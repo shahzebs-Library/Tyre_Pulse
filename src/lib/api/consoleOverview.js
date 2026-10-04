@@ -175,7 +175,7 @@ export async function loadRecentAdminActivity(limit = 12) {
   const ids = [...new Set(rows.map((r) => r.admin_id).filter(Boolean))]
   let names = {}
   if (ids.length) {
-    const { data: ps } = await supabase.from('profiles').select('id, full_name, username').in('id', ids)
+    const { data: ps } = await supabase.from('profiles').select('id, full_name, username').in('id', ids.slice(0, 500)).limit(500)
     names = Object.fromEntries((ps || []).map((p) => [p.id, p.full_name || p.username || null]))
   }
   return rows.map((r) => ({ ...r, admin_name: names[r.admin_id] || null }))

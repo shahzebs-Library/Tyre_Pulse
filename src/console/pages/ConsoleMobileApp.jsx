@@ -49,7 +49,7 @@ const VERSION_EXPORT = [
   { key: 'last_seen', header: 'Last seen' },
 ]
 
-export default function ConsoleMobileApp() {
+export default function ConsoleMobileApp({ tabParam = 'tab' } = {}) {
   const { logAction } = useConsoleAuth()
   const [ops, setOps] = useState(null)
   const [devices, setDevices] = useState(null)
@@ -63,7 +63,7 @@ export default function ConsoleMobileApp() {
   const [msg, setMsg] = useState('')
   const [msgIsError, setMsgIsError] = useState(false)
   const [confirmMin, setConfirmMin] = useState(false)
-  const [tab, setTab] = useUrlTab(TABS, 'overview')
+  const [tab, setTab] = useUrlTab(TABS, 'overview', tabParam)
 
   const load = useCallback(async () => {
     setLoading(true); setError('')

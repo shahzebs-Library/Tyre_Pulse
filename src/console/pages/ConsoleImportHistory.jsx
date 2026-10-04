@@ -92,8 +92,8 @@ const ACTIVITY_EXPORT = [
 ]
 const TABS = ['uploads', 'activity', 'coverage', 'decisions']
 
-export default function ConsoleImportHistory() {
-  const [tab, setTab] = useUrlTab(TABS, 'uploads')
+export default function ConsoleImportHistory({ tabParam = 'tab' } = {}) {
+  const [tab, setTab] = useUrlTab(TABS, 'uploads', tabParam)
   const [detail, setDetail] = useState(null)
   const [loadedAt, setLoadedAt] = useState(null)
   const [clustersAt, setClustersAt] = useState(null)

@@ -55,7 +55,7 @@ describe('Control Center sidebar', () => {
 
   it('lists every console route exactly once', () => {
     const routes = CONSOLE_NAV.flatMap((g) => g.items.map((i) => i.to))
-    expect(routes.length).toBe(54)
+    expect(routes.length).toBe(35)
     expect(new Set(routes).size).toBe(routes.length)
   })
 

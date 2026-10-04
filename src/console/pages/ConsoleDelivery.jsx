@@ -76,7 +76,7 @@ const TYPE_EXPORT_COLUMNS = [
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function ConsoleDelivery() {
+export default function ConsoleDelivery({ tabParam = 'tab' } = {}) {
   const { admin } = useConsoleAuth()
   const theme = useChartTheme()
 
@@ -91,7 +91,7 @@ export default function ConsoleDelivery() {
   const [pushError, setPushError] = useState(null)
   const [emailError, setEmailError] = useState(null)
   const [readAt, setReadAt] = useState(null)
-  const [tab, setTab] = useUrlTab(TABS, 'overview')
+  const [tab, setTab] = useUrlTab(TABS, 'overview', tabParam)
   const [channel, setChannel] = useState('all')
   const [search, setSearch] = useState('')
   const [openFailure, setOpenFailure] = useState(null)

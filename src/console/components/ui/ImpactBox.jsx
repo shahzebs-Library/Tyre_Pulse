@@ -73,14 +73,14 @@ export default function ImpactBox({ what, change, who, undo, tone = 'info', stat
  */
 export function ConfirmImpactDialog({
   open, title, impact, confirmLabel = 'Confirm', onCancel, onConfirm,
-  requireReason = false, typedWord, busy = false, error, danger = false,
+  requireReason = false, typedWord, busy = false, error, danger = false, children, readyExtra = true,
 }) {
   const [reason, setReason] = useState('')
   const [typed, setTyped] = useState('')
   useEffect(() => { if (open) { setReason(''); setTyped('') } }, [open])
   const reasonOk = !requireReason || reason.trim().length >= 3
   const typedOk = !typedWord || typed.trim() === typedWord
-  const ready = reasonOk && typedOk && !busy
+  const ready = reasonOk && typedOk && !busy && readyExtra !== false
   return (
     <Modal open={open} title={title} onClose={busy ? () => {} : onCancel} width="max-w-lg"
       footer={(<>
@@ -89,6 +89,7 @@ export function ConfirmImpactDialog({
       </>)}>
       <div className="space-y-3">
         {impact && <ImpactBox {...impact} />}
+        {children}
         {requireReason && (
           <label className="block">
             <span className="block text-[11px] font-semibold text-gray-400 mb-1">Reason (goes to the audit log)</span>

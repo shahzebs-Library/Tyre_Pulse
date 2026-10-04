@@ -58,7 +58,7 @@ function Swatches({ colors, height = 'h-4' }) {
 
 /** THE super-admin control for the report colour theme (org-wide). Persists the
  *  choice to system_config.report_palette and applies it live to every report. */
-export default function ConsoleReportAppearance() {
+export default function ConsoleReportAppearance({ sectionParam = 'section' } = {}) {
   const { logAction } = useConsoleAuth()
   const [sel, setSel] = useState(DEFAULT_PRESET)          // preset key OR hex array (custom)
   const [savedSel, setSavedSel] = useState(DEFAULT_PRESET)
@@ -83,7 +83,7 @@ export default function ConsoleReportAppearance() {
   const [diagBgError, setDiagBgError] = useState('')
   const [diagBgStored, setDiagBgStored] = useState(DEFAULT_DIAGRAM_BG)
   const [readAt, setReadAt] = useState(null)
-  const [section, setSection] = useUrlTab(SECTIONS, 'theme', 'section')
+  const [section, setSection] = useUrlTab(SECTIONS, 'theme', sectionParam)
 
   const load = useCallback(async () => {
     setLoading(true); setSaved(false); setError(''); setLoadError('')

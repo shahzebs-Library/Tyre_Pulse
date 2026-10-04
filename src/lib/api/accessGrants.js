@@ -96,6 +96,7 @@ export async function setUserAccessGrant({
   effect = 'grant',
   note = null,
   expiresAt = null,
+  reason = null,
 }) {
   return unwrap(
     await supabase.rpc('set_user_access_grant', {
@@ -105,6 +106,7 @@ export async function setUserAccessGrant({
       p_effect: effect,
       p_note: note,
       p_expires_at: expiresAt,
+      ...(reason ? { p_reason: String(reason).trim() } : {}),
     }),
   )
 }
@@ -117,8 +119,8 @@ export async function setUserAccessGrant({
  * @param {string} id  the grant row's uuid
  * @returns {Promise<void>}
  */
-export async function revokeUserAccessGrant(id) {
-  return unwrap(await supabase.rpc('revoke_user_access_grant', { p_id: id }))
+export async function revokeUserAccessGrant(id, reason = null) {
+  return unwrap(await supabase.rpc('revoke_user_access_grant', { p_id: id, ...(reason ? { p_reason: String(reason).trim() } : {}) }))
 }
 
 // ── Web / Mobile scope (surface partitioning) ────────────────────────────────

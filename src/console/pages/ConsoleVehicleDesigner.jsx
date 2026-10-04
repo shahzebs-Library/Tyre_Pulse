@@ -105,7 +105,7 @@ function freshDraft() {
  *  coverage view and bulk assignment. Active layouts replace the app's
  *  built-in tyre diagrams for that vehicle type; built-ins stay the fallback.
  *  Table: V268. */
-export default function ConsoleVehicleDesigner() {
+export default function ConsoleVehicleDesigner({ tabParam = 'tab' } = {}) {
   const { logAction } = useConsoleAuth()
 
   const [rows, setRows] = useState([])
@@ -114,7 +114,7 @@ export default function ConsoleVehicleDesigner() {
   const [fleetTypes, setFleetTypes] = useState([])
   const [fleetState, setFleetState] = useState('loading') // loading | ok | error
   const [readAt, setReadAt] = useState(null)
-  const [tab, setTab] = useUrlTab(TABS, 'designer')
+  const [tab, setTab] = useUrlTab(TABS, 'designer', tabParam)
   const [listSort, setListSort] = useState('type')
   const [pendingSwitch, setPendingSwitch] = useState(null)
   const [query, setQuery] = useState('')

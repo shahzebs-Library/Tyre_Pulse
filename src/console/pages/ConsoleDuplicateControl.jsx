@@ -69,9 +69,9 @@ const fmtTime = (v) => {
   return Number.isNaN(d.getTime()) ? 'N/A' : d.toISOString().slice(0, 16).replace('T', ' ')
 }
 
-export default function ConsoleDuplicateControl() {
+export default function ConsoleDuplicateControl({ tabParam = 'tab' } = {}) {
   const { logAction } = useConsoleAuth()
-  const [tab, setTab] = useUrlTab(TAB_KEYS, 'duplicates')
+  const [tab, setTab] = useUrlTab(TAB_KEYS, 'duplicates', tabParam)
   const [refreshedAt, setRefreshedAt] = useState(null)
   const [targetQuery, setTargetQuery] = useState('')
   const [historyQuery, setHistoryQuery] = useState('')

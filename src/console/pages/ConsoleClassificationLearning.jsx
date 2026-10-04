@@ -76,9 +76,9 @@ function PageHead({ onRefresh, busy, at }) {
   )
 }
 
-export default function ConsoleClassificationLearning() {
+export default function ConsoleClassificationLearning({ tabParam = 'tab' } = {}) {
   const [state, setState] = useState({ loading: true, error: null, data: null, at: null })
-  const [tab, setTab] = useUrlTab(TABS, 'overview')
+  const [tab, setTab] = useUrlTab(TABS, 'overview', tabParam)
   const [preview, setPreview] = useState(null)   // {proposal, rows, loading, error}
   const [busy, setBusy] = useState('')
   const [flash, setFlash] = useState(null)

@@ -15,8 +15,9 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  KeyRound, Ban, CalendarClock, FileSpreadsheet, FileText, AlertTriangle, Info, Activity, Building2,
+  KeyRound, Ban, CalendarClock, FileSpreadsheet, FileText, AlertTriangle, Info, Activity, Building2, ListChecks,
 } from 'lucide-react'
+import WebhookDeliveries from './apiMonitor/WebhookDeliveries'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Code, Btn, Segmented, SearchInput, Select, Toolbar,
   Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Modal,
@@ -31,7 +32,7 @@ import { toUserMessage } from '../../lib/safeError'
 import { exportConsoleRows, sortRows, useTableSort } from '../../lib/consoleTable'
 import { PageHeader, useUrlTab, useRefreshStamp, usePaged, Pager, Drawer, DetailList, AttentionList } from './shared/pageKit'
 
-const TABS = ['keys', 'usage']
+const TABS = ['keys', 'usage', 'webhooks']
 
 function fmtWhen(v) {
   if (!v) return 'N/A'
@@ -124,6 +125,57 @@ function ExpiryModal({ target, onClose, onDone }) {
         </div>
       )}
     </Modal>
+  )
+}
+
+/**
+ * The rules every API key follows. Each one says whether the database enforces
+ * it today ("In force") or whether it is still planned, so the list never
+ * claims a control that does not exist.
+ */
+function KeyRules({ summary, maxAgeDays }) {
+  const rules = [
+    {
+      title: 'Ends by itself',
+      state: 'in_force',
+      detail: `A key with an expiry date stops working on that date (checked on every call).${maxAgeDays ? ` Keys older than ${maxAgeDays} days are flagged over policy.` : ''} ${summary.no_expiry} of ${summary.total} keys have no expiry today.`,
+    },
+    {
+      title: 'Least access',
+      state: 'in_force',
+      detail: 'Access is chosen per key. A new key gets read only unless write is chosen on purpose.',
+    },
+    {
+      title: 'Rate limit per key',
+      state: 'in_force',
+      detail: 'Each key has its own per-minute limit (120 by default), checked on every call.',
+    },
+    {
+      title: 'Unused keys are flagged',
+      state: 'in_force',
+      detail: `A key nobody has used for ${STALE_AFTER_DAYS} days is listed under Needs attention. Nothing is revoked by itself.`,
+    },
+    {
+      title: 'Safe rotation with a 7-day overlap',
+      state: 'planned',
+      detail: 'Planned: issue the new key, keep the old one working up to 7 days, then it ends. Today: create the new key, move the integration, then revoke the old one.',
+    },
+  ]
+  return (
+    <Panel>
+      <PanelHeader icon={ListChecks} title="Rules every key follows" subtitle="What the database checks on every API call, and what is still planned." />
+      <ul className="divide-y divide-gray-800">
+        {rules.map((r) => (
+          <li key={r.title} className="py-2 flex items-start gap-3">
+            <Badge tone={r.state === 'in_force' ? 'good' : 'quiet'}>{r.state === 'in_force' ? 'In force' : 'Planned'}</Badge>
+            <div className="min-w-0">
+              <p className="text-sm text-gray-200">{r.title}</p>
+              <p className="text-[11px] text-gray-500">{r.detail}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Panel>
   )
 }
 
@@ -283,11 +335,17 @@ export default function ConsoleApiKeys() {
           <Segmented ariaLabel="API key views" value={tab} onChange={setTab} options={[
             { key: 'keys', label: 'Keys', count: summary.total },
             { key: 'usage', label: 'Usage, policy and tenants' },
+            { key: 'webhooks', label: 'Webhooks' },
           ]} />
+
+          {tab === 'webhooks' && (
+            <div role="tabpanel" aria-label="Webhooks"><WebhookDeliveries /></div>
+          )}
 
           {tab === 'keys' && (
             <div role="tabpanel" aria-label="Keys" className="space-y-4">
               <AttentionList items={attention} clearText="No key is over policy, stale, old or about to expire." />
+              <KeyRules summary={summary} maxAgeDays={data?.maxAgeDays} />
               <Panel flush>
                 <div className="p-4 pb-3 space-y-3">
                   <PanelHeader icon={KeyRound} title="Keys" subtitle={`${rows.length} of ${summary.total} shown. Select a row for its full record.`} />

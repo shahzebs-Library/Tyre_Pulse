@@ -80,12 +80,12 @@ const COLUMN_EXPORT = [
   { key: 'pct', header: '% filled', value: (c) => c.pct ?? 'N/A' },
 ]
 
-export default function ConsoleDataLearning() {
+export default function ConsoleDataLearning({ tabParam = 'tab' } = {}) {
   const [country, setCountry] = useState('All')
   const [field, setField] = useState(SUGGESTABLE_FIELDS[0] || 'brand')
 
   const [state, setState] = useState({ loading: true, error: null, at: null })
-  const [tab, setTab] = useUrlTab(TABS, 'suggestions')
+  const [tab, setTab] = useUrlTab(TABS, 'suggestions', tabParam)
   const [gap, setGap] = useState([])
   const [suggestions, setSuggestions] = useState([])
   const [facts, setFacts] = useState([])

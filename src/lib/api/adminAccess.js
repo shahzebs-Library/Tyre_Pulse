@@ -67,11 +67,12 @@ export async function getMyCapabilities() {
  * @param {string[]} countries  the new country array (replaces the current one)
  * @returns {Promise<void>}
  */
-export async function setUserCountry(userId, countries) {
+export async function setUserCountry(userId, countries, reason = null) {
   return unwrap(
     await supabase.rpc('admin_set_user_country', {
       p_user_id: userId,
       p_countries: countries,
+      ...(reason ? { p_reason: String(reason).trim() } : {}),
     }),
   )
 }
@@ -89,11 +90,12 @@ export async function setUserCountry(userId, countries) {
  *                                  ['ALL'] = org-wide; null/empty = no access
  * @returns {Promise<void>}
  */
-export async function adminSetUserSites(userId, sites) {
+export async function adminSetUserSites(userId, sites, reason = null) {
   return unwrap(
     await supabase.rpc('admin_set_user_sites', {
       p_user_id: userId,
       p_sites: Array.isArray(sites) && sites.length > 0 ? sites : null,
+      ...(reason ? { p_reason: String(reason).trim() } : {}),
     }),
   )
 }
@@ -135,6 +137,7 @@ export async function bulkSetGrant({
   capability = 'view',
   effect = 'grant',
   expiresAt = null,
+  reason = null,
 }) {
   return unwrap(
     await supabase.rpc('admin_bulk_set_grant', {
@@ -143,6 +146,7 @@ export async function bulkSetGrant({
       p_capability: capability,
       p_effect: effect,
       p_expires_at: expiresAt,
+      ...(reason ? { p_reason: String(reason).trim() } : {}),
     }),
   )
 }
@@ -156,10 +160,11 @@ export async function bulkSetGrant({
  * @param {string}   role     the role to assign
  * @returns {Promise<number>} count of users whose role actually changed
  */
-export async function bulkSetRole(userIds, role) {
+export async function bulkSetRole(userIds, role, reason = null) {
   const res = await supabase.rpc('admin_bulk_set_role', {
       p_user_ids: userIds,
       p_role: role,
+      ...(reason ? { p_reason: String(reason).trim() } : {}),
     })
   // Dual control: a gated action says plainly that it needs a second approval.
   if (res?.error && isApprovalRequiredError(res.error)) throw new Error(APPROVAL_REQUIRED_MESSAGE)

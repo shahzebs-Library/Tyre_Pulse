@@ -102,7 +102,7 @@ async function profileNames(ids) {
   try {
     for (let i = 0; i < ids.length; i += 200) {
       const { data } = await supabase.from('profiles')
-        .select('id,full_name,username').in('id', ids.slice(i, i + 200))
+        .select('id,full_name,username').in('id', ids.slice(i, i + 200)).limit(200)
       for (const p of data || []) out.set(p.id, p.full_name || p.username || null)
     }
   } catch { /* names are a convenience; the list still renders */ }

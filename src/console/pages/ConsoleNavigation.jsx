@@ -48,7 +48,7 @@ const CHANGE_EXPORT = [
   { key: 'kind', header: 'Change' }, { key: 'target', header: 'Menu entry' }, { key: 'detail', header: 'Detail' },
 ]
 
-export default function ConsoleNavigation() {
+export default function ConsoleNavigation({ tabParam = 'tab' } = {}) {
   const { logAction } = useConsoleAuth()
   const [model, setModel] = useState(null)      // editor tree [{key,label,defaultLabel,hidden,items:[{key,label,hidden}]}]
   const [loading, setLoading] = useState(true)
@@ -62,7 +62,7 @@ export default function ConsoleNavigation() {
   const [expanded, setExpanded] = useState(() => new Set())
   const [confirmReset, setConfirmReset] = useState(false)
   const [readAt, setReadAt] = useState(null)
-  const [tab, setTab] = useUrlTab(TABS, 'editor')
+  const [tab, setTab] = useUrlTab(TABS, 'editor', tabParam)
 
   const defaults = useMemo(() => buildNavEditorModel(NAV_CATALOG, {}), [])
   const defaultGroupOf = useMemo(() => {

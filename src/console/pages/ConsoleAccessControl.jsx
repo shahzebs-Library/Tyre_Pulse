@@ -49,6 +49,7 @@ import PeopleGrants from './access/PeopleGrants'
 import CustomRolesQuick from './access/CustomRolesQuick'
 import NewNotShared, { useNewAreas } from './access/NewNotShared'
 import WhoCanDoThis from './access/WhoCanDoThis'
+import UnusedAccess from './access/UnusedAccess'
 
 const AccessManager = lazy(() => import('./access/AccessManager'))
 const MobileAccessTab = lazy(() => import('./access/MobileAccessTab'))
@@ -259,6 +260,7 @@ export default function ConsoleAccessControl() {
               <StagedChanges changes={stagedList} peopleCounts={peopleCounts} onUndo={onUndo}
                 onDiscard={() => setStaged({})} onSave={saveStaged} saving={saving} error={saveError} notice={saveNotice} />
             </div>
+            <UnusedAccess onGoTab={selectTab} />
           </div>
         )
       case 'web': return <Suspense fallback={<TabFallback />}><AccessManager /></Suspense>
@@ -275,8 +277,13 @@ export default function ConsoleAccessControl() {
           </div>
         )
       case 'reviews':
-        return <LinkPanel icon={ClipboardCheck} title="Access reviews" to="/console/access-reviews" cta="Open access reviews"
-          body="Ask each manager to confirm who still needs the access they have. Reviews, their decisions and removals run on their own page." />
+        return (
+          <div className="space-y-4">
+            <UnusedAccess onGoTab={selectTab} />
+            <LinkPanel icon={ClipboardCheck} title="Access reviews" to="/console/access-reviews" cta="Open access reviews"
+              body="Ask each manager to confirm who still needs the access they have. Reviews, their decisions and removals run on their own page." />
+          </div>
+        )
       case 'temporary':
         return (
           <div className="space-y-4">

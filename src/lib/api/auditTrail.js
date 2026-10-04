@@ -36,7 +36,7 @@ export const DATA_AUDIT_COLS =
   'id,user_id,user_email,user_role,action,table_name,record_id,' +
   'old_values,new_values,ip_address,site,country,org_id,created_at,actor_type,actor_detail'
 export const ACCESS_AUDIT_COLS =
-  'id,actor,actor_email,action,target_user,entity,before,after,at'
+  'id,actor,actor_email,action,target_user,entity,before,after,at,reason'
 export const CONSOLE_AUDIT_COLS =
   'id,admin_id,action,target_id,target_type,details,created_at'
 
@@ -138,7 +138,9 @@ export function normalizeRow(source, raw) {
       detail: joinTarget(
         r.entity ? `entity ${r.entity}` : '',
         r.target_user ? `target ${r.target_user}` : '',
+        r.reason ? `reason ${r.reason}` : '',
       ),
+      reason: r.reason || null,
       source: 'access_audit',
       old: r.before ?? null,
       new: r.after ?? null,
@@ -334,4 +336,23 @@ export async function readAuditExport({ upload = false, filters = {}, search = '
     }
   }
   throw new Error('Export limit reached. Narrow the filters before exporting.')
+}
+
+/**
+ * Measured reason coverage for access changes: how many access_audit rows in
+ * the last `days` days carry a written reason. Two head-only counts. Returns
+ * nulls (never zeros) when a count cannot be read.
+ * @returns {Promise<{total:number|null, withReason:number|null, days:number}>}
+ */
+export async function countAccessReasons(days = 30) {
+  const since = new Date(Date.now() - days * 86400000).toISOString()
+  const [all, withReason] = await Promise.all([
+    supabase.from('access_audit').select('id', { count: 'exact', head: true }).gte('at', since),
+    supabase.from('access_audit').select('id', { count: 'exact', head: true }).gte('at', since).not('reason', 'is', null).neq('reason', ''),
+  ])
+  return {
+    days,
+    total: all?.error ? null : (all?.count ?? null),
+    withReason: withReason?.error ? null : (withReason?.count ?? null),
+  }
 }

@@ -14,6 +14,7 @@ import { Link } from 'react-router-dom'
 import {
   ShieldCheck, ShieldAlert, Play, CheckCircle2, AlertTriangle, XCircle,
   Info, Hand, LogIn, History, FileSpreadsheet, FileText, ArrowUpRight, Clock,
+  ListChecks, EyeOff, Eye,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, Segmented, SearchInput, Toolbar,
@@ -26,6 +27,10 @@ import {
 import {
   postureSummary, scanTrend, SEVERITIES, SEVERITY_LABEL, STATUS_LABEL,
 } from '../../lib/securityAudit'
+import { remediationStats, hardeningTasks, taskCounts, TASK_STATE_LABEL, TASK_STATE_TONE } from '../../lib/securityHardening'
+import { getAccessPolicies } from '../../lib/api/accessPolicies'
+import { listAccessReviews } from '../../lib/api/accessReviews'
+import { loadSystemConfig, configBool } from '../../lib/api/systemConfig'
 import { toUserMessage } from '../../lib/safeError'
 import { exportConsoleRows, sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
 import { PageHeader, useUrlTab, useRefreshStamp, usePaged, Pager, Drawer, AttentionList } from './shared/pageKit'
@@ -48,9 +53,82 @@ function fmtWhen(v) {
   return new Date(v).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+function fmtDay(t) {
+  if (t === null || t === undefined) return 'N/A'
+  return new Date(t).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+}
+
+/** Remediation strip: how old the open findings are and how fast they get fixed. */
+function RemediationStrip({ stats, runsError }) {
+  const cells = [
+    { label: 'Open findings', value: stats.open, sub: 'failing or warning now' },
+    {
+      label: 'Oldest open', value: stats.oldestDays === null ? 'N/A' : `${stats.oldestDays} ${stats.oldestDays === 1 ? 'day' : 'days'}`,
+      sub: runsError ? 'scan history could not be read' : stats.oldestId ? stats.oldestId.replace(/_/g, ' ') : 'nothing open',
+    },
+    {
+      label: 'Average time to fix', value: stats.avgFixDays === null ? 'N/A' : `${stats.avgFixDays} days`,
+      sub: stats.avgFixDays === null ? 'no finding has been closed yet' : 'from first seen to passing',
+    },
+    { label: 'Fixed in 30 days', value: stats.fixed30, sub: `across ${stats.scans} ${stats.scans === 1 ? 'scan' : 'scans'}` },
+    { label: 'Owners assigned', value: 'N/A', sub: 'finding owner is not recorded yet' },
+  ]
+  return (
+    <section aria-label="Remediation" className="grid grid-cols-2 md:grid-cols-5 gap-px rounded-xl overflow-hidden border border-gray-800 bg-gray-800">
+      {cells.map((c) => (
+        <div key={c.label} className="bg-gray-900/70 px-3 py-2.5 min-w-0">
+          <p className="text-[11px] text-gray-500">{c.label}</p>
+          <p className="text-base font-semibold text-gray-100 tabular-nums">{c.value}</p>
+          <p className="text-[10px] text-gray-500 truncate" title={c.sub}>{c.sub}</p>
+        </div>
+      ))}
+    </section>
+  )
+}
+
+/** Ranked hardening tasks (recommendations only; each links to its own switch). */
+function HardeningTasks({ tasks }) {
+  const [hideDone, setHideDone] = useState(false)
+  const counts = taskCounts(tasks)
+  const shown = hideDone ? tasks.filter((t) => t.state !== 'done') : tasks
+  return (
+    <Panel>
+      <PanelHeader icon={ListChecks} title="Recommended hardening tasks"
+        subtitle={`Ranked by how much risk each removes. ${counts.done} of ${counts.total} done.`}
+        actions={<Btn size="xs" icon={hideDone ? Eye : EyeOff} onClick={() => setHideDone((v) => !v)}>{hideDone ? 'Show done' : 'Hide done'}</Btn>} />
+      {shown.length === 0 ? (
+        <EmptyState icon={CheckCircle2} title="Every task is done" reason="Show done tasks to see the full list." />
+      ) : (
+        <ul className="grid gap-px sm:grid-cols-2 xl:grid-cols-4 rounded-lg overflow-hidden border border-gray-800 bg-gray-800">
+          {shown.map((t) => (
+            <li key={t.key} className="bg-gray-900/70 p-3 space-y-1.5 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <Badge tone={TASK_STATE_TONE[t.state]}>{TASK_STATE_LABEL[t.state]}</Badge>
+                {t.state !== 'done' && <Badge tone={t.risk === 'High' ? 'danger' : t.risk === 'Medium' ? 'warning' : 'quiet'}>{t.risk}</Badge>}
+              </div>
+              <p className="text-sm font-semibold text-gray-200">{t.title}</p>
+              <p className="text-[11px] text-gray-500 leading-relaxed">{t.detail}</p>
+              {t.state !== 'done' && (
+                <Link to={t.to} className="inline-flex items-center gap-1 text-[11px] text-orange-400 hover:text-orange-300 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
+                  Open the switch <ArrowUpRight size={10} aria-hidden="true" />
+                </Link>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-3 text-[11px] text-gray-500 flex items-start gap-1.5">
+        <Info size={12} className="mt-0.5 shrink-0" aria-hidden="true" />
+        These are recommendations, not legal or audit advice. Each To do opens the switch that does it, where the change shows its own impact and asks for a reason.
+      </p>
+    </Panel>
+  )
+}
+
 export default function ConsoleSecurityAudit() {
   const theme = useChartTheme()
   const [state, setState] = useState({ loading: true, error: null, posture: null, runs: [], events: [], runsError: null, eventsError: null })
+  const [switches, setSwitches] = useState({ ipAllowlist: null, dualControl: null, reviewsEver: null })
   const [scanning, setScanning] = useState(false)
   const [notice, setNotice] = useState(null)
   const [filter, setFilter] = useState('attention')
@@ -77,6 +155,16 @@ export default function ConsoleSecurityAudit() {
       ])
       setState({ loading: false, error: null, posture, runs, events, runsError, eventsError })
       stamp()
+      // Switch states for the hardening tasks. Each one is optional: a failed
+      // read shows "Could not check", never a guessed on or off.
+      const [pol, cfg, reviews] = await Promise.allSettled([
+        getAccessPolicies(), loadSystemConfig({ force: true }), listAccessReviews(),
+      ])
+      setSwitches({
+        ipAllowlist: pol.status === 'fulfilled' ? pol.value.ip.enabled : null,
+        dualControl: cfg.status === 'fulfilled' && cfg.value && 'dual_control_enabled' in cfg.value ? configBool('dual_control_enabled', false) : null,
+        reviewsEver: reviews.status === 'fulfilled' ? reviews.value.length : null,
+      })
     } catch (err) {
       setState((s) => ({ ...s, loading: false, error: toUserMessage(err, 'Could not load the security audit.') }))
     }
@@ -104,6 +192,8 @@ export default function ConsoleSecurityAudit() {
   const { posture, runs, events } = state
   const summary = useMemo(() => postureSummary(posture), [posture])
   const trend = useMemo(() => scanTrend(runs), [runs])
+  const remediation = useMemo(() => remediationStats(posture, runs), [posture, runs])
+  const tasks = useMemo(() => hardeningTasks({ posture, ...switches }), [posture, switches])
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -231,6 +321,7 @@ export default function ConsoleSecurityAudit() {
 
       {tab === 'findings' && (
         <div role="tabpanel" aria-label="Findings" className="space-y-4">
+          <RemediationStrip stats={remediation} runsError={state.runsError} />
           <AttentionList ready={!!posture} items={attention} clearText="No check is failing or warning." />
           <Panel flush>
             <div className="p-4 pb-3">
@@ -259,6 +350,7 @@ export default function ConsoleSecurityAudit() {
                     <Th sortKey="severity" sort={sort} onSort={onSort}>Severity</Th>
                     <Th sortKey="status" sort={sort} onSort={onSort}>Status</Th>
                     <Th align="right" sortKey="count" sort={sort} onSort={onSort}>Count</Th>
+                    <Th>Open since</Th>
                   </THead>
                   <tbody>
                     {pagedChecks.pageRows.map((c) => {
@@ -270,6 +362,13 @@ export default function ConsoleSecurityAudit() {
                           <Td><Badge tone={SEV_TONE[c.severity]}>{SEVERITY_LABEL[c.severity]}</Badge></Td>
                           <Td><Badge tone={STATUS_TONE[c.status]} icon={Icon}>{STATUS_LABEL[c.status] || c.status}</Badge></Td>
                           <Td align="right" nowrap><span className="tabular-nums text-gray-300">{c.count === null ? 'N/A' : c.count}</span></Td>
+                          <Td nowrap>
+                            <span className="text-gray-400 tabular-nums text-xs">
+                              {(c.status === 'fail' || c.status === 'warn')
+                                ? (remediation.sinceById[c.id] == null ? 'N/A' : `${fmtDay(remediation.sinceById[c.id])}, ${Math.max(0, Math.floor((Date.now() - remediation.sinceById[c.id]) / 86400000))} days`)
+                                : c.status === 'pass' ? 'Passing' : 'Every scan'}
+                            </span>
+                          </Td>
                         </Tr>
                       )
                     })}
@@ -279,6 +378,7 @@ export default function ConsoleSecurityAudit() {
               </>
             )}
           </Panel>
+          <HardeningTasks tasks={tasks} />
         </div>
       )}
 

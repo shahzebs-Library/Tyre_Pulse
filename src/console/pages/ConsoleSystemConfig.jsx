@@ -140,7 +140,7 @@ function validate(cfg, raw) {
   return null
 }
 
-export default function ConsoleSystemConfig() {
+export default function ConsoleSystemConfig({ tabParam = 'tab' } = {}) {
   const { logAction } = useConsoleAuth()
   const [configs, setConfigs] = useState({})   // key -> value (string)
   const [original, setOriginal] = useState({}) // as read from the database
@@ -153,7 +153,7 @@ export default function ConsoleSystemConfig() {
   const [reviewOpen, setReviewOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
-  const [tab, setTab] = useUrlTab(TABS, 'system')
+  const [tab, setTab] = useUrlTab(TABS, 'system', tabParam)
 
   const load = useCallback(async () => {
     setLoading(true); setSaved(false); setLoadError(''); setSaveError('')

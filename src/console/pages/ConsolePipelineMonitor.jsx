@@ -75,9 +75,9 @@ function outcomeOf(status) {
   return 'other'
 }
 
-export default function ConsolePipelineMonitor() {
+export default function ConsolePipelineMonitor({ tabParam = 'tab' } = {}) {
   const [country, setCountry] = useState('All')
-  const [tab, setTab] = useUrlTab(TABS, 'jobs')
+  const [tab, setTab] = useUrlTab(TABS, 'jobs', tabParam)
   const [search, setSearch] = useState('')
   const [outcome, setOutcome] = useState('all')
   const [detail, setDetail] = useState(null) // { kind: 'run'|'event', row }

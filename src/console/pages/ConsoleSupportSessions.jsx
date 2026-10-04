@@ -81,7 +81,7 @@ function minutesLeft(expiresAt, nowMs) {
   return Math.max(0, Math.ceil((t - nowMs) / 60000))
 }
 
-export default function ConsoleSupportSessions() {
+export default function ConsoleSupportSessions({ tabParam = 'tab' } = {}) {
   const { orgs, logAction } = useConsoleAuth()
 
   const [targetOrg, setTargetOrg] = useState('')
@@ -104,7 +104,7 @@ export default function ConsoleSupportSessions() {
   const [ending, setEnding]     = useState(false)
   const [nowMs, setNowMs]       = useState(() => Date.now())
   const [detail, setDetail]     = useState(null)
-  const [tab, setTab] = useUrlTab(TABS, 'current')
+  const [tab, setTab] = useUrlTab(TABS, 'current', tabParam)
   const { refreshedAt, stamp } = useRefreshStamp()
 
   // Map org id -> name so target orgs on session rows always show a label.

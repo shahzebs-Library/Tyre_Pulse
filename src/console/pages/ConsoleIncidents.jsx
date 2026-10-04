@@ -55,7 +55,7 @@ function fmtWhen(v) {
 
 const EMPTY_DRAFT = { title: '', severity: 'sev3', impact: '', affected_modules: '', started_at: '', message: '', source_type: 'manual', source_ref: null }
 
-export default function ConsoleIncidents() {
+export default function ConsoleIncidents({ tabParam = 'tab' } = {}) {
   const theme = useChartTheme()
   const [incidents, setIncidents] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -72,7 +72,7 @@ export default function ConsoleIncidents() {
   const [posting, setPosting] = useState(false)
   const [exporting, setExporting] = useState(null)
   const [refreshedAt, setRefreshedAt] = useState(null)
-  const [tab, setTab] = useUrlTab(['incidents', 'trends', 'signals'], 'incidents')
+  const [tab, setTab] = useUrlTab(['incidents', 'trends', 'signals'], 'incidents', tabParam)
   const [now, setNow] = useState(() => new Date())
   const [supers, setSupers] = useState(null)
   const [supersError, setSupersError] = useState('')

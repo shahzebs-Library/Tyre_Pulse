@@ -17,6 +17,7 @@ import { ALL_MODULES } from '../../../lib/moduleCatalog'
 import { MOBILE_MODULES } from '../../../lib/mobileModules'
 import { CAPABILITIES } from '../../../lib/permissionMatrix'
 import { describeGrant } from '../../../lib/accessOverview'
+import { defaultGrantEndDate } from '../../../lib/accessUnused'
 import {
   deleteUserGrants, editUserGrant, setUserAccessGrantScoped,
 } from '../../../lib/api/accessGrants'
@@ -264,7 +265,8 @@ function AddException({ profiles, onCancel, onSave, busy }) {
   const [eff, setEff] = useState('grant')
   const [scope, setScope] = useState('web')
   const [cap, setCap] = useState('view')
-  const [end, setEnd] = useState('')
+  // New rules end by themselves after 90 days unless the admin clears the date.
+  const [end, setEnd] = useState(() => defaultGrantEndDate())
   const [note, setNote] = useState('')
   const people = useMemo(() => (profiles || []).filter((p) => p.approved !== false)
     .map((p) => ({ value: p.id, label: `${displayName(p)} (${p.role || 'no role'})` }))
@@ -290,7 +292,10 @@ function AddException({ profiles, onCancel, onSave, busy }) {
         <Select ariaLabel="Allow or block" value={eff} onChange={setEff} options={EFFECT_OPTIONS} />
         <Select ariaLabel="Capability" value={cap} onChange={setCap} options={CAP_OPTIONS} />
         <Select ariaLabel="Where" value={phoneOnly ? 'mobile' : scope} onChange={setScope} options={SCOPE_OPTIONS} disabled={phoneOnly} />
-        <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className={inputCls} aria-label="End date (optional)" />
+        <span className="flex items-center gap-1.5">
+          <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className={`${inputCls} flex-1`} aria-label="End date (optional)" />
+          {end && <button type="button" onClick={() => setEnd('')} className="text-[11px] text-gray-500 hover:text-gray-300 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">No end date</button>}
+        </span>
       </div>
       <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} placeholder="Reason (required)" aria-label="Reason"
         className={`w-full ${inputCls}`} />

@@ -1,520 +1,517 @@
 /**
- * ConsoleReleases.jsx - the release and impact center.
+ * ConsoleReleases.jsx - Releases (/console/releases).
  *
- * When a number changes, the first question is "what did we ship?". This page
- * records every release and the metrics or assets it touched, so a figure that
- * moves can be traced back to the deployment that moved it.
+ * One timeline across web, Android, database and releases recorded by hand,
+ * with what is running now, Android adoption on installs AND active phones,
+ * app errors before vs after each release in equal windows, and a guarded
+ * web rollback that RECORDS the decision and sends you to Vercel. The console
+ * never deploys or rolls anything back on its own.
  *
- * An impact is a claim about cause, so it is entered deliberately per release,
- * never inferred.
+ * Nothing removed: the old Release & Impact ledger lives on as the Releases,
+ * Impacts and Insights tabs (?tab=releases | impacts | insights), unchanged.
  *
- * Layout: three tabs synced to ?tab=. Releases (searchable, paged, with a
- * "no impact recorded" filter; a row opens the release and its impact form in a
- * side drawer), Impacts (every recorded impact across releases, searchable and
- * exportable) and Insights (releases per month, impacts by type, and the
- * metrics that releases touch most).
+ * Honest gaps stated on screen: web adoption is not measured (browsers do not
+ * report a build), the Vercel and marketing deploy lists are not connected,
+ * Flutter does not report its version, crash-free rate needs Sentry release
+ * tags, database changes cannot be rolled back from here, and the error
+ * source is app-logged errors (no request count, so no error rate).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
-  Rocket, Tag, Plus, AlertTriangle, CheckCircle2, Clock, ExternalLink, BarChart3, HelpCircle,
+  Rocket, Globe, Smartphone, Database, RotateCcw, AlertTriangle, CheckCircle2, Layers, GitCompare,
+  Activity, ExternalLink, Apple, Megaphone, Info, History,
 } from 'lucide-react'
 import {
-  Panel, PanelHeader, Note, StatTile, Badge, Btn, Toolbar, Modal, SearchInput, Segmented,
-  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState,
+  Panel, PanelHeader, Note, StatTile, Badge, Btn, Toolbar, Segmented, SearchInput, Select,
+  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, ProportionBar, ConfirmImpactDialog,
 } from '../components/ui'
-import { sortRows, searchRows, useTableSort } from '../../lib/consoleTable'
+import { PageHeader, useUrlTab, TabBar, TabPanel, Drawer, DetailList } from './shared/pageKit'
 import ExportButtons from './shared/ExportButtons'
-import { listReleases, recordRelease, addReleaseImpact } from '../../lib/api/lineageOps'
+import ReleaseLedger from './releases/ReleaseLedger'
+import {
+  getRecentMigrations, getEngineeringConfig, listRecordedReleases, getAppAdoption,
+  countErrors24h, getReleaseErrorWindows, recordRollback,
+} from '../../lib/api/engineeringCenter'
+import {
+  buildReleaseTimeline, filterTimeline, groupByDay, platformCounts, errorVerdict, adoptionSummary,
+  fmtInt, riyadhTime, riyadhDay, PLATFORMS,
+} from '../../lib/engineeringCenter'
+import { installedRelease } from '../../lib/releases'
 import { toUserMessage } from '../../lib/safeError'
-import { BarsChart, TrendChart } from '../components/ui/charts'
-import { PageHeader, fmtRelative, TabBar, useUrlTab, usePaged, Pager, SideDrawer } from './shared/pageKit'
+import { useConsoleAuth } from '../ConsoleAuthContext'
 
-const TABS = ['releases', 'impacts', 'insights']
-const IMPACT_EXPORT_COLUMNS = [
-  { key: 'version', header: 'Release' },
-  { key: 'metric_id', header: 'Metric' },
-  { key: 'asset_id', header: 'Asset' },
-  { key: 'impact_type', header: 'Type' },
-  { key: 'note', header: 'Note' },
+const TABS = ['timeline', 'releases', 'impacts', 'insights']
+const PLATFORM_LABEL = Object.fromEntries(PLATFORMS.map((p) => [p.key, p.label]))
+const PLATFORM_ICON = { web: Globe, marketing: Megaphone, android: Smartphone, flutter: Smartphone, database: Database, manual: Rocket }
+const WINDOW_HOURS = 12
+const VERDICT_TONE = { Higher: 'danger', Lower: 'good', Similar: 'default', 'Too early': 'info', 'N/A': 'quiet' }
+const VERCEL_URL = 'https://vercel.com/dashboard'
+const NOT_ROLLED_BACK = [
+  'Database changes and migrations stay as they are.',
+  'Settings, environment variables and secrets are not changed.',
+  'Phones keep the app version they have installed.',
+  'Domains and the marketing site are not touched.',
+  'New pushes to main stop going live until the rollback is undone in Vercel.',
 ]
 
-const nf = new Intl.NumberFormat('en-US')
+const liveBuildId = installedRelease?.buildId || null
+const liveShort = liveBuildId && !['development', 'local'].includes(liveBuildId) ? String(liveBuildId).slice(0, 7) : null
 
-function fmtWhen(v) {
-  if (!v) return 'N/A'
-  const d = new Date(v)
-  if (Number.isNaN(d.getTime())) return 'N/A'
-  return d.toLocaleString('en-US', {
-    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-  })
+function useLoad(fn, fallback) {
+  const [s, setS] = useState({ loading: true, error: '', data: null })
+  const reload = useCallback(async () => {
+    setS((p) => ({ ...p, loading: true, error: '' }))
+    try { setS({ loading: false, error: '', data: await fn() }) }
+    catch (e) { setS({ loading: false, error: toUserMessage(e, fallback), data: null }) }
+  }, [fn, fallback])
+  useEffect(() => { reload() }, [reload])
+  return { ...s, reload }
 }
 
-const IMPACT_TONE = { increase: 'good', decrease: 'danger', fix: 'accent', change: 'info' }
+const loadMigrations = () => getRecentMigrations(100)
 
 export default function ConsoleReleases() {
-  const [state, setState] = useState({ loading: true, error: null, releases: [], impacts: [] })
-  const [flash, setFlash] = useState(null) // {tone, text}
+  const [tab, setTab] = useUrlTab(TABS, 'timeline')
+  const [params, setParams] = useSearchParams()
+  const migrations = useLoad(loadMigrations, 'Migration history could not be read.')
+  const config = useLoad(getEngineeringConfig, 'App version settings could not be read.')
+  const recorded = useLoad(listRecordedReleases, 'Recorded releases could not be read.')
+  const adoption = useLoad(getAppAdoption, 'App adoption could not be read.')
+  const errors24 = useLoad(countErrors24h, 'Errors could not be counted.')
+  const { logAction } = useConsoleAuth() || {}
 
-  // record-release modal
-  const [creating, setCreating] = useState(false)
-  const [form, setForm] = useState({ version: '', notes: '' })
-  const [savingRelease, setSavingRelease] = useState(false)
+  const [platform, setPlatform] = useState('all')
+  const [days, setDays] = useState(30)
+  const [search, setSearch] = useState('')
+  const [detail, setDetail] = useState(null)
+  const [rollbackOpen, setRollbackOpen] = useState(params.get('rollback') === '1')
+  const [flash, setFlash] = useState(null)
+  const [readAt, setReadAt] = useState(Date.now())
 
-  // detail modal
-  const [detail, setDetail] = useState(null) // release row
-  const [impactForm, setImpactForm] = useState({ metric: '', asset: '', impact: '', note: '' })
-  const [savingImpact, setSavingImpact] = useState(false)
-  const [tab, setTab] = useUrlTab(TABS, 'releases')
-  const [readAt, setReadAt] = useState(null)
-  const [coverage, setCoverage] = useState('all')
-  const [impactQuery, setImpactQuery] = useState('')
-
-  const load = useCallback(async () => {
-    setState((s) => ({ ...s, loading: true, error: null }))
-    try {
-      const { releases, impacts } = await listReleases()
-      setState({ loading: false, error: null, releases, impacts })
-      setReadAt(Date.now())
-      return { releases, impacts }
-    } catch (e) {
-      setState({ loading: false, error: toUserMessage(e), releases: [], impacts: [] })
-      return null
-    }
-  }, [])
-
-  useEffect(() => { load() }, [load])
-
-  const impactsByRelease = useMemo(() => {
-    const m = new Map()
-    for (const it of state.impacts) {
-      const arr = m.get(it.release_id) || []
-      arr.push(it)
-      m.set(it.release_id, arr)
-    }
-    return m
-  }, [state.impacts])
-
-  const [query, setQuery] = useState('')
-  const { sort, onSort } = useTableSort(null)
-  const visibleReleases = useMemo(() => sortRows(
-    searchRows(state.releases.filter((r) => {
-      const n = impactsByRelease.get(r.id)?.length || 0
-      return coverage === 'all' || (coverage === 'none' ? n === 0 : n > 0)
-    }), query, ['version', 'notes']),
-    sort,
-    { impacts: (r) => impactsByRelease.get(r.id)?.length || 0 },
-  ), [state.releases, query, sort, impactsByRelease, coverage])
-  const paged = usePaged(visibleReleases)
-  const noImpactCount = useMemo(() => state.releases.filter((r) => !(impactsByRelease.get(r.id)?.length)).length, [state.releases, impactsByRelease])
-  const lastRelease = useMemo(() => state.releases.reduce((a, r) => (r.released_at && (!a || r.released_at > a) ? r.released_at : a), null), [state.releases])
-
-  const releaseById = useMemo(() => new Map(state.releases.map((r) => [r.id, r])), [state.releases])
-  const allImpacts = useMemo(() => state.impacts.map((it) => ({ ...it, version: releaseById.get(it.release_id)?.version || 'N/A' })), [state.impacts, releaseById])
-  const { sort: impactSort, onSort: onImpactSort } = useTableSort(null)
-  const visibleImpacts = useMemo(() => sortRows(
-    searchRows(allImpacts, impactQuery, ['version', 'metric_id', 'asset_id', 'impact_type', 'note']), impactSort,
-  ), [allImpacts, impactQuery, impactSort])
-  const impactPaged = usePaged(visibleImpacts)
-
-  const perMonth = useMemo(() => {
-    const m = new Map()
-    for (const r of state.releases) {
-      const k = String(r.released_at || '').slice(0, 7)
-      if (k) m.set(k, (m.get(k) || 0) + 1)
-    }
-    const keys = [...m.keys()].sort().slice(-12)
-    return { labels: keys, values: keys.map((k) => m.get(k)) }
-  }, [state.releases])
-  const byType = useMemo(() => {
-    const m = new Map()
-    for (const it of state.impacts) {
-      const k = it.impact_type ? String(it.impact_type).toLowerCase() : 'unspecified'
-      m.set(k, (m.get(k) || 0) + 1)
-    }
-    return [...m.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value)
-  }, [state.impacts])
-  const topMetrics = useMemo(() => {
-    const m = new Map()
-    for (const it of state.impacts) if (it.metric_id) m.set(it.metric_id, (m.get(it.metric_id) || 0) + 1)
-    return [...m.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value).slice(0, 8)
-  }, [state.impacts])
-  const exportColumns = useMemo(() => ([
-    { key: 'version', header: 'Version' },
-    { key: 'notes', header: 'Notes' },
-    { key: 'released_at', header: 'Released at' },
-    { key: 'impacts', header: 'Impacts', value: (r) => impactsByRelease.get(r.id)?.length || 0 },
-  ]), [impactsByRelease])
-
-  const detailImpacts = useMemo(
-    () => (detail ? (impactsByRelease.get(detail.id) || []) : []),
-    [detail, impactsByRelease],
-  )
-
-  const openCreate = () => { setForm({ version: '', notes: '' }); setCreating(true) }
-
-  const saveRelease = async () => {
-    const version = form.version.trim()
-    if (!version) { setFlash({ tone: 'bad', text: 'A version is required to record a release.' }); return }
-    setSavingRelease(true)
-    try {
-      await recordRelease(version, form.notes.trim() || null)
-      setFlash({ tone: 'ok', text: `Release "${version}" recorded.` })
-      setCreating(false)
-      await load()
-    } catch (e) {
-      setFlash({ tone: 'bad', text: toUserMessage(e) })
-    } finally {
-      setSavingRelease(false)
-    }
+  const reloadAll = () => {
+    migrations.reload(); config.reload(); recorded.reload(); adoption.reload(); errors24.reload()
+    setReadAt(Date.now())
   }
 
-  const saveImpact = async () => {
-    if (!detail) return
-    const metric = impactForm.metric.trim()
-    const asset = impactForm.asset.trim()
-    if (!metric && !asset) {
-      setFlash({ tone: 'bad', text: 'Enter a metric id or an asset id for the impact.' })
-      return
-    }
-    setSavingImpact(true)
-    try {
-      await addReleaseImpact(detail.id, {
-        metric: metric || null,
-        asset: asset || null,
-        impact: impactForm.impact.trim() || null,
-        note: impactForm.note.trim() || null,
+  const cfg = config.data || {}
+  const android = useMemo(() => {
+    const min = cfg.mobile_min_version; const latest = cfg.mobile_latest_version
+    if (!min && !latest) return null
+    const times = [min?.updatedAt, latest?.updatedAt].filter(Boolean).sort()
+    return { min: min?.value || null, latest: latest?.value || null, updatedAt: times[times.length - 1] || null }
+  }, [cfg.mobile_min_version, cfg.mobile_latest_version])
+
+  const events = useMemo(() => buildReleaseTimeline({
+    notes: installedRelease?.releases || [],
+    migrations: migrations.data?.items || [],
+    android,
+    recorded: recorded.data || [],
+    liveBuild: liveBuildId,
+  }), [migrations.data, android, recorded.data])
+
+  const inPeriod = useMemo(() => filterTimeline(events, { platform: 'all', days }), [events, days])
+  const counts = useMemo(() => platformCounts(inPeriod), [inPeriod])
+  const visible = useMemo(() => filterTimeline(events, { platform, days, search }), [events, platform, days, search])
+  const groups = useMemo(() => groupByDay(visible), [visible])
+
+  // Errors before vs after, only for events with a real time of day.
+  const timed = useMemo(() => visible.filter((e) => e.timeKnown && e.at).slice(0, 40), [visible])
+  const [windows, setWindows] = useState({ loading: false, error: '', byId: {} })
+  const timedKey = timed.map((e) => e.id).join('|')
+  useEffect(() => {
+    let alive = true
+    if (!timed.length) { setWindows({ loading: false, error: '', byId: {} }); return undefined }
+    setWindows((w) => ({ ...w, loading: true, error: '' }))
+    getReleaseErrorWindows(timed.map((e) => e.at), WINDOW_HOURS)
+      .then((items) => {
+        if (!alive) return
+        const byId = {}
+        timed.forEach((e, i) => { byId[e.id] = items[i] || null })
+        setWindows({ loading: false, error: '', byId })
       })
-      setFlash({ tone: 'ok', text: 'Impact added.' })
-      setImpactForm({ metric: '', asset: '', impact: '', note: '' })
-      const res = await load()
-      if (res) {
-        const updated = res.releases.find((r) => r.id === detail.id)
-        if (updated) setDetail(updated)
-      }
-    } catch (e) {
-      setFlash({ tone: 'bad', text: toUserMessage(e) })
-    } finally {
-      setSavingImpact(false)
-    }
-  }
+      .catch((e) => { if (alive) setWindows({ loading: false, error: toUserMessage(e, 'Errors before and after could not be read.'), byId: {} }) })
+    return () => { alive = false }
+  }, [timedKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const na = state.loading || state.error
-  const showNoImpact = () => { setCoverage('none'); setQuery(''); setTab('releases') }
-  const inputCls = 'w-full px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-600 focus:border-gray-700 focus:outline-none'
+  const summary = useMemo(() => adoptionSummary(adoption.data?.by_version || [], android?.min, android?.latest), [adoption.data, android])
+  const recorded30 = useMemo(() => (recorded.data || []).filter((r) => r.released_at && Date.now() - new Date(r.released_at).getTime() < 30 * 86400000), [recorded.data])
+  const rollbacks30 = recorded30.filter((r) => r.kind === 'rollback').length
+  const releases30 = useMemo(() => filterTimeline(events, { days: 30 }).length, [events])
+
+  const exportRows = useMemo(() => visible.map((e) => {
+    const w = windows.byId[e.id]
+    return {
+      when: e.at ? (e.timeKnown ? riyadhTime(e.at) : `${riyadhDay(e.at)} (time not recorded)`) : 'N/A',
+      platform: PLATFORM_LABEL[e.platform] || 'Recorded',
+      version: e.version || 'N/A',
+      change: e.title,
+      status: e.status,
+      before: w ? fmtInt(w.before) : 'N/A',
+      after: w ? fmtInt(w.after) : 'N/A',
+      verdict: w ? errorVerdict(w) : 'N/A',
+      source: e.source,
+    }
+  }), [visible, windows.byId])
+
+  const openRollback = () => setRollbackOpen(true)
+  const closeRollback = () => {
+    setRollbackOpen(false)
+    if (params.get('rollback')) { const p = new URLSearchParams(params); p.delete('rollback'); setParams(p, { replace: true }) }
+  }
 
   return (
     <div className="space-y-5 max-w-7xl">
-      <PageHeader icon={Rocket} title="Release & Impact Center"
-        purpose="Record each release and the metrics or assets it affects, so a number change can be traced to a deployment."
-        refreshedAt={readAt} onRefresh={load} refreshing={state.loading}
-        actions={<Btn icon={Plus} variant="primary" onClick={openCreate}>Record release</Btn>} />
+      <PageHeader icon={Rocket} title="Releases"
+        purpose="What shipped, where, and whether errors went up afterwards. One timeline for web, Android and the database."
+        refreshedAt={readAt} onRefresh={reloadAll}
+        refreshing={migrations.loading || config.loading || recorded.loading}
+        actions={(<>
+          <Btn icon={RotateCcw} variant="danger" onClick={openRollback}>Roll back web app</Btn>
+        </>)} />
 
       {flash && (
-        <Note icon={flash.tone === 'ok' ? CheckCircle2 : AlertTriangle} tone={flash.tone === 'ok' ? 'accent' : 'danger'}>
-          {flash.text}
-        </Note>
+        <Note icon={flash.tone === 'ok' ? CheckCircle2 : AlertTriangle} tone={flash.tone === 'ok' ? 'accent' : 'danger'}>{flash.text}</Note>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatTile label="Releases" value={na ? 'N/A' : nf.format(state.releases.length)} icon={Tag}
-          onClick={() => { setCoverage('all'); setTab('releases') }} active={tab === 'releases' && coverage === 'all'} />
-        <StatTile label="Recorded impacts" value={na ? 'N/A' : nf.format(state.impacts.length)} icon={BarChart3}
-          onClick={() => setTab('impacts')} active={tab === 'impacts'} />
-        <StatTile label="No impact recorded" value={na ? 'N/A' : nf.format(noImpactCount)} icon={HelpCircle}
-          tone={!na && noImpactCount ? 'warning' : 'default'} sub="Untraceable if a number moves"
-          onClick={showNoImpact} active={tab === 'releases' && coverage === 'none'} />
-        <StatTile label="Last release" value={na || !lastRelease ? 'N/A' : fmtRelative(lastRelease)} icon={Clock}
-          sub={na || !lastRelease ? undefined : fmtWhen(lastRelease)} />
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <StatTile label="Releases, 30 days" icon={Rocket}
+          value={migrations.loading || recorded.loading ? 'N/A' : fmtInt(releases30)}
+          sub="Web notes, database days, Android, recorded" />
+        <StatTile label="Live web build" icon={Globe} value={liveShort || 'N/A'}
+          sub={liveShort ? 'Build this console runs' : 'Build id not set on this build'} />
+        <StatTile label="Android on latest" icon={Smartphone}
+          value={adoption.loading || adoption.error || summary.pctActive === null ? 'N/A' : `${summary.pctActive}%`}
+          sub={adoption.error ? 'Could not be read' : summary.pctActive === null ? 'No latest version recorded'
+            : `${fmtInt(summary.latestActive)} of ${fmtInt(summary.active)} active phones, ${fmtInt(summary.latestInstalls)} of ${fmtInt(summary.installs)} installs`} />
+        <StatTile label="App errors, 24 hours" icon={Activity}
+          tone={errors24.data > 0 ? 'warning' : 'default'}
+          value={errors24.loading || errors24.error ? 'N/A' : fmtInt(errors24.data)}
+          sub={errors24.error ? 'Could not be counted' : 'Logged errors; no request count, so no rate'} />
+        <StatTile label="Migrations today" icon={Database}
+          value={migrations.loading || migrations.error ? 'N/A' : fmtInt(migrations.data?.today)}
+          sub={migrations.data ? `${fmtInt(migrations.data.total)} applied in total` : undefined} />
+        <StatTile label="Rollbacks, 30 days" icon={RotateCcw}
+          tone={rollbacks30 ? 'warning' : 'default'}
+          value={recorded.loading || recorded.error ? 'N/A' : fmtInt(rollbacks30)}
+          sub="Recorded from this screen" />
       </div>
 
-      <TabBar tabs={[
-        { key: 'releases', label: 'Releases', count: na ? undefined : state.releases.length },
-        { key: 'impacts', label: 'Impacts', count: na ? undefined : state.impacts.length },
+      <TabBar value={tab} onChange={setTab} label="Release sections" tabs={[
+        { key: 'timeline', label: 'Timeline', count: visible.length },
+        { key: 'releases', label: 'Recorded releases', count: recorded.data ? recorded.data.filter((r) => r.kind !== 'rollback').length : undefined },
+        { key: 'impacts', label: 'Impacts' },
         { key: 'insights', label: 'Insights' },
-      ]} value={tab} onChange={setTab} label="Release sections" />
+      ]} />
 
-      {tab === 'releases' && (
-      <Panel>
-        <PanelHeader icon={Tag} title="Releases" subtitle="Select a release to see and add its impacts."
-          actions={(
-            <Toolbar>
-              <Segmented value={coverage} onChange={setCoverage} ariaLabel="Filter by impacts" role="group" options={[
-                { key: 'all', label: 'All', count: state.releases.length },
-                { key: 'with', label: 'With impacts', count: state.releases.length - noImpactCount },
-                { key: 'none', label: 'No impact', count: noImpactCount },
-              ]} />
-              <SearchInput value={query} onChange={setQuery} placeholder="Search version or notes" className="w-full sm:w-56" ariaLabel="Search releases" />
-              <ExportButtons rows={visibleReleases} columns={exportColumns} title="Releases" disabled={!!state.error} />
-            </Toolbar>
-          )} />
+      {tab === 'timeline' && (
+        <TabPanel label="Timeline">
+          <div className="grid gap-4 xl:grid-cols-[1fr_22rem]">
+            <div className="space-y-4 min-w-0">
+              <Panel>
+                <PanelHeader icon={History} title="Release timeline"
+                  subtitle={`Grouped by day, Riyadh time. Errors compare the ${WINDOW_HOURS} hours before with the ${WINDOW_HOURS} hours after.`}
+                  actions={(
+                    <Toolbar>
+                      <Segmented ariaLabel="Period" role="group" value={String(days)} onChange={(v) => setDays(Number(v))}
+                        options={[{ key: '7', label: '7 days' }, { key: '30', label: '30 days' }, { key: '90', label: '90 days' }]} />
+                      <SearchInput value={search} onChange={setSearch} placeholder="Search version or change" className="w-full sm:w-56" ariaLabel="Search releases" />
+                      <ExportButtons rows={exportRows} title="Releases" columns={[
+                        { key: 'when', header: 'When' }, { key: 'platform', header: 'Platform' }, { key: 'version', header: 'Version' },
+                        { key: 'change', header: 'Change' }, { key: 'status', header: 'Status' }, { key: 'before', header: 'Errors before' },
+                        { key: 'after', header: 'Errors after' }, { key: 'verdict', header: 'Verdict' }, { key: 'source', header: 'Source' },
+                      ]} />
+                    </Toolbar>
+                  )} />
+                <div className="px-4 pb-3">
+                  <Segmented ariaLabel="Platform" role="group" value={platform} onChange={setPlatform} options={[
+                    { key: 'all', label: 'All', count: counts.all || 0 },
+                    ...PLATFORMS.map((p) => ({ key: p.key, label: p.label, count: counts[p.key] || 0 })),
+                    ...(counts.manual ? [{ key: 'manual', label: 'Recorded', count: counts.manual }] : []),
+                  ]} />
+                </div>
+                {migrations.error && <div className="px-4 pb-3"><ErrorState message={migrations.error} onRetry={migrations.reload} /></div>}
+                {recorded.error && <div className="px-4 pb-3"><ErrorState message={recorded.error} onRetry={recorded.reload} /></div>}
+                {migrations.loading || recorded.loading ? <LoadingState label="Reading releases" rows={6} /> : visible.length === 0 ? (
+                  <EmptyState icon={Rocket} title="Nothing in this period"
+                    reason={search || platform !== 'all' ? 'Clear the search or choose All platforms.' : 'Widen the period to see older releases.'}
+                    action={<Btn onClick={() => { setSearch(''); setPlatform('all'); setDays(90) }}>Show 90 days, all platforms</Btn>} />
+                ) : (
+                  <div className="divide-y divide-gray-800">
+                    {groups.map((g) => (
+                      <section key={g.key} aria-label={g.label}>
+                        <h3 className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">{g.label}</h3>
+                        <Table>
+                          <THead>
+                            <Th>Time</Th><Th>Platform</Th><Th>Version</Th><Th>Change</Th><Th align="right">Errors before / after</Th>
+                          </THead>
+                          <tbody>
+                            {g.events.map((e) => {
+                              const w = windows.byId[e.id]
+                              const verdict = e.timeKnown ? (w ? errorVerdict(w) : (windows.loading ? null : 'N/A')) : null
+                              const Icon = PLATFORM_ICON[e.platform] || Rocket
+                              return (
+                                <Tr key={e.id} onClick={() => setDetail(e)} ariaLabel={`Open ${e.title}`}>
+                                  <Td nowrap><span className="text-gray-400 tabular-nums">{e.timeKnown && e.at ? riyadhTime(e.at).split(' ').slice(-1)[0] : 'N/A'}</span></Td>
+                                  <Td nowrap><span className="inline-flex items-center gap-1.5 text-gray-300"><Icon size={12} aria-hidden="true" />{PLATFORM_LABEL[e.platform] || 'Recorded'}</span></Td>
+                                  <Td nowrap><span className="font-mono text-gray-200">{e.version || 'N/A'}</span>{e.status === 'Live' && <Badge tone="good">Live</Badge>}{e.status === 'Rollback' && <Badge tone="warning">Rollback</Badge>}</Td>
+                                  <Td className="text-gray-300 break-words max-w-xl">{e.title}</Td>
+                                  <Td align="right" nowrap>
+                                    {!e.timeKnown ? <span className="text-gray-500" title="The release notes carry a date but not a time, so no equal window can be drawn.">N/A, no time</span>
+                                      : !w ? <span className="text-gray-500">{windows.loading ? 'Reading' : 'N/A'}</span>
+                                        : (<span className="inline-flex items-center gap-2 tabular-nums">
+                                          <span className="text-gray-300">{fmtInt(w.before)} / {fmtInt(w.after)}</span>
+                                          <Badge tone={VERDICT_TONE[verdict] || 'default'}>{verdict}</Badge>
+                                        </span>)}
+                                  </Td>
+                                </Tr>
+                              )
+                            })}
+                          </tbody>
+                        </Table>
+                      </section>
+                    ))}
+                  </div>
+                )}
+                {windows.error && <div className="px-4 py-3"><ErrorState message={windows.error} /></div>}
+                <p className="px-4 py-3 text-[11px] text-gray-500">
+                  Web entries come from the release notes shipped in the build, which carry a date but no time. The Vercel deploy list is not connected, so commit times and skipped deploys are not shown.
+                </p>
+              </Panel>
 
-        {state.loading ? (
-          <LoadingState label="Reading releases" rows={5} />
-        ) : state.error ? (
-          <div className="p-4 pt-0"><ErrorState message={state.error} onRetry={load} /></div>
-        ) : state.releases.length === 0 ? (
-          <EmptyState
-            icon={Rocket}
-            title="No releases recorded yet"
-            reason="Record a release to start tracing number changes to deployments."
-            action={<Btn icon={Plus} variant="primary" onClick={openCreate}>Record release</Btn>}
-          />
-        ) : visibleReleases.length === 0 ? (
-          <EmptyState icon={Tag} title="No releases match this search"
-            reason="Clear or change the search and filter to see every release."
-            action={<Btn onClick={() => { setQuery(''); setCoverage('all') }}>Clear filters</Btn>} />
-        ) : (
-          <>
-          <Table>
-            <THead>
-              <Th sortKey="version" sort={sort} onSort={onSort}>Version</Th>
-              <Th sortKey="notes" sort={sort} onSort={onSort}>Notes</Th>
-              <Th sortKey="released_at" sort={sort} onSort={onSort}>Released at</Th>
-              <Th align="right" sortKey="impacts" sort={sort} onSort={onSort}>Impacts</Th>
-            </THead>
-            <tbody>
-              {paged.rows.map((r) => (
-                <Tr key={r.id} onClick={() => setDetail(r)} ariaLabel={`Open release ${r.version || ''}`.trim()}>
-                  <Td><span className="font-medium text-gray-100">{r.version || 'N/A'}</span></Td>
-                  <Td className="text-gray-400 break-words max-w-md">{r.notes || 'No notes'}</Td>
-                  <Td nowrap>
-                    <span className="inline-flex items-center gap-1 text-gray-400">
-                      <Clock size={11} />{fmtWhen(r.released_at)}
-                    </span>
-                  </Td>
-                  <Td align="right">
-                    <Badge tone={(impactsByRelease.get(r.id)?.length || 0) ? 'accent' : 'quiet'}>
-                      {nf.format(impactsByRelease.get(r.id)?.length || 0)}
-                    </Badge>
-                  </Td>
-                </Tr>
-              ))}
-            </tbody>
-          </Table>
-          <Pager paged={paged} label="releases" />
-          </>
-        )}
-      </Panel>
+              <CompareReleases events={visible} windows={windows.byId} />
+            </div>
+
+            <div className="space-y-4 min-w-0">
+              <RunningNow android={android} adoption={summary} adoptionError={adoption.error}
+                migrations={migrations.data} flutterMin={cfg.flutter_min_version?.value} onRollback={openRollback} />
+              <AndroidAdoption summary={summary} loading={adoption.loading} error={adoption.error} onRetry={adoption.reload}
+                latest={android?.latest} min={android?.min} />
+              <Panel>
+                <PanelHeader icon={Info} title="Not measured yet" />
+                <ul className="px-4 pb-4 space-y-1.5 text-xs text-gray-400 list-disc pl-8">
+                  <li>Web adoption: browsers do not report which build they run.</li>
+                  <li>Crash-free rate per build: needs Sentry release tags on the web build.</li>
+                  <li>Flutter version: the Flutter app does not report its version yet.</li>
+                  <li>Marketing site deploys: that project is not connected.</li>
+                  <li>Error rate: app errors are logged, requests are not counted, so only counts are shown.</li>
+                </ul>
+              </Panel>
+            </div>
+          </div>
+        </TabPanel>
       )}
 
-      {tab === 'impacts' && (
-        <Panel>
-          <PanelHeader icon={BarChart3} title="All recorded impacts" subtitle="Every metric or asset a release was recorded as touching. Select one to open its release."
-            actions={(
-              <Toolbar>
-                <SearchInput value={impactQuery} onChange={setImpactQuery} placeholder="Search release, metric, asset or note" className="w-full sm:w-64" />
-                <ExportButtons rows={visibleImpacts} columns={IMPACT_EXPORT_COLUMNS} title="Release Impacts" disabled={!!state.error} />
-              </Toolbar>
-            )} />
-          {state.loading ? <LoadingState label="Reading impacts" /> : state.error ? (
-            <ErrorState message={state.error} onRetry={load} />
-          ) : allImpacts.length === 0 ? (
-            <EmptyState icon={Tag} title="No impacts recorded yet" reason="Open a release and add the metrics or assets it affected." />
-          ) : visibleImpacts.length === 0 ? (
-            <EmptyState icon={Tag} title="No impacts match" reason="Clear the search to see every impact." />
-          ) : (
-            <>
+      {tab !== 'timeline' && (
+        <TabPanel label="Recorded releases">
+          <ReleaseLedger embedded tab={tab} onTabChange={setTab} />
+        </TabPanel>
+      )}
+
+      <ReleaseDrawer event={detail} window={detail ? windows.byId[detail.id] : null} onClose={() => setDetail(null)} />
+
+      <RollbackDialog open={rollbackOpen} onClose={closeRollback} logAction={logAction}
+        recorded={recorded.data || []}
+        onDone={(to) => {
+          closeRollback()
+          setFlash({ tone: 'ok', text: `Rollback to ${to} recorded. Finish it in Vercel: open the project, Deployments, choose the build, Instant Rollback.` })
+          recorded.reload()
+        }} />
+    </div>
+  )
+}
+
+/* ── running now ───────────────────────────────────────────────────────── */
+
+function RunningNow({ android, adoption, adoptionError, migrations, flutterMin, onRollback }) {
+  const rows = [
+    { key: 'web', icon: Globe, label: 'Web app', version: liveShort || 'N/A', note: liveShort ? 'Adoption not measured' : 'Build id not set on this build' },
+    { key: 'marketing', icon: Megaphone, label: 'Marketing site', version: 'N/A', note: 'Deploy list not connected' },
+    {
+      key: 'android', icon: Smartphone, label: 'Android', version: android?.latest || 'N/A',
+      note: adoptionError ? 'Adoption could not be read' : adoption.pctActive === null ? 'Latest version not recorded' : `${adoption.pctActive}% of active phones`,
+    },
+    { key: 'flutter', icon: Smartphone, label: 'Flutter', version: 'N/A', note: flutterMin ? `Minimum ${flutterMin}; running version not reported` : 'Running version not reported' },
+    { key: 'ios', icon: Apple, label: 'iOS', version: 'N/A', note: 'There is no iOS app' },
+    { key: 'database', icon: Database, label: 'Database', version: migrations?.latest?.version || 'N/A', note: migrations ? `${fmtInt(migrations.total)} migrations applied` : 'Could not be read' },
+  ]
+  return (
+    <Panel>
+      <PanelHeader icon={Layers} title="Running now" subtitle="Production only; there is no staging." />
+      <ul className="px-4 pb-3 divide-y divide-gray-800">
+        {rows.map((r) => (
+          <li key={r.key} className="py-2 flex items-center gap-3">
+            <r.icon size={14} className="text-gray-500 shrink-0" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-gray-300">{r.label}</p>
+              <p className="text-[11px] text-gray-500">{r.note}</p>
+            </div>
+            <span className="font-mono text-xs text-gray-200">{r.version}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="px-4 pb-4">
+        <Btn icon={RotateCcw} variant="danger" onClick={onRollback}>Roll back web app</Btn>
+      </div>
+    </Panel>
+  )
+}
+
+function AndroidAdoption({ summary, loading, error, onRetry, latest, min }) {
+  return (
+    <Panel>
+      <PanelHeader icon={Smartphone} title="Android adoption"
+        subtitle="Installs, and phones opened in the last 7 days. Active phones are the fair measure." />
+      {loading ? <LoadingState rows={3} /> : error ? <div className="px-4 pb-4"><ErrorState message={error} onRetry={onRetry} /></div>
+        : summary.rows.length === 0 ? <EmptyState icon={Smartphone} title="No phones have reported a version" reason="Phones report their version after signing in." />
+          : (
+            <div className="px-4 pb-4 space-y-3">
+              <ProportionBar total={summary.installs} segments={summary.rows.slice(0, 5).map((r, i) => ({
+                label: r.version || 'Unknown', value: r.installs, tone: i === 0 ? 'good' : 'muted',
+              }))} />
               <Table>
-                <THead>
-                  <Th sortKey="version" sort={impactSort} onSort={onImpactSort}>Release</Th>
-                  <Th sortKey="metric_id" sort={impactSort} onSort={onImpactSort}>Metric</Th>
-                  <Th sortKey="asset_id" sort={impactSort} onSort={onImpactSort}>Asset</Th>
-                  <Th sortKey="impact_type" sort={impactSort} onSort={onImpactSort}>Type</Th>
-                  <Th>Note</Th>
-                </THead>
+                <THead><Th>Version</Th><Th align="right">Installs</Th><Th align="right">Active 7d</Th></THead>
                 <tbody>
-                  {impactPaged.rows.map((it) => (
-                    <Tr key={it.id} onClick={() => { const r = releaseById.get(it.release_id); if (r) setDetail(r) }} ariaLabel={`Open release ${it.version}`}>
-                      <Td nowrap><span className="text-gray-200">{it.version}</span></Td>
-                      <Td nowrap><span className="font-mono text-gray-400">{it.metric_id || 'N/A'}</span></Td>
-                      <Td nowrap><span className="font-mono text-gray-400">{it.asset_id || 'N/A'}</span></Td>
-                      <Td>{it.impact_type ? <Badge tone={IMPACT_TONE[String(it.impact_type).toLowerCase()] || 'default'}>{it.impact_type}</Badge> : <span className="text-gray-500">N/A</span>}</Td>
-                      <Td className="text-gray-300 break-words">{it.note || 'No note'}</Td>
+                  {summary.rows.map((r) => (
+                    <Tr key={r.version || 'unknown'}>
+                      <Td nowrap>
+                        <span className="font-mono text-gray-200">{r.version || 'Unknown'}</span>
+                        {latest && r.version === latest && <Badge tone="good">Latest</Badge>}
+                        {min && summary.belowRows.some((b) => b.version === r.version) && <Badge tone="warning">Below minimum</Badge>}
+                      </Td>
+                      <Td align="right" className="tabular-nums">{fmtInt(r.installs)}</Td>
+                      <Td align="right" className="tabular-nums">{fmtInt(r.active)}</Td>
                     </Tr>
                   ))}
                 </tbody>
               </Table>
-              <Pager paged={impactPaged} label="impacts" />
-            </>
+            </div>
           )}
-        </Panel>
-      )}
+    </Panel>
+  )
+}
 
-      {tab === 'insights' && (
-        state.error ? <ErrorState message={state.error} onRetry={load} /> : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Panel className="lg:col-span-2">
-            <PanelHeader icon={Rocket} title="Releases per month" subtitle="The last 12 months with a recorded release." />
-            {state.loading ? <LoadingState rows={2} /> : (
-              <TrendChart labels={perMonth.labels} series={[{ label: 'Releases', values: perMonth.values }]} height={180} area={false}
-                summary={perMonth.labels.map((l, i) => `${l} ${perMonth.values[i]}`).join(', ')} emptyText="No releases recorded yet." />
-            )}
-          </Panel>
-          <Panel>
-            <PanelHeader icon={Tag} title="Impacts by type" />
-            {state.loading ? <LoadingState rows={2} /> : (
-              <BarsChart bars={byType} summary={byType.map((b) => `${b.label} ${b.value}`).join(', ')} emptyText="No impacts recorded yet." />
-            )}
-          </Panel>
-          <Panel>
-            <PanelHeader icon={BarChart3} title="Metrics touched most" subtitle="Metrics that releases were recorded as affecting."
-              actions={<a href="/console/metric-catalogue" className="text-xs text-orange-300 hover:text-orange-200 inline-flex items-center gap-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">Metric catalogue <ExternalLink size={11} aria-hidden="true" /></a>} />
-            {state.loading ? <LoadingState rows={2} /> : (
-              <BarsChart bars={topMetrics} summary={topMetrics.map((b) => `${b.label} ${b.value}`).join(', ')} emptyText="No impact names a metric yet." />
-            )}
-          </Panel>
+/* ── compare two releases ──────────────────────────────────────────────── */
+
+function CompareReleases({ events, windows }) {
+  const options = events.map((e) => ({ value: e.id, label: `${e.at ? riyadhDay(e.at) : 'N/A'} ${PLATFORM_LABEL[e.platform] || 'Recorded'} ${e.version || ''}`.trim() }))
+  const [a, setA] = useState('')
+  const [b, setB] = useState('')
+  const ea = events.find((e) => e.id === a) || null
+  const eb = events.find((e) => e.id === b) || null
+  const col = (e) => {
+    if (!e) return null
+    const w = windows[e.id]
+    return [
+      ['Platform', PLATFORM_LABEL[e.platform] || 'Recorded'],
+      ['Version', e.version || 'N/A'],
+      ['When', e.at ? (e.timeKnown ? riyadhTime(e.at) : `${riyadhDay(e.at)}, time not recorded`) : 'N/A'],
+      ['Change', e.title],
+      ['Errors before', w ? fmtInt(w.before) : 'N/A'],
+      ['Errors after', w ? fmtInt(w.after) : 'N/A'],
+      ['Verdict', w ? errorVerdict(w) : 'N/A'],
+    ]
+  }
+  return (
+    <Panel>
+      <PanelHeader icon={GitCompare} title="Compare two releases" subtitle="Pick any two entries in the current filter." />
+      <div className="px-4 pb-4 space-y-3">
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Select value={a} onChange={setA} options={options} placeholder="First release" ariaLabel="First release" />
+          <Select value={b} onChange={setB} options={options} placeholder="Second release" ariaLabel="Second release" />
         </div>
-        )
-      )}
-
-      {/* ── record release ─────────────────────────────────────────────────── */}
-      <Modal
-        open={creating}
-        title="Record a release"
-        subtitle="Name the version you shipped. Add its impacts afterwards from the release detail."
-        onClose={() => { if (!savingRelease) setCreating(false) }}
-        width="max-w-lg"
-        footer={(
-          <Toolbar className="justify-end">
-            <Btn onClick={() => setCreating(false)} disabled={savingRelease}>Cancel</Btn>
-            <Btn variant="primary" icon={CheckCircle2} onClick={saveRelease} busy={savingRelease} disabled={!form.version.trim()}>
-              {savingRelease ? 'Saving...' : 'Record release'}
-            </Btn>
-          </Toolbar>
-        )}
-      >
-        <div className="space-y-3">
-          {flash?.tone === 'bad' && <ErrorState message={flash.text} />}
-          <div>
-            <label htmlFor="release-version" className="block text-xs text-gray-400 mb-1">Version <span className="text-red-400">*</span></label>
-            <input
-              id="release-version"
-              value={form.version}
-              onChange={(e) => setForm((f) => ({ ...f, version: e.target.value }))}
-              placeholder="e.g. V474"
-              className={inputCls}
-            />
-          </div>
-          <div>
-            <label htmlFor="release-notes" className="block text-xs text-gray-400 mb-1">Notes</label>
-            <textarea
-              id="release-notes"
-              value={form.notes}
-              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-              placeholder="What changed in this release"
-              rows={3}
-              className={inputCls}
-            />
-          </div>
-        </div>
-      </Modal>
-
-      {/* ── release detail + impacts ───────────────────────────────────────── */}
-      <SideDrawer
-        open={!!detail}
-        title={detail ? `Release ${detail.version || ''}`.trim() : ''}
-        subtitle={detail ? `Released ${fmtWhen(detail.released_at)}` : ''}
-        onClose={() => { setDetail(null); setImpactForm({ metric: '', asset: '', impact: '', note: '' }) }}
-        width="max-w-2xl"
-      >
-        {detail && (
-          <div className="space-y-4">
-            {flash?.tone === 'bad' && <ErrorState message={flash.text} />}
-            {detail.notes && <Note>{detail.notes}</Note>}
-
-            <div>
-              <h4 className="text-xs uppercase tracking-wide text-gray-400 mb-2">Recorded impacts</h4>
-              {detailImpacts.length === 0 ? (
-                <EmptyState
-                  icon={Tag}
-                  title="No impacts recorded"
-                  reason="Add the metrics or assets this release affected below."
-                />
-              ) : (
-                <Table>
-                  <THead>
-                    <Th>Metric</Th>
-                    <Th>Asset</Th>
-                    <Th>Type</Th>
-                    <Th>Note</Th>
-                  </THead>
-                  <tbody>
-                    {detailImpacts.map((it) => (
-                      <Tr key={it.id}>
-                        <Td nowrap><span className="font-mono text-gray-400">{it.metric_id || 'N/A'}</span></Td>
-                        <Td nowrap><span className="font-mono text-gray-400">{it.asset_id || 'N/A'}</span></Td>
-                        <Td>
-                          {it.impact_type
-                            ? <Badge tone={IMPACT_TONE[String(it.impact_type).toLowerCase()] || 'default'}>{it.impact_type}</Badge>
-                            : <span className="text-gray-500">N/A</span>}
-                        </Td>
-                        <Td className="text-gray-300 break-words">{it.note || 'No note'}</Td>
-                      </Tr>
-                    ))}
-                  </tbody>
-                </Table>
-              )}
-            </div>
-
-            <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-3">
-              <h4 className="text-xs uppercase tracking-wide text-gray-400 mb-2">Add an impact</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div>
-                  <label htmlFor="impact-metric" className="block text-[11px] text-gray-400 mb-1">Metric id</label>
-                  <input
-                    id="impact-metric"
-                    value={impactForm.metric}
-                    onChange={(e) => setImpactForm((f) => ({ ...f, metric: e.target.value }))}
-                    placeholder="e.g. fleet_cpk"
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="impact-asset" className="block text-[11px] text-gray-400 mb-1">Asset id</label>
-                  <input
-                    id="impact-asset"
-                    value={impactForm.asset}
-                    onChange={(e) => setImpactForm((f) => ({ ...f, asset: e.target.value }))}
-                    placeholder="optional asset id"
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="impact-impact" className="block text-[11px] text-gray-400 mb-1">Impact type</label>
-                  <input
-                    id="impact-impact"
-                    value={impactForm.impact}
-                    onChange={(e) => setImpactForm((f) => ({ ...f, impact: e.target.value }))}
-                    placeholder="e.g. increase, decrease, fix, change"
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="impact-note" className="block text-[11px] text-gray-400 mb-1">Note</label>
-                  <input
-                    id="impact-note"
-                    value={impactForm.note}
-                    onChange={(e) => setImpactForm((f) => ({ ...f, note: e.target.value }))}
-                    placeholder="what this release did to it"
-                    className={inputCls}
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end mt-3">
-                <Btn
-                  variant="primary"
-                  icon={Plus}
-                  onClick={saveImpact}
-                  busy={savingImpact}
-                  disabled={!impactForm.metric.trim() && !impactForm.asset.trim()}
-                >
-                  {savingImpact ? 'Saving...' : 'Add impact'}
-                </Btn>
-              </div>
-            </div>
+        {!ea || !eb ? <p className="text-xs text-gray-500">Choose two releases to see them side by side.</p> : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[ea, eb].map((e, i) => (
+              <div key={`${e.id}-${i}`} className="rounded-xl border border-gray-800 p-3"><DetailList items={col(e)} /></div>
+            ))}
           </div>
         )}
-      </SideDrawer>
-    </div>
+      </div>
+    </Panel>
+  )
+}
+
+/* ── release detail ────────────────────────────────────────────────────── */
+
+function ReleaseDrawer({ event, window: w, onClose }) {
+  const verdict = w ? errorVerdict(w) : 'N/A'
+  return (
+    <Drawer open={!!event} onClose={onClose} title={event ? `${PLATFORM_LABEL[event.platform] || 'Recorded'} ${event.version || ''}`.trim() : ''}
+      subtitle={event?.source}>
+      {event && (
+        <div className="space-y-4">
+          <DetailList items={[
+            ['When', event.at ? (event.timeKnown ? riyadhTime(event.at) : `${riyadhDay(event.at)}, time not recorded`) : 'N/A'],
+            ['Status', event.status],
+            event.range ? ['Range', event.range] : null,
+            ['Errors before', w ? `${fmtInt(w.before)} in ${WINDOW_HOURS} hours` : 'N/A'],
+            ['Errors after', w ? `${fmtInt(w.after)}${w.complete ? '' : ' so far, window not complete'}` : 'N/A'],
+            ['Verdict', verdict],
+          ]} />
+          <div>
+            <h4 className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">What changed</h4>
+            <p className="text-sm text-gray-300 whitespace-pre-wrap">{event.detail || event.title}</p>
+          </div>
+          {event.modules?.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">{[...new Set(event.modules)].map((m) => <Badge key={m} tone="info">{m}</Badge>)}</div>
+          )}
+          <Note icon={Info}>
+            {event.timeKnown
+              ? `Errors come from the app error log in equal ${WINDOW_HOURS}-hour windows. A handful of errors is not proof of a bad release.`
+              : 'This entry has a date but no time, so no before and after window can be drawn.'}
+          </Note>
+        </div>
+      )}
+    </Drawer>
+  )
+}
+
+/* ── guarded rollback ──────────────────────────────────────────────────── */
+
+function RollbackDialog({ open, onClose, onDone, logAction, recorded }) {
+  const [to, setTo] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  useEffect(() => { if (open) { setTo(''); setError('') } }, [open])
+  const previous = useMemo(() => (recorded || []).filter((r) => r.kind !== 'rollback' && (!r.platform || r.platform === 'web')).map((r) => r.version).filter(Boolean), [recorded])
+  const confirm = async ({ reason }) => {
+    if (reason.length < 5) { setError('Give a reason of at least 5 characters.'); return }
+    setBusy(true); setError('')
+    try {
+      await recordRollback({ platform: 'web', from: liveShort, to: to.trim(), reason })
+      try { await logAction?.('record_rollback', null, 'releases', { platform: 'web', from: liveShort, to: to.trim(), reason }) } catch { /* audit best effort */ }
+      window.open(VERCEL_URL, '_blank', 'noopener,noreferrer')
+      onDone?.(to.trim())
+    } catch (e) {
+      setError(toUserMessage(e, 'The rollback could not be recorded.'))
+    } finally { setBusy(false) }
+  }
+  return (
+    <ConfirmImpactDialog open={open} danger title="Roll back the web app"
+      confirmLabel="Record and open Vercel" typedWord="ROLLBACK" requireReason busy={busy} error={error}
+      readyExtra={to.trim().length > 0} onCancel={onClose} onConfirm={confirm}
+      impact={{
+        tone: 'danger',
+        what: 'Records a rollback of the web app and opens Vercel, where you choose the build and press Instant Rollback.',
+        change: `From ${liveShort || 'the live build'} to the build you name below.`,
+        who: 'Everyone using the web app and the console after Vercel switches.',
+        undo: 'In Vercel, Undo Rollback. Record it here again if you want it on the timeline.',
+      }}>
+      <label className="block">
+        <span className="block text-[11px] font-semibold text-gray-400 mb-1">Roll back to (build or commit)</span>
+        <input value={to} onChange={(e) => setTo(e.target.value)} list="rollback-previous" autoComplete="off" spellCheck={false}
+          placeholder="e.g. 3bcfd28"
+          className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-800 text-xs font-mono text-gray-200 placeholder-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
+        <datalist id="rollback-previous">{previous.map((v) => <option key={v} value={v} />)}</datalist>
+      </label>
+      <div className="rounded-xl border border-red-900/60 bg-red-950/20 p-3">
+        <p className="text-[11px] font-semibold text-red-300 mb-1">Not rolled back</p>
+        <ul className="list-disc pl-5 space-y-0.5 text-xs text-gray-300">{NOT_ROLLED_BACK.map((t) => <li key={t}>{t}</li>)}</ul>
+      </div>
+      <p className="text-[11px] text-gray-500 inline-flex items-center gap-1">
+        <ExternalLink size={11} aria-hidden="true" />This screen never deploys or rolls back by itself. The switch happens in Vercel.
+      </p>
+    </ConfirmImpactDialog>
   )
 }

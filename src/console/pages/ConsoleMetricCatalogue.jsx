@@ -83,13 +83,13 @@ function Detail({ label, value, mono = false, full = false }) {
   )
 }
 
-export default function ConsoleMetricCatalogue() {
+export default function ConsoleMetricCatalogue({ tabParam = 'tab' } = {}) {
   const [state, setState] = useState({ loading: true, error: null, rows: [], at: null })
   const [query, setQuery] = useState('')
   const [owner, setOwner] = useState('')
   const [unusedOnly, setUnusedOnly] = useState(false)
   const [gapOnly, setGapOnly] = useState(false)
-  const [tab, setTab] = useUrlTab(TABS, 'registry')
+  const [tab, setTab] = useUrlTab(TABS, 'registry', tabParam)
   const [params, setParams] = useSearchParams()
   const selected = params.get('metric') || null
   const [detail, setDetail] = useState({ loading: false, error: null, data: null })

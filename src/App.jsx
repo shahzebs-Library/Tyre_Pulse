@@ -33,58 +33,47 @@ function LegacyRedirect({ to }) {
   return <Navigate to={`${to}${search}${hash}`} replace />
 }
 
+// Old console page -> a tab of its new home. The old page's own ?tab= moves
+// to ?sub= so its internal section still opens.
+function ConsoleTabRedirect({ to, tab, subParam = 'sub' }) {
+  const { search, hash } = useLocation()
+  const p = new URLSearchParams(search)
+  const sub = p.get('tab')
+  p.delete('tab')
+  p.set('tab', tab)
+  if (sub) p.set(subParam, sub)
+  return <Navigate to={`${to}?${p.toString()}${hash}`} replace />
+}
+
 // Console pages are admin/super-admin only and rarely loaded; lazy-load them so
 // their code stays out of the main entry chunk for the typical user.
 const ConsoleLogin         = lazy(() => import('./console/pages/ConsoleLogin'))
 const ConsoleDashboard     = lazy(() => import('./console/pages/ConsoleDashboard'))
-const ConsoleOrganisations = lazy(() => import('./console/pages/ConsoleOrganisations'))
-const ConsoleUsers         = lazy(() => import('./console/pages/ConsoleUsers'))
-const ConsoleAIUsage       = lazy(() => import('./console/pages/ConsoleAIUsage'))
-const ConsoleAnnouncements = lazy(() => import('./console/pages/ConsoleAnnouncements'))
-const ConsoleSystemConfig  = lazy(() => import('./console/pages/ConsoleSystemConfig'))
-const ConsoleReportAppearance = lazy(() => import('./console/pages/ConsoleReportAppearance'))
+const ConsoleOrganizationsHome = lazy(() => import('./console/pages/ConsoleOrganizationsHome'))
+const ConsoleUsersHome     = lazy(() => import('./console/pages/ConsoleUsersHome'))
+const ConsoleUserDetail    = lazy(() => import('./console/pages/ConsoleUserDetail'))
+const ConsoleBilling       = lazy(() => import('./console/pages/ConsoleBilling'))
+// Control Center MONITOR screens (each keeps the pages it replaces as tabs).
+const ConsoleAlertCenter   = lazy(() => import('./console/pages/ConsoleAlertCenter'))
+const ConsoleAnalytics     = lazy(() => import('./console/pages/ConsoleAnalytics'))
+const ConsoleNotifications = lazy(() => import('./console/pages/ConsoleNotifications'))
+const ConsoleOperations    = lazy(() => import('./console/pages/ConsoleOperations'))
+const ConsoleSettings      = lazy(() => import('./console/pages/ConsoleSettings'))
 const ConsoleSystemHealth  = lazy(() => import('./console/pages/ConsoleSystemHealth'))
-const ConsoleBackups       = lazy(() => import('./console/pages/ConsoleBackups'))
 const ConsoleAuditTrail    = lazy(() => import('./console/pages/ConsoleAuditTrail'))
-const ConsoleAlertRules    = lazy(() => import('./console/pages/ConsoleAlertRules'))
-const ConsoleModuleControl = lazy(() => import('./console/pages/ConsoleModuleControl'))
-const ConsoleSelfHealing   = lazy(() => import('./console/pages/ConsoleSelfHealing'))
-const ConsoleDataBrowser   = lazy(() => import('./console/pages/ConsoleDataBrowser'))
-const ConsoleDataCleanup   = lazy(() => import('./console/pages/ConsoleDataCleanup'))
-const ConsoleDuplicateControl = lazy(() => import('./console/pages/ConsoleDuplicateControl'))
-const ConsoleImportHistory = lazy(() => import('./console/pages/ConsoleImportHistory'))
-const ConsoleMaterialMaster = lazy(() => import('./console/pages/ConsoleMaterialMaster'))
-const ConsoleClassificationLearning = lazy(() => import('./console/pages/ConsoleClassificationLearning'))
-const ConsoleDataLearning = lazy(() => import('./console/pages/ConsoleDataLearning'))
-const ConsoleMetricCatalogue = lazy(() => import('./console/pages/ConsoleMetricCatalogue'))
-const ConsoleDataQuality = lazy(() => import('./console/pages/ConsoleDataQuality'))
-const ConsoleReconciliation = lazy(() => import('./console/pages/ConsoleReconciliation'))
-const ConsolePipelineMonitor = lazy(() => import('./console/pages/ConsolePipelineMonitor'))
-const ConsoleCorrectionCenter = lazy(() => import('./console/pages/ConsoleCorrectionCenter'))
-const ConsoleLineageExplorer = lazy(() => import('./console/pages/ConsoleLineageExplorer'))
-const ConsoleTrustAlerts = lazy(() => import('./console/pages/ConsoleTrustAlerts'))
+const ConsoleDatabase    = lazy(() => import('./console/pages/ConsoleDatabase'))
+const ConsoleStorage     = lazy(() => import('./console/pages/ConsoleStorage'))
 const ConsoleReleases = lazy(() => import('./console/pages/ConsoleReleases'))
-const ConsoleSmartImport   = lazy(() => import('./console/pages/ConsoleSmartImport'))
-const ConsoleVehicleDesigner = lazy(() => import('./console/pages/ConsoleVehicleDesigner'))
+const ConsoleDeveloper = lazy(() => import('./console/pages/ConsoleDeveloper'))
+const ConsoleFeatureFlags = lazy(() => import('./console/pages/ConsoleFeatureFlags'))
 const ConsolePlatformMap     = lazy(() => import('./console/pages/ConsolePlatformMap'))
-const ConsoleMobileApp       = lazy(() => import('./console/pages/ConsoleMobileApp'))
-const ConsoleNavigation    = lazy(() => import('./console/pages/ConsoleNavigation'))
 const ConsoleCrashReports  = lazy(() => import('./console/pages/ConsoleCrashReports'))
-const ConsoleSessions      = lazy(() => import('./console/pages/ConsoleSessions'))
-const ConsoleAutomation    = lazy(() => import('./console/pages/ConsoleAutomation'))
-const ConsoleDelivery      = lazy(() => import('./console/pages/ConsoleDelivery'))
-const ConsoleSupportSessions = lazy(() => import('./console/pages/ConsoleSupportSessions'))
-const ConsoleAccountDeletions = lazy(() => import('./console/pages/ConsoleAccountDeletions'))
-const ConsoleControlCenter = lazy(() => import('./console/pages/ConsoleControlCenter'))
-const ConsoleDataOps = lazy(() => import('./console/pages/ConsoleDataOps'))
 const ConsoleSecurityAudit = lazy(() => import('./console/pages/ConsoleSecurityAudit'))
 const ConsoleAccessReviews = lazy(() => import('./console/pages/ConsoleAccessReviews'))
 const ConsoleAuditIntegrity = lazy(() => import('./console/pages/ConsoleAuditIntegrity'))
 const ConsoleApiKeys = lazy(() => import('./console/pages/ConsoleApiKeys'))
 const ConsoleCompliance = lazy(() => import('./console/pages/ConsoleCompliance'))
 const ConsoleApprovals = lazy(() => import('./console/pages/ConsoleApprovals'))
-const ConsoleTenantExport = lazy(() => import('./console/pages/ConsoleTenantExport'))
-const ConsoleIncidents = lazy(() => import('./console/pages/ConsoleIncidents'))
 const ConsoleJitElevation = lazy(() => import('./console/pages/ConsoleJitElevation'))
 const ConsoleAccessPolicies = lazy(() => import('./console/pages/ConsoleAccessPolicies'))
 
@@ -332,7 +321,6 @@ const ScheduledReports       = lazy(() => import('./pages/ScheduledReports'))
 const ReportCenter           = lazy(() => import('./pages/ReportCenter'))
 const KnowledgeBase          = lazy(() => import('./pages/KnowledgeBase'))
 const AiCostMonitor          = lazy(() => import('./pages/AiCostMonitor'))
-const AiAdministration       = lazy(() => import('./pages/AiAdministration'))
 const DisplayDashboard       = lazy(() => import('./pages/DisplayDashboard'))
 const ReportBuilder          = lazy(() => import('./pages/ReportBuilder'))
 const SystemHealth           = lazy(() => import('./pages/SystemHealth'))
@@ -924,18 +912,20 @@ export default function App() {
           </ConsoleSurfaceGate>
         }>
           <Route index                element={<ConsoleDashboard />} />
-          <Route path="organisations" element={<ConsoleOrganisations />} />
-          <Route path="users"         element={<ConsoleUsers />} />
+          <Route path="organisations" element={<ConsoleOrganizationsHome />} />
+          <Route path="users"         element={<ConsoleUsersHome />} />
+          <Route path="users/:id"     element={<ConsoleUserDetail />} />
+          <Route path="billing"       element={<ConsoleBilling />} />
           <Route path="permissions"   element={<Navigate to="/console/access?tab=roles" replace />} />
-          <Route path="ai-usage"      element={<ConsoleAIUsage />} />
+          <Route path="ai-usage" element={<ConsoleTabRedirect to="/console/analytics" tab="ai" />} />
           <Route path="audit"         element={<Navigate to="/console/audit-trail" replace />} />
-          <Route path="announcements" element={<ConsoleAnnouncements />} />
-          <Route path="config"        element={<ConsoleSystemConfig />} />
-          <Route path="appearance"    element={<ConsoleReportAppearance />} />
+          <Route path="announcements" element={<ConsoleTabRedirect to="/console/notifications" tab="announcements" />} />
+          <Route path="config"        element={<ConsoleSettings />} />
+          <Route path="appearance"    element={<ConsoleTabRedirect to="/console/config" tab="colours" subParam="asec" />} />
           <Route path="health"        element={<ConsoleSystemHealth />} />
-          <Route path="control-center" element={<ConsoleControlCenter />} />
-          <Route path="data-ops"      element={<ConsoleDataOps />} />
-          <Route path="backups"       element={<ConsoleBackups />} />
+          <Route path="control-center" element={<LegacyRedirect to="/console/database/trust/control" />} />
+          <Route path="data-ops" element={<ConsoleTabRedirect to="/console/operations" tab="data-ops" />} />
+          <Route path="backups"       element={<LegacyRedirect to="/console/database/backups" />} />
           <Route path="admin-roles"   element={<Navigate to="/console/users" replace />} />
           <Route path="security-audit" element={<ConsoleSecurityAudit />} />
           <Route path="access-reviews" element={<ConsoleAccessReviews />} />
@@ -943,43 +933,53 @@ export default function App() {
           <Route path="api-keys" element={<ConsoleApiKeys />} />
           <Route path="compliance" element={<ConsoleCompliance />} />
           <Route path="approvals" element={<ConsoleApprovals />} />
-          <Route path="tenant-export" element={<ConsoleTenantExport />} />
-          <Route path="incidents" element={<ConsoleIncidents />} />
+          <Route path="tenant-export" element={<ConsoleTabRedirect to="/console/organisations" tab="exports" subParam="etab" />} />
+          <Route path="incidents" element={<ConsoleTabRedirect to="/console/alerts" tab="incidents" />} />
           <Route path="jit-elevation" element={<ConsoleJitElevation />} />
           <Route path="access-policies" element={<ConsoleAccessPolicies />} />
           <Route path="audit-trail"   element={<ConsoleAuditTrail />} />
-          <Route path="alert-rules"   element={<ConsoleAlertRules />} />
-          <Route path="module-control" element={<ConsoleModuleControl />} />
-          <Route path="self-healing"  element={<ConsoleSelfHealing />} />
-          <Route path="data-browser"  element={<ConsoleDataBrowser />} />
-          <Route path="data-cleanup"  element={<ConsoleDataCleanup />} />
-          <Route path="duplicates"    element={<ConsoleDuplicateControl />} />
-          <Route path="import-history" element={<ConsoleImportHistory />} />
-          <Route path="material-master" element={<ConsoleMaterialMaster />} />
-          <Route path="classification-learning" element={<ConsoleClassificationLearning />} />
-          <Route path="data-learning" element={<ConsoleDataLearning />} />
-          <Route path="metric-catalogue" element={<ConsoleMetricCatalogue />} />
-          <Route path="data-quality" element={<ConsoleDataQuality />} />
-          <Route path="reconciliation" element={<ConsoleReconciliation />} />
-          <Route path="pipeline-monitor" element={<ConsolePipelineMonitor />} />
-          <Route path="correction-center" element={<ConsoleCorrectionCenter />} />
-          <Route path="lineage" element={<ConsoleLineageExplorer />} />
-          <Route path="trust-alerts" element={<ConsoleTrustAlerts />} />
+          <Route path="alert-rules" element={<ConsoleTabRedirect to="/console/alerts" tab="rules" />} />
+          <Route path="module-control" element={<ConsoleTabRedirect to="/console/flags" tab="modules" />} />
+          <Route path="flags" element={<ConsoleFeatureFlags />} />
+          <Route path="self-healing" element={<ConsoleTabRedirect to="/console/alerts" tab="self-healing" />} />
+          <Route path="database" element={<ConsoleDatabase />} />
+          <Route path="database/:section" element={<ConsoleDatabase />} />
+          <Route path="database/:section/:view" element={<ConsoleDatabase />} />
+          <Route path="storage" element={<ConsoleStorage />} />
+          <Route path="data-browser"  element={<LegacyRedirect to="/console/database/browser" />} />
+          <Route path="data-cleanup" element={<ConsoleTabRedirect to="/console/operations" tab="cleanup" />} />
+          <Route path="duplicates" element={<ConsoleTabRedirect to="/console/operations" tab="duplicates" />} />
+          <Route path="import-history" element={<ConsoleTabRedirect to="/console/operations" tab="import-history" />} />
+          <Route path="material-master" element={<ConsoleTabRedirect to="/console/operations" tab="material-master" />} />
+          <Route path="classification-learning" element={<ConsoleTabRedirect to="/console/operations" tab="classifier" />} />
+          <Route path="data-learning" element={<ConsoleTabRedirect to="/console/operations" tab="data-learning" />} />
+          <Route path="metric-catalogue" element={<ConsoleTabRedirect to="/console/analytics" tab="metrics" />} />
+          <Route path="data-quality" element={<LegacyRedirect to="/console/database/trust/quality" />} />
+          <Route path="reconciliation" element={<LegacyRedirect to="/console/database/trust/recon" />} />
+          <Route path="pipeline-monitor" element={<ConsoleTabRedirect to="/console/developer" tab="pipeline" />} />
+          <Route path="correction-center" element={<LegacyRedirect to="/console/database/trust/cases" />} />
+          <Route path="lineage" element={<LegacyRedirect to="/console/database/trust/lineage" />} />
+          <Route path="trust-alerts" element={<ConsoleTabRedirect to="/console/alerts" tab="trust" />} />
           <Route path="releases" element={<ConsoleReleases />} />
-          <Route path="smart-import"  element={<ConsoleSmartImport />} />
-          <Route path="vehicle-designer" element={<ConsoleVehicleDesigner />} />
+          <Route path="smart-import" element={<ConsoleTabRedirect to="/console/operations" tab="smart-import" />} />
+          <Route path="vehicle-designer" element={<ConsoleTabRedirect to="/console/config" tab="vehicle" subParam="vtab" />} />
           <Route path="platform-map"     element={<ConsolePlatformMap />} />
-          <Route path="mobile-app"       element={<ConsoleMobileApp />} />
-          <Route path="navigation"    element={<ConsoleNavigation />} />
-          <Route path="crash-reports" element={<ConsoleCrashReports />} />
-          <Route path="sessions"      element={<ConsoleSessions />} />
-          <Route path="automation"    element={<ConsoleAutomation />} />
-          <Route path="delivery"      element={<ConsoleDelivery />} />
-          <Route path="support-sessions" element={<ConsoleSupportSessions />} />
-          <Route path="account-deletions" element={<ConsoleAccountDeletions />} />
+          <Route path="mobile-app"       element={<ConsoleTabRedirect to="/console/developer" tab="mobile" />} />
+          <Route path="developer"        element={<ConsoleDeveloper />} />
+          <Route path="navigation"    element={<ConsoleTabRedirect to="/console/config" tab="navigation" subParam="ntab" />} />
+          <Route path="crash-reports" element={<ConsoleCrashReports defaultTab="overview" />} />
+          <Route path="alerts"        element={<ConsoleAlertCenter />} />
+          <Route path="analytics"     element={<ConsoleAnalytics />} />
+          <Route path="notifications" element={<ConsoleNotifications />} />
+          <Route path="operations"    element={<ConsoleOperations />} />
+          <Route path="sessions"      element={<ConsoleTabRedirect to="/console/users" tab="sessions" subParam="stab" />} />
+          <Route path="automation"    element={<ConsoleTabRedirect to="/console/developer" tab="automation" />} />
+          <Route path="delivery" element={<ConsoleTabRedirect to="/console/notifications" tab="delivery" />} />
+          <Route path="support-sessions" element={<ConsoleTabRedirect to="/console/users" tab="support" subParam="sptab" />} />
+          <Route path="account-deletions" element={<ConsoleTabRedirect to="/console/users" tab="deletions" subParam="dtab" />} />
           {/* Unified admin + access control hosted from the main app via ConsoleAuthBridge */}
           <Route path="access"        element={<ConsoleAuthBridge><Suspense fallback={<ConsoleModulePlaceholder label="Access Control" />}><ConsoleAccessControl /></Suspense></ConsoleAuthBridge>} />
-          <Route path="ai-admin"      element={<ConsoleAuthBridge><Suspense fallback={<ConsoleModulePlaceholder label="AI Administration" />}><AiAdministration /></Suspense></ConsoleAuthBridge>} />
+          <Route path="ai-admin"      element={<ConsoleTabRedirect to="/console/developer" tab="ai" />} />
           <Route path="security"      element={<ConsoleAuthBridge><Suspense fallback={<ConsoleModulePlaceholder label="Security" />}><ConsoleSecurity /></Suspense></ConsoleAuthBridge>} />
           <Route path="system"        element={<Navigate to="/console/health" replace />} />
           <Route path="*"             element={<Navigate to="/console" replace />} />

@@ -30,12 +30,13 @@ export async function listGlobalPermissions() {
  * @param {{ role: string, module_key: string, enabled: boolean }[]} changes
  * @returns {Promise<number>} rows written
  */
-export async function saveModulePermissions(changes) {
+/** @param {string} [reason] written to access_audit.reason by the trigger */
+export async function saveModulePermissions(changes, reason = null) {
   const clean = (changes || []).filter(
     (c) => c && c.role && c.module_key && typeof c.enabled === 'boolean',
   )
   if (!clean.length) return 0
-  const { data, error } = await supabase.rpc('set_module_permissions', { p_changes: clean })
+  const { data, error } = await supabase.rpc('set_module_permissions', { p_changes: clean, ...(reason ? { p_reason: String(reason).trim() } : {}) })
   if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data ?? clean.length
 }

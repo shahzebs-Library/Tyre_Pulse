@@ -190,7 +190,7 @@ function ShareDialog({ item, columns, peopleCounts, onClose, onDone, logAction }
   async function share() {
     setBusy(true); setErr('')
     try {
-      await saveModulePermissions(changes)
+      await saveModulePermissions(changes, reason.trim())
       try { await logAction?.('access_share_new_area', null, 'module_permissions', { area: item.storedKey, roles: picked, where, reason: reason.trim() }) } catch { /* best effort */ }
       await onDone(`${item.label} shared with ${picked.join(', ')}.`)
     } catch (e) {

@@ -1,18 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  ShieldCheck, Info, Activity, Users, Clock,
+  ShieldCheck, Info, Activity, Users, Clock, ListFilter, Plus, Trash2, MessageSquare,
 } from 'lucide-react'
 import {
   Panel, PanelHeader, Note, StatTile, Badge, Btn, SearchInput, Select, Toolbar,
-  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Code,
+  Table, THead, Th, Tr, Td, LoadingState, EmptyState, ErrorState, Code, Modal, Segmented,
 } from '../components/ui'
 import { sortRows, useTableSort } from '../../lib/consoleTable'
 import { TrendChart, ShareChart, BarsChart } from '../components/ui/charts'
 import { dailySeries, topShare } from '../../lib/consoleCharts'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
-  AUDIT_SOURCES, listDataAudit, listAccessAudit, listConsoleAudit,
+  AUDIT_SOURCES, listDataAudit, listAccessAudit, listConsoleAudit, countAccessReasons,
 } from '../../lib/api/auditTrail'
+import {
+  QUERY_FIELDS, QUERY_OPS, parseQuery, toQueryString, filterByQuery, reasonCoverageText,
+} from '../../lib/auditQuery'
 import { toUserMessage } from '../../lib/safeError'
 import ExportButtons from './shared/ExportButtons'
 import { PageHeader, TabBar, useUrlTab, usePaged, Pager, SideDrawer, Field } from './shared/pageKit'
@@ -95,6 +98,60 @@ function JsonBlock({ label, value }) {
   )
 }
 
+/**
+ * AND / OR condition builder for people who do not type search syntax. It
+ * writes the same query string the search box parses (one parser), so the box
+ * always shows exactly what is being searched.
+ */
+function ConditionBuilder({ open, initial, onApply, onClose }) {
+  const start = () => {
+    const parsed = parseQuery(initial)
+    const rows = parsed.conditions.map((c, i) => ({ id: i, field: c.field || 'detail', op: c.op, value: c.value }))
+    return { join: parsed.join, rows: rows.length ? rows : [{ id: 0, field: 'actor', op: 'contains', value: '' }] }
+  }
+  const [draft, setDraft] = useState(start)
+  useEffect(() => { if (open) setDraft(start()) }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  const setRow = (id, patch) => setDraft((d) => ({ ...d, rows: d.rows.map((r) => (r.id === id ? { ...r, ...patch } : r)) }))
+  const addRow = () => setDraft((d) => ({ ...d, rows: [...d.rows, { id: Date.now(), field: 'action', op: 'contains', value: '' }] }))
+  const removeRow = (id) => setDraft((d) => ({ ...d, rows: d.rows.filter((r) => r.id !== id) }))
+  const preview = toQueryString(draft.rows, draft.join)
+  return (
+    <Modal open={open} onClose={onClose} title="Build a search" subtitle="Add conditions. The search box shows the same search as text."
+      footer={<>
+        <Btn onClick={onClose}>Cancel</Btn>
+        <Btn variant="primary" onClick={() => { onApply(preview); onClose() }}>Apply search</Btn>
+      </>}>
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400">
+          <span>Match</span>
+          <Segmented ariaLabel="Match all or any" value={draft.join} onChange={(join) => setDraft((d) => ({ ...d, join }))}
+            options={[{ key: 'and', label: 'All conditions (AND)' }, { key: 'or', label: 'Any condition (OR)' }]} />
+        </div>
+        <ul className="space-y-2">
+          {draft.rows.map((r, i) => (
+            <li key={r.id} className="grid grid-cols-1 sm:grid-cols-[8rem_10rem_1fr_auto] gap-2 items-center">
+              <Select ariaLabel={`Condition ${i + 1} field`} value={r.field} onChange={(field) => setRow(r.id, { field })}
+                options={QUERY_FIELDS.map((f) => ({ value: f.key, label: f.label }))} />
+              <Select ariaLabel={`Condition ${i + 1} test`} value={r.op} onChange={(op) => setRow(r.id, { op })}
+                options={QUERY_OPS.map((o) => ({ value: o.key, label: o.label }))} />
+              <input value={r.value} onChange={(e) => setRow(r.id, { value: e.target.value })} aria-label={`Condition ${i + 1} value`}
+                placeholder="Value"
+                className="w-full px-3 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
+              <Btn size="xs" icon={Trash2} ariaLabel={`Remove condition ${i + 1}`} disabled={draft.rows.length === 1} onClick={() => removeRow(r.id)} />
+            </li>
+          ))}
+        </ul>
+        <Btn size="xs" icon={Plus} onClick={addRow}>Add condition</Btn>
+        <div className="rounded-lg border border-gray-800 bg-gray-900/60 p-2.5">
+          <p className="text-[10px] text-gray-500 mb-1">Search text</p>
+          <p className="font-mono text-xs text-gray-200 break-all">{preview || 'Nothing yet'}</p>
+        </div>
+        <p className="text-[11px] text-gray-500">"Does not contain" always applies, whichever match mode you pick.</p>
+      </div>
+    </Modal>
+  )
+}
+
 export default function ConsoleAuditTrail() {
   useConsoleAuth() // gate: rendered only inside the super-admin console shell
 
@@ -109,6 +166,15 @@ export default function ConsoleAuditTrail() {
   const [since, setSince] = useState('7d')
   const [expanded, setExpanded] = useState(null)
   const [seenActions, setSeenActions] = useState({})
+  const [builderOpen, setBuilderOpen] = useState(false)
+  const [reasons, setReasons] = useState({ total: null, withReason: null, days: 30, loading: true })
+  useEffect(() => {
+    let live = true
+    countAccessReasons(30)
+      .then((r) => { if (live) setReasons({ ...r, loading: false }) })
+      .catch(() => { if (live) setReasons({ total: null, withReason: null, days: 30, loading: false }) })
+    return () => { live = false }
+  }, [])
 
   const meta = SOURCE_META[sourceKey] || SOURCE_META.audit_log_v2
 
@@ -159,16 +225,8 @@ export default function ConsoleAuditTrail() {
 
   // Free-text search across actor / action / target / detail.
   const { sort, onSort } = useTableSort(null)
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return sortRows(rows, sort)
-    return sortRows(rows.filter((r) =>
-      (r.actor || '').toLowerCase().includes(q) ||
-      (r.action || '').toLowerCase().includes(q) ||
-      (r.target || '').toLowerCase().includes(q) ||
-      (r.detail || '').toLowerCase().includes(q),
-    ), sort)
-  }, [rows, search, sort])
+  // One parser for typed qualifiers and the AND / OR builder (lib/auditQuery).
+  const filtered = useMemo(() => sortRows(filterByQuery(rows, search), sort), [rows, search, sort])
 
   const canDiff = sourceKey === 'audit_log_v2'
   const hasFilters = !!(search || actionFilter || since !== '7d')
@@ -225,8 +283,25 @@ export default function ConsoleAuditTrail() {
         <StatTile label="Most recent" value={loading || error || !filtered.length ? 'N/A' : fmtWhen(filtered[0]?.when)} icon={Clock} />
       </div>
 
+      <Panel>
+        <div className="flex flex-wrap items-start gap-3">
+          <MessageSquare size={16} className="text-orange-400 mt-0.5" aria-hidden="true" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] text-gray-500">Access changes with a written reason, last {reasons.days} days</p>
+            <p className="text-lg font-semibold text-gray-100 tabular-nums">{reasons.loading ? 'Loading' : reasonCoverageText(reasons)}</p>
+            <p className="text-[11px] text-gray-500 max-w-3xl">
+              {reasons.loading ? 'Counting.' : reasons.total === null
+                ? 'N/A: the count could not be read.'
+                : 'Measured from the access log. Access changes made from 30 Sep 2026 carry the reason typed in the console; older rows were written before reasons were recorded and show Not recorded. Data changes do not carry a reason field yet.'}
+            </p>
+          </div>
+          <Btn size="xs" onClick={() => { switchSource('access_audit'); setView('entries') }} disabled={reasons.loading}>See access changes</Btn>
+        </div>
+      </Panel>
+
       <Toolbar>
-        <SearchInput value={search} onChange={setSearch} placeholder="Search actor, action, target, detail" className="flex-1 min-w-48" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Search, or actor:anum action:update OR -action:login" className="flex-1 min-w-48" />
+        <Btn icon={ListFilter} onClick={() => setBuilderOpen(true)}>AND / OR builder</Btn>
         <Select value={actionFilter} onChange={setActionFilter} placeholder="All actions" className="w-52"
           options={actionOptions.map((a) => ({ value: a, label: a.replace(/_/g, ' ') }))} />
         <Select value={since} onChange={setSince} className="w-40"
@@ -238,6 +313,11 @@ export default function ConsoleAuditTrail() {
           <SegmentedView value={view} onChange={setView} />
         </div>
       </Toolbar>
+
+      <p className="text-[11px] text-gray-500 -mt-2">
+        Qualifiers: {QUERY_FIELDS.map((f) => `${f.key}:`).join(' ')} Put a minus in front to exclude, and OR between terms to match any.
+      </p>
+      <ConditionBuilder open={builderOpen} initial={search} onApply={setSearch} onClose={() => setBuilderOpen(false)} />
 
       {view === 'insights' && (
         error ? <ErrorState message={error} onRetry={load} /> : (
@@ -326,6 +406,7 @@ export default function ConsoleAuditTrail() {
               <Field label="Actor">{openRow.actor || 'N/A'}{openRow.role ? ` (${openRow.role})` : ''}</Field>
               <Field label="Target">{openRow.target || 'N/A'}</Field>
               <Field label="Detail">{openRow.detail || 'N/A'}</Field>
+              {openRow.source === 'access_audit' && <Field label="Reason">{openRow.reason || 'Not recorded'}</Field>}
               {openRow.id != null && <Field label="Entry ID"><Code>{String(openRow.id)}</Code></Field>}
             </dl>
             {canDiff && (

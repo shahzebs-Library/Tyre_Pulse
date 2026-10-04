@@ -128,14 +128,14 @@ const ISSUE_COLUMNS = [
 const SEV_RANK = { critical: 0, warning: 1, info: 2 }
 const ISSUE_ACCESSORS = { severity: (r) => SEV_RANK[r.severity] ?? 9, label: (r) => r.label || r.key, count: (r) => Number(r.count) || 0 }
 
-export default function ConsoleDataOps() {
+export default function ConsoleDataOps({ tabParam = 'tab' } = {}) {
   const navigate = useNavigate()
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [refreshedAt, setRefreshedAt] = useState(null)
-  const [tab, setTab] = useUrlTab(TAB_KEYS, 'overview')
+  const [tab, setTab] = useUrlTab(TAB_KEYS, 'overview', tabParam)
   const [issueQuery, setIssueQuery] = useState('')
   const [sevFilter, setSevFilter] = useState('')
 

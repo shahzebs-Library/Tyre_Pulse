@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import { Archivo, Inter } from "next/font/google";
 import "./globals.css";
 import "./pmv.css";
+import "./motion.css";
 
 const display = Archivo({ subsets: ["latin"], weight: ["700", "800"], variable: "--font-display", display: "swap" });
 const body = Inter({ subsets: ["latin"], variable: "--font-body", display: "swap" });
 import { WhatsAppButton } from "@/components/WhatsAppButton";
+import { MotionRoot } from "@/components/motion/MotionRoot";
 import { BRAND_COLOR, JsonLd, SITE_URL, alternatesFor, siteSchemaGraph } from "./schema";
 import { OG_IMAGES } from "@/lib/site";
 
@@ -73,6 +75,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         </a>
         {children}
         <WhatsAppButton />
+        <MotionRoot />
       </body>
     </html>
   );

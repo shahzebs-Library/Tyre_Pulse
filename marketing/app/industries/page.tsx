@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Photo } from "@/components/art/Photos";
 import { PageFrame } from "@/components/PageFrame";
+import { PageTop } from "@/components/PageTop";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../schema";
 import { CTA } from "@/components/CTA";
 import { OG_IMAGES } from "@/lib/site";
@@ -31,8 +32,8 @@ const industries = [
 export default function IndustriesPage() {
   return <PageFrame>
     <JsonLd data={pageBreadcrumb("Industries", "/industries")} />
-    <section className="page-hero"><div className="site-shell"><span className="eyebrow">Industry workflows</span><h1 className="display">Configured for the way your operation works.</h1><p className="lead">Built inside a ready-mix concrete operation running mixers, pumps and batching plants across Saudi Arabia, the UAE and Egypt. The same platform is configured for each model below.</p></div></section>
-    <section className="page-content"><div className="site-shell">
+    <PageTop crumbs={[{ href: "/", label: "Home" }, { label: "Industries" }]} title="Configured for the way your operation works." lead="Built inside a ready-mix concrete operation running mixers, pumps and batching plants across Saudi Arabia, the UAE and Egypt. The same platform is configured for each model below." />
+    <section className="section-pad tight"><div className="site-shell">
       <ul className="ind-list">
         {industries.map(([photo, title, text]) => <li key={title}><div className="ind-media"><Photo name={photo} position={photo === "riyadh" ? "30% 92%" : undefined} sizes="(max-width: 760px) 100vw, 600px" /></div><h2>{title}</h2><p>{text}</p></li>)}
       </ul>

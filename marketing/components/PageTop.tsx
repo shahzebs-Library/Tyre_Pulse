@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
 /** Inner-page opening: breadcrumb, title, one line of purpose, demo button. */
-export function PageTop({ crumbs, title, lead }: { crumbs: { href?: string; label: string }[]; title: string; lead: string }) {
+export function PageTop({ crumbs, title, lead, cta = true }: { crumbs: { href?: string; label: string }[]; title: string; lead: string; cta?: boolean }) {
   return (
     <section className="page-top">
       <div className="site-shell">
@@ -21,7 +21,7 @@ export function PageTop({ crumbs, title, lead }: { crumbs: { href?: string; labe
             <h1 className="page-h1">{title}</h1>
             <p className="page-lead">{lead}</p>
           </div>
-          <Link className="btn btn-primary" href="/contact">Book a demo <ArrowRight size={17} aria-hidden="true" /></Link>
+          {cta && <Link className="btn btn-primary" href="/contact">Book a demo <ArrowRight className="cta-arrow" size={17} aria-hidden="true" /></Link>}
         </div>
       </div>
     </section>

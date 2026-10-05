@@ -9,7 +9,9 @@ import { Footer } from "@/components/Footer";
 import { CtaBand } from "@/components/CtaBand";
 import { Tabs } from "@/components/Tabs";
 import { HeroCarousel, type HeroSlide } from "@/components/HeroCarousel";
-import { Photo } from "@/components/art/Photos";
+import { Photo, type PhotoKey } from "@/components/art/Photos";
+import { CountUp } from "@/components/motion/CountUp";
+import { Spotlight } from "@/components/motion/Spotlight";
 import {
   ApprovalCard, AssetRecord, AssetStats, SignOffCard, CompleteCard, FleetCostPanel, NewInspectionCard, OfflineInspectionPhone,
   OpsOverview, PartsCard,
@@ -50,15 +52,35 @@ const STEPS = [
   { icon: FileSignature, title: "Verify and release", text: "Confirm work is complete, update records and return the asset to service.", card: <CompleteCard /> },
 ];
 
-const MODULES = [
-  { icon: Truck, title: "Fleet and asset lifecycle", text: "Track plant, machinery and vehicles from acquisition to disposal.", href: "/platform/fleet-assets" },
-  { icon: Wrench, title: "Preventive maintenance", text: "Plan and manage maintenance to keep assets working and compliant.", href: "/platform/maintenance" },
-  { icon: Settings, title: "Workshop and job cards", text: "Manage jobs, labour, parts and third-party services.", href: "/platform/maintenance" },
-  { icon: CircleDot, title: "Tyre lifecycle", text: "Track tyre inspections, fitments, rotations and cost per kilometre or hour.", href: "/platform/inspections#tyres" },
-  { icon: ShieldCheck, title: "Accidents and insurance", text: "Record incidents, manage claims and track insurance details.", href: "/contact" },
-  { icon: Box, title: "Stores and procurement", text: "Control inventory, purchases and suppliers across all sites.", href: "/platform/inventory" },
-  { icon: Fuel, title: "Fuel and operating costs", text: "See operating costs by asset, site or project.", href: "/contact" },
-  { icon: BarChart3, title: "Approvals and reporting", text: "Route work orders and purchases to the right approver, with the history kept.", href: "/contact" },
+type Module = {
+  icon: typeof Truck; title: string; text: string; href: string;
+  photo?: { name: PhotoKey; position?: string }; tone?: "dark" | "brand";
+};
+
+/* Eight modules, eight bento cells: two photo tiles, one dark, one yellow, four plain. */
+const MODULES: Module[] = [
+  { icon: Truck, title: "Fleet and asset lifecycle", text: "Track plant, machinery and vehicles from acquisition to disposal, with meters, documents and cost on one record.", href: "/platform/fleet-assets", photo: { name: "fleetLineup", position: "50% 60%" } },
+  { icon: CircleDot, title: "Tyre lifecycle", text: "Inspections, fitments, rotations and cost per kilometre or hour.", href: "/platform/inspections#tyres", photo: { name: "riyadh", position: "30% 88%" } },
+  { icon: Settings, title: "Workshop and job cards", text: "Jobs, labour, parts and outside services in one queue.", href: "/platform/maintenance", tone: "dark" },
+  { icon: Wrench, title: "Preventive maintenance", text: "Plans by hours, kilometres or date that keep assets compliant.", href: "/platform/maintenance" },
+  { icon: Box, title: "Stores and procurement", text: "Inventory, purchases and suppliers across every site.", href: "/platform/inventory" },
+  { icon: ShieldCheck, title: "Accidents and insurance", text: "Incidents, claims and policy details per machine.", href: "/contact" },
+  { icon: Fuel, title: "Fuel and operating costs", text: "Operating cost by asset, site or project.", href: "/contact" },
+  { icon: BarChart3, title: "Approvals and reporting", text: "Work orders and purchases routed to the right approver.", href: "/contact", tone: "brand" },
+];
+
+/* Real figures from the ready-mix operation Tyre Pulse runs in today (rounded down). */
+const PROOF = [
+  { value: 1600, suffix: "+", label: "machines on record", text: "Mixers, pumps, loaders, generators and plant." },
+  { value: 89000, suffix: "+", label: "job cards", text: "Imported from the ERP and worked in the app." },
+  { value: 216000, suffix: "+", label: "expense lines", text: "Classified into tyres, spare parts and oil." },
+  { value: 3, suffix: "", label: "countries", text: "Saudi Arabia, the UAE and Egypt, each in its own currency." },
+];
+
+/* Asset classes the platform already tracks in production. */
+const ASSET_TYPES = [
+  "Transit mixers", "Concrete pumps", "Placing booms", "Wheel loaders", "Skid loaders", "Backhoes",
+  "Generators", "Batching plants", "Ice plants", "Pickups", "Staff buses", "Trailers", "Forklifts",
 ];
 
 const FAQ = [
@@ -111,6 +133,29 @@ export default function HomePage() {
       <Header />
       <main id="main-content" tabIndex={-1}>
         <HeroCarousel slides={HERO_SLIDES} />
+
+        <section className="proof" aria-labelledby="proof-h">
+          <div className="site-shell">
+            <div className="proof-head">
+              <h2 id="proof-h">Built inside a working ready-mix operation, not a demo account.</h2>
+              <p>Tyre Pulse runs the daily work of a concrete fleet across three countries. These are its own numbers.</p>
+            </div>
+            <dl className="proof-stats">
+              {PROOF.map((p) => (
+                <div key={p.label}>
+                  <dt>{p.label}</dt>
+                  <dd><b><CountUp value={p.value} suffix={p.suffix} /></b><span>{p.text}</span></dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+          <div className="marquee">
+            <div className="marquee-track">
+              <ul aria-label="Asset types tracked">{ASSET_TYPES.map((t) => <li key={t}>{t}</li>)}</ul>
+              <ul aria-hidden="true">{ASSET_TYPES.map((t) => <li key={t}>{t}</li>)}</ul>
+            </div>
+          </div>
+        </section>
 
         <section className="section-pad" aria-labelledby="one-asset">
           <div className="site-shell">
@@ -181,17 +226,29 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="section-pad tight" aria-labelledby="full-picture">
+        <section className="section-pad" aria-labelledby="full-picture">
           <div className="site-shell">
             <h2 className="sec-h" id="full-picture">Everything a PMV department runs on.</h2>
-            <ul className="module-grid">
-              {MODULES.map(({ icon: Icon, title, text, href }) => (
-                <li key={title}>
-                  <Icon size={32} strokeWidth={1.6} aria-hidden="true" />
-                  <div><h3>{title}</h3><p>{text}</p><Link href={href} aria-label={href === "/contact" ? `Ask about ${title.toLowerCase()} in a demo` : `Learn more about ${title.toLowerCase()}`}>{href === "/contact" ? "Ask in a demo" : "Learn more"} <ArrowRight size={14} aria-hidden="true" /></Link></div>
-                </li>
-              ))}
-            </ul>
+            <Spotlight>
+              <ul className="bento">
+                {MODULES.map(({ icon: Icon, title, text, href, photo, tone }) => {
+                  const demo = href === "/contact";
+                  return (
+                    <li key={title} className={`bento-cell${tone ? ` is-${tone}` : ""}${photo ? " has-photo" : ""}`}>
+                      {photo && <div className="bento-media"><Photo name={photo.name} position={photo.position} sizes="(max-width: 720px) 100vw, 560px" /></div>}
+                      <div className="bento-body">
+                        <Icon size={26} strokeWidth={1.7} aria-hidden="true" />
+                        <h3>{title}</h3>
+                        <p>{text}</p>
+                        <Link href={href} className="bento-link" aria-label={demo ? `Ask about ${title.toLowerCase()} in a demo` : `Learn more about ${title.toLowerCase()}`}>
+                          {demo ? "Ask in a demo" : "Learn more"} <ArrowRight size={15} aria-hidden="true" />
+                        </Link>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Spotlight>
           </div>
         </section>
 
@@ -222,7 +279,7 @@ function RoleCopy({ title, text }: { title: string; text: string }) {
       <ul className="caps">
         {caps.map(([Icon, l]) => <li key={l}><Icon size={22} aria-hidden={true} />{l}</li>)}
       </ul>
-      <p className="muted-sm" style={{ marginTop: 16 }}><ClipboardCheck size={13} aria-hidden="true" style={{ verticalAlign: -2 }} /> Works on Android phones and tablets, and in any modern browser.</p>
+      <p className="muted-sm role-note"><ClipboardCheck size={13} aria-hidden="true" /> Works on Android phones and tablets, and in any modern browser.</p>
     </div>
   );
 }

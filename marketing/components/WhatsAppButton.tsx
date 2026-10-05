@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { WHATSAPP_URL } from "@/lib/site";
 
 /**
@@ -11,14 +12,17 @@ import { WHATSAPP_URL } from "@/lib/site";
  */
 export function WhatsAppButton() {
   const [tucked, setTucked] = useState(false);
+  const pathname = usePathname();
 
+  // Tucked while most of the home hero is still on screen. IntersectionObserver on the
+  // hero itself: it costs nothing while scrolling, unlike a scroll listener.
   useEffect(() => {
-    if (!document.querySelector(".hc-picker")) return;
-    const update = () => setTucked(window.scrollY < window.innerHeight * 0.6);
-    update();
-    window.addEventListener("scroll", update, { passive: true });
-    return () => window.removeEventListener("scroll", update);
-  }, []);
+    const hero = document.querySelector(".home-hero");
+    if (!hero || !("IntersectionObserver" in window)) return;
+    const io = new IntersectionObserver(([e]) => setTucked(e.intersectionRatio > 0.4), { threshold: [0, 0.4, 1] });
+    io.observe(hero);
+    return () => { io.disconnect(); setTucked(false); };
+  }, [pathname]);
 
   if (!WHATSAPP_URL) return null;
   return (

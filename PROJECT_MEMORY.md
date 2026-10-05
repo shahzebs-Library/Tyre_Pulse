@@ -5,6 +5,21 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ SESSION 2026-10-05 (part 12) — "PAGES WENT MISSING" CHECK. PR #381 merged (b72e3e3d).
+- Owner felt finished pages (Maintenance, Calendar) were removed/reverted. Audited: since 2026-09-28 NO page file,
+  route or nav link was removed on main (only additions; the only deletions were intentional marketing files);
+  no revert commits. Pages that shrank (WorkshopLive, FuelEfficiency, CustomData, Login) were refactors into
+  kit parts files; every feature verified still present.
+- ONE REAL LOSS FOUND + RECOVERED: commit 9328a66c (2026-09-29, branch claude/project-review-audit-t07hbp)
+  "failed reads and refused deletes now say so" never reached main. Cherry-picked into #381 (TyreRecords
+  conflict kept main's kit version, which already has error+Retry). Adds src/test/honestReadGuards.test.js.
+  CHECK TO REUSE: for each remote branch, `git diff C^ C | git apply --check --reverse` on origin/main; a
+  failing reverse apply means the commit's content is NOT in main (squash merges make ahead-counts useless).
+- MaintenanceCalendar.jsx + PmPrograms.jsx were NEVER rebuilt to a mockup on web (history checked). No
+  maintenance/calendar mockup exists in any upload or scratchpad on this machine (uploads = 4 admin screens,
+  6 improved modules, 16-screen zip; the 3 Oct-4 PNGs are social-media screenshots). Flutter maintenance WAS
+  matched to mock (part 9, 2026-09-27). Asked owner for the mockups before rebuilding.
+
 # ⚑ SESSION 2026-10-05 (part 11) — RAW I18N KEYS ON SCREEN + RAW ERRORS ON SIGN-IN. No migration.
 - Owner: sign-in button showed "auth.login.signingIn". Cause: t() returns the KEY PATH when a key is missing
   (falls back en -> key). Full scan of every literal t('ns.path') + prefix helpers (`const p = k => t(`ns.${k}`)`)

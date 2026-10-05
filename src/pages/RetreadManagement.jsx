@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { AnimatePresence, motion } from 'framer-motion'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -10,7 +9,7 @@ import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import {
   RefreshCw, FileText, FileSpreadsheet, Search, Filter,
   Loader2, AlertTriangle, CheckCircle, TrendingDown,
-  BarChart3, X, ChevronRight, Activity, Building2, Tag, Layers, Info, Star,
+  BarChart3, ChevronRight, Activity, Building2, Layers, Info, Star,
   Recycle, CircleDollarSign, Target, Zap, Lock, Award, RotateCcw, Plus,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'

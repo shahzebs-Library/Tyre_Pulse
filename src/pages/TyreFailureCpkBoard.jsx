@@ -31,7 +31,7 @@ import {
 } from 'lucide-react'
 import Modal from '../components/ui/Modal'
 import DateField from '../components/ui/DateField'
-import { Card, CardState, Kpi, Tabs, Donut, KitTable, fmtInt } from '../components/commandCenter/kit'
+import { Card, CardState, Kpi, Tabs, Donut, KitTable } from '../components/commandCenter/kit'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrency } from '../lib/formatters'
 import { listAllRecords } from '../lib/api/tyreRecords'

@@ -34,7 +34,7 @@ import { getCpkDrivers } from '../lib/api/cpkDrivers'
 import { getBrandSizeCpk } from '../lib/api/brandSizeCpk'
 import {
   CPK_PERIODS, DEFAULT_PERIOD, periodBounds, periodLabel,
-  MOBILITY_META, splitByMobility, fleetSideFor,
+  MOBILITY_META, splitByMobility,
 } from '../lib/cpkModule'
 import { sortByTypeWorstFirst } from '../lib/fleetCpkView'
 import {
@@ -250,15 +250,6 @@ export default function CpkIntelligence() {
     { key: 'distance_or_hours', header: mobility === 'movable' ? 'Km' : 'Hours', align: 'right', kind: 'int' },
     { key: 'tyre_cost', header: `Tyre (${currency})`, align: 'right', kind: 'money' },
     { key: 'maintenance_cost', header: `Maint (${currency})`, align: 'right', kind: 'money' },
-    { key: 'total_cost', header: `Total (${currency})`, align: 'right', kind: 'money' },
-    { key: 'cpk_tyre', header: 'CPK tyre', align: 'right', kind: 'cpk' },
-    { key: 'cpk_total', header: 'CPK total', align: 'right', kind: 'cpk' },
-  ])
-
-  const typeColumns = (mobility) => ([
-    { key: 'vehicle_type', header: 'Asset type', align: 'left', kind: 'text' },
-    { key: 'distance_or_hours', header: mobility === 'movable' ? 'Km' : 'Hours', align: 'right', kind: 'int' },
-    { key: 'tyre_cost', header: `Tyre (${currency})`, align: 'right', kind: 'money' },
     { key: 'total_cost', header: `Total (${currency})`, align: 'right', kind: 'money' },
     { key: 'cpk_tyre', header: 'CPK tyre', align: 'right', kind: 'cpk' },
     { key: 'cpk_total', header: 'CPK total', align: 'right', kind: 'cpk' },

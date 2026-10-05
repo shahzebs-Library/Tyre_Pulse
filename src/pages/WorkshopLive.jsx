@@ -302,7 +302,7 @@ export default function WorkshopLive() {
     loadRangeActivity({ from: range.from, to: pastTo, country: activeCountry })
       .then((rows) => {
         if (!mounted.current || request !== pastLoadId.current) return
-        setPast({ ...rows, from: range.from, to: pastTo })
+        setPast({ ...rows, from: range.from, to: pastTo, country: activeCountry })
       })
       .catch((e) => {
         if (!mounted.current || request !== pastLoadId.current) return
@@ -312,7 +312,7 @@ export default function WorkshopLive() {
     return undefined
   }, [range.from, pastTo, activeCountry, pastNonce])
 
-  const pastReady = !pastTo || (past && past.from === range.from && past.to === pastTo)
+  const pastReady = !pastTo || (past && past.from === range.from && past.to === pastTo && past.country === activeCountry)
 
   const board = useMemo(() => {
     if (!raw) return []

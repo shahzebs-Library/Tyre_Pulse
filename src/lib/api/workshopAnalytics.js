@@ -192,7 +192,7 @@ export async function loadRangeActivity({ from, to, site, country } = {}) {
   const readCompleted = async () => {
     const pageFn = (pFrom, pTo) => {
       let q = supabase.from('work_orders').select(LIVE_WO_COLS)
-        .in('status', ['Completed', 'completed'])
+        .in('status', ['Completed', 'completed', 'Closed', 'closed'])
         .gte('completed_at', lo).lt('completed_at', hi)
       q = applyCountry(q, country)
       if (site && site !== 'All') q = q.eq('site', site)
@@ -211,7 +211,7 @@ export async function loadRangeActivity({ from, to, site, country } = {}) {
   const [ev, jobs, shifts] = await Promise.all([
     readEvents(),
     readCompleted(),
-    loadShifts({ from, to, site, country }).catch(() => []),
+    loadShifts({ from, to, site, country }),
   ])
   return {
     events: ev.rows,

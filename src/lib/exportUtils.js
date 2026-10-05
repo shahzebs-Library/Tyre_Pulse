@@ -58,8 +58,8 @@ function recordExport(name, rowCount) {
  * exporter, or single-document PDF builders). Throws when export is disabled and
  * caps the row array to max_export_rows. Returns the (possibly capped) rows.
  */
-export function applyExportPolicy(rows) {
-  return guardExport(rows)
+export function applyExportPolicy(rows, name) {
+  return guardExport(rows, name)
 }
 
 // ── Lazy-loaded heavy libraries ────────────────────────────────────────────────
@@ -870,6 +870,8 @@ export async function exportToExcel(rows, columns, headers, filename = 'export',
  *        Contents sheet, which records what each sheet rests on.
  */
 export async function exportSheetsToExcel(sheets, filename = 'export', opts = {}) {
+  if (!configBool('export_enabled', true)) throw new Error('Exports are disabled by your administrator.')
+  recordExport(filename, (Array.isArray(sheets) ? sheets : []).reduce((n, sh) => n + (Array.isArray(sh?.rows) ? sh.rows.length : 0), 0))
   await ensureXlsx()
   const list = (Array.isArray(sheets) ? sheets : []).filter((s) => s && s.name)
   if (!list.length) return false
@@ -1260,7 +1262,7 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
  * @param {string} [d.company] company name for the footer.
  */
 export async function exportDocumentPdf({ title, subject, to, sections = [], filename = 'document', company = '' } = {}) {
-  guardExport([])
+  guardExport([], filename || title || 'Document PDF')
   await ensurePdf()
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pw = doc.internal.pageSize.width
@@ -1390,7 +1392,7 @@ function _inspectionSummaryStrip(doc, stats, y, mx, accent) {
  * @param {string}  [opts.company]
  */
 export async function exportInspectionDetailPdf(row, opts = {}) {
-  guardExport([])
+  guardExport([], opts.filename || `Inspection report ${row?.asset_no || ''}`.trim())
   await ensurePdf()
   const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pw      = doc.internal.pageSize.width
@@ -1897,7 +1899,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
  *   await exportAccidentCasePdf(acc, { parts, remarks, branding, company, fmtCurrency })
  */
 export async function exportAccidentCasePdf(acc = {}, opts = {}) {
-  guardExport([])
+  guardExport([], opts.filename || `Accident case ${acc?.reference_no || acc?.asset_no || ''}`.trim())
   await ensurePdf()
   const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pw      = doc.internal.pageSize.width
@@ -2104,7 +2106,7 @@ export async function exportAccidentCasePdf(acc = {}, opts = {}) {
  *   await exportChecklistSubmissionPdf(submission, { company, branding, fields })
  */
 export async function exportChecklistSubmissionPdf(submission = {}, opts = {}) {
-  guardExport([])
+  guardExport([], opts.filename || `Checklist ${submission?.document_no || ''}`.trim())
   await ensurePdf()
   const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pw      = doc.internal.pageSize.width
@@ -2516,7 +2518,7 @@ function _fmtThousands(v) {
  * @param {Object} opts  { company, branding, currency, filename }
  */
 export async function exportDailyOpsBriefingPdf(data = {}, opts = {}) {
-  guardExport([])
+  guardExport([], opts.filename || 'Daily operations briefing')
   await ensurePdf()
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const PW  = doc.internal.pageSize.width
@@ -2622,7 +2624,7 @@ function _buildRecommendations(riskCounts, totalT, row) {
  * @param {string} [filename]
  */
 export async function exportDailyExecutivePdf(data, filename) {
-  guardExport([])
+  guardExport([], filename || 'Daily executive report')
   await ensurePdf()
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const PW  = doc.internal.pageSize.width   // 297

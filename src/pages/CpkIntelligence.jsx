@@ -80,18 +80,21 @@ export default function CpkIntelligence() {
   const [periodKey, setPeriodKey] = useState(DEFAULT_PERIOD)
   const [tab, setTab] = useState('fleet')
   // Registered site (vehicle_fleet.site). '' = all sites. Options come from the
-  // site register for the chosen country; a failed read just leaves All Sites.
+  // site register for the chosen country; a failed read says so and offers Retry.
   const [site, setSite] = useState('')
   const [siteOptions, setSiteOptions] = useState([])
+  const [siteError, setSiteError] = useState(false)
+  const [siteNonce, setSiteNonce] = useState(0)
   useEffect(() => {
     let cancelled = false
-    setSite('')
     setSiteOptions([])
+    setSiteError(false)
     listSites({ country, activeOnly: true })
       .then((rows) => { if (!cancelled) setSiteOptions(siteOptionsForCountry(rows, country)) })
-      .catch(() => { if (!cancelled) setSiteOptions([]) })
+      .catch(() => { if (!cancelled) { setSiteOptions([]); setSiteError(true) } })
     return () => { cancelled = true }
-  }, [country])
+  }, [country, siteNonce])
+  useEffect(() => { setSite('') }, [country])
   const siteArg = site || undefined
   const scopeLabel = site ? `${country}, ${site}` : country
 
@@ -366,6 +369,12 @@ export default function CpkIntelligence() {
             <option value="">All Sites</option>
             {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
+          {siteError && (
+            <span role="alert" className="cpk-site-error">
+              Could not load sites.{' '}
+              <button type="button" className="cc-link cc-link-btn" onClick={() => setSiteNonce((n) => n + 1)}>Retry</button>
+            </span>
+          )}
         </label>
         <label className="cpk-period">
           <span>Period</span>

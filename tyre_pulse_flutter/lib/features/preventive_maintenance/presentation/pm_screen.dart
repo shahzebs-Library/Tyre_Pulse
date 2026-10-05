@@ -85,7 +85,7 @@ class _PreventiveMaintenanceScreenState
   }
 
   Widget _content(PmCopy copy) {
-    final DateTime now = DateTime.now();
+    final DateTime now = ref.watch(pmClockProvider)();
     final AsyncValue<List<PmPlan>> planState = ref.watch(
       activePmPlansProvider,
     );

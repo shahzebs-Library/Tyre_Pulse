@@ -13,7 +13,7 @@ const h = vi.hoisted(() => {
 
 vi.mock('../lib/supabase', () => ({ supabase: h.supabase }))
 
-const { getFleetCpk, withSite } = await import('../lib/api/fleetCpk')
+const { getFleetCpk, withSite, getCpkKmSource, getCpkHoursSource, getCpkUnitAudit, getCpkKmIntelligence } = await import('../lib/api/fleetCpk')
 const { getCpkDrivers } = await import('../lib/api/cpkDrivers')
 const { getBrandSizeCpk } = await import('../lib/api/brandSizeCpk')
 
@@ -56,5 +56,38 @@ describe('services thread the site', () => {
     expect(h.state.lastRpc).toEqual({ name: 'get_brand_size_cpk', args: { p_country: 'KSA', p_from: null, p_to: null, p_site: 'NHC' } })
     await getBrandSizeCpk({ country: 'KSA' })
     expect('p_site' in h.state.lastRpc.args).toBe(false)
+  })
+})
+
+// Migration 20261005180000: the KM source, Units and Km intelligence tabs.
+describe('tab services thread the site', () => {
+  it('getCpkKmSource / getCpkHoursSource send p_site with or without an asset', async () => {
+    h.state.rpc = { data: { ok: true, by_asset: [] }, error: null }
+    await getCpkKmSource({ country: 'KSA', site: 'NHC' })
+    expect(h.state.lastRpc).toEqual({ name: 'get_cpk_km_source', args: { p_country: 'KSA', p_from: null, p_to: null, p_asset: null, p_site: 'NHC' } })
+    await getCpkKmSource({ country: 'KSA', site: 'NHC', asset: 'TM634' })
+    expect(h.state.lastRpc.args).toMatchObject({ p_asset: 'TM634', p_site: 'NHC' })
+    await getCpkHoursSource({ country: 'KSA', site: 'NHC' })
+    expect(h.state.lastRpc).toEqual({ name: 'get_cpk_hours_source', args: { p_country: 'KSA', p_from: null, p_to: null, p_asset: null, p_site: 'NHC' } })
+    await getCpkHoursSource({ country: 'KSA' })
+    expect('p_site' in h.state.lastRpc.args).toBe(false)
+  })
+
+  it('getCpkUnitAudit / getCpkKmIntelligence send p_site only for a real site', async () => {
+    h.state.rpc = { data: { ok: true }, error: null }
+    await getCpkUnitAudit({ country: 'KSA', site: 'NHC' })
+    expect(h.state.lastRpc).toEqual({ name: 'get_cpk_unit_audit', args: { p_country: 'KSA', p_from: null, p_to: null, p_site: 'NHC' } })
+    await getCpkUnitAudit({ country: 'KSA', site: 'All' })
+    expect('p_site' in h.state.lastRpc.args).toBe(false)
+    await getCpkKmIntelligence({ country: 'KSA', site: 'NHC' })
+    expect(h.state.lastRpc).toEqual({ name: 'get_cpk_km_intelligence', args: { p_country: 'KSA', p_from: null, p_to: null, p_site: 'NHC' } })
+    await getCpkKmIntelligence({ country: 'KSA' })
+    expect('p_site' in h.state.lastRpc.args).toBe(false)
+  })
+
+  it('a forbidden site degrades to an honest not-ok result', async () => {
+    h.state.rpc = { data: { ok: false, reason: 'forbidden' }, error: null }
+    expect((await getCpkKmSource({ country: 'KSA', site: 'JED' })).ok).toBe(false)
+    expect((await getCpkUnitAudit({ country: 'KSA', site: 'JED' })).ok).toBe(false)
   })
 })

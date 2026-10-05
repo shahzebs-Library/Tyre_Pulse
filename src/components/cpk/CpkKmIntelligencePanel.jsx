@@ -130,7 +130,7 @@ const CONFIDENCE_FILTERS = [
   { key: 'none', label: 'None' },
 ]
 
-export default function CpkKmIntelligencePanel({ country, from, to, currency } = {}) {
+export default function CpkKmIntelligencePanel({ country, from, to, site, currency } = {}) {
   const countryLabel = country && country !== 'All' ? country : 'All'
 
   /* ----- data ----- */
@@ -149,7 +149,7 @@ export default function CpkKmIntelligencePanel({ country, from, to, currency } =
     let cancelled = false
     setLoading(true)
     setErrored(false)
-    getCpkKmIntelligence({ country, from, to })
+    getCpkKmIntelligence({ country, from, to, site })
       .then((res) => {
         if (cancelled) return
         if (res && res.ok) {
@@ -166,7 +166,7 @@ export default function CpkKmIntelligencePanel({ country, from, to, currency } =
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [country, from, to])
+  }, [country, from, to, site])
 
   useEffect(() => loadIntel(), [loadIntel])
 

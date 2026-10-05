@@ -567,25 +567,21 @@ export default function CpkIntelligence() {
         </div>
       )}
 
-      {site && (tab === 'km_source' || tab === 'units' || tab === 'km_intel') && (
-        <p className="cpk-note"><Info size={14} aria-hidden="true" /> This view covers every site in {country}. The site filter applies to the overview, asset types, vehicles, brand value, change drivers, scenario and report tabs.</p>
-      )}
-
       {tab === 'km_source' && (
         <Suspense fallback={<Loading />}>
-          <KmSourcePanel country={country} from={bounds.from} to={bounds.to} currency={currency} />
+          <KmSourcePanel country={country} from={bounds.from} to={bounds.to} site={siteArg} currency={currency} />
         </Suspense>
       )}
 
       {tab === 'units' && (
         <Suspense fallback={<Loading />}>
-          <CpkUnitAuditPanel country={country} from={bounds.from} to={bounds.to} currency={currency} />
+          <CpkUnitAuditPanel country={country} from={bounds.from} to={bounds.to} site={siteArg} currency={currency} />
         </Suspense>
       )}
 
       {tab === 'km_intel' && (
         <Suspense fallback={<Loading />}>
-          <CpkKmIntelligencePanel country={country} from={bounds.from} to={bounds.to} currency={currency} />
+          <CpkKmIntelligencePanel country={country} from={bounds.from} to={bounds.to} site={siteArg} currency={currency} />
         </Suspense>
       )}
 

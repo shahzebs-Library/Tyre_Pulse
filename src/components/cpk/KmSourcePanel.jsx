@@ -81,7 +81,7 @@ function fmtText(v) {
 }
 
 
-export default function KmSourcePanel({ country, from, to, currency } = {}) {
+export default function KmSourcePanel({ country, from, to, site, currency } = {}) {
   const countryLabel = country && country !== 'All' ? country : 'All'
   const cur = currency || countryLabel
 
@@ -105,7 +105,7 @@ export default function KmSourcePanel({ country, from, to, currency } = {}) {
     // Reset any open drawer when the window changes.
     setOpenAsset(null)
     setDetail(null)
-    getCpkKmSource({ country, from, to })
+    getCpkKmSource({ country, from, to, site })
       .then((res) => {
         if (cancelled) return
         const outcome = kmSourceOutcome(res)
@@ -122,7 +122,7 @@ export default function KmSourcePanel({ country, from, to, currency } = {}) {
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [country, from, to])
+  }, [country, from, to, site])
 
   useEffect(() => loadSummary(), [loadSummary])
 
@@ -166,7 +166,7 @@ export default function KmSourcePanel({ country, from, to, currency } = {}) {
     setDetail(null)
     setDetailErrored(false)
     setDetailLoading(true)
-    getCpkKmSource({ country, from, to, asset: assetNo })
+    getCpkKmSource({ country, from, to, site, asset: assetNo })
       .then((res) => {
         if (res && res.ok) setDetail(res)
         else { setDetail(null); setDetailErrored(true) }

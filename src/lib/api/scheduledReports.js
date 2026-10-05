@@ -16,6 +16,9 @@
  */
 import { supabase } from '../supabase'
 import { applyCountry } from '../countryFilter'
+import { fetchAllPages } from '../fetchAll'
+
+const REPORT_ROW_MAX = 5000
 import { listTemplates as listAccidentReportTemplates } from './accidentReportTemplates'
 import { reportDateLabel } from '../exportUtils'
 import { ServiceError } from './_client'
@@ -323,14 +326,20 @@ export function resolvePeriod(period, customFrom, customTo) {
  */
 export async function fetchReportRows(reportType, { from, to, country } = {}) {
   const ds = datasetFor(reportType)
-  let q = supabase.from(ds.table).select(ds.cols.join(','))
-  q = applyCountry(q, country)
-  if (from) q = q.gte(ds.dateCol, from)
-  if (to)   q = q.lte(ds.dateCol, to)
-  if (ds.eqFilter) for (const [col, val] of Object.entries(ds.eqFilter)) q = q.eq(col, val)
-  if (ds.orFilter) q = q.or(ds.orFilter)
-  q = q.order(ds.dateCol, { ascending: ds.orderAscending === true, nullsFirst: false }).limit(5000)
-  const { data, error } = await q
+  // A fresh query per page: a PostgREST builder is mutable, so one shared
+  // builder would let concurrent pages overwrite each other's range.
+  const build = () => {
+    let q = supabase.from(ds.table).select(ds.cols.join(','))
+    q = applyCountry(q, country)
+    if (from) q = q.gte(ds.dateCol, from)
+    if (to)   q = q.lte(ds.dateCol, to)
+    if (ds.eqFilter) for (const [col, val] of Object.entries(ds.eqFilter)) q = q.eq(col, val)
+    if (ds.orFilter) q = q.or(ds.orFilter)
+    // id tiebreak keeps page boundaries stable on a non-unique date.
+    return q.order(ds.dateCol, { ascending: ds.orderAscending === true, nullsFirst: false }).order('id', { ascending: true })
+  }
+  // The server caps one response at 1000 rows, so page up to the report ceiling.
+  const { data, error, truncated } = await fetchAllPages((a, b) => build().range(a, b), { pageSize: 1000, max: REPORT_ROW_MAX })
   if (error) throw new ServiceError(toUserMessage(error), error.code, error)
-  return { rows: data ?? [], dataset: ds }
+  return { rows: data ?? [], dataset: ds, truncated: !!truncated }
 }

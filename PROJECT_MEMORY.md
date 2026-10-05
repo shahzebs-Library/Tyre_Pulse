@@ -21,8 +21,13 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   (reason unknown). After any gen-l10n in a copy, check `git status lib/l10n/generated` in the real tree and copy the fresh output back.
 - Flutter SDK 3.47.2 lives in scratchpad/flutter; test copy at scratchpad/fqa/tp (PUB_CACHE=scratchpad/.pubcache). 4 golden
   diffs (fill screen, inspection approval, 0.5-1.3%) are Linux-vs-Windows noise, not regressions.
-- STATE AT CLOSE: PR #377 open on claude/modest-hopper-5bnq8c, owner said "pushed and merged to main if all done" -> squash-merge
-  when CI green, then realign branch. If this line still says "pending", check PR #377 first.
+- STATE AT CLOSE: PR #377 MERGED as 38148c6 (all CI green incl. Flutter Android+iOS builds). Branch realigned to main.
+  The same PR also carried a PARALLEL session's work: 10 web pages rebuilt to owner mockups on the Command Center kit
+  (AuditTrail, BrandAssets, BrandPerformance, CpkIntelligence, CustomData, OnboardingWizard, RetreadManagement,
+  TyreFailureCpkBoard, TyreScrapManagement, WorkshopLive; each with its own .css), migrations 20261005100000 tyre disposal
+  governance, 101000 retread jobs, 140000 audit event reviews, 150000 brand asset registry, 151000 onboarding training
+  phase+dependency; login "Super Admin Console" tab REMOVED (owner: add back later); Flutter PM golden test clock frozen
+  + goldens regenerated on Windows.
 
 # ⚑ SESSION 2026-10-04 (part 6) — SECURITY REVIEW + QR SIGN-IN HARDENING (applied live, feature still OFF).
 - Console migrations (1f2f356/91ef59f) reviewed vs live DB: clean (74 DEFINER fns pinned, all console fns is_super_admin gated,

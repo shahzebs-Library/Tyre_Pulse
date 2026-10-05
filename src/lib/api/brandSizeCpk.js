@@ -14,6 +14,7 @@
  * array so the page renders an honest empty state instead of throwing.
  */
 import { supabase, toServiceError } from './_client'
+import { withSite } from './fleetCpk'
 
 /**
  * Fetch per-size, per-brand price + CPK rows for the value comparison.
@@ -23,13 +24,13 @@ import { supabase, toServiceError } from './_client'
  *   from/to: ISO YYYY-MM-DD bounds on the tyre's issue/fitment/removal date.
  * @returns {Promise<Array<object>>} raw RPC rows. Forgiving by default; strict callers receive failures.
  */
-export async function getBrandSizeCpk({ country, from, to, strict = false } = {}) {
+export async function getBrandSizeCpk({ country, from, to, site, strict = false } = {}) {
   try {
-    const { data, error } = await supabase.rpc('get_brand_size_cpk', {
+    const { data, error } = await supabase.rpc('get_brand_size_cpk', withSite({
       p_country: country && country !== 'All' ? country : null,
       p_from: from || null,
       p_to: to || null,
-    })
+    }, site))
     if (error) {
       if (strict) throw toServiceError(error)
       return []

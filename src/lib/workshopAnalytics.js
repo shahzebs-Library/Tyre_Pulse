@@ -19,7 +19,7 @@
  * no completed jobs, target-vs-actual with no timed jobs) and empty ranges yield
  * empty arrays - never zero-filled invented data.
  */
-import { rollupTechnician, delayBreakdown } from './workshopLive'
+import { rollupTechnician, delayBreakdown, buildBoard, computeKpis } from './workshopLive'
 
 const MIN = 60_000
 const DAY_MS = 86_400_000
@@ -394,5 +394,269 @@ export function computeWorkshopAnalytics({
     avgTaskDurationMin,
     targetVsActual,
     summary,
+  }
+}
+
+// ── Workshop Live Control: measured figures over a chosen date range ─────────
+//
+// The live page keeps its "Now" surfaces (technician status, current job, live
+// alerts, open job flow) on the current moment, and lets a From/To range drive
+// the MEASURED figures: completed jobs, productive / lost / overtime hours,
+// utilisation and the delay breakdown. These helpers do that WITHOUT a second
+// engine: each LOCAL calendar day in the range is rolled up through the live
+// `buildBoard` (one board card per technician-day), then the concatenated
+// technician-day cards go through the same `computeKpis` and `delayBreakdown`
+// the live board uses. A range of exactly today, fed the live board's own
+// inputs, therefore reproduces the live figures to the decimal.
+//
+// Days are LOCAL calendar days (the workshop's wall clock), matching the live
+// board's local-midnight "today", not the UTC days the history report uses.
+
+/** Local YYYY-MM-DD for an epoch ms / Date / ISO value, or ''. */
+export function localDayKey(v) {
+  const t = v instanceof Date ? v.getTime() : (typeof v === 'number' ? v : ts(v))
+  if (!Number.isFinite(t)) return ''
+  const d = new Date(t)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+/** Local-midnight epoch ms for a YYYY-MM-DD key, or NaN. */
+export function localDayStart(key) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key || '').slice(0, 10))
+  if (!m) return NaN
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime()
+}
+
+/** Local midnight of the day AFTER `key` (exclusive upper bound), or NaN. */
+export function localDayEnd(key) {
+  const s = localDayStart(key)
+  if (!Number.isFinite(s)) return NaN
+  const d = new Date(s)
+  d.setDate(d.getDate() + 1)
+  return d.getTime()
+}
+
+/** Longest range the live page will measure in one go (days). */
+export const MAX_RANGE_DAYS = 366
+
+/** Quick picks offered in the Workshop Live header. */
+export const RANGE_PRESETS = Object.freeze([
+  { key: 'today', label: 'Today' },
+  { key: 'yesterday', label: 'Yesterday' },
+  { key: 'last7', label: 'Last 7 days' },
+  { key: 'month', label: 'This month' },
+])
+
+/**
+ * Resolve a quick pick into a { from, to } pair of local YYYY-MM-DD keys.
+ * Unknown keys fall back to today.
+ */
+export function rangePreset(key, now = Date.now()) {
+  const today = new Date(now)
+  today.setHours(0, 0, 0, 0)
+  const k = (d) => localDayKey(d)
+  if (key === 'yesterday') {
+    const y = new Date(today); y.setDate(y.getDate() - 1)
+    return { from: k(y), to: k(y) }
+  }
+  if (key === 'last7') {
+    const f = new Date(today); f.setDate(f.getDate() - 6)
+    return { from: k(f), to: k(today) }
+  }
+  if (key === 'month') {
+    const f = new Date(today.getFullYear(), today.getMonth(), 1)
+    return { from: k(f), to: k(today) }
+  }
+  return { from: k(today), to: k(today) }
+}
+
+/** Which quick pick (if any) a range matches, else null. */
+export function matchPreset(range, now = Date.now()) {
+  if (!range) return null
+  for (const p of RANGE_PRESETS) {
+    const r = rangePreset(p.key, now)
+    if (r.from === range.from && r.to === range.to) return p.key
+  }
+  return null
+}
+
+/**
+ * Make a user-entered range safe to measure: valid keys, from <= to, never past
+ * today (the future has no activity), and at most MAX_RANGE_DAYS long. Invalid
+ * input falls back to today.
+ */
+export function normalizeRange(range, now = Date.now()) {
+  const today = localDayKey(now)
+  let from = String(range?.from || '').slice(0, 10)
+  let to = String(range?.to || '').slice(0, 10)
+  if (!Number.isFinite(localDayStart(from))) from = today
+  if (!Number.isFinite(localDayStart(to))) to = today
+  if (to > today) to = today
+  if (from > today) from = today
+  if (from > to) { const x = from; from = to; to = x }
+  const span = rangeDays(from, to).length
+  if (span > MAX_RANGE_DAYS) {
+    const f = new Date(localDayStart(to))
+    f.setDate(f.getDate() - (MAX_RANGE_DAYS - 1))
+    from = localDayKey(f)
+  }
+  return { from, to }
+}
+
+/** Inclusive list of LOCAL day keys spanning [from,to]. Empty when invalid. */
+export function rangeDays(from, to) {
+  const a = localDayStart(from)
+  const b = localDayStart(to)
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b < a) return []
+  const out = []
+  const d = new Date(a)
+  while (d.getTime() <= b && out.length <= MAX_RANGE_DAYS + 1) {
+    out.push(localDayKey(d))
+    d.setDate(d.getDate() + 1)
+  }
+  return out
+}
+
+/** True when the range is exactly the local day containing `now`. */
+export function isTodayRange(range, now = Date.now()) {
+  const today = localDayKey(now)
+  return !!range && range.from === today && range.to === today
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/**
+ * Plain name for a day range: "5 Oct 2026", "1 to 5 Oct 2026",
+ * "28 Sep to 5 Oct 2026", "28 Dec 2025 to 3 Jan 2026". Never "this period".
+ */
+export function rangeLabel(from, to) {
+  const a = localDayStart(from)
+  const b = localDayStart(to)
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return 'No dates chosen'
+  const f = new Date(a)
+  const t = new Date(b)
+  const full = (d) => `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`
+  if (a === b) return full(f)
+  if (f.getFullYear() !== t.getFullYear()) return `${full(f)} to ${full(t)}`
+  if (f.getMonth() !== t.getMonth()) return `${f.getDate()} ${MONTHS[f.getMonth()]} to ${full(t)}`
+  return `${f.getDate()} to ${full(t)}`
+}
+
+/** Match today's roster rows (by name) to technicians -> { [userId]: {start,end,label} }. */
+function shiftByUserForDay(technicians, shifts, day) {
+  const byName = new Map()
+  for (const s of arr(shifts)) {
+    if (String(s?.shift_date || '').slice(0, 10) !== day) continue
+    const name = String(s?.person_name || '').trim().toLowerCase()
+    if (name) byName.set(name, s)
+  }
+  const out = {}
+  for (const t of arr(technicians)) {
+    const name = String(t?.full_name || t?.name || '').trim().toLowerCase()
+    const s = name ? byName.get(name) : null
+    if (!s) continue
+    const st = hhmmss(s.start_time)
+    const en = hhmmss(s.end_time)
+    out[t.id] = {
+      // Local wall-clock times, exactly as the live loader builds them.
+      start: st ? `${day}T${st}` : null,
+      end: en ? `${day}T${en}` : null,
+      label: s.start_time && s.end_time ? `${s.start_time} to ${s.end_time}` : (s.start_time || s.end_time || null),
+    }
+  }
+  return out
+}
+
+/**
+ * Split a range's raw rows into one input per LOCAL day for computeRangeMeasures.
+ * Each day is closed at its own end (or at `now` for today), so a dangling
+ * check-in on a past day never runs into the next day. Attendance presence is
+ * only known for today, so `presentByUser` applies to today alone.
+ *
+ * @returns {Array<{ day, now, eventsByUser, shiftByUser, presentByUser, eventCount }>}
+ */
+export function buildRangeDays({ technicians, events, shifts, from, to, now = Date.now(), presentByUser } = {}) {
+  const today = localDayKey(now)
+  const days = rangeDays(from, to).filter((d) => d <= today)
+  const byDay = new Map(days.map((d) => [d, {}]))
+  for (const e of arr(events)) {
+    if (e?.user_id == null) continue
+    const key = localDayKey(e.at)
+    const bucket = byDay.get(key)
+    if (!bucket) continue
+    ;(bucket[e.user_id] || (bucket[e.user_id] = [])).push(e)
+  }
+  return days.map((day) => {
+    const eventsByUser = byDay.get(day)
+    const end = localDayEnd(day)
+    return {
+      day,
+      now: Math.min(now, end),
+      eventsByUser,
+      shiftByUser: shiftByUserForDay(technicians, shifts, day),
+      presentByUser: day === today ? (presentByUser || {}) : {},
+      eventCount: Object.values(eventsByUser).reduce((s, l) => s + l.length, 0),
+    }
+  })
+}
+
+/**
+ * Measured figures for a range: one live board per day (via buildBoard), the
+ * technician-day cards concatenated, then computeKpis + delayBreakdown exactly
+ * as the live page uses them.
+ *
+ * @param {{
+ *   technicians:object[], days:object[], completedJobs?:object[],
+ *   from:string, to:string, now?:number, labourRate?:number, rateJobs?:object[],
+ *   site?:string
+ * }} args  `days` from buildRangeDays (or the live board's own today input)
+ * @returns {{ label, from, to, days:number, eventCount:number, hasActivity:boolean,
+ *   completed:number, productiveHours:(number|null), lostHours:(number|null),
+ *   overtimeHours:(number|null), utilization:(number|null), delays:object[], techDays:number }}
+ *   Hours and utilisation are null when the range holds no technician activity:
+ *   an empty range is reported as "nothing recorded", never as 0.
+ */
+export function computeRangeMeasures({
+  technicians, days, completedJobs, from, to, now = Date.now(), labourRate, rateJobs, site,
+} = {}) {
+  const bySite = (v) => !site || site === 'All' || v === site
+  const techs = arr(technicians).filter((t) => bySite(t?.site))
+  const cards = []
+  let eventCount = 0
+  for (const d of arr(days)) {
+    // Count only the activity of technicians in scope (site filter applied).
+    for (const t of techs) eventCount += arr(d.eventsByUser?.[t.id]).length
+    const dayBoard = buildBoard(techs, d.eventsByUser || {}, {
+      now: d.now ?? now,
+      shiftByUser: d.shiftByUser || {},
+      presentByUser: d.presentByUser || {},
+    })
+    for (const c of dayBoard) cards.push(c)
+  }
+
+  const start = localDayStart(from)
+  const end = localDayEnd(to)
+  const inWindow = (v) => {
+    const t = ts(v)
+    return Number.isFinite(t) && t >= start && t < end
+  }
+  const jobsInRange = arr(completedJobs).filter((j) => bySite(j?.site) && inWindow(j?.completed_at))
+  const k = computeKpis(cards, jobsInRange, { now, todayStart: start })
+  const hasActivity = eventCount > 0
+  return {
+    label: rangeLabel(from, to),
+    from,
+    to,
+    days: arr(days).length,
+    eventCount,
+    hasActivity,
+    completed: k.jobsCompletedToday,
+    productiveHours: hasActivity ? k.productiveHours : null,
+    lostHours: hasActivity ? k.lostHours : null,
+    overtimeHours: hasActivity ? k.overtimeHours : null,
+    utilization: hasActivity ? k.utilization : null,
+    delays: hasActivity ? delayBreakdown(cards, { jobs: rateJobs, labourRate }) : [],
+    techDays: cards.length,
   }
 }

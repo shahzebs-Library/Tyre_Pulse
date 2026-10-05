@@ -10,7 +10,7 @@ vi.mock('../lib/supabase', () => ({ supabase: { from: () => {
 vi.mock('../lib/api/auditTrail', () => ({
   auditQuery: () => ({ range: async () => ({ data: null, error: state.error }) }),
   uploadHistoryQuery: () => ({ range: async () => ({ data: null, error: state.error }) }),
-  readAuditExport: vi.fn(), matchesAuditSearch: () => true,
+  readAuditExport: vi.fn(), matchesAuditSearch: () => true, listAccessAudit: vi.fn(async () => []),
 }))
 vi.mock('../lib/api/auditTrailOverview', () => ({
   loadAuditCounts: async () => ({ events: null, security: null, changes: null, deletes: null, uploads: null, batches: null, error: 'Some audit figures could not be read.' }),
@@ -31,7 +31,8 @@ it('failed reads show errors and N/A figures, never an empty log or zero', async
   expect(await screen.findByText(toUserMessage(state.error, 'Audit events could not be loaded.'))).toBeInTheDocument()
   expect(screen.queryByText('No audit events in this period.')).not.toBeInTheDocument()
   await waitFor(() => expect(screen.getAllByText('N/A').length).toBeGreaterThanOrEqual(4))
-  expect(screen.getByText('Review flags not set up yet')).toBeInTheDocument()
+  expect(screen.getByText('High severity (rule based). Review flags not set up yet')).toBeInTheDocument()
+  expect(screen.getByRole('tab', { name: /Exports/ })).toBeInTheDocument()
 })
 
 it('a role the audit RLS refuses is told so instead of seeing an empty log', async () => {

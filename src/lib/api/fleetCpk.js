@@ -42,7 +42,8 @@ function emptyResult() {
  * matched to the tyre's change month by coalesce(removal_date, issue_date) - the
  * IDENTICAL filter get_fleet_cpk uses, so the per-asset km reconciles to the page.
  *
- * @param {{ country?:string, from?:string, to?:string, asset?:string }} [opts]
+ * @param {{ country?:string, from?:string, to?:string, asset?:string, site?:string }} [opts]
+ *   site: registered vehicle_fleet.site; blank/'All' = every site (p_site omitted).
  *   asset omitted -> `{ ok, source, basis, from, to, by_asset:[{asset_no,tyres,km}] }`
  *   asset given   -> `{ ok, source, basis, asset_no, km, tyre_count,
  *                       tyres:[{serial_no,position,brand,size,job_card,issue_date,
@@ -50,14 +51,14 @@ function emptyResult() {
  *                       km_at_removal,total_km,cost_per_tyre,data_source}] }`
  * Degrades to `{ ok:false }`; never throws.
  */
-export async function getCpkKmSource({ country, from, to, asset } = {}) {
+export async function getCpkKmSource({ country, from, to, asset, site } = {}) {
   try {
-    const { data, error } = await supabase.rpc('get_cpk_km_source', {
+    const { data, error } = await supabase.rpc('get_cpk_km_source', withSite({
       p_country: country && country !== 'All' ? country : null,
       p_from: from || null,
       p_to: to || null,
       p_asset: asset || null,
-    })
+    }, site))
     if (error) return { ok: false, reason: 'error' }
     return data || { ok: false, reason: 'empty' }
   } catch {
@@ -71,12 +72,12 @@ export async function getCpkKmSource({ country, from, to, asset } = {}) {
  * period readings. Same filter as fleet_hours_by_asset, so it reconciles.
  * @param {{ country?:string, from?:string, to?:string, asset?:string }} [opts]
  */
-export async function getCpkHoursSource({ country, from, to, asset } = {}) {
+export async function getCpkHoursSource({ country, from, to, asset, site } = {}) {
   try {
-    const { data, error } = await supabase.rpc('get_cpk_hours_source', {
+    const { data, error } = await supabase.rpc('get_cpk_hours_source', withSite({
       p_country: country && country !== 'All' ? country : null,
       p_from: from || null, p_to: to || null, p_asset: asset || null,
-    })
+    }, site))
     if (error) return { ok: false, reason: 'error' }
     return data || { ok: false, reason: 'empty' }
   } catch {
@@ -94,12 +95,12 @@ export async function getCpkHoursSource({ country, from, to, asset } = {}) {
  * data for its unit -> CPK N/A), `ok`. Returns `{ ok, summary, assets, note }`.
  * @param {{ country?:string, from?:string, to?:string }} [opts]
  */
-export async function getCpkUnitAudit({ country, from, to } = {}) {
+export async function getCpkUnitAudit({ country, from, to, site } = {}) {
   try {
-    const { data, error } = await supabase.rpc('get_cpk_unit_audit', {
+    const { data, error } = await supabase.rpc('get_cpk_unit_audit', withSite({
       p_country: country && country !== 'All' ? country : null,
       p_from: from || null, p_to: to || null,
-    })
+    }, site))
     if (error) return { ok: false, reason: 'error' }
     return data || { ok: false, reason: 'empty' }
   } catch {
@@ -120,13 +121,13 @@ export async function getCpkUnitAudit({ country, from, to } = {}) {
  *   `{ ok, country, from, to, summary:{...}, per_asset:[{...}] }` on success,
  *   else `{ ok:false }`. Never throws.
  */
-export async function getCpkKmIntelligence({ country, from, to } = {}) {
+export async function getCpkKmIntelligence({ country, from, to, site } = {}) {
   try {
-    const { data, error } = await supabase.rpc('get_cpk_km_intelligence', {
+    const { data, error } = await supabase.rpc('get_cpk_km_intelligence', withSite({
       p_country: country && country !== 'All' ? country : 'KSA',
       p_from: from || null,
       p_to: to || null,
-    })
+    }, site))
     if (error) return { ok: false }
     return data || { ok: false }
   } catch {
@@ -160,19 +161,28 @@ export async function getFleetAreaMap({ country } = {}) {
   }
 }
 
-export async function getFleetCpk({ country, from, to, strict = false } = {}) {
+/**
+ * Registered-site filter (vehicle_fleet.site, 20261005170000). The arg is only
+ * sent when a site is chosen, so an all-sites call is byte-identical to before.
+ */
+export function withSite(params, site) {
+  const s = typeof site === 'string' ? site.trim() : ''
+  return s && s.toLowerCase() !== 'all' ? { ...params, p_site: s } : params
+}
+
+export async function getFleetCpk({ country, from, to, site, strict = false } = {}) {
   try {
-    const { data, error } = await supabase.rpc('get_fleet_cpk', {
+    const { data, error } = await supabase.rpc('get_fleet_cpk', withSite({
       p_country: country && country !== 'All' ? country : null,
       p_from: from || null,
       p_to: to || null,
-    })
+    }, site))
     if (error) {
       if (strict) throw toServiceError(error)
       return emptyResult()
     }
-    if (!data) {
-      if (strict) throw new Error('Fleet CPK returned no response.')
+    if (!data || data.ok === false) {
+      if (strict) throw new Error(data?.reason === 'forbidden' ? 'You do not have access to this site or country.' : 'Fleet CPK returned no response.')
       return emptyResult()
     }
     return {

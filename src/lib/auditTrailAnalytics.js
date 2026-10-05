@@ -8,6 +8,9 @@
  * the page shows "Unavailable" rather than a false zero.
  */
 
+import { auditSeverity } from './auditSeverity'
+import { formatIp, parseUserAgent } from './auditTrailDevice'
+
 export const AUDIT_ACTIONS = ['UPLOAD', 'CREATE', 'UPDATE', 'EDIT', 'DELETE', 'EXPORT']
 
 export function nonEmpty(obj) {
@@ -73,8 +76,8 @@ export function pageCountFor(total, pageSize) {
   return Math.ceil(total / pageSize)
 }
 
-export const AUDIT_EXPORT_COLS = ['timestamp', 'user', 'action', 'table_name', 'records', 'details', 'old_values', 'new_values']
-export const AUDIT_EXPORT_HEADERS = ['Timestamp', 'User', 'Action', 'Table', 'Records', 'Details', 'Old Values', 'New Values']
+export const AUDIT_EXPORT_COLS = ['timestamp', 'user', 'action', 'table_name', 'records', 'site', 'ip_address', 'device', 'severity', 'details', 'old_values', 'new_values']
+export const AUDIT_EXPORT_HEADERS = ['Timestamp', 'User', 'Action', 'Table', 'Records', 'Site', 'IP Address', 'Device', 'Severity (rule based)', 'Details', 'Old Values', 'New Values']
 export const UPLOAD_EXPORT_COLS = ['file_names', 'records_added', 'records_skipped', 'uploaded_by', 'uploaded_at', 'region', 'reversed_at', 'reversed_count']
 export const UPLOAD_EXPORT_HEADERS = ['File Names', 'Records Added', 'Records Skipped', 'Uploaded By', 'Uploaded At', 'Region', 'Reversed At', 'Reversed Records']
 
@@ -85,6 +88,10 @@ export function auditExportRows(rows = [], fmtTs = (v) => String(v)) {
     action: r.action ?? '',
     table_name: r.table_name ?? '',
     records: r.record_count ?? '',
+    site: r.site ?? '',
+    ip_address: formatIp(r.ip_address) ?? '',
+    device: parseUserAgent(r.user_agent).label ?? '',
+    severity: auditSeverity(r).label,
     details: r.details ? JSON.stringify(r.details) : '',
     old_values: JSON.stringify(r.old_values ?? r.old_data ?? null),
     new_values: JSON.stringify(r.new_values ?? r.new_data ?? null),

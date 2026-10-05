@@ -28,13 +28,28 @@ import { resolveLayoutKey, isTyrelessEquipment } from './vehicleTyreLayout'
  * that pass opts.title). Fail-safe: unset/unreadable config keeps exports enabled
  * and uncapped, matching prior behavior.
  */
-function guardExport(rows) {
+function guardExport(rows, name) {
   if (!configBool('export_enabled', true)) {
     throw new Error('Exports are disabled by your administrator.')
   }
   const arr = Array.isArray(rows) ? rows : []
   const max = configNum('max_export_rows', 0)
-  return max > 0 && arr.length > max ? arr.slice(0, max) : arr
+  const out = max > 0 && arr.length > max ? arr.slice(0, max) : arr
+  if (name) recordExport(name, out.length)
+  return out
+}
+
+/**
+ * Write one EXPORT row to the audit log so the Audit Trail "Exports" tab shows
+ * who downloaded what. Fire-and-forget: loaded lazily, never throws, never
+ * delays the download. The server stamps IP and device on the row.
+ */
+function recordExport(name, rowCount) {
+  try {
+    import('./auditLogger')
+      .then((m) => m.audit.export(String(name).slice(0, 120), { rows: rowCount }))
+      .catch(() => {})
+  } catch { /* never block an export */ }
 }
 
 /**
@@ -43,8 +58,8 @@ function guardExport(rows) {
  * exporter, or single-document PDF builders). Throws when export is disabled and
  * caps the row array to max_export_rows. Returns the (possibly capped) rows.
  */
-export function applyExportPolicy(rows) {
-  return guardExport(rows)
+export function applyExportPolicy(rows, name) {
+  return guardExport(rows, name)
 }
 
 // ── Lazy-loaded heavy libraries ────────────────────────────────────────────────
@@ -772,7 +787,7 @@ function _drawTyreDiagram(doc, layout, tyreConditions, originX, originY, scale) 
 // ── Excel Export ───────────────────────────────────────────────────────────────
 export async function exportToExcel(rows, columns, headers, filename = 'export', sheetName = 'Data', opts = {}) {
   await ensureXlsx()
-  rows = guardExport(rows)
+  rows = guardExport(rows, filename)
   const currency = opts.currency || 'SAR'
   const wb = XLSX.utils.book_new()
 
@@ -855,6 +870,8 @@ export async function exportToExcel(rows, columns, headers, filename = 'export',
  *        Contents sheet, which records what each sheet rests on.
  */
 export async function exportSheetsToExcel(sheets, filename = 'export', opts = {}) {
+  if (!configBool('export_enabled', true)) throw new Error('Exports are disabled by your administrator.')
+  recordExport(filename, (Array.isArray(sheets) ? sheets : []).reduce((n, sh) => n + (Array.isArray(sh?.rows) ? sh.rows.length : 0), 0))
   await ensureXlsx()
   const list = (Array.isArray(sheets) ? sheets : []).filter((s) => s && s.name)
   if (!list.length) return false
@@ -1006,7 +1023,7 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
   await ensurePdf()
   const doc = new jsPDF({ orientation, unit: 'mm', format: 'a4' })
   const PW  = doc.internal.pageSize.width
-  rows = guardExport(rows)
+  rows = guardExport(rows, filename)
   const currency = opts.currency || 'SAR'
   const brand = await _pdfBrand(opts.branding)
   const hdrOpts = { accent: brand.accent, logoData: brand.logoData }
@@ -1245,7 +1262,7 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
  * @param {string} [d.company] company name for the footer.
  */
 export async function exportDocumentPdf({ title, subject, to, sections = [], filename = 'document', company = '' } = {}) {
-  guardExport([])
+  guardExport([], filename || title || 'Document PDF')
   await ensurePdf()
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pw = doc.internal.pageSize.width
@@ -1375,7 +1392,7 @@ function _inspectionSummaryStrip(doc, stats, y, mx, accent) {
  * @param {string}  [opts.company]
  */
 export async function exportInspectionDetailPdf(row, opts = {}) {
-  guardExport([])
+  guardExport([], opts.filename || `Inspection report ${row?.asset_no || ''}`.trim())
   await ensurePdf()
   const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pw      = doc.internal.pageSize.width
@@ -1882,7 +1899,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
  *   await exportAccidentCasePdf(acc, { parts, remarks, branding, company, fmtCurrency })
  */
 export async function exportAccidentCasePdf(acc = {}, opts = {}) {
-  guardExport([])
+  guardExport([], opts.filename || `Accident case ${acc?.reference_no || acc?.asset_no || ''}`.trim())
   await ensurePdf()
   const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pw      = doc.internal.pageSize.width
@@ -2089,7 +2106,7 @@ export async function exportAccidentCasePdf(acc = {}, opts = {}) {
  *   await exportChecklistSubmissionPdf(submission, { company, branding, fields })
  */
 export async function exportChecklistSubmissionPdf(submission = {}, opts = {}) {
-  guardExport([])
+  guardExport([], opts.filename || `Checklist ${submission?.document_no || ''}`.trim())
   await ensurePdf()
   const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pw      = doc.internal.pageSize.width
@@ -2501,7 +2518,7 @@ function _fmtThousands(v) {
  * @param {Object} opts  { company, branding, currency, filename }
  */
 export async function exportDailyOpsBriefingPdf(data = {}, opts = {}) {
-  guardExport([])
+  guardExport([], opts.filename || 'Daily operations briefing')
   await ensurePdf()
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const PW  = doc.internal.pageSize.width
@@ -2607,7 +2624,7 @@ function _buildRecommendations(riskCounts, totalT, row) {
  * @param {string} [filename]
  */
 export async function exportDailyExecutivePdf(data, filename) {
-  guardExport([])
+  guardExport([], filename || 'Daily executive report')
   await ensurePdf()
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const PW  = doc.internal.pageSize.width   // 297
@@ -3052,7 +3069,7 @@ export async function exportDailyExecutivePdf(data, filename) {
 
 // ── PowerPoint Export - light executive theme, native editable charts ─────────
 export async function exportToPptx(data, filename = 'TyrePulse_Report') {
-  guardExport([])   // honor the CSV/Excel/Export master switch for PPTX too
+  guardExport([], filename)   // honor the CSV/Excel/Export master switch for PPTX too
   const pptx = await buildPptxDeck(data)
   await pptx.writeFile({ fileName: `${filename}.pptx` })
 }

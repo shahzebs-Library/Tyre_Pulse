@@ -104,7 +104,7 @@ const FLAG_TILES = [
   { key: 'used_unit_no_data', label: 'Used-unit has no data', tone: 'bad' },
 ]
 
-export default function CpkUnitAuditPanel({ country, from, to, currency } = {}) {
+export default function CpkUnitAuditPanel({ country, from, to, site, currency } = {}) {
   const countryLabel = country && country !== 'All' ? country : 'All'
 
   /* ----- audit ----- */
@@ -132,7 +132,7 @@ export default function CpkUnitAuditPanel({ country, from, to, currency } = {}) 
     setOpenRow(null)
     setKmDetail(null)
     setHoursDetail(null)
-    getCpkUnitAudit({ country, from, to })
+    getCpkUnitAudit({ country, from, to, site })
       .then((res) => {
         if (cancelled) return
         if (res && res.ok) {
@@ -149,7 +149,7 @@ export default function CpkUnitAuditPanel({ country, from, to, currency } = {}) 
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [country, from, to])
+  }, [country, from, to, site])
 
   useEffect(() => loadAudit(), [loadAudit])
 
@@ -217,8 +217,8 @@ export default function CpkUnitAuditPanel({ country, from, to, currency } = {}) 
     setDetailErrored(false)
     setDetailLoading(true)
     Promise.all([
-      getCpkKmSource({ country, from, to, asset: row.asset_no }).catch(() => ({ ok: false })),
-      getCpkHoursSource({ country, from, to, asset: row.asset_no }).catch(() => ({ ok: false })),
+      getCpkKmSource({ country, from, to, site, asset: row.asset_no }).catch(() => ({ ok: false })),
+      getCpkHoursSource({ country, from, to, site, asset: row.asset_no }).catch(() => ({ ok: false })),
     ]).then(([km, hours]) => {
       const kmOk = km && km.ok
       const hoursOk = hours && hours.ok

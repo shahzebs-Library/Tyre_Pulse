@@ -34,7 +34,7 @@ export const AUDIT_SOURCES = [
 /** Explicit least-privilege column lists (no SELECT *). */
 export const DATA_AUDIT_COLS =
   'id,user_id,user_email,user_role,action,table_name,record_id,' +
-  'old_values,new_values,ip_address,site,country,org_id,created_at,actor_type,actor_detail'
+  'old_values,new_values,ip_address,user_agent,session_id,site,country,org_id,created_at,actor_type,actor_detail'
 export const ACCESS_AUDIT_COLS =
   'id,actor,actor_email,action,target_user,entity,before,after,at,reason'
 export const CONSOLE_AUDIT_COLS =
@@ -126,6 +126,10 @@ export function normalizeRow(source, raw) {
       old: r.old_values ?? null,
       new: r.new_values ?? null,
       role: r.user_role || null,
+      ip: r.ip_address ?? null,
+      userAgent: r.user_agent ?? null,
+      sessionId: r.session_id ?? null,
+      site: r.site ?? null,
     }
   }
   if (source === 'access_audit') {
@@ -225,16 +229,18 @@ export async function listDataAudit({ action, table, user, since, limit = 200 } 
  * @param {string} [opts.action]  eq filter on action
  * @param {string} [opts.target]  ilike filter on target_user
  * @param {string} [opts.since]   ISO timestamp; `at` gte filter
+ * @param {string} [opts.until]   ISO timestamp; `at` lt filter
  * @param {number} [opts.limit=200]
  * @returns {Promise<Array<object>>}
  */
-export async function listAccessAudit({ action, target, since, limit = 200 } = {}) {
+export async function listAccessAudit({ action, target, since, until, limit = 200 } = {}) {
   let q = sb.from('access_audit').select(ACCESS_AUDIT_COLS)
     .order('at', { ascending: false })
     .limit(limit)
   if (action) q = q.eq('action', action)
   if (target) q = q.ilike('target_user', like(target))
   if (since) q = q.gte('at', since)
+  if (until) q = q.lt('at', until)
   const { data, error } = await q
   if (error) {
     if (isAuditSourceMissing(error)) return []
@@ -279,7 +285,7 @@ import { toUserMessage } from '../safeError'
 
 export const AUDIT_EXPORT_CAP = 5000
 
-export function auditQuery({ dateFrom, dateTo, action, user, actions, actorType, recordId } = {}) {
+export function auditQuery({ dateFrom, dateTo, action, user, actions, actorType, recordId, orFilter } = {}) {
   let query = supabase.from('audit_log_v2')
     .select('*, profiles(full_name, username)', { count: 'exact' })
     .order('created_at', { ascending: false }).order('id', { ascending: false })
@@ -295,6 +301,8 @@ export function auditQuery({ dateFrom, dateTo, action, user, actions, actorType,
   if (Array.isArray(actions) && actions.length) query = query.in('action', actions)
   if (actorType) query = query.eq('actor_type', actorType)
   if (recordId) query = query.eq('record_id', String(recordId))
+  // A PostgREST `or` expression, e.g. the rule-based High severity filter.
+  if (orFilter) query = query.or(orFilter)
   if (user) query = query.eq('user_id', user)
   return query
 }

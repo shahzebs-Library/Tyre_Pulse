@@ -7669,4 +7669,18 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get qrLoginAdmin =>
       'QR سائن ان ایڈمنسٹریٹر اکاؤنٹس کے لیے دستیاب نہیں ہے۔ اپنے پاس ورڈ سے سائن ان کریں۔';
+
+  @override
+  String get checklistDetailTitle => 'چیک لسٹ کی تفصیلات';
+
+  @override
+  String checklistDetailSubmittedOn(String date) {
+    return '$date کو جمع کرائی گئی';
+  }
+
+  @override
+  String get checklistDetailReviewNote => 'جائزہ لینے والے کا نوٹ';
+
+  @override
+  String get checklistDetailOpen => 'چیک لسٹ کھولیں';
 }

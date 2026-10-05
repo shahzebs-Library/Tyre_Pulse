@@ -577,10 +577,14 @@ void main() {
     // safety warning, the pick-a-number instruction and its button label,
     // Decline, and the mismatch and admin failure sentences
     // (qrLoginChecking ... qrLoginAdmin).
-    test('en, ar and ur each carry exactly 2208 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2208);
-      expect(_translatableKeys(ar).length, 2208);
-      expect(_translatableKeys(ur).length, 2208);
+    // 2208 + 4 = 2212. Checklist details (open a submitted sheet from
+    // history): the screen title, the submitted-on line, the reviewer note
+    // label and the open-row accessibility label
+    // (checklistDetailTitle ... checklistDetailOpen).
+    test('en, ar and ur each carry exactly 2212 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2212);
+      expect(_translatableKeys(ar).length, 2212);
+      expect(_translatableKeys(ur).length, 2212);
     });
   });
 

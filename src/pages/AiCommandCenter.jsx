@@ -1,24 +1,37 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// AiCommandCenter.jsx - Multi-agent AI interface for TyrePulse AI OS
-// Route: /ai-command-center
+// AiCommandCenter.jsx - Smart Analytics (AI), the multi-agent AI interface
+// Route: /ai-command-center. Rebuilt on the Command Center kit to the owner's
+// mockup. The insight feed is the fleet's real active alerts routed to an
+// agent; the tiles are real counts (alerts, ai_token_logs usage, saved
+// conversations). Nothing AI-generated is shown as a stored number.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Brain, Send, Trash2, Copy, Check, Download, RefreshCw,
-  ChevronDown, ChevronUp, AlertTriangle, Activity, BarChart2,
-  ClipboardList, Cpu, Zap, User, Bot, Sparkles, MessageSquarePlus, Archive,
+  Copy, Check, Download, RefreshCw, Trash2,
+  ChevronDown, ChevronUp, BarChart2, ChevronRight,
+  ClipboardList, Cpu, Zap, Bot, Sparkles, MessageSquarePlus, Archive,
   TrendingUp, TrendingDown, Minus, Clock, Database, ShieldAlert, ShoppingCart,
+  AlertTriangle, CalendarDays, ShieldCheck, History, RotateCcw, Eye, Lightbulb, Coins, MessagesSquare,
 } from 'lucide-react'
-import PageHeader from '../components/ui/PageHeader'
 import { classifyQuery, AGENT_TYPES, AGENT_LABELS, AGENT_COLORS, AGENT_DESCRIPTIONS } from '../lib/aiRouter'
 import {
   archiveConversation, listConversationMessages, listConversations, sendOrchestratorMessage,
 } from '../lib/aiOrchestratorClient'
+import { getUsageOverview } from '../lib/api/aiOps'
+import { supabase } from '../lib/supabase'
+import { toUserMessage } from '../lib/safeError'
+import { formatDateTime } from '../lib/formatters'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState } from '../lib/exportUtils'
+import { Card, CardState, Kpi, Tabs, KitTable, ViewAll, useCard } from '../components/commandCenter/kit'
+import {
+  MAX_QUESTION, SEVERITIES, agentTone, signalFeed, signalCounts, filterSignals,
+  aiKpis, traceRows, clampQuestion,
+} from '../lib/aiCommandCenterView'
+import './AiCommandCenter.css'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -42,6 +55,10 @@ const AGENT_ICONS = {
   [AGENT_TYPES.PLANNER]:       ClipboardList,
   [AGENT_TYPES.SAFETY]:        ShieldAlert,
   [AGENT_TYPES.PROCUREMENT]:   ShoppingCart,
+}
+
+const KPI_ICONS = {
+  critical: AlertTriangle, open: Lightbulb, requests: Zap, spend: Coins, success: ShieldCheck, conversations: MessagesSquare,
 }
 
 const TREND_ICON = (trend) => {
@@ -339,14 +356,14 @@ function MessageBubble({ message, onCopy }) {
                   <span className="font-medium text-[var(--text-secondary)]">Sources:</span>
                   {message.sources.map(source => (
                     <span key={source.id} className="px-2 py-0.5 rounded-full bg-[var(--surface-1)] border border-[var(--input-border)]">
-                      {source.label} · {source.status}
+                      {source.label} : {source.status}
                     </span>
                   ))}
                 </div>
               )}
               {message.usage && (
                 <p className="mt-2 tabular-nums" aria-label="AI request usage">
-                  {Number(message.usage.total_tokens || 0).toLocaleString()} tokens · estimated ${Number(message.usage.estimated_cost_usd || 0).toFixed(6)} · {message.usage.model}
+                  {Number(message.usage.total_tokens || 0).toLocaleString()} tokens, estimated ${Number(message.usage.estimated_cost_usd || 0).toFixed(6)}, {message.usage.model}
                 </p>
               )}
             </div>
@@ -414,6 +431,20 @@ function TypingIndicator({ agentType }) {
 
 // ── Main Page Component ───────────────────────────────────────────────────────
 
+const USAGE_DAYS = 30
+const SEV_FILTERS = ['all', ...SEVERITIES]
+
+async function loadSignals() {
+  const { data, error } = await supabase
+    .from('alerts')
+    .select('id,asset_no,alert_type,severity,message,created_at,country')
+    .eq('is_active', true)
+    .order('created_at', { ascending: false })
+    .limit(200)
+  if (error) throw error
+  return data ?? []
+}
+
 export default function AiCommandCenter() {
   const { appSettings } = useSettings()
   const { branding } = useTenant()
@@ -428,10 +459,22 @@ export default function AiCommandCenter() {
   const [historyLoading, setHistoryLoading] = useState(true)
   const [historyError, setHistoryError]   = useState('')
   const [previewAgent, setPreviewAgent]   = useState(null)
+  // Agent routing: null = automatic (the router picks), else a forced agent.
+  const [forcedAgent, setForcedAgent]     = useState(null)
+  const [sevFilter, setSevFilter]         = useState('all')
+  const [feedSort, setFeedSort]           = useState('severity')
+  const [showAllPrompts, setShowAllPrompts] = useState(false)
+  const [now] = useState(() => new Date())
 
   const chatEndRef   = useRef(null)
   const inputRef     = useRef(null)
   const requestRef   = useRef(0)
+  const traceRef     = useRef(null)
+  const chatRef      = useRef(null)
+
+  // Real fleet signals (active alerts) and real AI usage (ai_token_logs).
+  const signals = useCard(loadSignals, [])
+  const usage = useCard(() => getUsageOverview({ days: USAGE_DAYS }), [])
 
   // ── Load initial context data ───────────────────────────────────────────────
 
@@ -441,19 +484,25 @@ export default function AiCommandCenter() {
     return rows
   }, [])
 
-  useEffect(() => {
+  const loadHistory = useCallback(() => {
     let live = true
     setHistoryLoading(true)
+    setHistoryError('')
     refreshConversations()
-      .catch(() => { if (live) setHistoryError('Conversation history is unavailable.') })
+      .catch((e) => { if (live) setHistoryError(toUserMessage(e, 'Conversation history is unavailable.')) })
       .finally(() => { if (live) setHistoryLoading(false) })
-    return () => { live = false; requestRef.current += 1 }
+    return () => { live = false }
   }, [refreshConversations])
+
+  useEffect(() => {
+    const stop = loadHistory()
+    return () => { stop(); requestRef.current += 1 }
+  }, [loadHistory])
 
   // ── Auto-scroll ─────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (messages.length || loading) chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [messages, loading])
 
   // ── Preview agent type as user types ───────────────────────────────────────
@@ -466,24 +515,22 @@ export default function AiCommandCenter() {
     }
   }, [query])
 
-  // ── Context for agents ──────────────────────────────────────────────────────
-
   // ── Send message ─────────────────────────────────────────────────────────────
 
-  const sendMessage = useCallback(async (queryText = query) => {
-    const text = queryText.trim()
+  const sendMessage = useCallback(async (queryText = query, agentOverride = null) => {
+    const text = String(queryText ?? '').trim()
     if (!text || loading) return
 
     const requestId = ++requestRef.current
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    const agentType = classifyQuery(text)
+    const agentType = agentOverride || forcedAgent || classifyQuery(text)
 
     const userMsg = { id: Date.now(), role: 'user', content: text, timestamp }
     setMessages(prev => [...prev, userMsg])
     setQuery('')
     setLoading(true)
     setActiveAgent(agentType)
-    inputRef.current?.focus()
+    chatRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
     try {
       const result = await sendOrchestratorMessage({
@@ -523,7 +570,7 @@ export default function AiCommandCenter() {
         setMessages(prev => [...prev, {
           id:        Date.now() + 1,
           role:      'assistant',
-          content:   'An error occurred while processing your query. Please check your connection and try again.',
+          content:   toUserMessage(err, 'An error occurred while processing your query. Please check your connection and try again.'),
           agentType,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         }])
@@ -534,7 +581,7 @@ export default function AiCommandCenter() {
         setActiveAgent(null)
       }
     }
-  }, [query, loading, conversationId, refreshConversations])
+  }, [query, loading, conversationId, refreshConversations, forcedAgent])
 
   function handleKeyDown(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -567,6 +614,7 @@ export default function AiCommandCenter() {
         timestamp: row.created_at ? new Date(row.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
       })))
       setConversationId(conversation.id)
+      chatRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     } catch {
       if (requestId === requestRef.current) setHistoryError('This conversation could not be loaded.')
     } finally {
@@ -596,7 +644,7 @@ export default function AiCommandCenter() {
     const maxWidth = pageWidth - margin * 2
     const brand = await resolvePdfBrand(branding)
 
-    pdfHeader(doc, 'AI Command Center - Chat Export', 'Secure orchestrator conversation', company, brand)
+    pdfHeader(doc, 'Smart Analytics (AI) - Chat Export', 'Secure orchestrator conversation', company, brand)
 
     // ── Empty state: nothing to export ──
     if (messages.length === 0) {
@@ -635,212 +683,311 @@ export default function AiCommandCenter() {
     doc.save(`tyre-pulse-ai-chat-${new Date().toISOString().slice(0, 10)}.pdf`)
   }
 
+  // ── Derived view data (pure, src/lib/aiCommandCenterView.js) ───────────────
+
+  const feed = useMemo(() => {
+    const items = signalFeed(signals.data || [], now)
+    return feedSort === 'newest' ? [...items].sort((a, b) => b.at - a.at) : items
+  }, [signals.data, now, feedSort])
+  const counts = useMemo(() => signalCounts(feed), [feed])
+  const shownFeed = useMemo(() => filterSignals(feed, sevFilter), [feed, sevFilter])
+  const kpis = useMemo(() => aiKpis({
+    signals: feed,
+    signalsReady: !!signals.data && !signals.error,
+    usage: usage.data?.summary || null,
+    usageReady: !!usage.data && !usage.error,
+    conversations,
+    conversationsReady: !historyLoading && !historyError,
+    days: USAGE_DAYS,
+  }), [feed, signals.data, signals.error, usage.data, usage.error, conversations, historyLoading, historyError])
+  const trace = useMemo(() => traceRows(conversations), [conversations])
+  const rangeLabel = useMemo(() => {
+    const from = new Date(now.getTime() - USAGE_DAYS * 86400000)
+    const f = (d) => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    return `${f(from)} to ${f(now)}`
+  }, [now])
+  const routedAgent = forcedAgent || previewAgent
+  const prompts = showAllPrompts ? QUICK_ACTIONS : QUICK_ACTIONS.slice(0, 4)
+  const kpiLoading = { critical: signals.loading, open: signals.loading, requests: usage.loading, spend: usage.loading, success: usage.loading, conversations: historyLoading }
+
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="AI Command Center"
-        subtitle="Multi-agent fleet intelligence: Analyst · Engineer · QA · Planner"
-        icon={Brain}
-        actions={
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="flex items-center gap-1.5 text-xs text-emerald-400">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              Secure server orchestration
-            </span>
-
-            {messages.length > 0 && (
-              <>
-                <button
-                  onClick={exportChatPdf}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  Export PDF
-                </button>
-                <button
-                  onClick={clearChat}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-red-400 transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Clear
-                </button>
-              </>
-            )}
-          </div>
-        }
-      />
-
-      <section aria-label="Conversation history" className="px-4 sm:px-6 py-3 border-b border-[var(--input-border)]/50">
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          <button onClick={clearChat} disabled={loading} className="flex-shrink-0 flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-blue-600/20 border border-blue-600/40 text-blue-300 disabled:opacity-50">
-            <MessageSquarePlus className="w-3.5 h-3.5" /> New chat
-          </button>
-          {historyLoading && <span className="text-xs text-[var(--text-muted)]">Loading history...</span>}
-          {!historyLoading && conversations.map(conversation => (
-            <div key={conversation.id} className={`flex-shrink-0 flex items-center rounded-lg border ${conversationId === conversation.id ? 'border-blue-500 bg-blue-600/10' : 'border-[var(--input-border)] bg-[var(--input-bg)]'}`}>
-              <button onClick={() => openConversation(conversation)} disabled={loading} className="max-w-48 truncate px-3 py-2 text-xs text-[var(--text-secondary)] disabled:opacity-50" title={conversation.title}>
-                {conversation.title || 'Untitled conversation'}
-              </button>
-              <button onClick={() => handleArchive(conversation.id)} disabled={loading} className="p-2 text-[var(--text-muted)] hover:text-amber-400 disabled:opacity-50" aria-label={`Archive ${conversation.title || 'conversation'}`}>
-                <Archive className="w-3.5 h-3.5" />
-              </button>
+    <div className="cc ai-page">
+      <header className="ai-head">
+        <div className="ai-head-copy">
+          <nav aria-label="Breadcrumb" className="ai-crumb">
+            Analytics &amp; Reports <ChevronRight size={13} aria-hidden="true" /> <span aria-current="page">Smart Analytics (AI)</span>
+          </nav>
+          <div className="ai-title-row">
+            <span className="ai-title-icon" aria-hidden="true"><Bot size={26} /></span>
+            <div>
+              <h1>Smart Analytics (AI)</h1>
+              <p>Multi-agent fleet intelligence using Analyst, Tyre Engineer, QA, Planner, Safety and Procurement agents, with the sources each answer read.</p>
             </div>
-          ))}
+          </div>
         </div>
-        {historyError && <p role="alert" className="text-xs text-red-400 mt-2">{historyError}</p>}
-      </section>
+        <div className="ai-head-actions">
+          <div className="cc-card ai-range">
+            <CalendarDays size={17} aria-hidden="true" />
+            <div><b>{rangeLabel}</b><span>AI usage, last {USAGE_DAYS} days</span></div>
+          </div>
+          <span className="cc-pill good ai-secure"><ShieldCheck size={13} aria-hidden="true" /> Secure server orchestration</span>
+          <button type="button" className="cc-btn-primary" onClick={exportChatPdf} disabled={messages.length === 0}
+            title={messages.length === 0 ? 'Ask a question first, then export the conversation' : 'Export this conversation as PDF'}>
+            <Download size={15} aria-hidden="true" /> Export Report
+          </button>
+        </div>
+      </header>
 
-      {/* ── Agent cards row ── */}
-      <div className="flex-shrink-0 px-4 sm:px-6 py-3 border-b border-[var(--input-border)]/50">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {Object.values(AGENT_TYPES).map(type => {
-            const AgentIcon = AGENT_ICONS[type]
-            const color = AGENT_COLORS[type]
-            const isActive = activeAgent === type
-            return (
-              <div
-                key={type}
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all ${isActive ? `${color.bg} ${color.border} border` : 'bg-[var(--surface-1)]/40 border-[var(--input-border)]/60'}`}
-              >
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${color.bg} border ${color.border}`}>
-                  <AgentIcon className={`w-3.5 h-3.5 ${color.text}`} />
-                </div>
-                <div className="min-w-0">
-                  <p className={`text-xs font-medium truncate ${isActive ? color.text : 'text-[var(--text-secondary)]'}`}>
-                    {AGENT_LABELS[type]}
-                    {isActive && <span className="ml-1 inline-block w-1.5 h-1.5 bg-current rounded-full animate-pulse" />}
-                  </p>
-                  <p className="text-xs text-[var(--text-dim)] truncate hidden sm:block">{AGENT_DESCRIPTIONS[type].split(',')[0]}</p>
-                </div>
-              </div>
-            )
-          })}
-        </div>
+      <div className="cc-kpis ai-kpis">
+        {kpis.map((k) => (
+          <Kpi
+            key={k.key}
+            icon={KPI_ICONS[k.key]}
+            tone={k.tone}
+            value={k.value}
+            display={k.display ?? (k.value == null && !kpiLoading[k.key] ? 'N/A' : undefined)}
+            loading={kpiLoading[k.key]}
+            danger={k.danger}
+            label={<>{k.label}<span className="ai-kpi-sub">{k.sub}</span></>}
+          />
+        ))}
       </div>
 
-      {/* ── Chat area ── */}
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-5 min-h-0">
+      <div className="ai-grid">
+        <Card
+          className="ai-feed"
+          title="AI Insight Feed"
+          sub="Live fleet alerts, each routed to the agent best placed to explain it"
+          action={(
+            <select className="cc-select" aria-label="Sort signals" value={feedSort} onChange={(e) => setFeedSort(e.target.value)}>
+              <option value="severity">Most severe first</option>
+              <option value="newest">Newest first</option>
+            </select>
+          )}
+        >
+          <Tabs
+            label="Filter by severity"
+            value={sevFilter}
+            onChange={setSevFilter}
+            tabs={SEV_FILTERS.map((s) => ({ key: s, label: s === 'all' ? 'All signals' : s, count: s === 'all' ? counts.all : counts[s] }))}
+          />
+          <div className="ai-feed-body">
+            <CardState
+              state={signals}
+              lines={5}
+              empty={signals.data && !shownFeed.length ? (
+                <div>
+                  {feed.length ? 'No signals at this severity.' : 'No active fleet alerts right now. Ask a question below to run an agent.'}
+                  <br /><ViewAll to="/alerts" label="Open alerts" />
+                </div>
+              ) : null}
+            >
+              <ul className="ai-feed-list">
+                {shownFeed.slice(0, 12).map((s) => {
+                  const tone = agentTone(s.agent)
+                  const AgentIcon = AGENT_ICONS[s.agent] ?? Bot
+                  return (
+                    <li key={s.id} className="ai-signal">
+                      <span className={`ai-signal-icon tone-${s.tone}`} aria-hidden="true"><AlertTriangle size={20} /></span>
+                      <div className="ai-signal-main">
+                        <div className="ai-signal-title">
+                          <b>{s.title}</b>
+                          <span className={`cc-pill ${s.tone}`}>{s.severity}</span>
+                        </div>
+                        <p title={s.message}>{s.message}</p>
+                        <span className="ai-signal-meta">{[s.asset, s.country, s.ago].filter(Boolean).join(' : ') || 'No asset recorded'}</span>
+                      </div>
+                      <span className={`cc-pill ${tone.pill} ai-agent-chip`}><AgentIcon size={12} aria-hidden="true" /> {s.agentLabel} Agent</span>
+                      <button type="button" className="cc-btn ai-ask-btn" disabled={loading}
+                        onClick={() => sendMessage(s.question, s.agent)}>
+                        Ask agent
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+              {shownFeed.length > 12 && <p className="ai-muted">Showing the 12 most relevant of {shownFeed.length} signals. <ViewAll to="/alerts" label="See all alerts" /></p>}
+            </CardState>
+          </div>
+        </Card>
 
-        {/* Empty state */}
-        {messages.length === 0 && !loading && (
-          <div className="max-w-2xl mx-auto text-center py-12">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600/20 to-indigo-700/20 border border-blue-600/20 flex items-center justify-center mx-auto mb-4">
-              <Sparkles className="w-8 h-8 text-blue-400" />
-            </div>
-            <h2 className="text-[var(--text-primary)] font-semibold text-lg mb-2">TyrePulse AI Command Center</h2>
-            <p className="text-[var(--text-muted)] text-sm mb-8 leading-relaxed">
-              Ask any question about your fleet - tyre costs, failure analysis, data quality, or maintenance planning.
-              The AI router automatically dispatches to the best specialist agent.
-            </p>
+        <Card
+          className="ai-ask"
+          title="Ask TyrePulse AI"
+          sub="Get answers, analysis and recommendations from the TyrePulse agents."
+          action={(
+            <button type="button" className="cc-btn-ghost" onClick={() => traceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+              <History size={14} aria-hidden="true" /> View Chat History
+            </button>
+          )}
+        >
+          <div className="ai-input-wrap">
+            <textarea
+              ref={inputRef}
+              className="ai-input"
+              value={query}
+              onChange={e => setQuery(clampQuestion(e.target.value))}
+              onKeyDown={handleKeyDown}
+              maxLength={MAX_QUESTION}
+              placeholder="Ask a question about your fleet, tyres, costs, risks or maintenance..."
+              disabled={loading}
+              rows={3}
+              aria-label="Question for TyrePulse AI"
+            />
+            <span className="ai-count">{query.length}/{MAX_QUESTION}</span>
+          </div>
 
-            {/* Quick actions */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
-              {QUICK_ACTIONS.map(action => {
-                const color = AGENT_COLORS[action.agent]
-                const AgentIcon = AGENT_ICONS[action.agent]
+          <div className="ai-prompts">
+            {prompts.map((action) => (
+              <button key={action.label} type="button" className="ai-prompt" disabled={loading}
+                onClick={() => sendMessage(action.query, action.agent)}>
+                {action.label}
+              </button>
+            ))}
+            <button type="button" className="ai-prompt ai-prompt-more" onClick={() => setShowAllPrompts(v => !v)}>
+              {showAllPrompts ? 'Fewer suggestions' : `More suggestions (${QUICK_ACTIONS.length - 4})`}
+            </button>
+          </div>
+
+          <div className="ai-routing">
+            <span className="ai-label">Agent routing</span>
+            <div className="ai-agents" role="radiogroup" aria-label="Agent routing">
+              <button type="button" role="radio" aria-checked={forcedAgent == null}
+                className={`ai-agent ${forcedAgent == null ? 'is-on' : ''}`} onClick={() => setForcedAgent(null)}>
+                <span className="cc-kpi-icon t-green"><Zap size={16} aria-hidden="true" /></span>
+                <span><b>Automatic</b><small>Router picks the agent</small></span>
+              </button>
+              {Object.values(AGENT_TYPES).map((type) => {
+                const AgentIcon = AGENT_ICONS[type]
+                const on = forcedAgent === type
+                const busy = activeAgent === type
                 return (
-                  <button
-                    key={action.label}
-                    onClick={() => sendMessage(action.query)}
-                    disabled={loading}
-                    className={`flex items-center gap-2.5 px-3.5 py-3 rounded-xl border text-left transition-all hover:scale-[1.01] ${color.bg} ${color.border} border group`}
-                  >
-                    <AgentIcon className={`w-4 h-4 ${color.text} flex-shrink-0`} />
-                    <span className={`text-sm font-medium ${color.text}`}>{action.label}</span>
+                  <button key={type} type="button" role="radio" aria-checked={on}
+                    className={`ai-agent ${on ? 'is-on' : ''}`} onClick={() => setForcedAgent(on ? null : type)}
+                    title={AGENT_DESCRIPTIONS[type]}>
+                    <span className={`cc-kpi-icon ${agentTone(type).icon}`}><AgentIcon size={16} aria-hidden="true" /></span>
+                    <span>
+                      <b>{AGENT_LABELS[type]}{busy && <i className="ai-busy" aria-label="working" />}</b>
+                      <small>{AGENT_DESCRIPTIONS[type].split(',')[0]}</small>
+                    </span>
                   </button>
                 )
               })}
             </div>
+            {routedAgent && (query.trim() || forcedAgent) && (
+              <p className="ai-route-note">
+                <Zap size={12} aria-hidden="true" /> {forcedAgent ? 'Will send to' : 'Will route to'} <b>{AGENT_LABELS[routedAgent]} Agent</b>: {AGENT_DESCRIPTIONS[routedAgent]}
+              </p>
+            )}
           </div>
-        )}
 
-        {/* Messages */}
-        {messages.map(msg => (
-          <MessageBubble key={msg.id} message={msg} />
-        ))}
+          <div className="ai-evidence">
+            <span className="ai-label">Evidence and scope</span>
+            <ul>
+              <li><Check size={14} aria-hidden="true" /> Every answer lists the records and sources it read.</li>
+              <li><Check size={14} aria-hidden="true" /> Answers are read-only recommendations; nothing is changed in your data.</li>
+              <li><Check size={14} aria-hidden="true" /> Data scope follows your access: organisation, country and site.</li>
+            </ul>
+          </div>
 
-        {/* Typing indicator */}
-        <AnimatePresence>
-          {loading && activeAgent && (
-            <TypingIndicator agentType={activeAgent} />
-          )}
-        </AnimatePresence>
-
-        <div ref={chatEndRef} />
+          <div className="ai-run">
+            <button type="button" className="cc-btn-primary ai-run-btn" onClick={() => sendMessage()} disabled={!query.trim() || loading}>
+              {loading ? <RefreshCw size={16} className="animate-spin" aria-hidden="true" /> : <Sparkles size={16} aria-hidden="true" />}
+              {loading ? 'Running analysis...' : 'Run Analysis'}
+            </button>
+            <button type="button" className="cc-btn-ghost" onClick={() => { setQuery(''); setForcedAgent(null) }} disabled={loading}>
+              <RotateCcw size={14} aria-hidden="true" /> Clear
+            </button>
+          </div>
+        </Card>
       </div>
 
-      {/* ── Quick action chips (shown when chat has messages) ── */}
-      {messages.length > 0 && (
-        <div className="flex-shrink-0 px-4 sm:px-6 py-2 border-t border-[var(--input-border)]/50 overflow-x-auto">
-          <div className="flex gap-2 min-w-max">
-            {QUICK_ACTIONS.slice(0, 5).map(action => {
-              const color = AGENT_COLORS[action.agent]
-              return (
-                <button
-                  key={action.label}
-                  onClick={() => sendMessage(action.query)}
-                  disabled={loading}
-                  className={`flex-shrink-0 text-xs px-3 py-1.5 rounded-full border transition-colors disabled:opacity-40 ${color.bg} ${color.border} ${color.text} hover:brightness-110`}
-                >
-                  {action.label}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ── Input area ── */}
-      <div className="flex-shrink-0 border-t border-[var(--input-border)] bg-[var(--surface-1)]/50 backdrop-blur-sm px-4 sm:px-6 py-4">
-
-        {/* Agent preview */}
-        {previewAgent && query.trim() && (
-          <div className={`flex items-center gap-2 mb-2 text-xs ${AGENT_COLORS[previewAgent].text}`}>
-            <Zap className="w-3 h-3" />
-            Will route to: <span className="font-medium">{AGENT_LABELS[previewAgent]} Agent</span>
-            <span className="text-[var(--text-dim)]">- {AGENT_DESCRIPTIONS[previewAgent]}</span>
-          </div>
-        )}
-
-        <div className="flex gap-3 items-end">
-          <div className="flex-1 relative">
-            <textarea
-              ref={inputRef}
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask about CPK, failures, root causes, planning, or data quality..."
-              disabled={loading}
-              rows={1}
-              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl px-4 py-3 pr-12 text-sm text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none disabled:opacity-50 transition-colors leading-relaxed"
-              style={{ minHeight: '48px', maxHeight: '120px' }}
-              onInput={e => {
-                e.target.style.height = 'auto'
-                e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`
-              }}
-            />
-            <div className="absolute right-3 bottom-2.5 text-xs text-[var(--text-dim)]">
-              {query.length > 0 && `${query.length}`}
+      <div ref={chatRef}>
+        <Card
+          title="Conversation"
+          sub={conversationId ? 'Saved to your history as you go' : 'A new conversation starts with your first question'}
+          action={messages.length > 0 ? (
+            <span className="ai-actions">
+              <button type="button" className="cc-btn-ghost" onClick={exportChatPdf}><Download size={14} aria-hidden="true" /> Export PDF</button>
+              <button type="button" className="cc-btn-ghost" onClick={clearChat}><Trash2 size={14} aria-hidden="true" /> Clear</button>
+            </span>
+          ) : null}
+        >
+          {messages.length === 0 && !loading ? (
+            <div className="cc-empty ai-chat-empty">
+              <div>
+                <Sparkles size={26} aria-hidden="true" />
+                <p>Ask a question, pick a suggestion, or send a signal from the feed to an agent. The answer appears here with the sources it used.</p>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="ai-chat">
+              {messages.map(msg => (
+                <MessageBubble key={msg.id} message={msg} />
+              ))}
+              <AnimatePresence>
+                {loading && activeAgent && (
+                  <TypingIndicator agentType={activeAgent} />
+                )}
+              </AnimatePresence>
+              <div ref={chatEndRef} />
+            </div>
+          )}
+          <p className="ai-muted ai-disclaimer">AI responses are generated from your fleet data. Always validate critical decisions with your engineering team.</p>
+        </Card>
+      </div>
 
-          <button
-            onClick={() => sendMessage()}
-            disabled={!query.trim() || loading}
-            className="flex-shrink-0 w-12 h-12 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:cursor-not-allowed flex items-center justify-center transition-colors shadow-lg"
-          >
-            {loading
-              ? <RefreshCw className="w-4 h-4 text-white animate-spin" />
-              : <Send className="w-4 h-4 text-white" />
-            }
-          </button>
-        </div>
-
-        <p className="text-xs text-[var(--text-dim)] mt-2 text-center">
-          AI responses are generated from your fleet data. Always validate critical decisions with your engineering team.
-        </p>
+      <div ref={traceRef}>
+        <Card
+          title="Prediction & Recommendation Trace"
+          sub="Saved conversations and the agent that answered. Confidence and predicted impact are not stored per answer, so they are not shown."
+          action={(
+            <button type="button" className="cc-btn" onClick={clearChat} disabled={loading}>
+              <MessageSquarePlus size={13} aria-hidden="true" /> New chat
+            </button>
+          )}
+        >
+          {historyError && (
+            <div className="cc-card ai-banner" role="alert">
+              <span>{historyError}</span>
+              <button type="button" className="cc-btn-ghost" onClick={loadHistory}>Try again</button>
+            </div>
+          )}
+          <KitTable
+            rows={trace}
+            loading={historyLoading && !trace.length}
+            empty="No saved conversations yet. Your first question starts one."
+            onRowClick={(r) => { const c = conversations.find((x) => x.id === r.id); if (c) openConversation(c) }}
+            columns={[
+              { key: 'n', header: '#', numeric: true },
+              { key: 'title', header: 'Conversation', cell: (r) => <span className={`ai-trace-title ${conversationId === r.id ? 'is-open' : ''}`} title={r.title}>{r.title}</span> },
+              {
+                key: 'agent', header: 'Agent',
+                cell: (r) => <span className={`cc-pill ${agentTone(r.agent).pill}`}>{r.agentLabel}</span>,
+              },
+              { key: 'created', header: 'Started', cell: (r) => (r.created ? formatDateTime(r.created) : <span className="cc-na">N/A</span>) },
+              { key: 'updated', header: 'Last Updated', cell: (r) => (r.updated ? formatDateTime(r.updated) : <span className="cc-na">N/A</span>) },
+              {
+                key: 'status', header: 'Status', sortable: false,
+                cell: (r) => <span className={`cc-pill ${conversationId === r.id ? 'good' : 'muted'}`}>{conversationId === r.id ? 'Open now' : 'Saved'}</span>,
+              },
+              {
+                key: 'actions', header: 'Actions', sortable: false,
+                cell: (r) => (
+                  <span className="ai-actions" onClick={(e) => e.stopPropagation()} role="presentation">
+                    <button type="button" className="cc-icon-btn" disabled={loading}
+                      onClick={() => { const c = conversations.find((x) => x.id === r.id); if (c) openConversation(c) }}
+                      aria-label={`Open ${r.title}`} title="Open"><Eye size={14} /></button>
+                    <button type="button" className="cc-icon-btn" disabled={loading}
+                      onClick={() => handleArchive(r.id)} aria-label={`Archive ${r.title}`} title="Archive"><Archive size={14} /></button>
+                  </span>
+                ),
+              },
+            ]}
+          />
+        </Card>
       </div>
     </div>
   )

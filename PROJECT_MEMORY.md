@@ -5,6 +5,22 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ SESSION 2026-10-05 (part 9) — 16 MORE WEB PAGES REBUILT TO OWNER MOCKUPS (web only, LOCAL commits, NOT pushed).
+- PR #378 merged as eeb72cc3 (prod READY verified). Then the owner sent a 16-screen zip (scratchpad mz/): Scheduled Reports,
+  Dashboard Builder, TV Display (DisplayDashboard), Smart Analytics (AiCommandCenter), Knowledge Base, Report Center, Report
+  Sharing, Policy Management, Driver Coaching, Fuel Theft Alerts, Daily Ops, Trip Replay, Fuel Efficiency, Toll Transactions,
+  Supplier Marketplace, Load Planning. All rebuilt on commandCenter/kit.jsx (8 agents x 2 pages), each with a pure
+  src/lib/<x>View.js + test + page .css. No migrations. Owner re-sent screens one by one; all were byte-identical to the zip.
+- EMPTY TABLES (honest empty states, not bugs): toll_transactions, load_plans, marketplace_*, trip_segments, fuel_theft_alerts,
+  driver_coaching, policies, knowledge_documents, fuel_transactions, journeys, gps_positions = 0 rows. No GPS => no maps.
+- Fixed: fetchReportRows (scheduledReports.js) now pages past the 1000-row cap (fresh builder per page, id tiebreak, max 5000,
+  returns truncated). TV board tyre cost no longer sums SAR+AED+EGP. Scheduled trend chart even y-ceiling.
+- Verified: lint 0 errors, vite build clean, full suite 13,026/13,027 (only checklistIcons, environmental). Browser harness
+  scratchpad/harness_m16 (fake auth + empty supabase, run vite FROM REPO ROOT or tailwind utilities are missing): all 16 pages
+  x dark/light x 1440/390 = 0 overflow, 0 crash.
+- Agent suggestions not done: tablePaginationClassification test only accepts <EnterpriseTable (not <KitTable); kit Donut needs
+  literal hex (SVG attr); displayCharts.js dark-only; Accidents has no deep link to its Report Builder tab.
+
 # ⚑ SESSION 2026-10-05 (part 8) — MOCKUP GAPS CLOSED: AUDIT TRAIL IP/DEVICE/SEVERITY, WORKSHOP DATE RANGE, CPK SITE FILTER.
 - All owner mockup sets are built: 54 console pages (all on the console kit; old pages live as tabs), the 10 module
   screens (#377), login, 7 accident workstreams (web + Flutter). Flutter mock 12 still EMPTY - ask owner to resend.

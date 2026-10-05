@@ -56,7 +56,9 @@ const TREND_SERIES = [
 /** Small SVG line chart for the 7-day delivery trend. */
 function TrendChart({ points }) {
   const W = 420; const H = 150; const pad = 26
-  const max = Math.max(1, ...points.flatMap((p) => TREND_SERIES.map((s) => p[s.key])))
+  // Even ceiling so the half-way gridline is a whole number (never 1 / 1 / 0).
+  const peak = Math.max(0, ...points.flatMap((p) => TREND_SERIES.map((s) => Number(p[s.key]) || 0)))
+  const max = Math.max(2, Math.ceil(peak / 2) * 2)
   const step = points.length > 1 ? (W - pad - 8) / (points.length - 1) : 0
   const x = (i) => pad + i * step
   const y = (v) => H - (v / max) * (H - 14)
@@ -708,10 +710,10 @@ function DeliveryHistory({ runs, summary, loading, error, open, onToggle, onRefr
             </p>
             <p className="text-[var(--text-secondary)] text-xs mt-0.5">
               {summary && summary.total > 0
-                ? td('schedreports.history.summary', '{total} runs | {sent} sent | {failed} failed (last 60 days)', {
+                ? td('schedreports.history.summary', '{total} runs | {sent} sent | {failed} failed (last 70 days)', {
                   total: summary.total, sent: summary.sent, failed: summary.failed,
                 })
-                : td('schedreports.history.subtitle', 'Recent scheduled report deliveries (last 60 days)')}
+                : td('schedreports.history.subtitle', 'Recent scheduled report deliveries (last 70 days)')}
             </p>
           </div>
         </button>

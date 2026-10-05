@@ -48,6 +48,16 @@ describe('headlineKpis', () => {
     expect(k.delayedJobs.value).toBe(1)
     expect(k.onTime).toEqual({ value: 50, judged: 2 })
     expect(k.activeVehicles).toEqual({ value: 0, trend: null })
+    expect(k.jobsInProgress).toEqual({ value: 0 })
+  })
+  it('counts jobs in progress opened on or before the day', () => {
+    const k = headlineKpis({ workOrders: [
+      { status: 'In Progress', created_at: `${P}T07:00:00` },
+      { status: 'Quality Inspection', created_at: `${D}T07:00:00` },
+      { status: 'In Progress', created_at: '2026-10-06T07:00:00' },
+      { status: 'Open', created_at: `${D}T07:00:00` },
+    ], selectedDate: D })
+    expect(k.jobsInProgress).toEqual({ value: 2 })
   })
   it('on-time is null when no job can be judged', () => {
     expect(headlineKpis({ workOrders: [], selectedDate: D }).onTime.value).toBeNull()

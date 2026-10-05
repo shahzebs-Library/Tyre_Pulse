@@ -16,10 +16,10 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   MapPin, Gauge, Truck, AlertTriangle, Search, X, FileSpreadsheet, FileText, Plus, Pencil, Trash2,
   Milestone, Zap, Timer, Clock, RotateCcw, Play, Pause, SkipBack, SkipForward, Fuel, Leaf, Spline,
-  ChevronRight, ParkingCircle, Flag, Navigation, Activity, RefreshCw,
+  ChevronRight, ParkingCircle, Flag, Navigation, Activity, RefreshCw, BarChart3, Download, Share2, ChevronDown,
 } from 'lucide-react'
 import Modal from '../components/ui/Modal'
-import { Card, Kpi, Tabs, KitTable, VehicleThumb, fmtInt } from '../components/commandCenter/kit'
+import { Card, Kpi, Tabs, KitTable, VehicleThumb, ViewAll, fmtInt } from '../components/commandCenter/kit'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listTripSegments, listTripRefs, createTripSegment, updateTripSegment, deleteTripSegment,
@@ -94,7 +94,10 @@ export default function TripReplay() {
   const { activeCountry } = useSettings()
 
   const [trips, setTrips] = useState(null)
-  const [tripRef, setTripRef] = useState('')
+  // A shared link (?trip=<ref>) opens straight on that trip.
+  const [tripRef, setTripRef] = useState(() => {
+    try { return new URLSearchParams(window.location.search).get('trip') || '' } catch { return '' }
+  })
   const [segments, setSegments] = useState(null)
 
   const [error, setError] = useState('')
@@ -114,6 +117,9 @@ export default function TripReplay() {
   const [harshOnly, setHarshOnly] = useState(false)
   const [search, setSearch] = useState('')
   const [chartTab, setChartTab] = useState('speed')
+  const [compareOpen, setCompareOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
+  const [shareNote, setShareNote] = useState('')
 
   const [playIdx, setPlayIdx] = useState(0)
   const [playing, setPlaying] = useState(false)
@@ -282,6 +288,19 @@ export default function TripReplay() {
     }
   }, [confirmDelete, reloadAll])
 
+  const shareTrip = async () => {
+    setShareNote('')
+    try {
+      const url = new URL(window.location.href)
+      if (tripRef) url.searchParams.set('trip', tripRef); else url.searchParams.delete('trip')
+      await navigator.clipboard.writeText(url.toString())
+      setShareNote(tripRef ? `Link to ${tripRef} copied.` : 'Link to Trip Replay copied.')
+    } catch (e) {
+      setActionError(toUserMessage(e, 'Could not copy the link. Copy it from the address bar instead.'))
+    }
+  }
+  const scrollToSegments = () => document.getElementById('tr-segments')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+
   const clearFilters = () => { setAssetFilter(''); setEventFilter(''); setHarshOnly(false); setSearch('') }
   const hasFilters = !!(assetFilter || eventFilter || harshOnly || search)
   const tripsLoaded = Array.isArray(trips)
@@ -327,8 +346,8 @@ export default function TripReplay() {
   return (
     <div className="cc tr-page">
       <header className="tr-head">
-        <div className="tr-head-art tr-art-dark" style={{ backgroundImage: 'url(/dashboard/hero-history-dark.webp)' }} aria-hidden="true" />
-        <div className="tr-head-art tr-art-light" style={{ backgroundImage: 'url(/dashboard/hero-history-light.webp)' }} aria-hidden="true" />
+        <div className="tr-head-art tr-art-dark" style={{ backgroundImage: 'url(/dashboard/hero-replay-dark.webp)' }} aria-hidden="true" />
+        <div className="tr-head-art tr-art-light" style={{ backgroundImage: 'url(/dashboard/hero-replay-light.webp)' }} aria-hidden="true" />
         <div className="tr-head-copy">
           <nav className="tr-crumb" aria-label="Breadcrumb">Monitoring and Logistics <ChevronRight size={12} aria-hidden="true" /> <span>Trip Replay</span></nav>
           <h1>Trip Replay</h1>
@@ -337,16 +356,36 @@ export default function TripReplay() {
         <div className="tr-head-actions">
           <label className="tr-date"><span>From</span><input type="date" className="cc-select" value={periodFrom} onChange={(e) => setPeriodFrom(e.target.value)} aria-label="Trips from date" /></label>
           <label className="tr-date"><span>To</span><input type="date" className="cc-select" value={periodTo} onChange={(e) => setPeriodTo(e.target.value)} aria-label="Trips to date" /></label>
+          <select className="cc-select tr-site" aria-label="Site" disabled title="Trip segments carry no site column, so trips cannot be filtered by site.">
+            <option>All sites</option>
+          </select>
           <button type="button" className="cc-btn-primary" onClick={playing ? () => setPlaying(false) : startReplay} disabled={!geo}>
             {playing ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />} {playing ? 'Pause' : 'Replay'}
           </button>
-          <button type="button" className="cc-btn-ghost" onClick={doExcel} disabled={!filtered.length}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
-          <button type="button" className="cc-btn-ghost" onClick={doPdf} disabled={!filtered.length}><FileText size={14} aria-hidden="true" /> PDF</button>
+          <button type="button" className="cc-btn-ghost" onClick={() => setCompareOpen(true)} disabled={!tripsLoaded}><BarChart3 size={14} aria-hidden="true" /> Compare trips</button>
+          <div className="tr-menu">
+            <button type="button" className="cc-btn-ghost" onClick={() => setExportOpen((v) => !v)} aria-expanded={exportOpen} aria-haspopup="menu" disabled={!filtered.length}>
+              <Download size={14} aria-hidden="true" /> Export <ChevronDown size={13} aria-hidden="true" />
+            </button>
+            {exportOpen && (
+              <div className="tr-menu-pop" role="menu">
+                <button type="button" role="menuitem" onClick={() => { setExportOpen(false); doExcel() }}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
+                <button type="button" role="menuitem" onClick={() => { setExportOpen(false); doPdf() }}><FileText size={14} aria-hidden="true" /> PDF</button>
+              </div>
+            )}
+          </div>
+          <button type="button" className="cc-btn-ghost" onClick={shareTrip}><Share2 size={14} aria-hidden="true" /> Share</button>
           <button type="button" className="cc-btn-ghost" onClick={openCreate} disabled={notProvisioned || !tripsLoaded}><Plus size={14} aria-hidden="true" /> Add segment</button>
           <button type="button" className="cc-icon-btn" onClick={reloadAll} disabled={refreshing || segLoading} aria-label="Refresh"><RefreshCw size={14} className={refreshing || segLoading ? 'animate-spin' : ''} /></button>
         </div>
       </header>
 
+      {shareNote && (
+        <div className="cc-card tr-banner info" role="status">
+          <Share2 size={16} aria-hidden="true" /><div>{shareNote}</div>
+          <button type="button" className="cc-icon-btn" onClick={() => setShareNote('')} aria-label="Dismiss message"><X size={14} /></button>
+        </div>
+      )}
       {notProvisioned && (
         <div className="cc-card tr-banner warn" role="status"><AlertTriangle size={16} aria-hidden="true" /><div>Trip Replay is not enabled on this database yet. Apply <b>MIGRATIONS_V191_TRIP_SEGMENTS.sql</b>, then reload.</div></div>
       )}
@@ -510,8 +549,14 @@ export default function TripReplay() {
             )}
           </Card>
 
-          <Card title="Events and alerts">
-            {!tripRef ? <div className="cc-empty">No trip selected.</div>
+          <Card title="Events and alerts" action={tripRef ? <ViewAll onClick={scrollToSegments} /> : null}>
+            {!tripRef ? (
+              <ul className="tr-events tr-events-idle" aria-label="Events and alerts, no trip selected">
+                {[['purple', MapPin, 'Geofence events'], ['bad', Gauge, 'Speed violations'], ['warn', Zap, 'Harsh driving'], ['info', Timer, 'Idle and stop time'], ['good', Fuel, 'Fuel burn'], ['bad', Flag, 'Toll passages']].map(([tone, Ic, label]) => (
+                  <li key={label}><i className={`tr-ev-ic ${tone}`}><Ic size={13} /></i><span>{label}</span><small>Select a trip</small></li>
+                ))}
+              </ul>
+            )
               : segError ? <div className="cc-empty" role="alert"><div>{segError}<br /><button type="button" className="cc-btn" onClick={loadSegments}>Try again</button></div></div>
                 : (
                   <ul className="tr-events">
@@ -525,7 +570,7 @@ export default function TripReplay() {
                 )}
           </Card>
 
-          <Card title="Stops and timeline">
+          <Card title="Stops and timeline" action={tripRef ? <ViewAll onClick={scrollToSegments} /> : null}>
             {!tripRef ? <div className="cc-empty">No trip selected.</div>
               : !segLoaded ? <div className="cc-skel" style={{ height: 120 }} />
                 : timeline.length === 0 ? <div className="cc-empty">This trip has no breadcrumbs yet.</div>
@@ -540,6 +585,7 @@ export default function TripReplay() {
         </aside>
       </div>
 
+      <div id="tr-segments" />
       <Card title="Trip segments" sub={`${fmtInt(filtered.length)} of ${fmtInt(segs.length)} breadcrumbs for ${tripRef || 'no trip'}`}
         action={hasFilters ? <button type="button" className="cc-link cc-link-btn" onClick={clearFilters}><X size={13} aria-hidden="true" /> Clear filters</button> : null}>
         <div className="cc-filters tr-filters">
@@ -659,6 +705,27 @@ export default function TripReplay() {
             Seq {confirmDelete.sequence ?? 'N/A'} | {confirmDelete.event_type ? eventLabel(confirmDelete.event_type) : 'No event'} | {fmtTime(confirmDelete.recorded_at)}. This cannot be undone.
           </p>
         )}
+      </Modal>
+      <Modal open={compareOpen} onClose={() => setCompareOpen(false)} size="xl" title="Compare trips"
+        subtitle={`${fmtInt(tripRows.length)} trip${tripRows.length === 1 ? '' : 's'} in the current period and filters, side by side`}>
+        <KitTable
+          columns={[
+            { key: 'trip_ref', header: 'Trip ID', cell: (t) => <span className="cc-strong">{t.trip_ref}</span> },
+            { key: 'asset_no', header: 'Asset', cell: (t) => t.asset_no || NA },
+            { key: 'driver_name', header: 'Driver', cell: (t) => t.driver_name || NA },
+            { key: 'firstAt', header: 'Start', sortValue: (t) => t.firstAt || '', cell: (t) => fmtTime(t.firstAt) },
+            { key: 'durationMin', header: 'Duration', numeric: true, cell: (t) => fmtMin(t.durationMin) },
+            { key: 'segments', header: 'Points', numeric: true, cell: (t) => fmtInt(t.segments) },
+            { key: 'open', header: '', sortable: false, align: 'right', cell: (t) => (
+              <button type="button" className="cc-btn-ghost" onClick={() => { setTripRef(t.trip_ref); setCompareOpen(false) }}>Replay</button>
+            ) },
+          ]}
+          rows={tripRows}
+          getRowId={(t) => t.trip_ref}
+          initialPageSize={10}
+          empty={noTrips ? 'No trips recorded yet, so there is nothing to compare.' : 'No trips match this period and these filters.'}
+        />
+        <p className="tr-foot">Distance, fuel and harsh events per trip need each trip&apos;s breadcrumbs; open a trip to see them. Fuel is not recorded on trip segments.</p>
       </Modal>
     </div>
   )

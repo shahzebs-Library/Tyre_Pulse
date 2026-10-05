@@ -2,7 +2,7 @@
  * FuelTheftAlerts (route /fuel-theft-alerts) - Fuel Theft Alerts, rebuilt on
  * the shared Command Center kit to the owner's mockup: photo hero with a date
  * range, five headline tiles, the alert feed, loss hotspots, the variance
- * trend, after-hours split, top loss sites, repeat assets and the selected
+ * trend, after-hours split, top loss sites, fuel card misuse (by asset) and the selected
  * alert investigation panel.
  *
  * Runs on the `fuel_theft_alerts` table (V180). Real data only. The table
@@ -19,9 +19,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   Fuel, Droplet, ShieldAlert, Coins, ShieldCheck, Search, X, FileSpreadsheet, FileText,
-  Plus, Pencil, Trash2, RefreshCw, AlertTriangle, Loader2, Save, Lightbulb, Repeat2,
-  MapPin, Info, Eye, BadgeCheck, CheckCircle2, Ban, CalendarDays,
+  Plus, Pencil, Trash2, RefreshCw, AlertTriangle, Loader2, Save, Lightbulb,
+  MapPin, Info, BadgeCheck, CheckCircle2, Ban, CalendarDays, Filter, FolderPlus, UserPlus,
+  Settings2, Download, Map as MapIcon,
 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import Modal from '../components/ui/Modal'
 import { Card, CardState, Kpi, PageHero, Tabs, KitTable, Donut, VehicleThumb, fmtInt } from '../components/commandCenter/kit'
 import { useSettings } from '../contexts/SettingsContext'
@@ -31,12 +33,12 @@ import {
 import { estimatedLoss } from '../lib/fuelTheftAlerts'
 import {
   SEVERITY_KEYS, STATUS_KEYS, titleCase, enrichAlerts, filterAlerts, buildAlertKpis,
-  buildAlertInsights, severityBreakdown, statusBreakdown, repeatAssets,
+  buildAlertInsights, severityBreakdown, statusBreakdown,
   alertExportRows, ALERT_EXPORT_COLUMNS,
 } from '../lib/fuelTheftAlertsAnalytics'
 import {
   fuelHeadline, dailyVariance, afterHoursSplit, locationHotspots, alertTimeline,
-  recommendedActions, AFTER_HOURS,
+  recommendedActions, AFTER_HOURS, cardMisuseRows, locationOptions,
 } from '../lib/fuelTheftAlertsView'
 import { formatCurrency } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
@@ -79,7 +81,6 @@ function toLocalInput(v) {
 /** Daily litres lost as downward bars. Days without a reading draw nothing. */
 function VarianceBars({ days }) {
   const vals = days.map((d) => d.litres).filter((v) => v != null)
-  if (!vals.length) return null
   const max = Math.max(...vals.map((v) => Math.abs(v)), 1)
   const W = 340; const H = 140; const top = 12; const base = 20
   const bw = (W - 30) / days.length
@@ -88,12 +89,13 @@ function VarianceBars({ days }) {
     <svg viewBox={`0 0 ${W} ${H}`} className="fta-bars" role="img" aria-label={days.filter((d) => d.litres != null).map((d) => `${d.day} ${d.litres} litres`).join(', ')}>
       <line x1="28" x2={W} y1={top} y2={top} className="fta-axis-line" />
       <text x="2" y={top + 3} className="fta-axis">0</text>
-      <text x="2" y={H - base} className="fta-axis">-{Math.round(max)}</text>
+      <text x="2" y={H - base} className="fta-axis">{vals.length ? `-${Math.round(max)}` : ''}</text>
+      <line x1="28" x2={W} y1={H - base} y2={H - base} className="fta-axis-line" />
       {days.map((d, i) => (d.litres == null ? null : (
         <rect key={d.day} x={30 + i * bw + 1} y={top} width={Math.max(1.5, bw - 2)} height={(Math.abs(d.litres) / max) * (H - top - base)} className="fta-bar-neg" />
       )))}
       {[0, Math.floor(days.length / 2), days.length - 1].map((i) => days[i] && (
-        <text key={i} x={30 + i * bw + bw / 2} y={H - 4} textAnchor="middle" className="fta-axis">{label(days[i])}</text>
+        <text key={i} x={i === days.length - 1 ? W - 2 : 30 + i * bw + bw / 2} y={H - 4} textAnchor={i === days.length - 1 ? 'end' : 'middle'} className="fta-axis">{label(days[i])}</text>
       ))}
     </svg>
   )
@@ -117,6 +119,8 @@ export default function FuelTheftAlerts() {
   const [severityFilter, setSeverityFilter] = useState('')
   const [openOnly, setOpenOnly] = useState(false)
   const [search, setSearch] = useState('')
+  const [locationFilter, setLocationFilter] = useState('')
+  const [showMoreFilters, setShowMoreFilters] = useState(false)
   const [selectedId, setSelectedId] = useState(null)
 
   const [showModal, setShowModal] = useState(false)
@@ -152,16 +156,20 @@ export default function FuelTheftAlerts() {
   const currency = activeCurrency || ''
 
   // Everything on the page follows the date range.
-  const scoped = useMemo(() => filterAlerts(all, { from, to }), [all, from, to])
+  const ranged = useMemo(() => filterAlerts(all, { from, to }), [all, from, to])
+  const locations = useMemo(() => locationOptions(ranged), [ranged])
+  const scoped = useMemo(() => (locationFilter
+    ? ranged.filter((r) => String(r.location || '').trim().toLowerCase() === locationFilter.toLowerCase())
+    : ranged), [ranged, locationFilter])
   const head = useMemo(() => fuelHeadline(scoped), [scoped])
   const kpi = useMemo(() => buildAlertKpis(scoped, now, currency), [scoped, now, currency])
   const insights = useMemo(() => buildAlertInsights(scoped, now, currency), [scoped, now, currency])
   const severities = useMemo(() => severityBreakdown(scoped), [scoped])
   const statuses = useMemo(() => statusBreakdown(scoped), [scoped])
-  const repeat = useMemo(() => repeatAssets(scoped, currency).slice(0, 8), [scoped, currency])
   const variance = useMemo(() => dailyVariance(scoped, { from, to, now }), [scoped, from, to, now])
   const afterHours = useMemo(() => afterHoursSplit(scoped), [scoped])
   const hotspots = useMemo(() => locationHotspots(scoped), [scoped])
+  const misuse = useMemo(() => cardMisuseRows(scoped), [scoped])
 
   const assetOptions = useMemo(() => [...new Set(scoped.map((r) => r.asset_no).filter(Boolean))].sort(), [scoped])
   const register = useMemo(() => {
@@ -185,6 +193,14 @@ export default function FuelTheftAlerts() {
     setActionError('')
     try {
       await exportToExcel(exportRows, ALERT_EXPORT_COLUMNS.map((c) => c.key), ALERT_EXPORT_COLUMNS.map((c) => c.header), reportFileName('Fuel Theft Alerts', scopeLabel))
+    } catch (e) { setActionError(toUserMessage(e, 'Could not export. Try again.')) }
+  }
+  const doSelectedExcel = async () => {
+    if (!selected) return
+    setActionError('')
+    try {
+      const one = alertExportRows([selected], now, currency)
+      await exportToExcel(one, ALERT_EXPORT_COLUMNS.map((c) => c.key), ALERT_EXPORT_COLUMNS.map((c) => c.header), reportFileName('Fuel Theft Alert', selected.alert_no || selected.asset_no || 'alert'))
     } catch (e) { setActionError(toUserMessage(e, 'Could not export. Try again.')) }
   }
   const doPdf = async () => {
@@ -258,23 +274,25 @@ export default function FuelTheftAlerts() {
     }
   }, [load])
 
-  const clearFilters = () => { setAssetFilter(''); setStatusFilter(''); setSeverityFilter(''); setOpenOnly(false); setSearch('') }
-  const hasFilters = !!(assetFilter || statusFilter || severityFilter || openOnly || search)
+  const clearFilters = () => { setAssetFilter(''); setStatusFilter(''); setSeverityFilter(''); setOpenOnly(false); setSearch(''); setLocationFilter('') }
+  const hasFilters = !!(assetFilter || statusFilter || severityFilter || openOnly || search || locationFilter)
+  const moreFilterCount = [assetFilter, severityFilter, openOnly].filter(Boolean).length
   const na = (v, f = fmtInt) => (!ready ? 'N/A' : (v == null ? 'N/A' : f(v)))
 
   const feedColumns = [
-    { key: 'detectedTime', header: 'Time (local)', sortValue: (r) => r.detectedTime ?? -1, cell: (r) => <span className="fta-nowrap">{fmtTime(r.detected_at)}</span> },
+    {
+      key: 'detectedTime', header: 'Time (local)', sortValue: (r) => r.detectedTime ?? -1,
+      cell: (r) => <span className="fta-nowrap fta-time"><AlertTriangle size={13} className={`fta-tri ${r.sev === 'critical' || r.sev === 'high' ? 'bad' : 'warn'}`} aria-hidden="true" />{fmtTime(r.detected_at)}</span>,
+    },
     { key: 'asset_no', header: 'Asset', cell: (r) => <b className="fta-asset">{r.asset_no || 'N/A'}</b> },
     { key: 'driver_name', header: 'Driver', cell: (r) => r.driver_name || <span className="cc-na">N/A</span> },
     { key: 'location', header: 'Site / location', cell: (r) => r.location || <span className="cc-na">N/A</span> },
     {
-      key: 'dropValue', header: 'Litres variance', numeric: true, sortValue: (r) => r.dropValue ?? -1,
+      key: 'dropValue', header: 'Litres var.', numeric: true, sortValue: (r) => r.dropValue ?? -1,
       cell: (r) => (r.dropValue == null ? <span className="cc-na">N/A</span> : <b className="fta-neg">-{r.dropValue.toLocaleString('en-US')} L</b>),
     },
-    {
-      key: 'loss', header: 'Est. loss', numeric: true, sortValue: (r) => r.loss ?? -1,
-      cell: (r) => (r.loss == null ? <span className="cc-na">N/A</span> : <span title={r.basis === 'stored' ? 'Recorded figure' : 'Drop x price'}>{fmtMoney(r.loss, r.cur)}</span>),
-    },
+    { key: 'card', header: 'Fuel card', sortable: false, cell: () => <span className="cc-na" title="Alerts carry no fuel card column">Not recorded</span> },
+    { key: 'geo', header: 'Geofence', sortable: false, cell: () => <span className="cc-na" title="Alerts carry no geofence column">Not recorded</span> },
     { key: 'sev', header: 'Severity', sortValue: (r) => (r.sev ? SEVERITY_KEYS.length - SEVERITY_KEYS.indexOf(r.sev) : -1), cell: (r) => (r.sev ? <span className={`cc-pill ${SEV_PILL[r.sev] || 'muted'}`}>{titleCase(r.sev)}</span> : <span className="cc-na">N/A</span>) },
     { key: 'st', header: 'Status', cell: (r) => (r.st ? <span className={`cc-pill ${STATUS_PILL[r.st] || 'muted'}`}>{titleCase(r.st)}</span> : <span className="cc-na">N/A</span>) },
     {
@@ -302,21 +320,16 @@ export default function FuelTheftAlerts() {
 
   return (
     <div className="cc fta-page">
-      <PageHero
-        hello="Monitoring and Logistics"
-        title="Fuel Theft Alerts"
-        lead="Detect suspicious fuel loss, siphoning and tank variance across your fleet."
-        imgLight="/dashboard/hero-fueltheft-light.webp"
-        imgDark="/dashboard/hero-fueltheft-dark.webp"
-      />
-
-      <div className="cc-card fta-bar">
-        <Tabs label="Fuel theft views" value={tab} onChange={setTab} tabs={[
-          { key: 'overview', label: 'Overview' },
-          { key: 'analysis', label: 'Analysis', count: ready ? scoped.length : null },
-        ]} />
-        <div className="fta-range">
-          <CalendarDays size={14} aria-hidden="true" />
+      <div className="fta-hero">
+        <PageHero
+          hello="Monitoring and Logistics / Fuel Theft Alerts"
+          title="Fuel Theft Alerts"
+          lead="Detect suspicious fuel loss, siphoning, card misuse and tank variance across your fleet."
+          imgLight="/dashboard/hero-fueltheft-light.webp"
+          imgDark="/dashboard/hero-fueltheft-dark.webp"
+        />
+        <div className="fta-range fta-hero-range">
+          <CalendarDays size={15} aria-hidden="true" />
           <label htmlFor="fta-from" className="sr-only">From date</label>
           <input id="fta-from" type="date" className="cc-select" value={from} onChange={(e) => setFrom(e.target.value)} />
           <span>to</span>
@@ -324,6 +337,13 @@ export default function FuelTheftAlerts() {
           <input id="fta-to" type="date" className="cc-select" value={to} onChange={(e) => setTo(e.target.value)} />
           {(from || to) && <button type="button" className="cc-icon-btn" onClick={() => { setFrom(''); setTo('') }} aria-label="Clear date range"><X size={13} /></button>}
         </div>
+      </div>
+
+      <div className="cc-card fta-bar">
+        <Tabs label="Fuel theft views" value={tab} onChange={setTab} tabs={[
+          { key: 'overview', label: 'Overview' },
+          { key: 'analysis', label: 'Analysis', count: ready ? scoped.length : null },
+        ]} />
         <div className="fta-bar-actions">
           {updatedAt && <span className="fta-updated">Updated {updatedAt.toLocaleTimeString()}</span>}
           <button type="button" className="cc-btn-ghost" onClick={load} disabled={refreshing}><RefreshCw size={14} className={refreshing ? 'fta-spin' : ''} aria-hidden="true" /> Refresh</button>
@@ -371,13 +391,25 @@ export default function FuelTheftAlerts() {
       {tab === 'overview' && (
         <>
           <div className="fta-top">
-            <Card title="Alert Feed" sub="Latest fuel theft and anomaly alerts"
+            <Card className="fta-feed" title="Alert Feed" sub="Latest fuel theft and anomaly alerts across all sites."
               action={(
                 <div className="fta-filters">
                   <select className="cc-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
-                    <option value="">All statuses</option>
+                    <option value="">All alerts</option>
                     {STATUS_KEYS.map((s) => <option key={s} value={s}>{titleCase(s)}</option>)}
                   </select>
+                  <label className="fta-search">
+                    <Search size={14} aria-hidden="true" />
+                    <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search alerts..." aria-label="Search alerts" />
+                  </label>
+                  <button type="button" className={`cc-icon-btn fta-filter-btn ${showMoreFilters || moreFilterCount ? 'on' : ''}`} onClick={() => setShowMoreFilters((v) => !v)}
+                    aria-expanded={showMoreFilters} aria-label={`More filters${moreFilterCount ? ` (${moreFilterCount} active)` : ''}`}>
+                    <Filter size={14} aria-hidden="true" />{moreFilterCount > 0 && <span className="fta-filter-count">{moreFilterCount}</span>}
+                  </button>
+                </div>
+              )}>
+              {showMoreFilters && (
+                <div className="fta-filters fta-more">
                   <select className="cc-select" value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)} aria-label="Severity">
                     <option value="">All severities</option>
                     {SEVERITY_KEYS.map((s) => <option key={s} value={s}>{titleCase(s)}</option>)}
@@ -386,148 +418,175 @@ export default function FuelTheftAlerts() {
                     <option value="">All assets</option>
                     {assetOptions.map((a) => <option key={a} value={a}>{a}</option>)}
                   </select>
-                  <label className="fta-search">
-                    <Search size={14} aria-hidden="true" />
-                    <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search alerts" aria-label="Search alerts" />
-                  </label>
                   <label className="fta-check"><input type="checkbox" checked={openOnly} onChange={(e) => setOpenOnly(e.target.checked)} /> Open only</label>
-                  {hasFilters && <button type="button" className="cc-btn-ghost" onClick={clearFilters}><X size={13} aria-hidden="true" /> Clear</button>}
+                  {hasFilters && <button type="button" className="cc-btn-ghost" onClick={clearFilters}><X size={13} aria-hidden="true" /> Clear filters</button>}
                 </div>
-              )}>
-              <CardState state={cardState} lines={6}
-                empty={ready && !scoped.length ? (
-                  <div>{all.length ? 'No alerts in this date range.' : 'No fuel theft alerts recorded yet.'}<br /><button type="button" className="cc-btn" onClick={openCreate} disabled={notProvisioned}>Log an alert</button></div>
-                ) : null}>
+              )}
+              <CardState state={cardState} lines={6}>
                 <KitTable columns={feedColumns} rows={register} getRowId={(r) => String(r.id)} onRowClick={(r) => setSelectedId(r.id)}
-                  empty="No alerts match these filters." />
+                  empty={scoped.length ? 'No alerts match these filters.' : (
+                    <span className="fta-empty-cta">
+                      {all.length ? 'No alerts in this date range.' : 'No fuel theft alerts recorded yet.'}
+                      <button type="button" className="cc-btn" onClick={openCreate} disabled={notProvisioned}>Log an alert</button>
+                    </span>
+                  )} />
               </CardState>
             </Card>
 
-            <Card title="Fuel Loss Hotspots" sub="Locations with the most fuel loss alerts">
-              <CardState state={cardState} lines={5}
-                empty={ready && !hotspots.byCount.length ? (scoped.length ? 'No alert in range records a location.' : 'No alerts in range.') : null}>
-                <p className="fta-note"><Info size={13} aria-hidden="true" /> Alerts record a location name but no coordinates, so hotspots are listed rather than mapped.</p>
-                <ul className="fta-hot">
-                  {hotspots.byCount.slice(0, 8).map((h) => (
-                    <li key={h.location}>
-                      <span className={`fta-hot-dot ${h.band}`} aria-hidden="true">{h.count}</span>
-                      <span className="fta-hot-name"><MapPin size={12} aria-hidden="true" /> {h.location}<small>{h.open} open | {h.litres == null ? 'litres not recorded' : `${Math.round(h.litres).toLocaleString('en-US')} L`}</small></span>
-                      <span className={`cc-pill ${h.band === 'high' ? 'bad' : h.band === 'medium' ? 'warn' : 'good'}`}>{BAND_LABEL[h.band].split(' ')[0]}</span>
-                    </li>
-                  ))}
-                </ul>
-                <div className="fta-legend">
-                  {Object.entries(BAND_LABEL).map(([k, l]) => <span key={k}><i className={`fta-hot-dot ${k} sm`} aria-hidden="true" /> {l}</span>)}
+            <Card title="Fuel Loss Hotspots" sub="Locations with high frequency of fuel loss events."
+              action={(
+                <select className="cc-select" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} aria-label="Site">
+                  <option value="">All sites</option>
+                  {locations.map((l) => <option key={l} value={l}>{l}</option>)}
+                </select>
+              )}>
+              <CardState state={cardState} lines={5}>
+                <div className="fta-map" role="img" aria-label="Fuel loss hotspots by location">
+                  <div className="fta-map-grid" aria-hidden="true" />
+                  {hotspots.byCount.length ? (
+                    <ul className="fta-hot">
+                      {hotspots.byCount.slice(0, 6).map((h) => (
+                        <li key={h.location}>
+                          <span className={`fta-hot-dot ${h.band}`} aria-hidden="true">{h.count}</span>
+                          <span className="fta-hot-name"><MapPin size={12} aria-hidden="true" /> {h.location}<small>{h.open} open | {h.litres == null ? 'litres not recorded' : `${Math.round(h.litres).toLocaleString('en-US')} L`}</small></span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="fta-map-empty">
+                      <MapIcon size={22} aria-hidden="true" />
+                      <span>{scoped.length ? 'No alert in range records a location.' : 'No fuel loss events in range.'}</span>
+                    </div>
+                  )}
+                  <div className="fta-legend fta-map-legend">
+                    {Object.entries(BAND_LABEL).map(([k, l]) => <span key={k}><i className={`fta-hot-dot ${k} sm`} aria-hidden="true" /> {l}</span>)}
+                  </div>
                 </div>
-                {hotspots.unlocated > 0 && <p className="fta-foot">{hotspots.unlocated} alert(s) have no location.</p>}
+                <p className="fta-foot"><Info size={12} aria-hidden="true" /> Alerts record a location name but no coordinates, so hotspots are listed rather than plotted on a map.{hotspots.unlocated > 0 ? ` ${hotspots.unlocated} alert(s) have no location.` : ''}</p>
               </CardState>
             </Card>
           </div>
 
           <div className="fta-four">
-            <Card title="Fuel Variance Trend" sub={from || to ? 'Litres lost per day in range' : 'Litres lost per day, last 30 days'}>
-              <CardState state={cardState} lines={3}
-                empty={ready && !variance.measuredDays ? 'No alert in this window records drop litres.' : null}>
-                <VarianceBars days={variance.days} />
-                <p className="fta-foot">Total {fmtLitres(variance.totalLitres == null ? null : Math.round(variance.totalLitres))} over {variance.measuredDays} day(s) with a reading. Positive variance is not recorded.</p>
+            <Card title="Fuel Variance Trend" sub="Difference between expected and actual fuel consumption.">
+              <CardState state={cardState} lines={3}>
+                <div className="fta-chart">
+                  <VarianceBars days={variance.days} />
+                  {!variance.measuredDays && <span className="fta-chart-empty">{from || to ? 'No drop litres recorded in range' : 'No drop litres recorded in the last 30 days'}</span>}
+                </div>
+                <div className="fta-legend">
+                  <span><i className="fta-sw pos" aria-hidden="true" /> Positive variance (L): not recorded</span>
+                  <span><i className="fta-sw neg" aria-hidden="true" /> Negative variance (L)</span>
+                </div>
+                <p className="fta-foot">Total {fmtLitres(variance.totalLitres == null ? null : Math.round(variance.totalLitres))} over {variance.measuredDays} day(s) with a reading.</p>
               </CardState>
             </Card>
 
-            <Card title="After-Hours Alerts" sub={`Detected ${AFTER_HOURS.start}:00 to 0${AFTER_HOURS.end}:00 local time`}>
-              <CardState state={cardState} lines={3}
-                empty={ready && !afterHours.timed ? 'No alert in range has a detected time.' : ready && !afterHours.total ? 'No alert in range was detected after hours.' : null}>
-                <Donut segments={afterSegments} total={afterHours.total} centerLabel="After hours" />
-                <p className="fta-foot">The after-hours window is a fixed assumption; site operating hours are not recorded. Fuelling transactions are not recorded, so this counts alerts, not refuels.</p>
+            <Card title="After-Hours Fueling" sub={`Alerts detected outside allowed hours (${AFTER_HOURS.start}:00 to 0${AFTER_HOURS.end}:00).`}>
+              <CardState state={cardState} lines={3}>
+                <Donut segments={afterSegments} total={afterHours.total} centerLabel="After-hours events" />
+                <p className="fta-foot">{!afterHours.timed ? 'No alert in range has a detected time. ' : ''}Fuel transactions are not recorded, so this counts theft alerts, not refuels. The window is a fixed assumption.</p>
               </CardState>
             </Card>
 
-            <Card title="Top Fuel Loss Sites" sub="Litres lost by location">
-              <CardState state={cardState} lines={4}
-                empty={ready && !hotspots.byLitres.length ? 'No alert in range records both a location and drop litres.' : null}>
-                <ul className="fta-sites">
-                  {hotspots.byLitres.slice(0, 6).map((h, i) => (
-                    <li key={h.location}>
-                      <span className="fta-sites-name">{h.location}</span>
-                      <span className="fta-sites-track"><i className={`c${i % 4}`} style={{ width: `${(h.litres / hotMax) * 100}%` }} /></span>
-                      <b>{Math.round(h.litres).toLocaleString('en-US')} L</b>
-                    </li>
-                  ))}
-                </ul>
+            <Card title="Top Fuel Loss Sites" sub="Sites with highest fuel variance (litres).">
+              <CardState state={cardState} lines={4}>
+                {hotspots.byLitres.length ? (
+                  <ul className="fta-sites">
+                    {hotspots.byLitres.slice(0, 5).map((h, i) => (
+                      <li key={h.location}>
+                        <span className="fta-sites-name">{h.location}</span>
+                        <span className="fta-sites-track"><i className={`c${i % 4}`} style={{ width: `${(h.litres / hotMax) * 100}%` }} /></span>
+                        <b>{Math.round(h.litres).toLocaleString('en-US')} L</b>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <ul className="fta-sites fta-ghost" aria-label="No site loss recorded">
+                    {[0.9, 0.65, 0.48, 0.3, 0.18].map((w, i) => (
+                      <li key={w}><span className="fta-sites-name">Site {i + 1}</span><span className="fta-sites-track"><i style={{ width: `${w * 100}%` }} /></span><b>N/A</b></li>
+                    ))}
+                  </ul>
+                )}
+                {!hotspots.byLitres.length && <p className="fta-foot">No alert in range records both a location and drop litres.</p>}
               </CardState>
             </Card>
 
-            <Card title="Repeat Assets" sub="Fuel card is not recorded, so repeat loss is shown by asset">
-              <CardState state={cardState} lines={4}
-                empty={ready && !repeat.length ? (scoped.length ? 'No asset has more than one alert in range.' : 'No alerts in range.') : null}>
-                <ul className="fta-repeat">
-                  {repeat.map((a) => (
-                    <li key={a.asset_no}>
-                      <button type="button" onClick={() => setAssetFilter(a.asset_no)} aria-label={`Filter feed to asset ${a.asset_no}`}>
-                        <Repeat2 size={13} aria-hidden="true" />
-                        <span><b>{a.asset_no}</b><small>{a.alerts} alerts | {a.open} open</small></span>
-                        <span className="fta-neg">{fmtLoss(a.loss)}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+            <Card title="Fuel Card Misuse" sub="Fuel card is not recorded on alerts, so repeat loss is grouped by asset.">
+              <CardState state={cardState} lines={4}>
+                <KitTable compact columns={[
+                  { key: 'asset_no', header: 'Asset', cell: (a) => <button type="button" className="cc-link-btn fta-asset" onClick={() => { setAssetFilter(a.asset_no); setShowMoreFilters(true) }} aria-label={`Filter feed to asset ${a.asset_no}`}>{a.asset_no}</button> },
+                  { key: 'alerts', header: 'Alerts', numeric: true },
+                  { key: 'litres', header: 'Variance (L)', numeric: true, cell: (a) => (a.litres == null ? <span className="cc-na">N/A</span> : <b className="fta-neg">-{Math.round(a.litres).toLocaleString('en-US')}</b>) },
+                  { key: 'band', header: 'Risk', cell: (a) => (a.band === 'unrated' ? <span className="cc-na">Not set</span> : <span className={`cc-pill ${a.band === 'high' ? 'bad' : a.band === 'medium' ? 'warn' : 'good'}`}>{titleCase(a.band)}</span>) },
+                ]} rows={misuse} getRowId={(a) => a.asset_no} empty={scoped.length ? 'No asset in range has an alert.' : 'No alerts in range.'} />
               </CardState>
             </Card>
           </div>
 
-          <Card className="fta-inv" title={selected ? (
-            <span className="fta-inv-title">Selected Alert Investigation {selected.sev && <span className={`cc-pill ${SEV_PILL[selected.sev] || 'muted'}`}>{titleCase(selected.sev)}</span>} <small>{selected.alert_no || 'No alert number'}</small></span>
-          ) : 'Selected Alert Investigation'}
-            action={selected && (
+          <Card className="fta-inv" title={(
+            <span className="fta-inv-title">Selected Alert Investigation {selected?.sev && <span className={`cc-pill ${SEV_PILL[selected.sev] || 'muted'}`}>{titleCase(selected.sev)}</span>} {selected && <small>{selected.alert_no || 'No alert number'}</small>}</span>
+          )}
+            action={(
               <div className="fta-inv-actions">
-                <button type="button" className="cc-btn-ghost" disabled={statusBusy} onClick={() => setStatus(selected, 'investigating')}><Eye size={14} aria-hidden="true" /> Investigate</button>
-                <button type="button" className="cc-btn-ghost" disabled={statusBusy} onClick={() => setStatus(selected, 'confirmed')}><BadgeCheck size={14} aria-hidden="true" /> Mark verified</button>
-                <button type="button" className="cc-btn-ghost" disabled={statusBusy} onClick={() => setStatus(selected, 'resolved')}><CheckCircle2 size={14} aria-hidden="true" /> Resolve</button>
-                <button type="button" className="cc-btn-ghost" disabled={statusBusy} onClick={() => setStatus(selected, 'dismissed')}><Ban size={14} aria-hidden="true" /> Dismiss</button>
-                <button type="button" className="cc-btn-primary" onClick={() => openEdit(selected)}><Pencil size={14} aria-hidden="true" /> Edit</button>
+                <button type="button" className="cc-btn-primary" disabled={!selected || statusBusy} onClick={() => setStatus(selected, 'investigating')} title="Open an investigation case on this alert"><FolderPlus size={14} aria-hidden="true" /> Create case</button>
+                <button type="button" className="cc-btn-ghost" disabled={!selected} onClick={() => openEdit(selected)} title="Investigator is not a recorded field; record it in the notes"><UserPlus size={14} aria-hidden="true" /> Assign investigator</button>
+                <button type="button" className="cc-btn-ghost" disabled={!selected || statusBusy} onClick={() => setStatus(selected, 'confirmed')}><BadgeCheck size={14} aria-hidden="true" /> Mark verified</button>
+                <button type="button" className="cc-btn-ghost" disabled={!selected || statusBusy} onClick={() => setStatus(selected, 'resolved')}><CheckCircle2 size={14} aria-hidden="true" /> Resolve</button>
+                <button type="button" className="cc-btn-ghost" disabled={!selected || statusBusy} onClick={() => setStatus(selected, 'dismissed')}><Ban size={14} aria-hidden="true" /> Dismiss</button>
+                <button type="button" className="cc-btn-ghost" disabled={!selected} onClick={doSelectedExcel}><Download size={14} aria-hidden="true" /> Export</button>
+                <Link className="cc-btn-ghost" to="/alert-thresholds"><Settings2 size={14} aria-hidden="true" /> Alert rules</Link>
               </div>
             )}>
-            <CardState state={cardState} lines={4} empty={ready && !selected ? 'Pick an alert in the feed to investigate it.' : null}>
-              {selected && (
-                <div className="fta-inv-grid">
-                  <div className="fta-inv-asset">
-                    <VehicleThumb row={{ asset_no: selected.asset_no }} size="lg" />
-                    <b>{selected.asset_no || 'N/A'}</b>
-                    <dl>
-                      <dt>Status</dt><dd>{selected.st ? <span className={`cc-pill ${STATUS_PILL[selected.st] || 'muted'}`}>{titleCase(selected.st)}</span> : 'N/A'}</dd>
-                      <dt>Reported</dt><dd>{fmtDateTime(selected.detected_at)}</dd>
-                      <dt>Open for</dt><dd>{selected.open ? (selected.ageDays == null ? 'N/A' : `${selected.ageDays} day(s)`) : 'Closed'}</dd>
-                    </dl>
+            <CardState state={cardState} lines={4}>
+              <div className="fta-inv-grid">
+                <div className="fta-inv-asset">
+                  <div className="fta-inv-head">
+                    <VehicleThumb row={{ asset_no: selected?.asset_no }} size="lg" />
+                    <div><b>{selected?.asset_no || 'No alert selected'}</b><small>{selected ? `Asset ${selected.asset_no || 'N/A'}` : 'Pick an alert in the feed'}</small></div>
                   </div>
-                  <dl className="fta-inv-facts">
-                    <dt>Driver</dt><dd>{selected.driver_name || 'Not recorded'}</dd>
-                    <dt>Fuel card</dt><dd className="cc-na">Not recorded</dd>
-                    <dt>Site / location</dt><dd>{selected.location || 'Not recorded'}</dd>
-                    <dt>Geofence context</dt><dd className="cc-na">Not recorded</dd>
-                    <dt>Drop / expected</dt><dd>{fmtLitres(selected.dropValue)} / {fmtLitres(selected.expectedValue)}</dd>
-                    <dt>Estimated loss</dt><dd>{fmtMoney(selected.loss, selected.cur)}{selected.basis === 'stored' ? ' (recorded)' : selected.basis === 'derived' ? ' (drop x price)' : ''}</dd>
+                  <dl>
+                    <dt>Status</dt><dd>{selected?.st ? <span className={`cc-pill ${STATUS_PILL[selected.st] || 'muted'}`}>{titleCase(selected.st)}</span> : 'N/A'}</dd>
+                    <dt>Severity</dt><dd>{selected?.sev ? <span className={`cc-pill ${SEV_PILL[selected.sev] || 'muted'}`}>{titleCase(selected.sev)}</span> : 'N/A'}</dd>
+                    <dt>Reported</dt><dd>{selected ? fmtDateTime(selected.detected_at) : 'N/A'}</dd>
+                    <dt>Open for</dt><dd>{!selected ? 'N/A' : selected.open ? (selected.ageDays == null ? 'N/A' : `${selected.ageDays} day(s)`) : 'Closed'}</dd>
                   </dl>
-                  <div>
-                    <h3 className="fta-sub">Event timeline</h3>
-                    {timeline.length ? (
-                      <ol className="fta-tl">
-                        {timeline.map((e) => <li key={`${e.at}-${e.text}`} className={e.tone}><span>{fmtTime(e.at)}</span>{e.text}</li>)}
-                      </ol>
-                    ) : <p className="cc-na">No timestamps recorded.</p>}
-                    {selected.resolution && <p className="fta-foot">Resolution: {selected.resolution}</p>}
-                  </div>
-                  <div>
-                    <h3 className="fta-sub">Tank level and odometer</h3>
-                    <div className="fta-nodata">Not recorded. Alerts carry no tank-level or odometer readings, so the consumption analysis cannot be drawn.</div>
-                    {selected.notes && <p className="fta-foot">Notes: {selected.notes}</p>}
-                  </div>
-                  <div>
-                    <h3 className="fta-sub">Recommended actions</h3>
+                </div>
+                <dl className="fta-inv-facts">
+                  <dt>Driver</dt><dd>{selected ? (selected.driver_name || 'Not recorded') : 'N/A'}</dd>
+                  <dt>Fuel card</dt><dd className="cc-na">Not recorded</dd>
+                  <dt>Site / location</dt><dd>{selected ? (selected.location || 'Not recorded') : 'N/A'}</dd>
+                  <dt>Geofence context</dt><dd className="cc-na">Not recorded</dd>
+                  <dt>Drop / expected</dt><dd>{selected ? `${fmtLitres(selected.dropValue)} / ${fmtLitres(selected.expectedValue)}` : 'N/A'}</dd>
+                  <dt>Estimated loss</dt><dd>{selected ? `${fmtMoney(selected.loss, selected.cur)}${selected.basis === 'stored' ? ' (recorded)' : selected.basis === 'derived' ? ' (drop x price)' : ''}` : 'N/A'}</dd>
+                </dl>
+                <div>
+                  <h3 className="fta-sub">Event timeline</h3>
+                  {timeline.length ? (
+                    <ol className="fta-tl">
+                      {timeline.map((e) => <li key={`${e.at}-${e.text}`} className={e.tone}><span>{fmtTime(e.at)}</span>{e.text}</li>)}
+                    </ol>
+                  ) : <div className="fta-nodata">{selected ? 'No timestamps recorded on this alert.' : 'Select an alert to see its event timeline.'}</div>}
+                  {selected?.resolution && <p className="fta-foot">Resolution: {selected.resolution}</p>}
+                </div>
+                <div>
+                  <h3 className="fta-sub">Tank level analysis</h3>
+                  <div className="fta-nodata fta-chart-frame">Not recorded. Alerts carry no tank-level series, so tank level against expected level cannot be drawn.</div>
+                </div>
+                <div>
+                  <h3 className="fta-sub">Odometer vs fuel consumption</h3>
+                  <div className="fta-nodata fta-chart-frame">Not recorded. Alerts carry no odometer or consumption readings.</div>
+                  {selected?.notes && <p className="fta-foot">Notes: {selected.notes}</p>}
+                </div>
+                <div>
+                  <h3 className="fta-sub">Recommended actions</h3>
+                  {actions.length ? (
                     <ul className="fta-recs">
                       {actions.map((a) => <li key={a.title}><Lightbulb size={13} aria-hidden="true" /><span><b>{a.title}</b><small>{a.sub}</small></span></li>)}
                     </ul>
-                  </div>
+                  ) : <div className="fta-nodata">Select an alert to see the next steps.</div>}
                 </div>
-              )}
+              </div>
             </CardState>
           </Card>
         </>

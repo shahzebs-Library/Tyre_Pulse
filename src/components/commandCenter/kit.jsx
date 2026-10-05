@@ -115,11 +115,12 @@ export function Kpi({ icon: Icon, tone, value, display, label, to, onClick, tren
  * Page hero: title, lead line, class artwork for light and dark, and an
  * optional headline stat on the right.
  */
-export function PageHero({ hello, title, lead, imgLight, imgDark, stat }) {
+export function PageHero({ hello, title, lead, imgLight, imgDark, stat, icon: Icon }) {
   return (
     <div className="cc-hero">
       {imgDark && <div className="cc-hero-img cc-hero-dark" style={{ backgroundImage: `url(${imgDark})` }} aria-hidden="true" />}
       {imgLight && <div className="cc-hero-img cc-hero-light" style={{ backgroundImage: `url(${imgLight})` }} aria-hidden="true" />}
+      {Icon && <span className="cc-hero-icon" aria-hidden="true"><Icon size={26} strokeWidth={2} /></span>}
       <div className="cc-hero-copy">
         {hello && <p className="cc-hero-hello">{hello}</p>}
         <h1>{title}</h1>

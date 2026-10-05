@@ -17,7 +17,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   ShoppingCart, FileText, FileSpreadsheet, Users, Clock, Database, Plus, Pencil, Trash2,
-  AlertTriangle, RefreshCw, Search, Filter, Star, ChevronRight, Send, X,
+  AlertTriangle, RefreshCw, Search, Filter, Star, ChevronRight, Send, X, Disc, Trophy, Scale, ListChecks,
 } from 'lucide-react'
 import { toUserMessage } from '../lib/safeError'
 import Modal from '../components/ui/Modal'
@@ -33,18 +33,20 @@ import {
   LISTING_EXPORT_COLUMNS, RFQ_EXPORT_COLUMNS, listingExportRows, rfqExportRows,
 } from '../lib/supplierMarketplaceAnalytics'
 import {
-  PERIODS, LEAD_BUCKETS, RATING_FLOORS, NOT_RECORDED, inPeriod, listingOptions, applyListingExtras,
+  PERIODS, LEAD_BUCKETS, quotedCount, RATING_FLOORS, NOT_RECORDED, inPeriod, listingOptions, applyListingExtras,
   stockState, headlineTiles, moneyLines, sourcingFunnel, recentRfqs, compareListings,
   listingDetailFields, supplierProfile, samePriceBook, RFQ_TONE,
+  COMPARE_EXPORT_COLUMNS, comparisonExportRows,
 } from '../lib/supplierMarketplaceView'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { isMissingRelation } from '../lib/api/_client'
 import './SupplierMarketplace.css'
 
-// Reused artwork: the mockup photo carries header buttons over it, so a clean
-// crop is not possible. The tyre hero is the closest existing art.
-const HERO_DARK = '/dashboard/hero-tyres-dark.webp'
-const HERO_LIGHT = '/dashboard/hero-tyres-light.webp'
+// Header photo cropped from the owner's Supplier Marketplace mockup (the clean
+// warehouse / forklift area, no header text or buttons), with a lighter grade
+// for the light theme.
+const HERO_DARK = '/dashboard/hero-market-dark.webp'
+const HERO_LIGHT = '/dashboard/hero-market-light.webp'
 
 const EMPTY_LISTING = {
   supplier: '', listing_no: '', category: 'tyre', product_name: '', brand: '',
@@ -90,7 +92,8 @@ export default function SupplierMarketplace() {
 
   const [period, setPeriod] = useState('all')
   const [filters, setFilters] = useState(EMPTY_FILTERS)
-  const [showFilters, setShowFilters] = useState(true)
+  const [showFilters, setShowFilters] = useState(false)
+  const [quoteQty, setQuoteQty] = useState('')
   const [selection, setSelection] = useState({})
   const [selectedId, setSelectedId] = useState(null)
   const [detailTab, setDetailTab] = useState('details')
@@ -147,6 +150,7 @@ export default function SupplierMarketplace() {
 
   const tiles = useMemo(() => headlineTiles(allListings, periodRfqs), [allListings, periodRfqs])
   const funnel = useMemo(() => sourcingFunnel(periodRfqs), [periodRfqs])
+  const quoted = useMemo(() => quotedCount(periodRfqs), [periodRfqs])
   const recent = useMemo(() => recentRfqs(periodRfqs, { limit: 5, now: asOf }), [periodRfqs, asOf])
   const priceView = useMemo(() => categoryPriceByCurrency(filteredListings), [filteredListings])
   const topSuppliers = useMemo(() => topRatedSuppliers(filteredListings), [filteredListings])
@@ -165,6 +169,20 @@ export default function SupplierMarketplace() {
       const name = reportFileName(isL ? 'TyrePulse Supplier Listings' : 'TyrePulse Buyer RFQs', countryTag, reportDateLabel())
       if (kind === 'excel') await exportToExcel(rows, cols.map((c) => c[0]), cols.map((c) => c[1]), name)
       else await exportToPdf(rows, cols.map(([key, header]) => ({ key, header })), isL ? 'Supplier Listings' : 'Buyer RFQs', name, 'landscape')
+    } catch (err) {
+      setActionError(toUserMessage(err, 'Could not export. Try again.'))
+    }
+  }
+
+  const exportComparison = async (kind) => {
+    setActionError('')
+    try {
+      const rows = comparisonExportRows(comparison)
+      if (!rows.length) return
+      const cols = COMPARE_EXPORT_COLUMNS
+      const name = reportFileName('TyrePulse Supplier Comparison', countryTag, reportDateLabel())
+      if (kind === 'excel') await exportToExcel(rows, cols.map((c) => c[0]), cols.map((c) => c[1]), name)
+      else await exportToPdf(rows, cols.map(([key, header]) => ({ key, header })), 'Supplier Comparison', name, 'landscape')
     } catch (err) {
       setActionError(toUserMessage(err, 'Could not export. Try again.'))
     }
@@ -240,11 +258,25 @@ export default function SupplierMarketplace() {
     }
   }
 
-  const requestQuote = (l) => openCreate('rfq', {
+  const requestQuote = (l, qty) => openCreate('rfq', {
     product_name: [l?.product_name, l?.size_spec].filter(Boolean).join(' ') || '',
     category: l?.category || '', currency: l?.currency || 'SAR',
-    target_price: l?.unit_price ?? '', quantity: l?.moq ?? '',
+    target_price: l?.unit_price ?? '', quantity: qty || l?.moq || '',
   })
+  // Award: open a new RFQ already marked awarded to the cheapest ticked
+  // listing (cheapest within its own currency). Nothing is saved until the
+  // user confirms the form.
+  const awardSupplier = () => {
+    const best = comparison.rows.find((r) => r.cheapest) || comparison.rows[0]
+    const src = ticked.find((t) => String(t.id) === String(best?.id)) || ticked[0]
+    if (!src) return
+    openCreate('rfq', {
+      product_name: [src.product_name, src.size_spec].filter(Boolean).join(' ') || '',
+      category: src.category || '', currency: src.currency || 'SAR',
+      target_price: src.unit_price ?? '', best_quote: src.unit_price ?? '', quantity: src.moq ?? '',
+      awarded_supplier: src.supplier || '', status: 'awarded', responses_count: String(ticked.length),
+    })
+  }
 
   // -- Columns ---------------------------------------------------------------
   const listingCols = [
@@ -254,7 +286,7 @@ export default function SupplierMarketplace() {
     { key: 'price', header: 'Price', numeric: true, sortValue: (r) => num(r.unit_price) ?? -1, cell: (r) => money(r.unit_price, currencyOf(r)) || NA },
     { key: 'moq', header: 'MOQ', numeric: true, sortValue: (r) => num(r.moq) ?? -1, cell: (r) => (num(r.moq) == null ? NA : fmtInt(r.moq)) },
     { key: 'lead', header: 'Lead time', numeric: true, sortValue: (r) => num(r.lead_time_days) ?? 9999, cell: (r) => (num(r.lead_time_days) == null ? NA : `${fmtInt(r.lead_time_days)} days`) },
-    { key: 'country', header: 'Country', cell: (r) => r.country || NA },
+    { key: 'country', header: 'Region', cell: (r) => r.country || NA },
     { key: 'stock', header: 'Stock', sortValue: (r) => stockState(r).label, cell: (r) => { const s = stockState(r); return <Pill tone={s.tone}>{s.label}</Pill> } },
     { key: 'rating', header: 'Rating', numeric: true, sortValue: (r) => num(r.rating) ?? -1, cell: (r) => <Rating value={r.rating} /> },
     {
@@ -363,22 +395,22 @@ export default function SupplierMarketplace() {
             <div className="sm-card-tools">
               <label className="cc-search sm-search"><Search size={14} aria-hidden="true" /><input type="search" placeholder="Search listings, supplier, brand" value={filters.search} onChange={(e) => setF('search', e.target.value)} aria-label="Search listings" /></label>
               <button type="button" className="cc-btn-ghost" aria-pressed={showFilters} onClick={() => setShowFilters((s) => !s)}><Filter size={14} aria-hidden="true" /> Filters</button>
-              <button type="button" className="cc-icon-btn" onClick={() => runExport('listings', 'excel')} disabled={!filteredListings.length} aria-label="Export listings to Excel" title="Export listings to Excel"><FileSpreadsheet size={14} /></button>
-              <button type="button" className="cc-icon-btn" onClick={() => runExport('listings', 'pdf')} disabled={!filteredListings.length} aria-label="Export listings to PDF" title="Export listings to PDF"><FileText size={14} /></button>
             </div>
           )}
         >
+          <div className="sm-filterbar">
+            <label className="cc-field"><span>Category</span><select className="cc-select" value={filters.category} onChange={(e) => setF('category', e.target.value)}><option value="">All categories</option>{LISTING_CATEGORIES.map((c) => <option key={c} value={c}>{titleCase(c)}</option>)}</select></label>
+            <label className="cc-field"><span>Brand</span><select className="cc-select" value={filters.brand} onChange={(e) => setF('brand', e.target.value)}><option value="">All brands</option>{options.brands.map((b) => <option key={b} value={b}>{b}</option>)}</select></label>
+            <label className="cc-field"><span>Region</span><select className="cc-select" value={filters.country} onChange={(e) => setF('country', e.target.value)}><option value="">All regions</option>{options.countries.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
+            <label className="cc-field"><span>Supplier rating</span><select className="cc-select" value={filters.minRating} onChange={(e) => setF('minRating', e.target.value)}>{RATING_FLOORS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}</select></label>
+            <label className="cc-field"><span>Delivery time</span><select className="cc-select" value={filters.lead} onChange={(e) => setF('lead', e.target.value)}>{LEAD_BUCKETS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}</select></label>
+            <button type="button" className="cc-link cc-link-btn sm-clear" onClick={() => setFilters(EMPTY_FILTERS)} disabled={!hasFilters}>Clear all</button>
+          </div>
           {showFilters && (
-            <div className="cc-filters sm-filters">
-              <label className="cc-field"><span>Category</span><select className="cc-select" value={filters.category} onChange={(e) => setF('category', e.target.value)}><option value="">All categories</option>{LISTING_CATEGORIES.map((c) => <option key={c} value={c}>{titleCase(c)}</option>)}</select></label>
-              <label className="cc-field"><span>Brand</span><select className="cc-select" value={filters.brand} onChange={(e) => setF('brand', e.target.value)}><option value="">All brands</option>{options.brands.map((b) => <option key={b} value={b}>{b}</option>)}</select></label>
-              <label className="cc-field"><span>Country</span><select className="cc-select" value={filters.country} onChange={(e) => setF('country', e.target.value)}><option value="">All countries</option>{options.countries.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
-              <label className="cc-field"><span>Supplier rating</span><select className="cc-select" value={filters.minRating} onChange={(e) => setF('minRating', e.target.value)}>{RATING_FLOORS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}</select></label>
-              <label className="cc-field"><span>Delivery time</span><select className="cc-select" value={filters.lead} onChange={(e) => setF('lead', e.target.value)}>{LEAD_BUCKETS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}</select></label>
+            <div className="sm-filterbar sm-filterbar-more">
               <label className="cc-field"><span>Stock</span><select className="cc-select" value={filters.stock} onChange={(e) => setF('stock', e.target.value)}><option value="">Any</option><option value="in">In stock</option><option value="out">Out of stock</option></select></label>
               <label className="cc-field"><span>Status</span><select className="cc-select" value={filters.status} onChange={(e) => setF('status', e.target.value)}><option value="">All statuses</option>{LISTING_STATUSES.map((s) => <option key={s} value={s}>{titleCase(s)}</option>)}</select></label>
               <label className="cc-field"><span>Currency</span><select className="cc-select" value={filters.currency} onChange={(e) => setF('currency', e.target.value)}><option value="">All currencies</option>{currencyOptions.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
-              {hasFilters && <button type="button" className="cc-link cc-link-btn sm-clear" onClick={() => setFilters(EMPTY_FILTERS)}>Clear all</button>}
             </div>
           )}
           <CardState state={cardState} lines={6}>
@@ -392,87 +424,113 @@ export default function SupplierMarketplace() {
               onRowClick={(r) => { setSelectedId(r.id); setDetailTab('details') }}
               empty={allListings.length === 0 ? 'No supplier listings recorded yet. Add the first listing to start comparing suppliers.' : 'No listings match these filters.'}
             />
-            <p className="sm-foot">{fmtInt(filteredListings.length)} of {fmtInt(allListings.length)} listings{ticked.length ? `, ${ticked.length} ticked for comparison` : ''}</p>
+            <div className="sm-table-foot">
+              <p className="sm-foot">Showing {fmtInt(filteredListings.length)} of {fmtInt(allListings.length)} listings{ticked.length ? `, ${ticked.length} ticked for comparison` : ''}</p>
+              <span className="sm-foot-tools">
+                <button type="button" className="cc-btn-ghost" onClick={() => runExport('listings', 'excel')} disabled={!filteredListings.length}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
+                <button type="button" className="cc-btn-ghost" onClick={() => runExport('listings', 'pdf')} disabled={!filteredListings.length}><FileText size={14} aria-hidden="true" /> PDF</button>
+              </span>
+            </div>
           </CardState>
         </Card>
 
         <Card
           className="sm-detail"
           title="Supplier / listing details"
-          action={selected ? <button type="button" className="cc-link cc-link-btn" onClick={() => openEdit('listing', selected)}>Edit listing <ChevronRight size={13} aria-hidden="true" /></button> : null}
+          action={selected ? <button type="button" className="cc-link cc-link-btn" onClick={() => setDetailTab('supplier')}>View supplier profile <ChevronRight size={13} aria-hidden="true" /></button> : null}
         >
-          <CardState state={cardState} lines={6} empty={known && !selected ? (allListings.length ? 'Select a listing to see its details.' : 'No listing to show yet.') : null}>
-            {selected && (
-              <div className="sm-detail-body">
-                <div className="sm-detail-top">
-                  <Pill tone={stock.tone}>{stock.label}</Pill>
-                  <h3>{selected.supplier || 'N/A'}</h3>
-                  <p><Rating value={selected.rating} />{selected.country ? <span> | {selected.country}</span> : null}</p>
-                </div>
-                <Tabs
-                  label="Listing detail views"
-                  value={detailTab}
-                  onChange={setDetailTab}
-                  tabs={[{ key: 'details', label: 'Listing details' }, { key: 'supplier', label: 'Supplier info' }, { key: 'prices', label: 'Same item prices' }, { key: 'reviews', label: 'Reviews' }]}
-                />
-                {detailTab === 'details' && (
-                  <dl className="sm-fields">
-                    {detailFields.map((f) => (
-                      <div key={f.label}><dt>{f.label}</dt><dd className={f.value === NOT_RECORDED ? 'cc-na' : f.tone ? `sm-tone-${f.tone}` : ''} title={f.note}>{f.value}</dd></div>
-                    ))}
-                  </dl>
-                )}
-                {detailTab === 'supplier' && profile && (
-                  <dl className="sm-fields">
-                    <div><dt>Listings</dt><dd>{fmtInt(profile.listings)}</dd></div>
-                    <div><dt>In stock</dt><dd>{fmtInt(profile.inStock)}</dd></div>
-                    <div><dt>Average rating</dt><dd>{profile.avgRating == null ? <span className="cc-na">Not rated</span> : profile.avgRating.toFixed(1)}</dd></div>
-                    <div><dt>Categories</dt><dd>{profile.categories.join(', ') || <span className="cc-na">Not recorded</span>}</dd></div>
-                    <div><dt>Verification</dt><dd className="cc-na">Not recorded</dd></div>
-                  </dl>
-                )}
-                {detailTab === 'prices' && (prices.length < 2
-                  ? <div className="cc-empty">No other supplier lists the same item. Price history is not kept for listings.</div>
-                  : (
-                    <ul className="sm-price-list">
-                      {prices.map((p) => <li key={p.id} className={p.self ? 'is-self' : ''}><span>{p.supplier}</span><b>{money(p.price, p.currency)}</b></li>)}
-                    </ul>
-                  ))}
-                {detailTab === 'reviews' && <div className="cc-empty">Supplier reviews are not recorded. The rating is the only feedback field on a listing.</div>}
-                <div className="sm-detail-actions">
-                  <button type="button" className="cc-btn-primary" onClick={() => requestQuote(selected)}><Send size={14} aria-hidden="true" /> Request quote</button>
-                  <button type="button" className="cc-btn-ghost" onClick={() => setSelection((s) => ({ ...s, [String(selected.id)]: !s[String(selected.id)] }))}>
-                    {selection[String(selected.id)] ? 'Remove from compare' : 'Add to compare'}
-                  </button>
+          <CardState state={cardState} lines={6}>
+            <div className="sm-detail-body">
+              <div className="sm-detail-top">
+                <span className="sm-detail-art" aria-hidden="true"><Disc size={34} /></span>
+                <div className="sm-detail-id">
+                  {selected ? <Pill tone={stock.tone}>{stock.label}</Pill> : <Pill>No listing selected</Pill>}
+                  <h3>{selected ? (selected.supplier || 'N/A') : (allListings.length ? 'Select a listing' : 'No listings yet')}</h3>
+                  <p>{selected ? <><Rating value={selected.rating} />{selected.country ? <span> | {selected.country}</span> : null}</> : <span className="sm-muted">{allListings.length ? 'Pick a row in Supplier listings to see its details here.' : 'Add a supplier listing to see its details here.'}</span>}</p>
                 </div>
               </div>
-            )}
-          </CardState>
-        </Card>
-
-        <Card className="sm-compare" title="Listing comparison" sub="Tick listings in the register to compare them side by side.">
-          <CardState state={cardState} lines={4} empty={known && ticked.length === 0 ? 'No listings ticked. Tick two or more listings in the register to compare price, lead time and minimum order.' : null}>
-            <KitTable compact columns={compareCols} rows={comparison.rows} getRowId={(r) => String(r.id)} />
-            {comparison.mixedCurrency && <p className="sm-foot">These listings use more than one currency. Best price and lead time are marked within each currency only.</p>}
-            <div className="sm-row-end">
-              <button type="button" className="cc-btn-ghost" onClick={() => setSelection({})}>Clear selection</button>
-              <button type="button" className="cc-btn-primary" onClick={() => requestQuote(ticked[0])}><ShoppingCart size={14} aria-hidden="true" /> Raise RFQ</button>
+              <Tabs
+                label="Listing detail views"
+                value={detailTab}
+                onChange={setDetailTab}
+                tabs={[{ key: 'details', label: 'Listing details' }, { key: 'supplier', label: 'Supplier info' }, { key: 'prices', label: 'Pricing' }, { key: 'reviews', label: 'Reviews' }]}
+              />
+              {!selected && <div className="cc-empty">{allListings.length ? 'No listing selected.' : 'No supplier listings recorded yet.'}</div>}
+              {selected && detailTab === 'details' && (
+                <dl className="sm-fields">
+                  {detailFields.map((f) => (
+                    <div key={f.label}><dt>{f.label}</dt><dd className={f.value === NOT_RECORDED ? 'cc-na' : f.tone ? `sm-tone-${f.tone}` : ''} title={f.note}>{f.value}</dd></div>
+                  ))}
+                </dl>
+              )}
+              {selected && detailTab === 'supplier' && profile && (
+                <dl className="sm-fields">
+                  <div><dt>Listings</dt><dd>{fmtInt(profile.listings)}</dd></div>
+                  <div><dt>In stock</dt><dd>{fmtInt(profile.inStock)}</dd></div>
+                  <div><dt>Average rating</dt><dd>{profile.avgRating == null ? <span className="cc-na">Not rated</span> : profile.avgRating.toFixed(1)}</dd></div>
+                  <div><dt>Categories</dt><dd>{profile.categories.join(', ') || <span className="cc-na">Not recorded</span>}</dd></div>
+                  <div><dt>Verification</dt><dd className="cc-na">Not recorded</dd></div>
+                </dl>
+              )}
+              {selected && detailTab === 'prices' && (prices.length < 2
+                ? <div className="cc-empty">No other supplier lists the same item. Price history is not kept for listings.</div>
+                : (
+                  <ul className="sm-price-list">
+                    {prices.map((p) => <li key={p.id} className={p.self ? 'is-self' : ''}><span>{p.supplier}</span><b>{money(p.price, p.currency)}</b></li>)}
+                  </ul>
+                ))}
+              {selected && detailTab === 'reviews' && <div className="cc-empty">Supplier reviews are not recorded. The rating is the only feedback field on a listing.</div>}
+              {selected && <button type="button" className="cc-link cc-link-btn sm-edit-link" onClick={() => openEdit('listing', selected)}>Edit listing <ChevronRight size={13} aria-hidden="true" /></button>}
+              <div className="sm-detail-actions">
+                <label className="sm-qty"><span className="sr-only">Quantity</span><input className="cc-select" type="number" min="1" inputMode="numeric" placeholder={selected && num(selected.moq) != null ? String(selected.moq) : 'Qty'} value={quoteQty} onChange={(e) => setQuoteQty(e.target.value)} disabled={!selected} aria-label="Quantity for the quote" /></label>
+                <button type="button" className="cc-btn-primary" onClick={() => requestQuote(selected, quoteQty)} disabled={!selected || notProvisioned}><Send size={14} aria-hidden="true" /> Request quote</button>
+                <button type="button" className="cc-btn-ghost" disabled={!selected} onClick={() => selected && setSelection((s) => ({ ...s, [String(selected.id)]: !s[String(selected.id)] }))}>
+                  <ListChecks size={14} aria-hidden="true" /> {selected && selection[String(selected.id)] ? 'Remove from RFQ' : 'Add to RFQ'}
+                </button>
+              </div>
             </div>
           </CardState>
         </Card>
 
-        <Card className="sm-funnel" title="Sourcing funnel" sub="RFQ progress, from the stages the register records.">
-          <CardState state={cardState} lines={4} empty={known && periodRfqs.length === 0 ? 'No RFQs in this period. Create an RFQ to start the funnel.' : null}>
+        <Card
+          className="sm-compare"
+          title="RFQ comparison"
+          sub="Compare ticked supplier listings side by side before you award."
+          action={<button type="button" className="cc-btn-ghost" disabled={ticked.length < 2} onClick={() => document.getElementById('sm-compare-table')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })}><Scale size={14} aria-hidden="true" /> Compare quotes ({ticked.length})</button>}
+        >
+          <CardState state={cardState} lines={4}>
+            <div id="sm-compare-table">
+              <KitTable compact columns={compareCols} rows={comparison.rows} getRowId={(r) => String(r.id)} empty="No listings ticked. Tick listings in Supplier listings (or press Add to RFQ) to compare price, lead time and minimum order." />
+            </div>
+            {comparison.mixedCurrency && <p className="sm-foot">These listings use more than one currency. Best price and lead time are marked within each currency only.</p>}
+            <div className="sm-compare-foot">
+              <span className="sm-foot">{ticked.length} supplier{ticked.length === 1 ? '' : 's'} selected</span>
+              <span className="sm-push" />
+              <button type="button" className="cc-icon-btn" onClick={() => exportComparison('excel')} disabled={!comparison.rows.length} aria-label="Export comparison to Excel" title="Export comparison to Excel"><FileSpreadsheet size={14} /></button>
+              <button type="button" className="cc-icon-btn" onClick={() => exportComparison('pdf')} disabled={!comparison.rows.length} aria-label="Export comparison to PDF" title="Export comparison to PDF"><FileText size={14} /></button>
+              <button type="button" className="cc-btn-ghost" onClick={() => setSelection({})} disabled={!ticked.length}>Clear</button>
+              <button type="button" className="cc-btn-primary" onClick={awardSupplier} disabled={!ticked.length || notProvisioned}><Trophy size={14} aria-hidden="true" /> Award supplier</button>
+            </div>
+          </CardState>
+        </Card>
+
+        <Card
+          className="sm-funnel"
+          title="Sourcing funnel"
+          sub="RFQ progression and supplier response funnel."
+          action={<select className="cc-select sm-card-sel" aria-label="Sourcing funnel period" value={period} onChange={(e) => setPeriod(e.target.value)}>{PERIODS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</select>}
+        >
+          <CardState state={cardState} lines={4}>
             <ol className="sm-funnel-list">
               {funnel.map((s) => (
-                <li key={s.key}>
-                  <span className={`sm-funnel-bar t-${s.tone}`} style={{ width: `${Math.max(s.pct ?? 0, 30)}%` }}>{s.label}</span>
-                  <b>{fmtInt(s.count)}</b>
-                  <span className="sm-funnel-pct">{s.pct == null ? 'N/A' : `${s.pct}%`}</span>
+                <li key={s.key} className={s.recorded ? '' : 'is-unrecorded'}>
+                  <span className={`sm-funnel-bar t-${s.tone}`} style={{ width: `${s.width}%` }}>{s.label}</span>
+                  <b>{s.recorded ? fmtInt(s.count) : <span className="cc-na">N/A</span>}</b>
+                  <span className="sm-funnel-pct">{s.recorded ? (s.pct == null ? 'N/A' : `${s.pct}%`) : 'Not recorded'}</span>
                 </li>
               ))}
             </ol>
-            <p className="sm-foot">Supplier invitations and shortlists are not recorded on an RFQ, so they are not drawn.</p>
+            <p className="sm-foot">{periodRfqs.length === 0 ? 'No RFQs in this period yet. Create an RFQ to start the funnel. ' : `${fmtInt(quoted)} RFQ${quoted === 1 ? '' : 's'} with a best quote. `}Supplier invitations and shortlists are not recorded on an RFQ.</p>
           </CardState>
         </Card>
 

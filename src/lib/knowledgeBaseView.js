@@ -196,3 +196,30 @@ export function governance(doc) {
     { key: 'tags', label: doc.tags.length ? `${doc.tags.length} tag${doc.tags.length === 1 ? '' : 's'} for retrieval` : 'No tags recorded', ok: doc.tags.length > 0 },
   ]
 }
+
+/**
+ * SVG polyline points for a small line chart. `series` is [{ count }], drawn
+ * left to right inside width x height with `pad` on every side. A series whose
+ * peak is 0 sits on the baseline. Returns { points: [{x,y,count}], max }.
+ */
+export function lineChartPoints(series = [], { width = 300, height = 120, pad = 10 } = {}) {
+  const list = Array.isArray(series) ? series : []
+  const max = list.reduce((m, s) => Math.max(m, Number(s.count) || 0), 0)
+  const n = list.length
+  const innerW = Math.max(0, width - pad * 2)
+  const innerH = Math.max(0, height - pad * 2)
+  const points = list.map((s, i) => {
+    const c = Number(s.count) || 0
+    const x = pad + (n <= 1 ? innerW / 2 : (innerW * i) / (n - 1))
+    const y = pad + innerH - (max > 0 ? (c / max) * innerH : 0)
+    return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10, count: c, label: s.label, key: s.key }
+  })
+  return { points, max }
+}
+
+/** Each item's share of the total, as a whole percent (null when the total is 0). */
+export function percentShares(items = []) {
+  const list = Array.isArray(items) ? items : []
+  const total = list.reduce((s, x) => s + (Number(x.count) || 0), 0)
+  return list.map((x) => ({ ...x, pct: total > 0 ? Math.round(((Number(x.count) || 0) / total) * 100) : null }))
+}

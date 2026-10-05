@@ -51,6 +51,7 @@
 .db-lib-icon.k-kpi { color: var(--cc-green); background: var(--cc-green-tint); }
 .db-lib-icon.k-visual { color: var(--cc-blue); background: var(--cc-blue-tint); }
 .db-lib-icon.k-data { color: var(--cc-purple); background: var(--cc-purple-tint); }
+.db-lib-icon.k-media { color: var(--cc-amber); background: var(--cc-amber-tint); }
 .db-lib-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .db-lib-copy b { font-size: 12.5px; font-weight: 600; color: var(--cc-ink); overflow-wrap: anywhere; }
 .db-lib-copy small { font-size: 11px; color: var(--cc-ink-3); }
@@ -123,6 +124,9 @@ html.light .db-input { background: #fff; }
 .db-full-btn { justify-content: center; margin-top: 8px; }
 .db-form { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
 .db-form label { font-weight: 600; }
+.db-form textarea.db-input { resize: vertical; min-height: 120px; font-family: inherit; }
+.db-content-preview { margin-top: 6px; border: 1px dashed var(--cc-line, rgba(148,163,184,0.35)); border-radius: 8px; padding: 8px; display: flex; justify-content: center; max-height: 160px; }
+.db-content-preview img { max-height: 140px; max-width: 100%; object-fit: contain; }
 
 /* Footer */
 .db-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
@@ -140,3 +144,30 @@ html.light .db-input { background: #fff; }
   .db-template { flex: 1 1 100%; }
   .db-template .cc-select { min-width: 0; width: 100%; }
 }
+
+/* Mockup match: segmented library tabs, two-up widget tiles, KPI-height row. */
+.db-lib .cc-tabs { flex-wrap: nowrap; }
+.db-lib .cc-tab { min-width: 0; padding: 7px 4px; font-size: 12px; }
+.db-lib-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.db-lib-item { position: relative; align-items: flex-start; gap: 8px; padding: 9px 30px 9px 9px; min-height: 58px; }
+.db-lib-item .db-lib-icon { width: 30px; height: 30px; }
+.db-lib-copy b { font-size: 12px; line-height: 1.25; }
+.db-lib-copy small { font-size: 10.5px; line-height: 1.3; }
+.db-lib-add { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 6px; }
+.db-lib-add svg { width: 12px; height: 12px; }
+.db-cell.db-h-sm { min-height: 118px; }
+.db-cell.db-h-md { min-height: 260px; }
+.db-desc { font-size: 12.5px; line-height: 1.45; color: var(--cc-ink); background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 9px; padding: 8px 10px; }
+html.light .db-desc { background: #fff; }
+.db-desc small { display: block; margin-top: 4px; font-size: 11px; color: var(--cc-ink-3); }
+.db-readonly span { display: inline-flex; align-items: center; gap: 5px; }
+.db-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.db-choice button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 6px; font-size: 12px; font-weight: 600; color: var(--cc-ink-2); background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 9px; cursor: pointer; }
+html.light .db-choice button { background: #fff; }
+.db-choice button[aria-pressed="true"] { color: var(--cc-green); border-color: var(--cc-green); background: var(--cc-green-tint); }
+.db-choice button:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 2px; }
+@media (max-width: 420px) { .db-lib-grid { grid-template-columns: minmax(0, 1fr); } }
+/* Two-up tiles: icon and add button on one row, name and type below at full width. */
+.db-lib-item { flex-direction: column; align-items: stretch; gap: 6px; padding: 8px 9px 9px; min-height: 0; }
+.db-lib-item .db-lib-icon { width: 28px; height: 28px; }
+.db-lib-copy b { overflow-wrap: normal; word-break: normal; hyphens: auto; }

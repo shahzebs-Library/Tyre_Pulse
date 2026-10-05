@@ -213,3 +213,54 @@ export function mapImportRows(sheetRows = []) {
 }
 
 export const IMPORT_TEMPLATE_HEADERS = ['Asset', 'Driver', 'Tag ID', 'Plaza', 'Highway', 'Transaction at', 'Amount', 'Currency', 'Payment method', 'Status', 'Notes']
+
+/** Card period pickers: rows whose transaction falls in the period ending at `now`. */
+export const CARD_PERIODS = [
+  { key: 'month', label: 'This month' },
+  { key: 'quarter', label: 'This quarter' },
+  { key: 'all', label: 'All in scope' },
+]
+export function periodRows(rows = [], period = 'all', now = Date.now()) {
+  const list = Array.isArray(rows) ? rows : []
+  if (period !== 'month' && period !== 'quarter') return list
+  const d = new Date(now instanceof Date ? now.getTime() : Number(now))
+  if (Number.isNaN(d.getTime())) return list
+  const startMonth = period === 'month' ? d.getUTCMonth() : d.getUTCMonth() - (d.getUTCMonth() % 3)
+  const start = Date.UTC(d.getUTCFullYear(), startMonth, 1)
+  return list.filter((r) => {
+    const t = r?.transaction_at ? new Date(r.transaction_at).getTime() : NaN
+    return Number.isFinite(t) && t >= start && t <= d.getTime()
+  })
+}
+
+/**
+ * Rows from the current ledger that are ticked. Ids compare as strings so a
+ * numeric id and its text form match. Rows hidden by the filters are not
+ * returned: a bulk action only ever touches what the person can see.
+ */
+export function checkedRows(rows = [], checkedIds) {
+  const ids = new Set([...(checkedIds || [])].map(String))
+  if (!ids.size) return []
+  return (Array.isArray(rows) ? rows : []).filter((r) => ids.has(String(r?.id)))
+}
+
+/** Select-all toggle: ticks every visible row, or clears them when all are ticked. */
+export function toggleAllChecked(rows = [], checkedIds) {
+  const visible = (Array.isArray(rows) ? rows : []).map((r) => String(r?.id))
+  const current = new Set([...(checkedIds || [])].map(String))
+  const allOn = visible.length > 0 && visible.every((id) => current.has(id))
+  if (allOn) { for (const id of visible) current.delete(id); return current }
+  for (const id of visible) current.add(id)
+  return current
+}
+
+/**
+ * Plan a bulk status change. Rows already carrying the target status are left
+ * alone (no write), so the confirm dialog can say exactly how many will change.
+ */
+export function bulkStatusPlan(rows = [], status) {
+  const target = lc(status)
+  const list = Array.isArray(rows) ? rows : []
+  const toChange = list.filter((r) => lc(r?.status) !== target)
+  return { total: list.length, toChange, unchanged: list.length - toChange.length }
+}

@@ -8,11 +8,11 @@ import { WIDGET_CATALOG, WIDGET_BY_ID, DEFAULT_LAYOUT, DASHBOARD_RANGE_PRESETS }
 const NOW = '2026-10-05T12:00:00Z'
 
 describe('librarySections', () => {
-  it('covers every catalog widget across the three sections', () => {
+  it('covers every catalog widget across the four sections', () => {
     const secs = librarySections(WIDGET_CATALOG)
     const n = secs.reduce((s, x) => s + x.items.length, 0)
     expect(n).toBe(WIDGET_CATALOG.length)
-    expect(secs.map((s) => s.key)).toEqual(['kpi', 'visual', 'data'])
+    expect(secs.map((s) => s.key)).toEqual(['kpi', 'visual', 'data', 'media'])
   })
   it('filters by tab and search, and counts placed widgets', () => {
     const kpis = librarySections(WIDGET_CATALOG, { tab: 'kpis', placedIds: ['total-vehicles', 'total-vehicles'] })
@@ -56,7 +56,9 @@ describe('grid', () => {
     expect(gridColumns('tablet', 2000)).toBe(2)
     expect(gridColumns('mobile', 2000)).toBe(1)
     expect(gridColumns('desktop', 1200)).toBe(4)
-    expect(gridColumns('desktop', 700)).toBe(2)
+    expect(gridColumns('desktop', 700)).toBe(4)
+    expect(gridColumns('desktop', 600)).toBe(2)
+    expect(gridColumns('desktop', 500)).toBe(1)
     expect(gridColumns('desktop', 0)).toBe(4)
     expect(spanFor(3, 2)).toBe(2)
     expect(spanFor(1, 4)).toBe(1)

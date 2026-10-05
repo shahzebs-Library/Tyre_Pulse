@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   inPeriod, applyListingExtras, listingOptions, stockState, awardedValue, headlineTiles,
-  moneyLines, sourcingFunnel, ageLabel, recentRfqs, compareListings, listingDetailFields,
+  moneyLines, sourcingFunnel, quotedCount, ageLabel, recentRfqs, compareListings, listingDetailFields,
   supplierProfile, samePriceBook, NOT_RECORDED,
 } from '../lib/supplierMarketplaceView'
 
@@ -57,8 +57,11 @@ describe('supplierMarketplaceView', () => {
 
   it('builds the funnel only from recorded stages', () => {
     const f = sourcingFunnel(R)
-    expect(f.map((s) => s.count)).toEqual([4, 2, 3, 2])
-    expect(f[1].pct).toBe(50)
+    expect(f.map((s) => s.count)).toEqual([4, null, 2, null, 2])
+    expect(f[2].pct).toBe(50)
+    expect(f[1].recorded).toBe(false)
+    expect(f[1].pct).toBeNull()
+    expect(quotedCount(R)).toBe(3)
     expect(sourcingFunnel([])[0].pct).toBeNull()
   })
 
@@ -90,5 +93,20 @@ describe('supplierMarketplaceView', () => {
     expect(f.find((x) => x.label === 'Price').value).toBe('AED 400 / unit')
     expect(supplierProfile(L, 'alpha')).toMatchObject({ listings: 2, inStock: 2, avgRating: 4.8 })
     expect(samePriceBook(L, L[0]).map((x) => x.id)).toEqual([3, 1, 2])
+  })
+})
+
+describe('supplierMarketplaceView comparison export', () => {
+  it('flattens compared listings, keeps blanks blank and repeats best marks', async () => {
+    const { compareListings, comparisonExportRows, COMPARE_EXPORT_COLUMNS } = await import('../lib/supplierMarketplaceView')
+    const cmp = compareListings([
+      { id: 1, supplier: 'A', product_name: 'Tyre', size_spec: '315/80R22.5', unit_price: 400, lead_time_days: 5, moq: 10, currency: 'SAR' },
+      { id: 2, supplier: 'B', product_name: 'Tyre', unit_price: 420, lead_time_days: null, moq: null, currency: 'SAR' },
+    ])
+    const rows = comparisonExportRows(cmp)
+    expect(rows[0]).toMatchObject({ supplier: 'A', price: 400, total: 4000, best: 'Lowest price, Fastest delivery' })
+    expect(rows[1]).toMatchObject({ supplier: 'B', lead: '', moq: '', total: '', best: '' })
+    expect(COMPARE_EXPORT_COLUMNS.map((c) => c[0])).toEqual(Object.keys(rows[0]))
+    expect(comparisonExportRows(null)).toEqual([])
   })
 })

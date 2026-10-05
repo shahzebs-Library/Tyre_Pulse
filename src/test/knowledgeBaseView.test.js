@@ -82,3 +82,25 @@ describe('knowledgeBaseView', () => {
     expect(governance(null)).toEqual([])
   })
 })
+
+describe('lineChartPoints / percentShares', () => {
+  it('spreads points across the width and scales to the peak', async () => {
+    const { lineChartPoints } = await import('../lib/knowledgeBaseView')
+    const { points, max } = lineChartPoints([{ count: 0 }, { count: 5 }, { count: 10 }], { width: 120, height: 60, pad: 10 })
+    expect(max).toBe(10)
+    expect(points.map((p) => p.x)).toEqual([10, 60, 110])
+    expect(points[0].y).toBe(50)
+    expect(points[2].y).toBe(10)
+  })
+  it('keeps an all-zero series on the baseline and handles one point', async () => {
+    const { lineChartPoints } = await import('../lib/knowledgeBaseView')
+    expect(lineChartPoints([{ count: 0 }, { count: 0 }], { width: 100, height: 40, pad: 0 }).points.every((p) => p.y === 40)).toBe(true)
+    expect(lineChartPoints([{ count: 3 }], { width: 100, height: 40, pad: 0 }).points[0].x).toBe(50)
+    expect(lineChartPoints(null).points).toEqual([])
+  })
+  it('gives whole-percent shares and null on an empty total', async () => {
+    const { percentShares } = await import('../lib/knowledgeBaseView')
+    expect(percentShares([{ count: 1 }, { count: 3 }]).map((x) => x.pct)).toEqual([25, 75])
+    expect(percentShares([{ count: 0 }]).map((x) => x.pct)).toEqual([null])
+  })
+})

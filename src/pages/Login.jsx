@@ -3,18 +3,17 @@ import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Eye, EyeOff, ArrowRight, Mail, Phone, KeyRound, AlertCircle,
-  Loader2, Lock, Clock, Shield, Wifi, WifiOff,
+  Loader2, Clock, WifiOff,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { supabase } from '../lib/supabase'
 import { getPublicConfig } from '../lib/api/systemConfig'
-import { getLoginShowcase, signInOptions, signInWithProvider } from '../lib/api/loginShowcase'
+import { signInOptions, signInWithProvider } from '../lib/api/loginShowcase'
 import { loginAttemptStatus, recordLoginFailure, resetLoginAttempts, lockMinutes } from '../lib/api/loginGuard'
 import TpLogo from '../assets/logo.svg'
 import { readCachedLogo } from '../lib/brand/library'
 import TwoFactorChallenge from '../components/TwoFactorChallenge'
-import BrandIcon from '../components/ui/BrandIcon'
 import ThemeToggle from '../components/ui/ThemeToggle'
 import TurnstileWidget, { captchaEnabled } from '../components/auth/TurnstileWidget'
 import LoginHero from '../components/auth/login/LoginHero'
@@ -98,6 +97,11 @@ export default function Login() {
   const [forgotSent, setForgotSent]   = useState(false)
   const [forgotLoading, setForgotLoading] = useState(false)
   const [focusedField, setFocusedField] = useState(null)
+  // Which field needs correcting: null = fine, '' = mark it without a
+  // message, text = mark it and say why. shake flips so the nudge replays.
+  const [fieldErr, setFieldErr] = useState({ id: null, pw: null })
+  const [shake, setShake] = useState(0)
+  const flagFields = (next) => { setFieldErr(next); setShake(n => n + 1) }
   const [isOnline, setIsOnline]       = useState(navigator.onLine)
   const [mfaState, setMfaState]       = useState(null) // { factorId } when MFA challenge needed
   const [loginAttempts, setLoginAttempts] = useState(0)
@@ -112,8 +116,6 @@ export default function Login() {
   // switches them on, so the page never shows a button that cannot work.
   const [signInOpts, setSignInOpts] = useState({ google: false, microsoft: false, qr: false })
   const [appVersion, setAppVersion] = useState('')
-  // Real platform figures for the hero (counts only). null = show N/A.
-  const [showcase, setShowcase] = useState(null)
 
   // Pre-auth read of the registration switch on mount. getPublicConfig never
   // throws (returns {} on failure), so a read miss leaves signup permissively open.
@@ -126,7 +128,6 @@ export default function Login() {
       const v = typeof cfg?.app_version === 'string' ? cfg.app_version.replace(/^"|"$/g, '').trim() : ''
       if (v) setAppVersion(v)
     })
-    getLoginShowcase().then((s) => { if (alive) setShowcase(s) })
     return () => { alive = false }
   }, [])
 
@@ -161,8 +162,15 @@ export default function Login() {
       setError(t('auth.login.errTooManyAttempts', { secs }))
       return
     }
+    const idMissing = !identifier.trim()
+    const pwMissing = !password
+    if (idMissing || pwMissing) {
+      setError('')
+      flagFields({ id: idMissing ? p('errIdRequired') : null, pw: pwMissing ? p('errPwRequired') : null })
+      return
+    }
     if (needsCaptcha && !captchaToken) { setError(t('auth.login.errCaptcha')); return }
-    setError(''); setLoading(true)
+    setError(''); setFieldErr({ id: null, pw: null }); setLoading(true)
     // Server-enforced lockout (System Configuration -> Max Login Attempts, V287).
     // Fail-safe: a not-locked / errored probe never blocks a real sign-in.
     const gate = await loginAttemptStatus(identifier)
@@ -233,7 +241,9 @@ export default function Login() {
       if (locked?.locked) {
         setError(t('auth.login.errAccountLocked', { mins: lockMinutes(locked) }))
       } else {
-        setError(result.message || t('auth.login.errLoginFailed'))
+        // Wrong username or password: we cannot tell which, so mark both and
+        // say it under the password, where the person will retype.
+        flagFields({ id: '', pw: result.message || t('auth.login.errLoginFailed') })
       }
       setLoading(false)
       return
@@ -366,21 +376,20 @@ export default function Login() {
     }
   }
 
-  function switchTab(val) { setTab(val); setError(''); setSignupDone(false); setForgotMode(false); setForgotSent(false); setForgotCode(''); setForgotChallengeId(''); setPendingApproval(false) }
+  function switchTab(val) { setTab(val); setError(''); setSignupDone(false); setForgotMode(false); setForgotSent(false); setForgotCode(''); setForgotChallengeId(''); setPendingApproval(false); setFieldErr({ id: null, pw: null }) }
 
   const inputStyle = (field) => ({
     width: '100%',
     padding: '11px 14px',
-    minHeight: 46,
+    minHeight: 48,
     background: 'var(--login-input-bg)',
     border: `1.5px solid ${focusedField === field ? 'var(--login-input-border-focus)' : 'var(--login-input-border)'}`,
     borderRadius: 12,
     color: 'var(--login-text)',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 500,
-    letterSpacing: '0.01em',
-    transition: 'border-color 0.2s, box-shadow 0.2s, background 0.2s',
-    boxShadow: focusedField === field ? '0 0 0 3px rgba(22,163,74,0.15), 0 0 20px rgba(22,163,74,0.08)' : 'none',
+    transition: 'border-color 160ms ease, box-shadow 160ms ease',
+    boxShadow: focusedField === field ? '0 0 0 4px var(--tpl-ring)' : 'none',
     outline: 'none',
   })
 
@@ -414,10 +423,10 @@ export default function Login() {
     <>
       <style>{LOGIN_PAGE_CSS}</style>
 
-      {/* Dark photographic hero (both themes) + the sign-in panel, which follows
-          the light/dark theme through the tokens in loginStyles.js. */}
+      {/* Brand panel (fixed palette) + the sign-in panel, which follows the
+          light/dark theme through the tokens in loginStyles.js. */}
       <div className="tpl-shell tp-login-shell">
-        <LoginHero logoSrc={loginLogo} customLogo={customLogo} showcase={showcase} />
+        <LoginHero logoSrc={loginLogo} customLogo={customLogo} />
 
         <main id="main-content" className="tpl-side">
           <motion.div
@@ -427,20 +436,12 @@ export default function Login() {
             className="tpl-card"
           >
             <div className="tpl-card-top">
-              <div className="tpl-card-brand">
-                <span className="tpl-emblem" aria-hidden="true">
-                  <BrandIcon src={loginLogo} custom={customLogo} chip={customLogo} size={22} />
+              {!isOnline && (
+                <span className="tpl-net off" role="status">
+                  <WifiOff size={12} aria-hidden="true"/>{t('auth.login.offline')}
                 </span>
-                <span className="tpl-wordmark" role="img" aria-label="TyrePulse" data-a="Tyre" data-b="Pulse" />
-              </div>
-              <div style={{ display:'flex', alignItems:'center', gap:10, marginInlineStart:'auto' }}>
-                <span className={`tpl-net${isOnline ? '' : ' off'}`}>
-                  {isOnline
-                    ? <><Wifi size={12} aria-hidden="true"/>{t('auth.login.connected')}</>
-                    : <><WifiOff size={12} aria-hidden="true"/>{t('auth.login.offline')}</>}
-                </span>
-                <span className="tpl-theme"><ThemeToggle size={17} includeSystem={false} /></span>
-              </div>
+              )}
+              <span className="tpl-theme"><ThemeToggle size={16} includeSystem={false} /></span>
             </div>
 
             {showWelcome && (
@@ -520,9 +521,8 @@ export default function Login() {
                   </div>
                   <button onClick={() => { setPendingApproval(false); setPassword('') }} style={{
                     marginTop:22, width:'100%', padding:'12px', borderRadius:14, border:'none',
-                    background:'linear-gradient(135deg, #16a34a, #15803d)',
-                    color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer',
-                    boxShadow:'0 4px 24px rgba(22,163,74,0.3)',
+                    background:'var(--tpl-accent)',
+                    color:'var(--tpl-on-accent)', fontSize:14, fontWeight:700, cursor:'pointer',
                   }}>{t('auth.login.backToSignInBtn')}</button>
                 </motion.div>
               )}
@@ -532,53 +532,47 @@ export default function Login() {
                 <motion.form key="login"
                   initial={{ opacity:0, x:12 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:-12 }}
                   transition={{ duration:0.2 }}
-                  onSubmit={handleLogin}
+                  onSubmit={handleLogin} noValidate
                   style={{ display:'flex', flexDirection:'column', gap:14 }}
                 >
                   {/* Unified identifier input - accepts email, username, or employee ID */}
-                  <div>
+                  <div className="tpl-field" data-invalid={fieldErr.id !== null || undefined} data-shake={fieldErr.id !== null ? (shake % 2 ? 'a' : 'b') : undefined}>
                     <label htmlFor="login-identifier" style={labelStyle}>{p('idLabel')}</label>
                     <div style={{ position:'relative' }}>
-                      <span className="tpl-field-icon" style={{ color: focusedField==='id' ? 'var(--brand-on-tint)' : 'var(--login-icon)' }}>
-                        <Mail size={16} aria-hidden="true"/>
-                      </span>
                       <input
                         id="login-identifier"
                         name="identifier"
                         type="text"
-                        style={{ ...inputStyle('id'), paddingInlineStart:42 }}
-                        aria-invalid={error ? true : undefined}
-                        aria-describedby={error ? 'login-error' : undefined}
+                        style={inputStyle('id')}
+                        aria-invalid={fieldErr.id !== null || undefined}
+                        aria-describedby={fieldErr.id ? 'login-id-err' : (error ? 'login-error' : undefined)}
                         placeholder={p('idPlaceholder')}
                         value={identifier}
-                        onChange={e => setIdentifier(e.target.value)}
+                        onChange={e => { setIdentifier(e.target.value); if (fieldErr.id !== null || fieldErr.pw) setFieldErr({ id: null, pw: null }) }}
                         onFocus={() => setFocusedField('id')}
                         onBlur={() => setFocusedField(null)}
-                        required autoFocus autoComplete="username"
+                        autoFocus autoComplete="username"
                       />
                     </div>
+                    {fieldErr.id && <p id="login-id-err" className="tpl-field-err" role="alert">{fieldErr.id}</p>}
                   </div>
 
                   {/* Password */}
-                  <div>
+                  <div className="tpl-field" data-invalid={fieldErr.pw !== null || undefined} data-shake={fieldErr.pw !== null ? (shake % 2 ? 'a' : 'b') : undefined}>
                     <label htmlFor="login-password" style={labelStyle}>{t('auth.passwordLabel')}</label>
                     <div style={{ position:'relative' }}>
-                      <span className="tpl-field-icon" style={{ color: focusedField==='pw' ? 'var(--brand-on-tint)' : 'var(--login-icon)' }}>
-                        <Lock size={16} aria-hidden="true"/>
-                      </span>
                       <input
                         id="login-password"
                         name="password"
                         type={showLoginPw ? 'text' : 'password'}
-                        style={{ ...inputStyle('pw'), paddingInlineStart:42, paddingInlineEnd:48 }}
-                        aria-invalid={error ? true : undefined}
-                        aria-describedby={error ? 'login-error' : undefined}
-                        placeholder="••••••••"
+                        style={{ ...inputStyle('pw'), paddingInlineEnd:48 }}
+                        aria-invalid={fieldErr.pw !== null || undefined}
+                        aria-describedby={fieldErr.pw ? 'login-pw-err' : (error ? 'login-error' : undefined)}
                         value={password}
-                        onChange={e => setPassword(e.target.value)}
+                        onChange={e => { setPassword(e.target.value); if (fieldErr.pw !== null || fieldErr.id === '') setFieldErr({ id: null, pw: null }) }}
                         onFocus={() => setFocusedField('pw')}
                         onBlur={() => setFocusedField(null)}
-                        required autoComplete="current-password"
+                        autoComplete="current-password"
                       />
                       <button type="button" className="tp-login-eye" aria-label={showLoginPw ? 'Hide password' : 'Show password'} aria-pressed={showLoginPw} onClick={() => setShowLoginPw(v => !v)} style={{
                         position:'absolute', insetInlineEnd:2, top:'50%', transform:'translateY(-50%)',
@@ -588,6 +582,7 @@ export default function Login() {
                         {showLoginPw ? <EyeOff size={16}/> : <Eye size={16}/>}
                       </button>
                     </div>
+                    {fieldErr.pw && <p id="login-pw-err" className="tpl-field-err" role="alert">{fieldErr.pw}</p>}
                   </div>
 
                   <div className="tpl-row">
@@ -615,7 +610,6 @@ export default function Login() {
                   <button type="submit" className="tpl-primary" disabled={loading || !isOnline || (needsCaptcha && !captchaToken)}>
                     {loading && <Loader2 size={17} className="animate-spin" aria-hidden="true"/>}
                     {loading ? t('auth.login.signingIn') : !isOnline ? t('auth.login.noConnection') : p('signIn')}
-                    {!loading && isOnline && <ArrowRight size={17} className="tp-dir-icon" aria-hidden="true"/>}
                   </button>
 
                   <div className="tpl-divider">{p('orContinue')}</div>
@@ -632,7 +626,7 @@ export default function Login() {
                     )}
                     {/* Enterprise SSO (existing flow: resolves the work-email domain). */}
                     <button type="button" className="tpl-provider" onClick={handleSso} disabled={ssoLoading || !isOnline} aria-label={p('ssoAria')}>
-                      {ssoLoading ? <Loader2 size={15} className="animate-spin" aria-hidden="true"/> : <Shield size={15} aria-hidden="true"/>}
+                      {ssoLoading && <Loader2 size={15} className="animate-spin" aria-hidden="true"/>}
                       {ssoLoading ? t('auth.login.redirecting') : p('sso')}
                     </button>
                   </div>
@@ -647,7 +641,7 @@ export default function Login() {
                 <div className="tpl-request">
                   {p('newTo')}
                   <button type="button" onClick={() => switchTab('signup')}>
-                    {p('requestAccess')}<ArrowRight size={14} className="tp-dir-icon" aria-hidden="true"/>
+                    {p('requestAccess')}
                   </button>
                 </div>
               )}
@@ -683,7 +677,7 @@ export default function Login() {
                           padding:'10px', minHeight:44, borderRadius:12, cursor:'pointer', fontSize:13, fontWeight:700,
                           display:'flex', alignItems:'center', justifyContent:'center', gap:7,
                           color:forgotChannel === value ? 'var(--brand-on-tint)' : 'var(--login-text-dim)',
-                          background:forgotChannel === value ? 'rgba(22,163,74,0.12)' : 'var(--login-input-bg)',
+                          background:forgotChannel === value ? 'var(--tpl-accent-soft)' : 'var(--login-input-bg)',
                           border:`1.5px solid ${forgotChannel === value ? 'rgba(74,222,128,0.45)' : 'var(--login-input-border)'}`,
                         }}>
                         <Icon size={15}/>{label}
@@ -704,10 +698,9 @@ export default function Login() {
                   </div>
                   <button type="submit" disabled={forgotLoading} className="tp-btn-shine" style={{
                     width:'100%', padding:'13px', borderRadius:14, border:'none',
-                    background:'linear-gradient(135deg, #16a34a, #15803d)',
-                    color:'#fff', fontSize:14, fontWeight:700, cursor:forgotLoading?'not-allowed':'pointer',
+                    background:'var(--tpl-accent)',
+                    color:'var(--tpl-on-accent)', fontSize:14, fontWeight:700, cursor:forgotLoading?'not-allowed':'pointer',
                     display:'flex', alignItems:'center', justifyContent:'center', gap:8,
-                    boxShadow:'0 4px 24px rgba(22,163,74,0.35)',
                   }}>
                     {forgotLoading ? <Loader2 size={16} className="animate-spin"/> : forgotChannel === 'email' ? <Mail size={16}/> : <Phone size={16}/>}
                     {forgotLoading ? t('auth.login.sending') : 'Send verification code'}
@@ -727,9 +720,8 @@ export default function Login() {
                   style={{ textAlign:'center', padding:'8px 0' }}>
                   <div style={{
                     width:64, height:64, borderRadius:20, margin:'0 auto 18px',
-                    background:'rgba(22,163,74,0.12)', border:'1.5px solid rgba(22,163,74,0.3)',
+                    background:'var(--tpl-accent-soft)', border:'1.5px solid var(--tpl-accent)',
                     display:'flex', alignItems:'center', justifyContent:'center',
-                    boxShadow:'0 0 40px rgba(22,163,74,0.25)',
                   }}>
                     <KeyRound size={30} style={{color:'var(--brand-on-tint)'}}/>
                   </div>
@@ -742,9 +734,8 @@ export default function Login() {
                     style={{ ...inputStyle('recovery-code'), textAlign:'center', fontSize:22, letterSpacing:'0.35em' }} autoFocus required />
                   <button type="submit" disabled={forgotLoading || forgotCode.length !== 6} className="tp-btn-shine" style={{
                     marginTop:22, width:'100%', padding:'12px', borderRadius:14, border:'none',
-                    background:'linear-gradient(135deg, #16a34a, #15803d)',
-                    color:'#fff', fontSize:14, fontWeight:700, cursor:forgotLoading?'not-allowed':'pointer',
-                    boxShadow:'0 4px 24px rgba(22,163,74,0.3)',
+                    background:'var(--tpl-accent)',
+                    color:'var(--tpl-on-accent)', fontSize:14, fontWeight:700, cursor:forgotLoading?'not-allowed':'pointer',
                   }}>{forgotLoading ? 'Verifying…' : 'Verify and reset password'}</button>
                   <button type="button" onClick={() => { setForgotSent(false); setForgotCode(''); setForgotChallengeId(''); setError('') }}
                     style={{ marginTop:12, background:'none', border:'none', color:'var(--brand-on-tint)', cursor:'pointer', fontSize:12, fontWeight:600 }}>
@@ -852,10 +843,9 @@ export default function Login() {
 
                   <button type="submit" disabled={loading || signupClosed || (needsCaptcha && !captchaToken)} className="tp-btn-shine" style={{
                     width:'100%', padding:'13px', borderRadius:14, border:'none',
-                    background: (loading || signupClosed) ? 'rgba(22,163,74,0.3)' : 'linear-gradient(135deg, #16a34a, #15803d)',
-                    color:'#fff', fontSize:14, fontWeight:700, cursor:(loading || signupClosed)?'not-allowed':'pointer',
+                    background: 'var(--tpl-accent)',
+                    color:'var(--tpl-on-accent)', fontSize:14, fontWeight:700, cursor:(loading || signupClosed)?'not-allowed':'pointer', opacity:(loading || signupClosed) ? 0.55 : 1,
                     display:'flex', alignItems:'center', justifyContent:'center', gap:8,
-                    boxShadow: (loading || signupClosed) ? 'none' : '0 4px 28px rgba(22,163,74,0.4)',
                   }}>
                     {loading && <Loader2 size={16} className="animate-spin"/>}
                     {loading ? t('auth.login.creatingAccount') : signupClosed ? t('auth.login.signupClosed') : t('auth.login.createAccount')}
@@ -880,9 +870,8 @@ export default function Login() {
                   </div>
                   <button onClick={() => switchTab('login')} style={{
                     marginTop:22, width:'100%', padding:'12px', borderRadius:14, border:'none',
-                    background:'linear-gradient(135deg, #16a34a, #15803d)',
-                    color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer',
-                    boxShadow:'0 4px 24px rgba(22,163,74,0.3)',
+                    background:'var(--tpl-accent)',
+                    color:'var(--tpl-on-accent)', fontSize:14, fontWeight:700, cursor:'pointer',
                   }}>{t('auth.login.backToSignInBtn')}</button>
                 </motion.div>
               )}

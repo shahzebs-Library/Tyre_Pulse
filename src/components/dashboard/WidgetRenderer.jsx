@@ -12,10 +12,12 @@
  * Queries mirror the reads already used by DisplayDashboard.jsx /
  * GlobalSearch.jsx — only tables/columns visible in existing page code.
  */
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Truck, CircleDot, AlertTriangle, DollarSign, ClipboardList,
   Inbox, Bell, ShieldCheck, Wrench, ListChecks,
+  MapPin, Activity, BarChart3, ClipboardCheck, TrendingUp, BadgeCheck,
+  Flame, History, StickyNote, Image as ImageIcon, Siren, Map as MapIcon,
 } from 'lucide-react'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import {
@@ -35,6 +37,13 @@ import {
 import {
   WIDGET_BY_ID, computeCostTrend, groupWorkOrdersByStatus,
 } from '../../lib/dashboardBuilder'
+import {
+  closedWoStatusTokens, openWorkOrderCount, recentMonths, stackWorkshopJobs,
+  utilisationTrend, inspectionProgress, rollingWindows, trendChange,
+  FRESHNESS_FEEDS, freshnessStatus, heatmapSiteWeekday, mergeTimeline,
+} from '../../lib/dashboardWidgets'
+import { getLatestActivity } from '../../lib/api/latestActivity'
+import { safeImageSrc } from '../../lib/safeUrl'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend,
@@ -203,6 +212,133 @@ const SOURCE_FETCHERS = {
     rows.truncated = truncated
     return rows
   },
+  // ── Widgets added for the builder mockup ──
+  // Open job cards = exact total minus exact closed count (live state, so the
+  // date window does not apply). NULL / blank status stays counted as open.
+  workOrdersOpen: async ({ site, country } = {}) => {
+    const base = () => {
+      let q = supabase.from('work_orders').select('id', { count: 'exact', head: true })
+      q = withSite(q, site)
+      return applyCountry(q, country)
+    }
+    const [all, closed] = await Promise.all([
+      base(),
+      base().in('status', closedWoStatusTokens()),
+    ])
+    if (all.error) throw all.error
+    if (closed.error) throw closed.error
+    return openWorkOrderCount(all.count, closed.count)
+  },
+  // Telematics snapshots (asset_utilization). An unprovisioned table reads as
+  // no data, which the widget states honestly.
+  utilisation: async ({ country } = {}) => {
+    const { data, error } = await fetchAllPages((lo, hi) => {
+      let q = supabase.from('asset_utilization').select('id,captured_at,utilization_pct')
+      q = applyCountry(q, country)
+      return q.order('id').range(lo, hi)
+    }, { max: 20000 })
+    if (error) {
+      const code = String(error.code || '')
+      if (code === '42P01' || code === 'PGRST205') return []
+      throw error
+    }
+    return data ?? []
+  },
+  // Six server aggregates (get_work_order_stats folds statuses to the canonical
+  // vocabulary). Site is not a parameter of that RPC, so this widget is
+  // country scoped only. A failed month reads as unmeasured, never as zero.
+  workshopMonths: async ({ country } = {}) => {
+    const months = recentMonths(new Date(), 6)
+    const settled = await Promise.allSettled(months.map(m => supabase.rpc('get_work_order_stats', {
+      p_country: country || null, p_from: m.from, p_to: m.to,
+    })))
+    let failures = 0
+    const out = months.map((m, i) => {
+      const r = settled[i]
+      if (r.status !== 'fulfilled' || r.value?.error) { failures += 1; return { ...m, by_status: null } }
+      return { ...m, by_status: Array.isArray(r.value.data?.by_status) ? r.value.data.by_status : [] }
+    })
+    if (failures === months.length) {
+      const first = settled.find(r => r.status === 'fulfilled')?.value?.error || settled[0]?.reason
+      throw first || new Error('Workshop jobs could not be read')
+    }
+    return out
+  },
+  inspectionsMonth: async ({ site, country } = {}) => {
+    const now = new Date()
+    const pad = n => String(n).padStart(2, '0')
+    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+    const from = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`
+    const to = `${last.getFullYear()}-${pad(last.getMonth() + 1)}-${pad(last.getDate())}`
+    const { data, error } = await fetchAllPages((lo, hi) => {
+      let q = supabase.from('inspections').select('id,scheduled_date,status,completed_date')
+        .gte('scheduled_date', from).lte('scheduled_date', to)
+      q = withSite(q, site)
+      q = applyCountry(q, country)
+      return q.order('id').range(lo, hi)
+    }, { max: 20000 })
+    if (error) throw error
+    return data ?? []
+  },
+  // Job cards opened in the last 30 days vs the 30 days before (opened_at,
+  // both windows bounded at today so future-dated rows never count).
+  workOrdersTrend: async ({ site, country } = {}) => {
+    const w = rollingWindows(new Date(), 30)
+    const count = (from, to) => {
+      let q = supabase.from('work_orders').select('id', { count: 'exact', head: true })
+        .gte('opened_at', from).lte('opened_at', `${to}T23:59:59.999Z`)
+      q = withSite(q, site)
+      return applyCountry(q, country)
+    }
+    const [cur, prev] = await Promise.all([count(w.from, w.to), count(w.prevFrom, w.prevTo)])
+    if (cur.error) throw cur.error
+    return { ...trendChange(cur.count, prev.error ? null : prev.count), window: w }
+  },
+  // Newest upload (created_at) per feed. Unreadable feeds come back null.
+  freshness: async ({ country } = {}) => {
+    const dates = await Promise.all(FRESHNESS_FEEDS.map(f =>
+      getLatestActivity(f.table, { country, dateColumn: 'created_at' })))
+    const latest = {}
+    FRESHNESS_FEEDS.forEach((f, i) => { latest[f.table] = dates[i] })
+    return freshnessStatus(latest, new Date())
+  },
+  inspectionsHeat: async ({ site, country } = {}) => {
+    const since = new Date()
+    since.setDate(since.getDate() - 89)
+    const { data, error } = await fetchAllPages((lo, hi) => {
+      let q = supabase.from('inspections').select('id,site,inspection_date')
+        .gte('inspection_date', since.toISOString().slice(0, 10))
+      q = withSite(q, site)
+      q = applyCountry(q, country)
+      return q.order('id').range(lo, hi)
+    }, { max: 20000 })
+    if (error) throw error
+    return data ?? []
+  },
+  // Latest records from three registers. One failing register leaves the
+  // other two; all three failing is an error tile.
+  timeline: async ({ site, country } = {}) => {
+    const recent = (table, cols) => {
+      let q = supabase.from(table).select(cols)
+      q = withSite(q, site)
+      q = applyCountry(q, country)
+      return q.order('created_at', { ascending: false }).limit(12)
+    }
+    const settled = await Promise.allSettled([
+      recent('work_orders', 'id,work_order_no,asset_no,status,created_at'),
+      recent('accidents', 'id,reference_no,asset_no,severity,site,created_at'),
+      recent('inspections', 'id,asset_no,status,site,created_at'),
+    ])
+    const ok = settled.map(r => (r.status === 'fulfilled' && !r.value?.error ? (r.value.data || []) : null))
+    if (ok.every(v => v == null)) {
+      throw settled[0].status === 'fulfilled' ? settled[0].value.error : settled[0].reason
+    }
+    const events = mergeTimeline({ workOrders: ok[0] || [], accidents: ok[1] || [], inspections: ok[2] || [] }, 12)
+    events.partial = ok.some(v => v == null)
+    return events
+  },
+  // Note / Image widgets read nothing; their content lives in the layout.
+  static: async () => [],
 }
 
 /**
@@ -312,7 +448,7 @@ function AlertsBySeverityWidget({ rows }) {
     }],
   }
   return (
-    <ChartShell title={`Alerts by Severity · ${summary.total}`} icon={Bell}>
+    <ChartShell title={`Alerts by Severity | ${summary.total}`} icon={Bell}>
       <Doughnut data={data} options={DONUT_OPTS} />
     </ChartShell>
   )
@@ -374,7 +510,7 @@ function CostTrendWidget({ rows, currency }) {
     },
   }
   return (
-    <ChartShell title="Tyre Cost Trend · 6 Months" icon={DollarSign}>
+    <ChartShell title="Tyre Cost Trend, 6 Months" icon={DollarSign}>
       <Line data={data} options={opts} />
     </ChartShell>
   )
@@ -399,7 +535,7 @@ function WorkOrdersByStatusWidget({ rows }) {
     }],
   }
   return (
-    <ChartShell title={`Work Orders · ${total.toLocaleString()}`} icon={ClipboardList}>
+    <ChartShell title={`Work Orders | ${total.toLocaleString()}`} icon={ClipboardList}>
       <Doughnut data={data} options={DONUT_OPTS} />
       {rows?.truncated ? (
         <p className="absolute bottom-0 left-0 right-0 text-center text-[10px] text-[var(--text-dim)]">
@@ -435,7 +571,7 @@ function RecentAlertsWidget({ rows }) {
               <div className="min-w-0">
                 <p className="text-xs text-[var(--text-primary)] leading-snug line-clamp-2">{a.message ?? 'Alert'}</p>
                 <p className="text-[10px] text-[var(--text-dim)] mt-0.5 font-mono">
-                  {a.asset_no ?? ''}{a.asset_no && a.created_at ? ' · ' : ''}
+                  {a.asset_no ?? ''}{a.asset_no && a.created_at ? ' | ' : ''}
                   {a.created_at ? new Date(a.created_at).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
                 </p>
               </div>
@@ -457,7 +593,7 @@ function TyreStatusWidget({ rows }) {
   const removed = list.filter(r => (r.status || '') === 'Removed').length
   if (!active && !removed) return <ChartShell title="Tyre Status" icon={CircleDot}><EmptyNote text="No tyre records" /></ChartShell>
   const data = { labels: ['Active', 'Removed'], datasets: [{ data: [active, removed], backgroundColor: ['#22c55e', '#ef4444'], borderWidth: 0, hoverOffset: 6 }] }
-  return <ChartShell title={`Tyre Status · ${active + removed}`} icon={CircleDot}><Doughnut data={data} options={DONUT_OPTS} /></ChartShell>
+  return <ChartShell title={`Tyre Status | ${active + removed}`} icon={CircleDot}><Doughnut data={data} options={DONUT_OPTS} /></ChartShell>
 }
 
 function TyreFailureWidget({ rows }) {
@@ -486,7 +622,295 @@ function TopTasksWidget({ rows }) {
   return <ChartShell title="Top Maintenance Tasks" icon={ListChecks}><Bar data={data} options={{ ...BASE_OPTS, indexAxis: 'y' }} /></ChartShell>
 }
 
-export default function WidgetRenderer({ widgetId, slice, currency }) {
+// ── Widgets added for the builder mockup ──────────────────────────────────────
+const WO_STATUS_COLORS = {
+  Completed: '#22c55e', 'In Progress': '#3b82f6', New: '#f59e0b', Assigned: '#8b5cf6',
+  'Waiting for Parts': '#f97316', 'Waiting for Approval': '#eab308', 'Quality Inspection': '#06b6d4',
+  Cancelled: '#94a3b8', 'On Hold': '#64748b', Other: '#cbd5e1',
+}
+const FRESH_TONE = {
+  fresh:   { label: 'Up to date', color: '#16a34a' },
+  stale:   { label: 'Getting stale', color: '#d97706' },
+  old:     { label: 'Out of date', color: '#dc2626' },
+  unknown: { label: 'Not readable', color: '#64748b' },
+}
+
+function FleetLocationWidget({ rows }) {
+  const sites = groupVehiclesBySite(rows, 24)
+  const total = (rows || []).length
+  return (
+    <ChartShell title={`Fleet Location | ${sites.length} sites`} icon={MapPin}>
+      <div className="h-full flex flex-col gap-2 min-h-0">
+        <div className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[11px] text-[var(--text-muted)]"
+          style={{ border: '1px dashed var(--hairline, rgba(148,163,184,0.35))' }}>
+          <MapIcon size={13} aria-hidden="true" />
+          <span>Map view not connected yet. Sites are listed with their registered vehicles.</span>
+        </div>
+        {sites.length === 0 ? (
+          <EmptyNote text="No vehicles recorded" />
+        ) : (
+          <div className="grid gap-1.5 overflow-y-auto pr-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))' }}>
+            {sites.map(s => (
+              <div key={s.site} className="flex items-center gap-2 rounded-lg px-2 py-1.5"
+                style={{ border: '1px solid var(--hairline, rgba(148,163,184,0.18))' }}>
+                <MapPin size={14} className="text-green-600 flex-shrink-0" aria-hidden="true" />
+                <span className="text-xs text-[var(--text-primary)] truncate flex-1" title={s.site}>{s.site}</span>
+                <span className="text-xs font-bold tabular-nums text-[var(--text-primary)]">{s.count.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {total > 0 && sites.length === 24 && (
+          <p className="text-[10px] text-[var(--text-dim)]">Showing the 24 sites with the most vehicles.</p>
+        )}
+      </div>
+    </ChartShell>
+  )
+}
+
+function UtilisationTrendWidget({ rows }) {
+  const trend = utilisationTrend(rows)
+  if (!trend.length) {
+    return (
+      <ChartShell title="Fleet Utilisation Trend" icon={Activity}>
+        <EmptyNote text="No telematics utilisation captured yet" />
+      </ChartShell>
+    )
+  }
+  const data = {
+    labels: trend.map(t => t.date),
+    datasets: [{
+      label: 'Average utilisation',
+      data: trend.map(t => t.avg),
+      borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,0.10)',
+      fill: true, tension: 0.35, pointRadius: 3, pointBackgroundColor: '#16a34a', borderWidth: 2,
+    }],
+  }
+  const opts = {
+    ...BASE_OPTS,
+    scales: { x: { ticks: TICK, grid: GRID }, y: { ticks: { ...TICK, callback: v => `${v}%` }, grid: GRID, suggestedMin: 0, suggestedMax: 100 } },
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => `${ctx.raw}% average over ${trend[ctx.dataIndex]?.assets ?? 0} assets` } },
+    },
+  }
+  return (
+    <ChartShell title="Fleet Utilisation Trend" icon={Activity}>
+      <Line data={data} options={opts} />
+      {trend.length === 1 && (
+        <p className="absolute bottom-0 left-0 right-0 text-center text-[10px] text-[var(--text-dim)]">
+          One capture date so far, a trend needs at least two
+        </p>
+      )}
+    </ChartShell>
+  )
+}
+
+function WorkshopJobsWidget({ rows }) {
+  const stack = stackWorkshopJobs(Array.isArray(rows) ? rows : [])
+  if (!stack.total) {
+    return (
+      <ChartShell title="Workshop Jobs, 6 Months" icon={BarChart3}>
+        <EmptyNote text="No job cards opened in the last 6 months" />
+      </ChartShell>
+    )
+  }
+  const data = {
+    labels: stack.labels,
+    datasets: stack.series.map((s, i) => ({
+      label: s.status,
+      data: s.data,
+      backgroundColor: WO_STATUS_COLORS[s.status] || STATUS_PALETTE[i % STATUS_PALETTE.length],
+      borderRadius: 3, stack: 'jobs',
+    })),
+  }
+  const opts = {
+    ...BASE_OPTS,
+    plugins: { legend: { ...LEGEND, display: true, position: 'top' } },
+    scales: { x: { ticks: TICK, grid: GRID, stacked: true }, y: { ticks: TICK, grid: GRID, stacked: true } },
+  }
+  const gaps = stack.series[0]?.data.some(v => v == null)
+  return (
+    <ChartShell title={`Workshop Jobs, 6 Months | ${stack.total.toLocaleString()}`} icon={BarChart3}>
+      <Bar data={data} options={opts} />
+      {gaps && (
+        <p className="absolute bottom-0 left-0 right-0 text-center text-[10px] text-[var(--text-dim)]">
+          Some months could not be read and are left blank
+        </p>
+      )}
+    </ChartShell>
+  )
+}
+
+function InspectionProgressWidget({ rows }) {
+  const p = inspectionProgress(rows, new Date())
+  const pct = p.pct
+  const color = pct == null ? '#94a3b8' : pct >= 90 ? '#16a34a' : pct >= 60 ? '#d97706' : '#dc2626'
+  return (
+    <div className="card h-full flex flex-col gap-2 !p-4">
+      <div className="flex items-center gap-2">
+        <ClipboardCheck size={14} className="text-[var(--text-muted)]" />
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] truncate">Inspection Progress</span>
+      </div>
+      <div className="text-2xl font-bold tabular-nums text-[var(--text-primary)]">{pct == null ? 'N/A' : `${pct}%`}</div>
+      <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--hairline, rgba(148,163,184,0.2))' }}
+        role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct ?? undefined} aria-label="Inspections completed">
+        <div className="h-full rounded-full" style={{ width: `${Math.min(100, pct ?? 0)}%`, background: color }} />
+      </div>
+      <p className="text-xs text-[var(--text-muted)]">
+        {p.planned === 0
+          ? `No inspections scheduled in ${p.month}`
+          : `${p.done.toLocaleString()} of ${p.planned.toLocaleString()} scheduled done, ${p.month}`}
+      </p>
+    </div>
+  )
+}
+
+function DataFreshnessWidget({ rows }) {
+  const items = Array.isArray(rows?.items) ? rows.items : []
+  const overall = FRESH_TONE[rows?.overall] || FRESH_TONE.unknown
+  return (
+    <div className="card h-full flex flex-col gap-2 !p-4 min-h-0">
+      <div className="flex items-center gap-2">
+        <BadgeCheck size={14} className="text-[var(--text-muted)]" />
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] truncate">Data Freshness</span>
+      </div>
+      <span className="self-start inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full"
+        style={{ color: overall.color, backgroundColor: `${overall.color}1f` }}>
+        <span className="w-1.5 h-1.5 rounded-full" style={{ background: overall.color }} aria-hidden="true" />
+        {overall.label}
+      </span>
+      <div className="space-y-1 overflow-y-auto min-h-0">
+        {items.map(i => {
+          const tone = FRESH_TONE[i.status] || FRESH_TONE.unknown
+          return (
+            <div key={i.table} className="flex items-center gap-2 text-[11px]">
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: tone.color }} aria-hidden="true" />
+              <span className="text-[var(--text-primary)] truncate flex-1">{i.label}</span>
+              <span className="text-[var(--text-muted)] tabular-nums">
+                {i.days == null ? 'N/A' : i.days === 0 ? 'today' : `${i.days}d ago`}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function InspectionHeatmapWidget({ rows }) {
+  const hm = heatmapSiteWeekday(rows, 'inspection_date', 8)
+  if (!hm.sites.length) {
+    return (
+      <ChartShell title="Inspections Heat Map, 90 Days" icon={Flame}>
+        <EmptyNote text="No inspections with a site in the last 90 days" />
+      </ChartShell>
+    )
+  }
+  const cellBg = n => (n === 0 || hm.max === 0 ? 'rgba(148,163,184,0.10)' : `rgba(22,163,74,${(0.18 + 0.72 * (n / hm.max)).toFixed(2)})`)
+  return (
+    <ChartShell title={`Inspections Heat Map, 90 Days | ${hm.total.toLocaleString()}`} icon={Flame}>
+      <div className="h-full overflow-auto">
+        <div className="grid gap-1 text-[10px]" style={{ gridTemplateColumns: 'minmax(70px, 1.4fr) repeat(7, minmax(26px, 1fr))' }}
+          role="grid" aria-label="Inspections by site and weekday">
+          <span />
+          {hm.days.map(d => <span key={d} className="text-center text-[var(--text-muted)] font-semibold">{d}</span>)}
+          {hm.sites.map((site, r) => (
+            <div key={site} className="contents" role="row">
+              <span className="truncate text-[var(--text-primary)] self-center" title={site}>{site}</span>
+              {hm.cells[r].map((n, c) => (
+                <span key={c} role="gridcell" title={`${site}, ${hm.days[c]}: ${n}`}
+                  className="text-center rounded py-1 tabular-nums"
+                  style={{ background: cellBg(n), color: n / (hm.max || 1) > 0.55 ? '#fff' : 'var(--text-primary)' }}>
+                  {n}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </ChartShell>
+  )
+}
+
+const TIMELINE_ICON = { work_order: Wrench, accident: Siren, inspection: ClipboardCheck }
+const TIMELINE_COLOR = { work_order: '#3b82f6', accident: '#dc2626', inspection: '#16a34a' }
+
+function TimelineWidget({ rows }) {
+  const events = Array.isArray(rows) ? rows : []
+  return (
+    <ChartShell title="Activity Timeline" icon={History}>
+      {events.length === 0 ? (
+        <EmptyNote text="No recent job cards, accidents or inspections" />
+      ) : (
+        <div className="h-full overflow-y-auto pr-1">
+          <ol className="relative space-y-2.5" style={{ borderInlineStart: '1px solid var(--hairline, rgba(148,163,184,0.25))' }}>
+            {events.map((e, i) => {
+              const Icon = TIMELINE_ICON[e.type] || History
+              const color = TIMELINE_COLOR[e.type] || '#64748b'
+              return (
+                <li key={`${e.type}-${e.at}-${i}`} className="flex items-start gap-2 ps-3">
+                  <span className="rounded-full p-1 flex-shrink-0 -ms-[22px]" style={{ background: `${color}1f`, color }}>
+                    <Icon size={12} aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-xs text-[var(--text-primary)] truncate">{e.title}</p>
+                    <p className="text-[10px] text-[var(--text-dim)] truncate">
+                      {[e.sub, new Date(e.at).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })].filter(Boolean).join(' | ')}
+                    </p>
+                  </div>
+                </li>
+              )
+            })}
+          </ol>
+          {rows?.partial && (
+            <p className="text-[10px] text-[var(--text-dim)] mt-2">One register could not be read, the rest are shown.</p>
+          )}
+        </div>
+      )}
+    </ChartShell>
+  )
+}
+
+function NoteWidget({ config }) {
+  const title = config?.title || 'Note'
+  const text = config?.text || ''
+  return (
+    <ChartShell title={title} icon={StickyNote}>
+      {text.trim() ? (
+        <div className="h-full overflow-y-auto text-sm text-[var(--text-primary)] whitespace-pre-wrap break-words">{text}</div>
+      ) : (
+        <EmptyNote text="Empty note. Edit the layout and press Edit content to add text." />
+      )}
+    </ChartShell>
+  )
+}
+
+function ImageWidget({ config }) {
+  const [broken, setBroken] = useState(false)
+  const src = safeImageSrc(config?.url)
+  const caption = config?.caption || ''
+  return (
+    <ChartShell title={caption || 'Image'} icon={ImageIcon}>
+      {!src ? (
+        <EmptyNote text="No image yet. Edit the layout and press Edit content to add an image address." />
+      ) : broken ? (
+        <EmptyNote text="The image could not be loaded from this address." />
+      ) : (
+        <div className="h-full flex items-center justify-center">
+          <img src={src} alt={caption || 'Dashboard image'} className="max-h-full max-w-full object-contain"
+            loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} />
+        </div>
+      )}
+    </ChartShell>
+  )
+}
+
+/**
+ * @param {{ widgetId:string, slice:{rows:any[], error:string|null, loaded:boolean}, currency?:string, config?:object }} props
+ *        `config` is the per-instance content of Note / Image widgets.
+ */
+export default function WidgetRenderer({ widgetId, slice, currency, config }) {
   const def = WIDGET_BY_ID[widgetId]
 
   // Derived stats memoised so re-renders in edit mode stay cheap.
@@ -519,7 +943,7 @@ export default function WidgetRenderer({ widgetId, slice, currency }) {
         const t = countTodaysInspections(rows, new Date().toISOString().slice(0, 10))
         return {
           value: t.total.toLocaleString(),
-          sub: `${t.done} done · ${t.pending} pending · ${t.overdue} overdue`,
+          sub: `${t.done} done | ${t.pending} pending | ${t.overdue} overdue`,
           tone: t.overdue > 0 ? 'warn' : 'accent',
         }
       }
@@ -538,11 +962,35 @@ export default function WidgetRenderer({ widgetId, slice, currency }) {
           sub: snap?.kpis?.job_cards != null ? `${Number(snap.kpis.job_cards).toLocaleString()} job cards` : '',
         }
       }
+      case 'open-work-orders': {
+        const open = rows?.open
+        return {
+          value: open == null ? 'N/A' : open.toLocaleString(),
+          sub: rows?.total != null ? `of ${Number(rows.total).toLocaleString()} job cards on record` : 'Count unavailable',
+          tone: open > 0 ? 'warn' : 'accent',
+        }
+      }
+      case 'work-orders-trend': {
+        const t = rows || {}
+        const hasPrev = t.previous != null
+        return {
+          value: t.current == null ? 'N/A' : Number(t.current).toLocaleString(),
+          delta: t.pct,
+          sub: !hasPrev
+            ? 'Earlier 30 days could not be read'
+            : t.pct == null
+              ? `No job cards in the 30 days before, so no change is shown`
+              : `vs ${Number(t.previous).toLocaleString()} in the 30 days before`,
+        }
+      }
       default: return null
     }
   }, [def, slice, widgetId, currency])
 
   if (!def) return <WidgetErrorTile label="Unknown widget" message={widgetId} />
+  // Text & media widgets render their saved content and read no data.
+  if (def.kind === 'note') return <NoteWidget config={config} />
+  if (def.kind === 'image') return <ImageWidget key={config?.url || 'empty'} config={config} />
   if (!slice || (!slice.loaded && !slice.error)) {
     return <WidgetSkeleton lines={def.kind === 'stat' ? 2 : 4} />
   }
@@ -573,6 +1021,17 @@ export default function WidgetRenderer({ widgetId, slice, currency }) {
     case 'tyre-failure-reasons':  return <TyreFailureWidget rows={rows} />
     case 'maintenance-by-type':   return <MaintenanceByTypeWidget rows={rows} />
     case 'top-maintenance-tasks': return <TopTasksWidget rows={rows} />
+    case 'open-work-orders':
+      return <StatTile label={def.label} value={derived.value} icon={Wrench} tone={derived.tone} sub={derived.sub} />
+    case 'work-orders-trend':
+      return <StatTile label={def.label} value={derived.value} icon={TrendingUp} tone="info" sub={derived.sub} delta={derived.delta ?? undefined} />
+    case 'fleet-location':        return <FleetLocationWidget rows={rows} />
+    case 'utilisation-trend':     return <UtilisationTrendWidget rows={rows} />
+    case 'workshop-jobs':         return <WorkshopJobsWidget rows={rows} />
+    case 'inspection-progress':   return <InspectionProgressWidget rows={rows} />
+    case 'data-freshness':        return <DataFreshnessWidget rows={rows} />
+    case 'inspection-heatmap':    return <InspectionHeatmapWidget rows={rows} />
+    case 'activity-timeline':     return <TimelineWidget rows={rows} />
     case 'maintenance-spend':
       return <StatTile label={def.label} value={derived.value} unit={derived.unit} icon={Wrench} tone="accent" sub={derived.sub} />
     default:

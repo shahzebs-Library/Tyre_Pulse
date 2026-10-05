@@ -92,3 +92,36 @@ describe('tollTransactionsView', () => {
     expect(out).toEqual([{ asset_no: 'TM9', amount: 1250.5, currency: 'SAR', plaza_name: 'North' }])
   })
 })
+
+describe('tollTransactionsView: card periods', () => {
+  it('filters rows to this month / this quarter, all keeps everything', async () => {
+    const { periodRows } = await import('../lib/tollTransactionsView')
+    expect(periodRows(rows, 'month', NOW).map((r) => r.id)).toEqual([1, 2, 4])
+    expect(periodRows(rows, 'quarter', NOW).map((r) => r.id)).toEqual([1, 2, 4])
+    expect(periodRows(rows, 'all', NOW)).toHaveLength(5)
+    expect(periodRows(rows, 'quarter', Date.UTC(2026, 8, 15)).map((r) => r.id)).toEqual([3])
+  })
+})
+
+describe('tollTransactionsView bulk selection', () => {
+  const rows = [{ id: 1, status: 'posted' }, { id: 2, status: 'reconciled' }, { id: '3', status: 'disputed' }]
+  it('returns only ticked visible rows, ids compared as text', async () => {
+    const { checkedRows } = await import('../lib/tollTransactionsView')
+    expect(checkedRows(rows, new Set(['1', 3, '99'])).map((r) => r.id)).toEqual([1, '3'])
+    expect(checkedRows(rows, new Set())).toEqual([])
+  })
+  it('select-all ticks every visible row, then clears them', async () => {
+    const { toggleAllChecked } = await import('../lib/tollTransactionsView')
+    const on = toggleAllChecked(rows, new Set(['1', 'hidden']))
+    expect([...on].sort()).toEqual(['1', '2', '3', 'hidden'])
+    const off = toggleAllChecked(rows, on)
+    expect([...off]).toEqual(['hidden'])
+  })
+  it('bulk plan skips rows already at the target status', async () => {
+    const { bulkStatusPlan } = await import('../lib/tollTransactionsView')
+    const p = bulkStatusPlan(rows, 'reconciled')
+    expect(p.total).toBe(3)
+    expect(p.unchanged).toBe(1)
+    expect(p.toChange.map((r) => r.id)).toEqual([1, '3'])
+  })
+})

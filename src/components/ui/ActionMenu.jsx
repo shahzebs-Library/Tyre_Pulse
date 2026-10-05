@@ -20,6 +20,10 @@ import useAnchoredPopover from './useAnchoredPopover'
  *   align     'left' | 'right'  menu alignment (default 'right')
  *   variant   'secondary' | 'primary'  button styling (default 'secondary')
  *   className extra classes on the trigger button
+ *   ariaLabel accessible name for the trigger (needed when label is empty)
+ *   caret     show the chevron on the trigger (default true)
+ *   bare      when true, `className` fully replaces the default button styling
+ *             (for icon-only triggers such as a row "more actions" button)
  */
 export default function ActionMenu({
   label,
@@ -31,6 +35,9 @@ export default function ActionMenu({
   align = 'right',
   variant = 'secondary',
   className = '',
+  ariaLabel,
+  caret = true,
+  bare = false,
 }) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef(null)
@@ -62,11 +69,13 @@ export default function ActionMenu({
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => !disabled && !busy && setOpen((o) => !o)}
+        onClick={(e) => { e.stopPropagation(); if (!disabled && !busy) setOpen((o) => !o) }}
         disabled={disabled || busy}
         aria-haspopup="menu"
         aria-expanded={open}
-        className={`${variant === 'primary' ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50 ${className}`}
+        aria-label={ariaLabel}
+        title={ariaLabel}
+        className={bare ? className : `${variant === 'primary' ? 'btn-primary' : 'btn-secondary'} flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50 ${className}`}
       >
         {busy ? (
           <>
@@ -77,7 +86,7 @@ export default function ActionMenu({
           <>
             {Icon && <Icon size={14} />}
             {label}
-            <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+            {caret && <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />}
           </>
         )}
       </button>
@@ -98,7 +107,8 @@ export default function ActionMenu({
                 role="menuitem"
                 disabled={item.disabled}
                 title={item.title}
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation()
                   if (item.disabled) return
                   setOpen(false)
                   item.onClick?.()

@@ -5,6 +5,25 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ SESSION 2026-10-05 (part 10) — SIGN-IN + 2FA IN MARKETING LOOK; 16 PAGES RE-MATCHED TO MOCKUPS; NEW BUILDER WIDGETS.
+- SIGN-IN (src/pages/Login.jsx + components/auth/login/*): marketing system (asphalt #161616, signal yellow #FFC629 as a FILL
+  behind dark text only, Archivo headline, slash logo), photo /login-art/riyadh-loader.webp (from marketing/public/photos).
+  OWNER: no numbers on the login (showcase fetch removed), no icon grids / nav / industry cards. One load entrance (photo
+  settles, headline rises, yellow bar draws), reduced-motion = fade. FIELD-LEVEL ERRORS: fieldErr {id,pw} (null ok, '' mark,
+  text = message under field) + shake; wrong creds mark both, message under password; form is noValidate.
+- 2FA (src/components/TwoFactorChallenge.jsx): six digit boxes, auto-advance, paste/autofill, auto-submit, Escape, shake+clear
+  on wrong code, backup-code mode, own TFA_CSS with html.light tokens.
+- kit PageHero gained `icon` prop = green module chip (light mockups). Every one of the 16 pages now has its OWN header
+  picture cropped from its own mockup (public/dashboard/hero-<key>-dark/light.webp: dailyops, replay, fuel, toll, market,
+  load, coaching, fueltheft re-cropped; policies kept) or the green chip. Never reuse another module's hero.
+- HARNESS GOTCHA: scratchpad harness_m16 had NO publicDir, so heroes rendered as black bands in screenshots and I misreported
+  pages as "blank". Fixed (publicDir + 5 s wait). Always confirm the image URL returns image/webp before judging a hero.
+- Toll Transactions chart cards default to "This quarter" (owner ruling). Dashboard Builder: owner approved new shared
+  widget types (map pin board without provider, text/note, image, progress, trend, status, heat map, timeline, stacked bar,
+  open work orders KPI).
+- Still data-bound (honest N/A, do not fake): fuel volume, toll operator/trip, trips/GPS, load axle weights, marketplace
+  reviews/badges, policy acknowledgments, coaching behaviour counts, report-share viewer identity.
+
 # ⚑ SESSION 2026-10-05 (part 9) — 16 MORE WEB PAGES REBUILT TO OWNER MOCKUPS (web only). Owner said push 2026-10-05.
 - PR #378 merged as eeb72cc3 (prod READY verified). Then the owner sent a 16-screen zip (scratchpad mz/): Scheduled Reports,
   Dashboard Builder, TV Display (DisplayDashboard), Smart Analytics (AiCommandCenter), Knowledge Base, Report Center, Report

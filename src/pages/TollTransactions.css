@@ -1,6 +1,21 @@
 /* Toll Transactions page. Only --cc-* tokens, so light and dark share one sheet. */
-.tt-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px; }
+.tt-head { position: relative; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; min-height: 124px; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--cc-border); }
+.tt-hero-img { position: absolute; inset: 0 0 0 26%; border-radius: 0 14px 14px 0; background-size: cover; background-position: center; pointer-events: none; overflow: hidden; }
+.tt-hero-img::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, var(--cc-hero-fade) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0) 62%, color-mix(in srgb, var(--cc-hero-fade) 55%, transparent) 100%); }
+.tt-head-copy, .tt-head-actions { position: relative; z-index: 1; }
 .tt-head-copy { min-width: 0; flex: 1 1 320px; }
+.tt-head-actions .cc-btn-ghost, .tt-head .cc-select { background-color: var(--cc-card); }
+.tt-menu-wrap { position: relative; display: inline-flex; }
+.tt-menu { position: absolute; top: calc(100% + 4px); right: 0; z-index: 20; min-width: 140px; display: flex; flex-direction: column; padding: 4px; border-radius: 10px; border: 1px solid var(--cc-border); background: var(--cc-card); box-shadow: var(--cc-shadow); }
+.tt-menu button { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 0; border-radius: 7px; background: none; color: var(--cc-ink); font: inherit; font-size: 12.5px; cursor: pointer; text-align: start; }
+.tt-menu button:hover { background: var(--cc-green-tint); }
+.tt-range { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--cc-ink-3); }
+.tt-range .cc-select { padding: 7px 10px; font-size: 12.5px; background-image: none; }
+.tt-head-sel { padding: 7px 28px 7px 10px; font-size: 12.5px; min-width: 150px; }
+.tt-card-sel { padding: 5px 26px 5px 9px; font-size: 11.5px; }
+.tt-ledger-tools { display: inline-flex; align-items: center; gap: 10px; }
+.tt-search { min-width: 220px; padding-top: 6px; padding-bottom: 6px; }
+.tt-more { font-size: 12.5px; font-weight: 600; color: var(--cc-ink-2); }
 .tt-crumb { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--cc-ink-3); }
 .tt-crumb span { color: var(--cc-ink-2); font-weight: 600; }
 .tt-head h1 { margin: 6px 0 4px; font-size: clamp(22px, 2.4vw, 28px); font-weight: 750; letter-spacing: -0.02em; color: var(--cc-ink); }
@@ -38,7 +53,8 @@
 
 .tt-filters { align-items: flex-end; }
 .tt-push { margin-left: auto; }
-.tt-tabbar { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; }
+.tt-tabbar { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 12px; padding: 8px 12px; }
+.tt-tabbar .cc-tabs { margin-bottom: 0; }
 .tt-chip { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--cc-ink-2); }
 
 .tt-ledger-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr); gap: 12px; align-items: start; }
@@ -103,6 +119,17 @@ input.tt-input, textarea.tt-input { background-image: none; cursor: text; }
   .tt-row3, .tt-two, .tt-two-wide, .tt-form-grid { grid-template-columns: minmax(0, 1fr); }
   .tt-head-actions, .tt-btn-row { align-items: stretch; justify-content: flex-start; width: 100%; }
   .tt-date { flex: 1 1 130px; }
+  .tt-hero-img { inset: 0; opacity: 0.45; border-radius: 14px; }
+  .tt-range { flex-wrap: wrap; width: 100%; }
+  .tt-range .cc-select { flex: 1 1 120px; min-width: 0; }
+  .tt-head-sel { flex: 1 1 140px; min-width: 0; }
+  .tt-ledger-tools, .tt-search { min-width: 0; width: 100%; }
+  .tt-banner { flex-wrap: wrap; }
   .tt-date .cc-select { min-width: 0; width: 100%; }
   .tt-push { margin-left: 0; }
 }
+
+/* Ledger tick-boxes + bulk bar */
+.tt-check { width: 15px; height: 15px; accent-color: var(--cc-green-strong); cursor: pointer; }
+.tt-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; padding: 8px 10px; border-radius: 10px; background: var(--cc-green-tint); border: 1px solid var(--cc-border); }
+.tt-bulk b { font-size: 13px; color: var(--cc-ink); margin-right: 4px; }

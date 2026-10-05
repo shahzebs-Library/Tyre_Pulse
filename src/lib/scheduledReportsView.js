@@ -106,8 +106,8 @@ export function scheduleStatus(s, latestRun, now) {
 export const STATUS_META = {
   active: { label: 'Active', tone: 'good', color: 'var(--cc-green)' },
   paused: { label: 'Paused', tone: 'warn', color: 'var(--cc-amber)' },
-  failing: { label: 'Failing', tone: 'bad', color: 'var(--cc-red)' },
-  expired: { label: 'Run once, done', tone: 'muted', color: 'var(--cc-ink-3)' },
+  failing: { label: 'Failed', tone: 'bad', color: 'var(--cc-red)' },
+  expired: { label: 'Inactive', tone: 'muted', color: 'var(--cc-ink-3)' },
 }
 
 export function healthSegments(schedules = [], runs = [], now) {
@@ -237,4 +237,50 @@ export function recipientOptions(schedules = []) {
   const set = new Set()
   for (const s of schedules) for (const e of s.recipients || []) if (e) set.add(String(e).trim().toLowerCase())
   return [...set].sort()
+}
+
+/** One or two capital letters for a recipient avatar: "ahmad.khan@x.com" -> "AK". */
+export function recipientInitials(email) {
+  const local = String(email || '').trim().split('@')[0]
+  const parts = local.split(/[._\-+\s]+/).filter((p) => /[a-z0-9]/i.test(p))
+  if (!parts.length) return '?'
+  const first = parts[0].match(/[a-z0-9]/i)[0]
+  const second = parts.length > 1 ? parts[1].match(/[a-z0-9]/i)[0] : ''
+  return (first + second).toUpperCase()
+}
+
+/**
+ * Turn a stored schedule row into the editor form shape. Shared by Edit and
+ * Duplicate so the two can never disagree about which fields carry over.
+ */
+export function scheduleToForm(s = {}) {
+  return {
+    name: s.name || '',
+    report_type: s.report_type || 'executive',
+    frequency: s.frequency || 'weekly',
+    day_of_week: s.day_of_week ?? 1,
+    day_of_month: s.day_of_month ?? 1,
+    time_of_day: s.time_of_day ?? '07:00',
+    run_at: s.run_at ? new Date(s.run_at).toISOString().slice(0, 16) : '',
+    start_date: s.start_date ?? '',
+    period: s.period ?? 'last_30',
+    period_from: s.period_from ?? '',
+    period_to: s.period_to ?? '',
+    output_formats: s.output_formats?.length ? [...s.output_formats] : ['pdf'],
+    recipients_raw: (s.recipients ?? []).join('\n'),
+    active: s.active ?? true,
+  }
+}
+
+/**
+ * Form for a copy of an existing schedule. The copy is named "<name> (copy)"
+ * and starts PAUSED, so saving a duplicate never sends a second set of emails
+ * to the same recipients until someone deliberately switches it on. A one-off
+ * schedule's run time is cleared because the original's moment has usually
+ * already passed.
+ */
+export function duplicateScheduleForm(s = {}) {
+  const f = scheduleToForm(s)
+  const base = f.name.trim() || 'Schedule'
+  return { ...f, name: `${base} (copy)`, active: false, run_at: f.frequency === 'once' ? '' : f.run_at }
 }

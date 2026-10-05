@@ -13,7 +13,8 @@ import {
   ChevronDown, ChevronUp, BarChart2, ChevronRight,
   ClipboardList, Cpu, Zap, Bot, Sparkles, MessageSquarePlus, Archive,
   TrendingUp, TrendingDown, Minus, Clock, Database, ShieldAlert, ShoppingCart,
-  AlertTriangle, CalendarDays, ShieldCheck, History, RotateCcw, Eye, Lightbulb, Coins, MessagesSquare,
+  AlertTriangle, CalendarDays, ShieldCheck, History, RotateCcw, Eye, Lightbulb, Coins,
+  BrainCircuit, Target,
 } from 'lucide-react'
 import { classifyQuery, AGENT_TYPES, AGENT_LABELS, AGENT_COLORS, AGENT_DESCRIPTIONS } from '../lib/aiRouter'
 import {
@@ -26,10 +27,10 @@ import { formatDateTime } from '../lib/formatters'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState } from '../lib/exportUtils'
-import { Card, CardState, Kpi, Tabs, KitTable, ViewAll, useCard } from '../components/commandCenter/kit'
+import { Card, CardState, Tabs, KitTable, ViewAll, useCard } from '../components/commandCenter/kit'
 import {
   MAX_QUESTION, SEVERITIES, agentTone, signalFeed, signalCounts, filterSignals,
-  aiKpis, traceRows, clampQuestion,
+  aiKpis, traceRows, clampQuestion, dailyCounts, signalPicture,
 } from '../lib/aiCommandCenterView'
 import './AiCommandCenter.css'
 
@@ -58,7 +59,31 @@ const AGENT_ICONS = {
 }
 
 const KPI_ICONS = {
-  critical: AlertTriangle, open: Lightbulb, requests: Zap, spend: Coins, success: ShieldCheck, conversations: MessagesSquare,
+  critical: Eye, open: Lightbulb, forecast: AlertTriangle, savings: Coins, success: ShieldCheck,
+}
+
+const TIME_RANGES = [
+  { key: 'all', label: 'Any period', suffix: '' },
+  { key: '7', label: 'Last 7 days', suffix: 'the last 7 days' },
+  { key: '30', label: 'Last 30 days', suffix: 'the last 30 days' },
+  { key: '90', label: 'Last 90 days', suffix: 'the last 90 days' },
+]
+
+/** Tiny bar sparkline for the headline tiles. Hidden when there is nothing to draw. */
+function MiniBars({ values = [], tone = 't-green' }) {
+  if (!values || values.length < 2 || !values.some((v) => v > 0)) return null
+  const max = Math.max(...values)
+  const w = 72
+  const h = 40
+  const bw = w / values.length
+  return (
+    <svg className={`ai-minibars ${tone}`} width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
+      {values.map((v, i) => {
+        const bh = max ? Math.max(1.5, (v / max) * (h - 2)) : 0
+        return <rect key={i} x={i * bw + bw * 0.15} y={h - bh} width={bw * 0.7} height={bh} rx={1} />
+      })}
+    </svg>
+  )
 }
 
 const TREND_ICON = (trend) => {
@@ -434,6 +459,20 @@ function TypingIndicator({ agentType }) {
 const USAGE_DAYS = 30
 const SEV_FILTERS = ['all', ...SEVERITIES]
 
+/** Forecast risk: active PM plans whose next due date falls in the next 30 days (or is overdue). */
+async function loadForecast() {
+  const d = new Date()
+  const until = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 30)
+  const key = `${until.getFullYear()}-${String(until.getMonth() + 1).padStart(2, '0')}-${String(until.getDate()).padStart(2, '0')}`
+  const { count, error } = await supabase
+    .from('pm_programs')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'active')
+    .lte('next_due', key)
+  if (error) throw error
+  return count ?? 0
+}
+
 async function loadSignals() {
   const { data, error } = await supabase
     .from('alerts')
@@ -475,6 +514,8 @@ export default function AiCommandCenter() {
   // Real fleet signals (active alerts) and real AI usage (ai_token_logs).
   const signals = useCard(loadSignals, [])
   const usage = useCard(() => getUsageOverview({ days: USAGE_DAYS }), [])
+  const forecast = useCard(loadForecast, [])
+  const [timeRange, setTimeRange] = useState('all')
 
   // ── Load initial context data ───────────────────────────────────────────────
 
@@ -525,7 +566,9 @@ export default function AiCommandCenter() {
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     const agentType = agentOverride || forcedAgent || classifyQuery(text)
 
-    const userMsg = { id: Date.now(), role: 'user', content: text, timestamp }
+    const range = TIME_RANGES.find((r) => r.key === timeRange)
+    const sendText = range?.suffix ? `${text}\n\n(Time range for this question: ${range.suffix}.)` : text
+    const userMsg = { id: Date.now(), role: 'user', content: sendText, timestamp }
     setMessages(prev => [...prev, userMsg])
     setQuery('')
     setLoading(true)
@@ -534,7 +577,7 @@ export default function AiCommandCenter() {
 
     try {
       const result = await sendOrchestratorMessage({
-        message: text,
+        message: sendText,
         conversationId,
         agent: agentType || 'auto',
       })
@@ -581,7 +624,7 @@ export default function AiCommandCenter() {
         setActiveAgent(null)
       }
     }
-  }, [query, loading, conversationId, refreshConversations, forcedAgent])
+  }, [query, loading, conversationId, refreshConversations, forcedAgent, timeRange])
 
   function handleKeyDown(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -698,8 +741,15 @@ export default function AiCommandCenter() {
     usageReady: !!usage.data && !usage.error,
     conversations,
     conversationsReady: !historyLoading && !historyError,
+    forecast: forecast.data,
+    forecastReady: forecast.data != null && !forecast.error,
     days: USAGE_DAYS,
-  }), [feed, signals.data, signals.error, usage.data, usage.error, conversations, historyLoading, historyError])
+  }), [feed, signals.data, signals.error, usage.data, usage.error, conversations, historyLoading, historyError, forecast.data, forecast.error])
+  const kpiSeries = useMemo(() => ({
+    critical: dailyCounts(feed.filter((x) => x.severity === 'Critical'), now, 14, (x) => (x.at ? new Date(x.at).toISOString() : null)),
+    open: dailyCounts(feed.filter((x) => x.severity !== 'Critical'), now, 14, (x) => (x.at ? new Date(x.at).toISOString() : null)),
+    success: dailyCounts(usage.data?.summary?.byDay || [], now, 14, (d) => (d.date ? `${d.date}T12:00:00` : null), (d) => d.calls),
+  }), [feed, now, usage.data])
   const trace = useMemo(() => traceRows(conversations), [conversations])
   const rangeLabel = useMemo(() => {
     const from = new Date(now.getTime() - USAGE_DAYS * 86400000)
@@ -708,7 +758,8 @@ export default function AiCommandCenter() {
   }, [now])
   const routedAgent = forcedAgent || previewAgent
   const prompts = showAllPrompts ? QUICK_ACTIONS : QUICK_ACTIONS.slice(0, 4)
-  const kpiLoading = { critical: signals.loading, open: signals.loading, requests: usage.loading, spend: usage.loading, success: usage.loading, conversations: historyLoading }
+  const kpiLoading = { critical: signals.loading, open: signals.loading, forecast: forecast.loading, savings: false, success: usage.loading }
+  const usageLine = kpis.usageLine
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -720,7 +771,7 @@ export default function AiCommandCenter() {
             Analytics &amp; Reports <ChevronRight size={13} aria-hidden="true" /> <span aria-current="page">Smart Analytics (AI)</span>
           </nav>
           <div className="ai-title-row">
-            <span className="ai-title-icon" aria-hidden="true"><Bot size={26} /></span>
+            <span className="ai-title-icon" aria-hidden="true"><BrainCircuit size={26} /></span>
             <div>
               <h1>Smart Analytics (AI)</h1>
               <p>Multi-agent fleet intelligence using Analyst, Tyre Engineer, QA, Planner, Safety and Procurement agents, with the sources each answer read.</p>
@@ -740,19 +791,22 @@ export default function AiCommandCenter() {
         </div>
       </header>
 
-      <div className="cc-kpis ai-kpis">
-        {kpis.map((k) => (
-          <Kpi
-            key={k.key}
-            icon={KPI_ICONS[k.key]}
-            tone={k.tone}
-            value={k.value}
-            display={k.display ?? (k.value == null && !kpiLoading[k.key] ? 'N/A' : undefined)}
-            loading={kpiLoading[k.key]}
-            danger={k.danger}
-            label={<>{k.label}<span className="ai-kpi-sub">{k.sub}</span></>}
-          />
-        ))}
+      <div className="ai-kpis">
+        {kpis.map((k) => {
+          const Icon = KPI_ICONS[k.key]
+          const val = kpiLoading[k.key] ? '...' : (k.display ?? (k.value == null ? 'N/A' : k.value.toLocaleString('en-US')))
+          return (
+            <div key={k.key} className="cc-card ai-kpi">
+              <span className={`ai-kpi-icon ${k.tone}`}><Icon size={24} aria-hidden="true" /></span>
+              <span className="ai-kpi-body">
+                <span className="ai-kpi-label">{k.label}</span>
+                <b className={`ai-kpi-val ${k.display === 'Not recorded' ? 'is-none' : ''}`} style={k.danger ? { color: 'var(--cc-red)' } : undefined}>{val}</b>
+                <span className="ai-kpi-sub">{k.sub}</span>
+              </span>
+              <MiniBars values={kpiSeries[k.key]} tone={k.tone} />
+            </div>
+          )
+        })}
       </div>
 
       <div className="ai-grid">
@@ -790,19 +844,27 @@ export default function AiCommandCenter() {
                   const AgentIcon = AGENT_ICONS[s.agent] ?? Bot
                   return (
                     <li key={s.id} className="ai-signal">
-                      <span className={`ai-signal-icon tone-${s.tone}`} aria-hidden="true"><AlertTriangle size={20} /></span>
+                      <img className="ai-signal-pic" src={signalPicture(s)} alt="" loading="lazy" />
                       <div className="ai-signal-main">
                         <div className="ai-signal-title">
                           <b>{s.title}</b>
                           <span className={`cc-pill ${s.tone}`}>{s.severity}</span>
                         </div>
                         <p title={s.message}>{s.message}</p>
-                        <span className="ai-signal-meta">{[s.asset, s.country, s.ago].filter(Boolean).join(' : ') || 'No asset recorded'}</span>
+                        {s.country && <span className="ai-signal-meta">{s.country}</span>}
                       </div>
                       <span className={`cc-pill ${tone.pill} ai-agent-chip`}><AgentIcon size={12} aria-hidden="true" /> {s.agentLabel} Agent</span>
+                      <span className="ai-signal-metric">
+                        <b><Target size={13} aria-hidden="true" /> {s.asset || 'N/A'}</b>
+                        <small>Asset</small>
+                      </span>
+                      <span className="ai-signal-metric">
+                        <b><Clock size={13} aria-hidden="true" /> {s.ago || 'N/A'}</b>
+                        <small>Raised</small>
+                      </span>
                       <button type="button" className="cc-btn ai-ask-btn" disabled={loading}
-                        onClick={() => sendMessage(s.question, s.agent)}>
-                        Ask agent
+                        onClick={() => sendMessage(s.question, s.agent)} title={`Send to the ${s.agentLabel} agent`}>
+                        View Details
                       </button>
                     </li>
                   )
@@ -884,12 +946,22 @@ export default function AiCommandCenter() {
           </div>
 
           <div className="ai-evidence">
-            <span className="ai-label">Evidence and scope</span>
-            <ul>
-              <li><Check size={14} aria-hidden="true" /> Every answer lists the records and sources it read.</li>
-              <li><Check size={14} aria-hidden="true" /> Answers are read-only recommendations; nothing is changed in your data.</li>
-              <li><Check size={14} aria-hidden="true" /> Data scope follows your access: organisation, country and site.</li>
-            </ul>
+            <div className="ai-evidence-checks">
+              <span className="ai-label">Evidence controls</span>
+              <label title="Always on: every answer lists what it read"><input type="checkbox" checked readOnly disabled /> Cite source records</label>
+              <label title="Always on: answers come from your records and approved knowledge"><input type="checkbox" checked readOnly disabled /> Use approved knowledge only</label>
+              <label title="Always on: nothing is changed in your data"><input type="checkbox" checked readOnly disabled /> Read-only recommendations</label>
+            </div>
+            <div className="ai-evidence-scope">
+              <label className="ai-label" htmlFor="ai-scope">Data scope</label>
+              <select id="ai-scope" className="cc-select" value="access" disabled title="Data scope follows your access: organisation, country and site">
+                <option value="access">Your sites (by access)</option>
+              </select>
+              <label className="ai-label" htmlFor="ai-range">Time range</label>
+              <select id="ai-range" className="cc-select" value={timeRange} onChange={(e) => setTimeRange(e.target.value)} disabled={loading}>
+                {TIME_RANGES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+              </select>
+            </div>
           </div>
 
           <div className="ai-run">
@@ -897,14 +969,24 @@ export default function AiCommandCenter() {
               {loading ? <RefreshCw size={16} className="animate-spin" aria-hidden="true" /> : <Sparkles size={16} aria-hidden="true" />}
               {loading ? 'Running analysis...' : 'Run Analysis'}
             </button>
-            <button type="button" className="cc-btn-ghost" onClick={() => { setQuery(''); setForcedAgent(null) }} disabled={loading}>
+            <button type="button" className="cc-btn-ghost" onClick={() => { setQuery(''); setForcedAgent(null); setTimeRange('all') }} disabled={loading}>
               <RotateCcw size={14} aria-hidden="true" /> Clear
             </button>
           </div>
+          <p className="ai-usage">
+            <Zap size={12} aria-hidden="true" /> AI usage, last {USAGE_DAYS} days:{' '}
+            {usage.loading ? 'loading' : usage.error ? 'could not be read' : (
+              <>
+                {usageLine.requests ?? 'N/A'} requests{usageLine.failed ? ` (${usageLine.failed} failed)` : ''}, {usageLine.spend ?? 'N/A'} model cost
+              </>
+            )}
+            {', '}{usageLine.conversations == null ? 'history not loaded' : `${usageLine.conversations} saved conversations`}
+          </p>
         </Card>
       </div>
 
       <div ref={chatRef}>
+        {(messages.length > 0 || loading) && (
         <Card
           title="Conversation"
           sub={conversationId ? 'Saved to your history as you go' : 'A new conversation starts with your first question'}
@@ -937,12 +1019,13 @@ export default function AiCommandCenter() {
           )}
           <p className="ai-muted ai-disclaimer">AI responses are generated from your fleet data. Always validate critical decisions with your engineering team.</p>
         </Card>
+        )}
       </div>
 
       <div ref={traceRef}>
         <Card
           title="Prediction & Recommendation Trace"
-          sub="Saved conversations and the agent that answered. Confidence and predicted impact are not stored per answer, so they are not shown."
+          sub="Saved conversations and the agent that answered. Confidence and predicted impact are not stored per answer."
           action={(
             <button type="button" className="cc-btn" onClick={clearChat} disabled={loading}>
               <MessageSquarePlus size={13} aria-hidden="true" /> New chat
@@ -962,17 +1045,20 @@ export default function AiCommandCenter() {
             onRowClick={(r) => { const c = conversations.find((x) => x.id === r.id); if (c) openConversation(c) }}
             columns={[
               { key: 'n', header: '#', numeric: true },
-              { key: 'title', header: 'Conversation', cell: (r) => <span className={`ai-trace-title ${conversationId === r.id ? 'is-open' : ''}`} title={r.title}>{r.title}</span> },
+              { key: 'title', header: 'Insight', cell: (r) => <span className={`ai-trace-title ${conversationId === r.id ? 'is-open' : ''}`} title={r.title}>{r.title}</span> },
               {
                 key: 'agent', header: 'Agent',
                 cell: (r) => <span className={`cc-pill ${agentTone(r.agent).pill}`}>{r.agentLabel}</span>,
               },
-              { key: 'created', header: 'Started', cell: (r) => (r.created ? formatDateTime(r.created) : <span className="cc-na">N/A</span>) },
-              { key: 'updated', header: 'Last Updated', cell: (r) => (r.updated ? formatDateTime(r.updated) : <span className="cc-na">N/A</span>) },
+              { key: 'evidence', header: 'Evidence', sortable: false, cell: () => <span className="cc-na" title="Sources are listed inside each answer, not stored per conversation">In the answer</span> },
+              { key: 'confidence', header: 'Confidence', sortable: false, cell: () => <span className="cc-na" title="Confidence is not stored per answer">Not stored</span> },
+              { key: 'impact', header: 'Predicted Impact', sortable: false, cell: () => <span className="cc-na" title="Predicted impact is not stored per answer">Not stored</span> },
+              { key: 'action', header: 'Recommended Action', sortable: false, cell: () => <span className="cc-na" title="Open the conversation to read the recommendation">Open to read</span> },
               {
                 key: 'status', header: 'Status', sortable: false,
                 cell: (r) => <span className={`cc-pill ${conversationId === r.id ? 'good' : 'muted'}`}>{conversationId === r.id ? 'Open now' : 'Saved'}</span>,
               },
+              { key: 'updated', header: 'Last Updated', cell: (r) => (r.updated ? formatDateTime(r.updated) : <span className="cc-na">N/A</span>) },
               {
                 key: 'actions', header: 'Actions', sortable: false,
                 cell: (r) => (

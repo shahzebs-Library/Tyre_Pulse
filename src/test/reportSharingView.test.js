@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   filterShareRows, shareKpis, expiryText, relativeAgo, viewsByLink, viewsByStatus, boardList, shareDetail,
+  channelOf, channelCounts, viewsByChannel,
 } from '../lib/reportSharingView'
 import { enrichShares, summarizeShares, STATUS_META } from '../lib/reportSharingAnalytics'
 
@@ -55,5 +56,40 @@ describe('text helpers', () => {
     expect(d.lastViewed).toBe('Never viewed')
     expect(d.expires).toBe('Never')
     expect(shareDetail(null)).toBeNull()
+  })
+})
+
+describe('channels', () => {
+  const extra = enrichShares([
+    ...RAW,
+    { id: 'w', name: 'Workshop wall', pages: ['workshop_live'], layout: null, active: true, created_at: '2026-10-01T00:00:00Z', view_count: 5, expires_at: null },
+  ], { now: NOW })
+  it('derives the channel from the board behind the link', () => {
+    const by = Object.fromEntries(extra.map((r) => [r.id, channelOf(r)]))
+    expect(by).toEqual({ a: 'link', b: 'tv', c: 'link', w: 'workshop' })
+  })
+  it('counts live links per channel and leaves expired out', () => {
+    expect(channelCounts(extra)).toEqual({ link: 1, tv: 1, workshop: 1 })
+  })
+  it('splits views by channel and filters by channel and access', () => {
+    expect(viewsByChannel(extra).map((s) => [s.key, s.count])).toEqual([['link', 15], ['workshop', 5]])
+    expect(filterShareRows(extra, { channel: 'workshop' }).map((r) => r.id)).toEqual(['w'])
+    expect(filterShareRows(extra, { access: 'edit' })).toEqual([])
+    expect(filterShareRows(extra, { access: 'view' })).toHaveLength(4)
+  })
+})
+
+describe('reportSharingView row actions', () => {
+  it('offers copy, open, manage and revoke with honest reasons', async () => {
+    const { shareRowActions } = await import('../lib/reportSharingView')
+    const ok = shareRowActions({ id: 1, token: 'rpt_x', status: 'active' })
+    expect(ok.map((a) => a.key)).toEqual(['copy', 'open', 'manage', 'revoke'])
+    expect(ok.every((a) => !a.disabled)).toBe(true)
+    const expired = shareRowActions({ id: 2, token: 'rpt_y', status: 'expired' })
+    expect(expired.find((a) => a.key === 'open')).toMatchObject({ disabled: true, reason: expect.stringMatching(/expired/) })
+    expect(expired.find((a) => a.key === 'copy').disabled).toBe(false)
+    const noToken = shareRowActions({ id: 3, status: 'active' })
+    expect(noToken.find((a) => a.key === 'copy').disabled).toBe(true)
+    expect(noToken.find((a) => a.key === 'revoke')).toMatchObject({ disabled: false, danger: true })
   })
 })

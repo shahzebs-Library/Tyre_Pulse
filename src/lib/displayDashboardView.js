@@ -128,6 +128,7 @@ export function liveAlertRows(alerts = [], now, limit = 6) {
         tone: SEV_TONE[sev],
         message: (a?.message && String(a.message).trim()) || 'Alert',
         asset: a?.asset_no || '',
+        site: (a?.site && String(a.site).trim()) || '',
         ago: agoText(a?.created_at, now),
         at: a?.created_at ? new Date(a.created_at).getTime() : 0,
       }
@@ -179,7 +180,7 @@ export function rotationRows(boards = [], enabled = {}, { rotateSecs = 30, activ
       key: b.key,
       label: b.label,
       duration: `${rotateSecs} sec`,
-      scope: 'All sites you can see',
+      scope: 'All sites',
       on,
       live: b.key === activeKey,
       state: !on ? 'Off' : b.key === activeKey ? (autoRotate ? 'On screen' : 'Paused on screen') : 'Queued',
@@ -255,4 +256,145 @@ export function clockParts(now) {
   const date = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
   const time = `${d.toLocaleDateString('en-GB', { weekday: 'short' })} ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
   return { date, time }
+}
+
+/* ── Operations summary period + map board (fix round, mockup parity) ───── */
+
+export const OPS_PERIODS = [
+  { key: 'today', label: 'Today' },
+  { key: '7d', label: 'Last 7 days' },
+  { key: 'mtd', label: 'Month to date' },
+]
+
+const dayKey = (d) => {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${dd}`
+}
+
+/**
+ * Local-calendar window for an Operations Summary period. `from`/`to` are
+ * YYYY-MM-DD (inclusive) built from local getters, never toISOString.
+ */
+export function opsPeriodRange(key, now) {
+  const d = now instanceof Date ? now : new Date(now)
+  const end = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  let start = end
+  if (key === '7d') start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 6)
+  else if (key === 'mtd') start = new Date(end.getFullYear(), end.getMonth(), 1)
+  const days = Math.round((end - start) / 86400000) + 1
+  const label = OPS_PERIODS.find((p) => p.key === key)?.label || 'Today'
+  return { from: dayKey(start), to: dayKey(end), days, label }
+}
+
+/** Earliest date any period can ask for: the sooner of month start and 7 days ago. */
+export function opsLoadStart(now) {
+  const a = opsPeriodRange('mtd', now).from
+  const b = opsPeriodRange('7d', now).from
+  return a < b ? a : b
+}
+
+const inRange = (v, from, to) => {
+  if (!v) return false
+  const k = String(v).slice(0, 10)
+  return k >= from && k <= to
+}
+
+/** Tyre spend per currency inside an explicit window (same rules as monthSpendByCurrency). */
+export function spendByCurrency(rows = [], { from, to }) {
+  const by = {}
+  let unknownCountry = 0
+  let priced = 0
+  for (const r of rows) {
+    if (!inRange(r?.issue_date, from, to)) continue
+    const cost = num(r.cost_per_tyre)
+    if (cost == null || cost <= 0) continue
+    const qty = num(r.qty) && num(r.qty) > 0 ? num(r.qty) : 1
+    priced += 1
+    const currency = COUNTRY_CURRENCY[r.country]
+    if (!currency) { unknownCountry += 1; continue }
+    const b = (by[r.country] ||= { country: r.country, currency, amount: 0, tyres: 0 })
+    b.amount += cost * qty
+    b.tyres += qty
+  }
+  const lines = Object.values(by)
+    .map((b) => ({ ...b, amount: Math.round(b.amount) }))
+    .sort((a, b) => a.country.localeCompare(b.country))
+  return { lines, unknownCountry, priced }
+}
+
+/**
+ * One value per day across the window (zero-filled), for the mini bar charts.
+ * `valueOf(row)` returns the number to add, or null to skip the row.
+ */
+export function dailySeries(rows = [], { from, to }, dateKey, valueOf = () => 1) {
+  const out = []
+  const idx = {}
+  const [y, m, d] = from.split('-').map(Number)
+  for (let t = new Date(y, m - 1, d); dayKey(t) <= to; t = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1)) {
+    idx[dayKey(t)] = out.length
+    out.push(0)
+    if (out.length > 62) break
+  }
+  for (const r of rows) {
+    const k = r?.[dateKey] ? String(r[dateKey]).slice(0, 10) : null
+    if (k == null || idx[k] == null) continue
+    const v = valueOf(r)
+    if (v == null || !Number.isFinite(v)) continue
+    out[idx[k]] += v
+  }
+  return out
+}
+
+/**
+ * Production in the window from production_logs. Approved m3 is the counted
+ * quantity; a load with no approved figure is NOT counted (V523 rule).
+ * @returns {{ m3:number|null, loads:number, series:number[] }}
+ */
+export function productionSummary(rows = [], range) {
+  const kept = rows.filter((r) => inRange(r?.period_date, range.from, range.to))
+  const approved = kept.filter((r) => num(r.approved_m3) != null)
+  const m3 = approved.length ? Math.round(approved.reduce((t, r) => t + num(r.approved_m3), 0)) : null
+  return {
+    m3,
+    loads: approved.length,
+    series: dailySeries(approved, range, 'period_date', (r) => num(r.approved_m3)),
+  }
+}
+
+/**
+ * Site board for the "Live Fleet Map" card. There is no GPS feed, so every
+ * site is a pin with its registered vehicles and today's activity.
+ * Tone: alert > workshop > inspection > active > inactive.
+ */
+export function siteBoard({ fleet = [], jobs = [], inspectionsToday = [], alerts = [] } = {}) {
+  const norm = (v) => (v && String(v).trim()) || 'Unassigned'
+  const by = {}
+  const get = (site) => (by[site] ||= { site, vehicles: 0, active: 0, inactive: 0, workshop: 0, inspection: 0, alerts: 0 })
+  for (const v of fleet) {
+    const b = get(norm(v?.site))
+    b.vehicles += 1
+    if (!v?.status || v.status === 'Active') b.active += 1
+    else b.inactive += 1
+  }
+  for (const j of jobs) get(norm(j?.site)).workshop += 1
+  for (const i of inspectionsToday) get(norm(i?.site)).inspection += 1
+  for (const a of alerts) if (a?.severity === 'Critical' && a?.site) get(norm(a.site)).alerts += 1
+  const rows = Object.values(by).map((b) => ({
+    ...b,
+    tone: b.alerts ? 'alert' : b.workshop ? 'workshop' : b.inspection ? 'inspection' : b.active ? 'active' : 'inactive',
+  })).sort((a, b) => b.vehicles - a.vehicles || a.site.localeCompare(b.site))
+  const sum = (k) => rows.reduce((t, r) => t + r[k], 0)
+  const criticalAll = alerts.filter((a) => a?.severity === 'Critical').length
+  return {
+    sites: rows,
+    legend: [
+      { key: 'active', label: 'Active', count: sum('active') },
+      { key: 'alert', label: 'Alert', count: criticalAll },
+      { key: 'workshop', label: 'Workshop', count: sum('workshop') },
+      { key: 'inspection', label: 'Inspection', count: sum('inspection') },
+      { key: 'inactive', label: 'Inactive', count: sum('inactive') },
+    ],
+  }
 }

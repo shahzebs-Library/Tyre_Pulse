@@ -92,6 +92,8 @@ html.light .cc-select { background-color: #fff; }
 .cc-hero-img::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, var(--cc-hero-fade) 0%, rgba(0,0,0,0) 26%, rgba(0,0,0,0) 78%, var(--cc-hero-fade) 100%); }
 html.light .cc-hero-img::after { background: linear-gradient(90deg, var(--cc-hero-fade) 0%, rgba(246,247,249,0) 26%, rgba(246,247,249,0) 80%, var(--cc-hero-fade) 100%); }
 .cc-hero-copy { position: relative; padding: 6px 4px; max-width: 60%; }
+.cc-hero-icon { position: relative; flex-shrink: 0; width: 56px; height: 56px; margin-inline-end: 16px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; background: #16a34a; color: #fff; box-shadow: 0 8px 20px rgba(22,163,74,0.28); }
+@media (max-width: 640px) { .cc-hero-icon { width: 44px; height: 44px; margin-inline-end: 12px; } }
 .cc-hero-hello { font-size: 14px; color: var(--cc-ink-2); margin: 0; }
 .cc-hero h1 { font-size: clamp(22px, 2.4vw, 31px); font-weight: 800; letter-spacing: -0.02em; margin: 4px 0 6px; color: var(--cc-ink); line-height: 1.1; }
 .cc-hero-lead { font-size: 13.5px; color: var(--cc-ink-2); margin: 0; }

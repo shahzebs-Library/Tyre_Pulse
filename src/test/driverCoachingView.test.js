@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   riskLevel, harshPer100Km, topBehaviours, driverHistory, buildCoachingQueue, filterQueue,
   scoreTrend, latestSession, driverTotals, coachingHeadline, behaviourTrends,
+  phasedTrend, coachOptions, workWeek, weekLabel,
 } from '../lib/driverCoachingView'
 
 const rows = [
@@ -59,5 +60,32 @@ describe('driverCoachingView', () => {
     expect(t.harsh.change).toBe(-70)
     expect(t.idling.series.map((s) => s.value)).toEqual([40, 20])
     expect(behaviourTrends([{ period: 'x' }]).harsh.change).toBeNull()
+  })
+
+  it('splits score points before and after the first completed coaching', () => {
+    const pts = phasedTrend([{ status: 'recommended' }, { status: 'completed' }, { status: 'none' }])
+    expect(pts.map((p) => p.phase)).toEqual(['before', 'after', 'after'])
+    expect(phasedTrend([{ status: 'none' }])[0].phase).toBe('before')
+  })
+
+  it('lists coaches and builds a Monday to Friday week', () => {
+    expect(coachOptions(buildCoachingQueue(rows))).toEqual(['SR'])
+    const wk = workWeek(new Date(2026, 9, 7, 10), 0) // Wed 7 Oct 2026
+    expect(wk.map((d) => d.iso)).toEqual(['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09'])
+    expect(wk.filter((d) => d.isToday).map((d) => d.iso)).toEqual(['2026-10-07'])
+    expect(workWeek(new Date(2026, 9, 7), 1)[0].iso).toBe('2026-10-12')
+    expect(weekLabel(wk)).toBe('5 to 9 Oct 2026')
+  })
+})
+
+describe('driverCoachingView export scopes', () => {
+  it('offers shown rows and the selected driver history with counts', async () => {
+    const { exportScopes } = await import('../lib/driverCoachingView')
+    const sc = exportScopes({ shown: [1, 2, 3], history: [1], driverName: 'Ali Khan' })
+    expect(sc.map((s) => s.label)).toEqual(['Shown scorecards (3)', 'Ali Khan history (1)'])
+    expect(sc.every((s) => !s.disabled)).toBe(true)
+    const none = exportScopes({ shown: [], history: [] })
+    expect(none[0].disabled).toBe(true)
+    expect(none[1]).toMatchObject({ label: 'Selected driver history', disabled: true })
   })
 })

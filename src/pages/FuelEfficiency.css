@@ -1,6 +1,25 @@
 /* Fuel Efficiency page. Only --cc-* tokens, so light and dark share one sheet. */
-.fe-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px; }
+.fe-head { position: relative; display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px; min-height: 124px; padding: 14px 16px; border-radius: 14px; overflow: hidden; border: 1px solid var(--cc-border); }
+.fe-hero-img { position: absolute; inset: 0 0 0 26%; background-size: cover; background-position: center; pointer-events: none; }
+.fe-hero-img::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, var(--cc-hero-fade) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0) 62%, color-mix(in srgb, var(--cc-hero-fade) 55%, transparent) 100%); }
+.fe-head-copy, .fe-head-actions { position: relative; z-index: 1; }
+.fe-head-actions { align-self: flex-start; margin-top: 18px; }
+.fe-head-actions .cc-btn-ghost, .fe-head-actions .cc-icon-btn { background: var(--cc-card); }
 .fe-head-copy { min-width: 0; flex: 1 1 320px; }
+.fe-on { border-color: var(--cc-green); color: var(--cc-green); background: var(--cc-green-tint); }
+.fe-card-ctrls { display: inline-flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.fe-card-ctrls .cc-select, .fe-card-sel { padding: 5px 26px 5px 9px; font-size: 11.5px; }
+.fe-compare { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; padding: 8px 10px; margin-bottom: 8px; border-radius: 10px; background: var(--cc-inner); border: 1px solid var(--cc-inner-border); font-size: 12px; color: var(--cc-ink-2); }
+.fe-compare b { color: var(--cc-ink); margin-left: 4px; }
+.fe-compare small { flex-basis: 100%; font-size: 11px; color: var(--cc-ink-3); }
+.fe-out { display: flex; align-items: flex-start; gap: 10px; }
+.fe-out > span { display: flex; flex-direction: column; }
+.fe-out-ic { flex: none; color: var(--cc-green); margin-top: 2px; }
+.fe-out-ic.amber { color: var(--cc-amber); }
+.fe-asset { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.fe-muted { color: var(--cc-ink-3); font-variant-numeric: tabular-nums; }
+.fe-page .cc-tabs { flex-wrap: wrap; }
+#fe-details .cc-card-head { flex-wrap: wrap; gap: 8px; }
 .fe-crumb { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--cc-ink-3); }
 .fe-crumb span { color: var(--cc-ink-2); font-weight: 600; }
 .fe-head h1 { margin: 6px 0 4px; font-size: clamp(22px, 2.4vw, 28px); font-weight: 750; letter-spacing: -0.02em; color: var(--cc-ink); }
@@ -38,7 +57,7 @@ input.fe-input { background-image: none; cursor: text; }
 .fe-impact h3 { margin: 0 0 8px; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--cc-ink); }
 .fe-impact dl { margin: 0; display: flex; flex-direction: column; gap: 10px; }
 .fe-impact dt { font-size: 11.5px; color: var(--cc-ink-3); }
-.fe-impact dd { margin: 1px 0 0; font-size: 19px; font-weight: 750; color: var(--cc-green); font-variant-numeric: tabular-nums; }
+.fe-impact dd { margin: 0; font-size: 19px; font-weight: 750; color: var(--cc-green); font-variant-numeric: tabular-nums; }
 .fe-impact small { font-size: 10.5px; color: var(--cc-ink-3); }
 .fe-run { margin-top: 12px; justify-content: center; }
 
@@ -81,4 +100,5 @@ input.fe-input { background-image: none; cursor: text; }
   .fe-row3, .fe-calc-grid { grid-template-columns: minmax(0, 1fr); }
   .fe-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .fe-head-actions { justify-content: flex-start; width: 100%; }
+  .fe-hero-img { inset: 0; opacity: 0.45; }
 }

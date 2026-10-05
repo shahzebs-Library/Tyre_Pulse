@@ -18,19 +18,24 @@ export const LIBRARY_TABS = Object.freeze([
 
 /** Widget kind to library section. */
 const KIND_SECTION = Object.freeze({
-  stat: 'kpi', gauge: 'kpi',
-  line: 'visual', bar: 'visual', donut: 'visual',
-  list: 'data',
+  stat: 'kpi', gauge: 'kpi', progress: 'kpi', trend: 'kpi', badge: 'kpi',
+  line: 'visual', bar: 'visual', donut: 'visual', stacked: 'visual', heatmap: 'visual', map: 'visual',
+  list: 'data', timeline: 'data',
+  note: 'media', image: 'media',
 })
 
 export const LIBRARY_SECTIONS = Object.freeze([
   { key: 'kpi', label: 'KPI Widgets', tab: 'kpis' },
   { key: 'visual', label: 'Charts & Visuals', tab: 'visuals' },
   { key: 'data', label: 'Data Widgets', tab: 'data' },
+  { key: 'media', label: 'Text & Media', tab: 'visuals' },
 ])
 
 export const KIND_LABEL = Object.freeze({
   stat: 'KPI card', gauge: 'Gauge', line: 'Line chart', bar: 'Bar chart', donut: 'Donut chart', list: 'Data list',
+  progress: 'Progress bar', trend: 'Trend indicator', badge: 'Status badge',
+  stacked: 'Stacked bar', heatmap: 'Heat map', map: 'Site board', timeline: 'Timeline',
+  note: 'Text / note', image: 'Image / logo',
 })
 
 export function sectionOf(kind) {
@@ -69,7 +74,8 @@ export function canvasSummary(layout, byId = {}) {
   for (const w of widgets) {
     const def = byId[w.widgetId]
     if (!def) continue
-    if (def.data?.source) sources.add(def.data.source)
+    // Note / Image widgets read no data, so they are not a live source.
+    if (def.data?.source && def.data.source !== 'static') sources.add(def.data.source)
     categories[def.category] = (categories[def.category] || 0) + 1
   }
   return {
@@ -124,8 +130,8 @@ export function gridColumns(device, canvasWidth) {
   if (d.cols) return d.cols
   const w = Number(canvasWidth)
   if (!Number.isFinite(w) || w <= 0) return 4
-  if (w < 560) return 1
-  if (w < 900) return 2
+  if (w < 520) return 1
+  if (w < 640) return 2
   return 4
 }
 

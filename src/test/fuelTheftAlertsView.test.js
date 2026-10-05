@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   fuelHeadline, rangeBounds, dailyVariance, isAfterHours, afterHoursSplit, hotspotBand,
-  locationHotspots, alertTimeline, recommendedActions,
+  locationHotspots, alertTimeline, recommendedActions, cardMisuseRows, locationOptions,
 } from '../lib/fuelTheftAlertsView'
 
 const at = (y, m, d, h = 12) => new Date(y, m - 1, d, h, 0, 0).toISOString()
@@ -61,5 +61,22 @@ describe('fuelTheftAlertsView', () => {
     expect(recommendedActions({ status: 'open', severity: 'high' })).toHaveLength(5)
     expect(recommendedActions({ status: 'open', severity: 'low' })).toHaveLength(4)
     expect(recommendedActions({ status: 'resolved' })).toHaveLength(1)
+  })
+
+  it('groups repeat loss by asset with honest null litres and worst band', () => {
+    const list = cardMisuseRows([
+      { asset_no: 'A1', severity: 'low', drop_litres: 10 },
+      { asset_no: 'A1', severity: 'critical', drop_litres: 5 },
+      { asset_no: 'B2', severity: 'medium' },
+      { severity: 'high' },
+    ])
+    expect(list[0]).toEqual({ asset_no: 'A1', alerts: 2, litres: 15, band: 'high' })
+    expect(list[1]).toEqual({ asset_no: 'B2', alerts: 1, litres: null, band: 'medium' })
+    expect(list).toHaveLength(2)
+    expect(cardMisuseRows([])).toEqual([])
+  })
+
+  it('lists distinct locations case-insensitively', () => {
+    expect(locationOptions(rows)).toEqual(['East Depot', 'West Hub'])
   })
 })

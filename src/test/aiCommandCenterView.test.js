@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   signalFeed, signalCounts, filterSignals, aiKpis, traceRows, clampQuestion, MAX_QUESTION, agentTone, agoText,
+  dailyCounts, signalPicture,
 } from '../lib/aiCommandCenterView'
 import { AGENT_TYPES } from '../lib/aiRouter'
 
@@ -32,7 +33,8 @@ describe('aiCommandCenterView', () => {
 
   it('aiKpis shows null when a source did not load, never a fake 0', () => {
     const k = aiKpis({ signals: [], signalsReady: false, usage: null, usageReady: false, conversations: [], conversationsReady: false })
-    expect(k.every((t) => (t.value ?? null) === null && (t.display ?? null) === null)).toBe(true)
+    expect(k.filter((t) => t.key !== 'savings').every((t) => (t.value ?? null) === null && (t.display ?? null) === null)).toBe(true)
+    expect(k.usageLine).toEqual({ requests: null, failed: null, spend: null, conversations: null })
   })
 
   it('aiKpis measures usage from summarizeUsage output', () => {
@@ -43,10 +45,10 @@ describe('aiCommandCenterView', () => {
     })
     const by = Object.fromEntries(k.map((t) => [t.key, t]))
     expect(by.critical.value).toBe(1)
-    expect(by.requests.value).toBe(10)
-    expect(by.spend.display).toBe('USD 1.23')
+    expect(by.open.value).toBe(2)
+    expect(by.savings.display).toBe('Not recorded')
     expect(by.success.display).toBe('90%')
-    expect(by.conversations.value).toBe(2)
+    expect(k.usageLine).toEqual({ requests: 10, failed: 1, spend: 'USD 1.23', conversations: 2 })
   })
 
   it('aiKpis gives N/A success when nothing was asked', () => {
@@ -69,5 +71,29 @@ describe('aiCommandCenterView', () => {
     expect(clampQuestion(null)).toBe('')
     Object.values(AGENT_TYPES).forEach((t) => expect(agentTone(t).icon).toMatch(/^t-/))
     expect(agoText('2026-10-05T11:59:50Z', NOW)).toBe('Just now')
+  })
+})
+
+describe('aiCommandCenterView fix round', () => {
+  it('forecast risk reads the PM count only once loaded', () => {
+    const base = { signals: [], signalsReady: true, usage: null, usageReady: false, conversations: [], conversationsReady: true }
+    expect(aiKpis({ ...base, forecast: 4, forecastReady: false }).find((t) => t.key === 'forecast').value).toBeNull()
+    expect(aiKpis({ ...base, forecast: 4, forecastReady: true }).find((t) => t.key === 'forecast').value).toBe(4)
+  })
+  it('dailyCounts zero-fills the window on local days', () => {
+    const now = new Date(2026, 9, 5, 12)
+    const s = dailyCounts([
+      { created_at: new Date(2026, 9, 5, 8).toISOString() },
+      { created_at: new Date(2026, 9, 3, 8).toISOString() },
+      { created_at: new Date(2026, 8, 1).toISOString() },
+      { created_at: null },
+    ], now, 5)
+    expect(s).toEqual([0, 0, 1, 0, 1])
+  })
+  it('signalPicture picks a topic picture', () => {
+    expect(signalPicture({ title: 'Fuel anomaly' })).toContain('fuel')
+    expect(signalPicture({ message: 'Odometer record conflict' })).toContain('data')
+    expect(signalPicture({ title: 'Breakdown overdue' })).toContain('workshop')
+    expect(signalPicture({ title: 'Tyre risk' })).toContain('tyre')
   })
 })

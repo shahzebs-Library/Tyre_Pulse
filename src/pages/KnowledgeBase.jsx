@@ -20,6 +20,7 @@ import {
   FileText, AlertCircle, CheckCircle, Clock, RefreshCw,
   X, Plus, Loader, Lock, FileSpreadsheet, Layers, Percent,
   FolderOpen, LayoutTemplate, FileBarChart, ChevronRight, ExternalLink, Info,
+  MoreVertical, Sparkles, Save, Quote, Database,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase' // retained solely for reindexMissingEmbeddings(supabase)
 import { toUserMessage } from '../lib/safeError'
@@ -30,7 +31,7 @@ import Modal from '../components/ui/Modal'
 import SideDrawer from '../components/ui/SideDrawer'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import {
-  Card, CardState, Kpi, KitTable, Tabs, MeterCell, fmtInt, fmtPct,
+  Card, CardState, KitTable, Tabs, MeterCell, Trend, fmtInt, fmtPct,
 } from '../components/commandCenter/kit'
 import { formatDate } from '../lib/formatters'
 import {
@@ -39,7 +40,7 @@ import {
 } from '../lib/knowledgeBaseAnalytics'
 import {
   groupDocuments, collections as buildCollections, kbHeadline, filterDocuments, sortDocuments,
-  monthlyAdded, governance, DOC_SORTS, INDEX_STATUS_META,
+  monthlyAdded, governance, DOC_SORTS, INDEX_STATUS_META, lineChartPoints, percentShares,
 } from '../lib/knowledgeBaseView'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import './KnowledgeBase.css'
@@ -260,21 +261,62 @@ function UploadModal({ onClose, onSuccess, sites }) {
 const TYPE_TONE = { sop: 't-blue', manual: 't-purple', policy: 't-amber', inspection: 't-green', rca: 't-red', vendor: 't-orange', other: 't-blue' }
 const fmtDay = (v) => (v ? formatDate(v, 'All', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A')
 
-function MiniBars({ items, color = 'var(--cc-green)', empty }) {
-  const max = items.reduce((m, x) => Math.max(m, x.count), 0)
-  if (!items.length || max === 0) return <div className="cc-empty">{empty}</div>
+/** KPI tile laid out as the mockup: label on top, value with trend, a sub line. */
+function StatTile({ icon: Icon, tone, label, value, sub, trend, title, loading }) {
   return (
-    <ul className="kb-bars">
-      {items.map((x) => (
-        <li key={x.key}>
-          <span className="kb-bar-label">{x.label}</span>
-          <span className="kb-bar-track"><i style={{ width: `${(x.count / max) * 100}%`, background: color }} /></span>
-          <b>{fmtInt(x.count)}</b>
+    <div className="cc-card kb-stat" title={title}>
+      <span className={`kb-stat-icon ${tone}`}><Icon size={24} aria-hidden="true" /></span>
+      <div className="kb-stat-body">
+        <span className="kb-stat-label">{label}</span>
+        <span className="kb-stat-row"><b>{loading ? '...' : value}</b><Trend value={trend} /></span>
+        {sub && <span className="kb-stat-sub">{sub}</span>}
+      </div>
+    </div>
+  )
+}
+
+/** Area line chart over monthly counts (inline SVG, theme tokens only). */
+function LineTrend({ items, empty }) {
+  const W = 320
+  const H = 140
+  const { points, max } = lineChartPoints(items, { width: W, height: H, pad: 14 })
+  if (!points.length || max === 0) return <div className="cc-empty kb-chart-empty">{empty}</div>
+  const line = points.map((p) => `${p.x},${p.y}`).join(' ')
+  const area = `${points[0].x},${H - 14} ${line} ${points[points.length - 1].x},${H - 14}`
+  return (
+    <div className="kb-line">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Documents added per month, peak ${max}`} preserveAspectRatio="none">
+        {[0.25, 0.5, 0.75].map((f) => <line key={f} x1="14" x2={W - 14} y1={14 + (H - 28) * f} y2={14 + (H - 28) * f} className="kb-grid-line" />)}
+        <polygon points={area} className="kb-line-area" />
+        <polyline points={line} className="kb-line-stroke" />
+        {points.map((p) => <circle key={p.key} cx={p.x} cy={p.y} r="3.5" className="kb-line-dot"><title>{`${p.label}: ${p.count}`}</title></circle>)}
+      </svg>
+      <div className="kb-line-axis">{points.map((p) => <span key={p.key}>{p.label}</span>)}</div>
+    </div>
+  )
+}
+
+const BAR_COLORS = ['var(--cc-green)', 'var(--cc-blue)', 'var(--cc-purple, var(--cc-blue))', 'var(--cc-amber)', 'var(--cc-red)', 'var(--cc-orange, var(--cc-amber))']
+
+/** Vertical column chart with a share label on each column. */
+function ColumnBars({ items, empty }) {
+  const shares = percentShares(items)
+  const max = shares.reduce((m, x) => Math.max(m, x.count), 0)
+  if (!shares.length || max === 0) return <div className="cc-empty kb-chart-empty">{empty}</div>
+  return (
+    <ul className="kb-cols" aria-label="Chunks by collection">
+      {shares.slice(0, 6).map((x, i) => (
+        <li key={x.key} title={`${x.label}: ${fmtInt(x.count)} chunks`}>
+          <span className="kb-cols-pct">{x.pct == null ? 'N/A' : `${x.pct}%`}</span>
+          <span className="kb-cols-track"><i style={{ height: `${Math.max(4, (x.count / max) * 100)}%`, background: BAR_COLORS[i % BAR_COLORS.length] }} /></span>
+          <span className="kb-cols-label">{x.label}</span>
         </li>
       ))}
     </ul>
   )
 }
+
+const PREVIEW_WINDOWS = [{ key: 3, label: 'Last 3 months' }, { key: 6, label: 'Last 6 months' }, { key: 12, label: 'Last 12 months' }]
 
 export default function KnowledgeBase() {
   const { profile } = useAuth()
@@ -290,6 +332,8 @@ export default function KnowledgeBase() {
   const [filterStatus, setFilterStatus] = useState('all')
   const [sort, setSort] = useState('updated')
   const [tab, setTab] = useState('documents')
+  const [previewMonths, setPreviewMonths] = useState(6)
+  const [templateSearch, setTemplateSearch] = useState('')
   const [detailTab, setDetailTab] = useState('details')
   const [selectedKey, setSelectedKey] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
@@ -345,7 +389,7 @@ export default function KnowledgeBase() {
   )
   const byType = useMemo(() => kbByType(filteredChunks).filter((t) => t.chunks > 0).map((t) => ({ key: t.type, label: t.label, count: t.chunks })), [filteredChunks])
   const topTags = useMemo(() => kbTopTags(filteredChunks, 12), [filteredChunks])
-  const months = useMemo(() => monthlyAdded(filteredDocs, now, 6), [filteredDocs, now])
+  const months = useMemo(() => monthlyAdded(filteredDocs, now, previewMonths), [filteredDocs, now, previewMonths])
   const shownCollections = cols.filter((c) => !collectionSearch.trim() || c.label.toLowerCase().includes(collectionSearch.trim().toLowerCase()))
 
   const isLocked = (id) => viewDoc?.id === id && wfLocked
@@ -405,14 +449,13 @@ export default function KnowledgeBase() {
 
   const loadState = { loading, data: docs, error, retry: fetchDocs }
   const known = docs !== null && !error
-  const kv = (n) => (known ? n : null)
 
   const kpis = [
-    { icon: BookOpen, tone: 't-green', value: kv(head.documents), label: 'Knowledge documents', trend: known ? head.docTrend : null, title: 'Source documents (chunks grouped by title). Trend compares documents added in the last 30 days with the 30 days before.' },
-    { icon: Layers, tone: 't-blue', value: kv(head.indexed), label: `Indexed chunks, AI ready${known ? ` (of ${fmtInt(head.chunks)})` : ''}` },
-    { icon: Percent, tone: 't-purple', display: known ? fmtPct(head.coveragePct) : 'N/A', label: 'Index coverage', title: 'Share of chunks that carry an embedding and can be retrieved by the AI' },
-    { icon: LayoutTemplate, tone: 't-amber', display: 'N/A', label: 'Report templates', title: 'Not recorded: no knowledge-based report templates are stored yet' },
-    { icon: FileBarChart, tone: 't-red', display: 'N/A', label: 'Generated reports', title: 'Not recorded: AI report generation from the knowledge base is not logged yet' },
+    { icon: BookOpen, tone: 't-green', label: 'Knowledge Documents', value: known ? fmtInt(head.documents) : 'N/A', trend: known ? head.docTrend : null, sub: 'Uploaded and searchable', title: 'Source documents (chunks grouped by title). Trend compares documents added in the last 30 days with the 30 days before.' },
+    { icon: Layers, tone: 't-blue', label: 'Indexed Chunks', value: known ? fmtInt(head.indexed) : 'N/A', sub: known ? `AI ready for RAG, ${fmtPct(head.coveragePct)} of ${fmtInt(head.chunks)}` : 'AI ready for RAG', title: 'Chunks that carry an embedding and can be retrieved by the AI' },
+    { icon: Quote, tone: 't-purple', label: 'Citation Coverage', value: 'N/A', sub: 'Not recorded: answers do not log citations', title: 'AI answers do not record which document they cited yet' },
+    { icon: LayoutTemplate, tone: 't-amber', label: 'Report Templates', value: 'N/A', sub: 'Not recorded: no knowledge templates stored', title: 'Not recorded: no knowledge-based report templates are stored yet' },
+    { icon: FileBarChart, tone: 't-red', label: 'Generated Reports', value: 'N/A', sub: 'Not recorded: AI report runs are not logged', title: 'Not recorded: AI report generation from the knowledge base is not logged yet' },
   ]
 
   const docColumns = [
@@ -426,10 +469,17 @@ export default function KnowledgeBase() {
       ),
     },
     { key: 'typeLabel', header: 'Collection' },
-    { key: 'chunkCount', header: 'Chunks', numeric: true, cell: (d) => fmtInt(d.chunkCount) },
-    { key: 'status', header: 'Index status', sortValue: (d) => INDEX_STATUS_META[d.status].label, cell: (d) => <span className={`cc-pill ${INDEX_STATUS_META[d.status].tone}`}>{INDEX_STATUS_META[d.status].label}</span> },
+    { key: 'status', header: 'Status', sortValue: (d) => INDEX_STATUS_META[d.status].label, cell: (d) => <span className={`cc-pill ${INDEX_STATUS_META[d.status].tone}`}>{INDEX_STATUS_META[d.status].label}</span> },
     { key: 'coveragePct', header: 'Coverage', cell: (d) => <MeterCell value={d.coveragePct} suffix="%" /> },
     { key: 'updatedAt', header: 'Updated', cell: (d) => fmtDay(d.updatedAt) },
+    {
+      key: 'actions', header: '', sortable: false,
+      cell: (d) => (
+        <button type="button" className="cc-icon-btn" onClick={(e) => { e.stopPropagation(); setViewDoc(d.chunks[0]) }} aria-label={`Open ${d.title}`} title="Open document">
+          <MoreVertical size={15} aria-hidden="true" />
+        </button>
+      ),
+    },
   ]
 
   const chunkColumns = [
@@ -491,6 +541,7 @@ export default function KnowledgeBase() {
           </div>
         </div>
         <div className="kb-head-side">
+          <span className="kb-global-label">Global Search</span>
           <label className="cc-search kb-global">
             <Search size={15} aria-hidden="true" />
             <input type="search" placeholder="Search documents, collections, topics" aria-label="Global knowledge search" value={search} onChange={(e) => { setSearch(e.target.value); setTab('documents') }} />
@@ -501,6 +552,9 @@ export default function KnowledgeBase() {
                 <RefreshCw size={15} className={reindexing ? 'animate-spin' : ''} aria-hidden="true" /> Re-index {fmtInt(head.pending)} pending
               </button>
             )}
+            <button type="button" className="cc-btn-ghost" aria-pressed={tab === 'chunks'} onClick={() => setTab(tab === 'chunks' ? 'documents' : 'chunks')}>
+              <Database size={15} aria-hidden="true" /> {tab === 'chunks' ? 'Back to documents' : `Chunk register${known ? ` (${fmtInt(chunks.length)})` : ''}`}
+            </button>
             <button type="button" className="cc-btn-ghost" onClick={fetchDocs} disabled={loading} aria-label="Refresh"><RefreshCw size={15} aria-hidden="true" /></button>
             {canWrite && <button type="button" className="cc-btn-primary" onClick={() => setModalOpen(true)}><Plus size={15} aria-hidden="true" /> Add document</button>}
           </div>
@@ -521,19 +575,9 @@ export default function KnowledgeBase() {
         </div>
       )}
 
-      <div className="cc-kpis kb-kpis">
-        {kpis.map((k) => <Kpi key={k.label} {...k} loading={loading && docs === null} />)}
+      <div className="kb-kpis">
+        {kpis.map((k) => <StatTile key={k.label} {...k} loading={loading && docs === null} />)}
       </div>
-
-      <Tabs
-        label="Knowledge base views"
-        value={tab}
-        onChange={setTab}
-        tabs={[
-          { key: 'documents', label: 'Documents', count: known ? grouped.length : null },
-          { key: 'chunks', label: 'Chunk register', count: known ? chunks.length : null },
-        ]}
-      />
 
       {tab === 'chunks' ? (
         <Card
@@ -574,6 +618,25 @@ export default function KnowledgeBase() {
               </CardState>
             </Card>
 
+            <Card
+              title="Report Templates"
+              action={(profile?.role === 'Admin' || profile?.is_super_admin)
+                ? <Link className="cc-btn-primary kb-new-tpl" to="/report-builder"><Plus size={14} aria-hidden="true" /> New Template</Link>
+                : null}
+            >
+              <label className="cc-search kb-mini-search">
+                <Search size={14} aria-hidden="true" />
+                <input type="search" placeholder="Search templates" aria-label="Search templates" value={templateSearch} onChange={(e) => setTemplateSearch(e.target.value)} />
+              </label>
+              <div className="cc-empty kb-tpl-empty">
+                <div>
+                  <LayoutTemplate size={22} aria-hidden="true" />
+                  <p><b>No knowledge-based templates yet</b></p>
+                  <p>Templates built from approved documents are not stored yet. Fleet data reports are built in the Report Builder (administrators).</p>
+                </div>
+              </div>
+            </Card>
+
             <Card title="Most used tags">
               <CardState state={loadState} empty={known && topTags.length === 0 ? 'No tags recorded in this view. Tags help retrieval find documents.' : null}>
                 <div className="kb-tags">
@@ -585,44 +648,39 @@ export default function KnowledgeBase() {
                 </div>
               </CardState>
             </Card>
-
-            <Card title="Report Templates">
-              <div className="cc-empty">
-                <div>
-                  <LayoutTemplate size={22} aria-hidden="true" />
-                  <p>No knowledge-based report templates are stored yet. Reports from fleet data are built in the Report Builder (administrators).</p>
-                  {(profile?.role === 'Admin' || profile?.is_super_admin) && <Link className="cc-btn" to="/report-builder">Open Report Builder</Link>}
-                </div>
-              </div>
-            </Card>
           </div>
 
           <div className="kb-col">
-            <Card title="Knowledge Documents" className="kb-docs">
-              <div className="cc-filters kb-filters">
-                <select className="cc-select" aria-label="Collection" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-                  {cols.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-                </select>
-                <select className="cc-select" aria-label="Site" value={filterSite} onChange={(e) => setFilterSite(e.target.value)}>
-                  <option value="all">All sites</option>
-                  <option value="global">Global (no site)</option>
-                  {sites.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-                <select className="cc-select" aria-label="Index status" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-                  <option value="all">Any index status</option>
-                  {Object.entries(INDEX_STATUS_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
-                </select>
-                <select className="cc-select" aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value)}>
-                  {DOC_SORTS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-                </select>
-              </div>
+            <Card
+              title="Knowledge Documents"
+              className="kb-docs"
+              action={(
+                <div className="cc-filters kb-filters kb-filters-head">
+                  <select className="cc-select" aria-label="Collection" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+                    {cols.map((c) => <option key={c.key} value={c.key}>{c.key === 'all' ? 'All Collections' : c.label}</option>)}
+                  </select>
+                  <select className="cc-select" aria-label="Site" value={filterSite} onChange={(e) => setFilterSite(e.target.value)}>
+                    <option value="all">All Sites</option>
+                    <option value="global">Global (no site)</option>
+                    {sites.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <select className="cc-select" aria-label="Index status" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+                    <option value="all">Index Status</option>
+                    {Object.entries(INDEX_STATUS_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
+                  </select>
+                  <select className="cc-select" aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value)}>
+                    {DOC_SORTS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+                  </select>
+                </div>
+              )}
+            >
               <div className="cc-filters kb-filters">
                 <label className="cc-search">
                   <Search size={15} aria-hidden="true" />
-                  <input type="search" placeholder="Search documents by title, collection, site, asset or tag" aria-label="Search documents" value={search} onChange={(e) => setSearch(e.target.value)} />
+                  <input type="search" placeholder="Search documents" aria-label="Search documents" value={search} onChange={(e) => setSearch(e.target.value)} />
                 </label>
                 {hasFilters && <button type="button" className="cc-btn-ghost" onClick={clearFilters}><X size={14} aria-hidden="true" /> Clear</button>}
-                <span className="kb-count" aria-live="polite">{known ? `${filteredDocs.length} of ${grouped.length} documents` : ''}</span>
+                <span className="kb-count" aria-live="polite">{known ? `${filteredDocs.length} of ${grouped.length}` : ''}</span>
               </div>
               <CardState state={loadState} empty={emptyLibrary}>
                 <KitTable
@@ -636,36 +694,52 @@ export default function KnowledgeBase() {
             </Card>
 
             <Card
-              title="Report Preview: Knowledge Library"
-              sub={hasFilters ? 'Follows the filters above' : 'Whole library'}
+              title={<>Report Preview <span className="kb-dot" aria-hidden="true" /> Knowledge Library Report</>}
               action={(
-                <div className="kb-head-actions">
-                  <button type="button" className="cc-btn-ghost" onClick={() => runExport('pdf')} disabled={!known || !filteredChunks.length}><FileText size={15} aria-hidden="true" /> Export PDF</button>
-                  <button type="button" className="cc-btn-ghost" onClick={() => runExport('excel')} disabled={!known || !filteredChunks.length}><FileSpreadsheet size={15} aria-hidden="true" /> Export Excel</button>
+                <div className="cc-filters kb-filters kb-filters-head">
+                  <select className="cc-select" aria-label="Chart window" value={previewMonths} onChange={(e) => setPreviewMonths(Number(e.target.value))}>
+                    {PREVIEW_WINDOWS.map((w) => <option key={w.key} value={w.key}>{w.label}</option>)}
+                  </select>
+                  <select className="cc-select" aria-label="Preview site" value={filterSite} onChange={(e) => setFilterSite(e.target.value)}>
+                    <option value="all">All Sites</option>
+                    <option value="global">Global (no site)</option>
+                    {sites.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
                 </div>
               )}
             >
               <CardState state={loadState} empty={emptyLibrary}>
                 <div className="kb-report">
+                  <div className="kb-report-brand">
+                    <span className="kb-report-logo"><span className="kb-report-mark" aria-hidden="true"><BookOpen size={16} /></span><span><b>TyrePulse</b><small>FLEET INTELLIGENCE</small></span></span>
+                    <span className="kb-report-title"><small>Knowledge Base Report</small><b>Knowledge Library Summary</b><small>Based on documents in the knowledge base{hasFilters ? ', current filters' : ''}</small></span>
+                    <span className="kb-report-date">{fmtDay(now)}</span>
+                  </div>
                   <div className="kb-report-tiles">
-                    <div><span>Documents</span><b>{fmtInt(filteredDocs.length)}</b></div>
-                    <div><span>Chunks</span><b>{fmtInt(filteredChunks.length)}</b></div>
-                    <div><span>Indexed</span><b>{fmtInt(filteredChunks.filter((c) => c.embedding).length)}</b></div>
-                    <div><span>Linked to an asset</span><b>{fmtInt(filteredDocs.filter((d) => d.assetNo).length)}</b></div>
+                    <div><span className="kb-rt-icon t-blue"><FileText size={17} aria-hidden="true" /></span><span><small>Documents</small><b>{fmtInt(filteredDocs.length)}</b></span></div>
+                    <div><span className="kb-rt-icon t-purple"><Layers size={17} aria-hidden="true" /></span><span><small>Chunks</small><b>{fmtInt(filteredChunks.length)}</b></span></div>
+                    <div><span className="kb-rt-icon t-green"><CheckCircle size={17} aria-hidden="true" /></span><span><small>Indexed</small><b>{fmtInt(filteredChunks.filter((c) => c.embedding).length)}</b></span></div>
+                    <div><span className="kb-rt-icon t-amber"><Truck size={17} aria-hidden="true" /></span><span><small>Linked to an asset</small><b>{fmtInt(filteredDocs.filter((d) => d.assetNo).length)}</b></span></div>
                   </div>
                   <div className="kb-report-charts">
-                    <div>
+                    <div className="kb-chart-box">
                       <h3>Documents added per month</h3>
-                      <MiniBars items={months} empty="No documents added in the last 6 months." />
+                      <LineTrend items={months} empty={`No documents added in the last ${previewMonths} months.`} />
                     </div>
-                    <div>
+                    <div className="kb-chart-box">
                       <h3>Chunks by collection</h3>
-                      <MiniBars items={byType} color="var(--cc-blue)" empty="No chunks in this view." />
+                      <ColumnBars items={byType} empty="No chunks in this view." />
                     </div>
                   </div>
-                  <p className="kb-note"><Info size={13} aria-hidden="true" /> AI-written reports from the knowledge base are not available yet. This preview is measured from the library itself.</p>
                 </div>
               </CardState>
+              <div className="kb-report-actions">
+                <button type="button" className="cc-btn-primary" disabled title="Not available yet: AI report generation from the knowledge base is not built"><Sparkles size={15} aria-hidden="true" /> Generate Report (AI)</button>
+                <button type="button" className="cc-btn-ghost" onClick={() => runExport('pdf')} disabled={!known || !filteredChunks.length}><FileText size={15} aria-hidden="true" /> Export PDF</button>
+                <button type="button" className="cc-btn-ghost" onClick={() => runExport('excel')} disabled={!known || !filteredChunks.length}><FileSpreadsheet size={15} aria-hidden="true" /> Export Excel</button>
+                <button type="button" className="cc-btn-ghost" disabled title="Not available yet: knowledge report templates are not stored"><Save size={15} aria-hidden="true" /> Save Template</button>
+              </div>
+              <p className="kb-note"><Info size={13} aria-hidden="true" /> AI-written reports and saved templates are not available yet. This preview is measured from the library itself.</p>
             </Card>
           </div>
 
@@ -686,24 +760,29 @@ export default function KnowledgeBase() {
                       onChange={setDetailTab}
                       tabs={[
                         { key: 'details', label: 'Details' },
-                        { key: 'chunks', label: 'Chunks', count: selected.chunkCount },
+                        { key: 'insights', label: 'AI Insights' },
                         { key: 'citations', label: 'Citations' },
+                        { key: 'chunks', label: 'Chunks' },
                       ]}
                     />
                     {detailTab === 'details' && (
                       <dl className="kb-facts">
                         <div><dt>Title</dt><dd>{selected.title}</dd></div>
+                        <div><dt>Version</dt><dd><span className="cc-na">Not recorded</span></dd></div>
+                        <div><dt>Owner</dt><dd><span className="cc-na">Not recorded</span></dd></div>
                         <div><dt>Collection</dt><dd>{selected.typeLabel}</dd></div>
                         <div><dt>Site</dt><dd>{selected.site || 'All sites'}</dd></div>
                         <div><dt>Asset</dt><dd>{selected.assetNo || <span className="cc-na">Not linked</span>}</dd></div>
                         <div><dt>Chunks</dt><dd>{fmtInt(selected.chunkCount)}</dd></div>
-                        <div><dt>Indexed</dt><dd>{fmtInt(selected.indexed)}</dd></div>
-                        <div><dt>Added</dt><dd>{fmtDay(selected.addedAt)}</dd></div>
                         <div><dt>Updated</dt><dd>{fmtDay(selected.updatedAt)}</dd></div>
+                        <div><dt>Status</dt><dd><b>{INDEX_STATUS_META[selected.status].label}</b></dd></div>
                         <div><dt>Coverage</dt><dd><MeterCell value={selected.coveragePct} suffix="%" /></dd></div>
+                        <div><dt>AI usage</dt><dd><span className="cc-na">Not recorded</span></dd></div>
                         <div><dt>Tags</dt><dd>{selected.tags.length ? selected.tags.join(', ') : <span className="cc-na">None</span>}</dd></div>
-                        <div><dt>Version / owner</dt><dd><span className="cc-na">Not recorded</span></dd></div>
                       </dl>
+                    )}
+                    {detailTab === 'insights' && (
+                      <div className="cc-empty">Not recorded: AI insights per document are not generated or stored yet.</div>
                     )}
                     {detailTab === 'chunks' && (
                       <ul className="kb-chunks">
@@ -729,7 +808,8 @@ export default function KnowledgeBase() {
                       ))}
                     </ul>
                     <div className="kb-detail-actions">
-                      <button type="button" className="cc-btn-primary" onClick={() => setViewDoc(selected.chunks[0])}><ExternalLink size={15} aria-hidden="true" /> Open document</button>
+                      <button type="button" className="cc-btn-primary" onClick={() => setViewDoc(selected.chunks[0])}><ExternalLink size={15} aria-hidden="true" /> Open Document</button>
+                      <button type="button" className="cc-btn-ghost kb-outline" onClick={() => setDetailTab('citations')}><Quote size={15} aria-hidden="true" /> View Citations</button>
                       <button type="button" className="cc-btn-ghost" onClick={() => setDetailTab('chunks')}><Layers size={15} aria-hidden="true" /> View chunks ({fmtInt(selected.chunkCount)})</button>
                     </div>
                   </>

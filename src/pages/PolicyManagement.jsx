@@ -1,96 +1,59 @@
 /**
- * PolicyManagement (route /policies) - manage fleet policies & SOPs and the
- * insurance/governance documents covering the fleet: title, category (coverage
- * type), version, owner (responsible party), effective/renewal (review) dates
- * and a status lifecycle. Backed by the `policies` table (V137). Any
- * authenticated member reads; Admin/Manager/Director author and maintain.
+ * PolicyManagement (route /policies) - govern safety, workshop, fleet and
+ * compliance policies across countries. Backed by the `policies` table (V137),
+ * a document register: title, category, version, owner, effective/review dates,
+ * status lifecycle, body and notes. Any authenticated member reads;
+ * Admin/Manager/Director author and maintain (RLS enforces it).
  *
- * Deepened to a portfolio dashboard: status distribution, renewal/expiry bands,
- * a 12-month renewal pipeline, coverage-type and insurer/owner breakdowns, and
- * a premium roll-up shown ONLY where a premium is actually recorded (honest N/A
- * otherwise, never fabricated). Search + status/coverage/expiry/date filters, a
- * sortable table (soonest renewal first) with traffic-light badges, role-gated
- * CRUD, Excel/PDF export, and full loading / error+Retry / empty states.
+ * Laid out to the owner's mockup on the Command Center kit: KPI strip, policy
+ * register with filters, and a detail / version / acknowledgment row, plus the
+ * portfolio view (status, renewal pipeline, categories). Figures come from the
+ * pure `src/lib/policyView.js` + `policyAnalytics.js`. Anything the table does
+ * not record (acknowledgments, departments, sites, attachments, regulations,
+ * earlier versions) is shown as "Not recorded", never invented.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import {
+  ClipboardList, CalendarClock, Users, CheckCircle2, AlertTriangle, Plus, Pencil,
+  Trash2, Search, X, FileSpreadsheet, FileText, Loader2, Save, Send, RotateCcw,
+  Hash, GitBranch, ShieldCheck, Globe, Calendar, Paperclip, BookOpen, History, Info,
+} from 'lucide-react'
+import Modal from '../components/ui/Modal'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import {
-  Chart as ChartJS, CategoryScale, LinearScale, BarElement,
-  ArcElement, Tooltip, Legend,
-} from 'chart.js'
-import { Bar, Doughnut } from 'react-chartjs-2'
-import {
-  ScrollText, Plus, Pencil, Trash2, Search, X, FileSpreadsheet,
-  FileText, AlertTriangle, Loader2, CheckCircle2, ClipboardList, CalendarClock,
-  CalendarX, Archive, Save, ShieldCheck, Wallet, Layers,
-} from 'lucide-react'
-import PageHeader from '../components/ui/PageHeader'
-import Modal from '../components/ui/Modal'
+  Card, CardState, Kpi, PageHero, Donut, fmtInt,
+} from '../components/commandCenter/kit'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listPolicies, createPolicy, updatePolicy, deletePolicy,
 } from '../lib/api/policies'
-import {
-  POLICY_STATUSES, POLICY_STATUS_META,
-} from '../lib/policies'
+import { POLICY_STATUSES, POLICY_STATUS_META } from '../lib/policies'
 import {
   summarizePolicyPortfolio, filterPolicies, sortByExpiry, policyExpiry,
   policyPremium, EXPIRY_BANDS, DEFAULT_WARN_DAYS,
 } from '../lib/policyAnalytics'
+import {
+  policyCode, statusLabel, statusTone, ownerInitials, policyGaps, policyKpis,
+  reviewDistance, optionsOf, regionLabel, versionLog, policyDetailRows, categoryBreakdown,
+} from '../lib/policyView'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
-import { formatCurrency } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
-import { categorical, withAlpha, ACCENTS } from '../lib/reportColors'
 import { isMissingRelation } from '../lib/api/_client'
+import './PolicyManagement.css'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
-
-const STATUS_STYLES = {
-  draft: 'bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)]',
-  active: 'bg-green-900/40 text-green-300 border border-green-700/50',
-  under_review: 'bg-amber-900/40 text-amber-300 border border-amber-700/50',
-  archived: 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
-}
-// Traffic-light styling for the renewal/expiry band.
-const BAND_STYLES = {
-  expired: 'bg-red-900/40 text-red-300 border border-red-700/50',
-  expiring: 'bg-amber-900/40 text-amber-300 border border-amber-700/50',
-  valid: 'bg-green-900/40 text-green-300 border border-green-700/50',
-  none: 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
-}
-const BAND_LABEL = {
-  expired: 'Expired', expiring: 'Expiring', valid: 'Valid', none: 'No date',
-}
+const BAND_TONE = { expired: 'bad', expiring: 'warn', valid: 'good', none: 'muted' }
+const BAND_LABEL = { expired: 'Expired', expiring: 'Expiring', valid: 'Valid', none: 'No date' }
+const STATUS_COLOR = { draft: 'var(--cc-ink-3)', active: 'var(--cc-green)', under_review: 'var(--cc-amber)', archived: 'var(--cc-blue)', unknown: 'var(--cc-red)' }
 const EMPTY_FORM = {
   title: '', category: '', version: '', owner: '',
   effective_date: '', review_date: '', status: 'draft', body: '', notes: '',
 }
+const EMPTY_FILTERS = { search: '', country: '', category: '', status: 'all', band: 'all', from: '', to: '', gapsOnly: false }
+
 function fmtDate(v) {
   if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
-}
-
-const CHART_OPTS = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: { display: false },
-    tooltip: { enabled: true },
-  },
-  scales: {
-    x: { grid: { color: 'var(--panel-2)' }, ticks: { color: 'var(--text-muted)', font: { size: 11 } } },
-    y: { grid: { color: 'var(--panel-2)' }, ticks: { color: 'var(--text-muted)', precision: 0 }, beginAtZero: true },
-  },
-}
-const DOUGHNUT_OPTS = {
-  responsive: true,
-  maintainAspectRatio: false,
-  cutout: '62%',
-  plugins: {
-    legend: { position: 'bottom', labels: { color: 'var(--text-muted)', boxWidth: 12, font: { size: 11 } } },
-    tooltip: { enabled: true },
-  },
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 // -- Create / edit modal -------------------------------------------------------
@@ -248,86 +211,102 @@ function DeleteConfirm({ policy, onCancel, onConfirm, busy }) {
   )
 }
 
-// -- Small chart card ----------------------------------------------------------
-function ChartCard({ title, icon: Icon, children, empty }) {
+// -- Small helpers ----------------------------------------------------------
+function Owner({ name, title }) {
+  if (!name) return <span className="cc-na">Not recorded</span>
   return (
-    <div className="card space-y-3">
-      <div className="flex items-center gap-2">
-        {Icon && <Icon size={15} className="text-[var(--text-muted)]" />}
-        <h3 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h3>
-      </div>
-      {empty ? (
-        <div className="h-[240px] flex items-center justify-center text-sm text-[var(--text-muted)]">
-          No data yet.
-        </div>
-      ) : (
-        <div className="h-[240px]">{children}</div>
-      )}
+    <span className="pm-owner" title={title}>
+      <span className="pm-avatar" aria-hidden="true">{ownerInitials(name)}</span>
+      <span className="pm-owner-name">{name}</span>
+    </span>
+  )
+}
+
+function Fact({ icon: Icon, label, children }) {
+  return (
+    <div className="pm-fact">
+      <dt><Icon size={13} aria-hidden="true" /> {label}</dt>
+      <dd>{children}</dd>
     </div>
+  )
+}
+
+function Bars({ items, color = 'var(--cc-green)', onSelect, emptyText }) {
+  const max = items.reduce((m, x) => Math.max(m, x.count), 0)
+  if (!items.length || max === 0) return <div className="cc-empty">{emptyText}</div>
+  return (
+    <ul className="pm-bars">
+      {items.map((x) => (
+        <li key={x.key || x.label}>
+          <button type="button" disabled={!onSelect} onClick={() => onSelect?.(x)}>
+            <span className="pm-bar-label">{x.label}</span>
+            <span className="pm-bar-track"><i style={{ width: `${(x.count / max) * 100}%`, background: color }} /></span>
+            <b>{fmtInt(x.count)}</b>
+          </button>
+        </li>
+      ))}
+    </ul>
   )
 }
 
 // -- Page ----------------------------------------------------------------------
 export default function PolicyManagement() {
-  const { activeCountry, activeCurrency } = useSettings()
+  const { activeCountry } = useSettings()
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
   const [missing, setMissing] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
-  const [updatedAt, setUpdatedAt] = useState(null)
+  const [loading, setLoading] = useState(true)
 
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [categoryFilter, setCategoryFilter] = useState('')
-  const [bandFilter, setBandFilter] = useState('all')
-  const [fromDate, setFromDate] = useState('')
-  const [toDate, setToDate] = useState('')
-  const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
 
+  const [selectedId, setSelectedId] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [deleting, setDeleting] = useState(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
+  const [statusBusy, setStatusBusy] = useState('')
   const [actionError, setActionError] = useState('')
 
   const load = useCallback(async () => {
-    setRefreshing(true); setError(''); setMissing(false)
+    setLoading(true); setError(''); setMissing(false)
     try {
       const data = await listPolicies({ country: activeCountry })
       setRows(Array.isArray(data) ? data : [])
-      setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) { setMissing(true); setRows([]) }
       else { setError(toUserMessage(err, 'Could not load policies.')); setRows(null) }
     } finally {
-      setRefreshing(false)
+      setLoading(false)
     }
   }, [activeCountry])
 
   useEffect(() => { load() }, [load])
 
-  // One clock per load, so every memo below agrees on 'today'.
+  // One clock per load, so every figure below agrees on 'today'.
   const now = useMemo(() => Date.now(), [rows]) // eslint-disable-line react-hooks/exhaustive-deps
-  const portfolio = useMemo(() => summarizePolicyPortfolio(rows || [], now), [rows, now])
-
-  const categoryOptions = useMemo(
-    () => [...new Set((rows || []).map((r) => r.category).filter(Boolean))].sort(),
-    [rows],
-  )
+  const all = useMemo(() => rows || [], [rows])
+  const portfolio = useMemo(() => summarizePolicyPortfolio(all, now), [all, now])
+  const kpi = useMemo(() => policyKpis(all, now), [all, now])
+  const countryOptions = useMemo(() => optionsOf(all, 'country'), [all])
+  const categoryOptions = useMemo(() => optionsOf(all, 'category'), [all])
 
   const filtered = useMemo(() => {
-    const list = filterPolicies(rows || [], {
-      status: statusFilter, category: categoryFilter, band: bandFilter,
-      from: fromDate, to: toDate, search,
+    let list = filterPolicies(all, {
+      status: filters.status, category: filters.category, band: filters.band,
+      from: filters.from, to: filters.to, search: filters.search,
     }, now)
+    if (filters.country) list = list.filter((r) => (r.country || '') === filters.country)
+    if (filters.gapsOnly) list = list.filter((r) => policyGaps(r, now).length > 0)
     // Default order: soonest renewal first. The table re-sorts on any header.
     return sortByExpiry(list, 'asc')
-  }, [rows, statusFilter, categoryFilter, bandFilter, fromDate, toDate, search, now])
+  }, [all, filters, now])
 
-  const clearFilters = () => {
-    setStatusFilter('all'); setCategoryFilter(''); setBandFilter('all')
-    setFromDate(''); setToDate(''); setSearch('')
-  }
-  const hasFilters = statusFilter !== 'all' || categoryFilter || bandFilter !== 'all' || fromDate || toDate || search
+  const hasFilters = JSON.stringify(filters) !== JSON.stringify(EMPTY_FILTERS)
+  const selected = useMemo(
+    () => filtered.find((r) => r.id === selectedId) || all.find((r) => r.id === selectedId) || filtered[0] || null,
+    [filtered, all, selectedId],
+  )
 
   const openCreate = () => { setEditing(null); setModalOpen(true) }
   const openEdit = useCallback((p) => { setEditing(p); setModalOpen(true) }, [])
@@ -337,6 +316,7 @@ export default function PolicyManagement() {
     setDeleteBusy(true)
     try {
       await deletePolicy(deleting.id)
+      if (selectedId === deleting.id) setSelectedId(null)
       setDeleting(null)
       await load()
     } catch (err) {
@@ -344,257 +324,308 @@ export default function PolicyManagement() {
     } finally {
       setDeleteBusy(false)
     }
-  }, [deleting, load])
+  }, [deleting, load, selectedId])
 
-  // -- charts (real data only) --
-  const statusChart = useMemo(() => {
-    const items = portfolio.status.list.filter((x) => x.count > 0)
-    return {
-      empty: items.length === 0,
-      data: {
-        labels: items.map((x) => x.label),
-        datasets: [{ data: items.map((x) => x.count), backgroundColor: categorical(items.length), borderWidth: 0 }],
-      },
+  const setStatus = useCallback(async (policy, status) => {
+    setActionError(''); setStatusBusy(status)
+    try {
+      await updatePolicy(policy.id, { status })
+      await load()
+    } catch (err) {
+      setActionError(toUserMessage(err, 'Could not change the policy status.'))
+    } finally {
+      setStatusBusy('')
     }
-  }, [portfolio])
-
-  const pipelineChart = useMemo(() => {
-    const b = portfolio.pipeline.buckets
-    const total = b.reduce((a, x) => a + x.count, 0) + portfolio.pipeline.overdue
-    return {
-      empty: total === 0,
-      data: {
-        labels: b.map((x) => x.label),
-        datasets: [{ label: 'Renewals', data: b.map((x) => x.count), backgroundColor: withAlpha(ACCENTS.primary, 0.85), borderRadius: 4 }],
-      },
-    }
-  }, [portfolio])
-
-  // Premium-by-insurer only where at least one row carries a premium AND an
-  // insurer; otherwise fall back to policy count by coverage type (real data).
-  const insurerChart = useMemo(() => {
-    const src = portfolio.hasInsurer ? portfolio.insurers : portfolio.coverage
-    const withPrem = src.filter((x) => x.premium != null)
-    const usePremium = withPrem.length > 0
-    const items = (usePremium ? withPrem : src).filter((x) => x.key !== 'Unspecified').slice(0, 8)
-    return {
-      title: portfolio.hasInsurer
-        ? (usePremium ? 'Premium by insurer' : 'Policies by insurer')
-        : (usePremium ? 'Premium by coverage type' : 'Policies by coverage type'),
-      usePremium,
-      empty: items.length === 0,
-      data: {
-        labels: items.map((x) => x.key),
-        datasets: [{
-          label: usePremium ? 'Premium' : 'Policies',
-          data: items.map((x) => (usePremium ? x.premium : x.count)),
-          backgroundColor: categorical(items.length),
-          borderRadius: 4,
-        }],
-      },
-    }
-  }, [portfolio])
+  }, [load])
 
   // -- export --
-  const EXPORT_COLS = ['title', 'category', 'version', 'owner', 'status', 'expiry', 'effective_date', 'review_date', 'premium']
-  const EXPORT_HEADERS = ['Title', 'Coverage type', 'Version', 'Owner', 'Status', 'Renewal', 'Effective', 'Renewal date', 'Premium']
+  const EXPORT_COLS = ['code', 'title', 'category', 'version', 'owner', 'region', 'status', 'expiry', 'effective_date', 'review_date', 'gaps', 'premium']
+  const EXPORT_HEADERS = ['Policy ID', 'Title', 'Category', 'Version', 'Owner', 'Region', 'Status', 'Renewal', 'Effective', 'Next review', 'Governance gaps', 'Premium']
   const exportRows = filtered.map((r) => {
     const prem = policyPremium(r)
     return {
-      title: r.title || '', category: r.category || '', version: r.version || '',
-      owner: r.owner || '', status: POLICY_STATUS_META[r.status]?.label || r.status || '',
+      code: policyCode(r), title: r.title || '', category: r.category || '', version: r.version || '',
+      owner: r.owner || '', region: regionLabel(r), status: statusLabel(r.status),
       expiry: BAND_LABEL[policyExpiry(r, now).band] || '',
       effective_date: r.effective_date || '', review_date: r.review_date || '',
-      premium: prem == null ? 'N/A' : String(prem),
+      gaps: policyGaps(r, now).join(', ') || 'None',
+      premium: prem == null ? 'Not recorded' : String(prem),
     }
   })
+  const runExport = async (kind) => {
+    setActionError('')
+    try {
+      if (kind === 'excel') await exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, reportFileName('Policies'))
+      else await exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Policy Management', reportFileName('Policies'), 'landscape')
+    } catch (err) {
+      setActionError(toUserMessage(err, 'Could not export. Try again.'))
+    }
+  }
+  const exportOne = async (policy) => {
+    setActionError('')
+    try {
+      await exportToPdf(policyDetailRows(policy, now), [{ key: 'field', header: 'Field' }, { key: 'value', header: 'Value' }],
+        policy.title || 'Policy', reportFileName('Policy', policyCode(policy)), 'portrait')
+    } catch (err) {
+      setActionError(toUserMessage(err, 'Could not export the policy.'))
+    }
+  }
 
-  const premiumKpi = portfolio.kpis.premiumTotal == null
-    ? 'N/A'
-    : formatCurrency(portfolio.kpis.premiumTotal, activeCurrency || 'SAR', 0)
+  const loadState = { loading, data: rows, error: error || null, retry: load }
+  const kv = (n) => (rows === null ? null : n)
 
   const kpis = [
-    { label: 'Total policies', value: portfolio.total, icon: ClipboardList, tone: 'text-[var(--text-primary)]' },
-    { label: 'Active', value: portfolio.kpis.active, icon: CheckCircle2, tone: 'text-green-400' },
-    { label: 'Expiring soon', value: portfolio.kpis.expiringSoon, icon: CalendarClock, tone: 'text-amber-400', hint: `<= ${DEFAULT_WARN_DAYS}d` },
-    { label: 'Expired', value: portfolio.kpis.expired, icon: CalendarX, tone: 'text-red-400' },
-    { label: 'Under review', value: portfolio.kpis.underReview, icon: ShieldCheck, tone: 'text-amber-300' },
-    { label: 'Coverage types', value: portfolio.kpis.coverageTypes, icon: Layers, tone: 'text-[var(--text-primary)]' },
-    { label: 'Archived', value: portfolio.kpis.archived, icon: Archive, tone: 'text-[var(--text-muted)]' },
-    { label: 'Total premium', value: premiumKpi, icon: Wallet, tone: 'text-[var(--text-primary)]', isText: true, hint: portfolio.premium.hasAny ? `${portfolio.premium.present} recorded` : 'not recorded' },
+    { icon: ClipboardList, tone: 't-green', value: kv(kpi.active), label: 'Active policies', onClick: () => setFilters({ ...EMPTY_FILTERS, status: 'active' }) },
+    { icon: CalendarClock, tone: 't-amber', value: kv(kpi.expiringSoon), label: 'Expiring soon', title: `Review date within ${DEFAULT_WARN_DAYS} days`, onClick: () => setFilters({ ...EMPTY_FILTERS, band: 'expiring' }) },
+    { icon: Users, tone: 't-blue', value: kv(kpi.pendingReview), label: 'Pending review', title: 'Policies with status Under review', onClick: () => setFilters({ ...EMPTY_FILTERS, status: 'under_review' }) },
+    { icon: CheckCircle2, tone: 't-green', display: 'N/A', label: 'Avg. acknowledgment', title: 'Not recorded: no acknowledgment records exist for policies yet' },
+    { icon: AlertTriangle, tone: 't-red', value: kv(kpi.withGaps), label: 'Policy gaps', danger: kpi.withGaps > 0, title: 'Non-archived policies with no owner, no review date, an overdue review, no effective date or no policy text', onClick: () => setFilters({ ...EMPTY_FILTERS, gapsOnly: true }) },
   ]
 
-  const columns = useMemo(() => [
-    { id: 'title', header: 'Title', accessorFn: (r) => r.title || '', cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue() || 'N/A'}</span> },
-    { id: 'category', header: 'Coverage type', accessorFn: (r) => r.category || '', cell: ({ getValue }) => getValue() || 'N/A' },
-    { id: 'version', header: 'Version', accessorFn: (r) => r.version || '', cell: ({ getValue }) => getValue() || 'N/A' },
-    { id: 'owner', header: 'Owner', accessorFn: (r) => r.owner || '', cell: ({ getValue }) => getValue() || 'N/A' },
-    { id: 'effective_date', header: 'Effective', accessorFn: (r) => r.effective_date || '', cell: ({ row }) => fmtDate(row.original.effective_date) },
+  const columns = [
+    { key: 'code', header: 'Policy ID', sortValue: (r) => policyCode(r), cell: (r) => <span className="pm-code">{policyCode(r)}</span> },
+    { key: 'title', header: 'Policy title', cell: (r) => <span className="pm-title">{r.title || 'Untitled'}</span> },
+    { key: 'owner', header: 'Owner', cell: (r) => <Owner name={r.owner} /> },
+    { key: 'category', header: 'Category', cell: (r) => (r.category ? <span className="cc-pill info">{r.category}</span> : <span className="cc-na">Not recorded</span>) },
+    { key: 'country', header: 'Region', sortValue: (r) => regionLabel(r), cell: (r) => <span className="pm-region"><Globe size={13} aria-hidden="true" /> {regionLabel(r)}</span> },
+    { key: 'version', header: 'Version', cell: (r) => (r.version ? `v${String(r.version).replace(/^v/i, '')}` : <span className="cc-na">N/A</span>) },
+    { key: 'effective_date', header: 'Effective date', cell: (r) => fmtDate(r.effective_date) },
     {
-      id: 'review_date', header: 'Renewal', accessorFn: (r) => r.review_date || '',
-      cell: ({ row }) => {
-        const r = row.original
+      key: 'review_date', header: 'Next review',
+      cell: (r) => {
         const e = policyExpiry(r, now)
         return (
-          <span className="inline-flex items-center gap-2 whitespace-nowrap">
-            <span>{fmtDate(r.review_date)}</span>
-            {e.hasDate && r.status !== 'archived' && (
-              <span className={`text-[11px] px-1.5 py-0.5 rounded ${BAND_STYLES[e.band]}`}>{BAND_LABEL[e.band]}</span>
-            )}
+          <span className="pm-review">
+            {fmtDate(r.review_date)}
+            {e.hasDate && r.status !== 'archived' && e.band !== 'valid' && <span className={`cc-pill ${BAND_TONE[e.band]}`}>{BAND_LABEL[e.band]}</span>}
           </span>
         )
       },
     },
+    { key: 'status', header: 'Status', sortValue: (r) => statusLabel(r.status), cell: (r) => <span className={`cc-pill ${statusTone(r.status)}`}>{statusLabel(r.status)}</span> },
+    { key: 'ack', header: 'Ack. %', sortable: false, cell: () => <span className="cc-na" title="No acknowledgment records exist for policies">Not recorded</span> },
     {
-      id: 'premium', header: 'Premium', accessorFn: (r) => policyPremium(r), meta: { align: 'right' },
-      cell: ({ getValue }) => (getValue() == null ? 'N/A' : formatCurrency(getValue(), activeCurrency || 'SAR', 0)),
-    },
-    {
-      id: 'status', header: 'Status', accessorFn: (r) => POLICY_STATUS_META[r.status]?.label || r.status || '',
-      meta: { filterVariant: 'select' },
-      cell: ({ row }) => <span className={`badge text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[row.original.status] || STATUS_STYLES.draft}`}>{POLICY_STATUS_META[row.original.status]?.label || row.original.status}</span>,
-    },
-    {
-      id: 'actions', header: '', enableSorting: false, enableHiding: false, meta: { export: false },
-      cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-1">
-          <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(row.original) }} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)]" aria-label={`Edit ${row.original.title || 'policy'}`}><Pencil size={15} /></button>
-          <button type="button" onClick={(e) => { e.stopPropagation(); setDeleting(row.original) }} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-300 focus-visible:ring-2 focus-visible:ring-red-400" aria-label={`Delete ${row.original.title || 'policy'}`}><Trash2 size={15} /></button>
-        </div>
+      key: 'actions', header: 'Actions', sortable: false,
+      cell: (r) => (
+        <span className="pm-actions">
+          <button type="button" className="cc-icon-btn" onClick={(e) => { e.stopPropagation(); openEdit(r) }} aria-label={`Edit ${r.title || 'policy'}`} title="Edit"><Pencil size={14} /></button>
+          <button type="button" className="cc-icon-btn pm-danger" onClick={(e) => { e.stopPropagation(); setDeleting(r) }} aria-label={`Delete ${r.title || 'policy'}`} title="Delete"><Trash2 size={14} /></button>
+        </span>
       ),
     },
-  ], [now, activeCurrency, openEdit])
+  ]
+
+  // The register renders through EnterpriseTable in the kit skin (cc-et), the
+  // same table KitTable wraps, so it pages and sorts the whole filtered set.
+  const tableColumns = columns.map((c) => ({
+    id: c.key,
+    header: c.header,
+    accessorFn: (r) => (c.sortValue ? c.sortValue(r) : r[c.key]),
+    cell: ({ row }) => c.cell(row.original),
+    enableSorting: c.sortable !== false,
+  }))
+
+  const statusSegments = portfolio.status.list.map((s) => ({ label: s.label, count: s.count, color: STATUS_COLOR[s.status] || 'var(--cc-ink-3)', status: s.status }))
+  const pipelineItems = portfolio.pipeline.buckets.map((b) => ({ key: b.key, label: b.label, count: b.count }))
+  const categories = categoryBreakdown(all)
+  const log = versionLog(selected)
+  const gaps = selected ? policyGaps(selected, now) : []
+  const distance = selected ? reviewDistance(selected.review_date, now) : null
+  const emptyRegister = all.length === 0
+    ? (missing ? 'Policy management is not enabled on this database yet.' : 'No policies recorded yet. Create the first fleet policy with New Policy.')
+    : null
 
   return (
-    <div className="space-y-6">
-      <PageHeader
+    <div className="cc pm-page">
+      <PageHero
+        hello="Inspections and Compliance"
         title="Policy Management"
-        subtitle="Fleet insurance & governance policies - coverage, ownership, renewals and premium tracked in one register."
-        icon={ScrollText}
-        onRefresh={load}
-        refreshing={refreshing}
-        updatedAt={updatedAt}
-        actions={
-          <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, reportFileName('Policies'))} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileSpreadsheet size={14} /> Excel
-            </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Policy Management', reportFileName('Policies'), 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileText size={14} /> PDF
-            </button>
-            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5">
-              <Plus size={14} /> New policy
-            </button>
-          </div>
-        }
+        lead="Govern safety, workshop, fleet and compliance policies across countries and sites."
+        imgLight="/dashboard/hero-policies-light.webp"
+        imgDark="/dashboard/hero-policies-dark.webp"
+        stat={rows ? { value: fmtInt(kpi.total), lines: ['Policies in', 'the register'] } : undefined}
       />
 
       {missing && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
-          <div>
-            <p className="text-amber-300 font-medium">Policy management isn't enabled on this database yet.</p>
-            <p className="text-[var(--text-muted)] text-sm mt-1">
-              Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V137_POLICIES.sql</span>, then reload.
-            </p>
-          </div>
+        <div className="cc-card pm-banner warn" role="status">
+          <AlertTriangle size={18} aria-hidden="true" />
+          <p>Policy management is not enabled on this database yet. Apply MIGRATIONS_V137_POLICIES.sql, then reload.</p>
         </div>
       )}
-
       {actionError && (
-        <div className="card border border-red-800/50 flex items-start justify-between gap-3" role="alert">
-          <p className="text-sm text-red-300 flex items-start gap-2"><AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />{actionError}</p>
-          <button type="button" onClick={() => setActionError('')} aria-label="Dismiss message" className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={16} /></button>
+        <div className="cc-card pm-banner bad" role="alert">
+          <AlertTriangle size={18} aria-hidden="true" />
+          <p>{actionError}</p>
+          <button type="button" className="cc-icon-btn" onClick={() => setActionError('')} aria-label="Dismiss message"><X size={14} /></button>
+        </div>
+      )}
+      {portfolio.pipeline.overdue > 0 && (
+        <div className="cc-card pm-banner bad" role="status">
+          <CalendarClock size={18} aria-hidden="true" />
+          <p><b>{portfolio.pipeline.overdue}</b> policy review{portfolio.pipeline.overdue === 1 ? ' is' : 's are'} already overdue.</p>
+          <button type="button" className="cc-btn" onClick={() => setFilters({ ...EMPTY_FILTERS, band: 'expired' })}>Show overdue</button>
         </div>
       )}
 
-      {/* KPI tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {kpis.map((k) => {
-          const Icon = k.icon
-          return (
-            <div key={k.label} className="card">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <Icon size={16} className={k.tone} />
-              </div>
-              <p className={`${k.isText ? 'text-2xl' : 'text-3xl'} font-bold mt-1 ${k.tone}`}>
-                {rows === null ? 'N/A' : k.value}
-              </p>
-              {k.hint && rows !== null && <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{k.hint}</p>}
-            </div>
-          )
-        })}
+      <div className="cc-kpis pm-kpis">
+        {kpis.map((k) => <Kpi key={k.label} {...k} loading={loading && rows === null} />)}
       </div>
 
-      {/* Charts */}
-      {rows !== null && rows.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <ChartCard title="Status distribution" icon={ClipboardList} empty={statusChart.empty}>
-            <Doughnut data={statusChart.data} options={DOUGHNUT_OPTS} />
-          </ChartCard>
-          <ChartCard title="Renewal pipeline (next 12 months)" icon={CalendarClock} empty={pipelineChart.empty}>
-            <Bar data={pipelineChart.data} options={CHART_OPTS} />
-          </ChartCard>
-          <ChartCard title={insurerChart.title} icon={Wallet} empty={insurerChart.empty}>
-            <Bar data={insurerChart.data} options={CHART_OPTS} />
-          </ChartCard>
-        </div>
-      )}
-
-      {portfolio.pipeline.overdue > 0 && (
-        <div className="card border border-red-800/40 flex items-center gap-2 text-sm">
-          <CalendarX size={16} className="text-red-400 shrink-0" />
-          <span className="text-[var(--text-secondary)]">
-            <span className="font-semibold text-red-300">{portfolio.pipeline.overdue}</span> policy renewal{portfolio.pipeline.overdue === 1 ? '' : 's'} already overdue.
-          </span>
-          <button onClick={() => { setBandFilter('expired'); setStatusFilter('all') }} className="ml-auto btn-secondary text-xs">Show overdue</button>
-        </div>
-      )}
-
-      {/* Filters */}
-      <div className="card space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search title, coverage, owner, insurer, version" aria-label="Search policies" value={search} onChange={(e) => setSearch(e.target.value)} />
+      <Card
+        className="pm-register"
+        title="Policy Register"
+        sub="Search and manage all safety, workshop, fleet and compliance policies"
+        action={(
+          <div className="pm-head-actions">
+            <button type="button" className="cc-btn-ghost" onClick={() => runExport('excel')} disabled={!filtered.length}><FileSpreadsheet size={15} aria-hidden="true" /> Excel</button>
+            <button type="button" className="cc-btn-ghost" onClick={() => runExport('pdf')} disabled={!filtered.length}><FileText size={15} aria-hidden="true" /> Export PDF</button>
+            <button type="button" className="cc-btn-primary" onClick={openCreate}><Plus size={15} aria-hidden="true" /> New Policy</button>
           </div>
-          <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
-            <option value="all">All statuses</option>
+        )}
+      >
+        <div className="cc-filters pm-filters">
+          <label className="cc-search">
+            <Search size={15} aria-hidden="true" />
+            <input type="search" placeholder="Search policies by title, owner, category, version" aria-label="Search policies" value={filters.search} onChange={(e) => setFilter('search', e.target.value)} />
+          </label>
+          {countryOptions.length > 1 && (
+            <select className="cc-select" aria-label="Country" value={filters.country} onChange={(e) => setFilter('country', e.target.value)}>
+              <option value="">All countries</option>
+              {countryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
+          <select className="cc-select" aria-label="Policy type" value={filters.category} onChange={(e) => setFilter('category', e.target.value)}>
+            <option value="">All policy types</option>
+            {categoryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select className="cc-select" aria-label="Status" value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
+            <option value="all">All status</option>
             {POLICY_STATUSES.map((s) => <option key={s} value={s}>{POLICY_STATUS_META[s]?.label || s}</option>)}
           </select>
-          <select className="input" value={bandFilter} onChange={(e) => setBandFilter(e.target.value)} aria-label="Renewal band">
+          <select className="cc-select" aria-label="Renewal band" value={filters.band} onChange={(e) => setFilter('band', e.target.value)}>
             <option value="all">All renewals</option>
             {EXPIRY_BANDS.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
           </select>
-          <select className="input" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} aria-label="Coverage type">
-            <option value="">All coverage types</option>
-            {categoryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {portfolio.total}</span>
+          <label className="pm-date"><span>Review from</span><input type="date" className="cc-select" value={filters.from} onChange={(e) => setFilter('from', e.target.value)} /></label>
+          <label className="pm-date"><span>to</span><input type="date" className="cc-select" value={filters.to} onChange={(e) => setFilter('to', e.target.value)} /></label>
+          {hasFilters && <button type="button" className="cc-btn-ghost" onClick={() => setFilters(EMPTY_FILTERS)}><RotateCcw size={14} aria-hidden="true" /> Reset</button>}
+          <span className="pm-count" aria-live="polite">{rows ? `${filtered.length} of ${all.length}` : ''}</span>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <label htmlFor="pol-from" className="text-xs text-[var(--text-muted)]">Renewal from</label>
-          <input id="pol-from" type="date" className="input" value={fromDate} onChange={(e) => setFromDate(e.target.value)} aria-label="Renewal from" />
-          <label htmlFor="pol-to" className="text-xs text-[var(--text-muted)]">to</label>
-          <input id="pol-to" type="date" className="input" value={toDate} onChange={(e) => setToDate(e.target.value)} aria-label="Renewal to" />
-        </div>
+        {filters.gapsOnly && <p className="pm-note"><Info size={13} aria-hidden="true" /> Showing policies with governance gaps only.</p>}
+        <CardState state={loadState} empty={emptyRegister}>
+          <EnterpriseTable
+            columns={tableColumns}
+            data={filtered}
+            getRowId={(r) => String(r.id)}
+            emptyMessage="No policies match these filters."
+            onRowClick={(r) => setSelectedId(r.id)}
+            enableGlobalFilter={false}
+            enableColumnFilters={false}
+            enableExport={false}
+            enableColumnVisibility={false}
+            initialPageSize={25}
+            className="cc-et cc-et-clickable"
+          />
+        </CardState>
+      </Card>
+
+      <div className="pm-row">
+        <Card
+          title="Policy Details"
+          action={selected ? <button type="button" className="cc-btn" onClick={() => openEdit(selected)}>Edit policy</button> : null}
+        >
+          <CardState state={loadState} empty={!selected ? 'Select a policy in the register to see its details.' : null}>
+            {selected && (
+              <div className="pm-detail">
+                <div className="pm-detail-head">
+                  <h3>{selected.title || 'Untitled'}</h3>
+                  <span className={`cc-pill ${statusTone(selected.status)}`}>{statusLabel(selected.status)}</span>
+                </div>
+                <div className="pm-chips">
+                  <span><Hash size={13} aria-hidden="true" /> {policyCode(selected)}</span>
+                  <span><GitBranch size={13} aria-hidden="true" /> {selected.version ? `v${String(selected.version).replace(/^v/i, '')}` : 'No version'}</span>
+                  <span><ShieldCheck size={13} aria-hidden="true" /> {selected.category || 'Uncategorised'}</span>
+                  <span><Globe size={13} aria-hidden="true" /> {regionLabel(selected)}</span>
+                </div>
+                <p className="pm-body">{selected.body || 'No policy text recorded yet.'}</p>
+                <dl className="pm-facts">
+                  <Fact icon={Users} label="Owner"><Owner name={selected.owner} /></Fact>
+                  <Fact icon={Calendar} label="Effective date">{fmtDate(selected.effective_date)}</Fact>
+                  <Fact icon={CalendarClock} label="Next review">
+                    {fmtDate(selected.review_date)}{distance && <span className={`pm-dist ${distance.startsWith('overdue') ? 'bad' : ''}`}> ({distance})</span>}
+                  </Fact>
+                  <Fact icon={Globe} label="Applies to">{regionLabel(selected)}</Fact>
+                  <Fact icon={BookOpen} label="Related regulations"><span className="cc-na">Not recorded</span></Fact>
+                  <Fact icon={Paperclip} label="Attachments"><span className="cc-na">Not recorded</span></Fact>
+                  <Fact icon={AlertTriangle} label="Governance gaps">
+                    {gaps.length ? <span className="pm-gaps">{gaps.map((g) => <span key={g} className="cc-pill bad">{g}</span>)}</span> : 'None'}
+                  </Fact>
+                  {selected.notes && <Fact icon={Info} label="Notes">{selected.notes}</Fact>}
+                </dl>
+                <div className="pm-detail-actions">
+                  <button type="button" className="cc-btn-primary" disabled={!!statusBusy || selected.status === 'active'} onClick={() => setStatus(selected, 'active')}>
+                    {statusBusy === 'active' ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Send size={15} aria-hidden="true" />} Publish
+                  </button>
+                  <button type="button" className="cc-btn-ghost" disabled={!!statusBusy || selected.status === 'under_review'} onClick={() => setStatus(selected, 'under_review')}>
+                    {statusBusy === 'under_review' ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <RotateCcw size={15} aria-hidden="true" />} Request Review
+                  </button>
+                  <button type="button" className="cc-btn-ghost" onClick={() => exportOne(selected)}><FileText size={15} aria-hidden="true" /> Export PDF</button>
+                  <button type="button" className="cc-icon-btn pm-danger" onClick={() => setDeleting(selected)} aria-label={`Delete ${selected.title || 'policy'}`} title="Delete"><Trash2 size={14} /></button>
+                </div>
+              </div>
+            )}
+          </CardState>
+        </Card>
+
+        <Card title="Version History and Change Log">
+          <CardState state={loadState} empty={!selected ? 'Select a policy to see its history.' : null}>
+            {selected && (
+              <>
+                <ol className="pm-timeline">
+                  {log.entries.map((e, i) => (
+                    <li key={e.key} className={i === 0 ? 'current' : ''}>
+                      <span className="pm-ver">{e.version ? `v${String(e.version).replace(/^v/i, '')}` : <History size={13} aria-hidden="true" />}</span>
+                      <div>
+                        <div className="pm-tl-top"><b>{fmtDate(e.at)}</b><span className={`cc-pill ${i === 0 ? 'good' : 'muted'}`}>{e.label}</span></div>
+                        <p>{e.note}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+                <p className="pm-note"><Info size={13} aria-hidden="true" /> Earlier versions and per-change notes are not recorded: the register keeps only the current version of each policy.</p>
+              </>
+            )}
+          </CardState>
+        </Card>
+
+        <Card title="Policy Acknowledgment and Compliance">
+          <div className="cc-empty pm-ack-empty">
+            <div>
+              <CheckCircle2 size={26} aria-hidden="true" />
+              <p><b>Acknowledgments are not recorded yet.</b></p>
+              <p>No table stores who has read and accepted each policy, so acknowledgment rates by person or role cannot be measured. Governance gaps above are measured from the register itself.</p>
+            </div>
+          </div>
+        </Card>
       </div>
 
-      {/* Register */}
-      <EnterpriseTable
-        columns={columns}
-        data={filtered}
-        getRowId={(r) => String(r.id)}
-        loading={rows === null && !error}
-        error={error || null}
-        onRetry={load}
-        enableGlobalFilter={false}
-        exportFileName={reportFileName('Policies')}
-        emptyMessage={(rows || []).length === 0 && !missing ? 'No policies yet. Create your first fleet policy or coverage record.' : 'No policies match these filters.'}
-        onRowClick={(r) => openEdit(r)}
-      />
+      <div className="pm-row">
+        <Card title="Status distribution" sub="Every policy in the register">
+          <CardState state={loadState} empty={all.length === 0 ? 'No policies yet.' : null}>
+            <Donut segments={statusSegments} total={portfolio.total} centerLabel="policies" onSelect={(s) => setFilters({ ...EMPTY_FILTERS, status: s.status === 'unknown' ? 'all' : s.status })} />
+          </CardState>
+        </Card>
+        <Card title="Review pipeline" sub={`Next 12 months${portfolio.pipeline.overdue ? `, plus ${portfolio.pipeline.overdue} overdue` : ''}`}>
+          <CardState state={loadState}>
+            <Bars items={pipelineItems} color="var(--cc-blue)" emptyText="No reviews scheduled in the next 12 months." />
+          </CardState>
+        </Card>
+        <Card title="Policies by category">
+          <CardState state={loadState}>
+            <Bars items={categories} onSelect={(c) => setFilters({ ...EMPTY_FILTERS, category: c.label === 'Uncategorised' ? '' : c.label })} emptyText="No policies yet." />
+          </CardState>
+        </Card>
+      </div>
 
       <PolicyModal open={modalOpen} existing={editing} onClose={() => setModalOpen(false)} onSaved={load} />
       <DeleteConfirm policy={deleting} onCancel={() => setDeleting(null)} onConfirm={confirmDelete} busy={deleteBusy} />

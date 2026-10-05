@@ -1,28 +1,30 @@
 /**
  * TollTransactions (route /toll-transactions) - toll-road charges per asset,
- * paid by electronic tag, cash, card or on account. Toll spend is a recurring
- * per-trip operating cost, so every charge is org-isolated, country-scoped and
- * can be reconciled or disputed.
+ * rebuilt on the Command Center kit to the owner's "Toll Transactions" mockup:
+ * KPI strip, spend by route, daily trend, status donut, filter bar, the
+ * transaction ledger, reconciliation overview and the selected-transaction
+ * panel (raise dispute / mark reconciled).
  *
- * Runs on the `toll_transactions` table (V169). All analytics live in the pure
- * `src/lib/tollTransactionsAnalytics.js` engine (which reuses the roll-up
- * primitives in `src/lib/tollTransactions.js`). Money is always shown in its
- * own currency: a scope that mixes SAR, AED and EGP reports each currency on
- * its own line and never a combined total.
+ * Runs on `toll_transactions` (V169). Money rules live in
+ * src/lib/tollTransactionsAnalytics.js and the page shaping in
+ * src/lib/tollTransactionsView.js: money is shown in its own currency, and a
+ * scope mixing SAR, AED and EGP reports each currency on its own line.
+ *
+ * The table has no operator, trip link, toll evidence or dispute history
+ * column; those places in the mockup read "Not recorded".
  */
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
-  Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend,
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, LineElement, PointElement,
+  Filler, Tooltip, Legend,
 } from 'chart.js'
-import { Bar, Doughnut } from 'react-chartjs-2'
+import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import {
-  Receipt, Coins, AlertTriangle, Truck, Search, X, FileSpreadsheet, FileText,
-  Plus, Pencil, Trash2, RotateCcw, Percent, CalendarClock, Banknote, MapPin,
+  Receipt, Coins, AlertTriangle, Clock, Tag, Search, X, FileSpreadsheet, FileText,
+  Plus, Pencil, Trash2, RotateCcw, Upload, ChevronLeft, ChevronRight, CheckCircle2, MapPin, Truck,
 } from 'lucide-react'
-import PageHeader from '../components/ui/PageHeader'
-import StatTile from '../components/ui/StatTile'
 import Modal from '../components/ui/Modal'
-import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { Card, CardState, Kpi, Tabs, KitTable, Donut, fmtInt } from '../components/commandCenter/kit'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listTollTransactions, createTollTransaction, updateTollTransaction, deleteTollTransaction,
@@ -32,11 +34,15 @@ import {
   tollExportRows, currencyOf, titleCase, TOLL_STATUSES, TOLL_METHODS,
   EXPORT_COLS, EXPORT_HEADERS,
 } from '../lib/tollTransactionsAnalytics'
-import { colorAt, categorical, withAlpha } from '../lib/reportColors'
+import {
+  reconBucket, reconOverview, routeSpend, dailyTrend, tagSummary, previousWindow, changePct,
+  selectionNav, statusPill, mapImportRows, IMPORT_TEMPLATE_HEADERS, RECON_META,
+} from '../lib/tollTransactionsView'
 import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation } from '../lib/api/_client'
+import './TollTransactions.css'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, LineElement, PointElement, Filler, Tooltip, Legend)
 
 const loadExportUtils = () => import('../lib/exportUtils')
 const READ_LIMIT = 500
@@ -46,27 +52,19 @@ const EMPTY_FORM = {
   transaction_at: '', amount: '', currency: '', payment_method: '', status: '', notes: '',
 }
 
-const STATUS_TONE = {
-  posted: 'text-sky-400 bg-sky-500/10 border-sky-500/30',
-  disputed: 'text-red-400 bg-red-500/10 border-red-500/30',
-  reconciled: 'text-green-400 bg-green-500/10 border-green-500/30',
-  refunded: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
-}
-
 const fmtAmount = (v, currency) => {
   if (v == null || v === '') return 'N/A'
   const n = Number(v)
   if (!Number.isFinite(n)) return 'N/A'
-  const num = n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const num = n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   return currency && currency !== 'Unspecified' ? `${currency} ${num}` : num
 }
-const fmtNum = (v) => (v == null ? 'N/A' : Number(v).toLocaleString())
 const fmtPct = (v) => (v == null ? 'N/A' : `${v}%`)
 
 function fmtDateTime(v) {
   if (!v) return 'N/A'
   const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString()
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 /** Local <input type="datetime-local"> value (YYYY-MM-DDTHH:mm) from an ISO/date. */
@@ -78,40 +76,47 @@ function toLocalInput(v) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+const TOOLTIP = { backgroundColor: 'var(--panel)', borderColor: 'var(--hairline)', borderWidth: 1, titleColor: 'var(--text-primary)', bodyColor: 'var(--text-secondary)' }
 const CHART_OPTS = {
   responsive: true,
   maintainAspectRatio: false,
-  plugins: { legend: { display: false } },
+  plugins: { legend: { display: false }, tooltip: TOOLTIP },
   scales: {
-    x: { ticks: { color: 'var(--text-muted)', font: { size: 10 } }, grid: { display: false } },
+    x: { ticks: { color: 'var(--text-muted)', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 7 }, grid: { display: false } },
     y: { ticks: { color: 'var(--text-muted)', font: { size: 10 } }, grid: { color: 'var(--panel-2)' }, beginAtZero: true },
   },
 }
 const DONUT_OPTS = {
   responsive: true,
   maintainAspectRatio: false,
-  cutout: '60%',
-  plugins: { legend: { position: 'right', labels: { color: 'var(--text-secondary)', boxWidth: 12, font: { size: 11 } } } },
+  cutout: '62%',
+  plugins: { legend: { position: 'bottom', labels: { color: 'var(--text-muted)', boxWidth: 10, font: { size: 11 } } }, tooltip: TOOLTIP },
 }
+const SERIES = ['#22c55e', '#06b6d4', '#f59e0b', '#ef4444', '#f97316', '#3b82f6', '#a855f7', '#94a3b8']
 
-const FIELD = 'input w-full min-h-[44px]'
+const NOT_RECORDED = <span className="cc-na">Not recorded</span>
 
 export default function TollTransactions() {
   const { activeCountry } = useSettings()
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
   const [actionError, setActionError] = useState('')
+  const [notice, setNotice] = useState('')
   const [notProvisioned, setNotProvisioned] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [updatedAt, setUpdatedAt] = useState(null)
 
   const [countryFilter, setCountryFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [methodFilter, setMethodFilter] = useState('')
   const [currencyFilter, setCurrencyFilter] = useState('')
+  const [assetFilter, setAssetFilter] = useState('')
+  const [reconFilter, setReconFilter] = useState('')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [search, setSearch] = useState('')
+  const [tab, setTab] = useState('ledger')
+  const [detailTab, setDetailTab] = useState('timeline')
+  const [selectedId, setSelectedId] = useState(null)
 
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -120,13 +125,19 @@ export default function TollTransactions() {
   const [formError, setFormError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [busyId, setBusyId] = useState(null)
+
+  const [importOpen, setImportOpen] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState(null)
+  const [importError, setImportError] = useState('')
+  const fileRef = useRef(null)
 
   const load = useCallback(async () => {
     setRefreshing(true); setError(''); setNotProvisioned(false)
     try {
       const data = await listTollTransactions({ country: activeCountry, limit: READ_LIMIT })
       setRows(Array.isArray(data) ? data : [])
-      setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) { setNotProvisioned(true); setRows([]) }
       else { setError(toUserMessage(err, 'Could not load toll transactions.')); setRows(null) }
@@ -138,25 +149,44 @@ export default function TollTransactions() {
   useEffect(() => { load() }, [load])
 
   const loaded = Array.isArray(rows)
+  const loadState = { loading: !loaded && !error, data: rows, error: error || null, retry: load }
   const all = useMemo(() => rows || [], [rows])
-  const filtered = useMemo(() => filterTolls(all, {
+  const baseFilter = useMemo(() => ({
     search, country: countryFilter, status: statusFilter, method: methodFilter,
-    currency: currencyFilter, from: fromDate, to: toDate,
-  }), [all, search, countryFilter, statusFilter, methodFilter, currencyFilter, fromDate, toDate])
+    currency: currencyFilter, asset: assetFilter,
+  }), [search, countryFilter, statusFilter, methodFilter, currencyFilter, assetFilter])
+  const filtered = useMemo(() => filterTolls(all, { ...baseFilter, from: fromDate, to: toDate }), [all, baseFilter, fromDate, toDate])
+  const ledgerRows = useMemo(() => (reconFilter ? filtered.filter((r) => reconBucket(r) === reconFilter) : filtered), [filtered, reconFilter])
+
   const summary = useMemo(() => summarizeTollAnalytics(filtered, { now: Date.now() }), [filtered])
-  const trend = useMemo(
-    () => monthlyTrend(filtered, { now: Date.now(), currency: summary.currency }),
-    [filtered, summary.currency],
-  )
+  const recon = useMemo(() => reconOverview(filtered), [filtered])
+  const tags = useMemo(() => tagSummary(filtered), [filtered])
+  const routes = useMemo(() => routeSpend(filtered, summary.currency), [filtered, summary.currency])
+  const daily = useMemo(() => dailyTrend(filtered, { now: Date.now(), to: toDate, currency: summary.currency }), [filtered, toDate, summary.currency])
+  const trend = useMemo(() => monthlyTrend(filtered, { now: Date.now(), currency: summary.currency }), [filtered, summary.currency])
   const methods = useMemo(() => methodMix(filtered), [filtered])
   const rollups = useMemo(() => rollupsForCurrency(filtered, summary.currency), [filtered, summary.currency])
 
+  // Previous period: only when a full From/To window is chosen.
+  const prevWin = previousWindow(fromDate, toDate)
+  const prev = useMemo(() => {
+    if (!prevWin) return null
+    const p = filterTolls(all, { ...baseFilter, from: prevWin.from, to: prevWin.to })
+    return { rows: p, summary: summarizeTollAnalytics(p, { now: Date.now() }), recon: reconOverview(p) }
+  }, [all, baseFilter, prevWin?.from, prevWin?.to]) // eslint-disable-line react-hooks/exhaustive-deps
+  const trendOf = (cur, before) => (prev ? changePct(cur, before) : null)
+  const trendTitle = prevWin ? `Change vs ${prevWin.from} to ${prevWin.to}` : undefined
+
   const countryOptions = useMemo(() => [...new Set(all.map((r) => r.country).filter(Boolean))].sort(), [all])
   const currencyOptions = useMemo(() => [...new Set(all.map(currencyOf))].sort(), [all])
+  const assetOptions = useMemo(() => [...new Set(all.map((r) => String(r.asset_no || '').trim()).filter(Boolean))].sort(), [all])
   const truncated = loaded && all.length >= READ_LIMIT
 
+  const selected = useMemo(() => ledgerRows.find((r) => String(r.id) === String(selectedId)) || ledgerRows[0] || null, [ledgerRows, selectedId])
+  const nav = selectionNav(ledgerRows, selected?.id)
+
   // ── Exports (whole filtered set, never one page) ─────────────────────────
-  const exportRows = useMemo(() => tollExportRows(filtered), [filtered])
+  const exportRows = useMemo(() => tollExportRows(ledgerRows), [ledgerRows])
   const fileBase = async () => {
     const { reportFileName, reportDateLabel } = await loadExportUtils()
     return reportFileName('TyrePulse Toll Transactions', activeCountry !== 'All' ? activeCountry : null, reportDateLabel())
@@ -174,7 +204,7 @@ export default function TollTransactions() {
     } catch (e) { setActionError(toUserMessage(e, 'Export failed. Please try again.')) }
   }
 
-  // ── Modal ────────────────────────────────────────────────────────────────
+  // ── Create / edit ────────────────────────────────────────────────────────
   const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setFormError(''); setShowModal(true) }
   const openEdit = useCallback((r) => {
     setEditing(r)
@@ -231,288 +261,421 @@ export default function TollTransactions() {
     }
   }, [confirmDelete, load])
 
-  const clearFilters = () => {
-    setCountryFilter(''); setStatusFilter(''); setMethodFilter(''); setCurrencyFilter('')
-    setFromDate(''); setToDate(''); setSearch('')
-  }
-  const hasFilters = !!(countryFilter || statusFilter || methodFilter || currencyFilter || fromDate || toDate || search)
+  const setStatus = useCallback(async (r, status) => {
+    if (!r) return
+    setBusyId(r.id); setActionError(''); setNotice('')
+    try {
+      await updateTollTransaction(r.id, { status })
+      setNotice(status === 'disputed' ? `Dispute raised for ${r.asset_no || 'the transaction'}.` : `${r.asset_no || 'Transaction'} marked as reconciled.`)
+      await load()
+    } catch (err) {
+      setActionError(toUserMessage(err, 'Could not update the transaction status.'))
+    } finally {
+      setBusyId(null)
+    }
+  }, [load])
 
-  // ── Table ────────────────────────────────────────────────────────────────
+  // ── Import ───────────────────────────────────────────────────────────────
+  const onImportFile = async (e) => {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    setImporting(true); setImportError(''); setImportResult(null)
+    try {
+      const { parseWorkbook } = await import('../lib/import/parseWorkbook')
+      const wb = await parseWorkbook(await f.arrayBuffer(), { fileName: f.name })
+      const sheet = wb.sheets?.[0]
+      if (!sheet) throw new Error('No sheet found in the file.')
+      const { rows: payloads, skipped } = mapImportRows(sheet.rows || [])
+      if (!payloads.length) throw new Error('No rows with an asset number were found. Check the column headers.')
+      let saved = 0
+      const failures = []
+      for (const p of payloads.slice(0, 5000)) {
+        try {
+          await createTollTransaction({ ...p, country: activeCountry !== 'All' ? activeCountry : null })
+          saved += 1
+        } catch (err) {
+          if (failures.length < 5) failures.push(`${p.asset_no}: ${toUserMessage(err, 'not saved')}`)
+        }
+      }
+      setImportResult({ saved, skipped, failed: payloads.length - saved, failures, capped: payloads.length > 5000 })
+      if (saved) await load()
+    } catch (err) {
+      setImportError(toUserMessage(err, 'Could not read that file.'))
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  const clearFilters = () => {
+    setCountryFilter(''); setStatusFilter(''); setMethodFilter(''); setCurrencyFilter(''); setAssetFilter('')
+    setFromDate(''); setToDate(''); setSearch(''); setReconFilter('')
+  }
+  const hasFilters = !!(countryFilter || statusFilter || methodFilter || currencyFilter || assetFilter || fromDate || toDate || search || reconFilter)
+  const emptyAll = loaded && all.length === 0
+
+  // ── Ledger columns ───────────────────────────────────────────────────────
   const columns = useMemo(() => [
-    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset_no || 'N/A', size: 120,
-      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.asset_no || 'N/A'}</span> },
-    { id: 'driver', header: 'Driver', accessorFn: (r) => r.driver_name || 'N/A', size: 140 },
-    { id: 'plaza', header: 'Plaza', accessorFn: (r) => r.plaza_name || 'N/A', size: 160 },
-    { id: 'highway', header: 'Highway', accessorFn: (r) => r.highway || 'N/A', size: 120 },
-    { id: 'when', header: 'Transaction at', accessorFn: (r) => r.transaction_at || '', size: 170,
-      cell: ({ row }) => <span className="whitespace-nowrap text-[var(--text-secondary)]">{fmtDateTime(row.original.transaction_at)}</span> },
-    { id: 'amount', header: 'Amount', accessorFn: (r) => (r.amount == null || r.amount === '' ? null : Number(r.amount)), size: 130, meta: { align: 'right' },
-      cell: ({ row }) => <span className="font-semibold tabular-nums whitespace-nowrap text-[var(--text-primary)]">{fmtAmount(row.original.amount, currencyOf(row.original))}</span> },
-    { id: 'method', header: 'Method', accessorFn: (r) => (r.payment_method ? titleCase(r.payment_method) : 'N/A'), size: 110 },
-    { id: 'status', header: 'Status', accessorFn: (r) => (r.status ? titleCase(r.status) : 'N/A'), size: 120,
-      cell: ({ row }) => {
-        const s = String(row.original.status || '').toLowerCase()
-        return s ? (
-          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_TONE[s] || 'text-[var(--text-secondary)] bg-[var(--input-bg)] border-[var(--input-border)]'}`}>
-            {titleCase(s)}
-          </span>
-        ) : <span className="text-[var(--text-muted)]">N/A</span>
-      } },
-    { id: 'actions', header: '', size: 110, enableSorting: false, meta: { export: false, align: 'right' },
-      cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-1">
-          <button type="button" onClick={() => openEdit(row.original)} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label={`Edit toll for ${row.original.asset_no || 'asset'}`}><Pencil size={15} /></button>
-          <button type="button" onClick={() => setConfirmDelete(row.original)} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label={`Delete toll for ${row.original.asset_no || 'asset'}`}><Trash2 size={15} /></button>
-        </div>
-      ) },
+    { key: 'when', header: 'Date and time', sortValue: (r) => r.transaction_at || '', cell: (r) => <span className="tt-nowrap">{fmtDateTime(r.transaction_at)}</span> },
+    { key: 'asset', header: 'Asset', sortValue: (r) => r.asset_no || '', cell: (r) => <span className="tt-asset"><Truck size={13} aria-hidden="true" />{r.asset_no || 'N/A'}</span> },
+    { key: 'route', header: 'Route', sortValue: (r) => r.highway || '', cell: (r) => (r.highway ? <span className="tt-route">{r.highway}</span> : NOT_RECORDED) },
+    { key: 'tag', header: 'Tag / Payment', sortValue: (r) => r.tag_id || r.payment_method || '', cell: (r) => (
+      <span className="tt-tag">
+        <span>{r.tag_id || (r.payment_method ? titleCase(r.payment_method) : 'Not recorded')}</span>
+        {r.tag_id && r.payment_method && <small>{titleCase(r.payment_method)}</small>}
+      </span>
+    ) },
+    { key: 'plaza', header: 'Toll point', sortValue: (r) => r.plaza_name || '', cell: (r) => r.plaza_name || NOT_RECORDED },
+    { key: 'amount', header: 'Amount', numeric: true, sortValue: (r) => (r.amount == null || r.amount === '' ? null : Number(r.amount)), cell: (r) => <b className="tt-amount">{fmtAmount(r.amount, currencyOf(r))}</b> },
+    { key: 'status', header: 'Status', sortValue: (r) => reconBucket(r), cell: (r) => { const p = statusPill(r); return <span className={`cc-pill ${p.tone}`}>{p.label}</span> } },
+    { key: 'actions', header: '', sortable: false, align: 'right', cell: (r) => (
+      <span className="tt-row-actions">
+        <button type="button" className="cc-icon-btn" onClick={(e) => { e.stopPropagation(); openEdit(r) }} aria-label={`Edit toll for ${r.asset_no || 'asset'}`} title="Edit"><Pencil size={13} /></button>
+        <button type="button" className="cc-icon-btn tt-danger" onClick={(e) => { e.stopPropagation(); setConfirmDelete(r) }} aria-label={`Delete toll for ${r.asset_no || 'asset'}`} title="Delete"><Trash2 size={13} /></button>
+      </span>
+    ) },
   ], [openEdit])
 
   const assetColumns = useMemo(() => [
-    { id: 'asset', header: 'Asset', accessorFn: (a) => a.asset_no, size: 140 },
-    { id: 'count', header: 'Charges', accessorFn: (a) => a.count, size: 90, meta: { align: 'right' } },
-    { id: 'amount', header: 'Spend', accessorFn: (a) => a.amount, size: 130, meta: { align: 'right' },
-      cell: ({ row }) => <span className="tabular-nums">{fmtAmount(row.original.amount, summary.currency)}</span> },
+    { key: 'asset_no', header: 'Asset' },
+    { key: 'count', header: 'Charges', numeric: true },
+    { key: 'amount', header: 'Spend', numeric: true, cell: (a) => fmtAmount(a.amount, summary.currency) },
   ], [summary.currency])
   const plazaColumns = useMemo(() => [
-    { id: 'plaza', header: 'Plaza', accessorFn: (p) => p.plaza, size: 180 },
-    { id: 'count', header: 'Charges', accessorFn: (p) => p.count, size: 90, meta: { align: 'right' } },
-    { id: 'amount', header: 'Spend', accessorFn: (p) => p.amount, size: 130, meta: { align: 'right' },
-      cell: ({ row }) => <span className="tabular-nums">{fmtAmount(row.original.amount, summary.currency)}</span> },
+    { key: 'plaza', header: 'Toll point' },
+    { key: 'count', header: 'Charges', numeric: true },
+    { key: 'amount', header: 'Spend', numeric: true, cell: (p) => fmtAmount(p.amount, summary.currency) },
   ], [summary.currency])
 
-  const trendData = {
-    labels: trend.map((t) => t.month),
+  // ── KPI strip ────────────────────────────────────────────────────────────
+  const moneyNote = summary.mixedCurrency ? 'Mixed currencies: see the per-currency split' : null
+  const kpiLoading = !loaded && !error
+  const routeMax = routes.reduce((m, r) => Math.max(m, r.amount), 0)
+
+  const dailyData = {
+    labels: daily.series.map((d) => d.day.slice(5)),
     datasets: [{
-      label: summary.currency ? `Spend (${summary.currency})` : 'Transactions',
-      data: trend.map((t) => (summary.currency ? t.amount : t.count)),
-      backgroundColor: withAlpha(colorAt(0), 0.75),
-      borderRadius: 4,
+      data: daily.series.map((d) => (daily.metric === 'amount' ? d.amount : d.count)),
+      borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.18)', fill: true, tension: 0.35, pointRadius: 2,
     }],
   }
-  const methodData = {
-    labels: methods.map((m) => m.label),
-    datasets: [{ data: methods.map((m) => m.count), backgroundColor: categorical(methods.length), borderWidth: 0 }],
-  }
-
-  const moneyNote = summary.mixedCurrency ? 'Mixed currencies: see the per-currency split' : null
-  const kpis = [
-    { label: 'Transactions', value: loaded ? fmtNum(summary.total) : 'N/A', icon: Receipt, sub: `${fmtNum(summary.last30Count)} in the last 30 days` },
-    { label: 'Toll spend', value: loaded ? fmtAmount(summary.totalAmount, summary.currency) : 'N/A', icon: Coins, tone: 'warn', sub: moneyNote || (summary.unpricedCount ? `${summary.unpricedCount} without an amount` : 'All charges priced') },
-    { label: 'Average charge', value: loaded ? fmtAmount(summary.avgAmount, summary.currency) : 'N/A', icon: Banknote, sub: moneyNote || 'Per priced charge' },
-    { label: 'Disputed', value: loaded ? fmtNum(summary.disputedCount) : 'N/A', icon: AlertTriangle, tone: 'crit', sub: `Rate ${fmtPct(summary.disputeRatePct)}` },
-    { label: 'Disputed amount', value: loaded ? fmtAmount(summary.disputedAmount, summary.currency) : 'N/A', icon: Percent, tone: 'crit', sub: moneyNote || 'Awaiting resolution' },
-    { label: 'Reconciled', value: loaded ? fmtPct(summary.reconciledPct) : 'N/A', icon: CalendarClock, tone: 'accent', sub: `${fmtNum(summary.distinctAssets)} assets charged` },
-  ]
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Toll Transactions"
-        subtitle="Toll-road charges per asset (tag, cash, card or on account) for reconciliation, dispute handling and per-trip cost visibility."
-        icon={Receipt}
-        onRefresh={load}
-        refreshing={refreshing}
-        updatedAt={updatedAt}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={doExcel} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}>
-              <FileSpreadsheet size={14} /> Excel
+    <div className="cc tt-page">
+      {/* Header */}
+      <div className="tt-head">
+        <div className="tt-head-copy">
+          <div className="tt-crumb">Monitoring and Logistics <ChevronRight size={12} aria-hidden="true" /> <span>Toll Transactions</span></div>
+          <h1>Toll Transactions</h1>
+          <p>Track toll-road charges, reconciliation, disputes and per-asset cost visibility across your fleet.</p>
+        </div>
+        <div className="tt-head-actions">
+          <div className="tt-btn-row">
+            <button type="button" className="cc-btn-ghost" onClick={() => { setImportResult(null); setImportError(''); setImportOpen(true) }} disabled={notProvisioned || !loaded}>
+              <Upload size={14} aria-hidden="true" /> Import
             </button>
-            <button type="button" onClick={doPdf} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}>
-              <FileText size={14} /> PDF
-            </button>
-            <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={notProvisioned || !loaded}>
-              <Plus size={14} /> Add transaction
-            </button>
+            <button type="button" className="cc-btn-ghost" onClick={doExcel} disabled={!ledgerRows.length}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
+            <button type="button" className="cc-icon-btn" onClick={doPdf} disabled={!ledgerRows.length} aria-label="Export to PDF" title="Export to PDF"><FileText size={14} /></button>
+            <button type="button" className="cc-btn-primary" onClick={openCreate} disabled={notProvisioned || !loaded}><Plus size={14} aria-hidden="true" /> Add Transaction</button>
           </div>
-        }
-      />
+          <div className="tt-btn-row">
+            <label className="tt-date"><span>From</span><input type="date" className="cc-select" value={fromDate} max={toDate || undefined} onChange={(e) => setFromDate(e.target.value)} /></label>
+            <label className="tt-date"><span>To</span><input type="date" className="cc-select" value={toDate} min={fromDate || undefined} onChange={(e) => setToDate(e.target.value)} /></label>
+            {countryOptions.length > 1 && (
+              <label className="tt-date"><span>Country</span>
+                <select className="cc-select" value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)}>
+                  <option value="">All countries</option>
+                  {countryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </label>
+            )}
+          </div>
+        </div>
+      </div>
 
       {notProvisioned && (
-        <div className="card border border-amber-800/50 flex items-start gap-3" role="status">
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
-          <div>
-            <p className="text-amber-300 font-medium">Toll transactions are not enabled on this database yet.</p>
-            <p className="text-[var(--text-muted)] text-sm mt-1">
-              Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V169_TOLL_TRANSACTIONS.sql</span>, then reload.
-            </p>
-          </div>
+        <div className="cc-card tt-banner" role="status">
+          <AlertTriangle size={18} aria-hidden="true" />
+          <div><b>Toll transactions are not enabled on this database yet.</b><p>Apply MIGRATIONS_V169_TOLL_TRANSACTIONS.sql, then reload.</p></div>
         </div>
       )}
-
       {error && (
-        <div className="card border border-red-800/50 flex flex-wrap items-start gap-3" role="alert">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
-          <div className="flex-1 min-w-0">
-            <p className="text-red-300 font-medium">Could not load toll transactions.</p>
-            <p className="text-[var(--text-muted)] text-sm mt-1">{error}</p>
-          </div>
-          <button type="button" onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={refreshing}>
-            <RotateCcw size={14} /> Retry
-          </button>
+        <div className="cc-card tt-banner bad" role="alert">
+          <AlertTriangle size={18} aria-hidden="true" />
+          <div><b>Could not load toll transactions.</b><p>{error}</p></div>
+          <button type="button" className="cc-btn-ghost" onClick={load} disabled={refreshing}><RotateCcw size={14} aria-hidden="true" /> Retry</button>
         </div>
       )}
-
       {actionError && (
-        <div className="card border border-red-800/50 flex items-start gap-3" role="alert">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
-          <p className="flex-1 text-sm text-red-300">{actionError}</p>
-          <button type="button" onClick={() => setActionError('')} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Dismiss message"><X size={16} /></button>
+        <div className="cc-card tt-banner bad" role="alert">
+          <AlertTriangle size={18} aria-hidden="true" />
+          <div><p>{actionError}</p></div>
+          <button type="button" className="cc-icon-btn" onClick={() => setActionError('')} aria-label="Dismiss message"><X size={14} /></button>
+        </div>
+      )}
+      {notice && (
+        <div className="cc-card tt-banner good" role="status">
+          <CheckCircle2 size={18} aria-hidden="true" />
+          <div><p>{notice}</p></div>
+          <button type="button" className="cc-icon-btn" onClick={() => setNotice('')} aria-label="Dismiss message"><X size={14} /></button>
+        </div>
+      )}
+      {emptyAll && !notProvisioned && (
+        <div className="cc-card tt-banner" role="status">
+          <Receipt size={18} aria-hidden="true" />
+          <div><b>No toll transactions recorded yet.</b><p>Add the first charge by hand or import a statement from your toll operator (CSV or Excel). Every figure on this page fills in from those records.</p></div>
+          <button type="button" className="cc-btn-primary" onClick={openCreate}><Plus size={14} aria-hidden="true" /> Add Transaction</button>
         </div>
       )}
 
-      {/* KPI strip: covers exactly the transactions matching the filters */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        {kpis.map((k, i) => <StatTile key={k.label} index={i} label={k.label} value={k.value} icon={k.icon} tone={k.tone} sub={k.sub} />)}
+      {/* KPI strip */}
+      <div className="cc-kpis tt-kpis">
+        <Kpi icon={Coins} tone="t-green" loading={kpiLoading}
+          display={summary.mixedCurrency ? 'Mixed' : fmtAmount(summary.totalAmount, summary.currency)}
+          trend={summary.currency && prev?.summary.currency === summary.currency ? trendOf(summary.totalAmount, prev.summary.totalAmount) : null}
+          goodWhenUp={false} title={trendTitle}
+          label={<>Total toll spend<small className="tt-kpi-sub">{moneyNote || (summary.unpricedCount ? `${summary.unpricedCount} without an amount` : `${fmtInt(summary.total)} transactions`)}</small></>} />
+        <Kpi icon={AlertTriangle} tone="t-red" loading={kpiLoading} value={loaded ? summary.disputedCount : null}
+          trend={trendOf(summary.disputedCount, prev?.summary.disputedCount)} goodWhenUp={false} title={trendTitle}
+          onClick={() => { setReconFilter('disputed'); setTab('ledger') }}
+          label={<>Disputed transactions<small className="tt-kpi-sub">{fmtPct(summary.disputeRatePct)} of total</small></>} />
+        <Kpi icon={Clock} tone="t-amber" loading={kpiLoading} value={loaded ? recon.unreconciled : null}
+          trend={trendOf(recon.unreconciled, prev?.recon.unreconciled)} goodWhenUp={false} title={trendTitle}
+          onClick={() => { setReconFilter('unreconciled'); setTab('ledger') }}
+          label={<>Unreconciled transactions<small className="tt-kpi-sub">{fmtPct(recon.unreconciledPct)} of total</small></>} />
+        <Kpi icon={Receipt} tone="t-blue" loading={kpiLoading}
+          display={summary.mixedCurrency ? 'Mixed' : fmtAmount(summary.avgAmount, summary.currency)}
+          title="Average per priced charge. Charges carry no trip link, so a per-trip cost cannot be measured."
+          label={<>Average charge<small className="tt-kpi-sub">{moneyNote ? 'Pick one currency' : 'Per transaction (no trip link recorded)'}</small></>} />
+        <Kpi icon={Tag} tone="t-purple" loading={kpiLoading} value={loaded ? tags.tags : null}
+          label={<>Active tags<small className="tt-kpi-sub">{loaded ? `Across ${fmtInt(tags.assets)} assets` : 'N/A'}</small></>} />
       </div>
       {loaded && (
-        <p className="text-xs text-[var(--text-muted)] -mt-3">
-          These figures cover the {fmtNum(filtered.length)} transaction{filtered.length === 1 ? '' : 's'} matching the current filters
+        <p className="tt-scope">
+          These figures cover the {fmtInt(filtered.length)} transaction{filtered.length === 1 ? '' : 's'} matching the current filters
           {truncated ? `. Only the most recent ${READ_LIMIT} transactions are loaded, so older charges are not included.` : '.'}
+          {!prevWin && ' Pick a From and To date to compare with the previous period.'}
         </p>
       )}
 
       {/* Per-currency split: money is never added across currencies */}
       {loaded && summary.currencies.length > 1 && (
-        <div className="card">
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-1 flex items-center gap-2"><Coins size={15} aria-hidden="true" /> Spend by currency</h2>
-          <p className="text-xs text-[var(--text-muted)] mb-3">This scope mixes currencies, so each is reported on its own. Pick a currency filter to see totals, trend and rankings in one currency.</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <Card title="Spend by currency" sub="This scope mixes currencies, so each is reported on its own. Pick one to see totals, routes and trend in one currency.">
+          <div className="tt-cur-grid">
             {summary.currencies.map((c) => (
-              <button
-                type="button"
-                key={c.currency}
-                onClick={() => setCurrencyFilter(c.currency)}
-                className="text-left rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/40 px-3 py-3 min-h-[44px] hover:border-[var(--accent)]"
-                aria-label={`Show only ${c.currency} transactions`}
-              >
-                <p className="text-xs text-[var(--text-muted)]">{c.currency}</p>
-                <p className="text-lg font-semibold tabular-nums text-[var(--text-primary)]">{fmtAmount(c.priced ? c.amount : null, c.currency)}</p>
-                <p className="text-[11px] text-[var(--text-muted)]">{c.count} charge{c.count === 1 ? '' : 's'} | disputed {fmtAmount(c.priced ? c.disputedAmount : null, c.currency)}</p>
+              <button type="button" key={c.currency} className="tt-cur" onClick={() => setCurrencyFilter(c.currency)} aria-label={`Show only ${c.currency} transactions`}>
+                <span>{c.currency}</span>
+                <b>{fmtAmount(c.priced ? c.amount : null, c.currency)}</b>
+                <small>{c.count} charge{c.count === 1 ? '' : 's'} | disputed {fmtAmount(c.priced ? c.disputedAmount : null, c.currency)}</small>
               </button>
             ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Route / daily / status */}
+      <div className="tt-row3">
+        <Card title="Toll spend by route" sub={summary.currency ? `Top routes by spend (${summary.currency})` : 'Top routes by spend'}>
+          <CardState state={loadState} empty={
+            summary.mixedCurrency ? 'Routes are ranked in one currency. Pick a currency above.'
+              : routes.length === 0 ? 'No priced toll charges in this scope yet.' : null
+          }>
+            <div className="tt-routes">
+              {routes.map((r, i) => (
+                <div key={r.route} className="tt-route-row">
+                  <span className="tt-route-name" title={r.route}>{r.route}</span>
+                  <span className="cc-bar-track"><i style={{ width: `${routeMax ? (r.amount / routeMax) * 100 : 0}%`, background: SERIES[i % SERIES.length] }} /></span>
+                  <b>{fmtAmount(r.amount, summary.currency)}</b>
+                </div>
+              ))}
+            </div>
+          </CardState>
+        </Card>
+
+        <Card title={daily.metric === 'amount' ? 'Daily toll spend trend' : 'Daily transactions trend'} sub={`Last 30 days${toDate ? ` to ${toDate}` : ''}${daily.metric === 'count' && summary.mixedCurrency ? ', counted because currencies are mixed' : ''}`}>
+          <CardState state={loadState} empty={!daily.any ? 'No toll transactions in the last 30 days of this scope.' : null}>
+            <div className="tt-chart" role="img" aria-label="Daily toll trend for the last 30 days"><Line data={dailyData} options={CHART_OPTS} /></div>
+          </CardState>
+        </Card>
+
+        <Card title="Transaction status" sub="Reconciliation state of every transaction in scope">
+          <CardState state={loadState} empty={recon.total === 0 ? 'No transactions to break down yet.' : null}>
+            <Donut segments={recon.segments} total={recon.total} centerLabel="Total" onSelect={(s) => { setReconFilter(s.key); setTab('ledger') }} />
+          </CardState>
+        </Card>
+      </div>
+
+      {/* Filters */}
+      <div className="cc-card">
+        <div className="cc-filters tt-filters">
+          <label className="cc-search">
+            <Search size={15} aria-hidden="true" />
+            <input aria-label="Search toll transactions" placeholder="Asset, driver, tag, toll point, route, notes" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </label>
+          <label className="cc-field"><span>Asset</span>
+            <select className="cc-select" value={assetFilter} onChange={(e) => setAssetFilter(e.target.value)}>
+              <option value="">All assets</option>
+              {assetOptions.map((a) => <option key={a} value={a}>{a}</option>)}
+            </select>
+          </label>
+          <label className="cc-field"><span>Payment type</span>
+            <select className="cc-select" value={methodFilter} onChange={(e) => setMethodFilter(e.target.value)}>
+              <option value="">All types</option>
+              {TOLL_METHODS.map((m) => <option key={m} value={m}>{titleCase(m)}</option>)}
+            </select>
+          </label>
+          <label className="cc-field"><span>Status</span>
+            <select className="cc-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="">All statuses</option>
+              {TOLL_STATUSES.map((s) => <option key={s} value={s}>{titleCase(s)}</option>)}
+            </select>
+          </label>
+          <label className="cc-field"><span>Currency</span>
+            <select className="cc-select" value={currencyFilter} onChange={(e) => setCurrencyFilter(e.target.value)}>
+              <option value="">All currencies</option>
+              {currencyOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+          <button type="button" className="cc-btn-ghost tt-push" onClick={clearFilters} disabled={!hasFilters}><RotateCcw size={14} aria-hidden="true" /> Reset filters</button>
+        </div>
+      </div>
+
+      <div className="cc-card tt-tabbar">
+        <Tabs label="Toll views" value={tab} onChange={setTab} tabs={[
+          { key: 'ledger', label: 'Transaction ledger', count: loaded ? ledgerRows.length : null },
+          { key: 'rankings', label: 'Asset and toll point rankings' },
+          { key: 'analysis', label: 'Monthly and payment mix' },
+        ]} />
+        {reconFilter && (
+          <span className="tt-chip">Showing {RECON_META[reconFilter].label.toLowerCase()} only
+            <button type="button" className="cc-link cc-link-btn" onClick={() => setReconFilter('')}>Show all</button>
+          </span>
+        )}
+      </div>
+
+      {tab === 'ledger' && (
+        <div className="tt-ledger-grid">
+          <Card title="Transaction ledger" sub={loaded ? `${fmtInt(ledgerRows.length)} transactions` : undefined} className="tt-ledger">
+            <KitTable
+              columns={columns}
+              rows={ledgerRows}
+              getRowId={(r) => String(r.id)}
+              loading={!loaded && !error}
+              error={error && !loaded ? error : null}
+              onRetry={load}
+              onRowClick={(r) => { setSelectedId(r.id); setDetailTab('timeline') }}
+              empty={emptyAll ? 'No toll transactions recorded yet. Add your first transaction or import a statement.' : 'No transactions match these filters.'}
+              viewKey="toll-transactions"
+            />
+          </Card>
+
+          <div className="tt-side">
+            <Card title="Reconciliation overview" sub="Reconciled includes refunded charges">
+              <CardState state={loadState} empty={recon.total === 0 ? 'Nothing to reconcile yet.' : null}>
+                <div className="tt-stack" role="img" aria-label={recon.segments.map((s) => `${s.label} ${s.count}`).join(', ')}>
+                  {recon.segments.map((s) => s.count > 0 && <i key={s.key} style={{ width: `${(s.count / recon.total) * 100}%`, background: s.color }} />)}
+                </div>
+                <ul className="tt-stack-legend">
+                  {recon.segments.map((s) => (
+                    <li key={s.key}><i style={{ background: s.color }} aria-hidden="true" />{s.label} ({fmtInt(s.count)})<b>{fmtPct(recon[`${s.key}Pct`])}</b></li>
+                  ))}
+                </ul>
+                <button type="button" className="cc-btn-ghost tt-wide" disabled={!recon.unreconciled} onClick={() => setReconFilter('unreconciled')}>
+                  Review unreconciled ({fmtInt(recon.unreconciled)}) <ChevronRight size={14} aria-hidden="true" />
+                </button>
+              </CardState>
+            </Card>
+
+            <Card title="Selected transaction" action={selected && (
+              <span className="tt-nav">
+                <button type="button" className="cc-icon-btn" disabled={!nav.prev} onClick={() => setSelectedId(nav.prev?.id)} aria-label="Previous transaction"><ChevronLeft size={14} /></button>
+                <span>{nav.index + 1} of {fmtInt(nav.total)}</span>
+                <button type="button" className="cc-icon-btn" disabled={!nav.next} onClick={() => setSelectedId(nav.next?.id)} aria-label="Next transaction"><ChevronRight size={14} /></button>
+              </span>
+            )}>
+              {!selected ? (
+                <div className="cc-empty">{loaded ? 'Select a transaction in the ledger to see its details.' : 'Loading...'}</div>
+              ) : (
+                <div className="tt-detail">
+                  <div className="tt-detail-top">
+                    <div>
+                      <h3><Truck size={15} aria-hidden="true" /> {selected.asset_no || 'N/A'}</h3>
+                      <small>{fmtDateTime(selected.transaction_at)}</small>
+                    </div>
+                    <div className="tt-detail-amt">
+                      <span className={`cc-pill ${statusPill(selected).tone}`}>{statusPill(selected).label}</span>
+                      <b>{fmtAmount(selected.amount, currencyOf(selected))}</b>
+                    </div>
+                  </div>
+                  <dl className="tt-dl">
+                    <div><dt>Route</dt><dd>{selected.highway || NOT_RECORDED}</dd></div>
+                    <div><dt>Toll point</dt><dd>{selected.plaza_name || NOT_RECORDED}</dd></div>
+                    <div><dt>Operator</dt><dd>{NOT_RECORDED}</dd></div>
+                    <div><dt>Payment method</dt><dd>{selected.payment_method ? titleCase(selected.payment_method) : NOT_RECORDED}</dd></div>
+                    <div><dt>Tag</dt><dd>{selected.tag_id || NOT_RECORDED}</dd></div>
+                    <div><dt>Driver</dt><dd>{selected.driver_name || NOT_RECORDED}</dd></div>
+                    <div><dt>Linked trip</dt><dd>{NOT_RECORDED}</dd></div>
+                    <div><dt>Transaction ID</dt><dd className="tt-mono">{String(selected.id).slice(0, 8)}</dd></div>
+                  </dl>
+                  <Tabs variant="line" label="Transaction details" value={detailTab} onChange={setDetailTab} tabs={[
+                    { key: 'timeline', label: 'Trip timeline' },
+                    { key: 'evidence', label: 'Toll evidence' },
+                    { key: 'notes', label: 'Notes' },
+                  ]} />
+                  <div className="tt-detail-body">
+                    {detailTab === 'timeline' && <p>Not recorded. Toll charges are not linked to trips, so departure and arrival are not available for this charge.</p>}
+                    {detailTab === 'evidence' && <p>Not recorded. No gantry photo or receipt is stored with toll charges.</p>}
+                    {detailTab === 'notes' && <p>{selected.notes || 'No notes on this transaction.'}</p>}
+                  </div>
+                  <div className="tt-detail-actions">
+                    <button type="button" className="cc-btn-ghost tt-danger-btn" disabled={busyId === selected.id || String(selected.status).toLowerCase() === 'disputed'} onClick={() => setStatus(selected, 'disputed')}>
+                      <AlertTriangle size={14} aria-hidden="true" /> Raise dispute
+                    </button>
+                    <button type="button" className="cc-btn-primary" disabled={busyId === selected.id || String(selected.status).toLowerCase() === 'reconciled'} onClick={() => setStatus(selected, 'reconciled')}>
+                      <CheckCircle2 size={14} aria-hidden="true" /> Mark as reconciled
+                    </button>
+                    <button type="button" className="cc-icon-btn" onClick={() => openEdit(selected)} aria-label="Edit this transaction" title="Edit"><Pencil size={13} /></button>
+                  </div>
+                </div>
+              )}
+            </Card>
           </div>
         </div>
       )}
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="card lg:col-span-2">
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">
-            {summary.currency ? `Monthly toll spend (${summary.currency}), last 12 months` : 'Monthly transactions, last 12 months'}
-          </h2>
-          <div className="h-60" role="img" aria-label={`Monthly ${summary.currency ? 'toll spend' : 'transaction count'} for the last 12 months`}>
-            {!loaded ? <div className="h-full bg-[var(--input-bg)] rounded animate-pulse" />
-              : trend.some((t) => t.count > 0) ? <Bar data={trendData} options={CHART_OPTS} />
-                : <p className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No transactions in the last 12 months for this scope.</p>}
-          </div>
+      {tab === 'rankings' && (
+        <div className="tt-two">
+          <Card title="Toll spend by asset" action={<Truck size={15} aria-hidden="true" />}>
+            {summary.mixedCurrency
+              ? <div className="cc-empty">Rankings need one currency. Choose a currency filter above.</div>
+              : <KitTable columns={assetColumns} rows={rollups.assets} getRowId={(a) => a.asset_no} loading={!loaded && !error} empty="No toll charges carry an asset number." />}
+          </Card>
+          <Card title="Toll spend by toll point" action={<MapPin size={15} aria-hidden="true" />}>
+            {summary.mixedCurrency
+              ? <div className="cc-empty">Rankings need one currency. Choose a currency filter above.</div>
+              : <KitTable columns={plazaColumns} rows={rollups.plazas} getRowId={(p) => p.plaza} loading={!loaded && !error} empty="No toll charges carry a toll point name." />}
+          </Card>
         </div>
-        <div className="card">
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Payment method mix</h2>
-          <div className="h-60" role="img" aria-label="Transactions by payment method">
-            {!loaded ? <div className="h-full bg-[var(--input-bg)] rounded animate-pulse" />
-              : methods.length ? <Doughnut data={methodData} options={DONUT_OPTS} />
-                : <p className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No transactions to break down.</p>}
-          </div>
-        </div>
-      </div>
+      )}
 
-      {/* Roll-ups (one currency only) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card space-y-2">
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2"><Truck size={15} aria-hidden="true" /> Toll spend by asset</h2>
-          {summary.mixedCurrency
-            ? <p className="text-sm text-[var(--text-muted)] py-4">Rankings need one currency. Choose a currency filter above.</p>
-            : (
-              <EnterpriseTable columns={assetColumns} data={rollups.assets} getRowId={(a) => a.asset_no}
-                loading={!loaded && !error} emptyMessage="No toll charges carry an asset number." enableExport={false}
-                enableColumnFilters={false} enableColumnVisibility={false} initialPageSize={25} searchPlaceholder="Search assets" />
-            )}
+      {tab === 'analysis' && (
+        <div className="tt-two tt-two-wide">
+          <Card title={summary.currency ? `Monthly toll spend (${summary.currency}), last 12 months` : 'Monthly transactions, last 12 months'}>
+            <CardState state={loadState} empty={!trend.some((t) => t.count > 0) ? 'No transactions in the last 12 months for this scope.' : null}>
+              <div className="tt-chart tt-chart-lg" role="img" aria-label="Monthly toll trend">
+                <Bar data={{ labels: trend.map((t) => t.month), datasets: [{ data: trend.map((t) => (summary.currency ? t.amount : t.count)), backgroundColor: 'rgba(34,197,94,0.75)', borderRadius: 4 }] }} options={CHART_OPTS} />
+              </div>
+            </CardState>
+          </Card>
+          <Card title="Payment method mix">
+            <CardState state={loadState} empty={!methods.length ? 'No transactions to break down.' : null}>
+              <div className="tt-chart tt-chart-lg" role="img" aria-label="Transactions by payment method">
+                <Doughnut data={{ labels: methods.map((m) => m.label), datasets: [{ data: methods.map((m) => m.count), backgroundColor: methods.map((_, i) => SERIES[i % SERIES.length]), borderWidth: 0 }] }} options={DONUT_OPTS} />
+              </div>
+            </CardState>
+          </Card>
         </div>
-        <div className="card space-y-2">
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2"><MapPin size={15} aria-hidden="true" /> Toll spend by plaza</h2>
-          {summary.mixedCurrency
-            ? <p className="text-sm text-[var(--text-muted)] py-4">Rankings need one currency. Choose a currency filter above.</p>
-            : (
-              <EnterpriseTable columns={plazaColumns} data={rollups.plazas} getRowId={(p) => p.plaza}
-                loading={!loaded && !error} emptyMessage="No toll charges carry a plaza name." enableExport={false}
-                enableColumnFilters={false} enableColumnVisibility={false} initialPageSize={25} searchPlaceholder="Search plazas" />
-            )}
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="card">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3 items-end">
-          <div className="sm:col-span-2">
-            <label htmlFor="toll-search" className="label">Search</label>
-            <div className="relative">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
-              <input id="toll-search" className={`${FIELD} pl-9`} placeholder="Asset, driver, tag, plaza, highway, notes" value={search} onChange={(e) => setSearch(e.target.value)} />
-            </div>
-          </div>
-          {countryOptions.length > 1 && (
-            <div>
-              <label htmlFor="toll-country" className="label">Country</label>
-              <select id="toll-country" className={FIELD} value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)}>
-                <option value="">All countries</option>
-                {countryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-          )}
-          <div>
-            <label htmlFor="toll-status" className="label">Status</label>
-            <select id="toll-status" className={FIELD} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="">All statuses</option>
-              {TOLL_STATUSES.map((s) => <option key={s} value={s}>{titleCase(s)}</option>)}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="toll-method" className="label">Payment method</label>
-            <select id="toll-method" className={FIELD} value={methodFilter} onChange={(e) => setMethodFilter(e.target.value)}>
-              <option value="">All methods</option>
-              {TOLL_METHODS.map((m) => <option key={m} value={m}>{titleCase(m)}</option>)}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="toll-currency" className="label">Currency</label>
-            <select id="toll-currency" className={FIELD} value={currencyFilter} onChange={(e) => setCurrencyFilter(e.target.value)}>
-              <option value="">All currencies</option>
-              {currencyOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="toll-from" className="label">From</label>
-            <input id="toll-from" type="date" className={FIELD} value={fromDate} max={toDate || undefined} onChange={(e) => setFromDate(e.target.value)} />
-          </div>
-          <div>
-            <label htmlFor="toll-to" className="label">To</label>
-            <input id="toll-to" type="date" className={FIELD} value={toDate} min={fromDate || undefined} onChange={(e) => setToDate(e.target.value)} />
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 mt-3">
-          {hasFilters && (
-            <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} /> Clear filters</button>
-          )}
-          <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{fmtNum(filtered.length)} of {fmtNum(all.length)} transactions</span>
-        </div>
-      </div>
-
-      {/* Register */}
-      <EnterpriseTable
-        columns={columns}
-        data={filtered}
-        getRowId={(r) => String(r.id)}
-        loading={!loaded && !error}
-        error={error && !loaded ? error : null}
-        onRetry={load}
-        emptyMessage={all.length === 0 && !notProvisioned ? 'No toll transactions recorded yet. Add your first transaction.' : 'No transactions match these filters.'}
-        enableGlobalFilter={false}
-        enableColumnFilters={false}
-        enableExport={false}
-        viewKey="toll-transactions"
-        initialPageSize={25}
-      />
+      )}
 
       {/* Create / Edit */}
       <Modal
@@ -521,75 +684,89 @@ export default function TollTransactions() {
         title={editing ? 'Edit toll transaction' : 'Add toll transaction'}
         size="lg"
         footer={
-          <div className="flex items-center justify-end gap-2 w-full">
-            <button type="button" onClick={closeModal} className="btn-secondary text-sm min-h-[44px]" disabled={saving}>Cancel</button>
-            <button type="submit" form="toll-form" className="btn-primary text-sm min-h-[44px] disabled:opacity-60" disabled={saving}>
+          <div className="tt-modal-foot">
+            <button type="button" onClick={closeModal} className="cc-btn-ghost" disabled={saving}>Cancel</button>
+            <button type="submit" form="toll-form" className="cc-btn-primary" disabled={saving}>
               {saving ? 'Saving...' : editing ? 'Save changes' : 'Add transaction'}
             </button>
           </div>
         }
       >
-        <form id="toll-form" onSubmit={submit} className="space-y-4" noValidate>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="tf-asset" className="label">Asset number <span className="text-red-400" aria-hidden="true">*</span></label>
-              <input id="tf-asset" className={FIELD} placeholder="e.g. TRK-1042" value={form.asset_no} maxLength={120} required onChange={(e) => set('asset_no', e.target.value)} />
-            </div>
-            <div>
-              <label htmlFor="tf-driver" className="label">Driver (optional)</label>
-              <input id="tf-driver" className={FIELD} placeholder="e.g. Ahmed Khan" value={form.driver_name} maxLength={200} onChange={(e) => set('driver_name', e.target.value)} />
-            </div>
-            <div>
-              <label htmlFor="tf-plaza" className="label">Toll plaza (optional)</label>
-              <input id="tf-plaza" className={FIELD} placeholder="e.g. Riyadh North Plaza" value={form.plaza_name} maxLength={200} onChange={(e) => set('plaza_name', e.target.value)} />
-            </div>
-            <div>
-              <label htmlFor="tf-highway" className="label">Highway (optional)</label>
-              <input id="tf-highway" className={FIELD} placeholder="e.g. Highway 40" value={form.highway} maxLength={200} onChange={(e) => set('highway', e.target.value)} />
-            </div>
-            <div>
-              <label htmlFor="tf-when" className="label">Transaction date and time</label>
-              <input id="tf-when" className={FIELD} type="datetime-local" value={form.transaction_at} onChange={(e) => set('transaction_at', e.target.value)} />
-            </div>
-            <div>
-              <label htmlFor="tf-tag" className="label">Tag ID (optional)</label>
-              <input id="tf-tag" className={FIELD} placeholder="e.g. RFID-88231" value={form.tag_id} maxLength={120} onChange={(e) => set('tag_id', e.target.value)} />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label htmlFor="tf-amount" className="label">Amount</label>
-              <input id="tf-amount" className={FIELD} type="number" step="0.01" min="0" inputMode="decimal" placeholder="25.00" value={form.amount} onChange={(e) => set('amount', e.target.value)} />
-            </div>
-            <div>
-              <label htmlFor="tf-currency" className="label">Currency (optional)</label>
-              <input id="tf-currency" className={FIELD} placeholder="SAR" value={form.currency} maxLength={12} onChange={(e) => set('currency', e.target.value)} />
-            </div>
-            <div>
-              <label htmlFor="tf-method" className="label">Payment method</label>
-              <select id="tf-method" className={FIELD} value={form.payment_method} onChange={(e) => set('payment_method', e.target.value)}>
+        <form id="toll-form" onSubmit={submit} className="cc tt-form" noValidate>
+          <div className="tt-form-grid">
+            <label htmlFor="tf-asset">Asset number <span aria-hidden="true">*</span>
+              <input id="tf-asset" className="cc-select tt-input" placeholder="e.g. TRK-1042" value={form.asset_no} maxLength={120} required onChange={(e) => set('asset_no', e.target.value)} />
+            </label>
+            <label htmlFor="tf-driver">Driver (optional)
+              <input id="tf-driver" className="cc-select tt-input" placeholder="e.g. Ahmed Khan" value={form.driver_name} maxLength={200} onChange={(e) => set('driver_name', e.target.value)} />
+            </label>
+            <label htmlFor="tf-plaza">Toll point (optional)
+              <input id="tf-plaza" className="cc-select tt-input" placeholder="e.g. Riyadh North Plaza" value={form.plaza_name} maxLength={200} onChange={(e) => set('plaza_name', e.target.value)} />
+            </label>
+            <label htmlFor="tf-highway">Route or highway (optional)
+              <input id="tf-highway" className="cc-select tt-input" placeholder="e.g. Highway 40" value={form.highway} maxLength={200} onChange={(e) => set('highway', e.target.value)} />
+            </label>
+            <label htmlFor="tf-when">Transaction date and time
+              <input id="tf-when" className="cc-select tt-input" type="datetime-local" value={form.transaction_at} onChange={(e) => set('transaction_at', e.target.value)} />
+            </label>
+            <label htmlFor="tf-tag">Tag ID (optional)
+              <input id="tf-tag" className="cc-select tt-input" placeholder="e.g. RFID-88231" value={form.tag_id} maxLength={120} onChange={(e) => set('tag_id', e.target.value)} />
+            </label>
+            <label htmlFor="tf-amount">Amount
+              <input id="tf-amount" className="cc-select tt-input" type="number" step="0.01" min="0" inputMode="decimal" placeholder="25.00" value={form.amount} onChange={(e) => set('amount', e.target.value)} />
+            </label>
+            <label htmlFor="tf-currency">Currency (optional)
+              <input id="tf-currency" className="cc-select tt-input" placeholder="SAR" value={form.currency} maxLength={12} onChange={(e) => set('currency', e.target.value)} />
+            </label>
+            <label htmlFor="tf-method">Payment method
+              <select id="tf-method" className="cc-select tt-input" value={form.payment_method} onChange={(e) => set('payment_method', e.target.value)}>
                 <option value="">None</option>
                 {TOLL_METHODS.map((m) => <option key={m} value={m}>{titleCase(m)}</option>)}
               </select>
-            </div>
-            <div>
-              <label htmlFor="tf-status" className="label">Status</label>
-              <select id="tf-status" className={FIELD} value={form.status} onChange={(e) => set('status', e.target.value)}>
+            </label>
+            <label htmlFor="tf-status">Status
+              <select id="tf-status" className="cc-select tt-input" value={form.status} onChange={(e) => set('status', e.target.value)}>
                 <option value="">None</option>
                 {TOLL_STATUSES.map((s) => <option key={s} value={s}>{titleCase(s)}</option>)}
               </select>
-            </div>
+            </label>
           </div>
-          <div>
-            <label htmlFor="tf-notes" className="label">Notes (optional)</label>
-            <textarea id="tf-notes" className="input w-full min-h-[80px] resize-y" placeholder="e.g. disputed, duplicate charge on same trip" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
+          <label htmlFor="tf-notes">Notes (optional)
+            <textarea id="tf-notes" className="cc-select tt-input tt-textarea" placeholder="e.g. disputed, duplicate charge on same trip" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
+          </label>
+          {formError && <p className="tt-err" role="alert">{formError}</p>}
+        </form>
+      </Modal>
+
+      {/* Import */}
+      <Modal
+        open={importOpen}
+        onClose={() => { if (!importing) setImportOpen(false) }}
+        title="Import toll transactions"
+        size="md"
+        footer={
+          <div className="tt-modal-foot">
+            <button type="button" className="cc-btn-ghost" onClick={() => setImportOpen(false)} disabled={importing}>Close</button>
+            <button type="button" className="cc-btn-primary" onClick={() => fileRef.current?.click()} disabled={importing}>
+              <Upload size={14} aria-hidden="true" /> {importing ? 'Importing...' : 'Choose a file'}
+            </button>
           </div>
-          {formError && (
-            <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2" role="alert">
-              <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> {formError}
+        }
+      >
+        <div className="cc tt-form">
+          <p>Upload a CSV or Excel statement. The first sheet is read; each row needs an asset number. Recognised columns:</p>
+          <p className="tt-mono">{IMPORT_TEMPLATE_HEADERS.join(', ')}</p>
+          <p>Rows are saved {activeCountry !== 'All' ? `under ${activeCountry}` : 'with no country (pick a country first to stamp one)'}.</p>
+          <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls,.txt" className="tt-hidden" onChange={onImportFile} aria-label="Toll statement file" />
+          {importError && <p className="tt-err" role="alert">{importError}</p>}
+          {importResult && (
+            <div role="status">
+              <p><b>{fmtInt(importResult.saved)}</b> saved, {fmtInt(importResult.failed)} failed, {fmtInt(importResult.skipped)} skipped (no asset number).</p>
+              {importResult.capped && <p>Only the first 5,000 rows were imported. Split the file for the rest.</p>}
+              {importResult.failures.map((f, i) => <p key={i} className="tt-err">{f}</p>)}
             </div>
           )}
-        </form>
+        </div>
       </Modal>
 
       {/* Delete confirm */}
@@ -599,16 +776,16 @@ export default function TollTransactions() {
         title="Delete this transaction?"
         size="sm"
         footer={
-          <div className="flex items-center justify-end gap-2 w-full">
-            <button type="button" onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm min-h-[44px]" disabled={deleting}>Cancel</button>
-            <button type="button" onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60" disabled={deleting}>
-              <Trash2 size={14} /> {deleting ? 'Deleting...' : 'Delete'}
+          <div className="tt-modal-foot">
+            <button type="button" onClick={() => setConfirmDelete(null)} className="cc-btn-ghost" disabled={deleting}>Cancel</button>
+            <button type="button" onClick={doDelete} className="cc-btn-primary tt-danger-fill" disabled={deleting}>
+              <Trash2 size={14} aria-hidden="true" /> {deleting ? 'Deleting...' : 'Delete'}
             </button>
           </div>
         }
       >
         {confirmDelete && (
-          <p className="text-sm text-[var(--text-secondary)]">
+          <p className="tt-confirm">
             {confirmDelete.asset_no || 'Transaction'} | {fmtAmount(confirmDelete.amount, currencyOf(confirmDelete))} | {fmtDateTime(confirmDelete.transaction_at)}. This cannot be undone.
           </p>
         )}

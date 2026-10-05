@@ -40,7 +40,7 @@ export function listDailyInspections({ thirtyDaysAgo, wEnd } = {}) {
 export function listDailyWorkOrders({ thirtyDaysAgo, wEnd, country } = {}) {
   return fetchAllPages((from, to) => applyCountry(
     supabase.from('work_orders')
-      .select('id,asset_no,work_order_no,status,priority,created_at,scheduled_date:target_completion,site,country')
+      .select('id,asset_no,work_order_no,status,priority,work_type,created_at,opened_at,completed_at,scheduled_date:target_completion,site,country')
       .gte('created_at', thirtyDaysAgo + 'T00:00:00').lte('created_at', wEnd + 'T23:59:59'),
     country,
   ).order('id').range(from, to), { max: 20000 })
@@ -66,4 +66,17 @@ export function listDailyAlerts({ thirtyDaysAgo, wEnd, country } = {}) {
 export function listDailyTyreFitments({ thirtyDaysAgo, date } = {}) {
   return fetchAllPages((from, to) => supabase.from('tyre_records')
     .select('asset_no,issue_date').gte('issue_date', thirtyDaysAgo).lte('issue_date', date).order('id').range(from, to), { max: 200000 })
+}
+
+/**
+ * Accidents reported within the window (paged, country-scoped, stable id
+ * tiebreak) for the Daily Ops "Incidents" tile. Resolves to `{ data, error, truncated }`.
+ */
+export function listDailyAccidents({ thirtyDaysAgo, wEnd, country } = {}) {
+  return fetchAllPages((from, to) => applyCountry(
+    supabase.from('accidents')
+      .select('id,asset_no,reference_no,incident_date,severity,status,site,country')
+      .gte('incident_date', thirtyDaysAgo).lte('incident_date', wEnd),
+    country,
+  ).order('id').range(from, to), { max: 20000 })
 }

@@ -12,6 +12,7 @@ const h = vi.hoisted(() => {
       select(cols) { calls.select = cols; return b },
       order(col, opts) { calls.order = [col, opts]; return b },
       limit(n) { calls.limit = n; return b },
+      range(a, z) { calls.range = [a, z]; return b },
       eq(c, v) { calls.eq.push([c, v]); return b },
       or(e) { calls.or.push(e); return b },
       gte(c, v) { calls.gte.push([c, v]); return b },

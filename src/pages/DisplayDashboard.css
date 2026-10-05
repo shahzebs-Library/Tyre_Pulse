@@ -1,0 +1,158 @@
+/* TV Display Mode (/display). Built on the --cc-* tokens so light and dark
+   share one sheet. The page renders outside the app chrome, so it paints its
+   own background. The rotating boards still carry Tailwind slate utilities;
+   they are re-inked here onto the same tokens. */
+.tv-page {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 22px 28px;
+  background: #060a12;
+  color: var(--cc-ink);
+  overflow-y: auto;
+}
+html.light .tv-page { background: #f6f7f9; }
+.tv-page.is-fullscreen { padding: 22px 28px; }
+
+/* Header */
+.tv-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.tv-head-copy { min-width: 0; flex: 1 1 360px; }
+.tv-crumb { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--cc-ink-3); }
+.tv-crumb span { color: var(--cc-ink-2); font-weight: 600; }
+.tv-title-row { display: flex; align-items: center; gap: 12px; margin: 6px 0 4px; flex-wrap: wrap; }
+.tv-title-row h1 { margin: 0; font-size: clamp(22px, 2.4vw, 30px); font-weight: 800; letter-spacing: -0.02em; color: var(--cc-ink); }
+.tv-logo { height: 34px; width: auto; max-width: 150px; object-fit: contain; }
+.tv-head-copy > p { margin: 0; color: var(--cc-ink-2); font-size: 13.5px; max-width: 78ch; }
+.tv-live { font-size: 12.5px; padding: 4px 11px; }
+.tv-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--cc-green); display: inline-block; animation: tv-pulse 1.6s ease-in-out infinite; }
+.tv-dot.is-busy { animation-duration: 0.6s; }
+@keyframes tv-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .tv-dot { animation: none; } }
+
+.tv-head-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tv-clock { flex-direction: row; align-items: center; gap: 10px; padding: 8px 14px; }
+.tv-clock svg { color: var(--cc-ink-2); }
+.tv-clock b { display: block; font-size: 14px; color: var(--cc-ink); }
+.tv-clock span { display: block; font-size: 12px; color: var(--cc-ink-3); font-variant-numeric: tabular-nums; }
+.tv-refresh { display: flex; flex-direction: column; align-items: flex-end; font-size: 12px; color: var(--cc-ink-2); font-variant-numeric: tabular-nums; }
+.tv-refresh span { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; }
+.tv-refresh small { font-size: 11px; color: var(--cc-ink-3); }
+.tv-page .cc-icon-btn { width: 36px; height: 36px; }
+.tv-page .cc-icon-btn.is-on { color: var(--cc-green); border-color: var(--cc-green); background: var(--cc-green-tint); }
+.tv-page .cc-icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.tv-fs-btn { padding: 10px 18px; font-size: 14px; }
+
+.tv-picker-wrap { position: relative; }
+.tv-picker { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; width: 260px; padding: 8px; gap: 2px; }
+.tv-picker-head { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 6px; font-size: 12px; color: var(--cc-ink-2); }
+.tv-picker-head .cc-icon-btn { width: 26px; height: 26px; }
+.tv-picker-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 6px; border-radius: 8px; border: 0; background: transparent; color: var(--cc-ink); font-size: 13px; cursor: pointer; text-align: start; }
+.tv-picker-row:hover { background: var(--cc-track); }
+.tv-check { width: 18px; height: 18px; border-radius: 5px; border: 1px solid var(--cc-inner-border); display: grid; place-items: center; color: #fff; }
+.tv-check.is-on { background: var(--cc-green-strong); border-color: var(--cc-green-strong); }
+
+/* KPI tiles */
+.tv-page .tv-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.tv-page .tv-kpis .cc-kpi { padding: 16px 14px; }
+.tv-page .tv-kpis .cc-kpi-icon { width: 48px; height: 48px; border-radius: 12px; }
+.tv-page .tv-kpis .cc-kpi-val { font-size: 30px; }
+.tv-kpi-sub { display: block; margin-top: 3px; font-size: 11.5px; color: var(--cc-ink-3); }
+
+/* Overview grids */
+.tv-grid-top { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); grid-template-areas: "map ops" "map alerts"; gap: 14px; }
+.tv-map { grid-area: map; }
+.tv-ops { grid-area: ops; }
+.tv-alerts { grid-area: alerts; }
+.tv-map-body { display: flex; flex-direction: column; gap: 12px; }
+.tv-status-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--cc-ink-2); }
+.tv-status-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.tv-status-legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
+.tv-ops-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.tv-ops-tile { display: flex; gap: 11px; align-items: flex-start; padding: 12px; border: 1px solid var(--cc-inner-border); border-radius: 12px; background: var(--cc-inner); min-width: 0; }
+.tv-ops-tile > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tv-ops-label { font-size: 12px; color: var(--cc-ink-2); }
+.tv-ops-val { font-size: 21px; font-weight: 750; color: var(--cc-ink); line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.tv-ops-val.tv-ops-none { font-size: 15px; color: var(--cc-ink-3); font-weight: 600; }
+.tv-ops-tile small { font-size: 11px; color: var(--cc-ink-3); line-height: 1.3; }
+
+.tv-alert-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.tv-alert-list li { display: grid; grid-template-columns: 24px minmax(0, 1.6fr) minmax(0, 0.7fr) auto auto; align-items: center; gap: 10px; padding: 8px 2px; border-top: 1px solid var(--cc-inner-border); font-size: 12.5px; }
+.tv-alert-list li:first-child { border-top: 0; }
+.tv-sev { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: #fff; }
+.tv-sev-bad { background: var(--cc-red); }
+.tv-sev-orange { background: var(--cc-orange); }
+.tv-sev-warn { background: var(--cc-amber); }
+.tv-sev-info, .tv-sev-muted { background: var(--cc-blue); }
+.tv-alert-msg { font-weight: 600; color: var(--cc-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-alert-asset { color: var(--cc-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-alert-ago { color: var(--cc-ink-3); white-space: nowrap; font-size: 12px; }
+
+.tv-grid-bottom { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 14px; }
+.tv-strong { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--cc-ink); }
+.tv-muted { margin: 0; font-size: 11.5px; color: var(--cc-ink-3); }
+.tv-row-actions { display: inline-flex; gap: 6px; }
+.tv-row-actions .cc-icon-btn { width: 30px; height: 28px; }
+
+.tv-screens { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.tv-screen { display: flex; flex-direction: column; gap: 6px; padding: 11px; border: 1px solid var(--cc-inner-border); border-radius: 12px; background: var(--cc-inner); min-width: 0; }
+.tv-screen-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.tv-screen-head b { font-size: 13px; color: var(--cc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tv-screen-open { align-self: flex-start; display: inline-flex; align-items: center; gap: 5px; }
+.tv-screen-add { border-style: dashed; align-items: center; justify-content: center; text-align: center; cursor: pointer; color: var(--cc-green); font: inherit; min-height: 104px; }
+.tv-screen-add b { font-size: 13px; color: var(--cc-ink); }
+.tv-screen-add:hover { border-color: var(--cc-green); }
+
+/* Rotating boards */
+.tv-boards { gap: 14px; }
+.tv-boards-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.tv-boards-head .cc-tabs { flex-wrap: wrap; }
+.tv-board-body { min-height: 0; }
+.tv-panel { background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 14px; padding: 16px; min-width: 0; }
+html.light .tv-panel { background: #fff; }
+.tv-panel-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: var(--cc-ink-3); }
+.tv-panel-head h3 { margin: 0; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--cc-ink-2); }
+.tv-bigstat { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.tv-bigstat-label { margin: 0; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--cc-ink-3); }
+.tv-bigstat-val { margin: 8px 0 4px; font-size: clamp(32px, 3.6vw, 52px); font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; color: var(--cc-ink); }
+.tv-bigstat-icon { color: var(--cc-ink-3); flex: none; }
+.tv-board-empty { min-height: 140px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--cc-green); text-align: center; }
+.tv-board-empty p { margin: 0; font-size: 16px; font-weight: 600; color: var(--cc-ink-2); }
+.tv-widget-error { min-height: 120px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; color: var(--cc-amber); }
+
+/* Re-ink the board's Tailwind slate utilities onto the kit tokens. */
+.tv-board-body .text-white,
+.tv-board-body .text-slate-100,
+.tv-board-body .text-slate-200 { color: var(--cc-ink); }
+.tv-board-body .text-slate-300,
+.tv-board-body .text-slate-400 { color: var(--cc-ink-2); }
+.tv-board-body .text-slate-500,
+.tv-board-body .text-slate-600 { color: var(--cc-ink-3); }
+.tv-board-body .bg-slate-900\/60 { background: var(--cc-inner); }
+html.light .tv-board-body .bg-slate-900\/60 { background: #f8fafc; }
+.tv-board-body .border-slate-800\/60,
+.tv-board-body .border-slate-800\/70 { border-color: var(--cc-inner-border); }
+.tv-board-body .text-emerald-500\/70 { color: var(--cc-green); }
+/* StatTile uses the global .card surface; keep it on the board's surface. */
+.tv-board-body .card { background: var(--cc-inner); border-color: var(--cc-inner-border); }
+html.light .tv-board-body .card { background: #fff; }
+
+@media (max-width: 1400px) {
+  .tv-grid-bottom { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .tv-grid-bottom > :last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 1100px) {
+  .tv-page .tv-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .tv-grid-top { grid-template-columns: minmax(0, 1fr); grid-template-areas: "map" "ops" "alerts"; }
+}
+@media (max-width: 760px) {
+  .tv-page { padding: 14px 16px 24px; }
+  .tv-page .tv-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tv-grid-bottom { grid-template-columns: minmax(0, 1fr); }
+  .tv-ops-grid, .tv-screens { grid-template-columns: minmax(0, 1fr); }
+  .tv-alert-list li { grid-template-columns: 24px minmax(0, 1fr) auto; }
+  .tv-alert-asset, .tv-alert-ago { display: none; }
+  .tv-head-actions { width: 100%; }
+}

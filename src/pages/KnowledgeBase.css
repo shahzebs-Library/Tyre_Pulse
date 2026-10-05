@@ -1,0 +1,102 @@
+/* Knowledge Base. Only --cc-* tokens, so light and dark share one sheet. */
+.kb-page { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.kb-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px 20px; }
+.kb-head-copy { min-width: 0; flex: 1 1 420px; }
+.kb-crumbs { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--cc-ink-3); margin-bottom: 8px; }
+.kb-crumbs a { color: var(--cc-ink-3); text-decoration: none; }
+.kb-crumbs a:hover { color: var(--cc-green); }
+.kb-crumbs [aria-current] { color: var(--cc-ink-2); }
+.kb-title-row { display: flex; align-items: center; gap: 14px; }
+.kb-title-icon { width: 52px; height: 52px; flex: none; border-radius: 12px; display: grid; place-items: center; color: #fff; background: var(--cc-green-strong); }
+.kb-title-row h1 { margin: 0; font-size: clamp(22px, 2.4vw, 30px); font-weight: 700; letter-spacing: -0.02em; color: var(--cc-ink); line-height: 1.15; }
+.kb-title-row p { margin: 4px 0 0; font-size: 13.5px; color: var(--cc-ink-2); max-width: 70ch; }
+.kb-head-side { display: flex; flex-direction: column; align-items: stretch; gap: 8px; flex: 0 1 380px; min-width: 260px; }
+.kb-global { flex: none; }
+.kb-head-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.kb-banner { flex-direction: row; align-items: center; gap: 10px; padding: 10px 14px; }
+.kb-banner p { margin: 0; flex: 1; font-size: 12.5px; color: var(--cc-ink-2); }
+.kb-banner.bad > svg { color: var(--cc-red); flex: none; }
+.kb-banner.warn > svg { color: var(--cc-amber); flex: none; }
+.kb-banner.good > svg { color: var(--cc-green); flex: none; }
+.kb-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
+.kb-grid { display: grid; grid-template-columns: minmax(230px, 0.85fr) minmax(0, 2fr) minmax(260px, 1fr); gap: 14px; align-items: start; }
+.kb-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.kb-mini-search { flex: none; min-width: 0; margin-bottom: 8px; }
+.kb-collections { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.kb-collections button { width: 100%; display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 10px; background: none; border: 0; border-radius: 8px; padding: 7px 6px; font: inherit; font-size: 13px; color: var(--cc-ink); text-align: start; cursor: pointer; }
+.kb-collections button:hover { background: var(--cc-inner); }
+.kb-collections button[aria-pressed="true"] { background: var(--cc-blue-tint); color: var(--cc-blue); font-weight: 600; }
+.kb-collections button:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 1px; }
+.kb-collections b { font-variant-numeric: tabular-nums; }
+.kb-col-icon { width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; }
+.kb-col-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kb-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.kb-tags button { display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px; border-radius: 8px; border: 1px solid var(--cc-inner-border); background: var(--cc-inner); color: var(--cc-ink-2); font: inherit; font-size: 12px; cursor: pointer; }
+.kb-tags button:hover { border-color: var(--cc-green); color: var(--cc-ink); }
+.kb-tags button span { color: var(--cc-ink-3); }
+
+.kb-filters { margin-bottom: 10px; align-items: center; }
+.kb-filters .cc-select { padding-top: 8px; padding-bottom: 8px; font-size: 12.5px; }
+.kb-count { margin-inline-start: auto; font-size: 12px; color: var(--cc-ink-3); }
+.kb-doc-cell { display: inline-flex; align-items: center; gap: 9px; min-width: 0; }
+.kb-doc-icon { width: 28px; height: 28px; flex: none; border-radius: 7px; display: grid; place-items: center; }
+.kb-doc-title { font-weight: 600; color: var(--cc-ink); overflow-wrap: anywhere; }
+.kb-link { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--cc-ink); text-align: start; cursor: pointer; }
+.kb-link:hover { color: var(--cc-green); text-decoration: underline; }
+.kb-sub { display: flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--cc-ink-3); margin-top: 2px; }
+.kb-danger:hover { color: var(--cc-red); border-color: var(--cc-red); }
+.kb-danger:disabled { opacity: .45; cursor: not-allowed; }
+
+.kb-report { display: flex; flex-direction: column; gap: 14px; }
+.kb-report-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.kb-report-tiles div { border: 1px solid var(--cc-inner-border); background: var(--cc-inner); border-radius: 10px; padding: 10px 12px; }
+.kb-report-tiles span { display: block; font-size: 11.5px; color: var(--cc-ink-3); }
+.kb-report-tiles b { display: block; margin-top: 4px; font-size: 19px; color: var(--cc-ink); font-variant-numeric: tabular-nums; }
+.kb-report-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.kb-report-charts h3 { margin: 0 0 8px; font-size: 12.5px; font-weight: 700; color: var(--cc-ink); }
+.kb-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.kb-bars li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(50px, 1.3fr) 34px; align-items: center; gap: 10px; font-size: 12.5px; color: var(--cc-ink-2); }
+.kb-bars b { text-align: right; color: var(--cc-ink); font-variant-numeric: tabular-nums; }
+.kb-bar-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kb-bar-track { height: 9px; border-radius: 999px; background: var(--cc-track); overflow: hidden; }
+.kb-bar-track i { display: block; height: 100%; border-radius: 999px; }
+.kb-note { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: 11.5px; color: var(--cc-ink-3); line-height: 1.45; }
+.kb-note svg { flex: none; margin-top: 2px; }
+
+.kb-detail-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.kb-detail-head h3 { margin: 0; flex: 1; min-width: 0; font-size: 15px; font-weight: 700; color: var(--cc-ink); overflow-wrap: anywhere; }
+.kb-facts { margin: 12px 0 0; display: flex; flex-direction: column; gap: 8px; }
+.kb-facts div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 10px; font-size: 12.5px; }
+.kb-facts dt { color: var(--cc-ink-3); }
+.kb-facts dd { margin: 0; color: var(--cc-ink); overflow-wrap: anywhere; }
+.kb-chunks { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.kb-chunks button { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px; border-radius: 8px; border: 1px solid var(--cc-inner-border); background: var(--cc-inner); font: inherit; font-size: 12.5px; color: var(--cc-ink); cursor: pointer; text-align: start; }
+.kb-chunks button:hover { border-color: var(--cc-green); }
+.kb-chunk-title { min-width: 0; overflow-wrap: anywhere; }
+.kb-gov-title { margin: 16px 0 8px; font-size: 13px; font-weight: 700; color: var(--cc-ink); }
+.kb-gov { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; font-size: 12.5px; color: var(--cc-ink-2); }
+.kb-gov li { display: flex; align-items: center; gap: 8px; }
+.kb-gov li svg { color: var(--cc-ink-3); flex: none; }
+.kb-gov li.ok svg { color: var(--cc-green); }
+.kb-detail-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.kb-detail-actions button { justify-content: center; }
+
+@media (max-width: 1360px) {
+  .kb-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+  .kb-grid > :last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 1100px) {
+  .kb-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 860px) {
+  .kb-grid { grid-template-columns: minmax(0, 1fr); }
+  .kb-report-charts { grid-template-columns: minmax(0, 1fr); }
+  .kb-report-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kb-head-side { flex: 1 1 100%; }
+  .kb-head-actions { justify-content: flex-start; }
+}
+@media (max-width: 560px) {
+  .kb-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kb-count { margin-inline-start: 0; }
+}

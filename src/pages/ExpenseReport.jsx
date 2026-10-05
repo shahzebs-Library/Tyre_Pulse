@@ -725,6 +725,8 @@ export default function ExpenseReport() {
   const [to, setTo] = useState(() => defaultWindow(new Date()).to)
   const [defaultPeriod, setDefaultPeriod] = useState(null)
   const [byCountry, setByCountry] = useState([])
+  // The per-country read can fail alone; the panel must say so, not vanish.
+  const [byCountryErr, setByCountryErr] = useState('')
   const isAll = !activeCountry || activeCountry === 'All'
 
   // Period comparison + cost per km. The period picker drives BOTH this and the
@@ -842,8 +844,15 @@ export default function ExpenseReport() {
       // currency (SAR / AED / EGP) so they are shown side by side, never blended.
       let countries = []
       if (isAll) {
-        const rows = await getExpenseByCountry({ from: from || undefined, to: to || undefined }).catch(() => [])
-        if (stale()) return
+        let rows = []
+        try {
+          rows = await getExpenseByCountry({ from: from || undefined, to: to || undefined })
+          if (stale()) return
+          setByCountryErr('')
+        } catch (e) {
+          if (stale()) return
+          setByCountryErr(toUserMessage(e, 'Could not load the per-country totals.'))
+        }
         // BOUND TO THE REPORTING SCOPE. This RPC takes no country and returns
         // every country RLS allows, so without this filter a scope of two
         // countries would still report on three. It cannot widen anything (RLS
@@ -857,6 +866,7 @@ export default function ExpenseReport() {
         countries = scoped.map((r) => r.country).filter(Boolean)
       } else {
         setByCountry([])
+        setByCountryErr('')
       }
       // Per-site expense (store_code -> site map). The read THROWS on a real
       // failure; each country's read is caught on its own so a by-site failure
@@ -1464,6 +1474,9 @@ export default function ExpenseReport() {
         <>
           {/* Per-country totals in each own currency (All-countries view only, so
               SAR / AED / EGP are never blended into one meaningless sum). */}
+          {isAll && byCountryErr && (
+            <p role="alert" className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5">{byCountryErr}</p>
+          )}
           {isAll && byCountry.length > 0 && (
             <section className="space-y-3">
               <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2">

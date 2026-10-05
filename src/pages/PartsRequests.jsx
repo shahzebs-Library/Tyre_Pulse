@@ -126,6 +126,7 @@ export default function PartsRequests() {
   const [jobs, setJobs] = useState([])
   const [parts, setParts] = useState([])
   const [pickerLoading, setPickerLoading] = useState(false)
+  const [pickerError, setPickerError] = useState('')
 
   const load = useCallback(async () => {
     setRefreshing(true)
@@ -152,13 +153,18 @@ export default function PartsRequests() {
     setFormError('')
     setShowModal(true)
     setPickerLoading(true)
+    setPickerError('')
     try {
-      const [j, p] = await Promise.all([
-        listOpenJobs({ country: activeCountry }).catch(() => []),
-        listPartCatalog({ country: activeCountry }).catch(() => []),
+      // Both lists are optional helpers, so a failure must not block the form -
+      // but it must be said, or an empty list reads as "no open jobs".
+      const [j, p] = await Promise.allSettled([
+        listOpenJobs({ country: activeCountry }),
+        listPartCatalog({ country: activeCountry }),
       ])
-      setJobs(Array.isArray(j) ? j : [])
-      setParts(Array.isArray(p) ? p : [])
+      setJobs(j.status === 'fulfilled' && Array.isArray(j.value) ? j.value : [])
+      setParts(p.status === 'fulfilled' && Array.isArray(p.value) ? p.value : [])
+      const failed = [j.status === 'rejected' && 'open jobs', p.status === 'rejected' && 'the parts catalog'].filter(Boolean)
+      if (failed.length) setPickerError(`Could not load ${failed.join(' or ')}. You can still type the part name and submit.`)
     } finally {
       setPickerLoading(false)
     }
@@ -614,6 +620,10 @@ export default function PartsRequests() {
                 <AlertTriangle size={15} className="text-red-400" />
                 <span className="text-sm text-red-200">{formError}</span>
               </div>
+            )}
+
+            {pickerError && (
+              <p role="status" className="mb-3 text-xs text-amber-300 bg-amber-900/20 border border-amber-700/50 rounded-lg p-2.5">{pickerError}</p>
             )}
 
             <form id="parts-request-form" onSubmit={submitForm} className="grid grid-cols-1 sm:grid-cols-2 gap-4">

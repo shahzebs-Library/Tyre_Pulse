@@ -53,7 +53,7 @@ export default function FilterBar({
             <button
               type="button"
               onClick={() => onSearch('')}
-              aria-label={t('common.clearSearch') || 'Clear search'}
+              aria-label={t('common.clearSearch')}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-white transition-colors"
             >
               <X className="w-3.5 h-3.5" />

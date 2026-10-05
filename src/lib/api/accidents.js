@@ -198,5 +198,7 @@ export function updateAccidentForPage(id, patch) {
  * (the page currently ignores the result, matching prior fire-and-forget).
  */
 export function deleteAccident(id) {
-  return supabase.from('accidents').delete().eq('id', id)
+  // .select('id') returns the removed rows, so a delete that RLS quietly
+  // refused (0 rows) can be told apart from one that worked.
+  return supabase.from('accidents').delete().eq('id', id).select('id')
 }

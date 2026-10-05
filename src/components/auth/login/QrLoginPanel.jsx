@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2, RefreshCw, Smartphone } from 'lucide-react'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { startQrLogin, pollQrLogin, redeemQrLogin, qrPayload } from '../../../lib/api/loginShowcase'
+import { toUserMessage } from '../../../lib/safeError'
 
 const POLL_MS = 2000
 const FALLBACK_TTL_MS = 2 * 60 * 1000
@@ -75,7 +76,7 @@ export default function QrLoginPanel({ onError }) {
           try {
             await redeemQrLogin(code.id, code.browserSecret)
           } catch (err) {
-            if (aliveRef.current) { setState('expired'); onError?.(err?.message) }
+            if (aliveRef.current) { setState('expired'); onError?.(toUserMessage(err, '')) }
           }
         } else if (status === 'expired' || status === 'consumed') {
           setState('expired')

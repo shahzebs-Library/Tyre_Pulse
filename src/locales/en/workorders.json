@@ -177,5 +177,6 @@
     "cancel": "Cancel",
     "saveEdit": "Save job card",
     "saveNew": "Create job card"
-  }
+  },
+  "exportTruncated": "The export was capped. Narrow the filters to get the full set."
 }

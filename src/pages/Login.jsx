@@ -8,6 +8,7 @@ import {
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { supabase } from '../lib/supabase'
+import { toUserMessage } from '../lib/safeError'
 import { getPublicConfig } from '../lib/api/systemConfig'
 import { signInOptions, signInWithProvider } from '../lib/api/loginShowcase'
 import { loginAttemptStatus, recordLoginFailure, resetLoginAttempts, lockMinutes } from '../lib/api/loginGuard'
@@ -186,7 +187,7 @@ export default function Login() {
       // Any unexpected failure (network drop, RPC crash) must surface a message
       // and release the button — never leave it stuck on "Signing in…".
       captchaRef.current?.reset()
-      setError(err?.message || t('auth.login.errUnexpected'))
+      setError(toUserMessage(err, t('auth.login.errUnexpected')))
       setLoading(false)
       return
     }
@@ -243,7 +244,7 @@ export default function Login() {
       } else {
         // Wrong username or password: we cannot tell which, so mark both and
         // say it under the password, where the person will retype.
-        flagFields({ id: '', pw: result.message || t('auth.login.errLoginFailed') })
+        flagFields({ id: '', pw: toUserMessage(result, t('auth.login.errLoginFailed')) })
       }
       setLoading(false)
       return
@@ -274,7 +275,7 @@ export default function Login() {
       if (ssoErr) {
         setError(/no sso provider|not found/i.test(ssoErr.message || '')
           ? 'Single sign-on is not enabled for this email domain.'
-          : (ssoErr.message || 'Single sign-on is unavailable right now.'))
+          : toUserMessage(ssoErr, 'Single sign-on is unavailable right now.'))
         setSsoLoading(false)
         return
       }
@@ -282,7 +283,7 @@ export default function Login() {
       setError('Single sign-on is not enabled for this email domain.')
       setSsoLoading(false)
     } catch (err) {
-      setError(err?.message || t('auth.login.errUnexpected'))
+      setError(toUserMessage(err, t('auth.login.errUnexpected')))
       setSsoLoading(false)
     }
   }
@@ -328,12 +329,12 @@ export default function Login() {
       captchaRef.current?.reset()
       if (authErr) {
         const taken = /already registered|already been registered|duplicate|already exists|database error/i.test(authErr.message || '')
-        setError(taken ? 'That username or Employee ID is already taken. Please choose another.' : authErr.message)
+        setError(taken ? 'That username or Employee ID is already taken. Please choose another.' : toUserMessage(authErr, t('auth.login.errUnexpected')))
         return
       }
       setSignupDone(true)
     } catch (err) {
-      setError(err?.message || t('auth.login.errUnexpected'))
+      setError(toUserMessage(err, t('auth.login.errUnexpected')))
     } finally {
       setLoading(false)
     }
@@ -352,7 +353,7 @@ export default function Login() {
       setForgotChallengeId(result.challengeId || '')
       setForgotSent(true)
     } catch (err) {
-      setError(err?.message || t('auth.login.errUnexpected'))
+      setError(toUserMessage(err, t('auth.login.errUnexpected')))
     } finally {
       setForgotLoading(false)
     }
@@ -370,7 +371,7 @@ export default function Login() {
       })
       window.location.assign(actionLink)
     } catch (err) {
-      setError(err?.message || 'The code is invalid or expired.')
+      setError(toUserMessage(err, t('auth.login.errCodeInvalid')))
     } finally {
       setForgotLoading(false)
     }
@@ -406,7 +407,7 @@ export default function Login() {
     try {
       await signInWithProvider(provider)
     } catch (err) {
-      setError(err?.message || t('auth.login.errUnexpected'))
+      setError(toUserMessage(err, t('auth.login.errUnexpected')))
       setProviderLoading('')
     }
   }
@@ -703,7 +704,7 @@ export default function Login() {
                     display:'flex', alignItems:'center', justifyContent:'center', gap:8,
                   }}>
                     {forgotLoading ? <Loader2 size={16} className="animate-spin"/> : forgotChannel === 'email' ? <Mail size={16}/> : <Phone size={16}/>}
-                    {forgotLoading ? t('auth.login.sending') : 'Send verification code'}
+                    {forgotLoading ? t('auth.login.sending') : t('auth.login.sendVerificationCode')}
                   </button>
                   <p style={{ margin:0, fontSize:11, color:'var(--login-text-faint)', lineHeight:1.5 }}>
                     For security, TyrePulse gives the same response whether or not an account exists. Codes expire after 10 minutes.

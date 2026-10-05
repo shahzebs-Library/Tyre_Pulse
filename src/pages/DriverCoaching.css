@@ -18,9 +18,12 @@
 @media (max-width: 1200px) { .dco-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .dco-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
-.dco-main { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.dco-main { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 14px; align-items: stretch;
+  grid-template-areas: "queue detail" "trends score" "cal session"; }
+.dco-a-queue { grid-area: queue; } .dco-a-detail { grid-area: detail; } .dco-a-trends { grid-area: trends; }
+.dco-a-score { grid-area: score; } .dco-a-cal { grid-area: cal; } .dco-a-session { grid-area: session; }
 .dco-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-@media (max-width: 1200px) { .dco-main { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 1200px) { .dco-main { grid-template-columns: minmax(0, 1fr); grid-template-areas: "queue" "detail" "trends" "score" "cal" "session"; } }
 
 .dco-filters, .dco-reg-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .dco-reg-filters { margin-bottom: 10px; }
@@ -135,3 +138,38 @@
 .dco-board small { font-size: 11px; color: var(--cc-ink-3); white-space: nowrap; }
 @media (max-width: 560px) { .dco-board li { grid-template-columns: 30px minmax(0, 1fr) auto; } .dco-board small { display: none; } }
 .dco-page .cc-card-head { flex-wrap: wrap; gap: 8px; }
+
+/* Round 2: mockup parity */
+.dco-empty-cta { display: inline-flex; flex-direction: column; align-items: center; gap: 10px; }
+.dco-nodata { display: flex; align-items: flex-start; gap: 8px; padding: 12px; border-radius: 10px; border: 1px dashed var(--cc-inner-border); background: var(--cc-inner); font-size: 12px; line-height: 1.45; color: var(--cc-ink-3); }
+.dco-nodata svg { flex: none; color: var(--cc-blue); }
+.dco-seg { stroke-width: 2.4; stroke-linecap: round; }
+.dco-seg.before { stroke: var(--cc-red); }
+.dco-seg.after { stroke: var(--cc-green); }
+.dco-pt.before { fill: var(--cc-red); }
+.dco-pt.after { fill: var(--cc-green); }
+.dco-marker { stroke: var(--cc-ink-3); stroke-width: 1; stroke-dasharray: 3 3; }
+.dco-axis-msg { font-size: 11px; }
+.dco-legend { display: inline-flex; flex-wrap: wrap; gap: 6px 12px; font-size: 11px; color: var(--cc-ink-3); }
+.dco-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.dco-legend i { width: 9px; height: 9px; border-radius: 999px; display: inline-block; }
+.dco-legend i.before { background: var(--cc-red); }
+.dco-legend i.after { background: var(--cc-green); }
+.dco-week-label { font-size: 12.5px; font-weight: 600; color: var(--cc-ink); white-space: nowrap; }
+.dco-a-cal .cc-tabs { margin: 0; }
+.dco-week { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+@media (max-width: 640px) { .dco-week { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.dco-day { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 10px; border: 1px solid var(--cc-inner-border); background: var(--cc-inner); min-height: 76px; }
+.dco-day.today { border-color: var(--cc-green); box-shadow: inset 0 2px 0 var(--cc-green); }
+.dco-day-head { font-size: 11.5px; font-weight: 600; color: var(--cc-ink-2); text-align: center; }
+.dco-day-empty { font-size: 11px; color: var(--cc-ink-3); text-align: center; margin: auto 0; }
+.dco-assigned-head { display: flex; justify-content: space-between; margin-bottom: 6px; }
+.dco-assigned-head small, .dco-session-notes small { font-size: 11.5px; font-weight: 600; color: var(--cc-ink-2); display: inline-flex; align-items: center; gap: 5px; }
+.dco-a-session .cc-card:first-child { flex: 1; }
+.dco-actionbar { justify-content: flex-start; }
+.dco-detail .cc-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.dco-detail .cc-tabs-line { gap: 12px; }
+.dco-detail .cc-tabs-line .cc-tab { font-size: 12.5px; padding-inline: 2px; }
+.dco-addnote { display: inline-flex; align-items: center; gap: 5px; }
+.dco-facts b { font-size: 16px; }
+.dco-a-cal .cc-card-head, .dco-a-queue .cc-card-head { flex-wrap: wrap; }

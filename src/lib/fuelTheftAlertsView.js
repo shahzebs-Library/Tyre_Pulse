@@ -179,3 +179,38 @@ export function recommendedActions(alert) {
   }
   return out
 }
+
+const SEV_RANK = { unrated: 0, low: 1, medium: 2, high: 3 }
+
+/**
+ * Rows for the "Fuel Card Misuse" card. Alerts carry no fuel card, so repeat
+ * loss is grouped by asset instead: alert count, litres lost (null when no
+ * alert records a drop, never 0) and the worst severity band seen.
+ */
+export function cardMisuseRows(rows = [], limit = 5) {
+  const map = new Map()
+  for (const r of Array.isArray(rows) ? rows : []) {
+    const asset = String(r?.asset_no || '').trim()
+    if (!asset) continue
+    const e = map.get(asset) || { asset_no: asset, alerts: 0, litres: null, band: 'unrated' }
+    e.alerts += 1
+    const drop = toFiniteNumber(r.drop_litres)
+    if (drop != null) e.litres = (e.litres || 0) + drop
+    const b = severityBucket(r)
+    if (SEV_RANK[b] > SEV_RANK[e.band]) e.band = b
+    map.set(asset, e)
+  }
+  return [...map.values()]
+    .sort((a, b) => b.alerts - a.alerts || (b.litres ?? -1) - (a.litres ?? -1) || a.asset_no.localeCompare(b.asset_no))
+    .slice(0, limit)
+}
+
+/** Distinct recorded locations, for the hotspot site filter. */
+export function locationOptions(rows = []) {
+  const seen = new Map()
+  for (const r of Array.isArray(rows) ? rows : []) {
+    const loc = String(r?.location || '').trim()
+    if (loc && !seen.has(loc.toLowerCase())) seen.set(loc.toLowerCase(), loc)
+  }
+  return [...seen.values()].sort((a, b) => a.localeCompare(b))
+}

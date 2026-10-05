@@ -21,8 +21,8 @@
 @media (max-width: 760px) { .fta-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .fta-scope { margin: -4px 0 0; font-size: 11.5px; color: var(--cc-ink-3); }
 
-.fta-top { display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr); gap: 14px; align-items: start; }
-.fta-four { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.fta-top { display: grid; grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr); gap: 14px; align-items: stretch; }
+.fta-four { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; align-items: stretch; }
 .fta-two, .fta-analysis-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .fta-analysis-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (max-width: 1280px) { .fta-top { grid-template-columns: minmax(0, 1fr); } .fta-four, .fta-analysis-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -91,8 +91,8 @@
 .fta-inv-title { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .fta-inv-title small { font-size: 12px; font-weight: 500; color: var(--cc-ink-3); }
 .fta-inv-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.fta-inv-grid { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
-@media (max-width: 1400px) { .fta-inv-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.fta-inv-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 1200px) { .fta-inv-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 860px) { .fta-inv-grid { grid-template-columns: minmax(0, 1fr); } }
 .fta-inv-asset { display: flex; flex-direction: column; gap: 6px; }
 .fta-inv-asset > b { font-size: 16px; color: var(--cc-ink); }
@@ -116,3 +116,47 @@
 
 .fta-big { display: block; font-size: 22px; font-weight: 800; color: var(--cc-ink); font-variant-numeric: tabular-nums; }
 .fta-findings { margin: 0; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--cc-ink-2); }
+
+/* Round 2: mockup parity */
+.fta-hero { position: relative; }
+.fta-hero-range { position: absolute; top: 14px; inset-inline-end: 14px; padding: 6px 8px; border-radius: 10px; background: var(--cc-card-flat); border: 1px solid var(--cc-inner-border); color: var(--cc-ink-2); }
+@media (max-width: 900px) { .fta-hero-range { position: static; margin-top: 10px; } }
+.fta-time { display: inline-flex; align-items: center; gap: 7px; }
+.fta-tri.bad { color: var(--cc-red); }
+.fta-tri.warn { color: var(--cc-amber); }
+.fta-filter-btn { position: relative; }
+.fta-filter-btn.on { border-color: var(--cc-green); color: var(--cc-green); }
+.fta-filter-count { position: absolute; top: -6px; inset-inline-end: -6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--cc-green-strong); color: #fff; font-size: 10px; font-weight: 700; display: grid; place-items: center; }
+.fta-more { margin: -4px 0 10px; }
+.fta-empty-cta { display: inline-flex; flex-direction: column; align-items: center; gap: 10px; }
+
+.fta-map { position: relative; min-height: 250px; border-radius: 12px; overflow: hidden; background: var(--cc-map-bg); border: 1px solid var(--cc-inner-border); padding: 12px 12px 56px; }
+.fta-map-grid { position: absolute; inset: 0; pointer-events: none; opacity: 0.6;
+  background-image: linear-gradient(var(--cc-track) 1px, transparent 1px), linear-gradient(90deg, var(--cc-track) 1px, transparent 1px);
+  background-size: 34px 34px; }
+.fta-map .fta-hot { position: relative; }
+.fta-map-empty { position: relative; min-height: 170px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; font-size: 12.5px; color: var(--cc-ink-3); }
+.fta-map-empty svg { color: var(--cc-green); opacity: 0.8; }
+.fta-map-legend { position: absolute; inset-inline-start: 12px; bottom: 10px; flex-direction: column; gap: 4px; padding: 7px 10px; border-radius: 9px; background: var(--cc-card-flat); border: 1px solid var(--cc-inner-border); margin: 0; }
+.fta-foot svg { display: inline; vertical-align: -2px; margin-inline-end: 4px; color: var(--cc-blue); }
+
+.fta-chart { position: relative; }
+.fta-chart-empty { position: absolute; inset: 0 0 20px 28px; display: grid; place-items: center; text-align: center; font-size: 12px; color: var(--cc-ink-3); }
+.fta-sw { display: inline-block; width: 10px; height: 10px; border-radius: 999px; }
+.fta-sw.pos { background: var(--cc-green); }
+.fta-sw.neg { background: var(--cc-red); }
+.fta-ghost { opacity: 0.45; }
+.fta-ghost .fta-sites-track i { background: var(--cc-ink-3); }
+
+.fta-inv-head { display: flex; align-items: center; gap: 10px; }
+.fta-inv-head b { display: block; font-size: 15px; color: var(--cc-ink); }
+.fta-inv-head small { font-size: 11.5px; color: var(--cc-ink-3); }
+.fta-chart-frame { min-height: 120px; display: flex; align-items: center;
+  background-image: linear-gradient(var(--cc-track) 1px, transparent 1px); background-size: 100% 24px; }
+
+.cc .fta-feed .cc-et th, .cc .fta-feed .cc-et td { padding-inline: 7px; font-size: 12px; }
+.cc .fta-feed .cc-et th:first-child, .cc .fta-feed .cc-et td:first-child { padding-left: 14px; }
+.fta-four .cc-donut-wrap { flex-wrap: nowrap; gap: 12px; }
+.fta-four .cc-donut { width: 124px; height: 124px; flex: none; }
+.fta-four .cc-legend-table { flex: 1 1 auto; }
+@media (max-width: 500px) { .fta-four .cc-donut-wrap { flex-wrap: wrap; } }

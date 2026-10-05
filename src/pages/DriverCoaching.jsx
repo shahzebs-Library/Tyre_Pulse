@@ -19,6 +19,7 @@ import {
   Users, AlertTriangle, Clock, TrendingUp, ClipboardList, Plus, Pencil, Trash2,
   FileSpreadsheet, FileText, Search, X, RefreshCw, ChevronLeft, ChevronRight,
   GraduationCap, Play, CalendarDays, CheckCircle2, Trophy, Medal, Award, Zap, Info,
+  Gauge, Smartphone, StickyNote, UserCheck, Download, FileStack,
 } from 'lucide-react'
 import Modal from '../components/ui/Modal'
 import { Card, CardState, Kpi, PageHero, Tabs, KitTable, fmtInt } from '../components/commandCenter/kit'
@@ -33,7 +34,8 @@ import {
 } from '../lib/driverCoachingAnalytics'
 import {
   buildCoachingQueue, filterQueue, driverHistory, scoreTrend, latestSession, driverTotals,
-  coachingHeadline, behaviourTrends, RISK_LABEL, RISK_OPTIONS,
+  coachingHeadline, behaviourTrends, RISK_LABEL, RISK_OPTIONS, phasedTrend, coachOptions,
+  workWeek, weekLabel,
 } from '../lib/driverCoachingView'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
@@ -58,29 +60,37 @@ function Avatar({ name, size = 'sm' }) {
   return <span className={`dco-avatar dco-avatar-${size}`} aria-hidden="true">{initials(name)}</span>
 }
 
-/** Score line across a driver's periods. Drawn only with two or more points. */
-function ScoreLine({ points }) {
-  if (points.length < 2) return null
-  const W = 320; const H = 130; const pad = 22
-  const x = (i) => pad + (i * (W - pad * 2)) / (points.length - 1)
+/**
+ * Score line across a driver's periods. Axes always draw so the card keeps its
+ * shape; the line needs two or more scored periods. Red segments are before
+ * the first completed coaching, green after it.
+ */
+function ScoreLine({ points, emptyText }) {
+  const W = 340; const H = 150; const pad = 24
+  const n = points.length
+  const x = (i) => (n < 2 ? W / 2 : pad + (i * (W - pad * 2)) / (n - 1))
   const y = (v) => H - pad - (Math.max(0, Math.min(100, v)) / 100) * (H - pad * 2)
-  const d = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.score).toFixed(1)}`).join(' ')
+  const firstAfter = points.findIndex((p) => p.phase === 'after')
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="dco-line" role="img" aria-label={points.map((p) => `${p.label} ${p.score.toFixed(1)}`).join(', ')}>
-      {[0, 50, 100].map((g) => (
+    <svg viewBox={`0 0 ${W} ${H}`} className="dco-line" role="img" aria-label={n ? points.map((p) => `${p.label} ${p.score.toFixed(1)}`).join(', ') : emptyText}>
+      {[0, 20, 40, 60, 80, 100].map((g) => (
         <g key={g}>
           <line x1={pad} x2={W - pad} y1={y(g)} y2={y(g)} className="dco-grid" />
-          <text x={4} y={y(g) + 3} className="dco-axis">{g}</text>
+          <text x={2} y={y(g) + 3} className="dco-axis">{g}</text>
         </g>
       ))}
       <line x1={pad} x2={W - pad} y1={y(COACHING_THRESHOLD)} y2={y(COACHING_THRESHOLD)} className="dco-threshold" />
-      <path d={d} className="dco-path" />
+      {n >= 2 && points.slice(1).map((p, i) => (
+        <line key={`seg-${i}`} x1={x(i)} y1={y(points[i].score)} x2={x(i + 1)} y2={y(p.score)} className={`dco-seg ${p.phase}`} />
+      ))}
+      {firstAfter > 0 && <line x1={x(firstAfter)} x2={x(firstAfter)} y1={pad - 6} y2={H - pad} className="dco-marker" />}
       {points.map((p, i) => (
         <g key={`${p.label}-${i}`}>
-          <circle cx={x(i)} cy={y(p.score)} r="4" className={`dco-pt ${scoreTone(p.score)}`} />
-          <text x={x(i)} y={H - 4} textAnchor="middle" className="dco-axis">{p.label}</text>
+          <circle cx={x(i)} cy={y(p.score)} r="4" className={`dco-pt ${p.phase}`} />
+          <text x={x(i)} y={H - 6} textAnchor="middle" className="dco-axis">{p.label}</text>
         </g>
       ))}
+      {n < 2 && <text x={W / 2} y={pad + 4} textAnchor="middle" className="dco-axis dco-axis-msg">{emptyText}</text>}
     </svg>
   )
 }
@@ -137,6 +147,10 @@ export default function DriverCoaching() {
   const [queueSearch, setQueueSearch] = useState('')
   const [selectedKey, setSelectedKey] = useState(null)
   const [detailTab, setDetailTab] = useState('overview')
+  const [trendWindow, setTrendWindow] = useState(6)
+  const [weekOffset, setWeekOffset] = useState(0)
+  const [calView, setCalView] = useState('week')
+  const [coachFilter, setCoachFilter] = useState('')
 
   // Register filters (leaderboard tab)
   const [statusFilter, setStatusFilter] = useState('')
@@ -177,14 +191,16 @@ export default function DriverCoaching() {
   const head = useMemo(() => coachingHeadline(list), [list])
   const queue = useMemo(() => buildCoachingQueue(list), [list])
   const shownQueue = useMemo(() => filterQueue(queue, { risk: riskFilter, status: queueStatus, search: queueSearch }), [queue, riskFilter, queueStatus, queueSearch])
-  const trends = useMemo(() => behaviourTrends(list), [list])
+  const trends = useMemo(() => behaviourTrends(list, trendWindow), [list, trendWindow])
   const selIndex = Math.max(0, shownQueue.findIndex((e) => e.key === selectedKey))
   const selected = shownQueue[selIndex] || null
   const history = useMemo(() => (selected ? driverHistory(list, selected.driver_name) : []), [list, selected])
-  const points = useMemo(() => scoreTrend(history), [history])
+  const points = useMemo(() => phasedTrend(scoreTrend(history)), [history])
   const session = useMemo(() => latestSession(history), [history])
   const totals = useMemo(() => driverTotals(history), [history])
-  const scheduled = useMemo(() => queue.filter((e) => e.status === 'scheduled' || e.status === 'recommended'), [queue])
+  const scheduled = useMemo(() => queue.filter((e) => (e.status === 'scheduled' || e.status === 'recommended') && (!coachFilter || e.coach === coachFilter)), [queue, coachFilter])
+  const coaches = useMemo(() => coachOptions(queue), [queue])
+  const week = useMemo(() => workWeek(Date.now(), weekOffset), [weekOffset])
 
   // Leaderboard tab
   const board = useMemo(() => honestLeaderboard(list), [list])
@@ -280,16 +296,16 @@ export default function DriverCoaching() {
     },
     { key: 'site', header: 'Site', sortable: false, cell: () => <span className="cc-na" title="The scorecard has no site column">Not recorded</span> },
     {
-      key: 'score', header: 'Score', numeric: true, sortValue: (e) => e.score ?? 1000,
-      cell: (e) => (e.score == null ? <span className="cc-na">Not scored</span> : <span className={`dco-score ${scoreTone(e.score)}`}>{e.score.toFixed(0)}</span>),
+      key: 'score', header: 'Risk score', numeric: true, sortValue: (e) => e.score ?? 1000,
+      cell: (e) => (e.score == null ? <span className="cc-na">Not scored</span> : <span className={`dco-score ${scoreTone(e.score)}`} title={RISK_LABEL[e.risk]}>{e.score.toFixed(0)}</span>),
     },
-    { key: 'risk', header: 'Risk', cell: (e) => <span className={`cc-pill ${RISK_PILL[e.risk]}`}>{RISK_LABEL[e.risk]}</span> },
     {
-      key: 'behaviours', header: 'Recorded behaviours', sortable: false,
+      key: 'behaviours', header: 'Top behaviours', sortable: false,
       cell: (e) => (e.behaviours.length ? <span className="dco-beh-list">{e.behaviours.join(', ')}</span> : <span className="cc-na">None recorded</span>),
     },
-    { key: 'period', header: 'Period', cell: (e) => e.period || <span className="cc-na">N/A</span> },
-    { key: 'coach', header: 'Coach', cell: (e) => (e.coach ? <span className="dco-who"><Avatar name={e.coach} /></span> : <span className="cc-na">N/A</span>) },
+    { key: 'period', header: 'Last session', cell: (e) => (e.period ? <span title="Scorecard period; session dates are not recorded">{e.period}</span> : <span className="cc-na">N/A</span>) },
+    { key: 'next', header: 'Next session', sortable: false, cell: () => <span className="cc-na" title="Scorecards record no session date">Not recorded</span> },
+    { key: 'coach', header: 'Coach', cell: (e) => (e.coach ? <span className="dco-who" title={e.coach}><Avatar name={e.coach} /></span> : <span className="cc-na">N/A</span>) },
     { key: 'status', header: 'Status', cell: (e) => <span className={`cc-pill ${STATUS_PILL[e.status]}`}>{STATUS_LABEL[e.status]}</span> },
   ]
 
@@ -339,12 +355,12 @@ export default function DriverCoaching() {
   return (
     <div className="cc dco-page">
       <PageHero
-        hello="Drivers and Safety"
+        hello="Drivers and Safety / Driver Coaching"
         title="Driver Coaching"
         lead="Risk-based coaching, behaviour improvement and follow-up actions for a safer, more efficient fleet."
         imgLight="/dashboard/hero-coaching-light.webp"
         imgDark="/dashboard/hero-coaching-dark.webp"
-        stat={{ value: na(head.drivers), lines: ['Drivers on', 'scorecards'] }}
+        stat={{ value: '', lines: ['Safer drivers', 'Stronger business'] }}
       />
 
       <div className="cc-card dco-bar">
@@ -388,62 +404,161 @@ export default function DriverCoaching() {
             <Kpi icon={Users} tone="t-green" display={na(head.coachedDrivers)} label="Coached drivers" loading={cardState.loading}
               title="Drivers with at least one scorecard marked Completed" onClick={() => { setTab('leaderboard'); setStatusFilter('completed') }} />
             <Kpi icon={AlertTriangle} tone="t-red" display={na(head.highRisk)} label="High-risk drivers" loading={cardState.loading} danger={head.highRisk > 0}
-              title={`Latest score below ${COACHING_THRESHOLD}`} onClick={() => setRiskFilter('high')} />
+              title={`Latest score below ${COACHING_THRESHOLD}, requiring coaching`} onClick={() => setRiskFilter('high')} />
             <Kpi icon={Clock} tone="t-amber" display="N/A" label="Overdue coaching" loading={cardState.loading}
               title="Not recorded: scorecards carry no session or due date, so overdue coaching cannot be measured" />
-            <Kpi icon={TrendingUp} tone="t-blue" display={na(head.avgImprovementPct, (v) => `${v > 0 ? '+' : ''}${v}%`)} label="Avg behaviour improvement" loading={cardState.loading}
+            <Kpi icon={TrendingUp} tone="t-blue" display={na(head.avgImprovementPct, (v) => `${v > 0 ? '+' : ''}${v}%`)} label="Behavior score improvement" loading={cardState.loading}
               title={ready ? `Mean improvement % from ${head.improvementRecords} scorecard(s) that record one` : undefined} />
-            <Kpi icon={ClipboardList} tone="t-purple" display={na(head.openFollowUps)} label="Open follow-ups" loading={cardState.loading}
-              title="Scorecards with coaching Recommended or Scheduled" onClick={() => setQueueStatus('recommended')} />
+            <Kpi icon={ClipboardList} tone="t-purple" display={na(head.openFollowUps)} label="Open follow-up tasks" loading={cardState.loading}
+              title="Scorecards with coaching Recommended or Scheduled, awaiting completion" onClick={() => setQueueStatus('recommended')} />
           </div>
 
           <div className="dco-main">
-            <div className="dco-col">
-              <Card title="Driver Coaching Queue" sub="Drivers ranked by latest score, highest risk first"
-                action={(
-                  <div className="dco-filters">
-                    <select className="cc-select" value={riskFilter} onChange={(e) => setRiskFilter(e.target.value)} aria-label="Risk level">
-                      <option value="">All risk levels</option>
-                      {RISK_OPTIONS.map((r) => <option key={r} value={r}>{RISK_LABEL[r]}</option>)}
-                    </select>
-                    <select className="cc-select" value={queueStatus} onChange={(e) => setQueueStatus(e.target.value)} aria-label="Coaching status">
-                      <option value="">All statuses</option>
-                      {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
-                    </select>
-                    <label className="dco-search">
-                      <Search size={14} aria-hidden="true" />
-                      <input value={queueSearch} onChange={(e) => setQueueSearch(e.target.value)} placeholder="Search drivers" aria-label="Search drivers" />
-                    </label>
-                  </div>
-                )}>
-                <CardState state={cardState} lines={6}
-                  empty={ready && !queue.length ? (
-                    <div>No driver scorecards recorded yet.<br /><button type="button" className="cc-btn" onClick={() => openCreate()} disabled={notProvisioned}>Add the first scorecard</button></div>
-                  ) : null}>
-                  <KitTable columns={queueColumns} rows={shownQueue} getRowId={(e) => e.key}
-                    onRowClick={(e) => { setSelectedKey(e.key); setDetailTab('overview') }}
-                    empty="No drivers match these filters." />
-                </CardState>
-              </Card>
+            <Card className="dco-a-queue" title="Driver Coaching Queue" sub="Drivers ranked by risk score and coaching priority"
+              action={(
+                <div className="dco-filters">
+                  <select className="cc-select" value="" disabled aria-label="Site" title="Scorecards record no site, so the queue cannot be filtered by site">
+                    <option value="">All sites</option>
+                  </select>
+                  <select className="cc-select" value={riskFilter} onChange={(e) => setRiskFilter(e.target.value)} aria-label="Risk level">
+                    <option value="">All risk levels</option>
+                    {RISK_OPTIONS.map((r) => <option key={r} value={r}>{RISK_LABEL[r]}</option>)}
+                  </select>
+                  <select className="cc-select" value={queueStatus} onChange={(e) => setQueueStatus(e.target.value)} aria-label="Coaching status">
+                    <option value="">All statuses</option>
+                    {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+                  </select>
+                  <label className="dco-search">
+                    <Search size={14} aria-hidden="true" />
+                    <input value={queueSearch} onChange={(e) => setQueueSearch(e.target.value)} placeholder="Search drivers..." aria-label="Search drivers" />
+                  </label>
+                </div>
+              )}>
+              <CardState state={cardState} lines={6}>
+                <KitTable columns={queueColumns} rows={shownQueue} getRowId={(e) => e.key}
+                  onRowClick={(e) => { setSelectedKey(e.key); setDetailTab('overview') }}
+                  empty={queue.length ? 'No drivers match these filters.' : (
+                    <span className="dco-empty-cta">
+                      No driver scorecards recorded yet.
+                      <button type="button" className="cc-btn" onClick={() => openCreate()} disabled={notProvisioned}>Add the first scorecard</button>
+                    </span>
+                  )} />
+              </CardState>
+            </Card>
 
-              <Card title="Behaviour Trends" sub="Fleet average per scorecard period">
-                <CardState state={cardState} lines={3}
-                  empty={ready && !trends.periods.length ? 'No scorecard carries a period yet, so trends cannot be drawn.' : null}>
-                  <div className="dco-behs">
-                    <BehaviourTile icon={Zap} tone="t-red" title="Harsh events" unit=" per 100 km" data={trends.harsh} note="Events per 100 km" />
-                    <BehaviourTile icon={Clock} tone="t-amber" title="Excessive idling" unit=" min" data={trends.idling} note="Avg minutes per scorecard" />
-                    <BehaviourTile icon={Zap} tone="t-blue" title="Speeding" note="Not on scorecards" />
-                    <BehaviourTile icon={Zap} tone="t-purple" title="Seatbelt non-use" note="Not on scorecards" />
-                    <BehaviourTile icon={Zap} tone="t-green" title="Mobile device use" note="Not on scorecards" />
+            <Card className="dco-a-detail" title="Driver Details"
+              action={(
+                <span className="dco-nav">
+                  <button type="button" className="cc-icon-btn" onClick={() => navigate(-1)} disabled={!shownQueue.length} aria-label="Previous driver"><ChevronLeft size={14} /></button>
+                  <span>{shownQueue.length ? `${selIndex + 1} of ${shownQueue.length}` : '0 of 0'}</span>
+                  <button type="button" className="cc-icon-btn" onClick={() => navigate(1)} disabled={!shownQueue.length} aria-label="Next driver"><ChevronRight size={14} /></button>
+                </span>
+              )}>
+              <CardState state={cardState} lines={5}>
+                <div className="dco-detail">
+                  <div className="dco-detail-head">
+                    <Avatar name={selected?.driver_name || '?'} size="lg" />
+                    <div className="dco-detail-id">
+                      <div><b>{selected ? selected.driver_name : 'No driver selected'}</b> {selected && <span className={`cc-pill ${RISK_PILL[selected.risk]}`}>{RISK_LABEL[selected.risk]}</span>}</div>
+                      <small>{selected ? `${selected.scorecards} scorecard(s) | latest period ${selected.period || 'N/A'} | site and vehicle not recorded` : 'Pick a driver from the queue to see their details.'}</small>
+                    </div>
+                    <div className={`dco-big-score ${scoreTone(selected?.score ?? null)}`}>
+                      <b>{selected?.score == null ? 'N/A' : selected.score.toFixed(0)}</b>
+                      <small>Risk score</small>
+                    </div>
                   </div>
-                </CardState>
-              </Card>
+                  <Tabs variant="line" label="Driver detail" value={detailTab} onChange={setDetailTab} tabs={[
+                    { key: 'overview', label: 'Overview' },
+                    { key: 'history', label: 'Coaching history', count: selected ? history.length : null },
+                    { key: 'behaviour', label: 'Behavior details' },
+                    { key: 'documents', label: 'Documents' },
+                  ]} />
+                  {detailTab === 'overview' && (
+                    <div className="dco-facts">
+                      <div><small>Total distance</small><b>{selected ? fmtNum(totals.distanceKm, ' km') : 'N/A'}</b><span>All scorecards</span></div>
+                      <div><small>Total drive time</small><b className="cc-na">N/A</b><span>Not on scorecards</span></div>
+                      <div><small>Incidents</small><b className="cc-na">N/A</b><span>Not on scorecards</span></div>
+                      <div><small>Harsh events</small><b>{selected ? fmtNum(totals.harshEvents) : 'N/A'}</b><span>All scorecards</span></div>
+                    </div>
+                  )}
+                  {detailTab === 'history' && (
+                    <KitTable compact columns={historyColumns} rows={[...history].reverse()} getRowId={(r) => String(r.id)} empty={selected ? 'No scorecards.' : 'No driver selected.'} />
+                  )}
+                  {detailTab === 'behaviour' && (
+                    <div className="dco-facts">
+                      <div><small>Harsh events</small><b>{selected ? fmtNum(totals.harshEvents) : 'N/A'}</b><span>All scorecards</span></div>
+                      <div><small>Idling</small><b>{selected ? fmtNum(totals.idlingMin, ' min') : 'N/A'}</b><span>All scorecards</span></div>
+                      <div><small>Per 100 km</small><b>{selected?.harshPer100 == null ? 'N/A' : selected.harshPer100}</b><span>Latest scorecard</span></div>
+                      <div><small>Speeding, seatbelt, phone</small><b className="cc-na">N/A</b><span>Not on scorecards</span></div>
+                    </div>
+                  )}
+                  {detailTab === 'documents' && (
+                    <div className="dco-nodata"><FileStack size={16} aria-hidden="true" /> Coaching documents are not stored on scorecards. Record references in the scorecard notes.</div>
+                  )}
+                </div>
+              </CardState>
+            </Card>
 
-              <Card title="Coaching Board" sub="Sessions waiting to happen"
-                action={<button type="button" className="cc-btn-ghost" onClick={() => openCreate({ coaching_status: 'scheduled' })} disabled={notProvisioned}><CalendarDays size={14} aria-hidden="true" /> Schedule session</button>}>
-                <CardState state={cardState} lines={2}
-                  empty={ready && !scheduled.length ? 'No coaching is Recommended or Scheduled right now.' : null}>
-                  <p className="dco-note"><Info size={13} aria-hidden="true" /> Scorecards record a coaching status but no session date, so sessions are listed by status rather than placed on a calendar.</p>
+            <Card className="dco-a-trends" title="Behavior Trends" sub="Key risky behaviours across all drivers (fleet average)."
+              action={(
+                <select className="cc-select" value={trendWindow} onChange={(e) => setTrendWindow(Number(e.target.value))} aria-label="Trend window">
+                  <option value={3}>Last 3 periods</option>
+                  <option value={6}>Last 6 periods</option>
+                  <option value={12}>Last 12 periods</option>
+                </select>
+              )}>
+              <CardState state={cardState} lines={3}>
+                <div className="dco-behs">
+                  <BehaviourTile icon={Zap} tone="t-red" title="Harsh events" unit=" per 100 km" data={trends.harsh} note="Events per 100 km" />
+                  <BehaviourTile icon={Gauge} tone="t-amber" title="Speeding" note="Not on scorecards" />
+                  <BehaviourTile icon={Clock} tone="t-amber" title="Excessive idling" unit=" min" data={trends.idling} note="Avg minutes per scorecard" />
+                  <BehaviourTile icon={UserCheck} tone="t-blue" title="Seatbelt non-use" note="Not on scorecards" />
+                  <BehaviourTile icon={Smartphone} tone="t-purple" title="Mobile device use" note="Not on scorecards" />
+                </div>
+                {!trends.periods.length && <p className="dco-note"><Info size={13} aria-hidden="true" /> No scorecard carries a period yet, so trends cannot be drawn.</p>}
+              </CardState>
+            </Card>
+
+            <Card className="dco-a-score" title="Behavior Score Trend" sub={selected ? `${selected.driver_name}, score per period` : 'Score per period'}
+              action={(
+                <span className="dco-legend">
+                  <span><i className="before" aria-hidden="true" /> Before coaching</span>
+                  <span><i className="after" aria-hidden="true" /> After coaching</span>
+                </span>
+              )}>
+              <CardState state={cardState} lines={3}>
+                <ScoreLine points={points} emptyText={selected ? 'Two or more scored periods are needed' : 'Pick a driver to see the trend'} />
+                <p className="dco-note"><Info size={13} aria-hidden="true" /> Dashed line marks the coaching threshold of {COACHING_THRESHOLD}.</p>
+              </CardState>
+            </Card>
+
+            <Card className="dco-a-cal" title="Coaching Calendar" sub="Scheduled coaching sessions and follow-ups"
+              action={(
+                <div className="dco-filters">
+                  <button type="button" className="cc-btn-ghost" onClick={() => setWeekOffset(0)}>Today</button>
+                  <button type="button" className="cc-icon-btn" onClick={() => setWeekOffset((w) => w - 1)} aria-label="Previous week"><ChevronLeft size={14} /></button>
+                  <button type="button" className="cc-icon-btn" onClick={() => setWeekOffset((w) => w + 1)} aria-label="Next week"><ChevronRight size={14} /></button>
+                  <span className="dco-week-label">{weekLabel(week)}</span>
+                  <Tabs label="Calendar view" value={calView} onChange={setCalView} tabs={[{ key: 'week', label: 'Week' }, { key: 'list', label: 'List' }]} />
+                  <select className="cc-select" value={coachFilter} onChange={(e) => setCoachFilter(e.target.value)} aria-label="Coach">
+                    <option value="">All coaches</option>
+                    {coaches.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              )}>
+              <CardState state={cardState} lines={2}>
+                {calView === 'week' && (
+                  <div className="dco-week">
+                    {week.map((d) => (
+                      <div key={d.iso} className={`dco-day ${d.isToday ? 'today' : ''}`}>
+                        <span className="dco-day-head">{d.weekday} {d.day} {d.month}</span>
+                        <span className="dco-day-empty">No dated session</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="dco-note"><Info size={13} aria-hidden="true" /> Scorecards record a coaching status but no session date, so open sessions are listed below rather than placed on a day.</p>
+                {scheduled.length ? (
                   <div className="dco-sessions">
                     {scheduled.slice(0, 10).map((e) => (
                       <button key={e.key} type="button" className={`dco-session ${e.status}`} onClick={() => setSelectedKey(e.key)}>
@@ -453,95 +568,38 @@ export default function DriverCoaching() {
                       </button>
                     ))}
                   </div>
-                </CardState>
-              </Card>
-            </div>
+                ) : <p className="dco-mini-empty">No coaching is Recommended or Scheduled{coachFilter ? ` for ${coachFilter}` : ''} right now.</p>}
+              </CardState>
+            </Card>
 
-            <div className="dco-col">
-              <Card title="Driver Details"
-                action={shownQueue.length > 0 && (
-                  <span className="dco-nav">
-                    <button type="button" className="cc-icon-btn" onClick={() => navigate(-1)} aria-label="Previous driver"><ChevronLeft size={14} /></button>
-                    <span>{selIndex + 1} of {shownQueue.length}</span>
-                    <button type="button" className="cc-icon-btn" onClick={() => navigate(1)} aria-label="Next driver"><ChevronRight size={14} /></button>
-                  </span>
-                )}>
-                <CardState state={cardState} lines={5} empty={ready && !selected ? 'Pick a driver from the queue to see their details.' : null}>
-                  {selected && (
-                    <div className="dco-detail">
-                      <div className="dco-detail-head">
-                        <Avatar name={selected.driver_name} size="lg" />
-                        <div className="dco-detail-id">
-                          <div><b>{selected.driver_name}</b> <span className={`cc-pill ${RISK_PILL[selected.risk]}`}>{RISK_LABEL[selected.risk]}</span></div>
-                          <small>{selected.scorecards} scorecard(s) | latest period {selected.period || 'N/A'} | site and vehicle not recorded</small>
-                        </div>
-                        <div className={`dco-big-score ${scoreTone(selected.score)}`}>
-                          <b>{selected.score == null ? 'N/A' : selected.score.toFixed(0)}</b>
-                          <small>Score</small>
-                        </div>
-                      </div>
-                      <Tabs variant="line" label="Driver detail" value={detailTab} onChange={setDetailTab} tabs={[
-                        { key: 'overview', label: 'Overview' },
-                        { key: 'history', label: 'Coaching history', count: history.length },
-                        { key: 'notes', label: 'Notes' },
-                      ]} />
-                      {detailTab === 'overview' && (
-                        <div className="dco-facts">
-                          <div><small>Total distance</small><b>{fmtNum(totals.distanceKm, ' km')}</b><span>All scorecards</span></div>
-                          <div><small>Harsh events</small><b>{fmtNum(totals.harshEvents)}</b><span>All scorecards</span></div>
-                          <div><small>Idling</small><b>{fmtNum(totals.idlingMin, ' min')}</b><span>All scorecards</span></div>
-                          <div><small>Incidents</small><b className="cc-na">N/A</b><span>Not on scorecards</span></div>
-                        </div>
-                      )}
-                      {detailTab === 'history' && (
-                        <KitTable compact columns={historyColumns} rows={[...history].reverse()} getRowId={(r) => String(r.id)} empty="No scorecards." />
-                      )}
-                      {detailTab === 'notes' && (
-                        <div className="dco-notes">
-                          {history.filter((r) => r.coaching_notes || r.notes).length === 0
-                            ? <p className="cc-na">No notes recorded for this driver.</p>
-                            : [...history].reverse().filter((r) => r.coaching_notes || r.notes).map((r) => (
-                              <div key={r.id}><small>{r.period || 'No period'}</small><p>{r.coaching_notes || r.notes}</p></div>
-                            ))}
-                        </div>
-                      )}
+            <div className="dco-a-session dco-col">
+              <Card title="Latest Coaching Session" action={session?.period ? <span className="cc-pill muted">{session.period}</span> : null}>
+                <CardState state={cardState} lines={3}>
+                  <div className="dco-session-card">
+                    <div className="dco-session-row">
+                      <div><small>Coach</small><b className="dco-who">{session?.coach ? <><Avatar name={session.coach} />{session.coach}</> : 'Not recorded'}</b></div>
+                      <div><small>Session type</small>{session ? <span className={`cc-pill ${STATUS_PILL[String(session.coaching_status || 'none').toLowerCase()] || 'muted'}`}>{STATUS_LABEL[String(session.coaching_status || 'none').toLowerCase()] || 'No coaching'}</span> : <b>N/A</b>}</div>
+                      <div><small>Duration</small><b className="cc-na">Not recorded</b></div>
                     </div>
-                  )}
-                </CardState>
-              </Card>
-
-              <Card title="Behaviour Score Trend" sub={selected ? `${selected.driver_name}, score per period` : 'Score per period'}>
-                <CardState state={cardState} lines={3}
-                  empty={ready && points.length < 2 ? (selected ? 'Two or more scored periods are needed to draw a trend for this driver.' : 'Pick a driver to see the trend.') : null}>
-                  <ScoreLine points={points} />
-                  <p className="dco-note"><Info size={13} aria-hidden="true" /> Dashed line marks the coaching threshold of {COACHING_THRESHOLD}.</p>
-                </CardState>
-              </Card>
-
-              <Card title="Latest Coaching Session" sub={session?.period ? `Period ${session.period}` : undefined}>
-                <CardState state={cardState} lines={3} empty={ready && !session ? 'No scorecard selected.' : null}>
-                  {session && (
-                    <div className="dco-session-card">
-                      <div className="dco-session-row">
-                        <div><small>Coach</small><b>{session.coach || 'Not recorded'}</b></div>
-                        <div><small>Status</small><span className={`cc-pill ${STATUS_PILL[String(session.coaching_status || 'none').toLowerCase()] || 'muted'}`}>{STATUS_LABEL[String(session.coaching_status || 'none').toLowerCase()] || 'No coaching'}</span></div>
-                        <div><small>Improvement</small><b>{session.improvement_pct == null ? 'N/A' : `${session.improvement_pct}%`}</b></div>
-                      </div>
-                      <div className="dco-session-notes">
-                        <small>Notes</small>
-                        <p>{session.coaching_notes || 'No coaching notes recorded.'}</p>
-                        <button type="button" className="cc-btn" onClick={() => openEdit(session)}>Add or edit notes</button>
-                      </div>
-                      <p className="dco-note"><Info size={13} aria-hidden="true" /> Assigned actions and due dates are not recorded on scorecards.</p>
+                    <div className="dco-session-notes">
+                      <small><StickyNote size={12} aria-hidden="true" /> Notes</small>
+                      <p>{session ? (session.coaching_notes || 'No coaching notes recorded.') : 'No driver selected.'}</p>
+                      <button type="button" className="cc-btn dco-addnote" disabled={!session} onClick={() => openEdit(session)}><Plus size={13} aria-hidden="true" /> Add note</button>
                     </div>
-                  )}
+                    <div className="dco-assigned">
+                      <div className="dco-assigned-head"><small>Assigned actions</small><small>Due date</small></div>
+                      <div className="dco-nodata">Assigned actions and due dates are not recorded on scorecards. {session?.improvement_pct != null ? `Recorded improvement: ${session.improvement_pct}%.` : ''}</div>
+                    </div>
+                  </div>
                 </CardState>
               </Card>
 
               <div className="cc-card dco-actionbar">
                 <button type="button" className="cc-btn-primary" disabled={!session || statusBusy || notProvisioned} onClick={() => setCoachingStatus(session, 'scheduled')}><Play size={14} aria-hidden="true" /> Start coaching</button>
+                <button type="button" className="cc-btn-ghost" disabled={!selected || notProvisioned} onClick={() => openCreate({ driver_name: selected?.driver_name || '', coaching_status: 'scheduled' })}><CalendarDays size={14} aria-hidden="true" /> Schedule session</button>
+                <button type="button" className="cc-btn-ghost" disabled={!session || statusBusy || notProvisioned} onClick={() => setCoachingStatus(session, 'recommended')}><GraduationCap size={14} aria-hidden="true" /> Assign follow-up</button>
                 <button type="button" className="cc-btn-ghost" disabled={!session || statusBusy || notProvisioned} onClick={() => setCoachingStatus(session, 'completed')}><CheckCircle2 size={14} aria-hidden="true" /> Mark completed</button>
-                <button type="button" className="cc-btn-ghost" disabled={!selected || notProvisioned} onClick={() => openCreate({ driver_name: selected?.driver_name || '', coaching_status: 'recommended' })}><GraduationCap size={14} aria-hidden="true" /> New scorecard</button>
+                <button type="button" className="cc-btn-ghost" disabled={!filtered.length} onClick={() => doExport('excel')}><Download size={14} aria-hidden="true" /> Export</button>
               </div>
             </div>
           </div>

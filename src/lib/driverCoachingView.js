@@ -202,3 +202,51 @@ export function behaviourTrends(rows = [], max = 6) {
     idling: { series: idling, change: change(idling) },
   }
 }
+
+/**
+ * Tag each score point as before or after the driver's first completed
+ * coaching step, for the "Before coaching / After coaching" legend. A driver
+ * with no completed step has only "before" points.
+ */
+export function phasedTrend(points = []) {
+  const first = points.findIndex((p) => p.status === 'completed')
+  return points.map((p, i) => ({ ...p, phase: first >= 0 && i >= first ? 'after' : 'before' }))
+}
+
+/** Distinct coach names in the queue, for the calendar coach filter. */
+export function coachOptions(queue = []) {
+  return [...new Set(queue.map((e) => e.coach).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+}
+
+const DAY_MS = 24 * 3600 * 1000
+const startOfDay = (t) => { const d = new Date(t); return new Date(d.getFullYear(), d.getMonth(), d.getDate()) }
+
+/**
+ * The Monday to Friday of the week `offset` weeks from `now`, for the
+ * coaching calendar header. Each day carries its ISO date and whether it is
+ * today.
+ */
+export function workWeek(now = Date.now(), offset = 0) {
+  const today = startOfDay(now instanceof Date ? now.getTime() : Number(now))
+  const dow = (today.getDay() + 6) % 7 // Monday = 0
+  const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - dow + offset * 7)
+  const pad = (n) => String(n).padStart(2, '0')
+  return Array.from({ length: 5 }, (_, i) => {
+    const d = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i)
+    return {
+      iso: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+      weekday: d.toLocaleDateString('en-US', { weekday: 'short' }),
+      day: d.getDate(),
+      month: d.toLocaleDateString('en-US', { month: 'short' }),
+      isToday: Math.abs(d.getTime() - today.getTime()) < DAY_MS / 2,
+    }
+  })
+}
+
+/** Label for a work week, e.g. "16 - 20 Sep 2026" written with "to". */
+export function weekLabel(days = []) {
+  if (!days.length) return ''
+  const a = days[0]; const b = days[days.length - 1]
+  const year = b.iso.slice(0, 4)
+  return a.month === b.month ? `${a.day} to ${b.day} ${b.month} ${year}` : `${a.day} ${a.month} to ${b.day} ${b.month} ${year}`
+}

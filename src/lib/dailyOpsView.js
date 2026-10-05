@@ -70,6 +70,11 @@ export function headlineKpis({ tyreRecords = [], inspections = [], workOrders = 
   const incNow = countOn(accidents, 'incident_date', selectedDate)
   const incPrev = countOn(accidents, 'incident_date', prev)
   const delayed = workOrders.filter((w) => dayOf(w.created_at) <= selectedDate && isWoDelayed(w, selectedDate)).length
+  // Jobs in progress: open work orders opened on or before the day whose current
+  // status is In Progress / Quality Inspection. Status is not snapshotted, so a
+  // day-before trend cannot be measured and none is returned.
+  const inProgress = workOrders.filter((w) => dayOf(w.created_at) <= selectedDate
+    && ['In Progress', 'Quality Inspection'].includes(normalizeWoStatus(w.status))).length
 
   // On-time completion: completed jobs (in the loaded 30-day window) that carry
   // both a target and a completion date. Null when none can be judged.
@@ -86,6 +91,7 @@ export function headlineKpis({ tyreRecords = [], inspections = [], workOrders = 
     activeVehicles: { value: activeNow, trend: pctChange(activeNow, activePrev) },
     workOrdersOpened: { value: woNow, trend: pctChange(woNow, woPrev) },
     delayedJobs: { value: delayed },
+    jobsInProgress: { value: inProgress },
     incidents: { value: incNow, trend: pctChange(incNow, incPrev) },
     onTime: { value: judged ? Math.round((onTime / judged) * 100) : null, judged },
   }

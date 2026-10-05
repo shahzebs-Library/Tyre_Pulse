@@ -19,7 +19,7 @@ import {
   ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, CheckCircle2, ClipboardList,
   Clock, Wrench, Truck, FileText, Printer, Download, Bell, User, Timer, Ban, Siren,
   History, Send, CheckCheck, MonitorPlay, Search, MapPin, Gauge, Activity, ShieldAlert,
-  AlertOctagon, Building2, Briefcase,
+  AlertOctagon, Building2, Briefcase, Navigation, ArrowLeftRight, PlayCircle,
 } from 'lucide-react'
 import * as dailyOpsApi from '../lib/api/dailyOps'
 import { useSettings } from '../contexts/SettingsContext'
@@ -495,8 +495,8 @@ export default function DailyOps() {
   return (
     <div className="cc do-page">
       <header className="do-head">
-        <div className="do-head-art do-art-dark" style={{ backgroundImage: 'url(/dashboard/hero-dark.webp)' }} aria-hidden="true" />
-        <div className="do-head-art do-art-light" style={{ backgroundImage: 'url(/dashboard/hero-light.webp)' }} aria-hidden="true" />
+        <div className="do-head-art do-art-dark" style={{ backgroundImage: 'url(/dashboard/hero-dailyops-dark.webp)' }} aria-hidden="true" />
+        <div className="do-head-art do-art-light" style={{ backgroundImage: 'url(/dashboard/hero-dailyops-light.webp)' }} aria-hidden="true" />
         <div className="do-head-copy">
           <nav className="do-crumb" aria-label="Breadcrumb">Monitoring and Logistics <ChevronRight size={12} aria-hidden="true" /> <span>Daily Ops</span></nav>
           <h1>{t('dailyops.header.title')}</h1>
@@ -513,6 +513,8 @@ export default function DailyOps() {
             <button type="button" className="cc-btn-primary" onClick={retry} disabled={loading}>
               <RefreshCw size={14} className={loading ? 'animate-spin' : ''} aria-hidden="true" /> Refresh live board
             </button>
+            <Link className="cc-btn-ghost" to="/dispatch"><Navigation size={14} aria-hidden="true" /> Dispatch vehicle</Link>
+            <Link className="cc-btn-ghost" to="/workshop-live"><ArrowLeftRight size={14} aria-hidden="true" /> Reassign</Link>
             <Link className="cc-btn-ghost" to="/action-center"><Siren size={14} aria-hidden="true" /> Escalate</Link>
             <Link className="cc-btn-ghost" to="/report-sharing"><MonitorPlay size={14} aria-hidden="true" /> Share TV view</Link>
             <button type="button" className="cc-btn-ghost" onClick={generatePDF} disabled={loading}><FileText size={14} aria-hidden="true" /> {t('dailyops.header.pdf')}</button>
@@ -554,9 +556,11 @@ export default function DailyOps() {
           display={failed('tyre records') && failed('inspections') ? 'N/A' : undefined}
           label="Active vehicles" trend={kpis.activeVehicles.trend}
           title="Distinct assets with a tyre change or inspection on this day. Trend against the previous day." />
-        <Kpi icon={ClipboardList} tone="t-blue" loading={loadingFirst} value={kv(kpis.workOrdersOpened.value)}
-          display={wkFail ? 'N/A' : undefined} label="Jobs opened" trend={kpis.workOrdersOpened.trend}
-          title="Work orders opened on this day. Trend against the previous day." />
+        <Kpi icon={PlayCircle} tone="t-blue" loading={loadingFirst} value={kv(kpis.jobsInProgress.value)}
+          display={wkFail ? 'N/A' : undefined}
+          label={<>Jobs in progress<small className="do-kpi-sub">{fmtInt(kpis.workOrdersOpened.value)} opened this day. Trips are not recorded</small></>}
+          onClick={() => setJobStatus('In Progress')}
+          title="Open work orders whose current status is In Progress or Quality Inspection. Trips are not recorded (the trips table holds no rows), so jobs stand in for trips. No trend: job status is not snapshotted per day." />
         <Kpi icon={AlertOctagon} tone="t-red" loading={loadingFirst} value={kv(kpis.delayedJobs.value)}
           display={wkFail ? 'N/A' : undefined} label="Delayed jobs" danger={kpis.delayedJobs.value > 0}
           onClick={() => { setJobStatus('delayed'); setExceptionTab('delays') }}

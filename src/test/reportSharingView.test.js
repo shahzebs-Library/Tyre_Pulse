@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   filterShareRows, shareKpis, expiryText, relativeAgo, viewsByLink, viewsByStatus, boardList, shareDetail,
+  channelOf, channelCounts, viewsByChannel,
 } from '../lib/reportSharingView'
 import { enrichShares, summarizeShares, STATUS_META } from '../lib/reportSharingAnalytics'
 
@@ -55,5 +56,25 @@ describe('text helpers', () => {
     expect(d.lastViewed).toBe('Never viewed')
     expect(d.expires).toBe('Never')
     expect(shareDetail(null)).toBeNull()
+  })
+})
+
+describe('channels', () => {
+  const extra = enrichShares([
+    ...RAW,
+    { id: 'w', name: 'Workshop wall', pages: ['workshop_live'], layout: null, active: true, created_at: '2026-10-01T00:00:00Z', view_count: 5, expires_at: null },
+  ], { now: NOW })
+  it('derives the channel from the board behind the link', () => {
+    const by = Object.fromEntries(extra.map((r) => [r.id, channelOf(r)]))
+    expect(by).toEqual({ a: 'link', b: 'tv', c: 'link', w: 'workshop' })
+  })
+  it('counts live links per channel and leaves expired out', () => {
+    expect(channelCounts(extra)).toEqual({ link: 1, tv: 1, workshop: 1 })
+  })
+  it('splits views by channel and filters by channel and access', () => {
+    expect(viewsByChannel(extra).map((s) => [s.key, s.count])).toEqual([['link', 15], ['workshop', 5]])
+    expect(filterShareRows(extra, { channel: 'workshop' }).map((r) => r.id)).toEqual(['w'])
+    expect(filterShareRows(extra, { access: 'edit' })).toEqual([])
+    expect(filterShareRows(extra, { access: 'view' })).toHaveLength(4)
   })
 })

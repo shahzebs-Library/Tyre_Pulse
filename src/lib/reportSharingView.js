@@ -11,7 +11,7 @@
  */
 
 export const BOARD_TYPES = Object.freeze([
-  { key: 'all', label: 'All board types' },
+  { key: 'all', label: 'All report types' },
   { key: 'custom', label: 'Custom boards' },
   { key: 'fixed', label: 'Fixed report pages' },
 ])
@@ -31,10 +31,68 @@ export const STATUS_COLOR = Object.freeze({
   expired: 'var(--cc-red)', revoked: 'var(--cc-ink-3)',
 })
 
-/** Filter enriched rows by search, status, board type and expiry. */
-export function filterShareRows(rows, { search = '', status = 'all', type = 'all', expiry = 'all', pageLabels = {} } = {}) {
+/** Workshop TV shares are report_shares rows tagged with this page key. */
+export const WORKSHOP_PAGE_KEY = 'workshop_live'
+
+/**
+ * Channel a share is opened on. Every share is a token link that needs no
+ * login; what differs is the board behind it: a workshop live board, a custom
+ * designed (one-screen) TV board, or fixed report pages on a public link.
+ */
+export const CHANNEL_META = Object.freeze({
+  link: { label: 'Public link', color: 'var(--cc-blue)' },
+  tv: { label: 'TV board', color: 'var(--cc-purple)' },
+  workshop: { label: 'Workshop TV', color: 'var(--cc-orange)' },
+})
+export const CHANNELS = Object.freeze([
+  { key: 'all', label: 'All channels' },
+  ...Object.entries(CHANNEL_META).map(([key, m]) => ({ key, label: m.label })),
+])
+/** Every shared board is read only; there is no edit access level to grant. */
+export const ACCESS_LEVELS = Object.freeze([
+  { key: 'all', label: 'All access levels' },
+  { key: 'view', label: 'View only' },
+  { key: 'edit', label: 'Edit access' },
+])
+
+export function channelOf(row) {
+  if (!row) return 'link'
+  const pages = Array.isArray(row.pages) ? row.pages : []
+  if (pages.includes(WORKSHOP_PAGE_KEY)) return 'workshop'
+  if (row.custom) return 'tv'
+  return 'link'
+}
+
+/** Live (not expired, not revoked) links per channel. */
+export function channelCounts(rows) {
+  const out = { link: 0, tv: 0, workshop: 0 }
+  for (const r of Array.isArray(rows) ? rows : []) {
+    if (r.status === 'expired' || r.status === 'revoked') continue
+    out[channelOf(r)] += 1
+  }
+  return out
+}
+
+/** Donut segments: total views split by channel. Only channels with views. */
+export function viewsByChannel(rows) {
+  const totals = {}
+  for (const r of Array.isArray(rows) ? rows : []) {
+    if (r.views == null) continue
+    const c = channelOf(r)
+    totals[c] = (totals[c] || 0) + r.views
+  }
+  return Object.entries(totals)
+    .filter(([, v]) => v > 0)
+    .map(([k, v]) => ({ key: k, label: CHANNEL_META[k].label, count: v, color: CHANNEL_META[k].color }))
+    .sort((a, b) => b.count - a.count)
+}
+
+/** Filter enriched rows by search, status, board type, channel, access and expiry. */
+export function filterShareRows(rows, { search = '', status = 'all', type = 'all', expiry = 'all', channel = 'all', access = 'all', pageLabels = {} } = {}) {
   const q = String(search || '').trim().toLowerCase()
   return (Array.isArray(rows) ? rows : []).filter((r) => {
+    if (access === 'edit') return false
+    if (channel !== 'all' && channelOf(r) !== channel) return false
     if (status !== 'all' && r.status !== status) return false
     if (type === 'custom' && !r.custom) return false
     if (type === 'fixed' && r.custom) return false

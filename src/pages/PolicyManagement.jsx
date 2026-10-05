@@ -16,7 +16,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   ClipboardList, CalendarClock, Users, CheckCircle2, AlertTriangle, Plus, Pencil,
   Trash2, Search, X, FileSpreadsheet, FileText, Loader2, Save, Send, RotateCcw,
-  Hash, GitBranch, ShieldCheck, Globe, Calendar, Paperclip, BookOpen, History, Info,
+  Hash, GitBranch, ShieldCheck, Globe, Calendar, Paperclip, BookOpen, History, Info, ExternalLink,
 } from 'lucide-react'
 import Modal from '../components/ui/Modal'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
@@ -35,6 +35,7 @@ import {
 import {
   policyCode, statusLabel, statusTone, ownerInitials, policyGaps, policyKpis,
   reviewDistance, optionsOf, regionLabel, versionLog, policyDetailRows, categoryBreakdown,
+  ACK_LEGEND, pickedPolicies,
 } from '../lib/policyView'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
@@ -261,6 +262,8 @@ export default function PolicyManagement() {
   const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
 
   const [selectedId, setSelectedId] = useState(null)
+  const [picked, setPicked] = useState(() => new Set())
+  const [viewing, setViewing] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [deleting, setDeleting] = useState(null)
@@ -341,7 +344,11 @@ export default function PolicyManagement() {
   // -- export --
   const EXPORT_COLS = ['code', 'title', 'category', 'version', 'owner', 'region', 'status', 'expiry', 'effective_date', 'review_date', 'gaps', 'premium']
   const EXPORT_HEADERS = ['Policy ID', 'Title', 'Category', 'Version', 'Owner', 'Region', 'Status', 'Renewal', 'Effective', 'Next review', 'Governance gaps', 'Premium']
-  const exportRows = filtered.map((r) => {
+  const pickedRows = pickedPolicies(filtered, picked)
+  const allPicked = filtered.length > 0 && pickedRows.length === filtered.length
+  const togglePick = (id) => setPicked((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const toggleAll = () => setPicked(allPicked ? new Set() : new Set(filtered.map((r) => r.id)))
+  const exportRows = (pickedRows.length ? pickedRows : filtered).map((r) => {
     const prem = policyPremium(r)
     return {
       code: policyCode(r), title: r.title || '', category: r.category || '', version: r.version || '',
@@ -383,6 +390,11 @@ export default function PolicyManagement() {
   ]
 
   const columns = [
+    {
+      key: 'pick', sortable: false,
+      header: <input type="checkbox" aria-label="Select all shown policies" checked={allPicked} onChange={toggleAll} />,
+      cell: (r) => <input type="checkbox" aria-label={`Select ${r.title || 'policy'}`} checked={picked.has(r.id)} onClick={(e) => e.stopPropagation()} onChange={() => togglePick(r.id)} />,
+    },
     { key: 'code', header: 'Policy ID', sortValue: (r) => policyCode(r), cell: (r) => <span className="pm-code">{policyCode(r)}</span> },
     { key: 'title', header: 'Policy title', cell: (r) => <span className="pm-title">{r.title || 'Untitled'}</span> },
     { key: 'owner', header: 'Owner', cell: (r) => <Owner name={r.owner} /> },
@@ -403,7 +415,7 @@ export default function PolicyManagement() {
       },
     },
     { key: 'status', header: 'Status', sortValue: (r) => statusLabel(r.status), cell: (r) => <span className={`cc-pill ${statusTone(r.status)}`}>{statusLabel(r.status)}</span> },
-    { key: 'ack', header: 'Ack. %', sortable: false, cell: () => <span className="cc-na" title="No acknowledgment records exist for policies">Not recorded</span> },
+    { key: 'ack', header: 'Ack. %', sortable: false, cell: () => <span className="pm-ack-cell" title="No acknowledgment records exist for policies"><span className="cc-na">N/A</span><span className="pm-ack-track" aria-hidden="true" /></span> },
     {
       key: 'actions', header: 'Actions', sortable: false,
       cell: (r) => (
@@ -488,12 +500,16 @@ export default function PolicyManagement() {
             <Search size={15} aria-hidden="true" />
             <input type="search" placeholder="Search policies by title, owner, category, version" aria-label="Search policies" value={filters.search} onChange={(e) => setFilter('search', e.target.value)} />
           </label>
-          {countryOptions.length > 1 && (
-            <select className="cc-select" aria-label="Country" value={filters.country} onChange={(e) => setFilter('country', e.target.value)}>
-              <option value="">All countries</option>
-              {countryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          )}
+          <select className="cc-select" aria-label="Country" value={filters.country} onChange={(e) => setFilter('country', e.target.value)}>
+            <option value="">All countries</option>
+            {countryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select className="cc-select" aria-label="Site" disabled title="Not recorded: policies are not linked to sites">
+            <option>All sites</option>
+          </select>
+          <select className="cc-select" aria-label="Department" disabled title="Not recorded: policies have no department">
+            <option>All departments</option>
+          </select>
           <select className="cc-select" aria-label="Policy type" value={filters.category} onChange={(e) => setFilter('category', e.target.value)}>
             <option value="">All policy types</option>
             {categoryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -502,15 +518,25 @@ export default function PolicyManagement() {
             <option value="all">All status</option>
             {POLICY_STATUSES.map((s) => <option key={s} value={s}>{POLICY_STATUS_META[s]?.label || s}</option>)}
           </select>
+          <button type="button" className="cc-btn-ghost pm-reset" onClick={() => setFilters(EMPTY_FILTERS)} disabled={!hasFilters}><RotateCcw size={14} aria-hidden="true" /> Reset</button>
+        </div>
+        <div className="cc-filters pm-filters pm-filters-2">
           <select className="cc-select" aria-label="Renewal band" value={filters.band} onChange={(e) => setFilter('band', e.target.value)}>
             <option value="all">All renewals</option>
             {EXPIRY_BANDS.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
           </select>
           <label className="pm-date"><span>Review from</span><input type="date" className="cc-select" value={filters.from} onChange={(e) => setFilter('from', e.target.value)} /></label>
           <label className="pm-date"><span>to</span><input type="date" className="cc-select" value={filters.to} onChange={(e) => setFilter('to', e.target.value)} /></label>
-          {hasFilters && <button type="button" className="cc-btn-ghost" onClick={() => setFilters(EMPTY_FILTERS)}><RotateCcw size={14} aria-hidden="true" /> Reset</button>}
           <span className="pm-count" aria-live="polite">{rows ? `${filtered.length} of ${all.length}` : ''}</span>
         </div>
+        {pickedRows.length > 0 && (
+          <div className="pm-bulk" role="status">
+            <b>{pickedRows.length} selected</b>
+            <button type="button" className="cc-btn-ghost" onClick={() => runExport('excel')}><FileSpreadsheet size={13} aria-hidden="true" /> Excel</button>
+            <button type="button" className="cc-btn-ghost" onClick={() => runExport('pdf')}><FileText size={13} aria-hidden="true" /> PDF</button>
+            <button type="button" className="cc-btn-ghost" onClick={() => setPicked(new Set())}>Clear</button>
+          </div>
+        )}
         {filters.gapsOnly && <p className="pm-note"><Info size={13} aria-hidden="true" /> Showing policies with governance gaps only.</p>}
         <CardState state={loadState} empty={emptyRegister}>
           <EnterpriseTable
@@ -532,7 +558,7 @@ export default function PolicyManagement() {
       <div className="pm-row">
         <Card
           title="Policy Details"
-          action={selected ? <button type="button" className="cc-btn" onClick={() => openEdit(selected)}>Edit policy</button> : null}
+          action={selected ? <button type="button" className="cc-btn-ghost pm-small" onClick={() => setViewing(selected)}>View Full Policy <ExternalLink size={13} aria-hidden="true" /></button> : null}
         >
           <CardState state={loadState} empty={!selected ? 'Select a policy in the register to see its details.' : null}>
             {selected && (
@@ -570,6 +596,7 @@ export default function PolicyManagement() {
                     {statusBusy === 'under_review' ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <RotateCcw size={15} aria-hidden="true" />} Request Review
                   </button>
                   <button type="button" className="cc-btn-ghost" onClick={() => exportOne(selected)}><FileText size={15} aria-hidden="true" /> Export PDF</button>
+                  <button type="button" className="cc-icon-btn" onClick={() => openEdit(selected)} aria-label={`Edit ${selected.title || 'policy'}`} title="Edit"><Pencil size={14} /></button>
                   <button type="button" className="cc-icon-btn pm-danger" onClick={() => setDeleting(selected)} aria-label={`Delete ${selected.title || 'policy'}`} title="Delete"><Trash2 size={14} /></button>
                 </div>
               </div>
@@ -598,14 +625,22 @@ export default function PolicyManagement() {
           </CardState>
         </Card>
 
-        <Card title="Policy Acknowledgment and Compliance">
-          <div className="cc-empty pm-ack-empty">
-            <div>
-              <CheckCircle2 size={26} aria-hidden="true" />
-              <p><b>Acknowledgments are not recorded yet.</b></p>
-              <p>No table stores who has read and accepted each policy, so acknowledgment rates by person or role cannot be measured. Governance gaps above are measured from the register itself.</p>
+        <Card
+          title="Policy Acknowledgment and Compliance"
+          action={<select className="cc-select pm-small" aria-label="Group acknowledgment by" disabled title="Not recorded"><option>By Role</option></select>}
+        >
+          <div className="pm-ack">
+            <div className="pm-ack-ring" role="img" aria-label="Acknowledgment rate not recorded">
+              <b>N/A</b><span>Acknowledged</span>
             </div>
+            <ul className="pm-ack-legend">
+              {ACK_LEGEND.map((x) => (
+                <li key={x.key}><i style={{ background: x.color }} aria-hidden="true" /><span>{x.label}</span><b className="cc-na">Not recorded</b></li>
+              ))}
+            </ul>
           </div>
+          <h4 className="pm-ack-role">Acknowledgment by Role</h4>
+          <p className="pm-note"><Info size={13} aria-hidden="true" /> No table stores who has read and accepted each policy, so acknowledgment rates by person or role cannot be measured yet. Governance gaps are measured from the register itself.</p>
         </Card>
       </div>
 
@@ -627,6 +662,25 @@ export default function PolicyManagement() {
         </Card>
       </div>
 
+      <Modal open={!!viewing} onClose={() => setViewing(null)} size="lg" title={viewing?.title || 'Policy'}>
+        {viewing && (
+          <div className="space-y-3 text-sm">
+            <div className="pm-chips">
+              <span><Hash size={13} aria-hidden="true" /> {policyCode(viewing)}</span>
+              <span><GitBranch size={13} aria-hidden="true" /> {viewing.version ? `v${String(viewing.version).replace(/^v/i, '')}` : 'No version'}</span>
+              <span><ShieldCheck size={13} aria-hidden="true" /> {viewing.category || 'Uncategorised'}</span>
+              <span><Globe size={13} aria-hidden="true" /> {regionLabel(viewing)}</span>
+              <span className={`cc-pill ${statusTone(viewing.status)}`}>{statusLabel(viewing.status)}</span>
+            </div>
+            <p className="whitespace-pre-wrap text-[var(--text-secondary)]">{viewing.body || 'No policy text recorded yet.'}</p>
+            {viewing.notes && <p className="whitespace-pre-wrap text-[var(--text-muted)]"><b>Notes:</b> {viewing.notes}</p>}
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-secondary text-sm" onClick={() => exportOne(viewing)}>Export PDF</button>
+              <button type="button" className="btn-primary text-sm" onClick={() => { const v = viewing; setViewing(null); openEdit(v) }}>Edit policy</button>
+            </div>
+          </div>
+        )}
+      </Modal>
       <PolicyModal open={modalOpen} existing={editing} onClose={() => setModalOpen(false)} onSaved={load} />
       <DeleteConfirm policy={deleting} onCancel={() => setDeleting(null)} onConfirm={confirmDelete} busy={deleteBusy} />
     </div>

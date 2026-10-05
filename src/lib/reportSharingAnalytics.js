@@ -145,7 +145,7 @@ export function shareFindings(summary) {
   if (!summary || !summary.total) return []
   const out = []
   if (summary.expired) out.push({ tone: 'danger', text: `${summary.expired} link${summary.expired === 1 ? ' has' : 's have'} expired and no longer open. Revoke or recreate them.` })
-  if (summary.expiring) out.push({ tone: 'warning', text: `${summary.expiring} link${summary.expiring === 1 ? '' : 's'} expire within ${EXPIRING_DAYS} days.` })
+  if (summary.expiring) out.push({ tone: 'warning', text: `${summary.expiring} link${summary.expiring === 1 ? '' : 's'} ${summary.expiring === 1 ? 'expires' : 'expire'} within ${EXPIRING_DAYS} days.` })
   if (summary.stale) out.push({ tone: 'warning', text: `${summary.stale} link${summary.stale === 1 ? ' has' : 's have'} not been viewed in ${STALE_DAYS} days. Consider revoking unused links.` })
   if (summary.noExpiry) out.push({ tone: 'info', text: `${summary.noExpiry} live link${summary.noExpiry === 1 ? ' has' : 's have'} no expiry date set.` })
   return out

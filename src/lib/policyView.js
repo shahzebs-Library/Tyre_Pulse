@@ -151,3 +151,21 @@ export function categoryBreakdown(rows) {
   return [...map.entries()].map(([label, count]) => ({ label, count }))
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
 }
+
+/**
+ * Acknowledgment legend in the mockup order. Every count is null because no
+ * table records who has read and accepted a policy; the card shows the shape
+ * with "Not recorded" rather than inventing rates.
+ */
+export const ACK_LEGEND = Object.freeze([
+  { key: 'acknowledged', label: 'Acknowledged', color: 'var(--cc-green)', count: null },
+  { key: 'pending', label: 'Pending', color: 'var(--cc-amber)', count: null },
+  { key: 'overdue', label: 'Overdue', color: 'var(--cc-red)', count: null },
+  { key: 'not_required', label: 'Not Required', color: 'var(--cc-ink-3)', count: null },
+])
+
+/** Rows picked in the register, kept in register order. */
+export function pickedPolicies(rows, picked) {
+  const set = picked instanceof Set ? picked : new Set(picked || [])
+  return (Array.isArray(rows) ? rows : []).filter((r) => set.has(r.id))
+}

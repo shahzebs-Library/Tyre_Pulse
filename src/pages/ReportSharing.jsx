@@ -23,21 +23,21 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Share2, Tv, Eye, Radio, Palette, AlertCircle, LayoutGrid, Link2, RefreshCw, Hourglass,
-  EyeOff, FileSpreadsheet, FileText, ChevronRight, Search, X, List, Copy, ExternalLink,
-  Ban, Lock, Info, Check, Calendar, Plus, Users,
+  Share2, Tv, Eye, Radio, Palette, AlertCircle, LayoutGrid, Link2, RefreshCw, Clock,
+  FileSpreadsheet, FileText, ChevronRight, Search, X, List, Copy, ExternalLink,
+  Ban, Lock, Info, Check, Calendar, Plus, Users, Globe, Wrench, UserCheck,
 } from 'lucide-react'
 import {
   enrichShares, summarizeShares, shareFindings, exportRows,
-  EXPORT_COLUMNS, LINK_STATUSES, STATUS_META, STALE_DAYS, EXPIRING_DAYS,
+  EXPORT_COLUMNS, LINK_STATUSES, STATUS_META, EXPIRING_DAYS,
 } from '../lib/reportSharingAnalytics'
 import {
   BOARD_TYPES, EXPIRY_FILTERS, STATUS_TONE, filterShareRows, shareKpis, expiryText,
-  relativeAgo, viewsByLink, viewsByStatus, shareDetail,
+  viewsByLink, shareDetail, CHANNELS, CHANNEL_META, ACCESS_LEVELS, channelOf, channelCounts, viewsByChannel,
 } from '../lib/reportSharingView'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import ReportSharesPanel from '../components/display/ReportSharesPanel'
-import { listReportShares, revokeReportShare, buildShareUrl, REPORT_PAGES } from '../lib/api/reportShares'
+import { listReportShares, revokeReportShare, buildShareUrl, buildWorkshopTvUrl, REPORT_PAGES } from '../lib/api/reportShares'
 import { hasCustomLayout, normalizeLayout } from '../lib/reportShareLayout'
 import { activePaletteName, PRESET_LABELS } from '../lib/reportColors'
 import { useAuth } from '../contexts/AuthContext'
@@ -66,6 +66,20 @@ function ExpiryCell({ row }) {
       {e.sub && <small className={e.tone === 'bad' ? 'rs-bad' : undefined}>{e.sub}</small>}
     </span>
   )
+}
+
+const CHANNEL_ICON = { link: Globe, tv: Tv, workshop: Wrench }
+
+function ChannelCell({ row }) {
+  const c = channelOf(row)
+  const Icon = CHANNEL_ICON[c] || Link2
+  return <span className="rs-inline"><Icon size={13} aria-hidden="true" /> {CHANNEL_META[c].label}</span>
+}
+
+/** Share URL for the board behind the link (workshop boards open on their own viewer). */
+function urlFor(row) {
+  if (!row?.token) return null
+  return channelOf(row) === 'workshop' ? buildWorkshopTvUrl(row.token) : buildShareUrl(row.token)
 }
 
 function ShareName({ row }) {
@@ -109,6 +123,9 @@ export default function ReportSharing() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
   const [expiryFilter, setExpiryFilter] = useState('all')
+  const [channelFilter, setChannelFilter] = useState('all')
+  const [accessFilter, setAccessFilter] = useState('all')
+  const [picked, setPicked] = useState(() => new Set())
   const [search, setSearch] = useState('')
   const [view, setView] = useState('list')
   const [selectedId, setSelectedId] = useState(null)
@@ -132,8 +149,12 @@ export default function ReportSharing() {
   const kpi = useMemo(() => shareKpis(summary, enriched), [summary, enriched])
   const findings = useMemo(() => shareFindings(summary), [summary])
   const visible = useMemo(() => filterShareRows(enriched, {
-    search, status: statusFilter, type: typeFilter, expiry: expiryFilter, pageLabels: PAGE_LABELS,
-  }), [enriched, search, statusFilter, typeFilter, expiryFilter])
+    search, status: statusFilter, type: typeFilter, expiry: expiryFilter,
+    channel: channelFilter, access: accessFilter, pageLabels: PAGE_LABELS,
+  }), [enriched, search, statusFilter, typeFilter, expiryFilter, channelFilter, accessFilter])
+  const channels = useMemo(() => channelCounts(enriched), [enriched])
+  const pickedRows = useMemo(() => visible.filter((r) => picked.has(r.id)), [visible, picked])
+  const allPicked = visible.length > 0 && pickedRows.length === visible.length
   const statusCounts = useMemo(() => {
     const c = { all: enriched.length }
     LINK_STATUSES.forEach((st) => { c[st] = enriched.filter((r) => r.status === st).length })
@@ -141,18 +162,20 @@ export default function ReportSharing() {
   }, [enriched])
   const selected = useMemo(() => enriched.find((r) => r.id === selectedId) || visible[0] || null, [enriched, selectedId, visible])
   const detail = useMemo(() => shareDetail(selected, { now, pageLabels: PAGE_LABELS }), [selected, now])
-  const shareUrl = selected?.token ? buildShareUrl(selected.token) : null
+  const shareUrl = urlFor(selected)
   const bars = useMemo(() => viewsByLink(enriched, 8), [enriched])
   const barMax = bars.reduce((m, b) => Math.max(m, b.views), 0)
-  const donut = useMemo(() => viewsByStatus(enriched, STATUS_META), [enriched])
+  const donut = useMemo(() => viewsByChannel(enriched), [enriched])
   const paletteName = PRESET_LABELS[activePaletteName()] || 'Custom'
-  const anyFilter = search || statusFilter !== 'all' || typeFilter !== 'all' || expiryFilter !== 'all'
+  const anyFilter = search || statusFilter !== 'all' || typeFilter !== 'all' || expiryFilter !== 'all' || channelFilter !== 'all' || accessFilter !== 'all'
   const cardState = { loading, error, retry: load, data: loading ? null : shares }
 
   useEffect(() => { setCopied(false) }, [selectedId])
 
   const scrollToManager = () => managerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  const resetFilters = () => { setSearch(''); setStatusFilter('all'); setTypeFilter('all'); setExpiryFilter('all') }
+  const resetFilters = () => { setSearch(''); setStatusFilter('all'); setTypeFilter('all'); setExpiryFilter('all'); setChannelFilter('all'); setAccessFilter('all') }
+  const togglePick = (id) => setPicked((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const toggleAll = () => setPicked(allPicked ? new Set() : new Set(visible.map((r) => r.id)))
 
   const copyLink = async () => {
     if (!shareUrl) return
@@ -168,10 +191,12 @@ export default function ReportSharing() {
     if (!revokeTarget) return
     setRevoking(true); setRevokeError(null)
     try {
-      await revokeReportShare(revokeTarget.id)
+      const ids = revokeTarget.bulk ? revokeTarget.ids : [revokeTarget.id]
+      for (const id of ids) await revokeReportShare(id)
       setRevokeTarget(null)
       setSelectedId(null)
-      setNotice({ tone: 'good', text: 'Report link revoked. It no longer opens.' })
+      setPicked(new Set())
+      setNotice({ tone: 'good', text: ids.length === 1 ? 'Report link revoked. It no longer opens.' : `${ids.length} report links revoked. They no longer open.` })
       setPanelKey((k) => k + 1)
       await load()
     } catch (err) {
@@ -184,7 +209,7 @@ export default function ReportSharing() {
   const runExport = async (kind) => {
     setExporting(true); setExportError(null)
     try {
-      const rows = exportRows(visible)
+      const rows = exportRows(pickedRows.length ? pickedRows : visible)
       const name = reportFileName('TyrePulse Report Share Links', reportDateLabel())
       if (kind === 'xlsx') {
         await exportToExcel(rows, EXPORT_COLUMNS.map((c) => c.key), EXPORT_COLUMNS.map((c) => c.header), name)
@@ -199,21 +224,32 @@ export default function ReportSharing() {
   }
 
   const columns = useMemo(() => [
+    {
+      key: 'pick', sortable: false,
+      header: <input type="checkbox" className="rs-check" aria-label="Select all shown links" checked={allPicked} onChange={toggleAll} />,
+      cell: (r) => (
+        <input type="checkbox" className="rs-check" aria-label={`Select ${r.name || 'shared report'}`} checked={picked.has(r.id)}
+          onClick={(e) => e.stopPropagation()} onChange={() => togglePick(r.id)} />
+      ),
+    },
     { key: 'name', header: 'Report / Board', sortValue: (r) => r.name || '', cell: (r) => <ShareName row={r} /> },
-    { key: 'access', header: 'Access', sortable: false, cell: () => <span className="rs-chip"><Eye size={13} aria-hidden="true" /> View only</span> },
-    { key: 'channel', header: 'Channel', sortable: false, cell: () => <span className="rs-inline"><Link2 size={13} aria-hidden="true" /> Public link</span> },
+    {
+      key: 'with', header: 'Shared With', sortable: false,
+      cell: () => <span className="rs-inline" title="Links open without a login, so viewers are anonymous"><Users size={13} aria-hidden="true" /> Anyone with link</span>,
+    },
+    { key: 'access', header: 'Access / Permission', sortable: false, cell: () => <span className="rs-chip"><Eye size={13} aria-hidden="true" /> View only</span> },
+    { key: 'channel', header: 'Channel', sortValue: (r) => channelOf(r), cell: (r) => <ChannelCell row={r} /> },
     { key: 'status', header: 'Status', sortValue: (r) => r.status, cell: (r) => <StatusPill status={r.status} /> },
     { key: 'views', header: 'Views', numeric: true, sortValue: (r) => r.views ?? -1, cell: (r) => (r.views == null ? <span className="cc-na">N/A</span> : fmtInt(r.views)) },
-    { key: 'last', header: 'Last viewed', sortValue: (r) => r.last_viewed_at || '', cell: (r) => (r.last_viewed_at ? relativeAgo(r.last_viewed_at, now) : <span className="cc-na">Never</span>) },
     { key: 'expires', header: 'Expires', sortValue: (r) => r.expires_at || '9999', cell: (r) => <ExpiryCell row={r} /> },
     {
       key: 'actions', header: 'Actions', sortable: false,
       cell: (r) => (
         <button type="button" className={`cc-btn-ghost rs-manage ${selected?.id === r.id ? 'is-on' : ''}`}
-          onClick={(e) => { e.stopPropagation(); setSelectedId(r.id) }}>Manage</button>
+            onClick={(e) => { e.stopPropagation(); setSelectedId(r.id) }}>Manage</button>
       ),
     },
-  ], [now, selected])
+  ], [selected, picked, allPicked]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!elevated) {
     return (
@@ -226,11 +262,11 @@ export default function ReportSharing() {
   }
 
   const kpis = [
-    { icon: Link2, tone: 't-green', value: kpi.live, label: <KpiLabel title="Shared reports" sub="Live links" /> },
-    { icon: Eye, tone: 't-blue', value: kpi.totalViews, label: <KpiLabel title="Total views" sub={summary.avgViewsPerLiveLink == null ? 'No views recorded yet' : `${summary.avgViewsPerLiveLink.toFixed(1)} per live link`} /> },
-    { icon: Tv, tone: 't-purple', value: kpi.boards, label: <KpiLabel title="Rotating boards" sub={`${fmtInt(kpi.customDesigned)} custom designed`} /> },
-    { icon: Hourglass, tone: 't-orange', value: kpi.expiring, label: <KpiLabel title="Link expires" sub={`Within ${EXPIRING_DAYS} days`} />, danger: (kpi.expiring || 0) > 0 },
-    { icon: EyeOff, tone: 't-red', value: (kpi.expired ?? 0) + (kpi.stale ?? 0), display: kpi.expired == null ? 'N/A' : undefined, label: <KpiLabel title="Need attention" sub={`Expired or not viewed in ${STALE_DAYS} days`} /> },
+    { icon: Share2, tone: 't-green', value: kpi.live, label: <KpiLabel title="Shared Reports" sub="Active links" />, onClick: () => { resetFilters(); setStatusFilter('active') } },
+    { icon: UserCheck, tone: 't-blue', display: 'N/A', label: <KpiLabel title="Internal Viewers" sub="Not recorded: links are anonymous" />, title: 'Shared links open without a login, so named viewers are not recorded.' },
+    { icon: Globe, tone: 't-orange', value: channels.link, label: <KpiLabel title="Public Links" sub="Read-only, no login" />, onClick: () => { resetFilters(); setChannelFilter('link') } },
+    { icon: Tv, tone: 't-purple', value: channels.tv + channels.workshop, label: <KpiLabel title="TV Boards" sub={`${fmtInt(channels.workshop)} workshop, ${fmtInt(channels.tv)} designed`} />, onClick: () => { resetFilters(); setChannelFilter('tv') } },
+    { icon: Clock, tone: 't-red', value: kpi.expiring, label: <KpiLabel title="Link Expires" sub={`Next ${EXPIRING_DAYS} days`} />, danger: (kpi.expiring || 0) > 0, onClick: () => { resetFilters(); setStatusFilter('expiring') } },
   ]
 
   return (
@@ -239,10 +275,10 @@ export default function ReportSharing() {
         <div className="rs-head-copy">
           <nav aria-label="Breadcrumb" className="rs-crumb">Analytics &amp; Reports <ChevronRight size={13} aria-hidden="true" /> <span aria-current="page">Report Sharing</span></nav>
           <div className="rs-title">
-            <span className="rs-title-icon"><Share2 size={22} aria-hidden="true" /></span>
+            <span className="rs-title-icon"><Link2 size={24} aria-hidden="true" /></span>
             <div>
               <h1>Report Sharing</h1>
-              <p>Share live report boards on a control-room TV or a public read-only link. No login required.</p>
+              <p>Share governed live report boards on a control-room TV or a public read-only link with controlled access.</p>
             </div>
           </div>
         </div>
@@ -272,7 +308,7 @@ export default function ReportSharing() {
       )}
 
       <div className="cc-kpis rs-kpis">
-        {kpis.map((x, i) => <Kpi key={i} {...x} loading={loading} display={error ? 'N/A' : x.display} />)}
+        {kpis.map((x, i) => <Kpi key={i} {...x} loading={loading && !x.display} display={error ? 'N/A' : x.display} />)}
       </div>
 
       {!loading && !error && findings.length > 0 && (
@@ -291,6 +327,12 @@ export default function ReportSharing() {
         <select className="cc-select" aria-label="Board type" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
           {BOARD_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
         </select>
+        <select className="cc-select" aria-label="Channel" value={channelFilter} onChange={(e) => setChannelFilter(e.target.value)}>
+          {CHANNELS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+        </select>
+        <select className="cc-select" aria-label="Access level" value={accessFilter} onChange={(e) => setAccessFilter(e.target.value)}>
+          {ACCESS_LEVELS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+        </select>
         <select className="cc-select" aria-label="Status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="all">All statuses ({statusCounts.all})</option>
           {LINK_STATUSES.filter((st) => st !== 'revoked').map((st) => <option key={st} value={st}>{STATUS_META[st].label} ({statusCounts[st] ?? 0})</option>)}
@@ -298,10 +340,10 @@ export default function ReportSharing() {
         <select className="cc-select" aria-label="Expiry" value={expiryFilter} onChange={(e) => setExpiryFilter(e.target.value)}>
           {EXPIRY_FILTERS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
         </select>
-        {anyFilter && <button type="button" className="cc-btn-ghost" onClick={resetFilters}><X size={14} aria-hidden="true" /> Reset</button>}
         <span className="rs-push" />
-        <button type="button" className="cc-btn-ghost" onClick={() => runExport('xlsx')} disabled={exporting || visible.length === 0}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
-        <button type="button" className="cc-btn-ghost" onClick={() => runExport('pdf')} disabled={exporting || visible.length === 0}><FileText size={14} aria-hidden="true" /> PDF</button>
+        <button type="button" className="cc-btn-ghost rs-reset" onClick={resetFilters} disabled={!anyFilter}>Reset</button>
+        <button type="button" className="cc-btn-ghost" onClick={() => runExport('xlsx')} disabled={exporting || visible.length === 0} title={pickedRows.length ? 'Export the selected links' : 'Export the links shown'}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
+        <button type="button" className="cc-btn-ghost" onClick={() => runExport('pdf')} disabled={exporting || visible.length === 0} title={pickedRows.length ? 'Export the selected links' : 'Export the links shown'}><FileText size={14} aria-hidden="true" /> PDF</button>
         <div className="rs-viewtoggle" role="group" aria-label="View">
           <button type="button" aria-pressed={view === 'list'} aria-label="List view" title="List view" onClick={() => setView('list')}><List size={15} /></button>
           <button type="button" aria-pressed={view === 'grid'} aria-label="Card view" title="Card view" onClick={() => setView('grid')}><LayoutGrid size={15} /></button>
@@ -310,7 +352,16 @@ export default function ReportSharing() {
       {exportError && <div className="cc-card rs-banner is-bad" role="alert"><AlertCircle size={16} aria-hidden="true" /> <span>{exportError}</span></div>}
 
       <div className="rs-main">
+        <div className="rs-col">
         <Card title="Shared Reports & Boards" sub={loading ? 'Loading...' : `${fmtInt(visible.length)} of ${fmtInt(enriched.length)} live links. Revoked links are not listed.`}>
+          {pickedRows.length > 0 && (
+            <div className="rs-bulk" role="status">
+              <b>{pickedRows.length} selected</b>
+              <button type="button" className="cc-btn-ghost" onClick={() => runExport('xlsx')} disabled={exporting}><FileSpreadsheet size={13} aria-hidden="true" /> Export selected</button>
+              <button type="button" className="cc-btn-ghost rs-bad" onClick={() => { setRevokeError(null); setRevokeTarget({ bulk: true, ids: pickedRows.map((r) => r.id), name: `${pickedRows.length} links` }) }}><Ban size={13} aria-hidden="true" /> Revoke selected</button>
+              <button type="button" className="cc-btn-ghost" onClick={() => setPicked(new Set())}>Clear</button>
+            </div>
+          )}
           {view === 'list' ? (
             <KitTable
               columns={columns}
@@ -330,7 +381,8 @@ export default function ReportSharing() {
                 {visible.map((r) => (
                   <button key={r.id} type="button" className={`rs-cardbtn ${selected?.id === r.id ? 'is-on' : ''}`} onClick={() => setSelectedId(r.id)}>
                     <ShareName row={r} />
-                    <span className="rs-cardrow"><StatusPill status={r.status} /><span>{r.views == null ? 'N/A' : `${fmtInt(r.views)} views`}</span></span>
+                    <span className="rs-cardrow"><StatusPill status={r.status} /><ChannelCell row={r} /></span>
+                    <span className="rs-cardrow rs-muted"><span>Views</span><span>{r.views == null ? 'N/A' : fmtInt(r.views)}</span></span>
                     <span className="rs-cardrow rs-muted"><span>Expires</span><ExpiryCell row={r} /></span>
                   </button>
                 ))}
@@ -339,6 +391,30 @@ export default function ReportSharing() {
           )}
         </Card>
 
+      <div className="rs-charts">
+        <Card title="Access Analytics" sub="Views per link since each was created. Per-day view history is not recorded.">
+          <CardState state={cardState} empty={bars.length === 0 || barMax === 0 ? 'No views recorded yet. Views appear once a shared link is opened.' : null}>
+            <div className="rs-bars">
+              {bars.map((b) => (
+                <button key={b.id} type="button" className="rs-bar" onClick={() => setSelectedId(b.id)} title={`${b.label}: ${b.views} views`}>
+                  <span className="rs-bar-label">{b.label}</span>
+                  <span className="rs-bar-track"><i style={{ width: `${barMax ? (b.views / barMax) * 100 : 0}%` }} /></span>
+                  <b>{fmtInt(b.views)}</b>
+                </button>
+              ))}
+            </div>
+          </CardState>
+        </Card>
+        <Card title="Views by Channel" sub="Total views split by the channel each link is shown on.">
+          <CardState state={cardState} empty={donut.length === 0 ? 'No views recorded yet.' : null}>
+            <Donut segments={donut} total={kpi.totalViews} centerLabel="Total Views" onSelect={(s) => setChannelFilter(s.key)} />
+          </CardState>
+        </Card>
+      </div>
+
+        </div>
+
+        <div className="rs-col rs-side">
         <Card title="Selected Share" className="rs-detail">
           <CardState state={cardState} empty={!detail ? 'Select a link to see its details.' : null}>
             {detail && (
@@ -350,7 +426,7 @@ export default function ReportSharing() {
                 <dl className="rs-dl">
                   <div><dt>Audience</dt><dd>Anyone with the link <span className="cc-pill info">External</span></dd></div>
                   <div><dt>Access</dt><dd><Eye size={13} aria-hidden="true" /> View only<small>The board is read only.</small></dd></div>
-                  <div><dt>Sharing mode</dt><dd><Link2 size={13} aria-hidden="true" /> Public link<small>No login required</small></dd></div>
+                  <div><dt>Sharing mode</dt><dd><ChannelCell row={selected} /><small>No login required</small></dd></div>
                   <div><dt>Link URL</dt><dd className="rs-url">{shareUrl ? <a href={safeHref(shareUrl)} target="_blank" rel="noopener noreferrer">{shareUrl}</a> : <span className="cc-na">Not available</span>}</dd></div>
                   <div><dt>Status</dt><dd><StatusPill status={selected.status} /></dd></div>
                   <div><dt>Created by</dt><dd className="rs-muted">Not shown on this page</dd></div>
@@ -372,42 +448,26 @@ export default function ReportSharing() {
                   <button type="button" className="cc-btn-ghost" onClick={scrollToManager}><Users size={14} aria-hidden="true" /> Edit Access</button>
                   <button type="button" className="cc-btn-primary rs-danger" onClick={() => { setRevokeError(null); setRevokeTarget(selected) }}><Ban size={14} aria-hidden="true" /> Revoke</button>
                 </div>
-                <div className="rs-security">
-                  <h3><Lock size={14} aria-hidden="true" /> Security controls</h3>
-                  <ul>
-                    <li><span>Expiring link</span><b>{selected.expires_at ? `Yes, ${expiryText(selected).text}` : 'No expiry set'}</b></li>
-                    <li><span>Password protection</span><b className="rs-muted">Set when the link is created, not shown here</b></li>
-                    <li><span>IP restriction</span><b className="rs-muted">Not supported</b></li>
-                    <li><span>Watermark reports</span><b className="rs-muted">Not supported</b></li>
-                    <li><span>Disable download</span><b className="rs-muted">Not configurable</b></li>
-                  </ul>
-                  <p className="rs-note"><Info size={12} aria-hidden="true" /> To change the password or expiry, revoke this link and create a new one.</p>
-                </div>
               </div>
             )}
           </CardState>
         </Card>
-      </div>
-
-      <div className="rs-charts">
-        <Card title="Access Analytics" sub="Views per link since each was created. Per-day view history is not recorded.">
-          <CardState state={cardState} empty={bars.length === 0 || barMax === 0 ? 'No views recorded yet. Views appear once a shared link is opened.' : null}>
-            <div className="rs-bars">
-              {bars.map((b) => (
-                <button key={b.id} type="button" className="rs-bar" onClick={() => setSelectedId(b.id)} title={`${b.label}: ${b.views} views`}>
-                  <span className="rs-bar-label">{b.label}</span>
-                  <span className="rs-bar-track"><i style={{ width: `${barMax ? (b.views / barMax) * 100 : 0}%` }} /></span>
-                  <b>{fmtInt(b.views)}</b>
-                </button>
-              ))}
-            </div>
+        <Card title={<span className="rs-sec-title"><Lock size={15} aria-hidden="true" /> Security Controls</span>}>
+          <CardState state={cardState} empty={!detail ? 'Select a link to see its controls.' : null}>
+          {detail && (<div className="rs-security">
+                  <ul className="rs-controls">
+                    <li><input type="checkbox" className="rs-check" checked={!!selected.expires_at} readOnly disabled aria-label="Expiring link" /><span>Expiring link</span><b>{selected.expires_at ? expiryText(selected).text : 'No expiry set'}</b></li>
+                    <li><Info size={14} className="rs-muted" aria-hidden="true" /><span>Password protection</span><b className="rs-muted">Set at creation, not shown</b></li>
+                    <li><input type="checkbox" className="rs-check" checked={false} readOnly disabled aria-label="IP restriction" /><span>IP restriction</span><b className="rs-muted">Not supported</b></li>
+                    <li><input type="checkbox" className="rs-check" checked={false} readOnly disabled aria-label="Watermark reports" /><span>Watermark reports</span><b className="rs-muted">Not supported</b></li>
+                    <li><input type="checkbox" className="rs-check" checked readOnly disabled aria-label="Disable download" /><span>Disable download</span><b className="rs-muted">Boards have no download</b></li>
+                  </ul>
+                  <p className="rs-note"><Info size={12} aria-hidden="true" /> To change the password or expiry, revoke this link and create a new one.</p>
+                </div>
+          )}
           </CardState>
         </Card>
-        <Card title="Views by Link Status" sub="Total views split by each link's current status.">
-          <CardState state={cardState} empty={donut.length === 0 ? 'No views recorded yet.' : null}>
-            <Donut segments={donut} total={kpi.totalViews} centerLabel="Total views" onSelect={(s) => setStatusFilter(s.key)} />
-          </CardState>
-        </Card>
+        </div>
       </div>
 
       <div className="rs-info">
@@ -449,7 +509,7 @@ export default function ReportSharing() {
         )}
       >
         <p className="text-sm text-[var(--text-secondary)]">
-          Revoke "{revokeTarget?.name || 'Shared report'}"? Anyone using the link, including a TV wall board, loses access at once. This cannot be undone.
+          Revoke {revokeTarget?.bulk ? revokeTarget.name : `"${revokeTarget?.name || 'Shared report'}"`}? Anyone using the link, including a TV wall board, loses access at once. This cannot be undone.
         </p>
         {revokeError && <p className="text-xs text-red-500 mt-2">{revokeError}</p>}
       </Modal>

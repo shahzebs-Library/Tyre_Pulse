@@ -39,7 +39,9 @@ html.light .rs-clock { background: #fff; }
 .rs-viewtoggle button[aria-pressed="true"] { background: var(--cc-green-strong); color: #fff; }
 
 /* Register + selected share */
-.rs-main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 14px; align-items: start; }
+.rs-main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
+.rs-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.rs-sec-title { display: inline-flex; align-items: center; gap: 7px; }
 .rs-stack { display: inline-flex; flex-direction: column; gap: 1px; min-width: 0; }
 .rs-stack small { font-size: 11px; color: var(--cc-ink-3); }
 .rs-name { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
@@ -57,7 +59,6 @@ html.light .rs-clock { background: #fff; }
 .rs-cardbtn:hover, .rs-cardbtn.is-on { border-color: var(--cc-green); }
 .rs-cardrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; }
 
-.rs-detail { position: sticky; top: 12px; }
 .rs-detail-body { display: flex; flex-direction: column; gap: 12px; }
 .rs-detail-top { display: flex; align-items: center; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--cc-inner-border); }
 .rs-detail-top b { display: block; font-size: 15px; color: var(--cc-ink); overflow-wrap: anywhere; }
@@ -74,7 +75,7 @@ html.light .rs-clock { background: #fff; }
 .rs-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .rs-actions .cc-btn-ghost, .rs-actions .cc-btn-primary { justify-content: center; font-size: 12.5px; }
 .cc-btn-primary.rs-danger { background: var(--cc-red); border-color: var(--cc-red); }
-.rs-security { border-top: 1px solid var(--cc-inner-border); padding-top: 12px; }
+.rs-security { display: flex; flex-direction: column; }
 .rs-security h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--cc-ink); }
 .rs-security ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
 .rs-security li { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--cc-ink-2); }
@@ -84,7 +85,7 @@ html.light .rs-clock { background: #fff; }
 .rs-note svg { flex: none; margin-top: 2px; }
 
 /* Charts */
-.rs-charts { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 14px; }
+.rs-charts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
 .rs-bars { display: flex; flex-direction: column; gap: 9px; }
 .rs-bar { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 2fr) 52px; gap: 10px; align-items: center; font-size: 12.5px; color: var(--cc-ink); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
 .rs-bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--cc-ink-2); }
@@ -103,7 +104,6 @@ html.light .rs-clock { background: #fff; }
 @media (max-width: 1280px) {
   .rs-page .rs-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .rs-main { grid-template-columns: minmax(0, 1fr); }
-  .rs-detail { position: static; }
   .rs-info { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 760px) {
@@ -113,3 +113,16 @@ html.light .rs-clock { background: #fff; }
   .rs-push { display: none; }
   .rs-head-actions { width: 100%; }
 }
+
+/* Mockup parity: selection, bulk bar, row actions, security checkboxes */
+.rs-check { width: 15px; height: 15px; accent-color: var(--cc-green); cursor: pointer; }
+.rs-check:disabled { cursor: default; }
+.rs-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; margin-bottom: 10px; border-radius: 10px; background: var(--cc-green-tint); font-size: 12.5px; color: var(--cc-ink); }
+.rs-bulk .cc-btn-ghost { padding: 5px 10px; font-size: 12px; }
+.rs-rowacts { display: inline-flex; align-items: center; gap: 6px; }
+.rs-reset { color: var(--cc-blue); border-color: var(--cc-blue); }
+.rs-controls li { display: grid !important; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; }
+.rs-page .cc-et th, .rs-page .cc-et td { padding-left: 8px; padding-right: 8px; }
+.rs-page .cc-et th:first-child, .rs-page .cc-et td:first-child { padding-left: 14px; width: 30px; }
+.rs-page .rs-chip { padding: 3px 7px; font-size: 11.5px; }
+.rs-page .rs-name { min-width: 175px; }

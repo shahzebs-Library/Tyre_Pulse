@@ -77,3 +77,17 @@ describe('policyView', () => {
     ])
   })
 })
+
+describe('mockup helpers', () => {
+  it('keeps acknowledgment counts unmeasured', async () => {
+    const { ACK_LEGEND } = await import('../lib/policyView')
+    expect(ACK_LEGEND.map((x) => x.label)).toEqual(['Acknowledged', 'Pending', 'Overdue', 'Not Required'])
+    expect(ACK_LEGEND.every((x) => x.count === null)).toBe(true)
+  })
+  it('returns picked rows in register order', async () => {
+    const { pickedPolicies } = await import('../lib/policyView')
+    const rows = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
+    expect(pickedPolicies(rows, new Set(['c', 'a'])).map((r) => r.id)).toEqual(['a', 'c'])
+    expect(pickedPolicies(rows, null)).toEqual([])
+  })
+})

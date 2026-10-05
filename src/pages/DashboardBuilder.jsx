@@ -24,6 +24,7 @@ import {
   AlertTriangle, ChevronDown, Eye, Calendar, MapPin, RotateCcw, Search,
   Monitor, Tablet, Smartphone, Eraser, Settings2, ShieldCheck, Send,
   Gauge, BarChart3, List, Info, LayoutGrid, PieChart, LineChart, Hash, Sun, Moon, Users, Tag,
+  Percent, TrendingUp, BadgeCheck, BarChart4, Flame, History, StickyNote, Image as ImageIcon, PenLine,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
@@ -32,7 +33,7 @@ import { useSites } from '../hooks/useSites'
 import WidgetRenderer, { createWidgetDataLoader } from '../components/dashboard/WidgetRenderer'
 import {
   WIDGET_CATALOG, WIDGET_BY_ID, SIZE_PRESETS,
-  MIN_W, MAX_W, DEFAULT_LAYOUT, MAX_LAYOUTS,
+  MIN_W, MAX_W, DEFAULT_LAYOUT, MAX_LAYOUTS, CONFIGURABLE_KINDS, updateWidgetConfig,
   addWidget, removeWidget, moveWidget, resizeWidget, validateLayout,
   makeLayout, visibleLayouts, pickInitialLayout,
   DASHBOARD_RANGE_PRESETS, DEFAULT_DASHBOARD_FILTERS,
@@ -47,6 +48,8 @@ import {
   setDefaultDashboard, shareDashboard,
 } from '../lib/api/savedViews'
 import { toUserMessage } from '../lib/safeError'
+import { safeImageSrc } from '../lib/safeUrl'
+import { MAX_NOTE_LENGTH, MAX_CAPTION, MAX_IMAGE_URL } from '../lib/dashboardWidgets'
 import Modal from '../components/ui/Modal'
 import { Tabs } from '../components/commandCenter/kit'
 import './DashboardBuilder.css'
@@ -54,7 +57,11 @@ import './DashboardBuilder.css'
 const REFRESH_MS = 120_000
 const EMPTY_SLICE = { rows: [], error: null, loaded: false }
 const WIDGET_MIME = 'application/x-tp-widget'
-const KIND_ICON = { stat: Hash, gauge: Gauge, line: LineChart, bar: BarChart3, donut: PieChart, list: List }
+const KIND_ICON = {
+  stat: Hash, gauge: Gauge, line: LineChart, bar: BarChart3, donut: PieChart, list: List,
+  progress: Percent, trend: TrendingUp, badge: BadgeCheck, stacked: BarChart4, heatmap: Flame,
+  map: MapPin, timeline: History, note: StickyNote, image: ImageIcon,
+}
 const DEVICE_ICON = { desktop: Monitor, tablet: Tablet, mobile: Smartphone }
 
 /* ── Small controls ─────────────────────────────────────────────────────── */
@@ -97,6 +104,66 @@ function NameModal({ title, initial, onSubmit, onClose }) {
         <label htmlFor="dashboard-layout-name">Layout name</label>
         <input id="dashboard-layout-name" autoFocus value={value} onChange={e => setValue(e.target.value)}
           maxLength={80} placeholder="Layout name" className="db-input" />
+      </form>
+    </Modal>
+  )
+}
+
+/* ── Content modal (Text / Note and Image / Logo widgets) ────────────────── */
+function ContentModal({ kind, initial, onSubmit, onClose }) {
+  const [title, setTitle] = useState(initial?.title || '')
+  const [text, setText] = useState(initial?.text || '')
+  const [url, setUrl] = useState(initial?.url || '')
+  const [caption, setCaption] = useState(initial?.caption || '')
+  const isImage = kind === 'image'
+  const urlTrim = url.trim()
+  const urlOk = !urlTrim || !!safeImageSrc(urlTrim)
+  const canSave = isImage ? urlOk : true
+  function submit(e) {
+    e.preventDefault()
+    if (!canSave) return
+    onSubmit(isImage ? { url: urlTrim, caption } : { title, text })
+  }
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={isImage ? 'Image / Logo content' : 'Text / Note content'}
+      size="md"
+      footer={(
+        <>
+          <button type="button" onClick={onClose} className="cc-btn-ghost">Cancel</button>
+          <button type="submit" form="dashboard-widget-content-form" disabled={!canSave} className="cc-btn-primary">Apply</button>
+        </>
+      )}
+    >
+      <form id="dashboard-widget-content-form" className="cc db-form" onSubmit={submit}>
+        {isImage ? (
+          <>
+            <label htmlFor="db-content-url">Image address</label>
+            <input id="db-content-url" className="db-input" value={url} maxLength={MAX_IMAGE_URL}
+              placeholder="https://example.com/logo.png" onChange={e => setUrl(e.target.value)} autoFocus />
+            {!urlOk && <p className="db-muted" role="alert">Use an https web address or a site path. Other link types are blocked.</p>}
+            <label htmlFor="db-content-caption">Caption</label>
+            <input id="db-content-caption" className="db-input" value={caption} maxLength={MAX_CAPTION}
+              placeholder="Optional caption, also used as the image description" onChange={e => setCaption(e.target.value)} />
+            {urlTrim && urlOk && (
+              <div className="db-content-preview">
+                <img src={safeImageSrc(urlTrim)} alt={caption || 'Preview'} referrerPolicy="no-referrer" />
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <label htmlFor="db-content-title">Heading</label>
+            <input id="db-content-title" className="db-input" value={title} maxLength={MAX_CAPTION}
+              placeholder="Note" onChange={e => setTitle(e.target.value)} autoFocus />
+            <label htmlFor="db-content-text">Text</label>
+            <textarea id="db-content-text" className="db-input" rows={7} value={text} maxLength={MAX_NOTE_LENGTH}
+              onChange={e => setText(e.target.value)} />
+            <p className="db-muted">{text.length} of {MAX_NOTE_LENGTH} characters. Saved with the layout when you press Save Draft.</p>
+          </>
+        )}
       </form>
     </Modal>
   )
@@ -297,6 +364,7 @@ export default function DashboardBuilder() {
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const [modal, setModal]         = useState(null)   // { mode: 'new'|'rename'|'saveAs' }
   const [confirmState, setConfirmState] = useState(null) // { kind: 'delete'|'discard', layout? }
+  const [contentEdit, setContentEdit] = useState(null) // { index } of a Note / Image widget
   const switcherRef = useRef(null)
   const dragIndexRef = useRef(null)
   const loadingDataRef = useRef(false)
@@ -424,6 +492,7 @@ export default function DashboardBuilder() {
   const handleMove    = (i, delta) => mutate(l => moveWidget(l, i, i + delta))
   const handleWidth   = (i, w) => mutate(l => resizeWidget(l, i, { w }))
   const handlePreset  = (i, key) => mutate(l => resizeWidget(l, i, SIZE_PRESETS[key]))
+  const handleContent = (i, config) => { mutate(l => updateWidgetConfig(l, i, config)); setContentEdit(null) }
 
   /* ── Global filters ──────────────────────────────────────────────────── */
   const handleFilterChange = useCallback((patch) => {
@@ -855,13 +924,19 @@ export default function DashboardBuilder() {
                                 <SizeBtn key={k} title={`${k} preset`} onClick={() => handlePreset(i, k)}
                                   active={pw.w === SIZE_PRESETS[k].w && pw.h === SIZE_PRESETS[k].h}>{k}</SizeBtn>
                               ))}
+                              {CONFIGURABLE_KINDS.includes(def?.kind) && (
+                                <>
+                                  <span className="db-sep" />
+                                  <IconBtn title="Edit content" onClick={() => setContentEdit({ index: i })}><PenLine size={12} /></IconBtn>
+                                </>
+                              )}
                               <span className="db-sep" />
                               <IconBtn title="Remove widget" danger onClick={() => handleRemove(i)}><X size={12} /></IconBtn>
                             </span>
                           </div>
                         )}
                         <div className={`db-cell-body ${editMode ? 'is-locked' : ''}`}>
-                          <WidgetRenderer widgetId={pw.widgetId} slice={slices[pw.widgetId] || EMPTY_SLICE} currency={activeCurrency} />
+                          <WidgetRenderer widgetId={pw.widgetId} slice={slices[pw.widgetId] || EMPTY_SLICE} currency={activeCurrency} config={pw.config} />
                         </div>
                       </div>
                     )
@@ -921,6 +996,15 @@ export default function DashboardBuilder() {
       )}
       {modal?.mode === 'rename' && (
         <NameModal title="Rename layout" initial={draft?.name || ''} onSubmit={handleRename} onClose={() => setModal(null)} />
+      )}
+
+      {contentEdit && draft?.widgets[contentEdit.index] && (
+        <ContentModal
+          kind={WIDGET_BY_ID[draft.widgets[contentEdit.index].widgetId]?.kind}
+          initial={draft.widgets[contentEdit.index].config}
+          onSubmit={cfg => handleContent(contentEdit.index, cfg)}
+          onClose={() => setContentEdit(null)}
+        />
       )}
 
       {/* ── Confirmations (delete layout / discard unsaved changes) ── */}

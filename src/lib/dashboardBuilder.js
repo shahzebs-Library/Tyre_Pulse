@@ -30,6 +30,7 @@ import { getConfiguration, saveConfiguration } from './configurationStore'
  * @module dashboardBuilder
  */
 import { resolvePeriod } from './api/scheduledReports'
+import { sanitizeWidgetConfig } from './dashboardWidgets'
 
 // ── Limits & size domains ─────────────────────────────────────────────────────
 export const MIN_W = 1
@@ -48,12 +49,12 @@ export const SIZE_PRESETS = Object.freeze({
 
 // ── Widget catalog ────────────────────────────────────────────────────────────
 /**
- * @typedef {'stat'|'gauge'|'donut'|'bar'|'line'|'list'} WidgetKind
+ * @typedef {'stat'|'gauge'|'donut'|'bar'|'line'|'list'|'stacked'|'map'|'progress'|'trend'|'badge'|'heatmap'|'timeline'|'note'|'image'} WidgetKind
  * @typedef {Object} WidgetDef
  * @property {string} id
  * @property {string} label
  * @property {string} description
- * @property {'Fleet'|'Tyres'|'Cost'|'Operations'|'Alerts'} category
+ * @property {'Fleet'|'Tyres'|'Cost'|'Operations'|'Alerts'|'Content'} category
  * @property {WidgetKind} kind
  * @property {number} defaultW   grid columns (1-4)
  * @property {'sm'|'md'|'lg'} defaultH
@@ -182,7 +183,88 @@ export const WIDGET_CATALOG = Object.freeze([
     category: 'Operations', kind: 'bar', defaultW: 2, defaultH: 'md',
     data: { source: 'maintenanceSnapshot', shape: 'topTasks' },
   },
+  // ── Added for the owner's Dashboard Builder mockup ──
+  {
+    id: 'open-work-orders',
+    label: 'Open Work Orders',
+    description: 'Job cards not Completed or Cancelled, from an exact server count.',
+    category: 'Operations', kind: 'stat', defaultW: 1, defaultH: 'sm',
+    data: { source: 'workOrdersOpen', shape: 'openCount' },
+  },
+  {
+    id: 'fleet-location',
+    label: 'Fleet Location',
+    description: 'Sites with their registered vehicle counts. Map view is not connected yet.',
+    category: 'Fleet', kind: 'map', defaultW: 2, defaultH: 'md',
+    data: { source: 'fleet', shape: 'siteBoard' },
+  },
+  {
+    id: 'utilisation-trend',
+    label: 'Fleet Utilisation Trend',
+    description: 'Average telematics utilisation per capture date.',
+    category: 'Fleet', kind: 'line', defaultW: 2, defaultH: 'md',
+    data: { source: 'utilisation', shape: 'trend' },
+  },
+  {
+    id: 'workshop-jobs',
+    label: 'Workshop Jobs',
+    description: 'Job cards opened per month, stacked by status, last 6 months.',
+    category: 'Operations', kind: 'stacked', defaultW: 2, defaultH: 'md',
+    data: { source: 'workshopMonths', shape: 'stackedStatus' },
+  },
+  {
+    id: 'inspection-progress',
+    label: 'Inspection Progress',
+    description: 'Inspections completed against those scheduled this month.',
+    category: 'Operations', kind: 'progress', defaultW: 1, defaultH: 'sm',
+    data: { source: 'inspectionsMonth', shape: 'progress' },
+  },
+  {
+    id: 'work-orders-trend',
+    label: 'Job Cards Opened (30 days)',
+    description: 'Job cards opened in the last 30 days, with change against the 30 days before.',
+    category: 'Operations', kind: 'trend', defaultW: 1, defaultH: 'sm',
+    data: { source: 'workOrdersTrend', shape: 'trend' },
+  },
+  {
+    id: 'data-freshness',
+    label: 'Data Freshness',
+    description: 'Status of each data feed from its newest upload.',
+    category: 'Operations', kind: 'badge', defaultW: 1, defaultH: 'md',
+    data: { source: 'freshness', shape: 'status' },
+  },
+  {
+    id: 'inspection-heatmap',
+    label: 'Inspections Heat Map',
+    description: 'Inspections by site and weekday over the last 90 days.',
+    category: 'Operations', kind: 'heatmap', defaultW: 2, defaultH: 'md',
+    data: { source: 'inspectionsHeat', shape: 'siteWeekday' },
+  },
+  {
+    id: 'activity-timeline',
+    label: 'Activity Timeline',
+    description: 'Latest job cards, accidents and inspections in one feed.',
+    category: 'Operations', kind: 'timeline', defaultW: 2, defaultH: 'md',
+    data: { source: 'timeline', shape: 'events' },
+  },
+  {
+    id: 'text-note',
+    label: 'Text / Note',
+    description: 'Your own heading and text, saved with the layout.',
+    category: 'Content', kind: 'note', defaultW: 1, defaultH: 'md',
+    data: { source: 'static', shape: 'note' },
+  },
+  {
+    id: 'image-logo',
+    label: 'Image / Logo',
+    description: 'An image or logo from a web address, saved with the layout.',
+    category: 'Content', kind: 'image', defaultW: 1, defaultH: 'md',
+    data: { source: 'static', shape: 'image' },
+  },
 ])
+
+/** Widget kinds that carry per-instance config in the layout. */
+export const CONFIGURABLE_KINDS = Object.freeze(['note', 'image'])
 
 /** Fast lookup: widgetId → catalog entry. */
 export const WIDGET_BY_ID = Object.freeze(
@@ -316,11 +398,13 @@ const clampH = h => (HEIGHTS.includes(h) ? h : 'md')
 export function placeWidget(widgetId, overrides = {}) {
   const def = WIDGET_BY_ID[widgetId]
   if (!def) return null
-  return {
+  const placed = {
     widgetId,
     w: clampW(overrides.w ?? def.defaultW),
     h: clampH(overrides.h ?? def.defaultH),
   }
+  const config = sanitizeWidgetConfig(def.kind, overrides.config)
+  return config ? { ...placed, config } : placed
 }
 
 /**
@@ -354,7 +438,13 @@ export function validateLayout(layout) {
   const widgets = (Array.isArray(src.widgets) ? src.widgets : [])
     .filter(w => w && typeof w === 'object' && WIDGET_BY_ID[w.widgetId])
     .slice(0, MAX_WIDGETS_PER_LAYOUT)
-    .map(w => ({ widgetId: w.widgetId, w: clampW(w.w), h: clampH(w.h) }))
+    .map(w => {
+      const placed = { widgetId: w.widgetId, w: clampW(w.w), h: clampH(w.h) }
+      // Only Note / Image widgets carry config; older layouts have none and
+      // keep exactly their previous shape.
+      const config = sanitizeWidgetConfig(WIDGET_BY_ID[w.widgetId].kind, w.config)
+      return config ? { ...placed, config } : placed
+    })
   return {
     id: typeof src.id === 'string' && src.id ? src.id : newId(),
     name: (typeof src.name === 'string' ? src.name.trim().slice(0, MAX_LAYOUT_NAME) : '') || 'Untitled',
@@ -417,27 +507,47 @@ export function resizeWidget(layout, index, { w, h } = {}) {
   return touch({ ...layout, widgets })
 }
 
+/**
+ * Replace the per-instance config of the widget at `index` (Note / Image only).
+ * Widgets that carry no config, and out-of-range indices, are no-ops.
+ */
+export function updateWidgetConfig(layout, index, config) {
+  if (!Number.isInteger(index) || index < 0 || index >= layout.widgets.length) return layout
+  const target = layout.widgets[index]
+  const def = WIDGET_BY_ID[target.widgetId]
+  const clean = def ? sanitizeWidgetConfig(def.kind, config) : null
+  if (!clean) return layout
+  const widgets = layout.widgets.map((w, i) => (i === index ? { ...w, config: clean } : w))
+  return touch({ ...layout, widgets })
+}
+
 /** Starter layout for users with no saved layouts yet. */
 export const DEFAULT_LAYOUT = Object.freeze(validateLayout({
   id: 'default',
   name: 'Fleet Overview',
-  // Order mirrors the owner's Dashboard Builder mockup: four KPI tiles, then
-  // paired charts (distribution, workshop, cost, alerts), then smaller tiles.
+  // Order mirrors the owner's Dashboard Builder mockup: four KPI tiles (Total
+  // Fleet, Fleet Utilisation, Open Work Orders, Tyres Needing Attention), then
+  // paired charts (utilisation trend + tyre health, fleet location + workshop
+  // jobs, cost trend + recent alerts), then smaller tiles.
   widgets: [
     { widgetId: 'total-vehicles',         w: 1, h: 'sm' },
     { widgetId: 'fleet-availability',     w: 1, h: 'sm' },
-    { widgetId: 'tyres-in-service',       w: 1, h: 'sm' },
+    { widgetId: 'open-work-orders',       w: 1, h: 'sm' },
     { widgetId: 'critical-tyres',         w: 1, h: 'sm' },
-    { widgetId: 'maintenance-by-type',    w: 2, h: 'md' },
+    { widgetId: 'utilisation-trend',      w: 2, h: 'md' },
     { widgetId: 'tyre-status-split',      w: 2, h: 'md' },
-    { widgetId: 'vehicles-by-site',       w: 2, h: 'md' },
-    { widgetId: 'work-orders-by-status',  w: 2, h: 'md' },
+    { widgetId: 'fleet-location',         w: 2, h: 'md' },
+    { widgetId: 'workshop-jobs',          w: 2, h: 'md' },
     { widgetId: 'tyre-cost-trend',        w: 2, h: 'md' },
     { widgetId: 'recent-alerts',          w: 2, h: 'md' },
+    { widgetId: 'tyres-in-service',       w: 1, h: 'sm' },
     { widgetId: 'inspections-today',      w: 1, h: 'sm' },
-    { widgetId: 'pending-approvals',      w: 1, h: 'sm' },
+    { widgetId: 'inspection-progress',    w: 1, h: 'sm' },
+    { widgetId: 'work-orders-trend',      w: 1, h: 'sm' },
     { widgetId: 'monthly-tyre-cost',      w: 1, h: 'sm' },
     { widgetId: 'maintenance-spend',      w: 1, h: 'sm' },
+    { widgetId: 'pending-approvals',      w: 1, h: 'sm' },
+    { widgetId: 'data-freshness',         w: 1, h: 'sm' },
   ],
   created_by: null,
   shared: true,

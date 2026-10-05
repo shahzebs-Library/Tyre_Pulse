@@ -28,13 +28,28 @@ import { resolveLayoutKey, isTyrelessEquipment } from './vehicleTyreLayout'
  * that pass opts.title). Fail-safe: unset/unreadable config keeps exports enabled
  * and uncapped, matching prior behavior.
  */
-function guardExport(rows) {
+function guardExport(rows, name) {
   if (!configBool('export_enabled', true)) {
     throw new Error('Exports are disabled by your administrator.')
   }
   const arr = Array.isArray(rows) ? rows : []
   const max = configNum('max_export_rows', 0)
-  return max > 0 && arr.length > max ? arr.slice(0, max) : arr
+  const out = max > 0 && arr.length > max ? arr.slice(0, max) : arr
+  if (name) recordExport(name, out.length)
+  return out
+}
+
+/**
+ * Write one EXPORT row to the audit log so the Audit Trail "Exports" tab shows
+ * who downloaded what. Fire-and-forget: loaded lazily, never throws, never
+ * delays the download. The server stamps IP and device on the row.
+ */
+function recordExport(name, rowCount) {
+  try {
+    import('./auditLogger')
+      .then((m) => m.audit.export(String(name).slice(0, 120), { rows: rowCount }))
+      .catch(() => {})
+  } catch { /* never block an export */ }
 }
 
 /**
@@ -772,7 +787,7 @@ function _drawTyreDiagram(doc, layout, tyreConditions, originX, originY, scale) 
 // ── Excel Export ───────────────────────────────────────────────────────────────
 export async function exportToExcel(rows, columns, headers, filename = 'export', sheetName = 'Data', opts = {}) {
   await ensureXlsx()
-  rows = guardExport(rows)
+  rows = guardExport(rows, filename)
   const currency = opts.currency || 'SAR'
   const wb = XLSX.utils.book_new()
 
@@ -1006,7 +1021,7 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
   await ensurePdf()
   const doc = new jsPDF({ orientation, unit: 'mm', format: 'a4' })
   const PW  = doc.internal.pageSize.width
-  rows = guardExport(rows)
+  rows = guardExport(rows, filename)
   const currency = opts.currency || 'SAR'
   const brand = await _pdfBrand(opts.branding)
   const hdrOpts = { accent: brand.accent, logoData: brand.logoData }
@@ -3052,7 +3067,7 @@ export async function exportDailyExecutivePdf(data, filename) {
 
 // ── PowerPoint Export - light executive theme, native editable charts ─────────
 export async function exportToPptx(data, filename = 'TyrePulse_Report') {
-  guardExport([])   // honor the CSV/Excel/Export master switch for PPTX too
+  guardExport([], filename)   // honor the CSV/Excel/Export master switch for PPTX too
   const pptx = await buildPptxDeck(data)
   await pptx.writeFile({ fileName: `${filename}.pptx` })
 }

@@ -95,3 +95,18 @@ describe('supplierMarketplaceView', () => {
     expect(samePriceBook(L, L[0]).map((x) => x.id)).toEqual([3, 1, 2])
   })
 })
+
+describe('supplierMarketplaceView comparison export', () => {
+  it('flattens compared listings, keeps blanks blank and repeats best marks', async () => {
+    const { compareListings, comparisonExportRows, COMPARE_EXPORT_COLUMNS } = await import('../lib/supplierMarketplaceView')
+    const cmp = compareListings([
+      { id: 1, supplier: 'A', product_name: 'Tyre', size_spec: '315/80R22.5', unit_price: 400, lead_time_days: 5, moq: 10, currency: 'SAR' },
+      { id: 2, supplier: 'B', product_name: 'Tyre', unit_price: 420, lead_time_days: null, moq: null, currency: 'SAR' },
+    ])
+    const rows = comparisonExportRows(cmp)
+    expect(rows[0]).toMatchObject({ supplier: 'A', price: 400, total: 4000, best: 'Lowest price, Fastest delivery' })
+    expect(rows[1]).toMatchObject({ supplier: 'B', lead: '', moq: '', total: '', best: '' })
+    expect(COMPARE_EXPORT_COLUMNS.map((c) => c[0])).toEqual(Object.keys(rows[0]))
+    expect(comparisonExportRows(null)).toEqual([])
+  })
+})

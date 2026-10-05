@@ -78,3 +78,18 @@ describe('channels', () => {
     expect(filterShareRows(extra, { access: 'view' })).toHaveLength(4)
   })
 })
+
+describe('reportSharingView row actions', () => {
+  it('offers copy, open, manage and revoke with honest reasons', async () => {
+    const { shareRowActions } = await import('../lib/reportSharingView')
+    const ok = shareRowActions({ id: 1, token: 'rpt_x', status: 'active' })
+    expect(ok.map((a) => a.key)).toEqual(['copy', 'open', 'manage', 'revoke'])
+    expect(ok.every((a) => !a.disabled)).toBe(true)
+    const expired = shareRowActions({ id: 2, token: 'rpt_y', status: 'expired' })
+    expect(expired.find((a) => a.key === 'open')).toMatchObject({ disabled: true, reason: expect.stringMatching(/expired/) })
+    expect(expired.find((a) => a.key === 'copy').disabled).toBe(false)
+    const noToken = shareRowActions({ id: 3, status: 'active' })
+    expect(noToken.find((a) => a.key === 'copy').disabled).toBe(true)
+    expect(noToken.find((a) => a.key === 'revoke')).toMatchObject({ disabled: false, danger: true })
+  })
+})

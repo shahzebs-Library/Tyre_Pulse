@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Clock, Mail, Plus, Edit2, Trash2, Eye, EyeOff,
@@ -6,7 +6,7 @@ import {
   CheckCircle, XCircle, AlertCircle, AlertTriangle, ChevronDown, X, Save, Lock,
   Package, Building2, Download, Loader2, FileSpreadsheet, CalendarClock, ShieldCheck,
   LayoutTemplate, Send, History, RefreshCw, CalendarDays, ChevronRight, Play, PauseCircle, List, LayoutGrid,
-  Users, Search, CircleDot, Wrench,
+  Users, Search, CircleDot, Wrench, Copy,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { aiOps } from '../lib/api'
@@ -36,6 +36,7 @@ import { Card, CardState, Trend, Donut, KitTable, ViewAll, fmtInt } from '../com
 import {
   moduleOf, MODULE_OPTIONS, scheduleLabel, scheduleStatus, STATUS_META, healthSegments, registryKpis,
   deliveryTrend, recentActivity, latestRunBySchedule, filterRegistry, recipientOptions, recipientInitials,
+  scheduleToForm, duplicateScheduleForm,
 } from '../lib/scheduledReportsView'
 import './ScheduledReports.css'
 
@@ -414,6 +415,42 @@ function SelectField({ value, onChange, children, id }) {
         {children}
       </select>
       <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-secondary)] pointer-events-none" />
+    </div>
+  )
+}
+
+// Split "New Schedule" button. Every menu item maps to a real action on this
+// page: create, duplicate the one selected schedule, or open Report Center.
+// There is no schedule import in the app, so no import item is offered.
+function NewScheduleSplit({ label, onCreate, duplicateSource, selectedCount, onDuplicate, onReportCenter }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return undefined
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey) }
+  }, [open])
+  const dupHint = selectedCount === 0 ? 'Tick one schedule in the registry first'
+    : selectedCount > 1 ? 'Select exactly one schedule to duplicate' : `Copy "${duplicateSource?.name || 'schedule'}" as a paused schedule`
+  const pick = (fn) => { setOpen(false); fn() }
+  return (
+    <div className="sr-split" ref={ref}>
+      <button type="button" className="cc-btn-primary sr-new sr-split-main" onClick={onCreate}><Plus size={16} aria-hidden="true" /> {label}</button>
+      <button type="button" className="cc-btn-primary sr-split-caret" aria-haspopup="menu" aria-expanded={open} aria-label="More schedule actions" onClick={() => setOpen((v) => !v)}>
+        <ChevronDown size={16} aria-hidden="true" />
+      </button>
+      {open && (
+        <div className="sr-split-menu" role="menu">
+          <button type="button" role="menuitem" onClick={() => pick(onCreate)}><Plus size={14} aria-hidden="true" /><span><b>New schedule</b><small>Start from a blank schedule</small></span></button>
+          <button type="button" role="menuitem" disabled={!duplicateSource} onClick={() => pick(() => onDuplicate(duplicateSource))}>
+            <Copy size={14} aria-hidden="true" /><span><b>Duplicate selected</b><small>{dupHint}</small></span>
+          </button>
+          <button type="button" role="menuitem" onClick={() => pick(onReportCenter)}><LayoutTemplate size={14} aria-hidden="true" /><span><b>Open Report Center</b><small>Browse every report you can schedule</small></span></button>
+        </div>
+      )}
     </div>
   )
 }
@@ -911,23 +948,15 @@ export default function ScheduledReports() {
 
   const openEdit = (s) => {
     setEditTarget(s)
-    setForm({
-      name: s.name || '',
-      report_type: s.report_type || 'executive',
-      frequency: s.frequency || 'weekly',
-      day_of_week: s.day_of_week ?? 1,
-      day_of_month: s.day_of_month ?? 1,
-      time_of_day: s.time_of_day ?? '07:00',
-      run_at: s.run_at ? new Date(s.run_at).toISOString().slice(0, 16) : '',
-      start_date: s.start_date ?? '',
-      period: s.period ?? 'last_30',
-      period_from: s.period_from ?? '',
-      period_to: s.period_to ?? '',
-      output_formats: s.output_formats?.length ? s.output_formats : ['pdf'],
-      recipients_raw: (s.recipients ?? []).join('\n'),
-      active: s.active ?? true,
-    })
+    setForm(scheduleToForm(s))
     setFormError(''); setModalOpen(true)
+  }
+
+  // Duplicate: same editor, prefilled from the source schedule, saved as a NEW
+  // schedule (editTarget stays null). The copy starts paused.
+  const openDuplicate = (s) => {
+    if (!s) return
+    setEditTarget(null); setForm(duplicateScheduleForm(s)); setFormError(''); setModalOpen(true)
   }
 
   const closeModal = () => { setModalOpen(false); setEditTarget(null); setFormError('') }
@@ -1322,7 +1351,14 @@ export default function ScheduledReports() {
           </div>
           <button type="button" className="cc-btn-ghost" onClick={() => exportSchedules('excel')} disabled={loading || filtered.length === 0}><FileSpreadsheet size={15} aria-hidden="true" /> Excel</button>
           <button type="button" className="cc-icon-btn" onClick={() => exportSchedules('pdf')} disabled={loading || filtered.length === 0} aria-label="Export schedules to PDF" title="Export to PDF"><FileText size={14} /></button>
-          <button type="button" className="cc-btn-primary sr-new" onClick={openCreate}><Plus size={16} aria-hidden="true" /> {td('schedreports.header.newSchedule', 'New Schedule')}</button>
+          <NewScheduleSplit
+            label={td('schedreports.header.newSchedule', 'New Schedule')}
+            onCreate={openCreate}
+            duplicateSource={selectedRows.length === 1 ? selectedRows[0] : null}
+            selectedCount={selectedRows.length}
+            onDuplicate={openDuplicate}
+            onReportCenter={() => navigate('/report-center')}
+          />
         </div>
       </header>
 

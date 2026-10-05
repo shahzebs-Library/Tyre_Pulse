@@ -126,3 +126,9 @@ html.light .rs-clock { background: #fff; }
 .rs-page .cc-et th:first-child, .rs-page .cc-et td:first-child { padding-left: 14px; width: 30px; }
 .rs-page .rs-chip { padding: 3px 7px; font-size: 11.5px; }
 .rs-page .rs-name { min-width: 175px; }
+
+/* Row actions + split Share Report button */
+.rs-row-actions { display: inline-flex; align-items: center; gap: 6px; }
+.rs-split { display: inline-flex; align-items: stretch; }
+.rs-split-main { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.rs-split-caret { display: inline-flex; align-items: center; padding: 0 10px; border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 1px solid rgba(255, 255, 255, 0.35); }

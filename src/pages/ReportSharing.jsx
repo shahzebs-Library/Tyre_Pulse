@@ -25,7 +25,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Share2, Tv, Eye, Radio, Palette, AlertCircle, LayoutGrid, Link2, RefreshCw, Clock,
   FileSpreadsheet, FileText, ChevronRight, Search, X, List, Copy, ExternalLink,
-  Ban, Lock, Info, Check, Calendar, Plus, Users, Globe, Wrench, UserCheck,
+  Ban, Lock, Info, Check, Calendar, Plus, Users, Globe, Wrench, UserCheck, MoreVertical,
 } from 'lucide-react'
 import {
   enrichShares, summarizeShares, shareFindings, exportRows,
@@ -34,6 +34,7 @@ import {
 import {
   BOARD_TYPES, EXPIRY_FILTERS, STATUS_TONE, filterShareRows, shareKpis, expiryText,
   viewsByLink, shareDetail, CHANNELS, CHANNEL_META, ACCESS_LEVELS, channelOf, channelCounts, viewsByChannel,
+  shareRowActions,
 } from '../lib/reportSharingView'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import ReportSharesPanel from '../components/display/ReportSharesPanel'
@@ -44,6 +45,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { toUserMessage } from '../lib/safeError'
 import { safeHref } from '../lib/safeUrl'
 import Modal from '../components/ui/Modal'
+import ActionMenu from '../components/ui/ActionMenu'
 import { Card, CardState, Kpi, KitTable, Donut, fmtInt } from '../components/commandCenter/kit'
 import './ReportSharing.css'
 
@@ -187,6 +189,31 @@ export default function ReportSharing() {
     }
   }
 
+  // Row menu actions (Copy / Open / Manage / Revoke) for any listed link.
+  const copyRowLink = async (row) => {
+    const url = urlFor(row)
+    if (!url) return
+    try {
+      await navigator.clipboard.writeText(url)
+      setNotice({ tone: 'good', text: `Link for ${row.name || 'the shared report'} copied.` })
+    } catch {
+      setNotice({ tone: 'bad', text: 'Could not copy the link. Open the link and copy it from the address bar.' })
+    }
+  }
+  const rowMenuItems = (row) => shareRowActions(row).map((a) => ({
+    label: a.label,
+    icon: a.key === 'copy' ? Copy : a.key === 'open' ? ExternalLink : a.key === 'manage' ? Users : Ban,
+    disabled: a.disabled,
+    title: a.reason || undefined,
+    danger: a.danger,
+    onClick: () => {
+      if (a.key === 'copy') copyRowLink(row)
+      else if (a.key === 'open') { const href = safeHref(urlFor(row)); if (href) window.open(href, '_blank', 'noopener,noreferrer') }
+      else if (a.key === 'manage') setSelectedId(row.id)
+      else { setRevokeError(null); setRevokeTarget(row) }
+    },
+  }))
+
   const confirmRevoke = async () => {
     if (!revokeTarget) return
     setRevoking(true); setRevokeError(null)
@@ -245,8 +272,11 @@ export default function ReportSharing() {
     {
       key: 'actions', header: 'Actions', sortable: false,
       cell: (r) => (
-        <button type="button" className={`cc-btn-ghost rs-manage ${selected?.id === r.id ? 'is-on' : ''}`}
+        <span className="rs-row-actions">
+          <button type="button" className={`cc-btn-ghost rs-manage ${selected?.id === r.id ? 'is-on' : ''}`}
             onClick={(e) => { e.stopPropagation(); setSelectedId(r.id) }}>Manage</button>
+          <ActionMenu bare caret={false} label="" icon={MoreVertical} ariaLabel={`More actions for ${r.name || 'shared report'}`} className="cc-icon-btn" items={rowMenuItems(r)} />
+        </span>
       ),
     },
   ], [selected, picked, allPicked]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -289,7 +319,15 @@ export default function ReportSharing() {
           </div>
           <button type="button" className="cc-icon-btn" onClick={load} aria-label="Refresh" title="Refresh"><RefreshCw size={14} className={loading ? 'animate-spin' : ''} /></button>
           <button type="button" className="cc-btn-ghost" onClick={() => navigate('/display')}><Radio size={15} aria-hidden="true" /> TV Display Mode</button>
-          <button type="button" className="cc-btn-primary" onClick={scrollToManager}><Plus size={15} aria-hidden="true" /> Share Report</button>
+          <span className="rs-split">
+            <button type="button" className="cc-btn-primary rs-split-main" onClick={scrollToManager}><Plus size={15} aria-hidden="true" /> Share Report</button>
+            <ActionMenu bare label="" ariaLabel="More sharing actions" className="cc-btn-primary rs-split-caret" items={[
+              { label: 'New share link', icon: Plus, onClick: scrollToManager },
+              { label: 'Copy selected link', icon: Copy, disabled: !shareUrl, title: shareUrl ? undefined : 'Select a link first', onClick: () => selected && copyRowLink(selected) },
+              { label: pickedRows.length ? `Export ${pickedRows.length} selected (Excel)` : 'Export shown links (Excel)', icon: FileSpreadsheet, disabled: exporting || visible.length === 0, onClick: () => runExport('xlsx') },
+              { label: 'Open TV Display Mode', icon: Tv, onClick: () => navigate('/display') },
+            ]} />
+          </span>
         </div>
       </header>
 

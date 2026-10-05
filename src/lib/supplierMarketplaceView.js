@@ -319,3 +319,28 @@ export function samePriceBook(listings = [], r) {
     .sort((a, b) => a.currency.localeCompare(b.currency) || a.price - b.price)
 }
 
+
+/** Columns for exporting the RFQ comparison (key, header). */
+export const COMPARE_EXPORT_COLUMNS = Object.freeze([
+  ['supplier', 'Supplier'], ['product', 'Item / specification'], ['price', 'Unit price'], ['currency', 'Currency'],
+  ['lead', 'Lead time (days)'], ['moq', 'MOQ'], ['total', 'Value at MOQ'], ['best', 'Best in currency'],
+])
+
+/**
+ * Flat rows for exporting the side-by-side comparison. Blank figures stay
+ * blank (never 0); "Best in currency" repeats the on-screen marks, which are
+ * only ever judged within one currency.
+ */
+export function comparisonExportRows(comparison) {
+  const rows = Array.isArray(comparison?.rows) ? comparison.rows : []
+  return rows.map((r) => ({
+    supplier: r.supplier,
+    product: r.product,
+    price: r.price ?? '',
+    currency: r.currency || '',
+    lead: r.lead ?? '',
+    moq: r.moq ?? '',
+    total: r.total ?? '',
+    best: [r.cheapest ? 'Lowest price' : '', r.fastest ? 'Fastest delivery' : ''].filter(Boolean).join(', '),
+  }))
+}

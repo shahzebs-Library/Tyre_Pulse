@@ -22,6 +22,7 @@ import {
   Gauge, Smartphone, StickyNote, UserCheck, Download, FileStack,
 } from 'lucide-react'
 import Modal from '../components/ui/Modal'
+import ActionMenu from '../components/ui/ActionMenu'
 import { Card, CardState, Kpi, PageHero, Tabs, KitTable, fmtInt } from '../components/commandCenter/kit'
 import { useSettings } from '../contexts/SettingsContext'
 import {
@@ -36,6 +37,7 @@ import {
   buildCoachingQueue, filterQueue, driverHistory, scoreTrend, latestSession, driverTotals,
   coachingHeadline, behaviourTrends, RISK_LABEL, RISK_OPTIONS, phasedTrend, coachOptions,
   workWeek, weekLabel,
+  exportScopes,
 } from '../lib/driverCoachingView'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
@@ -212,9 +214,9 @@ export default function DriverCoaching() {
     [enriched, statusFilter, periodFilter, bandFilter, search],
   )
 
-  const doExport = async (format) => {
-    const shaped = coachingExport(filtered)
-    const file = reportFileName('Driver Coaching', activeCountry !== 'All' ? activeCountry : '')
+  const doExport = async (format, rows = filtered, scopeName = '') => {
+    const shaped = coachingExport(rows)
+    const file = reportFileName('Driver Coaching', scopeName, activeCountry !== 'All' ? activeCountry : '')
     try {
       if (format === 'pdf') await exportToPdf(shaped.rows, shaped.keys.map((k, i) => ({ key: k, header: shaped.headers[i] })), 'Driver Coaching', file, 'landscape')
       else await exportToExcel(shaped.rows, shaped.keys, shaped.headers, file)
@@ -599,7 +601,11 @@ export default function DriverCoaching() {
                 <button type="button" className="cc-btn-ghost" disabled={!selected || notProvisioned} onClick={() => openCreate({ driver_name: selected?.driver_name || '', coaching_status: 'scheduled' })}><CalendarDays size={14} aria-hidden="true" /> Schedule session</button>
                 <button type="button" className="cc-btn-ghost" disabled={!session || statusBusy || notProvisioned} onClick={() => setCoachingStatus(session, 'recommended')}><GraduationCap size={14} aria-hidden="true" /> Assign follow-up</button>
                 <button type="button" className="cc-btn-ghost" disabled={!session || statusBusy || notProvisioned} onClick={() => setCoachingStatus(session, 'completed')}><CheckCircle2 size={14} aria-hidden="true" /> Mark completed</button>
-                <button type="button" className="cc-btn-ghost" disabled={!filtered.length} onClick={() => doExport('excel')}><Download size={14} aria-hidden="true" /> Export</button>
+                <ActionMenu bare label="Export" icon={Download} className="cc-btn-ghost" ariaLabel="Export coaching records"
+                  items={exportScopes({ shown: filtered, history, driverName: selected?.driver_name }).flatMap((sc) => [
+                    { label: `${sc.label}: Excel`, icon: FileSpreadsheet, disabled: sc.disabled, onClick: () => doExport('excel', sc.rows, sc.key === 'driver' ? selected?.driver_name : '') },
+                    { label: `${sc.label}: PDF`, icon: FileText, disabled: sc.disabled, onClick: () => doExport('pdf', sc.rows, sc.key === 'driver' ? selected?.driver_name : '') },
+                  ])} />
               </div>
             </div>
           </div>

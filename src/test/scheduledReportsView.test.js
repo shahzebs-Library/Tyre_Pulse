@@ -97,3 +97,22 @@ describe('recipientInitials', () => {
     expect(recipientInitials('__@x.com')).toBe('?')
   })
 })
+
+describe('scheduledReportsView duplicate', () => {
+  const src = { id: 'x', name: 'Weekly Tyre', report_type: 'kpi', frequency: 'weekly', day_of_week: 3, time_of_day: '08:00', output_formats: ['pdf', 'excel'], recipients: ['a@x.com', 'b@x.com'], active: true, period: 'last_7' }
+  it('maps a schedule to the editor form', async () => {
+    const { scheduleToForm } = await import('../lib/scheduledReportsView')
+    const f = scheduleToForm(src)
+    expect(f).toMatchObject({ name: 'Weekly Tyre', report_type: 'kpi', day_of_week: 3, recipients_raw: 'a@x.com\nb@x.com', active: true, period: 'last_7' })
+    expect(f.output_formats).not.toBe(src.output_formats)
+    expect(scheduleToForm({})).toMatchObject({ report_type: 'executive', output_formats: ['pdf'], active: true })
+  })
+  it('duplicate is named as a copy and starts paused', async () => {
+    const { duplicateScheduleForm } = await import('../lib/scheduledReportsView')
+    const f = duplicateScheduleForm(src)
+    expect(f.name).toBe('Weekly Tyre (copy)')
+    expect(f.active).toBe(false)
+    expect(f.recipients_raw).toBe('a@x.com\nb@x.com')
+    expect(duplicateScheduleForm({ frequency: 'once', run_at: '2026-01-01T10:00:00Z' })).toMatchObject({ name: 'Schedule (copy)', run_at: '' })
+  })
+})

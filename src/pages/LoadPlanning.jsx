@@ -19,6 +19,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   Truck, Gauge, AlertTriangle, ClipboardList, CheckCircle2, Search, MapPin, ChevronRight,
   FileSpreadsheet, FileText, Plus, Pencil, Trash2, RefreshCw, Loader2, ShieldCheck, Send, Scale, UserCheck, Milestone, X,
+  Sparkles, Check,
 } from 'lucide-react'
 import Modal from '../components/ui/Modal'
 import { Card, CardState, Kpi, KitTable, Tabs, VehicleThumb, ViewAll, fmtInt, useCard } from '../components/commandCenter/kit'
@@ -32,7 +33,7 @@ import {
 import {
   fleetAvailability, depotOptions, filterVehicles, headlineTiles, constraintCards, bandDistribution,
   weekTonnage, capacityOutlook, PLAN_TABS, planTabMatch, planTabCounts, placeOptions, plannerStatus,
-  fleetIndex, routeLegs,
+  fleetIndex, routeLegs, suggestAssignments, assignmentPatch,
 } from '../lib/loadPlanningView'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
@@ -153,6 +154,10 @@ export default function LoadPlanning() {
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [dispatching, setDispatching] = useState(false)
+  // Optimize plan: proposal computed when the modal opens; per-row apply state.
+  const [optOpen, setOptOpen] = useState(false)
+  const [optApplied, setOptApplied] = useState({}) // planId -> 'ok' | error text
+  const [optBusy, setOptBusy] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true); setError(''); setNotProvisioned(false)
@@ -281,6 +286,24 @@ export default function LoadPlanning() {
     if (failed.length) setActionError(`${dispatchable.length - failed.length} of ${dispatchable.length} plans dispatched. ${failed.join('; ')}`)
     setSelection({})
     setDispatching(false)
+    await load()
+  }
+
+  // -- Optimize plan --------------------------------------------------------
+  // Suggestions are worked out from the real Available vehicles and the stored
+  // plans; nothing is written until the planner accepts a row or Apply all.
+  const proposal = useMemo(() => suggestAssignments(allPlans, availability.available), [allPlans, availability])
+  const openOptimize = () => { setOptApplied({}); setOptOpen(true) }
+  const applySuggestions = async (list) => {
+    const todo = list.filter((sg) => optApplied[String(sg.plan.id)] !== 'ok')
+    if (!todo.length) return
+    setOptBusy(true); setActionError('')
+    const next = {}
+    for (const sg of todo) {
+      try { await updateLoadPlan(sg.plan.id, assignmentPatch(sg)); next[String(sg.plan.id)] = 'ok' } catch (err) { next[String(sg.plan.id)] = toUserMessage(err, 'Not saved') }
+    }
+    setOptApplied((prev) => ({ ...prev, ...next }))
+    setOptBusy(false)
     await load()
   }
 
@@ -463,8 +486,9 @@ export default function LoadPlanning() {
             </div>
             <h3 className="lp-sub-title">Quick actions</h3>
             <div className="lp-actions">
-              <button type="button" className="cc-btn-ghost" onClick={() => openCreate({ reference: nextReference() })} disabled={notProvisioned}><Plus size={14} aria-hidden="true" /> Plan load</button>
+              <button type="button" className="cc-btn-primary lp-optimize" onClick={openOptimize} disabled={!known || !fleet.data} title={!fleet.data ? 'Waiting for the fleet register' : undefined}><Sparkles size={14} aria-hidden="true" /> Optimize plan</button>
               <button type="button" className="cc-btn-ghost" onClick={() => selectedPlans.length === 1 && openEdit(selectedPlans[0])} disabled={selectedPlans.length !== 1} title={selectedPlans.length !== 1 ? 'Tick exactly one plan in the register' : undefined}><Truck size={14} aria-hidden="true" /> Reassign vehicle</button>
+              <button type="button" className="cc-btn-ghost" onClick={() => openCreate({ reference: nextReference() })} disabled={notProvisioned}><Plus size={14} aria-hidden="true" /> Plan load</button>
               <button type="button" className="cc-btn-ghost" onClick={() => runExport('excel')} disabled={!known || !filtered.length}><FileSpreadsheet size={14} aria-hidden="true" /> Export plan</button>
               <button type="button" className="cc-btn-ghost" onClick={() => setTab('risk')} disabled={!known}><ShieldCheck size={14} aria-hidden="true" /> Validate compliance</button>
               <button type="button" className="cc-btn-primary" onClick={dispatchSelected} disabled={!dispatchable.length || dispatching} title={!dispatchable.length ? 'Tick plans that are draft, planned or loaded' : undefined}>
@@ -587,6 +611,71 @@ export default function LoadPlanning() {
             </div>
           )}
         </form>
+      </Modal>
+
+      <Modal
+        open={optOpen}
+        onClose={() => { if (!optBusy) setOptOpen(false) }}
+        title="Optimize plan"
+        size="xl"
+        footer={(
+          <>
+            <button type="button" onClick={() => setOptOpen(false)} className="btn-secondary text-sm min-h-[44px]" disabled={optBusy}>Close</button>
+            <button type="button" onClick={() => applySuggestions(proposal.suggestions)} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60"
+              disabled={optBusy || !proposal.suggestions.some((sg) => optApplied[String(sg.plan.id)] !== 'ok')}>
+              {optBusy ? <><Loader2 size={14} className="animate-spin" aria-hidden="true" /> Applying</> : <><Check size={14} aria-hidden="true" /> Apply all ({fmtInt(proposal.suggestions.filter((sg) => optApplied[String(sg.plan.id)] !== 'ok').length)})</>}
+            </button>
+          </>
+        )}
+      >
+        <div className="cc lp-opt">
+          <p className="lp-opt-lead">
+            For each unassigned planned load, the smallest available vehicle whose rated payload carries the cargo weight, with no vehicle booked twice on the same date.
+            Rated payload comes from the fleet register capacity when it states a weight, otherwise from the vehicle&apos;s own past load plans.
+            {' '}{fmtInt(proposal.ratedCandidates)} of {fmtInt(proposal.candidates)} available vehicles have a known rated payload.
+          </p>
+          {proposal.suggestions.length === 0 && proposal.unplaced.length === 0 && (
+            <div className="cc-empty"><div>No unassigned planned loads. Every open plan already has a vehicle.</div></div>
+          )}
+          {proposal.suggestions.length > 0 && (
+            <>
+              <h4 className="lp-sub-title">Suggested assignments ({fmtInt(proposal.suggestions.length)})</h4>
+              <KitTable
+                compact
+                rows={proposal.suggestions}
+                getRowId={(sg) => String(sg.plan.id)}
+                columns={[
+                  { key: 'ref', header: 'Load', sortable: false, cell: (sg) => <span className="cc-strong">{sg.plan.reference || 'N/A'}<span className="cc-sub">{sg.plan.plan_date || ''}{sg.plan.origin || sg.plan.destination ? ` | ${sg.plan.origin || 'N/A'} to ${sg.plan.destination || 'N/A'}` : ''}</span></span> },
+                  { key: 'w', header: 'Cargo', numeric: true, sortable: false, cell: (sg) => fmtT(sg.plan.cargo_weight_kg) },
+                  { key: 'v', header: 'Vehicle', sortable: false, cell: (sg) => <span className="cc-strong">{sg.vehicle.asset_no}<span className="cc-sub">{sg.vehicle.vehicle_type || 'Type not recorded'}{sg.vehicle.site ? ` | ${sg.vehicle.site}` : ''}</span></span> },
+                  { key: 'p', header: 'Rated payload', numeric: true, sortable: false, cell: (sg) => <span>{fmtT(sg.payloadKg)}<span className="cc-sub">from {sg.payloadSource}</span></span> },
+                  { key: 'u', header: 'Fill', numeric: true, sortable: false, cell: (sg) => <span>{sg.utilPct}%{sg.volumeUnchecked && <span className="cc-sub">Volume not checked</span>}</span> },
+                  { key: 'a', header: '', sortable: false, align: 'right', cell: (sg) => {
+                    const st = optApplied[String(sg.plan.id)]
+                    if (st === 'ok') return <span className="cc-pill good">Applied</span>
+                    return (
+                      <span className="lp-opt-act">
+                        {st && <span className="cc-pill bad" title={st}>Not saved</span>}
+                        <button type="button" className="cc-btn" onClick={() => applySuggestions([sg])} disabled={optBusy}><Check size={13} aria-hidden="true" /> Accept</button>
+                      </span>
+                    )
+                  } },
+                ]}
+              />
+            </>
+          )}
+          {proposal.unplaced.length > 0 && (
+            <>
+              <h4 className="lp-sub-title">No suggestion ({fmtInt(proposal.unplaced.length)})</h4>
+              <ul className="lp-opt-list">
+                {proposal.unplaced.map((u) => (
+                  <li key={String(u.plan.id)}><b>{u.plan.reference || 'Plan'}</b><span>{u.reason}</span></li>
+                ))}
+              </ul>
+            </>
+          )}
+          <p className="lp-foot">Accepting assigns the vehicle, stores its rated payload when the plan has none, and moves a draft to planned. Nothing else on the plan changes.</p>
+        </div>
       </Modal>
 
       <Modal

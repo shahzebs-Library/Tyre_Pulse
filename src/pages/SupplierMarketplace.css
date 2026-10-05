@@ -126,3 +126,4 @@ html.light .sm-head-img::after { background: linear-gradient(0deg, var(--cc-hero
   .sm-filterbar-more { max-width: none; }
   .sm-qty input { width: 100%; }
 }
+.sm-card-sel { min-width: 0; padding-top: 6px; padding-bottom: 6px; font-size: 12px; }

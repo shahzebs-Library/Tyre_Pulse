@@ -250,3 +250,18 @@ export function weekLabel(days = []) {
   const year = b.iso.slice(0, 4)
   return a.month === b.month ? `${a.day} to ${b.day} ${b.month} ${year}` : `${a.day} ${a.month} to ${b.day} ${b.month} ${year}`
 }
+
+/**
+ * Export choices for the action bar's Export menu: every shown scorecard, or
+ * just the selected driver's own history. Each scope carries its row count and
+ * is disabled when it would export nothing.
+ */
+export function exportScopes({ shown = [], history = [], driverName = '' } = {}) {
+  const s = Array.isArray(shown) ? shown : []
+  const h = Array.isArray(history) ? history : []
+  const name = String(driverName || '').trim()
+  return [
+    { key: 'shown', label: `Shown scorecards (${s.length})`, rows: s, disabled: s.length === 0 },
+    { key: 'driver', label: name ? `${name} history (${h.length})` : 'Selected driver history', rows: h, disabled: !name || h.length === 0 },
+  ]
+}

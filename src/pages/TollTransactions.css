@@ -128,3 +128,8 @@ input.tt-input, textarea.tt-input { background-image: none; cursor: text; }
   .tt-date .cc-select { min-width: 0; width: 100%; }
   .tt-push { margin-left: 0; }
 }
+
+/* Ledger tick-boxes + bulk bar */
+.tt-check { width: 15px; height: 15px; accent-color: var(--cc-green-strong); cursor: pointer; }
+.tt-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; padding: 8px 10px; border-radius: 10px; background: var(--cc-green-tint); border: 1px solid var(--cc-border); }
+.tt-bulk b { font-size: 13px; color: var(--cc-ink); margin-right: 4px; }

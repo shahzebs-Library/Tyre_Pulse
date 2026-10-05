@@ -208,3 +208,18 @@ export function shareDetail(row, { now, pageLabels = {} } = {}) {
     timing: `${rotate}, data refresh every ${refresh}`,
   }
 }
+
+/**
+ * Row "more actions" menu for one share link. Every entry is a real action on
+ * the page; an entry that cannot run says why instead of disappearing.
+ */
+export function shareRowActions(row) {
+  const hasToken = !!row?.token
+  const expired = row?.status === 'expired'
+  return [
+    { key: 'copy', label: 'Copy link', disabled: !hasToken, reason: hasToken ? null : 'This share has no link token' },
+    { key: 'open', label: 'Open board', disabled: !hasToken || expired, reason: !hasToken ? 'This share has no link token' : expired ? 'The link has expired and no longer opens' : null },
+    { key: 'manage', label: 'Manage', disabled: false, reason: null },
+    { key: 'revoke', label: 'Revoke link', disabled: !row?.id, reason: row?.id ? null : 'Unknown share', danger: true },
+  ]
+}

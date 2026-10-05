@@ -37,6 +37,7 @@ import {
 import {
   reconBucket, reconOverview, routeSpend, dailyTrend, tagSummary, previousWindow, changePct,
   selectionNav, statusPill, mapImportRows, IMPORT_TEMPLATE_HEADERS, RECON_META, CARD_PERIODS, periodRows,
+  checkedRows, toggleAllChecked, bulkStatusPlan,
 } from '../lib/tollTransactionsView'
 import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation } from '../lib/api/_client'
@@ -117,9 +118,9 @@ export default function TollTransactions() {
   const [tab, setTab] = useState('ledger')
   const [detailTab, setDetailTab] = useState('timeline')
   const [selectedId, setSelectedId] = useState(null)
-  const [routePeriod, setRoutePeriod] = useState('all')
+  const [routePeriod, setRoutePeriod] = useState('quarter')
   const [dailyDays, setDailyDays] = useState(30)
-  const [statusPeriod, setStatusPeriod] = useState('all')
+  const [statusPeriod, setStatusPeriod] = useState('quarter')
   const [exportOpen, setExportOpen] = useState(false)
 
   const [showModal, setShowModal] = useState(false)
@@ -130,6 +131,10 @@ export default function TollTransactions() {
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [busyId, setBusyId] = useState(null)
+  // Ledger tick-boxes (bulk actions). Separate from the detail-panel selection.
+  const [checked, setChecked] = useState(() => new Set())
+  const [bulkConfirm, setBulkConfirm] = useState(null) // { status, plan }
+  const [bulkBusy, setBulkBusy] = useState(false)
 
   const [importOpen, setImportOpen] = useState(false)
   const [importing, setImporting] = useState(false)
@@ -280,6 +285,41 @@ export default function TollTransactions() {
     }
   }, [load])
 
+  // ── Bulk (ticked ledger rows) ────────────────────────────────────────────
+  const ticked = useMemo(() => checkedRows(ledgerRows, checked), [ledgerRows, checked])
+  const allTicked = ledgerRows.length > 0 && ticked.length === ledgerRows.length
+  const toggleTick = useCallback((id) => setChecked((prev) => {
+    const n = new Set(prev); const k = String(id)
+    if (n.has(k)) n.delete(k); else n.add(k)
+    return n
+  }), [])
+  const toggleAllTicks = useCallback(() => setChecked((prev) => toggleAllChecked(ledgerRows, prev)), [ledgerRows])
+  const exportTicked = async (kind) => {
+    if (!ticked.length) return
+    try {
+      const u = await loadExportUtils()
+      const rowsOut = tollExportRows(ticked)
+      const base = u.reportFileName('TyrePulse Toll Transactions Selected', activeCountry !== 'All' ? activeCountry : null, u.reportDateLabel())
+      if (kind === 'pdf') await u.exportToPdf(rowsOut, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Toll Transactions (selected)', base, 'landscape')
+      else await u.exportToExcel(rowsOut, EXPORT_COLS, EXPORT_HEADERS, base)
+    } catch (e) { setActionError(toUserMessage(e, 'Export failed. Please try again.')) }
+  }
+  const askBulkStatus = (status) => setBulkConfirm({ status, plan: bulkStatusPlan(ticked, status) })
+  const runBulkStatus = useCallback(async () => {
+    if (!bulkConfirm) return
+    const { status, plan } = bulkConfirm
+    setBulkBusy(true); setActionError(''); setNotice('')
+    let ok = 0; let failed = 0
+    for (const r of plan.toChange) {
+      try { await updateTollTransaction(r.id, { status }); ok += 1 } catch { failed += 1 }
+    }
+    const word = status === 'disputed' ? 'disputed' : 'reconciled'
+    if (ok) setNotice(`${fmtInt(ok)} transaction${ok === 1 ? '' : 's'} marked ${word}${plan.unchanged ? `; ${fmtInt(plan.unchanged)} already ${word}` : ''}.`)
+    if (failed) setActionError(`${fmtInt(failed)} transaction${failed === 1 ? '' : 's'} could not be updated. Please try again.`)
+    setBulkBusy(false); setBulkConfirm(null); setChecked(new Set())
+    await load()
+  }, [bulkConfirm, load])
+
   // ── Import ───────────────────────────────────────────────────────────────
   const onImportFile = async (e) => {
     const f = e.target.files?.[0]
@@ -321,6 +361,9 @@ export default function TollTransactions() {
 
   // ── Ledger columns ───────────────────────────────────────────────────────
   const columns = useMemo(() => [
+    { key: 'select', sortable: false, width: 40,
+      header: <input type="checkbox" className="tt-check" aria-label="Select all visible transactions" checked={allTicked} onChange={toggleAllTicks} disabled={!ledgerRows.length} />,
+      cell: (r) => <span onClick={(e) => e.stopPropagation()} role="presentation"><input type="checkbox" className="tt-check" aria-label={`Select toll for ${r.asset_no || 'asset'}`} checked={checked.has(String(r.id))} onChange={() => toggleTick(r.id)} /></span> },
     { key: 'when', header: 'Date and time', sortValue: (r) => r.transaction_at || '', cell: (r) => <span className="tt-nowrap">{fmtDateTime(r.transaction_at)}</span> },
     { key: 'asset', header: 'Asset', sortValue: (r) => r.asset_no || '', cell: (r) => <span className="tt-asset"><Truck size={13} aria-hidden="true" />{r.asset_no || 'N/A'}</span> },
     { key: 'route', header: 'Route', sortValue: (r) => r.highway || '', cell: (r) => (r.highway ? <span className="tt-route">{r.highway}</span> : NOT_RECORDED) },
@@ -340,7 +383,7 @@ export default function TollTransactions() {
         <button type="button" className="cc-icon-btn tt-danger" onClick={(e) => { e.stopPropagation(); setConfirmDelete(r) }} aria-label={`Delete toll for ${r.asset_no || 'asset'}`} title="Delete"><Trash2 size={13} /></button>
       </span>
     ) },
-  ], [openEdit])
+  ], [openEdit, checked, allTicked, ledgerRows.length, toggleTick, toggleAllTicks])
 
   const assetColumns = useMemo(() => [
     { key: 'asset_no', header: 'Asset' },
@@ -580,6 +623,16 @@ export default function TollTransactions() {
                 </label>
               </span>
             )}>
+            {ticked.length > 0 && (
+              <div className="tt-bulk" role="region" aria-label="Bulk actions">
+                <b>{fmtInt(ticked.length)} selected</b>
+                <button type="button" className="cc-btn-ghost" onClick={() => exportTicked('excel')}><FileSpreadsheet size={13} aria-hidden="true" /> Excel</button>
+                <button type="button" className="cc-btn-ghost" onClick={() => exportTicked('pdf')}><FileText size={13} aria-hidden="true" /> PDF</button>
+                <button type="button" className="cc-btn-ghost" onClick={() => askBulkStatus('reconciled')}><CheckCircle2 size={13} aria-hidden="true" /> Mark reconciled</button>
+                <button type="button" className="cc-btn-ghost tt-danger-btn" onClick={() => askBulkStatus('disputed')}><AlertTriangle size={13} aria-hidden="true" /> Mark disputed</button>
+                <button type="button" className="cc-btn-ghost" onClick={() => setChecked(new Set())}><X size={13} aria-hidden="true" /> Clear</button>
+              </div>
+            )}
             <KitTable
               columns={columns}
               rows={ledgerRows}
@@ -804,6 +857,30 @@ export default function TollTransactions() {
       </Modal>
 
       {/* Delete confirm */}
+      <Modal
+        open={!!bulkConfirm}
+        onClose={() => { if (!bulkBusy) setBulkConfirm(null) }}
+        title={bulkConfirm?.status === 'disputed' ? 'Mark selected as disputed?' : 'Mark selected as reconciled?'}
+        size="sm"
+        footer={
+          <div className="tt-modal-foot">
+            <button type="button" onClick={() => setBulkConfirm(null)} className="cc-btn-ghost" disabled={bulkBusy}>Cancel</button>
+            <button type="button" onClick={runBulkStatus} className={`cc-btn-primary${bulkConfirm?.status === 'disputed' ? ' tt-danger-fill' : ''}`} disabled={bulkBusy || !bulkConfirm?.plan.toChange.length}>
+              {bulkBusy ? 'Updating...' : `Update ${fmtInt(bulkConfirm?.plan.toChange.length || 0)}`}
+            </button>
+          </div>
+        }
+      >
+        {bulkConfirm && (
+          <p className="tt-confirm">
+            {bulkConfirm.plan.toChange.length
+              ? `${fmtInt(bulkConfirm.plan.toChange.length)} of the ${fmtInt(bulkConfirm.plan.total)} selected transaction${bulkConfirm.plan.total === 1 ? '' : 's'} will change status to ${bulkConfirm.status}.`
+              : `All ${fmtInt(bulkConfirm.plan.total)} selected transaction${bulkConfirm.plan.total === 1 ? ' is' : 's are'} already ${bulkConfirm.status}. Nothing to change.`}
+            {bulkConfirm.plan.unchanged > 0 && bulkConfirm.plan.toChange.length > 0 ? ` ${fmtInt(bulkConfirm.plan.unchanged)} already ${bulkConfirm.status} will be left as they are.` : ''}
+          </p>
+        )}
+      </Modal>
+
       <Modal
         open={!!confirmDelete}
         onClose={() => { if (!deleting) setConfirmDelete(null) }}

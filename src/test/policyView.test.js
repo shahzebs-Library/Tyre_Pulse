@@ -91,3 +91,17 @@ describe('mockup helpers', () => {
     expect(pickedPolicies(rows, null)).toEqual([])
   })
 })
+
+describe('policyView row actions', () => {
+  it('disables the status move the policy is already in', async () => {
+    const { policyRowActions } = await import('../lib/policyView')
+    const active = Object.fromEntries(policyRowActions({ status: 'active' }).map((a) => [a.key, a]))
+    expect(active.publish.disabled).toBe(true)
+    expect(active.review.disabled).toBe(false)
+    expect(active.delete.danger).toBe(true)
+    const review = Object.fromEntries(policyRowActions({ status: 'under_review' }).map((a) => [a.key, a]))
+    expect(review.review).toMatchObject({ disabled: true, reason: 'Already under review' })
+    expect(review.publish.disabled).toBe(false)
+    expect(policyRowActions({}).map((a) => a.key)).toEqual(['view', 'edit', 'publish', 'review', 'archive', 'export', 'delete'])
+  })
+})

@@ -77,3 +77,15 @@ describe('driverCoachingView', () => {
     expect(weekLabel(wk)).toBe('5 to 9 Oct 2026')
   })
 })
+
+describe('driverCoachingView export scopes', () => {
+  it('offers shown rows and the selected driver history with counts', async () => {
+    const { exportScopes } = await import('../lib/driverCoachingView')
+    const sc = exportScopes({ shown: [1, 2, 3], history: [1], driverName: 'Ali Khan' })
+    expect(sc.map((s) => s.label)).toEqual(['Shown scorecards (3)', 'Ali Khan history (1)'])
+    expect(sc.every((s) => !s.disabled)).toBe(true)
+    const none = exportScopes({ shown: [], history: [] })
+    expect(none[0].disabled).toBe(true)
+    expect(none[1]).toMatchObject({ label: 'Selected driver history', disabled: true })
+  })
+})

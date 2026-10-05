@@ -63,7 +63,6 @@
 .lp-sub-title { margin: 14px 0 8px; font-size: 13.5px; font-weight: 700; color: var(--cc-ink); }
 .lp-actions { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
 .lp-actions button { justify-content: center; grid-column: span 2; font-size: 11.5px; padding-left: 4px; padding-right: 4px; white-space: nowrap; gap: 5px; }
-.lp-actions button:nth-child(-n+2) { grid-column: span 3; }
 .lp-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Charts */
@@ -137,7 +136,15 @@
   .lp-cons-grid { grid-template-columns: minmax(0, 1fr); }
   .lp-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lp-actions button, .lp-actions button:nth-child(-n+2) { grid-column: auto; }
-  .lp-actions button:last-child { grid-column: span 2; }
   .lp-map-legend { position: static; margin: 10px; }
   .lp-map { flex-direction: column; }
 }
+
+/* Optimize plan */
+.cc.lp-opt { gap: 6px; }
+.lp-opt-lead { margin: 0; font-size: 13px; color: var(--cc-ink-2); line-height: 1.5; }
+.lp-opt-act { display: inline-flex; align-items: center; gap: 6px; }
+.lp-opt-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lp-opt-list li { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--cc-inner-border); background: var(--cc-inner); font-size: 12.5px; }
+.lp-opt-list b { color: var(--cc-ink); }
+.lp-opt-list span { color: var(--cc-ink-2); }

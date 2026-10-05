@@ -17,8 +17,10 @@ import {
   ClipboardList, CalendarClock, Users, CheckCircle2, AlertTriangle, Plus, Pencil,
   Trash2, Search, X, FileSpreadsheet, FileText, Loader2, Save, Send, RotateCcw,
   Hash, GitBranch, ShieldCheck, Globe, Calendar, Paperclip, BookOpen, History, Info, ExternalLink,
+  MoreHorizontal, Archive, Eye,
 } from 'lucide-react'
 import Modal from '../components/ui/Modal'
+import ActionMenu from '../components/ui/ActionMenu'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import {
   Card, CardState, Kpi, PageHero, Donut, fmtInt,
@@ -36,11 +38,14 @@ import {
   policyCode, statusLabel, statusTone, ownerInitials, policyGaps, policyKpis,
   reviewDistance, optionsOf, regionLabel, versionLog, policyDetailRows, categoryBreakdown,
   ACK_LEGEND, pickedPolicies,
+  policyRowActions,
 } from '../lib/policyView'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation } from '../lib/api/_client'
 import './PolicyManagement.css'
+
+const ROW_ICON = { view: Eye, edit: Pencil, publish: Send, review: RotateCcw, archive: Archive, export: FileText, delete: Trash2 }
 
 const BAND_TONE = { expired: 'bad', expiring: 'warn', valid: 'good', none: 'muted' }
 const BAND_LABEL = { expired: 'Expired', expiring: 'Expiring', valid: 'Valid', none: 'No date' }
@@ -420,8 +425,23 @@ export default function PolicyManagement() {
       key: 'actions', header: 'Actions', sortable: false,
       cell: (r) => (
         <span className="pm-actions">
-          <button type="button" className="cc-icon-btn" onClick={(e) => { e.stopPropagation(); openEdit(r) }} aria-label={`Edit ${r.title || 'policy'}`} title="Edit"><Pencil size={14} /></button>
-          <button type="button" className="cc-icon-btn pm-danger" onClick={(e) => { e.stopPropagation(); setDeleting(r) }} aria-label={`Delete ${r.title || 'policy'}`} title="Delete"><Trash2 size={14} /></button>
+          <ActionMenu bare caret={false} label="" icon={MoreHorizontal} ariaLabel={`More actions for ${r.title || 'policy'}`} className="cc-icon-btn"
+            items={policyRowActions(r).map((a) => ({
+              label: a.label,
+              icon: ROW_ICON[a.key],
+              disabled: a.disabled || (!!statusBusy && ['publish', 'review', 'archive'].includes(a.key)),
+              title: a.reason || undefined,
+              danger: a.danger,
+              onClick: () => {
+                if (a.key === 'view') setViewing(r)
+                else if (a.key === 'edit') openEdit(r)
+                else if (a.key === 'publish') setStatus(r, 'active')
+                else if (a.key === 'review') setStatus(r, 'under_review')
+                else if (a.key === 'archive') setStatus(r, 'archived')
+                else if (a.key === 'export') exportOne(r)
+                else setDeleting(r)
+              },
+            }))} />
         </span>
       ),
     },

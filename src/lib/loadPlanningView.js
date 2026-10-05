@@ -274,3 +274,142 @@ export function routeLegs(plans = [], limit = 6) {
   }
   return [...m.values()].sort((a, b) => b.plans - a.plans || a.origin.localeCompare(b.origin)).slice(0, limit)
 }
+
+// ── Optimize plan (assignment suggestions) ─────────────────────────────────
+
+/**
+ * Rated payload in kg stated on the fleet register's free-text `capacity`
+ * column, ONLY when it is written as a weight ("26T", "6 TON", "26000 KG").
+ * Volume figures (litres, m3) are ignored because a tank size says nothing
+ * about how much weight the vehicle may carry. Returns null when no weight is
+ * stated.
+ */
+export function capacityKg(capacity) {
+  const s = lower(capacity)
+  if (!s) return null
+  const kg = s.match(/(\d+(?:\.\d+)?)\s*(?:kg|kgs|kilo(?:gram)?s?)\b/)
+  if (kg) { const n = Number(kg[1]); return n > 0 ? Math.round(n) : null }
+  const t = s.match(/(\d+(?:\.\d+)?)\s*(?:t|tn|ton|tons|tonne|tonnes|mt)\b/)
+  if (t) { const n = Number(t[1]); return n > 0 ? Math.round(n * 1000) : null }
+  return null
+}
+
+/**
+ * Rated payload of one vehicle and where it came from:
+ *   1. the fleet register capacity when it states a weight ("register"),
+ *   2. else the newest `max_payload_kg` recorded on that vehicle's own load
+ *      plans ("plan history").
+ * Null when neither source holds a figure.
+ */
+export function vehiclePayload(vehicle, plans = []) {
+  const reg = capacityKg(vehicle?.capacity)
+  if (reg != null) return { kg: reg, source: 'register' }
+  const k = assetKey(vehicle?.asset_no)
+  if (!k) return { kg: null, source: null }
+  let best = null
+  for (const p of Array.isArray(plans) ? plans : []) {
+    if (assetKey(p?.asset_no) !== k) continue
+    const kg = toFiniteNumber(p?.max_payload_kg)
+    if (kg == null || kg <= 0) continue
+    const when = text(p?.updated_at) || text(p?.plan_date) || ''
+    if (!best || when > best.when) best = { kg, when }
+  }
+  return best ? { kg: best.kg, source: 'plan history' } : { kg: null, source: null }
+}
+
+/** Open plans that still need a vehicle: no asset and not loaded/dispatched/delivered. */
+export function unassignedPlans(plans = []) {
+  return (Array.isArray(plans) ? plans : []).filter((p) => {
+    const s = lower(p?.status)
+    return !text(p?.asset_no) && (s === '' || s === 'draft' || s === 'planned')
+  })
+}
+
+const fmtT = (kg) => `${(Math.round(kg / 100) / 10).toLocaleString('en-GB')} t`
+
+/**
+ * Suggest a vehicle for every unassigned planned load.
+ *
+ *   - candidates are the vehicles passed in (the page passes the Available
+ *     list: active, not broken down, not on a loaded/dispatched plan);
+ *   - a vehicle qualifies only when its rated payload is known and is at least
+ *     the load's cargo weight;
+ *   - best fit: the smallest payload that carries the load, so big vehicles stay
+ *     free for heavy loads; heaviest loads are placed first;
+ *   - no double booking: a vehicle already on another open plan for that date,
+ *     or suggested for another load that date, is skipped.
+ *
+ * Returns { suggestions, unplaced, candidates } where each unplaced row says why
+ * no suggestion could be made. Nothing is guessed: a load without a weight or a
+ * date is reported, never forced onto a vehicle.
+ */
+export function suggestAssignments(plans = [], vehicles = []) {
+  const all = Array.isArray(plans) ? plans : []
+  const booked = new Map() // day -> Set(assetKey)
+  const book = (day, k) => { if (!booked.has(day)) booked.set(day, new Set()); booked.get(day).add(k) }
+  for (const p of all) {
+    const k = assetKey(p?.asset_no); const d = planDay(p)
+    if (k && d && lower(p?.status) !== 'delivered') book(d, k)
+  }
+
+  const candidates = (Array.isArray(vehicles) ? vehicles : [])
+    .map((v) => ({ vehicle: v, key: assetKey(v?.asset_no), ...vehiclePayload(v, all) }))
+    .filter((c) => c.key)
+  const rated = candidates.filter((c) => c.kg != null)
+    .sort((a, b) => a.kg - b.kg || text(a.vehicle.asset_no).localeCompare(text(b.vehicle.asset_no), undefined, { numeric: true }))
+
+  const open = unassignedPlans(all)
+  const unplaced = []
+  const ready = []
+  for (const p of open) {
+    const w = toFiniteNumber(p?.cargo_weight_kg)
+    if (w == null || w <= 0) { unplaced.push({ plan: p, reason: 'No cargo weight recorded, so no payload can be matched.' }); continue }
+    if (!planDay(p)) { unplaced.push({ plan: p, reason: 'No plan date, so double booking cannot be checked.' }); continue }
+    ready.push({ plan: p, weight: w, day: planDay(p) })
+  }
+  ready.sort((a, b) => b.weight - a.weight || text(a.plan.reference).localeCompare(text(b.plan.reference)))
+
+  const suggestions = []
+  for (const r of ready) {
+    if (!rated.length) {
+      unplaced.push({ plan: r.plan, reason: candidates.length ? 'No available vehicle has a known rated payload.' : 'No vehicle is available.' })
+      continue
+    }
+    const busy = booked.get(r.day) || new Set()
+    const fits = rated.filter((c) => c.kg >= r.weight)
+    const pick = fits.find((c) => !busy.has(c.key))
+    if (!pick) {
+      unplaced.push({
+        plan: r.plan,
+        reason: fits.length
+          ? `Every vehicle that can carry ${fmtT(r.weight)} is already booked on ${r.day}.`
+          : `No available vehicle is rated for ${fmtT(r.weight)} (largest known payload ${fmtT(rated[rated.length - 1].kg)}).`,
+      })
+      continue
+    }
+    book(r.day, pick.key)
+    suggestions.push({
+      plan: r.plan,
+      vehicle: pick.vehicle,
+      payloadKg: pick.kg,
+      payloadSource: pick.source,
+      slackKg: pick.kg - r.weight,
+      utilPct: Math.round((r.weight / pick.kg) * 100),
+      volumeUnchecked: toFiniteNumber(r.plan?.volume_m3) != null,
+    })
+  }
+  return { suggestions, unplaced, candidates: candidates.length, ratedCandidates: rated.length }
+}
+
+/**
+ * Patch written when a suggestion is accepted: the asset, its rated payload when
+ * the plan holds none, and draft promoted to planned (an assigned plan is no
+ * longer a draft). Other fields are untouched.
+ */
+export function assignmentPatch(s) {
+  const patch = { asset_no: text(s?.vehicle?.asset_no) }
+  if (toFiniteNumber(s?.plan?.max_payload_kg) == null && s?.payloadKg != null) patch.max_payload_kg = s.payloadKg
+  const st = lower(s?.plan?.status)
+  if (st === '' || st === 'draft') patch.status = 'planned'
+  return patch
+}

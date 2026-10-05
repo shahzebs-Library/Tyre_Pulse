@@ -36,6 +36,7 @@ import {
   PERIODS, LEAD_BUCKETS, quotedCount, RATING_FLOORS, NOT_RECORDED, inPeriod, listingOptions, applyListingExtras,
   stockState, headlineTiles, moneyLines, sourcingFunnel, recentRfqs, compareListings,
   listingDetailFields, supplierProfile, samePriceBook, RFQ_TONE,
+  COMPARE_EXPORT_COLUMNS, comparisonExportRows,
 } from '../lib/supplierMarketplaceView'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { isMissingRelation } from '../lib/api/_client'
@@ -168,6 +169,20 @@ export default function SupplierMarketplace() {
       const name = reportFileName(isL ? 'TyrePulse Supplier Listings' : 'TyrePulse Buyer RFQs', countryTag, reportDateLabel())
       if (kind === 'excel') await exportToExcel(rows, cols.map((c) => c[0]), cols.map((c) => c[1]), name)
       else await exportToPdf(rows, cols.map(([key, header]) => ({ key, header })), isL ? 'Supplier Listings' : 'Buyer RFQs', name, 'landscape')
+    } catch (err) {
+      setActionError(toUserMessage(err, 'Could not export. Try again.'))
+    }
+  }
+
+  const exportComparison = async (kind) => {
+    setActionError('')
+    try {
+      const rows = comparisonExportRows(comparison)
+      if (!rows.length) return
+      const cols = COMPARE_EXPORT_COLUMNS
+      const name = reportFileName('TyrePulse Supplier Comparison', countryTag, reportDateLabel())
+      if (kind === 'excel') await exportToExcel(rows, cols.map((c) => c[0]), cols.map((c) => c[1]), name)
+      else await exportToPdf(rows, cols.map(([key, header]) => ({ key, header })), 'Supplier Comparison', name, 'landscape')
     } catch (err) {
       setActionError(toUserMessage(err, 'Could not export. Try again.'))
     }
@@ -491,6 +506,8 @@ export default function SupplierMarketplace() {
             <div className="sm-compare-foot">
               <span className="sm-foot">{ticked.length} supplier{ticked.length === 1 ? '' : 's'} selected</span>
               <span className="sm-push" />
+              <button type="button" className="cc-icon-btn" onClick={() => exportComparison('excel')} disabled={!comparison.rows.length} aria-label="Export comparison to Excel" title="Export comparison to Excel"><FileSpreadsheet size={14} /></button>
+              <button type="button" className="cc-icon-btn" onClick={() => exportComparison('pdf')} disabled={!comparison.rows.length} aria-label="Export comparison to PDF" title="Export comparison to PDF"><FileText size={14} /></button>
               <button type="button" className="cc-btn-ghost" onClick={() => setSelection({})} disabled={!ticked.length}>Clear</button>
               <button type="button" className="cc-btn-primary" onClick={awardSupplier} disabled={!ticked.length || notProvisioned}><Trophy size={14} aria-hidden="true" /> Award supplier</button>
             </div>
@@ -501,7 +518,7 @@ export default function SupplierMarketplace() {
           className="sm-funnel"
           title="Sourcing funnel"
           sub="RFQ progression and supplier response funnel."
-          action={<span className="cc-pill muted">{PERIODS.find((p) => p.key === period)?.label}</span>}
+          action={<select className="cc-select sm-card-sel" aria-label="Sourcing funnel period" value={period} onChange={(e) => setPeriod(e.target.value)}>{PERIODS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</select>}
         >
           <CardState state={cardState} lines={4}>
             <ol className="sm-funnel-list">

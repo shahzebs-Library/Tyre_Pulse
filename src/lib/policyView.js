@@ -169,3 +169,20 @@ export function pickedPolicies(rows, picked) {
   const set = picked instanceof Set ? picked : new Set(picked || [])
   return (Array.isArray(rows) ? rows : []).filter((r) => set.has(r.id))
 }
+
+/**
+ * Row "more actions" menu for one policy. Status moves are offered only when
+ * they change something (publishing an active policy is a no-op).
+ */
+export function policyRowActions(row) {
+  const s = String(row?.status || '').toLowerCase()
+  return [
+    { key: 'view', label: 'View full policy', disabled: false },
+    { key: 'edit', label: 'Edit policy', disabled: false },
+    { key: 'publish', label: 'Publish (set active)', disabled: s === 'active', reason: s === 'active' ? 'Already active' : null },
+    { key: 'review', label: 'Request review', disabled: s === 'under_review', reason: s === 'under_review' ? 'Already under review' : null },
+    { key: 'archive', label: 'Archive', disabled: s === 'archived', reason: s === 'archived' ? 'Already archived' : null },
+    { key: 'export', label: 'Export PDF', disabled: false },
+    { key: 'delete', label: 'Delete', disabled: false, danger: true },
+  ]
+}

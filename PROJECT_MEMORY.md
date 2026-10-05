@@ -5,7 +5,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
-# ⚑ SESSION 2026-10-05 (part 9) — 16 MORE WEB PAGES REBUILT TO OWNER MOCKUPS (web only, LOCAL commits, NOT pushed).
+# ⚑ SESSION 2026-10-05 (part 9) — 16 MORE WEB PAGES REBUILT TO OWNER MOCKUPS (web only). Owner said push 2026-10-05.
 - PR #378 merged as eeb72cc3 (prod READY verified). Then the owner sent a 16-screen zip (scratchpad mz/): Scheduled Reports,
   Dashboard Builder, TV Display (DisplayDashboard), Smart Analytics (AiCommandCenter), Knowledge Base, Report Center, Report
   Sharing, Policy Management, Driver Coaching, Fuel Theft Alerts, Daily Ops, Trip Replay, Fuel Efficiency, Toll Transactions,
@@ -20,6 +20,9 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   x dark/light x 1440/390 = 0 overflow, 0 crash.
 - Agent suggestions not done: tablePaginationClassification test only accepts <EnterpriseTable (not <KitTable); kit Donut needs
   literal hex (SVG attr); displayCharts.js dark-only; Accidents has no deep link to its Report Builder tab.
+- OWNER DECISIONS (2026-10-05): empty-table pages are ACCEPTED as-is, they fill when data lands (do not seed or fake);
+  MAPS deferred, there is no maps API key yet (do not add a map provider until the owner supplies one); COST work on these
+  pages is NOT to be done (owner ruling). Do not re-raise these three as open items.
 
 # ⚑ SESSION 2026-10-05 (part 8) — MOCKUP GAPS CLOSED: AUDIT TRAIL IP/DEVICE/SEVERITY, WORKSHOP DATE RANGE, CPK SITE FILTER.
 - All owner mockup sets are built: 54 console pages (all on the console kit; old pages live as tabs), the 10 module

@@ -84,3 +84,36 @@ describe('fuelEfficiencyView', () => {
     expect(filterVehicles(vehicles, { status: 'unmeasured' }).map((v) => v.asset_no)).toEqual(['A4'])
   })
 })
+
+describe('fuelEfficiencyView: asset type and trend window', () => {
+  it('groups modelled penalty by asset type, unmeasured dropped, missing type labelled', async () => {
+    const { typePenalty, assetTypeOptions } = await import('../lib/fuelEfficiencyView')
+    const types = { A1: 'Mixer', A2: 'Mixer', A3: 'Pump' }
+    const out = typePenalty(vehicles, (a) => types[a])
+    expect(out.map((e) => e.type)).toEqual(expect.arrayContaining(['Mixer', 'Pump']))
+    expect(out.find((e) => e.type === 'Type not recorded')).toBeUndefined()
+    expect(out[0].penaltyPct).toBeLessThanOrEqual(out[out.length - 1].penaltyPct)
+    expect(assetTypeOptions(vehicles, (a) => types[a])).toEqual(['Mixer', 'Pump'])
+  })
+  it('slices the last n months', async () => {
+    const { trendWindow } = await import('../lib/fuelEfficiencyView')
+    const t = Array.from({ length: 12 }, (_, i) => ({ key: i }))
+    expect(trendWindow(t, 6).map((x) => x.key)).toEqual([6, 7, 8, 9, 10, 11])
+    expect(trendWindow(t, 99)).toHaveLength(12)
+    expect(trendWindow([], 6)).toEqual([])
+  })
+})
+
+describe('fuelEfficiencyView: compare periods', () => {
+  it('weights by measured tyres and returns null when a side is empty', async () => {
+    const { comparePeriods } = await import('../lib/fuelEfficiencyView')
+    const t = Array.from({ length: 12 }, (_, i) => ({ key: i, measured: i < 6 ? 2 : 1, avgPenaltyPct: i < 6 ? 2 : 1 }))
+    const c = comparePeriods(t, 6)
+    expect(c.current.penaltyPct).toBe(1)
+    expect(c.previous.penaltyPct).toBe(2)
+    expect(c.changePct).toBe(-50)
+    const empty = comparePeriods(t.map((m, i) => (i < 6 ? { ...m, measured: 0, avgPenaltyPct: null } : m)), 6)
+    expect(empty.previous.penaltyPct).toBeNull()
+    expect(empty.changePct).toBeNull()
+  })
+})

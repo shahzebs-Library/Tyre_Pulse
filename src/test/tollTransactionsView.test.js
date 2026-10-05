@@ -92,3 +92,13 @@ describe('tollTransactionsView', () => {
     expect(out).toEqual([{ asset_no: 'TM9', amount: 1250.5, currency: 'SAR', plaza_name: 'North' }])
   })
 })
+
+describe('tollTransactionsView: card periods', () => {
+  it('filters rows to this month / this quarter, all keeps everything', async () => {
+    const { periodRows } = await import('../lib/tollTransactionsView')
+    expect(periodRows(rows, 'month', NOW).map((r) => r.id)).toEqual([1, 2, 4])
+    expect(periodRows(rows, 'quarter', NOW).map((r) => r.id)).toEqual([1, 2, 4])
+    expect(periodRows(rows, 'all', NOW)).toHaveLength(5)
+    expect(periodRows(rows, 'quarter', Date.UTC(2026, 8, 15)).map((r) => r.id)).toEqual([3])
+  })
+})

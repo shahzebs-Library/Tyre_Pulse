@@ -178,3 +178,54 @@ export function filterVehicles(vehicles = [], { search = '', site = '', status =
     return true
   })
 }
+
+/**
+ * Modelled fuel penalty per asset type (the mockup's "by Site / Asset Type"
+ * card on its asset-type view). `typeOf(asset_no)` returns the vehicle type;
+ * an asset with no type groups under "Type not recorded". Lower is better.
+ */
+export function typePenalty(vehicles = [], typeOf = () => null) {
+  const m = new Map()
+  for (const v of Array.isArray(vehicles) ? vehicles : []) {
+    const t = String(typeOf(v.asset_no) || '').trim() || 'Type not recorded'
+    const e = m.get(t) || { type: t, vehicles: 0, penalties: [] }
+    e.vehicles += 1
+    if (v.penaltyPct != null) e.penalties.push(v.penaltyPct)
+    m.set(t, e)
+  }
+  return [...m.values()]
+    .map((e) => ({ type: e.type, vehicles: e.vehicles, measuredVehicles: e.penalties.length, penaltyPct: round(mean(e.penalties), 2) }))
+    .filter((e) => e.penaltyPct != null)
+    .sort((a, b) => a.penaltyPct - b.penaltyPct || a.type.localeCompare(b.type))
+}
+
+/** Last `months` entries of a monthly trend (the trend card's range picker). */
+export function trendWindow(trend = [], months = 6) {
+  const list = Array.isArray(trend) ? trend : []
+  const n = Math.max(1, Math.min(list.length, Number(months) || list.length))
+  return list.slice(list.length - n)
+}
+
+/** Distinct, sorted asset types for the details table filter. */
+export function assetTypeOptions(vehicles = [], typeOf = () => null) {
+  return [...new Set((Array.isArray(vehicles) ? vehicles : []).map((v) => String(typeOf(v.asset_no) || '').trim()).filter(Boolean))].sort()
+}
+
+/**
+ * Compare Periods: the measured-weighted modelled penalty of the last `months`
+ * against the `months` before them, from a 12-month trend. null where a side
+ * has no measured tyre, so no change is ever invented.
+ */
+export function comparePeriods(trend = [], months = 6) {
+  const list = Array.isArray(trend) ? trend : []
+  const n = Math.max(1, Math.min(Math.floor(list.length / 2), Number(months) || 1))
+  const side = (arr) => {
+    let w = 0; let s = 0
+    for (const m of arr) if (m.avgPenaltyPct != null && m.measured > 0) { w += m.measured; s += m.avgPenaltyPct * m.measured }
+    return { measured: w, penaltyPct: w ? round(s / w, 2) : null }
+  }
+  const current = side(list.slice(list.length - n))
+  const previous = side(list.slice(list.length - 2 * n, list.length - n))
+  const changePct = current.penaltyPct != null && previous.penaltyPct ? round(((current.penaltyPct - previous.penaltyPct) / previous.penaltyPct) * 100, 1) : null
+  return { months: n, current, previous, changePct }
+}

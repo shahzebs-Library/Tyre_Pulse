@@ -213,3 +213,22 @@ export function mapImportRows(sheetRows = []) {
 }
 
 export const IMPORT_TEMPLATE_HEADERS = ['Asset', 'Driver', 'Tag ID', 'Plaza', 'Highway', 'Transaction at', 'Amount', 'Currency', 'Payment method', 'Status', 'Notes']
+
+/** Card period pickers: rows whose transaction falls in the period ending at `now`. */
+export const CARD_PERIODS = [
+  { key: 'month', label: 'This month' },
+  { key: 'quarter', label: 'This quarter' },
+  { key: 'all', label: 'All in scope' },
+]
+export function periodRows(rows = [], period = 'all', now = Date.now()) {
+  const list = Array.isArray(rows) ? rows : []
+  if (period !== 'month' && period !== 'quarter') return list
+  const d = new Date(now instanceof Date ? now.getTime() : Number(now))
+  if (Number.isNaN(d.getTime())) return list
+  const startMonth = period === 'month' ? d.getUTCMonth() : d.getUTCMonth() - (d.getUTCMonth() % 3)
+  const start = Date.UTC(d.getUTCFullYear(), startMonth, 1)
+  return list.filter((r) => {
+    const t = r?.transaction_at ? new Date(r.transaction_at).getTime() : NaN
+    return Number.isFinite(t) && t >= start && t <= d.getTime()
+  })
+}

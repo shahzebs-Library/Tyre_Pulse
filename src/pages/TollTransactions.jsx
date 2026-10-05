@@ -21,10 +21,10 @@ import {
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import {
   Receipt, Coins, AlertTriangle, Clock, Tag, Search, X, FileSpreadsheet, FileText,
-  Plus, Pencil, Trash2, RotateCcw, Upload, ChevronLeft, ChevronRight, CheckCircle2, MapPin, Truck,
+  Plus, Pencil, Trash2, RotateCcw, Upload, ChevronLeft, ChevronRight, CheckCircle2, MapPin, Truck, Download,
 } from 'lucide-react'
 import Modal from '../components/ui/Modal'
-import { Card, CardState, Kpi, Tabs, KitTable, Donut, fmtInt } from '../components/commandCenter/kit'
+import { Card, CardState, Kpi, Tabs, KitTable, Donut, ViewAll, fmtInt } from '../components/commandCenter/kit'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listTollTransactions, createTollTransaction, updateTollTransaction, deleteTollTransaction,
@@ -36,7 +36,7 @@ import {
 } from '../lib/tollTransactionsAnalytics'
 import {
   reconBucket, reconOverview, routeSpend, dailyTrend, tagSummary, previousWindow, changePct,
-  selectionNav, statusPill, mapImportRows, IMPORT_TEMPLATE_HEADERS, RECON_META,
+  selectionNav, statusPill, mapImportRows, IMPORT_TEMPLATE_HEADERS, RECON_META, CARD_PERIODS, periodRows,
 } from '../lib/tollTransactionsView'
 import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation } from '../lib/api/_client'
@@ -117,6 +117,10 @@ export default function TollTransactions() {
   const [tab, setTab] = useState('ledger')
   const [detailTab, setDetailTab] = useState('timeline')
   const [selectedId, setSelectedId] = useState(null)
+  const [routePeriod, setRoutePeriod] = useState('all')
+  const [dailyDays, setDailyDays] = useState(30)
+  const [statusPeriod, setStatusPeriod] = useState('all')
+  const [exportOpen, setExportOpen] = useState(false)
 
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -161,8 +165,9 @@ export default function TollTransactions() {
   const summary = useMemo(() => summarizeTollAnalytics(filtered, { now: Date.now() }), [filtered])
   const recon = useMemo(() => reconOverview(filtered), [filtered])
   const tags = useMemo(() => tagSummary(filtered), [filtered])
-  const routes = useMemo(() => routeSpend(filtered, summary.currency), [filtered, summary.currency])
-  const daily = useMemo(() => dailyTrend(filtered, { now: Date.now(), to: toDate, currency: summary.currency }), [filtered, toDate, summary.currency])
+  const routes = useMemo(() => routeSpend(periodRows(filtered, routePeriod, Date.now()), summary.currency), [filtered, routePeriod, summary.currency])
+  const daily = useMemo(() => dailyTrend(filtered, { now: Date.now(), to: toDate, days: dailyDays, currency: summary.currency }), [filtered, toDate, dailyDays, summary.currency])
+  const statusRecon = useMemo(() => reconOverview(periodRows(filtered, statusPeriod, Date.now())), [filtered, statusPeriod])
   const trend = useMemo(() => monthlyTrend(filtered, { now: Date.now(), currency: summary.currency }), [filtered, summary.currency])
   const methods = useMemo(() => methodMix(filtered), [filtered])
   const rollups = useMemo(() => rollupsForCurrency(filtered, summary.currency), [filtered, summary.currency])
@@ -328,6 +333,7 @@ export default function TollTransactions() {
     { key: 'plaza', header: 'Toll point', sortValue: (r) => r.plaza_name || '', cell: (r) => r.plaza_name || NOT_RECORDED },
     { key: 'amount', header: 'Amount', numeric: true, sortValue: (r) => (r.amount == null || r.amount === '' ? null : Number(r.amount)), cell: (r) => <b className="tt-amount">{fmtAmount(r.amount, currencyOf(r))}</b> },
     { key: 'status', header: 'Status', sortValue: (r) => reconBucket(r), cell: (r) => { const p = statusPill(r); return <span className={`cc-pill ${p.tone}`}>{p.label}</span> } },
+    { key: 'trip', header: 'Linked trip', sortable: false, cell: () => <span className="cc-na" title="Toll charges are not linked to trips.">Not recorded</span> },
     { key: 'actions', header: '', sortable: false, align: 'right', cell: (r) => (
       <span className="tt-row-actions">
         <button type="button" className="cc-icon-btn" onClick={(e) => { e.stopPropagation(); openEdit(r) }} aria-label={`Edit toll for ${r.asset_no || 'asset'}`} title="Edit"><Pencil size={13} /></button>
@@ -364,31 +370,44 @@ export default function TollTransactions() {
     <div className="cc tt-page">
       {/* Header */}
       <div className="tt-head">
+        <div className="tt-hero-img cc-hero-dark" style={{ backgroundImage: 'url(/dashboard/hero-toll-dark.webp)' }} aria-hidden="true" />
+        <div className="tt-hero-img cc-hero-light" style={{ backgroundImage: 'url(/dashboard/hero-toll-light.webp)' }} aria-hidden="true" />
         <div className="tt-head-copy">
           <div className="tt-crumb">Monitoring and Logistics <ChevronRight size={12} aria-hidden="true" /> <span>Toll Transactions</span></div>
           <h1>Toll Transactions</h1>
-          <p>Track toll-road charges, reconciliation, disputes and per-asset cost visibility across your fleet.</p>
+          <p>Track toll-road charges, reconciliation, disputes and trip-level cost visibility across your fleet.</p>
         </div>
         <div className="tt-head-actions">
           <div className="tt-btn-row">
             <button type="button" className="cc-btn-ghost" onClick={() => { setImportResult(null); setImportError(''); setImportOpen(true) }} disabled={notProvisioned || !loaded}>
               <Upload size={14} aria-hidden="true" /> Import
             </button>
-            <button type="button" className="cc-btn-ghost" onClick={doExcel} disabled={!ledgerRows.length}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
-            <button type="button" className="cc-icon-btn" onClick={doPdf} disabled={!ledgerRows.length} aria-label="Export to PDF" title="Export to PDF"><FileText size={14} /></button>
+            <span className="tt-menu-wrap">
+              <button type="button" className="cc-btn-ghost" aria-haspopup="menu" aria-expanded={exportOpen} onClick={() => setExportOpen((v) => !v)} disabled={!ledgerRows.length}>
+                <Download size={14} aria-hidden="true" /> Export
+              </button>
+              {exportOpen && (
+                <span className="tt-menu" role="menu">
+                  <button type="button" role="menuitem" onClick={() => { setExportOpen(false); doExcel() }}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
+                  <button type="button" role="menuitem" onClick={() => { setExportOpen(false); doPdf() }}><FileText size={14} aria-hidden="true" /> PDF</button>
+                </span>
+              )}
+            </span>
             <button type="button" className="cc-btn-primary" onClick={openCreate} disabled={notProvisioned || !loaded}><Plus size={14} aria-hidden="true" /> Add Transaction</button>
           </div>
           <div className="tt-btn-row">
-            <label className="tt-date"><span>From</span><input type="date" className="cc-select" value={fromDate} max={toDate || undefined} onChange={(e) => setFromDate(e.target.value)} /></label>
-            <label className="tt-date"><span>To</span><input type="date" className="cc-select" value={toDate} min={fromDate || undefined} onChange={(e) => setToDate(e.target.value)} /></label>
-            {countryOptions.length > 1 && (
-              <label className="tt-date"><span>Country</span>
-                <select className="cc-select" value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)}>
-                  <option value="">All countries</option>
-                  {countryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </label>
-            )}
+            <span className="tt-range" role="group" aria-label="Date range">
+              <input type="date" className="cc-select" aria-label="From date" value={fromDate} max={toDate || undefined} onChange={(e) => setFromDate(e.target.value)} />
+              <span aria-hidden="true">to</span>
+              <input type="date" className="cc-select" aria-label="To date" value={toDate} min={fromDate || undefined} onChange={(e) => setToDate(e.target.value)} />
+            </span>
+            <select className="cc-select tt-head-sel" aria-label="Country" value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)}>
+              <option value="">All Countries</option>
+              {countryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select className="cc-select tt-head-sel" aria-label="Operator" disabled title="Toll operator is not recorded on toll transactions.">
+              <option>All Operators</option>
+            </select>
           </div>
         </div>
       </div>
@@ -475,7 +494,8 @@ export default function TollTransactions() {
 
       {/* Route / daily / status */}
       <div className="tt-row3">
-        <Card title="Toll spend by route" sub={summary.currency ? `Top routes by spend (${summary.currency})` : 'Top routes by spend'}>
+        <Card title="Toll Spend by Route" sub={summary.currency ? `Top routes by toll spend (${summary.currency})` : 'Top routes by toll spend'}
+          action={<select className="cc-select tt-card-sel" aria-label="Route period" value={routePeriod} onChange={(e) => setRoutePeriod(e.target.value)}>{CARD_PERIODS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</select>}>
           <CardState state={loadState} empty={
             summary.mixedCurrency ? 'Routes are ranked in one currency. Pick a currency above.'
               : routes.length === 0 ? 'No priced toll charges in this scope yet.' : null
@@ -492,15 +512,17 @@ export default function TollTransactions() {
           </CardState>
         </Card>
 
-        <Card title={daily.metric === 'amount' ? 'Daily toll spend trend' : 'Daily transactions trend'} sub={`Last 30 days${toDate ? ` to ${toDate}` : ''}${daily.metric === 'count' && summary.mixedCurrency ? ', counted because currencies are mixed' : ''}`}>
-          <CardState state={loadState} empty={!daily.any ? 'No toll transactions in the last 30 days of this scope.' : null}>
-            <div className="tt-chart" role="img" aria-label="Daily toll trend for the last 30 days"><Line data={dailyData} options={CHART_OPTS} /></div>
+        <Card title={daily.metric === 'amount' ? 'Daily Toll Spend Trend' : 'Daily Transactions Trend'} sub={`Last ${dailyDays} days${toDate ? ` to ${toDate}` : ''}${daily.metric === 'count' && summary.mixedCurrency ? ', counted because currencies are mixed' : ''}`}
+          action={<select className="cc-select tt-card-sel" aria-label="Trend window" value={dailyDays} onChange={(e) => setDailyDays(Number(e.target.value))}><option value={7}>Last 7 Days</option><option value={30}>Last 30 Days</option><option value={90}>Last 90 Days</option></select>}>
+          <CardState state={loadState} empty={!daily.any ? `No toll transactions in the last ${dailyDays} days of this scope.` : null}>
+            <div className="tt-chart" role="img" aria-label={`Daily toll trend for the last ${dailyDays} days`}><Line data={dailyData} options={CHART_OPTS} /></div>
           </CardState>
         </Card>
 
-        <Card title="Transaction status" sub="Reconciliation state of every transaction in scope">
-          <CardState state={loadState} empty={recon.total === 0 ? 'No transactions to break down yet.' : null}>
-            <Donut segments={recon.segments} total={recon.total} centerLabel="Total" onSelect={(s) => { setReconFilter(s.key); setTab('ledger') }} />
+        <Card title="Transaction Status" sub="Reconciliation state of transactions in scope"
+          action={<select className="cc-select tt-card-sel" aria-label="Status period" value={statusPeriod} onChange={(e) => setStatusPeriod(e.target.value)}>{CARD_PERIODS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</select>}>
+          <CardState state={loadState} empty={statusRecon.total === 0 ? 'No transactions to break down in this period.' : null}>
+            <Donut segments={statusRecon.segments} total={statusRecon.total} centerLabel="Total" onSelect={(s) => { setReconFilter(s.key); setTab('ledger') }} />
           </CardState>
         </Card>
       </div>
@@ -508,9 +530,16 @@ export default function TollTransactions() {
       {/* Filters */}
       <div className="cc-card">
         <div className="cc-filters tt-filters">
-          <label className="cc-search">
-            <Search size={15} aria-hidden="true" />
-            <input aria-label="Search toll transactions" placeholder="Asset, driver, tag, toll point, route, notes" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <label className="cc-field"><span>Country</span>
+            <select className="cc-select" value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)}>
+              <option value="">All Countries</option>
+              {countryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+          <label className="cc-field"><span>Operator</span>
+            <select className="cc-select" disabled title="Toll operator is not recorded on toll transactions.">
+              <option>All Operators</option>
+            </select>
           </label>
           <label className="cc-field"><span>Asset</span>
             <select className="cc-select" value={assetFilter} onChange={(e) => setAssetFilter(e.target.value)}>
@@ -540,22 +569,17 @@ export default function TollTransactions() {
         </div>
       </div>
 
-      <div className="cc-card tt-tabbar">
-        <Tabs label="Toll views" value={tab} onChange={setTab} tabs={[
-          { key: 'ledger', label: 'Transaction ledger', count: loaded ? ledgerRows.length : null },
-          { key: 'rankings', label: 'Asset and toll point rankings' },
-          { key: 'analysis', label: 'Monthly and payment mix' },
-        ]} />
-        {reconFilter && (
-          <span className="tt-chip">Showing {RECON_META[reconFilter].label.toLowerCase()} only
-            <button type="button" className="cc-link cc-link-btn" onClick={() => setReconFilter('')}>Show all</button>
-          </span>
-        )}
-      </div>
-
-      {tab === 'ledger' && (
         <div className="tt-ledger-grid">
-          <Card title="Transaction ledger" sub={loaded ? `${fmtInt(ledgerRows.length)} transactions` : undefined} className="tt-ledger">
+          <Card title="Transaction Ledger" sub={loaded ? `${fmtInt(ledgerRows.length)} transactions${reconFilter ? `, ${RECON_META[reconFilter].label.toLowerCase()} only` : ''}` : undefined} className="tt-ledger"
+            action={(
+              <span className="tt-ledger-tools">
+                {reconFilter && <button type="button" className="cc-link cc-link-btn" onClick={() => setReconFilter('')}>Show all</button>}
+                <label className="cc-search tt-search">
+                  <Search size={14} aria-hidden="true" />
+                  <input aria-label="Search toll transactions" placeholder="Asset, tag, toll point, route" value={search} onChange={(e) => setSearch(e.target.value)} />
+                </label>
+              </span>
+            )}>
             <KitTable
               columns={columns}
               rows={ledgerRows}
@@ -570,7 +594,7 @@ export default function TollTransactions() {
           </Card>
 
           <div className="tt-side">
-            <Card title="Reconciliation overview" sub="Reconciled includes refunded charges">
+            <Card title="Reconciliation Overview" sub="Reconciled includes refunded charges" action={<ViewAll label="View All" onClick={() => setReconFilter('')} />}>
               <CardState state={loadState} empty={recon.total === 0 ? 'Nothing to reconcile yet.' : null}>
                 <div className="tt-stack" role="img" aria-label={recon.segments.map((s) => `${s.label} ${s.count}`).join(', ')}>
                   {recon.segments.map((s) => s.count > 0 && <i key={s.key} style={{ width: `${(s.count / recon.total) * 100}%`, background: s.color }} />)}
@@ -581,12 +605,12 @@ export default function TollTransactions() {
                   ))}
                 </ul>
                 <button type="button" className="cc-btn-ghost tt-wide" disabled={!recon.unreconciled} onClick={() => setReconFilter('unreconciled')}>
-                  Review unreconciled ({fmtInt(recon.unreconciled)}) <ChevronRight size={14} aria-hidden="true" />
+                  Reconcile Unmatched ({fmtInt(recon.unreconciled)}) <ChevronRight size={14} aria-hidden="true" />
                 </button>
               </CardState>
             </Card>
 
-            <Card title="Selected transaction" action={selected && (
+            <Card title="Selected Transaction Details" action={selected && (
               <span className="tt-nav">
                 <button type="button" className="cc-icon-btn" disabled={!nav.prev} onClick={() => setSelectedId(nav.prev?.id)} aria-label="Previous transaction"><ChevronLeft size={14} /></button>
                 <span>{nav.index + 1} of {fmtInt(nav.total)}</span>
@@ -620,11 +644,13 @@ export default function TollTransactions() {
                   <Tabs variant="line" label="Transaction details" value={detailTab} onChange={setDetailTab} tabs={[
                     { key: 'timeline', label: 'Trip timeline' },
                     { key: 'evidence', label: 'Toll evidence' },
+                    { key: 'dispute', label: 'Dispute history' },
                     { key: 'notes', label: 'Notes' },
                   ]} />
                   <div className="tt-detail-body">
                     {detailTab === 'timeline' && <p>Not recorded. Toll charges are not linked to trips, so departure and arrival are not available for this charge.</p>}
                     {detailTab === 'evidence' && <p>Not recorded. No gantry photo or receipt is stored with toll charges.</p>}
+                    {detailTab === 'dispute' && <p>Not recorded. Only the current status is stored{String(selected.status).toLowerCase() === 'disputed' ? ' (disputed)' : ''}; no dispute log is kept for toll charges.</p>}
                     {detailTab === 'notes' && <p>{selected.notes || 'No notes on this transaction.'}</p>}
                   </div>
                   <div className="tt-detail-actions">
@@ -641,7 +667,15 @@ export default function TollTransactions() {
             </Card>
           </div>
         </div>
-      )}
+
+      <div className="cc-card tt-tabbar">
+        <span className="tt-more">More views</span>
+        <Tabs label="More toll views" value={tab} onChange={setTab} tabs={[
+          { key: 'ledger', label: 'Ledger only' },
+          { key: 'rankings', label: 'Asset and toll point rankings' },
+          { key: 'analysis', label: 'Monthly and payment mix' },
+        ]} />
+      </div>
 
       {tab === 'rankings' && (
         <div className="tt-two">

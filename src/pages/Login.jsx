@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Eye, EyeOff, ArrowRight, Mail, Phone, KeyRound, AlertCircle,
-  Loader2, Lock, Clock, Shield, Wifi, WifiOff,
+  Loader2, Clock, WifiOff,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -14,7 +14,6 @@ import { loginAttemptStatus, recordLoginFailure, resetLoginAttempts, lockMinutes
 import TpLogo from '../assets/logo.svg'
 import { readCachedLogo } from '../lib/brand/library'
 import TwoFactorChallenge from '../components/TwoFactorChallenge'
-import BrandIcon from '../components/ui/BrandIcon'
 import ThemeToggle from '../components/ui/ThemeToggle'
 import TurnstileWidget, { captchaEnabled } from '../components/auth/TurnstileWidget'
 import LoginHero from '../components/auth/login/LoginHero'
@@ -371,16 +370,15 @@ export default function Login() {
   const inputStyle = (field) => ({
     width: '100%',
     padding: '11px 14px',
-    minHeight: 46,
+    minHeight: 48,
     background: 'var(--login-input-bg)',
     border: `1.5px solid ${focusedField === field ? 'var(--login-input-border-focus)' : 'var(--login-input-border)'}`,
     borderRadius: 12,
     color: 'var(--login-text)',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 500,
-    letterSpacing: '0.01em',
-    transition: 'border-color 0.2s, box-shadow 0.2s, background 0.2s',
-    boxShadow: focusedField === field ? '0 0 0 3px rgba(22,163,74,0.15), 0 0 20px rgba(22,163,74,0.08)' : 'none',
+    transition: 'border-color 160ms ease, box-shadow 160ms ease',
+    boxShadow: focusedField === field ? '0 0 0 4px rgba(22,163,74,0.14)' : 'none',
     outline: 'none',
   })
 
@@ -414,8 +412,8 @@ export default function Login() {
     <>
       <style>{LOGIN_PAGE_CSS}</style>
 
-      {/* Dark photographic hero (both themes) + the sign-in panel, which follows
-          the light/dark theme through the tokens in loginStyles.js. */}
+      {/* Brand panel (fixed palette) + the sign-in panel, which follows the
+          light/dark theme through the tokens in loginStyles.js. */}
       <div className="tpl-shell tp-login-shell">
         <LoginHero logoSrc={loginLogo} customLogo={customLogo} showcase={showcase} />
 
@@ -427,20 +425,12 @@ export default function Login() {
             className="tpl-card"
           >
             <div className="tpl-card-top">
-              <div className="tpl-card-brand">
-                <span className="tpl-emblem" aria-hidden="true">
-                  <BrandIcon src={loginLogo} custom={customLogo} chip={customLogo} size={22} />
+              {!isOnline && (
+                <span className="tpl-net off" role="status">
+                  <WifiOff size={12} aria-hidden="true"/>{t('auth.login.offline')}
                 </span>
-                <span className="tpl-wordmark" role="img" aria-label="TyrePulse" data-a="Tyre" data-b="Pulse" />
-              </div>
-              <div style={{ display:'flex', alignItems:'center', gap:10, marginInlineStart:'auto' }}>
-                <span className={`tpl-net${isOnline ? '' : ' off'}`}>
-                  {isOnline
-                    ? <><Wifi size={12} aria-hidden="true"/>{t('auth.login.connected')}</>
-                    : <><WifiOff size={12} aria-hidden="true"/>{t('auth.login.offline')}</>}
-                </span>
-                <span className="tpl-theme"><ThemeToggle size={17} includeSystem={false} /></span>
-              </div>
+              )}
+              <span className="tpl-theme"><ThemeToggle size={16} includeSystem={false} /></span>
             </div>
 
             {showWelcome && (
@@ -539,14 +529,11 @@ export default function Login() {
                   <div>
                     <label htmlFor="login-identifier" style={labelStyle}>{p('idLabel')}</label>
                     <div style={{ position:'relative' }}>
-                      <span className="tpl-field-icon" style={{ color: focusedField==='id' ? 'var(--brand-on-tint)' : 'var(--login-icon)' }}>
-                        <Mail size={16} aria-hidden="true"/>
-                      </span>
                       <input
                         id="login-identifier"
                         name="identifier"
                         type="text"
-                        style={{ ...inputStyle('id'), paddingInlineStart:42 }}
+                        style={inputStyle('id')}
                         aria-invalid={error ? true : undefined}
                         aria-describedby={error ? 'login-error' : undefined}
                         placeholder={p('idPlaceholder')}
@@ -563,14 +550,11 @@ export default function Login() {
                   <div>
                     <label htmlFor="login-password" style={labelStyle}>{t('auth.passwordLabel')}</label>
                     <div style={{ position:'relative' }}>
-                      <span className="tpl-field-icon" style={{ color: focusedField==='pw' ? 'var(--brand-on-tint)' : 'var(--login-icon)' }}>
-                        <Lock size={16} aria-hidden="true"/>
-                      </span>
                       <input
                         id="login-password"
                         name="password"
                         type={showLoginPw ? 'text' : 'password'}
-                        style={{ ...inputStyle('pw'), paddingInlineStart:42, paddingInlineEnd:48 }}
+                        style={{ ...inputStyle('pw'), paddingInlineEnd:48 }}
                         aria-invalid={error ? true : undefined}
                         aria-describedby={error ? 'login-error' : undefined}
                         placeholder="••••••••"
@@ -615,7 +599,6 @@ export default function Login() {
                   <button type="submit" className="tpl-primary" disabled={loading || !isOnline || (needsCaptcha && !captchaToken)}>
                     {loading && <Loader2 size={17} className="animate-spin" aria-hidden="true"/>}
                     {loading ? t('auth.login.signingIn') : !isOnline ? t('auth.login.noConnection') : p('signIn')}
-                    {!loading && isOnline && <ArrowRight size={17} className="tp-dir-icon" aria-hidden="true"/>}
                   </button>
 
                   <div className="tpl-divider">{p('orContinue')}</div>
@@ -632,7 +615,7 @@ export default function Login() {
                     )}
                     {/* Enterprise SSO (existing flow: resolves the work-email domain). */}
                     <button type="button" className="tpl-provider" onClick={handleSso} disabled={ssoLoading || !isOnline} aria-label={p('ssoAria')}>
-                      {ssoLoading ? <Loader2 size={15} className="animate-spin" aria-hidden="true"/> : <Shield size={15} aria-hidden="true"/>}
+                      {ssoLoading && <Loader2 size={15} className="animate-spin" aria-hidden="true"/>}
                       {ssoLoading ? t('auth.login.redirecting') : p('sso')}
                     </button>
                   </div>
@@ -647,7 +630,7 @@ export default function Login() {
                 <div className="tpl-request">
                   {p('newTo')}
                   <button type="button" onClick={() => switchTab('signup')}>
-                    {p('requestAccess')}<ArrowRight size={14} className="tp-dir-icon" aria-hidden="true"/>
+                    {p('requestAccess')}
                   </button>
                 </div>
               )}

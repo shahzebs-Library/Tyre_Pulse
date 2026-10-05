@@ -7,7 +7,8 @@
  */
 import { supabase, ServiceError, isNotProvisioned } from './_client'
 import { toUserMessage } from '../safeError'
-import { SECURITY_ACTIONS, DATA_CHANGE_ACTIONS, DELETE_ACTIONS } from '../auditTrailView'
+import { SECURITY_ACTIONS, DATA_CHANGE_ACTIONS, DELETE_ACTIONS, EXPORT_ACTIONS } from '../auditTrailView'
+import { highSeverityOrFilter } from '../auditSeverity'
 
 function bound(q, col, from, to) {
   let out = q
@@ -34,15 +35,19 @@ async function headCount(table, col, from, to, refine) {
  * first error seen, so the page can show N/A with a reason per tile.
  */
 export async function loadAuditCounts({ from, to } = {}) {
-  const [events, security, changes, deletes, uploads, batches] = await Promise.all([
+  const [events, security, changes, deletes, uploads, batches, critical, exportsN, automation] = await Promise.all([
     headCount('audit_log_v2', 'created_at', from, to),
     headCount('audit_log_v2', 'created_at', from, to, (q) => q.in('action', [...SECURITY_ACTIONS])),
     headCount('audit_log_v2', 'created_at', from, to, (q) => q.in('action', [...DATA_CHANGE_ACTIONS])),
     headCount('audit_log_v2', 'created_at', from, to, (q) => q.in('action', [...DELETE_ACTIONS])),
     headCount('upload_history', 'uploaded_at', from, to),
     headCount('import_batches', 'created_at', from, to),
+    // Rule-based High severity (src/lib/auditSeverity.js), counted server side.
+    headCount('audit_log_v2', 'created_at', from, to, (q) => q.or(highSeverityOrFilter())),
+    headCount('audit_log_v2', 'created_at', from, to, (q) => q.in('action', [...EXPORT_ACTIONS])),
+    headCount('audit_log_v2', 'created_at', from, to, (q) => q.eq('actor_type', 'service')),
   ])
-  const all = [events, security, changes, deletes, uploads, batches]
+  const all = [events, security, changes, deletes, uploads, batches, critical, exportsN, automation]
   const err = all.find((x) => x.error)?.error || null
   return {
     events: events.value,
@@ -51,6 +56,9 @@ export async function loadAuditCounts({ from, to } = {}) {
     deletes: deletes.value,
     uploads: uploads.value,
     batches: batches.value,
+    critical: critical.value,
+    exports: exportsN.value,
+    automation: automation.value,
     error: err ? toUserMessage(err, 'Some audit figures could not be read.') : null,
   }
 }

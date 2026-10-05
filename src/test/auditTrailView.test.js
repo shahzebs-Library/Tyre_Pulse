@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   actionLabel, moduleLabel, recordRef, eventType, actorLabel, changeHeadline, defaultRange,
   previousRange, trendPct, tabScope, actionsForGroup, canReadAudit, rangeLabel,
+  siteLabel, exportInfo, emptyMessage, AUDIT_TABS,
 } from '../lib/auditTrailView'
 
 describe('auditTrailView', () => {
@@ -58,5 +59,21 @@ describe('auditTrailView', () => {
     expect(canReadAudit({ role: 'Manager' })).toBe(true)
     expect(canReadAudit({ role: 'Reporter' })).toBe(false)
     expect(canReadAudit({ role: 'Reporter' }, true)).toBe(true)
+  })
+  it('has the five mockup tabs and scopes Exports to EXPORT rows', () => {
+    expect(AUDIT_TABS.map((t) => t.key)).toEqual(['audit', 'upload', 'security', 'exports', 'automation'])
+    expect(tabScope('exports')).toEqual({ actions: ['EXPORT'] })
+    expect(emptyMessage('exports')).toMatch(/5 Oct 2026/)
+  })
+  it('reads export file, rows and format honestly', () => {
+    expect(exportInfo({ action: 'EXPORT', table_name: 'TyrePulse Audit Log 2026-10-05.xlsx', new_values: { rows: 120 } }))
+      .toEqual({ file: 'TyrePulse Audit Log 2026-10-05.xlsx', rows: 120, format: 'XLSX' })
+    expect(exportInfo({ action: 'EXPORT', table_name: 'report', new_values: {} })).toEqual({ file: 'report', rows: null, format: null })
+    expect(moduleLabel({ action: 'EXPORT', table_name: 'x.pdf' })).toBe('Export')
+  })
+  it('shows site or N/A', () => {
+    expect(siteLabel({ site: 'NHC' })).toBe('NHC')
+    expect(siteLabel({ site: '  ' })).toBe('N/A')
+    expect(siteLabel({})).toBe('N/A')
   })
 })

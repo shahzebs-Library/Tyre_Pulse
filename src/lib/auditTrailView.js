@@ -4,10 +4,13 @@
  * What audit_log_v2 really records (measured 2026-10-05): actions are the
  * trigger tokens db.insert / db.update / db.delete plus the app's LOGIN,
  * LOGOUT, tyre_scrap, tyre_unscrap, stock_movement, org_branding_update and a
- * handful of CREATE / UPDATE. ip_address, user_agent and site are empty on
- * every row, so the page shows no IP, device or site column. There is no
- * severity column either: the page shows the event TYPE, which is derived
- * from the action by the fixed rule below and never presented as a severity.
+ * handful of CREATE / UPDATE, plus EXPORT (one row per Excel / PDF / PPTX
+ * download: table_name = file name, new_values.rows = row count).
+ * ip_address, user_agent and site were empty on every row until 5 Oct 2026;
+ * a trigger stamps them on new rows from then on (src/lib/auditTrailDevice.js
+ * renders them, "Not recorded" for older rows). There is no severity column:
+ * src/lib/auditSeverity.js derives one by a documented rule and the page
+ * labels it rule based. The event TYPE below is a separate grouping.
  *
  * No I/O, no clock unless passed in.
  */
@@ -30,18 +33,24 @@ export const ACTION_GROUPS = Object.freeze([
 export const SECURITY_ACTIONS = Object.freeze(['LOGIN', 'LOGOUT', 'org_branding_update'])
 export const DATA_CHANGE_ACTIONS = Object.freeze(['db.insert', 'db.update', 'db.delete', 'CREATE', 'UPDATE', 'EDIT', 'DELETE'])
 export const DELETE_ACTIONS = Object.freeze(['db.delete', 'DELETE'])
+export const EXPORT_ACTIONS = Object.freeze(['EXPORT'])
+
+/** Date the register started recording downloads, IP, device and site. */
+export const RECORDING_START = '5 Oct 2026'
 
 /** Tabs: each is a fixed slice of the same register (upload is its own table). */
 export const AUDIT_TABS = Object.freeze([
   { key: 'audit', label: 'Audit log' },
   { key: 'upload', label: 'Upload history' },
   { key: 'security', label: 'Security' },
+  { key: 'exports', label: 'Exports' },
   { key: 'automation', label: 'Automation' },
 ])
 
 /** Server filter for a tab, merged over the user's own filters. */
 export function tabScope(tab) {
   if (tab === 'security') return { actions: [...SECURITY_ACTIONS] }
+  if (tab === 'exports') return { actions: [...EXPORT_ACTIONS] }
   if (tab === 'automation') return { actorType: 'service' }
   return {}
 }
@@ -70,9 +79,35 @@ export function actionLabel(action) {
 
 /** Module the event touched, from the table name ("tyre_records" -> "Tyre records"). */
 export function moduleLabel(row) {
+  if (EXPORT_ACTIONS.includes(row?.action)) return 'Export'
   if (row?.table_name) return titleCase(row.table_name)
   if (SECURITY_ACTIONS.includes(row?.action)) return 'Sign-in'
   return 'N/A'
+}
+
+/** Site stamped on the audit row; older rows carry none. */
+export function siteLabel(row) {
+  const s = row?.site == null ? '' : String(row.site).trim()
+  return s || 'N/A'
+}
+
+/** File name and row count of an EXPORT event, read from what the app stored. */
+export function exportInfo(row) {
+  const file = row?.table_name ? String(row.table_name) : null
+  const nv = row?.new_values && typeof row.new_values === 'object' ? row.new_values : {}
+  const n = Number(nv.rows)
+  const rows = nv.rows == null || nv.rows === '' || !Number.isFinite(n) ? null : n
+  const ext = file && /\.([a-z0-9]{2,5})$/i.exec(file)
+  const format = nv.format ? String(nv.format).toUpperCase() : (ext ? ext[1].toUpperCase() : null)
+  return { file, rows, format }
+}
+
+/** Empty-state copy per register tab. */
+export function emptyMessage(tab) {
+  if (tab === 'exports') return `No downloads in this period. Exports are recorded from ${RECORDING_START}; earlier downloads were not logged.`
+  if (tab === 'security') return 'No sign in, sign out or branding events in this period.'
+  if (tab === 'automation') return 'No writes by imports, jobs or other system paths in this period.'
+  return 'No audit events in this period.'
 }
 
 /** Short, readable record reference; uuids are cut to their first block. */

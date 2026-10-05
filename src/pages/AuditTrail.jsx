@@ -13,20 +13,26 @@
  *   - audit_event_reviews (migration 20261005140000, may not be applied yet):
  *                      "Investigate" flags; the page says when it is not set up.
  *
- * Honest gaps against the mockup: audit_log_v2 records no IP address, device or
- * site on any row and has no severity or result column, so those columns are
- * not shown; the event TYPE (derived from the action by a fixed rule) replaces
- * severity. No EXPORT events are written anywhere, so there is no Exports tab.
- * Pure shaping lives in src/lib/auditTrailView.js and auditTrailAnalytics.js.
+ *   - access_audit   : access-control changes, shown on the Security tab to
+ *                      super admins only (its RLS admits nobody else).
+ *
+ * IP, device and site are stamped on audit rows from 5 Oct 2026 by the
+ * trg_audit_stamp_request trigger; older rows read "Not recorded" / "N/A" and a
+ * service write with no browser reads its system name. Severity is not stored:
+ * src/lib/auditSeverity.js derives it by a documented rule and the page labels
+ * it rule based. The log has no result column, so there is no Result column.
+ * EXPORT rows (one per download, from 5 Oct 2026) feed the Exports tab.
+ * Pure shaping lives in src/lib/auditTrailView.js, auditTrailAnalytics.js,
+ * auditTrailDevice.js and auditSeverity.js.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Activity, ShieldCheck, Database, Upload, Flag, ChevronRight, FileSpreadsheet, FileText,
-  RefreshCw, Search, X, History, Eye, Info, Loader2,
+  RefreshCw, Search, X, History, Eye, Info, Loader2, AlertTriangle,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import useLatestRequest from '../lib/useLatestRequest'
-import { auditQuery, uploadHistoryQuery, readAuditExport, matchesAuditSearch } from '../lib/api/auditTrail'
+import { auditQuery, uploadHistoryQuery, readAuditExport, matchesAuditSearch, listAccessAudit } from '../lib/api/auditTrail'
 import {
   loadAuditCounts, listImportBatches, loadReviews, flagAuditEvent, setReviewStatus,
 } from '../lib/api/auditTrailOverview'
@@ -44,8 +50,10 @@ import {
 import {
   AUDIT_TABS, ACTION_GROUPS, tabScope, actionsForGroup, actionLabel, moduleLabel, recordRef,
   eventType, actorLabel, changeHeadline, defaultRange, previousRange, trendPct, rangeLabel,
-  canReadAudit, REVIEW_STATUSES,
+  canReadAudit, REVIEW_STATUSES, siteLabel, exportInfo, emptyMessage, RECORDING_START,
 } from '../lib/auditTrailView'
+import { auditSeverity, highSeverityOrFilter, SEVERITY_CAPTION } from '../lib/auditSeverity'
+import { ipDevice } from '../lib/auditTrailDevice'
 import { lineageRows } from '../lib/customDataView'
 import './AuditTrail.css'
 
@@ -73,6 +81,23 @@ function AuditChangeDetail({ row }) {
       {details && <pre className="at-pre">{JSON.stringify(details, null, 2)}</pre>}
     </div>
   )
+}
+
+/** IP / Device cell: what the trigger stamped, else System / Not recorded. */
+function IpDeviceCell({ row }) {
+  const d = ipDevice(row)
+  if (d.kind === 'missing') return <span className="at-muted" title={`IP and device are recorded from ${RECORDING_START}`}>Not recorded</span>
+  return (
+    <span className="at-ipdev">
+      <span className={d.kind === 'recorded' && d.ip ? 'at-mono' : (d.kind === 'system' ? 'at-muted' : undefined)}>{d.primary}</span>
+      {d.secondary && <small>{d.secondary}</small>}
+    </span>
+  )
+}
+
+function SeverityPill({ row }) {
+  const s = auditSeverity(row)
+  return <span className={`cc-pill ${s.tone}`} title={`${s.reason} (rule based)`}>{s.label}</span>
 }
 
 function KpiLabel({ title, sub }) {
@@ -104,6 +129,7 @@ export default function AuditTrail() {
   const [regError, setRegError] = useState('')
   const [search, setSearch] = useState('')
   const [group, setGroup] = useState('')
+  const [severity, setSeverity] = useState('')
   const [user, setUser] = useState('')
   const [recordFilter, setRecordFilter] = useState(null)
   const [users, setUsers] = useState([])
@@ -174,7 +200,8 @@ export default function AuditTrail() {
     ...tabScope(tab),
     ...(group ? { actions: actionsForGroup(group) } : {}),
     ...(recordFilter ? { recordId: recordFilter.record_id } : {}),
-  }), [dateFrom, dateTo, user, tab, group, recordFilter])
+    ...(severity === 'high' ? { orFilter: highSeverityOrFilter() } : {}),
+  }), [dateFrom, dateTo, user, tab, group, recordFilter, severity])
 
   const latest = useLatestRequest()
   const loadRegister = useCallback(async () => {
@@ -225,6 +252,19 @@ export default function AuditTrail() {
   }, [dateFrom, dateTo])
 
   useEffect(() => { if (tab === 'upload') { loadUploads(); loadBatches() } }, [tab, loadUploads, loadBatches])
+
+  // ── Access control changes (Security tab, super admins only) ───────────────
+  const [access, setAccess] = useState({ loading: false, data: null, error: null })
+  const loadAccess = useCallback(async () => {
+    setAccess((s) => ({ ...s, loading: true, error: null }))
+    try {
+      let until
+      if (dateTo) { const n = new Date(`${dateTo}T00:00:00Z`); n.setUTCDate(n.getUTCDate() + 1); until = n.toISOString() }
+      const data = await listAccessAudit({ since: dateFrom ? `${dateFrom}T00:00:00Z` : undefined, until, limit: 200 })
+      setAccess({ loading: false, data, error: null })
+    } catch (e) { setAccess({ loading: false, data: null, error: toUserMessage(e, 'Access control changes could not be loaded.') }) }
+  }, [dateFrom, dateTo])
+  useEffect(() => { if (tab === 'security' && isSuperAdmin) loadAccess() }, [tab, isSuperAdmin, loadAccess])
 
   // ── Exports ─────────────────────────────────────────────────────────────────
   async function exportAudit(kind = 'xlsx') {
@@ -295,23 +335,26 @@ export default function AuditTrail() {
   const uploadsTotal = counts.uploads == null && counts.batches == null ? null : (counts.uploads ?? 0) + (counts.batches ?? 0)
 
   const kpis = [
-    { icon: Activity, tone: 't-blue', value: k('events'), trend: t('events'), label: <KpiLabel title="Audit events" sub={rangeLabel(dateFrom, dateTo)} />, title: trendTitle || naTitle, onClick: () => { setTab('audit'); setGroup(''); resetPages() } },
-    { icon: ShieldCheck, tone: 't-red', value: k('security'), trend: t('security'), goodWhenUp: false, label: <KpiLabel title="Security events" sub="Sign in, sign out, branding" />, title: trendTitle || naTitle, onClick: () => { setTab('security'); setGroup(''); resetPages() } },
-    { icon: Database, tone: 't-purple', value: k('changes'), trend: t('changes'), label: <KpiLabel title="Data changes" sub={counts.deletes == null ? 'Created / updated / deleted' : `${fmtInt(counts.deletes)} deletions`} />, title: trendTitle || naTitle, onClick: () => { setTab('audit'); setGroup('update'); resetPages() } },
+    { icon: Activity, tone: 't-blue', value: k('events'), trend: t('events'), label: <KpiLabel title="Audit events" sub={rangeLabel(dateFrom, dateTo)} />, title: trendTitle || naTitle, onClick: () => { setTab('audit'); setGroup(''); setSeverity(''); resetPages() } },
+    { icon: ShieldCheck, tone: 't-red', value: k('security'), trend: t('security'), goodWhenUp: false, label: <KpiLabel title="Security events" sub="Sign in, sign out, branding" />, title: trendTitle || naTitle, onClick: () => { setTab('security'); setGroup(''); setSeverity(''); resetPages() } },
+    { icon: Database, tone: 't-purple', value: k('changes'), trend: t('changes'), label: <KpiLabel title="Data changes" sub={counts.deletes == null ? 'Created / updated / deleted' : `${fmtInt(counts.deletes)} deletions`} />, title: trendTitle || naTitle, onClick: () => { setTab('audit'); setGroup('update'); setSeverity(''); resetPages() } },
     { icon: Upload, tone: 't-amber', value: counts.loading ? null : uploadsTotal, label: <KpiLabel title="Upload events" sub={`${fmtInt(counts.uploads)} uploads, ${fmtInt(counts.batches)} import batches`} />, title: naTitle, onClick: () => { setTab('upload'); resetPages() } },
     {
-      icon: Flag, tone: 't-orange',
-      display: reviews.provisioned === false ? 'N/A' : undefined,
-      value: reviews.open,
-      label: <KpiLabel title="Flagged for review" sub={reviews.provisioned === false ? 'Review flags not set up yet' : 'Open and investigating'} />,
-      title: reviews.provisioned === false ? 'The audit_event_reviews table has not been created on this database yet.' : 'Events someone flagged with Investigate that are not resolved',
+      icon: AlertTriangle, tone: 't-orange', value: k('critical'), trend: t('critical'), goodWhenUp: false,
+      label: <KpiLabel title="Critical events" sub={reviews.provisioned === false ? 'High severity (rule based). Review flags not set up yet' : `High severity (rule based). ${reviews.open == null ? 'N/A' : fmtInt(reviews.open)} flagged for review`} />,
+      title: `${SEVERITY_CAPTION} High = business or access record deleted, or a failed security event.`,
+      onClick: () => { setTab('audit'); setGroup(''); setSeverity('high'); resetPages() },
     },
   ]
 
   const tabsWithCounts = AUDIT_TABS.map((x) => ({
     ...x,
-    count: x.key === 'security' ? (counts.loading ? undefined : counts.security ?? undefined)
-      : x.key === 'upload' ? (counts.loading ? undefined : uploadsTotal ?? undefined) : undefined,
+    count: counts.loading ? undefined
+      : x.key === 'security' ? counts.security ?? undefined
+      : x.key === 'upload' ? uploadsTotal ?? undefined
+      : x.key === 'exports' ? counts.exports ?? undefined
+      : x.key === 'automation' ? counts.automation ?? undefined
+      : undefined,
   }))
 
   const columns = [
@@ -320,14 +363,33 @@ export default function AuditTrail() {
     { key: 'action', header: 'Action', sortable: false, cell: (r) => actionLabel(r.action) },
     { key: 'module', header: 'Module', sortable: false, cell: (r) => moduleLabel(r) },
     { key: 'record', header: 'Record', sortable: false, cell: (r) => (recordRef(r) === 'N/A' ? NA : <span className="at-mono" title={String(r.record_id)}>{recordRef(r)}</span>) },
-    {
-      key: 'type', header: 'Type', sortable: false,
-      cell: (r) => { const e = eventType(r); return <span className={`cc-pill ${e.tone}`}>{e.label}</span> },
-    },
+    { key: 'site', header: 'Site', sortable: false, cell: (r) => (siteLabel(r) === 'N/A' ? NA : siteLabel(r)) },
+    { key: 'ipdev', header: 'IP / Device', sortable: false, cell: (r) => <IpDeviceCell row={r} /> },
+    { key: 'severity', header: 'Severity', sortable: false, cell: (r) => <SeverityPill row={r} /> },
     {
       key: 'review', header: 'Review', sortable: false,
       cell: (r) => { const f = reviews.byAudit[r.id]; if (!f) return <span className="at-muted">None</span>; const s = REVIEW_STATUSES[f.status] || REVIEW_STATUSES.open; return <span className={`cc-pill ${s.tone}`}>{s.label}</span> },
     },
+  ]
+
+  // Exports tab: the downloaded file and its size instead of module / record.
+  const exportColumns = [
+    columns[0], columns[1],
+    { key: 'file', header: 'File', sortable: false, cell: (r) => { const f = exportInfo(r).file; return f ? <span className="at-trunc" title={f}>{f}</span> : NA } },
+    { key: 'format', header: 'Format', sortable: false, cell: (r) => exportInfo(r).format || NA },
+    { key: 'rows', header: 'Rows', numeric: true, sortable: false, cell: (r) => { const n = exportInfo(r).rows; return n == null ? NA : fmtInt(n) } },
+    columns.find((c) => c.key === 'site'),
+    columns.find((c) => c.key === 'ipdev'),
+    columns.find((c) => c.key === 'severity'),
+  ]
+  const registerColumns = tab === 'exports' ? exportColumns : columns
+
+  const accessColumns = [
+    { key: 'when', header: 'Time', sortable: false, cell: (r) => <span className="at-nowrap">{r.when ? formatDateTime(r.when) : 'N/A'}</span> },
+    { key: 'actor', header: 'Changed by', sortable: false, cell: (r) => r.actor || NA },
+    { key: 'action', header: 'Action', sortable: false, cell: (r) => actionLabel(r.action) },
+    { key: 'target', header: 'Target', sortable: false, cell: (r) => (r.target ? <span className="at-trunc" title={r.target}>{r.target}</span> : NA) },
+    { key: 'reason', header: 'Reason', sortable: false, cell: (r) => (r.reason ? <span className="at-trunc" title={r.reason}>{r.reason}</span> : <span className="at-muted">Not given</span>) },
   ]
 
   const uploadColumns = [
@@ -358,7 +420,7 @@ export default function AuditTrail() {
     { key: 'at', header: 'Created', sortable: false, cell: (b) => <span className="at-nowrap">{b.created_at ? formatDateTime(b.created_at) : 'N/A'}</span> },
   ]
 
-  const anyFilter = group || user || search || recordFilter
+  const anyFilter = group || user || search || recordFilter || severity
   const errors = [exportError, usersError, reviewError].filter(Boolean)
 
   return (
@@ -397,13 +459,14 @@ export default function AuditTrail() {
       {canRead && (
         <>
           <div className="cc-kpis at-kpis">
-            {kpis.map((x, i) => <Kpi key={i} {...x} goodWhenUp={x.goodWhenUp ?? true} loading={counts.loading && x.icon !== Flag} />)}
+            {kpis.map((x, i) => <Kpi key={i} {...x} goodWhenUp={x.goodWhenUp ?? true} loading={counts.loading} />)}
           </div>
 
           <div className="cc-card at-tabbar">
-            <Tabs tabs={tabsWithCounts} value={tab} onChange={(v) => { setTab(v); setGroup(''); setRecordFilter(null); resetPages() }} label="Audit views" />
+            <Tabs tabs={tabsWithCounts} value={tab} onChange={(v) => { setTab(v); setGroup(''); setSeverity(''); setRecordFilter(null); resetPages() }} label="Audit views" />
             <span className="at-tab-hint">
               {tab === 'security' && 'Sign in, sign out and branding changes.'}
+              {tab === 'exports' && `Excel, PDF and PowerPoint downloads, recorded from ${RECORDING_START}.`}
               {tab === 'automation' && 'Writes made by imports, jobs and other system paths.'}
               {tab === 'upload' && 'Legacy uploads and in-app import batches.'}
               {tab === 'audit' && 'Every recorded event.'}
@@ -424,12 +487,16 @@ export default function AuditTrail() {
                       {ACTION_GROUPS.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
                     </select>
                   )}
+                  <select className="cc-select" aria-label="Severity" value={severity} onChange={(e) => { setSeverity(e.target.value); resetPages() }}>
+                    <option value="">All severities</option>
+                    <option value="high">High only</option>
+                  </select>
                   <select className="cc-select" aria-label="User" value={user} onChange={(e) => { setUser(e.target.value); resetPages() }}>
                     <option value="">All users</option>
                     {users.map((u) => <option key={u.id} value={u.id}>{u.full_name || u.username || 'Unnamed user'}</option>)}
                   </select>
                   {anyFilter && (
-                    <button type="button" className="cc-btn-ghost" onClick={() => { setGroup(''); setUser(''); setSearch(''); setRecordFilter(null); resetPages() }}>
+                    <button type="button" className="cc-btn-ghost" onClick={() => { setGroup(''); setUser(''); setSearch(''); setRecordFilter(null); setSeverity(''); resetPages() }}>
                       <X size={14} aria-hidden="true" /> Clear filters
                     </button>
                   )}
@@ -444,7 +511,7 @@ export default function AuditTrail() {
                   </p>
                 )}
                 <KitTable
-                  columns={columns}
+                  columns={registerColumns}
                   rows={visibleRows}
                   loading={loading && !rows.length}
                   error={regError || null}
@@ -457,9 +524,12 @@ export default function AuditTrail() {
                   totalRows={total}
                   pageSize={pageSize}
                   onRowClick={(r) => setSelected(r)}
-                  empty={search ? 'No event on this page matches the search.' : 'No audit events in this period.'}
+                  empty={search ? 'No event on this page matches the search.' : severity === 'high' ? 'No high severity events in this period.' : emptyMessage(tab)}
                   scroll
                 />
+                <p className="at-caption">
+                  {SEVERITY_CAPTION} IP, device and site are recorded from {RECORDING_START}; earlier events show Not recorded or N/A, and system writes show the system path.
+                </p>
                 {!regError && total > 0 && (
                   <Pager page={page} pageSize={pageSize} total={total} onPage={(p) => { setPage(Math.max(0, Math.min(pageCount - 1, p))); setSelected(null) }} onPageSize={(s) => { setPageSize(s); setPage(0) }} noun="events" />
                 )}
@@ -479,6 +549,13 @@ export default function AuditTrail() {
                           <span>Source: <b>{selected.actor_type === 'service' ? 'System path' : selected.actor_type === 'user' ? 'Signed-in user' : 'Not recorded (before attribution)'}</b></span>
                           {selected.session_id && <span>Session: <b className="at-mono">{String(selected.session_id).slice(0, 12)}</b></span>}
                           <span>Record: <b className="at-mono">{selected.record_id ?? 'N/A'}</b></span>
+                          <span>Site: <b>{siteLabel(selected)}</b></span>
+                          {(() => { const d = ipDevice(selected); return d.kind === 'recorded'
+                            ? <><span>IP: <b className="at-mono">{d.ip || 'Not recorded'}</b></span><span>Device: <b>{d.device || 'Not recorded'}</b></span></>
+                            : <span>IP / Device: <b>{d.kind === 'system' ? `${d.primary} (no browser)` : `Not recorded (before ${RECORDING_START})`}</b></span> })()}
+                          {(() => { const sv = auditSeverity(selected); return <span>Severity: <b>{sv.label}</b> ({sv.reason}, rule based)</span> })()}
+                          <span>Type: <b>{eventType(selected).label}</b></span>
+                          {selected.action === 'EXPORT' && (() => { const x = exportInfo(selected); return <span>Download: <b>{x.file || 'N/A'}</b>{x.rows != null ? `, ${fmtInt(x.rows)} rows` : ''}</span> })()}
                         </p>
                         {selectedFlag && (
                           <p className="at-flag">
@@ -506,6 +583,19 @@ export default function AuditTrail() {
                   </div>
                 )}
               </Card>
+
+              {tab === 'security' && (
+                <Card title="Access control changes"
+                  sub={isSuperAdmin ? 'Role, grant and account changes in this period (latest 200), with the reason given.' : 'Visible to super admins only.'}>
+                  {isSuperAdmin ? (
+                    <CardState state={{ ...access, retry: loadAccess }} empty={access.data && !access.data.length ? 'No access control changes in this period.' : null}>
+                      <KitTable columns={accessColumns} rows={access.data || []} getRowId={(r) => String(r.id)} compact scroll />
+                    </CardState>
+                  ) : (
+                    <div className="cc-empty">Access control changes are readable by super admins only.</div>
+                  )}
+                </Card>
+              )}
             </>
           )}
 

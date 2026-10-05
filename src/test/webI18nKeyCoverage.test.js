@@ -48,12 +48,13 @@ const HELPER = /const\s+(\w+)\s*=\s*\(\s*(\w+)[^)]*\)\s*=>\s*t\(\s*`([\w.-]+)\.\
 function collectKeys() {
   const keys = []
   for (const file of walk(ROOT)) {
+    // Comments are prose (e.g. "t('ns.key', ...)" in a doc block), not calls.
     const src = fs.readFileSync(file, 'utf8').replace(/\r/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:'"`])\/\/.*$/gm, '$1')
     const rel = path.relative(ROOT, file)
-    for (const m of src.matchAll(LITERAL)) {
-      // Only keys whose namespace is a real dictionary file (skips prose like "ns.key").
-      if (Object.prototype.hasOwnProperty.call(EN, m[1].split('.')[0])) keys.push({ rel, key: m[1] })
-    }
+    // An unknown namespace (a typo such as 'commmon.x') must fail too.
+    for (const m of src.matchAll(LITERAL)) keys.push({ rel, key: m[1] })
     for (const h of src.matchAll(HELPER)) {
       const call = new RegExp(`(?<![\\w.])${h[1]}\\(\\s*['"]([\\w.-]+)['"]`, 'g')
       for (const c of src.matchAll(call)) keys.push({ rel, key: `${h[3]}.${c[1]}` })

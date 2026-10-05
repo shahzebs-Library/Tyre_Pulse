@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -12,17 +13,26 @@ import {
   BarChart3, Building2, Tag, Layers, Info,
   ChevronUp, ArrowRight, X,
   Recycle, AlertOctagon, Flame, Activity, Lock, ShieldCheck,
+  ChevronRight, CalendarRange, Plus,
 } from 'lucide-react'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import ScrappedRegister from '../components/tyre/ScrappedRegister'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import * as scrapApi from '../lib/api/tyreScrap'
+import { saveTyreDisposal } from '../lib/api/tyreScrap'
+import { getScrapPermissions } from '../lib/api/tyreExchange'
+import { Card, CardState, Tabs, Donut } from '../components/commandCenter/kit'
+import TyreKpiTile from '../components/tyre/TyreKpiTile'
+import {
+  COUNTRY_CURRENCY, moneyScope, previousWindowKpis, scrapTrends, trendBars, reasonSegments,
+  governanceRows, disposalStatusOptions, disposalTone, selectedTyreFacts,
+} from '../lib/tyreScrapView'
+import './TyreScrapManagement.css'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { formatMonthYear } from '../lib/formatters'
-import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
 import { toUserMessage } from '../lib/safeError'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
@@ -54,6 +64,10 @@ ChartJS.register(
 const TABS = ['Scrapped Register', 'Overview', 'By Brand', 'By Site', 'Disposal Log']
 
 const NA = 'N/A'
+
+// Removal-reason donut: mid-tone hues that read on both the light and dark card.
+const REASON_COLORS = ['#ef4444', '#f59e0b', '#3b82f6', '#a855f7', '#f97316']
+const EMPTY_DISP = { disposal_vendor: '', collection_due: '', recovery_value: '', status: 'Pending' }
 
 const DISPOSAL_STATUSES = {
   Pending:   { text: 'text-yellow-400', bg: 'bg-yellow-900/30', border: 'border-yellow-700' },
@@ -130,28 +144,6 @@ function fmtCurrency(n, currency) {
 const fmtPct = (v, d = 1) => (v == null ? NA : `${Number(v).toFixed(d)}%`)
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
-
-function KpiCard({ icon: Icon, label, value, sub, color = 'text-[var(--text-primary)]', warn = false, badge }) {
-  return (
-    <div
-      className={`bg-[var(--surface-1)] border ${warn ? 'border-red-700/60' : 'border-[var(--input-border)]'} rounded-xl p-4 flex items-start gap-3 min-w-0`}
-    >
-      <div className={`p-2 rounded-lg bg-[var(--input-bg)] shrink-0 ${color}`} aria-hidden="true">
-        <Icon size={18} />
-      </div>
-      <div className="min-w-0">
-        <p className="text-[var(--text-muted)] text-xs leading-none">{label}</p>
-        <p className={`text-2xl font-bold mt-1 tabular-nums ${color} break-words`}>{value}</p>
-        {sub && <p className="text-[var(--text-muted)] text-xs mt-0.5 leading-tight">{sub}</p>}
-        {badge && (
-          <span className={`inline-block mt-1.5 px-2 py-0.5 rounded-full border text-[10px] font-semibold ${badge.cls}`}>
-            {badge.label}
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}
 
 function TrendCell({ trend }) {
   const map = {
@@ -244,7 +236,7 @@ export default function TyreScrapManagement() {
   const [error,      setError]      = useState(null)
   const [truncated,  setTruncated]  = useState(false)
   const [loaded,     setLoaded]     = useState(false)
-  const [activeTab,  setActiveTab]  = useState('Overview')
+  const [activeTab,  setActiveTab]  = useState('Scrapped Register')
 
   // Filters
   const [dateRangeIdx, setDateRangeIdx] = useState(2)          // 180 days default
@@ -266,6 +258,9 @@ export default function TyreScrapManagement() {
   // A failed read of the statuses must not render every tyre as "Pending",
   // and a status button must not overwrite a value we could not read.
   const [disposalLoadError, setDisposalLoadError] = useState('')
+  const [disposalRows, setDisposalRows] = useState([])
+  const [governanceReady, setGovernanceReady] = useState(false)
+  const [disposalsLoaded, setDisposalsLoaded] = useState(false)
 
   // ── Approval & Workflow Engine (per disposal-log record) ──────────────────────
   // The open record hosts <EntityApprovalPanel/>. While that record's workflow is
@@ -286,9 +281,11 @@ export default function TyreScrapManagement() {
   const loadDisposals = useCallback(async () => {
     setDisposalLoadError('')
     try {
-      const { data, error: err } = await scrapApi.listTyreDisposals()
-      if (err) throw err
-      setDisposals(Object.fromEntries((data || []).map((d) => [d.tyre_record_id, d.status])))
+      const { rows, governanceReady: ready } = await scrapApi.listTyreDisposalsFull()
+      setDisposals(Object.fromEntries(rows.map((d) => [d.tyre_record_id, d.status])))
+      setDisposalRows(rows)
+      setGovernanceReady(ready)
+      setDisposalsLoaded(true)
     } catch (e) {
       setDisposalLoadError(toUserMessage(e, 'Disposal statuses could not be loaded.'))
     }
@@ -320,7 +317,7 @@ export default function TyreScrapManagement() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  const refreshAll = useCallback(() => { loadData(); loadDisposals() }, [loadData, loadDisposals])
+  const refreshAll = useCallback(() => { loadData(); loadDisposals(); setRegisterRefresh(n => n + 1) }, [loadData, loadDisposals])
 
   // A failed first read is shown as a failure, never as "no scrap".
   const analysisFailed = !!error && !loaded
@@ -452,9 +449,11 @@ export default function TyreScrapManagement() {
         if (err) {
           setDisposals(prev => ({ ...prev, [id]: prevStatus ?? 'Pending' }))
           setDisposalError(toUserMessage(err, 'Could not save the disposal status.'))
+        } else {
+          loadDisposals()
         }
       })
-  }, [expandedId, wfLocked, disposalLoadError])
+  }, [expandedId, wfLocked, disposalLoadError, loadDisposals])
 
   // ── Chart data (colours follow the report palette) ────────────────────────────
   const trendChartData = useMemo(() => {
@@ -780,182 +779,449 @@ export default function TyreScrapManagement() {
     })
   }
 
+  // ── Mockup layer: trends, money scope, governance, selected tyre ──────────────
+  // Same filters as the trend base, with no date cutoff: the previous window is
+  // cut from this so its scope matches the tiles exactly.
+  const scopeNoDate = useMemo(() => countryFiltered.filter(t => {
+    if (filterSite !== 'All' && t.site !== filterSite) return false
+    if (filterBrand !== 'All' && t.brand !== filterBrand) return false
+    if (filterReason !== 'All') {
+      const reason = (t.removal_reason ?? '').toLowerCase()
+      if (!reason.includes(filterReason.toLowerCase())) return false
+    }
+    return true
+  }), [countryFiltered, filterSite, filterBrand, filterReason])
+  const previousKpis = useMemo(
+    () => previousWindowKpis(scopeNoDate, DATE_RANGE_OPTS[dateRangeIdx].days, dataAnchor),
+    [scopeNoDate, dateRangeIdx, dataAnchor],
+  )
+  const trends = useMemo(() => scrapTrends(kpis, previousKpis), [kpis, previousKpis])
+  const money = useMemo(() => moneyScope(scrapped, activeCountry, activeCurrency), [scrapped, activeCountry, activeCurrency])
+  const trendBarsData = useMemo(() => trendBars(monthlyTrend, 9), [monthlyTrend])
+  const reasonSegs = useMemo(() => reasonSegments(reasons, REASON_COLORS), [reasons])
+
+  const [registerInfo, setRegisterInfo] = useState(null)
+  const [selected, setSelected] = useState(null)
+  const [markSignal, setMarkSignal] = useState(0)
+  const [registerRefresh, setRegisterRefresh] = useState(0)
+  const [scrapPerms, setScrapPerms] = useState({ canScrap: false, canUndo: false })
+  const [showApproval, setShowApproval] = useState(false)
+  const [selWfLocked, setSelWfLocked] = useState(false)
+  const [dispForm, setDispForm] = useState(EMPTY_DISP)
+  const [dispBusy, setDispBusy] = useState(false)
+  const [dispMsg, setDispMsg] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    getScrapPermissions().then(p => { if (!cancelled) setScrapPerms(p) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  const handleRegisterLoaded = useCallback((res) => {
+    setRegisterInfo(res?.ok ? { total: res.total || 0, withDisposal: res.linked?.with_disposal ?? null } : null)
+    if (res?.ok) {
+      // keep the selected card in step with what the register now shows
+      setSelected(prev => (prev ? (res.rows || []).find(r => r.serial === prev.serial) || null : prev))
+    }
+  }, [])
+
+  const selectedDisposal = useMemo(
+    () => (selected?.tyre_record_id ? disposalRows.find(d => d.tyre_record_id === selected.tyre_record_id) || null : null),
+    [selected, disposalRows],
+  )
+  const selectedCurrency = selected?.country ? COUNTRY_CURRENCY[selected.country] || null : (activeCountry !== 'All' ? activeCurrency : null)
+  const selectedFacts = useMemo(() => selectedTyreFacts(selected), [selected])
+
+  const selectRegisterRow = useCallback((row) => {
+    setSelected(row || null)
+    setShowApproval(false)
+    setSelWfLocked(false)
+    setDispMsg(null)
+  }, [])
+
+  useEffect(() => {
+    setDispForm({
+      disposal_vendor: selectedDisposal?.disposal_vendor || '',
+      collection_due: selectedDisposal?.collection_due || '',
+      recovery_value: selectedDisposal?.recovery_value ?? '',
+      status: selectedDisposal?.status || 'Pending',
+    })
+  }, [selectedDisposal, selected?.serial])
+
+  const saveSelectedDisposal = useCallback(async (status) => {
+    if (!selected?.tyre_record_id || selWfLocked) return
+    setDispBusy(true); setDispMsg(null)
+    try {
+      await saveTyreDisposal(selected.tyre_record_id, {
+        status,
+        disposal_vendor: dispForm.disposal_vendor,
+        collection_due: dispForm.collection_due,
+        recovery_value: selectedCurrency ? dispForm.recovery_value : null,
+        currency: selectedCurrency,
+      }, { governanceReady })
+      setDispMsg({ tone: 'good', text: `${selected.serial}: disposal recorded as ${status}.` })
+      loadDisposals()
+      setRegisterRefresh(n => n + 1)
+    } catch (e) {
+      setDispMsg({ tone: 'bad', text: toUserMessage(e, 'Could not save the disposal decision.') })
+    } finally {
+      setDispBusy(false)
+    }
+  }, [selected, selWfLocked, dispForm, selectedCurrency, governanceReady, loadDisposals])
+
+  const openScrapDialog = useCallback(() => {
+    setActiveTab('Scrapped Register')
+    setMarkSignal(n => n + 1)
+  }, [])
+
+  const governance = useMemo(() => governanceRows(disposalRows, {
+    registerTotal: registerInfo?.total ?? null,
+    withDisposal: registerInfo?.withDisposal ?? null,
+    ready: governanceReady,
+  }), [disposalRows, registerInfo, governanceReady])
+  const governanceLoading = !disposalsLoaded && !disposalLoadError
+
+  const fmtDay = (v) => {
+    if (!v) return 'an unknown date'
+    const d = new Date(v)
+    return Number.isNaN(d.getTime()) ? 'an unknown date' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────────
 
-  const rateTone = kpis.scrapRate == null ? 'text-[var(--text-muted)]'
-    : kpis.scrapRate > 25 ? 'text-red-400'
-    : kpis.scrapRate > 15 ? 'text-orange-400'
-    : kpis.scrapRate > 8 ? 'text-yellow-400'
-    : 'text-green-400'
+  const periodLabel = DATE_RANGE_OPTS[dateRangeIdx].label
+  const kpiLoading = loading && !loaded
+  const costTitle = money.ok ? undefined : `Costs are in different currencies (${(money.countries || []).join(', ')}). Pick one country to see the scrap cost.`
+  const trendTitle = DATE_RANGE_OPTS[dateRangeIdx].days
+    ? `Against the previous ${DATE_RANGE_OPTS[dateRangeIdx].days} days`
+    : undefined
+  const maxBar = trendBarsData.reduce((m, b) => Math.max(m, b.count), 0)
 
   return (
-    <div className="space-y-6">
-
-      <PageHeader
-        title="Tyre Scrap Management"
-        subtitle="Record and analyse tyre scrap events and root causes"
-        icon={Trash2}
-        actions={
-          <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={exportDisposalPdf} disabled={analysisFailed} className={BTN_CLS}>
-              <FileText size={14} aria-hidden="true" /> PDF
-            </button>
-            <button onClick={exportDisposalExcel} disabled={analysisFailed} className={BTN_CLS}>
-              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
-            </button>
-            <button onClick={refreshAll} disabled={loading} className={BTN_CLS}>
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} aria-hidden="true" /> Refresh
-            </button>
-          </div>
-        }
-      />
-
-      {/* ── Refresh error (data already on screen stays, but it may be stale) ── */}
-      {error && loaded && (
-        <div role="alert" className="bg-red-900/40 border border-red-700 rounded-xl px-4 py-3 flex items-center gap-3 flex-wrap">
-          <AlertOctagon className="text-red-400 shrink-0" size={18} aria-hidden="true" />
-          <p className="text-red-300 text-sm flex-1">{error} The figures below are from the previous load.</p>
-          <button onClick={loadData} className={BTN_CLS}><RefreshCw size={14} aria-hidden="true" /> Retry</button>
+    <div className="cc tsm-page">
+      <header className="tsm-head">
+        <div className="tsm-head-copy">
+          <nav className="tsm-crumbs" aria-label="Breadcrumb">
+            <Link to="/tyre-records">Tyre management</Link>
+            <ChevronRight size={13} aria-hidden="true" />
+            <span aria-current="page">Scrap management</span>
+          </nav>
+          <h1>Tyre Scrap Management</h1>
+          <p>Record and analyse tyre scrap events, root causes, recovery and disposal governance.</p>
         </div>
-      )}
-
-      {/* ── Global filter bar ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap gap-2 items-end" role="group" aria-label="Scrap analysis filters">
-        <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">
-          Period
-          <select value={dateRangeIdx} onChange={e => setDateRangeIdx(Number(e.target.value))} className={FIELD_CLS}>
-            {DATE_RANGE_OPTS.map((o, i) => <option key={o.label} value={i}>{o.label}</option>)}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">
-          Site
-          <select value={filterSite} onChange={e => setFilterSite(e.target.value)} className={FIELD_CLS}>
-            {siteOptions.map(s => <option key={s} value={s}>{s === 'All' ? 'All sites' : s}</option>)}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">
-          Brand
-          <select value={filterBrand} onChange={e => setFilterBrand(e.target.value)} className={FIELD_CLS}>
-            {brandOptions.map(b => <option key={b} value={b}>{b === 'All' ? 'All brands' : b}</option>)}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">
-          Removal reason
-          <select value={filterReason} onChange={e => setFilterReason(e.target.value)} className={FIELD_CLS}>
-            {REMOVAL_REASONS.map(r => <option key={r} value={r}>{r === 'All' ? 'All reasons' : r}</option>)}
-          </select>
-        </label>
-        {filtersActive && (
-          <button onClick={clearFilters} className={BTN_CLS}><X size={14} aria-hidden="true" /> Clear filters</button>
-        )}
-        <div className="flex items-center gap-2 lg:ml-auto text-xs text-[var(--text-muted)] min-h-[44px]" aria-live="polite">
-          <Filter size={12} aria-hidden="true" />
-          <span>{scrapped.length} flagged as scrap of {filtered.length} tyres</span>
-        </div>
-      </div>
-
-      <p className="text-[11px] text-[var(--text-dim)] flex items-start gap-1.5">
-        <Info size={12} className="shrink-0 mt-0.5" aria-hidden="true" />
-        <span>
-          The figures and the Overview, By Brand, By Site and Disposal Log tabs are a scrap-rate analysis: a tyre counts
-          when it is rated Critical or categorised Scrap. The Scrapped Register tab lists the tyres somebody actually marked as scrap.
-        </span>
-      </p>
-
-      {/* ── Capped view note ── */}
-      {truncated && (
-        <div className="flex items-center gap-2 text-xs text-amber-400">
-          <Info size={12} className="shrink-0" aria-hidden="true" />
-          <span>Capped view: showing the first 50,000 tyre records. Narrow the date range or filters for the full set.</span>
-        </div>
-      )}
-
-      {/* ── KPI Cards ── */}
-      {loading && !loaded ? (
-        <SkeletonTable rows={2} cols={5} />
-      ) : !analysisFailed && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
-          <KpiCard
-            icon={Trash2}
-            label="Flagged as scrap"
-            value={fmt(kpis.scrapCount)}
-            sub={DATE_RANGE_OPTS[dateRangeIdx].label}
-            color="text-red-400"
-            warn={kpis.scrapCount > 0}
-          />
-          <KpiCard
-            icon={DollarSign}
-            label="Scrap cost"
-            value={fmtCurrency(kpis.totalCost, activeCurrency)}
-            sub={kpis.scrapCount ? `Priced on ${kpis.costedCount} of ${kpis.scrapCount} tyres` : 'No scrap in the window'}
-            color="text-orange-400"
-          />
-          <KpiCard
-            icon={Activity}
-            label="Avg km life at scrap"
-            value={kpis.avgKmLife != null ? `${fmt(kpis.avgKmLife)} km` : NA}
-            sub={fleetAvgKmLife != null ? `Fleet avg: ${fmt(fleetAvgKmLife)} km` : 'Fleet avg: N/A'}
-            color={
-              fleetAvgKmLife == null || kpis.avgKmLife == null ? 'text-[var(--text-muted)]'
-                : kpis.avgKmLife < fleetAvgKmLife * 0.6 ? 'text-red-400'
-                : kpis.avgKmLife < fleetAvgKmLife * 0.8 ? 'text-yellow-400'
-                : 'text-green-400'
-            }
-          />
-          <KpiCard
-            icon={BarChart3}
-            label="Scrap rate"
-            value={fmtPct(kpis.scrapRate)}
-            sub={`${kpis.scrapCount} of ${filtered.length} tyres`}
-            color={rateTone}
-            badge={
-              kpis.scrapRate == null ? null
-                : kpis.scrapRate > 25
-                ? { label: 'Critical, investigate', cls: 'text-red-400 bg-red-900/30 border-red-700' }
-                : kpis.scrapRate > 15
-                ? { label: 'Elevated, monitor', cls: 'text-orange-400 bg-orange-900/30 border-orange-700' }
-                : null
-            }
-          />
-          <KpiCard
-            icon={Recycle}
-            label="Potential retread savings"
-            value={fmtCurrency(kpis.retreadSavings, activeCurrency)}
-            sub={`Estimate: about ${kpis.retreadCandidates} units retreadable`}
-            color="text-blue-400"
-          />
-        </div>
-      )}
-
-      {/* ── Tabs ── */}
-      <div role="tablist" aria-label="Scrap management views" className="flex gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1 overflow-x-auto">
-        {TABS.map(t => (
-          <button
-            key={t}
-            role="tab"
-            aria-selected={activeTab === t}
-            onClick={() => setActiveTab(t)}
-            className={`min-h-[44px] px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
-              activeTab === t
-                ? 'bg-[var(--input-bg-hover)] text-[var(--text-primary)] shadow-sm'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-            }`}
-          >
-            {t}
+        <div className="tsm-head-actions">
+          <label className="tsm-ctl">
+            <CalendarRange size={14} aria-hidden="true" />
+            <span className="sr-only">Period</span>
+            <select className="cc-select" value={dateRangeIdx} onChange={e => setDateRangeIdx(Number(e.target.value))}>
+              {DATE_RANGE_OPTS.map((o, i) => <option key={o.label} value={i}>{o.label}</option>)}
+            </select>
+          </label>
+          <label className="tsm-ctl">
+            <Building2 size={14} aria-hidden="true" />
+            <span className="sr-only">Site</span>
+            <select className="cc-select" value={filterSite} onChange={e => setFilterSite(e.target.value)}>
+              {siteOptions.map(s => <option key={s} value={s}>{s === 'All' ? 'All sites' : s}</option>)}
+            </select>
+          </label>
+          <button type="button" className="cc-btn-ghost" onClick={refreshAll} disabled={loading} aria-label="Refresh">
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} aria-hidden="true" />
           </button>
-        ))}
-      </div>
+          <button type="button" className="cc-btn-ghost" onClick={exportDisposalExcel} disabled={analysisFailed}>
+            <FileSpreadsheet size={14} aria-hidden="true" /> Excel
+          </button>
+          <button type="button" className="cc-btn-ghost" onClick={exportDisposalPdf} disabled={analysisFailed}>
+            <FileText size={14} aria-hidden="true" /> PDF
+          </button>
+          <button
+            type="button"
+            className="cc-btn-primary tsm-primary"
+            onClick={openScrapDialog}
+            disabled={!scrapPerms.canScrap}
+            title={scrapPerms.canScrap ? 'Mark a tyre as scrap by its serial number' : 'Marking a tyre as scrap needs the tyre scrap permission'}
+          >
+            <Plus size={16} aria-hidden="true" /> Scrap tyre
+          </button>
+        </div>
+      </header>
+
+      {error && loaded && (
+        <div role="alert" className="cc-card tsm-banner bad">
+          <AlertOctagon size={18} aria-hidden="true" />
+          <p>{error} The figures below are from the previous load.</p>
+          <button type="button" className="cc-btn" onClick={loadData}>Retry</button>
+        </div>
+      )}
+      {truncated && (
+        <div role="status" className="cc-card tsm-banner warn">
+          <Info size={16} aria-hidden="true" />
+          <p>Capped view: the analysis reads the first 50,000 tyre records. Narrow the period or filters for the full set.</p>
+        </div>
+      )}
+
+      {analysisFailed ? (
+        <LoadFailed message={error} onRetry={loadData} />
+      ) : (
+        <div className="tk-row" aria-label="Scrap indicators">
+          <TyreKpiTile
+            icon={Trash2} tone="t-red" label="Flagged as scrap" loading={kpiLoading}
+            display={fmt(kpis.scrapCount)} sub={periodLabel}
+            trend={trends.count} goodWhenUp={false} trendTitle={trendTitle}
+            title="Tyres rated Critical or categorised Scrap in the period"
+          />
+          <TyreKpiTile
+            icon={DollarSign} tone="t-purple" label="Scrap cost" loading={kpiLoading}
+            display={money.ok ? fmtCurrency(kpis.totalCost, money.currency) : NA}
+            sub={money.ok
+              ? (kpis.scrapCount ? `Priced on ${fmt(kpis.costedCount)} of ${fmt(kpis.scrapCount)} scrap events` : 'No scrap in the period')
+              : 'Pick one country: costs are in different currencies'}
+            trend={money.ok ? trends.cost : null} goodWhenUp={false} trendTitle={trendTitle} title={costTitle}
+          />
+          <TyreKpiTile
+            icon={Activity} tone="t-blue" label="Avg life at scrap" loading={kpiLoading}
+            display={kpis.avgKmLife != null ? `${fmt(kpis.avgKmLife)} km` : NA}
+            sub={fleetAvgKmLife != null ? `Fleet avg ${fmt(fleetAvgKmLife)} km` : 'Fleet average not measurable'}
+            trend={trends.life} goodWhenUp trendTitle={trendTitle}
+          />
+          <TyreKpiTile
+            icon={BarChart3} tone="t-amber" label="Scrap rate" loading={kpiLoading}
+            display={fmtPct(kpis.scrapRate)} sub={`${fmt(kpis.scrapCount)} of ${fmt(filtered.length)} tyres in scope`}
+            trend={trends.rate} goodWhenUp={false} trendTitle={trendTitle}
+          />
+          <TyreKpiTile
+            icon={Recycle} tone="t-green" label="Retread potential" loading={kpiLoading}
+            display={`${fmt(kpis.retreadCandidates)} casings`}
+            sub={money.ok && kpis.retreadSavings != null
+              ? `Est. ${fmtCurrency(kpis.retreadSavings, money.currency)} saving`
+              : 'Saving not measurable'}
+            trend={trends.retread} goodWhenUp trendTitle={trendTitle}
+            title={`Estimate: ${Math.round(RETREAD_SHARE * 100)}% of scrapped casings retreadable at ${Math.round(RETREAD_SAVING * 100)}% lower cost than new`}
+          />
+        </div>
+      )}
+
+      {!analysisFailed && (
+        <div className="tsm-row">
+          <Card title="Monthly scrap trend" sub={`Scrap count by month${filterSite !== 'All' ? `, ${filterSite}` : ''}. Hover a bar for cost.`}>
+            <CardState state={{ loading: kpiLoading, data: loaded ? monthlyTrend : null, error: null }}
+              empty={loaded && maxBar === 0 ? 'No scrap recorded in the last nine months for these filters.' : null}>
+              <div className="tsm-bars" role="img" aria-label={trendBarsData.map(b => `${b.label}: ${b.count}`).join(', ')}>
+                {trendBarsData.map((b, i) => (
+                  <div key={b.key} className="tsm-bar"
+                    title={`${b.label}: ${b.count} scrapped${money.ok ? `, ${fmtCurrency(b.cost, money.currency)}` : ''}`}>
+                    <span className="tsm-bar-n">{b.count || ''}</span>
+                    <i className={i % 2 ? 'alt' : ''} style={{ height: `${Math.max(b.pct, b.count ? 4 : 0)}%` }} />
+                    <small>{b.label}</small>
+                  </div>
+                ))}
+              </div>
+            </CardState>
+          </Card>
+
+          <Card title="Scrap by removal reason" sub={periodLabel}>
+            <CardState state={{ loading: kpiLoading, data: loaded ? reasons : null, error: null }}
+              empty={loaded && !scrapped.length ? 'No scrap in this period, so there are no removal reasons to show.' : null}>
+              <Donut
+                segments={reasonSegs}
+                total={scrapped.length}
+                centerLabel="Scrapped"
+                onSelect={(s) => {
+                  const match = REMOVAL_REASONS.find(r => r !== 'All' && s.label.toLowerCase().includes(r.toLowerCase()))
+                  if (match) setFilterReason(match)
+                }}
+              />
+            </CardState>
+          </Card>
+
+          <Card title="Disposal governance" sub="Scrapped register, by disposal decision">
+            <CardState
+              state={{ loading: governanceLoading, data: governanceLoading ? null : governance, error: disposalLoadError || null, retry: loadDisposals }}
+            >
+              <ul className="tsm-gov">
+                {governance.map(g => (
+                  <li key={g.key} title={g.hint}>
+                    <span>{g.label}</span>
+                    {g.count == null
+                      ? <span className="cc-na" title={governanceReady || g.key === 'not_started' ? 'Not available yet' : 'Needs the disposal governance update to be applied'}>N/A</span>
+                      : <span className={`cc-pill ${g.tone}`}>{fmt(g.count)}</span>}
+                  </li>
+                ))}
+              </ul>
+              {!governanceReady && (
+                <p className="tsm-note">Recycled, destroyed and vendor collection dates are not set up on this database yet. They start counting once the disposal governance update is applied.</p>
+              )}
+            </CardState>
+          </Card>
+        </div>
+      )}
+
+      <Card className="tsm-filterbar" title={null}>
+        <div className="cc-filters" role="group" aria-label="Scrap analysis filters">
+          <label className="cc-field">
+            <span>Brand</span>
+            <select className="cc-select" value={filterBrand} onChange={e => setFilterBrand(e.target.value)}>
+              {brandOptions.map(b => <option key={b} value={b}>{b === 'All' ? 'All brands' : b}</option>)}
+            </select>
+          </label>
+          <label className="cc-field">
+            <span>Removal reason</span>
+            <select className="cc-select" value={filterReason} onChange={e => setFilterReason(e.target.value)}>
+              {REMOVAL_REASONS.map(r => <option key={r} value={r}>{r === 'All' ? 'All reasons' : r}</option>)}
+            </select>
+          </label>
+          {filtersActive && (
+            <button type="button" className="cc-btn-ghost" onClick={clearFilters}><X size={14} aria-hidden="true" /> Clear filters</button>
+          )}
+          <span className="tsm-count" aria-live="polite">
+            <Filter size={12} aria-hidden="true" /> {fmt(scrapped.length)} flagged as scrap of {fmt(filtered.length)} tyres
+          </span>
+        </div>
+        <p className="tsm-note">
+          The tiles, charts and the Overview, By Brand, By Site and Disposal Log tabs are a scrap-rate analysis: a tyre counts
+          when it is rated Critical or categorised Scrap. The Scrapped Register lists the tyres somebody actually marked as scrap.
+        </p>
+      </Card>
+
+      <Tabs
+        label="Scrap management views"
+        variant="line"
+        value={activeTab}
+        onChange={setActiveTab}
+        tabs={TABS.map(t => ({ key: t, label: t }))}
+      />
 
       {/* ══════════════════════════════════════════════════════════════════════
           Tab: Scrapped Register - the tyres someone actually marked scrap.
           Independent of the heuristic read, so it works even if that failed.
       ════════════════════════════════════════════════════════════════════════ */}
       {activeTab === 'Scrapped Register' && (
-        <ScrappedRegister country={activeCountry} currency={activeCurrency} />
+        <ScrappedRegister
+          country={activeCountry}
+          currency={activeCurrency}
+          openMarkSignal={markSignal}
+          refreshSignal={registerRefresh}
+          onLoaded={handleRegisterLoaded}
+          onSelect={selectRegisterRow}
+        />
+      )}
+
+      {activeTab === 'Scrapped Register' && !selected && (registerInfo?.total ?? 0) > 0 && (
+        <p className="tsm-note tsm-hint">Select a tyre in the register to review it, record its disposal or start a scrap approval.</p>
+      )}
+
+      {activeTab === 'Scrapped Register' && selected && (
+        <Card
+          className="tsm-selected"
+          title={
+            <span className="tsm-sel-title">
+              <span className="tsm-sel-eyebrow">Selected tyre</span>
+              <span>{[selected.serial, selected.brand, selected.size].filter(Boolean).join(', ')}</span>
+            </span>
+          }
+          action={(
+            <button type="button" className="cc-icon-btn" onClick={() => setSelected(null)} aria-label="Close selected tyre"><X size={14} /></button>
+          )}
+        >
+          <div className="tsm-sel-grid">
+            <div className="tsm-sel-facts">
+              {selectedFacts.length
+                ? <p>{selectedFacts.join('  |  ')}</p>
+                : <p className="cc-na">No vehicle, life or reason is recorded for this tyre.</p>}
+              <p className="tsm-sel-meta">
+                {selected.marked
+                  ? `Scrapped by ${selected.scrapped_by_name || 'an unknown user'} on ${fmtDay(selected.scrapped_at)}`
+                  : 'Status changed in bulk from the tyre grid: no record of who scrapped it'}
+                {' | '}Disposal: <span className={`cc-pill ${disposalTone(selectedDisposal?.status)}`}>{selectedDisposal?.status || 'Not started'}</span>
+              </p>
+              <div className="tsm-sel-links">
+                <Link className="cc-link" to={`/tyre-passport/${encodeURIComponent(selected.serial)}`}>Open tyre passport</Link>
+                {selected.asset_no && <Link className="cc-link" to={`/asset-management/${encodeURIComponent(selected.asset_no)}`}>Open vehicle</Link>}
+                <button type="button" className="cc-link cc-link-btn" onClick={() => setShowApproval(v => !v)} disabled={!selected.tyre_record_id}>
+                  {showApproval ? 'Hide scrap approval' : 'Scrap approval'}
+                </button>
+              </div>
+            </div>
+
+            <form className="tsm-disp" onSubmit={(e) => { e.preventDefault(); saveSelectedDisposal(dispForm.status) }}>
+              {!selected.tyre_record_id ? (
+                <p className="cc-na">This register row has no tyre record behind it, so a disposal decision cannot be attached.</p>
+              ) : selWfLocked ? (
+                <p className="tsm-lock"><Lock size={13} aria-hidden="true" /> This tyre is in an approval. Disposal changes unlock once the approval finishes.</p>
+              ) : (
+                <>
+                  {governanceReady && (
+                    <div className="tsm-disp-fields">
+                      <label className="cc-field">
+                        <span>Vendor</span>
+                        <input className="tsm-input" value={dispForm.disposal_vendor} maxLength={160}
+                          onChange={e => setDispForm(f => ({ ...f, disposal_vendor: e.target.value }))} placeholder="Recycler or retreader" />
+                      </label>
+                      <label className="cc-field">
+                        <span>Collection due</span>
+                        <input className="tsm-input" type="date" value={dispForm.collection_due}
+                          onChange={e => setDispForm(f => ({ ...f, collection_due: e.target.value }))} />
+                      </label>
+                      <label className="cc-field">
+                        <span>Recovery value{selectedCurrency ? ` (${selectedCurrency})` : ''}</span>
+                        <input className="tsm-input" type="number" min="0" step="0.01" inputMode="decimal" value={dispForm.recovery_value}
+                          disabled={!selectedCurrency}
+                          title={selectedCurrency ? undefined : 'This tyre has no country, so its currency is unknown'}
+                          onChange={e => setDispForm(f => ({ ...f, recovery_value: e.target.value }))} />
+                      </label>
+                    </div>
+                  )}
+                  <div className="tsm-disp-actions">
+                    <button type="button" className="cc-btn-primary" disabled={dispBusy || !!disposalLoadError}
+                      onClick={() => saveSelectedDisposal('Disposed')}>
+                      <CheckCircle size={14} aria-hidden="true" /> Approve disposal
+                    </button>
+                    <button type="button" className="cc-btn-ghost tsm-blue" disabled={dispBusy || !!disposalLoadError}
+                      onClick={() => saveSelectedDisposal('Retreaded')}>
+                      <Recycle size={14} aria-hidden="true" /> Send to retread
+                    </button>
+                    <label className="tsm-ctl tsm-more">
+                      <span className="sr-only">Other disposal status</span>
+                      <select className="cc-select" value="" disabled={dispBusy || !!disposalLoadError}
+                        onChange={e => { if (e.target.value) saveSelectedDisposal(e.target.value) }}>
+                        <option value="">More...</option>
+                        {disposalStatusOptions(governanceReady).filter(s => s !== 'Disposed' && s !== 'Retreaded').map(s => (
+                          <option key={s} value={s}>{s === 'Pending' ? 'Reset to pending' : `Mark ${s.toLowerCase()}`}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                </>
+              )}
+              {dispMsg && <p role="status" className={`tsm-msg ${dispMsg.tone}`}>{dispMsg.text}</p>}
+            </form>
+          </div>
+
+          {showApproval && selected.tyre_record_id && (
+            <div className="tsm-approval">
+              <EntityApprovalPanel
+                entityType="tyre_scrap"
+                entityId={selected.tyre_record_id}
+                entityLabel={selected.serial}
+                context={{
+                  scrap_cost: selected.cost_per_tyre ?? null,
+                  reason: selected.reason ?? null,
+                  brand: selected.brand ?? null,
+                  quantity: 1,
+                  site: selected.site ?? null,
+                  position: selected.tyre_position ?? null,
+                }}
+                onStateChange={({ isActive, isLocked }) => {
+                  const locked = !!(isActive || isLocked)
+                  setSelWfLocked(prev => (prev === locked ? prev : locked))
+                }}
+                title="Scrap approval"
+              />
+            </div>
+          )}
+        </Card>
       )}
 
       {activeTab !== 'Scrapped Register' && loading && !loaded && <SkeletonTable rows={8} cols={6} />}
-      {activeTab !== 'Scrapped Register' && analysisFailed && <LoadFailed message={error} onRetry={loadData} />}
 
       {activeTab !== 'Scrapped Register' && loaded && (
         <>

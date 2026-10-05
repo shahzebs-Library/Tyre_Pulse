@@ -35,6 +35,7 @@ vi.mock('../lib/api/fleetCpk', () => ({
     { asset_no: 'TM634', vehicle_type: 'TR-MIXER', unit: 'km', side: 'movable', km: 187080, hours: 1200, has_km: true, has_hours: true, status: 'both_present' },
   ] }),
   getCpkKmIntelligence: () => Promise.resolve({ ok: false }),
+  getFleetAreaMap: () => Promise.resolve([]),
 }))
 vi.mock('../lib/api/cpkDrivers', () => ({ getCpkDrivers: () => Promise.resolve({ ok: false, windows: null, segments: [] }) }))
 vi.mock('../lib/api/brandSizeCpk', () => ({ getBrandSizeCpk: () => Promise.resolve([]) }))
@@ -44,6 +45,25 @@ import CpkIntelligence from '../pages/CpkIntelligence'
 beforeEach(() => cleanup())
 
 describe('CpkIntelligence renders every tab without crashing', () => {
+  it('overview shows the mockup KPIs, both rate charts and the asset-type table from real rows', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getAllByText('TR-MIXER').length).toBeGreaterThan(0))
+    expect(screen.getByText(/Fleet CPK, tyre/)).toBeTruthy()
+    expect(screen.getByText(/Non-movable CPH/)).toBeTruthy()
+    expect(screen.getByText('Movable assets: cost per km')).toBeTruthy()
+    expect(screen.getAllByText('GENERATOR').length).toBeGreaterThan(0)
+    expect(screen.getByText('68%')).toBeTruthy()
+    // the drivers mock is empty, so the card says so instead of inventing drivers
+    expect(screen.getByText(/no change to explain/)).toBeTruthy()
+  })
+
+  it('lineage buttons switch to Scenario Studio', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Scenario Studio')).toBeTruthy())
+    fireEvent.click(screen.getByText('Scenario Studio'))
+    await waitFor(() => expect(screen.getAllByRole('tab').find((t) => t.getAttribute('aria-selected') === 'true')?.textContent).toBe('Scenario studio'))
+  })
+
   it('mounts the default fleet tab', async () => {
     renderPage()
     await waitFor(() => expect(screen.getByText(/CPK Intelligence/i)).toBeTruthy())
@@ -52,10 +72,10 @@ describe('CpkIntelligence renders every tab without crashing', () => {
   it('clicking through every tab never throws', async () => {
     renderPage()
     await waitFor(() => expect(screen.getByText(/CPK Intelligence/i)).toBeTruthy())
-    const tabLabels = ['Per vehicle', 'KM source', 'Units & why different', 'Km intelligence', 'Custom report', 'Scenario studio', 'Brand value', 'Why it changed']
+    const tabLabels = ['Per vehicle', 'KM source', 'Units & why different', 'KM intelligence', 'Custom report', 'Scenario studio', 'Brand value', 'Why it changed']
     for (const label of tabLabels) {
-      const btn = screen.getAllByRole('button').find((b) => b.textContent?.trim() === label)
-      if (!btn) continue
+      const btn = screen.getAllByRole('tab').find((b) => b.textContent?.trim() === label)
+      expect(btn).toBeTruthy()
       fireEvent.click(btn)
       // let the lazy chunk + effects settle; a render throw rejects this.
       await waitFor(() => expect(screen.getByText(/CPK Intelligence/i)).toBeTruthy())

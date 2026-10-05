@@ -9,7 +9,7 @@
  * run the migration) degrades listing to an empty array so the page can render
  * its "apply the migration" empty state instead of erroring.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, isMissingColumn } from './_client'
 import { toFiniteNumber } from '../onboarding'
 import { safeHref } from '../safeUrl'
 
@@ -20,7 +20,17 @@ export const COLS =
   'id,organisation_id,country,phase,title,description,sort_order,required,status,' +
   'owner,due_date,completed_at,help_url,notes,created_by,created_at,updated_at'
 
-const PHASES = ['setup', 'data_import', 'configuration', 'team', 'integration', 'go_live']
+const PHASES = ['setup', 'data_import', 'configuration', 'team', 'integration', 'training', 'go_live']
+
+/**
+ * Column added by 20261005151000 (task dependency). Read with a fallback so the
+ * page keeps working before that migration is applied.
+ */
+export const DEPENDS_COL = 'depends_on'
+let dependsSupported = true
+
+/** True once a read has proved the depends_on column exists (or not yet tried). */
+export function dependencySupported() { return dependsSupported }
 const STATUSES = ['not_started', 'in_progress', 'completed', 'skipped', 'blocked']
 
 /** True when the failure is "table does not exist yet" (pre-migration). */
@@ -66,14 +76,23 @@ const asStatus = (v) => {
  */
 export async function listOnboardingTasks({ country, limit = 500 } = {}) {
   try {
-    let q = supabase.from('onboarding_tasks').select(COLS)
-    q = applyCountry(q, country)
-    return unwrap(
-      await q
+    const run = async (cols) => {
+      let q = supabase.from('onboarding_tasks').select(cols)
+      q = applyCountry(q, country)
+      return q
         .order('sort_order', { ascending: true, nullsFirst: true })
         .order('created_at', { ascending: true })
-        .limit(limit),
-    ) || []
+        .order('id', { ascending: true })
+        .limit(limit)
+    }
+    let res = await run(`${COLS},${DEPENDS_COL}`)
+    if (res.error && isMissingColumn(res.error)) {
+      dependsSupported = false
+      res = await run(COLS)
+    } else if (!res.error) {
+      dependsSupported = true
+    }
+    return unwrap(res) || []
   } catch (err) {
     if (isMissingRelation(err)) return []
     throw err
@@ -120,6 +139,7 @@ export async function createOnboardingTask(values = {}) {
     notes: values.notes ? String(values.notes).slice(0, 8000) : null,
     country: values.country ?? null,
   }
+  if (dependsSupported && values.depends_on) payload.depends_on = values.depends_on
   return unwrap(await supabase.from('onboarding_tasks').insert(payload).select(COLS).single())
 }
 
@@ -172,6 +192,10 @@ export async function updateOnboardingTask(id, patch = {}) {
   if (patch.help_url !== undefined) clean.help_url = asUrl(asText(patch.help_url, 1000))
   if (patch.notes !== undefined) clean.notes = patch.notes ? String(patch.notes).slice(0, 8000) : null
   if (patch.country !== undefined) clean.country = patch.country ?? null
+  if (patch.depends_on !== undefined && dependsSupported) {
+    if (patch.depends_on && patch.depends_on === id) throw new Error('A task cannot depend on itself.')
+    clean.depends_on = patch.depends_on || null
+  }
 
   return unwrap(await supabase.from('onboarding_tasks').update(clean).eq('id', id).select(COLS).single())
 }

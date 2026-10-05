@@ -20,6 +20,8 @@ const TYRES = [
 const disposalRead = vi.fn(() => Promise.resolve({ data: [{ tyre_record_id: 't1', status: 'Disposed' }], error: null }))
 vi.mock('../lib/api/tyreScrap', () => ({
   listTyreDisposals: () => disposalRead(),
+  listTyreDisposalsFull: () => disposalRead().then(({ data, error }) => { if (error) throw error; return { rows: data || [], governanceReady: false } }),
+  saveTyreDisposal: () => Promise.resolve({}),
   listScrapTyreRecords: () => ({ order: () => ({}) }),
   upsertTyreDisposal: () => Promise.resolve({ error: null }),
 }))
@@ -63,6 +65,16 @@ describe('TyreScrapManagement', () => {
     expect(screen.getByText('1 disposed, 0 retreaded, 1 pending')).toBeTruthy()
     fireEvent.click(screen.getByRole('tab', { name: 'Scrapped Register' }))
     await waitFor(() => expect(screen.getByText('SN9')).toBeTruthy())
+  })
+
+  it('selecting a scrapped tyre opens the selected tyre card', async () => {
+    render(<MemoryRouter><TyreScrapManagement /></MemoryRouter>)
+    await waitFor(() => expect(screen.getByText('SN9')).toBeTruthy())
+    fireEvent.click(screen.getByText('SN9').closest('tr'))
+    await waitFor(() => expect(screen.getByText('Selected tyre')).toBeTruthy())
+    expect(screen.getByText(/Scrapped by Ali/)).toBeTruthy()
+    // the register row carries no tyre record id, so no disposal can be attached
+    expect(screen.getByText(/cannot be attached/)).toBeTruthy()
   })
 
   it('shows a failed read as a failure with Retry, never as "no scrap"', async () => {

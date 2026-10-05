@@ -1,661 +1,583 @@
 /**
- * AuditTrail (route /audit): full history of uploads and user activity.
+ * AuditTrail (route /audit): immutable history of uploads, user activity and
+ * system changes, rebuilt on the Command Center kit to the owner's mockup.
  *
- * Two server-paged registers (audit log + upload history) on the shared
- * EnterpriseTable, a KPI strip with honest "Unavailable" statistics when a read
- * fails, filters (date, action, user, page search), a change-detail dialog with
- * a field-level old/new diff, full-filter Excel/PDF exports, and the Admin-only
- * reversible upload batch reversal (server RPC `reverse_legacy_upload`, typed
- * confirmation + reason). Presentation logic lives in the pure
- * `src/lib/auditTrailAnalytics.js` engine.
+ * Sources, all real and read under RLS:
+ *   - audit_log_v2   : the register (server paged), its KPI head-counts and the
+ *                      selected event's stored old/new values. audit_log_v2 RLS
+ *                      admits Admin/Manager/Director and super admins only; any
+ *                      other role is told so instead of seeing an empty log.
+ *   - upload_history : legacy uploads with the Admin-only batch reversal
+ *                      (reverse_legacy_upload RPC, typed confirmation + reason).
+ *   - import_batches + import_files : in-app import batches.
+ *   - audit_event_reviews (migration 20261005140000, may not be applied yet):
+ *                      "Investigate" flags; the page says when it is not set up.
+ *
+ * Honest gaps against the mockup: audit_log_v2 records no IP address, device or
+ * site on any row and has no severity or result column, so those columns are
+ * not shown; the event TYPE (derived from the action by a fixed rule) replaces
+ * severity. No EXPORT events are written anywhere, so there is no Exports tab.
+ * Pure shaping lives in src/lib/auditTrailView.js and auditTrailAnalytics.js.
  */
-import React, { useEffect, useState, useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  Activity, ShieldCheck, Database, Upload, Flag, ChevronRight, FileSpreadsheet, FileText,
+  RefreshCw, Search, X, History, Eye, Info, Loader2,
+} from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import useLatestRequest from '../lib/useLatestRequest'
-import { fetchAllPages } from '../lib/fetchAll'
-
 import { auditQuery, uploadHistoryQuery, readAuditExport, matchesAuditSearch } from '../lib/api/auditTrail'
+import {
+  loadAuditCounts, listImportBatches, loadReviews, flagAuditEvent, setReviewStatus,
+} from '../lib/api/auditTrailOverview'
+import { fetchAllPages } from '../lib/fetchAll'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { useAuth } from '../contexts/AuthContext'
 import { formatDateTime, formatDate } from '../lib/formatters'
-import {
-  FileSpreadsheet, FileText, ClipboardList, RefreshCw, Search, Eye, Activity, Upload, Users, Database, X,
-} from 'lucide-react'
-import PageHeader from '../components/ui/PageHeader'
-import EnterpriseTable from '../components/ui/EnterpriseTable'
 import Modal from '../components/ui/Modal'
-import { useReportMeta } from '../hooks/useReportMeta'
+import { Card, CardState, Kpi, Tabs, Pager, KitTable, fmtInt } from '../components/commandCenter/kit'
 import {
-  hasExpandable, changeDiff, actionMix, pageRangeLabel, pageCountFor, actorName,
-  auditExportRows, uploadExportRows, auditFileName, AUDIT_ACTIONS,
+  changeDiff, actorName, auditExportRows, uploadExportRows, auditFileName,
   AUDIT_EXPORT_COLS, AUDIT_EXPORT_HEADERS, UPLOAD_EXPORT_COLS, UPLOAD_EXPORT_HEADERS,
 } from '../lib/auditTrailAnalytics'
+import {
+  AUDIT_TABS, ACTION_GROUPS, tabScope, actionsForGroup, actionLabel, moduleLabel, recordRef,
+  eventType, actorLabel, changeHeadline, defaultRange, previousRange, trendPct, rangeLabel,
+  canReadAudit, REVIEW_STATUSES,
+} from '../lib/auditTrailView'
+import { lineageRows } from '../lib/customDataView'
+import './AuditTrail.css'
 
-const PAGE_SIZE = 50
+const NA = <span className="cc-na">N/A</span>
 
-// Semantic action tints; the action word is always printed too.
-const ACTION_BADGE = {
-  UPLOAD: 'bg-blue-500/15 text-blue-500 border-blue-500/30',
-  CREATE: 'bg-green-500/15 text-green-500 border-green-500/30',
-  UPDATE: 'bg-amber-500/15 text-amber-500 border-amber-500/30',
-  DELETE: 'bg-red-500/15 text-red-500 border-red-500/30',
-  EDIT:   'bg-amber-500/15 text-amber-500 border-amber-500/30',
-  EXPORT: 'bg-green-500/15 text-green-500 border-green-500/30',
-}
-const NEUTRAL_BADGE = 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]'
-
-/** Field-level old/new diff rendered as a responsive definition list. */
+/** Field-level old/new diff of the stored values. */
 function AuditChangeDetail({ row }) {
   const { fields, meta, details } = changeDiff(row)
+  if (!fields.length && !meta && !details) return <p className="at-muted">No old or new values were stored for this event.</p>
   return (
-    <div className="space-y-3">
+    <div className="at-diff-wrap">
       {fields.length > 0 && (
-        <dl className="divide-y divide-[var(--input-border)] rounded-lg border border-[var(--input-border)]">
-          <div className="hidden sm:grid grid-cols-3 gap-3 px-3 py-2 text-xs font-medium text-[var(--text-muted)]">
-            <span>Field</span><span>Old value</span><span>New value</span>
-          </div>
+        <dl className="at-diff">
+          <div className="at-diff-head"><span>Field</span><span>Old value</span><span>New value</span></div>
           {fields.map((f) => (
-            <div key={f.field} className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-3 px-3 py-2 text-xs">
-              <dt className="font-medium text-[var(--text-secondary)] break-all">{f.field}{f.changed ? '' : ' (unchanged)'}</dt>
-              <dd className="text-[var(--text-muted)] break-all"><span className="sm:hidden font-medium">Old: </span>{f.oldValue}</dd>
-              <dd className={`break-all ${f.changed ? 'text-[var(--text-primary)] font-medium' : 'text-[var(--text-muted)]'}`}><span className="sm:hidden font-medium">New: </span>{f.newValue}</dd>
+            <div key={f.field} className={`at-diff-row ${f.changed ? 'is-changed' : ''}`}>
+              <dt>{f.field}{f.changed ? '' : ' (unchanged)'}</dt>
+              <dd><span className="at-diff-tag">Old</span>{f.oldValue}</dd>
+              <dd><span className="at-diff-tag">New</span>{f.newValue}</dd>
             </div>
           ))}
         </dl>
       )}
-      {meta && (
-        <pre className="text-xs text-[var(--text-secondary)] bg-[var(--input-bg)] rounded p-3 overflow-auto max-h-40">{JSON.stringify(meta, null, 2)}</pre>
-      )}
-      {details && (
-        <pre className="text-xs text-[var(--text-secondary)] bg-[var(--input-bg)] rounded p-3 overflow-auto max-h-40">{JSON.stringify(details, null, 2)}</pre>
-      )}
-      {fields.length === 0 && !meta && !details && (
-        <p className="text-xs text-[var(--text-muted)]">No change detail recorded.</p>
-      )}
+      {meta && <pre className="at-pre">{JSON.stringify(meta, null, 2)}</pre>}
+      {details && <pre className="at-pre">{JSON.stringify(details, null, 2)}</pre>}
     </div>
   )
 }
 
-function SummaryCard({ label, value, icon: Icon, tone, loading, note }) {
-  return (
-    <div className="card min-w-0">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-[var(--text-muted)]">{label}</p>
-        <Icon size={16} className={tone} aria-hidden="true" />
-      </div>
-      {loading ? (
-        <div className="animate-pulse bg-[var(--input-bg)] rounded h-8 w-24 mt-1" />
-      ) : (
-        <p className={`text-2xl sm:text-3xl font-bold mt-1 tabular-nums ${tone}`}>{value ?? 'Unavailable'}</p>
-      )}
-      {!loading && note ? <p className="text-[11px] mt-0.5 text-[var(--text-muted)]">{note}</p> : null}
-    </div>
-  )
+function KpiLabel({ title, sub }) {
+  return <>{title}<small className="at-kpi-sub">{sub}</small></>
 }
 
 export default function AuditTrail() {
-  const reportMeta = useReportMeta('Audit Trail')
-  const { profile } = useAuth()
-  const [activeTab, setActiveTab] = useState('audit')
+  const { profile, isSuperAdmin } = useAuth()
+  const canRead = canReadAudit(profile, isSuperAdmin)
+  const isAdmin = profile?.role === 'Admin' || Boolean(isSuperAdmin)
 
-  const [stats, setStats] = useState({ totalEvents: 0, uploadsMonth: 0, recordsMonth: 0, activeUsers: 0, recordsCapped: false, activeCapped: false })
-  const [statsLoading, setStatsLoading] = useState(true)
-  const [readError, setReadError] = useState('')
-  const [auditError, setAuditError] = useState('')
-  const [uploadError, setUploadError] = useState('')
-  const [exportError, setExportError] = useState('')
-  const [exporting, setExporting] = useState(false)
+  const initial = useMemo(() => defaultRange(), [])
+  const [dateFrom, setDateFrom] = useState(initial.from)
+  const [dateTo, setDateTo] = useState(initial.to)
+  const [tab, setTab] = useState('audit')
 
-  const [auditRows, setAuditRows]   = useState([])
-  const [auditTotal, setAuditTotal] = useState(0)
-  const [auditPage, setAuditPage]   = useState(0)
-  const [auditLoading, setAuditLoading] = useState(false)
-  const [expandedRow, setExpandedRow]   = useState(null)
-  const [auditSearch, setAuditSearch]   = useState('')
+  // KPI counts (current + previous period for trends)
+  const [counts, setCounts] = useState({ loading: true })
+  const [prevCounts, setPrevCounts] = useState(null)
+  const [reviews, setReviews] = useState({ provisioned: null, open: null, byAudit: {} })
+  const [reviewError, setReviewError] = useState('')
 
-  const [dateFrom, setDateFrom]         = useState('')
-  const [dateTo, setDateTo]             = useState('')
-  const [actionFilter, setActionFilter] = useState('')
-  const [userFilter, setUserFilter]     = useState('')
-  const [userOptions, setUserOptions]   = useState([])
+  // Register
+  const [rows, setRows] = useState([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(25)
+  const [loading, setLoading] = useState(false)
+  const [regError, setRegError] = useState('')
+  const [search, setSearch] = useState('')
+  const [group, setGroup] = useState('')
+  const [user, setUser] = useState('')
+  const [recordFilter, setRecordFilter] = useState(null)
+  const [users, setUsers] = useState([])
+  const [usersError, setUsersError] = useState('')
+  const [selected, setSelected] = useState(null)
+  const [diffOpen, setDiffOpen] = useState(false)
 
-  const [uploadRows, setUploadRows]   = useState([])
+  // Uploads
+  const [uploads, setUploads] = useState([])
   const [uploadTotal, setUploadTotal] = useState(0)
-  const [uploadPage, setUploadPage]   = useState(0)
+  const [uploadPage, setUploadPage] = useState(0)
   const [uploadLoading, setUploadLoading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const [batches, setBatches] = useState({ loading: false, data: null, error: null })
 
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState('')
+
+  // Reverse batch
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState('')
-  const [deleting, setDeleting] = useState(false)
   const [deleteReason, setDeleteReason] = useState('')
+  const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
 
-  useEffect(() => {
-    async function loadStats() {
-      setStatsLoading(true)
-      try {
-        const now = new Date()
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  // Flag for review
+  const [flagOpen, setFlagOpen] = useState(false)
+  const [flagNote, setFlagNote] = useState('')
+  const [flagBusy, setFlagBusy] = useState(false)
+  const [flagError, setFlagError] = useState('')
 
-        // Bound: a plain select silently caps at 1000 rows, which would undercount
-        // the derived totals below. Page past the cap for the sums / distinct set,
-        // and take the upload count straight from an exact server count.
-        const STAT_MAX = 100000
-        const [totalRes, uploadsCountRes, monthPaged, activePaged] = await Promise.all([
-          supabase.from('audit_log_v2').select('id', { count: 'exact', head: true }),
-          supabase.from('audit_log_v2').select('id', { count: 'exact', head: true }).eq('action', 'UPLOAD').gte('created_at', monthStart),
-          fetchAllPages((lo, hi) => supabase
-            .from('audit_log_v2').select('record_count')
-            .eq('action', 'UPLOAD').gte('created_at', monthStart)
-            .order('id', { ascending: true }).range(lo, hi), { max: STAT_MAX }),
-          fetchAllPages((lo, hi) => supabase
-            .from('audit_log_v2').select('user_id')
-            .gte('created_at', thirtyDaysAgo)
-            .order('id', { ascending: true }).range(lo, hi), { max: STAT_MAX }),
-        ])
+  const resetPages = () => { setPage(0); setUploadPage(0); setSelected(null) }
 
-        for (const result of [totalRes, uploadsCountRes, monthPaged, activePaged]) {
-          if (result.error) throw result.error
-        }
-        const uploadsMonth  = uploadsCountRes.count ?? (monthPaged.data ?? []).length
-        const recordsMonth  = (monthPaged.data ?? []).reduce((s, r) => s + (r.record_count ?? 0), 0)
-        const activeUsers   = new Set((activePaged.data ?? []).map(r => r.user_id).filter(Boolean)).size
-
-        setStats({
-          totalEvents: totalRes.count ?? 0,
-          uploadsMonth,
-          recordsMonth,
-          activeUsers,
-          recordsCapped: monthPaged.truncated,
-          activeCapped: activePaged.truncated,
-        })
-      } catch (error) {
-        setStats({ totalEvents: null, uploadsMonth: null, recordsMonth: null, activeUsers: null })
-        setReadError(toUserMessage(error, 'Could not read audit statistics.'))
-      }
-      setStatsLoading(false)
-    }
-    loadStats()
-  }, [])
-
-  useEffect(() => {
-    async function loadUsers() {
-      try {
-        const { data, error, truncated } = await fetchAllPages((from, to) => supabase.from('profiles')
-          .select('id, full_name, username').order('id').range(from, to), { max: 10000 })
-        if (error) throw error
-        if (truncated) throw new Error('The user filter list exceeds its limit. Use another filter.')
-        setUserOptions(data ?? [])
-      } catch (error) { setReadError(toUserMessage(error, 'Could not load audit user filters.')) }
-
-    }
-    loadUsers()
-  }, [])
-
-  // Five filters plus paging drive this read, so changing any of them twice
-  // quickly leaves two in flight and the slower one can paint the previous
-  // filter's entries under the new ones.
-  const latestAudit = useLatestRequest()
-
-  const loadAudit = useCallback(async () => {
-    const stale = latestAudit.begin()
-    setAuditLoading(true)
+  // ── KPI counts ──────────────────────────────────────────────────────────────
+  const loadCounts = useCallback(async () => {
+    setCounts({ loading: true })
+    const prev = previousRange(dateFrom, dateTo)
     try {
-      const { data, count, error } = await auditQuery({ dateFrom, dateTo, action: actionFilter, user: userFilter })
-        .range(auditPage * PAGE_SIZE, (auditPage + 1) * PAGE_SIZE - 1)
+      const [cur, before] = await Promise.all([
+        loadAuditCounts({ from: dateFrom, to: dateTo }),
+        prev ? loadAuditCounts(prev) : Promise.resolve(null),
+      ])
+      setCounts({ loading: false, ...cur })
+      setPrevCounts(before)
+    } catch (e) {
+      setCounts({ loading: false, error: toUserMessage(e, 'Audit figures could not be read.') })
+      setPrevCounts(null)
+    }
+  }, [dateFrom, dateTo])
+  useEffect(() => { if (canRead) loadCounts() }, [loadCounts, canRead])
+
+  // ── User filter options ─────────────────────────────────────────────────────
+  useEffect(() => {
+    let alive = true
+    fetchAllPages((f, t) => supabase.from('profiles').select('id, full_name, username').order('id').range(f, t), { max: 10000 })
+      .then(({ data, error }) => {
+        if (!alive) return
+        if (error) setUsersError(toUserMessage(error, 'Could not load the user filter.'))
+        else setUsers(data ?? [])
+      })
+      .catch((e) => { if (alive) setUsersError(toUserMessage(e, 'Could not load the user filter.')) })
+    return () => { alive = false }
+  }, [])
+
+  // ── Register ────────────────────────────────────────────────────────────────
+  const filters = useMemo(() => ({
+    dateFrom, dateTo, user,
+    ...tabScope(tab),
+    ...(group ? { actions: actionsForGroup(group) } : {}),
+    ...(recordFilter ? { recordId: recordFilter.record_id } : {}),
+  }), [dateFrom, dateTo, user, tab, group, recordFilter])
+
+  const latest = useLatestRequest()
+  const loadRegister = useCallback(async () => {
+    const stale = latest.begin()
+    setLoading(true)
+    try {
+      const { data, count, error } = await auditQuery(filters).range(page * pageSize, (page + 1) * pageSize - 1)
       if (error) throw error
       if (stale()) return
-      setAuditError('')
-      setAuditRows(data ?? [])
-      setAuditTotal(count ?? 0)
-    } catch (error) {
-      if (!stale()) { setAuditRows([]); setAuditTotal(0); setAuditError(toUserMessage(error, 'Could not load audit events.')) }
+      setRegError(''); setRows(data ?? []); setTotal(count ?? 0)
+    } catch (e) {
+      if (!stale()) { setRows([]); setTotal(0); setRegError(toUserMessage(e, 'Audit events could not be loaded.')) }
     }
-    if (!stale()) setAuditLoading(false)
-  }, [auditPage, dateFrom, dateTo, actionFilter, userFilter, latestAudit])
+    if (!stale()) setLoading(false)
+  }, [filters, page, pageSize, latest])
+  useEffect(() => { if (canRead && tab !== 'upload') loadRegister() }, [loadRegister, tab, canRead])
 
-  useEffect(() => { if (activeTab === 'audit') loadAudit() }, [loadAudit, activeTab])
+  // Review flags for the rows on screen
+  const loadFlags = useCallback(async (ids) => {
+    try {
+      setReviewError('')
+      setReviews(await loadReviews({ auditIds: ids }))
+    } catch (e) { setReviewError(toUserMessage(e, 'Review flags could not be read.')) }
+  }, [])
+  useEffect(() => { if (canRead) loadFlags(rows.map((r) => r.id)) }, [rows, loadFlags, canRead])
 
+  // ── Uploads ─────────────────────────────────────────────────────────────────
   const latestUpload = useLatestRequest()
-  const loadUploadHistory = useCallback(async () => {
+  const loadUploads = useCallback(async () => {
     const stale = latestUpload.begin()
     setUploadLoading(true)
     try {
       const { data, count, error } = await uploadHistoryQuery({ dateFrom, dateTo })
-        .range(uploadPage * PAGE_SIZE, (uploadPage + 1) * PAGE_SIZE - 1)
+        .range(uploadPage * 25, (uploadPage + 1) * 25 - 1)
       if (error) throw error
       if (stale()) return
-      setUploadError('')
-      setUploadRows(data ?? [])
-      setUploadTotal(count ?? 0)
-    } catch (error) { if (!stale()) { setUploadRows([]); setUploadTotal(0); setUploadError(toUserMessage(error, 'Could not load upload history.')) } }
+      setUploadError(''); setUploads(data ?? []); setUploadTotal(count ?? 0)
+    } catch (e) {
+      if (!stale()) { setUploads([]); setUploadTotal(0); setUploadError(toUserMessage(e, 'Upload history could not be loaded.')) }
+    }
     if (!stale()) setUploadLoading(false)
-  }, [uploadPage, latestUpload, dateFrom, dateTo])
+  }, [dateFrom, dateTo, uploadPage, latestUpload])
 
-  useEffect(() => { if (activeTab === 'upload') loadUploadHistory() }, [loadUploadHistory, activeTab])
+  const loadBatches = useCallback(async () => {
+    setBatches((s) => ({ ...s, loading: true, error: null }))
+    try { setBatches({ loading: false, data: await listImportBatches({ from: dateFrom, to: dateTo }), error: null }) }
+    catch (e) { setBatches({ loading: false, data: null, error: toUserMessage(e, 'Import batches could not be loaded.') }) }
+  }, [dateFrom, dateTo])
 
-  async function exportAuditLog(kind = 'xlsx') {
+  useEffect(() => { if (tab === 'upload') { loadUploads(); loadBatches() } }, [tab, loadUploads, loadBatches])
+
+  // ── Exports ─────────────────────────────────────────────────────────────────
+  async function exportAudit(kind = 'xlsx') {
     if (exporting) return
     setExporting(true); setExportError('')
     try {
-      const data = await readAuditExport({ filters: { dateFrom, dateTo, action: actionFilter, user: userFilter }, search: auditSearch })
-      const rows = auditExportRows(data ?? [], formatDateTime)
-      if (kind === 'pdf') {
-        await exportToPdf(rows, AUDIT_EXPORT_COLS.slice(0, 5).map((key, i) => ({ key, header: AUDIT_EXPORT_HEADERS[i] })), 'Audit Log', auditFileName('audit'), 'landscape')
+      if (tab === 'upload') {
+        const data = await readAuditExport({ upload: true, filters: { dateFrom, dateTo } })
+        const out = uploadExportRows(data ?? [], formatDateTime)
+        if (kind === 'pdf') await exportToPdf(out, UPLOAD_EXPORT_COLS.map((key, i) => ({ key, header: UPLOAD_EXPORT_HEADERS[i] })), 'Upload History', auditFileName('upload'), 'landscape')
+        else await exportToExcel(out, UPLOAD_EXPORT_COLS, UPLOAD_EXPORT_HEADERS, auditFileName('upload'), 'Upload History')
       } else {
-        await exportToExcel(rows, AUDIT_EXPORT_COLS, AUDIT_EXPORT_HEADERS, auditFileName('audit'), 'Audit Log')
+        const data = await readAuditExport({ filters, search })
+        const out = auditExportRows(data ?? [], formatDateTime)
+        if (kind === 'pdf') await exportToPdf(out, AUDIT_EXPORT_COLS.slice(0, 5).map((key, i) => ({ key, header: AUDIT_EXPORT_HEADERS[i] })), 'Audit Log', auditFileName('audit'), 'landscape')
+        else await exportToExcel(out, AUDIT_EXPORT_COLS, AUDIT_EXPORT_HEADERS, auditFileName('audit'), 'Audit Log')
       }
-    } catch (error) { setExportError(toUserMessage(error, 'Audit export failed.')) }
+    } catch (e) { setExportError(toUserMessage(e, 'The export failed.')) }
     finally { setExporting(false) }
   }
 
-  async function exportUploadHistory(kind = 'xlsx') {
-    if (exporting) return
-    setExporting(true); setExportError('')
-    try {
-      const data = await readAuditExport({ upload: true, filters: { dateFrom, dateTo } })
-      const rows = uploadExportRows(data ?? [], formatDateTime)
-      if (kind === 'pdf') {
-        await exportToPdf(rows, UPLOAD_EXPORT_COLS.map((key, i) => ({ key, header: UPLOAD_EXPORT_HEADERS[i] })), 'Upload History', auditFileName('upload'), 'landscape')
-      } else {
-        await exportToExcel(rows, UPLOAD_EXPORT_COLS, UPLOAD_EXPORT_HEADERS, auditFileName('upload'), 'Upload History')
-      }
-    } catch (error) { setExportError(toUserMessage(error, 'Upload history export failed.')) }
-    finally { setExporting(false) }
-  }
-
+  // ── Reverse batch ───────────────────────────────────────────────────────────
+  const closeDelete = () => { if (!deleting) { setDeleteTarget(null); setDeleteConfirm(''); setDeleteReason(''); setDeleteError('') } }
   async function handleDeleteBatch() {
     if (deleteConfirm !== 'DELETE' || deleteReason.trim().length < 3) return
-    setDeleting(true)
-    setDeleteError('')
+    setDeleting(true); setDeleteError('')
     try {
       const { data, error } = await supabase.rpc('reverse_legacy_upload', { p_batch_id: deleteTarget.batchId, p_reason: deleteReason.trim() })
       if (error) throw error
       if (data?.ok !== true || !Number.isInteger(data.removed)) throw new Error('The server did not confirm the reversal. Refresh before retrying.')
-      setDeleteTarget(null)
-      setDeleteConfirm('')
-      setDeleteReason('')
-      loadUploadHistory()
+      setDeleteTarget(null); setDeleteConfirm(''); setDeleteReason('')
+      loadUploads(); loadCounts()
     } catch (e) {
       setDeleteError(e?.code === '23503'
         ? 'This batch has dependent records. Resolve its cleaning or disposal activity before reversal.'
         : toUserMessage(e, 'Reversal failed. Please try again.'))
-    } finally {
-      setDeleting(false)
-    }
+    } finally { setDeleting(false) }
   }
 
-  const auditPages  = pageCountFor(auditTotal, PAGE_SIZE)
-  const uploadPages = pageCountFor(uploadTotal, PAGE_SIZE)
+  // ── Review flags ────────────────────────────────────────────────────────────
+  const selectedFlag = selected ? reviews.byAudit[selected.id] : null
+  async function submitFlag() {
+    if (!selected) return
+    setFlagBusy(true); setFlagError('')
+    try {
+      await flagAuditEvent(selected, flagNote)
+      setFlagOpen(false); setFlagNote('')
+      await loadFlags(rows.map((r) => r.id))
+    } catch (e) { setFlagError(toUserMessage(e, 'Could not flag this event.')) }
+    finally { setFlagBusy(false) }
+  }
+  async function moveFlag(status) {
+    if (!selectedFlag) return
+    try {
+      await setReviewStatus(selectedFlag.id, status)
+      await loadFlags(rows.map((r) => r.id))
+    } catch (e) { setReviewError(toUserMessage(e, 'Could not update the review.')) }
+  }
 
-  const visibleAuditRows = auditRows.filter(row => matchesAuditSearch(row, auditSearch))
-  const pageMix = useMemo(() => actionMix(visibleAuditRows), [visibleAuditRows])
+  // ── Derived ─────────────────────────────────────────────────────────────────
+  const visibleRows = useMemo(() => rows.filter((r) => matchesAuditSearch(r, search)), [rows, search])
+  const pageCount = Math.max(1, Math.ceil(total / pageSize))
+  const prev = previousRange(dateFrom, dateTo)
+  const trendTitle = prev ? `Compared with ${rangeLabel(prev.from, prev.to)}` : undefined
+  const k = (key) => (counts.loading ? null : counts[key])
+  const t = (key) => (prevCounts ? trendPct(counts[key], prevCounts[key]) : null)
+  const naTitle = counts.error || undefined
+  const uploadsTotal = counts.uploads == null && counts.batches == null ? null : (counts.uploads ?? 0) + (counts.batches ?? 0)
 
-  const closeDelete = () => { if (!deleting) { setDeleteTarget(null); setDeleteConfirm(''); setDeleteError('') } }
-
-  // EnterpriseTable columns for audit log
-  const auditColumns = useMemo(() => [
+  const kpis = [
+    { icon: Activity, tone: 't-blue', value: k('events'), trend: t('events'), label: <KpiLabel title="Audit events" sub={rangeLabel(dateFrom, dateTo)} />, title: trendTitle || naTitle, onClick: () => { setTab('audit'); setGroup(''); resetPages() } },
+    { icon: ShieldCheck, tone: 't-red', value: k('security'), trend: t('security'), goodWhenUp: false, label: <KpiLabel title="Security events" sub="Sign in, sign out, branding" />, title: trendTitle || naTitle, onClick: () => { setTab('security'); setGroup(''); resetPages() } },
+    { icon: Database, tone: 't-purple', value: k('changes'), trend: t('changes'), label: <KpiLabel title="Data changes" sub={counts.deletes == null ? 'Created / updated / deleted' : `${fmtInt(counts.deletes)} deletions`} />, title: trendTitle || naTitle, onClick: () => { setTab('audit'); setGroup('update'); resetPages() } },
+    { icon: Upload, tone: 't-amber', value: counts.loading ? null : uploadsTotal, label: <KpiLabel title="Upload events" sub={`${fmtInt(counts.uploads)} uploads, ${fmtInt(counts.batches)} import batches`} />, title: naTitle, onClick: () => { setTab('upload'); resetPages() } },
     {
-      id: 'created_at',
-      header: 'Timestamp',
-      accessorFn: r => r.created_at || '',
-      size: 160,
-      cell: ({ row }) => <span className="text-[var(--text-muted)] text-xs whitespace-nowrap">{row.original.created_at ? formatDateTime(row.original.created_at) : 'N/A'}</span>,
+      icon: Flag, tone: 't-orange',
+      display: reviews.provisioned === false ? 'N/A' : undefined,
+      value: reviews.open,
+      label: <KpiLabel title="Flagged for review" sub={reviews.provisioned === false ? 'Review flags not set up yet' : 'Open and investigating'} />,
+      title: reviews.provisioned === false ? 'The audit_event_reviews table has not been created on this database yet.' : 'Events someone flagged with Investigate that are not resolved',
     },
-    {
-      id: 'user',
-      header: 'User',
-      accessorFn: r => actorName(r),
-      size: 140,
-      cell: ({ getValue, row }) => row.original.profiles?.full_name || row.original.profiles?.username
-        ? <span className="text-[var(--text-primary)]">{getValue()}</span>
-        : <span className="text-[var(--text-muted)]">{getValue()}</span>,
-    },
-    {
-      id: 'action',
-      header: 'Action',
-      accessorFn: r => r.action ?? 'N/A',
-      size: 100,
-      cell: ({ getValue }) => {
-        const val = getValue()
-        return val !== 'N/A' ? (
-          <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium ${ACTION_BADGE[val] ?? NEUTRAL_BADGE}`}>{val}</span>
-        ) : 'N/A'
-      },
-    },
-    { id: 'table_name', header: 'Table', accessorFn: r => r.table_name ?? 'N/A', size: 120 },
-    {
-      id: 'record_count',
-      header: 'Records',
-      accessorFn: r => (r.record_count == null ? -1 : Number(r.record_count)),
-      size: 80,
-      meta: { align: 'right' },
-      cell: ({ row }) => <span className="tabular-nums">{row.original.record_count ?? 'N/A'}</span>,
-    },
-    {
-      id: 'details',
-      header: 'Details',
-      accessorFn: r => (hasExpandable(r) ? 'yes' : ''),
-      size: 110,
-      enableSorting: false,
-      meta: { export: false },
-      cell: ({ row }) => hasExpandable(row.original) ? (
-        <button
-          type="button"
-          onClick={() => setExpandedRow(row.original)}
-          className="inline-flex items-center gap-1 min-h-[44px] px-2 text-xs font-medium text-blue-500 hover:underline"
-          aria-label={`View change detail for ${row.original.action || 'event'} on ${row.original.table_name || 'record'}`}
-        >
-          <Eye size={13} aria-hidden="true" /> View
-        </button>
-      ) : <span className="text-[var(--text-dim)]">None</span>,
-    },
-  ], [])
-
-  // EnterpriseTable columns for upload history
-  const uploadColumns = useMemo(() => {
-    const cols = [
-      {
-        id: 'file_names',
-        header: 'File Names',
-        accessorFn: r => Array.isArray(r.file_names) ? r.file_names.join(', ') : (r.file_names ?? 'N/A'),
-        size: 200,
-        cell: ({ getValue }) => <span className="text-[var(--text-primary)] max-w-xs truncate block" title={getValue()}>{getValue()}</span>,
-      },
-      {
-        id: 'records_added',
-        header: 'Records Added',
-        accessorFn: r => r.records_added ?? 0,
-        size: 100,
-        meta: { align: 'right' },
-        cell: ({ getValue }) => <span className="text-green-500 font-medium tabular-nums">{getValue().toLocaleString()}</span>,
-      },
-      {
-        id: 'records_skipped',
-        header: 'Records Skipped',
-        accessorFn: r => r.records_skipped ?? 0,
-        size: 100,
-        meta: { align: 'right' },
-        cell: ({ getValue }) => <span className="text-amber-500 tabular-nums">{getValue().toLocaleString()}</span>,
-      },
-      {
-        id: 'uploaded_by',
-        header: 'Uploaded By',
-        accessorFn: r => actorName(r, 'uploaded_by'),
-        size: 140,
-      },
-      {
-        id: 'uploaded_at',
-        header: 'Uploaded At',
-        accessorFn: r => r.uploaded_at || '',
-        size: 160,
-        cell: ({ row }) => <span className="text-[var(--text-muted)] text-xs whitespace-nowrap">{row.original.uploaded_at ? formatDateTime(row.original.uploaded_at) : 'N/A'}</span>,
-      },
-      { id: 'region', header: 'Region', accessorFn: r => r.region ?? 'N/A', size: 100 },
-    ]
-    if (profile?.role === 'Admin') {
-      cols.push({
-        id: 'delete',
-        header: 'Reverse Batch',
-        accessorFn: r => r.batch_id ?? '',
-        size: 140,
-        enableSorting: false,
-        meta: { export: false },
-        cell: ({ row }) => row.original.reversed_at ? <span className="text-xs text-[var(--text-muted)]">Reversed</span> : row.original.batch_id ? (
-          <button
-            type="button"
-            onClick={() => { setDeleteReason(''); setDeleteTarget({ batchId: row.original.batch_id, count: row.original.records_added, date: row.original.uploaded_at }) }}
-            className="text-xs min-h-[44px] text-red-500 border border-red-500/40 hover:bg-red-500/10 px-3 rounded-lg transition-colors"
-          >
-            Delete Batch
-          </button>
-        ) : <span className="text-[var(--text-dim)] text-xs">N/A</span>,
-      })
-    }
-    return cols
-  }, [profile?.role])
-
-  const TABS = [
-    { id: 'audit',  label: 'Audit Log' },
-    { id: 'upload', label: 'Upload History' },
   ]
 
+  const tabsWithCounts = AUDIT_TABS.map((x) => ({
+    ...x,
+    count: x.key === 'security' ? (counts.loading ? undefined : counts.security ?? undefined)
+      : x.key === 'upload' ? (counts.loading ? undefined : uploadsTotal ?? undefined) : undefined,
+  }))
+
+  const columns = [
+    { key: 'time', header: 'Time', sortable: false, cell: (r) => <span className="at-nowrap">{r.created_at ? formatDateTime(r.created_at) : 'N/A'}</span> },
+    { key: 'actor', header: 'Actor', sortable: false, cell: (r) => <span className={r.profiles ? 'cc-strong' : 'at-muted'}>{actorLabel(r)}</span> },
+    { key: 'action', header: 'Action', sortable: false, cell: (r) => actionLabel(r.action) },
+    { key: 'module', header: 'Module', sortable: false, cell: (r) => moduleLabel(r) },
+    { key: 'record', header: 'Record', sortable: false, cell: (r) => (recordRef(r) === 'N/A' ? NA : <span className="at-mono" title={String(r.record_id)}>{recordRef(r)}</span>) },
+    {
+      key: 'type', header: 'Type', sortable: false,
+      cell: (r) => { const e = eventType(r); return <span className={`cc-pill ${e.tone}`}>{e.label}</span> },
+    },
+    {
+      key: 'review', header: 'Review', sortable: false,
+      cell: (r) => { const f = reviews.byAudit[r.id]; if (!f) return <span className="at-muted">None</span>; const s = REVIEW_STATUSES[f.status] || REVIEW_STATUSES.open; return <span className={`cc-pill ${s.tone}`}>{s.label}</span> },
+    },
+  ]
+
+  const uploadColumns = [
+    { key: 'files', header: 'File', sortable: false, cell: (r) => { const n = Array.isArray(r.file_names) ? r.file_names.join(', ') : (r.file_names ?? ''); return n ? <span className="at-trunc" title={n}>{n}</span> : NA } },
+    { key: 'added', header: 'Records added', numeric: true, sortable: false, cell: (r) => fmtInt(r.records_added ?? 0) },
+    { key: 'skipped', header: 'Skipped', numeric: true, sortable: false, cell: (r) => fmtInt(r.records_skipped ?? 0) },
+    { key: 'by', header: 'Uploaded by', sortable: false, cell: (r) => actorName(r, 'uploaded_by') },
+    { key: 'at', header: 'Uploaded at', sortable: false, cell: (r) => <span className="at-nowrap">{r.uploaded_at ? formatDateTime(r.uploaded_at) : 'N/A'}</span> },
+    { key: 'region', header: 'Region', sortable: false, cell: (r) => r.region || NA },
+    {
+      key: 'state', header: 'State', sortable: false,
+      cell: (r) => (r.reversed_at
+        ? <span className="cc-pill muted" title={`Reversed ${formatDateTime(r.reversed_at)}`}>Reversed</span>
+        : isAdmin && r.batch_id
+          ? <button type="button" className="cc-btn-ghost at-danger-btn" onClick={() => { setDeleteReason(''); setDeleteTarget({ batchId: r.batch_id, count: r.records_added, date: r.uploaded_at }) }}>Reverse batch</button>
+          : <span className="cc-pill good">Kept</span>),
+    },
+  ]
+
+  const batchColumns = [
+    { key: 'file', header: 'File', sortable: false, cell: (b) => b.import_files?.original_filename ? <span className="at-trunc" title={b.import_files.original_filename}>{b.import_files.original_filename}</span> : NA },
+    { key: 'module', header: 'Module', sortable: false, cell: (b) => (b.module ? moduleLabel({ table_name: b.module }) : NA) },
+    { key: 'country', header: 'Country', sortable: false, cell: (b) => b.country || NA },
+    { key: 'rows', header: 'Rows', numeric: true, sortable: false, cell: (b) => fmtInt(b.total_rows) },
+    { key: 'imported', header: 'Imported', numeric: true, sortable: false, cell: (b) => fmtInt(b.imported_rows) },
+    { key: 'issues', header: 'Errors / conflicts', numeric: true, sortable: false, cell: (b) => `${fmtInt(b.error_rows ?? 0)} / ${fmtInt(b.conflict_rows ?? 0)}` },
+    { key: 'status', header: 'Status', sortable: false, cell: (b) => { const l = lineageRows([b])[0]; return <span className={`cc-pill ${l.tone}`}>{l.label}</span> } },
+    { key: 'at', header: 'Created', sortable: false, cell: (b) => <span className="at-nowrap">{b.created_at ? formatDateTime(b.created_at) : 'N/A'}</span> },
+  ]
+
+  const anyFilter = group || user || search || recordFilter
+  const errors = [exportError, usersError, reviewError].filter(Boolean)
+
   return (
-    <div className="space-y-4">
-      {[readError, auditError, uploadError, exportError].filter(Boolean).map((message, index) => (
-        <div key={index} role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-500">{message}</div>
-      ))}
-      <PageHeader
-        title="Audit Trail"
-        subtitle="Full history of uploads and user activity"
-        icon={ClipboardList}
-      />
-
-      {/* KPI strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <SummaryCard label="Total Events"             value={stats.totalEvents?.toLocaleString()}  icon={Activity} tone="text-blue-500"   loading={statsLoading} />
-        <SummaryCard label="Uploads This Month"       value={stats.uploadsMonth?.toLocaleString()} icon={Upload}   tone="text-green-500"  loading={statsLoading} />
-        <SummaryCard label="Records Added This Month" value={stats.recordsMonth?.toLocaleString()} icon={Database} tone="text-violet-500" loading={statsLoading} note={stats.recordsCapped ? 'At least this many (capped)' : undefined} />
-        <SummaryCard label="Active Users (30 days)"   value={stats.activeUsers?.toLocaleString()}  icon={Users}    tone="text-amber-500"  loading={statsLoading} note={stats.activeCapped ? 'At least this many (capped)' : undefined} />
-      </div>
-
-      {/* Tabs */}
-      <div role="tablist" aria-label="Audit views" className="flex gap-1 border-b border-[var(--input-border)] overflow-x-auto">
-        {TABS.map(({ id, label }) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === id}
-            onClick={() => setActiveTab(id)}
-            className={`min-h-[44px] px-4 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
-              activeTab === id
-                ? 'border-blue-500 text-[var(--text-primary)]'
-                : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            {label}
+    <div className="cc at-page">
+      <header className="at-head">
+        <div className="at-head-copy">
+          <nav aria-label="Breadcrumb" className="at-crumb">Administration <ChevronRight size={13} aria-hidden="true" /> <span aria-current="page">Audit Trail</span></nav>
+          <h1>Audit Trail</h1>
+          <p>Immutable history of uploads, user activity and system changes.</p>
+        </div>
+        <div className="at-head-actions">
+          <label className="at-date"><span>From</span><input type="date" className="cc-select" value={dateFrom} max={dateTo || undefined} onChange={(e) => { setDateFrom(e.target.value); resetPages() }} /></label>
+          <label className="at-date"><span>To</span><input type="date" className="cc-select" value={dateTo} min={dateFrom || undefined} onChange={(e) => { setDateTo(e.target.value); resetPages() }} /></label>
+          <button type="button" className="cc-btn-primary" onClick={() => exportAudit('xlsx')} disabled={exporting || !canRead}>
+            {exporting ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <FileSpreadsheet size={15} aria-hidden="true" />} Export audit
           </button>
-        ))}
-      </div>
+          <button type="button" className="cc-icon-btn" onClick={() => exportAudit('pdf')} disabled={exporting || !canRead} aria-label="Export to PDF" title="Export to PDF"><FileText size={14} /></button>
+        </div>
+      </header>
 
-      {/* ── Audit Log tab ─────────────────────────────────────────────────── */}
-      {activeTab === 'audit' && (
-        <div className="space-y-3" role="tabpanel" aria-label="Audit Log">
-          <div className="card">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
-              <div>
-                <label className="label" htmlFor="at-from">Date From</label>
-                <input id="at-from" type="date" className="input w-full min-h-[44px]" value={dateFrom}
-                  onChange={e => { setDateFrom(e.target.value); setAuditPage(0) }} />
-              </div>
-              <div>
-                <label className="label" htmlFor="at-to">Date To</label>
-                <input id="at-to" type="date" className="input w-full min-h-[44px]" value={dateTo}
-                  onChange={e => { setDateTo(e.target.value); setAuditPage(0) }} />
-              </div>
-              <div>
-                <label className="label" htmlFor="at-action">Action</label>
-                <select id="at-action" className="input w-full min-h-[44px]" value={actionFilter}
-                  onChange={e => { setActionFilter(e.target.value); setAuditPage(0) }}>
-                  <option value="">All Actions</option>
-                  {AUDIT_ACTIONS.map(a => (
-                    <option key={a} value={a}>{a}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="label" htmlFor="at-user">User</label>
-                <select id="at-user" className="input w-full min-h-[44px]" value={userFilter}
-                  onChange={e => { setUserFilter(e.target.value); setAuditPage(0) }}>
-                  <option value="">All Users</option>
-                  {userOptions.map(u => (
-                    <option key={u.id} value={u.id}>{u.full_name ?? u.username ?? u.id}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="label" htmlFor="at-search">Search this page</label>
-                <div className="relative">
-                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
-                  <input
-                    id="at-search"
-                    type="text"
-                    className="input pl-8 w-full min-h-[44px]"
-                    placeholder="User, action, table"
-                    value={auditSearch}
-                    onChange={e => setAuditSearch(e.target.value)}
-                  />
+      {!canRead && (
+        <div className="cc-card at-banner" role="status">
+          <Info size={18} aria-hidden="true" />
+          <div><b>Your role cannot read the audit log.</b><p>Audit events are visible to Admin, Manager and Director roles. Ask an administrator if you need access.</p></div>
+        </div>
+      )}
+      {errors.map((m, i) => <div key={i} className="cc-card at-banner bad" role="alert"><Info size={18} aria-hidden="true" /><div><p>{m}</p></div></div>)}
+      {counts.error && canRead && (
+        <div className="cc-card at-banner bad" role="alert">
+          <Info size={18} aria-hidden="true" />
+          <div><p>{counts.error}</p></div>
+          <button type="button" className="cc-btn-ghost" onClick={loadCounts}>Try again</button>
+        </div>
+      )}
+
+      {canRead && (
+        <>
+          <div className="cc-kpis at-kpis">
+            {kpis.map((x, i) => <Kpi key={i} {...x} goodWhenUp={x.goodWhenUp ?? true} loading={counts.loading && x.icon !== Flag} />)}
+          </div>
+
+          <div className="cc-card at-tabbar">
+            <Tabs tabs={tabsWithCounts} value={tab} onChange={(v) => { setTab(v); setGroup(''); setRecordFilter(null); resetPages() }} label="Audit views" />
+            <span className="at-tab-hint">
+              {tab === 'security' && 'Sign in, sign out and branding changes.'}
+              {tab === 'automation' && 'Writes made by imports, jobs and other system paths.'}
+              {tab === 'upload' && 'Legacy uploads and in-app import batches.'}
+              {tab === 'audit' && 'Every recorded event.'}
+            </span>
+          </div>
+
+          {tab !== 'upload' && (
+            <>
+              <section className="cc-card" aria-label="Audit register">
+                <div className="cc-filters at-filters">
+                  <label className="cc-search">
+                    <Search size={15} aria-hidden="true" />
+                    <input aria-label="Search this page" placeholder="Search actor, action or module on this page" value={search} onChange={(e) => setSearch(e.target.value)} />
+                  </label>
+                  {tab === 'audit' && (
+                    <select className="cc-select" aria-label="Action" value={group} onChange={(e) => { setGroup(e.target.value); resetPages() }}>
+                      <option value="">All actions</option>
+                      {ACTION_GROUPS.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
+                    </select>
+                  )}
+                  <select className="cc-select" aria-label="User" value={user} onChange={(e) => { setUser(e.target.value); resetPages() }}>
+                    <option value="">All users</option>
+                    {users.map((u) => <option key={u.id} value={u.id}>{u.full_name || u.username || 'Unnamed user'}</option>)}
+                  </select>
+                  {anyFilter && (
+                    <button type="button" className="cc-btn-ghost" onClick={() => { setGroup(''); setUser(''); setSearch(''); setRecordFilter(null); resetPages() }}>
+                      <X size={14} aria-hidden="true" /> Clear filters
+                    </button>
+                  )}
+                  <button type="button" className="cc-icon-btn at-push" onClick={() => { loadRegister(); loadCounts() }} aria-label="Refresh" title="Refresh">
+                    <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                  </button>
                 </div>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 mt-3">
-              {(dateFrom || dateTo || actionFilter || userFilter || auditSearch) && (
-                <button type="button" onClick={() => { setDateFrom(''); setDateTo(''); setActionFilter(''); setUserFilter(''); setAuditSearch(''); setAuditPage(0) }} className="btn-secondary flex items-center gap-2 text-sm min-h-[44px]">
-                  <X size={14} aria-hidden="true" /> Clear filters
-                </button>
-              )}
-              <button type="button" onClick={loadAudit} className="btn-secondary flex items-center gap-2 text-sm min-h-[44px]">
-                <RefreshCw size={14} aria-hidden="true" /> Refresh
-              </button>
-              <div className="flex flex-wrap gap-2 ml-auto">
-                <button type="button" onClick={() => exportAuditLog('xlsx')} disabled={exporting} className="btn-secondary flex items-center gap-2 text-sm min-h-[44px]">
-                  <FileSpreadsheet size={14} aria-hidden="true" /> {exporting ? 'Exporting...' : 'Export to Excel'}
-                </button>
-                <button type="button" onClick={() => exportAuditLog('pdf')} disabled={exporting} className="btn-secondary flex items-center gap-2 text-sm min-h-[44px]">
-                  <FileText size={14} aria-hidden="true" /> PDF
-                </button>
-              </div>
-            </div>
-            {pageMix.length > 0 && (
-              <p className="text-xs text-[var(--text-muted)] mt-3" aria-live="polite">
-                On this page: {pageMix.map((m) => `${m.count} ${m.action}`).join(', ')}
-              </p>
-            )}
-          </div>
+                {recordFilter && (
+                  <p className="at-record-chip">
+                    Showing the full history of {moduleLabel(recordFilter)} record <b className="at-mono">{recordRef(recordFilter)}</b>
+                    <button type="button" className="cc-link cc-link-btn" onClick={() => { setRecordFilter(null); resetPages() }}>Show all events</button>
+                  </p>
+                )}
+                <KitTable
+                  columns={columns}
+                  rows={visibleRows}
+                  loading={loading && !rows.length}
+                  error={regError || null}
+                  onRetry={loadRegister}
+                  getRowId={(r) => String(r.id)}
+                  manualPagination
+                  showPagination={false}
+                  pageIndex={page}
+                  pageCount={pageCount}
+                  totalRows={total}
+                  pageSize={pageSize}
+                  onRowClick={(r) => setSelected(r)}
+                  empty={search ? 'No event on this page matches the search.' : 'No audit events in this period.'}
+                  scroll
+                />
+                {!regError && total > 0 && (
+                  <Pager page={page} pageSize={pageSize} total={total} onPage={(p) => { setPage(Math.max(0, Math.min(pageCount - 1, p))); setSelected(null) }} onPageSize={(s) => { setPageSize(s); setPage(0) }} noun="events" />
+                )}
+              </section>
 
-          <EnterpriseTable
-            viewKey="audit-trail"
-            reportMeta={reportMeta}
-            columns={auditColumns}
-            data={visibleAuditRows}
-            getRowId={(row) => String(row.id)}
-            loading={auditLoading && !auditRows.length}
-            enableGlobalFilter={false}
-            enableSorting={true}
-            enableExport={false}
-            enableColumnVisibility={false}
-            manualPagination
-            pageIndex={auditPage}
-            pageCount={auditPages}
-            totalRows={auditTotal}
-            pageSize={PAGE_SIZE}
-            pageSizeOptions={[PAGE_SIZE]}
-            onPageChange={(p) => setAuditPage(Math.max(0, Math.min(auditPages - 1, p)))}
-            paginationLabel={() => pageRangeLabel(auditPage, PAGE_SIZE, auditTotal)}
-            emptyMessage={auditError ? 'Audit events could not be loaded' : auditLoading ? 'Loading...' : 'No audit events found'}
-          />
-        </div>
+              <Card title="Selected event details" sub={selected ? undefined : 'Select an event in the register to see who changed what.'}>
+                {!selected ? (
+                  <div className="cc-empty">No event selected.</div>
+                ) : (
+                  <div className="at-detail">
+                    <div className="at-detail-top">
+                      <div className="at-detail-copy">
+                        <h3>{changeHeadline(selected)}</h3>
+                        <p className="at-meta">
+                          <span>Actor: <b>{actorLabel(selected)}</b>{selected.user_role ? ` (${selected.user_role})` : ''}</span>
+                          <span>Recorded: <b>{selected.created_at ? formatDateTime(selected.created_at) : 'N/A'}</b></span>
+                          <span>Source: <b>{selected.actor_type === 'service' ? 'System path' : selected.actor_type === 'user' ? 'Signed-in user' : 'Not recorded (before attribution)'}</b></span>
+                          {selected.session_id && <span>Session: <b className="at-mono">{String(selected.session_id).slice(0, 12)}</b></span>}
+                          <span>Record: <b className="at-mono">{selected.record_id ?? 'N/A'}</b></span>
+                        </p>
+                        {selectedFlag && (
+                          <p className="at-flag">
+                            <span className={`cc-pill ${(REVIEW_STATUSES[selectedFlag.status] || REVIEW_STATUSES.open).tone}`}>{(REVIEW_STATUSES[selectedFlag.status] || REVIEW_STATUSES.open).label}</span>
+                            {selectedFlag.note && <span>{selectedFlag.note}</span>}
+                            <span className="at-muted">Flagged {formatDate(selectedFlag.created_at)}</span>
+                          </p>
+                        )}
+                      </div>
+                      <div className="at-detail-actions">
+                        <button type="button" className="cc-btn-primary" disabled={!selected.record_id} title={selected.record_id ? 'Show every event recorded for this record' : 'This event names no record'} onClick={() => { setRecordFilter(selected); setTab('audit'); setGroup(''); setPage(0) }}>
+                          <History size={15} aria-hidden="true" /> View full history
+                        </button>
+                        {!selectedFlag && (
+                          <button type="button" className="cc-btn-ghost" disabled={reviews.provisioned === false} title={reviews.provisioned === false ? 'Review flags are not set up on this database yet' : 'Flag this event for review'} onClick={() => { setFlagNote(''); setFlagError(''); setFlagOpen(true) }}>
+                            <Flag size={14} aria-hidden="true" /> Investigate
+                          </button>
+                        )}
+                        {selectedFlag?.status === 'open' && <button type="button" className="cc-btn-ghost" onClick={() => moveFlag('investigating')}>Mark investigating</button>}
+                        {selectedFlag && selectedFlag.status !== 'resolved' && <button type="button" className="cc-btn-ghost" onClick={() => moveFlag('resolved')}>Mark resolved</button>}
+                        <button type="button" className="cc-icon-btn" onClick={() => setDiffOpen(true)} aria-label="Open the change in a larger view" title="Open larger"><Eye size={14} /></button>
+                      </div>
+                    </div>
+                    <AuditChangeDetail row={selected} />
+                  </div>
+                )}
+              </Card>
+            </>
+          )}
+
+          {tab === 'upload' && (
+            <>
+              <section className="cc-card" aria-label="Upload history">
+                <div className="cc-card-head">
+                  <div><h2 className="cc-card-title">Upload history</h2><p className="cc-card-sub">Files loaded through the legacy upload screen, with batch reversal for administrators.</p></div>
+                  <button type="button" className="cc-icon-btn" onClick={loadUploads} aria-label="Refresh uploads" title="Refresh"><RefreshCw size={14} className={uploadLoading ? 'animate-spin' : ''} /></button>
+                </div>
+                <KitTable
+                  columns={uploadColumns}
+                  rows={uploads}
+                  loading={uploadLoading && !uploads.length}
+                  error={uploadError || null}
+                  onRetry={loadUploads}
+                  getRowId={(r) => String(r.id)}
+                  manualPagination
+                  showPagination={false}
+                  pageIndex={uploadPage}
+                  pageCount={Math.max(1, Math.ceil(uploadTotal / 25))}
+                  totalRows={uploadTotal}
+                  pageSize={25}
+                  empty="No uploads in this period."
+                  scroll
+                />
+                {!uploadError && uploadTotal > 0 && <Pager page={uploadPage} pageSize={25} total={uploadTotal} onPage={setUploadPage} noun="uploads" />}
+              </section>
+              <Card title="Import batches" sub="Files loaded through Data Intake in this period (latest 200).">
+                <CardState state={{ ...batches, retry: loadBatches }} empty={batches.data && !batches.data.length ? 'No import batches in this period.' : null}>
+                  <KitTable columns={batchColumns} rows={batches.data || []} getRowId={(b) => String(b.id)} compact scroll />
+                </CardState>
+              </Card>
+            </>
+          )}
+        </>
       )}
 
-      {/* ── Upload History tab ─────────────────────────────────────────────── */}
-      {activeTab === 'upload' && (
-        <div className="space-y-3" role="tabpanel" aria-label="Upload History">
-          <div className="card">
-            <div className="flex flex-wrap items-end gap-3">
-              <div>
-                <label className="label" htmlFor="up-from">From</label>
-                <input id="up-from" type="date" className="input min-h-[44px]" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setUploadPage(0); setAuditPage(0) }} />
-              </div>
-              <div>
-                <label className="label" htmlFor="up-to">To</label>
-                <input id="up-to" type="date" className="input min-h-[44px]" value={dateTo} onChange={e => { setDateTo(e.target.value); setUploadPage(0); setAuditPage(0) }} />
-              </div>
-              <button type="button" onClick={loadUploadHistory} className="btn-secondary flex items-center gap-2 text-sm min-h-[44px]">
-                <RefreshCw size={14} aria-hidden="true" /> Refresh
-              </button>
-              <div className="flex flex-wrap gap-2 ml-auto">
-                <button type="button" onClick={() => exportUploadHistory('xlsx')} disabled={exporting} className="btn-secondary flex items-center gap-2 text-sm min-h-[44px]">
-                  <FileSpreadsheet size={14} aria-hidden="true" /> {exporting ? 'Exporting...' : 'Export to Excel'}
-                </button>
-                <button type="button" onClick={() => exportUploadHistory('pdf')} disabled={exporting} className="btn-secondary flex items-center gap-2 text-sm min-h-[44px]">
-                  <FileText size={14} aria-hidden="true" /> PDF
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <EnterpriseTable
-            viewKey="audit-upload-history"
-            reportMeta={reportMeta}
-            columns={uploadColumns}
-            data={uploadRows}
-            getRowId={(row) => String(row.id)}
-            loading={uploadLoading && !uploadRows.length}
-            enableGlobalFilter={false}
-            enableSorting={true}
-            enableExport={false}
-            enableColumnVisibility={false}
-            manualPagination
-            pageIndex={uploadPage}
-            pageCount={uploadPages}
-            totalRows={uploadTotal}
-            pageSize={PAGE_SIZE}
-            pageSizeOptions={[PAGE_SIZE]}
-            onPageChange={(p) => setUploadPage(Math.max(0, Math.min(uploadPages - 1, p)))}
-            paginationLabel={() => pageRangeLabel(uploadPage, PAGE_SIZE, uploadTotal)}
-            emptyMessage={uploadError ? 'Upload history could not be loaded' : uploadLoading ? 'Loading...' : 'No upload history found'}
-          />
-        </div>
-      )}
-
-      {/* ── Change detail dialog ──────────────────────────────────────────── */}
-      <Modal
-        open={Boolean(expandedRow)}
-        onClose={() => setExpandedRow(null)}
-        size="lg"
-        title="Change detail"
-        subtitle={expandedRow ? `${expandedRow.action || 'Event'} on ${expandedRow.table_name || 'record'} by ${actorName(expandedRow)}, ${expandedRow.created_at ? formatDateTime(expandedRow.created_at) : 'N/A'}` : null}
-      >
-        {expandedRow && <AuditChangeDetail row={expandedRow} />}
+      <Modal open={diffOpen && Boolean(selected)} onClose={() => setDiffOpen(false)} size="lg" title="Change detail"
+        subtitle={selected ? `${actionLabel(selected.action)} on ${moduleLabel(selected)} by ${actorLabel(selected)}, ${selected.created_at ? formatDateTime(selected.created_at) : 'N/A'}` : null}>
+        {selected && <AuditChangeDetail row={selected} />}
       </Modal>
 
-      {/* ── Batch reversal confirmation ───────────────────────────────────── */}
-      <Modal
-        open={Boolean(deleteTarget)}
-        onClose={closeDelete}
-        size="sm"
-        closeOnBackdrop={!deleting}
-        title="Reverse Upload Batch"
-        footer={
-          <div className="flex items-center justify-end gap-2">
-            <button type="button" onClick={closeDelete} className="btn-secondary min-h-[44px]" disabled={deleting}>Cancel</button>
-            <button type="button" onClick={handleDeleteBatch} disabled={deleteConfirm !== 'DELETE' || deleteReason.trim().length < 3 || deleting}
-              className="btn-danger min-h-[44px] disabled:opacity-40">
-              {deleting ? 'Reversing...' : 'Reverse Batch'}
-            </button>
-          </div>
-        }
-      >
+      <Modal open={flagOpen} onClose={() => { if (!flagBusy) setFlagOpen(false) }} size="sm" title="Flag event for review"
+        footer={<div className="at-modal-foot">
+          <button type="button" className="cc-btn-ghost" onClick={() => setFlagOpen(false)} disabled={flagBusy}>Cancel</button>
+          <button type="button" className="cc-btn-primary" onClick={submitFlag} disabled={flagBusy}>{flagBusy ? 'Saving...' : 'Flag for review'}</button>
+        </div>}>
+        <div className="at-form">
+          <p className="at-muted">{selected ? changeHeadline(selected) : ''}</p>
+          <label htmlFor="at-flag-note">What should the reviewer check? (optional)</label>
+          <textarea id="at-flag-note" className="cc-select at-textarea" maxLength={2000} value={flagNote} onChange={(e) => setFlagNote(e.target.value)} />
+          {flagError && <p role="alert" className="at-err">{flagError}</p>}
+        </div>
+      </Modal>
+
+      <Modal open={Boolean(deleteTarget)} onClose={closeDelete} size="sm" closeOnBackdrop={!deleting} title="Reverse upload batch"
+        footer={<div className="at-modal-foot">
+          <button type="button" onClick={closeDelete} className="cc-btn-ghost" disabled={deleting}>Cancel</button>
+          <button type="button" onClick={handleDeleteBatch} disabled={deleteConfirm !== 'DELETE' || deleteReason.trim().length < 3 || deleting} className="cc-btn-primary at-danger-fill">
+            {deleting ? 'Reversing...' : 'Reverse batch'}
+          </button>
+        </div>}>
         {deleteTarget && (
-          <div className="space-y-3">
-            <p className="text-[var(--text-secondary)] text-sm">
-              This removes the surviving records from the batch uploaded on {formatDate(deleteTarget.date)}. The original upload contained {deleteTarget.count} records. History and a recovery archive are retained; batches with cleaning or disposal activity cannot be reversed here.
-            </p>
-            <div>
-              <label className="label" htmlFor="rv-reason">Reason for reversal</label>
-              <textarea id="rv-reason" className="input w-full" value={deleteReason} maxLength={2000} onChange={e => setDeleteReason(e.target.value)} aria-describedby="rv-reason-help" />
-              <p id="rv-reason-help" className="text-[11px] text-[var(--text-muted)] mt-1">At least 3 characters. Recorded against the reversal.</p>
-            </div>
-            <div>
-              <label className="label" htmlFor="rv-confirm">Type <span className="font-mono text-red-500">DELETE</span> to confirm</label>
-              <input id="rv-confirm" className="input w-full" placeholder="DELETE" value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} autoComplete="off" />
-            </div>
-            {deleteError && (
-              <p role="alert" className="text-sm text-red-500 bg-red-500/10 border border-red-500/30 rounded-lg p-2.5">{deleteError}</p>
-            )}
+          <div className="at-form">
+            <p className="at-muted">This removes the surviving records from the batch uploaded on {formatDate(deleteTarget.date)}. The original upload contained {fmtInt(deleteTarget.count)} records. History and a recovery archive are retained; batches with cleaning or disposal activity cannot be reversed here.</p>
+            <label htmlFor="rv-reason">Reason for reversal</label>
+            <textarea id="rv-reason" className="cc-select at-textarea" value={deleteReason} maxLength={2000} onChange={(e) => setDeleteReason(e.target.value)} aria-describedby="rv-reason-help" />
+            <small id="rv-reason-help" className="at-muted">At least 3 characters. Recorded against the reversal.</small>
+            <label htmlFor="rv-confirm">Type DELETE to confirm</label>
+            <input id="rv-confirm" className="cc-select" placeholder="DELETE" value={deleteConfirm} onChange={(e) => setDeleteConfirm(e.target.value)} autoComplete="off" />
+            {deleteError && <p role="alert" className="at-err">{deleteError}</p>}
           </div>
         )}
       </Modal>

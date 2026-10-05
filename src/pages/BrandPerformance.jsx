@@ -1,4 +1,25 @@
+/**
+ * Brand Performance (route /brand-perf) rebuilt on the shared page kit to the
+ * owner's mockup: KPI strip, brand ranking / failure rate / cost vs life
+ * cards, a filter bar, the brand scoreboard and a brand insight card.
+ *
+ * Data: tyre_records (country-scoped, newest 50,000) for per-brand volume,
+ * rated-subset failure rate, tyre life and CPK (kpiEngine); warranty_claims
+ * for claims, acceptance and credit recovered; the expense grid
+ * (loadGovernedCostSplit) for the authoritative fleet tyre cost. Shaping
+ * lives in src/lib/brandPerformanceView.js.
+ *
+ * Honest gaps: risk_level is often blank, so failure rate is measured over
+ * rated tyres only and reads N/A when none are rated. Life and CPK need both
+ * fitment and removal km. Money is N/A on the All-countries scope. No earlier
+ * snapshot is stored, so the KPI tiles carry no trend arrows.
+ *
+ * Kept from the previous page: period, site and risk filters, Excel and PDF
+ * export, the volume and failure charts with full-screen view, the per-brand
+ * detail table, the brand drill-down and the value-by-size comparison.
+ */
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { linearRegression, bucketByMonth, recordCost } from '../lib/analyticsEngine'
@@ -8,29 +29,35 @@ import {
 } from 'chart.js'
 import { Bar, Line } from 'react-chartjs-2'
 import {
-  Maximize2, X, BarChart2, Download, FileText, Award, AlertTriangle, RefreshCw,
-  Ruler, Trophy, Tag, ShieldAlert, Layers, Coins,
+  Maximize2, X, Download, FileText, Award, AlertTriangle, ChevronRight,
+  Ruler, Trophy, Tag, ShieldAlert, Layers, Coins, Search, Info, GitCompare, Activity,
 } from 'lucide-react'
+import { Card, CardState, Kpi, Tabs, KitTable, fmtInt } from '../components/commandCenter/kit'
 import { getBrandSizeCpk } from '../lib/api/brandSizeCpk'
 import { groupBySize, recommendationFor, formatNumber, formatCpk } from '../lib/brandSizeCpk'
-import { SkeletonCards, SkeletonChart } from '../components/ui/Skeleton'
-import PageHeader from '../components/ui/PageHeader'
 import PeriodFilter, { filterByPeriodValue, periodLabel } from '../components/ui/PeriodFilter'
 import { ChartModal } from '../components/ChartModal'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { fetchAllPages } from '../lib/fetchAll'
 import { loadGovernedCostSplit, COST_SPLIT_TTL_MS } from '../lib/api/governedCost'
+import { listWarrantyClaims } from '../lib/api/warranty'
+import { scopeClaimsByCountry } from '../lib/warrantyTrackerAnalytics'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
-import { useReportMeta } from '../hooks/useReportMeta'
 import { toUserMessage } from '../lib/safeError'
 import { compareValues } from '../lib/consoleTable'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import {
-  RISK_LEVELS, sitesOf, filterBrandRecords, buildBrandMetrics, summarizeBrands,
-  failureBand, FAILURE_BAND_LABEL, categoryBreakdown, brandExportRows,
+  RISK_LEVELS, filterBrandRecords, buildBrandMetrics, summarizeBrands,
+  failureBand, categoryBreakdown, brandExportRows,
   BRAND_EXPORT_COLS, BRAND_EXPORT_HEADERS, flattenSizeGroups,
 } from '../lib/brandPerformanceAnalytics'
+import {
+  brandFilterOptions, filterByClassAndSize, brandScoreboard, brandHeadlines, brandInsight,
+  rankingBars, failureBars, brandInitials, scoreTone, failureTone, SCORE_LABEL, SCORE_WEIGHTS,
+  scoreboardExportRows, SCOREBOARD_EXPORT_COLS, SCOREBOARD_EXPORT_HEADERS,
+} from '../lib/brandPerformanceView'
+import './BrandPerformance.css'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend, Filler)
 
@@ -48,78 +75,69 @@ const CHART_OPTS = {
   plugins: { legend: { display: false } },
   scales: { x: { grid: GRID, ticks: TICK }, y: { grid: GRID, ticks: TICK, beginAtZero: true } },
 }
-
-// Semantic failure bands keep their meaning (and always carry a text label).
-const BAND_CLS = {
-  high: 'bg-red-500/15 text-red-400 border-red-500/30',
-  elevated: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-  low: 'bg-green-500/15 text-green-400 border-green-500/30',
-}
 const BAND_FILL = { high: 'rgba(239,68,68,0.7)', elevated: 'rgba(245,158,11,0.7)', low: 'rgba(16,185,129,0.7)' }
-
-const chipCls = (active) =>
-  'min-h-[44px] sm:min-h-[36px] px-3 rounded-full text-xs font-medium border transition-colors '
-  + 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] '
-  + (active
-    ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
-    : 'border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--border-bright)]')
 
 const inputCls =
   'rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] px-3 min-h-[44px] sm:min-h-[38px] '
   + 'text-sm text-[var(--text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
 
 const pct = (v, d = 1) => (v == null || !Number.isFinite(v) ? 'N/A' : `${v.toFixed(d)}%`)
+const km = (v) => (v == null ? null : `${Math.round(v / 1000).toLocaleString('en-US')}k`)
+const NA = ({ why }) => <span className="cc-na" title={why}>N/A</span>
 
-function Kpi({ icon: Icon, label, value, sub, tone = 'text-[var(--text-primary)]' }) {
+function MiniStat({ label, value }) {
   return (
-    <div className="card p-4 min-w-0">
-      <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
-        {Icon && <Icon size={13} aria-hidden="true" />}<span className="truncate">{label}</span>
-      </div>
-      <p className={`text-xl font-bold mt-1 truncate tabular-nums ${tone}`}>{value}</p>
-      {sub && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{sub}</p>}
+    <div className="bp-mini">
+      <span>{label}</span>
+      <b>{value}</b>
     </div>
   )
 }
 
-function BandPill({ rate }) {
-  const band = failureBand(rate)
-  if (!band) return <span className="text-xs text-[var(--text-muted)]">N/A</span>
-  return (
-    <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${BAND_CLS[band]}`}>
-      {rate.toFixed(1)}% <span className="sr-only sm:not-sr-only">{FAILURE_BAND_LABEL[band]}</span>
-    </span>
-  )
-}
+/** KPI label with a quiet second line, inside the kit tile. */
+const kpiLabel = (label, sub) => (
+  <>{label}{sub && <small className="bp-kpi-sub">{sub}</small>}</>
+)
+
+const TABS = [
+  { key: 'board', label: 'Brand scoreboard' },
+  { key: 'charts', label: 'Volume and detail' },
+  { key: 'size', label: 'Value by size' },
+]
 
 export default function BrandPerformance() {
-  const reportMeta = useReportMeta('Brand Performance')
   const { activeCountry, activeCurrency } = useSettings()
+  const money = !!activeCountry && activeCountry !== 'All'
   const [records, setRecords] = useState([])
   const [recordsTruncated, setRecordsTruncated] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [claims, setClaims] = useState([])
+  const [claimsError, setClaimsError] = useState(null)
+  const [cost, setCost] = useState({ loading: true, value: null, blended: false, failed: false })
   const [selected, setSelected] = useState(null)
-  // Authoritative fleet-level tyre cost from the classified expense grid.
-  const [fleetTyreCost, setFleetTyreCost] = useState(null)
+  const [tab, setTab] = useState('board')
 
   const [period, setPeriod] = useState({ mode: 'all' })
-  const [selectedSites, setSelectedSites] = useState([])
-  const [riskLevels, setRiskLevels] = useState([])
+  const [site, setSite] = useState('')
+  const [risk, setRisk] = useState('')
+  const [assetClass, setAssetClass] = useState('')
+  const [size, setSize] = useState('')
+  const [search, setSearch] = useState('')
 
   const [modalOpen, setModalOpen] = useState(false)
   const chartRef = useRef(null)
+  const insightRef = useRef(null)
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      // Per-row brand aggregation has no server RPC, so this stays a client pull.
-      // BOUNDED: country-scoped, newest-first, capped at 50,000 rows. The Period
-      // filter is applied client-side over the loaded set.
+      // Per-row brand aggregation has no server RPC, so this stays a client
+      // pull. BOUNDED: country-scoped, newest first, capped at 50,000 rows.
       const { data, error: e, truncated } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
-          .select('id,issue_date,brand,site,category,risk_level,cost_per_tyre,qty,description,remarks')
+          .select('id,issue_date,brand,site,size,vehicle_type,category,risk_level,cost_per_tyre,qty,km_at_fitment,km_at_removal,description,remarks')
           .order('issue_date', { ascending: false })
           .order('id', { ascending: true })
         if (activeCountry !== 'All') q = q.eq('country', activeCountry)
@@ -137,302 +155,367 @@ export default function BrandPerformance() {
     }
   }, [activeCountry])
 
-  useEffect(() => { load() }, [load])
+  const loadClaims = useCallback(async () => {
+    setClaimsError(null)
+    try {
+      setClaims(await listWarrantyClaims() || [])
+    } catch (err) {
+      setClaims([])
+      setClaimsError(toUserMessage(err, 'Warranty claims could not be read.'))
+    }
+  }, [])
 
-  useEffect(() => {
+  const loadCost = useCallback(() => {
     let alive = true
+    setCost((c) => ({ ...c, loading: true, failed: false }))
     loadGovernedCostSplit({ country: activeCountry, maxAgeMs: COST_SPLIT_TTL_MS })
-      .then(r => { if (alive) setFleetTyreCost(r?.tyre ?? null) })
-      .catch(() => { if (alive) setFleetTyreCost(null) })
+      .then((r) => { if (alive) setCost({ loading: false, value: r?.tyre ?? null, blended: !!r?.blended, failed: false, window: r?.window }) })
+      .catch(() => { if (alive) setCost({ loading: false, value: null, blended: false, failed: true }) })
     return () => { alive = false }
   }, [activeCountry])
 
-  const uniqueSites = useMemo(() => sitesOf(records), [records])
-  const filtered = useMemo(
-    () => filterBrandRecords(filterByPeriodValue(records, period, 'issue_date'), { sites: selectedSites, riskLevels }),
-    [records, period, selectedSites, riskLevels],
-  )
+  useEffect(() => { load() }, [load])
+  useEffect(() => { loadClaims() }, [loadClaims])
+  useEffect(() => loadCost(), [loadCost])
+
+  const options = useMemo(() => brandFilterOptions(records), [records])
+  const filtered = useMemo(() => filterByClassAndSize(
+    filterBrandRecords(filterByPeriodValue(records, period, 'issue_date'), {
+      sites: site ? [site] : [], riskLevels: risk ? [risk] : [],
+    }),
+    { assetClass, size },
+  ), [records, period, site, risk, assetClass, size])
+
+  const scopedClaims = useMemo(() => {
+    const byCountry = scopeClaimsByCountry(claims, activeCountry)
+    return filterByPeriodValue(byCountry, period, 'created_at')
+      .filter((c) => !site || (c.site || '') === site)
+      .filter((c) => !size || (c.size || '') === size)
+  }, [claims, activeCountry, period, site, size])
+
+  const board = useMemo(() => brandScoreboard(filtered, { claims: scopedClaims, money }), [filtered, scopedClaims, money])
   const metrics = useMemo(() => buildBrandMetrics(filtered), [filtered])
-  const summary = useMemo(() => summarizeBrands(metrics, { fleetTyreCost }), [metrics, fleetTyreCost])
-  const selectedData = useMemo(() => (selected ? filtered.filter(r => (r.brand || 'Unknown') === selected) : []), [filtered, selected])
+  const summary = useMemo(() => summarizeBrands(metrics), [metrics])
+  const heads = useMemo(() => brandHeadlines(board), [board])
+  const visibleBoard = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return q ? board.filter((r) => r.brand.toLowerCase().includes(q)) : board
+  }, [board, search])
+  const insight = useMemo(() => brandInsight(board, selected), [board, selected])
+  const selectedData = useMemo(() => (selected ? filtered.filter((r) => (r.brand || 'Unknown') === selected) : []), [filtered, selected])
 
-  const hasActiveFilter = period.mode !== 'all' || selectedSites.length > 0 || riskLevels.length > 0
+  const hasFilter = period.mode !== 'all' || site || risk || assetClass || size
   const scopeLabel = [
-    periodLabel(period),
-    selectedSites.length ? `Sites: ${selectedSites.join(', ')}` : null,
-    riskLevels.length ? `Risk: ${riskLevels.join(', ')}` : null,
+    periodLabel(period).replace('\u2192', 'to').replace(/\u2026/g, 'any'),
+    site ? `Site ${site}` : null,
+    risk ? `Risk ${risk}` : null,
+    assetClass ? `Asset class ${assetClass}` : null,
+    size ? `Size ${size}` : null,
   ].filter(Boolean).join(' | ')
+  function clearFilters() { setPeriod({ mode: 'all' }); setSite(''); setRisk(''); setAssetClass(''); setSize(''); setSearch('') }
 
-  const toggle = (setter) => (v) => setter(prev => (prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]))
-  const toggleSite = toggle(setSelectedSites)
-  const toggleRisk = toggle(setRiskLevels)
-  function clearFilters() { setPeriod({ mode: 'all' }); setSelectedSites([]); setRiskLevels([]) }
+  const selectBrand = (brand) => {
+    setSelected((cur) => (cur === brand ? null : brand))
+    requestAnimationFrame(() => insightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
+  }
 
+  // Detail tab charts (kept from the previous page).
   const top10 = metrics.slice(0, 10)
   const rankingChart = {
-    labels: top10.map(b => b.brand),
+    labels: top10.map((b) => b.brand),
     datasets: [{
       label: 'Records',
-      data: top10.map(b => b.count),
+      data: top10.map((b) => b.count),
       backgroundColor: top10.map((b, i) => BAND_FILL[failureBand(b.failureRate)] || withAlpha(colorAt(i), 0.7)),
       borderRadius: 4,
     }],
   }
-  const rated10 = metrics.filter(b => b.failureRate != null).slice(0, 10)
+  const rated10 = metrics.filter((b) => b.failureRate != null).slice(0, 10)
   const failureRateChart = {
-    labels: rated10.map(b => b.brand),
+    labels: rated10.map((b) => b.brand),
     datasets: [{
       label: 'High-risk failure rate %',
-      data: rated10.map(b => Number(b.failureRate.toFixed(1))),
-      backgroundColor: rated10.map(b => BAND_FILL[failureBand(b.failureRate)]),
+      data: rated10.map((b) => Number(b.failureRate.toFixed(1))),
+      backgroundColor: rated10.map((b) => BAND_FILL[failureBand(b.failureRate)]),
       borderRadius: 4,
     }],
   }
 
-  const exportFile = reportFileName('TyrePulse Brand Performance', activeCountry !== 'All' ? activeCountry : null)
-  const doExcel = () => exportToExcel(brandExportRows(metrics), BRAND_EXPORT_COLS, BRAND_EXPORT_HEADERS, exportFile, 'Brands')
+  const exportFile = reportFileName('TyrePulse Brand Performance', money ? activeCountry : null)
+  const doExcel = () => exportToExcel(scoreboardExportRows(board), SCOREBOARD_EXPORT_COLS, SCOREBOARD_EXPORT_HEADERS, exportFile, 'Brands')
   const doPdf = () => exportToPdf(
-    brandExportRows(metrics),
-    BRAND_EXPORT_COLS.map((k, i) => ({ key: k, header: BRAND_EXPORT_HEADERS[i] })),
+    scoreboardExportRows(board),
+    SCOREBOARD_EXPORT_COLS.map((k, i) => ({ key: k, header: SCOREBOARD_EXPORT_HEADERS[i] })),
     `Brand Performance (${scopeLabel || 'All periods'})`,
     exportFile, 'landscape',
   )
+  const detailFile = reportFileName('TyrePulse Brand Detail', money ? activeCountry : null)
+  const doDetailExcel = () => exportToExcel(brandExportRows(metrics), BRAND_EXPORT_COLS, BRAND_EXPORT_HEADERS, detailFile, 'Brands')
 
-  const brandColumns = useMemo(() => [
-    { id: 'rank', header: '#', accessorFn: r => r.rank, size: 48, meta: { align: 'center' }, ...SORT },
+  const money$ = (v) => (v == null ? null : formatCurrencyCompact(v, activeCurrency))
+  const moneyWhy = money ? 'No priced data for this brand' : 'Pick a country: SAR, AED and EGP are never added together'
+
+  const columns = useMemo(() => [
     {
-      id: 'brand', header: 'Brand', accessorFn: r => r.brand, size: 140, ...SORT,
-      cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue()}</span>,
+      key: 'brand', header: 'Brand', sortValue: (r) => r.brand,
+      cell: (r) => <span className={`bp-brand ${selected === r.brand ? 'is-sel' : ''}`}><i>{brandInitials(r.brand)}</i>{r.brand}</span>,
     },
-    { id: 'count', header: 'Records', accessorFn: r => r.count, size: 80, meta: { align: 'right' }, ...SORT },
+    { key: 'tyres', header: 'Tyres', numeric: true, cell: (r) => fmtInt(r.tyres) },
     {
-      id: 'totalCost', header: 'Total cost', accessorFn: r => undef(r.totalCost), size: 110, meta: { align: 'right', exportValue: r => r.totalCost ?? 'N/A' }, ...SORT,
-      cell: ({ getValue }) => (getValue() == null ? <span className="text-[var(--text-muted)]">N/A</span> : formatCurrencyCompact(getValue(), activeCurrency)),
-    },
-    {
-      id: 'avgCost', header: 'Avg per priced tyre', accessorFn: r => undef(r.avgCost), size: 120, meta: { align: 'right', exportValue: r => r.avgCost ?? 'N/A' }, ...SORT,
-      cell: ({ getValue }) => (getValue() == null ? <span className="text-[var(--text-muted)]">N/A</span> : formatCurrencyCompact(getValue(), activeCurrency)),
+      key: 'avgLifeKm', header: 'Avg life km', numeric: true, sortValue: (r) => undef(r.avgLifeKm),
+      cell: (r) => (r.avgLifeKm == null ? <NA why="No tyre with both fitment and removal km" /> : <span title={`${r.lifeCount} tyres measured`}>{fmtInt(r.avgLifeKm)}</span>),
     },
     {
-      id: 'failureRate', header: 'Failure rate', accessorFn: r => undef(r.failureRate), size: 120, meta: { align: 'right', exportValue: r => r.failureRate ?? 'N/A' }, ...SORT,
-      cell: ({ getValue, row }) => (
-        <span title={`${row.original.ratedCount} of ${row.original.count} records carry a risk rating`}>
-          <BandPill rate={getValue()} />
-        </span>
-      ),
-    },
-    { id: 'rated', header: 'Rated', accessorFn: r => r.ratedCount, size: 70, meta: { align: 'right' }, ...SORT },
-    {
-      id: 'topCategory', header: 'Top category', accessorFn: r => undef(r.topCategory), size: 130, ...SORT,
-      cell: ({ getValue }) => getValue() ?? <span className="text-[var(--text-muted)]">N/A</span>,
+      key: 'failurePct', header: 'Failure %', numeric: true, sortValue: (r) => undef(r.failurePct),
+      cell: (r) => (r.failurePct == null ? <NA why="No risk-rated tyre for this brand" /> : (
+        <span className={`bp-tone ${failureTone(r.failurePct)}`} title={`${r.ratedCount} of ${r.tyres} tyres rated`}>{pct(r.failurePct)}</span>
+      )),
     },
     {
-      id: 'riskScore', header: 'Risk score', accessorFn: r => undef(r.riskScore), size: 100, meta: { align: 'right', exportValue: r => r.riskScore ?? 'N/A' }, ...SORT,
-      cell: ({ getValue }) => {
-        const v = getValue()
-        if (v == null) return <span className="text-[var(--text-muted)]">N/A</span>
-        return <span className="font-mono text-xs tabular-nums text-[var(--text-primary)]">{v.toFixed(2)}</span>
+      key: 'avgCpk', header: 'Avg CPK', numeric: true, sortValue: (r) => undef(r.avgCpk),
+      cell: (r) => (r.avgCpk == null ? <NA why={money ? 'Needs a price plus fitment and removal km' : moneyWhy} /> : <span title={`${r.cpkCount} tyres measured`}>{r.avgCpk.toFixed(3)}</span>),
+    },
+    {
+      key: 'purchaseCost', header: 'Purchase cost', numeric: true, sortValue: (r) => undef(r.purchaseCost),
+      cell: (r) => (r.purchaseCost == null ? <NA why={moneyWhy} /> : <span title={`${r.pricedCount} priced tyres`}>{money$(r.purchaseCost)}</span>),
+    },
+    {
+      key: 'retreadPct', header: 'Retread %', numeric: true, sortValue: (r) => undef(r.retreadPct),
+      cell: (r) => (r.retreadPct == null ? <NA why="No category recorded on these tyres" /> : pct(r.retreadPct, 0)),
+    },
+    {
+      key: 'warrantyRecovery', header: 'Warranty recovery', numeric: true, sortValue: (r) => undef(r.warrantyRecovery),
+      cell: (r) => {
+        if (claimsError) return <NA why="Warranty claims could not be read" />
+        if (!r.warrantyClaims) return <span className="cc-na">No claims</span>
+        if (r.warrantyRecovery == null) return <span className="cc-na" title={money ? 'No credit issued yet' : moneyWhy}>{fmtInt(r.warrantyClaims)} open</span>
+        return money$(r.warrantyRecovery)
       },
     },
-  ], [activeCurrency])
+    {
+      key: 'score', header: 'Score', numeric: true, sortValue: (r) => undef(r.score),
+      cell: (r) => (r.score == null ? <NA why="Needs at least two measured components" /> : (
+        <span className={`bp-score ${scoreTone(r.score)}`} title={`From ${r.scoreParts.map((k) => SCORE_LABEL[k]).join(', ')}`}>{r.score}</span>
+      )),
+    },
+  ], [selected, money, moneyWhy, claimsError, activeCurrency]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (loading) return (
-    <div className="space-y-5">
-      <PageHeader title="Brand Performance" subtitle="Loading brand data..." icon={BarChart2} />
-      <SkeletonCards count={4} />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6"><SkeletonChart /><SkeletonChart /></div>
-    </div>
+  const detailColumns = useMemo(() => [
+    { key: 'rank', header: '#', numeric: true },
+    { key: 'brand', header: 'Brand', cell: (r) => <b>{r.brand}</b> },
+    { key: 'count', header: 'Records', numeric: true, cell: (r) => fmtInt(r.count) },
+    { key: 'ratedCount', header: 'Rated', numeric: true, cell: (r) => fmtInt(r.ratedCount) },
+    { key: 'avgCost', header: 'Avg per priced tyre', numeric: true, sortValue: (r) => undef(r.avgCost), cell: (r) => (!money || r.avgCost == null ? <NA why={moneyWhy} /> : money$(r.avgCost)) },
+    { key: 'topCategory', header: 'Top category', cell: (r) => r.topCategory ?? <NA why="No category recorded" /> },
+    { key: 'riskScore', header: 'Risk score', numeric: true, sortValue: (r) => undef(r.riskScore), cell: (r) => (r.riskScore == null ? <NA why="No rated tyres" /> : r.riskScore.toFixed(2)) },
+  ], [money, moneyWhy]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const costTile = (() => {
+    if (cost.loading) return { display: '...', sub: 'Expense grid' }
+    if (!money || cost.blended) return { display: 'N/A', sub: 'Pick a country to total one currency' }
+    if (cost.failed || cost.value == null) return { display: 'N/A', sub: 'Expense grid could not be read' }
+    return { display: formatCurrencyCompact(cost.value, activeCurrency), sub: 'Expense grid, last 12 months' }
+  })()
+
+  const rankBars = rankingBars(board)
+  const failBars = failureBars(board)
+  const maxFail = Math.max(1, ...failBars.map((b) => b.value))
+  const costLife = board.filter((r) => r.avgLifeKm != null || r.avgCpk != null).slice(0, 6)
+
+  const header = (
+    <header className="bp-head">
+      <div className="bp-head-copy">
+        <nav className="bp-crumb" aria-label="Breadcrumb">
+          <Link to="/tyre-records">Tyre management</Link>
+          <ChevronRight size={13} aria-hidden="true" />
+          <span aria-current="page">Brand performance</span>
+        </nav>
+        <h1>Brand Performance</h1>
+        <p>Compare failure rate, cost, life and ranking by tyre brand across the fleet.</p>
+      </div>
+      <div className="bp-head-actions">
+        <div className="bp-period"><PeriodFilter records={records} value={period} onChange={setPeriod} /></div>
+        <select className="cc-select bp-head-select" aria-label="Site" value={site} onChange={(e) => setSite(e.target.value)}>
+          <option value="">All sites</option>
+          {options.sites.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <button type="button" className="cc-btn-ghost" onClick={doExcel} disabled={!board.length}><Download size={15} aria-hidden="true" /> Excel</button>
+        <button type="button" className="cc-btn-primary" onClick={doPdf} disabled={!board.length}><FileText size={15} aria-hidden="true" /> Export report</button>
+      </div>
+    </header>
   )
 
   if (error) return (
-    <div className="space-y-5">
-      <PageHeader title="Brand Performance" subtitle="Could not load data" icon={BarChart2} />
-      <div className="card py-16 flex flex-col items-center gap-3 text-center" role="alert">
-        <AlertTriangle size={40} className="text-red-400" aria-hidden="true" />
-        <p className="text-red-400 font-medium">Could not load brand performance</p>
-        <p className="text-[var(--text-muted)] text-sm">{error}</p>
-        <button onClick={load} className="btn-primary min-h-[44px] mt-2 inline-flex items-center gap-2 px-4">
-          <RefreshCw size={16} aria-hidden="true" /> Retry
-        </button>
-      </div>
-    </div>
-  )
-
-  if (records.length === 0) return (
-    <div className="space-y-5">
-      <PageHeader title="Brand Performance" subtitle="No brand data available" icon={BarChart2} />
-      <div className="card py-16 flex flex-col items-center gap-3 text-center">
-        <BarChart2 size={40} className="text-[var(--text-dim)]" aria-hidden="true" />
-        <p className="text-[var(--text-secondary)] font-medium">No tyre records for this country yet</p>
-        <p className="text-[var(--text-muted)] text-sm">Import tyre records with brand information to see performance analytics.</p>
-      </div>
+    <div className="cc bp-page">
+      {header}
+      <Card><CardState state={{ loading: false, error, retry: load }} /></Card>
     </div>
   )
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Brand Performance"
-        subtitle="Failure rates, cost and ranking by brand"
-        icon={BarChart2}
-        actions={(
-          <div className="flex gap-2">
-            <button onClick={doExcel} disabled={!metrics.length} className="btn-secondary min-h-[44px] sm:min-h-[36px] inline-flex items-center gap-1.5 text-sm px-3 disabled:opacity-40">
-              <Download size={14} aria-hidden="true" /> Excel
-            </button>
-            <button onClick={doPdf} disabled={!metrics.length} className="btn-secondary min-h-[44px] sm:min-h-[36px] inline-flex items-center gap-1.5 text-sm px-3 disabled:opacity-40">
-              <FileText size={14} aria-hidden="true" /> PDF
-            </button>
-          </div>
-        )}
-      />
+    <div className="cc bp-page">
+      {header}
 
       {recordsTruncated && (
-        <div role="status" className="px-3 py-2 rounded-lg border border-amber-500/40 bg-amber-500/10 text-xs text-amber-400">
-          Capped view: showing the most recent 50,000 tyre records for the selected country. Total fleet cost is a
-          server aggregate and stays exact. Narrow the country or period for complete per brand detail.
+        <div role="status" className="bp-banner">
+          <Info size={16} aria-hidden="true" />
+          <p>Capped view: the most recent 50,000 tyre records for this country. Narrow the country or period for complete per brand detail. The fleet tyre cost tile is a server total and stays exact.</p>
         </div>
       )}
 
-      {/* KPI strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <Kpi icon={Layers} label="Brands tracked" value={formatNumber(summary.brandCount)} sub={`${formatNumber(summary.records)} records in scope`} />
-        <Kpi
-          icon={Coins}
-          label="Total fleet tyre cost"
-          value={summary.totalCost == null ? 'N/A' : formatCurrencyCompact(summary.totalCost, activeCurrency)}
-          sub={summary.costBasis === 'grid' ? 'From the expense grid' : summary.costBasis === 'records' ? 'Priced tyre records only' : 'No priced records'}
-        />
-        <Kpi
-          icon={ShieldAlert}
-          label="Fleet failure rate"
-          value={pct(summary.fleetFailureRate)}
-          sub={summary.ratedPct == null ? 'No records' : `${summary.ratedPct.toFixed(0)}% of records rated`}
-        />
-        <Kpi
-          icon={Award}
-          label="Best brand"
-          value={summary.best ? summary.best.brand : 'N/A'}
-          sub={summary.best ? `${pct(summary.best.failureRate)} failure, ${summary.best.ratedCount} rated` : 'No risk ratings recorded'}
-          tone={summary.best ? 'text-green-400' : 'text-[var(--text-muted)]'}
-        />
-        <Kpi
-          icon={AlertTriangle}
-          label="Highest risk brand"
-          value={summary.worst ? summary.worst.brand : 'N/A'}
-          sub={summary.worst ? `${pct(summary.worst.failureRate)} failure, ${summary.worst.ratedCount} rated` : 'Needs two rated brands'}
-          tone={summary.worst ? 'text-red-400' : 'text-[var(--text-muted)]'}
-        />
+      <div className="cc-kpis bp-kpis">
+        <Kpi icon={Layers} tone="t-blue" loading={loading} value={summary.brandCount}
+          label={kpiLabel('Brands tracked', `${fmtInt(summary.records)} tyres in scope`)} />
+        <Kpi icon={Coins} tone="t-purple" display={costTile.display}
+          label={kpiLabel('Fleet tyre cost', costTile.sub)} title="Authoritative tyre spend from the classified expense grid" />
+        <Kpi icon={ShieldAlert} tone="t-red" loading={loading} display={pct(summary.fleetFailureRate)}
+          label={kpiLabel('Failure rate', summary.ratedPct == null ? 'No records' : `${summary.ratedPct.toFixed(0)}% of tyres risk-rated`)}
+          title="High or Critical over risk-rated tyres only" />
+        <Kpi icon={Award} tone="t-green" loading={loading} display={heads.best ? heads.best.brand : 'N/A'}
+          onClick={heads.best ? () => selectBrand(heads.best.brand) : undefined}
+          label={kpiLabel('Best brand', heads.best ? `Composite score ${heads.best.score}` : 'Needs two measured components')} />
+        <Kpi icon={AlertTriangle} tone="t-amber" loading={loading} display={heads.worstFailure ? heads.worstFailure.brand : 'N/A'}
+          onClick={heads.worstFailure ? () => selectBrand(heads.worstFailure.brand) : undefined}
+          label={kpiLabel('Highest risk', heads.worstFailure ? `${pct(heads.worstFailure.failurePct)} of rated tyres` : 'Needs two rated brands')} />
       </div>
 
-      {summary.ratedCount === 0 && (
-        <p className="text-xs text-[var(--text-muted)]" role="note">
-          No record in this scope carries a risk rating, so failure rate and risk score read N/A rather than 0%.
-        </p>
-      )}
+      <Tabs tabs={TABS} value={tab} onChange={setTab} label="Brand performance views" variant="line" />
 
-      {/* Filters */}
-      <section className="card space-y-3" aria-label="Filters">
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex flex-col gap-1">
-            <span className="label text-xs" id="bp-period">Period</span>
-            <div aria-labelledby="bp-period"><PeriodFilter records={records} value={period} onChange={setPeriod} /></div>
-          </div>
-          {hasActiveFilter && (
-            <button onClick={clearFilters} className="btn-secondary min-h-[44px] sm:min-h-[36px] inline-flex items-center gap-1.5 text-sm px-3 self-end">
-              <X size={14} aria-hidden="true" /> Clear filters
-            </button>
-          )}
-        </div>
-
-        {uniqueSites.length > 0 && (
-          <div className="flex items-center gap-2 flex-wrap" role="group" aria-label="Filter by site">
-            <span className="text-xs text-[var(--text-muted)]">Sites:</span>
-            <button onClick={() => setSelectedSites([])} aria-pressed={selectedSites.length === 0} className={chipCls(selectedSites.length === 0)}>All</button>
-            {uniqueSites.map(site => (
-              <button key={site} onClick={() => toggleSite(site)} aria-pressed={selectedSites.includes(site)} className={chipCls(selectedSites.includes(site))}>
-                {site}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div className="flex items-center gap-2 flex-wrap" role="group" aria-label="Filter by risk level">
-          <span className="text-xs text-[var(--text-muted)]">Risk:</span>
-          <button onClick={() => setRiskLevels([])} aria-pressed={riskLevels.length === 0} className={chipCls(riskLevels.length === 0)}>All</button>
-          {RISK_LEVELS.map(level => (
-            <button key={level} onClick={() => toggleRisk(level)} aria-pressed={riskLevels.includes(level)} className={chipCls(riskLevels.includes(level))}>
-              {level}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {metrics.length === 0 ? (
-        <div className="card py-12 flex flex-col items-center gap-3 text-center">
-          <BarChart2 size={32} className="text-[var(--text-dim)]" aria-hidden="true" />
-          <p className="text-[var(--text-secondary)] font-medium">No records match these filters</p>
-          <button onClick={clearFilters} className="btn-secondary min-h-[44px] px-4 inline-flex items-center gap-1.5">
-            <X size={14} aria-hidden="true" /> Clear filters
-          </button>
-        </div>
-      ) : (
+      {tab === 'board' && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="card relative">
-              <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-4 pr-10">Volume by brand (top 10)</h3>
-              <button
-                onClick={() => setModalOpen(true)}
-                aria-label="Open volume by brand chart fullscreen"
-                className="absolute top-2 right-2 z-10 w-11 h-11 inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--panel-2)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-              >
-                <Maximize2 size={15} aria-hidden="true" />
-              </button>
-              <div style={{ height: 240 }} role="img" aria-label={`Bar chart of tyre records for the top ${top10.length} brands`}>
-                <Bar ref={chartRef} data={rankingChart} options={CHART_OPTS} />
-              </div>
-              <p className="text-[11px] text-[var(--text-muted)] mt-2">Bar colour shows the failure band; grey tones mean the brand has no rated records.</p>
-            </div>
-            <div className="card">
-              <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-4">High-risk failure rate % (rated brands, top 10)</h3>
-              {rated10.length === 0 ? (
-                <div className="h-[240px] flex items-center justify-center text-sm text-[var(--text-muted)] text-center px-4">
-                  No brand in this scope has risk-rated records, so there is no failure rate to chart.
+          <div className="bp-row">
+            <Card title="Brand ranking" sub="Composite score from life, cost per km, failure rate and warranty acceptance">
+              <CardState state={{ loading, error: null }} empty={!loading && !rankBars.length ? 'No brand has two measured components yet. Scores need life km, CPK, risk ratings or warranty decisions.' : null}>
+                <div className="bp-vbars" role="img" aria-label={rankBars.map((b) => `${b.brand} ${b.value}`).join(', ')}>
+                  {rankBars.map((b) => (
+                    <button key={b.brand} type="button" className={`bp-vbar ${selected === b.brand ? 'is-sel' : ''}`} onClick={() => selectBrand(b.brand)} title={`${b.brand}: score ${b.value}`}>
+                      <span className="bp-vbar-n">{b.value}</span>
+                      <i style={{ height: `${Math.max(4, b.value)}%` }} />
+                      <small>{brandInitials(b.brand)}</small>
+                    </button>
+                  ))}
                 </div>
-              ) : (
-                <div style={{ height: 240 }} role="img" aria-label={`Bar chart of failure rate for ${rated10.length} rated brands`}>
-                  <Bar data={failureRateChart} options={CHART_OPTS} />
-                </div>
-              )}
-            </div>
+                <p className="bp-note">Weights: life {SCORE_WEIGHTS.life * 100}%, CPK {SCORE_WEIGHTS.cpk * 100}%, failure {SCORE_WEIGHTS.failure * 100}%, warranty {SCORE_WEIGHTS.warranty * 100}%, rebalanced over what each brand has.</p>
+              </CardState>
+            </Card>
+
+            <Card title="Failure rate by brand" sub="High or Critical over risk-rated tyres">
+              <CardState state={{ loading, error: null }} empty={!loading && !failBars.length ? 'No tyre in this scope carries a risk rating, so failure rate is not measured.' : null}>
+                <ul className="bp-hbars">
+                  {failBars.map((b) => (
+                    <li key={b.brand}>
+                      <button type="button" onClick={() => selectBrand(b.brand)} title={`${b.rated} rated tyres`}>
+                        <span className="bp-hbar-label">{b.brand}</span>
+                        <span className="bp-hbar-track"><i className={failureTone(b.value)} style={{ width: `${Math.max(3, (b.value / maxFail) * 100)}%` }} /></span>
+                        <b>{pct(b.value, 0)}</b>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </CardState>
+            </Card>
+
+            <Card title="Cost vs life" sub={money ? `CPK in ${activeCurrency} per km` : 'CPK needs one country'}>
+              <CardState state={{ loading, error: null }} empty={!loading && !costLife.length ? 'No tyre has both fitment and removal km yet.' : null}>
+                <KitTable compact rows={costLife} getRowId={(r) => r.brand} onRowClick={(r) => selectBrand(r.brand)}
+                  columns={[
+                    { key: 'brand', header: 'Brand', cell: (r) => <b>{r.brand}</b> },
+                    { key: 'life', header: 'Avg life', numeric: true, cell: (r) => km(r.avgLifeKm) ?? <NA why="No life km" /> },
+                    { key: 'cpk', header: 'CPK', numeric: true, cell: (r) => (r.avgCpk == null ? <NA why={moneyWhy} /> : r.avgCpk.toFixed(3)) },
+                    { key: 'war', header: 'Warranty', numeric: true, cell: (r) => (r.warrantyAcceptPct == null ? <NA why={r.warrantyClaims ? 'No claim decided yet' : 'No claims'} /> : pct(r.warrantyAcceptPct, 0)) },
+                  ]} />
+              </CardState>
+            </Card>
           </div>
 
-          <p className="text-[11px] text-[var(--text-muted)]">
-            Cost by brand sums priced tyre records; the authoritative fleet total is from the expense grid. Select a row to drill down.
-          </p>
-          <EnterpriseTable
-            viewKey="brand-performance"
-            reportMeta={reportMeta}
-            columns={brandColumns}
-            data={metrics}
-            getRowId={r => r.brand}
-            enableGlobalFilter={true}
-            searchPlaceholder="Search brand..."
-            enableSorting
-            enableExport
-            exportFileName={exportFile}
-            initialPageSize={25}
-            pageSizeOptions={[10, 25, 50]}
-            emptyMessage="No brands match your search"
-            onRowClick={(row) => setSelected(selected === row.brand ? null : row.brand)}
-            enableRowSelection={false}
-          />
+          <Card className="bp-filterbar">
+            <div className="cc-filters">
+              <div className="cc-search">
+                <Search size={15} aria-hidden="true" />
+                <input type="search" placeholder="Search brand" aria-label="Search brand" value={search} onChange={(e) => setSearch(e.target.value)} />
+              </div>
+              <label className="cc-field"><span>Risk</span>
+                <select className="cc-select" value={risk} onChange={(e) => setRisk(e.target.value)}>
+                  <option value="">All</option>
+                  {RISK_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </label>
+              <label className="cc-field"><span>Asset class</span>
+                <select className="cc-select" value={assetClass} onChange={(e) => setAssetClass(e.target.value)} disabled={!options.classes.length}>
+                  <option value="">All</option>
+                  {options.classes.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </label>
+              <label className="cc-field"><span>Size</span>
+                <select className="cc-select" value={size} onChange={(e) => setSize(e.target.value)} disabled={!options.sizes.length}>
+                  <option value="">All</option>
+                  {options.sizes.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </label>
+              {(hasFilter || search) && <button type="button" className="cc-btn-ghost" onClick={clearFilters}><X size={14} aria-hidden="true" /> Clear</button>}
+            </div>
+            <p className="bp-scope" aria-live="polite">
+              {scopeLabel || 'All time'} | {fmtInt(filtered.length)} of {fmtInt(records.length)} tyres | {fmtInt(visibleBoard.length)} brands
+              {claimsError && <> | <span className="bp-warn">Warranty claims could not be read. <button type="button" className="cc-link-btn" onClick={loadClaims}>Retry</button></span></>}
+            </p>
+          </Card>
+
+          <Card className="bp-register" title="Brand scoreboard" sub="Select a brand to see its insight and drill-down. Purchase cost sums priced tyre records; the authoritative fleet total is the expense grid tile above.">
+            <KitTable
+              rows={visibleBoard}
+              columns={columns}
+              loading={loading}
+              getRowId={(r) => r.brand}
+              onRowClick={(r) => selectBrand(r.brand)}
+              empty={records.length === 0 ? 'No tyre records for this country yet. Import tyre records with a brand to compare brands.' : 'No brand matches these filters.'}
+            />
+          </Card>
+
+          <section ref={insightRef} className="cc-card bp-insight" aria-label="Brand insight">
+            <div className="bp-insight-copy">
+              <h2>{selected ? `${selected} insight` : 'Brand insight'}</h2>
+              {insight.length ? insight.map((l) => <p key={l}>{l}</p>) : <p>{loading ? 'Reading brand data...' : 'Not enough measured data in this scope to draw a conclusion.'}</p>}
+              <p className="bp-insight-action">Before changing the approved brand policy, compare fitment position, pressure deviation, site mix and driver behaviour for the brands in question.</p>
+            </div>
+            <div className="bp-insight-actions">
+              {selected && <button type="button" className="cc-btn-ghost" onClick={() => setSelected(null)}><X size={14} aria-hidden="true" /> Clear selection</button>}
+              <button type="button" className="cc-btn-ghost" onClick={() => setTab('size')}><GitCompare size={15} aria-hidden="true" /> Compare brands by size</button>
+              <Link className="cc-btn-primary" to="/tyre-failure-cpk"><Activity size={15} aria-hidden="true" /> Open failure analysis</Link>
+            </div>
+          </section>
 
           {selected && <BrandDrillDown brand={selected} records={selectedData} onClose={() => setSelected(null)} />}
         </>
       )}
 
-      <BrandSizeValuePanel country={activeCountry} />
+      {tab === 'charts' && (
+        <>
+          <div className="bp-row bp-row-2">
+            <Card title="Volume by brand" sub="Top 10 by tyre records; colour shows the failure band, grey means unrated"
+              action={<button type="button" className="cc-icon-btn" onClick={() => setModalOpen(true)} aria-label="Open volume by brand chart full screen"><Maximize2 size={14} /></button>}>
+              <CardState state={{ loading, error: null }} empty={!loading && !top10.length ? 'No records match these filters.' : null}>
+                <div style={{ height: 250 }} role="img" aria-label={`Bar chart of tyre records for the top ${top10.length} brands`}>
+                  <Bar ref={chartRef} data={rankingChart} options={CHART_OPTS} />
+                </div>
+              </CardState>
+            </Card>
+            <Card title="High-risk failure rate" sub="Rated brands, top 10">
+              <CardState state={{ loading, error: null }} empty={!loading && !rated10.length ? 'No brand in this scope has risk-rated records.' : null}>
+                <div style={{ height: 250 }} role="img" aria-label={`Bar chart of failure rate for ${rated10.length} rated brands`}>
+                  <Bar data={failureRateChart} options={CHART_OPTS} />
+                </div>
+              </CardState>
+            </Card>
+          </div>
+          <Card title="Brand detail" sub="Records, rated share, average purchase price, top category and weighted risk score"
+            action={<button type="button" className="cc-btn-ghost" onClick={doDetailExcel} disabled={!metrics.length}><Download size={14} aria-hidden="true" /> Excel</button>}>
+            <KitTable rows={metrics} columns={detailColumns} loading={loading} getRowId={(r) => r.brand}
+              onRowClick={(r) => { setTab('board'); selectBrand(r.brand) }} empty="No records match these filters." />
+          </Card>
+        </>
+      )}
+
+      {tab === 'size' && <BrandSizeValuePanel country={activeCountry} />}
 
       <ChartModal
         open={modalOpen}
@@ -440,7 +523,7 @@ export default function BrandPerformance() {
         title="Volume by brand (top 10)"
         chartRef={chartRef}
         filters={{}}
-        filterOptions={{ sites: uniqueSites, brands: [] }}
+        filterOptions={{ sites: options.sites, brands: [] }}
         showSite={false}
         showBrand={false}
       >
@@ -648,10 +731,10 @@ function BrandSizeValuePanel({ country }) {
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Kpi label="Sizes compared" value={loading || err ? 'N/A' : formatNumber(visibleGroups.length)} />
-        <Kpi label="Brand and size pairs" value={loading || err ? 'N/A' : formatNumber(flat.length)} />
-        <Kpi label="Sizes with a best value" value={loading || err ? 'N/A' : formatNumber(sizesWithBest)} />
-        <Kpi label="Sizes with thin life data" value={loading || err ? 'N/A' : formatNumber(visibleGroups.filter(g => g.thin).length)} />
+        <MiniStat label="Sizes compared" value={loading || err ? 'N/A' : formatNumber(visibleGroups.length)} />
+        <MiniStat label="Brand and size pairs" value={loading || err ? 'N/A' : formatNumber(flat.length)} />
+        <MiniStat label="Sizes with a best value" value={loading || err ? 'N/A' : formatNumber(sizesWithBest)} />
+        <MiniStat label="Sizes with thin life data" value={loading || err ? 'N/A' : formatNumber(visibleGroups.filter(g => g.thin).length)} />
       </div>
 
       <div className="flex flex-wrap gap-3 items-end">

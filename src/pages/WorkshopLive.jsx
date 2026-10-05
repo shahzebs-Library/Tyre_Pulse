@@ -1,85 +1,64 @@
 /**
- * WorkshopLive.jsx - Workshop Live Control & Technician Productivity dashboard
- * (route /workshop-live). A real-time foreman command centre over the workshop:
- * a KPI strip, a live technician board, a job-card kanban, a delay / root-cause
- * panel and an alerts rail.
+ * WorkshopLive.jsx - Workshop Live Control (route /workshop-live), rebuilt on
+ * the shared Command Center kit to the owner's mockup: breadcrumb + title,
+ * five headline tiles, a secondary productivity strip, the Technician Board
+ * beside Live Alerts, and the Job Flow strip (which opens the full kanban).
  *
- * ALL maths live in the pure engine `src/lib/workshopLive.js` (buildBoard /
- * computeKpis / deriveAlerts / delayBreakdown) - this page only loads raw rows
- * via the service `src/lib/api/workshopLive.js`, feeds them to the engine and
- * renders. Foreman actions (assign / reassign / status / priority / VOR /
- * confirm) go straight back through the service; the audit trail is server-side.
+ * ALL maths live in the pure engines: `src/lib/workshopLive.js` (buildBoard /
+ * computeKpis / deriveAlerts / delayBreakdown) and the presentation shapers
+ * `workshopLiveAnalytics.js` + `workshopLiveView.js` (job flow stages, alert
+ * rows, board chips). This page loads raw rows via `src/lib/api/workshopLive.js`,
+ * feeds the engines and renders. Foreman actions (assign / reassign / status /
+ * priority / VOR / QC / tasks / confirm) go back through the service; the audit
+ * trail is server side. The working pieces (kanban card, delay panel, modals,
+ * foreman drawer) live in `src/components/workshop/WorkshopLiveParts.jsx`.
  *
- * Live updates: a Supabase postgres_changes subscription on tech_activity_events
- * + work_orders triggers a debounced reload; a 60s poll is the fallback and a
- * manual Refresh is always available. No fabricated data: every tile derives from
- * the real board / jobs, with honest zero and empty states.
+ * Live updates: a Supabase postgres_changes subscription triggers a debounced
+ * reload; a 60s poll is the fallback (paused while the tab is hidden, with a
+ * catch-up refresh on return). The board is a TODAY view by design, so there
+ * is no date range and no trend arrow: the engine holds no previous period to
+ * compare against, and a trend is only drawn when it can be computed.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  Activity, RefreshCw, Users, Wrench, Clock, AlertTriangle, Package, ShieldAlert,
+  RefreshCw, Users, Wrench, AlertTriangle, Package, ShieldAlert,
   Coffee, UserX, X, Gauge, Timer, TrendingUp, CheckCircle2, Car, UserCheck,
-  Bell, User, Zap, ExternalLink, ListChecks, Plus, ChevronDown, ChevronUp,
-  Phone, Send, GraduationCap, PauseCircle, Sparkles, Settings2, Layers,
-  ClipboardList, XCircle, FileSpreadsheet, FileText,
+  User, Zap, Plus, Search, FileSpreadsheet, FileText, ChevronRight, Bell,
+  CalendarDays, Kanban, Settings2,
 } from 'lucide-react'
 
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
-import { useAuth } from '../contexts/AuthContext'
 import * as workshop from '../lib/api/workshopLive'
 import { loadWorkshopConfig } from '../lib/api/workshopConfig'
 import {
-  buildBoard, computeKpis, deriveAlerts, delayBreakdown,
-  STATUS, STATUS_META, statusColor, TONE_COLOR,
+  buildBoard, computeKpis, deriveAlerts, delayBreakdown, STATUS, STATUS_META,
 } from '../lib/workshopLive'
-import { taskRollup, jobTaskSummary, qcOutcome, TASK_STATUS, TASK_STATUS_LABEL } from '../lib/workshopTasks'
-import { recommendTechnicians } from '../lib/workshopAssign'
-import EChart from '../components/charts/EChart'
-import PageHeader from '../components/ui/PageHeader'
-import Modal from '../components/ui/Modal'
+import { taskRollup, jobTaskSummary, qcOutcome } from '../lib/workshopTasks'
+import { Card, CardState, Kpi, Tabs } from '../components/commandCenter/kit'
 import WorkshopTvShareButton from '../components/workshop/WorkshopTvShareButton'
 import WorkshopNewJobModal from '../components/workshop/WorkshopNewJobModal'
-import { colorAt, withAlpha } from '../lib/reportColors'
-import { safeImageSrc, safeHref } from '../lib/safeUrl'
-import { toUserMessage } from '../lib/safeError'
-import { normalizeWoStatus, WO_STATUSES, KANBAN_COLUMNS as WO_KANBAN_COLUMNS } from '../lib/workOrderStatus'
 import {
-  toTs, fmtMins, relTime, pct, jobColumnKey, siteOptions as buildSiteOptions,
-  filterBoard, filterJobs, bucketJobs, boardExportRows, BOARD_EXPORT_KEYS, BOARD_EXPORT_HEADERS, delayTotals,
+  KANBAN_COLUMNS, JobCard, DelayPanel, SmartAssignModal, TaskModal, TechDrawer,
+} from '../components/workshop/WorkshopLiveParts'
+import { safeImageSrc } from '../lib/safeUrl'
+import { toUserMessage } from '../lib/safeError'
+import {
+  fmtMins, relTime, pct, siteOptions as buildSiteOptions,
+  filterBoard, filterJobs, bucketJobs, boardExportRows, BOARD_EXPORT_KEYS, BOARD_EXPORT_HEADERS,
 } from '../lib/workshopLiveAnalytics'
-import EnterpriseTable from '../components/ui/EnterpriseTable'
+import {
+  jobFlowCounts, jobFlowStage, alertRows, alertLevelCounts, initials, techJobLine,
+  BOARD_CHIPS, chipCounts, todayLabel,
+} from '../lib/workshopLiveView'
 import { reportFileName } from '../lib/exportUtils'
+import './WorkshopLive.css'
 
-// ── Small pure helpers ─────────────────────────────────────────────────────────
+// Engine status tone -> kit pill tone.
+const PILL_TONE = { green: 'good', blue: 'info', amber: 'warn', purple: 'info', red: 'bad', grey: 'muted' }
 
-const normStatus = (s) => String(s || '').toLowerCase().replace(/\s+/g, '_')
-
-// ── Work-order status vocabulary (canonical Title Case) ────────────────────────
-// work_orders.status is free text (no DB CHECK). The kanban + the Move control
-// READ and WRITE the ONE canonical Title Case vocabulary from workOrderStatus.js,
-// so this dashboard and the legacy Work Orders page speak the same language.
-
-// Kanban columns rendered on the board (canonical Title Case = key + label).
-const KANBAN_COLUMNS = WO_KANBAN_COLUMNS.map((s) => ({ key: s, label: s }))
-
-// Statuses offered in the per-card "Move" control (Overdue is derived, not set).
-const STATUS_MOVES = WO_STATUSES.filter((s) => s !== 'Overdue')
-
-const PRIORITY_OPTS = ['Critical', 'High', 'Medium', 'Low']
-
-const PRIORITY_TONE = {
-  critical: TONE_COLOR.red, high: TONE_COLOR.amber, medium: TONE_COLOR.blue, low: TONE_COLOR.grey,
-}
-
-const ALERT_TONE = { critical: TONE_COLOR.red, warning: TONE_COLOR.amber, info: TONE_COLOR.blue }
-
-// Task status -> colour (mirrors the engine TASK_STATUS vocabulary).
-const TASK_TONE = {
-  pending: TONE_COLOR.grey, in_progress: TONE_COLOR.blue, blocked: TONE_COLOR.amber,
-  done: TONE_COLOR.green, qc: TONE_COLOR.purple,
-}
+// ── KPI config (values come straight from the engine `kpis`) ─────────────────
 
 // ── KPI strip config (values come straight from the engine `kpis`) ─────────────
 
@@ -103,872 +82,61 @@ function buildKpiDefs(kpis) {
     { key: 'overtimeHours',    label: 'Overtime Hours', value: kpis.overtimeHours,    icon: Zap,          scope: null },
   ]
 }
-
-// ── Status pill ────────────────────────────────────────────────────────────────
-
-function StatusPill({ status }) {
-  const meta = STATUS_META[status] || { label: status || 'Unknown' }
-  const c = statusColor(status)
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold"
-      style={{ background: withAlpha(c, 0.16), color: c, border: `1px solid ${withAlpha(c, 0.4)}` }}
-    >
-      <span className="w-1.5 h-1.5 rounded-full" style={{ background: c }} />
-      {meta.label}
-    </span>
-  )
+// Headline tiles (mockup order) and the secondary strip.
+const HEADLINE = [
+  { key: 'onDuty', tone: 't-green', sub: 'Technicians today' },
+  { key: 'working', tone: 't-blue', sub: 'On an active job' },
+  { key: 'available', tone: 't-purple', sub: 'Ready to assign' },
+  { key: 'waitingParts', tone: 't-amber', sub: 'Technicians blocked on parts' },
+  { key: 'vehiclesOffRoad', tone: 't-red', sub: 'Vehicles off road' },
+]
+const STRIP = ['openJobs', 'overdueJobs', 'jobsCompletedToday', 'utilization', 'productiveHours', 'lostHours', 'overtimeHours']
+const STRIP_FMT = {
+  utilization: (v) => v, // already formatted by pct()
+  productiveHours: (v) => `${v}h`, lostHours: (v) => `${v}h`, overtimeHours: (v) => `${v}h`,
+}
+const STRIP_TITLE = {
+  utilization: 'Average productive share of available duty time today (technicians with a measurable shift)',
+  lostHours: 'Blocked plus unassigned time today',
+  overtimeHours: 'Productive or blocked time past the shift end',
 }
 
-// ── KPI card ─────────────────────────────────────────────────────────────────
+// ── Technician tile ──────────────────────────────────────────────────────────
 
-function KpiCard({ def, active, onClick }) {
-  const Icon = def.icon
-  const clickable = def.scope != null
-  return (
-    <button
-      type="button"
-      onClick={clickable ? onClick : undefined}
-      aria-pressed={clickable ? active : undefined}
-      className="text-left rounded-xl p-3 transition-all border"
-      style={{
-        background: active ? withAlpha(TONE_COLOR.green, 0.14) : 'var(--surface-2)',
-        borderColor: active ? withAlpha(TONE_COLOR.green, 0.5) : 'var(--border-dim)',
-        cursor: clickable ? 'pointer' : 'default',
-      }}
-      title={clickable ? 'Click to filter, click again to clear' : def.label}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-medium text-muted truncate">{def.label}</span>
-        <Icon className="w-4 h-4 shrink-0" style={{ color: active ? TONE_COLOR.green : 'var(--text-muted)' }} />
-      </div>
-      <div className="mt-1 text-xl font-bold text-white tabular-nums">{def.value}</div>
-    </button>
-  )
-}
-
-// ── Technician card ─────────────────────────────────────────────────────────
-
-function TechCard({ tech, now, events, jobs, techById, busy, onAssign, onReassign, onConfirm, onOpenDrawer, highlight }) {
-  const [assignTo, setAssignTo] = useState('')
-  const band = statusColor(tech.status)
-  const openForAssign = jobs // pre-filtered open jobs
-
-  // For an awaiting-inspection tech, surface their latest unconfirmed complete_task.
-  const pendingConfirm = useMemo(() => {
-    if (tech.status !== STATUS.AWAITING_INSPECTION) return null
-    const evs = Array.isArray(events) ? events : []
-    for (let i = evs.length - 1; i >= 0; i--) {
-      const e = evs[i]
-      if (e.event_type === 'complete_task' && !e.foreman_confirmed) return e
-    }
-    return null
-  }, [events, tech.status])
-
-  const job = tech.job
+function TechTile({ tech, now, highlight, onOpen, onViewJob }) {
+  const meta = STATUS_META[tech.status] || { label: tech.status || 'Unknown', tone: 'grey' }
   const util = tech.utilization == null ? null : Math.round(tech.utilization * 100)
-
+  const src = tech.avatar ? safeImageSrc(tech.avatar) : null
   return (
-    <div
-      id={`ref-${tech.userId}`}
-      className="card p-4 flex flex-col gap-3"
-      style={{
-        borderLeft: `3px solid ${band}`,
-        outline: highlight ? `2px solid ${withAlpha(TONE_COLOR.green, 0.7)}` : 'none',
-      }}
-    >
-      <div className="flex items-start gap-3">
-        {tech.avatar ? (
-          <img
-            src={safeImageSrc(tech.avatar)}
-            alt={`${tech.name} avatar`}
-            className="w-10 h-10 rounded-full object-cover shrink-0 border border-white/10"
-          />
-        ) : (
-          <div className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center text-sm font-bold text-white" style={{ background: withAlpha(band, 0.25) }}>
-            {String(tech.name || '?').slice(0, 1).toUpperCase()}
-          </div>
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold text-white truncate">{tech.name}</span>
-            <StatusPill status={tech.status} />
-          </div>
-          <div className="text-[11px] text-muted mt-0.5 truncate">
-            {[tech.employeeId, tech.trade, tech.shift].filter(Boolean).join(' | ') || 'No shift assigned'}
-          </div>
+    <article id={`ref-${tech.userId}`} className={`wl-tech${highlight ? ' is-hl' : ''}`} data-tone={meta.tone}>
+      <div className="wl-tech-top">
+        <span className="wl-avatar" aria-hidden="true">{src ? <img src={src} alt="" /> : initials(tech.name)}</span>
+        <div className="wl-tech-id">
+          <b title={tech.name}>{tech.name}</b>
+          <span className="wl-tech-job" title={techJobLine(tech)}>{techJobLine(tech)}</span>
         </div>
-        <button
-          type="button"
-          onClick={() => onOpenDrawer(tech)}
-          className="shrink-0 rounded-lg p-1.5 border text-muted hover:text-white"
-          style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)' }}
-          title="Foreman actions"
-          aria-label={`Foreman actions for ${tech.name}`}
-        >
-          <Settings2 className="w-4 h-4" />
-        </button>
+        <span className={`cc-pill ${PILL_TONE[meta.tone] || 'muted'}`}>{meta.label}</span>
       </div>
-
-      {/* Current job */}
-      <div className="text-xs rounded-lg px-2.5 py-2" style={{ background: 'var(--surface-1)' }}>
-        {job ? (
-          <span className="text-white">
-            <Wrench className="w-3 h-3 inline mr-1 opacity-70" />
-            {job.no || 'Job'}{job.asset_no ? ` | ${job.asset_no}` : ''}
-          </span>
-        ) : (
-          <span className="text-muted">No active job</span>
-        )}
-      </div>
-
-      {/* Time segments */}
-      <div className="grid grid-cols-3 gap-2 text-center">
-        <TimeCell label="Productive" value={fmtMins(tech.productiveMin)} color={TONE_COLOR.green} />
-        <TimeCell label="Blocked" value={fmtMins(tech.blockedMin)} color={TONE_COLOR.amber} />
-        <TimeCell label="Unassigned" value={fmtMins(tech.unassignedMin)} color={TONE_COLOR.grey} />
-      </div>
-
-      <div className="flex items-center justify-between text-[11px] text-muted">
-        <span>Utilization <span className="text-white font-semibold">{util == null ? 'N/A' : `${util}%`}</span></span>
-        <span>Last activity {relTime(tech.lastActivityAt, now)}</span>
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <select
-          value={assignTo}
-          onChange={(e) => setAssignTo(e.target.value)}
-          disabled={busy}
-          className="flex-1 min-w-0 text-xs rounded-lg px-2 py-1.5 border"
-          style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
-          aria-label={`Assign a job to ${tech.name}`}
-        >
-          <option value="">{job ? 'Reassign to job...' : 'Assign a job...'}</option>
-          {openForAssign.map((j) => (
-            <option key={j.id} value={j.id}>{j.work_order_no || j.id}{j.asset_no ? ` | ${j.asset_no}` : ''}</option>
-          ))}
-        </select>
-        <button
-          type="button"
-          disabled={busy || !assignTo}
-          onClick={() => {
-            const target = openForAssign.find((j) => String(j.id) === String(assignTo))
-            if (!target) return
-            const fromOwner = target.assigned_owner_id
-            if (fromOwner && String(fromOwner) !== String(tech.userId)) {
-              onReassign(target.id, fromOwner, tech.userId)
-            } else {
-              onAssign(target.id, tech.userId)
-            }
-            setAssignTo('')
-          }}
-          className="btn-secondary text-xs px-3 py-1.5 disabled:opacity-40"
-        >
-          Assign
-        </button>
-      </div>
-
-      {pendingConfirm && (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => onConfirm(pendingConfirm.id)}
-          className="btn-primary text-xs px-3 py-1.5 disabled:opacity-40"
-        >
-          <CheckCircle2 className="w-3.5 h-3.5 inline mr-1" /> Confirm completed task
-        </button>
-      )}
-    </div>
-  )
-}
-
-function TimeCell({ label, value, color }) {
-  return (
-    <div className="rounded-lg py-1.5" style={{ background: withAlpha(color, 0.1) }}>
-      <div className="text-xs font-semibold text-white tabular-nums">{value}</div>
-      <div className="text-[10px] text-muted">{label}</div>
-    </div>
-  )
-}
-
-// ── Job card (kanban) ─────────────────────────────────────────────────────────
-
-function JobCard({
-  job, now, technicians, techById, busy, onAssign, onReassign, onStatus, onPriority, onVor, onQcPass, onQcFail, highlight,
-  tasks, taskSummary, expanded, onToggleTasks, onManageTasks, onSmartAssign, onSetTaskStatus,
-}) {
-  const canonicalStatus = normalizeWoStatus(job.status)
-  const tgt = toTs(job.target_completion)
-  const overdue = canonicalStatus !== 'Completed' && canonicalStatus !== 'Cancelled' && Number.isFinite(tgt) && tgt < now
-  const prio = normStatus(job.priority)
-  const prioColor = PRIORITY_TONE[prio] || TONE_COLOR.grey
-  const ownerName = job.assigned_owner_id ? (techById[job.assigned_owner_id]?.name || job.technician_name || null) : job.technician_name || null
-  const isQc = canonicalStatus === 'Quality Inspection'
-  const hasTasks = (taskSummary?.total || 0) > 0
-
-  return (
-    <div
-      id={`ref-${job.id}`}
-      className="rounded-xl p-3 border flex flex-col gap-2"
-      style={{
-        background: 'var(--surface-1)',
-        borderColor: overdue ? withAlpha(TONE_COLOR.red, 0.5) : 'var(--border-dim)',
-        outline: highlight ? `2px solid ${withAlpha(TONE_COLOR.green, 0.7)}` : 'none',
-      }}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="font-semibold text-white text-sm truncate">{job.work_order_no || `WO ${job.id}`}</div>
-          <div className="text-[11px] text-muted truncate">{job.asset_no || 'No asset'}{job.plate_number ? ` | ${job.plate_number}` : ''}</div>
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {hasTasks && (
-            <span
-              className="text-[10px] font-semibold px-1.5 py-0.5 rounded inline-flex items-center gap-1"
-              style={{ background: withAlpha(TONE_COLOR.blue, 0.16), color: TONE_COLOR.blue }}
-              title={`${taskSummary.done} of ${taskSummary.total} tasks done`}
-            >
-              <ListChecks className="w-3 h-3" />{taskSummary.done}/{taskSummary.total}
-            </span>
+      <dl className="wl-tech-stats">
+        <div><dt>Productive</dt><dd>{fmtMins(tech.productiveMin)}</dd></div>
+        <div><dt>Blocked</dt><dd className={tech.blockedMin > 0 ? 'is-warn' : ''}>{fmtMins(tech.blockedMin)}</dd></div>
+        <div><dt>Utilisation</dt><dd>{util == null ? <span className="cc-na" title="No measurable shift time today">N/A</span> : `${util}%`}</dd></div>
+      </dl>
+      <div className="wl-tech-foot">
+        <span className="wl-muted">Last update {relTime(tech.lastActivityAt, now)}</span>
+        {tech.status === STATUS.AWAITING_INSPECTION && <span className="cc-pill warn">Task to confirm</span>}
+        <span className="wl-tech-actions">
+          {tech.currentJobId && (
+            <button type="button" className="cc-link cc-link-btn" onClick={() => onViewJob(tech.currentJobId)}>
+              View job <ChevronRight size={13} aria-hidden="true" />
+            </button>
           )}
-          {job.priority && (
-            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ background: withAlpha(prioColor, 0.16), color: prioColor }}>
-              {job.priority}
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2 text-[11px] text-muted flex-wrap">
-        {job.vor && (
-          <span className="inline-flex items-center gap-1 font-semibold" style={{ color: TONE_COLOR.red }}>
-            <Car className="w-3 h-3" /> VOR
-          </span>
-        )}
-        {Number.isFinite(tgt) && (
-          <span className={overdue ? 'font-semibold' : ''} style={overdue ? { color: TONE_COLOR.red } : undefined}>
-            <Clock className="w-3 h-3 inline mr-0.5" />
-            {overdue ? 'Overdue' : 'Target'} {new Date(tgt).toLocaleDateString()}
-          </span>
-        )}
-        {ownerName && <span className="truncate"><User className="w-3 h-3 inline mr-0.5" />{ownerName}</span>}
-      </div>
-
-      {/* Controls */}
-      <div className="grid grid-cols-2 gap-1.5">
-        <select
-          aria-label="Assign technician"
-          disabled={busy}
-          value={job.assigned_owner_id || ''}
-          onChange={(e) => {
-            const to = e.target.value
-            if (!to) return
-            const from = job.assigned_owner_id
-            if (from && String(from) !== String(to)) onReassign(job.id, from, to)
-            else onAssign(job.id, to)
-          }}
-          className="text-[11px] rounded-lg px-1.5 py-1 border truncate"
-          style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
-        >
-          <option value="">Assign to...</option>
-          {technicians.map((t) => <option key={t.userId} value={t.userId}>{t.name}</option>)}
-        </select>
-
-        <select
-          aria-label="Move status"
-          disabled={busy}
-          value={STATUS_MOVES.includes(canonicalStatus) ? canonicalStatus : ''}
-          onChange={(e) => e.target.value && onStatus(job.id, e.target.value)}
-          className="text-[11px] rounded-lg px-1.5 py-1 border truncate"
-          style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
-        >
-          <option value="">Move to...</option>
-          {STATUS_MOVES.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-
-        <select
-          aria-label="Set priority"
-          disabled={busy}
-          value={PRIORITY_OPTS.find((p) => normStatus(p) === prio) || ''}
-          onChange={(e) => e.target.value && onPriority(job.id, e.target.value)}
-          className="text-[11px] rounded-lg px-1.5 py-1 border truncate"
-          style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
-        >
-          <option value="">Priority...</option>
-          {PRIORITY_OPTS.map((p) => <option key={p} value={p}>{p}</option>)}
-        </select>
-
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => onVor(job.id, !job.vor)}
-          className="text-[11px] rounded-lg px-1.5 py-1 border font-medium disabled:opacity-40"
-          style={{
-            background: job.vor ? withAlpha(TONE_COLOR.red, 0.16) : 'var(--surface-2)',
-            borderColor: job.vor ? withAlpha(TONE_COLOR.red, 0.4) : 'var(--border-dim)',
-            color: job.vor ? TONE_COLOR.red : 'var(--panel-ink)',
-          }}
-        >
-          {job.vor ? 'Clear VOR' : 'Set VOR'}
-        </button>
-      </div>
-
-      {hasTasks && (
-        <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--surface-2)' }}>
-          <div className="h-full rounded-full" style={{ width: `${taskSummary.pct}%`, background: TONE_COLOR.green }} />
-        </div>
-      )}
-
-      <div className="flex items-center gap-1.5 flex-wrap">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => onSmartAssign(job)}
-          className="text-[11px] rounded-lg px-2 py-1 border font-medium inline-flex items-center gap-1 disabled:opacity-40"
-          style={{ background: withAlpha(TONE_COLOR.green, 0.12), borderColor: withAlpha(TONE_COLOR.green, 0.4), color: TONE_COLOR.green }}
-          title="Suggest the best technician by skill, availability and workload"
-        >
-          <Sparkles className="w-3 h-3" /> Smart assign
-        </button>
-        <button
-          type="button"
-          onClick={() => onToggleTasks(job.id)}
-          className="text-[11px] rounded-lg px-2 py-1 border font-medium inline-flex items-center gap-1"
-          style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
-          aria-expanded={expanded}
-        >
-          <ListChecks className="w-3 h-3" /> Tasks{hasTasks ? ` (${taskSummary.total})` : ''}
-          {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => onManageTasks(job)}
-          className="text-[11px] rounded-lg px-2 py-1 border font-medium inline-flex items-center gap-1 disabled:opacity-40"
-          style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
-          title="Split this job into tasks"
-        >
-          <Plus className="w-3 h-3" /> Split
-        </button>
-      </div>
-
-      {expanded && (
-        <div className="rounded-lg p-2 flex flex-col gap-1.5" style={{ background: 'var(--surface-2)' }}>
-          {(!tasks || tasks.length === 0) ? (
-            <div className="text-[11px] text-muted text-center py-2">
-              No tasks yet. Use Split to break this job into tasks.
-            </div>
-          ) : tasks.map((tk) => {
-            const tone = TASK_TONE[tk.status] || TONE_COLOR.grey
-            const assigneeName = tk.assignee ? (techById[tk.assignee]?.name || 'Assigned') : null
-            return (
-              <div key={tk.id} className="rounded-lg px-2 py-1.5 border" style={{ background: 'var(--surface-1)', borderColor: 'var(--border-dim)' }}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-white truncate flex-1">
-                    {tk.title}
-                    {tk.skill ? <span className="text-muted"> · {tk.skill}</span> : null}
-                  </span>
-                  <select
-                    aria-label={`Set status for ${tk.title}`}
-                    disabled={busy}
-                    value={tk.status}
-                    onChange={(e) => onSetTaskStatus(tk.id, e.target.value, job.id)}
-                    className="text-[10px] rounded px-1 py-0.5 border shrink-0"
-                    style={{ background: 'var(--surface-2)', borderColor: withAlpha(tone, 0.4), color: tone }}
-                  >
-                    {TASK_STATUS.map((s) => <option key={s} value={s}>{TASK_STATUS_LABEL[s]}</option>)}
-                  </select>
-                </div>
-                <div className="flex items-center gap-2 text-[10px] text-muted mt-0.5">
-                  <span className="tabular-nums">{fmtMins(tk.minutesSpent)} spent</span>
-                  {tk.est_minutes != null && <span className="tabular-nums">/ {fmtMins(tk.est_minutes)} est</span>}
-                  {tk.overBudget && <span style={{ color: TONE_COLOR.red }}>over budget</span>}
-                  {assigneeName && <span className="truncate"><User className="w-2.5 h-2.5 inline mr-0.5" />{assigneeName}</span>}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      <div className="flex items-center justify-between gap-2">
-        {isQc ? (
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onQcPass(job)}
-              className="text-[11px] rounded-lg px-2.5 py-1 border font-semibold inline-flex items-center gap-1 disabled:opacity-40"
-              style={{ background: withAlpha(TONE_COLOR.green, 0.16), borderColor: withAlpha(TONE_COLOR.green, 0.4), color: TONE_COLOR.green }}
-              title="QC pass: complete the job"
-            >
-              <CheckCircle2 className="w-3 h-3" /> QC Pass
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onQcFail(job)}
-              className="text-[11px] rounded-lg px-2.5 py-1 border font-semibold inline-flex items-center gap-1 disabled:opacity-40"
-              style={{ background: withAlpha(TONE_COLOR.red, 0.16), borderColor: withAlpha(TONE_COLOR.red, 0.4), color: TONE_COLOR.red }}
-              title="QC fail: send back for rework"
-            >
-              <XCircle className="w-3 h-3" /> QC Fail
-            </button>
-          </div>
-        ) : <span />}
-        <Link to="/work-orders" className="text-[11px] text-muted hover:text-white inline-flex items-center gap-1">
-          Open <ExternalLink className="w-3 h-3" />
-        </Link>
-      </div>
-    </div>
-  )
-}
-
-// ── Delay / root-cause panel ────────────────────────────────────────────────
-
-const PRI_TONE = { high: TONE_COLOR.red, medium: TONE_COLOR.amber, low: TONE_COLOR.grey }
-
-function DelayPanel({ delays }) {
-  const totals = useMemo(() => delayTotals(delays), [delays])
-  const option = useMemo(() => {
-    const rows = [...delays].reverse() // ECharts hbar renders bottom-up
-    return {
-      grid: { left: 8, right: 48, top: 10, bottom: 8, containLabel: true },
-      tooltip: {
-        trigger: 'axis', axisPointer: { type: 'shadow' },
-        formatter: (p) => {
-          const d = rows[p[0].dataIndex]
-          return `${labelReason(d.reason)}<br/>Hours lost: <b>${d.hoursLost}</b><br/>Jobs affected: <b>${d.affectedJobs}</b>`
-        },
-      },
-      xAxis: { type: 'value', name: 'Hours lost', nameTextStyle: { color: '#9ca3af' }, axisLabel: { color: '#9ca3af' }, splitLine: { lineStyle: { color: 'var(--panel-2)' } } },
-      yAxis: { type: 'category', data: rows.map((d) => labelReason(d.reason)), axisLabel: { color: '#64748b' } },
-      series: [{
-        type: 'bar',
-        data: rows.map((d, i) => ({ value: d.hoursLost, itemStyle: { color: colorAt(i), borderRadius: [0, 4, 4, 0] } })),
-        barMaxWidth: 22,
-        label: { show: true, position: 'right', color: '#64748b', formatter: (p) => `${p.value}h` },
-      }],
-    }
-  }, [delays])
-
-  const delayColumns = useMemo(() => [
-    { id: 'cause', header: 'Cause', accessorFn: (d) => labelReason(d.reason), size: 170 },
-    { id: 'hours', header: 'Hours lost', accessorFn: (d) => Number(d.hoursLost) || 0, size: 100, meta: { align: 'right' },
-      cell: ({ row }) => <span className="tabular-nums">{row.original.hoursLost}</span> },
-    { id: 'jobs', header: 'Jobs affected', accessorFn: (d) => Number(d.affectedJobs) || 0, size: 110, meta: { align: 'right' },
-      cell: ({ row }) => <span className="tabular-nums">{row.original.affectedJobs ?? 'N/A'}</span> },
-    { id: 'cost', header: 'Cost impact', accessorFn: (d) => (d.costImpact == null ? null : Number(d.costImpact)), size: 120, meta: { align: 'right', exportValue: (d) => (d.costImpact == null ? 'N/A' : Number(d.costImpact)) },
-      cell: ({ row }) => <span className="tabular-nums">{row.original.costImpact != null ? Number(row.original.costImpact).toLocaleString() : 'N/A'}</span> },
-    { id: 'dept', header: 'Responsible', accessorFn: (d) => d.responsibleDept || 'N/A', size: 140, meta: { filterVariant: 'select' } },
-    { id: 'action', header: 'Suggested action', accessorFn: (d) => d.suggestedAction || 'N/A', size: 240,
-      cell: ({ row }) => <span className="text-muted">{row.original.suggestedAction || 'N/A'}</span> },
-    { id: 'priority', header: 'Priority', accessorFn: (d) => d.priority || 'low', size: 100, meta: { filterVariant: 'select' },
-      cell: ({ row }) => {
-        const p = row.original.priority || 'low'
-        const c = PRI_TONE[p] || TONE_COLOR.grey
-        return <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold capitalize" style={{ background: `${c}22`, color: c }}>{p}</span>
-      } },
-  ], [])
-
-  if (!delays.length) {
-    return (
-      <div className="card p-6 text-center">
-        <Timer className="w-8 h-8 mx-auto mb-2 opacity-40" aria-hidden="true" />
-        <div className="text-sm text-white font-medium">No blocked time recorded today</div>
-        <div className="text-xs text-muted mt-1">Delay causes appear here as technicians log waiting time.</div>
-      </div>
-    )
-  }
-  return (
-    <div className="card p-4">
-      <h3 className="text-sm font-semibold text-white mb-1">Delay and Root Cause</h3>
-      <p className="text-[11px] text-muted mb-3">
-        Hours lost to blocked time, by cause (today): {totals.hours}h across {totals.causes} cause{totals.causes === 1 ? '' : 's'},
-        {' '}cost impact {totals.cost == null ? 'N/A' : totals.cost.toLocaleString()}.
-      </p>
-      <div style={{ height: Math.max(160, delays.length * 42) }}>
-        <EChart option={option} ariaLabel="Delay hours by cause" />
-      </div>
-      <div className="mt-3">
-        <EnterpriseTable
-          columns={delayColumns}
-          data={delays}
-          getRowId={(d) => String(d.reason)}
-          initialPageSize={25}
-          searchPlaceholder="Search causes..."
-          emptyMessage="No blocked time recorded today"
-          exportFileName={reportFileName('Workshop Delay Causes')}
-          reportMeta={{ title: 'Workshop Delay and Root Cause' }}
-        />
-      </div>
-    </div>
-  )
-}
-
-function labelReason(r) {
-  const map = {
-    parts: 'Waiting for Parts', tools: 'Waiting for Tools', approval: 'Waiting for Approval',
-    vehicle: 'Waiting for Vehicle', vendor: 'Vendor Delay', support: 'Waiting for Support',
-  }
-  return map[r] || String(r || 'Other').replace(/_/g, ' ')
-}
-
-// ── Alerts rail ────────────────────────────────────────────────────────────
-
-function AlertsRail({ alerts, onFocus }) {
-  if (!alerts.length) {
-    return (
-      <div className="card p-4">
-        <h3 className="text-sm font-semibold text-white mb-2 flex items-center gap-2"><Bell className="w-4 h-4" /> Alerts</h3>
-        <div className="text-xs text-muted flex items-center gap-2 py-4 justify-center">
-          <CheckCircle2 className="w-4 h-4" style={{ color: TONE_COLOR.green }} /> All clear
-        </div>
-      </div>
-    )
-  }
-  const order = { critical: 0, warning: 1, info: 2 }
-  const sorted = [...alerts].sort((a, b) => (order[a.level] ?? 3) - (order[b.level] ?? 3))
-  return (
-    <div className="card p-4">
-      <h3 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
-        <Bell className="w-4 h-4" /> Alerts <span className="text-muted font-normal">({alerts.length})</span>
-      </h3>
-      <div className="flex flex-col gap-2 max-h-[520px] overflow-y-auto pr-1">
-        {sorted.map((a, i) => {
-          const c = ALERT_TONE[a.level] || TONE_COLOR.grey
-          return (
-            <button
-              key={`${a.type}-${a.ref}-${i}`}
-              type="button"
-              onClick={() => onFocus(a.ref)}
-              className="text-left rounded-lg px-2.5 py-2 border transition-colors hover:brightness-110"
-              style={{ background: withAlpha(c, 0.1), borderColor: withAlpha(c, 0.3) }}
-            >
-              <div className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: c }} />
-                <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: c }}>{a.level}</span>
-              </div>
-              <div className="text-xs text-white mt-0.5">{a.message}</div>
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-// ── Modal shell ────────────────────────────────────────────────────────────
-// Thin adapter over the shared dialog shell (portalled, so pickers are never
-// clipped by a .card). While an action is in flight it cannot be dismissed.
-
-function ModalShell({ title, icon: Icon, onClose, children, footer, busy = false }) {
-  return (
-    <Modal
-      open
-      onClose={busy ? undefined : onClose}
-      size="md"
-      footer={footer}
-      title={(
-        <span className="flex items-center gap-2">
-          {Icon && <Icon className="w-4 h-4" aria-hidden="true" />} {title}
+          <button type="button" className="cc-icon-btn" onClick={() => onOpen(tech)} aria-label={`Foreman actions for ${tech.name}`} title="Assign, confirm and foreman actions">
+            <Settings2 size={14} />
+          </button>
         </span>
-      )}
-    >
-      {children}
-    </Modal>
-  )
-}
-
-// ── Smart assign modal (job -> ranked technicians) ──────────────────────────
-
-function SmartAssignModal({ job, board, technicians, skillsByUser, assignments, busy, onClose, onAssign, onReassign }) {
-  const recs = useMemo(
-    () => recommendTechnicians(job, { technicians, skillsByUser, board, assignments }),
-    [job, technicians, skillsByUser, board, assignments],
-  )
-  const top = recs.slice(0, 3)
-  const owner = job.assigned_owner_id || null
-
-  const pick = (userId) => {
-    if (owner && String(owner) !== String(userId)) onReassign(job.id, owner, userId)
-    else onAssign(job.id, userId)
-    onClose()
-  }
-
-  const Row = ({ r, suggested }) => {
-    const c = r.score >= 70 ? TONE_COLOR.green : r.score >= 45 ? TONE_COLOR.amber : TONE_COLOR.grey
-    return (
-      <div className="rounded-xl p-3 border flex items-start gap-3" style={{ background: 'var(--surface-2)', borderColor: suggested ? withAlpha(TONE_COLOR.green, 0.4) : 'var(--border-dim)' }}>
-        <div className="flex flex-col items-center shrink-0">
-          <div className="w-11 h-11 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: withAlpha(c, 0.18), color: c }}>
-            {r.score}
-          </div>
-          <span className="text-[9px] text-muted mt-0.5">/ 100</span>
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-white truncate">{r.name}</span>
-            {suggested && <Sparkles className="w-3 h-3" style={{ color: TONE_COLOR.green }} />}
-            {r.available && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: withAlpha(TONE_COLOR.green, 0.16), color: TONE_COLOR.green }}>Available</span>}
-          </div>
-          <div className="text-[11px] text-muted mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
-            {r.reasons.slice(0, 4).map((rn, i) => <span key={i}>· {rn}</span>)}
-          </div>
-        </div>
-        <button type="button" disabled={busy} onClick={() => pick(r.userId)} className="btn-primary text-[11px] px-3 py-1.5 shrink-0 disabled:opacity-40">
-          Assign
-        </button>
       </div>
-    )
-  }
-
-  return (
-    <ModalShell title={`Smart assign · ${job.work_order_no || 'Job'}`} icon={Sparkles} onClose={onClose} busy={busy}>
-      <p className="text-[11px] text-muted mb-3">
-        Ranked by skill match, availability, workload and site. {job.work_type ? `Job type: ${job.work_type}.` : 'No job type set - skill match is neutral.'}
-      </p>
-      {recs.length === 0 ? (
-        <div className="text-sm text-muted text-center py-6">No eligible technicians (all off duty or absent).</div>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {top.length > 0 && (
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted mb-2">Suggested</div>
-              <div className="flex flex-col gap-2">{top.map((r) => <Row key={r.userId} r={r} suggested />)}</div>
-            </div>
-          )}
-          {recs.length > top.length && (
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted mb-2">All technicians</div>
-              <div className="flex flex-col gap-2">{recs.slice(3).map((r) => <Row key={r.userId} r={r} />)}</div>
-            </div>
-          )}
-        </div>
-      )}
-    </ModalShell>
-  )
-}
-
-// ── Task management modal (split a job into tasks) ──────────────────────────
-
-function TaskModal({ job, tasks, technicians, busy, onClose, onCreate, onUpdate, onSetStatus }) {
-  const [title, setTitle] = useState('')
-  const [skill, setSkill] = useState('')
-  const [est, setEst] = useState('')
-
-  const add = () => {
-    if (!title.trim()) return
-    onCreate(job.id, { title: title.trim(), skill: skill.trim() || null, est_minutes: est === '' ? null : Number(est) })
-    setTitle(''); setSkill(''); setEst('')
-  }
-
-  return (
-    <ModalShell title={`Tasks · ${job.work_order_no || 'Job'}`} icon={ClipboardList} onClose={onClose} busy={busy}>
-      <div className="flex flex-col gap-2 mb-4">
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Task title (e.g. Remove and inspect steer tyres)"
-          aria-label="Task title"
-          className="text-sm rounded-lg px-3 py-2 border w-full"
-          style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
-        />
-        <div className="flex gap-2">
-          <input
-            value={skill}
-            onChange={(e) => setSkill(e.target.value)}
-            placeholder="Skill (optional)"
-            aria-label="Skill (optional)"
-            className="text-sm rounded-lg px-3 py-2 border flex-1 min-w-0"
-            style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
-          />
-          <input
-            value={est}
-            onChange={(e) => setEst(e.target.value.replace(/[^0-9]/g, ''))}
-            placeholder="Est. min"
-            aria-label="Estimated minutes"
-            inputMode="numeric"
-            className="text-sm rounded-lg px-3 py-2 border w-24"
-            style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
-          />
-          <button type="button" disabled={busy || !title.trim()} onClick={add} className="btn-primary text-sm px-3 py-2 shrink-0 disabled:opacity-40">
-            <Plus className="w-4 h-4 inline" /> Add
-          </button>
-        </div>
-      </div>
-
-      {(!tasks || tasks.length === 0) ? (
-        <div className="text-sm text-muted text-center py-4">No tasks yet. Add the first one above.</div>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {tasks.map((tk) => {
-            const tone = TASK_TONE[tk.status] || TONE_COLOR.grey
-            return (
-              <div key={tk.id} className="rounded-lg p-2.5 border" style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)' }}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm text-white truncate flex-1">{tk.title}</span>
-                  <span className="text-[10px] tabular-nums text-muted shrink-0">{fmtMins(tk.minutesSpent)}{tk.est_minutes != null ? ` / ${fmtMins(tk.est_minutes)}` : ''}</span>
-                </div>
-                <div className="flex items-center gap-2 mt-2">
-                  <select
-                    aria-label="Task status"
-                    disabled={busy}
-                    value={tk.status}
-                    onChange={(e) => onSetStatus(tk.id, e.target.value)}
-                    className="text-[11px] rounded-lg px-2 py-1 border"
-                    style={{ background: 'var(--surface-1)', borderColor: withAlpha(tone, 0.4), color: tone }}
-                  >
-                    {TASK_STATUS.map((s) => <option key={s} value={s}>{TASK_STATUS_LABEL[s]}</option>)}
-                  </select>
-                  <select
-                    aria-label="Task assignee"
-                    disabled={busy}
-                    value={tk.assignee || ''}
-                    onChange={(e) => onUpdate(tk.id, { assignee_user_id: e.target.value || null })}
-                    className="text-[11px] rounded-lg px-2 py-1 border flex-1 min-w-0 truncate"
-                    style={{ background: 'var(--surface-1)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
-                  >
-                    <option value="">Unassigned</option>
-                    {technicians.map((t) => <option key={t.userId} value={t.userId}>{t.name}</option>)}
-                  </select>
-                  {tk.overBudget && <span className="text-[10px] shrink-0" style={{ color: TONE_COLOR.red }}>over</span>}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </ModalShell>
-  )
-}
-
-// ── Foreman action drawer (per technician) ──────────────────────────────────
-
-function TechDrawer({ tech, meta, assignments, skillsByUser, busy, onClose, onEvent, onNotify, onOpenJob }) {
-  const [note, setNote] = useState('')
-  const activeJobs = useMemo(
-    () => (assignments || []).filter((a) => a.active !== false && String(a.user_id) === String(tech.userId)),
-    [assignments, tech.userId],
-  )
-  const skills = skillsByUser?.[tech.userId] || []
-  const phone = meta?.phone || null
-
-  const Action = ({ icon: Icon, label, tone, onClick, disabled, title }) => (
-    <button
-      type="button"
-      disabled={busy || disabled}
-      onClick={onClick}
-      title={title}
-      className="w-full text-left rounded-lg px-3 py-2.5 border flex items-center gap-2.5 text-sm font-medium disabled:opacity-40"
-      style={{ background: 'var(--surface-2)', borderColor: withAlpha(tone || TONE_COLOR.grey, 0.35), color: 'var(--panel-ink)' }}
-    >
-      <Icon className="w-4 h-4 shrink-0" style={{ color: tone || 'var(--text-muted)' }} /> {label}
-    </button>
-  )
-
-  return (
-    <ModalShell title={`Foreman actions · ${tech.name}`} icon={Settings2} onClose={onClose} busy={busy}>
-      <div className="flex items-center gap-2 mb-3">
-        <StatusPill status={tech.status} />
-        {tech.job && <span className="text-[11px] text-muted truncate">on {tech.job.no || 'a job'}</span>}
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <Action
-          icon={PauseCircle} label="Mark temporarily unavailable" tone={TONE_COLOR.amber}
-          title="Logs a support pause on the technician (counts as blocked time, shown in the delay panel)"
-          onClick={() => onEvent(tech.userId, { event_type: 'pause_job', reason_code: 'support', note: 'Marked unavailable by foreman', job_id: tech.currentJobId || null })}
-        />
-        <Action
-          icon={Package} label="Escalate parts" tone={TONE_COLOR.blue}
-          title="Records a parts request and foreman-confirms it"
-          onClick={() => onEvent(tech.userId, { event_type: 'request_parts', reason_code: 'parts', note: 'Parts escalated by foreman', job_id: tech.currentJobId || null, confirm: true })}
-        />
-        <Action
-          icon={ShieldAlert} label="Escalate approval" tone={TONE_COLOR.blue}
-          title="Records a waiting-for-approval event and foreman-confirms it"
-          onClick={() => onEvent(tech.userId, { event_type: 'waiting_approval', reason_code: 'approval', note: 'Approval escalated by foreman', job_id: tech.currentJobId || null, confirm: true })}
-        />
-        <Action
-          icon={GraduationCap} label="Send to training" tone={TONE_COLOR.purple}
-          title="Moves the technician to training (excluded from utilization)"
-          onClick={() => onEvent(tech.userId, { event_type: 'training', note: 'Assigned to training by foreman' })}
-        />
-        {phone ? (
-          <a
-            href={safeHref(`tel:${String(phone).replace(/[^+0-9]/g, '')}`) || undefined}
-            className="w-full text-left rounded-lg px-3 py-2.5 border flex items-center gap-2.5 text-sm font-medium"
-            style={{ background: 'var(--surface-2)', borderColor: withAlpha(TONE_COLOR.green, 0.35), color: 'var(--panel-ink)' }}
-          >
-            <Phone className="w-4 h-4 shrink-0" style={{ color: TONE_COLOR.green }} /> Call {phone}
-          </a>
-        ) : (
-          <div className="w-full rounded-lg px-3 py-2.5 border flex items-center gap-2.5 text-sm text-muted" style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)' }}>
-            <Phone className="w-4 h-4 shrink-0" /> No phone number on file
-          </div>
-        )}
-        {tech.currentJobId && (
-          <Action icon={ExternalLink} label="Open current job" tone={TONE_COLOR.grey} onClick={() => onOpenJob(tech.currentJobId)} />
-        )}
-      </div>
-
-      {/* Send note to technician (records an activity annotation, not a push) */}
-      <div className="mt-4">
-        <label className="text-[11px] font-semibold text-white flex items-center gap-1.5 mb-1"><Send className="w-3.5 h-3.5" /> Send note to technician</label>
-        <div className="flex gap-2">
-          <input
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Message (logged to their activity feed)"
-            aria-label="Message to technician"
-            className="text-sm rounded-lg px-3 py-2 border flex-1 min-w-0"
-            style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
-          />
-          <button
-            type="button"
-            disabled={busy || !note.trim()}
-            onClick={() => { onNotify(tech.userId, note.trim()); setNote('') }}
-            className="btn-primary text-sm px-3 py-2 shrink-0 disabled:opacity-40"
-          >
-            Send
-          </button>
-        </div>
-        <p className="text-[10px] text-muted mt-1">Recorded as a note on the technician's activity log (audit trail). Push delivery is not wired.</p>
-      </div>
-
-      {/* Workload by skill + shift */}
-      <div className="mt-4 rounded-lg p-3 border" style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)' }}>
-        <div className="text-[11px] font-semibold text-white flex items-center gap-1.5 mb-2"><Layers className="w-3.5 h-3.5" /> Workload by skill and shift</div>
-        <div className="grid grid-cols-3 gap-2 text-center mb-2">
-          <div><div className="text-base font-bold text-white tabular-nums">{activeJobs.length}</div><div className="text-[10px] text-muted">Active jobs</div></div>
-          <div><div className="text-base font-bold text-white tabular-nums">{skills.length}</div><div className="text-[10px] text-muted">Skills</div></div>
-          <div><div className="text-base font-bold text-white tabular-nums">{tech.utilization == null ? 'N/A' : `${Math.round(tech.utilization * 100)}%`}</div><div className="text-[10px] text-muted">Utilization</div></div>
-        </div>
-        <div className="text-[11px] text-muted">Shift: <span className="text-white">{tech.shift || 'None assigned'}</span></div>
-        {skills.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {skills.map((s) => <span key={s} className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: withAlpha(TONE_COLOR.blue, 0.14), color: TONE_COLOR.blue }}>{s}</span>)}
-          </div>
-        )}
-      </div>
-    </ModalShell>
-  )
-}
-
-// ── Loading skeleton ──────────────────────────────────────────────────────
-
-function Skeleton() {
-  return (
-    <div className="space-y-6 animate-pulse">
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-        {Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-16 rounded-xl" style={{ background: 'var(--surface-2)' }} />)}
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-52 rounded-xl" style={{ background: 'var(--surface-2)' }} />)}
-      </div>
-    </div>
+    </article>
   )
 }
 
@@ -977,7 +145,6 @@ function Skeleton() {
 export default function WorkshopLive() {
   const { activeCountry } = useSettings()
   const loadId = useRef(0)
-  const { profile } = useAuth()
   const [raw, setRaw] = useState(null)
   const [cfg, setCfg] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -998,6 +165,10 @@ export default function WorkshopLive() {
   const [taskModalJob, setTaskModalJob] = useState(null)
   const [drawerTech, setDrawerTech] = useState(null)
   const [newJobOpen, setNewJobOpen] = useState(false)
+  const [boardChip, setBoardChip] = useState('all')   // technician status chip
+  const [stage, setStage] = useState(null)            // Job Flow stage filter
+  const [showKanban, setShowKanban] = useState(false) // full job board toggle
+  const metaLoaded = useRef(false)                    // skills + config loaded once
 
   const reloadTimer = useRef(null)
   const flashTimer = useRef(null)
@@ -1009,14 +180,18 @@ export default function WorkshopLive() {
     if (silent) setRefreshing(true)
     else setLoading(true)
     try {
+      // Skills + thresholds change rarely: read them on the first and on manual
+      // loads only, so the realtime reload and the 60s poll stay one board read.
+      const needMeta = !silent || !metaLoaded.current
       const [data, skills, config] = await Promise.all([
         workshop.loadLiveBoard({ country: activeCountry }),
-        workshop.listTechnicianSkills({}).catch(() => ({})),
-        loadWorkshopConfig().catch(() => null),
+        needMeta ? workshop.listTechnicianSkills({}).catch(() => null) : Promise.resolve(null),
+        needMeta ? loadWorkshopConfig().catch(() => null) : Promise.resolve(null),
       ])
       if (!mounted.current || request !== loadId.current) return
       setRaw(data)
-      setSkillsByUser(skills || {})
+      if (skills) setSkillsByUser(skills)
+      if (needMeta) metaLoaded.current = true
       if (config) setCfg(config)
       setError(null)
       setNowTs(Date.now())
@@ -1063,9 +238,14 @@ export default function WorkshopLive() {
 
   // 60s poll fallback + a lightweight clock tick (keeps relative times / overdue fresh).
   useEffect(() => {
-    const poll = setInterval(() => load({ silent: true }), 60000)
-    const tick = setInterval(() => setNowTs(Date.now()), 30000)
-    return () => { clearInterval(poll); clearInterval(tick) }
+    // Paused while the tab is hidden (a wall screen that is off, a background
+    // tab); one catch-up refresh when it becomes visible again.
+    const hidden = () => typeof document !== 'undefined' && document.hidden
+    const poll = setInterval(() => { if (!hidden()) load({ silent: true }) }, 60000)
+    const tick = setInterval(() => { if (!hidden()) setNowTs(Date.now()) }, 30000)
+    const onVis = () => { if (!hidden()) load({ silent: true }) }
+    document.addEventListener('visibilitychange', onVis)
+    return () => { clearInterval(poll); clearInterval(tick); document.removeEventListener('visibilitychange', onVis) }
   }, [load])
 
   // ── Engine derivation (all maths here, not recomputed by hand) ─────────────
@@ -1125,20 +305,40 @@ export default function WorkshopLive() {
 
   const activeDef = useMemo(() => (filter ? kpiDefs.find((d) => d.key === filter.key) : null), [filter, kpiDefs])
 
-  const filteredBoard = useMemo(() => filterBoard(board, {
-    site: siteFilter,
-    pred: filter?.scope === 'tech' ? activeDef?.pred : null,
-    query: search,
-  }), [board, siteFilter, filter, activeDef, search])
+  const filteredBoard = useMemo(() => {
+    const kpiPred = filter?.scope === 'tech' ? activeDef?.pred : null
+    const chipPred = BOARD_CHIPS.find((c) => c.key === boardChip)?.pred || null
+    const pred = kpiPred && chipPred ? (x) => kpiPred(x) && chipPred(x) : (kpiPred || chipPred)
+    return filterBoard(board, { site: siteFilter, pred, query: search })
+  }, [board, siteFilter, filter, activeDef, search, boardChip])
 
-  const filteredJobs = useMemo(() => filterJobs(raw?.jobs || [], {
-    site: siteFilter,
-    // openJobs (jobCol null) keeps every open job already returned by the service.
-    pred: filter?.scope === 'job' ? activeDef?.jobPred : null,
-    column: filter?.scope === 'job' && !activeDef?.jobPred ? activeDef?.jobCol : null,
-    query: search,
-    now: nowTs,
-  }), [raw, siteFilter, filter, activeDef, search, nowTs])
+  // Chip counts follow the site + search scope (not the chip itself).
+  const chips = useMemo(
+    () => chipCounts(filterBoard(board, { site: siteFilter, query: search })),
+    [board, siteFilter, search],
+  )
+
+  const filteredJobs = useMemo(() => {
+    const kpiPred = filter?.scope === 'job' ? activeDef?.jobPred : null
+    const stagePred = stage ? (j) => jobFlowStage(j) === stage : null
+    const pred = kpiPred && stagePred ? (j) => kpiPred(j) && stagePred(j) : (kpiPred || stagePred)
+    return filterJobs(raw?.jobs || [], {
+      site: siteFilter,
+      // openJobs (jobCol null) keeps every open job already returned by the service.
+      pred,
+      column: filter?.scope === 'job' && !activeDef?.jobPred ? activeDef?.jobCol : null,
+      query: search,
+      now: nowTs,
+    })
+  }, [raw, siteFilter, filter, activeDef, search, nowTs, stage])
+
+  // Job Flow counts over the site + search scope (the stage filter is the click target).
+  const flow = useMemo(
+    () => jobFlowCounts(filterJobs(raw?.jobs || [], { site: siteFilter, query: search, now: nowTs })),
+    [raw, siteFilter, search, nowTs],
+  )
+  const alertList = useMemo(() => alertRows(alerts), [alerts])
+  const levels = useMemo(() => alertLevelCounts(alerts), [alerts])
 
   const columns = useMemo(
     () => bucketJobs(filteredJobs, KANBAN_COLUMNS.map((c) => c.key), nowTs),
@@ -1273,7 +473,7 @@ export default function WorkshopLive() {
       'Note sent to technician.',
     )
 
-  const openJobById = (jobId) => { setDrawerTech(null); focusRef(jobId) }
+  const openJobById = (jobId) => { setDrawerTech(null); viewJob(jobId) }
 
   const focusRef = (ref) => {
     setHighlightRef(ref)
@@ -1282,233 +482,301 @@ export default function WorkshopLive() {
     setTimeout(() => mounted.current && setHighlightRef(null), 2500)
   }
 
+  // A job card lives in the (collapsible) kanban: open it before scrolling.
+  const jobIds = useMemo(() => new Set((raw?.jobs || []).map((j) => String(j.id))), [raw])
+  const viewJob = (jobId) => {
+    setShowKanban(true)
+    setStage(null)
+    setTimeout(() => focusRef(jobId), 60)
+  }
+  const focusAlert = (ref) => (jobIds.has(String(ref)) ? viewJob(ref) : focusRef(ref))
+
   const toggleFilter = (def) => {
     if (!def.scope) return
     setFilter((cur) => (cur && cur.key === def.key ? null : { scope: def.scope, key: def.key }))
+    if (def.scope === 'job') setShowKanban(true)
   }
+
 
   // ── Render ─────────────────────────────────────────────────────────────────
-  if (loading && !raw) {
-    return (
-      <div className="p-4 sm:p-6 space-y-6">
-        <PageHeader title="Workshop Live Control" subtitle="Real-time technician productivity and job flow" icon={Activity} />
-        <Skeleton />
-      </div>
-    )
-  }
-
-  if (error && !raw) {
-    return (
-      <div className="p-4 sm:p-6 space-y-6">
-        <PageHeader title="Workshop Live Control" subtitle="Real-time technician productivity and job flow" icon={Activity} />
-        <div className="card p-8 text-center">
-          <AlertTriangle className="w-10 h-10 mx-auto mb-3" style={{ color: TONE_COLOR.amber }} />
-          <div className="text-white font-medium">Could not load the workshop board</div>
-          <div className="text-sm text-muted mt-1">{error}</div>
-          <button onClick={() => load()} className="btn-primary text-sm px-4 py-2 mt-4">
-            <RefreshCw className="w-4 h-4 inline mr-1.5" /> Retry
-          </button>
-        </div>
-      </div>
-    )
-  }
-
+  const firstLoad = loading && !raw
+  const loadFailed = !!error && !raw
+  const pageState = { loading: firstLoad, data: raw, error: loadFailed ? error : null, retry: () => load() }
+  const defByKey = Object.fromEntries(kpiDefs.map((d) => [d.key, d]))
   const emptyBoard = board.length === 0
   const emptyJobs = (raw?.jobs || []).length === 0
+  const activeLabel = filter ? defByKey[filter.key]?.label : null
+  const stageLabel = stage ? flow.stages.find((s) => s.key === stage)?.label : null
 
   return (
-    <div className="p-4 sm:p-6 space-y-6">
-      <PageHeader
-        title="Workshop Live Control"
-        subtitle="Real-time technician productivity and job flow"
-        icon={Activity}
-        onRefresh={() => load({ silent: true })}
-        refreshing={refreshing}
-        updatedAt={updatedAt}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {siteOptions.length > 1 && (
-              <select
-                value={siteFilter}
-                onChange={(e) => setSiteFilter(e.target.value)}
-                className="btn-secondary text-xs px-3 min-h-[44px]"
-                style={{ color: 'var(--panel-ink)' }}
-                aria-label="Filter by site"
-              >
-                {siteOptions.map((s) => <option key={s} value={s}>{s === 'All' ? 'All sites' : s}</option>)}
-              </select>
-            )}
-            <button
-              type="button"
-              onClick={() => setNewJobOpen(true)}
-              className="btn-primary inline-flex items-center gap-2 min-h-[44px] px-3 text-sm font-semibold"
-            >
-              <Plus className="w-4 h-4" aria-hidden="true" /> New Job
-            </button>
-            <WorkshopTvShareButton />
-          </div>
-        }
-      />
+    <div className="cc wl-page">
+      {/* Header: breadcrumb, title, lead, date + site + primary action */}
+      <header className="wl-head">
+        <div className="wl-head-copy">
+          <nav className="wl-crumb" aria-label="Breadcrumb">
+            <Link to="/workshop-management">Workshop and Maintenance</Link>
+            <ChevronRight size={12} aria-hidden="true" />
+            <span aria-current="page">Live Control</span>
+          </nav>
+          <h1>Workshop Live Control</h1>
+          <p>Real-time technician productivity, job flow, blocked work and vehicle-off-road status.</p>
+        </div>
+        <div className="wl-head-actions">
+          <span className="wl-date" title="A live board: every figure covers today, so there is no date range to choose">
+            <CalendarDays size={14} aria-hidden="true" /> {todayLabel(nowTs)}
+          </span>
+          <select className="cc-select" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Filter by site" disabled={siteOptions.length <= 1}>
+            {siteOptions.map((s) => <option key={s} value={s}>{s === 'All' ? 'All sites' : s}</option>)}
+          </select>
+          <button type="button" className="cc-btn-primary wl-new" onClick={() => setNewJobOpen(true)}>
+            <Plus size={16} aria-hidden="true" /> New Job
+          </button>
+        </div>
+      </header>
 
-      {/* Flash banner */}
       {flash && (
-        <div
-          className="rounded-lg px-3 py-2 text-sm flex items-center gap-2"
-          style={{
-            background: withAlpha(flash.type === 'ok' ? TONE_COLOR.green : TONE_COLOR.red, 0.14),
-            color: flash.type === 'ok' ? TONE_COLOR.green : TONE_COLOR.red,
-            border: `1px solid ${withAlpha(flash.type === 'ok' ? TONE_COLOR.green : TONE_COLOR.red, 0.4)}`,
-          }}
-        >
-          {flash.type === 'ok' ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
-          {flash.msg}
+        <div className={`cc-card wl-flash ${flash.type === 'ok' ? 'ok' : 'err'}`} role={flash.type === 'ok' ? 'status' : 'alert'}>
+          {flash.type === 'ok' ? <CheckCircle2 size={16} aria-hidden="true" /> : <AlertTriangle size={16} aria-hidden="true" />}
+          <span>{flash.msg}</span>
+          <button type="button" className="cc-icon-btn" onClick={() => setFlash(null)} aria-label="Dismiss message"><X size={14} /></button>
         </div>
       )}
 
-      {/* 1. KPI strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-        {kpiDefs.map((def) => (
-          <KpiCard key={def.key} def={def} active={filter?.key === def.key} onClick={() => toggleFilter(def)} />
-        ))}
-      </div>
-
-      {filter && (
-        <button
-          type="button"
-          onClick={() => setFilter(null)}
-          className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-white"
-        >
-          <X className="w-3.5 h-3.5" /> Clear filter ({kpiDefs.find((d) => d.key === filter.key)?.label})
-        </button>
-      )}
-
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="flex-1 min-w-[220px]">
-          <span className="sr-only">Search technicians and job cards</span>
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search technician, job card, asset, plate..."
-            className="input w-full min-h-[44px]"
-          />
-        </label>
-        <button type="button" onClick={() => exportBoard('excel')} disabled={!filteredBoard.length}
-          className="btn-secondary inline-flex items-center gap-2 min-h-[44px] px-3 text-sm disabled:opacity-40">
-          <FileSpreadsheet className="w-4 h-4" aria-hidden="true" /> Excel
-        </button>
-        <button type="button" onClick={() => exportBoard('pdf')} disabled={!filteredBoard.length}
-          className="btn-secondary inline-flex items-center gap-2 min-h-[44px] px-3 text-sm disabled:opacity-40">
-          <FileText className="w-4 h-4" aria-hidden="true" /> PDF
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6">
-        <div className="space-y-6 min-w-0">
-          {/* 2. Technician live board */}
-          <section>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base font-semibold text-white flex items-center gap-2"><Users className="w-4 h-4" /> Technician Board</h2>
-              <span className="text-xs text-muted">{filteredBoard.length} of {board.length}</span>
-            </div>
-            {emptyBoard ? (
-              <div className="card p-8 text-center">
-                <Users className="w-10 h-10 mx-auto mb-3 opacity-40" />
-                <div className="text-white font-medium">No technicians yet</div>
-                <div className="text-sm text-muted mt-1">Assign a workshop role or a skills profile to staff to see them here.</div>
-              </div>
-            ) : filteredBoard.length === 0 ? (
-              <div className="card p-6 text-center text-sm text-muted">No technicians match this filter.</div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filteredBoard.map((tech) => (
-                  <TechCard
-                    key={tech.userId}
-                    tech={tech}
-                    now={nowTs}
-                    events={raw.eventsByUser?.[tech.userId]}
-                    jobs={openJobsForAssign}
-                    techById={techById}
-                    busy={busy}
-                    onAssign={onAssign}
-                    onReassign={onReassign}
-                    onConfirm={onConfirm}
-                    onOpenDrawer={setDrawerTech}
-                    highlight={highlightRef === tech.userId}
+      {loadFailed ? (
+        <Card title="Could not load the workshop board"><CardState state={pageState} /></Card>
+      ) : (
+        <>
+          {/* Headline tiles */}
+          <div className="cc-kpis wl-kpis">
+            {HEADLINE.map((h) => {
+              const d = defByKey[h.key]
+              const on = filter?.key === h.key
+              return (
+                <div key={h.key} className="wl-kpi-wrap" data-active={on}>
+                  <Kpi
+                    icon={d.icon}
+                    tone={h.tone}
+                    value={d.value}
+                    loading={firstLoad}
+                    danger={h.key === 'vehiclesOffRoad' && d.value > 0}
+                    label={<>{d.label}<span className="wl-kpi-sub">{h.sub}</span></>}
+                    onClick={() => toggleFilter(d)}
+                    title={on ? 'Showing only these. Click again to clear.' : 'Click to filter the board'}
                   />
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Secondary productivity strip */}
+          <section className="cc-card wl-strip" aria-label="Job and productivity figures">
+            {STRIP.map((k) => {
+              const d = defByKey[k]
+              const fmt = STRIP_FMT[k]
+              const shown = firstLoad ? '...' : (fmt ? fmt(d.value) : d.value)
+              const clickable = d.scope != null
+              const on = filter?.key === k
+              const body = <><span>{d.label}</span><b className={k === 'overdueJobs' && d.value > 0 ? 'is-bad' : ''}>{shown}</b></>
+              return clickable
+                ? <button key={k} type="button" className="wl-strip-item" aria-pressed={on} onClick={() => toggleFilter(d)} title="Click to filter the job cards">{body}</button>
+                : <div key={k} className="wl-strip-item" title={STRIP_TITLE[k]}>{body}</div>
+            })}
+          </section>
+
+          {/* Toolbar: search, refresh, exports, TV */}
+          <div className="cc-filters wl-tools">
+            <label className="cc-search wl-search">
+              <Search size={15} aria-hidden="true" />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search technician, job card, asset, plate"
+                aria-label="Search technicians and job cards"
+              />
+            </label>
+            {(filter || stage) && (
+              <button type="button" className="cc-btn-ghost" onClick={() => { setFilter(null); setStage(null) }}>
+                <X size={14} aria-hidden="true" /> Clear {[activeLabel, stageLabel].filter(Boolean).join(' and ')}
+              </button>
+            )}
+            <span className="wl-tools-right">
+              <span className="wl-muted wl-updated" aria-live="polite">
+                {refreshing ? 'Updating...' : updatedAt ? `Updated ${relTime(updatedAt.getTime(), nowTs)}` : ''}
+              </span>
+              <button type="button" className="cc-icon-btn" onClick={() => load({ silent: true })} aria-label="Refresh" title="Refresh now">
+                <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+              </button>
+              <button type="button" className="cc-btn-ghost" onClick={() => exportBoard('excel')} disabled={!filteredBoard.length}>
+                <FileSpreadsheet size={14} aria-hidden="true" /> Excel
+              </button>
+              <button type="button" className="cc-icon-btn" onClick={() => exportBoard('pdf')} disabled={!filteredBoard.length} aria-label="Export technician board to PDF" title="PDF">
+                <FileText size={14} />
+              </button>
+              <WorkshopTvShareButton className="wl-tv" />
+            </span>
+          </div>
+
+          {/* Technician Board + Live Alerts */}
+          <div className="wl-main">
+            <Card
+              title="Technician Board"
+              sub={`Live status by technician. ${firstLoad ? '' : `${filteredBoard.length} of ${board.length} shown.`}`}
+              className="wl-board"
+            >
+              <Tabs
+                label="Technician status"
+                variant="line"
+                value={boardChip}
+                onChange={setBoardChip}
+                tabs={BOARD_CHIPS.map((c) => ({ key: c.key, label: c.label, count: firstLoad ? null : chips[c.key] }))}
+              />
+              <CardState
+                state={pageState}
+                lines={4}
+                empty={emptyBoard
+                  ? 'No technicians yet. Give staff a workshop role or a skills profile to see them here.'
+                  : (filteredBoard.length === 0 ? 'No technicians match these filters.' : null)}
+              >
+                <div className="wl-tech-grid">
+                  {filteredBoard.map((tech) => (
+                    <TechTile
+                      key={tech.userId}
+                      tech={tech}
+                      now={nowTs}
+                      highlight={highlightRef === tech.userId}
+                      onOpen={setDrawerTech}
+                      onViewJob={viewJob}
+                    />
+                  ))}
+                </div>
+              </CardState>
+            </Card>
+
+            <Card
+              title={<span className="wl-alert-title"><Bell size={15} aria-hidden="true" /> Live Alerts</span>}
+              sub={firstLoad ? 'Requires supervisor attention' : `${alerts.length} need attention: ${levels.critical} critical, ${levels.warning} warning, ${levels.info} info`}
+              className="wl-alerts"
+            >
+              <CardState
+                state={pageState}
+                lines={5}
+                empty={alerts.length === 0 ? <span className="wl-clear"><CheckCircle2 size={16} aria-hidden="true" /> All clear. Nothing needs a supervisor right now.</span> : null}
+              >
+                <ul className="wl-alert-list">
+                  {alertList.map((a) => (
+                    <li key={a.key}>
+                      <button type="button" className={`wl-alert lvl-${a.level}`} onClick={() => focusAlert(a.ref)} title="Show the technician or job card">
+                        <span className="wl-alert-body">
+                          <b>{a.title}</b>
+                          <span>{a.detail}</span>
+                        </span>
+                        <span className={`cc-pill ${a.pillTone}`}>{a.pillLabel}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </CardState>
+            </Card>
+          </div>
+
+          {/* Job Flow + full kanban */}
+          <Card
+            title="Job Flow"
+            sub={firstLoad ? 'Open workshop work by stage' : `${flow.open} open job cards by stage${flow.other ? `. ${flow.other} with a status outside these stages.` : '.'} Click a stage to open it on the board.`}
+            action={(
+              <button type="button" className="cc-btn-ghost" aria-expanded={showKanban} onClick={() => setShowKanban((v) => !v)}>
+                <Kanban size={14} aria-hidden="true" /> {showKanban ? 'Hide job board' : 'Show job board'}
+              </button>
+            )}
+          >
+            <CardState state={pageState} lines={2} empty={emptyJobs ? 'No open job cards. Open work orders appear here as they are raised.' : null}>
+              <div className="wl-flow">
+                {flow.stages.map((s) => (
+                  <button
+                    key={s.key}
+                    type="button"
+                    className={`wl-stage tone-${s.tone}`}
+                    aria-pressed={stage === s.key}
+                    title={s.hint}
+                    onClick={() => { setStage((cur) => (cur === s.key ? null : s.key)); setShowKanban(true) }}
+                  >
+                    <span>{s.label}</span>
+                    <b>{s.count}</b>
+                    <i aria-hidden="true"><em style={{ width: `${Math.round(s.bar * 100)}%` }} /></i>
+                    <small>{flow.open ? `${Math.round(s.share * 100)}% of open` : 'N/A'}</small>
+                  </button>
                 ))}
               </div>
-            )}
-          </section>
+            </CardState>
 
-          {/* 3. Job kanban */}
-          <section>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base font-semibold text-white flex items-center gap-2"><Wrench className="w-4 h-4" /> Job Cards</h2>
-              <span className="text-xs text-muted">{filteredJobs.length} jobs</span>
+            {showKanban && !emptyJobs && (
+              <div className="wl-kanban-wrap">
+                <div className="wl-kanban-head">
+                  <span className="wl-muted">{filteredJobs.length} job cards{stageLabel ? ` in ${stageLabel}` : ''}{activeLabel ? ` (${activeLabel})` : ''}</span>
+                </div>
+                <div className="wl-kanban">
+                  {KANBAN_COLUMNS.map((col) => {
+                    const items = columns[col.key] || []
+                    return (
+                      <div key={col.key} className={`wl-col${col.key === 'Overdue' && items.length ? ' is-over' : ''}`}>
+                        <div className="wl-col-head"><span>{col.label}</span><b>{items.length}</b></div>
+                        <div className="wl-col-body">
+                          {items.length === 0 ? (
+                            <div className="wl-col-empty">Empty</div>
+                          ) : items.map((job) => (
+                            <JobCard
+                              key={job.id}
+                              job={job}
+                              now={nowTs}
+                              technicians={board}
+                              techById={techById}
+                              busy={busy}
+                              onAssign={onAssign}
+                              onReassign={onReassign}
+                              onStatus={onStatus}
+                              onPriority={onPriority}
+                              onVor={onVor}
+                              onQcPass={onQcPass}
+                              onQcFail={onQcFail}
+                              tasks={taskRollupByJob[job.id]}
+                              taskSummary={taskSummaryByJob[job.id]}
+                              expanded={!!expandedJobs[job.id]}
+                              onToggleTasks={toggleTasks}
+                              onManageTasks={openTaskModal}
+                              onSmartAssign={setSmartAssignJob}
+                              onSetTaskStatus={(taskId, status, jobId) => onSetTaskStatus(jobId, taskId, status)}
+                              highlight={highlightRef === job.id}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="wl-quick">
+              <Link to="/work-orders">All work orders</Link>
+              <Link to="/parts-requests">Parts requests</Link>
+              <Link to="/workshop-absence">Absence and attendance</Link>
+              <Link to="/workshop-analytics">Workshop analytics</Link>
+              <Link to="/workshop-settings">Alert thresholds</Link>
             </div>
-            {emptyJobs ? (
-              <div className="card p-8 text-center">
-                <Wrench className="w-10 h-10 mx-auto mb-3 opacity-40" />
-                <div className="text-white font-medium">No open job cards</div>
-                <div className="text-sm text-muted mt-1">Open work orders appear here as they are raised.</div>
-              </div>
-            ) : (
-              <div className="flex gap-3 overflow-x-auto pb-2">
-                {KANBAN_COLUMNS.map((col) => {
-                  const items = columns[col.key] || []
-                  const isOverdue = col.key === 'Overdue'
-                  return (
-                    <div key={col.key} className="shrink-0 w-64 rounded-xl p-2" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-dim)' }}>
-                      <div className="flex items-center justify-between px-1.5 py-1 mb-2">
-                        <span className="text-xs font-semibold" style={{ color: isOverdue && items.length ? TONE_COLOR.red : 'var(--panel-ink)' }}>{col.label}</span>
-                        <span className="text-[11px] text-muted tabular-nums">{items.length}</span>
-                      </div>
-                      <div className="flex flex-col gap-2 max-h-[560px] overflow-y-auto pr-0.5">
-                        {items.length === 0 ? (
-                          <div className="text-[11px] text-muted text-center py-4 opacity-60">Empty</div>
-                        ) : items.map((job) => (
-                          <JobCard
-                            key={job.id}
-                            job={job}
-                            now={nowTs}
-                            technicians={board}
-                            techById={techById}
-                            busy={busy}
-                            onAssign={onAssign}
-                            onReassign={onReassign}
-                            onStatus={onStatus}
-                            onPriority={onPriority}
-                            onVor={onVor}
-                            onQcPass={onQcPass}
-                            onQcFail={onQcFail}
-                            tasks={taskRollupByJob[job.id]}
-                            taskSummary={taskSummaryByJob[job.id]}
-                            expanded={!!expandedJobs[job.id]}
-                            onToggleTasks={toggleTasks}
-                            onManageTasks={openTaskModal}
-                            onSmartAssign={setSmartAssignJob}
-                            onSetTaskStatus={(taskId, status, jobId) => onSetTaskStatus(jobId, taskId, status)}
-                            highlight={highlightRef === job.id}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </section>
+          </Card>
 
-          {/* 4. Delay / root cause */}
-          <DelayPanel delays={delays} />
-        </div>
-
-        {/* 5. Alerts rail */}
-        <aside className="xl:sticky xl:top-4 self-start">
-          <AlertsRail alerts={alerts} onFocus={focusRef} />
-        </aside>
-      </div>
+          {/* Delay and root cause (lost hours and their cost) */}
+          <Card
+            title={<span className="wl-alert-title"><Timer size={15} aria-hidden="true" /> Delay and root cause</span>}
+            sub="Blocked time today by cause, with the responsible team, cost impact and suggested action"
+          >
+            <CardState state={pageState} lines={3}>
+              <DelayPanel delays={delays} bare />
+            </CardState>
+          </Card>
+        </>
+      )}
 
       {smartAssignJob && (
         <SmartAssignModal
@@ -1548,6 +816,12 @@ export default function WorkshopLive() {
           onEvent={onForemanEvent}
           onNotify={onForemanNotify}
           onOpenJob={openJobById}
+          now={nowTs}
+          events={raw?.eventsByUser?.[drawerTech.userId]}
+          jobs={openJobsForAssign}
+          onAssign={(j, u) => { onAssign(j, u); setDrawerTech(null) }}
+          onReassign={(j, f, t) => { onReassign(j, f, t); setDrawerTech(null) }}
+          onConfirm={(id) => { onConfirm(id); setDrawerTech(null) }}
         />
       )}
 

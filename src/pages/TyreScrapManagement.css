@@ -1,0 +1,89 @@
+/* Tyre Scrap Management. Only --cc-* tokens, so light and dark share one sheet.
+   The tabs' existing content keeps its app tokens; this sheet styles the
+   mockup layer (head, KPI row, analytics row, filter bar, selected tyre). */
+.tsm-page { min-width: 0; }
+
+/* Head: breadcrumb, title, lead, controls */
+.tsm-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px 20px; }
+.tsm-head-copy { min-width: 0; flex: 1 1 340px; }
+.tsm-crumbs { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--cc-ink-3); margin-bottom: 6px; }
+.tsm-crumbs a { color: var(--cc-ink-3); text-decoration: none; }
+.tsm-crumbs a:hover { color: var(--cc-green); }
+.tsm-crumbs [aria-current] { color: var(--cc-ink-2); }
+.tsm-head h1 { margin: 0; font-size: clamp(22px, 2.4vw, 30px); font-weight: 700; letter-spacing: -0.02em; color: var(--cc-ink); line-height: 1.15; }
+.tsm-head-copy > p { margin: 6px 0 0; font-size: 13.5px; color: var(--cc-ink-2); max-width: 64ch; }
+.tsm-head-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tsm-ctl { position: relative; display: inline-flex; align-items: center; }
+.tsm-ctl > svg { position: absolute; inset-inline-start: 10px; color: var(--cc-ink-3); pointer-events: none; }
+.tsm-ctl .cc-select { padding-inline-start: 30px; padding-top: 8px; padding-bottom: 8px; font-size: 12.5px; min-height: 38px; }
+.tsm-more .cc-select { padding-inline-start: 12px; }
+.tsm-primary { min-height: 38px; padding: 8px 16px; }
+
+/* Banners */
+.tsm-banner { flex-direction: row; align-items: center; gap: 10px; padding: 10px 14px; }
+.tsm-banner p { margin: 0; flex: 1; font-size: 12.5px; color: var(--cc-ink-2); }
+.tsm-banner.bad > svg { color: var(--cc-red); flex: none; }
+.tsm-banner.warn > svg { color: var(--cc-amber); flex: none; }
+
+/* Analytics row */
+.tsm-row { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.tsm-bars { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 8px; align-items: end; height: 190px; padding-top: 10px; }
+.tsm-bar { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; min-width: 0; }
+.tsm-bar i { display: block; width: 62%; min-height: 0; border-radius: 5px 5px 2px 2px; background: var(--cc-green); }
+.tsm-bar i.alt { background: var(--cc-amber); }
+.tsm-bar small { font-size: 10.5px; color: var(--cc-ink-3); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.tsm-bar-n { font-size: 10.5px; font-weight: 600; color: var(--cc-ink-2); margin-bottom: 4px; min-height: 13px; font-variant-numeric: tabular-nums; }
+
+.tsm-gov { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.tsm-gov li { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--cc-ink-2); }
+.tsm-gov .cc-pill { min-width: 44px; justify-content: center; font-variant-numeric: tabular-nums; }
+.tsm-note { font-size: 11.5px; color: var(--cc-ink-3); margin: 10px 0 0; line-height: 1.45; }
+.tsm-hint { margin: 0; }
+
+/* Filter bar */
+.tsm-filterbar { padding-top: 12px; padding-bottom: 12px; }
+.tsm-filterbar .cc-filters { align-items: flex-end; }
+.tsm-count { margin-inline-start: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--cc-ink-3); padding-bottom: 9px; }
+
+/* Selected tyre */
+.tsm-sel-title { display: flex; flex-direction: column; gap: 4px; }
+.tsm-sel-eyebrow { font-size: 11.5px; font-weight: 500; color: var(--cc-ink-3); }
+.tsm-sel-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.tsm-sel-facts p { margin: 0 0 8px; font-size: 12.5px; color: var(--cc-ink-2); line-height: 1.5; }
+.tsm-sel-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.tsm-sel-links { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 4px; }
+.tsm-sel-links button:disabled { opacity: .5; cursor: not-allowed; }
+.tsm-disp { display: flex; flex-direction: column; gap: 10px; }
+.tsm-disp-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.tsm-disp-fields .cc-field { min-width: 0; }
+.tsm-input { width: 100%; font: inherit; font-size: 12.5px; color: var(--cc-ink); background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 9px; padding: 8px 10px; outline: none; min-height: 38px; }
+html.light .tsm-input { background: #fff; }
+.tsm-input:focus { border-color: var(--cc-green); }
+.tsm-input:disabled { opacity: .55; cursor: not-allowed; }
+.tsm-disp-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.tsm-blue { color: var(--cc-blue); border-color: var(--cc-blue); }
+.tsm-blue:hover { border-color: var(--cc-blue); background: var(--cc-blue-tint); }
+.tsm-lock { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12.5px; color: var(--cc-amber); }
+.tsm-msg { margin: 0; font-size: 12px; }
+.tsm-msg.good { color: var(--cc-green); }
+.tsm-msg.bad { color: var(--cc-red); }
+.tsm-approval { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--cc-inner-border); }
+
+@media (max-width: 1280px) {
+  .tsm-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tsm-row > :first-child { grid-column: 1 / -1; }
+}
+@media (max-width: 860px) {
+  .tsm-row, .tsm-sel-grid { grid-template-columns: minmax(0, 1fr); }
+  .tsm-disp-fields { grid-template-columns: minmax(0, 1fr); }
+  .tsm-disp-actions { justify-content: flex-start; }
+  .tsm-count { margin-inline-start: 0; padding-bottom: 0; }
+}
+@media (max-width: 480px) {
+  .tsm-head-actions { width: 100%; }
+  .tsm-head-actions .tsm-ctl { flex: 1 1 140px; }
+  .tsm-head-actions .tsm-ctl .cc-select { width: 100%; }
+  .tsm-primary { flex: 1 1 100%; justify-content: center; }
+  .tsm-bars { gap: 4px; }
+}
+.tsm-selected .cc-card-head { flex-wrap: wrap; }

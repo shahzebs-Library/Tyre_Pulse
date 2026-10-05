@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   Chart as ChartJS,
@@ -10,7 +11,7 @@ import {
   RefreshCw, FileText, FileSpreadsheet, Search, Filter,
   Loader2, AlertTriangle, CheckCircle, TrendingDown,
   BarChart3, X, ChevronRight, Activity, Building2, Tag, Layers, Info, Star,
-  Recycle, CircleDollarSign, Target, Zap, Lock, Award, RotateCcw,
+  Recycle, CircleDollarSign, Target, Zap, Lock, Award, RotateCcw, Plus,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
@@ -24,7 +25,11 @@ import {
 import { formatMonthYear } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import { colorAt, withAlpha } from '../lib/reportColors'
-import PageHeader from '../components/ui/PageHeader'
+import { Tabs } from '../components/commandCenter/kit'
+import TyreKpiTile from '../components/tyre/TyreKpiTile'
+import RetreadJobsSection from '../components/tyre/RetreadJobsSection'
+import { moneyScope } from '../lib/tyreScrapView'
+import './RetreadManagement.css'
 import Modal from '../components/ui/Modal'
 import NotInUseNotice from '../components/ui/NotInUseNotice'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
@@ -107,21 +112,6 @@ const monthLabel = (m) => {
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
-function KpiCard({ icon: Icon, label, value, sub, tone = 'text-[var(--text-primary)]' }) {
-  return (
-    <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4 flex items-start gap-3 min-w-0">
-      <div className="p-2 rounded-lg bg-[var(--input-bg)] shrink-0 text-[var(--text-muted)]" aria-hidden="true">
-        <Icon size={18} />
-      </div>
-      <div className="min-w-0">
-        <p className="text-[var(--text-muted)] text-xs leading-tight">{label}</p>
-        <p className={`text-xl font-bold mt-0.5 truncate tabular-nums ${tone}`}>{value}</p>
-        {sub && <p className="text-[var(--text-muted)] text-xs mt-0.5 leading-tight">{sub}</p>}
-      </div>
-    </div>
-  )
-}
-
 const BADGE = {
   success: 'bg-green-900/40 text-green-400 border-green-700/50',
   warning: 'bg-yellow-900/40 text-yellow-400 border-yellow-700/50',
@@ -191,6 +181,7 @@ export default function RetreadManagement() {
   const [search, setSearch] = useState('')
 
   const [drawer, setDrawer] = useState(null)
+  const [newSignal, setNewSignal] = useState(0)
 
   // Approval & Workflow Engine gate: while the open casing's workflow is active
   // or locked, its per-record export is disabled. Resets per record.
@@ -571,42 +562,125 @@ export default function RetreadManagement() {
   const reportMeta = useMemo(() => ({ company, currency: activeCurrency, branding }), [company, activeCurrency, branding])
 
   // ── Render ─────────────────────────────────────────────────────────────────
+  // Money is shown only in one currency: under All countries the records may
+  // mix SAR, AED and EGP, and their sum is not an amount of anything.
+  const money = useMemo(() => moneyScope(records, activeCountry, activeCurrency), [records, activeCountry, activeCurrency])
+  const headerSites = siteOptions
+  const openNewRetread = () => { setActiveTab('Overview'); setNewSignal(n => n + 1) }
+  const moneyOk = money.ok
+  const moneyTitle = moneyOk ? undefined : 'Costs are in different currencies across countries. Pick one country to see money figures.'
+  const kpiLoading = loading
+  const kv = (v) => (error ? null : v)
+
   return (
-    <div className="space-y-6 min-w-0">
-      <PageHeader
-        title="Retread Management"
-        subtitle="Retread casings, vendor performance and the economics of retreading against buying new"
-        icon={Recycle}
-        actions={
-          <div className="flex items-center gap-2 flex-wrap">
-            <button type="button" onClick={loadData} disabled={loading} className={BTN}>
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} aria-hidden="true" /> Refresh
-            </button>
-            <button type="button" onClick={() => handleExportPdf()} disabled={loading || !!error || filtered.length === 0} className={BTN}>
-              <FileText size={14} aria-hidden="true" /> PDF
-            </button>
-            <EmailPdfButton
-              className={BTN}
-              getPdf={async () => ({
-                base64: await handleExportPdf({ returnBase64: true }),
-                filename: `${fileBase}.pdf`,
-                subject: 'Retread Management',
-                bodyHtml: '<p>Attached is the Retread Management report.</p>',
-              })}
-            />
-            <button type="button" onClick={handleExportExcel} disabled={loading || !!error || filtered.length === 0} className={BTN}>
-              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
-            </button>
-          </div>
-        }
-      />
+    <div className="cc rtm-page">
+      <header className="rtm-head">
+        <div className="rtm-head-copy">
+          <nav className="rtm-crumbs" aria-label="Breadcrumb">
+            <Link to="/tyre-records">Tyre management</Link>
+            <ChevronRight size={13} aria-hidden="true" />
+            <span aria-current="page">Retread management</span>
+          </nav>
+          <h1>Retread Management</h1>
+          <p>Manage retread casings, vendor performance and retread economics against buying new.</p>
+        </div>
+        <div className="rtm-head-actions">
+          <label className="rtm-ctl">
+            <Building2 size={14} aria-hidden="true" />
+            <span className="sr-only">Site</span>
+            <select className="cc-select" value={filterSite} onChange={e => setFilterSite(e.target.value)}>
+              {headerSites.map(o => <option key={o} value={o}>{o === 'All' ? 'All sites' : o}</option>)}
+            </select>
+          </label>
+          <button type="button" className="cc-btn-ghost" onClick={loadData} disabled={loading} aria-label="Refresh">
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} aria-hidden="true" />
+          </button>
+          <button type="button" className="cc-btn-ghost" onClick={handleExportExcel} disabled={loading || !!error || filtered.length === 0}>
+            <FileSpreadsheet size={14} aria-hidden="true" /> Excel
+          </button>
+          <button type="button" className="cc-btn-ghost" onClick={() => handleExportPdf()} disabled={loading || !!error || filtered.length === 0}>
+            <FileText size={14} aria-hidden="true" /> PDF
+          </button>
+          <EmailPdfButton
+            className="cc-btn-ghost"
+            getPdf={async () => ({
+              base64: await handleExportPdf({ returnBase64: true }),
+              filename: `${fileBase}.pdf`,
+              subject: 'Retread Management',
+              bodyHtml: '<p>Attached is the Retread Management report.</p>',
+            })}
+          />
+          <button type="button" className="cc-btn-primary rtm-primary" onClick={openNewRetread}>
+            <Plus size={16} aria-hidden="true" /> New retread
+          </button>
+        </div>
+      </header>
+
       <NotInUseNotice count={loading || error ? null : enriched.length} label="retread records"
         hint="Records appear once a tyre record is categorised as a retread." />
 
+      {truncated && (
+        <div role="status" className="cc-card rtm-banner warn">
+          <Info size={16} aria-hidden="true" />
+          <p>Capped view: showing the first 50,000 tyre records. Narrow the country for the full set.</p>
+        </div>
+      )}
+      {error && (
+        <div role="alert" className="cc-card rtm-banner bad">
+          <AlertTriangle size={18} aria-hidden="true" />
+          <p>{error}</p>
+          <button type="button" className="cc-btn" onClick={loadData}>Retry</button>
+        </div>
+      )}
+
+      <div className="tk-row" aria-label="Retread indicators">
+        <TyreKpiTile
+          icon={Recycle} tone="t-blue" label="Retread casings" loading={kpiLoading}
+          display={fmtNum(kv(kpis.totalRetreads))}
+          sub={error ? 'Could not load' : `${fmtNum(kpis.activeCount)} active, ${fmtPct(kpis.retreadShare, 1)} of fleet`}
+        />
+        <TyreKpiTile
+          icon={TrendingDown} tone="t-green" label="Retread CPK" loading={kpiLoading}
+          display={moneyOk ? fmtCpk(kv(kpis.retreadCpk), money.currency) : 'N/A'} title={moneyTitle}
+          sub={moneyOk
+            ? (kpis.newCpk != null ? `vs ${fmtCpk(kpis.newCpk, money.currency)} new` : 'No new-tyre baseline')
+            : 'Pick one country'}
+        />
+        <TyreKpiTile
+          icon={CircleDollarSign} tone="t-green" label="Savings vs new" loading={kpiLoading}
+          display={moneyOk ? fmtCurrency(kv(kpis.savings), money.currency) : 'N/A'} title={moneyTitle}
+          sub={moneyOk ? 'Realised on measurable casings' : 'Pick one country'}
+        />
+        <TyreKpiTile
+          icon={CheckCircle} tone="t-amber" label="Success rate" loading={kpiLoading}
+          display={fmtPct(kv(kpis.successRate), 1)} sub="Not high risk at removal"
+        />
+        <TyreKpiTile
+          icon={Layers} tone="t-purple" label="Avg cycle depth" loading={kpiLoading}
+          display={kv(kpis.avgCycle) != null ? kpis.avgCycle.toFixed(1) : 'N/A'}
+          sub={kpis.maxCycle != null ? `Cycles per casing, deepest ${kpis.maxCycle}` : 'No retread cycles recorded'}
+        />
+      </div>
+
+      <Tabs label="Retread views" variant="line" value={activeTab} onChange={setActiveTab} tabs={TABS.map(t => ({ key: t, label: t }))} />
+
+      {activeTab === 'Overview' && (
+        <RetreadJobsSection
+          activeCountry={activeCountry}
+          site={filterSite}
+          roi={roiCalc}
+          roiInputs={{ currency: activeCurrency }}
+          onOpenRoi={() => setActiveTab('ROI Calculator')}
+          openNewSignal={newSignal}
+        />
+      )}
+
+      {activeTab !== 'ROI Calculator' && (
+        <>
       {/* Filters: drive the KPI-adjacent lifecycle table and every export */}
       <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl px-4 py-3 space-y-3">
         <div className="flex items-center gap-2 text-[var(--text-muted)] text-xs">
-          <Filter size={14} aria-hidden="true" /> Filters
+          <Filter size={14} aria-hidden="true" /> Tyre register filters
           <span className="ml-auto text-[var(--text-dim)]" aria-live="polite">
             {filtered.length.toLocaleString()} of {enriched.length.toLocaleString()} retread casings shown
           </span>
@@ -652,64 +726,19 @@ export default function RetreadManagement() {
           </button>
         )}
       </div>
-
-      {truncated && (
-        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]" role="status">
-          <Info size={12} className="shrink-0" aria-hidden="true" />
-          <span>Capped view: showing the first 50,000 tyre records. Narrow the country for the full set.</span>
-        </div>
-      )}
-
-      {error && (
-        <div role="alert" className="bg-red-900/30 border border-red-700 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3">
-          <AlertTriangle className="text-red-400 shrink-0" size={18} aria-hidden="true" />
-          <p className="text-red-300 text-sm">{error}</p>
-          <button type="button" onClick={loadData} className={`${BTN} ml-auto`}>
-            <RefreshCw size={14} aria-hidden="true" /> Retry
-          </button>
-        </div>
+        </>
       )}
 
       {loading && (
-        <div className="flex items-center justify-center py-24" role="status">
-          <Loader2 className="animate-spin text-[var(--text-muted)] mr-3" size={28} aria-hidden="true" />
-          <span className="text-[var(--text-muted)]">Loading retread data</span>
+        <div className="cc-card rtm-loading" role="status">
+          <Loader2 className="animate-spin" size={22} aria-hidden="true" />
+          <span>Loading retread data</span>
         </div>
       )}
 
       {!loading && !error && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-            <KpiCard icon={Recycle} label="Retread casings" value={fmtNum(kpis.totalRetreads)}
-              sub={`${fmtNum(kpis.activeCount)} active, ${fmtNum(kpis.removedCount)} removed, ${fmtPct(kpis.retreadShare, 1)} of fleet`} />
-            <KpiCard icon={TrendingDown} label="Retread CPK" value={fmtCpk(kpis.retreadCpk, activeCurrency)} sub="cost per km, removed casings" />
-            <KpiCard icon={Tag} label="New tyre CPK" value={fmtCpk(kpis.newCpk, activeCurrency)}
-              sub={kpis.cpkDeltaPct != null ? `retread is ${Math.abs(kpis.cpkDeltaPct).toFixed(1)}% ${kpis.cpkDeltaPct >= 0 ? 'cheaper' : 'dearer'}` : 'baseline excludes scrap'} />
-            <KpiCard icon={CircleDollarSign} label="Savings vs new" value={fmtCurrency(kpis.savings, activeCurrency)}
-              sub="realised, measurable casings" tone={kpis.savings == null ? 'text-[var(--text-dim)]' : kpis.savings > 0 ? 'text-green-400' : 'text-red-400'} />
-            <KpiCard icon={CheckCircle} label="Success rate" value={fmtPct(kpis.successRate, 1)}
-              sub="not high risk at removal" tone={rateTone(kpis.successRate)} />
-            <KpiCard icon={Layers} label="Cycle depth" value={kpis.avgCycle != null ? `${kpis.avgCycle.toFixed(1)}x avg` : 'N/A'}
-              sub={kpis.maxCycle != null ? `deepest casing ${kpis.maxCycle}x` : 'no retread cycles recorded'} />
-          </div>
-
-          <div role="tablist" aria-label="Retread views" className="flex gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1 overflow-x-auto">
-            {TABS.map(t => (
-              <button
-                key={t}
-                type="button"
-                role="tab"
-                aria-selected={activeTab === t}
-                onClick={() => setActiveTab(t)}
-                className={`min-h-[44px] px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
-                  activeTab === t ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-
+          {activeTab === 'Overview' && <h2 className="rtm-section-title">Retreads in the tyre register</h2>}
           {activeTab === 'Overview' && (
             <div className="space-y-5">
               {enriched.length === 0 ? (

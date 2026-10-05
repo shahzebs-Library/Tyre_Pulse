@@ -1,840 +1,621 @@
 /**
- * Custom Data Manager
+ * Custom Data Manager (route /custom-data), rebuilt on the Command Center kit
+ * to the owner's mockup.
  *
- * Every column in every uploaded file is saved - nothing is ever lost.
- * Columns that don't match a standard field land in extra_fields JSONB.
- * This page makes all of that data visible, searchable, exportable,
- * and promotable to permanent field synonyms so future uploads auto-map them.
+ * Every column in every uploaded file is kept: columns that do not match a
+ * standard field land in tyre_records.extra_fields. This page shows them,
+ * maps them to permanent field synonyms so future uploads auto-map, copies a
+ * custom value into a standard column, browses and exports the records, and
+ * shows how each import batch preserved its rows.
+ *
+ * Sources (all real, read under RLS): get_extra_field_stats (per custom key),
+ * field_synonyms, tyre_records.extra_fields, import_mapping_profiles (saved
+ * mapping rules), import_batches + import_files (lineage, conflict rows).
+ *
+ * Honest gaps against the mockup: no per-field quality score, confidence or
+ * source upload is stored, so none is shown; the "looks like" type is read
+ * from the sample values only. Pure shaping: src/lib/customDataView.js and
+ * src/lib/customDataAnalytics.js.
  */
-
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { Link } from 'react-router-dom'
+import {
+  Layers, Tag, HelpCircle, Database, AlertTriangle, ChevronRight, Download, RefreshCw, Search,
+  Link2, ArrowRight, Eye, Trash2, Check, X, Plus, Loader2, Info,
+} from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import * as customData from '../lib/api/customData'
+import { listAllProfiles, setProfileActive } from '../lib/api/imports'
+import { listImportBatches } from '../lib/api/auditTrailOverview'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import { formatDate } from '../lib/formatters'
+import { formatDate, formatDateTime } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
-import {
-  Database, Search, Plus, Trash2, Check, X, ArrowRight,
-  Download, RefreshCw, Eye, Layers, Tag, Link2, AlertTriangle, Info, Zap, Hash,
-} from 'lucide-react'
-import PageHeader from '../components/ui/PageHeader'
 import Modal from '../components/ui/Modal'
-import StatTile from '../components/ui/StatTile'
-import EnterpriseTable from '../components/ui/EnterpriseTable'
-import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
+import { Card, CardState, Kpi, Tabs, Pager, KitTable, fmtInt, fmtPct } from '../components/commandCenter/kit'
 import { exportToExcel, reportFileName, reportDateLabel } from '../lib/exportUtils'
+import { summarizeCustomData, filterSynonyms, flattenForExport, pageCount } from '../lib/customDataAnalytics'
 import {
-  summarizeCustomData, filterFieldStats, filterSynonyms, flattenForExport, pageCount,
-} from '../lib/customDataAnalytics'
+  registryRows, filterRegistry, lineageRows, conflictTotal, scopeBatches, usageBars,
+} from '../lib/customDataView'
+import './CustomData.css'
 
-// Canonical tyre_records fields the user can map to
+// Canonical tyre_records fields a custom column can map to.
 const CANONICAL_FIELDS = [
-  { key: 'sr',          label: 'Row / SR No.' },
-  { key: 'issue_date',  label: 'Issue Date' },
-  { key: 'description', label: 'Description' },
-  { key: 'brand',       label: 'Brand' },
-  { key: 'serial_no',   label: 'Serial Number' },
-  { key: 'qty',         label: 'Quantity' },
-  { key: 'job_card',    label: 'Job Card' },
-  { key: 'mis_number',  label: 'MIS Number' },
-  { key: 'asset_no',    label: 'Asset / Vehicle No.' },
-  { key: 'site',        label: 'Site / Location' },
-  { key: 'country',     label: 'Country' },
-  { key: 'remarks',     label: 'Remarks / Notes' },
-  { key: 'cost_per_tyre', label: 'Cost Per Tyre' },
-  { key: 'driver_name', label: 'Driver Name' },
-  { key: 'supplier',    label: 'Supplier' },
-  { key: 'size',        label: 'Tyre Size' },
-  { key: 'position',    label: 'Tyre Position' },
-  { key: 'tread_depth', label: 'Tread Depth (mm)' },
+  { key: 'sr', label: 'Row / SR No.' }, { key: 'issue_date', label: 'Issue Date' },
+  { key: 'description', label: 'Description' }, { key: 'brand', label: 'Brand' },
+  { key: 'serial_no', label: 'Serial Number' }, { key: 'qty', label: 'Quantity' },
+  { key: 'job_card', label: 'Job Card' }, { key: 'mis_number', label: 'MIS Number' },
+  { key: 'asset_no', label: 'Asset / Vehicle No.' }, { key: 'site', label: 'Site / Location' },
+  { key: 'country', label: 'Country' }, { key: 'remarks', label: 'Remarks / Notes' },
+  { key: 'cost_per_tyre', label: 'Cost Per Tyre' }, { key: 'driver_name', label: 'Driver Name' },
+  { key: 'supplier', label: 'Supplier' }, { key: 'size', label: 'Tyre Size' },
+  { key: 'position', label: 'Tyre Position' }, { key: 'tread_depth', label: 'Tread Depth (mm)' },
   { key: 'pressure_reading', label: 'Pressure (PSI)' },
 ]
+const CANON_LABEL = Object.fromEntries(CANONICAL_FIELDS.map((f) => [f.key, f.label]))
+const fieldName = (k) => (k ? CANON_LABEL[k] || k : null)
 
-const TABS = ['fields', 'synonyms', 'records']
+const TABS = [
+  { key: 'fields', label: 'Custom fields' },
+  { key: 'synonyms', label: 'Synonyms' },
+  { key: 'records', label: 'Browse records' },
+  { key: 'rules', label: 'Mapping rules' },
+  { key: 'usage', label: 'Usage' },
+]
+const REC_PAGE_SIZE = 20
+const NA = <span className="cc-na">N/A</span>
+
+function KpiLabel({ title, sub }) {
+  return <>{title}<small className="cdm-kpi-sub">{sub}</small></>
+}
 
 export default function CustomData() {
   const { profile } = useAuth()
   const { activeCountry } = useSettings()
   const { t } = useLanguage()
+  const canWrite = ['Admin', 'Manager'].includes(profile?.role) || Boolean(profile?.is_super_admin)
 
-  const [tab, setTab]             = useState(0)
-  const [fieldStats, setFieldStats] = useState([])   // [{ field_key, record_count, sample_vals }]
-  const [synonyms, setSynonyms]   = useState([])
-  const [records, setRecords]     = useState([])
-  const [totalRecords, setTotalRecords] = useState(0)
-  const [loading, setLoading]     = useState(true)
-  const [synLoading, setSynLoading] = useState(true)
-  const [recLoading, setRecLoading] = useState(false)
-  const [recError, setRecError] = useState('')
+  const [tab, setTab] = useState('fields')
 
-  const [statsError, setStatsError] = useState('')
-  const [synError, setSynError]     = useState('')
+  // Field stats + synonyms
+  const [fieldStats, setFieldStats] = useState([])
   const [recordCount, setRecordCount] = useState(null)
-  const [exporting, setExporting]   = useState(false)
-  const [exportMsg, setExportMsg]   = useState(null)
-  const [backfillError, setBackfillError] = useState('')
-  const [selectedRecord, setSelectedRecord] = useState(null)
+  const [statsState, setStatsState] = useState({ loading: true, error: null })
+  const [synonyms, setSynonyms] = useState([])
+  const [synState, setSynState] = useState({ loading: true, error: null })
 
-  // Field stats filters
-  const [statsSearch, setStatsSearch] = useState('')
-  const [statsMapping, setStatsMapping] = useState('all')
-  const [synSearch, setSynSearch] = useState('')
+  // Lineage + rules
+  const [batches, setBatches] = useState({ loading: true, data: null, error: null })
+  const [profiles, setProfiles] = useState({ loading: false, data: null, error: null })
 
-  // Records tab
-  const [filterKey, setFilterKey]   = useState('')
-  const [filterVal, setFilterVal]   = useState('')
-  const [recPage, setRecPage]       = useState(0)
-  const REC_PAGE_SIZE = 20
-
-  // Add synonym form
-  const [newCustom, setNewCustom]   = useState('')
-  const [newMapsTo, setNewMapsTo]   = useState('')
-  const [addError, setAddError]     = useState('')
-  const [addSaving, setAddSaving]   = useState(false)
-
-  // Delete synonym confirmation
-  const [deleteTarget, setDeleteTarget] = useState(null)
-  const [deleteError, setDeleteError]   = useState('')
-  const [deleting, setDeleting]         = useState(false)
-
-  // Promote from custom field
-  const [promoteKey, setPromoteKey] = useState(null)
+  // Registry UI
+  const [search, setSearch] = useState('')
+  const [status, setStatus] = useState('all')
+  const [selectedKey, setSelectedKey] = useState(null)
   const [promoteTarget, setPromoteTarget] = useState('')
-
-  // Backfill panel
-  const [backfillKey, setBackfillKey]    = useState(null)
   const [backfillTarget, setBackfillTarget] = useState('')
   const [backfillRunning, setBackfillRunning] = useState(false)
   const [backfillResult, setBackfillResult] = useState(null)
+  const [actionError, setActionError] = useState('')
+
+  // Synonyms tab
+  const [synSearch, setSynSearch] = useState('')
+  const [newCustom, setNewCustom] = useState('')
+  const [newMapsTo, setNewMapsTo] = useState('')
+  const [addError, setAddError] = useState('')
+  const [addSaving, setAddSaving] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleteError, setDeleteError] = useState('')
+  const [deleting, setDeleting] = useState(false)
+
+  // Records tab
+  const [records, setRecords] = useState([])
+  const [totalRecords, setTotalRecords] = useState(0)
+  const [recLoading, setRecLoading] = useState(false)
+  const [recError, setRecError] = useState('')
+  const [filterKey, setFilterKey] = useState('')
+  const [filterVal, setFilterVal] = useState('')
+  const [recPage, setRecPage] = useState(0)
+  const [selectedRecord, setSelectedRecord] = useState(null)
+
+  const [exporting, setExporting] = useState(false)
+  const [exportMsg, setExportMsg] = useState(null)
 
   // ── Loaders ─────────────────────────────────────────────────────────────────
-
   const loadFieldStats = useCallback(async () => {
-    setLoading(true)
-    setStatsError('')
+    setStatsState({ loading: true, error: null })
     const country = activeCountry !== 'All' ? activeCountry : null
     try {
       const [data, head] = await Promise.all([
         customData.getExtraFieldStats({ country }),
-        // One-row read for the exact count of records carrying custom data.
         customData.listRecordsWithExtraFields({ country: activeCountry, from: 0, to: 0 }).catch(() => null),
       ])
       setFieldStats(data ?? [])
       setRecordCount(head ? head.count : null)
-    } catch (error) {
-      // A failed read is not "no custom fields": keep the error on screen.
-      setFieldStats([])
-      setRecordCount(null)
-      setStatsError(toUserMessage(error, 'Could not read the custom field summary.'))
+      setStatsState({ loading: false, error: null })
+    } catch (e) {
+      setFieldStats([]); setRecordCount(null)
+      setStatsState({ loading: false, error: toUserMessage(e, 'Could not read the custom field summary.') })
     }
-    setLoading(false)
   }, [activeCountry])
 
   const loadSynonyms = useCallback(async () => {
-    setSynLoading(true)
-    setSynError('')
-    try {
-      const data = await customData.listFieldSynonyms()
-      setSynonyms(data ?? [])
-    } catch (error) {
-      setSynonyms([])
-      setSynError(toUserMessage(error, 'Could not read the synonyms.'))
-    }
-    setSynLoading(false)
+    setSynState({ loading: true, error: null })
+    try { setSynonyms((await customData.listFieldSynonyms()) ?? []); setSynState({ loading: false, error: null }) }
+    catch (e) { setSynonyms([]); setSynState({ loading: false, error: toUserMessage(e, 'Could not read the synonyms.') }) }
+  }, [])
+
+  const loadBatches = useCallback(async () => {
+    setBatches((s) => ({ ...s, loading: true, error: null }))
+    try { setBatches({ loading: false, data: await listImportBatches({ limit: 200 }), error: null }) }
+    catch (e) { setBatches({ loading: false, data: null, error: toUserMessage(e, 'Import lineage could not be read.') }) }
+  }, [])
+
+  const loadProfiles = useCallback(async () => {
+    setProfiles((s) => ({ ...s, loading: true, error: null }))
+    try { setProfiles({ loading: false, data: await listAllProfiles(), error: null }) }
+    catch (e) { setProfiles({ loading: false, data: null, error: toUserMessage(e, 'Saved mapping rules could not be read.') }) }
   }, [])
 
   const loadRecords = useCallback(async () => {
-    setRecLoading(true)
-    setRecError('')
+    setRecLoading(true); setRecError('')
     try {
       const { data, count } = await customData.listRecordsWithExtraFields({
-        country: activeCountry,
-        filterKey,
-        filterVal,
-        from: recPage * REC_PAGE_SIZE,
-        to: (recPage + 1) * REC_PAGE_SIZE - 1,
+        country: activeCountry, filterKey, filterVal,
+        from: recPage * REC_PAGE_SIZE, to: (recPage + 1) * REC_PAGE_SIZE - 1,
       })
-      setRecords(data ?? [])
-      setTotalRecords(count ?? 0)
-    } catch (error) {
-      // A failed read is not "no records": say so instead of an empty table.
-      setRecords([])
-      setTotalRecords(0)
-      setRecError(toUserMessage(error, 'Could not load the records with custom data.'))
+      setRecords(data ?? []); setTotalRecords(count ?? 0)
+    } catch (e) {
+      setRecords([]); setTotalRecords(0)
+      setRecError(toUserMessage(e, 'Could not load the records with custom data.'))
     }
     setRecLoading(false)
   }, [activeCountry, filterKey, filterVal, recPage])
 
   useEffect(() => { loadFieldStats() }, [loadFieldStats])
   useEffect(() => { loadSynonyms() }, [loadSynonyms])
-  useEffect(() => { if (tab === 2) loadRecords() }, [tab, loadRecords])
+  useEffect(() => { loadBatches() }, [loadBatches])
+  useEffect(() => { if (tab === 'rules' && !profiles.data && !profiles.loading) loadProfiles() }, [tab, profiles.data, profiles.loading, loadProfiles])
+  useEffect(() => { if (tab === 'records') loadRecords() }, [tab, loadRecords])
 
-  // ── Synonym CRUD ─────────────────────────────────────────────────────────────
+  // ── Derived ─────────────────────────────────────────────────────────────────
+  const summary = useMemo(() => summarizeCustomData({ fieldStats, synonyms, recordCount }), [fieldStats, synonyms, recordCount])
+  const registry = useMemo(() => registryRows(fieldStats, synonyms), [fieldStats, synonyms])
+  const filteredRegistry = useMemo(() => filterRegistry(registry, { search, status }), [registry, search, status])
+  const selected = useMemo(() => registry.find((r) => r.key === selectedKey) || null, [registry, selectedKey])
+  const scopedBatches = useMemo(() => scopeBatches(batches.data, activeCountry), [batches.data, activeCountry])
+  const lineage = useMemo(() => lineageRows(scopedBatches || []), [scopedBatches])
+  const conflicts = conflictTotal(scopedBatches)
+  const filteredSynonyms = useMemo(() => filterSynonyms(synonyms, synSearch), [synonyms, synSearch])
+  const bars = useMemo(() => usageBars(registry), [registry])
+  const recPages = Math.max(1, pageCount(totalRecords, REC_PAGE_SIZE))
 
+  useEffect(() => { if (!selectedKey && registry.length) setSelectedKey(registry[0].key) }, [registry, selectedKey])
+  useEffect(() => { setPromoteTarget(''); setBackfillTarget(''); setBackfillResult(null); setActionError('') }, [selectedKey])
+
+  // ── Actions ─────────────────────────────────────────────────────────────────
   async function addSynonym(customName, mapsTo) {
-    if (!customName.trim() || !mapsTo) { setAddError(t('customdata.synonyms.add.errorBothRequired')); return }
+    if (!customName.trim() || !mapsTo) { const m = t('customdata.synonyms.add.errorBothRequired'); setAddError(m); return m }
     setAddSaving(true); setAddError('')
     try {
-      await customData.createFieldSynonym({
-        custom_name:  customName.trim(),
-        maps_to:      mapsTo,
-        table_target: 'tyre_records',
-        created_by:   profile?.id,
-        use_count:    0,
-      })
-      setNewCustom(''); setNewMapsTo(''); await loadSynonyms()
-    } catch (error) {
-      setAddError(toUserMessage(error, 'Could not save. Please try again.'))
-    }
-    setAddSaving(false)
+      await customData.createFieldSynonym({ custom_name: customName.trim(), maps_to: mapsTo, table_target: 'tyre_records', created_by: profile?.id, use_count: 0 })
+      await loadSynonyms()
+      return null
+    } catch (e) {
+      const m = toUserMessage(e, 'Could not save. Please try again.')
+      setAddError(m)
+      return m
+    } finally { setAddSaving(false) }
   }
 
-  function confirmDeleteSynonym(synonym) {
-    setDeleteTarget(synonym)
-    setDeleteError('')
-  }
-
-  function closeDeleteSynonym() {
-    setDeleteTarget(null)
-    setDeleteError('')
+  async function acceptMapping() {
+    if (!selected || !promoteTarget) return
+    setActionError('')
+    const failure = await addSynonym(selected.key, promoteTarget)
+    if (failure) setActionError(failure)
+    else setPromoteTarget('')
   }
 
   async function deleteSynonym() {
     if (!deleteTarget) return
-    setDeleting(true)
-    setDeleteError('')
+    setDeleting(true); setDeleteError('')
     try {
-      const { data, error } = await supabase
-        .from('field_synonyms').delete().eq('id', deleteTarget.id).select('id')
+      const { data, error } = await supabase.from('field_synonyms').delete().eq('id', deleteTarget.id).select('id')
       if (error) throw error
-      if ((data?.length ?? 0) === 0) {
-        throw new Error(t('customdata.synonyms.delete.errNotDeleted'))
-      }
-      setSynonyms(s => s.filter(x => x.id !== deleteTarget.id))
+      if ((data?.length ?? 0) === 0) throw new Error(t('customdata.synonyms.delete.errNotDeleted'))
+      setSynonyms((s) => s.filter((x) => x.id !== deleteTarget.id))
       setDeleteTarget(null)
-    } catch (e) {
-      setDeleteError(toUserMessage(e, t('customdata.synonyms.delete.errFailed')))
-    } finally {
-      setDeleting(false)
-    }
+    } catch (e) { setDeleteError(toUserMessage(e, t('customdata.synonyms.delete.errFailed'))) }
+    finally { setDeleting(false) }
   }
-
-  // Promote a custom field key to a permanent synonym
-  async function promote(fieldKey, mapsTo) {
-    if (!mapsTo) return
-    await addSynonym(fieldKey, mapsTo)
-    setPromoteKey(null)
-    setPromoteTarget('')
-  }
-
-  // ── Backfill: copy extra_fields value → canonical column ──────────────────
 
   async function runBackfill() {
-    if (!backfillKey || !backfillTarget) return
-    setBackfillRunning(true)
-    setBackfillResult(null)
-    setBackfillError('')
-
-    // Fetch ALL records where this extra_field exists but canonical column is null
-    const { data: batch, error } = await customData.listTyreRecordsForBackfill({
-      fieldKey: backfillKey,
-      target: backfillTarget,
-    })
-
-    if (error) {
-      setBackfillError(toUserMessage(error, 'Could not read the records to copy.'))
-      setBackfillRunning(false)
-      return
-    }
-
-    let updated = 0
-    let failed = 0
-    const CHUNK = 200
-    for (let i = 0; i < batch.length; i += CHUNK) {
-      const slice = batch.slice(i, i + CHUNK)
-      // Update each record - set canonical field = extra_fields value (dynamic key).
-      // Settled per row so one refused write is counted, not hidden behind the rest.
-      const results = await Promise.allSettled(slice.map(r =>
-        customData.updateTyreRecordFields(r.id, { [backfillTarget]: r.extra_fields[backfillKey] })
-      ))
+    if (!selected || !backfillTarget) return
+    setBackfillRunning(true); setBackfillResult(null); setActionError('')
+    const { data: batch, error } = await customData.listTyreRecordsForBackfill({ fieldKey: selected.key, target: backfillTarget })
+    if (error) { setActionError(toUserMessage(error, 'Could not read the records to copy.')); setBackfillRunning(false); return }
+    let updated = 0; let failed = 0
+    for (let i = 0; i < batch.length; i += 200) {
+      const slice = batch.slice(i, i + 200)
+      const results = await Promise.allSettled(slice.map((r) => customData.updateTyreRecordFields(r.id, { [backfillTarget]: r.extra_fields[selected.key] })))
       for (const res of results) { if (res.status === 'fulfilled') updated += 1; else failed += 1 }
     }
-
     setBackfillResult({ updated, total: batch.length })
-    if (failed) setBackfillError(`${failed.toLocaleString()} record${failed === 1 ? '' : 's'} could not be updated.`)
+    if (failed) setActionError(`${fmtInt(failed)} record${failed === 1 ? '' : 's'} could not be updated.`)
     setBackfillRunning(false)
     loadFieldStats()
   }
 
-  // ── Export extra_fields data ──────────────────────────────────────────────
-
   async function exportExtraFields() {
-    setExporting(true)
-    setExportMsg(null)
+    setExporting(true); setExportMsg(null)
     try {
       const { data, error } = await customData.listTyreRecordsForExport()
       if (error) throw error
-      if (!data?.length) {
-        setExportMsg({ type: 'info', text: 'There are no records with custom data to export.' })
-        return
-      }
+      if (!data?.length) { setExportMsg({ type: 'info', text: 'There are no records with custom data to export.' }); return }
       const { rows, columns, headers } = flattenForExport(data)
       await exportToExcel(rows, columns, headers, reportFileName('Custom Data', activeCountry, reportDateLabel()), 'Custom Data')
-    } catch (error) {
-      setExportMsg({ type: 'err', text: toUserMessage(error, 'Could not export the custom data.') })
-    } finally {
-      setExporting(false)
-    }
+    } catch (e) { setExportMsg({ type: 'err', text: toUserMessage(e, 'Could not export the custom data.') }) }
+    finally { setExporting(false) }
   }
 
-  // ── Derived ──────────────────────────────────────────────────────────────────
+  async function toggleProfile(p) {
+    try { await setProfileActive(p.id, !p.active); loadProfiles() }
+    catch (e) { setProfiles((s) => ({ ...s, error: toUserMessage(e, 'Could not update the mapping rule.') })) }
+  }
 
-  const filteredStats = useMemo(
-    () => filterFieldStats(fieldStats, { search: statsSearch, mapping: statsMapping, synonyms }),
-    [fieldStats, statsSearch, statsMapping, synonyms],
-  )
-  const filteredSynonyms = useMemo(() => filterSynonyms(synonyms, synSearch), [synonyms, synSearch])
-  const statsPager = usePagedRows(filteredStats)
-  const synonymsPager = usePagedRows(filteredSynonyms)
-  const summary = useMemo(
-    () => summarizeCustomData({ fieldStats, synonyms, recordCount }),
-    [fieldStats, synonyms, recordCount],
-  )
+  // ── KPIs ────────────────────────────────────────────────────────────────────
+  const statsBad = Boolean(statsState.error); const synBad = Boolean(synState.error)
+  const kpis = [
+    { icon: Layers, tone: 't-green', value: statsBad ? null : summary.uniqueFields, label: <KpiLabel title="Custom fields" sub={statsBad ? 'Could not be read' : 'Across uploads'} />, onClick: () => { setTab('fields'); setStatus('all') } },
+    { icon: Tag, tone: 't-blue', value: synBad ? null : summary.synonyms, label: <KpiLabel title="Synonym mappings" sub={synBad ? 'Could not be read' : `${fmtInt(summary.autoMapped)} auto-mapped on upload`} />, onClick: () => setTab('synonyms') },
+    { icon: HelpCircle, tone: 't-amber', value: statsBad || synBad ? null : summary.unmappedFields, label: <KpiLabel title="Unmapped fields" sub="Need a mapping" />, onClick: () => { setTab('fields'); setStatus('unmapped') } },
+    { icon: Database, tone: 't-purple', value: summary.recordCount, label: <KpiLabel title="Custom records" sub={summary.recordCount == null ? 'Count unavailable' : 'Tyre records with custom data'} />, onClick: () => setTab('records') },
+    { icon: AlertTriangle, tone: 't-red', value: conflicts, label: <KpiLabel title="Data conflicts" sub={batches.error ? 'Could not be read' : 'Import rows held as conflicts'} />, title: 'Sum of conflict rows across import batches in scope (latest 200)' },
+  ]
 
-  // Check if a custom field key already has a synonym
-  const synonymMap = useMemo(() => {
-    const m = {}
-    synonyms.forEach(s => { m[s.custom_name.toLowerCase()] = s })
-    return m
-  }, [synonyms])
+  const registryColumns = [
+    { key: 'key', header: 'Field', cell: (r) => <span className={`cdm-mono cc-strong cdm-field ${r.key === selectedKey ? 'is-selected' : ''}`} aria-current={r.key === selectedKey ? 'true' : undefined}>{r.key}</span> },
+    { key: 'map', header: 'Canonical mapping', sortValue: (r) => r.mappedTo || '', cell: (r) => (r.mappedTo ? fieldName(r.mappedTo) : <span className="cc-na">Not mapped</span>) },
+    { key: 'type', header: 'Looks like', sortValue: (r) => r.type || '', cell: (r) => r.type || NA },
+    { key: 'records', header: 'Records', numeric: true, sortValue: (r) => r.records, cell: (r) => fmtInt(r.records) },
+    { key: 'status', header: 'Status', sortValue: (r) => r.status, cell: (r) => <span className={`cc-pill ${r.status === 'mapped' ? 'good' : 'warn'}`}>{r.status === 'mapped' ? 'Mapped' : 'Unmapped'}</span> },
+  ]
 
-  const totalPages = pageCount(totalRecords, REC_PAGE_SIZE)
-  const fieldLabel = useCallback(
-    (key) => (CANONICAL_FIELDS.find(f => f.key === key) ? t(`customdata.fields.${key}`) : key),
-    [t],
-  )
+  const synonymColumns = [
+    { key: 'custom_name', header: 'Column name', cell: (s) => <span className="cdm-mono">{s.custom_name}</span> },
+    { key: 'maps_to', header: 'Maps to', sortValue: (s) => fieldName(s.maps_to) || '', cell: (s) => <span className="cdm-arrow"><ArrowRight size={12} aria-hidden="true" />{fieldName(s.maps_to)}</span> },
+    { key: 'use_count', header: 'Times used', numeric: true, sortValue: (s) => Number(s.use_count) || 0, cell: (s) => fmtInt(Number(s.use_count) || 0) },
+    { key: 'last_used_at', header: 'Last used', sortValue: (s) => s.last_used_at || '', cell: (s) => (s.last_used_at ? formatDate(s.last_used_at) : <span className="cc-na">Never</span>) },
+    {
+      key: 'actions', header: '', sortable: false,
+      cell: (s) => canWrite
+        ? <button type="button" className="cc-icon-btn cdm-danger" onClick={(e) => { e.stopPropagation(); setDeleteTarget(s); setDeleteError('') }} aria-label={`Delete synonym ${s.custom_name}`} title="Delete"><Trash2 size={14} /></button>
+        : null,
+    },
+  ]
 
-  const synonymColumns = useMemo(() => [
-    { id: 'custom_name', header: t('customdata.synonyms.table.columnName'), accessorKey: 'custom_name',
-      cell: ({ getValue }) => <span className="font-mono text-[var(--text-primary)]">{getValue()}</span> },
-    { id: 'maps_to', header: t('customdata.synonyms.table.mapsTo'), accessorFn: (s) => fieldLabel(s.maps_to),
-      cell: ({ getValue }) => (
-        <span className="flex items-center gap-1.5">
-          <ArrowRight size={12} className="text-[var(--text-dim)]" aria-hidden="true" />
-          <span className="font-medium text-[var(--text-secondary)]">{getValue()}</span>
-        </span>
-      ) },
-    { id: 'use_count', header: t('customdata.synonyms.table.timesUsed'), accessorFn: (s) => Number(s.use_count) || 0, meta: { align: 'right' },
-      cell: ({ getValue }) => <span className="tabular-nums text-[var(--text-muted)]">{getValue().toLocaleString()}</span> },
-    { id: 'last_used_at', header: t('customdata.synonyms.table.lastUsed'), accessorFn: (s) => s.last_used_at || '',
-      cell: ({ row }) => <span className="text-xs text-[var(--text-muted)]">{row.original.last_used_at ? formatDate(row.original.last_used_at) : t('customdata.synonyms.table.never')}</span> },
-    { id: 'actions', header: '', enableSorting: false, meta: { export: false }, size: 64,
-      cell: ({ row }) => (
-        <button
-          type="button"
-          onClick={() => confirmDeleteSynonym(row.original)}
-          aria-label={`Delete synonym ${row.original.custom_name}`}
-          className="min-w-[44px] min-h-[44px] grid place-items-center rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
-        >
-          <Trash2 size={14} aria-hidden="true" />
-        </button>
-      ) },
-  ], [t, fieldLabel])
-
-  const recordColumns = useMemo(() => [
-    { id: 'asset_no', header: t('customdata.records.table.assetNo'), accessorFn: (r) => r.asset_no ?? 'N/A',
-      cell: ({ getValue }) => <span className="font-mono text-[var(--text-primary)]">{getValue()}</span> },
-    { id: 'serial_no', header: t('customdata.records.table.serialNo'), accessorFn: (r) => r.serial_no ?? 'N/A',
-      cell: ({ getValue }) => <span className="font-mono text-[var(--text-secondary)]">{getValue()}</span> },
-    { id: 'issue_date', header: t('customdata.records.table.date'), accessorFn: (r) => r.issue_date ?? 'N/A' },
-    { id: 'site', header: t('customdata.records.table.site'), accessorFn: (r) => r.site ?? 'N/A' },
-    { id: 'custom', header: t('customdata.records.table.customFields'), enableSorting: false,
-      accessorFn: (r) => Object.entries(r.extra_fields ?? {}).map(([k, v]) => `${k}: ${v}`).join('; '),
-      cell: ({ row }) => {
-        const ef = row.original.extra_fields ?? {}
-        const keys = Object.keys(ef)
+  const recordColumns = [
+    { key: 'asset_no', header: 'Asset no', sortable: false, cell: (r) => (r.asset_no ? <span className="cdm-mono">{r.asset_no}</span> : NA) },
+    { key: 'serial_no', header: 'Serial no', sortable: false, cell: (r) => (r.serial_no ? <span className="cdm-mono">{r.serial_no}</span> : NA) },
+    { key: 'issue_date', header: 'Date', sortable: false, cell: (r) => r.issue_date || NA },
+    { key: 'site', header: 'Site', sortable: false, cell: (r) => r.site || NA },
+    {
+      key: 'custom', header: 'Custom fields', sortable: false,
+      cell: (r) => {
+        const ef = r.extra_fields ?? {}; const keys = Object.keys(ef)
+        const preview = keys.slice(0, 3) // cell preview only; the full set opens below the table
         return (
-          <div className="flex flex-wrap gap-1">
-            {keys.slice(0, 3).map(k => (
-              <span key={k} className="bg-[var(--input-bg)] text-[var(--text-secondary)] px-2 py-0.5 rounded-full text-xs max-w-[160px] truncate" title={`${k}: ${ef[k]}`}>
-                <span className="font-medium text-[var(--text-primary)]">{k}</span>: {String(ef[k])}
-              </span>
-            ))}
-            {keys.length > 3 && <span className="text-[var(--text-dim)] text-xs">{t('customdata.records.table.moreCount', { count: keys.length - 3 })}</span>}
-          </div>
+          <span className="cdm-chips">
+            {preview.map((k) => <span key={k} className="cdm-chip" title={`${k}: ${ef[k]}`}><b>{k}</b>: {String(ef[k])}</span>)}
+            {keys.length > 3 && <span className="cc-na">+{keys.length - 3} more</span>}
+          </span>
         )
-      } },
-  ], [t])
+      },
+    },
+  ]
 
-  // ── Render ────────────────────────────────────────────────────────────────────
+  const ruleColumns = [
+    { key: 'name', header: 'Mapping', cell: (p) => <span className="cc-strong">{p.name}</span> },
+    { key: 'module', header: 'Module', cell: (p) => p.module || NA },
+    { key: 'source', header: 'Source system', sortValue: (p) => p.source_system || '', cell: (p) => p.source_system || NA },
+    { key: 'country', header: 'Country', sortValue: (p) => p.country || '', cell: (p) => p.country || 'All' },
+    { key: 'rules', header: 'Column rules', numeric: true, sortValue: (p) => p.rule_count, cell: (p) => fmtInt(p.rule_count) },
+    { key: 'used', header: 'Last used', sortValue: (p) => p.last_used_at || '', cell: (p) => (p.last_used_at ? formatDate(p.last_used_at) : <span className="cc-na">Never</span>) },
+    {
+      key: 'active', header: 'Status', sortValue: (p) => (p.active ? 1 : 0),
+      cell: (p) => (canWrite
+        ? <button type="button" className={`cc-pill ${p.active ? 'good' : 'muted'} cdm-pill-btn`} onClick={() => toggleProfile(p)} title={p.active ? 'Active: suggested on matching uploads. Click to switch off.' : 'Inactive: not suggested. Click to switch on.'}>{p.active ? 'Active' : 'Inactive'}</button>
+        : <span className={`cc-pill ${p.active ? 'good' : 'muted'}`}>{p.active ? 'Active' : 'Inactive'}</span>),
+    },
+  ]
+
+  const lineageColumns = [
+    { key: 'file', header: 'Upload', sortable: false, cell: (l) => (l.file ? <span className="cdm-trunc" title={l.file}>{l.file}</span> : NA) },
+    { key: 'module', header: 'Module', sortable: false, cell: (l) => l.module || NA },
+    { key: 'created', header: 'Loaded', sortable: false, cell: (l) => (l.created ? <span className="cdm-nowrap">{formatDateTime(l.created)}</span> : NA) },
+    { key: 'rows', header: 'Rows', numeric: true, sortable: false, cell: (l) => fmtInt(l.total) },
+    { key: 'imported', header: 'Imported', numeric: true, sortable: false, cell: (l) => (l.share == null ? fmtInt(l.imported) : `${fmtInt(l.imported)} (${fmtPct(l.share)})`) },
+    { key: 'issues', header: 'Conflicts / errors', numeric: true, sortable: false, cell: (l) => `${fmtInt(l.conflicts)} / ${fmtInt(l.errors)}` },
+    { key: 'status', header: 'Status', sortable: false, cell: (l) => <span className={`cc-pill ${l.tone}`}>{l.label}</span> },
+  ]
+
+  const tabsWithCounts = TABS.map((x) => ({
+    ...x,
+    count: x.key === 'fields' && fieldStats.length ? fieldStats.length : x.key === 'synonyms' && synonyms.length ? synonyms.length : undefined,
+  }))
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={t('customdata.title')}
-        subtitle={t('customdata.subtitle')}
-        icon={Database}
-        actions={
-          <button type="button" onClick={exportExtraFields} disabled={exporting} className="btn-secondary flex items-center gap-2 text-sm min-h-[44px] disabled:opacity-50">
-            {exporting ? <RefreshCw size={14} className="animate-spin" aria-hidden="true" /> : <Download size={14} aria-hidden="true" />} {t('customdata.actions.exportAll')}
+    <div className="cc cdm-page">
+      <header className="cdm-head">
+        <div className="cdm-head-copy">
+          <nav aria-label="Breadcrumb" className="cdm-crumb">Administration <ChevronRight size={13} aria-hidden="true" /> <span aria-current="page">Custom Data Manager</span></nav>
+          <h1>Custom Data Manager</h1>
+          <p>Every uploaded column is kept. Map custom columns to standard fields so the next upload maps them for you.</p>
+        </div>
+        <div className="cdm-head-actions">
+          <span className="cdm-scope" title="Country from the app scope selector">{activeCountry === 'All' ? 'All countries' : activeCountry}</span>
+          <button type="button" className="cc-btn-primary" onClick={exportExtraFields} disabled={exporting}>
+            {exporting ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Download size={15} aria-hidden="true" />} Export all custom data
           </button>
-        }
-      />
+        </div>
+      </header>
 
       {exportMsg && (
-        <div role="status" className={`text-sm rounded-lg px-3 py-2 border ${exportMsg.type === 'err' ? 'bg-red-900/25 border-red-700/40 text-red-300' : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-secondary)]'}`}>
-          {exportMsg.text}
+        <div className={`cc-card cdm-banner ${exportMsg.type === 'err' ? 'bad' : ''}`} role={exportMsg.type === 'err' ? 'alert' : 'status'}>
+          <Info size={18} aria-hidden="true" /><div><p>{exportMsg.text}</p></div>
+          <button type="button" className="cc-icon-btn" onClick={() => setExportMsg(null)} aria-label="Dismiss message"><X size={14} /></button>
         </div>
       )}
 
-      {/* ── Summary strip ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <StatTile index={0} icon={Layers} tone="info" label={t('customdata.stats.uniqueFields')} value={statsError ? 'N/A' : summary.uniqueFields.toLocaleString()} sub={statsError ? 'Could not be read' : `${summary.unmappedFields.toLocaleString()} not yet mapped`} />
-        <StatTile index={1} icon={Database} tone="accent" label={t('customdata.stats.recordsWithCustomData')} value={summary.recordCount == null ? 'N/A' : summary.recordCount.toLocaleString()} sub={summary.recordCount == null ? 'Count unavailable' : 'Distinct tyre records'} />
-        <StatTile index={2} icon={Hash} tone="neutral" label="Custom values captured" value={statsError ? 'N/A' : summary.fieldValues.toLocaleString()} sub="One record can carry several" />
-        <StatTile index={3} icon={Tag} tone="neutral" label={t('customdata.stats.permanentSynonyms')} value={synError ? 'N/A' : summary.synonyms.toLocaleString()} sub={summary.mappedShare == null ? 'No custom fields yet' : `${Math.round(summary.mappedShare * 100)}% of fields mapped`} />
-        <StatTile index={4} icon={Link2} tone="neutral" label={t('customdata.stats.autoMappedOnUpload')} value={synError ? 'N/A' : summary.autoMapped.toLocaleString()} />
+      <div className="cc-kpis cdm-kpis">
+        {kpis.map((k, i) => <Kpi key={i} {...k} loading={(i < 4 && (statsState.loading || (i === 1 && synState.loading))) || (i === 4 && batches.loading)} />)}
       </div>
 
-      {/* ── How it works banner ── */}
-      <div className="card">
-        <div className="flex items-start gap-3">
-          <Info size={18} className="text-[var(--accent)] flex-shrink-0 mt-0.5" aria-hidden="true" />
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-[var(--text-primary)]">{t('customdata.banner.title')}</p>
-            <p className="text-sm text-[var(--text-muted)]">
-              {t('customdata.banner.bodyPart1')}<strong className="text-[var(--text-secondary)]">{t('customdata.banner.customData')}</strong>{t('customdata.banner.bodyPart2')}<strong className="text-[var(--text-secondary)]">{t('customdata.banner.permanentSynonym')}</strong>{t('customdata.banner.bodyPart3')}
-            </p>
-          </div>
-        </div>
+      <div className="cc-card cdm-tabbar">
+        <Tabs tabs={tabsWithCounts} value={tab} onChange={setTab} label="Custom data sections" />
       </div>
 
-      {/* ── Tabs ── */}
-      <div role="tablist" aria-label="Custom data sections" className="flex flex-wrap gap-1 bg-[var(--surface-1)]/60 rounded-xl p-1 w-fit max-w-full border border-[var(--input-border)]">
-        {TABS.map((tabKey, i) => (
-          <button
-            key={tabKey}
-            type="button"
-            role="tab"
-            aria-selected={tab === i}
-            onClick={() => setTab(i)}
-            className={`px-4 min-h-[44px] rounded-lg text-sm font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${
-              tab === i ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-            }`}
-          >
-            {t(`customdata.tabs.${tabKey}`)}
-            {i === 0 && fieldStats.length > 0 && (
-              <span className="ml-2 text-xs bg-[var(--input-bg)] text-[var(--text-secondary)] px-1.5 py-0.5 rounded-full">{fieldStats.length}</span>
-            )}
-            {i === 1 && synonyms.length > 0 && (
-              <span className="ml-2 text-xs bg-[var(--input-bg)] text-[var(--text-secondary)] px-1.5 py-0.5 rounded-full">{synonyms.length}</span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      <AnimatePresence mode="wait">
-
-        {/* ══ TAB 0: Custom Fields ══════════════════════════════════════════════ */}
-        {tab === 0 && (
-          <motion.div key="fields" initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-8 }} className="space-y-4">
-
-            {/* Search + refresh */}
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="relative flex-1 min-w-[180px] max-w-xs">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
-                <input
-                  aria-label="Search custom fields"
-                  className="input pl-8 text-sm w-full"
-                  placeholder={t('customdata.customFields.searchPlaceholder')}
-                  value={statsSearch}
-                  onChange={e => setStatsSearch(e.target.value)}
-                />
-              </div>
-              <select aria-label="Mapping state" className="input text-sm w-auto min-h-[44px]" value={statsMapping} onChange={e => setStatsMapping(e.target.value)}>
+      {tab === 'fields' && (
+        <div className="cdm-row">
+          <section className="cc-card" aria-label="Custom field registry">
+            <div className="cc-card-head">
+              <div><h2 className="cc-card-title">Custom field registry</h2><p className="cc-card-sub">Columns from your uploads that are not standard fields. Select one to map it.</p></div>
+              <button type="button" className="cc-icon-btn" onClick={() => { loadFieldStats(); loadSynonyms() }} aria-label="Refresh custom fields" title="Refresh"><RefreshCw size={14} className={statsState.loading ? 'animate-spin' : ''} /></button>
+            </div>
+            <div className="cc-filters cdm-filters">
+              <label className="cc-search">
+                <Search size={15} aria-hidden="true" />
+                <input aria-label="Search custom fields" placeholder="Search field or mapped name" value={search} onChange={(e) => setSearch(e.target.value)} />
+              </label>
+              <select className="cc-select" aria-label="Mapping state" value={status} onChange={(e) => setStatus(e.target.value)}>
                 <option value="all">All fields</option>
-                <option value="unmapped">Not yet mapped</option>
-                <option value="mapped">Mapped to a field</option>
+                <option value="unmapped">Unmapped</option>
+                <option value="mapped">Mapped</option>
               </select>
-              <button type="button" onClick={loadFieldStats} aria-label="Refresh custom fields" className="btn-secondary min-w-[44px] min-h-[44px] grid place-items-center"><RefreshCw size={14} aria-hidden="true" /></button>
-              <span className="text-xs text-[var(--text-muted)]">{filteredStats.length.toLocaleString()} of {fieldStats.length.toLocaleString()} fields</span>
+              <span className="cdm-count">{fmtInt(filteredRegistry.length)} of {fmtInt(registry.length)} fields</span>
             </div>
+            <KitTable
+              columns={registryColumns}
+              rows={filteredRegistry}
+              loading={statsState.loading && !fieldStats.length}
+              error={statsState.error}
+              onRetry={loadFieldStats}
+              getRowId={(r) => r.key}
+              onRowClick={(r) => setSelectedKey(r.key)}
+              empty={registry.length ? 'No custom field matches these filters.' : 'No custom fields yet. Columns that do not match a standard field appear here after an upload.'}
+              scroll
+            />
+          </section>
 
-            {statsError ? (
-              <div role="alert" className="card text-center py-12">
-                <AlertTriangle size={28} className="text-red-400 mx-auto mb-3" aria-hidden="true" />
-                <p className="text-[var(--text-primary)] font-medium">Custom fields could not be read</p>
-                <p className="text-[var(--text-muted)] text-sm mt-1">{statsError}</p>
-                <button type="button" onClick={loadFieldStats} className="btn-secondary mt-4 min-h-[44px]">Retry</button>
-              </div>
-            ) : loading ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="card space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-[var(--input-bg)]/40 animate-pulse" />
-                        <div className="h-4 w-32 rounded bg-[var(--input-bg)]/40 animate-pulse" />
-                      </div>
-                      <div className="h-3 w-20 rounded bg-[var(--input-bg)]/40 animate-pulse" />
-                    </div>
-                    <div className="flex gap-1.5 flex-wrap">
-                      {Array.from({ length: 3 }).map((_, j) => (
-                        <div key={j} className="h-5 w-16 rounded-full bg-[var(--input-bg)]/40 animate-pulse" />
-                      ))}
-                    </div>
-                    <div className="flex gap-2">
-                      <div className="h-7 w-28 rounded-lg bg-[var(--input-bg)]/40 animate-pulse" />
-                      <div className="h-7 w-24 rounded-lg bg-[var(--input-bg)]/40 animate-pulse" />
-                      <div className="h-7 w-24 rounded-lg bg-[var(--input-bg)]/40 animate-pulse" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : filteredStats.length === 0 ? (
-              <div className="card text-center py-16">
-                <Database size={32} className="text-[var(--text-dim)] mx-auto mb-3" aria-hidden="true" />
-                {fieldStats.length > 0 ? (
-                  <>
-                    <p className="text-[var(--text-muted)] font-medium">No custom field matches these filters.</p>
-                    <button type="button" onClick={() => { setStatsSearch(''); setStatsMapping('all') }} className="btn-secondary mt-4 min-h-[44px]">Clear filters</button>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-[var(--text-muted)] font-medium">{t('customdata.customFields.empty.title')}</p>
-                    <p className="text-[var(--text-dim)] text-sm mt-1">{t('customdata.customFields.empty.body')}</p>
-                  </>
-                )}
-              </div>
+          <Card title="Field intelligence" sub={selected ? undefined : 'Select a field in the registry.'} className="cdm-intel">
+            {!selected ? (
+              <div className="cc-empty">{statsState.loading ? 'Loading fields...' : 'No field selected.'}</div>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                {statsPager.pageRows.map(stat => {
-                  const hasSynonym = synonymMap[stat.field_key.toLowerCase()]
-                  const isPromoting = promoteKey === stat.field_key
-                  const isBackfilling = backfillKey === stat.field_key
-
-                  return (
-                    <motion.div
-                      key={stat.field_key}
-                      layout
-                      className={`card transition-all ${hasSynonym ? 'border-green-800/40' : ''}`}
-                    >
-                      <div className="flex items-start justify-between gap-3 mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${hasSynonym ? 'bg-green-500' : 'bg-blue-500'}`} />
-                          <span className="font-mono text-sm font-semibold text-[var(--text-primary)]">{stat.field_key}</span>
-                          {hasSynonym && (
-                            <span className="text-xs bg-green-900/50 text-green-300 border border-green-700/40 px-2 py-0.5 rounded-full flex items-center gap-1">
-                              <Check size={10} /> {t('customdata.customFields.autoMapsTo')} <strong>{hasSynonym.maps_to}</strong>
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-xs text-[var(--text-muted)] flex-shrink-0">{t('customdata.customFields.recordsCount', { count: Number(stat.record_count).toLocaleString() })}</span>
-                      </div>
-
-                      {/* Sample values */}
-                      {stat.sample_vals?.filter(Boolean).length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 mb-3">
-                          {stat.sample_vals.filter(Boolean).slice(0, 5).map((v, i) => (
-                            <span key={i} className="text-xs bg-[var(--input-bg)]/80 text-[var(--text-secondary)] px-2 py-0.5 rounded-full max-w-[160px] truncate">{v}</span>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Actions */}
-                      {!isPromoting && !isBackfilling && (
-                        <div className="flex flex-wrap gap-2">
-                          {!hasSynonym && (
-                            <button
-                              onClick={() => { setPromoteKey(stat.field_key); setPromoteTarget('') }}
-                              className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-900/30 text-purple-300 border border-purple-700/40 hover:bg-purple-900/50"
-                            >
-                              <Link2 size={11} /> {t('customdata.customFields.actions.createSynonym')}
-                            </button>
-                          )}
-                          <button
-                            onClick={() => { setBackfillKey(stat.field_key); setBackfillTarget(''); setBackfillResult(null) }}
-                            className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-900/30 text-blue-300 border border-blue-700/40 hover:bg-blue-900/50"
-                          >
-                            <ArrowRight size={11} /> {t('customdata.customFields.actions.copyToField')}
-                          </button>
-                          <button
-                            onClick={() => { setFilterKey(stat.field_key); setFilterVal(''); setTab(2) }}
-                            className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--input-bg)]/50 text-[var(--text-secondary)] border border-[var(--input-border)] hover:bg-[var(--input-bg-hover)]"
-                          >
-                            <Eye size={11} /> {t('customdata.customFields.actions.browseRecords')}
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Promote panel */}
-                      {isPromoting && (
-                        <div className="mt-2 p-3 rounded-lg bg-purple-900/20 border border-purple-700/40 space-y-2">
-                          <p className="text-xs text-purple-300 font-medium">{t('customdata.customFields.promote.promptBefore')}<span className="font-mono">{stat.field_key}</span>{t('customdata.customFields.promote.promptAfter')}</p>
-                          <select className="input text-xs w-full" value={promoteTarget} onChange={e => setPromoteTarget(e.target.value)}>
-                            <option value="">{t('customdata.customFields.promote.choose')}</option>
-                            {CANONICAL_FIELDS.map(f => <option key={f.key} value={f.key}>{t(`customdata.fields.${f.key}`)}</option>)}
-                          </select>
-                          <div className="flex gap-2">
-                            <button onClick={() => promote(stat.field_key, promoteTarget)} disabled={!promoteTarget} className="btn-primary text-xs py-1.5 px-3 disabled:opacity-40">{t('customdata.customFields.promote.save')}</button>
-                            <button onClick={() => setPromoteKey(null)} className="btn-secondary text-xs py-1.5 px-3">{t('customdata.customFields.promote.cancel')}</button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Backfill panel */}
-                      {isBackfilling && (
-                        <div className="mt-2 p-3 rounded-lg bg-blue-900/20 border border-blue-700/40 space-y-2">
-                          <p className="text-xs text-blue-300 font-medium">
-                            {t('customdata.customFields.backfill.promptBefore')}<span className="font-mono">{stat.field_key}</span>{t('customdata.customFields.backfill.promptAfter')}
-                          </p>
-                          <p className="text-xs text-[var(--text-muted)]">{t('customdata.customFields.backfill.hint')}</p>
-                          <select className="input text-xs w-full" value={backfillTarget} onChange={e => setBackfillTarget(e.target.value)}>
-                            <option value="">{t('customdata.customFields.backfill.chooseTarget')}</option>
-                            {CANONICAL_FIELDS.map(f => <option key={f.key} value={f.key}>{t(`customdata.fields.${f.key}`)}</option>)}
-                          </select>
-                          {backfillError && <p role="alert" className="text-xs text-red-300">{backfillError}</p>}
-                          {backfillResult && (
-                            <p className="text-xs text-green-300 flex items-center gap-1"><Check size={11} aria-hidden="true" /> {t('customdata.customFields.backfill.result', { count: backfillResult.updated.toLocaleString() })}</p>
-                          )}
-                          <div className="flex gap-2">
-                            <button
-                              onClick={runBackfill}
-                              disabled={!backfillTarget || backfillRunning}
-                              className="btn-primary text-xs py-1.5 px-3 disabled:opacity-40 flex items-center gap-1.5"
-                            >
-                              {backfillRunning ? <><RefreshCw size={11} className="animate-spin" /> {t('customdata.customFields.backfill.running')}</> : t('customdata.customFields.backfill.run')}
-                            </button>
-                            <button onClick={() => { setBackfillKey(null); setBackfillResult(null); setBackfillError('') }} className="btn-secondary text-xs py-1.5 px-3">{t('customdata.customFields.backfill.done')}</button>
-                          </div>
-                        </div>
-                      )}
-                    </motion.div>
-                  )
-                })}
-                <TablePagination {...statsPager} />
-              </div>
-            )}
-          </motion.div>
-        )}
-
-        {/* ══ TAB 1: Synonyms ══════════════════════════════════════════════════ */}
-        {tab === 1 && (
-          <motion.div key="synonyms" initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-8 }} className="space-y-4">
-
-            {/* Add new synonym */}
-            <div className="card border-green-800/40">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1 flex items-center gap-2">
-                <Plus size={14} className="text-green-400" /> {t('customdata.synonyms.add.title')}
-              </h3>
-              <p className="text-xs text-[var(--text-muted)] mb-3">
-                {t('customdata.synonyms.add.description')}
-              </p>
-              {addError && <p className="text-xs text-red-400 mb-2">{addError}</p>}
-              <div className="flex flex-wrap gap-3 items-end">
-                <div className="flex-1 min-w-[180px]">
-                  <label className="label text-xs">{t('customdata.synonyms.add.columnNameLabel')}</label>
-                  <input className="input text-sm" placeholder={t('customdata.synonyms.add.columnNamePlaceholder')}
-                    value={newCustom} onChange={e => { setNewCustom(e.target.value); setAddError('') }} />
-                </div>
-                <div className="text-[var(--text-muted)] self-center pt-4"><ArrowRight size={16} /></div>
-                <div className="flex-1 min-w-[180px]">
-                  <label className="label text-xs">{t('customdata.synonyms.add.mapsToLabel')}</label>
-                  <select className="input text-sm" value={newMapsTo} onChange={e => setNewMapsTo(e.target.value)}>
-                    <option value="">{t('customdata.synonyms.add.select')}</option>
-                    {CANONICAL_FIELDS.map(f => <option key={f.key} value={f.key}>{t(`customdata.fields.${f.key}`)}</option>)}
-                  </select>
-                </div>
-                <button
-                  onClick={() => addSynonym(newCustom, newMapsTo)}
-                  disabled={addSaving || !newCustom.trim() || !newMapsTo}
-                  className="btn-primary disabled:opacity-40 flex items-center gap-2 self-end"
-                >
-                  {addSaving ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
-                  {t('customdata.synonyms.add.save')}
-                </button>
-              </div>
-            </div>
-
-            {/* Synonym list */}
-            {synError ? (
-              <div role="alert" className="card text-center py-12">
-                <AlertTriangle size={28} className="text-red-400 mx-auto mb-3" aria-hidden="true" />
-                <p className="text-[var(--text-primary)] font-medium">Synonyms could not be read</p>
-                <p className="text-[var(--text-muted)] text-sm mt-1">{synError}</p>
-                <button type="button" onClick={loadSynonyms} className="btn-secondary mt-4 min-h-[44px]">Retry</button>
-              </div>
-            ) : !synLoading && synonyms.length === 0 ? (
-              <div className="card text-center py-12">
-                <Tag size={28} className="text-[var(--text-dim)] mx-auto mb-3" aria-hidden="true" />
-                <p className="text-[var(--text-muted)] font-medium">{t('customdata.synonyms.empty.title')}</p>
-                <p className="text-[var(--text-dim)] text-sm mt-1">{t('customdata.synonyms.empty.body')}</p>
-              </div>
-            ) : (
-              <div className="card space-y-3">
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="relative flex-1 min-w-[180px] max-w-xs">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
-                    <input aria-label="Search synonyms" className="input pl-8 text-sm w-full" placeholder="Search column or field" value={synSearch} onChange={e => setSynSearch(e.target.value)} />
-                  </div>
-                  <span className="text-xs text-[var(--text-muted)]">{filteredSynonyms.length.toLocaleString()} of {synonyms.length.toLocaleString()} synonyms</span>
-                </div>
-                <EnterpriseTable
-                  columns={synonymColumns}
-                  data={synonymsPager.pageRows}
-                  getRowId={(s) => String(s.id)}
-                  loading={synLoading}
-                  enableGlobalFilter={false}
-                  enableColumnFilters={false}
-                  exportFileName={reportFileName('Custom Data synonyms', reportDateLabel())}
-                  virtual
-                  maxHeight={560}
-                  emptyMessage="No synonym matches this search."
-                />
-                <TablePagination {...synonymsPager} />
-              </div>
-            )}
-
-            {/* How synonyms work */}
-            <div className="card border-[var(--input-border)]/40 bg-[var(--input-bg)]/20">
-              <div className="flex items-start gap-3">
-                <Zap size={16} className="text-yellow-400 flex-shrink-0 mt-0.5" />
+              <div className="cdm-intel-body">
+                <p className="cdm-intel-title">Selected: <span className="cdm-mono">{selected.key}</span></p>
+                <dl className="cdm-facts">
+                  <div><dt>Records carrying it</dt><dd>{fmtInt(selected.records)}</dd></div>
+                  <div><dt>Looks like</dt><dd>{selected.type || 'N/A'}</dd></div>
+                  <div><dt>Mapped to</dt><dd>{selected.mappedTo ? fieldName(selected.mappedTo) : 'Not mapped'}</dd></div>
+                  <div><dt>Auto-mapped on upload</dt><dd>{selected.synonym ? `${fmtInt(Number(selected.synonym.use_count) || 0)} times` : 'N/A'}</dd></div>
+                  <div><dt>Last auto-mapped</dt><dd>{selected.synonym?.last_used_at ? formatDate(selected.synonym.last_used_at) : 'N/A'}</dd></div>
+                </dl>
                 <div>
-                  <p className="text-sm font-semibold text-[var(--text-secondary)] mb-1">{t('customdata.synonyms.info.title')}</p>
-                  <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-                    {t('customdata.synonyms.info.body')}
-                  </p>
+                  <p className="cdm-label">Sample values</p>
+                  {selected.samples.length
+                    ? <span className="cdm-chips">{selected.samples.map((v, i) => <span key={i} className="cdm-chip">{String(v)}</span>)}</span>
+                    : <p className="cc-na">No sample values returned.</p>}
                 </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
 
-        {/* ══ TAB 2: Browse Records ═════════════════════════════════════════════ */}
-        {tab === 2 && (
-          <motion.div key="records" initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-8 }} className="space-y-4">
-
-            {/* Filters */}
-            <div className="card">
-              <div className="flex flex-wrap gap-3 items-end">
-                <div className="flex-1 min-w-[180px]">
-                  <label htmlFor="cd-filter-key" className="label text-xs">{t('customdata.records.filters.byFieldLabel')}</label>
-                  <select id="cd-filter-key" className="input text-sm" value={filterKey} onChange={e => { setFilterKey(e.target.value); setFilterVal(''); setRecPage(0) }}>
-                    <option value="">{t('customdata.records.filters.allFields')}</option>
-                    {fieldStats.map(f => <option key={f.field_key} value={f.field_key}>{f.field_key} ({Number(f.record_count).toLocaleString()})</option>)}
-                  </select>
-                </div>
-                {filterKey && (
-                  <div className="flex-1 min-w-[180px]">
-                    <label htmlFor="cd-filter-val" className="label text-xs">{t('customdata.records.filters.valueLabel')}</label>
-                    <input id="cd-filter-val" className="input text-sm" placeholder={t('customdata.records.filters.valuePlaceholder')}
-                      value={filterVal} onChange={e => { setFilterVal(e.target.value); setRecPage(0) }} />
+                {canWrite && !selected.mappedTo && (
+                  <div className="cdm-action">
+                    <label htmlFor="cdm-map" className="cdm-label">Map this column to a standard field</label>
+                    <select id="cdm-map" className="cc-select" value={promoteTarget} onChange={(e) => setPromoteTarget(e.target.value)}>
+                      <option value="">Choose a field</option>
+                      {CANONICAL_FIELDS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+                    </select>
+                    <p className="cc-na">Future uploads with a column named {selected.key} will fill this field automatically.</p>
                   </div>
                 )}
-                <button type="button" onClick={() => { setFilterKey(''); setFilterVal(''); setRecPage(0) }} className="btn-secondary text-xs self-end flex items-center gap-1.5 min-h-[44px]">
-                  <X size={12} /> {t('customdata.records.filters.clear')}
-                </button>
-                <button type="button" onClick={exportExtraFields} disabled={exporting} className="btn-secondary text-xs self-end flex items-center gap-1.5 min-h-[44px] disabled:opacity-50">
-                  <Download size={12} aria-hidden="true" /> {t('customdata.records.filters.export')}
-                </button>
-              </div>
-            </div>
-
-            {/* Records table (server-paged: only this page is loaded) */}
-            <div className="card space-y-3">
-              <p className="text-sm text-[var(--text-muted)]">
-                <span className="text-[var(--text-primary)] font-semibold">{totalRecords.toLocaleString()}</span> {t('customdata.records.countSuffix')}
-                <span className="ml-2 text-xs">Select a row to see all of its custom values.</span>
-              </p>
-              {recError && <p role="alert" className="text-sm text-red-400">{recError}</p>}
-              <EnterpriseTable
-                columns={recordColumns}
-                data={records}
-                getRowId={(r) => String(r.id)}
-                loading={recLoading}
-                enableGlobalFilter={false}
-                enableColumnFilters={false}
-                enableExport={false}
-                manualPagination
-                pageIndex={recPage}
-                pageCount={totalPages}
-                totalRows={totalRecords}
-                pageSize={REC_PAGE_SIZE}
-                pageSizeOptions={[REC_PAGE_SIZE]}
-                onPageChange={(p) => { setRecPage(p); setSelectedRecord(null) }}
-                onRowClick={(r) => setSelectedRecord((cur) => (cur?.id === r.id ? null : r))}
-                emptyMessage={filterKey ? 'No record carries this custom field value.' : t('customdata.records.empty')}
-              />
-              {selectedRecord && (
-                <div className="rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)]/40 p-4">
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <p className="text-sm font-semibold text-[var(--text-primary)]">
-                      Custom values for {selectedRecord.asset_no ?? 'N/A'} {selectedRecord.serial_no ? `| ${selectedRecord.serial_no}` : ''}
-                    </p>
-                    <button type="button" onClick={() => setSelectedRecord(null)} aria-label="Close record details" className="min-w-[44px] min-h-[44px] grid place-items-center rounded text-[var(--text-muted)] hover:text-[var(--text-primary)]">
-                      <X size={16} aria-hidden="true" />
+                {canWrite && (
+                  <div className="cdm-action">
+                    <label htmlFor="cdm-copy" className="cdm-label">Copy existing values into a standard field</label>
+                    <select id="cdm-copy" className="cc-select" value={backfillTarget} onChange={(e) => { setBackfillTarget(e.target.value); setBackfillResult(null) }}>
+                      <option value="">Choose a field</option>
+                      {CANONICAL_FIELDS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+                    </select>
+                    <p className="cc-na">Only records where that field is empty are filled; nothing is overwritten.</p>
+                    {backfillResult && <p className="cdm-ok"><Check size={13} aria-hidden="true" /> Copied {fmtInt(backfillResult.updated)} of {fmtInt(backfillResult.total)} records.</p>}
+                  </div>
+                )}
+                {actionError && <p role="alert" className="cdm-err">{actionError}</p>}
+                <div className="cdm-intel-actions">
+                  {canWrite && !selected.mappedTo && (
+                    <button type="button" className="cc-btn-primary" onClick={acceptMapping} disabled={!promoteTarget || addSaving}>
+                      <Link2 size={14} aria-hidden="true" /> {addSaving ? 'Saving...' : 'Accept mapping'}
                     </button>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                    {Object.entries(selectedRecord.extra_fields ?? {}).map(([k, v]) => (
-                      <div key={k} className="bg-[var(--surface-1)]/60 rounded-lg px-3 py-2 border border-[var(--input-border)]/40">
-                        <p className="text-[var(--text-primary)] text-xs font-medium truncate" title={k}>{k}</p>
-                        <p className="text-[var(--text-secondary)] text-xs mt-0.5 break-all">{String(v)}</p>
-                      </div>
-                    ))}
-                  </div>
+                  )}
+                  {canWrite && (
+                    <button type="button" className="cc-btn-ghost" onClick={runBackfill} disabled={!backfillTarget || backfillRunning}>
+                      {backfillRunning ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <ArrowRight size={14} aria-hidden="true" />} Copy values
+                    </button>
+                  )}
+                  <button type="button" className="cc-btn-ghost" onClick={() => { setFilterKey(selected.key); setFilterVal(''); setRecPage(0); setTab('records') }}>
+                    <Eye size={14} aria-hidden="true" /> Browse records
+                  </button>
                 </div>
-              )}
-            </div>
-          </motion.div>
-        )}
-
-      </AnimatePresence>
-
-      {/* ── Delete Synonym Confirmation ─────────────────────────────────────── */}
-      <Modal
-        open={!!deleteTarget}
-        onClose={deleting ? undefined : closeDeleteSynonym}
-        title={t('customdata.synonyms.delete.title')}
-        size="md"
-        footer={(
-          <>
-            <button onClick={closeDeleteSynonym} disabled={deleting} className="btn-secondary disabled:opacity-50">{t('customdata.synonyms.delete.cancel')}</button>
-            <button onClick={deleteSynonym} disabled={deleting} className="btn-danger flex items-center gap-2 disabled:opacity-50">
-              <Trash2 size={15} /> {deleting ? t('customdata.synonyms.delete.deleting') : t('customdata.synonyms.delete.confirm')}
-            </button>
-          </>
-        )}
-      >
-        {deleteTarget && (
-          <>
-            <div className="flex gap-3 mb-4">
-              <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-[var(--text-primary)] font-medium">
-                  {t('customdata.synonyms.delete.questionBefore')}
-                  <span className="font-mono text-yellow-300">{deleteTarget.custom_name}</span>
-                  {t('customdata.synonyms.delete.questionAfter')}
-                </p>
-                <p className="text-[var(--text-muted)] text-sm mt-1">
-                  {t('customdata.synonyms.delete.warningBefore')}
-                  <span className="text-green-300 font-medium">
-                    {CANONICAL_FIELDS.find(f => f.key === deleteTarget.maps_to) ? t(`customdata.fields.${deleteTarget.maps_to}`) : deleteTarget.maps_to}
-                  </span>
-                  {t('customdata.synonyms.delete.warningAfter')}
-                </p>
+                {!canWrite && <p className="cc-na">Only Admin and Manager roles can change mappings.</p>}
               </div>
-            </div>
-            {deleteError && (
-              <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5">{deleteError}</p>
             )}
-          </>
+          </Card>
+        </div>
+      )}
+
+      {tab === 'synonyms' && (
+        <div className="cdm-stack">
+          {canWrite && (
+            <Card title="Add a synonym" sub="When an upload has this column name, its values go straight into the chosen field.">
+              <div className="cc-filters cdm-add">
+                <label className="cc-field"><span>Column name in your file</span>
+                  <input className="cc-select" placeholder="e.g. Tyre Brand Name" value={newCustom} onChange={(e) => { setNewCustom(e.target.value); setAddError('') }} />
+                </label>
+                <ArrowRight size={16} className="cdm-add-arrow" aria-hidden="true" />
+                <label className="cc-field"><span>Maps to</span>
+                  <select className="cc-select" value={newMapsTo} onChange={(e) => setNewMapsTo(e.target.value)}>
+                    <option value="">Choose a field</option>
+                    {CANONICAL_FIELDS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+                  </select>
+                </label>
+                <button type="button" className="cc-btn-primary" disabled={addSaving || !newCustom.trim() || !newMapsTo}
+                  onClick={async () => { if (!(await addSynonym(newCustom, newMapsTo))) { setNewCustom(''); setNewMapsTo('') } }}>
+                  {addSaving ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Plus size={14} aria-hidden="true" />} Save synonym
+                </button>
+              </div>
+              {addError && <p role="alert" className="cdm-err">{addError}</p>}
+            </Card>
+          )}
+          <section className="cc-card" aria-label="Synonyms">
+            <div className="cc-filters cdm-filters">
+              <label className="cc-search">
+                <Search size={15} aria-hidden="true" />
+                <input aria-label="Search synonyms" placeholder="Search column or field" value={synSearch} onChange={(e) => setSynSearch(e.target.value)} />
+              </label>
+              <span className="cdm-count">{fmtInt(filteredSynonyms.length)} of {fmtInt(synonyms.length)} synonyms</span>
+            </div>
+            <KitTable
+              columns={synonymColumns}
+              rows={filteredSynonyms}
+              loading={synState.loading && !synonyms.length}
+              error={synState.error}
+              onRetry={loadSynonyms}
+              getRowId={(s) => String(s.id)}
+              empty={synonyms.length ? 'No synonym matches this search.' : 'No synonyms yet. Map a custom field or add one above.'}
+              scroll
+            />
+          </section>
+        </div>
+      )}
+
+      {tab === 'records' && (
+        <section className="cc-card" aria-label="Records with custom data">
+          <div className="cc-filters cdm-filters">
+            <select className="cc-select" aria-label="Custom field" value={filterKey} onChange={(e) => { setFilterKey(e.target.value); setFilterVal(''); setRecPage(0); setSelectedRecord(null) }}>
+              <option value="">All custom fields</option>
+              {fieldStats.map((f) => <option key={f.field_key} value={f.field_key}>{f.field_key} ({fmtInt(Number(f.record_count))})</option>)}
+            </select>
+            {filterKey && (
+              <label className="cc-search">
+                <Search size={15} aria-hidden="true" />
+                <input aria-label="Value contains" placeholder="Value contains" value={filterVal} onChange={(e) => { setFilterVal(e.target.value); setRecPage(0) }} />
+              </label>
+            )}
+            {(filterKey || filterVal) && (
+              <button type="button" className="cc-btn-ghost" onClick={() => { setFilterKey(''); setFilterVal(''); setRecPage(0) }}><X size={14} aria-hidden="true" /> Clear</button>
+            )}
+            <span className="cdm-count">{recError ? 'Count unavailable' : `${fmtInt(totalRecords)} records`}</span>
+          </div>
+          <KitTable
+            columns={recordColumns}
+            rows={records}
+            loading={recLoading && !records.length}
+            error={recError || null}
+            onRetry={loadRecords}
+            getRowId={(r) => String(r.id)}
+            manualPagination
+            showPagination={false}
+            pageIndex={recPage}
+            pageCount={recPages}
+            totalRows={totalRecords}
+            pageSize={REC_PAGE_SIZE}
+            onRowClick={(r) => setSelectedRecord((cur) => (cur?.id === r.id ? null : r))}
+            empty={filterKey ? 'No record carries this custom field value.' : 'No records carry custom data.'}
+            scroll
+          />
+          {!recError && totalRecords > 0 && (
+            <Pager page={recPage} pageSize={REC_PAGE_SIZE} total={totalRecords} onPage={(p) => { setRecPage(Math.max(0, Math.min(recPages - 1, p))); setSelectedRecord(null) }} noun="records" />
+          )}
+          {selectedRecord && (
+            <div className="cdm-record">
+              <div className="cdm-record-head">
+                <b>Custom values for {selectedRecord.asset_no || 'N/A'}{selectedRecord.serial_no ? ` | ${selectedRecord.serial_no}` : ''}</b>
+                <button type="button" className="cc-icon-btn" onClick={() => setSelectedRecord(null)} aria-label="Close record details"><X size={14} /></button>
+              </div>
+              <dl className="cdm-record-grid">
+                {Object.entries(selectedRecord.extra_fields ?? {}).map(([k, v]) => <div key={k}><dt title={k}>{k}</dt><dd>{String(v)}</dd></div>)}
+              </dl>
+            </div>
+          )}
+        </section>
+      )}
+
+      {tab === 'rules' && (
+        <Card title="Saved mapping rules" sub="Formats remembered by Data Intake. Active ones are applied automatically to matching uploads."
+          action={<Link className="cc-link" to="/data-intake">Open Data Intake <ArrowRight size={13} aria-hidden="true" /></Link>}>
+          <CardState state={{ ...profiles, loading: profiles.loading || (!profiles.data && !profiles.error), retry: loadProfiles }}
+            empty={profiles.data && !profiles.data.length ? 'No saved mapping rules yet. They are created when you save a mapping during an upload.' : null}>
+            <KitTable columns={ruleColumns} rows={profiles.data || []} getRowId={(p) => String(p.id)} scroll />
+          </CardState>
+        </Card>
+      )}
+
+      {tab === 'usage' && (
+        <Card title="Where custom data sits" sub="Custom fields ranked by how many tyre records carry them (top 12).">
+          <CardState state={{ ...statsState, retry: loadFieldStats }} empty={!statsState.loading && !registry.length ? 'No custom fields yet.' : null}>
+            <div className="cdm-bars" role="list">
+              {bars.map((b) => (
+                <button key={b.key} type="button" role="listitem" className="cdm-bar" onClick={() => { setSelectedKey(b.key); setTab('fields') }} title={`${b.key}: ${b.records} records`}>
+                  <span className="cdm-bar-label cdm-mono">{b.key}</span>
+                  <span className="cc-bar-track"><i style={{ width: `${b.pct}%`, background: b.status === 'mapped' ? 'var(--cc-green)' : 'var(--cc-amber)' }} /></span>
+                  <b>{fmtInt(b.records)}</b>
+                </button>
+              ))}
+            </div>
+            <p className="cdm-note"><i className="cdm-dot good" /> Mapped <i className="cdm-dot warn" /> Unmapped. Select a bar to open the field.</p>
+          </CardState>
+        </Card>
+      )}
+
+      <Card title="Data preservation and lineage" sub="How each import batch kept its rows (latest 200 batches in scope).">
+        <CardState state={{ ...batches, retry: loadBatches }} empty={scopedBatches && !scopedBatches.length ? 'No import batches recorded yet.' : null}>
+          <KitTable columns={lineageColumns} rows={lineage} getRowId={(l) => String(l.id)} compact scroll />
+        </CardState>
+      </Card>
+
+      <Modal open={!!deleteTarget} onClose={deleting ? undefined : () => { setDeleteTarget(null); setDeleteError('') }} title={t('customdata.synonyms.delete.title')} size="md"
+        footer={<div className="cdm-modal-foot">
+          <button type="button" onClick={() => { setDeleteTarget(null); setDeleteError('') }} disabled={deleting} className="cc-btn-ghost">{t('customdata.synonyms.delete.cancel')}</button>
+          <button type="button" onClick={deleteSynonym} disabled={deleting} className="cc-btn-primary cdm-danger-fill"><Trash2 size={14} aria-hidden="true" /> {deleting ? t('customdata.synonyms.delete.deleting') : t('customdata.synonyms.delete.confirm')}</button>
+        </div>}>
+        {deleteTarget && (
+          <div className="cdm-form">
+            <p>{t('customdata.synonyms.delete.questionBefore')}<span className="cdm-mono">{deleteTarget.custom_name}</span>{t('customdata.synonyms.delete.questionAfter')}</p>
+            <p className="cc-na">{t('customdata.synonyms.delete.warningBefore')}<b>{fieldName(deleteTarget.maps_to)}</b>{t('customdata.synonyms.delete.warningAfter')}</p>
+            {deleteError && <p role="alert" className="cdm-err">{deleteError}</p>}
+          </div>
         )}
       </Modal>
     </div>
   )
 }
-

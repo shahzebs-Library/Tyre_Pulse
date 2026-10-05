@@ -1,0 +1,100 @@
+/* Brand Performance. Only --cc-* tokens, so light and dark share one sheet. */
+.bp-page { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+/* Page head: breadcrumb, title, lead, actions on the right */
+.bp-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px; }
+.bp-head-copy { min-width: 0; flex: 1 1 360px; }
+.bp-crumb { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--cc-ink-3); }
+.bp-crumb a { color: var(--cc-ink-2); text-decoration: none; }
+.bp-crumb a:hover { color: var(--cc-green); }
+.bp-crumb a:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 2px; border-radius: 3px; }
+.bp-head h1 { font-size: clamp(22px, 2.4vw, 30px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.12; margin: 6px 0 4px; color: var(--cc-ink); text-wrap: balance; }
+.bp-head-copy > p { margin: 0; font-size: 13.5px; color: var(--cc-ink-2); max-width: 70ch; }
+.bp-head-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.bp-head-select { padding-top: 8px; padding-bottom: 8px; font-size: 12.5px; min-width: 120px; }
+
+/* PeriodFilter is a shared Tailwind control: re-skin it on the kit tokens. */
+.bp-period select { background: var(--cc-inner) !important; border: 1px solid var(--cc-inner-border) !important; color: var(--cc-ink) !important; border-radius: 9px !important; font-size: 12.5px !important; padding-top: 8px !important; padding-bottom: 8px !important; }
+html.light .bp-period select { background: #fff !important; }
+.bp-period select:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 2px; }
+.bp-period svg { color: var(--cc-ink-3) !important; }
+
+.bp-banner { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--cc-amber); background: var(--cc-amber-tint); color: var(--cc-ink); font-size: 12.5px; }
+.bp-banner svg { color: var(--cc-amber); flex: none; margin-top: 1px; }
+.bp-banner p { margin: 0; }
+
+/* KPI strip: five tiles, long brand names stay on one line */
+.bp-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.bp-kpis .cc-kpi-val { font-size: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.01em; }
+.bp-kpi-sub { display: block; font-size: 11px; color: var(--cc-ink-3); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Analytics row */
+.bp-row { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1.1fr); gap: 14px; }
+.bp-row-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.bp-note { font-size: 11px; color: var(--cc-ink-3); margin: 10px 0 0; line-height: 1.45; }
+
+/* Ranking: one series, one hue. Bars sit on the baseline, values above. */
+.bp-vbars { display: flex; align-items: flex-end; gap: 10px; height: 190px; padding: 8px 4px 0; border-bottom: 1px solid var(--cc-inner-border); }
+.bp-vbar { all: unset; flex: 1 1 0; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; cursor: pointer; border-radius: 6px; }
+.bp-vbar i { display: block; width: min(38px, 70%); border-radius: 4px 4px 0 0; background: var(--cc-green); opacity: .82; transition: opacity .15s ease; }
+.bp-vbar:hover i, .bp-vbar.is-sel i { opacity: 1; }
+.bp-vbar.is-sel i { box-shadow: 0 0 0 2px var(--cc-card-flat), 0 0 0 4px var(--cc-green); }
+.bp-vbar-n { font-size: 11.5px; font-weight: 700; color: var(--cc-ink); margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+.bp-vbar small { font-size: 10.5px; color: var(--cc-ink-3); margin: 6px 0 -18px; font-weight: 600; }
+.bp-vbars + .bp-note { margin-top: 26px; }
+.bp-vbar:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 2px; }
+
+/* Failure bars: status hue plus the number, never colour alone */
+.bp-hbars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.bp-hbars button { all: unset; box-sizing: border-box; width: 100%; display: grid; grid-template-columns: minmax(70px, 0.9fr) minmax(0, 1.4fr) 44px; gap: 10px; align-items: center; padding: 6px 4px; border-radius: 8px; cursor: pointer; font-size: 12.5px; color: var(--cc-ink-2); }
+.bp-hbars button:hover { background: var(--cc-green-tint); }
+.bp-hbars button:focus-visible { outline: 2px solid var(--cc-green); }
+.bp-hbar-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bp-hbar-track { height: 9px; border-radius: 6px; background: var(--cc-track); overflow: hidden; }
+.bp-hbar-track i { display: block; height: 100%; border-radius: 6px; }
+.bp-hbar-track i.good { background: var(--cc-green); }
+.bp-hbar-track i.warn { background: var(--cc-amber); }
+.bp-hbar-track i.bad { background: var(--cc-red); }
+.bp-hbars b { text-align: right; color: var(--cc-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* Filter bar */
+.bp-filterbar { padding: 12px 14px; }
+.bp-filterbar .cc-field .cc-select { min-width: 130px; }
+.bp-scope { margin: 10px 0 0; font-size: 12px; color: var(--cc-ink-3); }
+.bp-warn { color: var(--cc-amber); }
+
+/* Register cells */
+.bp-brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--cc-ink); }
+.bp-brand i { font-style: normal; width: 26px; height: 26px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 10px; font-weight: 700; color: var(--cc-blue); background: var(--cc-blue-tint); flex: none; }
+.bp-brand.is-sel i { color: var(--cc-green); background: var(--cc-green-tint); }
+.bp-tone, .bp-score { font-weight: 700; font-variant-numeric: tabular-nums; }
+.bp-tone.good, .bp-score.good { color: var(--cc-green); }
+.bp-tone.warn, .bp-score.warn { color: var(--cc-amber); }
+.bp-tone.bad, .bp-score.bad { color: var(--cc-red); }
+
+/* Insight card */
+.bp-insight { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; }
+.bp-insight-copy { flex: 1 1 420px; min-width: 0; }
+.bp-insight h2 { margin: 0 0 8px; font-size: 16px; font-weight: 700; color: var(--cc-ink); }
+.bp-insight-copy p { margin: 0 0 4px; font-size: 13px; color: var(--cc-ink-2); max-width: 78ch; line-height: 1.5; }
+.bp-insight-copy .bp-insight-action { margin-top: 8px; font-size: 12px; color: var(--cc-ink-3); }
+.bp-insight-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Shared Tailwind sub-panels kept from the previous page sit on the kit surface */
+.bp-page > .card { background: var(--cc-card); border: 1px solid var(--cc-border); border-radius: 14px; box-shadow: var(--cc-shadow); }
+.bp-mini { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--cc-inner-border); border-radius: 10px; background: var(--cc-inner); min-width: 0; }
+.bp-mini span { font-size: 11.5px; color: var(--cc-ink-3); }
+.bp-mini b { font-size: 18px; color: var(--cc-ink); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 1400px) {
+  .bp-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .bp-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bp-row > :last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 760px) {
+  .bp-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bp-row, .bp-row-2 { grid-template-columns: minmax(0, 1fr); }
+  .bp-head-actions { width: 100%; }
+  .bp-head-actions > * { flex: 1 1 auto; }
+}
+@media (prefers-reduced-motion: reduce) { .bp-vbar i { transition: none; } }

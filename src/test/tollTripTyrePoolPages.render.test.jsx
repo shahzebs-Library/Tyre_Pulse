@@ -49,6 +49,7 @@ vi.mock('../lib/api/tyreRecords', () => ({
   ], error: null, truncated: false })),
 }))
 vi.mock('../lib/api/costSummary', () => ({ loadGridTyreByAsset: vi.fn(() => Promise.resolve({ map: new Map() })) }))
+vi.mock('../lib/api/tyreKpiTargets', () => ({ listTyreTargets: vi.fn(() => Promise.resolve([])), saveTyreTarget: vi.fn() }))
 vi.mock('../lib/api/tyrePool', () => ({
   listPoolCandidates: vi.fn(() => Promise.resolve([{ id: 9, serial_no: 'SP1', brand: 'Michelin', size: '315/80R22.5', site: 'NHC', status: 'In stock', cost_per_tyre: 900 }])),
   listPoolEntries: vi.fn(() => Promise.resolve([
@@ -105,9 +106,12 @@ describe('upgraded toll, trip, tyre and handover pages render', () => {
 
   it('TyreFailureCpkBoard renders the asset ranking and removed register', async () => {
     wrap(<TyreFailureCpkBoard />)
-    await waitFor(() => expect(screen.getByText('Asset CPK ranking')).toBeTruthy())
-    expect(screen.getByText('Removed tyre register')).toBeTruthy()
     await waitFor(() => expect(screen.getAllByText('Puncture').length).toBeGreaterThan(0))
+    expect(screen.getByText('Removed tyres')).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: /Asset ranking/ }))
+    await waitFor(() => expect(screen.getByText('Asset CPK ranking')).toBeTruthy())
+    fireEvent.click(screen.getByRole('tab', { name: /Removed register/ }))
+    await waitFor(() => expect(screen.getByText('Removed tyre register')).toBeTruthy())
   })
 
   it('TyrePool does not recommend against an uncounted fleet', async () => {

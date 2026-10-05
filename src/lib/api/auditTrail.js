@@ -279,7 +279,7 @@ import { toUserMessage } from '../safeError'
 
 export const AUDIT_EXPORT_CAP = 5000
 
-export function auditQuery({ dateFrom, dateTo, action, user } = {}) {
+export function auditQuery({ dateFrom, dateTo, action, user, actions, actorType, recordId } = {}) {
   let query = supabase.from('audit_log_v2')
     .select('*, profiles(full_name, username)', { count: 'exact' })
     .order('created_at', { ascending: false }).order('id', { ascending: false })
@@ -290,6 +290,11 @@ export function auditQuery({ dateFrom, dateTo, action, user } = {}) {
     query = query.lt('created_at', nextDay.toISOString())
   }
   if (action) query = query.eq('action', action)
+  // Optional, additive: a group of stored action tokens, the V499 actor type
+  // and one record's history (the Audit Trail page tabs and "full history").
+  if (Array.isArray(actions) && actions.length) query = query.in('action', actions)
+  if (actorType) query = query.eq('actor_type', actorType)
+  if (recordId) query = query.eq('record_id', String(recordId))
   if (user) query = query.eq('user_id', user)
   return query
 }

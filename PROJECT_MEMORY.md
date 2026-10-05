@@ -19,6 +19,11 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   maintenance/calendar mockup exists in any upload or scratchpad on this machine (uploads = 4 admin screens,
   6 improved modules, 16-screen zip; the 3 Oct-4 PNGs are social-media screenshots). Flutter maintenance WAS
   matched to mock (part 9, 2026-09-27). Asked owner for the mockups before rebuilding.
+- Owner gave no preference, so BOTH pages were rebuilt on commandCenter/kit (no mockup, kit style): PmPrograms.jsx
+  (+ .css prefix `pmp-`, src/lib/pmProgramsView.js + test; every tab/modal/export kept; money N/A on All
+  countries instead of SAR+AED+EGP) and MaintenanceCalendar.jsx (+ .css, src/lib/maintenanceCalendarView.js +
+  test; month/week/day/agenda, paged reads with truncation banners, estimated tyre dates labelled, failed PM read
+  -> Retry, search/site filter, Excel). If the owner later sends mockups, re-match these two.
 
 # ⚑ SESSION 2026-10-05 (part 11) — RAW I18N KEYS ON SCREEN + RAW ERRORS ON SIGN-IN. No migration.
 - Owner: sign-in button showed "auth.login.signingIn". Cause: t() returns the KEY PATH when a key is missing

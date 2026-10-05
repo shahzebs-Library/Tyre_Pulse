@@ -145,3 +145,8 @@ button.wl-strip-item:focus-visible { outline: 2px solid var(--cc-green); outline
   .wl-tech-grid { grid-template-columns: minmax(0, 1fr); max-height: none; }
   .wl-alert-list { max-height: none; }
 }
+
+/* Technician Board status tabs: one row that scrolls sideways, never a lone tab wrapped onto a second row. */
+.wl-board .cc-tabs-line { flex-wrap: nowrap; overflow-x: auto; gap: 12px; scrollbar-width: none; }
+.wl-board .cc-tabs-line::-webkit-scrollbar { display: none; }
+.wl-board .cc-tabs-line .cc-tab { font-size: 13px; white-space: nowrap; }

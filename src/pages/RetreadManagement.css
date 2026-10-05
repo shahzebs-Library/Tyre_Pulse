@@ -28,11 +28,11 @@
 .cc-pill.purple { color: var(--cc-purple); background: var(--cc-purple-tint); }
 
 .rtj-pipe { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.rtj-pipe button { width: 100%; display: grid; grid-template-columns: minmax(96px, 1fr) minmax(70px, 1.3fr) 32px; align-items: center; gap: 10px; background: none; border: 0; padding: 5px 4px; border-radius: 8px; color: var(--cc-ink-2); font: inherit; font-size: 12.5px; text-align: start; cursor: pointer; }
+.rtj-pipe button { width: 100%; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(56px, 1fr) 32px; align-items: center; gap: 10px; background: none; border: 0; padding: 5px 4px; border-radius: 8px; color: var(--cc-ink-2); font: inherit; font-size: 12.5px; text-align: start; cursor: pointer; }
 .rtj-pipe button:hover { background: var(--cc-inner); }
 .rtj-pipe button:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 1px; }
 .rtj-pipe b { text-align: right; color: var(--cc-ink); font-variant-numeric: tabular-nums; }
-.rtj-pipe-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rtj-pipe-label { min-width: 0; line-height: 1.3; overflow-wrap: anywhere; }
 .rtj-pipe-track { height: 10px; border-radius: 999px; background: var(--cc-track); overflow: hidden; }
 .rtj-pipe-track i { display: block; height: 100%; border-radius: 999px; min-width: 0; }
 .rtj-pipe-track i.tone-good { background: var(--cc-green); }

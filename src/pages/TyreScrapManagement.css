@@ -31,7 +31,7 @@
 .tsm-bar { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; min-width: 0; }
 .tsm-bar i { display: block; width: 62%; min-height: 0; border-radius: 5px 5px 2px 2px; background: var(--cc-green); }
 .tsm-bar i.alt { background: var(--cc-amber); }
-.tsm-bar small { font-size: 10.5px; color: var(--cc-ink-3); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.tsm-bar small { font-size: 10.5px; line-height: 1.15; color: var(--cc-ink-3); margin-top: 6px; text-align: center; max-width: 100%; min-height: 2.3em; overflow-wrap: anywhere; }
 .tsm-bar-n { font-size: 10.5px; font-weight: 600; color: var(--cc-ink-2); margin-bottom: 4px; min-height: 13px; font-variant-numeric: tabular-nums; }
 
 .tsm-gov { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }

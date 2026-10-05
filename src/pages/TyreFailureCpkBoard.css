@@ -17,7 +17,7 @@
 /* Shared DateField is a Tailwind control; seat it on the kit surface. */
 .tf-dates { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid var(--cc-inner-border); background: var(--cc-inner); border-radius: 9px; font-size: 12px; color: var(--cc-ink-3); }
 html.light .tf-dates { background: #fff; }
-.tf-dates input { background: transparent !important; border: 0 !important; color: var(--cc-ink) !important; font-size: 12.5px !important; width: 132px; min-height: 30px; }
+.tf-dates input { background: transparent !important; border: 0 !important; color: var(--cc-ink) !important; font-size: 12.5px !important; width: 152px; min-height: 30px; }
 
 .tf-banner { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--cc-amber); background: var(--cc-amber-tint); color: var(--cc-ink); font-size: 12.5px; }
 .tf-banner > svg { color: var(--cc-amber); flex: none; margin-top: 1px; }
@@ -27,8 +27,8 @@ html.light .tf-dates { background: #fff; }
 
 .tf-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .tf-kpis .cc-kpi-val { font-size: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
-.tf-kpis .cc-kpi-body { padding-right: 44px; }
-.tf-kpi-sub { display: block; font-size: 11px; color: var(--cc-ink-3); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tf-kpis .cc-kpi:has(.cc-kpi-trend) .cc-kpi-body { padding-right: 44px; }
+.tf-kpi-sub { display: block; font-size: 11px; line-height: 1.3; color: var(--cc-ink-3); margin-top: 3px; overflow-wrap: anywhere; }
 .tf-hint { margin: -6px 0 0; font-size: 12px; color: var(--cc-ink-3); }
 
 .tf-tabs-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
@@ -57,7 +57,7 @@ html.light .tf-dates { background: #fff; }
 /* Tyre life bands: ordered magnitude, one hue */
 .tf-bands { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 .tf-bands li { display: grid; grid-template-columns: minmax(96px, 0.9fr) minmax(0, 1.5fr) 44px; gap: 10px; align-items: center; font-size: 12.5px; color: var(--cc-ink-2); }
-.tf-band-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tf-band-label { min-width: 0; line-height: 1.25; overflow-wrap: anywhere; }
 .tf-band-track { height: 9px; border-radius: 6px; background: var(--cc-track); overflow: hidden; }
 .tf-band-track i { display: block; height: 100%; border-radius: 6px; background: var(--cc-green); }
 .tf-bands b { text-align: right; color: var(--cc-ink); font-variant-numeric: tabular-nums; }
@@ -95,7 +95,9 @@ html.light .tf-dates { background: #fff; }
   .tf-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tf-row, .tf-row-2 { grid-template-columns: minmax(0, 1fr); }
   .tf-head-actions { width: 100%; }
-  .tf-dates { flex-wrap: wrap; width: 100%; }
-  .tf-dates input { width: 120px; }
+  .tf-dates { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); width: 100%; }
+  .tf-dates > * { min-width: 0; }
+  .tf-dates input { width: 100%; }
+  .tf-kpis .cc-kpi-val { font-size: 19px; }
 }
 @media (prefers-reduced-motion: reduce) { .tf-vbar i { transition: none; } }

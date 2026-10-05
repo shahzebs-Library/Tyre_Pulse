@@ -14,7 +14,7 @@
 
 /* Five KPI tiles across, wrapping on smaller screens. */
 .at-page .at-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-.at-kpi-sub { display: block; margin-top: 2px; font-size: 11px; font-weight: 400; color: var(--cc-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.at-kpi-sub { display: block; margin-top: 2px; font-size: 11px; font-weight: 400; line-height: 1.3; color: var(--cc-ink-3); overflow-wrap: anywhere; }
 
 .at-tabbar { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; }
 .at-tab-hint { font-size: 12px; color: var(--cc-ink-3); padding-right: 6px; }

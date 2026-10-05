@@ -44,6 +44,7 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import CpkDataTable from '../components/cpk/CpkDataTable'
 import { toUserMessage } from '../lib/safeError'
+import { currencyForCountryCode } from '../lib/expenseReportAnalytics'
 import './CpkIntelligence.css'
 
 const CpkScenarioStudioPanel = lazy(() => import('../components/cpk/CpkScenarioStudioPanel'))
@@ -190,7 +191,8 @@ export default function CpkIntelligence() {
     return () => { cancelled = true }
   }, [tab, country, bounds.from, bounds.to])
 
-  const currency = fleetCpk.fleet?.[0]?.currency || country
+  // No row in the period must still label money in the country's currency, never the country code.
+  const currency = fleetCpk.fleet?.[0]?.currency || currencyForCountryCode(country, country)
 
   // Split every source by mobility so movable / non-movable are independent.
   const byTypeSplit = useMemo(() => splitByMobility(fleetCpk.byType), [fleetCpk.byType])

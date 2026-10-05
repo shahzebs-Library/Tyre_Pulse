@@ -3,8 +3,9 @@
 button.tk-tile { cursor: pointer; }
 .tk-tile .cc-kpi-icon { margin-top: 2px; }
 .tk-body { display: flex; flex-direction: column; gap: 6px; }
-.tk-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 16px; }
-.tk-label { margin-top: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tk-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; min-height: 16px; }
+.tk-label { margin-top: 0; min-width: 0; line-height: 1.3; overflow-wrap: anywhere; }
+.tk-top .cc-kpi-trend { flex: none; }
 .tk-tile .cc-kpi-trend { position: static; }
 .tk-val { font-size: 22px; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .tk-sub { font-size: 11.5px; color: var(--cc-ink-3); line-height: 1.35; }

@@ -11,7 +11,7 @@
 .cdm-scope { font-size: 12.5px; color: var(--cc-ink-2); background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 9px; padding: 8px 12px; }
 
 .cdm-page .cdm-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-.cdm-kpi-sub { display: block; margin-top: 2px; font-size: 11px; font-weight: 400; color: var(--cc-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cdm-kpi-sub { display: block; margin-top: 2px; font-size: 11px; font-weight: 400; line-height: 1.3; color: var(--cc-ink-3); overflow-wrap: anywhere; }
 .cdm-tabbar { padding: 8px 10px; }
 
 .cdm-banner { flex-direction: row; align-items: flex-start; gap: 10px; }

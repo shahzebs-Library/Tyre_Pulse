@@ -7684,4 +7684,13 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get checklistDetailOpen => 'فتح قائمة الفحص';
+
+  @override
+  String checklistDetailScoreOnly(int pct) {
+    return 'النتيجة: $pct%';
+  }
+
+  @override
+  String get checklistDetailPhotoUnavailable =>
+      'الصورة غير متاحة على هذا الجهاز';
 }

@@ -115,4 +115,38 @@ void main() {
       );
     });
   });
+
+  group('isServerPhotoReference', () {
+    test('storage refs and URLs are server photos; paths are local', () {
+      expect(
+        isServerPhotoReference('tp-storage://tyre-photos/a/b.jpg'),
+        isTrue,
+      );
+      expect(
+        isServerPhotoReference(
+          'https://x.supabase.co/storage/v1/object/public/tyre-photos/a.jpg',
+        ),
+        isTrue,
+      );
+      expect(isServerPhotoReference('/data/user/0/app/files/p.jpg'), isFalse);
+      expect(isServerPhotoReference(''), isFalse);
+    });
+  });
+
+  group('fallbackFieldKeys', () {
+    test('includes evidence-only fields, not just answered ones', () {
+      final ChecklistSubmissionDetail d = ChecklistSubmissionDetail.fromRow(
+        <String, dynamic>{
+          'id': 's',
+          'answers': <String, dynamic>{'b': 'OK'},
+          'photos': <String, dynamic>{
+            'c': <dynamic>['tp-storage://tyre-photos/c.jpg'],
+            'empty': <dynamic>[],
+          },
+          'signatures': <String, dynamic>{'a': '<svg></svg>'},
+        },
+      )!;
+      expect(fallbackFieldKeys(d), <String>['a', 'b', 'c']);
+    });
+  });
 }

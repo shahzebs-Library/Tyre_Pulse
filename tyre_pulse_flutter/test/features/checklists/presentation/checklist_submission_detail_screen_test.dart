@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
+import 'package:tyre_pulse/core/storage/private_storage_reference_resolver.dart';
+import 'package:tyre_pulse/core/storage/storage_providers.dart';
 import 'package:tyre_pulse/features/checklists/checklists_providers.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_remote_models.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_remote_repository.dart';
@@ -38,6 +40,8 @@ final Map<String, dynamic> _snapshot = <String, dynamic>{
 ChecklistSubmissionDetail _detail({
   Map<String, dynamic>? snapshot,
   String? reviewNote = 'Replace the cut tyre before the next shift.',
+  Object? scorePassed = true,
+  Map<String, dynamic> photos = const <String, dynamic>{},
 }) =>
     ChecklistSubmissionDetail.fromRow(<String, dynamic>{
       'id': 'sub-1',
@@ -51,7 +55,8 @@ ChecklistSubmissionDetail _detail({
       'printed_name': 'Ijaz Ali',
       'submitted_at': '2026-10-05T08:12:00Z',
       'score_pct': 92,
-      'score_passed': true,
+      'score_passed': scorePassed,
+      'photos': photos,
       'approval_status': 'pending_area_manager',
       'document_no': 'WDC-TM514-2026-0007',
       'supervisor_name': 'Vinay Kumar',
@@ -85,12 +90,15 @@ final class _RemoteFake implements ChecklistRemoteRepository {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+final List<String> _signed = <String>[];
+
 Future<void> _pump(
   WidgetTester tester,
   _RemoteFake remote, {
   Locale locale = const Locale('en'),
   Size size = const Size(390, 900),
 }) async {
+  _signed.clear();
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -98,6 +106,16 @@ Future<void> _pump(
     ProviderScope(
       overrides: [
         checklistRemoteRepositoryProvider.overrideWithValue(remote),
+        privateStorageReferenceResolverProvider.overrideWithValue(
+          PrivateStorageReferenceResolver(
+            (String bucket, String path, int expiresIn) async {
+              _signed.add('$bucket/$path');
+              // Not a reachable host: the image itself fails to load in the
+              // test and falls back to the "not available" placeholder.
+              return 'https://example.invalid/$path';
+            },
+          ),
+        ),
       ],
       child: MaterialApp(
         theme: TpTheme.light,
@@ -241,5 +259,91 @@ void main() {
     );
     expect(find.text('تفاصيل قائمة الفحص'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a score with no pass/fail decision shows only the percentage', (
+    WidgetTester tester,
+  ) async {
+    await _pump(tester, _RemoteFake(detail: _detail(scorePassed: null)));
+    expect(find.text('Score: 92%'), findsOneWidget);
+    expect(find.textContaining('Passed'), findsNothing);
+    expect(find.textContaining('Failed'), findsNothing);
+  });
+
+  testWidgets('a decided score still says Passed or Failed', (
+    WidgetTester tester,
+  ) async {
+    await _pump(tester, _RemoteFake(detail: _detail(scorePassed: false)));
+    expect(find.text('Score: 92% (Failed)'), findsOneWidget);
+  });
+
+  testWidgets('a stored photo is resolved through a signed URL', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      _RemoteFake(
+        detail: _detail(
+          photos: <String, dynamic>{
+            'tyres': <dynamic>['tp-storage://tyre-photos/org/sub-1/tyres.jpg'],
+          },
+        ),
+      ),
+    );
+    await tester.scrollUntilVisible(
+      find.byType(ChecklistEvidencePhotos),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(_signed, <String>['tyre-photos/org/sub-1/tyres.jpg']);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a local path not on this device says it is not available', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      _RemoteFake(
+        detail: _detail(
+          photos: <String, dynamic>{
+            'tyres': <dynamic>['/no/such/dir/photo.jpg'],
+          },
+        ),
+      ),
+    );
+    await tester.scrollUntilVisible(
+      find.byType(ChecklistEvidencePhotos),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(
+      find.byTooltip('Photo not available on this device'),
+      findsOneWidget,
+    );
+    expect(_signed, isEmpty);
+  });
+
+  testWidgets('no template: a photo-only field is still listed', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      _RemoteFake(
+        detail: _detail(
+          snapshot: <String, dynamic>{},
+          photos: <String, dynamic>{
+            'damage_photo': <dynamic>['/no/such/dir/photo.jpg'],
+          },
+        ),
+      ),
+    );
+    await tester.scrollUntilVisible(
+      find.text('damage_photo'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('damage_photo'), findsOneWidget);
   });
 }

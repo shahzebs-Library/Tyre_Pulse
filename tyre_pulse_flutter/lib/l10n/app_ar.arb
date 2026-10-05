@@ -3213,5 +3213,7 @@
   "checklistDetailTitle": "تفاصيل قائمة الفحص",
   "checklistDetailSubmittedOn": "أُرسلت في {date}",
   "checklistDetailReviewNote": "ملاحظة المراجع",
-  "checklistDetailOpen": "فتح قائمة الفحص"
+  "checklistDetailOpen": "فتح قائمة الفحص",
+  "checklistDetailScoreOnly": "النتيجة: {pct}%",
+  "checklistDetailPhotoUnavailable": "الصورة غير متاحة على هذا الجهاز"
 }

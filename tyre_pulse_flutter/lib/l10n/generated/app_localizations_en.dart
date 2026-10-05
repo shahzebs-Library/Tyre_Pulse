@@ -7665,4 +7665,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get checklistDetailOpen => 'Open checklist';
+
+  @override
+  String checklistDetailScoreOnly(int pct) {
+    return 'Score: $pct%';
+  }
+
+  @override
+  String get checklistDetailPhotoUnavailable =>
+      'Photo not available on this device';
 }

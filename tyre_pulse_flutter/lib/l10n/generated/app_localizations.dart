@@ -13372,6 +13372,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Open checklist'**
   String get checklistDetailOpen;
+
+  /// Checklist details: the score when no pass or fail was calculated (the template has no pass threshold).
+  ///
+  /// In en, this message translates to:
+  /// **'Score: {pct}%'**
+  String checklistDetailScoreOnly(int pct);
+
+  /// Checklist details: shown on a photo whose file is not on this device and has no stored server reference.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo not available on this device'**
+  String get checklistDetailPhotoUnavailable;
 }
 
 class _AppLocalizationsDelegate

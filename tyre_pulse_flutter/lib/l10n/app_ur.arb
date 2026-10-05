@@ -3213,5 +3213,7 @@
   "checklistDetailTitle": "چیک لسٹ کی تفصیلات",
   "checklistDetailSubmittedOn": "{date} کو جمع کرائی گئی",
   "checklistDetailReviewNote": "جائزہ لینے والے کا نوٹ",
-  "checklistDetailOpen": "چیک لسٹ کھولیں"
+  "checklistDetailOpen": "چیک لسٹ کھولیں",
+  "checklistDetailScoreOnly": "اسکور: {pct}%",
+  "checklistDetailPhotoUnavailable": "یہ تصویر اس ڈیوائس پر دستیاب نہیں"
 }

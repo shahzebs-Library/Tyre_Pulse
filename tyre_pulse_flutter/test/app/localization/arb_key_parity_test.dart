@@ -581,10 +581,14 @@ void main() {
     // history): the screen title, the submitted-on line, the reviewer note
     // label and the open-row accessibility label
     // (checklistDetailTitle ... checklistDetailOpen).
-    test('en, ar and ur each carry exactly 2212 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2212);
-      expect(_translatableKeys(ar).length, 2212);
-      expect(_translatableKeys(ur).length, 2212);
+    // 2212 + 2 = 2214. Checklist details review fixes: the score line when no
+    // pass/fail was calculated, and the label on a photo that is neither on
+    // this device nor stored as a server reference
+    // (checklistDetailScoreOnly, checklistDetailPhotoUnavailable).
+    test('en, ar and ur each carry exactly 2214 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2214);
+      expect(_translatableKeys(ar).length, 2214);
+      expect(_translatableKeys(ur).length, 2214);
     });
   });
 

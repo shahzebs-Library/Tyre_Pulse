@@ -27,17 +27,21 @@
 ///
 /// # Photos
 ///
-/// The tile renders photo answers from a local file path. A photo captured
-/// on THIS device shows; one captured elsewhere shows the tile's own
-/// "broken image" placeholder - the same, already-shipped behaviour as the
-/// approval review screen. Resolving remote storage refs is a separate
-/// change.
+/// Photos render through [ChecklistEvidencePhotos], not the tile: a server
+/// reference (`tp-storage://...`, what the Expo app stores, or a legacy public
+/// URL) is resolved to a short-lived signed URL; a local file path shows only
+/// while that file is on this device, otherwise the photo says it is not
+/// available here. Flutter-submitted sheets currently store local paths (the
+/// sync gap `checklist_submission_repository.dart` documents), so those photos
+/// show only on the phone that took them until that sync change lands.
 library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -48,6 +52,7 @@ import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
+import 'package:tyre_pulse/core/storage/storage_providers.dart';
 import 'package:tyre_pulse/features/checklists/checklists_providers.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_remote_models.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_submission_detail.dart';
@@ -351,12 +356,20 @@ class _SummaryCard extends StatelessWidget {
                   : (detail.scorePassed == true
                       ? TpStatus.ok
                       : TpStatus.neutral),
-              label: l10n.checklistApprovalScoreLine(
-                detail.scorePct!,
-                detail.scorePassed == false
-                    ? l10n.checklistApprovalScoreFailed
-                    : l10n.checklistApprovalScorePassed,
-              ),
+              // A scored template with no pass threshold stores a percentage
+              // with `score_passed` null: no pass/fail was ever decided, so
+              // none is shown.
+              label: switch (detail.scorePassed) {
+                true => l10n.checklistApprovalScoreLine(
+                    detail.scorePct!,
+                    l10n.checklistApprovalScorePassed,
+                  ),
+                false => l10n.checklistApprovalScoreLine(
+                    detail.scorePct!,
+                    l10n.checklistApprovalScoreFailed,
+                  ),
+                null => l10n.checklistDetailScoreOnly(detail.scorePct!),
+              },
               isCompact: true,
             ),
           ],
@@ -549,11 +562,19 @@ class _ResponsesCard extends StatelessWidget {
         template?.fields ?? const <ChecklistField>[];
 
     final List<ChecklistField> fields = declared.isEmpty
-        // No readable template: fall back to whatever answer keys exist,
-        // each labelled by its own id, so the sheet never renders blank.
+        // No readable template: fall back to every recorded key, each
+        // labelled by its own id, so the sheet never renders blank. A field
+        // that recorded only a photo or a signature has no `answers` entry,
+        // so the evidence maps are included too.
         ? <ChecklistField>[
-            for (final String key in detail.answers.keys.toList()..sort())
-              ChecklistField(id: key, type: 'text', label: key),
+            for (final String key in fallbackFieldKeys(detail))
+              ChecklistField(
+                id: key,
+                type: detail.signatures.containsKey(key)
+                    ? 'signature'
+                    : (!detail.answers.containsKey(key) ? 'photo' : 'text'),
+                label: key,
+              ),
           ]
         : visibleChecklistFields(declared, detail.answers);
 
@@ -585,7 +606,8 @@ class _ResponsesCard extends StatelessWidget {
             ? fieldOptions(field, template, lang)
             : const <ChecklistFieldOption>[];
     final String label = fieldLabel(field, lang);
-    return ChecklistFieldAnswerTile(
+    final List<String> photos = detail.photos[field.id] ?? const <String>[];
+    final Widget tile = ChecklistFieldAnswerTile(
       key: ValueKey<String>('detail-${field.id}'),
       field: field,
       label: label.isEmpty ? field.id : label,
@@ -595,12 +617,134 @@ class _ResponsesCard extends StatelessWidget {
       locked: true,
       note: hasNote ? note : null,
       showNoteField: field.allowNote != false && hasNote,
-      photos: detail.photos[field.id] ?? const <String>[],
+      // Photos render below through [ChecklistEvidencePhotos], which
+      // resolves server references; the tile itself only reads local files.
       signatureBuilder: field.type == 'signature'
           ? (BuildContext context) => ChecklistReadOnlySignature(
                 value: detail.signatureForField(field.id),
               )
           : null,
+    );
+    if (photos.isEmpty) return tile;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        tile,
+        Padding(
+          padding: const EdgeInsets.only(bottom: TpSpace.lg),
+          child: ChecklistEvidencePhotos(photos: photos),
+        ),
+      ],
+    );
+  }
+}
+
+/// The photos recorded against one field, read-only. A server reference
+/// (`tp-storage://...` or a legacy public URL) is resolved to a short-lived
+/// signed URL through [privateStorageImageUrlProvider] (Storage RLS still
+/// applies); a local path shows only while that file exists on this device;
+/// anything else says the photo is not available here rather than drawing a
+/// broken image. Tapping a photo opens it full screen.
+class ChecklistEvidencePhotos extends ConsumerWidget {
+  const ChecklistEvidencePhotos({required this.photos, super.key});
+
+  final List<String> photos;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Wrap(
+      spacing: TpSpace.sm,
+      runSpacing: TpSpace.sm,
+      children: <Widget>[
+        for (final String photo in photos) _EvidencePhoto(value: photo),
+      ],
+    );
+  }
+}
+
+class _EvidencePhoto extends ConsumerWidget {
+  const _EvidencePhoto({required this.value});
+
+  final String value;
+
+  static const double _size = 88;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+
+    Widget unavailable() => Tooltip(
+          message: l10n.checklistDetailPhotoUnavailable,
+          child: Semantics(
+            label: l10n.checklistDetailPhotoUnavailable,
+            child: ColoredBox(
+              color: palette.surfaceAlt,
+              child: Icon(
+                Icons.image_not_supported_outlined,
+                color: palette.textMuted,
+              ),
+            ),
+          ),
+        );
+
+    final ImageProvider<Object>? provider;
+    Widget content;
+    if (isServerPhotoReference(value)) {
+      final AsyncValue<String> url =
+          ref.watch(privateStorageImageUrlProvider(value));
+      provider = url.asData == null ? null : NetworkImage(url.asData!.value);
+      content = url.when(
+        data: (String u) => Image.network(
+          u,
+          fit: BoxFit.cover,
+          errorBuilder: (BuildContext c, Object e, StackTrace? s) =>
+              unavailable(),
+        ),
+        loading: () => const Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+        error: (Object e, StackTrace s) => unavailable(),
+      );
+    } else {
+      final File file = File(value);
+      final bool exists =
+          !kIsWeb && value.trim().isNotEmpty && file.existsSync();
+      provider = exists ? FileImage(file) : null;
+      content = exists
+          ? Image.file(
+              file,
+              fit: BoxFit.cover,
+              errorBuilder: (BuildContext c, Object e, StackTrace? s) =>
+                  unavailable(),
+            )
+          : unavailable();
+    }
+
+    final Widget thumb = ClipRRect(
+      borderRadius: BorderRadius.circular(TpRadius.md),
+      child: SizedBox(width: _size, height: _size, child: content),
+    );
+    if (provider == null) return thumb;
+    final ImageProvider<Object> image = provider;
+    return InkWell(
+      borderRadius: BorderRadius.circular(TpRadius.md),
+      onTap: () => unawaited(
+        showDialog<void>(
+          context: context,
+          builder: (BuildContext dialogContext) => Dialog(
+            insetPadding: const EdgeInsets.all(TpSpace.md),
+            child: InteractiveViewer(
+              child: Image(image: image, fit: BoxFit.contain),
+            ),
+          ),
+        ),
+      ),
+      child: thumb,
     );
   }
 }

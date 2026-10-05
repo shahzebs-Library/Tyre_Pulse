@@ -7683,4 +7683,13 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get checklistDetailOpen => 'چیک لسٹ کھولیں';
+
+  @override
+  String checklistDetailScoreOnly(int pct) {
+    return 'اسکور: $pct%';
+  }
+
+  @override
+  String get checklistDetailPhotoUnavailable =>
+      'یہ تصویر اس ڈیوائس پر دستیاب نہیں';
 }

@@ -212,3 +212,35 @@ final class ChecklistSubmissionDetail {
   String? signatureForField(String fieldId) =>
       signatures[fieldId] ?? (signatures.isEmpty ? signatureData : null);
 }
+
+/// Whether a recorded photo value points at storage on the server (a
+/// `tp-storage://bucket/path` reference, written by the Expo app, or a legacy
+/// public `https://.../storage/v1/object/public/...` URL) rather than a file
+/// path on the phone that captured it.
+///
+/// A server reference is resolved to a short-lived signed URL before it is
+/// shown. A local path is shown only when that file still exists on this
+/// device: the Flutter sync path currently writes local paths into
+/// `checklist_submissions.photos` (the gap `checklist_submission_repository
+/// .dart` documents, which lives in `lib/core/sync/` wiring this feature does
+/// not edit), so a sheet opened on another phone, or after the queue pruned
+/// the file, cannot show that photo and says so instead of a broken image.
+bool isServerPhotoReference(String value) {
+  final String v = value.trim();
+  return v.startsWith('tp-storage://') ||
+      v.startsWith('https://') ||
+      v.startsWith('http://');
+}
+
+/// The keys the details screen must list when it has NO template to read:
+/// every answered field plus every field that recorded only evidence (a
+/// photo or a signature has no `answers` entry), sorted for a stable order.
+List<String> fallbackFieldKeys(ChecklistSubmissionDetail detail) {
+  final Set<String> keys = <String>{
+    ...detail.answers.keys,
+    for (final MapEntry<String, List<String>> e in detail.photos.entries)
+      if (e.value.isNotEmpty) e.key,
+    ...detail.signatures.keys,
+  };
+  return keys.toList()..sort();
+}

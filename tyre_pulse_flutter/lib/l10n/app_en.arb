@@ -8385,5 +8385,18 @@
   "checklistDetailOpen": "Open checklist",
   "@checklistDetailOpen": {
     "description": "Checklist history: accessibility label for opening one submitted checklist."
+  },
+  "checklistDetailScoreOnly": "Score: {pct}%",
+  "@checklistDetailScoreOnly": {
+    "description": "Checklist details: the score when no pass or fail was calculated (the template has no pass threshold).",
+    "placeholders": {
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "checklistDetailPhotoUnavailable": "Photo not available on this device",
+  "@checklistDetailPhotoUnavailable": {
+    "description": "Checklist details: shown on a photo whose file is not on this device and has no stored server reference."
   }
 }

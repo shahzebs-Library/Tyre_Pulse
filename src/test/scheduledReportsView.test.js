@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   moduleOf, time12, ordinal, scheduleLabel, scheduleStatus, healthSegments, registryKpis,
-  expectedOn, deliveryTrend, recentActivity, filterRegistry, recipientOptions,
+  expectedOn, deliveryTrend, recentActivity, filterRegistry, recipientOptions, recipientInitials,
 } from '../lib/scheduledReportsView'
 
 const NOW = new Date(2026, 9, 5, 14, 30).getTime() // 5 Oct 2026 local
@@ -86,5 +86,14 @@ describe('scheduledReportsView', () => {
     expect(filterRegistry(rows, { format: 'pdf' }, { now: NOW }).map((r) => r.id)).toEqual([2])
     expect(filterRegistry(rows, { recipient: 'a@x.com' }, { now: NOW }).map((r) => r.id)).toEqual([1])
     expect(recipientOptions(rows)).toEqual(['a@x.com'])
+  })
+})
+
+describe('recipientInitials', () => {
+  it('builds avatar initials from the address', () => {
+    expect(recipientInitials('ahmad.khan@x.com')).toBe('AK')
+    expect(recipientInitials('ops@x.com')).toBe('O')
+    expect(recipientInitials('')).toBe('?')
+    expect(recipientInitials('__@x.com')).toBe('?')
   })
 })

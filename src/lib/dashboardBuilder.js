@@ -421,18 +421,23 @@ export function resizeWidget(layout, index, { w, h } = {}) {
 export const DEFAULT_LAYOUT = Object.freeze(validateLayout({
   id: 'default',
   name: 'Fleet Overview',
+  // Order mirrors the owner's Dashboard Builder mockup: four KPI tiles, then
+  // paired charts (distribution, workshop, cost, alerts), then smaller tiles.
   widgets: [
-    { widgetId: 'fleet-availability',     w: 1, h: 'md' },
     { widgetId: 'total-vehicles',         w: 1, h: 'sm' },
+    { widgetId: 'fleet-availability',     w: 1, h: 'sm' },
     { widgetId: 'tyres-in-service',       w: 1, h: 'sm' },
     { widgetId: 'critical-tyres',         w: 1, h: 'sm' },
-    { widgetId: 'alerts-by-severity',     w: 2, h: 'md' },
+    { widgetId: 'maintenance-by-type',    w: 2, h: 'md' },
+    { widgetId: 'tyre-status-split',      w: 2, h: 'md' },
     { widgetId: 'vehicles-by-site',       w: 2, h: 'md' },
-    { widgetId: 'tyre-cost-trend',        w: 2, h: 'md' },
     { widgetId: 'work-orders-by-status',  w: 2, h: 'md' },
-    { widgetId: 'recent-alerts',          w: 2, h: 'lg' },
+    { widgetId: 'tyre-cost-trend',        w: 2, h: 'md' },
+    { widgetId: 'recent-alerts',          w: 2, h: 'md' },
     { widgetId: 'inspections-today',      w: 1, h: 'sm' },
     { widgetId: 'pending-approvals',      w: 1, h: 'sm' },
+    { widgetId: 'monthly-tyre-cost',      w: 1, h: 'sm' },
+    { widgetId: 'maintenance-spend',      w: 1, h: 'sm' },
   ],
   created_by: null,
   shared: true,

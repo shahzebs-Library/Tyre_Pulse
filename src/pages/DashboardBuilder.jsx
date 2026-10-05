@@ -23,10 +23,11 @@ import {
   ChevronLeft, ChevronRight, GripVertical, Star, Globe, RefreshCw,
   AlertTriangle, ChevronDown, Eye, Calendar, MapPin, RotateCcw, Search,
   Monitor, Tablet, Smartphone, Eraser, Settings2, ShieldCheck, Send,
-  Gauge, BarChart3, List, Info,
+  Gauge, BarChart3, List, Info, LayoutGrid, PieChart, LineChart, Hash, Sun, Moon, Users, Tag,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
+import { useTheme } from '../contexts/ThemeContext'
 import { useSites } from '../hooks/useSites'
 import WidgetRenderer, { createWidgetDataLoader } from '../components/dashboard/WidgetRenderer'
 import {
@@ -53,7 +54,7 @@ import './DashboardBuilder.css'
 const REFRESH_MS = 120_000
 const EMPTY_SLICE = { rows: [], error: null, loaded: false }
 const WIDGET_MIME = 'application/x-tp-widget'
-const SECTION_ICON = { kpi: Gauge, visual: BarChart3, data: List }
+const KIND_ICON = { stat: Hash, gauge: Gauge, line: LineChart, bar: BarChart3, donut: PieChart, list: List }
 const DEVICE_ICON = { desktop: Monitor, tablet: Tablet, mobile: Smartphone }
 
 /* ── Small controls ─────────────────────────────────────────────────────── */
@@ -117,11 +118,10 @@ function WidgetLibrary({ placedIds, onAdd, searchRef }) {
         <Search size={15} aria-hidden="true" />
         <input ref={searchRef} aria-label="Search widgets" placeholder="Search widgets..." value={search} onChange={e => setSearch(e.target.value)} />
       </label>
-      <Tabs tabs={LIBRARY_TABS} value={tab} onChange={setTab} label="Widget types" variant="line" />
+      <Tabs tabs={LIBRARY_TABS} value={tab} onChange={setTab} label="Widget types" />
       <div className="db-lib-scroll">
         {sections.length === 0 && <div className="cc-empty">No widgets match "{search}".</div>}
         {sections.map(sec => {
-          const Icon = SECTION_ICON[sec.key] || List
           const open = !collapsed[sec.key]
           return (
             <section key={sec.key} className="db-lib-sec">
@@ -136,7 +136,7 @@ function WidgetLibrary({ placedIds, onAdd, searchRef }) {
                     <div key={w.id} className="db-lib-item" draggable
                       onDragStart={e => { try { e.dataTransfer.setData(WIDGET_MIME, w.id); e.dataTransfer.effectAllowed = 'copy' } catch { /* ignore */ } }}
                       title={`${w.description} Drag onto the canvas or press Add.`}>
-                      <span className={`db-lib-icon k-${sec.key}`}><Icon size={16} aria-hidden="true" /></span>
+                      {(() => { const Icon = KIND_ICON[w.kind] || List; return <span className={`db-lib-icon k-${sec.key}`}><Icon size={16} aria-hidden="true" /></span> })()}
                       <span className="db-lib-copy">
                         <b>{w.label}</b>
                         <small>{w.kindLabel}{w.placed > 0 ? `, ${w.placed} placed` : ''}</small>
@@ -161,8 +161,10 @@ function WidgetLibrary({ placedIds, onAdd, searchRef }) {
 function SettingsPanel({
   draft, isStarter, canEditName, onName, filters, siteOptions, sitesLoading, onFilter, onReset,
   editMode, access, layoutOptions, onSwitch, onSetDefault, onToggleShared, saving, summary,
+  fixedGrid, onFixedGrid,
 }) {
   const [tab, setTab] = useState('config')
+  const { isDark, setMode } = useTheme()
   const siteChoices = filters.site !== 'All' && !siteOptions.includes(filters.site) ? [filters.site, ...siteOptions] : siteOptions
   const isDefaultFilters = filters.range === 'all' && filters.site === 'All' && filters.country === 'All'
   return (
@@ -184,12 +186,23 @@ function SettingsPanel({
           <select id="db-template" className="cc-select db-full" value={draft?.id || ''} onChange={e => onSwitch(e.target.value)}>
             {layoutOptions.map(l => <option key={l.id} value={l.id}>{l.name}{l.id === DEFAULT_LAYOUT.id ? ' (starter)' : ''}{l.is_default ? ' (default)' : ''}</option>)}
           </select>
-          <div className="db-facts">
-            <span><b>{summary.widgets}</b> widgets</span>
-            <span><b>{summary.sources}</b> data sources</span>
+          <span className="db-lbl">Description</span>
+          <div className="db-desc">
+            {summary.widgets} widgets reading {summary.sources} live data sources
+            {summary.categories.length ? `: ${summary.categories.map(c => c.label.toLowerCase()).join(', ')}.` : '.'}
+            <small>Built from the widgets on the canvas. Layouts do not store a written description.</small>
           </div>
-          {summary.categories.length > 0 && (
-            <div className="db-chips">{summary.categories.map(c => <span key={c.label} className="cc-pill info">{c.label} {c.count}</span>)}</div>
+          <span className="db-lbl"><Tag size={12} aria-hidden="true" /> Category and tags</span>
+          {summary.categories.length > 0
+            ? <div className="db-chips">{summary.categories.map(c => <span key={c.label} className="cc-pill info">{c.label} {c.count}</span>)}</div>
+            : <p className="db-muted db-mb">No widgets on the canvas yet.</p>}
+
+          <h3 className="db-h3">Audience &amp; Access</h3>
+          {access && (
+            <>
+              <div className="db-readonly"><span><Users size={12} aria-hidden="true" /> Audience</span><b>{access.audience}</b></div>
+              <div className="db-readonly"><span>Access level</span><b>{draft?.shared ? 'Published to everyone' : 'Private to owner'}</b></div>
+            </>
           )}
 
           <h3 className="db-h3">Display &amp; Data</h3>
@@ -226,6 +239,18 @@ function SettingsPanel({
           {!isDefaultFilters && (
             <button type="button" className="cc-btn-ghost db-mt" onClick={onReset}><RotateCcw size={13} aria-hidden="true" /> Reset filters</button>
           )}
+
+          <span className="db-lbl">Theme</span>
+          <div className="db-choice" role="group" aria-label="Theme">
+            <button type="button" aria-pressed={!isDark} onClick={() => setMode('light')}><Sun size={14} aria-hidden="true" /> Light</button>
+            <button type="button" aria-pressed={isDark} onClick={() => setMode('dark')}><Moon size={14} aria-hidden="true" /> Dark</button>
+          </div>
+          <span className="db-lbl">Layout</span>
+          <div className="db-choice" role="group" aria-label="Canvas layout">
+            <button type="button" aria-pressed={!fixedGrid} onClick={() => onFixedGrid(false)}><Monitor size={14} aria-hidden="true" /> Auto (Responsive)</button>
+            <button type="button" aria-pressed={fixedGrid} onClick={() => onFixedGrid(true)}><LayoutGrid size={14} aria-hidden="true" /> Fixed Grid</button>
+          </div>
+          <p className="db-muted db-mt">Theme applies to the whole app on this device. Layout changes this preview only and is not saved with the dashboard.</p>
         </div>
       )}
 
@@ -559,6 +584,7 @@ export default function DashboardBuilder() {
 
     /* ── Builder-only state and actions ──────────────────────────────────── */
   const [device, setDevice] = useState('desktop')
+  const [fixedGrid, setFixedGrid] = useState(false)
   const [canvasWidth, setCanvasWidth] = useState(1200)
   const [moreOpen, setMoreOpen] = useState(false)
   const [now, setNow] = useState(() => new Date())
@@ -578,7 +604,7 @@ export default function DashboardBuilder() {
   const summary = useMemo(() => canvasSummary(draft, WIDGET_BY_ID), [draft])
   const access = useMemo(() => accessSummary(draft, { userId, isAdmin, isStarter }), [draft, userId, isAdmin, isStarter])
   const status = saveStatus({ dirty, layout: draft, isStarter, now })
-  const cols = gridColumns(device, canvasWidth)
+  const cols = fixedGrid && device === 'desktop' ? 4 : gridColumns(device, canvasWidth)
   const deviceDef = DEVICES.find(d => d.key === device) || DEVICES[0]
 
   // Keep the "Saved N minutes ago" line current.
@@ -695,7 +721,7 @@ export default function DashboardBuilder() {
         <div className="db-head-copy">
           <nav aria-label="Breadcrumb" className="db-crumb">Analytics &amp; Reports <ChevronRight size={13} aria-hidden="true" /> <span aria-current="page">Dashboard Builder</span></nav>
           <div className="db-title">
-            <span className="db-title-icon"><LayoutDashboard size={22} aria-hidden="true" /></span>
+            <span className="db-title-icon"><LayoutGrid size={24} aria-hidden="true" /></span>
             <div>
               <h1>Dashboard Builder</h1>
               <p>Build dashboards from governed widgets, shared filters and reusable layouts.</p>
@@ -864,6 +890,8 @@ export default function DashboardBuilder() {
           onToggleShared={handleToggleShared}
           saving={saving}
           summary={summary}
+          fixedGrid={fixedGrid}
+          onFixedGrid={setFixedGrid}
         />
       </div>
 

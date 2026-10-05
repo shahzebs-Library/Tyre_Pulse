@@ -106,8 +106,8 @@ export function scheduleStatus(s, latestRun, now) {
 export const STATUS_META = {
   active: { label: 'Active', tone: 'good', color: 'var(--cc-green)' },
   paused: { label: 'Paused', tone: 'warn', color: 'var(--cc-amber)' },
-  failing: { label: 'Failing', tone: 'bad', color: 'var(--cc-red)' },
-  expired: { label: 'Run once, done', tone: 'muted', color: 'var(--cc-ink-3)' },
+  failing: { label: 'Failed', tone: 'bad', color: 'var(--cc-red)' },
+  expired: { label: 'Inactive', tone: 'muted', color: 'var(--cc-ink-3)' },
 }
 
 export function healthSegments(schedules = [], runs = [], now) {
@@ -237,4 +237,14 @@ export function recipientOptions(schedules = []) {
   const set = new Set()
   for (const s of schedules) for (const e of s.recipients || []) if (e) set.add(String(e).trim().toLowerCase())
   return [...set].sort()
+}
+
+/** One or two capital letters for a recipient avatar: "ahmad.khan@x.com" -> "AK". */
+export function recipientInitials(email) {
+  const local = String(email || '').trim().split('@')[0]
+  const parts = local.split(/[._\-+\s]+/).filter((p) => /[a-z0-9]/i.test(p))
+  if (!parts.length) return '?'
+  const first = parts[0].match(/[a-z0-9]/i)[0]
+  const second = parts.length > 1 ? parts[1].match(/[a-z0-9]/i)[0] : ''
+  return (first + second).toUpperCase()
 }

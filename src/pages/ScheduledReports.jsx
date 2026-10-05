@@ -6,7 +6,7 @@ import {
   CheckCircle, XCircle, AlertCircle, AlertTriangle, ChevronDown, X, Save, Lock,
   Package, Building2, Download, Loader2, FileSpreadsheet, CalendarClock, ShieldCheck,
   LayoutTemplate, Send, History, RefreshCw, CalendarDays, ChevronRight, Play, PauseCircle, List, LayoutGrid,
-  Users, Search,
+  Users, Search, CircleDot, Wrench,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { aiOps } from '../lib/api'
@@ -32,10 +32,10 @@ import {
 } from '../lib/api/scheduledReports'
 import { getTemplate } from '../lib/api/accidentReportTemplates'
 import { tyreManVehicleTypeSummary, tyreManVehicleTypeTable } from '../lib/inspectionCoverage'
-import { Card, CardState, Kpi, Donut, KitTable, ViewAll, fmtInt } from '../components/commandCenter/kit'
+import { Card, CardState, Trend, Donut, KitTable, ViewAll, fmtInt } from '../components/commandCenter/kit'
 import {
   moduleOf, MODULE_OPTIONS, scheduleLabel, scheduleStatus, STATUS_META, healthSegments, registryKpis,
-  deliveryTrend, recentActivity, latestRunBySchedule, filterRegistry, recipientOptions,
+  deliveryTrend, recentActivity, latestRunBySchedule, filterRegistry, recipientOptions, recipientInitials,
 } from '../lib/scheduledReportsView'
 import './ScheduledReports.css'
 
@@ -43,14 +43,50 @@ import './ScheduledReports.css'
 // always inside it, so the month-on-month trend on the KPI tiles is honest.
 const HISTORY_DAYS = 70
 
-function KpiLabel({ title, sub }) {
-  return <>{title}<small className="sr-kpi-sub">{sub}</small></>
+/** Mockup KPI tile: title on top, big value with its trend, then a sub line. */
+function SrKpi({ icon: Icon, tone, title, value, display, sub, trend, goodWhenUp, danger, onClick, loading, tip }) {
+  const body = (
+    <>
+      <span className={`sr-kpi-icon ${tone}`}><Icon size={24} aria-hidden="true" /></span>
+      <span className="sr-kpi-body">
+        <span className="sr-kpi-title">{title}</span>
+        <span className="sr-kpi-row">
+          <b className="sr-kpi-val" style={danger ? { color: 'var(--cc-red)' } : undefined}>{loading ? '...' : (display ?? fmtInt(value))}</b>
+          <Trend value={trend} goodWhenUp={goodWhenUp} title={tip} />
+        </span>
+        <span className="sr-kpi-sub">{sub}</span>
+      </span>
+    </>
+  )
+  return onClick
+    ? <button type="button" className="cc-card sr-kpi" onClick={onClick} title={tip}>{body}</button>
+    : <div className="cc-card sr-kpi" title={tip}>{body}</div>
+}
+
+/** Initial-letter avatars for the first few recipients plus a "+N" count. */
+function RecipientStack({ list }) {
+  const r = list || []
+  if (!r.length) return <span className="cc-na">None</span>
+  const shown = r.slice(0, 3)
+  return (
+    <span className="sr-avatars" title={r.join(', ')}>
+      {shown.map((e, i) => <i key={`${e}-${i}`} className={`sr-av av${i}`} aria-hidden="true">{recipientInitials(e)}</i>)}
+      {r.length > shown.length && <small>+{r.length - shown.length}</small>}
+      <span className="sr-sr">{r.length} recipient{r.length === 1 ? '' : 's'}</span>
+    </span>
+  )
+}
+
+const MODULE_ICON = {
+  Fleet: Truck, Tyres: CircleDot, Workshop: Wrench, Finance: DollarSign, Compliance: ShieldCheck,
+  Drivers: Users, Inventory: Package, Executive: BarChart2, Accidents: AlertTriangle, Inspections: ClipboardList,
+  'Custom layout': LayoutTemplate,
 }
 
 const TREND_SERIES = [
-  { key: 'sent', label: 'Successful', color: 'var(--cc-green)' },
+  { key: 'sent', label: 'Successful', color: 'var(--cc-green)', area: true },
   { key: 'failed', label: 'Failed', color: 'var(--cc-red)' },
-  { key: 'expected', label: 'Expected', color: 'var(--cc-blue)', dashed: true },
+  { key: 'expected', label: 'Scheduled', color: 'var(--cc-blue)', area: true },
 ]
 
 /** Small SVG line chart for the 7-day delivery trend. */
@@ -62,7 +98,7 @@ function TrendChart({ points }) {
   const step = points.length > 1 ? (W - pad - 8) / (points.length - 1) : 0
   const x = (i) => pad + i * step
   const y = (v) => H - (v / max) * (H - 14)
-  const label = points.map((p) => `${p.label}: ${p.sent} sent, ${p.failed} failed, ${p.expected} expected`).join('; ')
+  const label = points.map((p) => `${p.label}: ${p.sent} sent, ${p.failed} failed, ${p.expected} scheduled`).join('; ')
   return (
     <div className="sr-trend">
       <div className="sr-trend-legend">
@@ -75,6 +111,10 @@ function TrendChart({ points }) {
               <line x1={pad} y1={y(max * f)} x2={W} y2={y(max * f)} stroke="var(--cc-inner-border)" />
               <text x={pad - 5} y={y(max * f) + 3} textAnchor="end" className="cc-axis">{Math.round(max * f)}</text>
             </g>
+          ))}
+          {TREND_SERIES.filter((s) => s.area && points.length > 1).map((s) => (
+            <polygon key={`a-${s.key}`} fill={s.color} fillOpacity="0.12" stroke="none"
+              points={`${x(0)},${H} ${points.map((p, i) => `${x(i)},${y(p[s.key])}`).join(' ')} ${x(points.length - 1)},${H}`} />
           ))}
           {TREND_SERIES.map((s) => (
             <g key={s.key}>
@@ -809,6 +849,7 @@ export default function ScheduledReports() {
   const [filterRecipient, setFilterRecipient] = useState('')
   const [search, setSearch] = useState('')
   const [view, setView] = useState('list')
+  const [selected, setSelected] = useState(() => new Set())
 
   // ── Fetch ───────────────────────────────────────────────────────────────────
   const fetchSchedules = useCallback(async () => {
@@ -1160,16 +1201,30 @@ export default function ScheduledReports() {
 
   const deliveriesBlocked = Boolean(jobsError)
   const kpiTiles = [
-    { icon: FileText, tone: 't-blue', value: loading ? null : reg.total, label: <KpiLabel title="Total schedules" sub={schedules.some((s) => isBuilderType(s.report_type)) ? 'Includes custom layouts' : 'Automated report schedules'} /> },
-    { icon: CheckCircle, tone: 't-green', value: loading ? null : reg.active, label: <KpiLabel title="Active schedules" sub={reg.activePct == null ? 'No schedules yet' : `${reg.activePct}% of schedules running`} />, onClick: () => setFilterActive('active') },
-    { icon: Send, tone: 't-purple', display: deliveriesBlocked ? 'N/A' : undefined, value: jobsLoading ? null : reg.deliveries, trend: reg.deliveriesTrend, label: <KpiLabel title="Deliveries (this month)" sub={deliveriesBlocked ? 'Delivery log could not be read' : reg.successPct == null ? 'No deliveries this month' : `${reg.successPct}% successful`} />, title: reg.deliveriesTrend == null ? 'Change vs last month is shown only when last month had deliveries' : 'Change vs last month' },
-    { icon: AlertCircle, tone: 't-red', display: deliveriesBlocked ? 'N/A' : undefined, value: jobsLoading ? null : reg.failed, trend: reg.failedTrend, goodWhenUp: false, danger: reg.failed > 0, label: <KpiLabel title="Failed runs (this month)" sub={kpis.failingSchedules ? `${kpis.failingSchedules} schedule${kpis.failingSchedules === 1 ? '' : 's'} need attention` : 'No schedule failing now'} />, onClick: () => setFilterActive('failing') },
-    { icon: Users, tone: 't-amber', value: loading ? null : reg.recipients, label: <KpiLabel title="Recipients" sub="Unique addresses on active schedules" /> },
+    { icon: FileText, tone: 't-blue', title: 'Total Schedules', value: loading ? null : reg.total, sub: schedules.some((s) => isBuilderType(s.report_type)) ? 'Includes custom layouts' : 'Active and automated reports' },
+    { icon: CheckCircle, tone: 't-green', title: 'Active Schedules', value: loading ? null : reg.active, sub: reg.activePct == null ? 'No schedules yet' : `${reg.activePct}% running as scheduled`, onClick: () => setFilterActive('active') },
+    { icon: Send, tone: 't-blue', title: 'Deliveries (This Month)', display: deliveriesBlocked ? 'N/A' : undefined, value: jobsLoading ? null : reg.deliveries, trend: reg.deliveriesTrend, sub: deliveriesBlocked ? 'Delivery log could not be read' : reg.successPct == null ? 'No deliveries this month' : `${reg.successPct}% successful deliveries`, tip: reg.deliveriesTrend == null ? 'Change vs last month is shown only when last month had deliveries' : 'Change vs last month' },
+    { icon: AlertCircle, tone: 't-red', title: 'Failed Runs', display: deliveriesBlocked ? 'N/A' : undefined, value: jobsLoading ? null : reg.failed, trend: reg.failedTrend, goodWhenUp: false, danger: reg.failed > 0, sub: kpis.failingSchedules ? `${kpis.failingSchedules} schedule${kpis.failingSchedules === 1 ? '' : 's'} need attention` : 'No schedule failing now', onClick: () => setFilterActive('failing'), tip: 'Failed deliveries this month' },
+    { icon: Users, tone: 't-purple', title: 'Recipients', value: loading ? null : reg.recipients, sub: 'Unique addresses on active schedules' },
   ]
+
+  const toggleSel = (id) => setSelected((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const allVisibleSelected = filtered.length > 0 && filtered.every((s) => selected.has(s.id))
+  const toggleAllVisible = () => setSelected(allVisibleSelected ? new Set() : new Set(filtered.map((s) => s.id)))
+  const selectedRows = schedules.filter((s) => selected.has(s.id))
+  const bulkSetActive = async (active) => {
+    for (const s of selectedRows) if (!!s.active !== active) await handleToggle(s)
+    setSelected(new Set())
+  }
 
   const columns = [
     {
-      key: 'name', header: 'Report name', sortValue: (s) => s.name || '',
+      key: 'sel', sortable: false,
+      header: <input type="checkbox" className="sr-check" aria-label="Select all visible schedules" checked={allVisibleSelected} onChange={toggleAllVisible} disabled={!filtered.length} />,
+      cell: (s) => <span onClick={(e) => e.stopPropagation()} role="presentation"><input type="checkbox" className="sr-check" aria-label={`Select ${s.name || 'schedule'}`} checked={selected.has(s.id)} onChange={() => toggleSel(s.id)} /></span>,
+    },
+    {
+      key: 'name', header: 'Report Name', sortValue: (s) => s.name || '',
       cell: (s) => {
         const { Icon } = iconCfgFor(s.report_type)
         return (
@@ -1180,14 +1235,17 @@ export default function ScheduledReports() {
         )
       },
     },
-    { key: 'module', header: 'Module', sortValue: (s) => moduleOf(s.report_type), cell: (s) => moduleOf(s.report_type) },
     {
-      key: 'schedule', header: 'Schedule', sortValue: (s) => s.frequency || '',
-      cell: (s) => { const l = scheduleLabel(s); return <span className="sr-two"><b>{l.line1}</b><small>{l.line2}</small></span> },
+      key: 'module', header: 'Module', sortValue: (s) => moduleOf(s.report_type),
+      cell: (s) => { const m = moduleOf(s.report_type); const MI = MODULE_ICON[m] || FileText; return <span className="sr-module"><MI size={14} aria-hidden="true" /> {m}</span> },
     },
     {
-      key: 'recipients', header: 'Recipients', numeric: true, sortValue: (s) => (s.recipients || []).length,
-      cell: (s) => { const r = s.recipients || []; return <span title={r.join(', ')}>{fmtInt(r.length)}</span> },
+      key: 'schedule', header: 'Schedule', sortValue: (s) => s.frequency || '',
+      cell: (s) => { const l = scheduleLabel(s); return <span className="sr-sched"><span className="sr-sched-ic" aria-hidden="true"><CalendarDays size={14} /></span><span className="sr-two"><b>{l.line1}</b><small>{l.line2}</small></span></span> },
+    },
+    {
+      key: 'recipients', header: 'Recipients', sortValue: (s) => (s.recipients || []).length,
+      cell: (s) => <RecipientStack list={s.recipients} />,
     },
     {
       key: 'format', header: 'Format', sortable: false,
@@ -1198,7 +1256,7 @@ export default function ScheduledReports() {
       cell: (s) => { const m = STATUS_META[scheduleStatus(s, latestRun.get(s.id), now)]; return <span className={`cc-pill ${m.tone}`}>{m.label}</span> },
     },
     {
-      key: 'last', header: 'Last run', sortValue: (s) => latestRun.get(s.id)?.sent_at || s.last_sent_at || '',
+      key: 'last', header: 'Last Run', sortValue: (s) => latestRun.get(s.id)?.sent_at || s.last_sent_at || '',
       cell: (s) => {
         const r = latestRun.get(s.id)
         if (!r) return s.last_sent_at ? <span className="sr-two"><b>{formatRunStamp(s.last_sent_at)}</b><small>Not in the last {HISTORY_DAYS} days log</small></span> : <span className="cc-na">Never run</span>
@@ -1212,7 +1270,7 @@ export default function ScheduledReports() {
       },
     },
     {
-      key: 'next', header: 'Next run', sortValue: (s) => (s.active ? s.next_run_at || '' : ''),
+      key: 'next', header: 'Next Run', sortValue: (s) => (s.active ? s.next_run_at || '' : ''),
       cell: (s) => (s.active && s.next_run_at ? <span className="sr-nowrap">{formatNextRun(s.next_run_at, td, now)}</span> : <span className="cc-na">{s.active ? 'Not scheduled' : 'Paused'}</span>),
     },
     {
@@ -1220,7 +1278,7 @@ export default function ScheduledReports() {
       cell: (s) => (
         <span className="sr-actions" onClick={(e) => e.stopPropagation()} role="presentation">
           <button type="button" className="sr-run" onClick={() => handleSendNow(s)} disabled={sendingNow === s.id} title="Email this report to its recipients now">
-            {sendingNow === s.id ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Play size={13} aria-hidden="true" />} Run now
+            {sendingNow === s.id ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Play size={13} aria-hidden="true" />} Run Now
           </button>
           <button type="button" className="cc-icon-btn" onClick={() => handleGenerate(s)} disabled={generating === s.id} aria-label={`Generate and download: ${s.name || ''}`} title="Generate and download now">
             {generating === s.id ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
@@ -1277,8 +1335,8 @@ export default function ScheduledReports() {
         </div>
       )}
 
-      <div className="cc-kpis sr-kpis">
-        {kpiTiles.map((k, i) => <Kpi key={i} {...k} loading={k.value == null && k.display == null} />)}
+      <div className="sr-kpis">
+        {kpiTiles.map((k, i) => <SrKpi key={i} {...k} loading={k.value == null && k.display == null} />)}
       </div>
 
       <div className="cc-card sr-filterbar">
@@ -1315,17 +1373,17 @@ export default function ScheduledReports() {
         </div>
       </div>
 
-      <Card title={<>Schedule registry <span className="sr-count">({fmtInt(filtered.length)}{filtered.length !== schedules.length ? ` of ${fmtInt(schedules.length)}` : ''})</span></>}
+      <Card title={<>Schedule Registry <span className="sr-count">({fmtInt(filtered.length)}{filtered.length !== schedules.length ? ` of ${fmtInt(schedules.length)}` : ''})</span></>}
         action={<button type="button" className="cc-icon-btn" onClick={() => { fetchSchedules(); fetchJobRuns() }} aria-label="Refresh" title="Refresh"><RefreshCw size={14} className={loading ? 'animate-spin' : ''} /></button>}>
-        {!loading && !error && schedules.length === 0 ? (
-          <div className="cc-empty">
-            <div>
-              <b>{td('schedreports.empty.noSchedulesTitle', 'No schedules yet')}</b>
-              <p className="sr-muted">{td('schedreports.empty.noSchedulesDesc', 'Set up automated fleet and tyre reports and have them generated and delivered on your schedule.')}</p>
-              <button type="button" className="cc-btn-primary" onClick={openCreate}><Plus size={15} aria-hidden="true" /> {td('schedreports.empty.createFirst', 'Create first schedule')}</button>
-            </div>
+        {selected.size > 0 && (
+          <div className="sr-bulk" role="region" aria-label="Bulk actions">
+            <b>{fmtInt(selected.size)} selected</b>
+            <button type="button" className="cc-btn-ghost" onClick={() => bulkSetActive(true)}><Play size={13} aria-hidden="true" /> Activate</button>
+            <button type="button" className="cc-btn-ghost" onClick={() => bulkSetActive(false)}><PauseCircle size={13} aria-hidden="true" /> Pause</button>
+            <button type="button" className="cc-btn-ghost" onClick={() => setSelected(new Set())}><X size={13} aria-hidden="true" /> Clear</button>
           </div>
-        ) : view === 'grid' && !loading ? (
+        )}
+        {view === 'grid' && !loading && schedules.length > 0 ? (
           filtered.length === 0 ? (
             <div className="cc-empty"><div>No schedule matches these filters.<br /><button type="button" className="cc-btn-ghost" onClick={resetFilters}>Clear filters</button></div></div>
           ) : (
@@ -1345,26 +1403,33 @@ export default function ScheduledReports() {
             onRetry={fetchSchedules}
             getRowId={(s) => String(s.id)}
             onRowClick={(s) => openEdit(s)}
-            empty={anyFilter ? 'No schedule matches these filters.' : 'No schedules yet.'}
+            empty={anyFilter ? 'No schedule matches these filters.' : td('schedreports.empty.noSchedulesTitle', 'No schedules yet')}
           />
+        )}
+        {!loading && !error && schedules.length === 0 && (
+          <div className="sr-empty-cta">
+            <p className="sr-muted">{td('schedreports.empty.noSchedulesDesc', 'Set up automated fleet and tyre reports and have them generated and delivered on your schedule.')}</p>
+            <button type="button" className="cc-btn-primary" onClick={openCreate}><Plus size={15} aria-hidden="true" /> {td('schedreports.empty.createFirst', 'Create first schedule')}</button>
+          </div>
         )}
       </Card>
 
       <div className="sr-bottom">
-        <Card title="Schedule health" sub="Status of every schedule right now">
-          <CardState state={{ loading, data: loading ? null : schedules, error: null }} empty={!loading && schedules.length === 0 ? 'No schedules yet.' : null}>
-            <Donut segments={health} total={schedules.length} centerLabel="Total schedules"
+        <Card title="Schedule Health" sub="Status of every schedule right now">
+          <CardState state={{ loading, data: loading ? null : schedules, error: null }}>
+            <Donut segments={health} total={schedules.length} centerLabel="Total Schedules"
               onSelect={(seg) => setFilterActive(seg.key)} />
+            {schedules.length === 0 && <p className="sr-muted sr-note">No schedules yet, so every status reads 0.</p>}
           </CardState>
         </Card>
 
-        <Card title="Delivery trend" sub="Last 7 days. Expected comes from current schedule settings.">
+        <Card title={<>Delivery Trend <span className="sr-count">(Last 7 Days)</span></>} sub="Scheduled comes from current schedule settings.">
           <CardState state={{ loading: jobsLoading, data: jobsLoading ? null : jobRuns, error: jobsError, retry: fetchJobRuns }}>
             <TrendChart points={trend} />
           </CardState>
         </Card>
 
-        <Card title="Recent activity" action={<ViewAll label="View all" onClick={() => setHistoryOpen(true)} />}>
+        <Card title="Recent Activity" action={<ViewAll label="View All" onClick={() => setHistoryOpen(true)} />}>
           <CardState state={{ loading: jobsLoading, data: jobsLoading ? null : jobRuns, error: jobsError, retry: fetchJobRuns }}
             empty={!jobsLoading && !jobsError && activity.length === 0 ? `No deliveries in the last ${HISTORY_DAYS} days. Use Run now to send one.` : null}>
             <div className="cc-list">

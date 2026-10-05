@@ -124,8 +124,8 @@ export function gridColumns(device, canvasWidth) {
   if (d.cols) return d.cols
   const w = Number(canvasWidth)
   if (!Number.isFinite(w) || w <= 0) return 4
-  if (w < 560) return 1
-  if (w < 900) return 2
+  if (w < 520) return 1
+  if (w < 640) return 2
   return 4
 }
 

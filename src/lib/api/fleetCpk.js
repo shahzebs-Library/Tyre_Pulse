@@ -160,19 +160,28 @@ export async function getFleetAreaMap({ country } = {}) {
   }
 }
 
-export async function getFleetCpk({ country, from, to, strict = false } = {}) {
+/**
+ * Registered-site filter (vehicle_fleet.site, 20261005170000). The arg is only
+ * sent when a site is chosen, so an all-sites call is byte-identical to before.
+ */
+export function withSite(params, site) {
+  const s = typeof site === 'string' ? site.trim() : ''
+  return s && s.toLowerCase() !== 'all' ? { ...params, p_site: s } : params
+}
+
+export async function getFleetCpk({ country, from, to, site, strict = false } = {}) {
   try {
-    const { data, error } = await supabase.rpc('get_fleet_cpk', {
+    const { data, error } = await supabase.rpc('get_fleet_cpk', withSite({
       p_country: country && country !== 'All' ? country : null,
       p_from: from || null,
       p_to: to || null,
-    })
+    }, site))
     if (error) {
       if (strict) throw toServiceError(error)
       return emptyResult()
     }
-    if (!data) {
-      if (strict) throw new Error('Fleet CPK returned no response.')
+    if (!data || data.ok === false) {
+      if (strict) throw new Error(data?.reason === 'forbidden' ? 'You do not have access to this site or country.' : 'Fleet CPK returned no response.')
       return emptyResult()
     }
     return {

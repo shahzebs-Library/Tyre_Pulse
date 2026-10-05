@@ -32,6 +32,7 @@ import { getFleetCpk } from '../lib/api/fleetCpk'
 import { getTyrePriceBasis, priceBasisNote } from '../lib/api/tyrePriceBackfill'
 import { getCpkDrivers } from '../lib/api/cpkDrivers'
 import { getBrandSizeCpk } from '../lib/api/brandSizeCpk'
+import { listSites, siteOptionsForCountry } from '../lib/api/sites'
 import {
   CPK_PERIODS, DEFAULT_PERIOD, periodBounds, periodLabel,
   MOBILITY_META, splitByMobility,
@@ -78,6 +79,21 @@ export default function CpkIntelligence() {
   const [country, setCountry] = useState(initialCountry)
   const [periodKey, setPeriodKey] = useState(DEFAULT_PERIOD)
   const [tab, setTab] = useState('fleet')
+  // Registered site (vehicle_fleet.site). '' = all sites. Options come from the
+  // site register for the chosen country; a failed read just leaves All Sites.
+  const [site, setSite] = useState('')
+  const [siteOptions, setSiteOptions] = useState([])
+  useEffect(() => {
+    let cancelled = false
+    setSite('')
+    setSiteOptions([])
+    listSites({ country, activeOnly: true })
+      .then((rows) => { if (!cancelled) setSiteOptions(siteOptionsForCountry(rows, country)) })
+      .catch(() => { if (!cancelled) setSiteOptions([]) })
+    return () => { cancelled = true }
+  }, [country])
+  const siteArg = site || undefined
+  const scopeLabel = site ? `${country}, ${site}` : country
 
   // Calendar custom range (used only when periodKey === 'custom'). An incomplete
   // range falls back to the current-month bounds inside periodBounds.
@@ -99,7 +115,7 @@ export default function CpkIntelligence() {
     setFleetCpk({ perVehicle: [], byType: [], fleet: [] })
     setLoading(true)
     setError('')
-    getFleetCpk({ country, from: bounds.from, to: bounds.to, strict: true })
+    getFleetCpk({ country, from: bounds.from, to: bounds.to, site: siteArg, strict: true })
       .then((res) => { if (!cancelled && request === loadId.current) setFleetCpk(res || { perVehicle: [], byType: [], fleet: [] }) })
       .catch((loadError) => {
         if (!cancelled && request === loadId.current) {
@@ -109,7 +125,7 @@ export default function CpkIntelligence() {
       })
       .finally(() => { if (!cancelled && request === loadId.current) setLoading(false) })
     return () => { cancelled = true }
-  }, [country, bounds.from, bounds.to])
+  }, [country, bounds.from, bounds.to, siteArg])
 
   useEffect(() => load(), [load])
 
@@ -125,10 +141,10 @@ export default function CpkIntelligence() {
   const loadOverviewDrivers = useCallback(() => {
     const id = ++ovSeq.current
     setOvDrivers({ loading: true, data: null, error: null })
-    getCpkDrivers({ country, from: bounds.from, to: bounds.to, strict: true })
+    getCpkDrivers({ country, from: bounds.from, to: bounds.to, site: siteArg, strict: true })
       .then((d) => { if (id === ovSeq.current) setOvDrivers({ loading: false, data: d, error: null }) })
       .catch((e) => { if (id === ovSeq.current) setOvDrivers({ loading: false, data: null, error: toUserMessage(e, 'Could not load what moved CPK.') }) })
-  }, [country, bounds.from, bounds.to])
+  }, [country, bounds.from, bounds.to, siteArg])
 
   useEffect(() => {
     if (tab !== 'fleet') return undefined
@@ -136,13 +152,13 @@ export default function CpkIntelligence() {
     setPrevFleetRow(null)
     if (prevWindow) {
       // A failed comparison read only removes the trend arrows; it never blocks the page.
-      getFleetCpk({ country, from: prevWindow.from, to: prevWindow.to })
+      getFleetCpk({ country, from: prevWindow.from, to: prevWindow.to, site: siteArg })
         .then((res) => { if (!cancelled) setPrevFleetRow(res?.fleet?.[0] || null) })
         .catch(() => { if (!cancelled) setPrevFleetRow(null) })
     }
     loadOverviewDrivers()
     return () => { cancelled = true }
-  }, [tab, country, prevWindow, loadOverviewDrivers])
+  }, [tab, country, prevWindow, loadOverviewDrivers, siteArg])
 
   const refreshAll = useCallback(() => {
     load()
@@ -177,9 +193,9 @@ export default function CpkIntelligence() {
     setAdvancedError('')
     Promise.allSettled([
       tab === 'drivers'
-        ? getCpkDrivers({ country, from: bounds.from, to: bounds.to, strict: true })
+        ? getCpkDrivers({ country, from: bounds.from, to: bounds.to, site: siteArg, strict: true })
         : Promise.resolve(null),
-      getBrandSizeCpk({ country, from: bounds.from, to: bounds.to, strict: true }),
+      getBrandSizeCpk({ country, from: bounds.from, to: bounds.to, site: siteArg, strict: true }),
     ]).then(([d, b]) => {
       if (cancelled) return
       if (d.status === 'fulfilled' && d.value) setDrivers(d.value)
@@ -189,7 +205,7 @@ export default function CpkIntelligence() {
       if (failed.length) setAdvancedError(`Could not load ${failed.join(' and ')} for this period.`)
     }).finally(() => { if (!cancelled) setAdvLoading(false) })
     return () => { cancelled = true }
-  }, [tab, country, bounds.from, bounds.to])
+  }, [tab, country, bounds.from, bounds.to, siteArg])
 
   // No row in the period must still label money in the country's currency, never the country code.
   const currency = fleetCpk.fleet?.[0]?.currency || currencyForCountryCode(country, country)
@@ -240,7 +256,7 @@ export default function CpkIntelligence() {
         { key: 'cpk_tyre', header: 'CPK Tyre' },
         { key: 'cpk_total', header: 'CPK Total' },
       ],
-      `${country} ${MOBILITY_META[mobility].label} CPK by type (${MOBILITY_META[mobility].sublabel})`,
+      `${scopeLabel} ${MOBILITY_META[mobility].label} CPK by type (${MOBILITY_META[mobility].sublabel})`,
       `TyrePulse_CPK_${country}_${mobility}`,
       'landscape',
     )
@@ -291,7 +307,7 @@ export default function CpkIntelligence() {
       ['vehicle_type', 'basis', 'units', 'distance', 'tyre_cost', 'maintenance_cost', 'total_cost', 'cpk_tyre', 'cpk_total', 'coverage'],
       ['Asset type', 'Basis', 'Units', 'Km or hours', `Tyre cost (${currency})`, `Maintenance cost (${currency})`, `Total cost (${currency})`, 'Tyre CPK or CPH', 'Total CPK or CPH', 'Coverage'],
       `TyrePulse_CPK_${country}_asset_types`,
-      `CPK by asset type, ${country}, ${bounds.from} to ${bounds.to}`,
+      `CPK by asset type, ${scopeLabel}, ${bounds.from} to ${bounds.to}`,
     )
   }
 
@@ -344,6 +360,13 @@ export default function CpkIntelligence() {
             <button key={c} type="button" role="radio" aria-checked={country === c} onClick={() => setCountry(c)}>{c}</button>
           ))}
         </div>
+        <label className="cpk-period">
+          <span>Site</span>
+          <select className="cc-select" value={site} onChange={(e) => setSite(e.target.value)} aria-label="Site">
+            <option value="">All Sites</option>
+            {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </label>
         <label className="cpk-period">
           <span>Period</span>
           <select className="cc-select" value={periodKey} onChange={(e) => setPeriodKey(e.target.value)} aria-label="Period">
@@ -401,7 +424,7 @@ export default function CpkIntelligence() {
           {noFleet && (
             <div className="cc-card cpk-alert">
               <Info size={16} aria-hidden="true" />
-              <span>No cost or meter data for {country} between {bounds.from} and {bounds.to}. Try a longer period.</span>
+              <span>No cost or meter data for {scopeLabel} between {bounds.from} and {bounds.to}. Try a longer period.</span>
             </div>
           )}
 
@@ -470,7 +493,7 @@ export default function CpkIntelligence() {
             </Card>
           </div>
 
-          <Card title="Cost by asset type" sub={`${country}, ${bounds.from} to ${bounds.to}. Coverage is the share of cost on assets with a meter reading.`}
+          <Card title="Cost by asset type" sub={`${scopeLabel}, ${bounds.from} to ${bounds.to}. Coverage is the share of cost on assets with a meter reading.`}
             className="cpk-table-card"
             action={(
               <div className="cpk-table-actions">
@@ -490,7 +513,7 @@ export default function CpkIntelligence() {
               loading={loading}
               error={error || undefined}
               onRetry={load}
-              empty={`No asset type carries cost or meter data for ${country} in this period.`}
+              empty={`No asset type carries cost or meter data for ${scopeLabel} in this period.`}
               getRowId={(r) => r.key}
             />
           </Card>
@@ -536,12 +559,16 @@ export default function CpkIntelligence() {
                   searchKeys={['asset_no', 'vehicle_type']}
                   initialSort={{ key: 'cpk_total', dir: 'desc' }}
                   pageSize={25}
-                  emptyText={`No ${meta.label.toLowerCase()} vehicles with cost or meter data for ${country} in this period.`}
+                  emptyText={`No ${meta.label.toLowerCase()} vehicles with cost or meter data for ${scopeLabel} in this period.`}
                 />
               </section>
             )
           })}
         </div>
+      )}
+
+      {site && (tab === 'km_source' || tab === 'units' || tab === 'km_intel') && (
+        <p className="cpk-note"><Info size={14} aria-hidden="true" /> This view covers every site in {country}. The site filter applies to the overview, asset types, vehicles, brand value, change drivers, scenario and report tabs.</p>
       )}
 
       {tab === 'km_source' && (

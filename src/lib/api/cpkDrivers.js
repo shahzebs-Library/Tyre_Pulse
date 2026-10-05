@@ -18,6 +18,7 @@
  * empty state - it never throws to the UI.
  */
 import { supabase, toServiceError } from './_client'
+import { withSite } from './fleetCpk'
 
 function emptyResult() {
   return { ok: false, windows: null, segments: [] }
@@ -35,15 +36,15 @@ function emptyResult() {
  * @returns {Promise<{ ok:boolean, windows:object|null, segments:Array }>}
  *   Forgiving by default; strict callers receive source failures for explicit UI recovery.
  */
-export async function getCpkDrivers({ country, from, to, prevFrom, prevTo, strict = false } = {}) {
+export async function getCpkDrivers({ country, from, to, prevFrom, prevTo, site, strict = false } = {}) {
   try {
-    const { data, error } = await supabase.rpc('get_cpk_drivers', {
+    const { data, error } = await supabase.rpc('get_cpk_drivers', withSite({
       p_country: country && country !== 'All' ? country : null,
       p_from: from || null,
       p_to: to || null,
       p_prev_from: prevFrom || null,
       p_prev_to: prevTo || null,
-    })
+    }, site))
     if (error) {
       if (strict) throw toServiceError(error)
       return emptyResult()

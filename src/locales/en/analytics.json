@@ -50,7 +50,8 @@
     "totalCost": "Total Cost",
     "avgCost": "Avg Cost",
     "highRisk": "High Risk",
-    "topCategory": "Top Category"
+    "topCategory": "Top Category",
+    "title": "Site metrics"
   },
   "brand": {
     "brand": "Brand",
@@ -58,7 +59,8 @@
     "totalCost": "Total Cost",
     "avgPerTyre": "Avg/Tyre",
     "failureRate": "Failure Rate",
-    "topFailure": "Top Failure"
+    "topFailure": "Top Failure",
+    "title": "Brand metrics"
   },
   "trend": {
     "forecast": "Forecast",

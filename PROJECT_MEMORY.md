@@ -5,6 +5,20 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ SESSION 2026-10-05 (part 11) — RAW I18N KEYS ON SCREEN + RAW ERRORS ON SIGN-IN. No migration.
+- Owner: sign-in button showed "auth.login.signingIn". Cause: t() returns the KEY PATH when a key is missing
+  (falls back en -> key). Full scan of every literal t('ns.path') + prefix helpers (`const p = k => t(`ns.${k}`)`)
+  against src/locales/en+ar found 5 missing: auth.login.signingIn, common.clearSearch, analytics.site.title,
+  analytics.brand.title, workorders.exportTruncated. All added in en AND ar (+ auth.login.sendVerificationCode,
+  auth.login.errCodeInvalid replacing hard-coded English on Login).
+- GUARD: src/test/webI18nKeyCoverage.test.js scans all of src (not tests/locales) and fails on any key that does not
+  resolve to a STRING in en, or in ar when that namespace has an ar file. Mutation-checked (removing the en keys
+  fails it). RULE: `t(key) || 'fallback'` and `t(key, { defaultValue })` do NOTHING here - a missing key is
+  truthy text. Add the key instead.
+- SECURITY (auth page): Login.jsx rendered raw err.message / authErr.message / ssoErr.message / signIn rpcErr in 8
+  places and QrLoginPanel passed raw err.message up. All now go through safeError.toUserMessage(err, fallback).
+- Dynamic keys (t(`x.${var}`)) are only prefix-checked; a bad runtime suffix still renders its path.
+
 # ⚑ SESSION 2026-10-05 (part 10) — SIGN-IN + 2FA IN MARKETING LOOK; 16 PAGES RE-MATCHED TO MOCKUPS; NEW BUILDER WIDGETS.
 - SIGN-IN (src/pages/Login.jsx + components/auth/login/*): marketing system (asphalt #161616, signal yellow #FFC629 as a FILL
   behind dark text only, Archivo headline, slash logo), photo /login-art/riyadh-loader.webp (from marketing/public/photos).

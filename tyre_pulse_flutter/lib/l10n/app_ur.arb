@@ -3209,5 +3209,11 @@
   "qrLoginApproveNumber": "نمبر {number} کے ساتھ منظور کریں",
   "qrLoginDecline": "مسترد کریں",
   "qrLoginMismatch": "یہ نمبر مماثل نہیں تھا۔ کوڈ منسوخ ہو گیا ہے؛ کمپیوٹر پر نیا کوڈ بنائیں۔",
-  "qrLoginAdmin": "QR سائن ان ایڈمنسٹریٹر اکاؤنٹس کے لیے دستیاب نہیں ہے۔ اپنے پاس ورڈ سے سائن ان کریں۔"
+  "qrLoginAdmin": "QR سائن ان ایڈمنسٹریٹر اکاؤنٹس کے لیے دستیاب نہیں ہے۔ اپنے پاس ورڈ سے سائن ان کریں۔",
+  "checklistDetailTitle": "چیک لسٹ کی تفصیلات",
+  "checklistDetailSubmittedOn": "{date} کو جمع کرائی گئی",
+  "checklistDetailReviewNote": "جائزہ لینے والے کا نوٹ",
+  "checklistDetailOpen": "چیک لسٹ کھولیں",
+  "checklistDetailScoreOnly": "اسکور: {pct}%",
+  "checklistDetailPhotoUnavailable": "یہ تصویر اس ڈیوائس پر دستیاب نہیں"
 }

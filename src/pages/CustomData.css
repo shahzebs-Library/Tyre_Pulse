@@ -1,0 +1,98 @@
+/* Custom Data Manager page. Only --cc-* tokens, so light and dark share one sheet. */
+.cdm-page .cc-strong { font-weight: 600; }
+
+.cdm-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px; }
+.cdm-head-copy { min-width: 0; flex: 1 1 320px; }
+.cdm-crumb { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--cc-ink-3); }
+.cdm-crumb span { color: var(--cc-ink-2); font-weight: 600; }
+.cdm-head h1 { margin: 6px 0 4px; font-size: clamp(22px, 2.4vw, 28px); font-weight: 750; letter-spacing: -0.02em; color: var(--cc-ink); }
+.cdm-head p { margin: 0; color: var(--cc-ink-2); font-size: 13.5px; max-width: 70ch; }
+.cdm-head-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cdm-scope { font-size: 12.5px; color: var(--cc-ink-2); background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 9px; padding: 8px 12px; }
+
+.cdm-page .cdm-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.cdm-kpi-sub { display: block; margin-top: 2px; font-size: 11px; font-weight: 400; line-height: 1.3; color: var(--cc-ink-3); overflow-wrap: anywhere; }
+.cdm-tabbar { padding: 8px 10px; }
+
+.cdm-banner { flex-direction: row; align-items: flex-start; gap: 10px; }
+.cdm-banner > svg { flex: none; margin-top: 2px; color: var(--cc-blue); }
+.cdm-banner.bad > svg { color: var(--cc-red); }
+.cdm-banner > div { flex: 1; min-width: 0; font-size: 13px; }
+.cdm-banner p { margin: 0; color: var(--cc-ink-2); font-size: 12.5px; }
+
+/* Registry + field intelligence side by side */
+.cdm-row { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr); gap: 14px; align-items: start; }
+.cdm-stack { display: flex; flex-direction: column; gap: 14px; }
+.cdm-filters { align-items: center; gap: 8px; margin-bottom: 8px; }
+.cdm-filters .cc-select { padding-top: 9px; padding-bottom: 9px; font-size: 12.5px; max-width: 260px; }
+.cdm-count { margin-left: auto; font-size: 12px; color: var(--cc-ink-3); white-space: nowrap; }
+
+.cdm-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.cdm-field { display: inline-flex; align-items: center; gap: 6px; }
+.cdm-field.is-selected { color: var(--cc-green); }
+.cdm-field.is-selected::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--cc-green); }
+.cdm-arrow { display: inline-flex; align-items: center; gap: 6px; }
+.cdm-arrow svg { color: var(--cc-ink-3); }
+.cdm-nowrap { white-space: nowrap; }
+.cdm-trunc { display: inline-block; max-width: 300px; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+
+.cdm-intel-body { display: flex; flex-direction: column; gap: 14px; }
+.cdm-intel-title { margin: 0; font-size: 13.5px; font-weight: 700; color: var(--cc-ink); }
+.cdm-facts { margin: 0; display: grid; gap: 8px; }
+.cdm-facts > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; font-size: 12.5px; }
+.cdm-facts dt { color: var(--cc-ink-3); }
+.cdm-facts dd { margin: 0; color: var(--cc-ink); font-weight: 600; overflow-wrap: anywhere; }
+.cdm-label { display: block; margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--cc-ink-2); }
+.cdm-chips { display: inline-flex; flex-wrap: wrap; gap: 5px; white-space: normal; }
+.cdm-chip { font-size: 11.5px; color: var(--cc-ink-2); background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 999px; padding: 2px 9px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cdm-chip b { color: var(--cc-ink); font-weight: 600; }
+.cdm-action { display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--cc-inner-border); }
+.cdm-action .cc-select { padding: 8px 10px; font-size: 12.5px; }
+.cdm-action .cc-na, .cdm-intel-body > .cc-na { font-size: 11.5px; margin: 0; }
+.cdm-intel-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.cdm-ok { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 12.5px; color: var(--cc-green); }
+.cdm-err { margin: 0; font-size: 12.5px; color: var(--cc-red); }
+
+.cdm-add { align-items: flex-end; gap: 10px; }
+.cdm-add .cc-field { flex: 1 1 220px; }
+.cdm-add .cc-select { padding: 8px 10px; font-size: 12.5px; }
+.cdm-add-arrow { color: var(--cc-ink-3); margin-bottom: 10px; }
+.cdm-danger:hover { color: var(--cc-red); border-color: var(--cc-red); }
+.cc-btn-primary.cdm-danger-fill { background: var(--cc-red); border-color: var(--cc-red); }
+.cdm-pill-btn { border: 0; cursor: pointer; }
+.cdm-pill-btn:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 2px; }
+
+.cdm-record { margin-top: 12px; padding: 12px; border: 1px solid var(--cc-inner-border); border-radius: 10px; background: var(--cc-inner); }
+.cdm-record-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 10px; }
+.cdm-record-grid { margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+.cdm-record-grid > div { border: 1px solid var(--cc-inner-border); border-radius: 8px; padding: 7px 10px; min-width: 0; }
+.cdm-record-grid dt { font-size: 11.5px; font-weight: 600; color: var(--cc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cdm-record-grid dd { margin: 3px 0 0; font-size: 12px; color: var(--cc-ink-2); overflow-wrap: anywhere; }
+
+.cdm-bars { display: flex; flex-direction: column; gap: 6px; }
+.cdm-bar { display: grid; grid-template-columns: minmax(110px, 220px) minmax(0, 1fr) 70px; align-items: center; gap: 10px; background: transparent; border: 0; padding: 5px 4px; border-radius: 8px; color: var(--cc-ink); text-align: left; cursor: pointer; }
+.cdm-bar:hover { background: var(--cc-inner); }
+.cdm-bar:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 1px; }
+.cdm-bar b { text-align: right; font-size: 12.5px; }
+.cdm-bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cdm-note { display: flex; align-items: center; gap: 6px; margin: 12px 0 0; font-size: 11.5px; color: var(--cc-ink-3); }
+.cdm-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+.cdm-dot.good { background: var(--cc-green); }
+.cdm-dot.warn { background: var(--cc-amber); margin-left: 8px; }
+
+.cdm-form { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.cdm-form p { margin: 0; }
+.cdm-modal-foot { display: flex; justify-content: flex-end; gap: 8px; }
+
+@media (max-width: 1280px) {
+  .cdm-page .cdm-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cdm-row { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .cdm-page .cdm-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cdm-filters .cc-select { max-width: none; flex: 1 1 150px; }
+  .cdm-count { margin-left: 0; }
+  .cdm-bar { grid-template-columns: minmax(0, 1fr) 60px; }
+  .cdm-bar .cc-bar-track { grid-column: 1 / -1; grid-row: 2; }
+  .cdm-add-arrow { display: none; }
+}

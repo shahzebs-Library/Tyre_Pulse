@@ -3209,5 +3209,11 @@
   "qrLoginApproveNumber": "موافقة بالرقم {number}",
   "qrLoginDecline": "رفض",
   "qrLoginMismatch": "هذا الرقم غير مطابق. تم إلغاء الرمز؛ أنشئ رمزاً جديداً على الكمبيوتر.",
-  "qrLoginAdmin": "تسجيل الدخول عبر رمز QR غير متاح لحسابات المسؤولين. سجّل الدخول بكلمة المرور."
+  "qrLoginAdmin": "تسجيل الدخول عبر رمز QR غير متاح لحسابات المسؤولين. سجّل الدخول بكلمة المرور.",
+  "checklistDetailTitle": "تفاصيل قائمة الفحص",
+  "checklistDetailSubmittedOn": "أُرسلت في {date}",
+  "checklistDetailReviewNote": "ملاحظة المراجع",
+  "checklistDetailOpen": "فتح قائمة الفحص",
+  "checklistDetailScoreOnly": "النتيجة: {pct}%",
+  "checklistDetailPhotoUnavailable": "الصورة غير متاحة على هذا الجهاز"
 }

@@ -330,6 +330,7 @@ Future<void> _pump(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        pmClockProvider.overrideWithValue(() => _fixedNow),
         pmRepositoryProvider.overrideWithValue(repository),
         maintenanceWorkOrderRepositoryProvider.overrideWithValue(
           workOrders ?? _WorkOrderRepository(),
@@ -405,7 +406,7 @@ final class _PmRepository implements PmRepository {
 
   @override
   Future<List<PmPlan>> listActive({String? country}) async {
-    final DateTime now = DateTime.now();
+    final DateTime now = _fixedNow;
     return <PmPlan>[
       PmPlan(
         id: 'overdue',
@@ -489,7 +490,7 @@ List<MaintenanceWorkOrder> _sampleOrders() => <MaintenanceWorkOrder>[
         status: 'Assigned',
         priority: 'Medium',
         site: 'NHC',
-        openedAt: DateTime.now().subtract(const Duration(days: 1)),
+        openedAt: _fixedNow.subtract(const Duration(days: 1)),
       ),
       MaintenanceWorkOrder(
         id: 'breakdown',
@@ -500,9 +501,13 @@ List<MaintenanceWorkOrder> _sampleOrders() => <MaintenanceWorkOrder>[
         status: 'In Progress',
         priority: 'High',
         site: 'Al Quoz Site',
-        openedAt: DateTime.now().subtract(const Duration(days: 2)),
-        targetCompletion: DateTime.now().subtract(const Duration(days: 1)),
+        openedAt: _fixedNow.subtract(const Duration(days: 2)),
+        targetCompletion: _fixedNow.subtract(const Duration(days: 1)),
         assignedOwnerId: 'tech-1',
         technicianName: 'Khalid R.',
       ),
     ];
+
+/// A fixed day so the golden never changes with the calendar: the screen
+/// prints due dates, and a live clock made the image differ every day.
+final DateTime _fixedNow = DateTime(2026, 9, 15, 9);

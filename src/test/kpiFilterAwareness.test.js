@@ -353,7 +353,9 @@ describe('KPI tiles are computed over the filtered rows, not the raw ones', () =
     // unreachable one (no input was ever wired to setTableSearch), so the brand
     // table was filtered by a value the user could never change.
     mustNot(s, 'tableSearch', 'the dead duplicate search state must stay removed')
-    must(s, 'enableGlobalFilter={true}', 'the table own search is what filters the brand list')
-    must(s, 'data={metrics}', 'the table is handed the metrics directly')
+    // Since the 2026-10-05 kit rebuild the page owns ONE search box (KitTable
+    // turns the table's own search off) and it must actually filter the board.
+    must(s, 'onChange={(e) => setSearch(e.target.value)}', 'the search input is wired to state')
+    must(s, 'rows={visibleBoard}', 'the scoreboard is handed the searched rows')
   })
 })

@@ -7670,4 +7670,27 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get qrLoginAdmin =>
       'تسجيل الدخول عبر رمز QR غير متاح لحسابات المسؤولين. سجّل الدخول بكلمة المرور.';
+
+  @override
+  String get checklistDetailTitle => 'تفاصيل قائمة الفحص';
+
+  @override
+  String checklistDetailSubmittedOn(String date) {
+    return 'أُرسلت في $date';
+  }
+
+  @override
+  String get checklistDetailReviewNote => 'ملاحظة المراجع';
+
+  @override
+  String get checklistDetailOpen => 'فتح قائمة الفحص';
+
+  @override
+  String checklistDetailScoreOnly(int pct) {
+    return 'النتيجة: $pct%';
+  }
+
+  @override
+  String get checklistDetailPhotoUnavailable =>
+      'الصورة غير متاحة على هذا الجهاز';
 }

@@ -16,6 +16,7 @@ export const PHASE_ORDER = [
   'configuration',
   'team',
   'integration',
+  'training',
   'go_live',
 ]
 
@@ -26,6 +27,7 @@ export const PHASE_LABELS = {
   configuration: 'Configuration',
   team: 'Team & Roles',
   integration: 'Integrations',
+  training: 'Training & UAT',
   go_live: 'Go Live',
 }
 

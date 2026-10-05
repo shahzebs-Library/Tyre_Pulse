@@ -1,0 +1,91 @@
+/* Retread Management. Only --cc-* tokens, so light and dark share one sheet.
+   rtm-* = page shell, rtj-* = the casing register section. */
+.rtm-page { min-width: 0; }
+.rtm-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px 20px; }
+.rtm-head-copy { min-width: 0; flex: 1 1 340px; }
+.rtm-crumbs { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--cc-ink-3); margin-bottom: 6px; }
+.rtm-crumbs a { color: var(--cc-ink-3); text-decoration: none; }
+.rtm-crumbs a:hover { color: var(--cc-green); }
+.rtm-crumbs [aria-current] { color: var(--cc-ink-2); }
+.rtm-head h1 { margin: 0; font-size: clamp(22px, 2.4vw, 30px); font-weight: 700; letter-spacing: -0.02em; color: var(--cc-ink); line-height: 1.15; }
+.rtm-head-copy > p { margin: 6px 0 0; font-size: 13.5px; color: var(--cc-ink-2); max-width: 64ch; }
+.rtm-head-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.rtm-ctl { position: relative; display: inline-flex; align-items: center; }
+.rtm-ctl > svg { position: absolute; inset-inline-start: 10px; color: var(--cc-ink-3); pointer-events: none; }
+.rtm-ctl .cc-select { padding-inline-start: 30px; padding-top: 8px; padding-bottom: 8px; font-size: 12.5px; min-height: 38px; }
+.rtm-primary { min-height: 38px; padding: 8px 16px; }
+.rtm-banner { flex-direction: row; align-items: center; gap: 10px; padding: 10px 14px; }
+.rtm-banner p { margin: 0; flex: 1; font-size: 12.5px; color: var(--cc-ink-2); }
+.rtm-banner.bad > svg { color: var(--cc-red); flex: none; }
+.rtm-banner.warn > svg { color: var(--cc-amber); flex: none; }
+.rtm-loading { flex-direction: row; align-items: center; justify-content: center; gap: 10px; padding: 40px 16px; color: var(--cc-ink-3); font-size: 13px; }
+.rtm-section-title { margin: 8px 0 0; font-size: 15px; font-weight: 700; color: var(--cc-ink); }
+
+/* Casing register section */
+.rtj { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.rtj-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 1fr); gap: 14px; }
+.rtj-note { font-size: 11.5px; color: var(--cc-ink-3); margin: 10px 0 0; line-height: 1.45; }
+.cc-pill.purple { color: var(--cc-purple); background: var(--cc-purple-tint); }
+
+.rtj-pipe { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.rtj-pipe button { width: 100%; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(56px, 1fr) 32px; align-items: center; gap: 10px; background: none; border: 0; padding: 5px 4px; border-radius: 8px; color: var(--cc-ink-2); font: inherit; font-size: 12.5px; text-align: start; cursor: pointer; }
+.rtj-pipe button:hover { background: var(--cc-inner); }
+.rtj-pipe button:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 1px; }
+.rtj-pipe b { text-align: right; color: var(--cc-ink); font-variant-numeric: tabular-nums; }
+.rtj-pipe-label { min-width: 0; line-height: 1.3; overflow-wrap: anywhere; }
+.rtj-pipe-track { height: 10px; border-radius: 999px; background: var(--cc-track); overflow: hidden; }
+.rtj-pipe-track i { display: block; height: 100%; border-radius: 999px; min-width: 0; }
+.rtj-pipe-track i.tone-good { background: var(--cc-green); }
+.rtj-pipe-track i.tone-warn { background: var(--cc-amber); }
+.rtj-pipe-track i.tone-info { background: var(--cc-blue); }
+.rtj-pipe-track i.tone-purple { background: var(--cc-purple); }
+.rtj-pipe-track i.tone-bad { background: var(--cc-red); }
+
+.rtj-roi { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 16px; align-items: center; }
+.rtj-ring { width: 120px; height: 120px; }
+.rtj-ring-num { font-size: 22px; font-weight: 700; fill: var(--cc-ink); }
+.rtj-ring-cap { font-size: 10px; fill: var(--cc-ink-3); }
+.rtj-roi-facts { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.rtj-roi-facts dt { font-size: 11.5px; color: var(--cc-ink-3); }
+.rtj-roi-facts dd { margin: 2px 0 0; font-size: 17px; font-weight: 700; color: var(--cc-ink); font-variant-numeric: tabular-nums; }
+.rtj-roi-facts dd.rtj-accent { color: var(--cc-green); }
+
+.rtj-filters { margin-bottom: 10px; align-items: center; }
+.rtj-filters .cc-select { padding-top: 9px; padding-bottom: 9px; font-size: 12.5px; }
+.rtj-count { margin-inline-start: auto; font-size: 12px; color: var(--cc-ink-3); }
+.rtj-row-actions { display: inline-flex; gap: 5px; }
+.rtj-row-actions .cc-icon-btn:disabled { opacity: .45; cursor: not-allowed; }
+.rtj-danger:hover { color: var(--cc-red); border-color: var(--cc-red); }
+.rtj-grade { font-weight: 700; }
+.rtj-grade.g-A { color: var(--cc-green); }
+.rtj-grade.g-B { color: var(--cc-blue); }
+.rtj-grade.g-C { color: var(--cc-amber); }
+.rtj-grade.g-R { color: var(--cc-red); }
+
+.rtj-sel-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.rtj-reject { color: var(--cc-red); border-color: var(--cc-red); }
+.rtj-reject:hover { border-color: var(--cc-red); background: var(--cc-red-tint); }
+.rtj-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 4px; font-size: 12.5px; color: var(--cc-ink-2); }
+.rtj-steps li { display: inline-flex; align-items: center; gap: 4px; }
+.rtj-steps li + li::before { content: ''; width: 14px; height: 1px; background: var(--cc-ink-3); margin-inline-end: 4px; }
+.rtj-facts { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 12px 0 0; font-size: 12px; color: var(--cc-ink-3); }
+.rtj-notice { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; font-size: 12px; color: var(--cc-ink-2); }
+
+@media (max-width: 1280px) {
+  .rtj-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rtj-row > :nth-child(2) { grid-column: 1 / -1; order: 3; }
+}
+@media (max-width: 760px) {
+  .rtj-row { grid-template-columns: minmax(0, 1fr); }
+  .rtj-row > :nth-child(2) { order: 0; }
+  .rtj-roi { grid-template-columns: minmax(0, 1fr); justify-items: start; }
+  .rtj-count { margin-inline-start: 0; }
+  .rtj-sel-actions { justify-content: flex-start; }
+}
+@media (max-width: 480px) {
+  .rtm-head-actions { width: 100%; }
+  .rtm-head-actions .rtm-ctl { flex: 1 1 140px; }
+  .rtm-head-actions .rtm-ctl .cc-select { width: 100%; }
+  .rtm-primary { flex: 1 1 100%; justify-content: center; }
+}
+.rtj-selected .cc-card-head, .rtj-register .cc-card-head { flex-wrap: wrap; }

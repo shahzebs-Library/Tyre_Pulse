@@ -7651,4 +7651,27 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get qrLoginAdmin =>
       'QR sign-in is not available for administrator accounts. Sign in with your password.';
+
+  @override
+  String get checklistDetailTitle => 'Checklist details';
+
+  @override
+  String checklistDetailSubmittedOn(String date) {
+    return 'Submitted $date';
+  }
+
+  @override
+  String get checklistDetailReviewNote => 'Reviewer note';
+
+  @override
+  String get checklistDetailOpen => 'Open checklist';
+
+  @override
+  String checklistDetailScoreOnly(int pct) {
+    return 'Score: $pct%';
+  }
+
+  @override
+  String get checklistDetailPhotoUnavailable =>
+      'Photo not available on this device';
 }

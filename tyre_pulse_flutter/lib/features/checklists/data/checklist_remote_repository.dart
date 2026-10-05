@@ -24,6 +24,7 @@ import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_history_row.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_remote_models.dart';
+import 'package:tyre_pulse/features/checklists/data/checklist_submission_detail.dart';
 import 'package:tyre_pulse/features/checklists/domain/checklist_targeting.dart';
 
 /// The last-submission advisory result for the "not due yet" warning.
@@ -97,6 +98,10 @@ abstract interface class ChecklistRemoteRepository {
     required String submittedBy,
     int limit = 200,
   });
+
+  /// One submitted sheet in full, for the read-only details screen, or
+  /// `null` when it does not exist / is not readable under RLS.
+  Future<ChecklistSubmissionDetail?> getSubmission(String id);
 }
 
 final class SupabaseChecklistRemoteRepository
@@ -289,5 +294,19 @@ final class SupabaseChecklistRemoteRepository
       if (decoded != null) out.add(decoded);
     }
     return out;
+  }
+
+  @override
+  Future<ChecklistSubmissionDetail?> getSubmission(String id) async {
+    if (id.trim().isEmpty) return null;
+    final Map<String, dynamic>? row = await guard<Map<String, dynamic>?>(
+      () => _client
+          .from(SupabaseTables.checklistSubmissions)
+          .select(checklistSubmissionDetailColumns)
+          .eq('id', id)
+          .maybeSingle(),
+    );
+    if (row == null) return null;
+    return ChecklistSubmissionDetail.fromRow(row);
   }
 }

@@ -8364,5 +8364,39 @@
   "qrLoginAdmin": "QR sign-in is not available for administrator accounts. Sign in with your password.",
   "@qrLoginAdmin": {
     "description": "Sign in on a computer: administrator accounts cannot approve a QR sign-in."
+  },
+  "checklistDetailTitle": "Checklist details",
+  "@checklistDetailTitle": {
+    "description": "Checklist history: title of the read-only screen that shows one submitted checklist."
+  },
+  "checklistDetailSubmittedOn": "Submitted {date}",
+  "@checklistDetailSubmittedOn": {
+    "description": "Checklist details: when the sheet was submitted.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "checklistDetailReviewNote": "Reviewer note",
+  "@checklistDetailReviewNote": {
+    "description": "Checklist details: label for the note a reviewer left when deciding."
+  },
+  "checklistDetailOpen": "Open checklist",
+  "@checklistDetailOpen": {
+    "description": "Checklist history: accessibility label for opening one submitted checklist."
+  },
+  "checklistDetailScoreOnly": "Score: {pct}%",
+  "@checklistDetailScoreOnly": {
+    "description": "Checklist details: the score when no pass or fail was calculated (the template has no pass threshold).",
+    "placeholders": {
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "checklistDetailPhotoUnavailable": "Photo not available on this device",
+  "@checklistDetailPhotoUnavailable": {
+    "description": "Checklist details: shown on a photo whose file is not on this device and has no stored server reference."
   }
 }

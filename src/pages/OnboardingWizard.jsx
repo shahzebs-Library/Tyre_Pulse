@@ -1,90 +1,98 @@
 /**
- * OnboardingWizard (route /onboarding) — guided tenant setup checklist. Walks a
- * new organisation through the phases required to go live on Tyre Pulse (account
- * setup, data import, configuration, team & roles, integrations, go-live) and
- * tracks activation progress so it is measurable and resumable across sessions.
+ * OnboardingWizard (route /onboarding-wizard) - tenant activation and go-live
+ * readiness, rebuilt on the Command Center kit to the owner's mockup.
  *
- * Runs on the new `onboarding_tasks` table (V199). Real data, an overall
- * completion ring + required-completion gauge + go-live readiness badge, KPI
- * tiles, a per-phase progress panel, a "what's next" queue, a grouped-by-phase
- * task list with inline status changes, create/edit modal, filters, search,
- * delete confirm, Excel/PDF export, and loading/empty/error/not-provisioned
- * states throughout. Progress roll-ups live in the pure `src/lib/onboarding.js`
- * helpers.
+ * Two real sources, kept apart so neither pretends to be the other:
+ *   1. Go-live readiness is MEASURED from the live system by
+ *      `src/lib/api/onboardingReadiness.js` (company profile, sites and regions,
+ *      fleet register, approved users, role matrix and custom roles, user data
+ *      scope, tyre records, job cards, expense lines, imports, API keys, phones,
+ *      inspections). Each check is pass, warning, fail or "could not check".
+ *      The checks and the phase roll-up live in `src/lib/onboardingReadinessView.js`.
+ *   2. The activation task board is the hand-kept `onboarding_tasks` checklist
+ *      (V199): create, edit, delete, inline status, filters, Excel/PDF export.
+ *
+ * Training and UAT and management sign-off have no system source, so they are
+ * read from Training and Go Live tasks in the checklist and say "not tracked"
+ * when there are none. The Training phase and the "Depends on" column need
+ * migration 20261005151000; before it is applied the page explains a refused
+ * Training save and hides the dependency field.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import {
-  Rocket, ListChecks, CheckCircle2, Ban, ClipboardCheck, Flag, ArrowRight,
-  AlertTriangle, Search, X, Filter, FileSpreadsheet, FileText, Plus, Pencil,
-  Trash2, Circle, PlayCircle, SkipForward, ExternalLink,
+  Rocket, Ban, CalendarClock, ShieldAlert, Gauge, Plus, Pencil, Trash2, Search, X,
+  FileSpreadsheet, FileText, RefreshCw, CheckCircle2, AlertTriangle, XCircle, HelpCircle,
+  ChevronRight, ExternalLink, Info,
 } from 'lucide-react'
-import PageHeader from '../components/ui/PageHeader'
 import Modal from '../components/ui/Modal'
+import { Card, CardState, Kpi, KitTable, fmtInt } from '../components/commandCenter/kit'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listOnboardingTasks, createOnboardingTask, updateOnboardingTask, deleteOnboardingTask,
+  dependencySupported,
 } from '../lib/api/onboarding'
+import { loadReadinessFacts } from '../lib/api/onboardingReadiness'
+import { PHASE_ORDER, PHASE_LABELS } from '../lib/onboarding'
 import {
-  summariseOnboarding, phaseProgress, nextTasks, requiredCompletionPct,
-  PHASE_ORDER, PHASE_LABELS,
-} from '../lib/onboarding'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+  evaluateChecks, readinessScore, criticalOpen, phaseReadiness, taskKpis, nextActions,
+  dependencyTitles,
+} from '../lib/onboardingReadinessView'
+import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { safeHref } from '../lib/safeUrl'
 import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation } from '../lib/api/_client'
+import './OnboardingWizard.css'
 
 const EMPTY_FORM = {
   title: '', phase: 'setup', description: '', sort_order: '', required: true,
-  status: 'not_started', owner: '', due_date: '', help_url: '', notes: '',
+  status: 'not_started', owner: '', due_date: '', help_url: '', notes: '', depends_on: '',
 }
 
 const STATUS_META = {
-  not_started: { label: 'Not started', icon: Circle, dot: 'text-[var(--text-muted)]', badge: 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]' },
-  in_progress: { label: 'In progress', icon: PlayCircle, dot: 'text-sky-400', badge: 'bg-sky-900/30 text-sky-300 border-sky-800/50' },
-  completed: { label: 'Completed', icon: CheckCircle2, dot: 'text-green-400', badge: 'bg-green-900/30 text-green-300 border-green-800/50' },
-  skipped: { label: 'Skipped', icon: SkipForward, dot: 'text-amber-400', badge: 'bg-amber-900/20 text-amber-300 border-amber-800/50' },
-  blocked: { label: 'Blocked', icon: Ban, dot: 'text-red-400', badge: 'bg-red-900/30 text-red-300 border-red-800/50' },
+  not_started: { label: 'Not started', tone: 'muted' },
+  in_progress: { label: 'In progress', tone: 'info' },
+  completed: { label: 'Done', tone: 'good' },
+  skipped: { label: 'Skipped', tone: 'muted' },
+  blocked: { label: 'Blocked', tone: 'bad' },
 }
 const STATUS_OPTIONS = Object.keys(STATUS_META)
 
+const CHECK_META = {
+  pass: { icon: CheckCircle2, cls: 'pass', label: 'Passed' },
+  warn: { icon: AlertTriangle, cls: 'warn', label: 'Needs attention' },
+  fail: { icon: XCircle, cls: 'fail', label: 'Failing' },
+  unknown: { icon: HelpCircle, cls: 'unknown', label: 'Could not check' },
+}
+
 function fmtDate(v) {
-  if (!v) return 'N/A'
-  const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString()
+  if (!v) return null
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v))
+  const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(v)
+  return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })
+}
+function isOverdue(t) {
+  if (!t?.due_date || t.status === 'completed' || t.status === 'skipped') return false
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(t.due_date))
+  if (!m) return false
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  return d < today
 }
 
-
-/** SVG progress ring. size/stroke in px, pct 0..100. */
-function ProgressRing({ pct = 0, size = 128, stroke = 12, tone = '#22c55e', label }) {
-  const r = (size - stroke) / 2
-  const c = 2 * Math.PI * r
-  const clamped = Math.max(0, Math.min(100, pct))
-  const offset = c - (clamped / 100) * c
-  return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--input-border)" strokeWidth={stroke} />
-        <circle
-          cx={size / 2} cy={size / 2} r={r} fill="none" stroke={tone} strokeWidth={stroke}
-          strokeLinecap="round" strokeDasharray={c} strokeDashoffset={offset}
-          style={{ transition: 'stroke-dashoffset 600ms ease' }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-bold text-[var(--text-primary)]">{clamped}%</span>
-        {label && <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mt-0.5">{label}</span>}
-      </div>
-    </div>
-  )
-}
-
-function Bar({ pct = 0, tone = 'bg-green-500' }) {
-  const w = Math.max(0, Math.min(100, pct))
-  return (
-    <div className="h-2 rounded-full bg-[var(--input-bg)] overflow-hidden">
-      <div className={`h-full rounded-full ${tone}`} style={{ width: `${w}%`, transition: 'width 500ms ease' }} />
-    </div>
-  )
+function useReadiness(country) {
+  const [state, setState] = useState({ loading: true, data: null, error: null })
+  const run = useCallback(async () => {
+    setState((s) => ({ ...s, loading: true, error: null }))
+    try {
+      const data = await loadReadinessFacts(country)
+      setState({ loading: false, data, error: null })
+    } catch (e) {
+      setState({ loading: false, data: null, error: toUserMessage(e, 'Could not run the readiness checks.') })
+    }
+  }, [country])
+  useEffect(() => { run() }, [run])
+  return { ...state, retry: run }
 }
 
 export default function OnboardingWizard() {
@@ -93,11 +101,11 @@ export default function OnboardingWizard() {
   const [error, setError] = useState('')
   const [notProvisioned, setNotProvisioned] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [updatedAt, setUpdatedAt] = useState(null)
 
   const [phaseFilter, setPhaseFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [search, setSearch] = useState('')
+  const [checkFilter, setCheckFilter] = useState('')
 
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -108,31 +116,37 @@ export default function OnboardingWizard() {
   const [deleting, setDeleting] = useState(false)
   const [busyId, setBusyId] = useState(null)
 
+  const readiness = useReadiness(activeCountry)
+
   const load = useCallback(async () => {
     setRefreshing(true); setError(''); setNotProvisioned(false)
     try {
       const data = await listOnboardingTasks({ country: activeCountry })
       setRows(Array.isArray(data) ? data : [])
-      setUpdatedAt(new Date())
     } catch (err) {
-      if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(toUserMessage(err, 'Could not load onboarding tasks.'))
-      setRows([])
+      if (isMissingRelation(err)) { setNotProvisioned(true); setRows([]) }
+      else { setError(toUserMessage(err, 'Could not load onboarding tasks.')); setRows(null) }
     } finally {
       setRefreshing(false)
     }
   }, [activeCountry])
-
   useEffect(() => { load() }, [load])
 
-  const summary = useMemo(() => summariseOnboarding(rows || []), [rows])
-  const reqPct = useMemo(() => requiredCompletionPct(rows || []), [rows])
-  const phases = useMemo(() => phaseProgress(rows || []), [rows])
-  const queue = useMemo(() => nextTasks(rows || []).slice(0, 8), [rows])
+  const refreshAll = () => { load(); readiness.retry() }
+
+  const tasks = useMemo(() => rows || [], [rows])
+  const hasDeps = dependencySupported()
+  const depTitles = useMemo(() => dependencyTitles(tasks), [tasks])
+  const checks = useMemo(() => (readiness.data ? evaluateChecks(readiness.data, tasks) : []), [readiness.data, tasks])
+  const score = useMemo(() => readinessScore(checks), [checks])
+  const critical = useMemo(() => criticalOpen(checks), [checks])
+  const phases = useMemo(() => phaseReadiness(checks, tasks), [checks, tasks])
+  const tk = useMemo(() => taskKpis(tasks), [tasks])
+  const actions = useMemo(() => nextActions(checks, tasks), [checks, tasks])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return (rows || []).filter((r) => {
+    return tasks.filter((r) => {
       if (phaseFilter && r.phase !== phaseFilter) return false
       if (statusFilter && r.status !== statusFilter) return false
       if (q) {
@@ -141,30 +155,13 @@ export default function OnboardingWizard() {
       }
       return true
     })
-  }, [rows, phaseFilter, statusFilter, search])
+  }, [tasks, phaseFilter, statusFilter, search])
 
-  // Grouped by phase in canonical order (only phases with visible tasks show).
-  const grouped = useMemo(() => {
-    return PHASE_ORDER.map((phase) => ({
-      phase,
-      tasks: filtered
-        .filter((r) => r.phase === phase)
-        .slice()
-        .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0)),
-    })).filter((g) => g.tasks.length > 0)
-  }, [filtered])
+  const visibleChecks = checkFilter ? checks.filter((c) => c.phase === checkFilter) : checks
 
-  // ── KPIs ─────────────────────────────────────────────────────────────────
-  const kpis = [
-    { label: 'Total tasks', value: summary.totalTasks, icon: ListChecks, tone: 'text-[var(--text-primary)]' },
-    { label: 'Completed', value: summary.completedCount, icon: CheckCircle2, tone: 'text-green-400' },
-    { label: 'Blocked', value: summary.blockedCount, icon: Ban, tone: 'text-red-400' },
-    { label: 'Required remaining', value: summary.requiredRemaining, icon: ClipboardCheck, tone: 'text-amber-400' },
-  ]
-
-  // ── Export ───────────────────────────────────────────────────────────────
-  const EXPORT_COLS = ['phase', 'title', 'status', 'required', 'owner', 'due_date', 'sort_order', 'notes']
-  const EXPORT_HEADERS = ['Phase', 'Task', 'Status', 'Required', 'Owner', 'Due date', 'Order', 'Notes']
+  // ── Export ─────────────────────────────────────────────────────────────────
+  const EXPORT_COLS = ['phase', 'title', 'status', 'required', 'owner', 'due_date', 'depends_on', 'notes']
+  const EXPORT_HEADERS = ['Phase', 'Task', 'Status', 'Required', 'Owner', 'Due date', 'Depends on', 'Notes']
   const exportRows = filtered.map((r) => ({
     phase: PHASE_LABELS[r.phase] || r.phase || '',
     title: r.title || '',
@@ -172,13 +169,14 @@ export default function OnboardingWizard() {
     required: r.required === false ? 'Optional' : 'Required',
     owner: r.owner || '',
     due_date: r.due_date || '',
-    sort_order: r.sort_order ?? '',
+    depends_on: r.depends_on ? (depTitles.get(r.depends_on) || '') : '',
     notes: r.notes || '',
   }))
+  const exportName = reportFileName('Onboarding Tasks')
 
-  // ── Modal ────────────────────────────────────────────────────────────────
+  // ── Modal ──────────────────────────────────────────────────────────────────
   const openCreate = () => {
-    const nextOrder = (rows || []).reduce((m, r) => Math.max(m, Number(r.sort_order) || 0), 0) + 1
+    const nextOrder = tasks.reduce((m, r) => Math.max(m, Number(r.sort_order) || 0), 0) + 1
     setEditing(null); setForm({ ...EMPTY_FORM, sort_order: String(nextOrder) }); setFormError(''); setShowModal(true)
   }
   const openEdit = (r) => {
@@ -188,6 +186,7 @@ export default function OnboardingWizard() {
       sort_order: r.sort_order ?? '', required: r.required !== false,
       status: r.status || 'not_started', owner: r.owner || '',
       due_date: r.due_date || '', help_url: r.help_url || '', notes: r.notes || '',
+      depends_on: r.depends_on || '',
     })
     setFormError(''); setShowModal(true)
   }
@@ -198,22 +197,28 @@ export default function OnboardingWizard() {
     e?.preventDefault?.()
     setFormError('')
     if (!form.title.trim()) { setFormError('A task title is required.'); return }
-    if (form.sort_order !== '' && Number(form.sort_order) < 0) { setFormError('Sort order cannot be negative.'); return }
+    if (form.sort_order !== '' && Number(form.sort_order) < 0) { setFormError('Order cannot be negative.'); return }
     setSaving(true)
     try {
       const payload = { ...form, country: activeCountry !== 'All' ? activeCountry : null }
+      if (!hasDeps) delete payload.depends_on
       if (editing) await updateOnboardingTask(editing.id, payload)
       else await createOnboardingTask(payload)
       setShowModal(false); setEditing(null)
       await load()
+      readiness.retry()
     } catch (err) {
-      setFormError(toUserMessage(err, 'Could not save the task.'))
+      const code = err?.code || err?.cause?.code
+      if (form.phase === 'training' && code === '23514') {
+        setFormError('The Training and UAT phase is not set up on this database yet. Pick another phase, or ask an administrator to apply the onboarding update.')
+      } else {
+        setFormError(toUserMessage(err, 'Could not save the task.'))
+      }
     } finally {
       setSaving(false)
     }
-  }, [form, editing, activeCountry, load])
+  }, [form, editing, activeCountry, load, hasDeps, readiness])
 
-  // Inline status change straight from the list.
   const changeStatus = useCallback(async (task, status) => {
     if (task.status === status) return
     setBusyId(task.id); setError('')
@@ -236,6 +241,7 @@ export default function OnboardingWizard() {
       await load()
     } catch (err) {
       setError(toUserMessage(err, 'Could not delete the task.'))
+      setConfirmDelete(null)
     } finally {
       setDeleting(false)
     }
@@ -243,236 +249,260 @@ export default function OnboardingWizard() {
 
   const clearFilters = () => { setPhaseFilter(''); setStatusFilter(''); setSearch('') }
   const hasFilters = phaseFilter || statusFilter || search
-  const ringTone = summary.readyForGoLive ? '#22c55e' : summary.completionPct >= 50 ? '#38bdf8' : '#f59e0b'
+  const tasksLoading = rows === null && !error
+  const rLoading = readiness.loading && !readiness.data
+
+  // ── Columns ────────────────────────────────────────────────────────────────
+  const taskColumns = [
+    {
+      key: 'title', header: 'Task',
+      cell: (r) => (
+        <div className="ow-task">
+          <span className={`ow-task-title ${r.status === 'completed' ? 'done' : ''}`}>{r.title}</span>
+          <span className="ow-task-meta">
+            {r.required === false ? 'Optional' : 'Required'}
+            {safeHref(r.help_url) && (
+              <a href={safeHref(r.help_url)} target="_blank" rel="noopener noreferrer" className="ow-help"><ExternalLink size={11} aria-hidden="true" /> Help</a>
+            )}
+          </span>
+        </div>
+      ),
+      sortValue: (r) => r.title || '',
+    },
+    { key: 'phase', header: 'Phase', cell: (r) => PHASE_LABELS[r.phase] || r.phase, sortValue: (r) => PHASE_ORDER.indexOf(r.phase) },
+    { key: 'owner', header: 'Owner', cell: (r) => r.owner || <span className="cc-na">Not assigned</span> },
+    {
+      key: 'due', header: 'Due', sortValue: (r) => r.due_date || '9999',
+      cell: (r) => (fmtDate(r.due_date)
+        ? <span className={isOverdue(r) ? 'ow-overdue' : undefined} title={isOverdue(r) ? 'Past due' : undefined}>{fmtDate(r.due_date)}</span>
+        : <span className="cc-na">No date</span>),
+    },
+    {
+      key: 'status', header: 'Status', sortValue: (r) => STATUS_OPTIONS.indexOf(r.status),
+      cell: (r) => (
+        <select
+          className={`cc-select ow-status ow-st-${STATUS_META[r.status]?.tone || 'muted'}`}
+          value={r.status} disabled={busyId === r.id}
+          onChange={(e) => changeStatus(r, e.target.value)} aria-label={`Status of ${r.title}`}
+        >
+          {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{STATUS_META[s].label}</option>)}
+        </select>
+      ),
+    },
+    ...(hasDeps ? [{
+      key: 'depends', header: 'Depends on', sortValue: (r) => (r.depends_on ? depTitles.get(r.depends_on) || '' : ''),
+      cell: (r) => (r.depends_on ? (depTitles.get(r.depends_on) || <span className="cc-na">Removed task</span>) : <span className="cc-na">None</span>),
+    }] : []),
+    {
+      key: 'actions', header: '', sortable: false,
+      cell: (r) => (
+        <div className="ow-row-actions">
+          <button type="button" className="cc-icon-btn" onClick={() => openEdit(r)} aria-label={`Edit ${r.title}`} title="Edit"><Pencil size={14} /></button>
+          <button type="button" className="cc-icon-btn ow-danger" onClick={() => setConfirmDelete(r)} aria-label={`Delete ${r.title}`} title="Delete"><Trash2 size={14} /></button>
+        </div>
+      ),
+    },
+  ]
+
+  const actionColumns = [
+    { key: 'id', header: 'ID', cell: (r) => <span className="ow-code">{r.id}</span> },
+    { key: 'title', header: 'Risk or action', cell: (r) => <span className="ow-wrap">{r.title}</span>, sortValue: (r) => r.title },
+    { key: 'area', header: 'Area', cell: (r) => r.area || <span className="cc-na">N/A</span> },
+    {
+      key: 'priority', header: 'Priority', sortValue: (r) => (r.priority === 'High' ? 0 : 1),
+      cell: (r) => <span className={`cc-pill ${r.priority === 'High' ? 'ow-pill-bad' : 'warn'}`}>{r.priority}</span>,
+    },
+    { key: 'owner', header: 'Owner', cell: (r) => r.owner || <span className="cc-na">Not assigned</span> },
+    { key: 'due', header: 'Due', cell: (r) => fmtDate(r.due) || <span className="cc-na">No date</span>, sortValue: (r) => r.due || '9999' },
+    {
+      key: 'step', header: 'Next step', sortable: false,
+      cell: (r) => {
+        if (r.kind === 'task') return <button type="button" className="cc-link cc-link-btn" onClick={() => openEdit(r.task)}>{r.step} <ChevronRight size={13} aria-hidden="true" /></button>
+        if (r.to) return <Link className="cc-link" to={r.to}>{r.step} <ChevronRight size={13} aria-hidden="true" /></Link>
+        return <span className="ow-wrap">{r.step}</span>
+      },
+    },
+  ]
+
+  const scoreTone = score.score == null ? 'unknown' : score.score >= 85 ? 'pass' : score.score >= 60 ? 'warn' : 'fail'
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Onboarding Wizard"
-        subtitle="Guide your organisation through tenant setup: track every activation task by phase and go live with confidence."
-        icon={Rocket}
-        onRefresh={load}
-        refreshing={refreshing}
-        updatedAt={updatedAt}
-        actions={
-          <div className="flex items-center gap-2">
-            <button onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, 'onboarding_tasks')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileSpreadsheet size={14} /> Excel
-            </button>
-            <button onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Onboarding Checklist', 'onboarding_tasks', 'landscape')} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileText size={14} /> PDF
-            </button>
-            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={notProvisioned}>
-              <Plus size={14} /> Add task
-            </button>
-          </div>
-        }
-      />
+    <div className="cc ow-page">
+      <header className="ow-head">
+        <div className="ow-head-copy">
+          <nav aria-label="Breadcrumb" className="ow-crumb">Administration <ChevronRight size={13} aria-hidden="true" /> <span aria-current="page">Onboarding Wizard</span></nav>
+          <h1>Onboarding Wizard</h1>
+          <p>Take each tenant through setup, checks and go-live. Readiness is measured from live data{activeCountry && activeCountry !== 'All' ? ` for ${activeCountry}` : ''}; tasks are your team&apos;s own checklist.</p>
+        </div>
+        <div className="ow-head-actions">
+          <button type="button" className="cc-btn-ghost" onClick={refreshAll} disabled={refreshing || readiness.loading} aria-label="Refresh">
+            <RefreshCw size={14} className={refreshing || readiness.loading ? 'ow-spin' : undefined} aria-hidden="true" /> Refresh
+          </button>
+          <button type="button" className="cc-btn-ghost" disabled={!filtered.length} onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, exportName)}>
+            <FileSpreadsheet size={14} aria-hidden="true" /> Excel
+          </button>
+          <button type="button" className="cc-btn-ghost" disabled={!filtered.length} onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Onboarding Checklist', exportName, 'landscape')}>
+            <FileText size={14} aria-hidden="true" /> PDF
+          </button>
+          <button type="button" className="cc-btn-primary" onClick={openCreate} disabled={notProvisioned}>
+            <Plus size={15} aria-hidden="true" /> Add task
+          </button>
+        </div>
+      </header>
 
       {notProvisioned && (
-        <div className="card border border-amber-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
-          <div>
-            <p className="text-amber-300 font-medium">Onboarding isn’t enabled on this database yet.</p>
-            <p className="text-[var(--text-muted)] text-sm mt-1">
-              Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V199_ONBOARDING_TASKS.sql</span>, then reload.
-            </p>
-          </div>
+        <div className="cc-card ow-banner warn" role="status">
+          <AlertTriangle size={16} aria-hidden="true" />
+          <span>The onboarding task checklist is not set up on this database yet, so the task board is empty. The readiness checks below still run on live data.</span>
+        </div>
+      )}
+      {error && rows !== null && (
+        <div className="cc-card ow-banner bad" role="alert">
+          <AlertTriangle size={16} aria-hidden="true" /><span>{error}</span>
+          <button type="button" className="cc-icon-btn" onClick={() => setError('')} aria-label="Dismiss message"><X size={14} /></button>
         </div>
       )}
 
-      {error && (
-        <div className="card border border-red-800/50 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-          <div><p className="text-red-300 font-medium">Something went wrong.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-        </div>
-      )}
-
-      {/* Progress hero */}
-      <div className="card">
-        <div className="flex flex-col lg:flex-row items-center gap-6 lg:gap-10">
-          <ProgressRing pct={rows === null ? 0 : summary.completionPct} tone={ringTone} label="Complete" />
-          <div className="flex-1 w-full space-y-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <h3 className="text-lg font-bold text-[var(--text-primary)]">Activation progress</h3>
-              {rows !== null && (
-                summary.readyForGoLive ? (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-900/30 text-green-300 border border-green-800/50">
-                    <Flag size={13} /> Ready to go live
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-900/20 text-amber-300 border border-amber-800/50">
-                    <Flag size={13} /> {summary.requiredRemaining} required task{summary.requiredRemaining === 1 ? '' : 's'} to go
-                  </span>
-                )
-              )}
-            </div>
-            <div>
-              <div className="flex items-center justify-between text-xs text-[var(--text-muted)] mb-1">
-                <span>Required tasks completed</span>
-                <span className="font-semibold text-[var(--text-primary)]">{rows === null ? 'N/A' : `${reqPct}%`}</span>
-              </div>
-              <Bar pct={rows === null ? 0 : reqPct} tone={summary.readyForGoLive ? 'bg-green-500' : 'bg-amber-500'} />
-            </div>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              {kpis.map((k) => {
-                const Icon = k.icon
-                return (
-                  <div key={k.label} className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/40 px-3 py-2.5">
-                    <div className="flex items-center justify-between">
-                      <p className="text-[11px] text-[var(--text-muted)]">{k.label}</p>
-                      <Icon size={14} className={k.tone} />
-                    </div>
-                    <p className={`text-2xl font-bold mt-0.5 ${k.tone}`}>{rows === null ? 'N/A' : k.value}</p>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
+      <div className="cc-kpis ow-kpis">
+        <Kpi
+          icon={Rocket} tone="t-green" loading={tasksLoading}
+          display={tk.completionPct == null ? 'N/A' : `${tk.completionPct}%`}
+          label={tk.total ? `Activation progress, ${tk.completed} of ${tk.total} tasks` : 'Activation progress, no tasks yet'}
+          title="Share of checklist tasks marked Done"
+        />
+        <Kpi
+          icon={Ban} tone="t-red" loading={tasksLoading} value={tk.blocked}
+          label="Blocked tasks, need owner action" danger={tk.blocked > 0}
+          onClick={() => { setStatusFilter('blocked'); setPhaseFilter('') }}
+          title="Show blocked tasks"
+        />
+        <Kpi
+          icon={CalendarClock} tone="t-amber" loading={tasksLoading} value={tk.dueThisWeek}
+          label={tk.overdue ? `Due this week, ${tk.overdue} overdue` : `Due this week, across ${tk.dueThisWeekPhases} ${tk.dueThisWeekPhases === 1 ? 'phase' : 'phases'}`}
+          title="Open tasks due in the next 7 days"
+        />
+        <Kpi
+          icon={ShieldAlert} tone="t-orange" loading={rLoading}
+          display={readiness.data ? fmtInt(critical.length) : 'N/A'}
+          label="Critical setup gaps, prevent go-live" danger={critical.length > 0}
+          title="Critical readiness checks that are failing"
+        />
+        <Kpi
+          icon={Gauge} tone="t-blue" loading={rLoading}
+          display={score.score == null ? 'N/A' : `${score.score}%`}
+          label={score.measured ? `Go-live readiness, ${score.passed} of ${score.measured} checks` : 'Go-live readiness'}
+          title={score.unknown ? `${score.unknown} checks could not be measured and are left out` : 'Share of measured checks that pass'}
+        />
       </div>
 
-      {/* Per-phase progress + what's next */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="card lg:col-span-2">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-            <ListChecks size={15} /> Progress by phase
-          </h3>
-          {rows === null ? (
-            <div className="space-y-3">{[0, 1, 2, 3].map((i) => <div key={i} className="h-8 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
-          ) : (
-            <div className="space-y-3">
+      <div className="ow-grid">
+        <Card title="Implementation phases" sub="Measured checks passed per phase" className="ow-phases">
+          <CardState state={readiness} lines={8}>
+            <ul className="ow-phase-list">
               {phases.map((p) => (
-                <div key={p.phase}>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="font-medium text-[var(--text-secondary)]">{PHASE_LABELS[p.phase]}</span>
-                    <span className="text-[var(--text-muted)]">{p.completed}/{p.total} · {p.pct}%</span>
-                  </div>
-                  <Bar pct={p.pct} tone={p.pct === 100 ? 'bg-green-500' : p.total === 0 ? 'bg-[var(--input-border)]' : 'bg-indigo-500'} />
-                </div>
+                <li key={p.key}>
+                  <button
+                    type="button" className="ow-phase" aria-pressed={checkFilter === p.key}
+                    onClick={() => setCheckFilter(checkFilter === p.key ? '' : p.key)}
+                    title={p.pct == null ? 'Nothing measurable in this phase yet' : `${p.passed} of ${p.measured} measured checks pass`}
+                  >
+                    <span className="ow-phase-name">{p.label}</span>
+                    <span className={`ow-phase-pct ${p.pct == null ? 'unknown' : p.pct === 100 ? 'pass' : p.pct >= 50 ? 'warn' : 'fail'}`}>
+                      {p.pct == null ? 'N/A' : `${p.pct}%`}
+                    </span>
+                    <span className="ow-phase-track" aria-hidden="true"><i style={{ width: `${p.pct ?? 0}%` }} className={p.pct == null ? '' : p.pct === 100 ? 'pass' : p.pct >= 50 ? 'warn' : 'fail'} /></span>
+                    <span className="ow-phase-sub">
+                      {p.measured ? `${p.passed}/${p.measured} checks` : 'Not measured'}
+                      {p.tasksTotal ? `, ${p.tasksDone}/${p.tasksTotal} tasks done` : ''}
+                    </span>
+                  </button>
+                </li>
               ))}
-            </div>
-          )}
-        </div>
+            </ul>
+          </CardState>
+        </Card>
 
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-            <ArrowRight size={15} /> What’s next
-          </h3>
-          {rows === null ? (
-            <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-10 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
-          ) : queue.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)]">{summary.totalTasks === 0 ? 'No tasks yet. Add your first setup task.' : 'Nothing open. Every task is completed or resolved.'}</p>
+        <section className="cc-card ow-board" aria-label="Activation task board">
+          <div className="cc-card-head">
+            <div>
+              <h2 className="cc-card-title">Activation task board</h2>
+              <p className="cc-card-sub">{rows ? `${filtered.length} of ${tasks.length} tasks` : 'Your team checklist'}</p>
+            </div>
+          </div>
+          <div className="cc-filters ow-filters">
+            <label className="cc-search">
+              <Search size={15} aria-hidden="true" />
+              <input placeholder="Search task, owner, notes" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search tasks" />
+            </label>
+            <select className="cc-select" value={phaseFilter} onChange={(e) => setPhaseFilter(e.target.value)} aria-label="Phase">
+              <option value="">All phases</option>
+              {PHASE_ORDER.map((p) => <option key={p} value={p}>{PHASE_LABELS[p]}</option>)}
+            </select>
+            <select className="cc-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
+              <option value="">All statuses</option>
+              {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{STATUS_META[s].label}</option>)}
+            </select>
+            {hasFilters && <button type="button" className="cc-btn-ghost" onClick={clearFilters}><X size={14} aria-hidden="true" /> Clear</button>}
+          </div>
+          {error && rows === null ? (
+            <div className="cc-empty" role="alert"><div>{error}<br /><button type="button" className="cc-btn" onClick={load}>Try again</button></div></div>
           ) : (
-            <ul className="space-y-2">
-              {queue.map((t) => {
-                const meta = STATUS_META[t.status] || STATUS_META.not_started
+            <KitTable
+              columns={taskColumns}
+              rows={filtered}
+              loading={tasksLoading}
+              scroll
+              empty={tasks.length === 0
+                ? (notProvisioned ? 'The task checklist is not set up yet.' : 'No tasks yet. Add the first setup task to start tracking activation.')
+                : 'No tasks match these filters.'}
+            />
+          )}
+        </section>
+
+        <Card
+          title="Go-live readiness"
+          sub={checkFilter ? `Showing ${phases.find((p) => p.key === checkFilter)?.label}` : 'Live checks on your data'}
+          className="ow-ready"
+          action={checkFilter ? <button type="button" className="cc-link cc-link-btn" onClick={() => setCheckFilter('')}>Show all</button> : null}
+        >
+          <CardState state={readiness} lines={8}>
+            <ul className="ow-check-list">
+              {visibleChecks.map((c) => {
+                const meta = CHECK_META[c.status]
                 const Icon = meta.icon
                 return (
-                  <li key={t.id}>
-                    <button onClick={() => openEdit(t)} className="w-full text-left rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/40 px-3 py-2 hover:border-[var(--text-muted)] transition-colors">
-                      <div className="flex items-center gap-2">
-                        <Icon size={14} className={meta.dot} />
-                        <span className="text-sm font-medium text-[var(--text-primary)] truncate">{t.title}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-1 text-[11px] text-[var(--text-muted)]">
-                        <span>{PHASE_LABELS[t.phase]}</span>
-                        {t.required !== false && <span className="text-amber-400">Required</span>}
-                        {t.due_date && <span>· Due {fmtDate(t.due_date)}</span>}
-                      </div>
-                    </button>
+                  <li key={c.id} className={`ow-check ${meta.cls}`}>
+                    <span className="ow-check-icon" title={meta.label}><Icon size={15} aria-hidden="true" /><span className="sr-only">{meta.label}</span></span>
+                    <div className="ow-check-body">
+                      <span className="ow-check-label">{c.label}{c.critical && <span className="ow-crit" title="Blocks go-live when failing">Critical</span>}</span>
+                      <span className="ow-check-detail">{c.detail}</span>
+                    </div>
+                    {c.to && c.status !== 'pass' && (
+                      <Link className="cc-icon-btn ow-check-go" to={c.to} aria-label={c.action} title={c.action}><ChevronRight size={14} /></Link>
+                    )}
                   </li>
                 )
               })}
             </ul>
-          )}
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="card space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-            <input className="input pl-9 w-full" placeholder="Search task, owner, notes…" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-          <select className="input" value={phaseFilter} onChange={(e) => setPhaseFilter(e.target.value)} aria-label="Phase">
-            <option value="">All phases</option>
-            {PHASE_ORDER.map((p) => <option key={p} value={p}>{PHASE_LABELS[p]}</option>)}
-          </select>
-          <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
-            <option value="">All statuses</option>
-            {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{STATUS_META[s].label}</option>)}
-          </select>
-          {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.totalTasks}</span>
-        </div>
-      </div>
-
-      {/* Grouped task list */}
-      {rows === null ? (
-        <div className="card space-y-3">{[0, 1, 2, 3, 4].map((i) => <div key={i} className="h-12 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
-      ) : grouped.length === 0 ? (
-        <div className="card text-center py-12 text-[var(--text-muted)]">
-          <Filter size={22} className="mx-auto mb-2 opacity-60" />
-          {summary.totalTasks === 0 && !notProvisioned ? 'No onboarding tasks yet. Add your first setup task.' : 'No tasks match these filters.'}
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {grouped.map((g) => (
-            <div key={g.phase} className="card !p-0 overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--input-border)]">
-                <h3 className="text-sm font-semibold text-[var(--text-primary)]">{PHASE_LABELS[g.phase]}</h3>
-                <span className="text-xs text-[var(--text-muted)]">{g.tasks.filter((t) => t.status === 'completed').length}/{g.tasks.length} done</span>
-              </div>
-              <ul>
-                {g.tasks.map((t) => {
-                  const meta = STATUS_META[t.status] || STATUS_META.not_started
-                  const Icon = meta.icon
-                  const busy = busyId === t.id
-                  return (
-                    <li key={t.id} className="flex items-start gap-3 px-4 py-3 border-b border-[var(--input-border)]/50 last:border-b-0 hover:bg-[var(--input-bg)]/40">
-                      <Icon size={18} className={`mt-0.5 shrink-0 ${meta.dot}`} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={`text-sm font-medium ${t.status === 'completed' ? 'line-through text-[var(--text-muted)]' : 'text-[var(--text-primary)]'}`}>{t.title}</span>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${meta.badge}`}>{meta.label}</span>
-                          {t.required === false
-                            ? <span className="text-[10px] px-1.5 py-0.5 rounded border border-[var(--input-border)] text-[var(--text-muted)]">Optional</span>
-                            : <span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-800/50 text-amber-300">Required</span>}
-                        </div>
-                        {t.description && <p className="text-xs text-[var(--text-muted)] mt-1 line-clamp-2">{t.description}</p>}
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[11px] text-[var(--text-muted)]">
-                          {t.owner && <span>Owner: <span className="text-[var(--text-secondary)]">{t.owner}</span></span>}
-                          {t.due_date && <span>Due {fmtDate(t.due_date)}</span>}
-                          {t.completed_at && <span>Completed {fmtDate(t.completed_at)}</span>}
-                          {safeHref(t.help_url) && (
-                            <a href={safeHref(t.help_url)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 text-sky-400 hover:underline">
-                              <ExternalLink size={11} /> Help
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <select
-                          className="input !py-1 !text-xs" value={t.status} disabled={busy}
-                          onChange={(e) => changeStatus(t, e.target.value)} aria-label="Change status"
-                        >
-                          {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{STATUS_META[s].label}</option>)}
-                        </select>
-                        <button onClick={() => openEdit(t)} className="p-1.5 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Edit"><Pencil size={14} /></button>
-                        <button onClick={() => setConfirmDelete(t)} className="p-1.5 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label="Delete"><Trash2 size={14} /></button>
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
+            <div className={`ow-score ${scoreTone}`}>
+              <span>Readiness score</span>
+              <b>{score.score == null ? 'N/A' : `${score.score} / 100`}</b>
+              {score.unknown > 0 && <small><Info size={12} aria-hidden="true" /> {score.unknown} not measured</small>}
             </div>
-          ))}
-        </div>
-      )}
+          </CardState>
+        </Card>
+      </div>
 
-      {/* Create / Edit modal */}
+      <Card title="Next actions and risks" sub="Failing checks first, then blocked and overdue tasks">
+        <CardState state={readiness} lines={5}>
+          <KitTable
+            columns={actionColumns}
+            rows={actions}
+            empty="Nothing needs action. Every measured check passes and no task is blocked or overdue."
+          />
+        </CardState>
+      </Card>
+
       <Modal
         open={showModal}
         onClose={saving ? undefined : closeModal}
@@ -487,70 +517,76 @@ export default function OnboardingWizard() {
           </>
         )}
       >
-            <form id="onboarding-task-form" onSubmit={submit} className="space-y-4">
-              <div>
-                <label htmlFor="onb-task-title" className="label">Task title</label>
-                <input id="onb-task-title" className="input w-full" placeholder="e.g. Import vehicle fleet" value={form.title} maxLength={300} onChange={(e) => set('title', e.target.value)} />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="onb-phase" className="label">Phase</label>
-                  <select id="onb-phase" className="input w-full" value={form.phase} onChange={(e) => set('phase', e.target.value)}>
-                    {PHASE_ORDER.map((p) => <option key={p} value={p}>{PHASE_LABELS[p]}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="onb-status" className="label">Status</label>
-                  <select id="onb-status" className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
-                    {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{STATUS_META[s].label}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label htmlFor="onb-description-optional" className="label">Description (optional)</label>
-                <textarea id="onb-description-optional" className="input w-full min-h-[70px] resize-y" placeholder="What needs to happen for this task to be done?" value={form.description} maxLength={8000} onChange={(e) => set('description', e.target.value)} />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="onb-owner-optional" className="label">Owner (optional)</label>
-                  <input id="onb-owner-optional" className="input w-full" placeholder="e.g. Fleet Admin" value={form.owner} maxLength={200} onChange={(e) => set('owner', e.target.value)} />
-                </div>
-                <div>
-                  <label htmlFor="onb-due-date-optional" className="label">Due date (optional)</label>
-                  <input id="onb-due-date-optional" className="input w-full" type="date" value={form.due_date} onChange={(e) => set('due_date', e.target.value)} />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="onb-order" className="label">Order</label>
-                  <input id="onb-order" className="input w-full" type="number" step="1" min="0" placeholder="0" value={form.sort_order} onChange={(e) => set('sort_order', e.target.value)} />
-                </div>
-                <div className="flex items-end pb-1">
-                  <label className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
-                    <input type="checkbox" className="accent-indigo-500 w-4 h-4" checked={form.required} onChange={(e) => set('required', e.target.checked)} />
-                    Required for go-live
-                  </label>
-                </div>
-              </div>
-              <div>
-                <label htmlFor="onb-help-link-optional" className="label">Help link (optional)</label>
-                <input id="onb-help-link-optional" className="input w-full" type="url" placeholder="https://…" value={form.help_url} maxLength={1000} onChange={(e) => set('help_url', e.target.value)} />
-              </div>
-              <div>
-                <label htmlFor="onb-notes-optional" className="label">Notes (optional)</label>
-                <textarea id="onb-notes-optional" className="input w-full min-h-[60px] resize-y" placeholder="Any context for whoever picks this up" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
-              </div>
-
-              {formError && (
-                <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
-                  <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {formError}
-                </div>
-              )}
-
-            </form>
+        <form id="onboarding-task-form" onSubmit={submit} className="space-y-4">
+          <div>
+            <label htmlFor="onb-task-title" className="label">Task title</label>
+            <input id="onb-task-title" className="input w-full" placeholder="e.g. Import vehicle master" value={form.title} maxLength={300} onChange={(e) => set('title', e.target.value)} />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="onb-phase" className="label">Phase</label>
+              <select id="onb-phase" className="input w-full" value={form.phase} onChange={(e) => set('phase', e.target.value)}>
+                {PHASE_ORDER.map((p) => <option key={p} value={p}>{PHASE_LABELS[p]}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="onb-status" className="label">Status</label>
+              <select id="onb-status" className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
+                {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{STATUS_META[s].label}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label htmlFor="onb-description-optional" className="label">Description (optional)</label>
+            <textarea id="onb-description-optional" className="input w-full min-h-[70px] resize-y" placeholder="What needs to happen for this task to be done?" value={form.description} maxLength={8000} onChange={(e) => set('description', e.target.value)} />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="onb-owner-optional" className="label">Owner (optional)</label>
+              <input id="onb-owner-optional" className="input w-full" placeholder="e.g. Fleet Admin" value={form.owner} maxLength={200} onChange={(e) => set('owner', e.target.value)} />
+            </div>
+            <div>
+              <label htmlFor="onb-due-date-optional" className="label">Due date (optional)</label>
+              <input id="onb-due-date-optional" className="input w-full" type="date" value={form.due_date} onChange={(e) => set('due_date', e.target.value)} />
+            </div>
+          </div>
+          {hasDeps && (
+            <div>
+              <label htmlFor="onb-depends" className="label">Depends on (optional)</label>
+              <select id="onb-depends" className="input w-full" value={form.depends_on} onChange={(e) => set('depends_on', e.target.value)}>
+                <option value="">No dependency</option>
+                {tasks.filter((t) => t.id !== editing?.id).map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+              </select>
+            </div>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="onb-order" className="label">Order</label>
+              <input id="onb-order" className="input w-full" type="number" step="1" min="0" placeholder="0" value={form.sort_order} onChange={(e) => set('sort_order', e.target.value)} />
+            </div>
+            <div className="flex items-end pb-1">
+              <label className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
+                <input type="checkbox" className="accent-green-600 w-4 h-4" checked={form.required} onChange={(e) => set('required', e.target.checked)} />
+                Required for go-live
+              </label>
+            </div>
+          </div>
+          <div>
+            <label htmlFor="onb-help-link-optional" className="label">Help link (optional)</label>
+            <input id="onb-help-link-optional" className="input w-full" type="url" placeholder="https://" value={form.help_url} maxLength={1000} onChange={(e) => set('help_url', e.target.value)} />
+          </div>
+          <div>
+            <label htmlFor="onb-notes-optional" className="label">Notes (optional)</label>
+            <textarea id="onb-notes-optional" className="input w-full min-h-[60px] resize-y" placeholder="Any context for whoever picks this up" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
+          </div>
+          {formError && (
+            <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2" role="alert">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> {formError}
+            </div>
+          )}
+        </form>
       </Modal>
 
-      {/* Delete confirm */}
       <Modal
         open={!!confirmDelete}
         onClose={deleting ? undefined : () => setConfirmDelete(null)}
@@ -558,20 +594,17 @@ export default function OnboardingWizard() {
         size="sm"
         footer={(
           <>
-            <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
-            <button onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
-              <Trash2 size={14} /> {deleting ? 'Deleting...' : 'Delete'}
+            <button type="button" onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm" disabled={deleting}>Cancel</button>
+            <button type="button" onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 disabled:opacity-60" disabled={deleting}>
+              <Trash2 size={14} aria-hidden="true" /> {deleting ? 'Deleting...' : 'Delete task'}
             </button>
           </>
         )}
       >
         {confirmDelete && (
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center shrink-0"><Trash2 size={18} className="text-red-400" /></div>
-            <p className="text-sm text-[var(--text-muted)]">
-              {confirmDelete.title || 'Task'} · {PHASE_LABELS[confirmDelete.phase] || confirmDelete.phase}. This cannot be undone.
-            </p>
-          </div>
+          <p className="text-sm text-[var(--text-muted)]">
+            {confirmDelete.title || 'Task'} in {PHASE_LABELS[confirmDelete.phase] || confirmDelete.phase}. This cannot be undone.
+          </p>
         )}
       </Modal>
     </div>

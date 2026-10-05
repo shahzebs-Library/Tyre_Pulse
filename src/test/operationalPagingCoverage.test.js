@@ -23,10 +23,17 @@ describe('operational registers expose honest paging', () => {
     expect(source).not.toMatch(/\.slice\(0,\s*\d+\)\.map/)
   })
 
+  it('CustomData pages every register through the kit table (EnterpriseTable)', () => {
+    // Rebuilt on the Command Center kit: KitTable pages the whole set and the
+    // records register is server paged with the kit Pager; nothing clips rows.
+    const source = pageSource('CustomData')
+    expect(source).toMatch(/<KitTable\b/)
+    expect(source).not.toMatch(/\.slice\(0,\s*\d+\)\.map/)
+  })
+
   it.each([
     'TyreScrapManagement',
     'DataIntakeHistory',
-    'CustomData',
     'StockManagement',
   ])('%s uses the shared paging contract', (page) => {
     const source = pageSource(page)
@@ -35,7 +42,11 @@ describe('operational registers expose honest paging', () => {
   })
 
   it('WorkshopLive delay register pages the whole set inside EnterpriseTable', () => {
-    const source = pageSource('WorkshopLive')
+    // The delay panel moved into the page's parts module (src/components/workshop).
+    const source = pageSource('WorkshopLive') + readFileSync(
+      resolve(process.cwd(), 'src', 'components', 'workshop', 'WorkshopLiveParts.jsx'),
+      'utf8',
+    )
     expect(source).toContain('<EnterpriseTable')
     expect(source).not.toContain('delaysPager.pageRows')
   })

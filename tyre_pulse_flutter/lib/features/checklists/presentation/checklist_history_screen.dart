@@ -17,6 +17,7 @@ import 'package:tyre_pulse/features/checklists/checklists_providers.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_history_repository.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_history_row.dart';
 import 'package:tyre_pulse/features/checklists/domain/checklist_history_view.dart';
+import 'package:tyre_pulse/features/checklists/presentation/checklist_submission_detail_screen.dart';
 
 class ChecklistHistoryScreen extends ConsumerStatefulWidget {
   const ChecklistHistoryScreen({this.initialSearch, super.key});
@@ -395,8 +396,17 @@ class _CompletedRow extends StatelessWidget {
         ),
     };
 
+    final String title = row.documentNo ?? (row.templateName ?? '');
     return TpCard(
       margin: const EdgeInsets.only(bottom: TpSpace.sm),
+      onTap: () => Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) => ChecklistSubmissionDetailScreen(
+            submissionId: row.id,
+            fallbackTitle: title.isEmpty ? null : title,
+          ),
+        ),
+      ),
       child: Row(
         children: <Widget>[
           Expanded(
@@ -404,7 +414,7 @@ class _CompletedRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
-                  row.documentNo ?? (row.templateName ?? ''),
+                  title,
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 Text(
@@ -415,13 +425,23 @@ class _CompletedRow extends StatelessWidget {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 Text(
-                  row.submittedAt ?? '',
+                  formatChecklistTimestamp(
+                        row.submittedAt,
+                        Localizations.localeOf(context).toLanguageTag(),
+                      ) ??
+                      '',
                   style: Theme.of(context).textTheme.labelSmall,
                 ),
               ],
             ),
           ),
           TpStatusChip(status: tone, label: label, isCompact: true),
+          const SizedBox(width: TpSpace.xs),
+          Icon(
+            Icons.chevron_right,
+            semanticLabel: l10n.checklistDetailOpen,
+            color: TpPalette.of(context).textMuted,
+          ),
         ],
       ),
     );

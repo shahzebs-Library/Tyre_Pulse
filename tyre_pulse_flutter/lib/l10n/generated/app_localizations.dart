@@ -13348,6 +13348,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'QR sign-in is not available for administrator accounts. Sign in with your password.'**
   String get qrLoginAdmin;
+
+  /// Checklist history: title of the read-only screen that shows one submitted checklist.
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist details'**
+  String get checklistDetailTitle;
+
+  /// Checklist details: when the sheet was submitted.
+  ///
+  /// In en, this message translates to:
+  /// **'Submitted {date}'**
+  String checklistDetailSubmittedOn(String date);
+
+  /// Checklist details: label for the note a reviewer left when deciding.
+  ///
+  /// In en, this message translates to:
+  /// **'Reviewer note'**
+  String get checklistDetailReviewNote;
+
+  /// Checklist history: accessibility label for opening one submitted checklist.
+  ///
+  /// In en, this message translates to:
+  /// **'Open checklist'**
+  String get checklistDetailOpen;
+
+  /// Checklist details: the score when no pass or fail was calculated (the template has no pass threshold).
+  ///
+  /// In en, this message translates to:
+  /// **'Score: {pct}%'**
+  String checklistDetailScoreOnly(int pct);
+
+  /// Checklist details: shown on a photo whose file is not on this device and has no stored server reference.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo not available on this device'**
+  String get checklistDetailPhotoUnavailable;
 }
 
 class _AppLocalizationsDelegate

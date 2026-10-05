@@ -8,6 +8,11 @@ import 'package:tyre_pulse/features/preventive_maintenance/data/pm_repository.da
 import 'package:tyre_pulse/features/preventive_maintenance/domain/maintenance_work_order.dart';
 import 'package:tyre_pulse/features/preventive_maintenance/domain/pm_plan.dart';
 
+/// The clock the maintenance screen judges "due" and "overdue" against.
+/// Injectable so a test can freeze the day; the app always reads the real time.
+final Provider<DateTime Function()> pmClockProvider =
+    Provider<DateTime Function()>((Ref ref) => DateTime.now);
+
 final Provider<PmRepository> pmRepositoryProvider = Provider<PmRepository>(
   (Ref ref) => SupabasePmRepository(ref.watch(supabaseClientProvider)),
 );

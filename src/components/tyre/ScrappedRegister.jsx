@@ -54,7 +54,14 @@ const EXPORT_HEADERS = ['Serial', 'Asset', 'Position', 'Vehicle type', 'Make', '
   'Km run', 'Tread depth', 'Reason', 'Scrapped by', 'Scrapped on', 'Cost',
   'Disposal', 'Recorded']
 
-export default function ScrappedRegister({ country, currency }) {
+/**
+ * Optional page hooks (all additive; the register works without them):
+ *   openMarkSignal - a counter; each increase opens the "Mark a tyre as scrap" dialog
+ *   refreshSignal  - a counter; each increase reloads the register
+ *   onLoaded(result) - receives the list_scrapped_tyres payload after each load
+ *   onSelect(row)  - makes rows clickable and reports the clicked row
+ */
+export default function ScrappedRegister({ country, currency, openMarkSignal = 0, refreshSignal = 0, onLoaded, onSelect }) {
   const [rows, setRows] = useState([])
   const [totals, setTotals] = useState({ total: 0, marked_total: 0, unattributed_total: 0, truncated: false })
   const [loading, setLoading] = useState(true)
@@ -99,12 +106,20 @@ export default function ScrappedRegister({ country, currency }) {
         truncated: res.truncated === true,
       })
       setLinked(res.linked || null)
+      onLoaded?.({ ok: true, ...res })
     } catch (e) {
       setError(toUserMessage(e, 'Could not load the scrapped register.'))
+      onLoaded?.({ ok: false, error: true })
     } finally { setLoading(false) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, country])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load() }, [load, refreshSignal])
+
+  useEffect(() => {
+    if (!openMarkSignal) return
+    setMarkOpen(true); setMarkSerial(''); setMarkReason(''); setMarkFound(null); setMarkErr('')
+  }, [openMarkSignal])
 
   // debounce the search box so typing is not one query per keystroke
   useEffect(() => {
@@ -477,6 +492,7 @@ export default function ScrappedRegister({ country, currency }) {
             columns={columns}
             data={rows}
             getRowId={(r) => String(r.serial)}
+            onRowClick={onSelect}
             loading={loading}
             enableGlobalFilter={false}
             enableExport={false}

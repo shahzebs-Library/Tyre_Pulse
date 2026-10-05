@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Eye, EyeOff, ArrowRight, Mail, Phone, KeyRound, AlertCircle,
-  Loader2, Lock, Clock, Shield, Crown, Wifi, WifiOff,
+  Loader2, Lock, Clock, Shield, Wifi, WifiOff,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -402,13 +402,6 @@ export default function Login() {
     }
   }
 
-  // The Super Admin Console runs in its OWN tab: its session is tab-local and
-  // isolated from this one (see IS_CONSOLE_SURFACE in lib/supabase.js), so it is
-  // never opened in place.
-  function openConsole() {
-    window.open('/console/login', '_blank', 'noopener,noreferrer')
-  }
-
   const showWelcome = tab === 'login' && !forgotMode && !pendingApproval
   const footerLinks = [
     [t('auth.login.footerPrivacy'), '/privacy'],
@@ -454,13 +447,6 @@ export default function Login() {
               <>
                 <h2 className="tpl-welcome">{p('welcome')}</h2>
                 <p className="tpl-welcome-sub">{p('welcomeSub')}</p>
-                <div className="tpl-seg" role="group" aria-label={p('modeLabel')}>
-                  <button type="button" aria-pressed="true">{p('tabUser')}</button>
-                  <button type="button" aria-pressed="false" onClick={openConsole} title={p('consoleNewTab')} aria-describedby="tpl-console-hint">
-                    <Crown size={15} aria-hidden="true"/>{p('tabConsole')}
-                  </button>
-                </div>
-                <span id="tpl-console-hint" className="tpl-sr">{p('consoleNewTab')}</span>
               </>
             )}
 

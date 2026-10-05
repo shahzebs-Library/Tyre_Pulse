@@ -5,6 +5,25 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ SESSION 2026-10-05 (part 7) — PR #376 MERGED + LIVE; FLUTTER CHECKLIST DETAILS SCREEN (PR #377, merge pending CI).
+- PR #376 (QR hardening, marketing copy, contact form, tooling) squash-merged as 70259c9; tyre-pulse + tyre-pulse-eezl production
+  READY on that sha. Codex review found a real gap: qr-login edge fn skipped the MFA check when listFactors errored -> now fails
+  closed (503), deployed as qr-login v3. qr_login_enabled still OFF until a Flutter build with number matching ships.
+- NEW Flutter screen: tap a completed row in My checklist history -> ChecklistSubmissionDetailScreen (pushed with Navigator,
+  router files untouched). DTO data/checklist_submission_detail.dart + ChecklistRemoteRepository.getSubmission (one row by id).
+  Labels from the row's template_snapshot, else live template, else answer keys (fallbackFieldKeys includes photo/signature-only).
+  Score shows Passed/Failed only when score_passed is non-null. Photos via ChecklistEvidencePhotos: tp-storage refs / legacy URLs
+  -> signed URL (privateStorageImageUrlProvider); local path only if the file exists; else "not available on this device".
+  ARB parity now 2214. Docs: artifact 01 s2.16 row, artifact 06 s7.5.
+- KNOWN GAP (not fixable from feature code): Flutter sync writes LOCAL photo paths into checklist_submissions.photos
+  (lib/core/sync wiring, see checklist_submission_repository.dart), so Flutter-submitted photos show only on the capturing phone.
+- GOTCHA: running `flutter gen-l10n` in a scratchpad COPY of tyre_pulse_flutter DELETED the real tree's lib/l10n/generated files
+  (reason unknown). After any gen-l10n in a copy, check `git status lib/l10n/generated` in the real tree and copy the fresh output back.
+- Flutter SDK 3.47.2 lives in scratchpad/flutter; test copy at scratchpad/fqa/tp (PUB_CACHE=scratchpad/.pubcache). 4 golden
+  diffs (fill screen, inspection approval, 0.5-1.3%) are Linux-vs-Windows noise, not regressions.
+- STATE AT CLOSE: PR #377 open on claude/modest-hopper-5bnq8c, owner said "pushed and merged to main if all done" -> squash-merge
+  when CI green, then realign branch. If this line still says "pending", check PR #377 first.
+
 # ⚑ SESSION 2026-10-04 (part 6) — SECURITY REVIEW + QR SIGN-IN HARDENING (applied live, feature still OFF).
 - Console migrations (1f2f356/91ef59f) reviewed vs live DB: clean (74 DEFINER fns pinned, all console fns is_super_admin gated,
   12 new tables RLS on). Leftover grants revoked. OPEN owner call: _user_issue_admin() also admits plain org Admins (Error Center).

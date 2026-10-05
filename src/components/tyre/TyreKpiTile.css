@@ -1,0 +1,16 @@
+/* KPI tile with a sub-line (scrap + retread pages). --cc-* tokens only. */
+.tk-tile { align-items: flex-start; text-align: start; font: inherit; color: inherit; cursor: default; }
+button.tk-tile { cursor: pointer; }
+.tk-tile .cc-kpi-icon { margin-top: 2px; }
+.tk-body { display: flex; flex-direction: column; gap: 6px; }
+.tk-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; min-height: 16px; }
+.tk-label { margin-top: 0; min-width: 0; line-height: 1.3; overflow-wrap: anywhere; }
+.tk-top .cc-kpi-trend { flex: none; }
+.tk-tile .cc-kpi-trend { position: static; }
+.tk-val { font-size: 22px; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.tk-sub { font-size: 11.5px; color: var(--cc-ink-3); line-height: 1.35; }
+.tk-active { border-color: var(--cc-green); box-shadow: inset 0 0 0 1px var(--cc-green); }
+.tk-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 1280px) { .tk-row { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .tk-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 420px) { .tk-row { grid-template-columns: minmax(0, 1fr); } }

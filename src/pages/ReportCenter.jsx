@@ -27,7 +27,7 @@ import {
   FileText, FileSpreadsheet, Presentation, CalendarClock, Palette, Loader2,
   CheckCircle2, AlertTriangle, X, RefreshCw, Download, Mail, Search, ChevronRight,
   Layers, LayoutTemplate, BarChart3, Truck, Disc3, Wrench, ShieldCheck, ShieldAlert, DollarSign,
-  Package, Briefcase, FilePlus2, CalendarPlus, Eye, List, LayoutGrid, Clock3,
+  Package, Briefcase, FilePlus2, CalendarPlus, Eye, List, LayoutGrid, CalendarDays, ChevronDown, Clock3,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
@@ -39,10 +39,9 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { formatDate } from '../lib/formatters'
 import { safeImageSrc } from '../lib/safeUrl'
 import { exportToPptx, exportToExcel, exportToPdf, exportDailyExecutivePdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
-import SectionTabs, { REPORTS_TABS } from '../components/ui/SectionTabs'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import Modal from '../components/ui/Modal'
-import { Card, CardState, Kpi, KitTable, ViewAll, fmtInt } from '../components/commandCenter/kit'
+import { Card, CardState, KitTable, ViewAll, Trend, fmtInt } from '../components/commandCenter/kit'
 import {
   summarizeDeliveryLog, filterDeliveryLog, deliveryStatus, recipientCount, DELIVERY_STATUS_LABEL,
 } from '../lib/reportCenterAnalytics'
@@ -101,9 +100,37 @@ const DELIVERY_META = {
 // The delivery log shows the most recent sends; the page says so.
 const HISTORY_LIMIT = 200
 
-function KpiLabel({ title, sub }) {
-  return <>{title}<small className="rc-kpi-sub">{sub}</small></>
+/** KPI tile laid out as the mockup: label on top, value with trend, a sub line. */
+function StatTile({ icon: Icon, tone, label, value, sub, trend, title, to, loading }) {
+  const body = (
+    <>
+      <span className={`rc-stat-icon ${tone}`}><Icon size={26} aria-hidden="true" /></span>
+      <span className="rc-stat-body">
+        <span className="rc-stat-label">{label}</span>
+        <span className="rc-stat-row"><b>{loading ? '...' : value}</b><Trend value={trend} /></span>
+        {sub && <span className="rc-stat-sub">{sub}</span>}
+      </span>
+    </>
+  )
+  return to
+    ? <Link to={to} className="cc-card rc-stat" title={title}>{body}</Link>
+    : <div className="cc-card rc-stat" title={title}>{body}</div>
 }
+
+/** Read-only field styled like the mockup's form control, showing the real value. */
+function Field({ label, value, hint, select }) {
+  return (
+    <div className="rc-field">
+      <span className="rc-field-label">{label}</span>
+      <span className={`rc-field-box ${select ? 'select' : ''}`} title={hint || undefined}>
+        <span>{value}</span>{select && <ChevronDown size={14} aria-hidden="true" />}
+      </span>
+    </div>
+  )
+}
+
+const FORMAT_SHORT = { PDF: 'PDF', Excel: 'XLS', PPTX: 'PPT' }
+const BRAND_THUMB = '/dashboard/hero-center-brandpack.webp'
 
 function DeliveryPill({ row }) {
   const st = deliveryStatus(row)
@@ -143,6 +170,7 @@ export default function ReportCenter() {
   const [catFormat, setCatFormat] = useState('')
   const [catMode, setCatMode] = useState('')
   const [catView, setCatView] = useState('list')
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const reportCompany = branding?.legal_name || branding?.display_name || appSettings.company_name || 'TyrePulse'
 
@@ -419,16 +447,18 @@ export default function ReportCenter() {
   const catalogLoading = layouts.loading && !layouts.data
 
   const kpis = [
-    { icon: LayoutTemplate, tone: 't-green', value: layouts.loading ? null : layouts.data?.length, display: layouts.error ? 'N/A' : undefined,
-      label: <KpiLabel title="Templates" sub={layouts.error ? 'Saved layouts could not be read' : 'Saved Report Builder layouts'} /> },
-    { icon: BarChart3, tone: 't-blue', value: exports30.loading ? null : exports30.count, display: exports30.error ? 'N/A' : undefined,
+    { icon: LayoutTemplate, tone: 't-green', label: 'Templates', loading: layouts.loading,
+      value: layouts.error ? 'N/A' : fmtInt(layouts.data?.length), sub: layouts.error ? 'Saved layouts could not be read' : 'Saved Report Builder layouts' },
+    { icon: BarChart3, tone: 't-blue', label: 'Generated (30d)', loading: exports30.loading,
+      value: exports30.error ? 'N/A' : fmtInt(exports30.count),
       title: exports30.error || `Excel, PDF and PowerPoint downloads recorded since ${RECORDING_START}`,
-      label: <KpiLabel title="Generated (30d)" sub={exports30.error ? 'Download log not readable for your role' : `Downloads, recorded from ${RECORDING_START}`} /> },
-    { icon: CalendarClock, tone: 't-purple', value: schedules.loading ? null : activeSchedules, display: schedules.error ? 'N/A' : undefined, to: '/scheduled-reports',
-      label: <KpiLabel title="Scheduled" sub={schedules.error ? 'Schedules could not be read' : `Active of ${fmtInt(scheduleRows.length)} schedules`} /> },
-    { icon: Layers, tone: 't-amber', value: PRESET_KEYS.length, label: <KpiLabel title="Report themes" sub={`Active: ${paletteLabel}`} /> },
-    { icon: Mail, tone: 't-green', value: histLoading ? null : success.pct, display: histError ? 'N/A' : success.pct == null ? 'N/A' : `${success.pct}%`,
-      label: <KpiLabel title="Delivery success" sub={histError ? 'Delivery log could not be read' : success.pct == null ? 'No deliveries in the last 30 days' : `Last 30 days, ${fmtInt(success.sent)} sent, ${fmtInt(success.failed)} failed${history.length >= HISTORY_LIMIT ? ' (latest 200 sends)' : ''}`} /> },
+      sub: exports30.error ? 'Download log not readable for your role' : 'Reports downloaded' },
+    { icon: CalendarClock, tone: 't-purple', label: 'Scheduled', loading: schedules.loading, to: '/scheduled-reports',
+      value: schedules.error ? 'N/A' : fmtInt(activeSchedules), sub: schedules.error ? 'Schedules could not be read' : `Active of ${fmtInt(scheduleRows.length)} schedules` },
+    { icon: Layers, tone: 't-amber', label: 'Brand Packs', value: fmtInt(PRESET_KEYS.length), sub: `Report themes, active ${paletteLabel}` },
+    { icon: Mail, tone: 't-green', label: 'Delivery Success', loading: histLoading,
+      value: histError || success.pct == null ? 'N/A' : `${success.pct}%`,
+      sub: histError ? 'Delivery log could not be read' : success.pct == null ? 'No deliveries in the last 30 days' : `Last 30 days, ${fmtInt(success.sent)} sent, ${fmtInt(success.failed)} failed${history.length >= HISTORY_LIMIT ? ' (latest 200 sends)' : ''}` },
   ]
 
   const busyFor = (entry, f) => generating === `${entry.id}:${f}` || (entry.kind === 'page' && generating === entry.id)
@@ -436,17 +466,16 @@ export default function ReportCenter() {
 
   const catalogColumns = [
     {
-      key: 'name', header: 'Report name', sortValue: (r) => r.name,
+      key: 'name', header: 'Report Name', sortValue: (r) => r.name,
       cell: (r) => {
         const Icon = r.kind === 'page' ? PAGE_ICON[r.id] : CATEGORY_ICON[r.category] || FileText
-        return <span className="rc-name"><span className={`rc-name-icon ${CATEGORY_TONE[r.category] || 't-blue'}`}><Icon size={14} aria-hidden="true" /></span><span className="rc-name-copy"><b title={r.name}>{r.name}</b><small title={r.desc}>{r.desc}</small></span></span>
+        return <span className="rc-name"><span className={`rc-name-icon ${CATEGORY_TONE[r.category] || 't-blue'}`}><Icon size={14} aria-hidden="true" /></span><span className="rc-name-copy"><b title={r.desc ? `${r.name}: ${r.desc}` : r.name}>{r.name}</b></span></span>
       },
     },
-    { key: 'category', header: 'Category' },
-    { key: 'formats', header: 'Formats', sortable: false, cell: (r) => r.formats.join(', ') },
+    { key: 'category', header: 'Category', cell: (r) => <span className="rc-wrap">{r.category}</span> },
     { key: 'mode', header: 'Mode', sortValue: (r) => modeFor(r, scheduleRows), cell: (r) => { const m = modeFor(r, scheduleRows); return <span className={`cc-pill ${m === 'Scheduled' ? 'info' : 'muted'}`}>{m}</span> } },
     {
-      key: 'last', header: 'Last delivered', sortValue: (r) => lastDelivery(r, history)?.sent_at || '',
+      key: 'last', header: 'Last Delivered', sortValue: (r) => lastDelivery(r, history)?.sent_at || '',
       cell: (r) => {
         const d = lastDelivery(r, history)
         if (!d) return <span className="cc-na">{r.kind === 'page' ? 'Not scheduled' : 'No delivery logged'}</span>
@@ -455,12 +484,12 @@ export default function ReportCenter() {
       },
     },
     {
-      key: 'actions', header: 'Generate', sortable: false,
+      key: 'actions', header: 'Formats and Actions', sortable: false,
       cell: (r) => (
         <span className="rc-gen" onClick={(e) => e.stopPropagation()} role="presentation">
           {r.formats.map((f) => (
-            <button key={f} type="button" className="rc-gen-btn" disabled={Boolean(generating)} onClick={() => runEntry(r, f)} aria-label={`Generate ${r.name} as ${f}`}>
-              {busyFor(r, f) ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : <Download size={12} aria-hidden="true" />} {f}
+            <button key={f} type="button" className="rc-gen-btn" disabled={Boolean(generating)} onClick={() => runEntry(r, f)} aria-label={`Generate ${r.name} as ${f}`} title={`Generate ${f}`}>
+              {busyFor(r, f) ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : <Download size={12} aria-hidden="true" />} {FORMAT_SHORT[f] || f}
             </button>
           ))}
         </span>
@@ -468,10 +497,48 @@ export default function ReportCenter() {
     },
   ]
 
+  const isAdmin = profile?.role === 'Admin' || profile?.is_super_admin
+  const todayStamp = stamp(now)
+  const scopeCurrency = activeCountry === 'All' ? 'per country (SAR, AED, EGP), never combined' : activeCurrency
+
+  const recentColumns = [
+    {
+      key: 'schedule_name', header: 'Report Name', sortable: false,
+      cell: (r) => <span className="rc-name"><span className="rc-name-icon t-blue"><BarChart3 size={13} aria-hidden="true" /></span><span className="rc-name-copy"><b title={r.schedule_name || ''}>{r.schedule_name || 'Unnamed schedule'}</b></span></span>,
+    },
+    { key: 'sent_at', header: 'Generated On', sortable: false, cell: (r) => { const st = stamp(r.sent_at); return st ? <span className="rc-two"><b>{st.date}</b><small>{st.time}</small></span> : <span className="cc-na">Not recorded</span> } },
+    { key: 'report_type', header: 'Type', sortable: false, cell: (r) => <span className="rc-fmt">{r.report_type || 'N/A'}</span> },
+    { key: 'status', header: 'Status', sortable: false, cell: (r) => <DeliveryPill row={r} /> },
+  ]
+  const templateColumns = [
+    {
+      key: 'label', header: 'Template Name', sortable: false,
+      cell: (l) => <span className="rc-name"><span className="rc-name-icon t-green"><LayoutTemplate size={13} aria-hidden="true" /></span><span className="rc-name-copy"><b title={l.label}>{l.label}</b></span></span>,
+    },
+    { key: 'category', header: 'Category', sortable: false, cell: () => 'Custom reports' },
+    { key: 'updated_at', header: 'Last Updated', sortable: false, cell: (l) => stamp(l.updated_at)?.date || <span className="cc-na">Not recorded</span> },
+    {
+      key: 'status', header: 'Status', sortable: false,
+      cell: (l) => { const sch = scheduleRows.some((x) => x.active && x.report_type === l.value); return <span className={`cc-pill ${sch ? 'good' : 'muted'}`}>{sch ? 'Scheduled' : 'Saved'}</span> },
+    },
+  ]
+  const scheduleColumns = [
+    { key: 'name', header: 'Schedule Name', sortable: false, cell: (sc) => <b className="rc-sched-name" title={sc.name || ''}>{sc.name || 'Unnamed schedule'}</b> },
+    { key: 'report_type', header: 'Report', sortable: false, cell: (sc) => <span className="rc-muted">{sc.report_type || 'N/A'}</span> },
+    { key: 'freq', header: 'Frequency', sortable: false, cell: (sc) => { const l = scheduleLabel(sc); return <span className="rc-two"><b>{l.line1}</b><small>{l.line2}</small></span> } },
+    {
+      key: 'active', header: 'Status', sortable: false,
+      cell: (sc) => (
+        <button type="button" role="switch" aria-checked={!!sc.active} aria-label={`${sc.active ? 'Pause' : 'Resume'} ${sc.name || 'schedule'}`}
+          className={`rc-switch ${sc.active ? 'on' : ''}`} disabled={togglingId === sc.id} onClick={(e) => { e.stopPropagation(); toggleSchedule(sc) }}>
+          <span />
+        </button>
+      ),
+    },
+  ]
+
   return (
     <div className="cc rc-page">
-      <SectionTabs tabs={REPORTS_TABS} />
-
       {toast && (
         <div role="status" aria-live="polite" className={`rc-toast ${toast.type}`}>
           {toast.type === 'ok' ? <CheckCircle2 size={15} aria-hidden="true" /> : <AlertTriangle size={15} aria-hidden="true" />}
@@ -482,29 +549,48 @@ export default function ReportCenter() {
 
       <header className="rc-head">
         <div className="rc-head-main">
-          <span className="rc-head-icon" aria-hidden="true"><FileText size={26} /></span>
           <div className="rc-head-copy">
-            <nav aria-label="Breadcrumb" className="rc-crumb">Analytics and Reports <ChevronRight size={13} aria-hidden="true" /> <span aria-current="page">{t('reportcenter.title')}</span></nav>
-            <h1>{t('reportcenter.title')}</h1>
-            <p>Generate branded fleet reports on demand and manage templates, branding and scheduled deliveries.</p>
+            <nav aria-label="Breadcrumb" className="rc-crumb"><Link to="/reports">Analytics and Reports</Link> <ChevronRight size={13} aria-hidden="true" /> <span aria-current="page">{t('reportcenter.title')}</span></nav>
+            <div className="rc-title-row">
+              <span className="rc-head-icon" aria-hidden="true"><CalendarDays size={26} /></span>
+              <div>
+                <h1>{t('reportcenter.title')}</h1>
+                <p>Generate branded fleet reports on demand and manage templates, branding and scheduled deliveries.</p>
+              </div>
+            </div>
           </div>
         </div>
         <div className="rc-head-actions">
-          <label className="rc-date"><span>{t('reportcenter.filters.from')}</span><input type="date" className="cc-select" value={dateFrom} max={dateTo || undefined} onChange={(e) => setDateFrom(e.target.value)} /></label>
-          <label className="rc-date"><span>{t('reportcenter.filters.to')}</span><input type="date" className="cc-select" value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} /></label>
-          <button type="button" className="cc-btn-primary rc-primary" onClick={() => setPickerOpen(true)}><FilePlus2 size={16} aria-hidden="true" /> Generate report</button>
+          <div className="rc-datebox" title="Every report below uses this date range">
+            <CalendarDays size={18} aria-hidden="true" />
+            <label className="rc-date"><span>{t('reportcenter.filters.from')}</span><input type="date" value={dateFrom} max={dateTo || undefined} onChange={(e) => setDateFrom(e.target.value)} /></label>
+            <label className="rc-date"><span>{t('reportcenter.filters.to')}</span><input type="date" value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} /></label>
+            {todayStamp && <span className="rc-today"><b>Today</b><small>{todayStamp.date}</small></span>}
+          </div>
+          <div className="rc-split">
+            <button type="button" className="cc-btn-primary rc-primary" onClick={() => setPickerOpen(true)}><FilePlus2 size={16} aria-hidden="true" /> Generate Report</button>
+            <button type="button" className="cc-btn-primary rc-split-caret" aria-haspopup="menu" aria-expanded={menuOpen} aria-label="More report actions" onClick={() => setMenuOpen((o) => !o)}><ChevronDown size={16} aria-hidden="true" /></button>
+            {menuOpen && (
+              <div className="rc-menu" role="menu" onMouseLeave={() => setMenuOpen(false)}>
+                <Link role="menuitem" to="/reports" onClick={() => setMenuOpen(false)}>Report wizard</Link>
+                <Link role="menuitem" to="/scheduled-reports" onClick={() => setMenuOpen(false)}>Scheduled reports</Link>
+                <Link role="menuitem" to="/report-sharing" onClick={() => setMenuOpen(false)}>Report sharing</Link>
+                {isAdmin && <Link role="menuitem" to="/report-builder" onClick={() => setMenuOpen(false)}>Report Builder</Link>}
+              </div>
+            )}
+          </div>
         </div>
       </header>
       <p className="rc-scope">
-        {t('reportcenter.filters.scope')} <b>{activeCountry === 'All' ? t('reportcenter.filters.allCountries') : activeCountry}</b>, {t('reportcenter.filters.currency')} <b>{activeCurrency}</b>. Every report below uses this date range and scope.
+        {t('reportcenter.filters.scope')} <b>{activeCountry === 'All' ? t('reportcenter.filters.allCountries') : activeCountry}</b>, {t('reportcenter.filters.currency')} <b>{scopeCurrency}</b>. Every report below uses this date range and scope.
       </p>
 
-      <div className="cc-kpis rc-kpis">
-        {kpis.map((k, i) => <Kpi key={i} {...k} loading={k.value == null && k.display == null} />)}
+      <div className="rc-kpis">
+        {kpis.map((k) => <StatTile key={k.label} {...k} />)}
       </div>
 
       <div className="rc-top">
-        <Card title="Report categories" sub="Every report the app can generate">
+        <Card title={<span className="rc-card-title"><Layers size={18} aria-hidden="true" /> Report Categories</span>}>
           <CardState state={{ loading: catalogLoading, data: catalog, error: null }}>
             <ul className="rc-cats">
               {cats.map((c) => {
@@ -526,19 +612,19 @@ export default function ReportCenter() {
           </CardState>
         </Card>
 
-        <Card title="Available reports" sub={`${fmtInt(shown.length)} of ${fmtInt(catalog.length)} reports`}>
+        <Card title={<span className="rc-card-title"><BarChart3 size={18} aria-hidden="true" /> Available Reports</span>}>
           <div className="cc-filters rc-filters">
             <label className="cc-search"><Search size={15} aria-hidden="true" /><input type="search" aria-label="Search reports" placeholder="Search reports" value={catSearch} onChange={(e) => setCatSearch(e.target.value)} /></label>
             <select className="cc-select" aria-label="Category" value={catCategory} onChange={(e) => setCatCategory(e.target.value)}>
-              <option value="">All categories</option>
+              <option value="">All Categories</option>
               {cats.filter((c) => c.count).map((c) => <option key={c.category} value={c.category}>{c.category}</option>)}
             </select>
             <select className="cc-select" aria-label="Format" value={catFormat} onChange={(e) => setCatFormat(e.target.value)}>
-              <option value="">All formats</option>
+              <option value="">All Formats</option>
               {['PDF', 'Excel', 'PPTX'].map((f) => <option key={f} value={f}>{f}</option>)}
             </select>
             <select className="cc-select" aria-label="Mode" value={catMode} onChange={(e) => setCatMode(e.target.value)}>
-              <option value="">All modes</option>
+              <option value="">All Modes</option>
               <option value="On demand">On demand</option>
               <option value="Scheduled">Scheduled</option>
             </select>
@@ -567,106 +653,71 @@ export default function ReportCenter() {
               </div>
             )
           ) : (
-            <KitTable columns={catalogColumns} rows={shown} loading={catalogLoading} getRowId={(r) => r.id} empty="No report matches these filters." scroll />
+            <KitTable columns={catalogColumns} rows={shown} loading={catalogLoading} getRowId={(r) => r.id} empty="No report matches these filters." className="rc-catalog" />
           )}
         </Card>
 
-        <Card title="Branding and delivery" sub="What every export carries">
+        <Card title={<span className="rc-card-title"><Palette size={18} aria-hidden="true" /> Branding and Delivery</span>}>
           <div className="rc-brand">
-            <div className="rc-brand-mark">
-              {logo
-                ? <img src={logo} alt={t('reportcenter.branding.logoAlt')} onError={(e) => { e.currentTarget.style.display = 'none' }} />
-                : <span className="rc-brand-swatch" style={{ background: branding?.primary_color || 'var(--cc-green-strong)' }}><Palette size={18} aria-hidden="true" /></span>}
-              <div><b>{reportCompany}</b><small>{logo ? 'Tenant logo on every report' : 'No tenant logo set'}{orgName ? `, ${orgName}` : ''}</small></div>
+            <div className="rc-brand-pack">
+              <Field label="Brand Pack" value={paletteLabel} select hint="Report colour theme, set by a super admin in the console" />
+              <span className="rc-brand-thumb rc-brand-logo">
+                {logo
+                  ? <img src={logo} alt={t('reportcenter.branding.logoAlt')} onError={(e) => { e.currentTarget.style.display = 'none' }} />
+                  : <span className="rc-brand-word"><Palette size={14} aria-hidden="true" /> {reportCompany}</span>}
+              </span>
+              <span className="rc-brand-thumb rc-brand-photo" style={{ backgroundImage: `url(${BRAND_THUMB})` }} aria-hidden="true" />
             </div>
-            <dl className="rc-kv">
-              <div><dt>Report theme</dt><dd>{paletteLabel}</dd></div>
-              <div><dt>Header</dt><dd>{reportCompany}</dd></div>
-              <div><dt>Footer</dt><dd className="cc-na">Not configurable</dd></div>
-              <div><dt>Default format</dt><dd className="cc-na" title="Each report and schedule picks its own formats">Chosen per report</dd></div>
-              <div><dt>Delivery method</dt><dd title="Schedules email their recipients; on-demand reports download">Email (schedules), download (on demand)</dd></div>
-              <div><dt>Language</dt><dd>English</dd></div>
-              <div><dt>Timezone</dt><dd>{tz || 'Not recorded'}</dd></div>
-              <div><dt>Currency</dt><dd>{activeCurrency}</dd></div>
-            </dl>
+            <div className="rc-brand-logo-row">
+              <Field label="Logo" value={logo ? 'Tenant logo' : 'No tenant logo set'} select />
+              <span className="rc-brand-mark">
+                {logo
+                  ? <img src={logo} alt="" onError={(e) => { e.currentTarget.style.display = 'none' }} />
+                  : <span className="rc-brand-swatch" style={{ background: branding?.primary_color || 'var(--cc-green-strong)' }}><Palette size={14} aria-hidden="true" /></span>}
+                <b>{reportCompany}</b>
+              </span>
+            </div>
+            <Field label="Header" value={reportCompany} hint={orgName ? `Organisation: ${orgName}` : undefined} />
+            <Field label="Footer" value={<span className="cc-na">Not configurable</span>} />
+            <div className="rc-field-grid">
+              <Field label="Default Format" value="Chosen per report" select hint="Each report and schedule picks its own formats" />
+              <Field label="Delivery Method" value="Email + download" select hint="Schedules email their recipients; on-demand reports download" />
+              <Field label="Language" value="English" select />
+              <Field label="Timezone" value={tz || 'Not recorded'} select />
+            </div>
             <div className="rc-brand-actions">
-              <button type="button" className="cc-btn-ghost" onClick={() => generate('daily')} disabled={Boolean(generating)}>
-                {generating === 'daily' ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />} Preview report
+              <button type="button" className="cc-btn-ghost rc-outline" onClick={() => generate('daily')} disabled={Boolean(generating)}>
+                {generating === 'daily' ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />} Preview Report
               </button>
               <Link to="/console/appearance" className="cc-btn-primary"><Palette size={14} aria-hidden="true" /> {t('reportcenter.branding.editBranding')}</Link>
             </div>
+            <p className="rc-note">Defaults are not stored per tenant; the fields show what every export uses today.</p>
           </div>
         </Card>
       </div>
 
       <div className="rc-bottom">
-        <Card title="Recent deliveries" sub="Scheduled reports emailed" action={<ViewAll label="View all" onClick={() => document.getElementById('rc-history-title')?.scrollIntoView({ behavior: 'smooth' })} />}>
+        <Card title={<span className="rc-card-title"><Clock3 size={18} aria-hidden="true" /> Recent Generated Reports</span>} action={<ViewAll label="View All" onClick={() => document.getElementById('rc-history-title')?.scrollIntoView({ behavior: 'smooth' })} />}>
           <CardState state={{ loading: histLoading, data: histLoading ? null : history, error: histError, retry: loadHistory }}
-            empty={!histLoading && !histError && !history.length ? 'No report has been delivered yet. Schedules log every send here.' : null}>
-            <div className="cc-list">
-              {history.slice(0, 5).map((r) => {
-                const s = stamp(r.sent_at)
-                return (
-                  <div key={r.id} className="cc-row">
-                    <span className="cc-row-icon rc-row-icon" aria-hidden="true"><Mail size={15} /></span>
-                    <div className="cc-row-main">
-                      <div className="cc-row-title" title={r.schedule_name || ''}>{r.schedule_name || 'Unnamed schedule'}</div>
-                      <div className="cc-row-meta">{s ? `${s.date} ${s.time}` : 'Time not recorded'}{recipientCount(r) != null ? `, ${recipientCount(r)} recipients` : ''}</div>
-                    </div>
-                    <DeliveryPill row={r} />
-                  </div>
-                )
-              })}
-            </div>
+            empty={!histLoading && !histError && !history.length ? 'No report has been delivered yet. Scheduled sends are logged here.' : null}>
+            <KitTable compact columns={recentColumns} rows={history.slice(0, 5)} getRowId={(r) => String(r.id)} empty="No deliveries yet." />
           </CardState>
         </Card>
 
-        <Card title="Report templates" sub="Saved Report Builder layouts" action={<ViewAll to="/accidents" label="Open builder" />}>
+        <Card title={<span className="rc-card-title"><LayoutTemplate size={18} aria-hidden="true" /> Report Templates</span>} action={<ViewAll to="/accidents" label="View All" />}>
           <CardState state={{ ...layouts, retry: loadLayouts }}
             empty={layouts.data && !layouts.data.length ? 'No saved layouts yet. Build one in Accidents, Report Builder tab.' : null}>
-            <div className="cc-list">
-              {(layouts.data || []).slice(0, 5).map((l) => {
-                const s = stamp(l.updated_at)
-                const scheduled = scheduleRows.some((x) => x.active && x.report_type === l.value)
-                return (
-                  <div key={l.value} className="cc-row">
-                    <span className="cc-row-icon rc-row-icon" aria-hidden="true"><LayoutTemplate size={15} /></span>
-                    <div className="cc-row-main">
-                      <div className="cc-row-title" title={l.label}>{l.label}</div>
-                      <div className="cc-row-meta">Custom reports{s ? `, updated ${s.date}` : ''}</div>
-                    </div>
-                    <span className={`cc-pill ${scheduled ? 'info' : 'muted'}`}>{scheduled ? 'Scheduled' : 'Saved'}</span>
-                  </div>
-                )
-              })}
-            </div>
+            <KitTable compact columns={templateColumns} rows={(layouts.data || []).slice(0, 5)} getRowId={(l) => String(l.value)} empty="No saved layouts yet." />
           </CardState>
-          <Link to="/accidents" className="rc-create"><FilePlus2 size={14} aria-hidden="true" /> Create new template</Link>
+          <Link to="/accidents" className="rc-create"><FilePlus2 size={14} aria-hidden="true" /> Create New Template</Link>
         </Card>
 
-        <Card title="Scheduling" sub="Pause or resume a schedule here" action={<ViewAll to="/scheduled-reports" />}>
+        <Card title={<span className="rc-card-title"><CalendarClock size={18} aria-hidden="true" /> Scheduling</span>} action={<ViewAll to="/scheduled-reports" label="View All" />}>
           <CardState state={{ ...schedules, retry: loadSchedules }}
             empty={schedules.data && !schedules.data.length ? 'No schedules yet.' : null}>
-            <div className="cc-list">
-              {upcomingSchedules(scheduleRows, 5).map((s) => {
-                const l = scheduleLabel(s)
-                return (
-                  <div key={s.id} className="cc-row">
-                    <span className="cc-row-icon rc-row-icon" aria-hidden="true"><Clock3 size={15} /></span>
-                    <div className="cc-row-main">
-                      <div className="cc-row-title" title={s.name}>{s.name || 'Unnamed schedule'}</div>
-                      <div className="cc-row-meta">{l.line1} {l.line2}</div>
-                    </div>
-                    <button type="button" role="switch" aria-checked={!!s.active} aria-label={`${s.active ? 'Pause' : 'Resume'} ${s.name || 'schedule'}`}
-                      className={`rc-switch ${s.active ? 'on' : ''}`} disabled={togglingId === s.id} onClick={() => toggleSchedule(s)}>
-                      <span />
-                    </button>
-                  </div>
-                )
-              })}
-            </div>
+            <KitTable compact columns={scheduleColumns} rows={upcomingSchedules(scheduleRows, 5)} getRowId={(sc) => String(sc.id)} empty="No schedules yet." />
           </CardState>
-          <button type="button" className="rc-create" onClick={() => navigate('/scheduled-reports', { state: { presetReportType: 'executive' } })}><CalendarPlus size={14} aria-hidden="true" /> Create new schedule</button>
+          <button type="button" className="rc-create" onClick={() => navigate('/scheduled-reports', { state: { presetReportType: 'executive' } })}><CalendarPlus size={14} aria-hidden="true" /> Create New Schedule</button>
         </Card>
       </div>
 

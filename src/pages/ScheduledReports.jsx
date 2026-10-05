@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
-  Calendar, Clock, Mail, Plus, Edit2, Trash2, Eye, EyeOff,
+  Clock, Mail, Plus, Edit2, Trash2, Eye, EyeOff,
   FileText, BarChart2, Truck, ClipboardList, DollarSign,
   CheckCircle, XCircle, AlertCircle, AlertTriangle, ChevronDown, X, Save, Lock,
   Package, Building2, Download, Loader2, FileSpreadsheet, CalendarClock, ShieldCheck,
-  LayoutTemplate, Send, History, RefreshCw,
+  LayoutTemplate, Send, History, RefreshCw, CalendarDays, ChevronRight, Play, PauseCircle, List, LayoutGrid,
+  Users, Search,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { aiOps } from '../lib/api'
@@ -16,10 +17,9 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import SegmentedControl from '../components/ui/SegmentedControl'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
-import StatTile from '../components/ui/StatTile'
 import DialogModal from '../components/ui/Modal'
 import {
-  filterSchedules, recipientCountOf, shortReason, validateEmails, nextRunBucket, scheduleKpis,
+  filterSchedules, shortReason, validateEmails, nextRunBucket, scheduleKpis,
   deliveryRows, scheduleExportRows, SCHEDULE_EXPORT_KEYS, SCHEDULE_EXPORT_HEADERS,
 } from '../lib/scheduledReportsAnalytics'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
@@ -32,6 +32,61 @@ import {
 } from '../lib/api/scheduledReports'
 import { getTemplate } from '../lib/api/accidentReportTemplates'
 import { tyreManVehicleTypeSummary, tyreManVehicleTypeTable } from '../lib/inspectionCoverage'
+import { Card, CardState, Kpi, Donut, KitTable, ViewAll, fmtInt } from '../components/commandCenter/kit'
+import {
+  moduleOf, MODULE_OPTIONS, scheduleLabel, scheduleStatus, STATUS_META, healthSegments, registryKpis,
+  deliveryTrend, recentActivity, latestRunBySchedule, filterRegistry, recipientOptions,
+} from '../lib/scheduledReportsView'
+import './ScheduledReports.css'
+
+// Delivery log window. Long enough that the whole previous calendar month is
+// always inside it, so the month-on-month trend on the KPI tiles is honest.
+const HISTORY_DAYS = 70
+
+function KpiLabel({ title, sub }) {
+  return <>{title}<small className="sr-kpi-sub">{sub}</small></>
+}
+
+const TREND_SERIES = [
+  { key: 'sent', label: 'Successful', color: 'var(--cc-green)' },
+  { key: 'failed', label: 'Failed', color: 'var(--cc-red)' },
+  { key: 'expected', label: 'Expected', color: 'var(--cc-blue)', dashed: true },
+]
+
+/** Small SVG line chart for the 7-day delivery trend. */
+function TrendChart({ points }) {
+  const W = 420; const H = 150; const pad = 26
+  const max = Math.max(1, ...points.flatMap((p) => TREND_SERIES.map((s) => p[s.key])))
+  const step = points.length > 1 ? (W - pad - 8) / (points.length - 1) : 0
+  const x = (i) => pad + i * step
+  const y = (v) => H - (v / max) * (H - 14)
+  const label = points.map((p) => `${p.label}: ${p.sent} sent, ${p.failed} failed, ${p.expected} expected`).join('; ')
+  return (
+    <div className="sr-trend">
+      <div className="sr-trend-legend">
+        {TREND_SERIES.map((s) => <span key={s.key}><i style={{ background: s.color }} aria-hidden="true" />{s.label}</span>)}
+      </div>
+      <div className="cc-chart">
+        <svg viewBox={`0 0 ${W} ${H + 20}`} role="img" aria-label={`Deliveries per day. ${label}`} preserveAspectRatio="none">
+          {[0, 0.5, 1].map((f) => (
+            <g key={f}>
+              <line x1={pad} y1={y(max * f)} x2={W} y2={y(max * f)} stroke="var(--cc-inner-border)" />
+              <text x={pad - 5} y={y(max * f) + 3} textAnchor="end" className="cc-axis">{Math.round(max * f)}</text>
+            </g>
+          ))}
+          {TREND_SERIES.map((s) => (
+            <g key={s.key}>
+              <polyline fill="none" stroke={s.color} strokeWidth="2" strokeDasharray={s.dashed ? '4 3' : undefined}
+                points={points.map((p, i) => `${x(i)},${y(p[s.key])}`).join(' ')} />
+              {points.map((p, i) => <circle key={i} cx={x(i)} cy={y(p[s.key])} r="3" fill={s.color}><title>{`${p.label} ${s.label}: ${p[s.key]}`}</title></circle>)}
+            </g>
+          ))}
+          {points.map((p, i) => <text key={p.date} x={x(i)} y={H + 15} textAnchor="middle" className="cc-axis">{p.label}</text>)}
+        </svg>
+      </div>
+    </div>
+  )
+}
 
 // ── Registry-derived lookups (labels come from the service; icons/colours here) ─
 
@@ -747,7 +802,11 @@ export default function ScheduledReports() {
 
   const [filterFreq, setFilterFreq] = useState('all')
   const [filterActive, setFilterActive] = useState('all')
+  const [filterModule, setFilterModule] = useState('')
+  const [filterFormat, setFilterFormat] = useState('')
+  const [filterRecipient, setFilterRecipient] = useState('')
   const [search, setSearch] = useState('')
+  const [view, setView] = useState('list')
 
   // ── Fetch ───────────────────────────────────────────────────────────────────
   const fetchSchedules = useCallback(async () => {
@@ -767,7 +826,7 @@ export default function ScheduledReports() {
     setJobsLoading(true)
     setJobsError(null)
     try {
-      const rows = await aiOps.listJobRuns({ days: 60, limit: 500 })
+      const rows = await aiOps.listJobRuns({ days: HISTORY_DAYS, limit: 1000 })
       setJobRuns(rows)
       setJobSummary(aiOps.summarizeJobs(rows))
     } catch (e) {
@@ -1068,12 +1127,20 @@ export default function ScheduledReports() {
   }
 
   // ── Filtered view ─────────────────────────────────────────────────────────
-  const filtered = useMemo(
-    () => filterSchedules(schedules, { search, frequency: filterFreq, status: filterActive, typeLabelFor }),
-    [schedules, search, filterFreq, filterActive, typeLabelFor],
-  )
+  const now = useMemo(() => Date.now(), [schedules, jobRuns]) // eslint-disable-line react-hooks/exhaustive-deps
+  const filtered = useMemo(() => {
+    const base = filterSchedules(schedules, { search, frequency: filterFreq, status: 'all', typeLabelFor })
+    return filterRegistry(base, { module: filterModule, format: filterFormat, recipient: filterRecipient, status: filterActive === 'all' ? '' : filterActive }, { runs: jobRuns, now })
+  }, [schedules, search, filterFreq, filterActive, filterModule, filterFormat, filterRecipient, typeLabelFor, jobRuns, now])
   const kpis = useMemo(() => scheduleKpis(schedules, jobRuns), [schedules, jobRuns])
-  const activeCount = kpis.active
+  const reg = useMemo(() => registryKpis(schedules, jobRuns, { now, windowStart: now - HISTORY_DAYS * 86400000 }), [schedules, jobRuns, now])
+  const health = useMemo(() => healthSegments(schedules, jobRuns, now), [schedules, jobRuns, now])
+  const trend = useMemo(() => deliveryTrend(jobRuns, schedules, now, 7), [jobRuns, schedules, now])
+  const activity = useMemo(() => recentActivity(jobRuns, 5), [jobRuns])
+  const latestRun = useMemo(() => latestRunBySchedule(jobRuns), [jobRuns])
+  const recipientsList = useMemo(() => recipientOptions(schedules), [schedules])
+  const anyFilter = search || filterFreq !== 'all' || filterActive !== 'all' || filterModule || filterFormat || filterRecipient
+  const resetFilters = () => { setSearch(''); setFilterFreq('all'); setFilterActive('all'); setFilterModule(''); setFilterFormat(''); setFilterRecipient('') }
 
   const exportSchedules = async (kind) => {
     const rows = scheduleExportRows(filtered, { typeLabelFor, health: healthById })
@@ -1089,241 +1156,242 @@ export default function ScheduledReports() {
     }
   }
 
+  const deliveriesBlocked = Boolean(jobsError)
+  const kpiTiles = [
+    { icon: FileText, tone: 't-blue', value: loading ? null : reg.total, label: <KpiLabel title="Total schedules" sub={schedules.some((s) => isBuilderType(s.report_type)) ? 'Includes custom layouts' : 'Automated report schedules'} /> },
+    { icon: CheckCircle, tone: 't-green', value: loading ? null : reg.active, label: <KpiLabel title="Active schedules" sub={reg.activePct == null ? 'No schedules yet' : `${reg.activePct}% of schedules running`} />, onClick: () => setFilterActive('active') },
+    { icon: Send, tone: 't-purple', display: deliveriesBlocked ? 'N/A' : undefined, value: jobsLoading ? null : reg.deliveries, trend: reg.deliveriesTrend, label: <KpiLabel title="Deliveries (this month)" sub={deliveriesBlocked ? 'Delivery log could not be read' : reg.successPct == null ? 'No deliveries this month' : `${reg.successPct}% successful`} />, title: reg.deliveriesTrend == null ? 'Change vs last month is shown only when last month had deliveries' : 'Change vs last month' },
+    { icon: AlertCircle, tone: 't-red', display: deliveriesBlocked ? 'N/A' : undefined, value: jobsLoading ? null : reg.failed, trend: reg.failedTrend, goodWhenUp: false, danger: reg.failed > 0, label: <KpiLabel title="Failed runs (this month)" sub={kpis.failingSchedules ? `${kpis.failingSchedules} schedule${kpis.failingSchedules === 1 ? '' : 's'} need attention` : 'No schedule failing now'} />, onClick: () => setFilterActive('failing') },
+    { icon: Users, tone: 't-amber', value: loading ? null : reg.recipients, label: <KpiLabel title="Recipients" sub="Unique addresses on active schedules" /> },
+  ]
+
+  const columns = [
+    {
+      key: 'name', header: 'Report name', sortValue: (s) => s.name || '',
+      cell: (s) => {
+        const { Icon } = iconCfgFor(s.report_type)
+        return (
+          <span className="sr-name">
+            <span className={`sr-name-icon ${isBuilderType(s.report_type) ? 'is-custom' : ''}`}><Icon size={15} aria-hidden="true" /></span>
+            <span className="sr-name-copy"><b title={s.name}>{s.name || 'Unnamed schedule'}</b><small>{typeLabelFor(s.report_type)}</small></span>
+          </span>
+        )
+      },
+    },
+    { key: 'module', header: 'Module', sortValue: (s) => moduleOf(s.report_type), cell: (s) => moduleOf(s.report_type) },
+    {
+      key: 'schedule', header: 'Schedule', sortValue: (s) => s.frequency || '',
+      cell: (s) => { const l = scheduleLabel(s); return <span className="sr-two"><b>{l.line1}</b><small>{l.line2}</small></span> },
+    },
+    {
+      key: 'recipients', header: 'Recipients', numeric: true, sortValue: (s) => (s.recipients || []).length,
+      cell: (s) => { const r = s.recipients || []; return <span title={r.join(', ')}>{fmtInt(r.length)}</span> },
+    },
+    {
+      key: 'format', header: 'Format', sortable: false,
+      cell: (s) => <span className="sr-formats">{(s.output_formats?.length ? s.output_formats : ['pdf']).map((f) => <span key={f} className={`sr-fmt ${f}`}>{f === 'excel' ? 'XLS' : f.toUpperCase()}</span>)}</span>,
+    },
+    {
+      key: 'status', header: 'Status', sortValue: (s) => scheduleStatus(s, latestRun.get(s.id), now),
+      cell: (s) => { const m = STATUS_META[scheduleStatus(s, latestRun.get(s.id), now)]; return <span className={`cc-pill ${m.tone}`}>{m.label}</span> },
+    },
+    {
+      key: 'last', header: 'Last run', sortValue: (s) => latestRun.get(s.id)?.sent_at || s.last_sent_at || '',
+      cell: (s) => {
+        const r = latestRun.get(s.id)
+        if (!r) return s.last_sent_at ? <span className="sr-two"><b>{formatRunStamp(s.last_sent_at)}</b><small>Not in the last {HISTORY_DAYS} days log</small></span> : <span className="cc-na">Never run</span>
+        const ok = r.status === 'sent'
+        return (
+          <span className="sr-two" title={ok ? undefined : (r.error || undefined)}>
+            <b>{formatRunStamp(r.sent_at)}</b>
+            <small className={ok ? 'sr-ok' : 'sr-bad'}>{ok ? <CheckCircle size={11} aria-hidden="true" /> : <XCircle size={11} aria-hidden="true" />} {ok ? 'Success' : 'Failed'}</small>
+          </span>
+        )
+      },
+    },
+    {
+      key: 'next', header: 'Next run', sortValue: (s) => (s.active ? s.next_run_at || '' : ''),
+      cell: (s) => (s.active && s.next_run_at ? <span className="sr-nowrap">{formatNextRun(s.next_run_at, td, now)}</span> : <span className="cc-na">{s.active ? 'Not scheduled' : 'Paused'}</span>),
+    },
+    {
+      key: 'actions', header: 'Actions', sortable: false,
+      cell: (s) => (
+        <span className="sr-actions" onClick={(e) => e.stopPropagation()} role="presentation">
+          <button type="button" className="sr-run" onClick={() => handleSendNow(s)} disabled={sendingNow === s.id} title="Email this report to its recipients now">
+            {sendingNow === s.id ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Play size={13} aria-hidden="true" />} Run now
+          </button>
+          <button type="button" className="cc-icon-btn" onClick={() => handleGenerate(s)} disabled={generating === s.id} aria-label={`Generate and download: ${s.name || ''}`} title="Generate and download now">
+            {generating === s.id ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+          </button>
+          <button type="button" className="cc-icon-btn" onClick={() => handleToggle(s)} aria-pressed={!!s.active} aria-label={`${s.active ? 'Pause' : 'Activate'}: ${s.name || ''}`} title={s.active ? 'Pause' : 'Activate'}>
+            {s.active ? <PauseCircle size={14} /> : <Play size={14} />}
+          </button>
+          <button type="button" className="cc-icon-btn" onClick={() => openEdit(s)} aria-label={`Edit: ${s.name || ''}`} title="Edit"><Edit2 size={14} /></button>
+          <button type="button" className="cc-icon-btn sr-danger" onClick={() => setDeleteTarget(s)} aria-label={`Delete: ${s.name || ''}`} title="Delete"><Trash2 size={14} /></button>
+        </span>
+      ),
+    },
+  ]
+
+  const nowDate = new Date(now)
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
-      {/* Toast */}
+    <div className="cc sr-page">
       {toast && (
-        <div role={toast.type === 'ok' ? 'status' : 'alert'} aria-live="polite" className={`fixed top-4 right-4 left-4 sm:left-auto z-[60] flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium shadow-lg border ${
-          toast.type === 'ok' ? 'bg-green-500/15 border-green-500/40 text-green-300'
-            : toast.type === 'warn' ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-              : 'bg-red-500/15 border-red-500/40 text-red-300'}`}>
-          {toast.type === 'ok' ? <CheckCircle className="w-4 h-4" /> : toast.type === 'warn' ? <AlertTriangle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-          <span className="max-w-xs">{toast.text}</span>
-          <button type="button" onClick={() => setToast(null)} aria-label="Dismiss message" className="ml-auto min-h-[32px] min-w-[32px] inline-flex items-center justify-center opacity-70 hover:opacity-100"><X className="w-3.5 h-3.5" aria-hidden="true" /></button>
+        <div role={toast.type === 'ok' ? 'status' : 'alert'} aria-live="polite" className={`sr-toast ${toast.type}`}>
+          {toast.type === 'ok' ? <CheckCircle size={16} aria-hidden="true" /> : toast.type === 'warn' ? <AlertTriangle size={16} aria-hidden="true" /> : <AlertCircle size={16} aria-hidden="true" />}
+          <span>{toast.text}</span>
+          <button type="button" onClick={() => setToast(null)} aria-label="Dismiss message" className="sr-toast-x"><X size={14} aria-hidden="true" /></button>
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">{td('schedreports.header.title', 'Scheduled Reports')}</h1>
-          <p className="text-[var(--text-secondary)] text-sm mt-1">
-            {loading
-              ? td('schedreports.header.loading', 'Loading...')
-              : (activeCount !== 1
-                ? td('schedreports.header.summaryOther', '{count} active schedules | {total} total', { count: activeCount, total: schedules.length })
-                : td('schedreports.header.summaryOne', '{count} active schedule | {total} total', { count: activeCount, total: schedules.length }))}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => exportSchedules('excel')} disabled={loading || filtered.length === 0}
-          className="inline-flex items-center gap-2 px-3 min-h-[44px] text-sm font-medium text-[var(--text-secondary)] bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-xl hover:text-[var(--text-primary)] disabled:opacity-40">
-          <FileSpreadsheet className="w-4 h-4" aria-hidden="true" /> Excel
-        </button>
-        <button type="button" onClick={() => exportSchedules('pdf')} disabled={loading || filtered.length === 0}
-          className="inline-flex items-center gap-2 px-3 min-h-[44px] text-sm font-medium text-[var(--text-secondary)] bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-xl hover:text-[var(--text-primary)] disabled:opacity-40">
-          <FileText className="w-4 h-4" aria-hidden="true" /> PDF
-        </button>
-        <button
-          type="button"
-          onClick={openCreate}
-          className="inline-flex items-center gap-2 px-4 min-h-[44px] text-sm font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 rounded-xl shadow-lg shadow-orange-500/20 transition-all active:scale-95"
-        >
-          <Plus className="w-4 h-4" aria-hidden="true" />{td('schedreports.header.newSchedule', 'New Schedule')}
-        </button>
-        </div>
-      </div>
-
-      {/* Error banner */}
-      {error && (
-        <div role="alert" className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3">
-          <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" aria-hidden="true" />
-          <p className="text-red-400 text-sm">{error}</p>
-          <button type="button" onClick={fetchSchedules} className="ml-auto inline-flex items-center gap-1 px-3 min-h-[36px] text-xs font-medium rounded-lg border border-red-500/40 text-red-400 hover:bg-red-500/10">
-            <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" /> {td('schedreports.errors.retry', 'Retry')}
-          </button>
-          <button type="button" onClick={() => setError(null)} aria-label="Dismiss error" className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center"><X className="w-4 h-4 text-red-400" aria-hidden="true" /></button>
-        </div>
-      )}
-
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <input
-          type="search"
-          aria-label={td('schedreports.search.placeholder', 'Search schedules...')}
-          placeholder={td('schedreports.search.placeholder', 'Search schedules, report types, recipients...')}
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="flex-1 bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-primary)] rounded-xl px-4 py-2.5 text-sm placeholder-gray-500 focus:outline-none focus:border-orange-500"
-        />
-        <div className="flex gap-2 flex-wrap">
-          {['all', 'once', 'daily', 'weekly', 'monthly'].map(f => (
-            <button
-              key={f}
-              type="button"
-              aria-pressed={filterFreq === f}
-              onClick={() => setFilterFreq(f)}
-              className={`px-3 min-h-[40px] rounded-lg text-xs font-medium border transition-all capitalize ${
-                filterFreq === f ? 'bg-orange-500 border-orange-500 text-white'
-                  : 'bg-[var(--surface-2)] border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              {f === 'all' ? td('schedreports.filters.allFrequencies', 'All Frequencies') : td(`schedreports.frequencies.${f}`, FREQ_LABEL[f] || f)}
-            </button>
-          ))}
-          {[['all', td('schedreports.filters.allStatus', 'All Status')], ['active', td('schedreports.filters.active', 'Active')], ['inactive', td('schedreports.filters.inactive', 'Paused')]].map(([val, lbl]) => (
-            <button
-              key={val}
-              type="button"
-              aria-pressed={filterActive === val}
-              onClick={() => setFilterActive(val)}
-              className={`px-3 min-h-[40px] rounded-lg text-xs font-medium border transition-all ${
-                filterActive === val ? 'bg-orange-500 border-orange-500 text-white'
-                  : 'bg-[var(--surface-2)] border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              {lbl}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* KPI strip */}
-      {!loading && !error && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" aria-label="Scheduled report summary">
-          <StatTile label="Active schedules" value={kpis.active} sub={`${kpis.paused} paused of ${kpis.total}`} tone="accent" icon={CalendarClock} index={0} />
-          <StatTile label="Delivery success (60d)" value={kpis.successRate === null ? 'N/A' : kpis.successRate} unit={kpis.successRate === null ? undefined : '%'}
-            sub={jobsError ? 'Delivery history could not be read' : kpis.deliveries ? `${kpis.sent} sent, ${kpis.failed} failed` : 'No deliveries yet'}
-            tone={kpis.successRate === null ? 'neutral' : kpis.successRate >= 95 ? 'accent' : kpis.successRate >= 80 ? 'warn' : 'crit'} icon={Send} index={1} />
-          <StatTile label="Failing schedules" value={jobsError ? 'N/A' : kpis.failingSchedules} sub="Last delivery failed" tone={kpis.failingSchedules > 0 ? 'crit' : 'neutral'} icon={AlertTriangle} index={2} />
-          <StatTile label="Next run" value={kpis.nextRun ? formatNextRun(kpis.nextRun.at, td) : 'N/A'} sub={kpis.nextRun?.name || 'Nothing scheduled'} tone="info" icon={Clock} index={3} />
-        </div>
-      )}
-
-      {/* Summary stats */}
-      {!loading && schedules.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {REPORT_TYPES.map(rt => {
-            const count = schedules.filter(s => s.report_type === rt.value).length
-            return (
-              <div key={rt.value} className="bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-xl px-4 py-3 flex items-center gap-3">
-                <ReportTypeIcon type={rt.value} size="sm" />
-                <div className="min-w-0">
-                  <p className="text-[var(--text-primary)] font-bold text-lg leading-none">{count}</p>
-                  <p className="text-[var(--text-secondary)] text-xs mt-0.5 truncate">{td(`schedreports.reportTypes.${rt.value}`, rt.label)}</p>
-                </div>
-              </div>
-            )
-          })}
-          {schedules.some(s => isBuilderType(s.report_type)) && (
-            <div className="bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-xl px-4 py-3 flex items-center gap-3">
-              <ReportTypeIcon type="builder:stat" size="sm" />
-              <div className="min-w-0">
-                <p className="text-[var(--text-primary)] font-bold text-lg leading-none">{schedules.filter(s => isBuilderType(s.report_type)).length}</p>
-                <p className="text-[var(--text-secondary)] text-xs mt-0.5 truncate">{td('schedreports.reportTypes.builderGroup', 'Custom layouts')}</p>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Loading */}
-      {loading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-xl p-5 animate-pulse space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[var(--surface-3)]" />
-                <div className="space-y-2 flex-1">
-                  <div className="h-4 bg-[var(--surface-3)] rounded w-3/4" />
-                  <div className="h-3 bg-[var(--surface-3)] rounded w-1/2" />
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <div className="h-5 bg-[var(--surface-3)] rounded-full w-16" />
-                <div className="h-5 bg-[var(--surface-3)] rounded w-28" />
-              </div>
-              <div className="pt-3 border-t border-[var(--border-bright)] flex justify-between">
-                <div className="h-3 bg-[var(--surface-3)] rounded w-32" />
-                <div className="h-3 bg-[var(--surface-3)] rounded w-12" />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Empty state */}
-      {!loading && filtered.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-[var(--surface-2)] border border-[var(--border-bright)] flex items-center justify-center mb-4">
-            <Calendar className="w-8 h-8 text-[var(--text-dim)]" />
+      <header className="sr-head">
+        <div className="sr-head-main">
+          <span className="sr-head-icon" aria-hidden="true"><CalendarDays size={26} /></span>
+          <div className="sr-head-copy">
+            <nav aria-label="Breadcrumb" className="sr-crumb">Analytics and Reports <ChevronRight size={13} aria-hidden="true" /> <span aria-current="page">{td('schedreports.header.title', 'Scheduled Reports')}</span></nav>
+            <h1>{td('schedreports.header.title', 'Scheduled Reports')}</h1>
+            <p>Automate and manage scheduled reports with flexible coverage, formats and delivery.</p>
           </div>
-          {schedules.length === 0 ? (
-            <>
-              <p className="text-[var(--text-primary)] font-semibold text-lg">{td('schedreports.empty.noSchedulesTitle', 'No schedules yet')}</p>
-              <p className="text-[var(--text-secondary)] text-sm mt-2 max-w-sm">
-                {td('schedreports.empty.noSchedulesDesc', 'Set up automated fleet & tyre intelligence reports and have them generated and delivered on your schedule.')}
-              </p>
-              <button
-                onClick={openCreate}
-                className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 rounded-xl transition-all"
-              >
-                <Plus className="w-4 h-4" />{td('schedreports.empty.createFirst', 'Create First Schedule')}
-              </button>
-            </>
+        </div>
+        <div className="sr-head-actions">
+          <div className="sr-today" aria-label="Today">
+            <CalendarDays size={18} aria-hidden="true" />
+            <span><b>{nowDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</b><small>{nowDate.toLocaleDateString('en-GB', { weekday: 'short' })} {nowDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</small></span>
+          </div>
+          <button type="button" className="cc-btn-ghost" onClick={() => exportSchedules('excel')} disabled={loading || filtered.length === 0}><FileSpreadsheet size={15} aria-hidden="true" /> Excel</button>
+          <button type="button" className="cc-icon-btn" onClick={() => exportSchedules('pdf')} disabled={loading || filtered.length === 0} aria-label="Export schedules to PDF" title="Export to PDF"><FileText size={14} /></button>
+          <button type="button" className="cc-btn-primary sr-new" onClick={openCreate}><Plus size={16} aria-hidden="true" /> {td('schedreports.header.newSchedule', 'New Schedule')}</button>
+        </div>
+      </header>
+
+      {error && (
+        <div role="alert" className="cc-card sr-banner">
+          <AlertCircle size={18} aria-hidden="true" />
+          <p>{error}</p>
+          <button type="button" className="cc-btn-ghost" onClick={fetchSchedules}><RefreshCw size={14} aria-hidden="true" /> Retry</button>
+          <button type="button" className="cc-icon-btn" onClick={() => setError(null)} aria-label="Dismiss error"><X size={14} /></button>
+        </div>
+      )}
+
+      <div className="cc-kpis sr-kpis">
+        {kpiTiles.map((k, i) => <Kpi key={i} {...k} loading={k.value == null && k.display == null} />)}
+      </div>
+
+      <div className="cc-card sr-filterbar">
+        <div className="cc-filters sr-filters">
+          <label className="cc-search">
+            <Search size={15} aria-hidden="true" />
+            <input type="search" aria-label="Search scheduled reports" placeholder="Search scheduled reports, types, recipients" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </label>
+          <select className="cc-select" aria-label="Module" value={filterModule} onChange={(e) => setFilterModule(e.target.value)}>
+            <option value="">All modules</option>
+            {MODULE_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <select className="cc-select" aria-label="Frequency" value={filterFreq} onChange={(e) => setFilterFreq(e.target.value)}>
+            <option value="all">All schedules</option>
+            {FREQUENCIES.map((f) => <option key={f.value} value={f.value}>{td(`schedreports.frequencies.${f.value}`, f.label)}</option>)}
+          </select>
+          <select className="cc-select" aria-label="Format" value={filterFormat} onChange={(e) => setFilterFormat(e.target.value)}>
+            <option value="">All formats</option>
+            {OUTPUT_FORMATS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+          </select>
+          <select className="cc-select" aria-label="Recipient" value={filterRecipient} onChange={(e) => setFilterRecipient(e.target.value)}>
+            <option value="">All recipients</option>
+            {recipientsList.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+          <select className="cc-select" aria-label="Status" value={filterActive} onChange={(e) => setFilterActive(e.target.value)}>
+            <option value="all">All status</option>
+            {Object.entries(STATUS_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
+          </select>
+          <button type="button" className="cc-btn-ghost" onClick={resetFilters} disabled={!anyFilter}>Reset</button>
+          <div className="sr-viewtoggle" role="group" aria-label="View">
+            <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')} aria-label="List view" title="List view"><List size={15} /></button>
+            <button type="button" aria-pressed={view === 'grid'} onClick={() => setView('grid')} aria-label="Card view" title="Card view"><LayoutGrid size={15} /></button>
+          </div>
+        </div>
+      </div>
+
+      <Card title={<>Schedule registry <span className="sr-count">({fmtInt(filtered.length)}{filtered.length !== schedules.length ? ` of ${fmtInt(schedules.length)}` : ''})</span></>}
+        action={<button type="button" className="cc-icon-btn" onClick={() => { fetchSchedules(); fetchJobRuns() }} aria-label="Refresh" title="Refresh"><RefreshCw size={14} className={loading ? 'animate-spin' : ''} /></button>}>
+        {!loading && !error && schedules.length === 0 ? (
+          <div className="cc-empty">
+            <div>
+              <b>{td('schedreports.empty.noSchedulesTitle', 'No schedules yet')}</b>
+              <p className="sr-muted">{td('schedreports.empty.noSchedulesDesc', 'Set up automated fleet and tyre reports and have them generated and delivered on your schedule.')}</p>
+              <button type="button" className="cc-btn-primary" onClick={openCreate}><Plus size={15} aria-hidden="true" /> {td('schedreports.empty.createFirst', 'Create first schedule')}</button>
+            </div>
+          </div>
+        ) : view === 'grid' && !loading ? (
+          filtered.length === 0 ? (
+            <div className="cc-empty"><div>No schedule matches these filters.<br /><button type="button" className="cc-btn-ghost" onClick={resetFilters}>Clear filters</button></div></div>
           ) : (
-            <>
-              <p className="text-[var(--text-primary)] font-semibold">{td('schedreports.empty.noMatchTitle', 'No matching schedules')}</p>
-              <p className="text-[var(--text-secondary)] text-sm mt-1">{td('schedreports.empty.noMatchDesc', 'Try adjusting your filters or search query.')}</p>
-              <button
-                onClick={() => { setFilterFreq('all'); setFilterActive('all'); setSearch('') }}
-                className="mt-4 text-orange-400 text-sm hover:text-orange-300 transition-colors"
-              >
-                {td('schedreports.empty.clearFilters', 'Clear filters')}
-              </button>
-            </>
-          )}
-        </div>
-      )}
+            <div className="sr-cards">
+              {filtered.map((s) => (
+                <ScheduleCard key={s.id} schedule={s} health={healthById.get(s.id)} onEdit={openEdit} onDelete={setDeleteTarget}
+                  onToggle={handleToggle} onGenerate={handleGenerate} generating={generating} onSendNow={handleSendNow} sendingNow={sendingNow} td={td} typeLabelFor={typeLabelFor} />
+              ))}
+            </div>
+          )
+        ) : (
+          <KitTable
+            columns={columns}
+            rows={filtered}
+            loading={loading}
+            error={error || null}
+            onRetry={fetchSchedules}
+            getRowId={(s) => String(s.id)}
+            onRowClick={(s) => openEdit(s)}
+            empty={anyFilter ? 'No schedule matches these filters.' : 'No schedules yet.'}
+          />
+        )}
+      </Card>
 
-      {/* Schedule grid */}
-      {!loading && filtered.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map(s => (
-            <ScheduleCard
-              key={s.id}
-              schedule={s}
-              health={healthById.get(s.id)}
-              onEdit={openEdit}
-              onDelete={setDeleteTarget}
-              onToggle={handleToggle}
-              onGenerate={handleGenerate}
-              generating={generating}
-              onSendNow={handleSendNow}
-              sendingNow={sendingNow}
-              td={td}
-              typeLabelFor={typeLabelFor}
-            />
-          ))}
-        </div>
-      )}
+      <div className="sr-bottom">
+        <Card title="Schedule health" sub="Status of every schedule right now">
+          <CardState state={{ loading, data: loading ? null : schedules, error: null }} empty={!loading && schedules.length === 0 ? 'No schedules yet.' : null}>
+            <Donut segments={health} total={schedules.length} centerLabel="Total schedules"
+              onSelect={(seg) => setFilterActive(seg.key)} />
+          </CardState>
+        </Card>
 
-      {/* Delivery history (report_send_log) */}
-      {!loading && (
-        <DeliveryHistory
-          runs={jobRuns}
-          summary={jobSummary}
-          loading={jobsLoading}
-          error={jobsError}
-          open={historyOpen}
-          onToggle={() => setHistoryOpen(o => !o)}
-          onRefresh={fetchJobRuns}
-          td={td}
-        />
-      )}
+        <Card title="Delivery trend" sub="Last 7 days. Expected comes from current schedule settings.">
+          <CardState state={{ loading: jobsLoading, data: jobsLoading ? null : jobRuns, error: jobsError, retry: fetchJobRuns }}>
+            <TrendChart points={trend} />
+          </CardState>
+        </Card>
 
-      {/* Create / Edit Modal */}
+        <Card title="Recent activity" action={<ViewAll label="View all" onClick={() => setHistoryOpen(true)} />}>
+          <CardState state={{ loading: jobsLoading, data: jobsLoading ? null : jobRuns, error: jobsError, retry: fetchJobRuns }}
+            empty={!jobsLoading && !jobsError && activity.length === 0 ? `No deliveries in the last ${HISTORY_DAYS} days. Use Run now to send one.` : null}>
+            <div className="cc-list">
+              {activity.map((a) => (
+                <div key={a.id} className="cc-row">
+                  <span className={`cc-row-icon sr-act ${a.kind}`} aria-hidden="true">{a.kind === 'sent' ? <CheckCircle size={16} /> : <XCircle size={16} />}</span>
+                  <div className="cc-row-main">
+                    <div className="cc-row-title" title={a.name}>{a.name} <span className="sr-muted">{a.verb}</span></div>
+                    <div className="cc-row-meta" title={a.detail}>{a.detail}</div>
+                  </div>
+                  <span className="cc-row-time">{formatRunStamp(a.at)}</span>
+                </div>
+              ))}
+            </div>
+          </CardState>
+        </Card>
+      </div>
+
+      <DeliveryHistory
+        runs={jobRuns}
+        summary={jobSummary}
+        loading={jobsLoading}
+        error={jobsError}
+        open={historyOpen}
+        onToggle={() => setHistoryOpen((o) => !o)}
+        onRefresh={fetchJobRuns}
+        td={td}
+      />
+
       {modalOpen && (
         <ScheduleModal
           title={editTarget ? td('schedreports.modal.editTitle', 'Edit Schedule') : td('schedreports.modal.newTitle', 'New Schedule')}
@@ -1344,7 +1412,6 @@ export default function ScheduledReports() {
         />
       )}
 
-      {/* Delete Confirm Modal */}
       {deleteTarget && (
         <DeleteConfirmModal
           schedule={deleteTarget}

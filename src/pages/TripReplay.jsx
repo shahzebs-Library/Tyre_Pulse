@@ -1,46 +1,45 @@
 /**
- * TripReplay (route /trip-replay) - reconstructs and analyses one trip from its
- * ordered GPS breadcrumb segments: great-circle distance, stops and idles,
- * harsh driving events (brake, accel, corner, speeding) and the speed profile
- * along the path. Pick a trip, walk its timeline segment by segment and read
- * the derived KPIs.
+ * TripReplay (route /trip-replay): replay one trip from its ordered GPS
+ * breadcrumbs, rebuilt on the Command Center kit to the owner's Trip Replay
+ * mockup: trip picker, route trace with playback, speed and events chart, trip
+ * summary, events panel and the stops timeline, plus the segment register with
+ * add / edit / delete and Excel / PDF export.
  *
- * Runs on the `trip_segments` table (V191). All analytics live in the pure
- * `src/lib/tripReplayAnalytics.js` engine, which reuses the path maths in
- * `src/lib/tripReplay.js`. A figure with nothing to measure reads N/A.
+ * Source: trip_segments (V191) only. The route is drawn as a local SVG trace of
+ * the recorded coordinates; no map tiles are loaded from an external host (the
+ * CSP does not allow one, and no base map is licensed). Fuel, CO2, tolls,
+ * geofence events, a planned route (deviation), elevation, engine RPM and tyre
+ * pressure have no column on trip_segments, so they read "Not recorded".
+ * Pure shaping lives in src/lib/tripReplayView.js and tripReplayAnalytics.js.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
-  Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip, Legend,
-} from 'chart.js'
-import { Bar } from 'react-chartjs-2'
-import {
-  Navigation, MapPin, Gauge, Activity, Truck, AlertTriangle, Search, X,
-  FileSpreadsheet, FileText, Plus, Pencil, Trash2, Milestone, StopCircle, Zap,
-  Timer, Flag, Clock, ListOrdered, RotateCcw, CheckCircle2,
+  MapPin, Gauge, Truck, AlertTriangle, Search, X, FileSpreadsheet, FileText, Plus, Pencil, Trash2,
+  Milestone, Zap, Timer, Clock, RotateCcw, Play, Pause, SkipBack, SkipForward, Fuel, Leaf, Spline,
+  ChevronRight, ParkingCircle, Flag, Navigation, Activity, RefreshCw,
 } from 'lucide-react'
-import PageHeader from '../components/ui/PageHeader'
-import StatTile from '../components/ui/StatTile'
 import Modal from '../components/ui/Modal'
-import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { Card, Kpi, Tabs, KitTable, VehicleThumb, fmtInt } from '../components/commandCenter/kit'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listTripSegments, listTripRefs, createTripSegment, updateTripSegment, deleteTripSegment,
 } from '../lib/api/tripReplay'
 import { orderSegments } from '../lib/tripReplay'
 import {
-  replayKpis, eventBreakdown, filterSegments, speedSeries, tripListRows, segmentExportRows,
+  replayKpis, eventBreakdown, filterSegments, tripListRows, segmentExportRows,
   replayNarrative, eventLabel, isHarsh, EVENT_TYPES, EXPORT_COLS, EXPORT_HEADERS,
 } from '../lib/tripReplayAnalytics'
-import { colorAt, withAlpha } from '../lib/reportColors'
+import {
+  tripsInPeriod, pathGeometry, playbackAt, fmtClock, eventsSummary, stopsTimeline, speedChart,
+  tripSummary, TONE_LABEL,
+} from '../lib/tripReplayView'
 import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation } from '../lib/api/_client'
-
-ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
+import './TripReplay.css'
 
 const loadExportUtils = () => import('../lib/exportUtils')
 const FIELD = 'input w-full min-h-[44px]'
-const HARSH_COLOR = '#ef4444'
+const NA = <span className="cc-na">N/A</span>
 
 const EMPTY_FORM = {
   trip_ref: '', asset_no: '', driver_name: '', sequence: '', latitude: '',
@@ -48,20 +47,16 @@ const EMPTY_FORM = {
   address: '', notes: '',
 }
 
-const EVENT_CLS = {
-  move: 'bg-sky-900/30 text-sky-400 border-sky-800/50',
-  stop: 'bg-[var(--input-bg)] text-[var(--text-secondary)] border-[var(--input-border)]',
-  idle: 'bg-[var(--input-bg)] text-[var(--text-secondary)] border-[var(--input-border)]',
-  harsh_brake: 'bg-red-900/30 text-red-400 border-red-800/50',
-  harsh_accel: 'bg-orange-900/30 text-orange-400 border-orange-800/50',
-  harsh_corner: 'bg-amber-900/30 text-amber-400 border-amber-800/50',
-  speeding: 'bg-fuchsia-900/30 text-fuchsia-400 border-fuchsia-800/50',
+const EVENT_TONE = {
+  move: 'good', stop: 'info', idle: 'info', harsh_brake: 'bad', harsh_accel: 'orange', harsh_corner: 'warn', speeding: 'warn',
 }
+const TONE_COLOR = {
+  normal: 'var(--cc-green)', slow: 'var(--cc-amber)', harsh: 'var(--cc-red)', speeding: 'var(--cc-orange)', stop: 'var(--cc-blue)',
+}
+const PLAY_SPEEDS = [1, 2, 4, 8]
 
-const fmtKm = (v) => (v == null ? 'N/A' : `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })} km`)
+const fmtKm = (v) => (v == null ? 'N/A' : `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })} km`)
 const fmtSpeed = (v) => (v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })} km/h`)
-const fmtNum = (v) => (v == null ? 'N/A' : Number(v).toLocaleString())
-const fmtPct = (v) => (v == null ? 'N/A' : `${v}%`)
 const numOrNull = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v))
 const fmtMin = (v) => {
   if (v == null) return 'N/A'
@@ -69,12 +64,17 @@ const fmtMin = (v) => {
   const h = Math.floor(v / 60); const m = v % 60
   return m ? `${h}h ${m}m` : `${h}h`
 }
-
 function fmtTime(v) {
   if (!v) return 'N/A'
   const d = new Date(v)
   if (Number.isNaN(d.getTime())) return 'N/A'
   return d.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
+}
+function fmtHm(v) {
+  if (!v) return '--:--'
+  const d = new Date(v)
+  if (Number.isNaN(d.getTime())) return '--:--'
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 function fmtCoord(lat, lng) {
   if (lat == null || lat === '' || lng == null || lng === '') return 'N/A'
@@ -82,21 +82,12 @@ function fmtCoord(lat, lng) {
 }
 
 function EventBadge({ type }) {
-  if (!type) return <span className="text-[var(--text-muted)]">N/A</span>
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${EVENT_CLS[type] || 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]'}`}>
-      {isHarsh(type) && <Zap size={10} aria-hidden="true" />}{eventLabel(type)}
-    </span>
-  )
+  if (!type) return NA
+  return <span className={`cc-pill ${EVENT_TONE[type] || 'muted'}`}>{isHarsh(type) && <Zap size={10} aria-hidden="true" />}{eventLabel(type)}</span>
 }
 
-const SPEED_OPTS = {
-  responsive: true, maintainAspectRatio: false,
-  plugins: { legend: { display: false } },
-  scales: {
-    x: { ticks: { color: 'var(--text-muted)', font: { size: 9 }, maxTicksLimit: 12 }, grid: { display: false }, title: { display: true, text: 'Segment', color: 'var(--text-muted)' } },
-    y: { ticks: { color: 'var(--text-muted)', font: { size: 10 } }, grid: { color: 'var(--panel-2)' }, beginAtZero: true, title: { display: true, text: 'km/h', color: 'var(--text-muted)' } },
-  },
+function NotRecorded({ children }) {
+  return <span className="tr-nr" title="No column for this on trip_segments">{children || 'Not recorded'}</span>
 }
 
 export default function TripReplay() {
@@ -112,13 +103,21 @@ export default function TripReplay() {
   const [notProvisioned, setNotProvisioned] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [segLoading, setSegLoading] = useState(false)
-  const [updatedAt, setUpdatedAt] = useState(null)
 
+  const [periodFrom, setPeriodFrom] = useState('')
+  const [periodTo, setPeriodTo] = useState('')
   const [tripSearch, setTripSearch] = useState('')
+  const [tripAsset, setTripAsset] = useState('')
+  const [tripDriver, setTripDriver] = useState('')
   const [assetFilter, setAssetFilter] = useState('')
   const [eventFilter, setEventFilter] = useState('')
   const [harshOnly, setHarshOnly] = useState(false)
   const [search, setSearch] = useState('')
+  const [chartTab, setChartTab] = useState('speed')
+
+  const [playIdx, setPlayIdx] = useState(0)
+  const [playing, setPlaying] = useState(false)
+  const [playSpeed, setPlaySpeed] = useState(1)
 
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -134,7 +133,6 @@ export default function TripReplay() {
       const data = await listTripRefs({ country: activeCountry })
       const list = Array.isArray(data) ? data : []
       setTrips(list)
-      setUpdatedAt(new Date())
       setTripRef((cur) => (cur && list.some((t) => t.trip_ref === cur) ? cur : list[0]?.trip_ref || ''))
     } catch (err) {
       if (isMissingRelation(err)) { setNotProvisioned(true); setTrips([]) }
@@ -162,6 +160,7 @@ export default function TripReplay() {
   }, [tripRef, activeCountry])
 
   useEffect(() => { loadSegments() }, [loadSegments])
+  useEffect(() => { setPlayIdx(0); setPlaying(false) }, [tripRef])
 
   const reloadAll = useCallback(async () => { await loadTrips(); await loadSegments() }, [loadTrips, loadSegments])
 
@@ -169,8 +168,21 @@ export default function TripReplay() {
   const segLoaded = Array.isArray(segments) && Array.isArray(trips)
   const k = useMemo(() => replayKpis(segs), [segs])
   const events = useMemo(() => eventBreakdown(segs), [segs])
-  const series = useMemo(() => speedSeries(segs), [segs])
-  const tripRows = useMemo(() => tripListRows(trips || [], { search: tripSearch }), [trips, tripSearch])
+  const ev = useMemo(() => eventsSummary(segs), [segs])
+  const summary = useMemo(() => tripSummary(k), [k])
+  const timeline = useMemo(() => stopsTimeline(segs), [segs])
+  const geo = useMemo(() => pathGeometry(segs, { w: 800, h: 300, pad: 28 }), [segs])
+  const chart = useMemo(() => speedChart(segs, { w: 800, h: 150 }), [segs])
+  const play = useMemo(() => playbackAt(segs, playIdx), [segs, playIdx])
+
+  const periodTrips = useMemo(() => tripsInPeriod(trips || [], { from: periodFrom, to: periodTo }), [trips, periodFrom, periodTo])
+  const tripAssets = useMemo(() => [...new Set(periodTrips.map((t) => t.asset_no).filter(Boolean))].sort(), [periodTrips])
+  const tripDrivers = useMemo(() => [...new Set(periodTrips.map((t) => t.driver_name).filter(Boolean))].sort(), [periodTrips])
+  const tripRows = useMemo(
+    () => tripListRows(periodTrips, { search: tripSearch })
+      .filter((t) => (!tripAsset || t.asset_no === tripAsset) && (!tripDriver || t.driver_name === tripDriver)),
+    [periodTrips, tripSearch, tripAsset, tripDriver],
+  )
   const selectedTrip = useMemo(() => (trips || []).find((t) => t.trip_ref === tripRef) || null, [trips, tripRef])
 
   const assetOptions = useMemo(() => [...new Set(segs.map((r) => r.asset_no).filter(Boolean))].sort(), [segs])
@@ -179,7 +191,21 @@ export default function TripReplay() {
     [segs, search, assetFilter, eventFilter, harshOnly],
   )
 
-  // ── Exports: every matching segment of the selected trip ─────────────────
+  // Playback: advance one breadcrumb per tick; stop at the end.
+  useEffect(() => {
+    if (!playing) return undefined
+    if (play.index >= play.last) { setPlaying(false); return undefined }
+    const id = setTimeout(() => setPlayIdx((i) => i + 1), Math.round(800 / playSpeed))
+    return () => clearTimeout(id)
+  }, [playing, play.index, play.last, playSpeed])
+
+  const startReplay = () => {
+    if (!segs.length) return
+    if (play.index >= play.last) setPlayIdx(0)
+    setPlaying(true)
+  }
+
+  // Exports: every matching segment of the selected trip
   const exportRows = useMemo(() => segmentExportRows(filtered), [filtered])
   const fileBase = async () => {
     const { reportFileName, reportDateLabel } = await loadExportUtils()
@@ -198,7 +224,7 @@ export default function TripReplay() {
     } catch (e) { setActionError(toUserMessage(e, 'Export failed. Please try again.')) }
   }
 
-  // ── Modal ────────────────────────────────────────────────────────────────
+  // Modal
   const openCreate = () => {
     const nextSeq = segs.reduce((m, r) => Math.max(m, Number(r.sequence) || 0), 0) + 1
     setEditing(null)
@@ -260,239 +286,285 @@ export default function TripReplay() {
   const hasFilters = !!(assetFilter || eventFilter || harshOnly || search)
   const tripsLoaded = Array.isArray(trips)
   const noTrips = tripsLoaded && trips.length === 0
+  const tripFiltersOn = !!(tripSearch || tripAsset || tripDriver)
 
-  // ── Tables ───────────────────────────────────────────────────────────────
-  const tripColumns = useMemo(() => [
-    { id: 'ref', header: 'Trip', accessorFn: (t) => t.trip_ref, size: 170,
-      cell: ({ row }) => (
-        <span className="inline-flex items-center gap-1.5 font-medium text-[var(--text-primary)]">
-          {row.original.trip_ref === tripRef && <CheckCircle2 size={13} className="text-[var(--accent)]" aria-label="Selected" />}
-          {row.original.trip_ref}
-        </span>
-      ) },
-    { id: 'asset', header: 'Asset', accessorFn: (t) => t.asset_no || 'N/A', size: 110 },
-    { id: 'driver', header: 'Driver', accessorFn: (t) => t.driver_name || 'N/A', size: 130 },
-    { id: 'points', header: 'Points', accessorFn: (t) => t.segments, size: 80, meta: { align: 'right' } },
-    { id: 'first', header: 'First point', accessorFn: (t) => t.firstAt || '', size: 150, cell: ({ row }) => fmtTime(row.original.firstAt) },
-    { id: 'dur', header: 'Span', accessorFn: (t) => t.durationMin, size: 90, meta: { align: 'right' }, cell: ({ row }) => fmtMin(row.original.durationMin) },
-  ], [tripRef])
-
-  const segColumns = useMemo(() => [
-    { id: 'seq', header: 'Seq', accessorFn: (r) => numOrNull(r.sequence), size: 70, meta: { align: 'right' },
-      cell: ({ row }) => <span className="font-mono tabular-nums text-[var(--text-secondary)]">{row.original.sequence ?? 'N/A'}</span> },
-    { id: 'time', header: 'Time', accessorFn: (r) => r.recorded_at || '', size: 150, cell: ({ row }) => <span className="whitespace-nowrap">{fmtTime(row.original.recorded_at)}</span> },
-    { id: 'event', header: 'Event', accessorFn: (r) => (r.event_type ? eventLabel(r.event_type) : 'N/A'), size: 130, cell: ({ row }) => <EventBadge type={row.original.event_type} /> },
-    { id: 'speed', header: 'Speed', accessorFn: (r) => numOrNull(r.speed_kmh), size: 110, meta: { align: 'right' },
-      cell: ({ row }) => <span className="font-semibold tabular-nums">{fmtSpeed(row.original.speed_kmh)}</span> },
-    { id: 'heading', header: 'Heading', accessorFn: (r) => numOrNull(r.heading), size: 90, meta: { align: 'right' },
-      cell: ({ row }) => (row.original.heading == null ? 'N/A' : `${Math.round(row.original.heading)} deg`) },
-    { id: 'pos', header: 'Position', accessorFn: (r) => fmtCoord(r.latitude, r.longitude), size: 160,
-      cell: ({ row }) => <span className="font-mono text-xs whitespace-nowrap">{fmtCoord(row.original.latitude, row.original.longitude)}</span> },
-    { id: 'address', header: 'Address', accessorFn: (r) => r.address || 'N/A', size: 200 },
-    { id: 'actions', header: '', size: 110, enableSorting: false, meta: { export: false, align: 'right' },
-      cell: ({ row }) => (
-        <div className="flex items-center justify-end gap-1">
-          <button type="button" onClick={() => openEdit(row.original)} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label={`Edit segment ${row.original.sequence ?? ''}`}><Pencil size={15} /></button>
-          <button type="button" onClick={() => setConfirmDelete(row.original)} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label={`Delete segment ${row.original.sequence ?? ''}`}><Trash2 size={15} /></button>
-        </div>
-      ) },
-  ], [openEdit])
-
-  const speedData = {
-    labels: series.map((p) => String(p.seq)),
-    datasets: [{
-      label: 'Speed (km/h)',
-      data: series.map((p) => p.speed ?? 0),
-      backgroundColor: series.map((p) => (p.harsh ? HARSH_COLOR : withAlpha(colorAt(0), 0.7))),
-      borderRadius: 2,
-    }],
-  }
-
-  const kpis = [
-    { label: 'Distance travelled', value: segLoaded ? fmtKm(k.distanceKm) : 'N/A', icon: Milestone, tone: 'info', sub: `${fmtNum(k.gpsPoints)} positioned points` },
-    { label: 'Trip span', value: segLoaded ? fmtMin(k.durationMin) : 'N/A', icon: Clock, sub: 'First to last timestamp' },
-    { label: 'Segments', value: segLoaded ? fmtNum(k.segments) : 'N/A', icon: ListOrdered, sub: `${fmtNum(k.speedPoints)} with a speed` },
-    { label: 'Stops and idles', value: segLoaded ? fmtNum(k.stops) : 'N/A', icon: StopCircle, tone: 'warn' },
-    { label: 'Harsh events', value: segLoaded ? fmtNum(k.harshEvents) : 'N/A', icon: Zap, tone: 'crit', sub: k.harshPer100Km != null ? `${k.harshPer100Km} per 100 km` : `Rate ${fmtPct(k.harshRatePct)}` },
-    { label: 'Max speed', value: segLoaded ? fmtSpeed(k.maxKmh) : 'N/A', icon: Gauge, tone: 'warn' },
-    { label: 'Avg speed', value: segLoaded ? fmtSpeed(k.avgKmh) : 'N/A', icon: Activity, sub: 'All speed readings' },
-    { label: 'Moving avg', value: segLoaded ? fmtSpeed(k.movingAvgKmh) : 'N/A', icon: Timer, tone: 'accent', sub: 'While in motion' },
+  const tripColumns = [
+    { key: 'sel', header: '', sortable: false, cell: (t) => <span className={`tr-radio ${t.trip_ref === tripRef ? 'on' : ''}`} aria-label={t.trip_ref === tripRef ? 'Selected' : undefined} /> },
+    { key: 'trip_ref', header: 'Trip ID', cell: (t) => <span className="cc-strong">{t.trip_ref}</span> },
+    { key: 'asset_no', header: 'Asset', cell: (t) => t.asset_no || NA },
+    { key: 'driver_name', header: 'Driver', cell: (t) => t.driver_name || NA },
+    { key: 'firstAt', header: 'Start time', sortValue: (t) => t.firstAt || '', cell: (t) => fmtTime(t.firstAt) },
+    { key: 'lastAt', header: 'End time', sortValue: (t) => t.lastAt || '', cell: (t) => fmtTime(t.lastAt) },
+    { key: 'segments', header: 'Points', numeric: true, cell: (t) => fmtInt(t.segments) },
+    { key: 'durationMin', header: 'Duration', numeric: true, cell: (t) => fmtMin(t.durationMin) },
   ]
 
+  const segColumns = [
+    { key: 'sequence', header: 'Seq', numeric: true, sortValue: (r) => numOrNull(r.sequence), cell: (r) => r.sequence ?? NA },
+    { key: 'recorded_at', header: 'Time', sortValue: (r) => r.recorded_at || '', cell: (r) => fmtTime(r.recorded_at) },
+    { key: 'event_type', header: 'Event', sortValue: (r) => (r.event_type ? eventLabel(r.event_type) : ''), cell: (r) => <EventBadge type={r.event_type} /> },
+    { key: 'speed_kmh', header: 'Speed', numeric: true, sortValue: (r) => numOrNull(r.speed_kmh), cell: (r) => fmtSpeed(r.speed_kmh) },
+    { key: 'heading', header: 'Heading', numeric: true, sortValue: (r) => numOrNull(r.heading), cell: (r) => (r.heading == null ? NA : `${Math.round(r.heading)} deg`) },
+    { key: 'pos', header: 'Position', sortable: false, cell: (r) => <span className="tr-mono">{fmtCoord(r.latitude, r.longitude)}</span> },
+    { key: 'address', header: 'Address', cell: (r) => r.address || NA },
+    {
+      key: 'actions', header: '', sortable: false, align: 'right', cell: (r) => (
+        <span className="tr-row-actions">
+          <button type="button" className="cc-icon-btn" onClick={(e) => { e.stopPropagation(); openEdit(r) }} aria-label={`Edit segment ${r.sequence ?? ''}`}><Pencil size={14} /></button>
+          <button type="button" className="cc-icon-btn tr-danger" onClick={(e) => { e.stopPropagation(); setConfirmDelete(r) }} aria-label={`Delete segment ${r.sequence ?? ''}`}><Trash2 size={14} /></button>
+        </span>
+      ),
+    },
+  ]
+
+  const replayEmpty = notProvisioned
+    ? 'Trip Replay is not enabled on this database yet. Apply MIGRATIONS_V191_TRIP_SEGMENTS.sql, then reload.'
+    : noTrips ? 'No trips recorded yet. Trip breadcrumbs (trip_segments) hold no rows, so there is nothing to replay. Add a segment to start a trip.'
+      : !tripRef ? 'Select a trip to replay.'
+        : 'This trip has fewer than two positioned points, so no route can be drawn.'
+  const cur = play.current
+
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Trip Replay"
-        subtitle="Reconstruct a journey from its ordered GPS breadcrumbs: distance travelled, stops, harsh driving events and the full speed profile, segment by segment."
-        icon={Navigation}
-        onRefresh={reloadAll}
-        refreshing={refreshing || segLoading}
-        updatedAt={updatedAt}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={doExcel} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}><FileSpreadsheet size={14} /> Excel</button>
-            <button type="button" onClick={doPdf} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}><FileText size={14} /> PDF</button>
-            <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={notProvisioned || !tripsLoaded}><Plus size={14} /> Add segment</button>
-          </div>
-        }
-      />
+    <div className="cc tr-page">
+      <header className="tr-head">
+        <div className="tr-head-art tr-art-dark" style={{ backgroundImage: 'url(/dashboard/hero-history-dark.webp)' }} aria-hidden="true" />
+        <div className="tr-head-art tr-art-light" style={{ backgroundImage: 'url(/dashboard/hero-history-light.webp)' }} aria-hidden="true" />
+        <div className="tr-head-copy">
+          <nav className="tr-crumb" aria-label="Breadcrumb">Monitoring and Logistics <ChevronRight size={12} aria-hidden="true" /> <span>Trip Replay</span></nav>
+          <h1>Trip Replay</h1>
+          <p>Replay recorded trips with route trace, stops, events and speed diagnostics.</p>
+        </div>
+        <div className="tr-head-actions">
+          <label className="tr-date"><span>From</span><input type="date" className="cc-select" value={periodFrom} onChange={(e) => setPeriodFrom(e.target.value)} aria-label="Trips from date" /></label>
+          <label className="tr-date"><span>To</span><input type="date" className="cc-select" value={periodTo} onChange={(e) => setPeriodTo(e.target.value)} aria-label="Trips to date" /></label>
+          <button type="button" className="cc-btn-primary" onClick={playing ? () => setPlaying(false) : startReplay} disabled={!geo}>
+            {playing ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />} {playing ? 'Pause' : 'Replay'}
+          </button>
+          <button type="button" className="cc-btn-ghost" onClick={doExcel} disabled={!filtered.length}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
+          <button type="button" className="cc-btn-ghost" onClick={doPdf} disabled={!filtered.length}><FileText size={14} aria-hidden="true" /> PDF</button>
+          <button type="button" className="cc-btn-ghost" onClick={openCreate} disabled={notProvisioned || !tripsLoaded}><Plus size={14} aria-hidden="true" /> Add segment</button>
+          <button type="button" className="cc-icon-btn" onClick={reloadAll} disabled={refreshing || segLoading} aria-label="Refresh"><RefreshCw size={14} className={refreshing || segLoading ? 'animate-spin' : ''} /></button>
+        </div>
+      </header>
 
       {notProvisioned && (
-        <div className="card border border-amber-800/50 flex items-start gap-3" role="status">
-          <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
-          <div>
-            <p className="text-amber-300 font-medium">Trip Replay is not enabled on this database yet.</p>
-            <p className="text-[var(--text-muted)] text-sm mt-1">Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V191_TRIP_SEGMENTS.sql</span>, then reload.</p>
-          </div>
-        </div>
+        <div className="cc-card tr-banner warn" role="status"><AlertTriangle size={16} aria-hidden="true" /><div>Trip Replay is not enabled on this database yet. Apply <b>MIGRATIONS_V191_TRIP_SEGMENTS.sql</b>, then reload.</div></div>
       )}
-
       {(error || segError) && (
-        <div className="card border border-red-800/50 flex flex-wrap items-start gap-3" role="alert">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
-          <div className="flex-1 min-w-0">
-            <p className="text-red-300 font-medium">{error ? 'Could not load trips.' : 'Could not load this trip.'}</p>
-            <p className="text-[var(--text-muted)] text-sm mt-1">{error || segError}</p>
-          </div>
-          <button type="button" onClick={error ? loadTrips : loadSegments} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={refreshing || segLoading}><RotateCcw size={14} /> Retry</button>
+        <div className="cc-card tr-banner bad" role="alert">
+          <AlertTriangle size={16} aria-hidden="true" />
+          <div><b>{error ? 'Could not load trips.' : 'Could not load this trip.'}</b> {error || segError}</div>
+          <button type="button" className="cc-btn" onClick={error ? loadTrips : loadSegments} disabled={refreshing || segLoading}><RotateCcw size={13} aria-hidden="true" /> Retry</button>
         </div>
       )}
-
       {actionError && (
-        <div className="card border border-red-800/50 flex items-start gap-3" role="alert">
-          <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
-          <p className="flex-1 text-sm text-red-300">{actionError}</p>
-          <button type="button" onClick={() => setActionError('')} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label="Dismiss message"><X size={16} /></button>
+        <div className="cc-card tr-banner bad" role="alert">
+          <AlertTriangle size={16} aria-hidden="true" /><div>{actionError}</div>
+          <button type="button" className="cc-icon-btn" onClick={() => setActionError('')} aria-label="Dismiss message"><X size={14} /></button>
         </div>
       )}
 
-      {/* Trip picker */}
-      <div className="card space-y-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[220px] flex-1 sm:flex-none">
-            <label htmlFor="replay-trip" className="label inline-flex items-center gap-1.5"><Flag size={13} aria-hidden="true" /> Trip</label>
-            <select id="replay-trip" className={FIELD} value={tripRef} onChange={(e) => setTripRef(e.target.value)} disabled={!tripsLoaded || noTrips}>
-              {!tripsLoaded && <option value="">{error ? 'Not available' : 'Loading...'}</option>}
-              {noTrips && <option value="">No trips yet</option>}
-              {(trips || []).map((t) => <option key={t.trip_ref} value={t.trip_ref}>{t.trip_ref} | {t.segments} pts{t.asset_no ? ` | ${t.asset_no}` : ''}</option>)}
-            </select>
-          </div>
-          <div className="min-w-[200px] flex-1">
-            <label htmlFor="replay-trip-search" className="label">Find a trip</label>
-            <div className="relative">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
-              <input id="replay-trip-search" className={`${FIELD} pl-9`} placeholder="Trip reference, asset or driver" value={tripSearch} onChange={(e) => setTripSearch(e.target.value)} />
-            </div>
-          </div>
-          {selectedTrip && (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--text-muted)] sm:ml-auto">
-              {selectedTrip.asset_no && <span className="inline-flex items-center gap-1"><Truck size={13} aria-hidden="true" /> {selectedTrip.asset_no}</span>}
-              {selectedTrip.driver_name && <span className="inline-flex items-center gap-1"><MapPin size={13} aria-hidden="true" /> {selectedTrip.driver_name}</span>}
-              <span className="inline-flex items-center gap-1"><Clock size={13} aria-hidden="true" /> {fmtTime(selectedTrip.firstAt)} to {fmtTime(selectedTrip.lastAt)}</span>
-            </div>
-          )}
-        </div>
-        <p className="text-xs text-[var(--text-muted)]">Select a row to replay that trip. {tripsLoaded ? `${fmtNum(trips.length)} trip${trips.length === 1 ? '' : 's'} available.` : ''}</p>
-        <EnterpriseTable
-          columns={tripColumns}
-          data={tripRows}
-          getRowId={(t) => t.trip_ref}
-          loading={!tripsLoaded && !error}
-          error={error && !tripsLoaded ? error : null}
-          onRetry={loadTrips}
-          emptyMessage={noTrips ? 'No trips recorded yet. Add your first segment.' : 'No trips match this search.'}
-          enableGlobalFilter={false}
-          enableColumnFilters={false}
-          enableExport={false}
-          enableColumnVisibility={false}
-          initialPageSize={25}
-          onRowClick={(t) => setTripRef(t.trip_ref)}
-        />
+      <div className="cc-kpis tr-kpis">
+        <Kpi icon={Truck} tone="t-green" loading={!tripsLoaded && !error} display={error ? 'N/A' : undefined} value={periodTrips.length}
+          label={<>Trips in period<small className="tr-kpi-sub">{periodFrom || periodTo ? 'Filtered by first point date' : 'All recorded trips'}</small></>} />
+        <Kpi icon={AlertTriangle} tone="t-red" loading={!segLoaded && !segError} display={!tripRef ? 'N/A' : undefined} value={k.harshEvents}
+          label={<>Harsh events<small className="tr-kpi-sub">Selected trip</small></>} danger={k.harshEvents > 0} />
+        <Kpi icon={ParkingCircle} tone="t-amber" loading={!segLoaded && !segError} display={!tripRef ? 'N/A' : undefined} value={k.stops}
+          label={<>Stops and idles<small className="tr-kpi-sub">Selected trip. Authorised stops are not recorded</small></>} />
+        <Kpi icon={Spline} tone="t-purple" display="N/A" label={<>Route deviation<small className="tr-kpi-sub">No planned route is recorded</small></>} />
+        <Kpi icon={Fuel} tone="t-green" display="N/A" label={<>Fuel used<small className="tr-kpi-sub">Not recorded on trip segments</small></>} />
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {kpis.map((t, i) => <StatTile key={t.label} index={i} label={t.label} value={t.value} icon={t.icon} tone={t.tone} sub={t.sub} />)}
-      </div>
+      <div className="tr-grid">
+        <div className="tr-main">
+          <Card title="Select trip to replay" sub={tripsLoaded ? `${fmtInt(tripRows.length)} of ${fmtInt(periodTrips.length)} trips` : undefined}
+            action={tripFiltersOn ? <button type="button" className="cc-link cc-link-btn" onClick={() => { setTripSearch(''); setTripAsset(''); setTripDriver('') }}>Clear</button> : null}>
+            <div className="cc-filters tr-filters">
+              <label className="cc-search"><Search size={14} aria-hidden="true" /><span className="sr-only">Find a trip</span>
+                <input type="search" value={tripSearch} onChange={(e) => setTripSearch(e.target.value)} placeholder="Search trip, asset, driver" /></label>
+              <select className="cc-select" aria-label="Filter trips by asset" value={tripAsset} onChange={(e) => setTripAsset(e.target.value)}>
+                <option value="">All assets</option>{tripAssets.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+              <select className="cc-select" aria-label="Filter trips by driver" value={tripDriver} onChange={(e) => setTripDriver(e.target.value)}>
+                <option value="">All drivers</option>{tripDrivers.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+            <KitTable
+              columns={tripColumns}
+              rows={tripRows}
+              getRowId={(t) => t.trip_ref}
+              loading={!tripsLoaded && !error}
+              error={error && !tripsLoaded ? error : null}
+              onRetry={loadTrips}
+              onRowClick={(t) => setTripRef(t.trip_ref)}
+              initialPageSize={5}
+              empty={notProvisioned ? 'Trip Replay is not enabled on this database yet.'
+                : noTrips ? 'No trips recorded yet. Use Add segment to record the first breadcrumb of a trip.'
+                  : 'No trips match these filters or this period.'}
+            />
+          </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="card lg:col-span-2">
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-1 flex items-center gap-2"><Gauge size={15} aria-hidden="true" /> Speed along the path</h2>
-          <p className="text-xs text-[var(--text-muted)] mb-3">Red bars mark harsh events. Long trips are sampled; every harsh point is always kept.</p>
-          <div className="h-60" role="img" aria-label={`Speed profile across ${series.length} points, peak ${fmtSpeed(k.maxKmh)}`}>
-            {!segLoaded ? <div className="h-full bg-[var(--input-bg)] rounded animate-pulse" />
-              : k.speedPoints > 0 ? <Bar data={speedData} options={SPEED_OPTS} />
-                : <p className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No speed readings recorded for this trip.</p>}
-          </div>
-        </div>
-        <div className="card">
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2"><Timer size={15} aria-hidden="true" /> Event breakdown</h2>
-          {!segLoaded ? <div className="h-24 bg-[var(--input-bg)] rounded animate-pulse" />
-            : !events.length ? <p className="text-sm text-[var(--text-muted)]">No event types recorded for this trip.</p>
-              : (
-                <ul className="space-y-2">
-                  {events.map((ev, i) => (
-                    <li key={ev.type} className="flex items-center gap-3">
-                      <div className="w-28 shrink-0"><EventBadge type={ev.type} /></div>
-                      <div className="flex-1 h-2.5 rounded-full bg-[var(--input-bg)] overflow-hidden" aria-hidden="true">
-                        <div className="h-full rounded-full" style={{ width: `${ev.pct || 0}%`, background: ev.harsh ? HARSH_COLOR : colorAt(i) }} />
-                      </div>
-                      <span className="text-xs text-[var(--text-secondary)] w-20 text-right tabular-nums">{ev.count} | {fmtPct(ev.pct)}</span>
-                    </li>
-                  ))}
-                  <li className="text-[11px] text-[var(--text-muted)] pt-1">{replayNarrative(k)}</li>
-                </ul>
+          <Card title="Route replay" sub={selectedTrip ? `${selectedTrip.trip_ref}${selectedTrip.asset_no ? ` | ${selectedTrip.asset_no}` : ''}` : 'No trip selected'}>
+            <div className="tr-map">
+              {!segLoaded && !segError && tripRef ? <div className="cc-skel" style={{ height: '100%' }} />
+                : segError ? <div className="cc-empty" role="alert"><div>{segError}<br /><button type="button" className="cc-btn" onClick={loadSegments}>Try again</button></div></div>
+                  : !geo ? <div className="cc-empty tr-map-empty"><div><Navigation size={22} aria-hidden="true" /><br />{replayEmpty}</div></div>
+                    : (
+                      <svg viewBox={`0 0 ${geo.w} ${geo.h}`} role="img" aria-label={`Route trace of ${geo.points.length} positioned points`} preserveAspectRatio="xMidYMid meet">
+                        {geo.lines.map((l) => (
+                          <line key={l.index} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke={TONE_COLOR[l.tone]} strokeWidth="4" strokeLinecap="round"
+                            opacity={l.index <= play.index ? 1 : 0.35} />
+                        ))}
+                        {geo.points.filter((p) => p.tone === 'harsh' || p.tone === 'speeding' || p.tone === 'stop').map((p) => (
+                          <circle key={`m${p.index}`} cx={p.x} cy={p.y} r="6" fill={TONE_COLOR[p.tone]} stroke="var(--cc-card-flat)" strokeWidth="2"><title>{eventLabel(p.event)}</title></circle>
+                        ))}
+                        <circle cx={geo.points[0].x} cy={geo.points[0].y} r="8" fill="var(--cc-green)" stroke="#fff" strokeWidth="2"><title>Start</title></circle>
+                        <rect x={geo.points[geo.points.length - 1].x - 7} y={geo.points[geo.points.length - 1].y - 7} width="14" height="14" rx="3" fill="var(--cc-ink)" stroke="#fff" strokeWidth="2"><title>End</title></rect>
+                        {(() => {
+                          const at = geo.points.filter((p) => p.index <= play.index).pop() || geo.points[0]
+                          return <circle cx={at.x} cy={at.y} r="9" fill="none" stroke="var(--cc-ink)" strokeWidth="3"><title>Playback position</title></circle>
+                        })()}
+                      </svg>
+                    )}
+              {geo && (
+                <div className="tr-legend">
+                  <b>Route</b>
+                  {Object.entries(TONE_LABEL).map(([k2, label]) => <div key={k2}><i style={{ background: TONE_COLOR[k2] }} aria-hidden="true" />{label}</div>)}
+                  <small>Approx. {geo.kmAcross} km across. No base map is loaded.</small>
+                </div>
               )}
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
-          <div className="sm:col-span-2">
-            <label htmlFor="replay-search" className="label">Search segments</label>
-            <div className="relative">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
-              <input id="replay-search" className={`${FIELD} pl-9`} placeholder="Event, asset, driver, address, notes" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
-          </div>
-          <div>
-            <label htmlFor="replay-asset" className="label">Asset</label>
-            <select id="replay-asset" className={FIELD} value={assetFilter} onChange={(e) => setAssetFilter(e.target.value)}>
-              <option value="">All assets</option>
-              {assetOptions.map((a) => <option key={a} value={a}>{a}</option>)}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="replay-event" className="label">Event type</label>
-            <select id="replay-event" className={FIELD} value={eventFilter} onChange={(e) => setEventFilter(e.target.value)}>
-              <option value="">All events</option>
-              {events.map((ev) => <option key={ev.type} value={ev.type}>{ev.label}</option>)}
-            </select>
-          </div>
-          <label className="inline-flex items-center gap-2 min-h-[44px] text-sm text-[var(--text-secondary)] cursor-pointer">
-            <input type="checkbox" className="w-4 h-4" checked={harshOnly} onChange={(e) => setHarshOnly(e.target.checked)} />
-            Harsh events only
-          </label>
+            <div className="tr-player">
+              <button type="button" className="cc-icon-btn" onClick={() => { setPlaying(false); setPlayIdx(0) }} disabled={!segs.length} aria-label="Back to start"><SkipBack size={14} /></button>
+              <button type="button" className="tr-play" onClick={playing ? () => setPlaying(false) : startReplay} disabled={!segs.length} aria-label={playing ? 'Pause replay' : 'Play replay'}>
+                {playing ? <Pause size={16} /> : <Play size={16} />}
+              </button>
+              <button type="button" className="cc-icon-btn" onClick={() => { setPlaying(false); setPlayIdx(play.last) }} disabled={!segs.length} aria-label="Jump to end"><SkipForward size={14} /></button>
+              <select className="cc-select" aria-label="Playback speed" value={playSpeed} onChange={(e) => setPlaySpeed(Number(e.target.value))}>
+                {PLAY_SPEEDS.map((s) => <option key={s} value={s}>{s}x</option>)}
+              </select>
+              <input type="range" className="tr-range" min={0} max={Math.max(0, play.last)} value={play.index} disabled={!segs.length}
+                onChange={(e) => { setPlaying(false); setPlayIdx(Number(e.target.value)) }} aria-label="Playback position" />
+              <span className="tr-clock">{fmtClock(play.elapsedMin)} / {fmtClock(play.totalMin)}</span>
+            </div>
+            {cur && (
+              <p className="tr-now">Point {play.index + 1} of {play.last + 1}: {fmtTime(cur.recorded_at)} | {fmtSpeed(cur.speed_kmh)} | <EventBadge type={cur.event_type} />{cur.address ? ` | ${cur.address}` : ''}</p>
+            )}
+          </Card>
+
+          <Card title="Speed and events">
+            <Tabs variant="line" label="Trip charts" value={chartTab} onChange={setChartTab} tabs={[
+              { key: 'speed', label: 'Speed and events' }, { key: 'events', label: 'Event breakdown' },
+              { key: 'elevation', label: 'Elevation' }, { key: 'rpm', label: 'Engine RPM' }, { key: 'fuel', label: 'Fuel rate' }, { key: 'pressure', label: 'Tyre pressure' },
+            ]} />
+            <div className="tr-chart">
+              {!segLoaded && !segError && tripRef ? <div className="cc-skel" style={{ height: 150 }} />
+                : chartTab === 'speed' ? (
+                  !chart ? <div className="cc-empty">{segs.length ? 'No speed readings recorded for this trip.' : 'No trip data to chart.'}</div> : (
+                    <svg viewBox={`0 0 ${chart.w} ${chart.h}`} role="img" aria-label={`Speed profile, peak ${fmtSpeed(k.maxKmh)}`} preserveAspectRatio="none">
+                      {chart.yTicks.map((t) => (
+                        <g key={t.v}><line x1={chart.padL} x2={chart.w} y1={t.y} y2={t.y} stroke="var(--cc-track)" /><text x={chart.padL - 6} y={t.y + 3} textAnchor="end" className="cc-axis">{t.v}</text></g>
+                      ))}
+                      <polygon points={chart.area} fill="var(--cc-green-tint)" />
+                      <polyline points={chart.line} fill="none" stroke="var(--cc-green)" strokeWidth="2" />
+                      {chart.markers.map((m) => <circle key={m.index} cx={m.x} cy={m.y} r="5" fill={TONE_COLOR[m.tone]}><title>{m.label}</title></circle>)}
+                      {segs.length > 0 && <line x1={chart.xOf(play.index)} x2={chart.xOf(play.index)} y1={chart.yTicks[3].y} y2={chart.h - chart.padB} stroke="var(--cc-ink-2)" strokeDasharray="4 3" />}
+                    </svg>
+                  )
+                ) : chartTab === 'events' ? (
+                  !events.length ? <div className="cc-empty">No event types recorded for this trip.</div> : (
+                    <ul className="tr-ev-bars">
+                      {events.map((e) => (
+                        <li key={e.type}><EventBadge type={e.type} /><span className="tr-bar"><i style={{ width: `${e.pct || 0}%`, background: isHarsh(e.type) ? 'var(--cc-red)' : 'var(--cc-green)' }} /></span><b>{e.count} | {e.pct == null ? 'N/A' : `${e.pct}%`}</b></li>
+                      ))}
+                      <li className="tr-note">{replayNarrative(k)}</li>
+                    </ul>
+                  )
+                ) : <div className="cc-empty">Not recorded: trip_segments has no {chartTab === 'elevation' ? 'elevation' : chartTab === 'rpm' ? 'engine RPM' : chartTab === 'fuel' ? 'fuel rate' : 'tyre pressure'} column, so this chart cannot be drawn.</div>}
+            </div>
+          </Card>
         </div>
-        <div className="flex flex-wrap items-center gap-2 mt-3">
-          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} /> Clear filters</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{fmtNum(filtered.length)} of {fmtNum(segs.length)} segments</span>
-        </div>
+
+        <aside className="tr-side">
+          <Card title="Trip summary">
+            {!tripRef ? <div className="cc-empty">No trip selected.</div> : (
+              <>
+                <div className="tr-sum-head">
+                  <VehicleThumb row={{ asset_no: selectedTrip?.asset_no }} size="lg" />
+                  <div>
+                    <b>{tripRef}</b>
+                    <small>{selectedTrip?.asset_no || 'No asset'} | {selectedTrip?.driver_name || 'No driver recorded'}</small>
+                    <small>{fmtTime(selectedTrip?.firstAt)} to {fmtTime(selectedTrip?.lastAt)}</small>
+                  </div>
+                </div>
+                <div className="tr-sum-grid">
+                  <div><Milestone size={15} aria-hidden="true" /><b>{segLoaded ? fmtKm(summary.distanceKm) : '...'}</b><span>Distance</span></div>
+                  <div><Clock size={15} aria-hidden="true" /><b>{segLoaded ? fmtMin(summary.durationMin) : '...'}</b><span>Duration</span></div>
+                  <div><Gauge size={15} aria-hidden="true" /><b>{segLoaded ? fmtSpeed(summary.avgKmh) : '...'}</b><span>Avg speed</span></div>
+                  <div><Fuel size={15} aria-hidden="true" /><b><NotRecorded>N/A</NotRecorded></b><span>Fuel used</span></div>
+                  <div><Activity size={15} aria-hidden="true" /><b><NotRecorded>N/A</NotRecorded></b><span>Efficiency</span></div>
+                  <div><Leaf size={15} aria-hidden="true" /><b><NotRecorded>N/A</NotRecorded></b><span>Est. CO2</span></div>
+                </div>
+                <p className="tr-foot">Fuel, efficiency and CO2 need fuel readings, which trip segments do not carry.</p>
+              </>
+            )}
+          </Card>
+
+          <Card title="Events and alerts">
+            {!tripRef ? <div className="cc-empty">No trip selected.</div>
+              : segError ? <div className="cc-empty" role="alert"><div>{segError}<br /><button type="button" className="cc-btn" onClick={loadSegments}>Try again</button></div></div>
+                : (
+                  <ul className="tr-events">
+                    <li><i className="tr-ev-ic purple"><MapPin size={13} /></i><span>Geofence events</span><NotRecorded /></li>
+                    <li><i className="tr-ev-ic bad"><Gauge size={13} /></i><span>Speed violations</span><b>{fmtInt(ev.speeding)}</b><small>{ev.maxSpeed == null ? 'No speeds' : `Peak ${fmtSpeed(ev.maxSpeed)}`}</small></li>
+                    <li><i className="tr-ev-ic warn"><Zap size={13} /></i><span>Harsh driving</span><b>{fmtInt(ev.harsh)}</b><small>{ev.harshBreakdown.harsh_brake} braking, {ev.harshBreakdown.harsh_accel} acceleration, {ev.harshBreakdown.harsh_corner} cornering</small></li>
+                    <li><i className="tr-ev-ic info"><Timer size={13} /></i><span>Idle and stop time</span><b>{ev.idleMin == null ? 'N/A' : fmtMin(ev.idleMin)}</b><small>{fmtInt(ev.stops)} stop{ev.stops === 1 ? '' : 's'}</small></li>
+                    <li><i className="tr-ev-ic good"><Fuel size={13} /></i><span>Fuel burn</span><NotRecorded /></li>
+                    <li><i className="tr-ev-ic bad"><Flag size={13} /></i><span>Toll passages</span><NotRecorded /></li>
+                  </ul>
+                )}
+          </Card>
+
+          <Card title="Stops and timeline">
+            {!tripRef ? <div className="cc-empty">No trip selected.</div>
+              : !segLoaded ? <div className="cc-skel" style={{ height: 120 }} />
+                : timeline.length === 0 ? <div className="cc-empty">This trip has no breadcrumbs yet.</div>
+                  : (
+                    <ol className="tr-tl">
+                      {timeline.map((e) => (
+                        <li key={e.key} className={e.kind}><time>{fmtHm(e.at)}</time><i aria-hidden="true" /><span>{e.label}</span><small>{e.note}</small></li>
+                      ))}
+                    </ol>
+                  )}
+          </Card>
+        </aside>
       </div>
 
-      <EnterpriseTable
-        columns={segColumns}
-        data={filtered}
-        getRowId={(r) => String(r.id)}
-        loading={(!segLoaded || segLoading) && !segError && !error}
-        error={segError && !segLoaded ? segError : null}
-        onRetry={loadSegments}
-        emptyMessage={noTrips && !notProvisioned ? 'No trips recorded yet. Add your first segment.'
-          : segs.length === 0 ? 'This trip has no segments. Add one to begin the replay.' : 'No segments match these filters.'}
-        enableGlobalFilter={false}
-        enableColumnFilters={false}
-        enableExport={false}
-        viewKey="trip-replay"
-      />
+      <Card title="Trip segments" sub={`${fmtInt(filtered.length)} of ${fmtInt(segs.length)} breadcrumbs for ${tripRef || 'no trip'}`}
+        action={hasFilters ? <button type="button" className="cc-link cc-link-btn" onClick={clearFilters}><X size={13} aria-hidden="true" /> Clear filters</button> : null}>
+        <div className="cc-filters tr-filters">
+          <label className="cc-search"><Search size={14} aria-hidden="true" /><span className="sr-only">Search segments</span>
+            <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Event, asset, driver, address, notes" /></label>
+          <select className="cc-select" aria-label="Filter segments by asset" value={assetFilter} onChange={(e) => setAssetFilter(e.target.value)}>
+            <option value="">All assets</option>{assetOptions.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <select className="cc-select" aria-label="Filter segments by event" value={eventFilter} onChange={(e) => setEventFilter(e.target.value)}>
+            <option value="">All events</option>{events.map((e) => <option key={e.type} value={e.type}>{e.label}</option>)}
+          </select>
+          <label className="tr-check"><input type="checkbox" checked={harshOnly} onChange={(e) => setHarshOnly(e.target.checked)} /> Harsh events only</label>
+        </div>
+        <KitTable
+          columns={segColumns}
+          rows={filtered}
+          getRowId={(r) => String(r.id)}
+          loading={(!segLoaded || segLoading) && !segError && !error}
+          error={segError && !segLoaded ? segError : null}
+          onRetry={loadSegments}
+          onRowClick={(r) => { const i = segs.findIndex((s) => s.id === r.id); if (i >= 0) { setPlaying(false); setPlayIdx(i) } }}
+          empty={noTrips && !notProvisioned ? 'No trips recorded yet. Add your first segment.'
+            : segs.length === 0 ? 'This trip has no segments. Add one to begin the replay.' : 'No segments match these filters.'}
+        />
+      </Card>
 
       <Modal
         open={showModal}

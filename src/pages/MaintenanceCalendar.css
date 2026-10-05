@@ -1,0 +1,137 @@
+/* Maintenance Calendar page. Built on --cc-* tokens so light and dark share one sheet.
+   Indigo (PM plans) is not a kit token, so it is defined here per theme. */
+.mc-page { --mc-indigo: #818cf8; --mc-indigo-tint: rgba(129, 140, 248, 0.16); --mc-today: var(--cc-green); }
+html.light .mc-page, html.light .mc-modal { --mc-indigo: #4f46e5; --mc-indigo-tint: #eef0fe; }
+.mc-modal { --mc-indigo: #818cf8; --mc-indigo-tint: rgba(129, 140, 248, 0.16); gap: 14px; }
+
+/* Event tones */
+.tone-blue   { --mc-c: var(--cc-blue);   --mc-t: var(--cc-blue-tint); }
+.tone-red    { --mc-c: var(--cc-red);    --mc-t: var(--cc-red-tint); }
+.tone-orange { --mc-c: var(--cc-orange); --mc-t: var(--cc-amber-tint); }
+.tone-indigo { --mc-c: var(--mc-indigo); --mc-t: var(--mc-indigo-tint); }
+
+/* Filters */
+.mc-filters { align-items: flex-end; }
+.mc-actions { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; }
+.mc-scope { margin: 10px 0 0; font-size: 12px; color: var(--cc-ink-3); }
+.mc-note { margin: 10px 0 0; display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--cc-ink-3); }
+.mc-note.bad { color: var(--cc-red); }
+.mc-spin { animation: mc-spin 0.9s linear infinite; }
+@keyframes mc-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .mc-spin { animation: none; } }
+
+.mc-banner { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--cc-border); background: var(--cc-blue-tint); color: var(--cc-ink); font-size: 12.5px; }
+.mc-banner > svg { flex: none; margin-top: 2px; color: var(--cc-blue); }
+.mc-banner p { margin: 0; }
+.mc-banner p + p { margin-top: 4px; }
+
+.mc-page .mc-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
+/* Layout */
+.mc-grid { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 14px; align-items: start; }
+.mc-side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+/* Calendar toolbar */
+.mc-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.mc-nav { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.mc-today { padding: 6px 12px; font-size: 12.5px; }
+.mc-period { margin: 0 0 0 6px; font-size: 17px; font-weight: 750; letter-spacing: -0.01em; color: var(--cc-ink); white-space: nowrap; }
+
+/* Month grid */
+.mc-month { border: 1px solid var(--cc-inner-border); border-radius: 12px; overflow: hidden; }
+.mc-dow { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); background: var(--cc-inner); border-bottom: 1px solid var(--cc-inner-border); }
+.mc-dow span { padding: 8px 6px; text-align: center; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--cc-ink-3); }
+.mc-cells { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.mc-cell { position: relative; min-height: 112px; padding: 6px; border-right: 1px solid var(--cc-inner-border); border-bottom: 1px solid var(--cc-inner-border); cursor: pointer; display: flex; flex-direction: column; gap: 4px; min-width: 0; transition: background-color 120ms ease; }
+.mc-cell:nth-child(7n) { border-right: 0; }
+.mc-cell:nth-last-child(-n + 7) { border-bottom: 0; }
+.mc-cell:hover { background: var(--cc-green-tint); }
+.mc-cell:focus-visible { outline: 2px solid var(--cc-green); outline-offset: -2px; }
+.mc-cell.out { background: var(--cc-track); }
+.mc-cell.out .mc-num { color: var(--cc-ink-3); opacity: 0.7; }
+.mc-cell.sel { box-shadow: inset 0 0 0 2px var(--cc-green); }
+.mc-cell.has-overdue::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--cc-red); }
+.mc-cell-head { display: flex; align-items: center; justify-content: space-between; }
+.mc-num { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; font-size: 12px; font-weight: 700; color: var(--cc-ink-2); font-variant-numeric: tabular-nums; }
+.mc-cell.today .mc-num { background: var(--mc-today); color: #fff; }
+.mc-cnt { font-size: 10.5px; font-weight: 600; color: var(--cc-ink-3); font-variant-numeric: tabular-nums; }
+.mc-chips { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+
+.mc-chip { display: flex; align-items: center; gap: 5px; width: 100%; min-width: 0; padding: 3px 6px; border: 0; border-radius: 6px; font: inherit; font-size: 11px; font-weight: 600; line-height: 1.25; text-align: start; cursor: pointer; color: var(--cc-ink); background: var(--mc-t); border-inline-start: 3px solid var(--mc-c); }
+.mc-chip i { display: none; }
+.mc-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc-chip:hover { filter: brightness(1.12); }
+html.light .mc-chip:hover { filter: brightness(0.96); }
+.mc-chip:focus-visible { outline: 2px solid var(--mc-c); outline-offset: 1px; }
+.mc-more { border: 0; background: none; padding: 1px 6px; font: inherit; font-size: 11px; font-weight: 600; color: var(--cc-ink-2); text-align: start; cursor: pointer; }
+.mc-more:hover { color: var(--cc-green); }
+
+/* Week */
+.mc-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border: 1px solid var(--cc-inner-border); border-radius: 12px; overflow: hidden; }
+.mc-wcol { min-width: 0; border-right: 1px solid var(--cc-inner-border); display: flex; flex-direction: column; }
+.mc-wcol:last-child { border-right: 0; }
+.mc-whead { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px; background: var(--cc-inner); border-bottom: 1px solid var(--cc-inner-border); }
+.mc-whead span { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--cc-ink-3); }
+.mc-whead b { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; font-size: 15px; color: var(--cc-ink); }
+.mc-whead small { font-size: 10.5px; color: var(--cc-ink-3); }
+.mc-whead:focus-visible { outline: 2px solid var(--cc-green); outline-offset: -2px; }
+.mc-wcol.today .mc-whead b { background: var(--mc-today); color: #fff; }
+.mc-wcol.sel .mc-whead { box-shadow: inset 0 -2px 0 var(--cc-green); }
+.mc-wbody { padding: 6px; display: flex; flex-direction: column; gap: 4px; min-height: 320px; }
+
+/* Event rows (day, agenda, sidebar) */
+.mc-day-sub { margin: 0 0 10px; font-size: 12.5px; color: var(--cc-ink-3); }
+.mc-evlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.mc-ev { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--cc-inner-border); background: var(--cc-inner); font: inherit; color: inherit; text-align: start; cursor: pointer; }
+html.light .mc-ev { background: #fff; }
+.mc-ev:hover { border-color: var(--mc-c); }
+.mc-ev:focus-visible { outline: 2px solid var(--mc-c); outline-offset: 1px; }
+.mc-ev-bar { align-self: stretch; width: 4px; flex: none; border-radius: 4px; background: var(--mc-c); }
+.mc-ev-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mc-ev-main b { font-size: 13px; font-weight: 650; color: var(--cc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc-ev-main small { font-size: 11.5px; color: var(--cc-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc-ev-side { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; flex: none; max-width: 48%; }
+.mc-evlist.compact .mc-ev { padding: 7px 9px; }
+.mc-evlist.compact .mc-ev-side { max-width: 40%; }
+
+.mc-agenda { display: flex; flex-direction: column; gap: 14px; }
+.mc-agroup h3 { margin: 0 0 6px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--cc-ink-3); }
+.mc-agroup h3.today { color: var(--cc-green); }
+.mc-upcoming { display: flex; flex-direction: column; gap: 12px; max-height: 520px; overflow-y: auto; padding-inline-end: 2px; }
+.mc-overdue-note { display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--cc-red); background: var(--cc-red-tint); color: var(--cc-red); font: inherit; font-size: 12.5px; font-weight: 600; text-align: start; cursor: pointer; }
+.mc-seeall { margin-top: 8px; }
+
+/* Legend */
+.mc-legend { list-style: none; margin: 12px 0 0; padding: 10px 0 0; border-top: 1px solid var(--cc-inner-border); display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.mc-legend li { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--cc-ink-2); }
+.mc-legend i, .mc-dot { width: 10px; height: 10px; border-radius: 3px; background: var(--mc-c); display: inline-block; flex: none; }
+
+/* Modal */
+.mc-modal-title { display: inline-flex; align-items: center; gap: 10px; }
+.mc-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.mc-dl { margin: 0; display: flex; flex-direction: column; }
+.mc-dl > div { display: flex; justify-content: space-between; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--cc-inner-border); font-size: 13px; }
+.mc-dl dt { color: var(--cc-ink-3); }
+.mc-dl dd { margin: 0; color: var(--cc-ink); font-weight: 600; text-align: end; min-width: 0; overflow-wrap: anywhere; }
+.mc-locked { margin: 0; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--cc-green); }
+.mc-modal-foot { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+
+@media (max-width: 1400px) {
+  .mc-page .mc-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 1180px) {
+  .mc-grid { grid-template-columns: minmax(0, 1fr); }
+  .mc-side { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+}
+@media (max-width: 760px) {
+  .mc-page .mc-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mc-side { grid-template-columns: minmax(0, 1fr); }
+  .mc-actions { margin-inline-start: 0; width: 100%; flex-wrap: wrap; }
+  .mc-filters .cc-field { flex: 1 1 140px; min-width: 0; }
+  .mc-filters .cc-search { min-width: 0; flex-basis: 100%; }
+  .mc-toolbar { flex-direction: column; align-items: stretch; }
+  .mc-period { font-size: 15px; white-space: normal; }
+  .mc-ev { flex-wrap: wrap; }
+  .mc-ev-side, .mc-evlist.compact .mc-ev-side { max-width: 100%; justify-content: flex-start; padding-inline-start: 14px; }
+  .mc-upcoming { max-height: none; }
+}

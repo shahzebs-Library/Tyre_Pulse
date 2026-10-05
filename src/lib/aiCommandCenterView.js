@@ -92,52 +92,103 @@ export function filterSignals(items = [], severity = 'all') {
 }
 
 /**
- * Headline tiles. Every value is a real count or N/A:
- *   signals     : active alerts (critical + all)
- *   usage       : summarizeUsage() of ai_token_logs for the window, or null
- *   conversations: saved, non-archived conversations, or null when unread
+ * Headline tiles, in the mockup's order: Critical Insights, Opportunities,
+ * Forecast Risk, Potential Savings, Confidence. Every value is a real count or
+ * N/A with the reason:
+ *   Critical Insights : active critical alerts
+ *   Opportunities     : the other active alerts an agent can explain
+ *   Forecast Risk     : active PM plans due within the next 30 days
+ *   Potential Savings : not stored per answer, so "Not recorded"
+ *   Confidence        : share of AI requests answered without error
+ * The AI usage numbers (requests, spend, conversations) are returned apart in
+ * `usageLine` so the page can still show them.
  */
-export function aiKpis({ signals, signalsReady, usage, usageReady, conversations, conversationsReady, days = 30 }) {
+export function aiKpis({
+  signals, signalsReady, usage, usageReady, conversations, conversationsReady,
+  forecast, forecastReady, days = 30,
+}) {
   const counts = signalCounts(signals || [])
   const calls = usage ? usage.totalCalls : null
   const failed = usage ? usage.failedCalls : null
   const totalReq = calls != null && failed != null ? calls + failed : null
   const successPct = totalReq ? Math.round((calls / totalReq) * 100) : null
-  return [
+  const tiles = [
     {
-      key: 'critical', label: 'Critical Signals', tone: 't-red',
+      key: 'critical', label: 'Critical Insights', tone: 't-red',
       value: signalsReady ? counts.Critical : null,
       sub: signalsReady ? 'Active critical alerts' : 'Alerts not loaded',
       danger: signalsReady && counts.Critical > 0,
     },
     {
-      key: 'open', label: 'Open Signals', tone: 't-green',
-      value: signalsReady ? counts.all : null,
-      sub: signalsReady ? 'Active alerts ready for an agent' : 'Alerts not loaded',
+      key: 'open', label: 'Opportunities', tone: 't-green',
+      value: signalsReady ? counts.all - counts.Critical : null,
+      sub: signalsReady ? 'Other active alerts for an agent' : 'Alerts not loaded',
     },
     {
-      key: 'requests', label: 'AI Requests', tone: 't-amber',
-      value: usageReady ? (totalReq ?? 0) : null,
-      sub: usageReady ? `Last ${days} days${failed ? `, ${failed} failed` : ''}` : 'Usage not loaded',
+      key: 'forecast', label: 'Forecast Risk', tone: 't-amber',
+      value: forecastReady ? (forecast ?? 0) : null,
+      sub: forecastReady ? 'PM plans due in next 30 days' : 'PM schedule not loaded',
     },
     {
-      key: 'spend', label: 'AI Spend', tone: 't-blue',
-      display: usageReady && usage ? `USD ${usage.totalCost.toFixed(2)}` : null,
-      sub: usageReady ? `Model cost, last ${days} days` : 'Usage not loaded',
+      key: 'savings', label: 'Potential Savings', tone: 't-blue',
+      display: 'Not recorded',
+      sub: 'Savings are not stored per answer',
     },
     {
-      key: 'success', label: 'Answer Success', tone: 't-purple',
+      key: 'success', label: 'Confidence', tone: 't-purple',
       display: usageReady ? (successPct == null ? 'N/A' : `${successPct}%`) : null,
       sub: usageReady
-        ? (successPct == null ? 'No AI requests in the window' : 'Requests answered without error')
+        ? (successPct == null ? `No AI requests in ${days} days` : 'AI requests answered without error')
         : 'Usage not loaded',
     },
-    {
-      key: 'conversations', label: 'Conversations', tone: 't-green',
-      value: conversationsReady ? (conversations?.length ?? 0) : null,
-      sub: conversationsReady ? 'Saved, not archived' : 'History not loaded',
-    },
   ]
+  const usageLine = {
+    requests: usageReady ? (totalReq ?? 0) : null,
+    failed: usageReady ? (failed ?? 0) : null,
+    spend: usageReady && usage ? `USD ${usage.totalCost.toFixed(2)}` : null,
+    conversations: conversationsReady ? (conversations?.length ?? 0) : null,
+  }
+  return Object.assign(tiles, { usageLine })
+}
+
+/**
+ * Daily counts (zero-filled, oldest first) over the last `days` days, for the
+ * tile mini charts. `dateOf(row)` returns an ISO date/time or null.
+ */
+export function dailyCounts(rows = [], now, days = 14, dateOf = (r) => r?.created_at, valueOf = () => 1) {
+  const n = now instanceof Date ? now : new Date(now)
+  const keys = []
+  for (let i = days - 1; i >= 0; i -= 1) {
+    const d = new Date(n.getFullYear(), n.getMonth(), n.getDate() - i)
+    keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
+  }
+  const idx = Object.fromEntries(keys.map((k, i) => [k, i]))
+  const out = keys.map(() => 0)
+  for (const r of rows) {
+    const v = dateOf(r)
+    if (!v) continue
+    const d = new Date(v)
+    if (Number.isNaN(d.getTime())) continue
+    const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    if (idx[k] == null) continue
+    const val = valueOf(r)
+    if (val == null || !Number.isFinite(val)) continue
+    out[idx[k]] += val
+  }
+  return out
+}
+
+/**
+ * Picture for an insight row, chosen from what the alert is about. The images
+ * are generic (no asset photo), so they only illustrate the topic.
+ */
+export function signalPicture(item) {
+  const t = `${item?.title || ''} ${item?.message || ''}`.toLowerCase()
+  if (/fuel|diesel|litre|liter/.test(t)) return '/dashboard/ai-signal-fuel.webp'
+  if (/data|quality|odometer|record|duplicate|missing|import/.test(t)) return '/dashboard/ai-signal-data.webp'
+  if (/workshop|job|parts|repair|breakdown|maintenance|pm /.test(t)) return '/dashboard/ai-signal-workshop.webp'
+  if (/replace|due|forecast|plan|schedule|window/.test(t)) return '/dashboard/ai-signal-replace.webp'
+  return '/dashboard/ai-signal-tyre.webp'
 }
 
 /** Rows for the conversation trace table, newest first. */

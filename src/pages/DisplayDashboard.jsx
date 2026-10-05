@@ -3,7 +3,7 @@
  *
  * A read-only, auto-refreshing control-room board, rebuilt on the Command
  * Center kit to the owner's mockup: header with live clock and full-screen
- * control, five headline tiles, fleet-by-site, operations summary, live
+ * control, five headline tiles, the live fleet map (sites, no GPS), operations summary, live
  * alerts, live job activity, the rotation controls and the TV screens (shared
  * board links), then the rotating boards themselves. It follows the app theme
  * (light and dark from the same --cc-* tokens). Rendered OUTSIDE the normal
@@ -31,6 +31,7 @@ import {
   Wrench, Repeat, Car, Stamp, Clock, Timer, FileCheck2,
   CalendarDays, Activity, CalendarClock, ClipboardCheck,
   Monitor, ChevronRight, Eye, Plus, ExternalLink, Info, Fuel, HeartPulse,
+  Factory, Maximize2,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
@@ -57,10 +58,12 @@ import {
   donutOption, hBarOption, vBarOption, gaugeOption,
   tyreRiskItems, inspectionStatusItems, alertSeverityItems, countBy,
 } from '../lib/displayCharts'
-import { Card, CardState, Kpi, Tabs, KitTable, ViewAll, Donut, useCard } from '../components/commandCenter/kit'
+import { Card, CardState, Tabs, KitTable, ViewAll, useCard } from '../components/commandCenter/kit'
 import {
   tvKpis, monthSpendByCurrency, money, liveAlertRows, jobActivityRows,
   rotationRows, screenRows, themeChartOption, clockParts,
+  OPS_PERIODS, opsPeriodRange, opsLoadStart, spendByCurrency, dailySeries,
+  productionSummary, siteBoard,
 } from '../lib/displayDashboardView'
 import './DisplayDashboard.css'
 
@@ -220,6 +223,23 @@ function pmDueLabel(item) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+/** Tiny bar sparkline for the Operations Summary tiles. Hidden under two points. */
+function MiniBars({ values = [], tone = 'green' }) {
+  if (!values || values.length < 2 || !values.some((v) => v > 0)) return null
+  const max = Math.max(...values)
+  const w = 88
+  const h = 34
+  const bw = w / values.length
+  return (
+    <svg className={`tv-minibars t-${tone}`} width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
+      {values.map((v, i) => {
+        const bh = max ? Math.max(1.5, (v / max) * (h - 2)) : 0
+        return <rect key={i} x={i * bw + bw * 0.18} y={h - bh} width={bw * 0.64} height={bh} rx={1} />
+      })}
+    </svg>
+  )
+}
+
 export default function DisplayDashboard() {
   const { branding, orgName } = useTenant()
   const navigate = useNavigate()
@@ -228,6 +248,9 @@ export default function DisplayDashboard() {
   const [fleet,        setFleet]        = useState(EMPTY_SLICE)
   const [tyres,        setTyres]        = useState(EMPTY_SLICE)
   const [monthTyres,   setMonthTyres]   = useState(EMPTY_SLICE)
+  const [production,   setProduction]   = useState(EMPTY_SLICE)
+  const [opsPeriod,    setOpsPeriod]    = useState('today')
+  const [mapSite,      setMapSite]      = useState('all')
   const [inspections,  setInspections]  = useState(EMPTY_SLICE)
   const [alerts,       setAlerts]       = useState(EMPTY_SLICE)
   const [pending,      setPending]      = useState(EMPTY_SLICE)
@@ -309,9 +332,8 @@ export default function DisplayDashboard() {
     loadingRef.current = true
     setRefreshing(true)
 
-    const monthStart = new Date()
-    monthStart.setDate(1)
-    const monthStartStr = monthStart.toISOString().slice(0, 10)
+    // Local calendar day, never toISOString (UTC can roll the date back).
+    const monthStartStr = opsLoadStart(new Date())
     const windowStart = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10)
 
     const tasks = [
@@ -353,6 +375,20 @@ export default function DisplayDashboard() {
         },
       },
       {
+        set: setProduction,
+        run: async () => {
+          const { data, error } = await fetchAllPages((from, to) => supabase
+            .from('production_logs')
+            .select('id,period_date,approved_m3,site')
+            .gte('period_date', monthStartStr)
+            .order('period_date', { ascending: true })
+            .order('id', { ascending: true })
+            .range(from, to), { max: 20000 })
+          if (error) throw error
+          return data ?? []
+        },
+      },
+      {
         set: setInspections,
         run: async () => {
           const { data, error } = await fetchAllPages((from, to) => supabase
@@ -372,7 +408,7 @@ export default function DisplayDashboard() {
         run: async () => {
           const { data, error } = await supabase
             .from('alerts')
-            .select('severity,message,asset_no,created_at,is_active')
+            .select('severity,message,asset_no,site,created_at,is_active')
             .eq('is_active', true)
             .order('created_at', { ascending: false })
             .limit(500)
@@ -709,26 +745,6 @@ export default function DisplayDashboard() {
     }))
   }, [fleet, alerts, workOrders, inspections, availability, alertSummary, woBoard, todayInsp])
 
-  const siteSegments = useMemo(() => {
-    const palette = ['var(--cc-green)', 'var(--cc-blue)', 'var(--cc-amber)', 'var(--cc-purple)', 'var(--cc-orange)', 'var(--cc-red)']
-    const top = groupVehiclesBySite(fleet.rows, 6)
-    const shown = top.reduce((t, x) => t + x.count, 0)
-    const rest = fleet.rows.length - shown
-    const segs = top.map((x, i) => ({ label: x.site, count: x.count, color: palette[i % palette.length] }))
-    if (rest > 0) segs.push({ label: 'Other sites', count: rest, color: 'var(--cc-ink-3)' })
-    return segs
-  }, [fleet.rows])
-
-  const statusLegend = useMemo(() => {
-    const active = availability.available
-    return [
-      { label: 'In service', count: active, color: 'var(--cc-green)' },
-      { label: 'Not in service', count: Math.max(0, availability.total - active), color: 'var(--cc-ink-3)' },
-      { label: 'Open job cards', count: woBoard.total, color: 'var(--cc-blue)' },
-      { label: 'Inspections today', count: todayInsp.total, color: 'var(--cc-amber)' },
-    ]
-  }, [availability, woBoard.total, todayInsp.total])
-
   const alertRows = useMemo(() => liveAlertRows(alerts.rows, now, 6), [alerts.rows, now])
   const jobRows   = useMemo(() => jobActivityRows(woBoard.list, dayRef, 8), [woBoard.list, dayRef])
   const rotation  = useMemo(
@@ -743,6 +759,31 @@ export default function DisplayDashboard() {
   // TV screens = this org's active shared board links (report_shares).
   const screens = useCard(() => listReportShares(), [])
   const screenList = useMemo(() => screenRows(screens.data || [], dayRef).slice(0, 5), [screens.data, dayRef])
+
+  // Operations Summary period + Live Fleet Map site board (no GPS feed).
+  const opsRange   = useMemo(() => opsPeriodRange(opsPeriod, dayRef), [opsPeriod, dayRef])
+  const opsSpend   = useMemo(() => spendByCurrency(monthTyres.rows, opsRange), [monthTyres.rows, opsRange])
+  const spendSeries = useMemo(() => {
+    const one = opsSpend.lines.length === 1 ? opsSpend.lines[0].country : null
+    return dailySeries(monthTyres.rows, opsRange, 'issue_date', (r) => {
+      const c = Number(r.cost_per_tyre)
+      if (!Number.isFinite(c) || c <= 0) return null
+      if (one && r.country !== one) return null
+      return one ? c * (Number(r.qty) > 0 ? Number(r.qty) : 1) : 1
+    })
+  }, [monthTyres.rows, opsRange, opsSpend.lines])
+  const prod     = useMemo(() => productionSummary(production.rows, opsRange), [production.rows, opsRange])
+  const jobSeries = useMemo(() => dailySeries(workOrders.rows, opsRange, 'opened_at'), [workOrders.rows, opsRange])
+  const mapBoard = useMemo(() => siteBoard({
+    fleet: fleet.rows,
+    jobs: workOrders.rows,
+    inspectionsToday: inspections.rows.filter((i) => String(i.scheduled_date || '').slice(0, 10) === todayStr),
+    alerts: alerts.rows,
+  }), [fleet.rows, workOrders.rows, inspections.rows, alerts.rows, todayStr])
+  const mapSites = useMemo(
+    () => (mapSite === 'all' ? mapBoard.sites.slice(0, 12) : mapBoard.sites.filter((x) => x.site === mapSite)),
+    [mapBoard, mapSite],
+  )
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -761,6 +802,7 @@ export default function DisplayDashboard() {
             {logoSrc && (
               <img src={logoSrc} alt="" className="tv-logo" onError={e => { e.currentTarget.style.display = 'none' }} />
             )}
+            <span className="tv-title-icon" aria-hidden="true"><Monitor size={24} strokeWidth={2} /></span>
             <h1>TV Display Mode</h1>
             <span className="cc-pill good tv-live">
               <i className={`tv-dot ${refreshing ? 'is-busy' : ''}`} aria-hidden="true" /> Live
@@ -827,89 +869,120 @@ export default function DisplayDashboard() {
         </div>
       </header>
 
-      {/* ── Headline KPI tiles ── */}
-      <div className="cc-kpis tv-kpis">
-        {kpiTiles.map((x) => (
-          <Kpi
-            key={x.key}
-            icon={KPI_ICON[x.key]}
-            tone={`t-${x.tone}`}
-            value={x.value}
-            display={x.display ?? (x.value == null && !x.loading ? 'N/A' : undefined)}
-            loading={x.loading}
-            danger={x.danger}
-            to={x.to}
-            label={<>{x.label}<span className="tv-kpi-sub">{x.sub}</span></>}
-          />
-        ))}
+      {/* ── Headline KPI tiles (label, big value, sub line; mockup order) ── */}
+      <div className="tv-kpis">
+        {kpiTiles.map((x) => {
+          const Icon = KPI_ICON[x.key]
+          const val = x.loading ? '...' : (x.display ?? (x.value == null ? 'N/A' : x.value.toLocaleString('en-US')))
+          return (
+            <button key={x.key} type="button" className="cc-card tv-kpi" onClick={() => navigate(x.to)}>
+              <span className={`tv-kpi-icon t-${x.tone}`}><Icon size={26} aria-hidden="true" /></span>
+              <span className="tv-kpi-body">
+                <span className="tv-kpi-label">{x.label}</span>
+                <b className="tv-kpi-val" style={x.danger ? { color: 'var(--cc-red)' } : undefined}>{val}</b>
+                <span className="tv-kpi-sub">{x.sub}</span>
+              </span>
+            </button>
+          )
+        })}
       </div>
 
-      {/* ── Fleet by site + operations summary + live alerts ── */}
+      {/* ── Live fleet map + operations summary + live alerts ── */}
       <div className="tv-grid-top">
-        <Card
-          className="tv-map"
-          title="Fleet by Site"
-          sub="No live GPS positions are recorded, so vehicles are placed by their registered site."
-          action={<ViewAll to="/fleet-master" label="Open fleet" />}
-        >
-          <CardState
-            state={{ loading: !fleet.loaded && !fleet.error, data: fleet.loaded ? fleet.rows : null, error: fleet.error, retry: load }}
-            empty={fleet.loaded && !fleet.error && !fleet.rows.length ? 'No vehicles are registered yet. Add assets in Fleet Master.' : null}
-          >
-            <div className="tv-map-body">
-              <div className="tv-status-legend">
-                {statusLegend.map((s) => (
-                  <span key={s.label}><i style={{ background: s.color }} aria-hidden="true" />{s.label} ({s.count.toLocaleString('en-US')})</span>
+        <section className="cc-card tv-map" aria-label="Live Fleet Map">
+          <div className="tv-card-head">
+            <h2 className="cc-card-title">Live Fleet Map</h2>
+            <div className="tv-map-legend">
+              {mapBoard.legend.map((l) => (
+                <span key={l.key}><i className={`tv-pin-dot is-${l.key}`} aria-hidden="true" />{l.label} ({l.count.toLocaleString('en-US')})</span>
+              ))}
+            </div>
+            <select className="tv-select" value={mapSite} onChange={(e) => setMapSite(e.target.value)} aria-label="Filter sites">
+              <option value="all">All Sites</option>
+              {mapBoard.sites.map((s) => <option key={s.site} value={s.site}>{s.site}</option>)}
+            </select>
+          </div>
+          <div className="tv-map-canvas">
+            <CardState
+              state={{ loading: !fleet.loaded && !fleet.error, data: fleet.loaded ? fleet.rows : null, error: fleet.error, retry: load }}
+              empty={fleet.loaded && !fleet.error && !fleet.rows.length ? <div className="tv-map-empty">No vehicles are registered yet. Add assets in Fleet Master to pin them to their sites.</div> : null}
+              lines={6}
+            >
+              <div className="tv-map-pins">
+                {mapSites.map((s) => (
+                  <button key={s.site} type="button" className={`tv-pin is-${s.tone}`} onClick={() => setMapSite(mapSite === s.site ? 'all' : s.site)}
+                    title={`${s.site}: ${s.vehicles} vehicles, ${s.workshop} in workshop, ${s.inspection} inspections today`}>
+                    <span className="tv-pin-count">{s.vehicles.toLocaleString('en-US')}</span>
+                    <span className="tv-pin-text">
+                      <b>{s.site}</b>
+                      <small>
+                        {s.alerts ? `${s.alerts} critical` : s.workshop ? `${s.workshop} in workshop` : s.inspection ? `${s.inspection} inspection` : `${s.active} active`}
+                      </small>
+                    </span>
+                  </button>
                 ))}
               </div>
-              <Donut
-                segments={siteSegments}
-                total={availability.total}
-                centerLabel="vehicles"
-              />
-            </div>
-          </CardState>
-        </Card>
+            </CardState>
+            <p className="tv-map-note">
+              <MapPin size={13} aria-hidden="true" /> No GPS positions are recorded yet, so each vehicle is pinned to its registered site.
+            </p>
+            <button type="button" className="tv-map-full" onClick={() => navigate('/fleet-master')}>
+              <Maximize2 size={14} aria-hidden="true" /> Open Fleet Register
+            </button>
+          </div>
+        </section>
 
-        <Card className="tv-ops" title="Operations Summary" sub={`This month and live, refreshed every ${REFRESH_SECS} seconds`}>
+        <section className="cc-card tv-ops" aria-label="Operations Summary">
+          <div className="tv-card-head">
+            <h2 className="cc-card-title">Operations Summary</h2>
+            <select className="tv-select" value={opsPeriod} onChange={(e) => setOpsPeriod(e.target.value)} aria-label="Operations period">
+              {OPS_PERIODS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+            </select>
+          </div>
           <div className="tv-ops-grid">
             <div className="tv-ops-tile">
-              <span className="cc-kpi-icon t-blue"><DollarSign size={19} aria-hidden="true" /></span>
+              <span className="tv-ops-icon t-green"><Factory size={20} aria-hidden="true" /></span>
               <div>
-                <span className="tv-ops-label">Tyre Spend ({clock.month})</span>
+                <span className="tv-ops-label">Production (approved m3)</span>
+                {!production.loaded && !production.error ? <b className="tv-ops-val">...</b>
+                  : production.error ? <b className="tv-ops-val tv-ops-none">N/A</b>
+                  : prod.m3 == null ? <b className="tv-ops-val tv-ops-none">Not recorded</b>
+                  : <b className="tv-ops-val">{prod.m3.toLocaleString('en-US')} m3</b>}
+                <small>{production.error ? 'Could not read production logs' : prod.m3 == null ? `No approved loads ${opsRange.label.toLowerCase()}` : `${prod.loads.toLocaleString('en-US')} approved loads`}</small>
+              </div>
+              <MiniBars values={prod.series} tone="green" />
+            </div>
+            <div className="tv-ops-tile">
+              <span className="tv-ops-icon t-blue"><DollarSign size={20} aria-hidden="true" /></span>
+              <div>
+                <span className="tv-ops-label">Tyre Spend</span>
                 {!monthTyres.loaded && !monthTyres.error ? <b className="tv-ops-val">...</b>
-                  : monthTyres.error ? <b className="tv-ops-val">N/A</b>
-                  : spend.lines.length === 0 ? <b className="tv-ops-val tv-ops-none">No priced tyres yet</b>
-                  : spend.lines.map((l) => <b key={l.country} className="tv-ops-val">{money(l.amount, l.currency)}</b>)}
+                  : monthTyres.error ? <b className="tv-ops-val tv-ops-none">N/A</b>
+                  : opsSpend.lines.length === 0 ? <b className="tv-ops-val tv-ops-none">No priced tyres</b>
+                  : opsSpend.lines.map((l) => <b key={l.country} className="tv-ops-val">{money(l.amount, l.currency)}</b>)}
                 <small>{monthTyres.error ? 'Could not read tyre records' : 'Priced tyre records, per country currency'}</small>
               </div>
+              <MiniBars values={spendSeries} tone="blue" />
             </div>
             <div className="tv-ops-tile">
-              <span className="cc-kpi-icon t-red"><Clock size={19} aria-hidden="true" /></span>
-              <div>
-                <span className="tv-ops-label">Delayed Jobs</span>
-                <b className="tv-ops-val">{!workOrders.loaded && !workOrders.error ? '...' : workOrders.error ? 'N/A' : woBoard.overdue.toLocaleString('en-US')}</b>
-                <small>Open job cards past their target date</small>
-              </div>
-            </div>
-            <div className="tv-ops-tile">
-              <span className="cc-kpi-icon t-orange"><Repeat size={19} aria-hidden="true" /></span>
-              <div>
-                <span className="tv-ops-label">Tyre Replacements</span>
-                <b className="tv-ops-val">{!replacements.loaded && !replacements.error ? '...' : replacements.error ? 'N/A' : replBoard.recent.toLocaleString('en-US')}</b>
-                <small>Tyres removed in the last {replBoard.windowDays} days</small>
-              </div>
-            </div>
-            <div className="tv-ops-tile">
-              <span className="cc-kpi-icon t-purple"><Fuel size={19} aria-hidden="true" /></span>
+              <span className="tv-ops-icon t-purple"><Fuel size={20} aria-hidden="true" /></span>
               <div>
                 <span className="tv-ops-label">Fuel Consumption</span>
                 <b className="tv-ops-val tv-ops-none">Not recorded</b>
                 <small>No fuel transactions are recorded yet</small>
               </div>
             </div>
+            <div className="tv-ops-tile">
+              <span className="tv-ops-icon t-red"><Clock size={20} aria-hidden="true" /></span>
+              <div>
+                <span className="tv-ops-label">Delayed Jobs</span>
+                <b className="tv-ops-val">{!workOrders.loaded && !workOrders.error ? '...' : workOrders.error ? 'N/A' : woBoard.overdue.toLocaleString('en-US')}</b>
+                <small>Open job cards past their target date</small>
+              </div>
+              <MiniBars values={jobSeries} tone="red" />
+            </div>
           </div>
-        </Card>
+        </section>
 
         <Card className="tv-alerts" title="Live Alerts" action={<ViewAll to="/alerts" />}>
           <CardState
@@ -924,9 +997,10 @@ export default function DisplayDashboard() {
                     {a.severity === 'Info' ? <Info size={13} /> : <AlertTriangle size={13} />}
                   </span>
                   <span className="tv-alert-msg" title={a.message}>{a.message}</span>
-                  <span className="tv-alert-asset">{a.asset}</span>
+                  <span className="tv-alert-asset">{a.asset || 'N/A'}</span>
+                  <span className="tv-alert-site">{a.site || 'N/A'}</span>
                   <span className="tv-alert-ago">{a.ago}</span>
-                  <span className={`cc-pill ${a.tone}`}>{a.severity}</span>
+                  <button type="button" className="cc-btn tv-alert-view" onClick={() => navigate('/alerts')}>View</button>
                 </li>
               ))}
             </ul>
@@ -943,19 +1017,19 @@ export default function DisplayDashboard() {
           >
             <KitTable
               compact
-              rows={jobRows}
+              rows={jobRows.slice(0, 5)}
               columns={[
                 { key: 'asset', header: 'Vehicle', cell: (r) => <span className="tv-strong"><Truck size={13} aria-hidden="true" /> {r.asset}</span> },
                 { key: 'type', header: 'Type' },
                 { key: 'site', header: 'Location', cell: (r) => r.site || <span className="cc-na">N/A</span> },
                 { key: 'status', header: 'Status', cell: (r) => <span className={`cc-pill ${r.tone}`}>{r.status}</span> },
-                { key: 'opened', header: 'Opened', cell: (r) => r.opened || <span className="cc-na">N/A</span> },
+                { key: 'opened', header: 'Last Update', cell: (r) => r.opened || <span className="cc-na">N/A</span> },
               ]}
             />
           </CardState>
         </Card>
 
-        <Card title="Display Rotation & Broadcast Controls"
+        <Card title="Display Rotation & Broadcast Controls" className="tv-rotation"
           sub={autoRotate ? `Rotating every ${ROTATE_SECS} seconds` : 'Rotation paused'}>
           <KitTable
             compact
@@ -964,7 +1038,7 @@ export default function DisplayDashboard() {
               { key: 'label', header: 'View', cell: (r) => <span className="tv-strong">{r.label}</span> },
               { key: 'duration', header: 'Duration' },
               { key: 'scope', header: 'Scope' },
-              { key: 'state', header: 'State', cell: (r) => <span className={`cc-pill ${r.live ? 'good' : r.on ? 'info' : 'muted'}`}>{r.state}</span> },
+              { key: 'state', header: 'State', cell: (r) => <span className="tv-state"><i className={`tv-state-dot ${r.live ? 'is-live' : r.on ? 'is-on' : 'is-off'}`} aria-hidden="true" />{r.state}</span> },
               {
                 key: 'actions', header: 'Actions', sortable: false,
                 cell: (r) => (
@@ -983,28 +1057,34 @@ export default function DisplayDashboard() {
           />
         </Card>
 
-        <Card title="TV Wall Management" sub="Shared board links open on any screen without signing in"
-          action={<button type="button" className="cc-btn" onClick={() => navigate('/report-sharing')}>Add Screen</button>}>
+        <section className="cc-card" aria-label="TV Wall Management">
+          <div className="tv-card-head">
+            <h2 className="cc-card-title"><Monitor size={18} aria-hidden="true" /> TV Wall Management</h2>
+            <button type="button" className="cc-btn" onClick={() => navigate('/report-sharing')}>Add Screen</button>
+          </div>
           <CardState
             state={screens}
             empty={screens.data && !screens.data.length ? (
-              <div>No TV screens set up yet.<br />
+              <div>No TV screens set up yet. Shared board links open on any screen without signing in.<br />
                 <button type="button" className="cc-btn" onClick={() => navigate('/report-sharing')}>Create a shared board</button>
               </div>
             ) : null}
             lines={3}
           >
             <div className="tv-screens">
-              {screenList.map((s) => (
+              {screenList.slice(0, 3).map((s) => (
                 <div key={s.id} className="tv-screen">
                   <div className="tv-screen-head">
                     <b title={s.name}>{s.name}</b>
-                    <span className={`cc-pill ${s.tone}`}>{s.status}</span>
+                    <span className={`tv-online ${s.tone === 'good' ? 'is-on' : ''}`}><i aria-hidden="true" />{s.tone === 'good' ? 'Online' : s.status}</span>
                   </div>
                   <span className="tv-muted">{s.boards} boards : {s.views.toLocaleString('en-US')} views : {s.lastViewed}</span>
-                  <a className="cc-btn tv-screen-open" href={buildShareUrl(s.token)} target="_blank" rel="noopener noreferrer">
-                    Open <ExternalLink size={12} aria-hidden="true" />
-                  </a>
+                  <div className="tv-screen-row">
+                    <span className="tv-screen-thumb" aria-hidden="true"><i /><i /><i /><i /></span>
+                    <a className="cc-btn tv-screen-open" href={buildShareUrl(s.token)} target="_blank" rel="noopener noreferrer">
+                      Open <ExternalLink size={12} aria-hidden="true" />
+                    </a>
+                  </div>
                 </div>
               ))}
               <button type="button" className="tv-screen tv-screen-add" onClick={() => navigate('/report-sharing')}>
@@ -1014,7 +1094,7 @@ export default function DisplayDashboard() {
               </button>
             </div>
           </CardState>
-        </Card>
+        </section>
       </div>
 
       {/* ── Rotating boards ── */}

@@ -107,3 +107,54 @@ describe('displayDashboardView', () => {
     expect(clockParts(NOW).date).toMatch(/Oct 2026/)
   })
 })
+
+import {
+  opsPeriodRange, opsLoadStart, spendByCurrency, dailySeries, productionSummary, siteBoard,
+} from '../lib/displayDashboardView'
+
+describe('operations summary period (fix round)', () => {
+  const now = new Date(2026, 9, 5, 12, 0)
+  it('builds local-calendar windows', () => {
+    expect(opsPeriodRange('today', now)).toMatchObject({ from: '2026-10-05', to: '2026-10-05', days: 1 })
+    expect(opsPeriodRange('7d', now)).toMatchObject({ from: '2026-09-29', to: '2026-10-05', days: 7 })
+    expect(opsPeriodRange('mtd', now)).toMatchObject({ from: '2026-10-01', days: 5 })
+    expect(opsLoadStart(now)).toBe('2026-09-29')
+  })
+  it('keeps spend per currency inside the window and never blends', () => {
+    const r = spendByCurrency([
+      { issue_date: '2026-10-05', cost_per_tyre: 100, qty: 2, country: 'KSA' },
+      { issue_date: '2026-10-04', cost_per_tyre: 50, country: 'UAE' },
+      { issue_date: '2026-09-01', cost_per_tyre: 999, country: 'KSA' },
+      { issue_date: '2026-10-05', cost_per_tyre: null, country: 'KSA' },
+    ], opsPeriodRange('7d', now))
+    expect(r.lines).toEqual([
+      { country: 'KSA', currency: 'SAR', amount: 200, tyres: 2 },
+      { country: 'UAE', currency: 'AED', amount: 50, tyres: 1 },
+    ])
+  })
+  it('zero-fills a daily series', () => {
+    const s = dailySeries([{ d: '2026-10-03' }, { d: '2026-10-03' }, { d: '2026-01-01' }], opsPeriodRange('7d', now), 'd')
+    expect(s).toEqual([0, 0, 0, 0, 2, 0, 0])
+  })
+  it('counts approved m3 only and reports null when nothing approved', () => {
+    const range = opsPeriodRange('today', now)
+    expect(productionSummary([{ period_date: '2026-10-05', approved_m3: null }], range).m3).toBeNull()
+    expect(productionSummary([{ period_date: '2026-10-05', approved_m3: 12 }, { period_date: '2026-10-05', approved_m3: 8 }], range))
+      .toMatchObject({ m3: 20, loads: 2 })
+  })
+})
+
+describe('siteBoard', () => {
+  it('pins vehicles to sites with activity tone and legend counts', () => {
+    const b = siteBoard({
+      fleet: [{ site: 'NHC', status: 'Active' }, { site: 'NHC', status: 'Inactive' }, { site: 'JED' }],
+      jobs: [{ site: 'JED' }],
+      inspectionsToday: [],
+      alerts: [{ severity: 'Critical', site: 'NHC' }, { severity: 'High', site: 'JED' }],
+    })
+    expect(b.sites.map((s) => [s.site, s.vehicles, s.tone])).toEqual([['NHC', 2, 'alert'], ['JED', 1, 'workshop']])
+    expect(b.legend.find((l) => l.key === 'active').count).toBe(2)
+    expect(b.legend.find((l) => l.key === 'inactive').count).toBe(1)
+    expect(b.legend.find((l) => l.key === 'alert').count).toBe(1)
+  })
+})

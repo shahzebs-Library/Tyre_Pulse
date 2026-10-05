@@ -18,7 +18,7 @@
  */
 import { supabase, unwrap, applyCountry, fetchAllPages, isMissingRelation, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
-import { listTechnicians } from './workshopLive'
+import { listTechnicians, EVENT_COLS as LIVE_EVENT_COLS, WO_COLS as LIVE_WO_COLS } from './workshopLive'
 
 export const EVENT_COLS =
   'id,user_id,job_id,task_id,asset_no,event_type,reason_code,site,country,at'
@@ -137,4 +137,87 @@ export function distinctSites(events, jobs, shifts) {
     }
   }
   return [...set].sort((a, b) => a.localeCompare(b))
+}
+
+// ── Workshop Live Control date range ─────────────────────────────────────────
+
+/** Events past this many rows in one range are not read; the page says so. */
+export const RANGE_EVENT_MAX = 50000
+/** Completed job cards past this many rows in one range are not read. */
+export const RANGE_JOB_MAX = 20000
+
+/** Local-midnight ISO instant for a YYYY-MM-DD key (the live board's day edge). */
+function localMidnightIso(key, addDays = 0) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key || '').slice(0, 10))
+  if (!m) return null
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + addDays).toISOString()
+}
+
+/**
+ * Raw rows for the Workshop Live measured strip over a LOCAL [from,to] day range:
+ *   - events          tech_activity_events with `at` inside the range (paged, id tiebreak)
+ *   - completedJobs   work_orders completed inside the range (paged, id tiebreak)
+ *   - shifts          the roster for those days (to rebuild each day's duty window)
+ * The technician roster is NOT re-read: the page passes the live board's roster
+ * so the range and the live view measure the same people. Day edges are LOCAL
+ * midnight, matching the live board's "today". Each read []-degrades when its
+ * relation is missing; a real error throws a sanitised ServiceError.
+ *
+ * @param {{ from:string, to:string, site?:string, country?:string }} opts
+ * @returns {Promise<{ events:object[], completedJobs:object[], shifts:object[],
+ *   eventsTruncated:boolean, jobsTruncated:boolean }>}
+ */
+export async function loadRangeActivity({ from, to, site, country } = {}) {
+  const lo = localMidnightIso(from)
+  const hi = localMidnightIso(to, 1)
+  if (!lo || !hi) return { events: [], completedJobs: [], shifts: [], eventsTruncated: false, jobsTruncated: false }
+
+  const readEvents = async () => {
+    const pageFn = (pFrom, pTo) => {
+      let q = supabase.from('tech_activity_events').select(LIVE_EVENT_COLS).gte('at', lo).lt('at', hi)
+      q = applyCountry(q, country)
+      if (site && site !== 'All') q = q.eq('site', site)
+      return q.order('at', { ascending: true }).order('id', { ascending: true }).range(pFrom, pTo)
+    }
+    try {
+      const { data, error, truncated } = await fetchAllPages(pageFn, { pageSize: 1000, max: RANGE_EVENT_MAX })
+      if (error) throw new ServiceError(toUserMessage(error), error.code, error)
+      return { rows: data || [], truncated: !!truncated }
+    } catch (err) {
+      if (isMissingRelation(err)) return { rows: [], truncated: false }
+      throw err
+    }
+  }
+
+  const readCompleted = async () => {
+    const pageFn = (pFrom, pTo) => {
+      let q = supabase.from('work_orders').select(LIVE_WO_COLS)
+        .in('status', ['Completed', 'completed'])
+        .gte('completed_at', lo).lt('completed_at', hi)
+      q = applyCountry(q, country)
+      if (site && site !== 'All') q = q.eq('site', site)
+      return q.order('completed_at', { ascending: false }).order('id', { ascending: true }).range(pFrom, pTo)
+    }
+    try {
+      const { data, error, truncated } = await fetchAllPages(pageFn, { pageSize: 1000, max: RANGE_JOB_MAX })
+      if (error) throw new ServiceError(toUserMessage(error), error.code, error)
+      return { rows: data || [], truncated: !!truncated }
+    } catch (err) {
+      if (isMissingRelation(err)) return { rows: [], truncated: false }
+      throw err
+    }
+  }
+
+  const [ev, jobs, shifts] = await Promise.all([
+    readEvents(),
+    readCompleted(),
+    loadShifts({ from, to, site, country }).catch(() => []),
+  ])
+  return {
+    events: ev.rows,
+    completedJobs: jobs.rows,
+    shifts,
+    eventsTruncated: ev.truncated,
+    jobsTruncated: jobs.truncated,
+  }
 }

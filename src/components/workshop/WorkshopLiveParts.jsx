@@ -319,7 +319,9 @@ export function JobCard({
 
 const PRI_TONE = { high: TONE_COLOR.red, medium: TONE_COLOR.amber, low: TONE_COLOR.grey }
 
-export function DelayPanel({ delays, bare = false }) {
+export function DelayPanel({ delays, bare = false, period = null }) {
+  // `period` names the measured window ("1 to 5 Oct 2026"); null means today.
+  const when = period ? `in ${period}` : 'today'
   const totals = useMemo(() => delayTotals(delays), [delays])
   const option = useMemo(() => {
     const rows = [...delays].reverse() // ECharts hbar renders bottom-up
@@ -366,7 +368,7 @@ export function DelayPanel({ delays, bare = false }) {
     return (
       <div className={bare ? 'p-6 text-center' : 'card p-6 text-center'}>
         <Timer className="w-8 h-8 mx-auto mb-2 opacity-40" aria-hidden="true" />
-        <div className="text-sm text-white font-medium">No blocked time recorded today</div>
+        <div className="text-sm text-white font-medium">No blocked time recorded {when}</div>
         <div className="text-xs text-muted mt-1">Delay causes appear here as technicians log waiting time.</div>
       </div>
     )
@@ -375,7 +377,7 @@ export function DelayPanel({ delays, bare = false }) {
     <div className={bare ? '' : 'card p-4'}>
       {!bare && <h3 className="text-sm font-semibold text-white mb-1">Delay and Root Cause</h3>}
       <p className="text-[11px] text-muted mb-3">
-        Hours lost to blocked time, by cause (today): {totals.hours}h across {totals.causes} cause{totals.causes === 1 ? '' : 's'},
+        Hours lost to blocked time, by cause ({period || 'today'}): {totals.hours}h across {totals.causes} cause{totals.causes === 1 ? '' : 's'},
         {' '}cost impact {totals.cost == null ? 'N/A' : totals.cost.toLocaleString()}.
       </p>
       <div style={{ height: Math.max(160, delays.length * 42) }}>
@@ -388,8 +390,8 @@ export function DelayPanel({ delays, bare = false }) {
           getRowId={(d) => String(d.reason)}
           initialPageSize={25}
           searchPlaceholder="Search causes..."
-          emptyMessage="No blocked time recorded today"
-          exportFileName={reportFileName('Workshop Delay Causes')}
+          emptyMessage={`No blocked time recorded ${when}`}
+          exportFileName={reportFileName('Workshop Delay Causes', period || 'Today')}
           reportMeta={{ title: 'Workshop Delay and Root Cause' }}
         />
       </div>

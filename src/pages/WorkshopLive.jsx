@@ -15,9 +15,17 @@
  *
  * Live updates: a Supabase postgres_changes subscription triggers a debounced
  * reload; a 60s poll is the fallback (paused while the tab is hidden, with a
- * catch-up refresh on return). The board is a TODAY view by design, so there
- * is no date range and no trend arrow: the engine holds no previous period to
- * compare against, and a trend is only drawn when it can be computed.
+ * catch-up refresh on return).
+ *
+ * Date range: the header From/To (quick picks Today / Yesterday / Last 7 days /
+ * This month) drives ONLY the measured figures (completed jobs, productive /
+ * lost / overtime hours, utilisation, delay causes). The live surfaces
+ * (technician status, current job, live alerts, open job flow, open and overdue
+ * cards, the headline tiles) stay on the current moment and are labelled "Now".
+ * Past days are read once per range via `loadRangeActivity` and rolled up per
+ * local day by `computeRangeMeasures` (workshopAnalytics.js), which reuses the
+ * live buildBoard / computeKpis / delayBreakdown; today always comes from the
+ * live board itself, so a range of Today equals the live figures exactly.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -32,8 +40,13 @@ import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import * as workshop from '../lib/api/workshopLive'
 import { loadWorkshopConfig } from '../lib/api/workshopConfig'
+import { loadRangeActivity } from '../lib/api/workshopAnalytics'
 import {
-  buildBoard, computeKpis, deriveAlerts, delayBreakdown, STATUS, STATUS_META,
+  RANGE_PRESETS, rangePreset, matchPreset, normalizeRange, rangeLabel,
+  localDayKey, localDayStart, buildRangeDays, computeRangeMeasures,
+} from '../lib/workshopAnalytics'
+import {
+  buildBoard, computeKpis, deriveAlerts, STATUS, STATUS_META,
 } from '../lib/workshopLive'
 import { taskRollup, jobTaskSummary, qcOutcome } from '../lib/workshopTasks'
 import { Card, CardState, Kpi, Tabs } from '../components/commandCenter/kit'
@@ -50,7 +63,7 @@ import {
 } from '../lib/workshopLiveAnalytics'
 import {
   jobFlowCounts, jobFlowStage, alertRows, alertLevelCounts, initials, techJobLine,
-  BOARD_CHIPS, chipCounts, todayLabel,
+  BOARD_CHIPS, chipCounts,
 } from '../lib/workshopLiveView'
 import { reportFileName } from '../lib/exportUtils'
 import './WorkshopLive.css'
@@ -84,21 +97,26 @@ function buildKpiDefs(kpis) {
 }
 // Headline tiles (mockup order) and the secondary strip.
 const HEADLINE = [
-  { key: 'onDuty', tone: 't-green', sub: 'Technicians today' },
-  { key: 'working', tone: 't-blue', sub: 'On an active job' },
-  { key: 'available', tone: 't-purple', sub: 'Ready to assign' },
-  { key: 'waitingParts', tone: 't-amber', sub: 'Technicians blocked on parts' },
-  { key: 'vehiclesOffRoad', tone: 't-red', sub: 'Vehicles off road' },
+  { key: 'onDuty', tone: 't-green', sub: 'Now: technicians on shift' },
+  { key: 'working', tone: 't-blue', sub: 'Now: on an active job' },
+  { key: 'available', tone: 't-purple', sub: 'Now: ready to assign' },
+  { key: 'waitingParts', tone: 't-amber', sub: 'Now: blocked on parts' },
+  { key: 'vehiclesOffRoad', tone: 't-red', sub: 'Now: vehicles off road' },
 ]
-const STRIP = ['openJobs', 'overdueJobs', 'jobsCompletedToday', 'utilization', 'productiveHours', 'lostHours', 'overtimeHours']
-const STRIP_FMT = {
-  utilization: (v) => v, // already formatted by pct()
-  productiveHours: (v) => `${v}h`, lostHours: (v) => `${v}h`, overtimeHours: (v) => `${v}h`,
-}
-const STRIP_TITLE = {
-  utilization: 'Average productive share of available duty time today (technicians with a measurable shift)',
-  lostHours: 'Blocked plus unassigned time today',
-  overtimeHours: 'Productive or blocked time past the shift end',
+// "Now" items stay on the current moment; the measured items follow the range.
+const STRIP_NOW = ['openJobs', 'overdueJobs']
+const STRIP_RANGE = [
+  { key: 'completed', label: 'Completed', title: 'Job cards completed in the chosen dates (by completion time)' },
+  { key: 'utilization', label: 'Utilisation', title: 'Average productive share of available duty time per technician-day (technician-days with a measurable shift)' },
+  { key: 'productiveHours', label: 'Productive hrs', title: 'Time on an active job in the chosen dates' },
+  { key: 'lostHours', label: 'Lost hrs', title: 'Blocked plus unassigned duty time in the chosen dates' },
+  { key: 'overtimeHours', label: 'Overtime', title: 'Productive or blocked time past the shift end in the chosen dates' },
+]
+function fmtMeasure(key, v) {
+  if (v == null) return 'N/A'
+  if (key === 'utilization') return pct(v)
+  if (key === 'completed') return String(v)
+  return `${v}h`
 }
 
 // ── Technician tile ──────────────────────────────────────────────────────────
@@ -168,6 +186,13 @@ export default function WorkshopLive() {
   const [boardChip, setBoardChip] = useState('all')   // technician status chip
   const [stage, setStage] = useState(null)            // Job Flow stage filter
   const [showKanban, setShowKanban] = useState(false) // full job board toggle
+  // Measured-figures window. A quick pick is stored by key so "Today" keeps
+  // meaning today after midnight; a custom pick is stored as dates.
+  const [rangeSel, setRangeSel] = useState({ preset: 'today' })
+  const [past, setPast] = useState(null)               // rows for the days before today
+  const [pastError, setPastError] = useState(null)
+  const [pastNonce, setPastNonce] = useState(0)        // bumps to retry the past read
+  const pastLoadId = useRef(0)
   const metaLoaded = useRef(false)                    // skills + config loaded once
 
   const reloadTimer = useRef(null)
@@ -251,6 +276,44 @@ export default function WorkshopLive() {
   // ── Engine derivation (all maths here, not recomputed by hand) ─────────────
   const todayStart = useMemo(() => { const d = new Date(nowTs); d.setHours(0, 0, 0, 0); return d.getTime() }, [nowTs])
 
+  // ── Date range (measured figures only) ─────────────────────────────────────
+  const todayKey = localDayKey(nowTs)
+  const range = useMemo(
+    () => (rangeSel.preset ? rangePreset(rangeSel.preset, nowTs) : normalizeRange(rangeSel, nowTs)),
+    // todayKey (not nowTs) so the range only moves when the calendar day does.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rangeSel, todayKey],
+  )
+  const activePreset = rangeSel.preset || matchPreset(range, nowTs)
+  const rangeName = useMemo(() => rangeLabel(range.from, range.to), [range])
+  const includesToday = range.to === todayKey
+  // Days before today are read once per range; today always comes from the live board.
+  const pastTo = useMemo(() => {
+    if (range.from >= todayKey) return null
+    if (range.to < todayKey) return range.to
+    const d = new Date(localDayStart(todayKey)); d.setDate(d.getDate() - 1)
+    return localDayKey(d)
+  }, [range, todayKey])
+
+  useEffect(() => {
+    if (!pastTo) { setPast(null); setPastError(null); return undefined }
+    const request = ++pastLoadId.current
+    setPastError(null)
+    loadRangeActivity({ from: range.from, to: pastTo, country: activeCountry })
+      .then((rows) => {
+        if (!mounted.current || request !== pastLoadId.current) return
+        setPast({ ...rows, from: range.from, to: pastTo })
+      })
+      .catch((e) => {
+        if (!mounted.current || request !== pastLoadId.current) return
+        setPast(null)
+        setPastError(toUserMessage(e, 'Could not load the figures for these dates.'))
+      })
+    return undefined
+  }, [range.from, pastTo, activeCountry, pastNonce])
+
+  const pastReady = !pastTo || (past && past.from === range.from && past.to === pastTo)
+
   const board = useMemo(() => {
     if (!raw) return []
     return buildBoard(raw.technicians, raw.eventsByUser, {
@@ -266,7 +329,47 @@ export default function WorkshopLive() {
     () => deriveAlerts(board, raw?.jobs || [], { now: nowTs, assignments: raw?.assignments || [], presentByUser: raw?.presentByUser || {}, thresholds: cfg?.thresholds }),
     [board, raw, nowTs, cfg],
   )
-  const delays = useMemo(() => delayBreakdown(board, { jobs: raw?.jobs || [], labourRate: cfg?.labourRate }), [board, raw, cfg])
+  // Measured figures for the chosen dates: past days from the range read, today
+  // from the live board's own inputs (so Today equals the live figures exactly).
+  const measures = useMemo(() => {
+    if (!raw || !pastReady) return null
+    const days = past && pastTo
+      ? buildRangeDays({ technicians: raw.technicians, events: past.events, shifts: past.shifts, from: range.from, to: pastTo, now: nowTs })
+      : []
+    if (includesToday) {
+      days.push({
+        day: todayKey, now: nowTs,
+        eventsByUser: raw.eventsByUser || {},
+        shiftByUser: raw.shiftByUser || {},
+        presentByUser: raw.presentByUser || {},
+      })
+    }
+    const seen = new Set()
+    const completedJobs = [...(past?.completedJobs || []), ...(includesToday ? raw.jobs || [] : [])]
+      .filter((j) => (j?.id == null || seen.has(j.id) ? false : (seen.add(j.id), true)))
+    return computeRangeMeasures({
+      technicians: raw.technicians,
+      days,
+      completedJobs,
+      from: range.from,
+      to: range.to,
+      now: nowTs,
+      labourRate: cfg?.labourRate,
+      rateJobs: raw.jobs || [],
+      site: siteFilter,
+    })
+  }, [raw, past, pastReady, pastTo, range, includesToday, todayKey, nowTs, cfg, siteFilter])
+  const delays = measures?.delays || []
+  const rangeTruncated = !!(past?.eventsTruncated || past?.jobsTruncated)
+
+  const pickPreset = (key) => setRangeSel({ preset: key })
+  const pickDate = (edge, value) => {
+    if (!value) return
+    setRangeSel((cur) => {
+      const base = cur.preset ? rangePreset(cur.preset, nowTs) : cur
+      return { preset: null, ...normalizeRange({ ...base, [edge]: value }, nowTs) }
+    })
+  }
 
   const kpiDefs = useMemo(() => buildKpiDefs(kpis), [kpis])
 
@@ -507,6 +610,7 @@ export default function WorkshopLive() {
   const emptyJobs = (raw?.jobs || []).length === 0
   const activeLabel = filter ? defByKey[filter.key]?.label : null
   const stageLabel = stage ? flow.stages.find((s) => s.key === stage)?.label : null
+  const rangeIsToday = range.from === todayKey && range.to === todayKey
 
   return (
     <div className="cc wl-page">
@@ -522,9 +626,38 @@ export default function WorkshopLive() {
           <p>Real-time technician productivity, job flow, blocked work and vehicle-off-road status.</p>
         </div>
         <div className="wl-head-actions">
-          <span className="wl-date" title="A live board: every figure covers today, so there is no date range to choose">
-            <CalendarDays size={14} aria-hidden="true" /> {todayLabel(nowTs)}
-          </span>
+          <div className="wl-range" role="group" aria-label="Dates for the measured figures">
+            <span className="wl-range-icon" aria-hidden="true"><CalendarDays size={14} /></span>
+            <label className="wl-range-field">
+              <input
+                type="date"
+                value={range.from}
+                max={range.to}
+                onChange={(e) => pickDate('from', e.target.value)}
+                aria-label="From date"
+              />
+            </label>
+            <span className="wl-range-sep" aria-hidden="true">to</span>
+            <label className="wl-range-field">
+              <input
+                type="date"
+                value={range.to}
+                min={range.from}
+                max={todayKey}
+                onChange={(e) => pickDate('to', e.target.value)}
+                aria-label="To date"
+              />
+            </label>
+          </div>
+          <select
+            className="cc-select wl-range-pick"
+            value={activePreset || 'custom'}
+            onChange={(e) => { if (e.target.value !== 'custom') pickPreset(e.target.value) }}
+            aria-label="Quick date range"
+          >
+            {RANGE_PRESETS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+            {!activePreset && <option value="custom">Custom dates</option>}
+          </select>
           <select className="cc-select" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Filter by site" disabled={siteOptions.length <= 1}>
             {siteOptions.map((s) => <option key={s} value={s}>{s === 'All' ? 'All sites' : s}</option>)}
           </select>
@@ -568,19 +701,50 @@ export default function WorkshopLive() {
             })}
           </div>
 
-          {/* Secondary productivity strip */}
+          {/* Secondary strip: "Now" job figures + measured figures for the chosen dates */}
           <section className="cc-card wl-strip" aria-label="Job and productivity figures">
-            {STRIP.map((k) => {
-              const d = defByKey[k]
-              const fmt = STRIP_FMT[k]
-              const shown = firstLoad ? '...' : (fmt ? fmt(d.value) : d.value)
-              const clickable = d.scope != null
-              const on = filter?.key === k
-              const body = <><span>{d.label}</span><b className={k === 'overdueJobs' && d.value > 0 ? 'is-bad' : ''}>{shown}</b></>
-              return clickable
-                ? <button key={k} type="button" className="wl-strip-item" aria-pressed={on} onClick={() => toggleFilter(d)} title="Click to filter the job cards">{body}</button>
-                : <div key={k} className="wl-strip-item" title={STRIP_TITLE[k]}>{body}</div>
-            })}
+            <div className="wl-strip-group wl-strip-now">
+              <span className="wl-strip-tag" title="Live: these follow the current moment, not the chosen dates">Now</span>
+              {STRIP_NOW.map((k) => {
+                const d = defByKey[k]
+                const on = filter?.key === k
+                return (
+                  <button key={k} type="button" className="wl-strip-item" aria-pressed={on} onClick={() => toggleFilter(d)} title="Click to filter the job cards">
+                    <span>{d.label}</span>
+                    <b className={k === 'overdueJobs' && d.value > 0 ? 'is-bad' : ''}>{firstLoad ? '...' : d.value}</b>
+                  </button>
+                )
+              })}
+            </div>
+            <div className="wl-strip-group wl-strip-range">
+              <span className="wl-strip-tag is-range" title="Measured over the dates chosen in the header">{rangeName}</span>
+              {STRIP_RANGE.map((m) => {
+                const pending = firstLoad || (!measures && !pastError)
+                const value = measures ? measures[m.key] : null
+                const shown = pending ? '...' : (pastError ? 'N/A' : fmtMeasure(m.key, value))
+                // Completed opens the board's Completed column, which only holds today's jobs.
+                const clickable = m.key === 'completed' && rangeIsToday
+                const on = clickable && filter?.key === 'jobsCompletedToday'
+                const body = <><span>{m.label}</span><b>{shown}</b></>
+                return clickable
+                  ? <button key={m.key} type="button" className="wl-strip-item" aria-pressed={on} onClick={() => toggleFilter(defByKey.jobsCompletedToday)} title={`${m.title}. Click to show them on the job board.`}>{body}</button>
+                  : <div key={m.key} className="wl-strip-item" title={m.title}>{body}</div>
+              })}
+            </div>
+            {(pastError || (measures && !measures.hasActivity) || rangeTruncated) && (
+              <p className={`wl-strip-note${pastError ? ' is-err' : ''}`} role={pastError ? 'alert' : 'status'}>
+                {pastError ? (
+                  <>
+                    {pastError}{' '}
+                    <button type="button" className="cc-link cc-link-btn" onClick={() => setPastNonce((n) => n + 1)}>Retry</button>
+                  </>
+                ) : rangeTruncated ? (
+                  `${rangeName} holds more activity than one read covers, so these figures are a partial count. Choose fewer dates for a complete figure.`
+                ) : (
+                  `No technician activity recorded in ${rangeName}${siteFilter !== 'All' ? ` at ${siteFilter}` : ''}, so hours and utilisation are not measurable.`
+                )}
+              </p>
+            )}
           </section>
 
           {/* Toolbar: search, refresh, exports, TV */}
@@ -621,7 +785,7 @@ export default function WorkshopLive() {
           <div className="wl-main">
             <Card
               title="Technician Board"
-              sub={`Live status by technician. ${firstLoad ? '' : `${filteredBoard.length} of ${board.length} shown.`}`}
+              sub={<><span className="wl-now-tag">Now</span> Live status by technician. {firstLoad ? '' : `${filteredBoard.length} of ${board.length} shown.`}</>}
               className="wl-board"
             >
               <Tabs
@@ -655,7 +819,7 @@ export default function WorkshopLive() {
 
             <Card
               title={<span className="wl-alert-title"><Bell size={15} aria-hidden="true" /> Live Alerts</span>}
-              sub={firstLoad ? 'Requires supervisor attention' : `${alerts.length} need attention: ${levels.critical} critical, ${levels.warning} warning, ${levels.info} info`}
+              sub={<><span className="wl-now-tag">Now</span> {firstLoad ? 'Requires supervisor attention' : `${alerts.length} need attention: ${levels.critical} critical, ${levels.warning} warning, ${levels.info} info`}</>}
               className="wl-alerts"
             >
               <CardState
@@ -683,7 +847,7 @@ export default function WorkshopLive() {
           {/* Job Flow + full kanban */}
           <Card
             title="Job Flow"
-            sub={firstLoad ? 'Open workshop work by stage' : `${flow.open} open job cards by stage${flow.other ? `. ${flow.other} with a status outside these stages.` : '.'} Click a stage to open it on the board.`}
+            sub={<><span className="wl-now-tag">Now</span> {firstLoad ? 'Open workshop work by stage' : `${flow.open} open job cards by stage${flow.other ? `. ${flow.other} with a status outside these stages.` : '.'} Click a stage to open it on the board.`}</>}
             action={(
               <button type="button" className="cc-btn-ghost" aria-expanded={showKanban} onClick={() => setShowKanban((v) => !v)}>
                 <Kanban size={14} aria-hidden="true" /> {showKanban ? 'Hide job board' : 'Show job board'}
@@ -769,10 +933,21 @@ export default function WorkshopLive() {
           {/* Delay and root cause (lost hours and their cost) */}
           <Card
             title={<span className="wl-alert-title"><Timer size={15} aria-hidden="true" /> Delay and root cause</span>}
-            sub="Blocked time today by cause, with the responsible team, cost impact and suggested action"
+            sub={`Blocked time in ${rangeName} by cause, with the responsible team, cost impact and suggested action`}
           >
             <CardState state={pageState} lines={3}>
-              <DelayPanel delays={delays} bare />
+              {pastError ? (
+                <p className="wl-strip-note is-err" role="alert">
+                  {pastError}{' '}
+                  <button type="button" className="cc-link cc-link-btn" onClick={() => setPastNonce((n) => n + 1)}>Retry</button>
+                </p>
+              ) : !measures ? (
+                <p className="wl-muted" aria-live="polite">Loading delay causes for {rangeName}...</p>
+              ) : !measures.hasActivity ? (
+                <p className="wl-muted">No technician activity recorded in {rangeName}, so there is no blocked time to break down.</p>
+              ) : (
+                <DelayPanel delays={delays} bare period={rangeIsToday ? null : rangeName} />
+              )}
             </CardState>
           </Card>
         </>

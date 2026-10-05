@@ -21,7 +21,7 @@ import {
   FileSpreadsheet, FileText, Plus, Pencil, Trash2, RefreshCw, Loader2, ShieldCheck, Send, Scale, UserCheck, Milestone, X,
 } from 'lucide-react'
 import Modal from '../components/ui/Modal'
-import { Card, CardState, Kpi, KitTable, Tabs, VehicleThumb, fmtInt, useCard } from '../components/commandCenter/kit'
+import { Card, CardState, Kpi, KitTable, Tabs, VehicleThumb, ViewAll, fmtInt, useCard } from '../components/commandCenter/kit'
 import { useSettings } from '../contexts/SettingsContext'
 import { listLoadPlans, createLoadPlan, updateLoadPlan, deleteLoadPlan } from '../lib/api/loadPlans'
 import { listAssets } from '../lib/api/assets'
@@ -39,9 +39,10 @@ import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation } from '../lib/api/_client'
 import './LoadPlanning.css'
 
-// Reused artwork (the mockup header is a plain dark texture, no photo to crop).
-const HERO_DARK = '/dashboard/hero-combinations-dark.webp'
-const HERO_LIGHT = '/dashboard/hero-combinations-light.webp'
+// Header art cropped from the owner's Load Planning mockup (its green terrain
+// texture, clear of the title text), with a lighter grade for the light theme.
+const HERO_DARK = '/dashboard/hero-load-dark.webp'
+const HERO_LIGHT = '/dashboard/hero-load-light.webp'
 
 const EMPTY_FORM = {
   reference: '', asset_no: '', origin: '', destination: '', plan_date: '',
@@ -71,6 +72,38 @@ function TonnageBars({ days }) {
             {ch > 0 && <rect x={x} y={H - ch} width={w} height={ch} rx="2" className="lp-bar-cap" />}
             {ph > 0 && <rect x={x + w * 0.2} y={H - ph} width={w * 0.6} height={ph} rx="2" className={d.capacity != null && d.planned > d.capacity ? 'lp-bar-over' : 'lp-bar-plan'} />}
             <text x={x + w / 2} y={H + 13} textAnchor="middle" className="cc-axis">{d.label}</text>
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
+/** Chart frame that keeps the axes visible and lays an honest note over an empty chart. */
+function ChartFrame({ empty, children }) {
+  return (
+    <div className="lp-chart-wrap">
+      {children}
+      {empty && <div className="lp-chart-empty"><span>{empty}</span></div>}
+    </div>
+  )
+}
+
+/** Plans per capacity band as columns (within / near / over / no rated capacity). */
+function BandColumns({ bands, active, onPick }) {
+  const max = Math.max(1, ...bands.map((b) => b.count))
+  const W = 300; const H = 120; const bw = W / bands.length
+  return (
+    <svg viewBox={`0 0 ${W} ${H + 30}`} className="lp-svg" role="img" aria-label={bands.map((b) => `${b.label} ${b.count}`).join(', ')}>
+      {[0.25, 0.5, 0.75, 1].map((f) => <line key={f} x1="0" x2={W} y1={H - H * f} y2={H - H * f} className="lp-gridline" />)}
+      {bands.map((b, i) => {
+        const x = i * bw + bw * 0.25; const w = bw * 0.5
+        const h = (b.count / max) * H
+        return (
+          <g key={b.key} className={`lp-band-col${active === b.key ? ' is-active' : ''}`} onClick={() => onPick(b.key)} role="presentation">
+            {h > 0 && <rect x={x} y={H - h} width={w} height={h} rx="2" style={{ fill: b.color }} />}
+            <text x={x + w / 2} y={H - h - 4} textAnchor="middle" className="cc-axis">{b.count}</text>
+            <text x={x + w / 2} y={H + 13} textAnchor="middle" className="cc-axis">{b.short}</text>
           </g>
         )
       })}
@@ -387,22 +420,30 @@ export default function LoadPlanning() {
         </Card>
 
         <Card className="lp-routes" title="Route and load overview" sub="Origin to destination legs on the plans in this window.">
-          <CardState state={plansState} lines={5} empty={known && legs.length === 0 ? 'No routes on load plans yet. A route appears once a plan records an origin and destination.' : null}>
-            <ol className="lp-legs">
-              {legs.map((l) => (
-                <li key={`${l.origin}|${l.destination}`}>
-                  <span className="lp-leg-dot" aria-hidden="true" />
-                  <span className="lp-leg-text"><b>{l.origin}</b> <Milestone size={12} aria-hidden="true" /> <b>{l.destination}</b></span>
-                  <span className="lp-leg-count">{fmtInt(l.plans)} plan{l.plans === 1 ? '' : 's'}</span>
-                  {l.over > 0 && <Pill tone="bad">{l.over} over</Pill>}
-                </li>
-              ))}
-            </ol>
-            <p className="lp-foot">The route map is not drawn: sites and load plans carry no coordinates, distances or route geometry.</p>
+          <CardState state={plansState} lines={5}>
+            <div className="lp-map">
+              <div className="lp-map-legend" aria-label="Route legend">
+                <span><i className="lp-lg-route" />Planned route</span>
+                <span><i className="lp-lg-risk" />Over payload leg</span>
+              </div>
+              <div className="lp-map-note"><MapPin size={22} aria-hidden="true" /><span>Map view is not connected yet. {legs.length ? `${legs.length} route leg${legs.length === 1 ? '' : 's'} listed below.` : 'No route legs on load plans yet. A leg appears once a plan records an origin and destination.'}</span></div>
+            </div>
+            {legs.length > 0 && (
+              <ol className="lp-legs">
+                {legs.map((l) => (
+                  <li key={`${l.origin}|${l.destination}`}>
+                    <span className={`lp-leg-dot${l.over > 0 ? ' is-risk' : ''}`} aria-hidden="true" />
+                    <span className="lp-leg-text"><b>{l.origin}</b> <Milestone size={12} aria-hidden="true" /> <b>{l.destination}</b></span>
+                    <span className="lp-leg-count">{fmtInt(l.plans)} plan{l.plans === 1 ? '' : 's'}</span>
+                    {l.over > 0 && <Pill tone="bad">{l.over} over</Pill>}
+                  </li>
+                ))}
+              </ol>
+            )}
           </CardState>
         </Card>
 
-        <Card className="lp-constraints" title="Load constraints and compliance">
+        <Card className="lp-constraints" title="Load constraints and compliance" action={<ViewAll label="View all" onClick={() => { setTab('risk'); document.getElementById('lp-register')?.scrollIntoView({ behavior: 'smooth' }) }} />}>
           <CardState state={plansState} lines={4}>
             <div className="lp-cons-grid">
               {constraints.map((c) => {
@@ -433,36 +474,38 @@ export default function LoadPlanning() {
           </CardState>
         </Card>
 
-        <Card className="lp-week" title="Fleet utilisation by tonnage" sub="Planned load vs rated payload, last 7 days by plan date.">
-          <CardState state={plansState} lines={4} empty={known && !weekHasData ? 'No plan in the last 7 days records a cargo weight or rated payload.' : null}>
-            <div className="lp-legend"><span><i className="lp-sw lp-sw-plan" />Planned load</span><span><i className="lp-sw lp-sw-cap" />Rated payload</span><span><i className="lp-sw lp-sw-over" />Over payload</span></div>
-            <TonnageBars days={week} />
-          </CardState>
-        </Card>
+        <div className="lp-charts">
+          <Card className="lp-week" title="Fleet utilisation (by tonnage)" sub="Planned load vs rated payload, last 7 days.">
+            <CardState state={plansState} lines={4}>
+              <div className="lp-legend"><span><i className="lp-sw lp-sw-plan" />Planned load</span><span><i className="lp-sw lp-sw-cap" />Rated payload</span><span><i className="lp-sw lp-sw-over" />Over payload</span></div>
+              <ChartFrame empty={known && !weekHasData ? 'No plan in the last 7 days records a cargo weight or rated payload.' : null}>
+                <TonnageBars days={week} />
+              </ChartFrame>
+            </CardState>
+          </Card>
 
-        <Card className="lp-bands" title="Load band distribution" sub="Peak of weight and volume against rated capacity.">
-          <CardState state={plansState} lines={4} empty={known && bandTotal === 0 ? 'No load plans in this window.' : null}>
-            <div className="lp-band-list">
-              {bands.map((b) => (
-                <button key={b.key} type="button" className="lp-band" aria-pressed={filters.band === b.key} onClick={() => setF('band', filters.band === b.key ? '' : b.key)}>
-                  <span className="lp-band-label">{b.label}</span>
-                  <span className="cc-bar-track"><i style={{ width: `${bandTotal ? (b.count / bandTotal) * 100 : 0}%`, background: b.color }} /></span>
-                  <b>{fmtInt(b.count)}</b>
-                </button>
-              ))}
-            </div>
-            <p className="lp-foot">Axle by axle weights are not recorded on load plans, so loads are judged against the vehicle payload as a whole.</p>
-          </CardState>
-        </Card>
+          <Card className="lp-bands" title="Load distribution" sub="Plans by peak of weight and volume against rated capacity.">
+            <CardState state={plansState} lines={4}>
+              <div className="lp-legend"><span><i className="lp-sw lp-sw-plan" />Within limit</span><span><i className="lp-sw lp-sw-near" />Near limit</span><span><i className="lp-sw lp-sw-over" />Over limit</span></div>
+              <ChartFrame empty={known && bandTotal === 0 ? 'No load plans in this window.' : null}>
+                <BandColumns bands={bands} active={filters.band} onPick={(k) => setF('band', filters.band === k ? '' : k)} />
+              </ChartFrame>
+              <p className="lp-foot">Axle by axle weights are not recorded on load plans, so loads are judged against the whole vehicle payload. Click a column to filter the register.</p>
+            </CardState>
+          </Card>
 
-        <Card className="lp-outlook" title="Planned capacity, next 14 days" sub="Mean weight utilisation of open plans per day.">
-          <CardState state={plansState} lines={4} empty={known && !outlookHasData ? 'No open plan in the next 14 days records a rated payload.' : null}>
-            <OutlookLine days={outlook} />
-            <p className="lp-foot">The dashed line is 100% of rated payload. Daily fleet availability is not recorded, so only planned utilisation is drawn.</p>
-          </CardState>
-        </Card>
+          <Card className="lp-outlook" title="Planned capacity (next 14 days)" sub="Mean weight utilisation of open plans per day.">
+            <CardState state={plansState} lines={4}>
+              <div className="lp-legend"><span><i className="lp-sw lp-sw-line" />Planned utilisation</span><span><i className="lp-sw lp-sw-limit" />100% of payload</span></div>
+              <ChartFrame empty={known && !outlookHasData ? 'No open plan in the next 14 days records a rated payload.' : null}>
+                <OutlookLine days={outlook} />
+              </ChartFrame>
+              <p className="lp-foot">Daily fleet availability is not recorded, so only planned utilisation is drawn.</p>
+            </CardState>
+          </Card>
+        </div>
 
-        <section className="cc-card lp-register" aria-label="Planned loads">
+        <section className="cc-card lp-register" id="lp-register" aria-label="Planned loads">
           <div className="lp-reg-head">
             <h2 className="cc-card-title">Planned loads ({known ? fmtInt(filtered.length) : 'N/A'})</h2>
             <Tabs

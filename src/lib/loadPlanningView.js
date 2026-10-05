@@ -149,10 +149,10 @@ export function bandDistribution(plans = []) {
   const counts = { ok: 0, near: 0, overloaded: 0, unmeasured: 0 }
   for (const p of Array.isArray(plans) ? plans : []) counts[loadBand(p)] += 1
   return [
-    { key: 'ok', label: 'Within limit', count: counts.ok, color: 'var(--cc-green)' },
-    { key: 'near', label: 'Near limit', count: counts.near, color: 'var(--cc-amber)' },
-    { key: 'overloaded', label: 'Over limit', count: counts.overloaded, color: 'var(--cc-red)' },
-    { key: 'unmeasured', label: 'No rated capacity', count: counts.unmeasured, color: 'var(--cc-track)' },
+    { key: 'ok', label: 'Within limit', short: 'Within', count: counts.ok, color: 'var(--cc-green)' },
+    { key: 'near', label: 'Near limit', short: 'Near', count: counts.near, color: 'var(--cc-amber)' },
+    { key: 'overloaded', label: 'Over limit', short: 'Over', count: counts.overloaded, color: 'var(--cc-red)' },
+    { key: 'unmeasured', label: 'No rated capacity', short: 'No rating', count: counts.unmeasured, color: 'var(--cc-ink-3)' },
   ]
 }
 

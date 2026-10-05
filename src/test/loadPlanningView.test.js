@@ -52,6 +52,7 @@ describe('loadPlanningView', () => {
 
   it('distributes bands', () => {
     expect(bandDistribution(PLANS).map((b) => b.count)).toEqual([1, 1, 1, 1])
+    expect(bandDistribution(PLANS).map((b) => b.short)).toEqual(['Within', 'Near', 'Over', 'No rating'])
   })
 
   it('builds the week and the 14 day outlook without inventing zeros', () => {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   inPeriod, applyListingExtras, listingOptions, stockState, awardedValue, headlineTiles,
-  moneyLines, sourcingFunnel, ageLabel, recentRfqs, compareListings, listingDetailFields,
+  moneyLines, sourcingFunnel, quotedCount, ageLabel, recentRfqs, compareListings, listingDetailFields,
   supplierProfile, samePriceBook, NOT_RECORDED,
 } from '../lib/supplierMarketplaceView'
 
@@ -57,8 +57,11 @@ describe('supplierMarketplaceView', () => {
 
   it('builds the funnel only from recorded stages', () => {
     const f = sourcingFunnel(R)
-    expect(f.map((s) => s.count)).toEqual([4, 2, 3, 2])
-    expect(f[1].pct).toBe(50)
+    expect(f.map((s) => s.count)).toEqual([4, null, 2, null, 2])
+    expect(f[2].pct).toBe(50)
+    expect(f[1].recorded).toBe(false)
+    expect(f[1].pct).toBeNull()
+    expect(quotedCount(R)).toBe(3)
     expect(sourcingFunnel([])[0].pct).toBeNull()
   })
 

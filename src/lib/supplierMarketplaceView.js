@@ -167,23 +167,32 @@ export function moneyLines(values = []) {
 }
 
 /**
- * Sourcing funnel built only from stages the RFQ register records:
- * created -> responses received -> quote recorded -> awarded.
- * Supplier invitations and shortlists have no column, so they are not drawn.
+ * Sourcing funnel in the mockup's five stages:
+ * created -> suppliers invited -> responses received -> shortlisted -> awarded.
+ * The register records created, responses and awarded. Invitations and
+ * shortlists have no column, so those two stages carry `recorded: false` and a
+ * null count (drawn as "Not recorded", never as 0). `quoted` is kept as extra
+ * detail for the caption.
  */
 export function sourcingFunnel(rfqs = []) {
   const R = Array.isArray(rfqs) ? rfqs : []
   const created = R.length
   const responded = R.filter((r) => (toFiniteNumber(r?.responses_count) || 0) > 0).length
-  const quoted = R.filter((r) => toFiniteNumber(r?.best_quote) != null).length
   const awarded = R.filter((r) => statusOf(r) === 'awarded').length
-  const pct = (n) => (created ? Math.round((n / created) * 100) : null)
+  const pct = (n) => (created && n != null ? Math.round((n / created) * 100) : null)
+  const stage = (key, label, count, tone, width) => ({ key, label, count, pct: pct(count), tone, width, recorded: count != null })
   return [
-    { key: 'created', label: 'RFQs created', count: created, pct: pct(created), tone: 'green' },
-    { key: 'responded', label: 'Responses received', count: responded, pct: pct(responded), tone: 'amber' },
-    { key: 'quoted', label: 'Best quote recorded', count: quoted, pct: pct(quoted), tone: 'orange' },
-    { key: 'awarded', label: 'Supplier awarded', count: awarded, pct: pct(awarded), tone: 'red' },
+    stage('created', 'RFQs created', created, 'green', 100),
+    stage('invited', 'Suppliers invited', null, 'green2', 93),
+    stage('responded', 'Responses received', responded, 'amber', 86),
+    stage('shortlisted', 'Quotes shortlisted', null, 'orange', 82),
+    stage('awarded', 'Suppliers awarded', awarded, 'red', 78),
   ]
+}
+
+/** RFQs with a best quote recorded (shown under the funnel). */
+export function quotedCount(rfqs = []) {
+  return (Array.isArray(rfqs) ? rfqs : []).filter((r) => toFiniteNumber(r?.best_quote) != null).length
 }
 
 /** "Today", "1 day ago", "5 days ago", "2 weeks ago", or a date. */

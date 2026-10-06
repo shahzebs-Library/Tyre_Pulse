@@ -137,7 +137,8 @@ export function InspectionDemo() {
     return () => window.clearTimeout(t);
   }, [running, step]);
 
-  const pick = useCallback((i: number) => { setStep(i); setPaused(false); }, []);
+  /** Choosing a step is an explicit "carry on": it clears both the pause and the hover/focus hold. */
+  const pick = useCallback((i: number) => { setStep(i); setPaused(false); setHeld(false); }, []);
   /** Exploring a tyre stops the tour so the visitor is not pulled away mid-look. */
   const choose = useCallback((id: string) => { setSel(id); setPaused(true); }, []);
   const current = STEPS[step];

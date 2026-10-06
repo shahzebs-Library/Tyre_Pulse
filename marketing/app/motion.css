@@ -369,10 +369,13 @@
 .idemo-n { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.25); }
 .idemo-steps button.is-on .idemo-n { background: var(--brand); color: #161616; border-color: var(--brand); }
 .idemo-timer { position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: var(--brand); transform-origin: left; animation: idemo-timer linear both; }
+.idemo-toggle { grid-column: 2; justify-self: start; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border: 1px solid rgba(255,255,255,.25); border-radius: 22px; background: transparent; color: inherit; font: inherit; font-size: .9rem; cursor: pointer; }
+.idemo-toggle:hover { background: rgba(255,255,255,.06); }
 @keyframes idemo-timer { from { transform: scaleX(0); } }
 @media (max-width: 860px) {
   .idemo { grid-template-columns: minmax(0, 1fr); }
   .idemo-phone { width: 240px; }
+  .idemo-toggle { grid-column: 1; }
   .idemo-steps button { padding: 10px 12px; }
   .idemo-steps b + span { display: none; }
   .idemo-steps button.is-on b + span { display: block; }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, CheckCircle2, CloudUpload, PenLine, QrCode, ScanLine, Wrench } from "lucide-react";
+import { Camera, CheckCircle2, CloudUpload, Pause, PenLine, Play, QrCode, ScanLine, Wrench } from "lucide-react";
 
 /**
  * A short, silent product scene: one walk-round inspection on the phone,
@@ -10,7 +10,9 @@ import { Camera, CheckCircle2, CloudUpload, PenLine, QrCode, ScanLine, Wrench } 
  * Drawn in HTML and CSS (no video file), so it is sharp at every size, weighs
  * a few kilobytes and stays readable by assistive technology. It plays only
  * while on screen and while the tab is visible. Reduced motion never
- * auto-advances: the steps stay as buttons the visitor can press.
+ * auto-advances: the steps stay as buttons the visitor can press. It also
+ * holds while the pointer or keyboard focus is inside it, and a visible
+ * Pause control stops it for touch users (WCAG 2.2.2).
  * Every value is illustrative sample data and the scene says so.
  */
 const STEPS = [
@@ -35,6 +37,9 @@ const WHEELS = [
 export function InspectionDemo() {
   const [step, setStep] = useState(0);
   const [auto, setAuto] = useState(false);
+  const [held, setHeld] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const running = auto && !held && !paused;
   const rootRef = useRef<HTMLDivElement>(null);
 
   // Auto-play only when on screen, the tab is visible and motion is welcome.
@@ -52,16 +57,24 @@ export function InspectionDemo() {
   }, []);
 
   useEffect(() => {
-    if (!auto) return;
+    if (!running) return;
     const t = window.setTimeout(() => setStep((s) => (s + 1) % STEPS.length), STEP_MS);
     return () => window.clearTimeout(t);
-  }, [auto, step]);
+  }, [running, step]);
 
   const pick = useCallback((i: number) => setStep(i), []);
   const current = STEPS[step];
 
   return (
-    <div className="idemo" ref={rootRef} data-step={current.id}>
+    <div
+      className="idemo"
+      ref={rootRef}
+      data-step={current.id}
+      onPointerEnter={(e) => { if (e.pointerType === "mouse") setHeld(true); }}
+      onPointerLeave={(e) => { if (e.pointerType === "mouse") setHeld(false); }}
+      onFocus={() => setHeld(true)}
+      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setHeld(false); }}
+    >
       <figure className="phone idemo-phone" aria-label={`Sample inspection on the mobile app, step ${step + 1} of ${STEPS.length}: ${current.title}`}>
         <div className="phone-status" aria-hidden="true"><span>07:42</span><span className="notch" /><span>{current.id === "sync" ? "5G" : "No signal"}</span></div>
         <div className="phone-screen idemo-screen" aria-hidden="true">
@@ -114,12 +127,18 @@ export function InspectionDemo() {
               <button type="button" className={i === step ? "is-on" : ""} aria-current={i === step ? "step" : undefined} onClick={() => pick(i)}>
                 <span className="idemo-n" aria-hidden="true"><Icon size={18} /></span>
                 <span><b>{s.title}</b><span>{s.text}</span></span>
-                {i === step && auto && <i className="idemo-timer" style={{ animationDuration: `${STEP_MS}ms` }} aria-hidden="true" />}
+                {i === step && running && <i className="idemo-timer" style={{ animationDuration: `${STEP_MS}ms` }} aria-hidden="true" />}
               </button>
             </li>
           );
         })}
       </ol>
+      {auto && (
+        <button type="button" className="idemo-toggle" aria-pressed={paused} onClick={() => setPaused((p) => !p)}>
+          {paused ? <Play size={14} aria-hidden="true" /> : <Pause size={14} aria-hidden="true" />}
+          {paused ? "Play the walk-through" : "Pause the walk-through"}
+        </button>
+      )}
     </div>
   );
 }

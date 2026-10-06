@@ -10,7 +10,7 @@ const PASSPORT = [
   { asset: "PT-118", pos: "LHF1", from: "Jun 2025", km: "18,900 km", note: "First fitment" },
 ] as const;
 
-/** Pressure on the leaking wheel at its last readings, from TPMS uploads and inspections (psi). */
+/** Live TPMS pressure on the leaking wheel over the last 6 hours, via the telematics connection (psi). */
 const PSI = [118, 117, 116, 112, 107, 101, 94];
 /** Tread forecast per tyre: mm now, weeks until 3 mm. */
 const FORECAST = [
@@ -35,8 +35,8 @@ function PsiLine() {
   const top = (v: number) => ((hi - v) / (hi - lo)) * 100;
   const left = (i: number) => 3 + i * (94 / (PSI.length - 1));
   return (
-    <figure className="idemo-chart" aria-label="Pressure on LHR1 at its last 7 readings, falling from 118 to 94 psi, alert level 105 psi">
-      <figcaption><span>LHR1 pressure, last 7 readings</span><b>94 psi</b><em className="warn">Falling at every reading</em></figcaption>
+    <figure className="idemo-chart" aria-label="Live TPMS pressure on LHR1 over the last 6 hours, falling from 118 to 94 psi, alert level 105 psi">
+      <figcaption><span>LHR1 live pressure, last 6 hours</span><b>94 psi</b><em className="warn">Slow leak detected</em></figcaption>
       <div className="idemo-line" aria-hidden="true">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none">
           <line x1="0" x2="100" y1={top(lim)} y2={top(lim)} className="limit" vectorEffect="non-scaling-stroke" />
@@ -68,7 +68,8 @@ function Phone({ step, sel }: SceneProps) {
         </div>
       </Pane>
       <Pane on={step === "tpms"}>
-        <div className="idemo-asset"><b>MX-214 · pressure check</b><span>Readings saved per wheel</span></div>
+        <Notice title="TPMS alert" body="MX-214 LHR1 at 94 psi, losing pressure" when="now" />
+        <div className="idemo-asset"><b>MX-214 · live TPMS</b><span>Via telematics, every wheel</span></div>
         <div className="idemo-reading bad"><b>LHR1</b><span>94 psi · 19% low</span><em>Flagged</em></div>
         <div className="idemo-reading good"><b>RHR1</b><span>117 psi</span><em>Normal</em></div>
       </Pane>
@@ -165,13 +166,13 @@ export const tyreIntel: Scenario = {
   id: "tyres",
   label: "Tyre intelligence",
   icon: Radar,
-  pitch: "RFID tags, TPMS readings and every inspection feed one tyre record, so you know which tyre fails next and which brand is worth the money.",
+  pitch: "RFID tags, live TPMS through your telematics connection and every inspection feed one tyre record, so you know which tyre fails next and which brand is worth the money.",
   appTitle: "Tyres",
   site: "Riyadh",
   defaultSel: "lhr1",
   steps: [
     { id: "rfid", icon: Nfc, title: "Read the RFID tag", text: "One read opens the tyre's passport: every vehicle, wheel and km it has run.", url: "app.tyrepulse.app/tyre-passport/DX-4471-208", nav: "Tyres" },
-    { id: "tpms", icon: Activity, title: "Pressure flags the leak", text: "Readings from TPMS sensor uploads and inspections are compared wheel by wheel, so a tyre losing pressure is flagged before it fails.", url: "app.tyrepulse.app/tpms", nav: "Tyres", bell: true },
+    { id: "tpms", icon: Activity, title: "Live TPMS catches the leak", text: "TPMS pressure arrives live through your telematics connection. A tyre losing pressure raises an alert to the tyre team before it fails.", url: "app.tyrepulse.app/tpms", nav: "Tyres", bell: true },
     { id: "predict", icon: TrendingDown, title: "Forecast the removal", text: "Tread trend predicts when each tyre reaches its limit. Click a tyre to see its date.", url: "app.tyrepulse.app/predictive-maintenance", nav: "Tyres" },
     { id: "anomaly", icon: AlertOctagon, title: "Anomalies flagged", text: "Meter rollbacks, duplicate expenses and odd pressures are found for you. Click one.", url: "app.tyrepulse.app/ops-intelligence", nav: "Overview", bell: true },
     { id: "value", icon: BadgeDollarSign, title: "Buy the right brand", text: "Cost per km by brand and fleet tyre health show where the money and the risk are.", url: "app.tyrepulse.app/cpk-intelligence", nav: "Costs" },

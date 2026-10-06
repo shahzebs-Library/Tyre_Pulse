@@ -16,7 +16,9 @@ import { tyreIntel } from "./tyreIntel";
  *
  * Module tabs on top; the tour plays every step of a module and then moves to
  * the next module. Wheels, rows, bars and teams are tappable: exploring pauses
- * the tour, choosing a step or a module resumes it.
+ * the tour, choosing a step or a module resumes it. Hover and focus do not
+ * hold the tour: that made the Play button read as broken. The Pause button
+ * is the one stop control (WCAG 2.2.2).
  *
  * HTML, CSS and real photos only. Plays only on screen with the tab visible;
  * reduced motion never auto-advances; a visible Pause control stops it
@@ -36,21 +38,29 @@ export function Walkthrough({ only, initial }: { only?: ScenarioId[]; initial?: 
   const list = only ? SCENARIOS.filter((s) => only.includes(s.id as ScenarioId)) : SCENARIOS;
   const [mi, setMi] = useState(() => Math.max(0, list.findIndex((s) => s.id === initial)));
   const [step, setStep] = useState(0);
-  const [auto, setAuto] = useState(false);
-  const [held, setHeld] = useState(false);
+  const [inView, setInView] = useState(false);
   const [paused, setPaused] = useState(false);
+  // Reduced motion: the tour starts paused and only the explicit Play control starts it.
+  const [reduced, setReduced] = useState(false);
   const mod = list[mi];
   const [sel, setSel] = useState(mod.defaultSel ?? "");
-  const running = auto && !held && !paused;
+  const running = inView && !paused;
   const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const apply = () => { setReduced(mq.matches); if (mq.matches) setPaused(true); };
+    const r = requestAnimationFrame(apply);
+    mq.addEventListener("change", apply);
+    return () => { cancelAnimationFrame(r); mq.removeEventListener("change", apply); };
+  }, []);
 
   useEffect(() => {
     const el = rootRef.current;
     if (!el) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    if (!("IntersectionObserver" in window)) return;
+    if (!("IntersectionObserver" in window)) { const r = requestAnimationFrame(() => setInView(true)); return () => cancelAnimationFrame(r); }
     let onScreen = false;
-    const sync = () => setAuto(onScreen && !document.hidden);
+    const sync = () => setInView(onScreen && !document.hidden);
     const io = new IntersectionObserver(([e]) => { onScreen = e.isIntersecting; sync(); }, { threshold: 0.3 });
     io.observe(el);
     document.addEventListener("visibilitychange", sync);
@@ -68,11 +78,11 @@ export function Walkthrough({ only, initial }: { only?: ScenarioId[]; initial?: 
     return () => window.clearTimeout(t);
   }, [running, step, mi, mod, list]);
 
-  /** Choosing a module or a step is an explicit "carry on": it clears both the pause and the hover/focus hold. */
+  /** Choosing a module or a step is an explicit "carry on": it clears the pause (never under reduced motion). */
   const pickModule = useCallback((i: number) => {
-    setMi(i); setStep(0); setSel(list[i].defaultSel ?? ""); setPaused(false); setHeld(false);
-  }, [list]);
-  const pickStep = useCallback((i: number) => { setStep(i); setPaused(false); setHeld(false); }, []);
+    setMi(i); setStep(0); setSel(list[i].defaultSel ?? ""); if (!reduced) setPaused(false);
+  }, [list, reduced]);
+  const pickStep = useCallback((i: number) => { setStep(i); if (!reduced) setPaused(false); }, [reduced]);
   /** Exploring stops the tour so the visitor is not pulled away mid-look. */
   const choose = useCallback((id: string) => { setSel(id); setPaused(true); }, []);
 
@@ -87,10 +97,6 @@ export function Walkthrough({ only, initial }: { only?: ScenarioId[]; initial?: 
       ref={rootRef}
       data-module={mod.id}
       data-step={current.id}
-      onPointerEnter={(e) => { if (e.pointerType === "mouse") setHeld(true); }}
-      onPointerLeave={(e) => { if (e.pointerType === "mouse") setHeld(false); }}
-      onFocus={() => setHeld(true)}
-      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setHeld(false); }}
     >
       {list.length > 1 && (
         <div className="wt-mods" role="tablist" aria-label="Choose a module">
@@ -169,12 +175,11 @@ export function Walkthrough({ only, initial }: { only?: ScenarioId[]; initial?: 
         </figure>
       </div>
 
-      {auto && (
-        <button type="button" className="idemo-toggle" aria-pressed={paused} onClick={() => { setPaused((p) => !p); setHeld(false); }}>
-          {paused ? <Play size={14} aria-hidden="true" /> : <Pause size={14} aria-hidden="true" />}
-          {paused ? "Play the walk-through" : "Pause the walk-through"}
-        </button>
-      )}
+      {/* The label follows the pause choice, not viewport visibility, so the control is never a dead button. */}
+      <button type="button" className="idemo-toggle" aria-pressed={paused} onClick={() => setPaused((p) => !p)}>
+        {paused ? <Play size={14} aria-hidden="true" /> : <Pause size={14} aria-hidden="true" />}
+        {paused ? "Play the walk-through" : "Pause the walk-through"}
+      </button>
     </div>
   );
 }

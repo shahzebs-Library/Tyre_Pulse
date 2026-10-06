@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
-  ArrowRight, BarChart3, Box, Camera, CheckCircle2, CircleDot, ClipboardCheck, CloudUpload, FileSignature,
-  Fuel, Gauge, ShieldCheck, Truck, Wrench, ClipboardList, PenLine, Settings, FileCheck2,
+  ArrowRight, BarChart3, Box, CheckCircle2, CircleDot, FileSignature,
+  Fuel, ShieldCheck, Truck, Wrench, ClipboardList, Settings, FileCheck2, Users, Monitor,
+  Smartphone, Tv,
 } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -11,12 +12,12 @@ import { Tabs } from "@/components/Tabs";
 import { HeroCarousel, type HeroSlide } from "@/components/HeroCarousel";
 import { Photo, type PhotoKey } from "@/components/art/Photos";
 import { CountUp } from "@/components/motion/CountUp";
-import { InspectionDemo } from "@/components/motion/InspectionDemo";
+import { Walkthrough } from "@/components/motion/walkthrough/Walkthrough";
+import { Donut, Heatmap } from "@/components/motion/walkthrough/charts";
 import { AssetCycle, LiveFeed, type LiveEvent } from "@/components/motion/HeroLive";
 import { Spotlight } from "@/components/motion/Spotlight";
 import {
-  ApprovalCard, AssetRecord, CompleteCard, FleetCostPanel, NewInspectionCard, OfflineInspectionPhone,
-  OpsOverview, PartsCard,
+  AssetRecord, FleetCostPanel, NewInspectionCard, OfflineInspectionPhone, OpsOverview,
 } from "@/components/mock/Screens";
 import { alternatesFor } from "./schema";
 import { OG_IMAGES } from "@/lib/site";
@@ -47,11 +48,31 @@ function TabCopy({ title, text, points, href }: { title: string; text: string; p
   );
 }
 
-const STEPS = [
-  { icon: ClipboardList, title: "Report and inspect", text: "Log issues, capture photos and record inspection results in the field.", card: <NewInspectionCard /> },
-  { icon: FileCheck2, title: "Review and approve", text: "Technically review, add work details and approve the job.", card: <ApprovalCard /> },
-  { icon: Wrench, title: "Repair and issue parts", text: "Complete the repair, issue parts from stores and record labour and costs.", card: <PartsCard /> },
-  { icon: FileSignature, title: "Verify and release", text: "Confirm work is complete, update records and return the asset to service.", card: <CompleteCard /> },
+/* What can open a job: every signal lands in the same queue. */
+const SIGNALS = [
+  "Driver reports a problem", "Inspection finds a defect", "Low pressure flagged", "Preventive service due",
+  "Anomaly flagged in the data", "Accident reported",
+];
+
+/* Sample downtime heatmap for the home page (hours, 8 weeks). */
+const DOWN_CITIES = ["Riyadh", "Jeddah", "Dammam", "Dubai", "Cairo"];
+const DOWN_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DOWN_HOURS = [
+  [41, 28, 22, 19, 24, 6, 9],
+  [33, 21, 18, 16, 20, 4, 7],
+  [18, 14, 11, 12, 15, 3, 5],
+  [12, 16, 10, 9, 13, 8, 4],
+  [15, 11, 9, 10, 8, 2, 6],
+];
+
+/* One job, start to finish: who owns each stage and what the platform does on its own. */
+const PIPELINE = [
+  { icon: ClipboardList, stage: "Detect", owner: "Driver or inspector", text: "Reported from the phone with photos, GPS and the meter reading, even offline.", auto: "Asset, site and history filled in from the QR or RFID tag", stat: "07:42", statLabel: "reported" },
+  { icon: FileCheck2, stage: "Triage and approve", owner: "Supervisor", text: "Severity set, defect confirmed, job raised and approved in one queue.", auto: "Priority from severity, machine stopped or not, and site", stat: "08:05", statLabel: "approved" },
+  { icon: Users, stage: "Assign", owner: "Workshop foreman", text: "The right technician picked by skill, who is free, workload and site.", auto: "Ranked suggestions, push notification to the technician", stat: "08:12", statLabel: "on the job" },
+  { icon: Box, stage: "Parts", owner: "Storekeeper", text: "Parts issued against the job card, or a purchase request sent for approval.", auto: "Stock by site, reorder level, job paused as waiting for parts", stat: "1 h 20", statLabel: "parts wait" },
+  { icon: Wrench, stage: "Repair", owner: "Technician", text: "Start, pause and finish on the phone. Labour, parts and outside work recorded.", auto: "Waiting time kept apart from repair time, cost rolls up", stat: "2 h 10", statLabel: "repair" },
+  { icon: FileSignature, stage: "Verify and learn", owner: "Supervisor and PMV manager", text: "Quality check, sign-off and release. The record feeds cost per km and root cause.", auto: "Repeat failures, tyre life and cost per km updated for the asset", stat: "14:40", statLabel: "back in service" },
 ];
 
 type Module = {
@@ -62,7 +83,7 @@ type Module = {
 /* Eight modules, eight bento cells: two photo tiles, one dark, one yellow, four plain. */
 const MODULES: Module[] = [
   { icon: Truck, title: "Fleet and asset lifecycle", text: "Track plant, machinery and vehicles from acquisition to disposal, with meters, documents and cost on one record.", href: "/platform/fleet-assets", photo: { name: "fleetLineup", position: "50% 60%" } },
-  { icon: CircleDot, title: "Tyre lifecycle", text: "Inspections, fitments, rotations and cost per kilometre or hour.", href: "/platform/inspections#tyres", photo: { name: "riyadh", position: "30% 88%" } },
+  { icon: CircleDot, title: "Tyre lifecycle", text: "Inspections, RFID passports, TPMS pressure, removal forecasts and cost per km by brand.", href: "/platform/inspections#tyres", photo: { name: "riyadh", position: "30% 88%" } },
   { icon: Settings, title: "Workshop and job cards", text: "Jobs, labour, parts and outside services in one queue.", href: "/platform/maintenance", tone: "dark" },
   { icon: Wrench, title: "Preventive maintenance", text: "Plans by hours, kilometres or date that keep assets compliant.", href: "/platform/maintenance" },
   { icon: Box, title: "Stores and procurement", text: "Inventory, purchases and suppliers across every site.", href: "/platform/inventory" },
@@ -93,22 +114,22 @@ const FAQ = [
 
 /* What the hero cards play through, one event at a time (sample data). */
 const OPS_EVENTS: LiveEvent[] = [
-  { icon: "inspect", text: "TM514 inspected at NHC", meta: "Ahmed K. · 07:42" },
+  { icon: "inspect", text: "MX-214 inspected in Riyadh", meta: "Ahmed K. · 07:42" },
   { icon: "tyre", text: "LHR1 sidewall cut flagged", meta: "Photo attached", tone: "bad" },
   { icon: "wrench", text: "WO-2026-0418 raised", meta: "Assigned to tyre bay", tone: "warn" },
   { icon: "check", text: "Purchase approved", meta: "SAR 1,240 · Fleet manager" },
-  { icon: "tyre", text: "New tyre fitted on LHR1", meta: "Serial YMA55312 · 38 min" },
-  { icon: "truck", text: "TM514 back in service", meta: "Down 1 h 12 min" },
+  { icon: "tyre", text: "New tyre fitted on LHR1", meta: "Serial DX-4471-208 · 38 min" },
+  { icon: "truck", text: "MX-214 back in service", meta: "Down 1 h 12 min" },
 ];
 const WORKSHOP_EVENTS: LiveEvent[] = [
-  { icon: "truck", text: "GN041 breakdown reported", meta: "Red Sea site · 06:10", tone: "bad" },
+  { icon: "truck", text: "GN-305 breakdown reported", meta: "Jeddah · 06:10", tone: "bad" },
   { icon: "wrench", text: "Job card opened", meta: "Technician: R. Ali", tone: "warn" },
   { icon: "gauge", text: "Parts issued from store", meta: "Fuel filter x2 · SAR 340" },
   { icon: "wrench", text: "Repair completed", meta: "Labour 2.5 h" },
   { icon: "check", text: "Supervisor signed off", meta: "Released to site" },
 ];
 const INSPECTION_EVENTS: LiveEvent[] = [
-  { icon: "inspect", text: "Checklist started offline", meta: "WL012 · no signal" },
+  { icon: "inspect", text: "Checklist started offline", meta: "WL-207 · no signal" },
   { icon: "gauge", text: "Meter read: 9,105 h", meta: "Saved on the phone" },
   { icon: "camera", text: "2 photos captured", meta: "Bucket teeth worn", tone: "warn" },
   { icon: "pen", text: "Inspector signed", meta: "S. Omar · 09:18" },
@@ -216,25 +237,54 @@ export default function HomePage() {
         <section className="dark-band" aria-labelledby="field-to-closed">
           <div className="site-shell">
             <h2 className="sec-h" id="field-to-closed">From a field issue to a closed job.</h2>
-            <ol className="flow">
-              {STEPS.map(({ icon: Icon, title, text, card }, i) => (
-                <li key={title}>
-                  <div className="flow-step">
-                    <span className="flow-n" aria-hidden="true">{i + 1}</span>
-                    <Icon size={26} aria-hidden="true" />
-                    <div><h3>{title}</h3><p>{text}</p></div>
-                  </div>
-                  {card}
+            <p className="dark-lead">Six kinds of signal open a job. Each stage has one owner, and the platform does the routine work in between, so a machine is back on site the same day.</p>
+            <div className="fx-signals" aria-label="What can open a job">
+              <span className="fx-signals-h">Opens a job</span>
+              <ul>{SIGNALS.map((x) => <li key={x}>{x}</li>)}</ul>
+            </div>
+            <ol className="fx-pipe">
+              {PIPELINE.map(({ icon: Icon, stage, owner, text, auto, stat, statLabel }, i) => (
+                <li key={stage}>
+                  <div className="fx-top"><span className="flow-n" aria-hidden="true">{i + 1}</span><Icon size={22} aria-hidden="true" /><b className="fx-stat">{stat}<small>{statLabel}</small></b></div>
+                  <h3>{stage}</h3>
+                  <span className="fx-owner">{owner}</span>
+                  <p>{text}</p>
+                  <p className="fx-auto"><Settings size={13} aria-hidden="true" /> {auto}</p>
                 </li>
               ))}
             </ol>
+            <figure className="fx-job" aria-label="Sample job on transit mixer MX-214, down 6 h 58 min from report to back in service: waiting to start 2 h 38, repair 2 h 10, waiting for parts 1 h 20, approve and assign 30 min, quality check 20 min">
+              <figcaption><span>One sample job · MX-214 · Riyadh</span><b>Down 6 h 58 min</b><em>Sample data</em></figcaption>
+              <div className="fx-charts">
+                <Donut size={132} center="6 h 58" sub="down" label="Where the downtime went, 6 h 58 min in total: waiting to start 2 h 38, repair 2 h 10, parts 1 h 20, approve and assign 30 min, quality check 20 min"
+                  slices={[
+                    { name: "Waiting to start", v: 158, tone: "ink2", label: "2 h 38" },
+                    { name: "Repair", v: 130, tone: "brand", label: "2 h 10" },
+                    { name: "Waiting for parts", v: 80, tone: "ink3", label: "1 h 20" },
+                    { name: "Approve and assign", v: 30, tone: "ink4", label: "30 min" },
+                    { name: "Quality check", v: 20, tone: "ink", label: "20 min" },
+                  ]} />
+                <div>
+                  <small className="fx-cap">Fleet downtime hours by city and weekday, last 8 weeks</small>
+                  <Heatmap rows={DOWN_CITIES} cols={DOWN_DAYS} data={DOWN_HOURS} unit=" h"
+                    label="Fleet downtime hours by city and weekday over 8 weeks. Highest: Riyadh on Sunday, 41 hours, and Jeddah on Sunday, 33 hours." />
+                </div>
+              </div>
+              <div className="fx-kpis">
+                <div><small>Repair share of downtime</small><b>31%</b></div>
+                <div><small>Biggest delay</small><b>Waiting to start</b></div>
+                <div><small>Cost booked to the asset</small><b>SAR 1,980</b></div>
+                <div><small>Fixed first time</small><b>Yes</b></div>
+              </div>
+            </figure>
           </div>
         </section>
 
         <section className="section-pad" aria-labelledby="people">
           <div className="site-shell">
             <h2 className="sec-h" id="people">Each role sees the work it owns.</h2>
-            <div className="people">
+            <p className="sec-lead">Seven roles, one record. Each person opens the app to their own queue, on the device they actually use, and nobody sees data from another country or site unless they are allowed to.</p>
+            <div className="people people-v2">
               <div className="people-art">
                 <Photo name="technicianPhone" position="40% 30%" />
                 <OfflineInspectionPhone />
@@ -242,23 +292,17 @@ export default function HomePage() {
               <Tabs
                 label="Roles"
                 className="role-tabs"
-                items={[
-                  { id: "tech", label: "Technician", panel: <RoleCopy title="Tools that work where you work." text="Capture inspections offline, add photos, take meter readings, record work and get signatures, even without a network connection." /> },
-                  { id: "store", label: "Storekeeper", panel: <RoleCopy title="Issue parts without the paperwork." text="See what each job needs, issue stock against the job card and keep reorder levels honest across every store." /> },
-                  { id: "sup", label: "Supervisor", panel: <RoleCopy title="See the day before it starts." text="Review defects, approve work, allocate technicians and follow every open job from one queue." /> },
-                  { id: "pmv", label: "PMV Manager", panel: <RoleCopy title="Availability and cost, asset by asset." text="Track availability, preventive compliance and spend across sites, and decide which assets to repair, replace or move." /> },
-                ]}
+                items={ROLES.map((r) => ({ id: r.id, label: r.label, panel: <RoleCopy {...r} /> }))}
               />
-              <div className="sig-standalone"><Photo name="signature" /></div>
             </div>
           </div>
         </section>
 
         <section className="bright-band" aria-labelledby="demo-walkround">
           <div className="site-shell">
-            <h2 className="sec-h" id="demo-walkround">Inspect on the phone, see it on the web the moment it syncs.</h2>
-            <p className="bright-lead">Follow one transit mixer through a walk-round: what the inspector does in the yard, and what the workshop sees in the office at the same step.</p>
-            <InspectionDemo />
+            <h2 className="sec-h" id="demo-walkround">See it work: the phone in the field, the web in the office.</h2>
+            <p className="bright-lead">Six short tours: tyre inspection, tyre intelligence with RFID, pressure and anomaly checks, breakdowns, accidents and claims, preventive maintenance, and cost per km. Pick one, or let it play. Tap the wheels, rows and bars to explore.</p>
+            <Walkthrough />
           </div>
         </section>
 
@@ -304,18 +348,59 @@ export default function HomePage() {
   );
 }
 
-function RoleCopy({ title, text }: { title: string; text: string }) {
-  const caps: [React.ComponentType<{ size?: number; "aria-hidden"?: boolean }>, string][] = [
-    [Camera, "Photos"], [Gauge, "Readings"], [PenLine, "Signatures"], [CloudUpload, "Offline sync"],
-  ];
+type Role = {
+  id: string; label: string; title: string; text: string;
+  screen: string[]; kpis: [string, string][]; devices: ("phone" | "web" | "tv")[];
+};
+
+/* Who uses Tyre Pulse and what each one sees first (sample figures). */
+const ROLES: Role[] = [
+  { id: "driver", label: "Driver", title: "Report it before the next trip.", text: "Daily checks, meter readings and problems reported from the phone in a minute, in Arabic or English, with or without signal.",
+    screen: ["Pre-trip checklist for this vehicle", "Report a problem with a photo", "Odometer or hour meter with a photo", "Accident report with GPS and damage marks"],
+    kpis: [["Checks done today", "1 of 1"], ["Open problems on my vehicle", "0"]], devices: ["phone"] },
+  { id: "tech", label: "Technician", title: "Your jobs, in order, on the phone.", text: "See the jobs assigned to you, start and pause them with a reason, record parts and labour, and close with photos and a signature.",
+    screen: ["My jobs by priority", "Start, pause for parts, finish", "Tyre fitment by wheel position", "Inspection photos and signature"],
+    kpis: [["Jobs today", "4"], ["Productive time", "6 h 10"]], devices: ["phone"] },
+  { id: "tyre", label: "Tyre man", title: "Every wheel, every reading, every serial.", text: "Walk round with the tyre map, read RFID tags, record tread and pressure per wheel, and see which tyres the forecast says come off next.",
+    screen: ["Tyre map per vehicle type", "RFID read opens the tyre passport", "Low-pressure flags from TPMS readings and checks", "Tyres due in the next 30 days"],
+    kpis: [["Tyres due in 30 days", "46"], ["Pressure compliance", "96%"]], devices: ["phone", "web"] },
+  { id: "store", label: "Storekeeper", title: "Issue parts without the paperwork.", text: "See what each job needs, issue stock against the job card, and raise a purchase request when the reorder level is reached.",
+    screen: ["Parts requested by open jobs", "Issue against the job card", "Stock and reorder level by site", "Purchase requests waiting approval"],
+    kpis: [["Requests waiting", "3"], ["Below reorder level", "7 items"]], devices: ["web", "phone"] },
+  { id: "sup", label: "Supervisor", title: "See the day before it starts.", text: "Approve inspections and jobs, assign the right technician, and follow every open job and every machine that is down.",
+    screen: ["Approvals with signature", "Live workshop board", "Machines out of production", "Smart technician assignment"],
+    kpis: [["Waiting your approval", "5"], ["Machines down now", "4"]], devices: ["web", "phone", "tv"] },
+  { id: "claims", label: "HSE and insurance", title: "One case, every document ready.", text: "Accident cases with photos, damage, root cause and the full claim package, so the insurer has nothing to send back.",
+    screen: ["Accident register by severity", "Root cause and actions", "Claim documents checklist", "Claimed, approved and recovered"],
+    kpis: [["Open cases", "6"], ["Recovered this year", "SAR 184k"]], devices: ["web"] },
+  { id: "pmv", label: "PMV manager", title: "Availability and cost, asset by asset.", text: "Availability, preventive compliance, cost per km or hour and anomalies across every site and country, each in its own currency.",
+    screen: ["Fleet availability and downtime causes", "Cost per km by asset and brand", "Anomalies and data checks", "Repair, replace or move decisions"],
+    kpis: [["Fleet availability", "93%"], ["Cost per km", "SAR 0.93"]], devices: ["web", "tv"] },
+];
+
+const DEVICE: Record<Role["devices"][number], [typeof Smartphone, string]> = {
+  phone: [Smartphone, "Phone, works offline"], web: [Monitor, "Web app"], tv: [Tv, "TV wallboard"],
+};
+
+function RoleCopy({ title, text, screen, kpis, devices }: Role) {
   return (
     <div className="role-copy">
       <h3>{title}</h3>
       <p>{text}</p>
+      <div className="role-grid">
+        <div>
+          <small className="role-h">First on their screen</small>
+          <ul className="role-list">{screen.map((x) => <li key={x}><CheckCircle2 size={15} aria-hidden="true" />{x}</li>)}</ul>
+        </div>
+        <div>
+          <small className="role-h">What they watch</small>
+          <dl className="role-kpis">{kpis.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+          <p className="muted-sm role-sample">Sample figures</p>
+        </div>
+      </div>
       <ul className="caps">
-        {caps.map(([Icon, l]) => <li key={l}><Icon size={22} aria-hidden={true} />{l}</li>)}
+        {devices.map((d) => { const [Icon, l] = DEVICE[d]; return <li key={d}><Icon size={20} aria-hidden={true} />{l}</li>; })}
       </ul>
-      <p className="muted-sm role-note"><ClipboardCheck size={13} aria-hidden="true" /> Works on Android phones and tablets, and in any modern browser.</p>
     </div>
   );
 }

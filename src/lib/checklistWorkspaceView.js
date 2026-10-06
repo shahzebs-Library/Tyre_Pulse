@@ -112,6 +112,12 @@ export function classifyRow(row) {
     return 'na'
   }
   const values = Array.isArray(row.value) ? row.value : [row.value]
+  // A field with a configured pass rule is judged by it, the same rule the
+  // score uses (computeScore): Brakes OK? false, Visible damage? true and
+  // Tyre condition Worn all fail here even though no word list names them.
+  if (Array.isArray(row.passValues) && row.passValues.length) {
+    return values.some((v) => row.passValues.includes(v)) ? 'ok' : 'issue'
+  }
   const words = values.map(norm).filter(Boolean)
   if (words.some((w) => ISSUE_WORDS.has(w))) return 'issue'
   if (words.length && words.every((w) => NA_WORDS.has(w))) return 'na'

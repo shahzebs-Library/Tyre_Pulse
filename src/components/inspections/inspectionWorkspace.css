@@ -84,7 +84,6 @@
 .iw-remark { color: var(--cc-ink-2); overflow-wrap: anywhere; }
 .iw-note { margin: 10px 0 0; font-size: 12.5px; color: var(--cc-ink-2); }
 .iw-note b { color: var(--cc-ink); }
-.iw-approve { margin-top: 12px; }
 
 .iw-finds { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .iw-finds li { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--cc-inner-border); border-radius: 9px; font-size: 12.5px; color: var(--cc-ink); }

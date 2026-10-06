@@ -22,7 +22,10 @@ const withTc = (r) => (r && !('tyre_conditions' in r) ? { ...r, tyre_conditions:
 const affected = (r) => affectedTyreReadings(withTc(r))
 
 const isDone = (r) => r?.status === 'Done' || r?.approval_status === 'approved'
-const isPending = (r) => !isDone(r) && r?.status !== 'Cancelled' && r?.status !== 'Overdue'
+// A rejected sign-off returns the record to In Progress, but it is a recorded
+// decision, not work waiting in the queue.
+const isRejected = (r) => r?.approval_status === 'rejected'
+const isPending = (r) => !isDone(r) && !isRejected(r) && r?.status !== 'Cancelled' && r?.status !== 'Overdue'
 
 /**
  * One inspection's place in the queue: done, overdue, pending approval, in progress
@@ -34,6 +37,7 @@ export function inspectionStage(r) {
   if (r.status === 'Done') return { key: 'done', label: 'Completed', tone: 'good' }
   if (r.status === 'Overdue') return { key: 'overdue', label: 'Overdue', tone: 'bad' }
   if (r.status === 'Cancelled') return { key: 'cancelled', label: 'Cancelled', tone: 'muted' }
+  if (isRejected(r)) return { key: 'rejected', label: 'Rejected', tone: 'bad' }
   if (r.approval_status === 'pending_approval') return { key: 'approval', label: 'Pending approval', tone: 'warn' }
   if (r.status === 'In Progress') return { key: 'progress', label: 'In progress', tone: 'info' }
   return { key: 'scheduled', label: r.status || 'Scheduled', tone: 'info' }
@@ -239,7 +243,7 @@ export function inspectionTrend(rows, now = new Date(), days = 30) {
     if (i == null || r.status === 'Cancelled') continue
     if (isDone(r)) completed[i] += 1
     else if (r.status === 'Overdue') overdue[i] += 1
-    else pending[i] += 1
+    else if (isPending(r)) pending[i] += 1
   }
   const any = completed.some(Boolean) || pending.some(Boolean) || overdue.some(Boolean)
   return { labels, completed, pending, overdue, any }

@@ -88,6 +88,14 @@ describe('inspectionWorkspaceView', () => {
     expect(t.any).toBe(true)
   })
 
+  it('a rejected sign-off is not pending work and says so', () => {
+    const rej = { id: 'z', status: 'In Progress', approval_status: 'rejected', inspection_date: '2026-10-06' }
+    expect(inspectionStage(rej)).toMatchObject({ key: 'rejected', label: 'Rejected' })
+    expect(matchesListTab(rej, 'pending', NOW)).toBe(false)
+    expect(workspaceKpis([rej]).pending).toBe(0)
+    expect(inspectionTrend([rej], NOW, 3).pending).toEqual([0, 0, 0])
+  })
+
   it('stage reads approval before status', () => {
     expect(inspectionStage({ status: 'In Progress', approval_status: 'approved' }).label).toBe('Approved')
     expect(inspectionStage({ status: 'In Progress', approval_status: 'pending_approval' }).key).toBe('approval')

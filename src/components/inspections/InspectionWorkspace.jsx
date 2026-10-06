@@ -237,6 +237,11 @@ export default function InspectionWorkspace({
                 <div className="iw-dhead-actions">
                   <button type="button" className="cc-btn-ghost" onClick={() => onEdit(selected)}><Pencil size={14} aria-hidden="true" /> Edit</button>
                   <button type="button" className="cc-btn-ghost" onClick={() => onPdf(selected)}><FileText size={14} aria-hidden="true" /> PDF</button>
+                  {/* In the header, not the tyre table: observations, training records and
+                      inspections without tyre readings still need signing. */}
+                  {selected.approval_status === 'pending_approval' && onApprove && (
+                    <button type="button" className="cc-btn-primary" onClick={() => onApprove(selected)}>Review and sign</button>
+                  )}
                   <button type="button" className="cc-btn-primary" onClick={() => onView(selected)}><Eye size={14} aria-hidden="true" /> Open</button>
                 </div>
               </div>
@@ -314,9 +319,6 @@ export default function InspectionWorkspace({
                       </div>
                       {selected.findings && <p className="iw-note"><b>Findings:</b> {selected.findings}</p>}
                       {selected.notes && <p className="iw-note"><b>Notes:</b> {selected.notes}</p>}
-                      {selected.approval_status === 'pending_approval' && onApprove && (
-                        <button type="button" className="cc-btn-primary iw-approve" onClick={() => onApprove(selected)}>Review and sign</button>
-                      )}
                     </div>
                   </div>
                 )

@@ -70,6 +70,21 @@ describe('classifyRow', () => {
     expect(classifyRow({ answered: true, marks: [], value: 1200 })).toBe('recorded')
     expect(classifyRow({ answered: true, marks: [], value: false })).toBe('recorded')
   })
+  it('judges a field by its own pass rule before any word list', () => {
+    expect(classifyRow({ answered: true, marks: [], value: false, passValues: [true] })).toBe('issue')
+    expect(classifyRow({ answered: true, marks: [], value: true, passValues: [true] })).toBe('ok')
+    expect(classifyRow({ answered: true, marks: [], value: true, passValues: [false] })).toBe('issue')
+    expect(classifyRow({ answered: true, marks: [], value: 'Worn', passValues: ['Good'] })).toBe('issue')
+    expect(classifyRow({ answered: true, marks: [], value: ['Good'], passValues: ['Good'] })).toBe('ok')
+  })
+  it('a field pass rule reaches the sections through the row model', () => {
+    const tpl = { fields: [
+      { id: 'brakes', type: 'boolean', label: 'Brakes OK?', passValues: [true] },
+      { id: 'tyre', type: 'select', label: 'Tyre condition', options: ['Good', 'Worn'], passValues: ['Good'] },
+    ] }
+    const rows = workspaceSections({ id: 'x', answers: { brakes: false, tyre: 'Worn' } }, tpl).flatMap((s) => s.rows)
+    expect(rows.map((r) => r.status)).toEqual(['issue', 'issue'])
+  })
   it('an unanswered line is never a verdict', () => {
     expect(classifyRow({ answered: false, marks: [], value: 'Fail' })).toBe('unanswered')
     expect(classifyRow(null)).toBe('unanswered')

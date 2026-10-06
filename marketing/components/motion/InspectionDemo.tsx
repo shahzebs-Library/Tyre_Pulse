@@ -202,6 +202,10 @@ export function InspectionDemo() {
               </Pane>
 
               <Pane on={at("tyres")}>
+                <div className="idemo-veh">
+                  <span className="idemo-veh-pic"><Photo name="mixer" className="idemo-photo" sizes="72px" position="60% 50%" alt="" /></span>
+                  <span><b>TM514</b><small>Transit mixer 6x4 · 10 tyres</small></span>
+                </div>
                 <svg className="idemo-truck" viewBox="0 0 100 112" role="group" aria-label="Tyre map, tap a wheel">
                   <rect x="30" y="4" width="40" height="22" rx="4" className="cab" />
                   <rect x="34" y="30" width="32" height="76" rx="6" className="body" />
@@ -222,10 +226,10 @@ export function InspectionDemo() {
 
               <Pane on={at("photo")}>
                 <div className="idemo-cam">
-                  <Photo name="loaderTyre" className="idemo-photo" sizes="240px" alt="" />
+                  <Photo name="mixer" className="idemo-photo zoom-rear" sizes="480px" alt="" />
                   <i className="idemo-flash" /><span className="idemo-gps">24.774 N, 46.738 E · 07:44</span>
                 </div>
-                <div className="idemo-thumbs"><span className="t1"><Photo name="loaderTyre" className="idemo-photo" sizes="48px" alt="" /></span><span className="t2"><Photo name="loaderTyre" className="idemo-photo" sizes="48px" position="30% 70%" alt="" /></span><em>LHR1 · 2 photos</em></div>
+                <div className="idemo-thumbs"><span className="t1"><Photo name="mixer" className="idemo-photo zoom-rear" sizes="96px" alt="" /></span><span className="t2"><Photo name="mixer" className="idemo-photo zoom-wide" sizes="96px" alt="" /></span><em>LHR1 · 2 photos</em></div>
               </Pane>
 
               <Pane on={at("sign")}>
@@ -307,8 +311,8 @@ export function InspectionDemo() {
                 <div className="idemo-web-h"><b>Defect · LHR1</b><span className="pill pill-red">High</span></div>
                 <div className="idemo-defect">
                   <div className="idemo-photos">
-                    <span className="t1"><Photo name="loaderTyre" className="idemo-photo" sizes="90px" alt="Defect photo 1" /></span>
-                    <span className="t2"><Photo name="loaderTyre" className="idemo-photo" sizes="90px" position="30% 70%" alt="Defect photo 2" /></span>
+                    <span className="t1"><Photo name="mixer" className="idemo-photo zoom-rear" sizes="180px" alt="Rear left wheel of TM514, close-up" /></span>
+                    <span className="t2"><Photo name="mixer" className="idemo-photo zoom-wide" sizes="180px" alt="TM514 rear axles" /></span>
                   </div>
                   <ul>
                     <li><small>Finding</small>Sidewall cut, 4 cm</li>

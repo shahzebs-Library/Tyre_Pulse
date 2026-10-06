@@ -7,6 +7,7 @@ import "./motion.css";
 const display = Archivo({ subsets: ["latin"], weight: ["700", "800"], variable: "--font-display", display: "swap" });
 const body = Inter({ subsets: ["latin"], variable: "--font-body", display: "swap" });
 import { WhatsAppButton } from "@/components/WhatsAppButton";
+import { LocaleSync } from "@/components/LocaleSync";
 import { MotionRoot } from "@/components/motion/MotionRoot";
 import { BRAND_COLOR, JsonLd, SITE_URL, alternatesFor, siteSchemaGraph } from "./schema";
 import { OG_IMAGES } from "@/lib/site";
@@ -67,12 +68,10 @@ export const viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${display.variable} ${body.variable}`}>
+    <html lang="en" className={`${display.variable} ${body.variable}`} suppressHydrationWarning>
       <body>
         <JsonLd data={siteSchemaGraph()} />
-        <a className="skip-link" href="#main-content">
-          Skip to main content
-        </a>
+        <LocaleSync />
         {children}
         <WhatsAppButton />
         <MotionRoot />

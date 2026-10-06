@@ -33,10 +33,11 @@ const nextConfig: NextConfig = {
    * have forfeited.
    */
   /**
-   * Baseline security headers on every response. No Content-Security-Policy yet:
-   * Next.js inlines its bootstrap scripts, and a strict policy needs nonces, which
-   * would force every page off static prerendering. frame-ancestors-style
-   * protection comes from X-Frame-Options instead.
+   * Baseline security headers on every response. The Content-Security-Policy is
+   * deliberately script-agnostic: Next.js inlines its bootstrap scripts, and a strict
+   * script-src needs nonces, which would force every page off static prerendering.
+   * The directives below restrict only what the site never does (plugins, a foreign
+   * <base>, posting forms off-site, being framed) and so cannot break a page.
    */
   async headers() {
     return [
@@ -47,6 +48,11 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          {
+            key: "Content-Security-Policy",
+            value: "base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'",
+          },
+          { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()" },
         ],
       },

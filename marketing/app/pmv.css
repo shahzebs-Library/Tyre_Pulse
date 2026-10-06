@@ -322,7 +322,7 @@ a:focus-visible, button:focus-visible, [tabindex="0"]:focus-visible { outline: 3
 /* ---------- Inner page hero ---------- */
 .crumbs { font-size: .84rem; color: var(--muted); margin: 0 0 14px; display: flex; gap: 8px; flex-wrap: wrap; }
 .crumbs { align-items: center; }
-.crumbs a { text-decoration: underline; text-underline-offset: 3px; display: inline-flex; align-items: center; min-height: 44px; }
+.crumbs a { text-decoration: underline; text-underline-offset: 3px; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; }
 .page-top { padding: 40px 0 26px; }
 .page-top-grid { display: flex; justify-content: space-between; gap: 24px; align-items: flex-end; flex-wrap: wrap; }
 .page-top .btn-primary { min-height: 52px; padding: 0 24px; }
@@ -534,15 +534,8 @@ img.ph { height: auto; aspect-ratio: 4 / 3; }
 .ind-list h2 { font-family: var(--font-display), sans-serif; font-size: 1.35rem; letter-spacing: -.015em; margin: 0; }
 .ind-list p { margin: 0; color: var(--muted); max-width: 56ch; }
 @media (max-width: 760px) { .ind-list { grid-template-columns: minmax(0,1fr); gap: 36px; } }
-/* Scroll-driven entry: pure CSS, only where supported, never for reduced motion; content is visible without it. */
-@supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: no-preference) {
-    .module-grid li, .eco-grid li, .sec-list li, .ind-list li, .price-card, .ar-steps li, .steps li {
-      animation: tp-rise linear both; animation-timeline: view(); animation-range: entry 0% entry 60%;
-    }
-    @keyframes tp-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
-  }
-}
+/* List entry is owned by components/motion/MotionRoot.tsx (one reveal engine). A second, CSS view-timeline
+   reveal used to run on the same lists, stacking two animations and leaving them hidden in print. */
 
 /* Copy-pass helpers (replace inline styles) */
 .section-pad.tight { padding-top: 0; }

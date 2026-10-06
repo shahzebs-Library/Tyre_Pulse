@@ -291,27 +291,6 @@
   .cta-band::after { width: 60%; opacity: .6; }
 }
 
-/* ---------- 3D: product screens tilt toward the mouse, cards float above them ----------
- * TiltRoot writes --tx/--ty (-1..1) on the host under the pointer. Screens also rest at a
- * slight angle on wide screens, so the depth reads on touch devices too. The layered
- * cards use the separate `translate` property so they never fight an entrance animation. */
-.hc-visual, .tab-media, .people-art, .flow > li { --tx: 0; --ty: 0; --rest-x: 0deg; --rest-y: 0deg; }
-.hc-visual > *, .tab-media > *, .flow-card {
-  transform: perspective(1200px) rotateX(calc(var(--ty) * -5deg + var(--rest-x))) rotateY(calc(var(--tx) * 7deg + var(--rest-y)));
-  transform-origin: 50% 50%;
-  transition: transform .7s var(--ease-out), box-shadow .7s var(--ease-out);
-}
-.is-tilting > *, .is-tilting .flow-card { transition-duration: .18s, .7s; }
-.hc-visual .hc-float, .people-art .phone { translate: calc(var(--tx) * -14px) calc(var(--ty) * -10px); transition: translate .5s var(--ease-out); }
-.is-tilting .hc-float, .people-art.is-tilting .phone { transition-duration: .15s; }
-.hc-visual.is-tilting > .app-window, .hc-visual.is-tilting > .hc-panel { box-shadow: calc(var(--tx) * -18px) calc(24px + var(--ty) * -10px) 60px rgba(22, 22, 22, .26); }
-.flow > li.is-tilting .flow-card { box-shadow: 0 22px 44px rgba(0, 0, 0, .4); }
-@media (min-width: 1081px) {
-  .hc-visual { --rest-y: -4deg; --rest-x: 2deg; }
-  .tab-media { --rest-y: -3deg; --rest-x: 1.5deg; }
-}
-.hc-visual, .tab-media { perspective: 1200px; }
-
 /* ---------- Inspection demo scene: one walk-round, scan to work order ---------- */
 .idemo { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: clamp(28px, 5vw, 72px); align-items: center; }
 .idemo-phone { width: 260px; justify-self: center; }
@@ -403,7 +382,6 @@
   .ind-media > img, .people-art > img.art, .sig-standalone img.art { animation: none; transform: none; }
   .btn:hover, .bento-cell:hover, .price-card:hover { transform: none; }
   .hc-visual > *, .tab-media > *, .flow-card { transform: none; }
-  .hc-visual .hc-float, .people-art .phone { translate: none; }
 }
 
 /* Pricing: the "Most flexible" flag sits on the card edge, so every feature list starts at the same height. */
@@ -420,3 +398,40 @@
   .proof-stats b { font-size: 1.75rem; }
   .proof-stats > div > dd > span { font-size: .8rem; }
 }
+
+/* ---------- Hero live cards: work happening, one event after another ---------- */
+.hc-live { position: relative; }
+.hc-live > .hc-float { right: -14px; bottom: -18px; width: min(290px, 72%); }
+.live-feed, .asset-cycle { padding: 12px 12px 10px; display: grid; gap: 8px; }
+.live-head { display: flex; align-items: center; gap: 8px; font-size: .8rem; }
+.live-head strong { flex: 1; }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: #1d7a44; box-shadow: 0 0 0 0 rgba(29, 122, 68, .5); animation: tp-live-pulse 1.6s ease-out infinite; }
+@keyframes tp-live-pulse { 70% { box-shadow: 0 0 0 7px rgba(29, 122, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(29, 122, 68, 0); } }
+.live-feed ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.live-row { display: flex; gap: 9px; align-items: center; padding: 7px 8px; border-radius: 8px; background: #f6f6f2; transition: opacity .4s ease; }
+.live-row.is-new { background: #fff7d9; animation: tp-live-in .5s var(--ease-out, ease) both; }
+@keyframes tp-live-in { from { opacity: 0; transform: translateY(-12px); } }
+.live-ic { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: #fff; color: #161616; flex: none; }
+.live-row.tone-bad .live-ic { color: #b42318; }
+.live-row.tone-warn .live-ic { color: #8a5a00; }
+.live-row.tone-good .live-ic { color: #1d7a44; }
+.live-txt { display: grid; min-width: 0; font-size: .78rem; line-height: 1.25; }
+.live-txt b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.live-txt span { color: #6b6b64; font-size: .72rem; }
+.ac-body { display: grid; gap: 10px; animation: tp-live-in .5s var(--ease-out, ease) both; }
+.ac-id { display: flex; align-items: center; gap: 10px; }
+.ac-id > span { display: grid; flex: 1; font-size: .78rem; color: #6b6b64; }
+.ac-id b { color: #161616; font-size: 1.05rem; }
+.ac-pill { font-style: normal; font-size: .72rem; font-weight: 700; padding: 3px 8px; border-radius: 99px; }
+.ac-pill.tone-good { background: #e3f3e8; color: #1d7a44; }
+.ac-pill.tone-warn { background: #fff1c7; color: #8a5a00; }
+.ac-pill.tone-bad { background: #fde4e1; color: #b42318; }
+.ac-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.ac-grid > div { display: grid; gap: 2px; padding: 8px; border-radius: 8px; background: #f6f6f2; }
+.ac-grid span { font-size: .7rem; color: #6b6b64; }
+.ac-grid b { font-size: .88rem; }
+.ac-dots { display: flex; gap: 5px; justify-content: center; }
+.ac-dots i { width: 6px; height: 6px; border-radius: 50%; background: #d6d6cf; transition: background .3s, width .3s; }
+.ac-dots i.is-on { width: 16px; border-radius: 3px; background: var(--brand, #FFC629); }
+@media (max-width: 1080px) { .hc-live > .hc-float { display: none; } }
+@media (prefers-reduced-motion: reduce) { .live-dot, .live-row.is-new, .ac-body { animation: none; } }

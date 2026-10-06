@@ -23,7 +23,7 @@ const STEPS = [
   { id: "tyres", icon: ScanLine, title: "Check every wheel", text: "Tread and pressure per position. A cut or low reading turns the wheel red." },
   { id: "photo", icon: Camera, title: "Photo the defect", text: "The picture is pinned to that wheel, with the time and the GPS point." },
   { id: "sign", icon: PenLine, title: "Sign it off", text: "The inspector signs on the glass. The supervisor sees it waiting to approve." },
-  { id: "sync", icon: CloudUpload, title: "Synced, job raised", text: "Back in signal it uploads, and the workshop gets a priced work order." },
+  { id: "sync", icon: CloudUpload, title: "Synced, job raised", text: "Back in signal it uploads. The supervisor turns the finding into a work order in one click." },
 ] as const;
 
 const STEP_MS = 3600;
@@ -106,7 +106,7 @@ export function InspectionDemo() {
           const Icon = s.icon;
           return (
             <li key={s.id}>
-              <button type="button" className={i === step ? "is-on" : ""} aria-current={i === step ? "step" : undefined} onClick={() => pick(i)}>
+              <button type="button" className={i === step ? "is-on" : ""} aria-label={`Step ${i + 1}: ${s.title}`} aria-current={i === step ? "step" : undefined} onClick={() => pick(i)}>
                 <span className="idemo-n" aria-hidden="true"><Icon size={17} /></span>
                 <span className="idemo-st"><small>Step {i + 1}</small><b>{s.title}</b></span>
                 {i === step && running && <i className="idemo-timer" style={{ animationDuration: `${STEP_MS}ms` }} aria-hidden="true" />}
@@ -162,7 +162,7 @@ export function InspectionDemo() {
 
             <Pane on={at("sync")}>
               <div className="idemo-done"><CheckCircle2 size={40} /><b>Inspection synced</b><span className="muted-xs">2 photos, 1 signature uploaded</span></div>
-              <div className="idemo-wo"><Wrench size={14} /><span><b>WO-2026-0418</b> raised for LHR1</span></div>
+              <div className="idemo-wo"><Wrench size={14} /><span>LHR1 finding sent to the supervisor</span></div>
             </Pane>
           </div>
         </figure>
@@ -235,12 +235,12 @@ export function InspectionDemo() {
               <Pane on={at("sync")} className="web">
                 <div className="idemo-web-h"><b>WO-2026-0418</b><span className="pill pill-blue">New</span></div>
                 <div className="idemo-wo-web">
-                  <div><small>Asset</small>TM514 · NHC</div>
+                  <div><small>From</small>Inspection INS-3F9A21C0</div>
                   <div><small>Job</small>Replace tyre LHR1</div>
-                  <div><small>Part</small>315/80R22.5 · 1 pc</div>
-                  <div><small>Estimate</small>SAR 1,450</div>
+                  <div><small>Asset</small>TM514 · NHC</div>
+                  <div><small>Cost</small>Added as parts and labour are booked</div>
                 </div>
-                <div className="idemo-live ok"><i />Workshop NHC notified · raised 07:47</div>
+                <div className="idemo-live ok"><i />Raised by the supervisor from the finding · 07:52</div>
               </Pane>
             </div>
           </div>

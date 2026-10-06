@@ -25,15 +25,25 @@ function useTicker(length: number, ms: number, start = 0) {
   const ref = useRef<HTMLDivElement>(null);
   const [i, setI] = useState(start);
 
+  // Follows the reduced-motion setting live: turning it on stops the ticker,
+  // turning it off starts it again, without a reload.
   useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const t = window.setInterval(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let t = 0;
+    const tick = () => {
+      if (document.hidden) return;
       const slide = ref.current?.closest(".hc-slide");
       const active = !slide || slide.classList.contains("is-on");
-      if (document.hidden) return;
       setI((n) => (active ? (n + 1) % length : start));
-    }, ms);
-    return () => window.clearInterval(t);
+    };
+    const sync = () => {
+      window.clearInterval(t);
+      t = 0;
+      if (!mq.matches) t = window.setInterval(tick, ms);
+    };
+    sync();
+    mq.addEventListener("change", sync);
+    return () => { mq.removeEventListener("change", sync); window.clearInterval(t); };
   }, [length, ms, start]);
 
   return { ref, i };

@@ -78,8 +78,32 @@ async function readJson(request: Request): Promise<{ ok: true; value: unknown } 
     try { return { ok: true, value: await request.json() }; } catch { return { ok: false, status: 400 }; }
   }
   let text: string;
-  try { text = await request.text(); } catch { return { ok: false, status: 400 }; }
-  if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) return { ok: false, status: 413 };
+  if (request.body && typeof request.body.getReader === "function") {
+    // Stream the body and stop as soon as the cap is passed, so a chunked request with no
+    // Content-Length can never make us buffer more than MAX_BODY_BYTES.
+    const reader = request.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > MAX_BODY_BYTES) {
+          await reader.cancel().catch(() => {});
+          return { ok: false, status: 413 };
+        }
+        chunks.push(value);
+      }
+    } catch { return { ok: false, status: 400 }; }
+    const all = new Uint8Array(size);
+    let at = 0;
+    for (const c of chunks) { all.set(c, at); at += c.byteLength; }
+    text = new TextDecoder().decode(all);
+  } else {
+    try { text = await request.text(); } catch { return { ok: false, status: 400 }; }
+    if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) return { ok: false, status: 413 };
+  }
   try { return { ok: true, value: JSON.parse(text) }; } catch { return { ok: false, status: 400 }; }
 }
 

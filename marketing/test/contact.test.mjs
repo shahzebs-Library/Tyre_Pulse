@@ -191,3 +191,18 @@ test('rate limit keys on the platform IP and ignores invalid attempts', async ()
   for (let i = 0; i < 5; i++) assert.equal((await post(req(input, { 'x-real-ip': '9.9.9.9', 'x-forwarded-for': `1.1.1.${i}` }))).status, 200);
   assert.equal((await post(req(input, { 'x-real-ip': '9.9.9.9', 'x-forwarded-for': '2.2.2.2' }))).status, 429);
 });
+
+test('a chunked stream is cut off at the cap, not buffered whole', async () => {
+  const post = handler(configured, () => { throw new Error('must not send'); });
+  let pulled = 0;
+  let cancelled = false;
+  const chunk = new Uint8Array(4096).fill(120);
+  const body = new ReadableStream({
+    pull(controller) { pulled += 1; if (pulled > 1000) controller.close(); else controller.enqueue(chunk); },
+    cancel() { cancelled = true; },
+  });
+  const res = await post({ headers: new Map([['content-type', 'application/json']]), body, text: async () => { throw new Error('must not buffer'); } });
+  assert.equal(res.status, 413);
+  assert.ok(cancelled, 'stream is cancelled once over the cap');
+  assert.ok(pulled <= 6, `read stopped early (pulled ${pulled} chunks)`);
+});

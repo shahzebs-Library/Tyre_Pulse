@@ -456,7 +456,7 @@
 .ac-dots i { width: 6px; height: 6px; border-radius: 50%; background: #d6d6cf; transition: background .3s, width .3s; }
 .ac-dots i.is-on { width: 16px; border-radius: 3px; background: var(--brand, #FFC629); }
 @media (max-width: 1080px) { .hc-live > .hc-float { display: none; } }
-@media (prefers-reduced-motion: reduce) { .live-dot, .live-row.is-new, .ac-body { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .live-dot, .live-dot::after, .live-row.is-new, .ac-body { animation: none; } }
 
 /* Fields the server rejected: red border plus a mark, so the state is not colour-only. */
 .field [aria-invalid="true"] { border-color: #b42318; box-shadow: 0 0 0 1px #b42318; }

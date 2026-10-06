@@ -82,10 +82,10 @@ export function LiveFeed({ title, events, rows = 4 }: { title: string; events: L
 type AssetCard = { code: string; type: string; site: string; meter: string; status: string; tone: "good" | "warn" | "bad"; next: string; cost: string };
 
 const ASSETS: AssetCard[] = [
-  { code: "TM514", type: "Transit mixer", site: "NHC", meter: "6,240 h", status: "In service", tone: "good", next: "250 h", cost: "SAR 3,180" },
-  { code: "MP093", type: "Concrete pump", site: "Diriyah", meter: "4,912 h", status: "In workshop", tone: "warn", next: "Due now", cost: "SAR 7,420" },
-  { code: "WL012", type: "Wheel loader", site: "Qiddiya", meter: "9,105 h", status: "In service", tone: "good", next: "120 h", cost: "SAR 2,060" },
-  { code: "GN041", type: "Generator", site: "Red Sea", meter: "12,880 h", status: "Breakdown", tone: "bad", next: "Overdue", cost: "SAR 5,890" },
+  { code: "MX-214", type: "Transit mixer", site: "Riyadh", meter: "6,240 h", status: "In service", tone: "good", next: "250 h", cost: "SAR 3,180" },
+  { code: "PT-118", type: "Concrete pump", site: "Jeddah", meter: "4,912 h", status: "In workshop", tone: "warn", next: "Due now", cost: "SAR 7,420" },
+  { code: "WL-207", type: "Wheel loader", site: "Dammam", meter: "9,105 h", status: "In service", tone: "good", next: "120 h", cost: "SAR 2,060" },
+  { code: "GN-305", type: "Generator", site: "Dubai", meter: "12,880 h", status: "Breakdown", tone: "bad", next: "Overdue", cost: "SAR 5,890" },
 ];
 
 /** One asset record at a time, rolling through the fleet. */

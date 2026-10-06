@@ -50,7 +50,7 @@ function TabCopy({ title, text, points, href }: { title: string; text: string; p
 
 /* What can open a job: every signal lands in the same queue. */
 const SIGNALS = [
-  "Driver reports a problem", "Inspection finds a defect", "Low pressure flagged", "Preventive service due",
+  "Driver reports a problem", "Inspection finds a defect", "Live TPMS pressure alert", "Preventive service due",
   "Anomaly flagged in the data", "Accident reported",
 ];
 
@@ -83,7 +83,7 @@ type Module = {
 /* Eight modules, eight bento cells: two photo tiles, one dark, one yellow, four plain. */
 const MODULES: Module[] = [
   { icon: Truck, title: "Fleet and asset lifecycle", text: "Track plant, machinery and vehicles from acquisition to disposal, with meters, documents and cost on one record.", href: "/platform/fleet-assets", photo: { name: "fleetLineup", position: "50% 60%" } },
-  { icon: CircleDot, title: "Tyre lifecycle", text: "Inspections, RFID passports, TPMS pressure, removal forecasts and cost per km by brand.", href: "/platform/inspections#tyres", photo: { name: "riyadh", position: "30% 88%" } },
+  { icon: CircleDot, title: "Tyre lifecycle", text: "Inspections, RFID passports, live TPMS pressure via telematics, removal forecasts and cost per km by brand.", href: "/platform/inspections#tyres", photo: { name: "riyadh", position: "30% 88%" } },
   { icon: Settings, title: "Workshop and job cards", text: "Jobs, labour, parts and outside services in one queue.", href: "/platform/maintenance", tone: "dark" },
   { icon: Wrench, title: "Preventive maintenance", text: "Plans by hours, kilometres or date that keep assets compliant.", href: "/platform/maintenance" },
   { icon: Box, title: "Stores and procurement", text: "Inventory, purchases and suppliers across every site.", href: "/platform/inventory" },
@@ -362,7 +362,7 @@ const ROLES: Role[] = [
     screen: ["My jobs by priority", "Start, pause for parts, finish", "Tyre fitment by wheel position", "Inspection photos and signature"],
     kpis: [["Jobs today", "4"], ["Productive time", "6 h 10"]], devices: ["phone"] },
   { id: "tyre", label: "Tyre man", title: "Every wheel, every reading, every serial.", text: "Walk round with the tyre map, read RFID tags, record tread and pressure per wheel, and see which tyres the forecast says come off next.",
-    screen: ["Tyre map per vehicle type", "RFID read opens the tyre passport", "Low-pressure flags from TPMS readings and checks", "Tyres due in the next 30 days"],
+    screen: ["Tyre map per vehicle type", "RFID read opens the tyre passport", "Live TPMS pressure alerts via telematics", "Tyres due in the next 30 days"],
     kpis: [["Tyres due in 30 days", "46"], ["Pressure compliance", "96%"]], devices: ["phone", "web"] },
   { id: "store", label: "Storekeeper", title: "Issue parts without the paperwork.", text: "See what each job needs, issue stock against the job card, and raise a purchase request when the reorder level is reached.",
     screen: ["Parts requested by open jobs", "Issue against the job card", "Stock and reorder level by site", "Purchase requests waiting approval"],

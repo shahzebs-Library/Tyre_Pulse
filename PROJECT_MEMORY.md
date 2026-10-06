@@ -14,10 +14,11 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   <branch>` must be clean. Stay inside your own area; touch a file the other session owns only if the owner asks.
 - Never force-push or reset a branch you did not create; never squash over another session's unmerged commits
   (check `git log origin/main..origin/<branch>` first). PROJECT_MEMORY.md is shared: add your own entry, never rewrite theirs.
+- 2026-10-06 later: marketing audit + round 2 (parts 4-5) re-verified (lint, tsc, 19/19 tests, build) and merged to main.
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
-# ⚑ SESSION 2026-10-06 (part 5, marketing session) — SPEED + SECURITY + ACCURACY ROUND 2 (same branch, NOT pushed). marketing/ only.
+# ⚑ SESSION 2026-10-06 (part 5, marketing session) — SPEED + SECURITY + ACCURACY ROUND 2 (same branch, MERGED to main with part 4). marketing/ only.
 - SPEED (measured, throttled phone 4x CPU / 1.6 Mbps / 150 ms RTT, 2 runs): home TBT 2.44 s -> ~1.0 s, LCP 2.66 -> ~1.6 s;
   /ar LCP 2.62 -> ~2.0 s; every page LCP < 2.5 s, CLS ~0. Cause was native style/paint, not JS (JS ~0.8 s of 3.7 s):
   live-dot pulse animated box-shadow (repaint every frame) -> transform/opacity pseudo; infinite loops (CTA stripes,
@@ -35,7 +36,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   rate-limited public API) = backed. Proof figures match the DB (1,617 fleet / ~89.9k job cards / 216,792 lines).
 - MEASURE GOTCHA: `pgrep -f next-server` matches your own shell; use `pgrep -f "^next-server"`.
 
-# ⚑ SESSION 2026-10-06 (part 4, marketing session) — MARKETING AUDIT + QC (branch claude/marketing-audit-qc, NOT pushed). marketing/ only.
+# ⚑ SESSION 2026-10-06 (part 4, marketing session) — MARKETING AUDIT + QC (branch claude/marketing-audit-qc, MERGED to main 2026-10-06 on owner go-ahead). marketing/ only.
 - Playwright sweep 11 pages x 320/390/768/1366/1920/2560 = 66 combos: 0 overflow, 0 contrast/tap/console/alt findings after fixes.
   GOTCHA: Playwright fullPage screenshots show BLANK bands on this site; that is a stitching artifact, not a defect. Judge
   renders from a viewport set to the page height (setViewportSize) or per-viewport shots. Kill a stale `next start`

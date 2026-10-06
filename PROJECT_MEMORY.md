@@ -5,6 +5,16 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ SESSION 2026-10-06 (part 3) — INSPECTION REPORT PDF REBUILT TO THE OWNER'S 3-PAGE MOCKUP. No migration.
+- exportInspectionDetailPdf (src/lib/exportUtils.js): p1 Vehicle Details card (+ vehicle picture via vehiclePhoto(row),
+  opts.vehiclePhotoUrl) / 5 summary tiles + Avg Pressure + Photos Attached / tyre map (app SVG, legend) / Inspection
+  Findings (derived lines + tyreman notes verbatim); p2 Tyre Inspection Details (every layout wheel, unrecorded =
+  No Data, serial/brand from tyre_conditions else lifeRows) / Axle Summary (positionGroup) / Compliance Checks
+  (Pass/Check/Fail/N/A from data only - valve/rim/wheel-nut rows from the mock were NOT added: no data) / Tyres Due
+  / Expected Tyre Life; p3 photos 4-up with status pills + Sign-off. Footer QR -> /inspections?view=<id> (new param
+  opens the viewer drawer; RLS decides access). New exported helpers inspectionReportRows/inspectionReportStats.
+- Mock person avatars on sign-off and "Good tread, no damage" phrasing NOT copied (no such data).
+
 # ⚑ SESSION 2026-10-06 (part 2) — INSPECTIONS + CHECKLISTS REBUILT TO THE OWNER'S 3 "INSPECTIONS & OBSERVATIONS" MOCKUPS. No migration.
 - /inspections: src/components/inspections/InspectionWorkspace.jsx (+ inspectionWorkspace.css, prefix iw-) over pure
   src/lib/inspectionWorkspaceView.js (+ test). Header, 5 KPIs + From/To/Site (writes the page's URL filters), module

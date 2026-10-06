@@ -4,13 +4,13 @@ import { loadAutoTable } from './pdfEngine'
 // One definition of "what the inspector recorded", shared with the on-screen
 // viewer. Keeping a private copy here is exactly how the report and the screen
 // would start disagreeing about a reading somebody signed off.
-// pressureFlagAvailable / pressureDeviation are no longer imported: the only
-// thing that used them was the per-position reading table, which the report no
-// longer prints. They remain in inspectionView for the on-screen record.
+// pressureDeviation flags a reading against the vehicle's own median, the same
+// rule the on-screen record uses.
 import {
   RISK_LABEL, riskForCondition,
-  normalizeTyreConditions, inspectionStats, inspectionDiagramModel,
+  normalizeTyreConditions, inspectionDiagramModel, positionLabelMap, pressureDeviation,
 } from './inspectionView'
+import { positionGroup, SECTION_LABEL } from './inspectionWorkspaceView'
 // The band judgement is bandFor and nothing else. The register flags a tyre as
 // due with this function, so the report has to use it too or the two would
 // disagree about the same tyre on the same day.
@@ -18,7 +18,7 @@ import { bandFor, measureFor } from './tyreRunningLife'
 // One conversion names every wheel: a stored capture key (F1L, R2Ri) prints as
 // the canonical code (LHF1, RHRI) the tyre records use, so an export can never
 // disagree with the screen it came from.
-import { displayPositionCode, inspectionTypeHint } from './tyreBay'
+import { displayPositionCode, inspectionTypeHint, canonicalToSlotId, slotDisplayCode } from './tyreBay'
 import { resolveLayoutKey, isTyrelessEquipment } from './vehicleTyreLayout'
 
 /**
@@ -1315,74 +1315,148 @@ export async function exportDocumentPdf({ title, subject, to, sections = [], fil
   doc.save(`${filename}.pdf`)
 }
 
-// ── Inspection Detail PDF - captures DOM SVG if provided ──────────────────────
-// Muted corporate status tones (small dots / thin borders + plain dark text -
-// never large colored cell fills). Private to the inspection detail renderer.
-const _MUTED_STATUS = {
-  good:     [22, 101, 52],
-  warning:  [146, 64, 14],
-  critical: [153, 27, 27],
-  none:     [100, 116, 139],
+// ── Inspection report layout (owner mockup, 2026-10-06) ───────────────────────
+// Three-page A4 document: (1) vehicle details, summary tiles, tyre map and the
+// findings; (2) per-position readings, axle summary and compliance checks;
+// (3) photos and sign-off. Every figure comes from the recorded inspection. A
+// check the data cannot answer reads "N/A", never a reassuring Pass.
+const _INS_TONE = {
+  good:     { fill: [220, 252, 231], ink: [22, 101, 52],  dot: [22, 163, 74] },
+  warning:  { fill: [254, 243, 199], ink: [146, 64, 14],  dot: [245, 158, 11] },
+  critical: { fill: [254, 226, 226], ink: [153, 27, 27],  dot: [220, 38, 38] },
+  none:     { fill: [241, 245, 249], ink: [71, 85, 105],  dot: [100, 116, 139] },
+}
+const _INS_WORD = { good: 'Good', warning: 'Wear', critical: 'Damage', none: 'No Data' }
+const _RESULT_TONE = { Pass: 'good', Check: 'warning', Fail: 'critical', 'N/A': 'none' }
+
+function _insPill(doc, x, y, w, h, label, toneKey) {
+  const t = _INS_TONE[toneKey] || _INS_TONE.none
+  doc.setFillColor(...t.fill)
+  doc.roundedRect(x, y, w, h, h / 2, h / 2, 'F')
+  doc.setFontSize(Math.min(7, h * 1.6)); doc.setFont('helvetica', 'bold'); doc.setTextColor(...t.ink)
+  doc.text(String(label), x + w / 2, y + h / 2 + 1.05, { align: 'center' })
 }
 
-// Compute the "Inspection summary" figures from the normalized tyre-condition
-// map. Honest: averages only over RECORDED values, null when nothing recorded.
-// _inspectionStats moved to ./inspectionView as inspectionStats - the viewer
-// needs the same counts and recorded-only averages.
-const _inspectionStats = inspectionStats
-
-// Compact two-line "Inspection summary" strip: position counts by condition on
-// line 1 (small muted dots + dark text) and recorded averages on line 2.
-// Returns the y below the strip.
-function _inspectionSummaryStrip(doc, stats, y, mx, accent) {
-  const pw = doc.internal.pageSize.width
-  const w = pw - mx * 2
-  const h = 15
-  doc.setFillColor(...P.offWhite)
-  doc.setDrawColor(...P.silver)
-  doc.setLineWidth(0.3)
-  doc.roundedRect(mx, y, w, h, 1.5, 1.5, 'FD')
+function _insSection(doc, title, y, mx, accent) {
   doc.setFillColor(...accent)
-  doc.roundedRect(mx, y, 1.4, h, 0.7, 0.7, 'F')
+  doc.rect(mx, y - 3.6, 1.1, 5, 'F')
+  doc.setFontSize(11.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+  doc.text(String(title), mx + 3.4, y)
+  return y + 5
+}
 
-  doc.setFontSize(6.3)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(...P.ghost)
-  doc.text('INSPECTION SUMMARY', mx + 5, y + 4.4, { charSpace: 0.4 })
+// Status glyph inside a filled circle: check / ! / x / -.
+function _insGlyph(doc, cx, cy, r, toneKey) {
+  const t = _INS_TONE[toneKey] || _INS_TONE.none
+  doc.setFillColor(...t.dot)
+  doc.circle(cx, cy, r, 'F')
+  doc.setDrawColor(255, 255, 255); doc.setLineWidth(r * 0.28)
+  if (toneKey === 'good') {
+    doc.line(cx - r * 0.45, cy, cx - r * 0.1, cy + r * 0.38)
+    doc.line(cx - r * 0.1, cy + r * 0.38, cx + r * 0.5, cy - r * 0.35)
+  } else if (toneKey === 'critical') {
+    doc.line(cx - r * 0.38, cy - r * 0.38, cx + r * 0.38, cy + r * 0.38)
+    doc.line(cx + r * 0.38, cy - r * 0.38, cx - r * 0.38, cy + r * 0.38)
+  } else if (toneKey === 'warning') {
+    doc.line(cx, cy - r * 0.5, cx, cy + r * 0.12)
+    doc.setFillColor(255, 255, 255); doc.circle(cx, cy + r * 0.45, r * 0.12, 'F')
+  } else {
+    doc.line(cx - r * 0.45, cy, cx + r * 0.45, cy)
+  }
+}
 
-  // Line 1 - counts, each with a small muted dot
-  let cx = mx + 5
-  const l1y = y + 8.6
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(...P.ink)
-  doc.text(`Positions checked: ${stats.total}`, cx, l1y)
-  cx += doc.getTextWidth(`Positions checked: ${stats.total}`) + 7
-  const segs = [
-    ['good', 'Good'], ['warning', 'Wear'], ['critical', 'Damage'], ['none', 'No data'],
-  ]
-  doc.setFont('helvetica', 'normal')
-  segs.forEach(([key, label]) => {
-    const txt = `${label} ${stats.counts[key] ?? 0}`
-    doc.setFillColor(..._MUTED_STATUS[key])
-    doc.circle(cx + 1.2, l1y - 1.1, 1.1, 'F')
-    doc.setTextColor(...P.ink)
-    doc.text(txt, cx + 3.4, l1y)
-    cx += doc.getTextWidth(txt) + 10
-  })
+function _insDate(v) {
+  if (!v) return 'N/A'
+  const d = new Date(String(v).length === 10 ? `${v}T00:00:00` : v)
+  if (Number.isNaN(d.getTime())) return String(v).slice(0, 10)
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${mm}-${dd}`
+}
 
-  // Line 2 - honest averages over recorded values only
-  const one = (v) => Math.round(v * 10) / 10
-  const parts = [
-    `Avg pressure: ${stats.avgPressure != null ? `${one(stats.avgPressure)} PSI` : 'N/A'}`,
-    `Avg tread: ${stats.avgTread != null ? `${one(stats.avgTread)} mm` : 'N/A'}`,
-    `Lowest tread: ${stats.lowTread ? `${stats.lowTread.pos} (${one(stats.lowTread.value)} mm)` : 'N/A'}`,
-  ]
-  doc.setFontSize(7.5)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(...P.iron)
-  doc.text(parts.join('   |   '), mx + 5, y + 13)
-  return y + h + 5
+/**
+ * Build the per-position rows the whole report reads from: one per wheel on
+ * the vehicle's layout (unrecorded wheels included as No Data) plus any
+ * recorded position the layout cannot place.
+ */
+export function inspectionReportRows(row, { lifeRows = [] } = {}) {
+  const normTc = normalizeTyreConditions(row)
+  const raw = (() => {
+    let tc = row?.tyre_conditions
+    if (typeof tc === 'string') { try { tc = JSON.parse(tc) } catch { tc = {} } }
+    if (Array.isArray(tc)) {
+      return Object.fromEntries(tc.map((d, i) => [d && (d.position || d.label) ? String(d.position || d.label) : String(i), d]))
+    }
+    return tc && typeof tc === 'object' ? tc : {}
+  })()
+  const labels = positionLabelMap(row)
+  const lifeBy = new Map((lifeRows || []).map((lr) => [String(lr.position || '').trim().toUpperCase(), lr]))
+  const model = inspectionDiagramModel(row, { isTyreless: isTyrelessEquipment })
+  const recorded = (d) => !!(d && (d.condition || d.pressure != null || d.tread != null || d.notes))
+
+  const build = (code, pos, riskOverride) => {
+    const d = pos != null ? normTc[pos] : null
+    const r = (raw && pos != null && raw[pos] && typeof raw[pos] === 'object') ? raw[pos] : {}
+    const life = lifeBy.get(String(code || '').trim().toUpperCase()) || null
+    const has = recorded(d)
+    const risk = has ? (riskOverride || d.risk || 'none') : 'none'
+    return {
+      code: code || pos || 'N/A',
+      position: pos,
+      recorded: has,
+      risk,
+      condition: has ? (d.condition || RISK_LABEL[risk] || null) : null,
+      pressure: d?.pressure ?? null,
+      tread: d?.tread ?? null,
+      notes: d?.notes || null,
+      photo: d?.photo || null,
+      serial: r.serial || r.serial_no || r.serial_number || r.tyre_serial || life?.serial || null,
+      brand: r.brand || r.tyre_brand || life?.brand || null,
+    }
+  }
+
+  const rows = []
+  if (model.renderable) {
+    const slotToPos = {}
+    for (const pos of Object.keys(normTc)) {
+      const slot = canonicalToSlotId(model.vehicleType, pos)
+      if (slot && !(slot in slotToPos)) slotToPos[slot] = pos
+    }
+    for (const slot of model.slots) {
+      rows.push(build(slotDisplayCode(model.layoutKey, slot), slotToPos[slot] ?? null, model.tyreData[slot]?.risk))
+    }
+    for (const u of model.unmatched) rows.push(build(labels[u.position] || u.position, u.position))
+  } else {
+    for (const pos of Object.keys(normTc)) rows.push(build(normTc[pos]?.label || labels[pos] || pos, pos))
+  }
+  return { rows, model, normTc }
+}
+
+/** Counts, recorded-only averages and the pressure median the report prints. */
+export function inspectionReportStats(rows) {
+  const counts = { good: 0, warning: 0, critical: 0, none: 0 }
+  const pressures = []
+  const treads = []
+  for (const r of rows) {
+    counts[r.risk] = (counts[r.risk] || 0) + 1
+    if (r.pressure != null) pressures.push(r.pressure)
+    if (r.tread != null) treads.push(r.tread)
+  }
+  const avg = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : null)
+  const sorted = [...pressures].sort((a, b) => a - b)
+  const median = sorted.length ? (sorted.length % 2 ? sorted[(sorted.length - 1) / 2] : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2) : null
+  const low = rows.filter((r) => r.tread != null).sort((a, b) => a.tread - b.tread)[0] || null
+  return {
+    total: rows.length,
+    recorded: rows.filter((r) => r.recorded).length,
+    counts,
+    avgPressure: avg(pressures),
+    avgTread: avg(treads),
+    lowTread: low ? { code: low.code, value: low.tread } : null,
+    medianPressure: median,
+    recordedPressures: pressures.length,
+    recordedTreads: treads.length,
+  }
 }
 
 /**
@@ -1390,6 +1464,10 @@ function _inspectionSummaryStrip(doc, stats, y, mx, accent) {
  * @param {Object}  [opts]
  * @param {Element} [opts.svgEl] - live SVG DOM element from VehicleTyreDiagram
  * @param {string}  [opts.company]
+ * @param {Array}   [opts.photos]   - [{ label, url }]
+ * @param {Array}   [opts.lifeRows] - shaped running-life rows for the asset
+ * @param {string}  [opts.vehiclePhotoUrl] - picture for the Vehicle Details card
+ * @param {string}  [opts.verifyUrl] - encoded in the footer QR code
  */
 export async function exportInspectionDetailPdf(row, opts = {}) {
   guardExport([], opts.filename || `Inspection report ${row?.asset_no || ''}`.trim())
@@ -1399,213 +1477,240 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   const ph      = doc.internal.pageSize.height
   const company = opts.company || ''
   const mx      = 14
+  const W       = pw - mx * 2
   const brand   = await _pdfBrand(opts.branding)
-  const hdr     = { accent: brand.accent, logoData: brand.logoData }
-  const ftr     = { footerText: brand.footerText }
+  const accent  = brand.logoData ? brand.accent : P.green
+  const TITLE   = 'Vehicle Tyres Inspection Report'
+  const BOTTOM  = ph - 20          // keep clear of the footer + QR
+  const docNo   = `INS-${String(row.id || '').replace(/-/g, '').slice(0, 8).toUpperCase() || 'DRAFT'}`
+  const inspDay = _insDate(row.inspection_date || row.completed_date || row.scheduled_date)
+  const genDay  = _insDate(new Date().toISOString())
 
-  // ── PAGE 1 ─────────────────────────────────────────────────────────────────
-  // Owner spec: the header shows the company LOGO when one is set (Console ->
-  // Report Colors), the report is titled "Vehicle Tyres Inspection Report",
-  // and every report carries a unique document number derived from the
-  // inspection id (stable: re-downloading yields the same number).
-  // Owner spec: big logo, no eyebrow text, no duplicated title/asset lines -
-  // the meta grid below is the single place each fact appears.
-  const docNo = `INS-${String(row.id || '').replace(/-/g, '').slice(0, 8).toUpperCase() || 'DRAFT'}`
-  const insHdr = { ...hdr, hideEyebrow: true, logoSize: 20 }
-  _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr)
-  doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
-  doc.text(`Document No: ${docNo}`, pw - MX, 20.5, { align: 'right' })
-  let y = 28
+  // ── Header (every page) ────────────────────────────────────────────────────
+  const header = () => {
+    doc.setFillColor(...P.white); doc.rect(0, 0, pw, 26, 'F')
+    let tx = mx
+    if (brand.logoData) {
+      const fmt = /image\/jpe?g/i.test(brand.logoData) ? 'JPEG' : 'PNG'
+      try { doc.addImage(brand.logoData, fmt, mx, 5, 15, 15, undefined, 'FAST'); tx = mx + 19 } catch { /* text only */ }
+    }
+    doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+    doc.text(TITLE, tx, 13.5)
+    if (company && !brand.logoData) {
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
+      doc.text(company, tx, 18.5)
+    }
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
+    doc.text(`Generated: ${genDay}`, pw - mx, 9, { align: 'right' })
+    doc.text(`Document No: ${docNo}`, pw - mx, 13.2, { align: 'right' })
+    doc.text(`Inspection Date: ${inspDay}`, pw - mx, 17.4, { align: 'right' })
+    doc.setDrawColor(...accent); doc.setLineWidth(0.8)
+    doc.line(mx, 22.5, pw - mx, 22.5)
+  }
+  const newPage = () => { doc.addPage(); header(); return 31 }
+  const ensure = (y, h) => (y + h > BOTTOM ? newPage() : y)
 
-  // Meta grid - 2-col, 3 rows. Owner spec: the person is the TYREMAN, status
-  // reads Complete/Incomplete, odometer + hour meter live HERE (not in notes),
-  // and company / findings-count rows are dropped.
-  const isComplete = /^(done|completed|approved)$/i.test(String(row.status || ''))
+  header()
+  let y = 32
+
+  const { rows: posRows, model: diagramCheck } = inspectionReportRows(row, { lifeRows: opts.lifeRows })
+  const stats = inspectionReportStats(posRows)
+  const photoItems = Array.isArray(opts.photos) ? opts.photos.filter((it) => it && it.url) : []
+  const one = (v) => Math.round(v * 10) / 10
+  const n0 = (v) => (v == null ? 'N/A' : Math.round(v).toLocaleString('en-US'))
+
+  // ── Vehicle Details ────────────────────────────────────────────────────────
+  y = _insSection(doc, 'Vehicle Details', y, mx, accent) + 1
+  const isApproved = String(row.approval_status || '').toLowerCase() === 'approved'
+  const isRejected = String(row.approval_status || '').toLowerCase() === 'rejected'
+  const isComplete = isApproved || /^(done|completed|approved)$/i.test(String(row.status || ''))
   const meterVal = [
     row.odometer_km != null && row.odometer_km !== '' ? `${Number(row.odometer_km).toLocaleString('en-US')} km` : null,
     row.hour_meter != null && row.hour_meter !== '' ? `${Number(row.hour_meter).toLocaleString('en-US')} hrs` : null,
-  ].filter(Boolean).join('  |  ') || '-'
-  const metaL = [
-    ['Inspection Date', row.inspection_date || row.scheduled_date || '-'],
-    ['Site',            row.site || '-'],
-    ['Tyreman',         row.inspector || row.attendees || '-'],
+  ].filter(Boolean).join('  |  ') || 'No meter reading'
+  const details = [
+    ['Asset No.', row.asset_no || 'N/A'],
+    ['Site', row.site || 'N/A'],
+    ['Vehicle Type', row.vehicle_type || 'N/A'],
+    ['Tyreman', row.inspector || row.attendees || 'N/A'],
+    ['Status / Meters', null],
+    ['Inspection Date', inspDay],
   ]
-  const metaR = [
-    ['Asset No.',        row.asset_no || '-'],
-    ['Vehicle Type',     row.vehicle_type || '-'],
-    ['Status / Meters',  `${isComplete ? 'Complete' : 'Incomplete'}  |  ${meterVal}`],
-  ]
-  const half = (pw - mx * 2) / 2
-  metaL.forEach(([lbl, val], i) => {
-    const my = y + i * 9
-    doc.setFontSize(6); doc.setFont('helvetica','normal'); doc.setTextColor(...P.mist)
-    doc.text(lbl, mx, my)
-    doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
-    doc.text(val, mx, my + 4.5)
-    doc.setDrawColor(...P.silver); doc.setLineWidth(0.2)
-    doc.line(mx, my + 6.5, mx + half - 4, my + 6.5)
-
-    doc.setFontSize(6); doc.setFont('helvetica','normal'); doc.setTextColor(...P.mist)
-    doc.text(metaR[i][0], mx + half, my)
-    doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
-    doc.text(metaR[i][1], mx + half, my + 4.5)
-    doc.line(mx + half, my + 6.5, pw - mx, my + 6.5)
+  const vPhoto = opts.vehiclePhotoUrl ? await fetchImageDataUri(opts.vehiclePhotoUrl) : null
+  const cardH = details.length * 7 + 4
+  const listW = vPhoto ? W * 0.5 : W
+  doc.setFillColor(...P.offWhite); doc.setDrawColor(...P.silver); doc.setLineWidth(0.25)
+  doc.roundedRect(mx, y, listW, cardH, 2, 2, 'FD')
+  details.forEach(([lbl, val], i) => {
+    const ry = y + 2 + i * 7
+    doc.setFillColor(...accent); doc.circle(mx + 4.5, ry + 3.6, 0.9, 'F')
+    doc.setFontSize(7.2); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
+    doc.text(lbl, mx + 8, ry + 4.6)
+    const vx = mx + 38
+    if (val === null) {
+      const word = isRejected ? 'Rejected' : isComplete ? 'Complete' : 'Incomplete'
+      const tone = isRejected ? 'critical' : isComplete ? 'good' : 'warning'
+      _insPill(doc, vx, ry + 1.4, 19, 4.6, word, tone)
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.iron)
+      doc.text(meterVal, vx + 21, ry + 4.6)
+    } else {
+      doc.setFontSize(8.2); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+      doc.text(doc.splitTextToSize(String(val), listW - 40)[0], vx, ry + 4.6)
+    }
+    if (i < details.length - 1) {
+      doc.setDrawColor(...P.silver); doc.setLineWidth(0.15)
+      doc.line(mx + 3, ry + 7, mx + listW - 3, ry + 7)
+    }
   })
-  y += 31
+  if (vPhoto) {
+    const px = mx + listW + 4, pwid = W - listW - 4
+    doc.setFillColor(...P.offWhite); doc.roundedRect(px, y, pwid, cardH, 2, 2, 'F')
+    try {
+      const props = doc.getImageProperties(vPhoto)
+      const ar = props.width / props.height
+      let dw = pwid, dh = pwid / ar
+      if (dh > cardH) { dh = cardH; dw = cardH * ar }
+      const fmt = /image\/jpe?g/i.test(vPhoto) ? 'JPEG' : /image\/webp/i.test(vPhoto) ? 'WEBP' : 'PNG'
+      doc.addImage(vPhoto, fmt, px + (pwid - dw) / 2, y + (cardH - dh) / 2, dw, dh, undefined, 'FAST')
+    } catch { /* card stays blank */ }
+  }
+  y += cardH + 8
 
-  // Normalize tyre conditions (needed by the summary strip, diagram + tables).
-  // Shared with the on-screen viewer so both read a recording identically.
-  const normTc = normalizeTyreConditions(row)
-  const diagramCheck = inspectionDiagramModel(row, { isTyreless: isTyrelessEquipment })
-
-  // ── Inspection summary strip (right under the info grid) ───────────────────
-  // Position counts by condition + recorded-only averages; honest N/A.
-  const insStats = _inspectionStats(diagramCheck.renderable
-    ? Object.fromEntries(diagramCheck.readings.map(reading => [reading.slot, reading]))
-    : normTc)
-  if (diagramCheck.renderable) insStats.counts.none += diagramCheck.unrecorded.length
-  if (insStats.total > 0 || diagramCheck.renderable) {
-    y = _inspectionSummaryStrip(doc, insStats, y, mx, brand.accent)
+  // ── Inspection Summary tiles ───────────────────────────────────────────────
+  if (posRows.length) {
+    y = ensure(y, 46)
+    y = _insSection(doc, 'Inspection Summary', y, mx, accent) + 1
+    const tiles = [
+      [stats.recorded, stats.recorded < stats.total ? `Checked of ${stats.total}` : 'Positions Checked', stats.recorded < stats.total ? 'warning' : 'good'],
+      [stats.counts.good, 'Good', 'good'],
+      [stats.counts.warning, 'Wear', 'warning'],
+      [stats.counts.critical, 'Damage', 'critical'],
+      [stats.counts.none, 'No Data', 'none'],
+    ]
+    const tw = (W - 4 * 3) / 5, th = 17
+    tiles.forEach(([val, label, tone], i) => {
+      const tx = mx + i * (tw + 3)
+      const t = _INS_TONE[tone]
+      doc.setFillColor(...(tone === 'none' || tone === 'good' ? P.offWhite : t.fill))
+      doc.setDrawColor(...P.silver); doc.setLineWidth(0.2)
+      doc.roundedRect(tx, y, tw, th, 2, 2, 'FD')
+      _insGlyph(doc, tx + 7, y + 6.6, 3.2, tone)
+      doc.setFontSize(15); doc.setFont('helvetica', 'bold'); doc.setTextColor(...(val > 0 && tone !== 'good' && tone !== 'none' ? t.ink : P.ink))
+      doc.text(String(val), tx + 13, y + 8.4)
+      doc.setFontSize(6.8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.iron)
+      doc.text(label, tx + tw / 2, y + 14.2, { align: 'center' })
+    })
+    y += th + 3
+    const bw = (W - 3) / 2, bh = 12
+    const wide = [
+      ['Avg Pressure', stats.avgPressure != null ? `${one(stats.avgPressure)} PSI` : 'N/A', 'gauge'],
+      ['Photos Attached', stats.total ? `${photoItems.length} of ${stats.total}` : String(photoItems.length), 'camera'],
+    ]
+    wide.forEach(([label, val, icon], i) => {
+      const bx = mx + i * (bw + 3)
+      doc.setFillColor(...P.offWhite); doc.setDrawColor(...P.silver); doc.setLineWidth(0.2)
+      doc.roundedRect(bx, y, bw, bh, 2, 2, 'FD')
+      doc.setDrawColor(...P.iron); doc.setLineWidth(0.5)
+      if (icon === 'gauge') {
+        doc.circle(bx + 8, y + 6.4, 3.4, 'S')
+        doc.line(bx + 8, y + 6.4, bx + 10, y + 4.6)
+      } else {
+        doc.roundedRect(bx + 4.4, y + 3.8, 7.2, 5, 0.8, 0.8, 'S')
+        doc.circle(bx + 8, y + 6.3, 1.4, 'S')
+      }
+      doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
+      doc.text(label, bx + 15, y + 4.8)
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+      doc.text(val, bx + 15, y + 9.6)
+    })
+    y += bh + 8
   }
 
-  // ── Tyre Diagram section ───────────────────────────────────────────────────
-  // Page-space check FIRST so the section title can never overlap other text
-  // by starting a tall map at the bottom of a page.
+  // ── Vehicle Tyre Condition Map ─────────────────────────────────────────────
   {
     let estH = null
-    if (opts.svgEl) {
-      estH = 120
-    } else {
+    if (opts.svgEl) estH = 64
+    else {
       const lk = _resolveLayoutKey(row.vehicle_type)
       const ly = lk ? _TYRE_LAYOUTS[lk] : null
-      if (ly) estH = ((ly.body.y + ly.body.h + 10) * (108 / 200)) + 14 + 12
+      if (ly) estH = Math.min(64, ((ly.body.y + ly.body.h + 10) * (108 / 200)) + 12)
     }
-    if (estH != null && y + estH > ph - FOOTER_SPACE) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
+    y = ensure(y, (estH || 16) + 8)
   }
-  y = _sectionBar(doc, 'Vehicle Tyre Condition Map', y, mx, brand.accent) + 3
+  y = _insSection(doc, 'Vehicle Tyre Condition Map', y, mx, accent) + 1
 
-  // Owner spec: embed the ACTUAL app diagram (the same SVG used while making
-  // the checklist), colored per condition with the PSI marked on each tyre.
-  // The earlier "uncolored capture" was a risk-token gap in the diagram, now
-  // fixed; the programmatic drawing remains the fallback when no live SVG is
-  // available (e.g. detached callers).
-  let diagramH = 0
-  // Diagram background follows Console -> Report Colors (report_diagram_bg);
-  // black when unset. Legend ink flips dark automatically on a light background.
+  // The ACTUAL app diagram (colored per condition, PSI on each wheel). The
+  // programmatic drawing is the fallback when no live SVG is available.
   const diagBg = (typeof opts.diagramBg === 'string' && /^#[0-9a-f]{6}$/i.test(opts.diagramBg)) ? opts.diagramBg : '#000000'
   const dbgRgb = [parseInt(diagBg.slice(1, 3), 16), parseInt(diagBg.slice(3, 5), 16), parseInt(diagBg.slice(5, 7), 16)]
   const dbgLight = (0.299 * dbgRgb[0] + 0.587 * dbgRgb[1] + 0.114 * dbgRgb[2]) > 150
-  const svgCap = opts.svgEl ? await svgToPngDataUrl(opts.svgEl, 3, diagBg) : null
-  if (svgCap && svgCap.dataUrl) {
-    // Owner spec: the diagram stays COMPACT so the whole report auto-fits one
-    // page (photos may flow to page 2) - never a full-page picture.
-    const bgW  = pw - mx * 2
-    const availH = Math.max(60, Math.min(105, ph - FOOTER_SPACE - y - 24))
-    let iw = Math.min(80, bgW - 60)                    // leave room for the legend
-    let ih = iw * (svgCap.h / svgCap.w)
-    if (ih > availH) { ih = availH; iw = ih * (svgCap.w / svgCap.h) }
-    const bgH = ih + 10
-
-    doc.setFillColor(...dbgRgb)
-    doc.setDrawColor(...P.iron)
-    doc.setLineWidth(0.3)
-    doc.roundedRect(mx, y, bgW, bgH, 3, 3, 'FD')
-    try { doc.addImage(svgCap.dataUrl, 'PNG', mx + (bgW - 50 - iw) / 2, y + 5, iw, ih, undefined, 'FAST') } catch { /* fall through to legend only */ }
-
-    // Legend
-    const legendX = mx + bgW - 50
-    let legendY   = y + 10
-    doc.setFontSize(6.5); doc.setFont('helvetica','bold')
-    if (dbgLight) doc.setTextColor(55, 65, 81); else doc.setTextColor(...P.mist)
-    doc.text('LEGEND', legendX, legendY); legendY += 7
+  const drawLegend = (bx, by, bw) => {
+    const lx = bx + bw - 40
+    doc.setFillColor(...(dbgLight ? [241, 245, 249] : [30, 41, 59]))
+    doc.roundedRect(lx - 3, by + 4, 38, 40, 2, 2, 'F')
+    let ly = by + 10
+    doc.setFontSize(6.8); doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...(dbgLight ? [55, 65, 81] : [226, 232, 240]))
+    doc.text('LEGEND', lx, ly); ly += 6.5
     Object.entries(RISK_LABEL).forEach(([key, label]) => {
       const [r, g, b] = RISK_RGB[key]
-      doc.setFillColor(r, g, b)
-      doc.roundedRect(legendX, legendY - 2, 4, 4, 0.5, 0.5, 'F')
-      doc.setFontSize(7); doc.setFont('helvetica','normal')
-      if (dbgLight) doc.setTextColor(31, 41, 55); else doc.setTextColor(220, 225, 235)
-      doc.text(label, legendX + 6, legendY + 1.5)
-      legendY += 8
+      doc.setFillColor(r, g, b); doc.circle(lx + 1.8, ly - 1.1, 1.6, 'F')
+      doc.setFontSize(7); doc.setFont('helvetica', 'normal')
+      doc.setTextColor(...(dbgLight ? [31, 41, 55] : [220, 225, 235]))
+      doc.text(label, lx + 5.5, ly)
+      ly += 7
     })
-
+  }
+  let diagramH = 0
+  const svgCap = opts.svgEl ? await svgToPngDataUrl(opts.svgEl, 3, diagBg) : null
+  if (svgCap && svgCap.dataUrl) {
+    const availH = Math.max(52, Math.min(64, BOTTOM - y - 4))
+    let iw = Math.min(110, W - 50)
+    let ih = iw * (svgCap.h / svgCap.w)
+    if (ih > availH - 8) { ih = availH - 8; iw = ih * (svgCap.w / svgCap.h) }
+    const bgH = Math.max(ih + 8, 50)
+    doc.setFillColor(...dbgRgb); doc.roundedRect(mx, y, W, bgH, 3, 3, 'F')
+    try { doc.addImage(svgCap.dataUrl, 'PNG', mx + (W - 44 - iw) / 2, y + (bgH - ih) / 2, iw, ih, undefined, 'FAST') } catch { /* legend only */ }
+    drawLegend(mx, y, W)
     diagramH = bgH
   } else {
     const layoutKey = _resolveLayoutKey(row.vehicle_type)
     const layout    = layoutKey ? _TYRE_LAYOUTS[layoutKey] : null
     if (layout) {
-      const maxDiagW = 108
-      const scale    = maxDiagW / 200
-      const bodyBtm  = layout.body.y + layout.body.h
-      const dH       = (bodyBtm + 10) * scale
-      const bgX      = mx, bgW = pw - mx * 2, bgH = dH + 14
-
-      doc.setFillColor(8, 12, 28)
-      doc.setDrawColor(...P.iron)
-      doc.setLineWidth(0.3)
-      doc.roundedRect(bgX, y, bgW, bgH, 3, 3, 'FD')
-      for (let gx = bgX + 6; gx < bgX + bgW - 6; gx += 10)
-        for (let gy = y + 6; gy < y + bgH - 3; gy += 10)
-          doc.circle(gx, gy, 0.25, 'F')
-
+      const bodyH    = layout.body.y + layout.body.h + 10
+      const scale    = Math.min(108 / 200, 54 / bodyH)
+      const maxDiagW = 200 * scale
+      const dH       = bodyH * scale
+      const bgH      = Math.max(dH + 12, 50)
+      doc.setFillColor(8, 12, 28); doc.roundedRect(mx, y, W, bgH, 3, 3, 'F')
       const minTyreX = layout.tyres.reduce((m, t) => Math.min(m, t.x), 999)
-      const originX  = mx + (bgW - maxDiagW) / 2 - minTyreX * scale
-      _drawTyreDiagram(doc, layout, normTc, originX, y + 5, scale)
-
-      // Legend
-      const legendX = bgX + bgW - 50
-      let legendY   = y + 10
-      doc.setFontSize(6.5); doc.setFont('helvetica','bold'); doc.setTextColor(...P.mist)
-      doc.text('LEGEND', legendX, legendY); legendY += 7
-      Object.entries(RISK_LABEL).forEach(([key, label]) => {
-        const [r, g, b] = RISK_RGB[key]
-        doc.setFillColor(r, g, b)
-        doc.roundedRect(legendX, legendY - 2, 4, 4, 0.5, 0.5, 'F')
-        doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(220, 225, 235)
-        doc.text(label, legendX + 6, legendY + 1.5)
-        legendY += 8
-      })
-
+      const originX  = mx + (W - 44 - maxDiagW) / 2 - minTyreX * scale
+      const normTcForDraw = normalizeTyreConditions(row)
+      _drawTyreDiagram(doc, layout, normTcForDraw, originX, y + 5, scale)
+      drawLegend(mx, y, W)
       diagramH = bgH
     } else {
-      // No layout is not a blank space on a safety record: say which of the two
-      // reasons it is, so the reader is never left wondering whether the tyre
-      // map was simply forgotten.
-      doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
+      doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
       doc.text(
         isTyrelessEquipment(row.vehicle_type)
           ? 'This machine carries no tyres, so there is no tyre map to print.'
           : 'No wheel layout is defined for this vehicle type, so the tyre map cannot be drawn.',
-        mx, y + 6,
+        mx, y + 5,
       )
-      diagramH = 12
+      diagramH = 9
     }
   }
+  y += diagramH + 6
 
-  y += diagramH + 8
-
-  if (diagramCheck.renderable && (diagramCheck.unmatched.length || diagramCheck.unrecorded.length)) {
-    const warning = ['Position data requires review.',
-      diagramCheck.unmatched.length ? `Unmapped recorded positions: ${diagramCheck.unmatched.map(p => p.position).join(', ')}.` : '',
-      diagramCheck.unrecorded.length ? `${diagramCheck.unrecorded.length} diagram position(s) have no mapped reading.` : '',
-    ].filter(Boolean).join(' ')
-    doc.setFontSize(8); doc.setTextColor(...P.ink)
-    const lines = doc.splitTextToSize(warning, pw - mx * 2)
-    if (y + lines.length * 4 > ph - FOOTER_SPACE) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
-    doc.text(lines, mx, y); y += lines.length * 4 + 5
+  if (diagramCheck.renderable && diagramCheck.unmatched.length) {
+    const warning = `Position data requires review. Unmapped recorded positions: ${diagramCheck.unmatched.map((p) => p.position).join(', ')}.`
+    doc.setFontSize(7.8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ink)
+    const lines = doc.splitTextToSize(warning, W)
+    y = ensure(y, lines.length * 4 + 2)
+    doc.text(lines, mx, y); y += lines.length * 4 + 4
   }
 
-  // ── Tyres due for change ───────────────────────────────────────────────────
-  // Owner ask: drop the full per-position reading list and print only the tyres
-  // that are actually DUE. The whole list made the reader find the problem; this
-  // states it. The readings are not lost - they are on the diagram above (each
-  // wheel carries its own PSI) and on screen in full.
-  //
-  // A tyre is due for one of two independent reasons, and both belong here
-  // because both end in the same action:
-  //   1. its life is spent      - bandFor(lifeRow) is overdue or due-soon
-  //   2. the inspector saw damage - the recorded condition reads damage/puncture
-  // A tyre can be flagged by either alone, so they are merged by position and
-  // the reason is named, never guessed at from the other.
+  // ── Tyres due for change (life spent OR damage seen) ───────────────────────
   const dueLifeRows = Array.isArray(opts.lifeRows) ? opts.lifeRows : []
   const dueByPos = new Map()
   const posKey = (p) => String(p ?? '').trim().toUpperCase()
@@ -1613,106 +1718,241 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     const band = bandFor(lr)
     if (band !== 'overdue' && band !== 'due-soon') continue
     dueByPos.set(posKey(lr.position), {
-      position: lr.position || 'N/A',
-      serial: lr.serial || 'N/A',
+      position: lr.position || 'N/A', serial: lr.serial || 'N/A',
       reason: band === 'overdue' ? 'Past expected life' : 'Approaching end of life',
-      condition: '',
       lifeUsed: measureFor(lr).used != null ? `${measureFor(lr).used}%` : 'N/A',
-      remainingKm: lr.remainingKm,
-      remainingDays: lr.remainingDays,
+      remainingKm: lr.remainingKm, remainingDays: lr.remainingDays,
     })
   }
-  for (const [pos, d] of Object.entries(normTc)) {
-    const cond = d && d.condition ? String(d.condition) : ''
-    if (!/damage|puncture/i.test(cond)) continue
-    const k = posKey(pos)
+  for (const r of posRows) {
+    if (!r.condition || !/damage|puncture|flat|burst|cut|bulge/i.test(r.condition)) continue
+    const k = posKey(r.code)
     const hit = dueByPos.get(k)
-    // Damage seen on a tyre already flagged on life is added to its reason
-    // rather than replacing it - the two facts are both true and both matter.
-    if (hit) { hit.condition = cond; hit.reason = `${hit.reason}; ${cond}` }
-    else dueByPos.set(k, {
-      position: pos, serial: 'N/A', reason: cond, condition: cond,
-      lifeUsed: 'N/A', remainingKm: null, remainingDays: null,
-    })
+    if (hit) hit.reason = `${hit.reason}; ${r.condition}`
+    else dueByPos.set(k, { position: r.code, serial: r.serial || 'N/A', reason: r.condition, lifeUsed: 'N/A', remainingKm: null, remainingDays: null })
   }
   const dueRows = Array.from(dueByPos.values())
 
-  if (dueRows.length) {
-    if (y > ph - 40) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
-    y = _sectionBar(doc, `Tyres Due for Change (${dueRows.length})`, y, mx, brand.accent) + 4
-    const nDue = (v) => (v == null ? 'N/A' : Math.round(v).toLocaleString('en-US'))
-    const dueStartPage = doc.internal.getNumberOfPages()
-    autoTable(doc, {
-      startY: y,
-      margin: { top: 30, left: mx, right: mx, bottom: FOOTER_SPACE },
-      head: [['Position', 'Serial', 'Why it is due', 'Life used', 'Remaining km', 'Remaining days']],
-      body: dueRows.map((r) => [
-        r.position, r.serial, r.reason, r.lifeUsed, nDue(r.remainingKm), nDue(r.remainingDays),
-      ]),
-      styles: { fontSize: 7, cellPadding: 1.6, textColor: P.ink, lineColor: P.silver, lineWidth: 0.15 },
-      headStyles: { fillColor: brand.accent, textColor: P.white, fontSize: 7, fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: P.cloud },
-      columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
-      didDrawPage: (data) => {
-        if (data.pageNumber > dueStartPage) _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr)
-      },
-    })
-    y = (doc.lastAutoTable?.finalY || y) + 6
-  } else if (dueLifeRows.length || Object.keys(normTc).length) {
-    // Saying nothing here would read as "this was not checked". An empty table
-    // would read the same. One line states the finding.
-    if (y > ph - 24) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
-    y = _sectionBar(doc, 'Tyres Due for Change', y, mx, brand.accent) + 4
-    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ink)
-    doc.text('No damage or life-limit alert identified in the available data.', mx, y + 1)
-    y += 8
+  // ── Inspection Findings (derived from the readings, never invented) ────────
+  const findings = []
+  const listCodes = (arr) => arr.slice(0, 8).map((r) => r.code).join(', ') + (arr.length > 8 ? ` and ${arr.length - 8} more` : '')
+  if (posRows.length) {
+    findings.push([stats.recorded === stats.total ? 'good' : 'warning',
+      stats.recorded === stats.total
+        ? `All ${stats.total} tyre positions were checked.`
+        : `${stats.recorded} of ${stats.total} tyre positions were checked; ${stats.total - stats.recorded} have no reading.`])
+    const worn = posRows.filter((r) => r.risk === 'warning')
+    const bad = posRows.filter((r) => r.risk === 'critical')
+    if (!worn.length && !bad.length) findings.push(['good', stats.recorded ? 'No visible wear or damage recorded on any checked tyre.' : 'No tyre condition was recorded.'])
+    if (worn.length) findings.push(['warning', `Wear recorded on ${worn.length} tyre(s): ${listCodes(worn)}.`])
+    if (bad.length) findings.push(['critical', `Damage recorded on ${bad.length} tyre(s): ${listCodes(bad)}.`])
+    if (stats.avgPressure != null) findings.push(['good', `Average recorded tyre pressure: ${one(stats.avgPressure)} PSI (${stats.recordedPressures} reading${stats.recordedPressures === 1 ? '' : 's'}).`])
+    else findings.push(['warning', 'No tyre pressure was recorded.'])
+    const devStats = { recordedPressures: stats.recordedPressures, medianPressure: stats.medianPressure }
+    const offPressure = posRows.filter((r) => pressureDeviation(r.pressure, devStats)?.check)
+    if (offPressure.length) findings.push(['warning', `Pressure more than 15% off this vehicle's median on: ${listCodes(offPressure)}.`])
+  }
+  findings.push([photoItems.length ? 'good' : 'warning', photoItems.length
+    ? `Photo evidence attached (${photoItems.length} photo${photoItems.length === 1 ? '' : 's'}).`
+    : 'No photo evidence attached.'])
+  if (dueRows.length) findings.push(['critical', `${dueRows.length} tyre(s) due for change. See Tyres Due for Change.`])
+  findings.push(isApproved ? ['good', 'Inspection completed and approved.']
+    : isRejected ? ['critical', 'Sign-off rejected; the inspection was returned for rework.']
+      : isComplete ? ['warning', 'Inspection completed; approval pending.']
+        : ['warning', 'Inspection not yet completed.'])
+
+  // The tyreman's own written findings and notes, verbatim, close the list.
+  const realNotes = [row.findings, String(row.notes || '')
+    .split(/\r?\n/).filter((l) => !/^\s*(odometer|hour\s*meter)\b/i.test(l)).join('\n')]
+    .map((s) => String(s || '').trim()).filter(Boolean).join(' ')
+  if (realNotes) findings.push(['none', `Tyreman notes: ${realNotes}`])
+
+  {
+    doc.setFontSize(7.8); doc.setFont('helvetica', 'normal')
+    const wrapped = findings.map(([tone, text]) => [tone, doc.splitTextToSize(text, W - 14)])
+    const boxH = wrapped.reduce((s, [, l]) => s + l.length * 3.6 + 1.7, 4)
+    y = ensure(y, boxH + 7)
+    y = _insSection(doc, 'Inspection Findings', y, mx, accent) + 1
+    doc.setFontSize(7.8); doc.setFont('helvetica', 'normal')
+    doc.setFillColor(...P.offWhite); doc.setDrawColor(...P.silver); doc.setLineWidth(0.2)
+    doc.roundedRect(mx, y, W, boxH, 2, 2, 'FD')
+    let fy = y + 5
+    for (const [tone, lines] of wrapped) {
+      _insGlyph(doc, mx + 5, fy - 1.2, 1.9, tone)
+      doc.setTextColor(...P.ink)
+      doc.text(lines, mx + 9.5, fy)
+      fy += lines.length * 3.6 + 1.7
+    }
+    y += boxH + 6
   }
 
-  // ── Expected tyre life (owner ask: a PROPER accurate table, not text lines) ──
+
+  // ── PAGE 2: Tyre Inspection Details ────────────────────────────────────────
+  if (posRows.length) {
+    // Readings start page 2, unless the findings already spilled onto it.
+    y = doc.internal.getNumberOfPages() === 1 ? newPage() : ensure(y, 40)
+    y = _insSection(doc, 'Tyre Inspection Details', y, mx, accent) + 1
+    const devStats = { recordedPressures: stats.recordedPressures, medianPressure: stats.medianPressure }
+    const body = posRows.map((r) => {
+      const dev = pressureDeviation(r.pressure, devStats)
+      const visual = [r.tread != null ? `${one(r.tread)} mm tread` : null, r.condition].filter(Boolean).join(', ')
+      const notes = [r.notes, dev?.check ? `Check: ${dev.pct}% ${dev.direction} median` : null].filter(Boolean).join('; ')
+      return [r.code, r.serial || 'N/A', r.brand || 'N/A', r.pressure != null ? one(r.pressure) : 'N/A',
+        r.recorded ? (visual || 'N/A') : 'Not checked', _INS_WORD[r.risk], notes || '-']
+    })
+    const startPage = doc.internal.getNumberOfPages()
+    autoTable(doc, {
+      startY: y,
+      margin: { top: 31, left: mx, right: mx, bottom: ph - BOTTOM },
+      head: [['Position', 'Serial No.', 'Brand', 'Pressure (PSI)', 'Tread / Visual Condition', 'Status', 'Notes']],
+      body,
+      styles: { fontSize: 7, cellPadding: { top: 1.9, bottom: 1.9, left: 1.6, right: 1.6 }, textColor: P.ink, lineColor: P.silver, lineWidth: 0.12, valign: 'middle' },
+      headStyles: { fillColor: [241, 245, 249], textColor: P.steel, fontSize: 6.8, fontStyle: 'bold', halign: 'center' },
+      columnStyles: { 0: { halign: 'center', fontStyle: 'bold', cellWidth: 16 }, 3: { halign: 'center', cellWidth: 17 }, 5: { halign: 'center', cellWidth: 18 } },
+      didParseCell: (d) => { if (d.section === 'body' && d.column.index === 5) d.cell.text = [''] },
+      didDrawCell: (d) => {
+        if (d.section !== 'body' || d.column.index !== 5) return
+        const r = posRows[d.row.index]
+        _insPill(doc, d.cell.x + (d.cell.width - 14) / 2, d.cell.y + d.cell.height / 2 - 2.1, 14, 4.2, _INS_WORD[r.risk], r.risk)
+      },
+      didDrawPage: (d) => { if (d.pageNumber > startPage) header() },
+    })
+    y = (doc.lastAutoTable?.finalY || y) + 8
+
+    // ── Axle Summary ─────────────────────────────────────────────────────────
+    const groups = new Map()
+    for (const r of posRows) {
+      const g = positionGroup(r.code)
+      if (!groups.has(g)) groups.set(g, [])
+      groups.get(g).push(r)
+    }
+    const order = ['steer', 'drive', 'rear', 'spare', 'other']
+    const axleBody = order.filter((g) => groups.has(g)).map((g) => {
+      const list = groups.get(g)
+      const s = inspectionReportStats(list)
+      return [SECTION_LABEL[g], s.total, s.counts.good, s.counts.warning, s.counts.critical, s.counts.none,
+        s.avgPressure != null ? one(s.avgPressure) : 'N/A']
+    })
+    axleBody.push(['Total', stats.total, stats.counts.good, stats.counts.warning, stats.counts.critical, stats.counts.none,
+      stats.avgPressure != null ? one(stats.avgPressure) : 'N/A'])
+    y = ensure(y, 14 + axleBody.length * 6)
+    y = _insSection(doc, 'Axle Summary', y, mx, accent) + 1
+    const axStart = doc.internal.getNumberOfPages()
+    const toneCol = { 2: 'good', 3: 'warning', 4: 'critical' }
+    autoTable(doc, {
+      startY: y,
+      margin: { top: 31, left: mx, right: mx, bottom: ph - BOTTOM },
+      head: [['Axle', 'Total Tyres', 'Good', 'Wear', 'Damage', 'No Data', 'Avg Pressure (PSI)']],
+      body: axleBody,
+      styles: { fontSize: 7.2, cellPadding: 1.9, textColor: P.ink, lineColor: P.silver, lineWidth: 0.12, halign: 'center' },
+      headStyles: { fillColor: [241, 245, 249], textColor: P.steel, fontSize: 6.8, fontStyle: 'bold' },
+      columnStyles: { 0: { halign: 'left' } },
+      didParseCell: (d) => {
+        if (d.section !== 'body') return
+        if (d.row.index === axleBody.length - 1) { d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = [248, 250, 252] }
+        const tone = toneCol[d.column.index]
+        if (tone && Number(d.cell.raw) > 0) { d.cell.styles.textColor = _INS_TONE[tone].ink; d.cell.styles.fontStyle = 'bold' }
+      },
+      didDrawPage: (d) => { if (d.pageNumber > axStart) header() },
+    })
+    y = (doc.lastAutoTable?.finalY || y) + 8
+
+    // ── Inspection Notes & Compliance Checks ─────────────────────────────────
+    const checks = []
+    const recorded = posRows.filter((r) => r.recorded)
+    const withP = recorded.filter((r) => r.pressure != null).length
+    checks.push(['Tyre pressure recorded',
+      !recorded.length ? 'N/A' : withP === recorded.length ? 'Pass' : withP ? 'Check' : 'Fail',
+      recorded.length ? `${withP} of ${recorded.length} checked positions${stats.avgPressure != null ? `, ${one(stats.avgPressure)} PSI average` : ''}` : 'No position was checked'])
+    const devStats2 = { recordedPressures: stats.recordedPressures, medianPressure: stats.medianPressure }
+    const off = posRows.filter((r) => pressureDeviation(r.pressure, devStats2)?.check)
+    checks.push(['Pressure consistency across the vehicle',
+      stats.recordedPressures < 4 ? 'N/A' : off.length ? 'Check' : 'Pass',
+      stats.recordedPressures < 4 ? 'Fewer than 4 readings to compare' : off.length ? `More than 15% off median: ${listCodes(off)}` : 'All within 15% of this vehicle\'s median'])
+    const worn = posRows.filter((r) => r.risk === 'warning')
+    const bad = posRows.filter((r) => r.risk === 'critical')
+    checks.push(['Tread and sidewall condition',
+      !recorded.length ? 'N/A' : bad.length ? 'Fail' : worn.length ? 'Check' : 'Pass',
+      !recorded.length ? 'No condition recorded' : bad.length ? `Damage: ${listCodes(bad)}` : worn.length ? `Wear: ${listCodes(worn)}` : 'No visible wear or damage recorded'])
+    checks.push(['Tread depth measured',
+      !stats.recordedTreads ? 'N/A' : stats.recordedTreads === recorded.length ? 'Pass' : 'Check',
+      !stats.recordedTreads ? 'Tread depth not measured' : `${stats.recordedTreads} of ${recorded.length} positions${stats.lowTread ? `, lowest ${stats.lowTread.code} ${one(stats.lowTread.value)} mm` : ''}`])
+    checks.push(['All tyre positions checked',
+      stats.recorded === stats.total ? 'Pass' : 'Check', `${stats.recorded} of ${stats.total} positions`])
+    checks.push(['Photo evidence captured',
+      photoItems.length ? 'Pass' : 'Check', photoItems.length ? `${photoItems.length} photo${photoItems.length === 1 ? '' : 's'} attached` : 'No photos attached'])
+    checks.push(['Overall vehicle condition (tyres)',
+      !recorded.length ? 'N/A' : bad.length || dueRows.length ? 'Fail' : worn.length ? 'Check' : 'Pass',
+      !recorded.length ? 'Not assessed' : bad.length || dueRows.length ? 'Action required before release' : worn.length ? 'Serviceable, monitor wear' : 'Satisfactory'])
+    y = ensure(y, 20)
+    y = _insSection(doc, 'Inspection Notes & Compliance Checks', y, mx, accent) + 1
+    const ckStart = doc.internal.getNumberOfPages()
+    autoTable(doc, {
+      startY: y,
+      margin: { top: 31, left: mx, right: mx, bottom: ph - BOTTOM },
+      head: [['No.', 'Item', 'Result', 'Remarks']],
+      body: checks.map((c, i) => [i + 1, c[0], c[1], c[2]]),
+      styles: { fontSize: 7.2, cellPadding: 1.9, textColor: P.ink, lineColor: P.silver, lineWidth: 0.12, valign: 'middle' },
+      headStyles: { fillColor: [241, 245, 249], textColor: P.steel, fontSize: 6.8, fontStyle: 'bold' },
+      columnStyles: { 0: { halign: 'center', cellWidth: 10 }, 1: { cellWidth: 58 }, 2: { halign: 'center', cellWidth: 18 } },
+      didParseCell: (d) => { if (d.section === 'body' && d.column.index === 2) d.cell.text = [''] },
+      didDrawCell: (d) => {
+        if (d.section !== 'body' || d.column.index !== 2) return
+        const res = checks[d.row.index][1]
+        _insPill(doc, d.cell.x + (d.cell.width - 13) / 2, d.cell.y + d.cell.height / 2 - 2.1, 13, 4.2, res, _RESULT_TONE[res])
+      },
+      didDrawPage: (d) => { if (d.pageNumber > ckStart) header() },
+    })
+    y = (doc.lastAutoTable?.finalY || y) + 8
+  }
+
+  // ── Tyres Due for Change ───────────────────────────────────────────────────
+  if (dueRows.length) {
+    y = ensure(y, 24)
+    y = _insSection(doc, `Tyres Due for Change (${dueRows.length})`, y, mx, accent) + 1
+    const st = doc.internal.getNumberOfPages()
+    autoTable(doc, {
+      startY: y,
+      margin: { top: 31, left: mx, right: mx, bottom: ph - BOTTOM },
+      head: [['Position', 'Serial', 'Why it is due', 'Life used', 'Remaining km', 'Remaining days']],
+      body: dueRows.map((r) => [r.position, r.serial, r.reason, r.lifeUsed, n0(r.remainingKm), n0(r.remainingDays)]),
+      styles: { fontSize: 7, cellPadding: 1.7, textColor: P.ink, lineColor: P.silver, lineWidth: 0.12 },
+      headStyles: { fillColor: [241, 245, 249], textColor: P.steel, fontSize: 6.8, fontStyle: 'bold' },
+      columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+      didDrawPage: (d) => { if (d.pageNumber > st) header() },
+    })
+    y = (doc.lastAutoTable?.finalY || y) + 8
+  }
+
+  // ── Expected Tyre Life ─────────────────────────────────────────────────────
   const lifeRows = Array.isArray(opts.lifeRows) ? opts.lifeRows.slice(0, 16) : []
   if (lifeRows.length) {
-    if (y > ph - 50) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
-    y = _sectionBar(doc, 'Expected Tyre Life', y, mx, brand.accent) + 4
-    doc.setFontSize(7); doc.setTextColor(...P.ink)
-    doc.text('Latest fleet estimates at export time; meters may differ from the inspection readings above.', mx, y)
-    y += 5
-    const n = (v) => (v == null ? 'N/A' : Math.round(v).toLocaleString('en-US'))
-    // Expected/Remaining show BOTH dimensions when both targets exist
-    // ("60,000 km / 8,000 hrs") - hour-metered plant is judged on hours.
+    y = ensure(y, 28)
+    y = _insSection(doc, 'Expected Tyre Life', y, mx, accent) + 1
+    doc.setFontSize(6.8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
+    doc.text('Latest fleet estimates at export time; meters may differ from the inspection readings above.', mx, y + 1)
+    y += 4
     const both = (km, hrs) => (km == null && hrs == null ? 'N/A'
-      : [km != null ? `${n(km)} km` : null, hrs != null ? `${n(hrs)} hrs` : null].filter(Boolean).join(' / '))
-    const lifeStartPage = doc.internal.getNumberOfPages()
+      : [km != null ? `${n0(km)} km` : null, hrs != null ? `${n0(hrs)} hrs` : null].filter(Boolean).join(' / '))
+    const st = doc.internal.getNumberOfPages()
     autoTable(doc, {
       startY: y,
-      margin: { top: 30, left: mx, right: mx, bottom: FOOTER_SPACE },
+      margin: { top: 31, left: mx, right: mx, bottom: ph - BOTTOM },
       head: [['Position', 'Serial', 'Brand', 'Km run', 'Hours run', 'Current km', 'Expected life', 'Remaining', 'Remaining days', 'Life used']],
       body: lifeRows.map((lr) => [
-        lr.position || 'N/A',
-        lr.serial || 'N/A',
-        lr.brand || 'N/A',
-        n(lr.kmRun),
-        n(lr.hoursRun),
-        n(lr.currentKm),
-        both(lr.expectedLifeKm, lr.expectedLifeHours),
-        both(lr.remainingKm, lr.remainingHours),
-        n(lr.remainingDays),
+        lr.position || 'N/A', lr.serial || 'N/A', lr.brand || 'N/A', n0(lr.kmRun), n0(lr.hoursRun), n0(lr.currentKm),
+        both(lr.expectedLifeKm, lr.expectedLifeHours), both(lr.remainingKm, lr.remainingHours), n0(lr.remainingDays),
         (measureFor(lr).used != null ? `${measureFor(lr).used}%` : 'N/A'),
       ]),
-      styles: { fontSize: 7, cellPadding: 1.6, textColor: P.ink, lineColor: P.silver, lineWidth: 0.15 },
-      headStyles: { fillColor: brand.accent, textColor: P.white, fontSize: 7, fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: P.cloud },
+      styles: { fontSize: 6.6, cellPadding: 1.5, textColor: P.ink, lineColor: P.silver, lineWidth: 0.12 },
+      headStyles: { fillColor: [241, 245, 249], textColor: P.steel, fontSize: 6.4, fontStyle: 'bold' },
       columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' }, 9: { halign: 'right' } },
-      didDrawPage: (data) => {
-        // Continuation pages only - redrawing on the first page would paint
-        // the white header band over the Document No already printed there.
-        if (data.pageNumber > lifeStartPage) _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr)
-      },
+      didDrawPage: (d) => { if (d.pageNumber > st) header() },
     })
-    y = (doc.lastAutoTable?.finalY || y) + 6
+    y = (doc.lastAutoTable?.finalY || y) + 8
   }
 
-  // ── Photos captured during the inspection ──────────────────────────────────
-  const photoItems = Array.isArray(opts.photos) ? opts.photos.filter((it) => it && it.url) : []
+  // ── PAGE 3: Tyre Inspection Photos ─────────────────────────────────────────
   if (photoItems.length) {
     const MAX_INSPECTION_PHOTOS = 12
     const fetchImageDataUrl = async (url) => {
@@ -1737,39 +1977,34 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
         return dataUrl ? { dataUrl, fmt } : null
       } catch { return null }
     }
-
+    const statusByCode = new Map(posRows.map((r) => [String(r.code).toUpperCase(), r.risk]))
     const omitted  = Math.max(0, photoItems.length - MAX_INSPECTION_PHOTOS)
     const toRender = photoItems.slice(0, MAX_INSPECTION_PHOTOS)
-    if (y > ph - 60) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
-    y = _sectionBar(doc, `Photos (${omitted ? `${toRender.length} of ${photoItems.length}` : toRender.length})`, y, mx, brand.accent) + 4
-
-    const cols = 3, gap = 6
-    const boxW = (pw - mx * 2 - gap * (cols - 1)) / cols
-    const imgH = boxW * 0.72
+    y = newPage()
+    y = _insSection(doc, `Tyre Inspection Photos (${omitted ? `${toRender.length} of ${photoItems.length}` : toRender.length})`, y, mx, accent) + 1
+    const cols = 4, gap = 3.5
+    const boxW = (W - gap * (cols - 1)) / cols
+    const imgH = boxW * 1.02
     const capH = 7
     const boxH = imgH + capH
     let col = 0
     let rowTop = y
     for (const item of toRender) {
-      if (col === 0) {
-        if (y > ph - boxH - FOOTER_SPACE - 4) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
-        rowTop = y
-      }
+      if (col === 0) { y = ensure(y, boxH); rowTop = y }
       const x = mx + col * (boxW + gap)
-      doc.setFillColor(...P.offWhite); doc.setDrawColor(...P.silver); doc.setLineWidth(0.3)
-      doc.roundedRect(x, rowTop, boxW, boxH, 2, 2, 'FD')
+      doc.setFillColor(...P.offWhite); doc.setDrawColor(...P.silver); doc.setLineWidth(0.2)
+      doc.roundedRect(x, rowTop, boxW, boxH, 1.6, 1.6, 'FD')
       let embedded = false
       const got = await fetchImageDataUrl(item.url)
       if (got) {
         try {
-          const availW = boxW - 4, availH = imgH - 4
-          let dW = availW, dH = availH, ox = x + 2, oy = rowTop + 2
+          let dW = boxW, dH = imgH, ox = x, oy = rowTop
           try {
             const props = doc.getImageProperties ? doc.getImageProperties(got.dataUrl) : null
             if (props && props.width && props.height) {
               const ar = props.width / props.height
-              if (ar > availW / availH) { dW = availW; dH = availW / ar; oy = rowTop + 2 + (availH - dH) / 2 }
-              else { dH = availH; dW = availH * ar; ox = x + 2 + (availW - dW) / 2 }
+              if (ar > boxW / imgH) { dW = boxW; dH = boxW / ar; oy = rowTop + (imgH - dH) / 2 }
+              else { dH = imgH; dW = imgH * ar; ox = x + (boxW - dW) / 2 }
             }
           } catch { /* box-fill sizing */ }
           doc.addImage(got.dataUrl, got.fmt, ox, oy, dW, dH, undefined, 'FAST')
@@ -1778,52 +2013,28 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
       }
       if (!embedded) {
         doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
-        doc.text('image unavailable', x + boxW / 2, rowTop + imgH / 2, { align: 'center' })
+        doc.text('Image unavailable', x + boxW / 2, rowTop + imgH / 2, { align: 'center' })
       }
-      doc.setFontSize(6.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
-      doc.text(String(item.label || '-'), x + 2, rowTop + imgH + 4.5)
+      doc.setFillColor(...P.white); doc.rect(x + 0.2, rowTop + imgH, boxW - 0.4, capH - 0.2, 'F')
+      const label = String(item.label || 'Photo')
+      doc.setFontSize(7.2); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+      doc.text(doc.splitTextToSize(label, boxW - 18)[0], x + 2, rowTop + imgH + 4.7)
+      const risk = statusByCode.get(label.toUpperCase())
+      if (risk) _insPill(doc, x + boxW - 14.5, rowTop + imgH + 1.4, 13, 4.2, _INS_WORD[risk], risk)
       col++
       if (col >= cols) { col = 0; y = rowTop + boxH + gap }
     }
     if (col !== 0) y = rowTop + boxH + gap
     if (omitted) {
-      doc.setFontSize(7); doc.setFont('helvetica', 'italic'); doc.setTextColor(...P.mist)
-      doc.text(`${omitted} additional photo(s) omitted.`, mx, y)
-      y += 6
-    }
+      y = ensure(y, 12)
+      doc.setFillColor(...P.cloud); doc.roundedRect(mx, y, W, 9, 2, 2, 'F')
+      doc.setFontSize(7.8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.iron)
+      doc.text(`${omitted} additional photo${omitted === 1 ? '' : 's'} omitted.`, pw / 2, y + 5.8, { align: 'center' })
+      y += 13
+    } else y += 3
   }
 
-  // ── Findings ───────────────────────────────────────────────────────────────
-  if (row.findings) {
-    if (y > ph - 40) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
-    y = _sectionBar(doc, 'Findings & Observations', y, mx, brand.accent) + 4
-    doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...P.ink)
-    const fl = doc.splitTextToSize(row.findings, pw - mx * 2)
-    doc.text(fl, mx, y); y += fl.length * 4.5 + 6
-  }
-
-  // ── Notes ──────────────────────────────────────────────────────────────────
-  // The meters are shown in the top meta grid; strip the auto-added
-  // "Odometer: ... / Hour meter: ..." lines so this section carries only the
-  // tyreman's REAL notes (and is omitted entirely when nothing else remains).
-  const realNotes = String(row.notes || '')
-    .split(/\r?\n/)
-    .filter((l) => !/^\s*(odometer|hour\s*meter)\b/i.test(l))
-    .join('\n')
-    .trim()
-  if (realNotes) {
-    if (y > ph - 35) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
-    y = _sectionBar(doc, 'Additional Notes', y, mx, brand.accent) + 4
-    doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...P.ink)
-    const nl = doc.splitTextToSize(realNotes, pw - mx * 2)
-    doc.text(nl, mx, y); y += nl.length * 4.5 + 6
-  }
-
-  // ── Signature block ─────────────────────────────────────────────────────────
-  // Owner spec: TWO signatures - the TYREMAN who performed the inspection and
-  // the APPROVER who signed it off - each with their actual drawn signature
-  // (mobile SVG string or web data-url both render) and name. Never the person
-  // downloading the report. A pending approval shows honestly as pending.
+  // ── Sign-off ───────────────────────────────────────────────────────────────
   const toSigPng = async (raw) => {
     if (typeof raw !== 'string' || !raw.trim()) return null
     if (/^data:image\//i.test(raw)) return raw
@@ -1842,47 +2053,68 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   const approverSig = await toSigPng(row.approver_signature)
   const approverName = row.approver_name || row.approver_email ||
     (row.approved_by && !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(row.approved_by) ? row.approved_by : null)
-  const isApproved   = String(row.approval_status || '').toLowerCase() === 'approved'
 
-  if (y + 40 > ph - FOOTER_SPACE - 2) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
-  y += 4
-  const sigBoxW = (pw - mx * 2 - 6) / 2
-  const drawSigBox = (x, title, png, name, dateLbl) => {
-    doc.setFillColor(...P.offWhite)
-    doc.setDrawColor(...P.silver)
-    doc.setLineWidth(0.3)
-    doc.roundedRect(x, y, sigBoxW, 34, 2, 2, 'FD')
-    doc.setFontSize(7); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ghost)
+  y = ensure(y, 48)
+  y = _insSection(doc, 'Sign-off', y, mx, accent) + 1
+  const sigW = (W - 5) / 2, sigH = 36
+  const drawSig = (x, title, png, name, dateLbl) => {
+    doc.setFillColor(...P.offWhite); doc.setDrawColor(...P.silver); doc.setLineWidth(0.2)
+    doc.roundedRect(x, y, sigW, sigH, 2, 2, 'FD')
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
     doc.text(title, x + 4, y + 6)
+    doc.setFillColor(...P.white); doc.roundedRect(x + 4, y + 8.5, sigW - 8, 14, 1.2, 1.2, 'F')
     if (png) {
-      try { doc.addImage(png, 'PNG', x + 4, y + 8, Math.min(sigBoxW - 8, 56), 13, undefined, 'FAST') } catch { /* line stays */ }
+      try {
+        const props = doc.getImageProperties(png)
+        const ar = props.width / props.height
+        let dh = 12, dw = dh * ar
+        if (dw > sigW - 10) { dw = sigW - 10; dh = dw / ar }
+        doc.addImage(png, 'PNG', x + 5, y + 9.5 + (12 - dh) / 2, dw, dh, undefined, 'FAST')
+      } catch { /* box stays blank */ }
     } else {
-      doc.setFontSize(6.5); doc.setFont('helvetica','italic'); doc.setTextColor(...P.mist)
-      doc.text(name ? 'No drawn signature on record' : 'Pending', x + 4, y + 15)
+      doc.setFontSize(7); doc.setFont('helvetica', 'italic'); doc.setTextColor(...P.mist)
+      doc.text(name ? 'No drawn signature on record' : 'Pending', x + 6, y + 16.5)
     }
-    doc.setDrawColor(...P.ghost); doc.setLineWidth(0.4)
-    doc.line(x + 4, y + 24, x + sigBoxW - 4, y + 24)
-    doc.setFontSize(7); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
-    doc.text(name || 'Not recorded', x + 4, y + 28.5)
-    doc.setFontSize(6); doc.setFont('helvetica','normal'); doc.setTextColor(...P.mist)
-    doc.text(dateLbl, x + 4, y + 32)
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+    doc.text(name || 'Not recorded', x + 4, y + 28)
+    doc.setFontSize(6.8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
+    doc.text(dateLbl, x + 4, y + 32.2)
   }
-  drawSigBox(mx, 'TYREMAN SIGNATURE', tyremanSig, row.inspector || row.attendees || null,
-    `Inspected: ${row.inspection_date || row.completed_date || row.scheduled_date || '-'}`)
-  drawSigBox(mx + sigBoxW + 6, 'APPROVER SIGNATURE',
+  drawSig(mx, 'Tyreman Signature', tyremanSig, row.inspector || row.attendees || null, `Inspected: ${inspDay}`)
+  drawSig(mx + sigW + 5, 'Approver Signature',
     isApproved ? approverSig : null,
     isApproved ? approverName : null,
-    isApproved ? `Approved: ${String(row.approved_at || '').slice(0, 10) || '-'}` : 'Approval pending')
-  y += 38
+    isApproved ? `Approved: ${_insDate(row.approved_at)}` : isRejected ? 'Sign-off rejected' : 'Approval pending')
+  y += sigH + 4
 
-  // ── Footers ─────────────────────────────────────────────────────────────────
+  // ── Footer on every page: title, page count, verification QR ───────────────
+  let qr = null
+  const verifyText = opts.verifyUrl || (typeof window !== 'undefined' && window.location && row.id
+    ? `${window.location.origin}/inspections?view=${encodeURIComponent(row.id)}` : null)
+  if (verifyText) {
+    try {
+      const mod = await import('qrcode')
+      const QR = mod.default || mod
+      qr = await QR.toDataURL(verifyText, { margin: 0, width: 220, errorCorrectionLevel: 'M' })
+    } catch { qr = null }
+  }
   const totalPages = doc.internal.getNumberOfPages()
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p)
-    _pageFooter(doc, p, totalPages, company || 'Fleet Operations', ftr)
+    doc.setDrawColor(...P.silver); doc.setLineWidth(0.25)
+    doc.line(mx, ph - 14, pw - mx - (qr ? 32 : 0), ph - 14)
+    doc.setFontSize(6.8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
+    doc.text(brand.footerText || `${TITLE}${company ? `  |  ${company}` : ''}`, mx, ph - 9.5)
+    doc.text(`Page ${p} of ${totalPages}`, pw - mx - (qr ? 34 : 0), ph - 9.5, { align: 'right' })
+    if (qr) {
+      try { doc.addImage(qr, 'PNG', pw - mx - 30, ph - 17, 11, 11, undefined, 'FAST') } catch { /* text only */ }
+      doc.setFontSize(5.8); doc.setTextColor(...P.ghost)
+      doc.text('Scan to verify', pw - mx - 17.5, ph - 12.4)
+      doc.text('this report', pw - mx - 17.5, ph - 9.6)
+    }
   }
 
-  const safe = (row.title || 'inspection').replace(/[^a-z0-9]/gi, ' ').slice(0, 40)
+  const safe = (row.title || row.asset_no || 'inspection').replace(/[^a-z0-9]/gi, ' ').slice(0, 40)
   if (opts.save !== false) doc.save(`${reportFileName('Inspection', safe)}.pdf`)
   return doc
 }

@@ -44,6 +44,7 @@ import { listSites, siteRegionMap, regionForSite, regionsIn } from '../lib/api/s
 import { trackingLink } from '../lib/tyreChangeTracking'
 import { getDiagramBg } from '../lib/api/brandLogo'
 import InspectionViewerDrawer from '../components/inspection/InspectionViewerDrawer'
+import { vehiclePhoto } from '../lib/vehiclePhoto'
 import InspectionDiagram from '../components/inspection/InspectionDiagram'
 import { buildApprovalEmailHtml } from '../lib/inspectionApprovalEmail'
 import { brandingForPdf, buildChecklistReportPdf, checklistReportFileName } from '../lib/inspectionChecklistReport'
@@ -341,6 +342,12 @@ export default function Inspections() {
   // Read a record in place. Holds an id, not a row: the drawer loads the full
   // record (signatures included, which the register list no longer carries).
   const [viewId, setViewId] = useState(null)
+  // The report's QR code lands here: ?view=<inspection_id> opens that record
+  // (RLS still decides whether the reader may see it).
+  useEffect(() => {
+    const id = searchParams.get('view')
+    if (id && /^[0-9a-f-]{36}$/i.test(id)) setViewId(id)
+  }, [searchParams])
   const [pdfBusyId, setPdfBusyId] = useState(null)
   const [pdfError, setPdfError] = useState('')
   // An export failure is reported on its own line, not through the approval modal's message slot.
@@ -410,7 +417,10 @@ export default function Inspections() {
         // operator sees. Falls back to the programmatic map when absent.
         const svgEl = pdfDiagramRef.current?.querySelector('svg[data-tyre-map]') || null
         const diagramBg = (await getDiagramBg().catch(() => '')) || '#000000'
-        await exportInspectionDetailPdf(pdfRow, { branding: await brandingForPdf(branding), company, photos, lifeRows, svgEl, diagramBg })
+        await exportInspectionDetailPdf(pdfRow, {
+          branding: await brandingForPdf(branding), company, photos, lifeRows, svgEl, diagramBg,
+          vehiclePhotoUrl: vehiclePhoto(pdfRow),
+        })
       } catch (err) { if (!cancelled) setPdfError(toUserMessage(err, 'Could not create the inspection PDF. Retry the download.')) }
       finally { if (!cancelled) { setPdfRow(null); setPdfBusyId(null) } }
     }, 80)

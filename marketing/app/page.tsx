@@ -176,9 +176,11 @@ export default function HomePage() {
             </dl>
           </div>
           <div className="marquee">
-            <div className="marquee-track">
-              <ul aria-label="Asset types tracked">{ASSET_TYPES.map((t) => <li key={t}>{t}</li>)}</ul>
-              <ul aria-hidden="true">{ASSET_TYPES.map((t) => <li key={t}>{t}</li>)}</ul>
+            <div className="site-shell marquee-viewport">
+              <div className="marquee-track">
+                <ul aria-label="Asset types tracked">{ASSET_TYPES.map((t) => <li key={t}>{t}</li>)}</ul>
+                <ul aria-hidden="true">{ASSET_TYPES.map((t) => <li key={t}>{t}</li>)}</ul>
+              </div>
             </div>
           </div>
         </section>

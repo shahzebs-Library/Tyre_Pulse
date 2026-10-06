@@ -10,8 +10,8 @@ const PASSPORT = [
   { asset: "PT-118", pos: "LHF1", from: "Jun 2025", km: "18,900 km", note: "First fitment" },
 ] as const;
 
-/** TPMS pressure, last 24 hours, on the leaking wheel (psi). */
-const PSI = [118, 118, 117, 116, 114, 112, 109, 106, 103, 100, 97, 94];
+/** Pressure on the leaking wheel at its last readings, from TPMS uploads and inspections (psi). */
+const PSI = [118, 117, 116, 112, 107, 101, 94];
 /** Tread forecast per tyre: mm now, weeks until 3 mm. */
 const FORECAST = [
   { id: "lhr1", pos: "LHR1", mm: 4.1, weeks: 5, tone: "red" },
@@ -35,15 +35,15 @@ function PsiLine() {
   const top = (v: number) => ((hi - v) / (hi - lo)) * 100;
   const left = (i: number) => 3 + i * (94 / (PSI.length - 1));
   return (
-    <figure className="idemo-chart" aria-label="TPMS pressure on LHR1 over 24 hours, falling from 118 to 94 psi, alert level 105 psi">
-      <figcaption><span>LHR1 pressure, 24 h</span><b>94 psi</b><em className="warn">Slow leak, -2 psi per hour</em></figcaption>
+    <figure className="idemo-chart" aria-label="Pressure on LHR1 at its last 7 readings, falling from 118 to 94 psi, alert level 105 psi">
+      <figcaption><span>LHR1 pressure, last 7 readings</span><b>94 psi</b><em className="warn">Falling at every reading</em></figcaption>
       <div className="idemo-line" aria-hidden="true">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none">
           <line x1="0" x2="100" y1={top(lim)} y2={top(lim)} className="limit" vectorEffect="non-scaling-stroke" />
           <polyline points={PSI.map((v, i) => `${left(i)},${top(v)}`).join(" ")} className="wear" vectorEffect="non-scaling-stroke" />
         </svg>
         <span className="limit-t" style={{ top: `${top(lim)}%` }}>Alert 105 psi</span>
-        {PSI.map((v, i) => (i % 3 === 2 || i === PSI.length - 1) && (
+        {PSI.map((v, i) => (i % 2 === 0 || i === PSI.length - 1) && (
           <span key={i} className={`dot${i === PSI.length - 1 ? " last" : ""}`} style={{ left: `${left(i)}%`, top: `${top(v)}%` }}><em>{v}</em></span>
         ))}
       </div>
@@ -68,9 +68,9 @@ function Phone({ step, sel }: SceneProps) {
         </div>
       </Pane>
       <Pane on={step === "tpms"}>
-        <Notice title="Pressure dropping" body="MX-214 LHR1 at 94 psi and falling. Check before the next trip." />
-        <div className="idemo-reading bad"><b>LHR1</b><span>94 psi · 41 °C</span><em>Slow leak</em></div>
-        <div className="idemo-reading good"><b>RHR1</b><span>117 psi · 39 °C</span><em>Normal</em></div>
+        <div className="idemo-asset"><b>MX-214 · pressure check</b><span>Readings saved per wheel</span></div>
+        <div className="idemo-reading bad"><b>LHR1</b><span>94 psi · 19% low</span><em>Flagged</em></div>
+        <div className="idemo-reading good"><b>RHR1</b><span>117 psi</span><em>Normal</em></div>
       </Pane>
       <Pane on={step === "predict"}>
         <div className="idemo-asset"><b>{f.pos} on MX-214</b><span>{f.mm} mm left</span><span>Reaches 3 mm in about {f.weeks} weeks</span></div>
@@ -106,7 +106,7 @@ function Web({ step, sel, choose }: SceneProps) {
         <PsiLine />
         <div className="v-sparks">
           <SparkKpi label="Pressure compliance" value="96%" data={[88, 90, 91, 93, 94, 96]} good="up" />
-          <SparkKpi label="Below alert now" value="3" data={[9, 7, 8, 5, 4, 3]} />
+          <SparkKpi label="Tyres below alert" value="3" data={[9, 7, 8, 5, 4, 3]} />
           <SparkKpi label="Blowouts this quarter" value="1" data={[5, 4, 4, 2, 2, 1]} />
         </div>
       </Pane>
@@ -165,13 +165,13 @@ export const tyreIntel: Scenario = {
   id: "tyres",
   label: "Tyre intelligence",
   icon: Radar,
-  pitch: "RFID, TPMS and every inspection feed one tyre record, so you know which tyre fails next and which brand is worth the money.",
+  pitch: "RFID tags, TPMS readings and every inspection feed one tyre record, so you know which tyre fails next and which brand is worth the money.",
   appTitle: "Tyres",
   site: "Riyadh",
   defaultSel: "lhr1",
   steps: [
     { id: "rfid", icon: Nfc, title: "Read the RFID tag", text: "One read opens the tyre's passport: every vehicle, wheel and km it has run.", url: "app.tyrepulse.app/tyre-passport/DX-4471-208", nav: "Tyres" },
-    { id: "tpms", icon: Activity, title: "TPMS catches the leak", text: "Live pressure and temperature. A slow leak alerts the driver before it becomes a blowout.", url: "app.tyrepulse.app/pressure-intel", nav: "Tyres", bell: true },
+    { id: "tpms", icon: Activity, title: "Pressure flags the leak", text: "Readings from TPMS sensor uploads and inspections are compared wheel by wheel, so a tyre losing pressure is flagged before it fails.", url: "app.tyrepulse.app/tpms", nav: "Tyres", bell: true },
     { id: "predict", icon: TrendingDown, title: "Forecast the removal", text: "Tread trend predicts when each tyre reaches its limit. Click a tyre to see its date.", url: "app.tyrepulse.app/predictive-maintenance", nav: "Tyres" },
     { id: "anomaly", icon: AlertOctagon, title: "Anomalies flagged", text: "Meter rollbacks, duplicate expenses and odd pressures are found for you. Click one.", url: "app.tyrepulse.app/ops-intelligence", nav: "Overview", bell: true },
     { id: "value", icon: BadgeDollarSign, title: "Buy the right brand", text: "Cost per km by brand and fleet tyre health show where the money and the risk are.", url: "app.tyrepulse.app/cpk-intelligence", nav: "Costs" },

@@ -50,7 +50,7 @@ function TabCopy({ title, text, points, href }: { title: string; text: string; p
 
 /* What can open a job: every signal lands in the same queue. */
 const SIGNALS = [
-  "Driver reports a problem", "Inspection finds a defect", "TPMS pressure alert", "Preventive service due",
+  "Driver reports a problem", "Inspection finds a defect", "Low pressure flagged", "Preventive service due",
   "Anomaly flagged in the data", "Accident reported",
 ];
 
@@ -253,10 +253,10 @@ export default function HomePage() {
                 </li>
               ))}
             </ol>
-            <figure className="fx-job" aria-label="Sample job on transit mixer MX-214: 7 hours from report to back in service. 23 minutes to approve and assign, 1 hour 20 waiting for parts, 2 hours 10 of repair, the rest waiting to start and quality check.">
+            <figure className="fx-job" aria-label="Sample job on transit mixer MX-214, down 6 h 58 min from report to back in service: waiting to start 2 h 38, repair 2 h 10, waiting for parts 1 h 20, approve and assign 30 min, quality check 20 min">
               <figcaption><span>One sample job · MX-214 · Riyadh</span><b>Down 6 h 58 min</b><em>Sample data</em></figcaption>
               <div className="fx-charts">
-                <Donut size={132} center="6 h 58" sub="down" label="Where the downtime went: waiting to start 2 h 38, repair 2 h 10, parts 1 h 20, approve and assign 30 min, quality check 20 min"
+                <Donut size={132} center="6 h 58" sub="down" label="Where the downtime went, 6 h 58 min in total: waiting to start 2 h 38, repair 2 h 10, parts 1 h 20, approve and assign 30 min, quality check 20 min"
                   slices={[
                     { name: "Waiting to start", v: 158, tone: "ink2", label: "2 h 38" },
                     { name: "Repair", v: 130, tone: "brand", label: "2 h 10" },
@@ -301,7 +301,7 @@ export default function HomePage() {
         <section className="bright-band" aria-labelledby="demo-walkround">
           <div className="site-shell">
             <h2 className="sec-h" id="demo-walkround">See it work: the phone in the field, the web in the office.</h2>
-            <p className="bright-lead">Six short tours: tyre inspection, tyre intelligence with RFID, TPMS and anomaly checks, breakdowns, accidents and claims, preventive maintenance, and cost per km. Pick one, or let it play. Tap the wheels, rows and bars to explore.</p>
+            <p className="bright-lead">Six short tours: tyre inspection, tyre intelligence with RFID, pressure and anomaly checks, breakdowns, accidents and claims, preventive maintenance, and cost per km. Pick one, or let it play. Tap the wheels, rows and bars to explore.</p>
             <Walkthrough />
           </div>
         </section>
@@ -362,7 +362,7 @@ const ROLES: Role[] = [
     screen: ["My jobs by priority", "Start, pause for parts, finish", "Tyre fitment by wheel position", "Inspection photos and signature"],
     kpis: [["Jobs today", "4"], ["Productive time", "6 h 10"]], devices: ["phone"] },
   { id: "tyre", label: "Tyre man", title: "Every wheel, every reading, every serial.", text: "Walk round with the tyre map, read RFID tags, record tread and pressure per wheel, and see which tyres the forecast says come off next.",
-    screen: ["Tyre map per vehicle type", "RFID read opens the tyre passport", "TPMS alerts on the wheels you look after", "Tyres due in the next 30 days"],
+    screen: ["Tyre map per vehicle type", "RFID read opens the tyre passport", "Low-pressure flags from TPMS readings and checks", "Tyres due in the next 30 days"],
     kpis: [["Tyres due in 30 days", "46"], ["Pressure compliance", "96%"]], devices: ["phone", "web"] },
   { id: "store", label: "Storekeeper", title: "Issue parts without the paperwork.", text: "See what each job needs, issue stock against the job card, and raise a purchase request when the reorder level is reached.",
     screen: ["Parts requested by open jobs", "Issue against the job card", "Stock and reorder level by site", "Purchase requests waiting approval"],

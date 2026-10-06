@@ -170,7 +170,7 @@ export function Walkthrough({ only, initial }: { only?: ScenarioId[]; initial?: 
       </div>
 
       {auto && (
-        <button type="button" className="idemo-toggle" aria-pressed={paused} onClick={() => setPaused((p) => !p)}>
+        <button type="button" className="idemo-toggle" aria-pressed={paused} onClick={() => { setPaused((p) => !p); setHeld(false); }}>
           {paused ? <Play size={14} aria-hidden="true" /> : <Pause size={14} aria-hidden="true" />}
           {paused ? "Play the walk-through" : "Pause the walk-through"}
         </button>

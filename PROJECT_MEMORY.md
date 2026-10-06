@@ -5,6 +5,18 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ TWO SESSIONS WORK THIS REPO IN PARALLEL (owner, 2026-10-06). EVERY SESSION FOLLOWS THIS.
+- One session works the APP (`src/`, e.g. branch claude/modest-hopper-5bnq8c), another the MARKETING site (`marketing/`,
+  branch claude/relaxed-planck-ur3ji5). Either can merge to main at any time without the other seeing it.
+- BEFORE starting work and BEFORE every push/merge: `git fetch origin` and read `git log origin/main` + open PRs. Never
+  assume main is where you left it.
+- Branch from / realign to the LATEST origin/main. Before merging, prove no clash: `git merge-tree --write-tree origin/main
+  <branch>` must be clean. Stay inside your own area; touch a file the other session owns only if the owner asks.
+- Never force-push or reset a branch you did not create; never squash over another session's unmerged commits
+  (check `git log origin/main..origin/<branch>` first). PROJECT_MEMORY.md is shared: add your own entry, never rewrite theirs.
+- 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
+  Inspections/Checklists workspace, other session) merged 9f7783a7.
+
 # ⚑ SESSION 2026-10-06 (part 3) — INSPECTION REPORT PDF REBUILT TO THE OWNER'S 3-PAGE MOCKUP. No migration.
 - exportInspectionDetailPdf (src/lib/exportUtils.js): p1 Vehicle Details card (+ vehicle picture via vehiclePhoto(row),
   opts.vehiclePhotoUrl) / 5 summary tiles + Avg Pressure + Photos Attached / tyre map (app SVG, legend) / Inspection

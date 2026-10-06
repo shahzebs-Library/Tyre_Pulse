@@ -50,10 +50,10 @@ function useTicker(length: number, ms: number, start = 0) {
 }
 
 /** A running activity feed: newest event slides in at the top, older ones fade down. */
-export function LiveFeed({ title, events }: { title: string; events: LiveEvent[] }) {
+export function LiveFeed({ title, events, rows = 4 }: { title: string; events: LiveEvent[]; rows?: number }) {
   // Starts on the fourth event so the first frame already reads as a running log.
   const { ref, i } = useTicker(events.length, TICK_MS, Math.min(3, events.length - 1));
-  const shown = [0, 1, 2, 3].map((k) => events[(i - k + events.length * 4) % events.length]);
+  const shown = Array.from({ length: Math.max(1, Math.min(rows, events.length)) }, (_, k) => k).map((k) => events[(i - k + events.length * 4) % events.length]);
   return (
     <div className="live-feed" ref={ref} aria-hidden="true">
       <div className="live-head"><span className="live-dot" /><strong>{title}</strong><span className="sample-tag">Sample data</span></div>

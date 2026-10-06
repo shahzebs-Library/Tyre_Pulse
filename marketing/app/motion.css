@@ -407,7 +407,14 @@
 
 /* ---------- Hero live cards: work happening, one event after another ---------- */
 .hc-live { position: relative; }
-.hc-live > .hc-float { right: -14px; bottom: -18px; width: min(290px, 72%); }
+/* One-line toast that hangs below the window, so it never covers the table it sits on. */
+.hc-live > .hc-float { right: -14px; top: calc(100% - 23px); bottom: auto; width: min(300px, 60%); }
+.hc-live > .hc-float .live-feed { padding: 8px 10px; gap: 5px; }
+.hc-live > .hc-float .live-row { padding: 5px 8px; }
+/* Below 1300px the gap above the module tabs is too short for the toast; the window stands alone. */
+@media (max-width: 1299px) { .hc-live > .hc-float { display: none; } }
+/* Four rows in the hero leave the window's lower edge free for the toast. */
+.hc-live tbody tr:nth-child(n+5) { display: none; }
 .live-feed, .asset-cycle { padding: 12px 12px 10px; display: grid; gap: 8px; }
 .live-head { display: flex; align-items: center; gap: 8px; font-size: .8rem; }
 .live-head strong { flex: 1; }

@@ -121,7 +121,7 @@ const HERO_SLIDES: HeroSlide[] = [
     title: "Know which machines are down, why, and what they cost.",
     lead: "Your workshop, field teams and stores work from one record per machine, so nothing is retyped.",
     link: { href: "/platform", label: "Explore the platform" },
-    visual: <div className="hc-live"><OpsOverview /><div className="hc-float"><LiveFeed title="Live activity" events={OPS_EVENTS} /></div></div>,
+    visual: <div className="hc-live"><OpsOverview /><div className="hc-float"><LiveFeed title="Live activity" events={OPS_EVENTS} rows={1} /></div></div>,
   },
   {
     id: "assets", tab: "Fleet and assets", kicker: "Fleet and asset lifecycle",

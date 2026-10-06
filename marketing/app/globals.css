@@ -24,6 +24,19 @@
   --info: #2459c7;
   --shadow: 0 20px 50px rgba(22, 22, 22, 0.14);
   --radius: 10px;
+  /*
+   * Page width system. Every band (header, sections, dark bands, CTA, footer,
+   * hero) sits inside .site-shell, so these two tokens decide where all
+   * content edges line up. The shell grows with the screen up to a cap; the
+   * gutter is 16px on phones and grows to 64px on wide screens. Prose keeps
+   * its own measure (.lead, .page-lead, .display ...), so a wider shell gives
+   * grids and media more room, never longer lines of text.
+   */
+  --shell-max: 1440px;
+  --gutter: clamp(16px, 4vw, 64px);
+}
+@media (min-width: 2200px) {
+  :root { --shell-max: 1680px; }
 }
 
 * { box-sizing: border-box; }
@@ -41,7 +54,7 @@ button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 img { max-width: 100%; height: auto; }
 
-.site-shell { width: min(1180px, calc(100% - 32px)); margin: 0 auto; }
+.site-shell { width: min(var(--shell-max), 100% - 2 * var(--gutter)); margin-inline: auto; }
 .section { padding: 78px 0; }
 .section-tight { padding: 64px 0; }
 .eyebrow {
@@ -245,7 +258,6 @@ img { max-width: 100%; height: auto; }
 }
 
 @media (max-width: 640px) {
-  .site-shell { width: min(100% - 32px, 1180px); }
   .section { padding: 70px 0; }
   .nav-logo img { width: 148px; }
   .nav-actions .btn-secondary { display: none; }

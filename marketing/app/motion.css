@@ -302,41 +302,66 @@
   .cta-band::after { width: 60%; opacity: .6; }
 }
 
-/* ---------- Inspection demo scene: one walk-round, scan to work order ---------- */
-.idemo { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: clamp(28px, 5vw, 72px); align-items: center; }
-.idemo-phone { width: 260px; justify-self: center; }
-.idemo-screen { position: relative; min-height: 330px; align-content: start; }
+/* ---------- Inspection walk-through: phone and web app in step ---------- */
+.bright-band { background: linear-gradient(180deg, #fffaea 0%, #fff 70%); border-top: 1px solid #f3e6b8; padding: 56px 0 64px; }
+.bright-lead { max-width: 640px; color: #4a4a44; margin: 6px 0 22px; font-size: 1.02rem; }
+.idemo { display: grid; gap: 18px; }
+/* Stepper */
+.idemo-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.idemo-steps button { position: relative; overflow: hidden; width: 100%; min-height: 56px; display: flex; gap: 10px; align-items: center; text-align: start; padding: 10px 12px; border: 1px solid #e7e3d4; border-radius: 10px; background: #fff; color: #161616; font: inherit; cursor: pointer; transition: border-color .2s, box-shadow .2s, background .2s; }
+.idemo-steps button:hover { border-color: #d8cfa8; }
+.idemo-steps button.is-on { border-color: #161616; box-shadow: 0 6px 18px rgba(22,22,22,.10); }
+.idemo-n { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: #f4f1e6; color: #161616; }
+.idemo-steps button.is-on .idemo-n { background: var(--brand); }
+.idemo-st { display: grid; min-width: 0; }
+.idemo-st small { font-size: .72rem; color: #6b6b64; }
+.idemo-st b { font-size: .92rem; line-height: 1.2; }
+.idemo-timer { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: var(--brand); transform-origin: left; animation: idemo-timer linear both; }
+@keyframes idemo-timer { from { transform: scaleX(0); } }
+.idemo-caption { margin: 0; min-height: 1.6em; font-size: 1rem; color: #33332e; }
+/* Stage: phone + browser */
+.idemo-stage { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: clamp(20px, 3.5vw, 44px); align-items: center; }
+.idemo-phone { width: 250px; justify-self: center; box-shadow: 0 24px 50px rgba(22,22,22,.22); }
+.idemo-screen { position: relative; min-height: 360px; align-content: start; }
 .idemo-progress { height: 3px; background: #ecece6; border-radius: 3px; overflow: hidden; }
 .idemo-progress span { display: block; height: 100%; background: var(--brand); transition: width .5s var(--ease-out, ease); }
-.idemo-pane { position: absolute; inset: 52px 12px 12px; display: grid; align-content: start; gap: 10px; opacity: 0; visibility: hidden; transform: translateY(8px); transition: opacity .3s var(--ease-out, ease), transform .3s var(--ease-out, ease), visibility 0s linear .3s; }
+.idemo-pane { position: absolute; inset: 52px 12px 12px; display: grid; align-content: start; gap: 8px; opacity: 0; visibility: hidden; transform: translateY(8px); transition: opacity .3s var(--ease-out, ease), transform .3s var(--ease-out, ease), visibility 0s linear .3s; }
 .idemo-pane.is-on { opacity: 1; visibility: visible; transform: none; transition: opacity .35s var(--ease-out, ease) .08s, transform .35s var(--ease-out, ease) .08s, visibility 0s; }
-.idemo-scan { position: relative; height: 150px; border-radius: 10px; background: #1d1d1b; color: #fff; display: grid; place-items: center; overflow: hidden; }
-.idemo-scan::before { content: ""; position: absolute; inset: 22px 46px; border: 2px solid var(--brand); border-radius: 8px; }
-.idemo-beam { position: absolute; left: 46px; right: 46px; top: 22px; height: 2px; background: var(--brand); box-shadow: 0 0 12px var(--brand); }
+.idemo-pane.web { inset: 40px 16px 14px; }
+.idemo-scan { position: relative; height: 140px; border-radius: 10px; background: #1d1d1b; color: #fff; display: grid; place-items: center; overflow: hidden; }
+.idemo-scan::before { content: ""; position: absolute; inset: 20px 46px; border: 2px solid var(--brand); border-radius: 8px; }
+.idemo-beam { position: absolute; left: 46px; right: 46px; top: 20px; height: 2px; background: var(--brand); box-shadow: 0 0 12px var(--brand); }
 .is-on .idemo-beam { animation: idemo-beam 1.4s var(--ease-swift, ease-in-out) infinite alternate; }
-@keyframes idemo-beam { to { transform: translateY(104px); } }
-.idemo-asset { display: grid; gap: 2px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; }
+@keyframes idemo-beam { to { transform: translateY(98px); } }
+.idemo-asset { display: grid; gap: 3px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; }
 .idemo-asset b { font-size: 15px; }
-.idemo-asset span { color: var(--muted); font-size: 10.5px; }
+.idemo-asset b em { font-style: normal; font-weight: 500; font-size: 10.5px; color: var(--muted); margin-inline-start: 4px; }
+.idemo-asset span { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 10.5px; }
 .is-on .idemo-asset { animation: idemo-pop .4s var(--ease-out, ease) 1.1s both; }
 @keyframes idemo-pop { from { opacity: 0; transform: translateY(6px) scale(.97); } }
-.idemo-truck { width: 150px; justify-self: center; }
+.idemo-truck { width: 130px; justify-self: center; }
 .idemo-truck .cab { fill: #d9d9d2; } .idemo-truck .body { fill: #ecece6; }
 .idemo-truck .wheel { fill: #b9b9b1; }
 .is-on .idemo-truck .wheel.good { animation: idemo-good .3s ease both; }
+.is-on .idemo-truck .wheel.warn { animation: idemo-warn .3s ease both; }
 .is-on .idemo-truck .wheel.bad { animation: idemo-bad .3s ease both; }
 @keyframes idemo-good { to { fill: #2e9e5b; } }
+@keyframes idemo-warn { to { fill: #e0a21b; } }
 @keyframes idemo-bad { to { fill: #d23c2a; } }
-.idemo-flag { display: inline-flex; align-items: center; gap: 6px; justify-self: start; padding: 4px 8px; border-radius: 12px; background: #fdecea; color: #a52a1c; font-weight: 700; font-size: 10.5px; }
-.idemo-flag .dot { width: 7px; height: 7px; border-radius: 50%; background: #d23c2a; }
-.is-on .idemo-flag { animation: idemo-pop .35s var(--ease-out, ease) 2s both; }
+.idemo-reading { display: grid; grid-template-columns: auto 1fr auto; gap: 6px; align-items: center; padding: 6px 8px; border-radius: 8px; font-size: 10.5px; }
+.idemo-reading em { font-style: normal; font-weight: 700; }
+.idemo-reading.bad { background: #fdecea; color: #8f2418; }
+.idemo-reading.warn { background: #fdf3d8; color: #7a4c00; }
+.is-on .idemo-reading.bad { animation: idemo-pop .35s var(--ease-out, ease) 1.7s both; }
+.is-on .idemo-reading.warn { animation: idemo-pop .35s var(--ease-out, ease) 2.1s both; }
 .idemo-cam { position: relative; height: 160px; border-radius: 10px; overflow: hidden; display: grid; place-items: center; color: #fff; background: radial-gradient(circle at 40% 45%, #6b6458, #2a2723 70%); }
+.idemo-gps { position: absolute; left: 8px; bottom: 6px; font-size: 9px; background: rgba(0,0,0,.45); padding: 2px 6px; border-radius: 4px; }
 .idemo-flash { position: absolute; inset: 0; background: #fff; opacity: 0; }
 .is-on .idemo-flash { animation: idemo-flash .5s ease-out .9s; }
 @keyframes idemo-flash { 0% { opacity: 0; } 20% { opacity: .9; } 100% { opacity: 0; } }
 .idemo-thumbs { display: flex; align-items: center; gap: 6px; }
-.idemo-thumbs span { width: 42px; height: 42px; border-radius: 6px; background: linear-gradient(135deg, #4d473f, #8a7f6e); }
-.idemo-thumbs .t2 { background: linear-gradient(135deg, #3c3a36, #6f6a60); }
+.idemo-thumbs span, .idemo-photos span { width: 42px; height: 42px; border-radius: 6px; background: linear-gradient(135deg, #4d473f, #8a7f6e); }
+.idemo-thumbs .t2, .idemo-photos .t2 { background: linear-gradient(135deg, #3c3a36, #6f6a60); }
 .idemo-thumbs em { font-style: normal; font-size: 10.5px; color: var(--muted); }
 .is-on .idemo-thumbs .t1 { animation: idemo-pop .35s var(--ease-out, ease) 1.1s both; }
 .is-on .idemo-thumbs .t2 { animation: idemo-pop .35s var(--ease-out, ease) 1.9s both; }
@@ -344,36 +369,92 @@
 .idemo-sig path { fill: none; stroke: #161616; stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 360; stroke-dashoffset: 0; }
 .is-on .idemo-sig path { animation: idemo-draw 1.8s var(--ease-out, ease) .3s both; }
 @keyframes idemo-draw { from { stroke-dashoffset: 360; } }
-.idemo-done { display: grid; justify-items: center; gap: 6px; padding: 26px 0 12px; color: #2e9e5b; }
+.idemo-done { display: grid; justify-items: center; gap: 4px; padding: 22px 0 10px; color: #2e9e5b; text-align: center; }
 .idemo-done b { color: var(--ink); font-size: 13px; }
 .is-on .idemo-done svg { animation: idemo-check .5s var(--ease-spring, ease) .2s both; }
 @keyframes idemo-check { from { transform: scale(.4); opacity: 0; } }
 .idemo-wo { display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: 8px; background: #fff7dd; border: 1px solid #f2dd95; }
 .is-on .idemo-wo { animation: idemo-pop .4s var(--ease-out, ease) .9s both; }
-.idemo-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.idemo-steps button { position: relative; overflow: hidden; width: 100%; min-height: 44px; display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 14px; align-items: center; text-align: start; padding: 12px 14px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: inherit; font: inherit; cursor: pointer; transition: background .2s, border-color .2s; }
-.idemo-steps button:hover { background: rgba(255,255,255,.05); }
-.idemo-steps button.is-on { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.14); }
-.idemo-steps b { display: block; font-size: 1.02rem; }
-.idemo-steps b + span { display: block; font-size: .9rem; opacity: .72; }
-.idemo-n { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.25); }
-.idemo-steps button.is-on .idemo-n { background: var(--brand); color: #161616; border-color: var(--brand); }
-.idemo-timer { position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: var(--brand); transform-origin: left; animation: idemo-timer linear both; }
-.idemo-toggle { grid-column: 2; justify-self: start; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border: 1px solid rgba(255,255,255,.25); border-radius: 22px; background: transparent; color: inherit; font: inherit; font-size: .9rem; cursor: pointer; }
-.idemo-toggle:hover { background: rgba(255,255,255,.06); }
-@keyframes idemo-timer { from { transform: scaleX(0); } }
+/* Browser window: light app, so the band stays bright */
+.idemo-web { margin: 0; min-width: 0; background: #fff; border: 1px solid #e3dfcf; border-radius: 12px; box-shadow: 0 30px 60px rgba(22,22,22,.14); overflow: hidden; font-size: 12px; color: #161616; }
+.idemo-chrome { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: #f6f4ec; border-bottom: 1px solid #e7e3d4; }
+.idemo-chrome i { width: 9px; height: 9px; border-radius: 50%; background: #d8d4c4; }
+.idemo-url { flex: 1 1 auto; min-width: 0; margin-inline-start: 8px; padding: 3px 10px; border-radius: 6px; background: #fff; border: 1px solid #e7e3d4; color: #55554e; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.idemo-app { display: grid; grid-template-columns: 132px minmax(0, 1fr); min-height: 330px; }
+.idemo-side { display: grid; align-content: start; gap: 2px; padding: 12px 8px; background: #161616; color: #d6d6cf; }
+.idemo-brand { display: flex; align-items: center; gap: 6px; color: #fff; font-weight: 800; padding: 0 6px 10px; }
+.idemo-brand span { width: 9px; height: 12px; background: var(--brand); transform: skewX(-20deg); }
+.idemo-side > span { display: flex; align-items: center; gap: 7px; padding: 6px; border-radius: 5px; transition: background .25s, color .25s; }
+.idemo-side > span.on { background: var(--brand); color: #161616; font-weight: 700; }
+.idemo-main { position: relative; min-width: 0; }
+.idemo-top { display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding: 9px 16px; border-bottom: 1px solid #efece2; color: #55554e; font-size: 11px; position: relative; }
+.idemo-bell-dot { position: absolute; right: 13px; top: 8px; width: 7px; height: 7px; border-radius: 50%; background: #d23c2a; animation: idemo-pop .3s ease .6s both; }
+.idemo-web-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.idemo-web-h b { font-size: 15px; }
+.idemo-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.idemo-kpis div, .idemo-wo-web div { display: grid; gap: 2px; padding: 10px; border: 1px solid #ecebe3; border-radius: 8px; background: #fcfbf7; }
+.idemo-kpis small, .idemo-defect small, .idemo-wo-web small { color: #6b6b64; font-size: 10.5px; }
+.idemo-kpis b { font-size: 14px; }
+.idemo-live { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; background: #fff7dd; border: 1px solid #f2dd95; font-size: 11.5px; }
+.idemo-live i { width: 8px; height: 8px; border-radius: 50%; background: #e0a21b; box-shadow: 0 0 0 0 rgba(224,162,27,.5); }
+.is-on .idemo-live i { animation: idemo-ping 1.4s ease-out infinite; }
+.idemo-live.ok { background: #e7f5ec; border-color: #bfe3cb; }
+.idemo-live.ok i { background: #2e9e5b; }
+@keyframes idemo-ping { to { box-shadow: 0 0 0 8px rgba(224,162,27,0); } }
+.is-on .idemo-live { animation: idemo-pop .4s var(--ease-out, ease) .8s both; }
+.idemo-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.idemo-table th { text-align: start; font-weight: 600; color: #6b6b64; padding: 6px 8px; border-bottom: 1px solid #ecebe3; }
+.idemo-table td { padding: 7px 8px; border-bottom: 1px solid #f3f1ea; white-space: nowrap; }
+.is-on .idemo-table tbody tr { animation: idemo-pop .3s var(--ease-out, ease) both; }
+.is-on .idemo-table tbody tr:nth-child(1) { animation-delay: 1.7s; background: #fff6f5; }
+.is-on .idemo-table tbody tr:nth-child(2) { animation-delay: 2.1s; }
+.is-on .idemo-table tbody tr:nth-child(3) { animation-delay: .4s; }
+.is-on .idemo-table tbody tr:nth-child(4) { animation-delay: .6s; }
+.idemo-defect { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: start; }
+.idemo-photos { display: grid; gap: 6px; }
+.idemo-photos span { width: 78px; height: 62px; }
+.is-on .idemo-photos .t1 { animation: idemo-pop .35s var(--ease-out, ease) 1.2s both; }
+.is-on .idemo-photos .t2 { animation: idemo-pop .35s var(--ease-out, ease) 2s both; }
+.idemo-defect ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; }
+.idemo-defect li { display: grid; gap: 1px; }
+.idemo-approval { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid #f2dd95; border-radius: 8px; background: #fffbea; }
+.idemo-approval > div { display: grid; gap: 2px; min-width: 0; }
+.idemo-approval > div span { color: #6b6b64; font-size: 11px; }
+.idemo-approval.dim { background: #fcfbf7; border-color: #ecebe3; }
+.is-on .idemo-approval:not(.dim) { animation: idemo-pop .4s var(--ease-out, ease) 1.6s both; }
+.idemo-wo-web { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.is-on .idemo-wo-web div { animation: idemo-pop .3s var(--ease-out, ease) both; }
+.is-on .idemo-wo-web div:nth-child(2) { animation-delay: .15s; }
+.is-on .idemo-wo-web div:nth-child(3) { animation-delay: .3s; }
+.is-on .idemo-wo-web div:nth-child(4) { animation-delay: .45s; }
+.idemo-toggle { justify-self: start; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border: 1px solid #d8d4c4; border-radius: 22px; background: #fff; color: #161616; font: inherit; font-size: .9rem; cursor: pointer; }
+.idemo-toggle:hover { background: #f6f4ec; }
+@media (max-width: 640px) {
+  .idemo-steps { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+  .idemo-st small { display: none; }
+  .idemo-steps button { justify-content: center; padding: 8px; }
+  .idemo-st b { display: none; }
+}
 @media (max-width: 860px) {
-  .idemo { grid-template-columns: minmax(0, 1fr); }
+  .idemo-stage { grid-template-columns: minmax(0, 1fr); }
   .idemo-phone { width: 240px; }
-  .idemo-toggle { grid-column: 1; }
-  .idemo-steps button { padding: 10px 12px; }
-  .idemo-steps b + span { display: none; }
-  .idemo-steps button.is-on b + span { display: block; }
+  .idemo-app { grid-template-columns: minmax(0, 1fr); }
+  .idemo-side { display: none; }
+  .idemo-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .idemo-app { min-height: 300px; }
+}
+@media (max-width: 480px) {
+  .idemo-web { font-size: 11px; }
+  .idemo-table th:nth-child(2), .idemo-table td:nth-child(2) { display: none; }
+  .idemo-defect { grid-template-columns: minmax(0, 1fr); }
+  .idemo-photos { grid-auto-flow: column; justify-content: start; }
+  .idemo-pane.web { inset: 40px 12px 12px; }
+  .idemo-app { min-height: 340px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .idemo-pane, .idemo-progress span { transition: none; }
   .idemo *, .idemo *::before { animation: none !important; }
-  .idemo-truck .wheel.good { fill: #2e9e5b; } .idemo-truck .wheel.bad { fill: #d23c2a; }
+  .idemo-truck .wheel.good { fill: #2e9e5b; } .idemo-truck .wheel.warn { fill: #e0a21b; } .idemo-truck .wheel.bad { fill: #d23c2a; }
 }
 
 /* ---------- Print and reduced motion ---------- */

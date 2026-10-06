@@ -254,9 +254,10 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="dark-band" aria-labelledby="demo-walkround">
+        <section className="bright-band" aria-labelledby="demo-walkround">
           <div className="site-shell">
-            <h2 className="sec-h" id="demo-walkround">One walk-round inspection, start to finish.</h2>
+            <h2 className="sec-h" id="demo-walkround">Inspect on the phone, see it on the web the moment it syncs.</h2>
+            <p className="bright-lead">Follow one transit mixer through a walk-round: what the inspector does in the yard, and what the workshop sees in the office at the same step.</p>
             <InspectionDemo />
           </div>
         </section>

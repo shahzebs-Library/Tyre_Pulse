@@ -6,6 +6,7 @@ import { PageTop, SubNav } from "@/components/PageTop";
 import { CtaBand } from "@/components/CtaBand";
 import { ConditionCard, DefectCard, MeterCard, OfflineInspectionPhone, SignOffCard } from "@/components/mock/Screens";
 import { Photo } from "@/components/art/Photos";
+import { InspectionDemo } from "@/components/motion/InspectionDemo";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../../schema";
 import { OG_IMAGES } from "@/lib/site";
 
@@ -49,6 +50,12 @@ export default function InspectionsPage() {
             <div id="actions" className="anchor-sec"><ConditionCard /></div>
             <div id="history" className="anchor-sec"><SignOffCard /></div>
           </div>
+        </div>
+      </section>
+      <section className="dark-band" aria-labelledby="demo-h">
+        <div className="site-shell">
+          <h2 className="sec-h" id="demo-h">Watch one inspection, from scan to work order.</h2>
+          <InspectionDemo />
         </div>
       </section>
       <section className="section-pad soft-bg anchor-sec" id="tyres" aria-labelledby="tyres-h">

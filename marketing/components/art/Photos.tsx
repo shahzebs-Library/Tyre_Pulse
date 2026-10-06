@@ -12,7 +12,7 @@ import Image from "next/image";
  * Stored locally under public/photos so the site depends on no external host.
  */
 const PHOTOS = {
-  loader: { src: "/photos/loader.webp", w: 1302, h: 711, alt: "Wheel loader on a quarry site" },
+  loader: { src: "/photos/loader.webp", w: 1292, h: 701, alt: "Wheel loader on a quarry site" },
   loaderCab: { src: "/photos/loader-cab.webp", w: 435, h: 435, alt: "Wheel loader cab" },
   loaderTyre: { src: "/photos/loader-tyre.webp", w: 336, h: 336, alt: "Wheel loader front tyre" },
   loaderBucket: { src: "/photos/loader-bucket.webp", w: 450, h: 360, alt: "Wheel loader bucket" },
@@ -21,7 +21,7 @@ const PHOTOS = {
   signature: { src: "/photos/signature.webp", w: 486, h: 558, alt: "Technician signing a job completion on a phone" },
   engineer: { src: "/photos/engineer-tablet.webp", w: 1399, h: 1124, alt: "Engineer in a hard hat holding a tablet on a rooftop plant area" },
   loaderSite: { src: "/photos/wheel-loader-site.webp", w: 576, h: 347, alt: "Wheel loader parked on a construction site" },
-  fleetLineup: { src: "/photos/fleet-lineup.webp", w: 1327, h: 1185, alt: "Wheel loader, concrete pump truck and staff bus in front of a city skyline" },
+  fleetLineup: { src: "/photos/fleet-lineup.webp", w: 1327, h: 1010, alt: "Wheel loader, concrete pump truck and staff bus in front of a city skyline" },
   mixer: { src: "/photos/transit-mixer.webp", w: 447, h: 447, alt: "Transit mixer truck" },
   riyadh: { src: "/photos/riyadh-loader.webp", w: 800, h: 1067, alt: "Wheel loader in front of the Riyadh skyline at night" },
 } as const;

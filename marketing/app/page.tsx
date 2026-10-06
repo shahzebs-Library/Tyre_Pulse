@@ -11,6 +11,7 @@ import { Tabs } from "@/components/Tabs";
 import { HeroCarousel, type HeroSlide } from "@/components/HeroCarousel";
 import { Photo, type PhotoKey } from "@/components/art/Photos";
 import { CountUp } from "@/components/motion/CountUp";
+import { InspectionDemo } from "@/components/motion/InspectionDemo";
 import { Spotlight } from "@/components/motion/Spotlight";
 import {
   ApprovalCard, AssetRecord, AssetStats, SignOffCard, CompleteCard, FleetCostPanel, NewInspectionCard, OfflineInspectionPhone,
@@ -223,6 +224,13 @@ export default function HomePage() {
               />
               <div className="sig-standalone"><Photo name="signature" /></div>
             </div>
+          </div>
+        </section>
+
+        <section className="dark-band" aria-labelledby="demo-walkround">
+          <div className="site-shell">
+            <h2 className="sec-h" id="demo-walkround">One walk-round inspection, start to finish.</h2>
+            <InspectionDemo />
           </div>
         </section>
 

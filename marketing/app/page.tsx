@@ -13,6 +13,7 @@ import { HeroCarousel, type HeroSlide } from "@/components/HeroCarousel";
 import { Photo, type PhotoKey } from "@/components/art/Photos";
 import { CountUp } from "@/components/motion/CountUp";
 import { Walkthrough } from "@/components/motion/walkthrough/Walkthrough";
+import { Donut, Heatmap } from "@/components/motion/walkthrough/charts";
 import { AssetCycle, LiveFeed, type LiveEvent } from "@/components/motion/HeroLive";
 import { Spotlight } from "@/components/motion/Spotlight";
 import {
@@ -51,6 +52,17 @@ function TabCopy({ title, text, points, href }: { title: string; text: string; p
 const SIGNALS = [
   "Driver reports a problem", "Inspection finds a defect", "TPMS pressure alert", "Preventive service due",
   "Anomaly flagged in the data", "Accident reported",
+];
+
+/* Sample downtime heatmap for the home page (hours, 8 weeks). */
+const DOWN_CITIES = ["Riyadh", "Jeddah", "Dammam", "Dubai", "Cairo"];
+const DOWN_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DOWN_HOURS = [
+  [41, 28, 22, 19, 24, 6, 9],
+  [33, 21, 18, 16, 20, 4, 7],
+  [18, 14, 11, 12, 15, 3, 5],
+  [12, 16, 10, 9, 13, 8, 4],
+  [15, 11, 9, 10, 8, 2, 6],
 ];
 
 /* One job, start to finish: who owns each stage and what the platform does on its own. */
@@ -243,12 +255,20 @@ export default function HomePage() {
             </ol>
             <figure className="fx-job" aria-label="Sample job on transit mixer MX-214: 7 hours from report to back in service. 23 minutes to approve and assign, 1 hour 20 waiting for parts, 2 hours 10 of repair, the rest waiting to start and quality check.">
               <figcaption><span>One sample job · MX-214 · Riyadh</span><b>Down 6 h 58 min</b><em>Sample data</em></figcaption>
-              <div className="fx-bar" aria-hidden="true">
-                <i className="a" style={{ flex: 30 }}><span>Assign 30m</span></i>
-                <i className="w" style={{ flex: 158 }}><span>Waiting to start 2 h 38</span></i>
-                <i className="p" style={{ flex: 80 }}><span>Parts 1 h 20</span></i>
-                <i className="r" style={{ flex: 130 }}><span>Repair 2 h 10</span></i>
-                <i className="q" style={{ flex: 20 }}><span>QC</span></i>
+              <div className="fx-charts">
+                <Donut size={132} center="6 h 58" sub="down" label="Where the downtime went: waiting to start 2 h 38, repair 2 h 10, parts 1 h 20, approve and assign 30 min, quality check 20 min"
+                  slices={[
+                    { name: "Waiting to start", v: 158, tone: "ink2", label: "2 h 38" },
+                    { name: "Repair", v: 130, tone: "brand", label: "2 h 10" },
+                    { name: "Waiting for parts", v: 80, tone: "ink3", label: "1 h 20" },
+                    { name: "Approve and assign", v: 30, tone: "ink4", label: "30 min" },
+                    { name: "Quality check", v: 20, tone: "ink", label: "20 min" },
+                  ]} />
+                <div>
+                  <small className="fx-cap">Fleet downtime hours by city and weekday, last 8 weeks</small>
+                  <Heatmap rows={DOWN_CITIES} cols={DOWN_DAYS} data={DOWN_HOURS} unit=" h"
+                    label="Fleet downtime hours by city and weekday over 8 weeks. Highest: Riyadh on Sunday, 41 hours, and Jeddah on Sunday, 33 hours." />
+                </div>
               </div>
               <div className="fx-kpis">
                 <div><small>Repair share of downtime</small><b>31%</b></div>

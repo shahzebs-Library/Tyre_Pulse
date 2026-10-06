@@ -1,6 +1,7 @@
 import { AlertTriangle, CheckCircle2, Clock, Hourglass, Package, UserCheck, Wrench } from "lucide-react";
 import { Photo } from "@/components/art/Photos";
 import { Notice, Pane, tap, type Scenario, type SceneProps } from "./shared";
+import { Donut } from "./charts";
 
 /** Technicians the board suggests, scored on skill, availability, workload and site. */
 const TECHS = [
@@ -109,11 +110,12 @@ function Web({ step, sel, choose }: SceneProps) {
       </Pane>
       <Pane on={step === "done"} className="web">
         <div className="idemo-web-h"><b>Where the MX-308 downtime went</b><span className="pill pill-green">Back in production</span></div>
-        <div className="wt-split" role="img" aria-label="Downtime 7 h 50 min: 4 h 20 waiting to start, 1 h 20 waiting parts, 2 h 10 repair">
-          <i className="w1" style={{ flex: 260 }}><span>Waiting to start 4 h 20</span></i>
-          <i className="w2" style={{ flex: 80 }}><span>Parts 1 h 20</span></i>
-          <i className="w3" style={{ flex: 130 }}><span>Repair 2 h 10</span></i>
-        </div>
+        <Donut center="7 h 50" sub="down" label="MX-308 downtime 7 h 50 min: waiting to start 4 h 20, waiting for parts 1 h 20, repair 2 h 10"
+          slices={[
+            { name: "Waiting to start", v: 260, tone: "ink2", label: "4 h 20" },
+            { name: "Waiting for parts", v: 80, tone: "ink3", label: "1 h 20" },
+            { name: "Repair", v: 130, tone: "brand", label: "2 h 10" },
+          ]} />
         <div className="idemo-kpis">
           <div><small>Total downtime</small><b>7 h 50</b></div>
           <div><small>Repair share</small><b>28%</b></div>

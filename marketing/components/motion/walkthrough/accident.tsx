@@ -1,6 +1,7 @@
 import { BadgeCheck, CheckCircle2, FileText, MapPin, ShieldAlert, Users, Wallet } from "lucide-react";
 import { Photo } from "@/components/art/Photos";
 import { HBars, Notice, Pane, tap, type Scenario, type SceneProps } from "./shared";
+import { Donut } from "./charts";
 
 /** Each team owns its own part of the case. */
 const TEAMS = [
@@ -110,10 +111,19 @@ function Web({ step, sel, choose }: SceneProps) {
       </Pane>
       <Pane on={step === "close"} className="web">
         <div className="idemo-web-h"><b>Closure check</b><span className="pill pill-green">Closed</span></div>
-        <div className="wt-checks">
-          {["Fleet", "HSE root cause", "Insurance settled", "Workshop repair", "Finance recovery"].map((c) => (
-            <span key={c}><BadgeCheck size={14} />{c}</span>
-          ))}
+        <div className="v-two">
+          <div className="wt-checks">
+            {["Fleet", "HSE root cause", "Insurance settled", "Workshop repair", "Finance recovery"].map((c) => (
+              <span key={c}><BadgeCheck size={14} />{c}</span>
+            ))}
+          </div>
+          <Donut size={96} center="42" sub="this year" label="42 accidents this year by root cause: reversing 15, distraction 11, road condition 9, mechanical 7"
+            slices={[
+              { name: "Reversing", v: 15, tone: "brand", label: "15" },
+              { name: "Distraction", v: 11, tone: "ink2", label: "11" },
+              { name: "Road", v: 9, tone: "ink3", label: "9" },
+              { name: "Mechanical", v: 7, tone: "ink4", label: "7" },
+            ]} />
         </div>
         <div className="idemo-kpis">
           <div><small>Days open</small><b>12</b></div>

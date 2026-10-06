@@ -1,6 +1,7 @@
 import { BarChart3, Coins, Gauge, Receipt, TrendingDown } from "lucide-react";
 import { Photo } from "@/components/art/Photos";
-import { Bars, Notice, Pane, tap, type Scenario, type SceneProps } from "./shared";
+import { Notice, Pane, tap, type Scenario, type SceneProps } from "./shared";
+import { SparkKpi, Waterfall } from "./charts";
 
 /** Cost per km by asset, worst first. */
 const ASSETS = [
@@ -10,7 +11,11 @@ const ASSETS = [
   { id: "mx152", asset: "MX-152", cpk: 0.81, tyre: 0.17, spare: 0.47, oil: 0.17, flag: false },
 ];
 const asset = (sel: string) => ASSETS.find((a) => a.id === sel) ?? ASSETS[0];
-const MONTHS = [["May", 1.06], ["Jun", 1.02], ["Jul", 1.05], ["Aug", 0.98], ["Sep", 0.96], ["Oct", 0.93]] as const;
+const SPARKS: ReadonlyArray<readonly [string, string, number[]]> = [
+  ["Cost per km", "SAR 0.93", [1.06, 1.02, 1.05, 0.98, 0.96, 0.93]],
+  ["Tyre share", "22%", [26, 25, 25, 24, 23, 22]],
+  ["Cost per hour", "SAR 38", [44, 43, 41, 41, 39, 38]],
+];
 
 function Phone({ step, sel }: SceneProps) {
   const a = asset(sel);
@@ -86,12 +91,12 @@ function Web({ step, sel, choose }: SceneProps) {
         </div>
       </Pane>
       <Pane on={step === "trend"} className="web">
-        <Bars title="Fleet cost per km" value="SAR 0.93" note="-12% since May" data={MONTHS} max={1.2} fmt={(v) => v.toFixed(2)}
-          label="Fleet cost per km, May to October, falling from 1.06 to 0.93 SAR" />
-        <div className="idemo-kpis">
-          <div><small>Why it moved</small><b>Price -4%</b></div>
-          <div><small>Volume</small><b>-6%</b></div>
-          <div><small>New assets</small><b>+2</b></div>
+        <Waterfall title="Why fleet cost per km moved, May to October (SAR)" fmt={(v) => v.toFixed(2)}
+          start={{ name: "May", v: 1.06 }} end={{ name: "Oct", v: 0.93 }}
+          steps={[{ name: "Price", v: -0.04 }, { name: "Volume", v: -0.06 }, { name: "Tyre mix", v: -0.05 }, { name: "New assets", v: 0.02 }]}
+          label="Fleet cost per km fell from 1.06 to 0.93 SAR: price minus 0.04, volume minus 0.06, tyre mix minus 0.05, new assets plus 0.02" />
+        <div className="v-sparks">
+          {SPARKS.map(([l, v, d]) => <SparkKpi key={l} label={l} value={v} data={d} />)}
         </div>
       </Pane>
     </>

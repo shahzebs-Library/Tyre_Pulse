@@ -1,6 +1,7 @@
 import { CalendarClock, CheckCircle2, Gauge, ListChecks, TrendingUp } from "lucide-react";
 import { Photo } from "@/components/art/Photos";
 import { Bars, Pane, tap, type Scenario, type SceneProps } from "./shared";
+import { Gauge as GaugeChart } from "./charts";
 
 /** What the PM list shows today, by hours or by km. */
 const DUE = [
@@ -92,8 +93,11 @@ function Web({ step, sel, choose }: SceneProps) {
         <div className="idemo-live ok"><i />The meter reading also updates the asset, so cost per hour stays right</div>
       </Pane>
       <Pane on={step === "trend"} className="web">
-        <Bars title="PM done on time" value="94%" note="+10 points since May" data={COMPLIANCE} max={100} fmt={(v) => `${v}%`}
-          label="Preventive maintenance done on time, May to October, from 84 to 94 percent" />
+        <div className="v-two">
+          <GaugeChart value={94} target={90} title="PM done on time" sub="Target 90%" label="Preventive maintenance compliance 94 percent against a 90 percent target" />
+          <Bars title="By month" value="94%" note="+10 pts" data={COMPLIANCE} max={100} fmt={(v) => `${v}`}
+            label="Preventive maintenance done on time, May to October, from 84 to 94 percent" />
+        </div>
         <div className="idemo-kpis">
           <div><small>Overdue now</small><b>2</b></div>
           <div><small>Breakdowns this month</small><b>-31%</b></div>

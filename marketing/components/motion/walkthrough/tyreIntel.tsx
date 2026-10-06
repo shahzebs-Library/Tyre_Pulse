@@ -1,6 +1,7 @@
 import { Activity, AlertOctagon, BadgeDollarSign, Nfc, Radar, TrendingDown } from "lucide-react";
 import { Photo } from "@/components/art/Photos";
 import { HBars, Notice, Pane, tap, type Scenario, type SceneProps } from "./shared";
+import { Donut, SparkKpi } from "./charts";
 
 /** One tyre's life across vehicles, read from its RFID tag. */
 const PASSPORT = [
@@ -47,19 +48,6 @@ function PsiLine() {
         ))}
       </div>
     </figure>
-  );
-}
-
-/** Fleet tyre health as a ring: share of tyres by state. */
-function HealthRing() {
-  const parts = [["Good", 71, "#1d7a44"], ["Watch", 21, "#c98a00"], ["Replace", 8, "#d23c2a"]] as const;
-  let acc = 0;
-  const stops = parts.map(([, v, c]) => { const s = `${c} ${acc}% ${acc + v}%`; acc += v; return s; }).join(", ");
-  return (
-    <div className="wt-ring-wrap" role="img" aria-label="Fleet tyre health: 71 percent good, 21 percent watch, 8 percent replace, out of 2,140 tyres">
-      <span className="wt-ring" style={{ background: `conic-gradient(${stops})` }}><b>2,140<small>tyres</small></b></span>
-      <ul>{parts.map(([n, v, c]) => <li key={n}><i style={{ background: c }} />{n}<b>{v}%</b></li>)}</ul>
-    </div>
   );
 }
 
@@ -116,10 +104,10 @@ function Web({ step, sel, choose }: SceneProps) {
       </Pane>
       <Pane on={step === "tpms"} className="web">
         <PsiLine />
-        <div className="idemo-kpis">
-          <div><small>Sensors live</small><b>1,860</b></div>
-          <div><small>Below alert</small><b>3</b></div>
-          <div><small>Pressure compliance</small><b>96%</b></div>
+        <div className="v-sparks">
+          <SparkKpi label="Pressure compliance" value="96%" data={[88, 90, 91, 93, 94, 96]} good="up" />
+          <SparkKpi label="Below alert now" value="3" data={[9, 7, 8, 5, 4, 3]} />
+          <SparkKpi label="Blowouts this quarter" value="1" data={[5, 4, 4, 2, 2, 1]} />
         </div>
       </Pane>
       <Pane on={step === "predict"} className="web">
@@ -158,7 +146,10 @@ function Web({ step, sel, choose }: SceneProps) {
             <HBars label="Cost per km by brand: A 0.021, B 0.026, C 0.034 SAR" max={0.036} fmt={(v) => v.toFixed(3)}
               rows={[{ name: "Brand A", v: 0.021, tone: "brand" }, { name: "Brand B", v: 0.026 }, { name: "Brand C", v: 0.034, tone: "warn" }]} />
           </div>
-          <div><small className="wt-cap">Fleet tyre health</small><HealthRing /></div>
+          <div><small className="wt-cap">Fleet tyre health</small>
+            <Donut size={92} center="2,140" sub="tyres" label="Fleet tyre health: 71 percent good, 21 percent watch, 8 percent replace, out of 2,140 tyres"
+              slices={[{ name: "Good", v: 71, tone: "good" }, { name: "Watch", v: 21, tone: "warn" }, { name: "Replace", v: 8, tone: "bad" }]} />
+          </div>
         </div>
         <div className="idemo-kpis">
           <div><small>Blowouts avoided</small><b>9</b></div>

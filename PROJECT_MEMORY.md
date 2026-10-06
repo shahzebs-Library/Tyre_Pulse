@@ -18,6 +18,16 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-10-06 (part 6, marketing session) — SIX MODULE TOURS + CHART KIT + DEMO DATA ONLY (PR #390). marketing/ only.
+- Walk-through engine = marketing/components/motion/walkthrough/ (Walkthrough.tsx + one file per scenario: inspection,
+  tyreIntel [RFID passport, TPMS, removal forecast, anomalies, brand cost/km], workshop, accident, maintenance, cost).
+  Add a tour = new Scenario file + register in SCENARIOS. InspectionDemo = Walkthrough only=["inspection"].
+- Chart kit = walkthrough/charts.tsx (Donut, Gauge, Waterfall, Heatmap, SparkKpi) + `--v-*` palette in motion.css:
+  ink greys carry data, brand yellow marks only the key value, green/amber/red = status only. No pastels.
+- OWNER RULE: NO real asset codes, serials, job card prefixes or site names on the marketing site. Invented codes
+  (MX-214, PT-118, GN-305, WL-207) + general cities (Riyadh, Jeddah, Dammam, Dubai, Cairo); brands = Brand A/B/C.
+- Home "field issue to closed job" = 6 signals + 6 owned stages + sample job donut + downtime heatmap; "roles" = 7 roles.
+
 # ⚑ SESSION 2026-10-06 (part 5, marketing session) — SPEED + SECURITY + ACCURACY ROUND 2 (same branch, MERGED to main with part 4). marketing/ only.
 - SPEED (measured, throttled phone 4x CPU / 1.6 Mbps / 150 ms RTT, 2 runs): home TBT 2.44 s -> ~1.0 s, LCP 2.66 -> ~1.6 s;
   /ar LCP 2.62 -> ~2.0 s; every page LCP < 2.5 s, CLS ~0. Cause was native style/paint, not JS (JS ~0.8 s of 3.7 s):

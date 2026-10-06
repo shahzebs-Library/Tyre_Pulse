@@ -1,16 +1,24 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+// Single-line fields: control characters and line breaks are folded to one space, so a
+// submitted value can never forge an extra "Field: value" line in the delivered email.
+const line = (min: number, max: number) =>
+  z.string().transform((v) => v.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim()).pipe(z.string().min(min).max(max));
+
 const requestSchema = z.object({
-  name: z.string().trim().min(2).max(100),
+  name: line(2, 100),
   email: z.string().trim().email().max(200),
-  company: z.string().trim().min(2).max(160),
-  country: z.string().trim().min(2).max(100),
-  fleetSize: z.string().trim().min(1).max(100),
-  industry: z.string().trim().max(120).optional().default(""),
+  company: line(2, 160),
+  country: line(2, 100),
+  fleetSize: line(1, 100),
+  industry: line(0, 120).optional().default(""),
   message: z.string().trim().max(2000).optional().default(""),
   website: z.string().max(0).optional().default(""),
 });
+
+// A real request is well under 4 KB; anything far larger is refused before it is read.
+const MAX_BODY_BYTES = 16 * 1024;
 
 // Best-effort abuse guard: each serverless instance keeps a short per-IP window.
 // It does not replace an edge rate limit, but it stops one client flooding the inbox.
@@ -49,11 +57,19 @@ export async function POST(request: Request) {
   if (rateLimited(ip)) {
     return NextResponse.json({ message: "Too many requests. Please try again in a few minutes." }, { status: 429 });
   }
+  if (Number(header(request, "content-length") ?? 0) > MAX_BODY_BYTES) {
+    return NextResponse.json({ message: "Request is too large." }, { status: 413 });
+  }
   let raw: unknown;
   try {
     raw = await request.json();
   } catch {
     return NextResponse.json({ message: "Please send a valid JSON request." }, { status: 400 });
+  }
+  // Honeypot: a filled hidden field is a bot. Answer exactly as a success would, so the
+  // bot learns nothing, and never deliver it.
+  if (raw && typeof raw === "object" && String((raw as { website?: unknown }).website ?? "") !== "") {
+    return NextResponse.json({ message: "Thank you. Your demo request has been received." });
   }
   try {
     const parsed = requestSchema.safeParse(raw);

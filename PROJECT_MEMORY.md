@@ -17,6 +17,22 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-10-06 (part 4, marketing session) — MARKETING AUDIT + QC (branch claude/marketing-audit-qc, NOT pushed). marketing/ only.
+- Playwright sweep 11 pages x 320/390/768/1366/1920/2560 = 66 combos: 0 overflow, 0 contrast/tap/console/alt findings after fixes.
+  GOTCHA: Playwright fullPage screenshots show BLANK bands on this site; that is a stitching artifact, not a defect. Judge
+  renders from a viewport set to the page height (setViewportSize) or per-viewport shots. Kill a stale `next start`
+  (pgrep next-server) before re-measuring or the old CSS chunk 404s and every contrast check is garbage.
+- FIXED: a second CSS `animation-timeline: view()` reveal in pmv.css ran on the SAME lists MotionRoot reveals (double
+  animation, lists hidden in print) - removed; MotionRoot is the one reveal engine. Breadcrumb Home link 38px -> 44px min.
+- FIXED a11y: /ar served <html lang="en"> (WCAG 3.1.1). components/LocaleSync.tsx sets html lang per path + Arabic skip
+  link; /ar has an inline pre-paint lang script; <html suppressHydrationWarning>.
+- FIXED security (app/api/contact): honeypot now answers 200 without delivering (bots learn nothing); 16 KB body cap (413);
+  single-line fields fold control chars/newlines so a value cannot forge an extra "Field:" line in the email. Tests 11 -> 13.
+  next.config: script-agnostic CSP (base-uri/form-action self, frame-ancestors/object-src none) + COOP same-origin.
+  No upgrade-insecure-requests (breaks http localhost; HSTS covers prod).
+- FIXED photo: technician-phone.webp still carried the MaxiFlex glove print + cuff text (part 1 cleaned only
+  technician-generator). Inpainted; original in git history. CWV local: CLS 0, LCP < 0.31 s.
+
 # ⚑ SESSION 2026-10-06 (part 3) — INSPECTION REPORT PDF REBUILT TO THE OWNER'S 3-PAGE MOCKUP. No migration.
 - exportInspectionDetailPdf (src/lib/exportUtils.js): p1 Vehicle Details card (+ vehicle picture via vehiclePhoto(row),
   opts.vehiclePhotoUrl) / 5 summary tiles + Avg Pressure + Photos Attached / tyre map (app SVG, legend) / Inspection

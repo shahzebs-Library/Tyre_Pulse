@@ -28,7 +28,24 @@ test('unconfigured contact delivery returns unavailable without calling a provid
 test('contact validation rejects malformed and honeypot submissions before delivery', async () => {
   const post = handler(configured, () => { throw new Error('must not send'); });
   assert.equal((await post(request({ ...input, email: 'invalid' }))).status, 400);
-  assert.equal((await post(request({ ...input, website: 'spam' }))).status, 400);
+  const trap = await post(request({ ...input, website: 'spam' }));
+  assert.equal(trap.status, 200, 'a honeypot hit looks like success to the bot');
+});
+
+test('oversized bodies are refused before they are read', async () => {
+  const post = handler(configured, () => { throw new Error('must not send'); });
+  const res = await post({ headers: new Map([['content-length', String(64 * 1024)]]), json: async () => { throw new Error('must not read'); } });
+  assert.equal(res.status, 413);
+});
+
+test('line breaks in single-line fields cannot forge extra email lines', async () => {
+  const post = handler(configured, async (_url, options) => {
+    const text = JSON.parse(options.body).text;
+    assert.ok(text.includes('Company: Example Fleet: 1'));
+    assert.equal(text.split('\n').filter(l => l.startsWith('Fleet size:')).length, 1);
+    return { ok: true, json: async () => ({ id: 'mock-delivery-id' }) };
+  });
+  assert.equal((await post(request({ ...input, company: 'Example\nFleet: 1' }))).status, 200);
 });
 
 test('malformed JSON is a client error and never attempts delivery', async () => {

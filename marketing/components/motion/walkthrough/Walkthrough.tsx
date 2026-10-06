@@ -39,12 +39,21 @@ export function Walkthrough({ only, initial }: { only?: ScenarioId[]; initial?: 
   const [mi, setMi] = useState(() => Math.max(0, list.findIndex((s) => s.id === initial)));
   const [step, setStep] = useState(0);
   const [inView, setInView] = useState(false);
-  // Reduced motion: start paused, but Play still works because pressing it is an explicit choice.
-  const [paused, setPaused] = useState(() => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const [paused, setPaused] = useState(false);
+  // Reduced motion: the tour starts paused and only the explicit Play control starts it.
+  const [reduced, setReduced] = useState(false);
   const mod = list[mi];
   const [sel, setSel] = useState(mod.defaultSel ?? "");
   const running = inView && !paused;
   const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const apply = () => { setReduced(mq.matches); if (mq.matches) setPaused(true); };
+    const r = requestAnimationFrame(apply);
+    mq.addEventListener("change", apply);
+    return () => { cancelAnimationFrame(r); mq.removeEventListener("change", apply); };
+  }, []);
 
   useEffect(() => {
     const el = rootRef.current;
@@ -69,11 +78,11 @@ export function Walkthrough({ only, initial }: { only?: ScenarioId[]; initial?: 
     return () => window.clearTimeout(t);
   }, [running, step, mi, mod, list]);
 
-  /** Choosing a module or a step is an explicit "carry on": it clears the pause. */
+  /** Choosing a module or a step is an explicit "carry on": it clears the pause (never under reduced motion). */
   const pickModule = useCallback((i: number) => {
-    setMi(i); setStep(0); setSel(list[i].defaultSel ?? ""); setPaused(false);
-  }, [list]);
-  const pickStep = useCallback((i: number) => { setStep(i); setPaused(false); }, []);
+    setMi(i); setStep(0); setSel(list[i].defaultSel ?? ""); if (!reduced) setPaused(false);
+  }, [list, reduced]);
+  const pickStep = useCallback((i: number) => { setStep(i); if (!reduced) setPaused(false); }, [reduced]);
   /** Exploring stops the tour so the visitor is not pulled away mid-look. */
   const choose = useCallback((id: string) => { setSel(id); setPaused(true); }, []);
 
@@ -166,11 +175,10 @@ export function Walkthrough({ only, initial }: { only?: ScenarioId[]; initial?: 
         </figure>
       </div>
 
-      {/* The label follows what the tour is actually doing, so Play always means "start moving now". */}
-      <button type="button" className="idemo-toggle" aria-pressed={!running}
-        onClick={() => { setPaused(running); }}>
-        {running ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}
-        {running ? "Pause the walk-through" : "Play the walk-through"}
+      {/* The label follows the pause choice, not viewport visibility, so the control is never a dead button. */}
+      <button type="button" className="idemo-toggle" aria-pressed={paused} onClick={() => setPaused((p) => !p)}>
+        {paused ? <Play size={14} aria-hidden="true" /> : <Pause size={14} aria-hidden="true" />}
+        {paused ? "Play the walk-through" : "Pause the walk-through"}
       </button>
     </div>
   );

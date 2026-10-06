@@ -30,7 +30,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - OWNER RULING (2026-10-06, PR follow-up): TPMS reaches the platform through the customer's TELEMATICS connection, so the site
   MAY promise live TPMS pressure alerts "via telematics" (this overrides the Codex P1 that had softened it to uploads only).
 - Walkthrough Play/Pause: hover/focus "hold" REMOVED - focus fired on mousedown, so clicking Pause read "not running" and
-  resumed instead. Button label follows `running`; reduced motion starts paused and Play still works. Do not re-add a hold.
+  resumed instead. Button label follows `paused` (never viewport visibility, which left a dead Play button); reduced motion starts paused, picking a step/module never unpauses it, only Play does. Do not re-add a hold.
 
 # ⚑ SESSION 2026-10-06 (part 5, marketing session) — SPEED + SECURITY + ACCURACY ROUND 2 (same branch, MERGED to main with part 4). marketing/ only.
 - SPEED (measured, throttled phone 4x CPU / 1.6 Mbps / 150 ms RTT, 2 runs): home TBT 2.44 s -> ~1.0 s, LCP 2.66 -> ~1.6 s;

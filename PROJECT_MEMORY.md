@@ -5,6 +5,30 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ SESSION 2026-10-06 (part 3) — INSPECTION REPORT PDF REBUILT TO THE OWNER'S 3-PAGE MOCKUP. No migration.
+- exportInspectionDetailPdf (src/lib/exportUtils.js): p1 Vehicle Details card (+ vehicle picture via vehiclePhoto(row),
+  opts.vehiclePhotoUrl) / 5 summary tiles + Avg Pressure + Photos Attached / tyre map (app SVG, legend) / Inspection
+  Findings (derived lines + tyreman notes verbatim); p2 Tyre Inspection Details (every layout wheel, unrecorded =
+  No Data, serial/brand from tyre_conditions else lifeRows) / Axle Summary (positionGroup) / Compliance Checks
+  (Pass/Check/Fail/N/A from data only - valve/rim/wheel-nut rows from the mock were NOT added: no data) / Tyres Due
+  / Expected Tyre Life; p3 photos 4-up with status pills + Sign-off. Footer QR -> /inspections?view=<id> (new param
+  opens the viewer drawer; RLS decides access). New exported helpers inspectionReportRows/inspectionReportStats.
+- Mock person avatars on sign-off and "Good tread, no damage" phrasing NOT copied (no such data).
+
+# ⚑ SESSION 2026-10-06 (part 2) — INSPECTIONS + CHECKLISTS REBUILT TO THE OWNER'S 3 "INSPECTIONS & OBSERVATIONS" MOCKUPS. No migration.
+- /inspections: src/components/inspections/InspectionWorkspace.jsx (+ inspectionWorkspace.css, prefix iw-) over pure
+  src/lib/inspectionWorkspaceView.js (+ test). Header, 5 KPIs + From/To/Site (writes the page's URL filters), module
+  strip, queue list | selected inspection (axle sections Steer/Drive/Rear/Spare, per-wheel OK/Minor/Issue/Not checked)
+  | tyre map + tyre-life alerts, bottom recent findings / defect donut / 30-day trend (inline SVG). Reads the page's
+  `scoped` rows; every action calls the page's existing handlers. Full register stays below ("Full register");
+  shown when not Tyre Man and not the checklist tab. NO AI panel (none exists) - mockup "AI" spots show real data.
+- GOTCHA: normalizeTyreConditions(row) reads a row WITHOUT a tyre_conditions key as the map itself; the view lib
+  wraps rows (withTc) first.
+- /checklists: src/components/checklists/ChecklistWorkspace.jsx (+ css, prefix clw-) over src/lib/checklistWorkspaceView.js
+  (+ test). Status read from approval_status (status is always 'submitted'); no overdue tile (no due date in data).
+- FIXED pre-existing: VehicleTyreDiagram Tyre + 13 illustration Wheel components got string coordinates ("66"+8) ->
+  invalid SVG; now coerced with Number().
+
 # ⚑ SESSION 2026-10-06 — MARKETING SITE: MOTION LAYER, 3D TILT, CLEANED PHOTOS, INSPECTION DEMO SCENE. marketing/ only, no migration.
 - MOTION (marketing/components/motion/): MotionRoot (one IntersectionObserver reveal engine in the layout; arms only
   blocks BELOW the fold so no-JS/first paint is always visible; groups stagger children; no scroll listeners),

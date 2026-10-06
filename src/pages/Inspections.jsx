@@ -44,6 +44,7 @@ import { listSites, siteRegionMap, regionForSite, regionsIn } from '../lib/api/s
 import { trackingLink } from '../lib/tyreChangeTracking'
 import { getDiagramBg } from '../lib/api/brandLogo'
 import InspectionViewerDrawer from '../components/inspection/InspectionViewerDrawer'
+import { vehiclePhoto } from '../lib/vehiclePhoto'
 import InspectionDiagram from '../components/inspection/InspectionDiagram'
 import { buildApprovalEmailHtml } from '../lib/inspectionApprovalEmail'
 import { brandingForPdf, buildChecklistReportPdf, checklistReportFileName } from '../lib/inspectionChecklistReport'
@@ -56,6 +57,7 @@ import InspectionSummaryModal from '../components/inspections/InspectionSummaryM
 import ChecklistTab from '../components/inspections/ChecklistTab'
 import InspectionFormModal from '../components/inspections/InspectionFormModal'
 import RaiseActionModal from '../components/inspections/RaiseActionModal'
+import InspectionWorkspace from '../components/inspections/InspectionWorkspace'
 import { buildRegisterColumns } from '../components/inspections/inspectionRegisterColumns'
 
 /**
@@ -215,6 +217,7 @@ export default function Inspections() {
   const search = filters.search
   const [deleteId, setDeleteId]         = useState(null)
   const [activeTab, setActiveTab]       = useState('all')
+  const registerTopRef = useRef(null)
   // Lock TyreMan to checklist tab; switch to checklist if asset param present
   useEffect(() => {
     if (isTyreMan || searchParams.get('asset')) setActiveTab('checklist')
@@ -339,6 +342,12 @@ export default function Inspections() {
   // Read a record in place. Holds an id, not a row: the drawer loads the full
   // record (signatures included, which the register list no longer carries).
   const [viewId, setViewId] = useState(null)
+  // The report's QR code lands here: ?view=<inspection_id> opens that record
+  // (RLS still decides whether the reader may see it).
+  useEffect(() => {
+    const id = searchParams.get('view')
+    if (id && /^[0-9a-f-]{36}$/i.test(id)) setViewId(id)
+  }, [searchParams])
   const [pdfBusyId, setPdfBusyId] = useState(null)
   const [pdfError, setPdfError] = useState('')
   // An export failure is reported on its own line, not through the approval modal's message slot.
@@ -408,7 +417,10 @@ export default function Inspections() {
         // operator sees. Falls back to the programmatic map when absent.
         const svgEl = pdfDiagramRef.current?.querySelector('svg[data-tyre-map]') || null
         const diagramBg = (await getDiagramBg().catch(() => '')) || '#000000'
-        await exportInspectionDetailPdf(pdfRow, { branding: await brandingForPdf(branding), company, photos, lifeRows, svgEl, diagramBg })
+        await exportInspectionDetailPdf(pdfRow, {
+          branding: await brandingForPdf(branding), company, photos, lifeRows, svgEl, diagramBg,
+          vehiclePhotoUrl: vehiclePhoto(pdfRow),
+        })
       } catch (err) { if (!cancelled) setPdfError(toUserMessage(err, 'Could not create the inspection PDF. Retry the download.')) }
       finally { if (!cancelled) { setPdfRow(null); setPdfBusyId(null) } }
     }, 80)
@@ -1110,20 +1122,16 @@ export default function Inspections() {
     } catch (e) { setExportError(toUserMessage(e, 'Could not export. Try again.')) }
   }
 
-  return (
-    <div className="space-y-6">
-      {pdfError && <p role="alert" className="card text-red-500">{pdfError}</p>}
-      {exportError && (
-        <div role="alert" className="card flex items-center justify-between gap-3 text-sm text-red-500">
-          <span>{exportError}</span>
-          <button type="button" onClick={() => setExportError('')} aria-label="Dismiss export error" className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center"><X size={14} /></button>
-        </div>
-      )}
-      <PageHeader
-        title={isTyreMan ? t('inspections.titleTyreMan') : t('inspections.title')}
-        subtitle={isTyreMan ? t('inspections.subtitleTyreMan') : t('inspections.subtitle')}
-        icon={ClipboardList}
-        actions={isTyreMan ? null : (
+  // The mockup workspace replaces the plain header on the register views. The
+  // checklist capture keeps its focused header (and the Tyre Man stays there).
+  const showWorkspace = !isTyreMan && activeTab !== 'checklist'
+  async function openApproveFor(row) {
+    try {
+      const data = await inspectionsApi.getInspectionForPage(row.id)
+      if (data) { setApproveTarget(data); setShowApproveModal(true) }
+    } catch (e) { setExportError(toUserMessage(e, 'Could not open this inspection for sign-off.')) }
+  }
+  const headerActions = (
           <div className="flex gap-2 flex-wrap">
             <button
               type="button"
@@ -1165,10 +1173,58 @@ export default function Inspections() {
               <Plus size={14} aria-hidden /> {t('inspections.actions.addRecord')}
             </button>
           </div>
-        )}
-      />
+  )
+
+  return (
+    <div className="space-y-6">
+      {pdfError && <p role="alert" className="card text-red-500">{pdfError}</p>}
+      {exportError && (
+        <div role="alert" className="card flex items-center justify-between gap-3 text-sm text-red-500">
+          <span>{exportError}</span>
+          <button type="button" onClick={() => setExportError('')} aria-label="Dismiss export error" className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center"><X size={14} /></button>
+        </div>
+      )}
+      {showWorkspace ? (
+        <InspectionWorkspace
+          rows={scoped}
+          allRows={rows}
+          loading={loading}
+          error={loadError}
+          onRetry={load}
+          flagMap={flagStatus === 'ok' ? (flagMap || {}) : null}
+          actions={headerActions}
+          sites={sites}
+          from={filterFrom}
+          to={filterTo}
+          site={toList(filterSite).length === 1 ? toList(filterSite)[0] : 'all'}
+          onFilter={(k, v) => setFilter(k, v)}
+          onView={(r) => setViewId(r.id)}
+          onPdf={(r) => exportRowPdf(r)}
+          onRaiseAction={(r) => setRaisingAction(r)}
+          onEdit={(r) => setForm({ ...r, tyre_conditions: r.tyre_conditions ?? {} })}
+          onApprove={canApproveInspection ? openApproveFor : null}
+          onObservations={() => { setActiveTab('observations'); registerTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}
+          onAddObservation={() => setForm({ ...EMPTY_FORM, inspection_type: 'Site Observation' })}
+        />
+      ) : (
+        <PageHeader
+          title={isTyreMan ? t('inspections.titleTyreMan') : t('inspections.title')}
+          subtitle={isTyreMan ? t('inspections.subtitleTyreMan') : t('inspections.subtitle')}
+          icon={ClipboardList}
+          actions={isTyreMan ? null : headerActions}
+        />
+      )}
+      <div ref={registerTopRef} />
 
       {/* Tabs - hidden for TyreMan (locked to checklist) */}
+      {showWorkspace && (
+        <div className="flex items-end justify-between gap-3 flex-wrap pt-2">
+          <div>
+            <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Full register</h2>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Every inspection, observation and training record, with filters, bulk actions and exports.</p>
+          </div>
+        </div>
+      )}
       {!isTyreMan && <div role="tablist" aria-label="Register views" className="flex gap-1 p-1 bg-[var(--surface-2)] rounded-lg w-fit max-w-full overflow-x-auto flex-wrap">
         {tabConfig.map(({ key, label, icon: Icon, count }) => (
           <button
@@ -1602,7 +1658,7 @@ export default function Inspections() {
         <>
         {/* Register KPI strip: status and completion over the SAME rows the tiles
             and the table count. N/A while the read has failed, never 0. */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" aria-label="Register summary">
+        {!showWorkspace && <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" aria-label="Register summary">
           <RegisterKpi label="Records" value={num(kpis.total)} sub={scopeActive ? 'Matching your filters' : 'In this view'} />
           <RegisterKpi label="Open" value={num(kpis.open)} sub="Scheduled, in progress or overdue" />
           <RegisterKpi label="Overdue" value={num(kpis.Overdue)} tone={!unreadable && kpis.Overdue > 0 ? '#b91c1c' : undefined}
@@ -1611,7 +1667,7 @@ export default function Inspections() {
             sub={unreadable || kpis.completionRate == null ? 'Rate N/A' : `${kpis.completionRate}% completion`} />
           <RegisterKpi label="High or critical" value={num(kpis.highSeverity)} tone={!unreadable && kpis.highSeverity > 0 ? '#b45309' : undefined} sub="By recorded severity" />
           <RegisterKpi label="Actions raised" value={num(kpis.withAction)} sub="Linked corrective actions" />
-        </div>
+        </div>}
         <div className="flex flex-wrap gap-4">
           <OverviewSlide
             title="Inspections"

@@ -19,6 +19,7 @@ import { toUserMessage } from '../lib/safeError'
 import { useTenant } from '../contexts/TenantContext'
 import ChecklistViewerDrawer from '../components/checklist/ChecklistViewerDrawer'
 import MonthlyGridPanel from '../components/checklist/MonthlyGridPanel'
+import ChecklistWorkspace from '../components/checklists/ChecklistWorkspace'
 import { isMissingRelation } from '../lib/api/_client'
 import Card from '../components/ui/Card'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
@@ -362,6 +363,25 @@ export default function Checklists() {
         refreshing={loading}
         updatedAt={updatedAt}
       />
+
+      {/* Workspace: the inspections-and-observations view (list, selected sheet,
+          findings, trend). Everything below it is unchanged. */}
+      {!missing && (
+        <ChecklistWorkspace
+          submissions={submissions}
+          templates={templates}
+          loading={loading}
+          error={error}
+          onRetry={load}
+          onOpenViewer={(id) => setViewId(id)}
+          onDownloadPdf={downloadPdf}
+          pdfBusyId={pdfBusyId}
+          now={now}
+        />
+      )}
+      {pdfNote && tab !== 'submissions' && (
+        <p className="text-xs text-amber-500" role="status">{pdfNote}</p>
+      )}
 
       {/* KPI strip */}
       {!missing && !error && (

@@ -246,6 +246,9 @@ export function submissionSections(sub, {
     // Empty for any line that is not answered from a legend, so a reader can
     // simply ask "does this row have marks?" rather than inspecting the type.
     marks: rowMarks(field, answers[field.id], template),
+    // The template's own pass rule (Brakes OK? -> [true], Tyre condition ->
+    // ['Good']). Null when the field states none.
+    passValues: Array.isArray(field.passValues) && field.passValues.length ? field.passValues : null,
     line: index,
   })
 

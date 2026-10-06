@@ -48,7 +48,10 @@ function resolvePendingKeys(pending) {
 }
 
 // ── Realistic 3D Tyre ──────────────────────────────────────────────────────────
-function Tyre({ x, y, w, h, id, risk = 'none', onClick, label, sub, pending = false }) {
+function Tyre({ x: rawX, y: rawY, w: rawW, h: rawH, id, risk = 'none', onClick, label, sub, pending = false }) {
+  // Some layouts carry coordinates as strings; `"6" + 6` is "66", which drew the
+  // hub spokes at invalid positions. Coerce once so every derived value is a number.
+  const x = Number(rawX), y = Number(rawY), w = Number(rawW), h = Number(rawH);
   const col  = rc(risk);
   const cx   = x + w / 2;
   const cy   = y + h / 2;

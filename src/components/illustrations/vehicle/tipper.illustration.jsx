@@ -6,7 +6,9 @@
 import { IllustrationBase, BrandDefs, useDefs, motion, useReducedMotion, C } from '../primitives'
 import { G } from '../tokens'
 
-function Wheel({ cx, cy, r = 16, d, spin }) {
+function Wheel({ cx: cxIn, cy: cyIn, r = 16, d, spin }) {
+  // Callers pass literal strings; "66" + 8 would be "668". Coerce first.
+  const cx = Number(cxIn), cy = Number(cyIn)
   return (
     <g filter={`url(#${d.shadow})`}>
       <circle cx={cx} cy={cy} r={r} fill={C.ink} opacity="0.92" />

@@ -8,6 +8,7 @@ const display = Archivo({ subsets: ["latin"], weight: ["700", "800"], variable: 
 const body = Inter({ subsets: ["latin"], variable: "--font-body", display: "swap" });
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { MotionRoot } from "@/components/motion/MotionRoot";
+import { TiltRoot } from "@/components/motion/TiltRoot";
 import { BRAND_COLOR, JsonLd, SITE_URL, alternatesFor, siteSchemaGraph } from "./schema";
 import { OG_IMAGES } from "@/lib/site";
 
@@ -76,6 +77,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         {children}
         <WhatsAppButton />
         <MotionRoot />
+        <TiltRoot />
       </body>
     </html>
   );

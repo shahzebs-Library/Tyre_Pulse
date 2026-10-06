@@ -133,8 +133,6 @@
 .flow.rv-group > li::before { transform: scale(0); }
 .flow.rv-group.is-in > li::before { transform: none; transition: transform .5s var(--ease-spring) calc(var(--rv-delay, 0ms) * 2.6 + 250ms); }
 @media (max-width: 1080px) { .flow { padding-top: 0; } .flow::before, .flow > li::before { display: none; } }
-.flow .flow-card { transition: transform .35s var(--ease-out), box-shadow .35s var(--ease-out); }
-.flow .flow-card:hover { transform: translateY(-4px); box-shadow: 0 18px 40px rgba(0, 0, 0, .35); }
 @media (max-width: 1080px) { .flow::before { display: none; } }
 
 /* ---------- Proof strip + marquee ---------- */
@@ -293,6 +291,27 @@
   .cta-band::after { width: 60%; opacity: .6; }
 }
 
+/* ---------- 3D: product screens tilt toward the mouse, cards float above them ----------
+ * TiltRoot writes --tx/--ty (-1..1) on the host under the pointer. Screens also rest at a
+ * slight angle on wide screens, so the depth reads on touch devices too. The layered
+ * cards use the separate `translate` property so they never fight an entrance animation. */
+.hc-visual, .tab-media, .people-art, .flow > li { --tx: 0; --ty: 0; --rest-x: 0deg; --rest-y: 0deg; }
+.hc-visual > *, .tab-media > *, .flow-card {
+  transform: perspective(1200px) rotateX(calc(var(--ty) * -5deg + var(--rest-x))) rotateY(calc(var(--tx) * 7deg + var(--rest-y)));
+  transform-origin: 50% 50%;
+  transition: transform .7s var(--ease-out), box-shadow .7s var(--ease-out);
+}
+.is-tilting > *, .is-tilting .flow-card { transition-duration: .18s, .7s; }
+.hc-visual .hc-float, .people-art .phone { translate: calc(var(--tx) * -14px) calc(var(--ty) * -10px); transition: translate .5s var(--ease-out); }
+.is-tilting .hc-float, .people-art.is-tilting .phone { transition-duration: .15s; }
+.hc-visual.is-tilting > .app-window, .hc-visual.is-tilting > .hc-panel { box-shadow: calc(var(--tx) * -18px) calc(24px + var(--ty) * -10px) 60px rgba(22, 22, 22, .26); }
+.flow > li.is-tilting .flow-card { box-shadow: 0 22px 44px rgba(0, 0, 0, .4); }
+@media (min-width: 1081px) {
+  .hc-visual { --rest-y: -4deg; --rest-x: 2deg; }
+  .tab-media { --rest-y: -3deg; --rest-x: 1.5deg; }
+}
+.hc-visual, .tab-media { perspective: 1200px; }
+
 /* ---------- Print and reduced motion ---------- */
 @media print {
   .rv, .rv-group > * { opacity: 1 !important; transform: none !important; clip-path: none !important; }
@@ -309,6 +328,8 @@
   .bento-cell::before { display: none; }
   .ind-media > img, .people-art > img.art, .sig-standalone img.art { animation: none; transform: none; }
   .btn:hover, .bento-cell:hover, .price-card:hover { transform: none; }
+  .hc-visual > *, .tab-media > *, .flow-card { transform: none; }
+  .hc-visual .hc-float, .people-art .phone { translate: none; }
 }
 
 /* Pricing: the "Most flexible" flag sits on the card edge, so every feature list starts at the same height. */

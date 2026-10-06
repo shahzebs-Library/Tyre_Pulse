@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Check } from "lucide-react";
 import { CTA } from "@/components/CTA";
 import { PageFrame } from "@/components/PageFrame";
+import { PageTop } from "@/components/PageTop";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../schema";
 import { OG_IMAGES } from "@/lib/site";
 
@@ -29,8 +30,8 @@ const plans = [
 export default function PricingPage() {
   return <PageFrame>
     <JsonLd data={pageBreadcrumb("Pricing", "/pricing")} />
-    <section className="page-hero"><div className="site-shell"><span className="eyebrow">Commercial plans</span><h1 className="display">Start with the control you need. Expand when you are ready.</h1><p className="lead">Pricing is based on fleet size, users, modules, countries and integration requirements. Send your fleet size and we reply with a figure.</p></div></section>
-    <section className="page-content"><div className="site-shell">
+    <PageTop crumbs={[{ href: "/", label: "Home" }, { label: "Pricing" }]} title="Start with the control you need. Expand when you are ready." lead="Pricing is based on fleet size, users, modules, countries and integrations. Send your fleet size and we reply with a figure." cta={false} />
+    <section className="section-pad tight"><div className="site-shell">
       <div className="price-grid">
         {plans.map(([name, text, features], i) => (
           <article className={`card price-card ${i === 2 ? "featured" : ""}`} key={String(name)} aria-label={i === 2 ? `${name}, most flexible` : String(name)}>

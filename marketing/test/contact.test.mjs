@@ -80,7 +80,8 @@ function contactForm(fetch) {
     } };
     if (name === 'react/jsx-runtime') return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) };
     if (name === '@/components/PageFrame') return { PageFrame: 'main' };
-    if (name === '@/lib/site') return { WHATSAPP_URL: null };
+    if (name === '@/components/PageTop') return { PageTop: 'header' };
+    if (name === '@/lib/site') return { WHATSAPP_URL: null, CONTACT_EMAIL: 'info@tyrepulse.app' };
     throw new Error(`Unexpected dependency: ${name}`);
   };
   class FormDataStub { entries() { return Object.entries(input); } }
@@ -102,13 +103,13 @@ test('contact form resets the captured form after React clears currentTarget', a
   });
   await form.submit(event);
   assert.equal(resets, 1);
-  assert.deepEqual(form.states, ['Accepted', false]);
+  assert.deepEqual(form.states, ['Accepted', 'ok', false]);
 });
 
 test('contact form preserves input and exits sending state on network failure', async () => {
   const form = contactForm(async () => { throw new Error('offline'); });
   await form.submit({ preventDefault() {}, currentTarget: { reset() { throw new Error('must not reset'); } } });
-  assert.deepEqual(form.states, ['Unable to send the request. Please try again.', false]);
+  assert.deepEqual(form.states, ['Unable to send the request. Please try again.', 'error', false]);
 });
 
 const withHeaders = (value, headers) => ({ json: async () => value, headers: new Headers(headers) });

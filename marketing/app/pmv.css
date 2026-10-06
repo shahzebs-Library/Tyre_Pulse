@@ -91,6 +91,8 @@ a:focus-visible, button:focus-visible, [tabindex="0"]:focus-visible { outline: 3
 .hc-picker { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: clamp(8px, 1.4vw, 20px); margin-top: clamp(18px, 3vh, 32px); }
 .hc-pick { display: grid; gap: 8px; text-align: left; background: none; border: 0; padding: 6px 0; min-height: 44px; cursor: pointer; color: #6b6b64; font-weight: 700; font-size: .86rem; }
 .hc-pick.is-on, .hc-pick:hover { color: var(--ink); }
+.hc-pick-now { display: none; }
+.hc-pick-count { color: #6b6b64; font-weight: 600; font-variant-numeric: tabular-nums; }
 .hc-pick-track { display: block; height: 3px; background: #deded8; border-radius: 2px; overflow: hidden; }
 .hc-pick-fill { display: block; height: 100%; width: 100%; background: var(--brand); transform-origin: left; animation-name: hc-fill; animation-timing-function: linear; animation-fill-mode: both; }
 @keyframes hc-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
@@ -388,7 +390,13 @@ a:focus-visible, button:focus-visible, [tabindex="0"]:focus-visible { outline: 3
   .hc-visual { aspect-ratio: 16 / 10; }
 }
 @media (max-width: 560px) {
-  .hc-pick-label { font-size: .72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  /* Five labels cannot fit a phone without truncating into "Operati...". The bars stay as
+     the tap targets; the active slide's name is printed once above them. Labels stay in the
+     DOM (visually hidden) so every tab keeps its accessible name. */
+  .hc-pick-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .hc-pick { align-content: center; }
+  .hc-pick-now { display: flex; justify-content: space-between; align-items: baseline; margin: clamp(18px, 3vh, 32px) 0 0; font-weight: 700; font-size: .86rem; color: var(--ink); }
+  .hc-pick-now + .hc-picker { margin-top: 2px; }
   .hc-float { display: none; }
 }
 @media (max-width: 720px) {
@@ -542,7 +550,14 @@ a, button { -webkit-tap-highlight-color: transparent; }
 .crumbs li { display: flex; gap: 8px; align-items: center; }
 @media (max-width: 560px) {
   .wa-float { width: 48px; height: 48px; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
-  .hc-picker { padding-inline-end: 60px; }
   .tabbar { scroll-snap-type: x mandatory; -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
   .tabbar [role="tab"] { scroll-snap-align: start; }
 }
+
+/* Phones: the WhatsApp button waits until the visitor scrolls past the first screen, so it
+   never sits on top of the hero slide picker. Desktop shows it at once. */
+@media (max-width: 560px) {
+  .wa-float.is-tucked { opacity: 0; transform: translateY(12px); pointer-events: none; }
+  .wa-float { transition: opacity .2s ease, transform .2s cubic-bezier(.23,1,.32,1), background-color .15s ease; }
+}
+@media (prefers-reduced-motion: reduce) { .wa-float { transition: none; } }

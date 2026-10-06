@@ -97,6 +97,10 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
           })}
         </div>
 
+        <p className="hc-pick-now" aria-hidden="true">
+          <span>{slides[active].tab}</span>
+          <span className="hc-pick-count">{active + 1} / {slides.length}</span>
+        </p>
         <div className="hc-picker" role="tablist" aria-label="Choose a hero slide">
           {slides.map((s, i) => {
             const on = i === active;

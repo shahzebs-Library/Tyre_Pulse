@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, Menu, X } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { APP_URL } from "@/lib/site";
 import { PLATFORM_PAGES, RESOURCE_PAGES, SOLUTION_PAGES } from "@/lib/nav";
@@ -29,6 +29,18 @@ export function Header({ locale = "en" }: { locale?: "en" | "ar" }) {
   const [mobile, setMobile] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
   const toggleRef = useRef<HTMLButtonElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const [scrolled, setScrolled] = useState(false);
+
+  // The bar firms up (shadow, tighter height) once the page has moved under it.
+  // A 1px sentinel above the bar, watched by IntersectionObserver: no scroll listener.
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !("IntersectionObserver" in window)) return;
+    const io = new IntersectionObserver(([e]) => setScrolled(!e.isIntersecting));
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
   const closeAll = useCallback(() => { setMenu(null); setMobile(false); }, []);
 
@@ -48,7 +60,9 @@ export function Header({ locale = "en" }: { locale?: "en" | "ar" }) {
   }, [menu, mobile, closeAll]);
 
   return (
-    <div className="topbar" ref={barRef}>
+    <>
+    <div className="topbar-sentinel" ref={sentinelRef} aria-hidden="true" />
+    <div className={`topbar${scrolled ? " is-scrolled" : ""}`} ref={barRef}>
       <A11yStyles />
       <div className="site-shell topbar-inner">
         <Link className="topbar-logo" href="/" aria-label={c.home}><Logo /></Link>
@@ -94,20 +108,21 @@ export function Header({ locale = "en" }: { locale?: "en" | "ar" }) {
             aria-controls="mobile-nav"
             onClick={() => setMobile(!mobile)}
           >
-            {mobile ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
+            <span className={`burger${mobile ? " is-open" : ""}`} aria-hidden="true"><i /><i /><i /></span>
           </button>
         </div>
       </div>
       {mobile && (
         <nav id="mobile-nav" className="mobile-panel" aria-label={c.site}>
           <div className="site-shell">
-            {MENUS.map((m) => (
-              <div key={m.id} className="mobile-group">
+            {MENUS.map((m, gi) => (
+              <div key={m.id} className="mobile-group" style={{ "--rv-delay": `${gi * 60}ms` } as React.CSSProperties}>
                 <span className="mobile-group-h">{ar ? m.labelAr : m.label}</span>
                 {m.items.map((it) => <Link key={it.href} href={it.href} onClick={closeAll} aria-current={pathname === it.href ? "page" : undefined}>{ar ? it.labelAr : it.label}</Link>)}
               </div>
             ))}
-            <div className="mobile-group">
+            <div className="mobile-group" style={{ "--rv-delay": `${MENUS.length * 60}ms` } as React.CSSProperties}>
+              <Link className="btn btn-primary mobile-demo" href="/contact" onClick={closeAll}>{c.demo}</Link>
               <a href={APP_URL}>{c.login}</a>
               {ar
                 ? <Link href="/" lang="en" onClick={closeAll}>English</Link>
@@ -117,5 +132,6 @@ export function Header({ locale = "en" }: { locale?: "en" | "ar" }) {
         </nav>
       )}
     </div>
+    </>
   );
 }

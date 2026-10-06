@@ -98,6 +98,7 @@
   ],
   "git": {
     "deploymentEnabled": {
+      "claude/relaxed-planck-ur3ji5": false,
       "claude/accident-builder-report-ui-2bkwb5": false,
       "claude/ksa-asset-mobile-visibility-xlnp7m": false,
       "claude/project-review-audit-t07hbp": false,

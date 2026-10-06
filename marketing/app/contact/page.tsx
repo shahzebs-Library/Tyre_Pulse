@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { PageFrame } from "@/components/PageFrame";
-import { WHATSAPP_URL } from "@/lib/site";
+import { PageTop } from "@/components/PageTop";
+import { CONTACT_EMAIL, WHATSAPP_URL } from "@/lib/site";
 
 export default function ContactPage() {
   const [status, setStatus] = useState<string>("");
+  const [tone, setTone] = useState<"" | "ok" | "error">("");
   const [sending, setSending] = useState(false);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -13,24 +15,27 @@ export default function ContactPage() {
     if (sending) return;
     const formElement = e.currentTarget;
     setSending(true);
-    setStatus("Sending...");
+    setTone("");
+    setStatus("");
     const form = new FormData(formElement);
     const payload = Object.fromEntries(form.entries());
     try {
       const res = await fetch("/api/contact", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await res.json();
       setStatus(data.message || (res.ok ? "Request received." : "Unable to send the request."));
+      setTone(res.ok ? "ok" : "error");
       if (res.ok) formElement.reset();
     } catch {
       setStatus("Unable to send the request. Please try again.");
+      setTone("error");
     } finally {
       setSending(false);
     }
   }
 
   return <PageFrame>
-    <section className="page-hero"><div className="site-shell"><span className="eyebrow">Talk to Tyre Pulse</span><h1 className="display">Book a demo around your real operation.</h1><p className="lead">Tell us how many assets, countries, sites and users you manage. The walkthrough will focus on the workflows and controls that matter to you.</p></div></section>
-    <section className="page-content"><div className="site-shell"><div className="card form-card">
+    <PageTop crumbs={[{ href: "/", label: "Home" }, { label: "Contact" }]} title="Book a demo around your real operation." lead="Tell us how many assets, countries, sites and users you manage. The walkthrough focuses on the workflows and controls that matter to you." cta={false} />
+    <section className="section-pad tight"><div className="site-shell contact-layout"><div className="card form-card">
       <form onSubmit={submit} className="form-grid">
         <div className="field"><label htmlFor="name">Full name</label><input id="name" name="name" required autoComplete="name" /></div>
         <div className="field"><label htmlFor="email">Work email</label><input id="email" name="email" type="email" required autoComplete="email" /></div>
@@ -40,8 +45,21 @@ export default function ContactPage() {
         <div className="field"><label htmlFor="industry">Industry</label><select id="industry" name="industry" defaultValue=""><option value="" disabled>Select industry</option><option>Construction</option><option>Transport & Logistics</option><option>Ready-Mix Concrete</option><option>Heavy Equipment Rental</option><option>Workshop / Service Centre</option><option>Other</option></select></div>
         <div className="field full"><label htmlFor="message">Which machines, and what problem?</label><textarea id="message" name="message" placeholder="For example: 120 mixers, tyre cost per km rising, inspections still on paper" /></div>
         <div className="field full" aria-hidden="true" style={{ position: "absolute", left: -10000 }}><label htmlFor="website">Website</label><input id="website" name="website" tabIndex={-1} autoComplete="off" /></div>
-        <div className="field full"><button className="btn btn-primary" type="submit" disabled={sending}>Request a demo</button><p className="form-note">Your information is used only to respond to this request.</p>{WHATSAPP_URL && <p className="form-note">Prefer WhatsApp? <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">Message us on WhatsApp</a>.</p>}<p aria-live="polite">{status}</p></div>
+        <div className="field full"><button className="btn btn-primary" type="submit" disabled={sending} aria-busy={sending}>{sending ? "Sending" : "Request a demo"}{sending && <span className="btn-spin" aria-hidden="true" />}</button><p className="form-note">Your information is used only to respond to this request.</p><p className={`form-status${tone ? ` is-${tone}` : ""}`} role="status" aria-live="polite">{status}</p></div>
       </form>
-    </div></div></section>
+    </div>
+    <aside className="contact-aside" aria-labelledby="next-h">
+      <h2 id="next-h">What happens next</h2>
+      <ol className="next-steps">
+        <li><b>We confirm a time.</b><span>A reply to your work email with a slot that suits your sites.</span></li>
+        <li><b>You send a sample, if you like.</b><span>One month of job cards and tyre records is enough. It stays private to the demo.</span></li>
+        <li><b>We walk through your own data.</b><span>Cost per km, open jobs and inspections, on your machines rather than a generic tour.</span></li>
+      </ol>
+      <div className="contact-direct">
+        {WHATSAPP_URL && <a className="btn btn-dark" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">Message us on WhatsApp</a>}
+        <a className="btn-text" href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+      </div>
+    </aside>
+    </div></section>
   </PageFrame>;
 }

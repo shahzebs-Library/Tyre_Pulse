@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Database, Fingerprint, KeyRound, LockKeyhole, ScrollText, ShieldCheck } from "lucide-react";
 import { PageFrame } from "@/components/PageFrame";
+import { PageTop } from "@/components/PageTop";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../schema";
 import { CTA } from "@/components/CTA";
 import { OG_IMAGES } from "@/lib/site";
@@ -30,8 +31,8 @@ const items = [
 export default function SecurityPage() {
   return <PageFrame>
     <JsonLd data={pageBreadcrumb("Security", "/security")} />
-    <section className="page-hero"><div className="site-shell"><span className="eyebrow">Security by design</span><h1 className="display">Control access without slowing down operations.</h1><p className="lead">Tyre Pulse is designed to separate platform ownership, company administration, locations, roles, financial visibility and approval authority.</p></div></section>
-    <section className="page-content"><div className="site-shell">
+    <PageTop crumbs={[{ href: "/", label: "Home" }, { label: "Security" }]} title="Control access without slowing down operations." lead="Platform ownership, company administration, locations, roles, financial visibility and approval authority are kept separate, and the database enforces it." />
+    <section className="section-pad tight"><div className="site-shell">
       <ul className="sec-list">
         {items.map(([Icon, title, text]) => { const C = Icon as typeof ShieldCheck; return <li key={String(title)}><C size={28} strokeWidth={1.6} aria-hidden="true" /><div><h2>{String(title)}</h2><p>{String(text)}</p></div></li>; })}
       </ul>

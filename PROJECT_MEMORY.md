@@ -5,6 +5,32 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ SESSION 2026-10-06 — MARKETING SITE: MOTION LAYER, 3D TILT, CLEANED PHOTOS, INSPECTION DEMO SCENE. marketing/ only, no migration.
+- MOTION (marketing/components/motion/): MotionRoot (one IntersectionObserver reveal engine in the layout; arms only
+  blocks BELOW the fold so no-JS/first paint is always visible; groups stagger children; no scroll listeners),
+  CountUp (server renders the real figure, sr-only copy for screen readers), Spotlight (bento hover light), TiltRoot
+  (one delegated rAF pointermove writes --tx/--ty; product screens lean in perspective, floating cards use the
+  `translate` property so they never fight transform animations; mouse only). All styles in app/motion.css
+  (imported after pmv.css); every effect honours prefers-reduced-motion. Do NOT add scroll listeners.
+- HOME: proof strip (1600+ machines / 89000+ job cards / 216000+ expense lines / 3 countries - KEPT, they are real
+  measured DB figures), asset-class marquee, photo bento of 8 modules, unified PageTop headers on pricing/security/
+  industries/contact, contact "what happens next" aside, footer legal links (LEGAL_LINKS in lib/site.ts point at the
+  app's /privacy /terms /data-deletion), security headers in next.config.ts (HSTS, nosniff, DENY, referrer, perms;
+  NO CSP - would need nonces). Fonts (Archivo + Inter) and lucide icons KEPT on purpose.
+- PHOTOS CLEANED (OpenCV inpaint, originals only in git history): CAT logos on loader / loader-cab /
+  technician-generator / technician-phone, Perkins + MaxiFlex glove print on technician-generator, both SANY marks on
+  wheel-loader-site, the grille star on transit-mixer. loader.webp trimmed of its 5px light frame (1292x701);
+  fleet-lineup.webp cropped above the off-brand navy wedge (1327x1010). Photos.tsx dims updated. RULE stands:
+  check every supplied photo for third-party logos before publishing.
+- DEMO SCENE: components/motion/InspectionDemo.tsx = a looping HTML/CSS phone scene (scan QR -> wheel diagram with a
+  red damaged tyre -> photo -> signature draws -> synced + work order raised), steps are clickable buttons, plays
+  only on screen and with the tab visible, never auto-advances under reduced motion, labelled Sample data. No video
+  file (sharp, a few KB, accessible). Mounted as a dark band on / and /platform/inspections.
+- three.js skills pinned in scripts/install-claude-skills.sh (CloudAI-X/threejs-skills); NOT used - no 3D model on
+  the site, CSS depth only.
+- Verified: lint, tsc, 11/11 tests, build, Playwright sweep 12 pages x 320/390/768/1280 = 0 overflow (only the
+  intentional contact honeypot off-screen).
+
 # ⚑ SESSION 2026-10-05 (part 12) — "PAGES WENT MISSING" CHECK. PR #381 merged (b72e3e3d).
 - Owner felt finished pages (Maintenance, Calendar) were removed/reverted. Audited: since 2026-09-28 NO page file,
   route or nav link was removed on main (only additions; the only deletions were intentional marketing files);

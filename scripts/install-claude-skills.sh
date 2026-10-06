@@ -35,6 +35,11 @@ SOURCES=(
   "jojojobring/claude-skills|ff6978997b09ccb8ea62398012c3785359e889c4|owasp-security|owasp-security|dir"
   "jojojobring/claude-skills|ff6978997b09ccb8ea62398012c3785359e889c4|webapp-testing|webapp-testing|dir"
 )
+# Three.js / 3D (CloudAI-X/threejs-skills), pinned 2026-10-06 after reading every SKILL.md.
+for s in threejs-fundamentals threejs-geometry threejs-materials threejs-lighting threejs-textures \
+         threejs-animation threejs-interaction threejs-loaders threejs-shaders threejs-postprocessing; do
+  SOURCES+=("CloudAI-X/threejs-skills|b1c623076c661fc9b03dac19292e825a5d106823|skills/$s|$s|dir")
+done
 for s in secure-storage-audit crypto-review auth-assessment network-security-check platform-interaction-review \
          code-quality-scan resilience-assessment privacy-audit mobile-threat-model masvs-checklist \
          secure-mobile-dev-guide mobile-pentest-plan; do

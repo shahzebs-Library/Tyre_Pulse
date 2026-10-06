@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { APP_STORE_URL } from "@/app/schema";
-import { APP_URL } from "@/lib/site";
+import { APP_URL, CONTACT_EMAIL, LEGAL_LINKS, WHATSAPP_URL } from "@/lib/site";
 import { PLATFORM_PAGES } from "@/lib/nav";
 import { Logo } from "./Logo";
 import { StoreBadges } from "./StoreBadges";
@@ -14,6 +14,8 @@ const COPY = {
     company: "Company",
     access: "Access",
     login: "Customer login",
+    whatsapp: "WhatsApp sales",
+    legal: "Legal",
     adminNote: "Company administration is inside the app.",
     company_links: [["/industries", "Industries"], ["/pricing", "Pricing"], ["/security", "Security"], ["/contact", "Contact"]],
     rights: "Tyre Pulse. All rights reserved.",
@@ -27,6 +29,8 @@ const COPY = {
     company: "الشركة",
     access: "الدخول",
     login: "دخول العملاء",
+    whatsapp: "المبيعات عبر واتساب",
+    legal: "قانوني",
     adminNote: "إدارة الشركة تتم داخل التطبيق.",
     company_links: [["/industries", "القطاعات"], ["/pricing", "الأسعار"], ["/security", "الأمان"], ["/contact", "تواصل معنا"]],
     rights: "تاير بالس. جميع الحقوق محفوظة.",
@@ -70,13 +74,18 @@ export function Footer({ locale = "en" }: { locale?: "en" | "ar" }) {
             <p className="footer-heading" aria-hidden="true">{c.access}</p>
             <div className="footer-links">
               <a href={APP_URL}>{c.login}</a>
+              <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+              {WHATSAPP_URL && <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">{c.whatsapp}</a>}
               <span className="footer-note">{c.adminNote}</span>
             </div>
           </nav>
         </div>
         <div className="footer-bottom">
           <span><bdi>&copy; {new Date().getFullYear()}</bdi> {c.rights}</span>
-          <span>{c.sample}</span>
+          <nav className="footer-legal" aria-label={c.legal}>
+            {LEGAL_LINKS.map((l) => <a key={l.href} href={l.href}>{ar ? l.labelAr : l.label}</a>)}
+          </nav>
+          <span className="footer-sample">{c.sample}</span>
         </div>
       </div>
     </footer>

@@ -232,6 +232,12 @@
 }
 [dir="rtl"] .cta-band::after { -webkit-mask-image: linear-gradient(270deg, transparent, #000 60%); mask-image: linear-gradient(270deg, transparent, #000 60%); }
 @keyframes tp-stripes { to { background-position: 51px 0; } }
+
+/* Endless loops run only while on screen. MotionRoot toggles .in-view with one
+   IntersectionObserver; off screen they stop forcing a style update every frame. */
+.cta-band:not(.in-view)::after,
+.marquee:not(.in-view) .marquee-track,
+.live-feed:not(.in-view) .live-dot::after { animation-play-state: paused; }
 .cta-band-inner { padding: 44px 0; }
 .cta-band h2 { font-size: clamp(1.5rem, 2.8vw, 2.2rem); text-wrap: balance; }
 
@@ -418,8 +424,11 @@
 .live-feed, .asset-cycle { padding: 12px 12px 10px; display: grid; gap: 8px; }
 .live-head { display: flex; align-items: center; gap: 8px; font-size: .8rem; }
 .live-head strong { flex: 1; }
-.live-dot { width: 8px; height: 8px; border-radius: 50%; background: #1d7a44; box-shadow: 0 0 0 0 rgba(29, 122, 68, .5); animation: tp-live-pulse 1.6s ease-out infinite; }
-@keyframes tp-live-pulse { 70% { box-shadow: 0 0 0 7px rgba(29, 122, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(29, 122, 68, 0); } }
+.live-dot { position: relative; width: 8px; height: 8px; border-radius: 50%; background: #1d7a44; }
+/* The pulse ring animates transform + opacity only, so it runs on the compositor (an
+   animated box-shadow repainted every frame, forever). */
+.live-dot::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: rgba(29, 122, 68, .5); animation: tp-live-pulse 1.6s ease-out infinite; }
+@keyframes tp-live-pulse { from { transform: scale(1); opacity: .9; } 70% { transform: scale(2.75); opacity: 0; } to { transform: scale(2.75); opacity: 0; } }
 .live-feed ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .live-row { display: flex; gap: 9px; align-items: center; padding: 7px 8px; border-radius: 8px; background: #f6f6f2; transition: opacity .4s ease; }
 .live-row.is-new { background: #fff7d9; animation: tp-live-in .5s var(--ease-out, ease) both; }
@@ -448,3 +457,21 @@
 .ac-dots i.is-on { width: 16px; border-radius: 3px; background: var(--brand, #FFC629); }
 @media (max-width: 1080px) { .hc-live > .hc-float { display: none; } }
 @media (prefers-reduced-motion: reduce) { .live-dot, .live-row.is-new, .ac-body { animation: none; } }
+
+/* Fields the server rejected: red border plus a mark, so the state is not colour-only. */
+.field [aria-invalid="true"] { border-color: #b42318; box-shadow: 0 0 0 1px #b42318; }
+.field:has([aria-invalid="true"]) > label::after { content: " (check this)"; color: #b42318; font-weight: 600; }
+
+/* Below-the-fold sections skip style, layout and paint until they near the viewport
+   (content-visibility: auto). The first two sections (hero + the one under it) always
+   render. Scoped to the hero pages (home, /ar): they have no in-page anchors. On the
+   platform pages a #anchor jump lands off target while estimated heights resolve, so
+   they render normally. "auto" in contain-intrinsic-size remembers each section's real height once it
+   has been rendered, so the scrollbar settles; find-in-page, anchors and
+   IntersectionObserver keep working. Print renders everything. */
+main:has(> .home-hero) > section:nth-of-type(n + 3) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 900px;
+}
+@media print { main > section, .footer { content-visibility: visible; } }
+.footer { content-visibility: auto; contain-intrinsic-size: auto 420px; }

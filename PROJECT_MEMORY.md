@@ -17,6 +17,24 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-10-06 (part 5, marketing session) — SPEED + SECURITY + ACCURACY ROUND 2 (same branch, NOT pushed). marketing/ only.
+- SPEED (measured, throttled phone 4x CPU / 1.6 Mbps / 150 ms RTT, 2 runs): home TBT 2.44 s -> ~1.0 s, LCP 2.66 -> ~1.6 s;
+  /ar LCP 2.62 -> ~2.0 s; every page LCP < 2.5 s, CLS ~0. Cause was native style/paint, not JS (JS ~0.8 s of 3.7 s):
+  live-dot pulse animated box-shadow (repaint every frame) -> transform/opacity pseudo; infinite loops (CTA stripes,
+  marquee, live dot) paused off screen via MotionRoot IO (.in-view); HeroLive feed stops re-rendering when scrolled away;
+  content-visibility:auto on below-fold sections of the HERO pages only (home, /ar) + footer.
+  GOTCHA: content-visibility on pages with #anchors makes the jump land off target (#documents landed -156px). It is
+  scoped with main:has(> .home-hero). Do not widen it to the platform pages.
+- SECURITY: next 16.3.4 -> 16.3.8 (GHSA-vcvr-r3jv-pc5j next/og RCE; not exploitable here, no next/og) + eslint-config-next
+  16.3.8; prod npm audit 0. Dev-only `braces` left: npm's fix downgrades eslint-config-next to v14 - do not apply.
+  Contact API: Sec-Fetch-Site cross-site -> 403, non-JSON content-type -> 415 (blocks form CSRF), body cap enforced on
+  the read text (holds for chunked bodies), rate limit keys on x-real-ip (Vercel-set, unspoofable) and counts only valid
+  requests. Validation 400 returns field NAMES only; form marks them aria-invalid + "(check this)", focuses the first,
+  clears a mark on edit; inputs carry the server's min/max lengths. Tests 13 -> 19, guards mutation-checked.
+- ACCURACY: security/pricing claims checked against the app (country RLS, support sessions, webhook admin, key rotation,
+  rate-limited public API) = backed. Proof figures match the DB (1,617 fleet / ~89.9k job cards / 216,792 lines).
+- MEASURE GOTCHA: `pgrep -f next-server` matches your own shell; use `pgrep -f "^next-server"`.
+
 # ⚑ SESSION 2026-10-06 (part 4, marketing session) — MARKETING AUDIT + QC (branch claude/marketing-audit-qc, NOT pushed). marketing/ only.
 - Playwright sweep 11 pages x 320/390/768/1366/1920/2560 = 66 combos: 0 overflow, 0 contrast/tap/console/alt findings after fixes.
   GOTCHA: Playwright fullPage screenshots show BLANK bands on this site; that is a stitching artifact, not a defect. Judge

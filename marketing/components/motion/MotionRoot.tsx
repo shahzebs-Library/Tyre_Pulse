@@ -30,11 +30,23 @@ const GROUPS = [
   ".price-grid", ".grid-3p", ".grid-4p", ".ar-steps", ".proof-stats", "[data-reveal-group]",
 ].join(",");
 
+/** Endless animations that should only run while visible (see motion.css). */
+const LOOPS = ".cta-band, .marquee, .live-feed";
+
 const STEP_MS = 70;
 const MAX_STEPS = 7;
 
 export function MotionRoot() {
   const pathname = usePathname();
+
+  useEffect(() => {
+    if (!("IntersectionObserver" in window)) return;
+    const loops = new IntersectionObserver((entries) => {
+      for (const e of entries) e.target.classList.toggle("in-view", e.isIntersecting);
+    });
+    document.querySelectorAll(LOOPS).forEach((el) => loops.observe(el));
+    return () => loops.disconnect();
+  }, [pathname]);
 
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;

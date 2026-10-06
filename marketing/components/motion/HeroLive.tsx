@@ -7,7 +7,7 @@ import { Camera, CheckCircle2, CircleDot, ClipboardCheck, Gauge, PenLine, Truck,
  * Live cards for the home hero: they show work HAPPENING, one event after
  * another, instead of a still screenshot.
  *
- * Each card ticks only while its own hero slide is on screen, the tab is
+ * Each card ticks only while its own hero slide is active and on screen, the tab is
  * visible and the visitor has not asked for reduced motion (reduced motion
  * shows one still frame). Every value is illustrative sample data.
  */
@@ -30,8 +30,15 @@ function useTicker(length: number, ms: number, start = 0) {
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
     let t = 0;
+    // Scrolled out of view: stop re-rendering the feed (the hero is the first screen,
+    // so most of a visit happens with it off screen).
+    let onScreen = true;
+    const io = "IntersectionObserver" in window
+      ? new IntersectionObserver(([e]) => { onScreen = e.isIntersecting; })
+      : null;
+    if (ref.current) io?.observe(ref.current);
     const tick = () => {
-      if (document.hidden) return;
+      if (document.hidden || !onScreen) return;
       const slide = ref.current?.closest(".hc-slide");
       const active = !slide || slide.classList.contains("is-on");
       setI((n) => (active ? (n + 1) % length : start));
@@ -43,7 +50,7 @@ function useTicker(length: number, ms: number, start = 0) {
     };
     sync();
     mq.addEventListener("change", sync);
-    return () => { mq.removeEventListener("change", sync); window.clearInterval(t); };
+    return () => { mq.removeEventListener("change", sync); window.clearInterval(t); io?.disconnect(); };
   }, [length, ms, start]);
 
   return { ref, i };

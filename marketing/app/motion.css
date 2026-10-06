@@ -149,7 +149,12 @@
 .proof-stats > div > dd > span { order: 3; color: var(--muted); font-size: .88rem; line-height: 1.5; }
 .proof-stats > div::before { content: ""; order: 0; width: 28px; height: 4px; background: var(--brand); margin-bottom: 10px; transform: skewX(-20deg); }
 
-.marquee { margin-top: 26px; border-block: 1px solid var(--line); background: #fafaf8; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
+/* The band (background + rules) runs full width like the other bands; the
+   moving words are held to the shell edges so they line up with the content
+   above and below, and fade out over a fixed distance at both inline edges so
+   a word is never cut off hard. The fade is symmetric, so it is RTL-safe. */
+.marquee { margin-top: 26px; border-block: 1px solid var(--line); background: #fafaf8; overflow: hidden; }
+.marquee-viewport { overflow: hidden; --marquee-fade: clamp(32px, 6vw, 120px); -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--marquee-fade), #000 calc(100% - var(--marquee-fade)), transparent); mask-image: linear-gradient(90deg, transparent, #000 var(--marquee-fade), #000 calc(100% - var(--marquee-fade)), transparent); }
 .marquee-track { display: flex; width: max-content; animation: tp-marquee 46s linear infinite; }
 .marquee:hover .marquee-track { animation-play-state: paused; }
 .marquee ul { display: flex; list-style: none; margin: 0; padding: 0; }
@@ -376,6 +381,7 @@
   .marquee-track { animation: none; flex-wrap: wrap; width: auto; }
   .marquee ul[aria-hidden="true"] { display: none; }
   .marquee ul { flex-wrap: wrap; justify-content: center; }
+  .marquee-viewport { -webkit-mask-image: none; mask-image: none; }
   .cta-band::after, .topbar::after { animation: none; }
   .topbar::after { display: none; }
   .bento-cell::before { display: none; }

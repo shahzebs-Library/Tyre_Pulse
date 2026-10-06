@@ -1,0 +1,122 @@
+/* Preventive Maintenance page. Only --cc-* tokens, so light and dark share one sheet.
+   Prefix pmp- (pm- belongs to Predictive Maintenance and Policy Management). */
+.pmp-page { display: flex; flex-direction: column; gap: 14px; min-width: 0; padding: 4px 2px 24px; }
+
+/* Hero: no artwork for this module, so the green chip sits on a card surface. */
+.pmp-page .cc-hero { padding: 16px 18px; border: 1px solid var(--cc-border); background: var(--cc-card); box-shadow: var(--cc-shadow); }
+.pmp-page .cc-hero::before { content: ""; position: absolute; inset: 0 0 0 auto; width: 46%; pointer-events: none;
+  background: radial-gradient(120% 140% at 100% 0%, var(--cc-green-tint), transparent 62%); }
+.pmp-page .cc-hero-copy { max-width: 70%; }
+
+.pmp-bar { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 10px 12px; }
+.pmp-bar .cc-tabs { margin: 0; }
+.pmp-bar-actions, .pmp-exports { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pmp-updated { font-size: 12px; color: var(--cc-ink-3); }
+.pmp-spin { animation: pmp-spin 0.9s linear infinite; }
+@keyframes pmp-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .pmp-spin { animation: none; } }
+
+.pmp-banner { flex-direction: row; align-items: center; gap: 10px; padding: 10px 14px; }
+.pmp-banner p { margin: 0; flex: 1; min-width: 0; font-size: 12.5px; color: var(--cc-ink-2); }
+.pmp-banner > svg { flex: none; }
+.pmp-banner.bad > svg { color: var(--cc-red); }
+.pmp-banner.warn > svg { color: var(--cc-amber); }
+.pmp-banner.good > svg { color: var(--cc-green); }
+
+.pmp-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.pmp-hist-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+/* Dashboard grid */
+.pmp-grid { display: grid; gap: 14px; grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-areas:
+    "due due due due due due up up up cat cat cat"
+    "cost cost cost cost cost cost cost cost cost cost cost cost"
+    "svc svc svc svc svc svc svc svc svc svc svc svc"; }
+.pmp-a-due { grid-area: due; } .pmp-a-up { grid-area: up; } .pmp-a-cat { grid-area: cat; }
+.pmp-a-cost { grid-area: cost; } .pmp-a-svc { grid-area: svc; }
+.pmp-grid > .cc-card { min-width: 0; }
+.pmp-grid .cc-card-head { flex-wrap: wrap; gap: 8px; }
+
+.pmp-due { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pmp-due li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-inline-start: 3px solid var(--cc-amber); }
+.pmp-due li.is-bad { border-inline-start-color: var(--cc-red); }
+.pmp-due-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pmp-due-main b { font-size: 13px; font-weight: 600; color: var(--cc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pmp-due-main small { font-size: 11.5px; color: var(--cc-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pmp-service { padding: 5px 10px; font-size: 12px; }
+
+.pmp-bars { display: flex; flex-direction: column; gap: 12px; }
+.pmp-bar-row { display: grid; grid-template-columns: minmax(80px, 1fr) 1.4fr auto; gap: 10px; align-items: center; font-size: 12.5px; }
+.pmp-bar-row > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--cc-ink-2); }
+.pmp-bar-row b { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--cc-ink); text-align: right; }
+.pmp-note { margin: 10px 0 0; font-size: 11.5px; color: var(--cc-ink-3); }
+.pmp-note-top { margin: 0 0 10px; }
+
+.pmp-seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--cc-inner-border); border-radius: 9px; overflow: hidden; background: var(--cc-inner); }
+.pmp-seg button { border: 0; border-inline-end: 1px solid var(--cc-inner-border); background: transparent; color: var(--cc-ink-2); font: inherit; font-size: 12.5px; font-weight: 600; padding: 7px 13px; cursor: pointer; }
+.pmp-seg button:last-child { border-inline-end: 0; }
+.pmp-seg button[aria-pressed="true"] { color: #fff; }
+.pmp-seg button:focus-visible { outline: 2px solid var(--cc-green); outline-offset: -2px; }
+
+.pmp-cost-grid { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(0, 3fr); gap: 12px; }
+.pmp-cost-total { display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 14px; border-radius: 10px; background: var(--cc-inner); border: 1px solid var(--cc-inner-border); }
+.pmp-cost-total > span { font-size: 12px; color: var(--cc-ink-3); }
+.pmp-cost-total > b { font-size: 26px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.pmp-cost-total dl { margin: 10px 0 0; display: flex; flex-direction: column; gap: 5px; font-size: 12px; }
+.pmp-cost-total dl div { display: flex; justify-content: space-between; gap: 10px; }
+.pmp-cost-total dt { color: var(--cc-ink-3); }
+.pmp-cost-total dd { margin: 0; color: var(--cc-ink-2); font-variant-numeric: tabular-nums; }
+.pmp-cost-sum { border-top: 1px solid var(--cc-inner-border); padding-top: 5px; }
+.pmp-cost-sum dd { color: var(--cc-ink); font-weight: 600; }
+.pmp-chart { position: relative; height: 230px; min-width: 0; }
+
+.pmp-svc-stats { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--cc-ink-3); }
+.pmp-svc-stats b { color: var(--cc-ink); margin-inline-start: 4px; font-variant-numeric: tabular-nums; }
+.pmp-svc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.pmp-inner { min-width: 0; padding: 12px; border-radius: 10px; background: var(--cc-inner); border: 1px solid var(--cc-inner-border); }
+.pmp-inner h3 { margin: 0 0 10px; font-size: 13px; font-weight: 700; color: var(--cc-ink); }
+
+.pmp-rank { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pmp-rank li { display: flex; align-items: center; gap: 10px; font-size: 12.5px; }
+.pmp-rank-n { width: 22px; height: 22px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--cc-green); background: var(--cc-green-tint); }
+.pmp-rank-main { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(70px, auto) 1fr; gap: 10px; align-items: center; border: 0; background: transparent; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: start; }
+.pmp-rank-main:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 2px; border-radius: 6px; }
+.pmp-rank-main b { color: var(--cc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pmp-rank-val { display: flex; flex-direction: column; align-items: flex-end; font-variant-numeric: tabular-nums; color: var(--cc-ink); white-space: nowrap; }
+.pmp-rank-val small { font-size: 10.5px; color: var(--cc-ink-3); }
+
+/* Registers */
+.pmp-filters { align-items: center; margin-bottom: 10px; }
+.pmp-filters .cc-select { padding-top: 9px; padding-bottom: 9px; font-size: 12.5px; }
+.pmp-date { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--cc-ink-3); }
+.pmp-date .cc-select { background-image: none; padding-inline-end: 10px; min-width: 0; }
+.pmp-on { border-color: var(--cc-amber); color: var(--cc-amber); background: var(--cc-amber-tint); }
+.pmp-plan { display: inline-flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pmp-plan b { font-weight: 600; color: var(--cc-ink); }
+.pmp-plan small { font-size: 11px; color: var(--cc-ink-3); }
+.pmp-plan small.pmp-strong { font-size: 12.5px; color: var(--cc-ink-2); }
+.pmp-plan .cc-pill { align-self: flex-start; }
+.pmp-mono { font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+.pmp-nowrap { white-space: nowrap; }
+.pmp-actions { display: flex; align-items: center; gap: 4px; }
+.pmp-danger:hover { color: var(--cc-red); border-color: var(--cc-red); }
+
+@media (max-width: 1280px) {
+  .pmp-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pmp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "due due" "up cat" "cost cost" "svc svc"; }
+}
+@media (max-width: 760px) {
+  .pmp-kpis, .pmp-hist-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pmp-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "due" "up" "cat" "cost" "svc"; }
+  .pmp-cost-grid, .pmp-svc-grid { grid-template-columns: minmax(0, 1fr); }
+  .pmp-page .cc-hero-copy { max-width: 100%; }
+  .pmp-page .cc-hero::before { width: 100%; }
+  .pmp-due li { flex-wrap: wrap; }
+  .pmp-due-main { flex-basis: 100%; }
+  .pmp-bar-actions { width: 100%; }
+  .pmp-filters > * { flex: 1 1 140px; }
+  .pmp-filters .cc-search { flex-basis: 100%; }
+}
+@media (max-width: 760px) {
+  .pmp-kpis > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+}

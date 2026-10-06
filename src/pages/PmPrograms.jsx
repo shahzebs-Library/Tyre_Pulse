@@ -1,5 +1,6 @@
 /**
- * PmPrograms (route /pm-programs) - Preventive Maintenance.
+ * PmPrograms (route /pm-programs) - Preventive Maintenance, on the Command
+ * Center kit (src/components/commandCenter/kit.jsx).
  *
  * A complete Preventive Maintenance workbench for EVERY asset type (vehicles,
  * generators, plant, machinery, equipment). It supports time-based (days /
@@ -8,33 +9,32 @@
  * permanent history, and a one-click Tyres vs Maintenance cost switch.
  *
  * Three tabs:
- *   1. Dashboard       - compliance KPIs, upcoming buckets, category mix, the
- *                        due banner, and the Combined | Tyres | Maintenance
- *                        cost view switch over a 12-month cost series.
+ *   1. Dashboard       - due queue, upcoming windows, category mix, the
+ *                        Combined | Tyres | Maintenance cost switch over the
+ *                        governed cost split, and service analytics.
  *   2. Plans           - the plan register (time + meter intervals, combined
- *                        due badge) with search / status / category / due-only
+ *                        due status) with search / status / category / due-only
  *                        filters, create / edit / delete, and Record service.
  *   3. Service History - the immutable service ledger with filters and export.
  *
- * All maths live in pure, unit-tested engines (pmSchedule / pmPrograms /
- * costSources); this page is presentation + orchestration only. Data is
- * org-isolated and country-scoped by RLS. Honest loading / empty / error
- * states, no fabricated data.
+ * All maths live in pure, unit-tested engines (pmSchedule / pmAnalytics /
+ * pmProgramsAnalytics / costSources); page shaping lives in
+ * src/lib/pmProgramsView.js. Data is org-isolated and country-scoped by RLS.
+ * Money is never summed across countries: on the All countries view every
+ * total that would mix currencies reads N/A with the reason.
  */
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
-  Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend,
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip, Legend,
 } from 'chart.js'
-import { Bar, Doughnut } from 'react-chartjs-2'
+import { Bar } from 'react-chartjs-2'
 import {
   CalendarClock, Wrench, Calendar, AlertTriangle, CheckCircle2, Search, X,
-  Plus, Pencil, Trash2, FileSpreadsheet, FileText, Loader2, Save,
-  LayoutDashboard, ClipboardList, History, Gauge, Wallet, TrendingUp,
-  ListChecks, ClipboardCheck, Timer, Layers, LayoutTemplate, BarChart3, PieChart, Trophy,
+  Plus, Pencil, Trash2, FileSpreadsheet, FileText, Loader2, Save, RefreshCw,
+  ClipboardList, Gauge, Wallet, ListChecks, ClipboardCheck, LayoutTemplate, Coins,
 } from 'lucide-react'
-import PageHeader from '../components/ui/PageHeader'
-import Card, { CardHeader, CardBody } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
+import { Card, CardState, Kpi, PageHero, Tabs, KitTable, Donut, fmtInt } from '../components/commandCenter/kit'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   createPmProgram, updatePmProgram, deletePmProgram,
@@ -47,7 +47,7 @@ import {
   METER_SOURCES, METER_SOURCE_LABELS, meterUnit,
 } from '../lib/pmVocab'
 import {
-  addTimeInterval, resolveMeter, pmAssetDueStatus, advanceSchedule,
+  resolveMeter, pmAssetDueStatus, advanceSchedule,
   summarizePmCompliance,
 } from '../lib/pmSchedule'
 import {
@@ -59,7 +59,7 @@ import { pmVehicleProfile, pmNextDueFromService } from '../lib/pmVehicleSetup'
 import {
   costByAsset, costByCategory, monthlyServiceCost, outcomeBreakdown, pmSummary,
 } from '../lib/pmAnalytics'
-import { colorAt, categorical, withAlpha } from '../lib/reportColors'
+import { categorical } from '../lib/reportColors'
 import {
   COST_MODES, pickCost, costModeLabel, pickMonthly, splitTotals,
 } from '../lib/costSources'
@@ -67,35 +67,26 @@ import { loadGovernedCostSplit } from '../lib/api/governedCost'
 import { generateWorkOrderNo, insertWorkOrder } from '../lib/api/workOrders'
 import { listParts } from '../lib/api/partsCatalog'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
-import EnterpriseTable from '../components/ui/EnterpriseTable'
 import {
   sumPartsCost, intervalSummary, filterPlans, filterHistory, dueSortValue, historySummary,
   planExportRows as buildPlanExportRows, historyExportRows as buildHistoryExportRows,
   PLAN_EXPORT_COLS, PLAN_EXPORT_HEADERS, HIST_EXPORT_COLS, HIST_EXPORT_HEADERS,
 } from '../lib/pmProgramsAnalytics'
+import {
+  pillClass, isSingleCountry, pageCurrency, dueDateText, dueMeterText, heroStat,
+  kpiValues, bucketRows, segments, barRows, dueQueue, money as fmtMoney,
+} from '../lib/pmProgramsView'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation } from '../lib/api/_client'
+import './PmPrograms.css'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
+ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
 // ── Presentation maps ─────────────────────────────────────────────────────────
-const TONE_CLS = {
-  green: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
-  amber: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-  red: 'bg-red-500/15 text-red-300 border-red-500/30',
-  slate: 'bg-slate-500/15 text-slate-300 border-slate-500/30',
-  sky: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
-}
 const COST_MODE_COLOR = { combined: '#6366f1', tyres: '#22c55e', maintenance: '#f59e0b' }
 const WO_PRIORITY = { low: 'Low', medium: 'Medium', high: 'High', critical: 'Critical' }
 const mapToWOPriority = (p) => WO_PRIORITY[String(p || '').toLowerCase()] || 'Medium'
-
-const TABS = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'plans', label: 'Plans', icon: ClipboardList },
-  { id: 'history', label: 'Service History', icon: History },
-]
 
 function fmtDate(v) {
   if (!v) return 'N/A'
@@ -115,13 +106,11 @@ function monthLabel(m) {
 }
 const todayISO = () => new Date().toISOString().slice(0, 10)
 
-function Badge({ tone, children }) {
-  return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${TONE_CLS[tone] || TONE_CLS.slate}`}>
-      {children}
-    </span>
-  )
+function Pill({ meta, fallback }) {
+  return <span className={`cc-pill ${pillClass(meta?.tone)}`}>{meta?.label || fallback || 'N/A'}</span>
 }
+
+const NA = <span className="cc-na">N/A</span>
 
 const EMPTY_FORM = {
   name: '', asset_no: '', asset_category: '', site: '', assigned_to: '',
@@ -294,11 +283,20 @@ export default function PmPrograms() {
   const clearHistFilters = () => { setHistAsset(''); setHistProgram('all'); setHistOutcome('all'); setHistFrom(''); setHistTo('') }
   const hasHistFilters = histAsset || histProgram !== 'all' || histOutcome !== 'all' || histFrom || histTo
 
-  // ── Cost switch derivation ──────────────────────────────────────────────────
+  // ── Money scope ───────────────────────────────────────────────────────────
+  // One country = one currency. On the All countries view, money that would
+  // add SAR, AED and EGP together is withheld rather than mislabelled.
+  const singleCountry = isSingleCountry(activeCountry)
+  const moneyCurrency = pageCurrency(activeCountry, activeCurrency)
+  const MIXED_REASON = 'Choose one country. Costs from several countries are in different currencies.'
+
+  // ── Cost switch derivation (governed Tyres vs Maintenance split) ────────────
   const byMonth = useMemo(() => cost?.byMonth || [], [cost])
   const costTotals = useMemo(() => splitTotals(byMonth), [byMonth])
   const costTotal = pickCost(costMode, costTotals)
   const monthly = useMemo(() => pickMonthly(costMode, byMonth), [costMode, byMonth])
+  const costBlended = Boolean(cost?.blended) || !singleCountry
+  const costCurrency = cost?.currency && !costBlended ? cost.currency : moneyCurrency
   const costChartData = useMemo(() => ({
     labels: monthly.map((m) => monthLabel(m.month)),
     datasets: [{
@@ -315,17 +313,17 @@ export default function PmPrograms() {
     plugins: {
       legend: { display: false },
       tooltip: {
-        callbacks: { label: (ctx) => `${costModeLabel(costMode)}: ${formatCurrencyCompact(ctx.parsed.y, activeCurrency)}` },
+        callbacks: { label: (ctx) => `${costModeLabel(costMode)}: ${formatCurrencyCompact(ctx.parsed.y, costCurrency)}` },
       },
     },
     scales: {
       x: { grid: { display: false }, ticks: { color: 'var(--text-muted)', font: { size: 10 } } },
       y: {
-        grid: { color: 'rgba(148,163,184,0.12)' },
-        ticks: { color: 'var(--text-muted)', font: { size: 10 }, callback: (v) => formatCurrencyCompact(v, activeCurrency) },
+        grid: { color: 'var(--panel-2)' },
+        ticks: { color: 'var(--text-muted)', font: { size: 10 }, callback: (v) => formatCurrencyCompact(v, costCurrency) },
       },
     },
-  }), [costMode, activeCurrency])
+  }), [costMode, costCurrency])
 
   // ── PM analytics (over loaded plans + the fetched service records) ────────────
   const records = useMemo(() => history || [], [history])
@@ -333,79 +331,54 @@ export default function PmPrograms() {
   const pmCatCost = useMemo(() => costByCategory(plans, records), [plans, records])
   const pmMonthlyCost = useMemo(() => monthlyServiceCost(records, { now: nowTs, months: 12 }), [records, nowTs])
   const pmOutcomes = useMemo(() => outcomeBreakdown(records), [records])
-  const pmTopAssets = useMemo(() => costByAsset(records).slice(0, 5), [records])
+  const pmTopAssets = useMemo(() => barRows(costByAsset(records), { valueOf: (a) => a.total, limit: 6 }), [records])
   const pmStats = useMemo(() => pmSummary(plans, records, { now: nowTs, kmByAsset, hoursByAsset }), [plans, records, nowTs, kmByAsset, hoursByAsset])
+  const catCostRows = useMemo(() => barRows(pmCatCost, { valueOf: (c) => c.total }), [pmCatCost])
 
-  const catCostChart = useMemo(() => {
-    const rows = pmCatCost.filter((c) => c.total > 0)
-    const colors = categorical(rows.length)
-    return {
-      hasData: rows.length > 0,
-      data: {
-        labels: rows.map((c) => ASSET_CATEGORY_LABELS[c.category] || c.category),
-        datasets: [{
-          label: 'Service cost',
-          data: rows.map((c) => Math.round(c.total)),
-          backgroundColor: rows.map((_, i) => colors[i]),
-          borderRadius: 4,
-          maxBarThickness: 40,
-        }],
-      },
-    }
-  }, [pmCatCost])
+  const outcomeSegs = useMemo(() => {
+    const rows = pmOutcomes.filter((o) => o.count > 0)
+    return segments(rows, {
+      keyOf: (o) => o.outcome,
+      labelOf: (o) => PM_OUTCOME_META[o.outcome]?.label || o.outcome,
+      colors: categorical(rows.length),
+    })
+  }, [pmOutcomes])
+
+  const categorySegs = useMemo(() => {
+    const rows = summary.byCategory || []
+    return segments(rows, {
+      keyOf: (c) => c.category,
+      labelOf: (c) => ASSET_CATEGORY_LABELS[c.category] || c.category,
+      colors: categorical(rows.length),
+    })
+  }, [summary.byCategory])
 
   const monthlyCostChart = useMemo(() => ({
     labels: pmMonthlyCost.map((m) => monthLabel(m.month)),
     datasets: [{
       label: 'Service cost',
       data: pmMonthlyCost.map((m) => Math.round(m.total)),
-      backgroundColor: withAlpha(colorAt(4), 0.85),
+      backgroundColor: '#16a34a',
       borderRadius: 4,
       maxBarThickness: 30,
     }],
   }), [pmMonthlyCost])
-
-  const outcomeChart = useMemo(() => {
-    const rows = pmOutcomes.filter((o) => o.count > 0)
-    const colors = categorical(rows.length)
-    return {
-      hasData: rows.length > 0,
-      data: {
-        labels: rows.map((o) => PM_OUTCOME_META[o.outcome]?.label || o.outcome),
-        datasets: [{
-          data: rows.map((o) => o.count),
-          backgroundColor: rows.map((_, i) => colors[i]),
-          borderWidth: 0,
-        }],
-      },
-    }
-  }, [pmOutcomes])
 
   const barCostOpts = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
       legend: { display: false },
-      tooltip: { callbacks: { label: (ctx) => formatCurrencyCompact(ctx.parsed.y, activeCurrency) } },
+      tooltip: { callbacks: { label: (ctx) => formatCurrencyCompact(ctx.parsed.y, moneyCurrency || '') } },
     },
     scales: {
       x: { grid: { display: false }, ticks: { color: 'var(--text-muted)', font: { size: 10 } } },
       y: {
-        grid: { color: 'rgba(148,163,184,0.12)' },
-        ticks: { color: 'var(--text-muted)', font: { size: 10 }, callback: (v) => formatCurrencyCompact(v, activeCurrency) },
+        grid: { color: 'var(--panel-2)' },
+        ticks: { color: 'var(--text-muted)', font: { size: 10 }, callback: (v) => formatCurrencyCompact(v, moneyCurrency || '') },
       },
     },
-  }), [activeCurrency])
-
-  const outcomeOpts = useMemo(() => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    cutout: '62%',
-    plugins: {
-      legend: { position: 'bottom', labels: { color: 'var(--text-muted)', font: { size: 11 }, boxWidth: 10, padding: 12 } },
-      tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.parsed}` } },
-    },
-  }), [])
+  }), [moneyCurrency])
 
   const pmMonthlyTotal = useMemo(() => pmMonthlyCost.reduce((s, m) => s + (m.total || 0), 0), [pmMonthlyCost])
 
@@ -666,564 +639,435 @@ export default function PmPrograms() {
   const exportHistExcel = () => exportToExcel(histExportRows, HIST_COLS, HIST_HEADERS, histFileName(), 'History', { title: 'Preventive Maintenance Service History', currency: activeCurrency })
   const exportHistPdf = () => exportToPdf(histExportRows, HIST_COLS.map((k, i) => ({ key: k, header: HIST_HEADERS[i] })), 'Preventive Maintenance Service History', histFileName(), 'landscape', '', { currency: activeCurrency })
 
-  const notLoaded = dashboard === null
 
-  // ── Register columns (EnterpriseTable) ──────────────────────────────────────
+  const notLoaded = dashboard === null
+  const pageState = { loading: notLoaded && !error, data: notLoaded ? null : true, error: notLoaded && error ? error : null, retry: load }
+  const kv = kpiValues({ summary, monthlyServiceTotal: pmMonthlyTotal, singleCountry, loaded: !notLoaded })
+  const queue = dueQueue(summary.dueList, 8)
+  const buckets = bucketRows(summary.buckets, summary.active)
+  const dash = (v) => (v == null ? 'N/A' : fmtInt(v))
+  const rowMoney = (v) => fmtMoney(v, moneyCurrency)
+  const curLabel = moneyCurrency ? ` (${moneyCurrency})` : ''
+
+  const goPlans = (patch = {}) => {
+    setTab('plans')
+    if (patch.dueOnly != null) setDueOnly(patch.dueOnly)
+    if (patch.status) setStatusFilter(patch.status)
+  }
+
+  // ── Register columns (KitTable over EnterpriseTable) ────────────────────────
   const planColumns = [
     {
-      accessorKey: 'name', header: 'Plan',
-      cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue() || 'N/A'}</span>,
-    },
-    {
-      accessorKey: 'asset_no', header: 'Asset',
-      cell: ({ row }) => (
-        <span className="text-[var(--text-secondary)]">
-          {row.original.asset_no || 'N/A'}
-          {row.original.asset_category && <span className="block text-[11px] text-[var(--text-muted)]">{ASSET_CATEGORY_LABELS[row.original.asset_category] || row.original.asset_category}</span>}
+      key: 'name', header: 'Plan',
+      cell: (p) => (
+        <span className="pmp-plan">
+          <b>{p.name || 'N/A'}</b>
+          {p.site && <small>{p.site}</small>}
         </span>
       ),
     },
     {
-      id: 'interval', header: 'Interval', enableSorting: false,
-      accessorFn: (p) => intervalSummary(p).map((it) => it.text).join(' / '),
-      cell: ({ row }) => {
-        const intervals = intervalSummary(row.original)
-        return intervals.length === 0 ? 'N/A' : intervals.map((it) => <span key={it.key} className="block text-[13px]">{it.text}</span>)
+      key: 'asset_no', header: 'Asset',
+      cell: (p) => (
+        <span className="pmp-plan">
+          <b className="pmp-mono">{p.asset_no || 'N/A'}</b>
+          {p.asset_category && <small>{ASSET_CATEGORY_LABELS[p.asset_category] || p.asset_category}</small>}
+        </span>
+      ),
+    },
+    {
+      key: 'interval', header: 'Interval', sortable: false,
+      sortValue: (p) => intervalSummary(p).map((it) => it.text).join(' / '),
+      cell: (p) => {
+        const intervals = intervalSummary(p)
+        return intervals.length === 0 ? NA : <span className="pmp-plan">{intervals.map((it) => <small key={it.key} className="pmp-strong">{it.text}</small>)}</span>
       },
     },
     {
-      id: 'next_due', header: 'Next due',
-      accessorFn: (p) => dueSortValue(p._st),
-      meta: { exportValue: (p) => `${PM_DUE_META[p._st.band]?.label || ''} ${p.next_due || ''}`.trim() },
-      cell: ({ row }) => {
-        const p = row.original
+      key: 'next_due', header: 'Next due',
+      sortValue: (p) => dueSortValue(p._st),
+      cell: (p) => {
         const st = p._st
         const unit = st.unit || meterUnit(p.meter_source)
+        const dt = dueDateText(st.daysToDue)
+        const mt = p.next_due_meter != null ? dueMeterText(st.meterRemaining, unit) : null
         return (
-          <>
-            <Badge tone={PM_DUE_META[st.band]?.tone}>{PM_DUE_META[st.band]?.label}</Badge>
-            {p.next_due && (
-              <span className="block text-[11px] text-[var(--text-muted)] mt-1">
-                {fmtDate(p.next_due)}{st.daysToDue != null && <> ({st.daysToDue < 0 ? `${Math.abs(st.daysToDue)}d ago` : `${st.daysToDue}d`})</>}
-              </span>
-            )}
-            {p.next_due_meter != null && unit && (
-              <span className="block text-[11px] text-[var(--text-muted)]">
-                {fmtNum(p.next_due_meter)} {unit}{st.meterRemaining != null && <> ({st.meterRemaining < 0 ? `${fmtNum(Math.abs(st.meterRemaining))} ${unit} over` : `${fmtNum(st.meterRemaining)} ${unit} left`})</>}
-              </span>
-            )}
-          </>
-        )
-      },
-    },
-    {
-      accessorKey: 'priority', header: 'Priority',
-      meta: { filterVariant: 'select', exportValue: (p) => PM_PRIORITY_META[p.priority]?.label || p.priority || '' },
-      cell: ({ getValue }) => <Badge tone={PM_PRIORITY_META[getValue()]?.tone}>{PM_PRIORITY_META[getValue()]?.label || getValue() || 'N/A'}</Badge>,
-    },
-    { accessorKey: 'assigned_to', header: 'Assigned', cell: ({ getValue }) => getValue() || 'N/A' },
-    {
-      accessorKey: 'status', header: 'Status',
-      meta: { exportValue: (p) => PM_STATUS_META[p.status]?.label || p.status || '' },
-      cell: ({ getValue }) => <Badge tone={PM_STATUS_META[getValue()]?.tone}>{PM_STATUS_META[getValue()]?.label || getValue() || 'N/A'}</Badge>,
-    },
-    {
-      id: 'actions', header: 'Actions', enableSorting: false, meta: { export: false },
-      cell: ({ row }) => {
-        const p = row.original
-        return (
-          <div className="flex items-center gap-1">
-            <button type="button" onClick={(e) => { e.stopPropagation(); openRecord(p) }} className="min-h-[44px] px-2.5 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 text-[11px] font-medium inline-flex items-center gap-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400"><Wrench size={13} aria-hidden="true" /> Service</button>
-            <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(p) }} className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400" aria-label={`Edit ${p.name || 'plan'}`}><Pencil size={14} /></button>
-            <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDelete(p) }} className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-400" aria-label={`Delete ${p.name || 'plan'}`}><Trash2 size={14} /></button>
-          </div>
-        )
-      },
-    },
-  ]
-
-  const money = (v) => (v != null && Number.isFinite(Number(v)) ? formatCurrencyCompact(Number(v), activeCurrency) : 'N/A')
-  const histColumns = [
-    { accessorKey: 'service_date', header: 'Date', cell: ({ getValue }) => <span className="whitespace-nowrap">{fmtDate(getValue())}</span> },
-    { accessorKey: 'asset_no', header: 'Asset', cell: ({ getValue }) => getValue() || 'N/A' },
-    {
-      id: 'plan', header: 'Plan',
-      accessorFn: (r) => planNameById.get(String(r.pm_program_id)) || '',
-      cell: ({ getValue }) => <span className="text-[var(--text-primary)]">{getValue() || 'N/A'}</span>,
-    },
-    {
-      accessorKey: 'meter_reading', header: 'Meter', meta: { align: 'right' },
-      cell: ({ row }) => {
-        const r = row.original
-        const unit = meterUnit(r.meter_type)
-        return <span className="whitespace-nowrap">{r.meter_reading != null ? `${fmtNum(r.meter_reading)}${unit ? ` ${unit}` : ''}` : 'N/A'}</span>
-      },
-    },
-    { accessorKey: 'performed_by', header: 'Performed by', cell: ({ getValue }) => getValue() || 'N/A' },
-    {
-      accessorKey: 'outcome', header: 'Outcome',
-      meta: { exportValue: (r) => PM_OUTCOME_META[r.outcome]?.label || r.outcome || '' },
-      cell: ({ getValue }) => <Badge tone={PM_OUTCOME_META[getValue()]?.tone}>{PM_OUTCOME_META[getValue()]?.label || getValue() || 'N/A'}</Badge>,
-    },
-    { accessorKey: 'parts_cost', header: `Parts (${activeCurrency})`, meta: { align: 'right' }, cell: ({ getValue }) => money(getValue()) },
-    { accessorKey: 'labour_cost', header: `Labour (${activeCurrency})`, meta: { align: 'right' }, cell: ({ getValue }) => money(getValue()) },
-    { accessorKey: 'total_cost', header: `Total (${activeCurrency})`, meta: { align: 'right' }, cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{money(getValue())}</span> },
-    {
-      accessorKey: 'next_due', header: 'Next due',
-      cell: ({ row }) => {
-        const r = row.original
-        const unit = meterUnit(r.meter_type)
-        return (
-          <span className="whitespace-nowrap">
-            {fmtDate(r.next_due)}
-            {r.next_due_meter != null && unit && <span className="block text-[11px] text-[var(--text-muted)]">{fmtNum(r.next_due_meter)} {unit}</span>}
+          <span className="pmp-plan">
+            <Pill meta={PM_DUE_META[st.band]} />
+            {p.next_due && <small>{fmtDate(p.next_due)}{dt ? `, ${dt}` : ''}</small>}
+            {p.next_due_meter != null && unit && <small>{fmtNum(p.next_due_meter)} {unit}{mt ? `, ${mt}` : ''}</small>}
           </span>
         )
       },
     },
-    { accessorKey: 'work_order_no', header: 'WO no', cell: ({ getValue }) => getValue() || 'N/A' },
+    {
+      key: 'priority', header: 'Priority',
+      sortValue: (p) => PM_PRIORITIES.indexOf(p.priority),
+      cell: (p) => <Pill meta={PM_PRIORITY_META[p.priority]} fallback={p.priority} />,
+    },
+    { key: 'assigned_to', header: 'Assigned', cell: (p) => p.assigned_to || NA },
+    {
+      key: 'status', header: 'Status',
+      cell: (p) => <Pill meta={PM_STATUS_META[p.status]} fallback={p.status} />,
+    },
+    {
+      key: 'actions', header: 'Actions', sortable: false,
+      cell: (p) => (
+        <div className="pmp-actions">
+          <button type="button" className="cc-btn-ghost pmp-service" onClick={(e) => { e.stopPropagation(); openRecord(p) }}><Wrench size={13} aria-hidden="true" /> Service</button>
+          <button type="button" className="cc-icon-btn" onClick={(e) => { e.stopPropagation(); openEdit(p) }} aria-label={`Edit ${p.name || 'plan'}`}><Pencil size={14} /></button>
+          <button type="button" className="cc-icon-btn pmp-danger" onClick={(e) => { e.stopPropagation(); setConfirmDelete(p) }} aria-label={`Delete ${p.name || 'plan'}`}><Trash2 size={14} /></button>
+        </div>
+      ),
+    },
   ]
 
-  const kpis = [
-    { label: 'Total plans', value: summary.total, icon: ClipboardList, tone: 'text-[var(--text-primary)]' },
-    { label: 'Active', value: summary.active, icon: CheckCircle2, tone: 'text-emerald-400' },
-    { label: 'Overdue', value: summary.overdue, icon: AlertTriangle, tone: 'text-red-400' },
-    { label: 'Due soon', value: summary.dueSoon, icon: Calendar, tone: 'text-amber-400' },
+  const histColumns = [
+    { key: 'service_date', header: 'Date', cell: (r) => <span className="pmp-nowrap">{fmtDate(r.service_date)}</span> },
+    { key: 'asset_no', header: 'Asset', cell: (r) => (r.asset_no ? <span className="pmp-mono">{r.asset_no}</span> : NA) },
+    {
+      key: 'plan', header: 'Plan',
+      sortValue: (r) => planNameById.get(String(r.pm_program_id)) || '',
+      cell: (r) => planNameById.get(String(r.pm_program_id)) || NA,
+    },
+    {
+      key: 'meter_reading', header: 'Meter', numeric: true,
+      cell: (r) => {
+        const unit = meterUnit(r.meter_type)
+        return r.meter_reading != null ? <span className="pmp-nowrap">{fmtNum(r.meter_reading)}{unit ? ` ${unit}` : ''}</span> : NA
+      },
+    },
+    { key: 'performed_by', header: 'Performed by', cell: (r) => r.performed_by || NA },
+    {
+      key: 'outcome', header: 'Outcome',
+      cell: (r) => <Pill meta={PM_OUTCOME_META[r.outcome]} fallback={r.outcome} />,
+    },
+    { key: 'parts_cost', header: `Parts${curLabel}`, numeric: true, cell: (r) => rowMoney(r.parts_cost) },
+    { key: 'labour_cost', header: `Labour${curLabel}`, numeric: true, cell: (r) => rowMoney(r.labour_cost) },
+    { key: 'total_cost', header: `Total${curLabel}`, numeric: true, cell: (r) => <b>{rowMoney(r.total_cost)}</b> },
+    {
+      key: 'next_due', header: 'Next due',
+      cell: (r) => {
+        const unit = meterUnit(r.meter_type)
+        return (
+          <span className="pmp-plan">
+            <span className="pmp-nowrap">{fmtDate(r.next_due)}</span>
+            {r.next_due_meter != null && unit && <small>{fmtNum(r.next_due_meter)} {unit}</small>}
+          </span>
+        )
+      },
+    },
+    { key: 'work_order_no', header: 'WO no', cell: (r) => (r.work_order_no ? <span className="pmp-mono">{r.work_order_no}</span> : NA) },
   ]
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Preventive Maintenance"
-        subtitle="Time and meter based service scheduling for every asset: vehicles, generators, plant, machinery and equipment. Record services, advance schedules, and split Tyres vs Maintenance cost in one click."
+    <div className="cc pmp-page">
+      <PageHero
         icon={CalendarClock}
-        onRefresh={load}
-        refreshing={refreshing}
-        updatedAt={updatedAt}
-        actions={
-          <div className="flex items-center gap-2">
-            <button onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5" disabled={missing}>
-              <Plus size={14} /> New plan
-            </button>
-          </div>
-        }
+        hello="Workshop and Downtime / Preventive Maintenance"
+        title="Preventive Maintenance"
+        lead="Time and meter based service plans for every asset: vehicles, generators, plant, machinery and equipment. Record services, advance schedules and see what it costs."
+        stat={heroStat(summary, !notLoaded)}
       />
 
-      {missing && (
-        <Card tone="warn">
-          <div className="flex items-start gap-[var(--space-3)]">
-            <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
-            <div>
-              <p className="text-amber-300 font-medium">Preventive Maintenance is not enabled on this database yet.</p>
-              <p className="text-[var(--text-muted)] text-sm mt-1">
-                Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V253.sql</span>, then reload.
-              </p>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {error && (
-        <Card tone="crit">
-          <div className="flex items-start gap-[var(--space-3)]">
-            <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" />
-            <div><p className="text-red-300 font-medium">Something went wrong.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-          </div>
-        </Card>
-      )}
-
-      {dataWarning && <Card as="p" role="alert" tone="warn" className="text-sm text-amber-500">{dataWarning}</Card>}
-      {recordOk && (
-        <Card pad="tight" tone="good">
-          <div className="flex items-center gap-[var(--space-3)]">
-            <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
-            <span className="text-sm text-emerald-200">{recordOk}</span>
-            <button onClick={() => setRecordOk('')} className="ml-auto p-1 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)]"><X size={14} /></button>
-          </div>
-        </Card>
-      )}
-
-      {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-[var(--input-border)]">
-        {TABS.map((t) => {
-          const Icon = t.icon
-          const on = tab === t.id
-          return (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${on ? 'border-blue-500 text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
-            >
-              <Icon size={15} /> {t.label}
-            </button>
-          )
-        })}
+      <div className="cc-card pmp-bar">
+        <Tabs label="Preventive maintenance views" value={tab} onChange={setTab} tabs={[
+          { key: 'dashboard', label: 'Dashboard' },
+          { key: 'plans', label: 'Plans', count: notLoaded ? null : plans.length },
+          { key: 'history', label: 'Service history', count: history === null ? null : history.length },
+        ]} />
+        <div className="pmp-bar-actions">
+          {updatedAt && <span className="pmp-updated">Updated {updatedAt.toLocaleTimeString()}</span>}
+          <button type="button" className="cc-btn-ghost" onClick={load} disabled={refreshing}>
+            <RefreshCw size={14} className={refreshing ? 'pmp-spin' : ''} aria-hidden="true" /> Refresh
+          </button>
+          <button type="button" className="cc-btn-primary" onClick={openCreate} disabled={missing}>
+            <Plus size={15} aria-hidden="true" /> New plan
+          </button>
+        </div>
       </div>
+
+      {missing && (
+        <div className="cc-card pmp-banner warn" role="status">
+          <AlertTriangle size={17} aria-hidden="true" />
+          <p>Preventive Maintenance is not enabled on this database yet. Apply MIGRATIONS_V253.sql, then reload.</p>
+        </div>
+      )}
+      {error && (
+        <div className="cc-card pmp-banner bad" role="alert">
+          <AlertTriangle size={17} aria-hidden="true" />
+          <p>Something went wrong. {error}</p>
+          <button type="button" className="cc-btn-ghost" onClick={load} disabled={refreshing}><RefreshCw size={14} aria-hidden="true" /> Retry</button>
+        </div>
+      )}
+      {dataWarning && (
+        <div className="cc-card pmp-banner warn" role="alert">
+          <AlertTriangle size={17} aria-hidden="true" />
+          <p>{dataWarning}</p>
+        </div>
+      )}
+      {recordOk && (
+        <div className="cc-card pmp-banner good" role="status">
+          <CheckCircle2 size={17} aria-hidden="true" />
+          <p>{recordOk}</p>
+          <button type="button" className="cc-icon-btn" onClick={() => setRecordOk('')} aria-label="Dismiss message"><X size={14} /></button>
+        </div>
+      )}
+
+      {tab !== 'history' && (
+      <div className="cc-kpis pmp-kpis">
+        <Kpi icon={ClipboardList} tone="t-green" display={dash(kv.active)} label="Active plans" loading={notLoaded && !error}
+          title={notLoaded ? undefined : `${fmtInt(summary.total)} plans in total`} onClick={() => goPlans({ status: 'active', dueOnly: false })} />
+        <Kpi icon={AlertTriangle} tone="t-red" display={dash(kv.overdue)} label="Overdue" loading={notLoaded && !error} danger={kv.overdue > 0}
+          title="Active plans past their due date or meter limit" onClick={() => goPlans({ dueOnly: true })} />
+        <Kpi icon={Calendar} tone="t-amber" display={dash(kv.dueSoon)} label="Due soon" loading={notLoaded && !error}
+          title="Active plans due within the warning window by date or meter" onClick={() => goPlans({ dueOnly: true })} />
+        <Kpi icon={ClipboardCheck} tone="t-blue" display={kv.compliance == null ? 'N/A' : `${kv.compliance}%`} label="Compliance" loading={notLoaded && !error}
+          title={kv.compliance == null ? 'No active plans to measure' : 'Share of active plans that are not overdue'} />
+        <Kpi icon={Coins} tone="t-purple" display={kv.serviceCost12m == null ? 'N/A' : fmtMoney(kv.serviceCost12m, moneyCurrency)} label="Service cost, last 12 months" loading={notLoaded && !error}
+          title={kv.costReason || 'Total cost of services recorded in the last 12 months'} onClick={() => setTab('history')} />
+      </div>
+      )}
 
       {/* ══════════════════════════ DASHBOARD ══════════════════════════ */}
       {tab === 'dashboard' && (
-        <div className="space-y-6">
-          {/* Due banner */}
-          {(summary.overdue > 0 || summary.dueSoon > 0) && (
-            <Card pad="tight" tone="warn" className="space-y-2">
-              <div className="flex items-center gap-2">
-                <CalendarClock size={16} className="text-amber-400 shrink-0" />
-                <span className="text-sm text-amber-200">
-                  {summary.overdue > 0 && <><span className="font-semibold text-red-300">{summary.overdue}</span> overdue</>}
-                  {summary.overdue > 0 && summary.dueSoon > 0 && ' | '}
-                  {summary.dueSoon > 0 && <><span className="font-semibold">{summary.dueSoon}</span> due soon</>}
-                  {' '}: schedule the work to keep assets compliant.
-                </span>
+        <div className="pmp-grid">
+          <Card className="pmp-a-due" title="Due now" sub="Overdue and due soon, worst first. Record the service to advance the schedule."
+            action={queue.total > 0 ? <button type="button" className="cc-link cc-link-btn" onClick={() => goPlans({ dueOnly: true })}>View all {fmtInt(queue.total)}</button> : null}>
+            <CardState state={pageState} lines={5}
+              empty={!notLoaded && queue.total === 0 ? (summary.active > 0 ? 'Every active plan is on schedule.' : 'No active plans yet. Create a plan to start scheduling services.') : null}>
+              <ul className="pmp-due">
+                {queue.rows.map((p) => {
+                  const dt = dueDateText(p.daysToDue)
+                  const mt = p.next_due_meter != null ? dueMeterText(p.meterRemaining, p.unit || meterUnit(p.meter_source)) : null
+                  return (
+                    <li key={p.id} className={p.band === 'overdue' ? 'is-bad' : 'is-warn'}>
+                      <span className="pmp-due-main">
+                        <b>{p.name || 'Plan'}</b>
+                        <small>{[p.asset_no || ASSET_CATEGORY_LABELS[p.asset_category] || 'Asset', dt, mt].filter(Boolean).join(' | ')}</small>
+                      </span>
+                      <Pill meta={PM_DUE_META[p.band]} />
+                      <button type="button" className="cc-btn-ghost pmp-service" onClick={() => openRecord(p)}><Wrench size={13} aria-hidden="true" /> Service</button>
+                    </li>
+                  )
+                })}
+              </ul>
+              {queue.more > 0 && <p className="pmp-note">{fmtInt(queue.more)} more in the Plans tab.</p>}
+            </CardState>
+          </Card>
+
+          <Card className="pmp-a-up" title="Upcoming services" sub="Active plans due by date or meter in each window">
+            <CardState state={pageState} lines={3}>
+              <div className="pmp-bars">
+                {buckets.map((b) => (
+                  <div key={b.key} className="pmp-bar-row">
+                    <span>{b.label}</span>
+                    <span className="cc-bar-track"><i style={{ width: `${b.pct}%`, background: 'var(--cc-green)' }} /></span>
+                    <b>{fmtInt(b.count)}</b>
+                  </div>
+                ))}
               </div>
-              <div className="flex flex-wrap gap-2">
-                {summary.dueList.slice(0, 8).map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => { setTab('plans'); setDueOnly(true) }}
-                    className="text-[11px] px-2 py-1 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] hover:border-amber-600/50 text-[var(--text-secondary)]"
-                    title="View in Plans"
-                  >
-                    <span className="font-medium text-[var(--text-primary)]">{p.name}</span>
-                    <span className="text-[var(--text-muted)]"> | {p.asset_no || ASSET_CATEGORY_LABELS[p.asset_category] || 'asset'}</span>
-                    <span className={p.band === 'overdue' ? 'text-red-300' : 'text-amber-300'}> | {PM_DUE_META[p.band]?.label}</span>
+              <p className="pmp-note">{summary.active > 0 ? `Out of ${fmtInt(summary.active)} active plans.` : 'No active plans to schedule yet.'}</p>
+            </CardState>
+          </Card>
+
+          <Card className="pmp-a-cat" title="Plans by asset category" sub="Active plans">
+            <CardState state={pageState} lines={3} empty={!notLoaded && categorySegs.length === 0 ? 'No active plans to categorise yet.' : null}>
+              <Donut segments={categorySegs} centerLabel="active plans"
+                onSelect={(s) => { setTab('plans'); setCategoryFilter(s.key); setStatusFilter('active') }} />
+            </CardState>
+          </Card>
+
+          <Card className="pmp-a-cost" title="Cost view" sub="One-click Tyres vs Maintenance, from the governed cost split"
+            action={(
+              <div className="pmp-seg" role="group" aria-label="Cost view">
+                {COST_MODES.map((m) => (
+                  <button key={m.key} type="button" aria-pressed={costMode === m.key} onClick={() => setCostMode(m.key)}
+                    style={costMode === m.key ? { background: COST_MODE_COLOR[m.key], borderColor: COST_MODE_COLOR[m.key] } : undefined}>
+                    {m.label}
                   </button>
                 ))}
               </div>
-            </Card>
-          )}
-
-          {/* KPI tiles */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-            {kpis.map((k) => {
-              const Icon = k.icon
-              return (
-                <Card key={k.label}>
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                    <Icon size={16} className={k.tone} />
-                  </div>
-                  <p className={`text-3xl font-bold mt-1 ${k.tone}`}>{notLoaded ? '-' : k.value}</p>
-                </Card>
-              )
-            })}
-            <Card>
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-[var(--text-muted)]">Compliance</p>
-                <ClipboardCheck size={16} className="text-sky-400" />
-              </div>
-              <p className="text-3xl font-bold mt-1 text-sky-300">
-                {notLoaded ? '-' : (summary.compliantPct == null ? 'N/A' : `${summary.compliantPct}%`)}
-              </p>
-              <p className="text-[11px] text-[var(--text-muted)] mt-0.5">active plans not overdue</p>
-            </Card>
-          </div>
-
-          {/* Upcoming buckets + category mix */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader title="Upcoming services" icon={Timer} level={2} />
-              <div className="grid grid-cols-3 gap-3">
-                {[['Next 30 days', summary.buckets.d30], ['Next 60 days', summary.buckets.d60], ['Next 90 days', summary.buckets.d90]].map(([label, val]) => (
-                  <div key={label} className="rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] p-3 text-center">
-                    <p className="text-2xl font-bold text-[var(--text-primary)]">{notLoaded ? '-' : val}</p>
-                    <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{label}</p>
-                  </div>
-                ))}
-              </div>
-              <p className="text-[11px] text-[var(--text-muted)] mt-3">Counts active plans due by date or by meter within each window.</p>
-            </Card>
-
-            <Card>
-              <CardHeader title="Plans by asset category" icon={Layers} level={2} />
-              {notLoaded ? (
-                <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-4 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
-              ) : summary.byCategory.length === 0 ? (
-                <p className="text-sm text-[var(--text-muted)]">No active plans to categorise yet.</p>
-              ) : (
-                <div className="space-y-2">
-                  {summary.byCategory.map((c) => {
-                    const pctW = summary.active > 0 ? Math.round((c.count / summary.active) * 100) : 0
-                    return (
-                      <div key={c.category} className="flex items-center gap-3">
-                        <span className="w-24 text-sm text-[var(--text-secondary)] shrink-0">{ASSET_CATEGORY_LABELS[c.category] || c.category}</span>
-                        <div className="flex-1 h-2.5 rounded-full bg-[var(--input-bg)] overflow-hidden">
-                          <div className="h-full rounded-full bg-indigo-500/70" style={{ width: `${pctW}%` }} />
-                        </div>
-                        <span className="w-10 text-right text-sm font-medium text-[var(--text-primary)]">{c.count}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </Card>
-          </div>
-
-          {/* Cost view switch */}
-          <Card>
-            <CardHeader
-              title="Cost view"
-              icon={Wallet}
-              level={2}
-              description="one-click Tyres vs Maintenance"
-              actions={(
-                <div className="inline-flex rounded-lg border border-[var(--input-border)] overflow-hidden">
-                  {COST_MODES.map((m) => (
-                    <button
-                      key={m.key}
-                      onClick={() => setCostMode(m.key)}
-                      className={`px-3.5 py-1.5 text-sm font-medium transition-colors ${costMode === m.key ? 'text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] bg-transparent'}`}
-                      style={costMode === m.key ? { backgroundColor: COST_MODE_COLOR[m.key] } : undefined}
-                    >
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            />
-
-            <CardBody className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-              <div className="rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] p-4 flex flex-col justify-center">
-                <p className="text-xs text-[var(--text-muted)]">{costModeLabel(costMode)} cost</p>
-                <p className="text-3xl font-bold mt-1" style={{ color: COST_MODE_COLOR[costMode] }}>
-                  {cost === null ? '-' : formatCurrencyCompact(costTotal, activeCurrency)}
-                </p>
-                <div className="mt-3 space-y-1 text-[11px] text-[var(--text-muted)]">
-                  <div className="flex items-center justify-between"><span>Tyres</span><span className="text-[var(--text-secondary)]">{formatCurrencyCompact(costTotals.tyre, activeCurrency)}</span></div>
-                  <div className="flex items-center justify-between"><span>Maintenance</span><span className="text-[var(--text-secondary)]">{formatCurrencyCompact(costTotals.maintenance, activeCurrency)}</span></div>
-                  <div className="flex items-center justify-between border-t border-[var(--input-border)] pt-1"><span>Combined</span><span className="text-[var(--text-primary)] font-medium">{formatCurrencyCompact(costTotals.combined, activeCurrency)}</span></div>
-                </div>
-              </div>
-              <div className="lg:col-span-3 rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <TrendingUp size={14} className="text-[var(--text-muted)]" />
-                  <p className="text-xs text-[var(--text-muted)]">Last 12 months : {costModeLabel(costMode)}</p>
-                </div>
-                <div className="h-[220px]">
-                  {cost === null ? (
-                    <div className="h-full bg-[var(--input-bg)] rounded animate-pulse" />
-                  ) : monthly.length === 0 ? (
-                    <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No cost history for this country yet.</div>
-                  ) : (
-                    <Bar data={costChartData} options={costChartOpts} />
-                  )}
-                </div>
-              </div>
-            </CardBody>
-          </Card>
-
-          {/* Service analytics (over recorded services) */}
-          <Card>
-            <CardHeader
-              title="Service analytics"
-              icon={BarChart3}
-              level={2}
-              description="from recorded services"
-              actions={hasServiceData ? (
-                <div className="flex flex-wrap items-center gap-4 text-[11px] text-[var(--text-muted)]">
-                  <span>Services: <span className="text-[var(--text-secondary)] font-medium">{fmtNum(pmStats.servicesCount)}</span></span>
-                  <span>Total cost: <span className="text-[var(--text-secondary)] font-medium">{formatCurrencyCompact(pmStats.totalServiceCost, activeCurrency)}</span></span>
-                  <span>Avg / service: <span className="text-[var(--text-secondary)] font-medium">{pmStats.avgCostPerService == null ? 'N/A' : formatCurrencyCompact(pmStats.avgCostPerService, activeCurrency)}</span></span>
-                </div>
-              ) : null}
-            />
-
-            {notLoaded || history === null ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {[0, 1].map((i) => <div key={i} className="h-[220px] bg-[var(--input-bg)] rounded animate-pulse" />)}
-              </div>
-            ) : !hasServiceData ? (
-              <div className="flex flex-col items-center justify-center py-10 text-center">
-                <BarChart3 size={24} className="text-[var(--text-muted)] opacity-60 mb-2" />
-                <p className="text-sm text-[var(--text-muted)]">No services recorded yet. Record a service from the Plans tab to build cost and outcome analytics.</p>
-              </div>
+            )}>
+            {cost === null && notLoaded ? (
+              <div className="pmp-cost-grid">{[0, 1].map((i) => <div key={i} className="cc-skel" style={{ height: 180 }} />)}</div>
+            ) : costBlended ? (
+              <div className="cc-empty">{MIXED_REASON}</div>
+            ) : cost === null ? (
+              <div className="cc-empty">Cost information could not be loaded.<br /><button type="button" className="cc-btn" onClick={load}>Try again</button></div>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/* Cost by category */}
-                <div className="rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Layers size={14} className="text-[var(--text-muted)]" />
-                    <p className="text-xs text-[var(--text-muted)]">Service cost by category</p>
-                  </div>
-                  <div className="h-[220px]">
-                    {catCostChart.hasData ? (
-                      <Bar data={catCostChart.data} options={barCostOpts} />
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No categorised service cost yet.</div>
-                    )}
-                  </div>
+              <div className="pmp-cost-grid">
+                <div className="pmp-cost-total">
+                  <span>{costModeLabel(costMode)} cost</span>
+                  <b style={{ color: COST_MODE_COLOR[costMode] }}>{formatCurrencyCompact(costTotal, costCurrency)}</b>
+                  <dl>
+                    <div><dt>Tyres</dt><dd>{formatCurrencyCompact(costTotals.tyre, costCurrency)}</dd></div>
+                    <div><dt>Maintenance</dt><dd>{formatCurrencyCompact(costTotals.maintenance, costCurrency)}</dd></div>
+                    <div className="pmp-cost-sum"><dt>Combined</dt><dd>{formatCurrencyCompact(costTotals.combined, costCurrency)}</dd></div>
+                  </dl>
                 </div>
-
-                {/* 12-month service cost */}
-                <div className="rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <TrendingUp size={14} className="text-[var(--text-muted)]" />
-                    <p className="text-xs text-[var(--text-muted)]">Last 12 months : service cost</p>
-                  </div>
-                  <div className="h-[220px]">
-                    {pmMonthlyTotal > 0 ? (
-                      <Bar data={monthlyCostChart} options={barCostOpts} />
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No service cost in the last 12 months.</div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Outcome breakdown */}
-                <div className="rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <PieChart size={14} className="text-[var(--text-muted)]" />
-                    <p className="text-xs text-[var(--text-muted)]">Outcome breakdown</p>
-                  </div>
-                  <div className="h-[220px]">
-                    {outcomeChart.hasData ? (
-                      <Doughnut data={outcomeChart.data} options={outcomeOpts} />
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No recorded outcomes yet.</div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Top cost assets */}
-                <div className="rounded-xl bg-[var(--input-bg)] border border-[var(--input-border)] p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Trophy size={14} className="text-[var(--text-muted)]" />
-                    <p className="text-xs text-[var(--text-muted)]">Top cost assets</p>
-                  </div>
-                  {pmTopAssets.length === 0 ? (
-                    <div className="h-[220px] flex items-center justify-center text-sm text-[var(--text-muted)]">No asset level service cost yet.</div>
-                  ) : (
-                    <ul className="space-y-2">
-                      {pmTopAssets.map((a, i) => {
-                        const max = pmTopAssets[0]?.total || 0
-                        const pctW = max > 0 ? Math.round((a.total / max) * 100) : 0
-                        return (
-                          <li key={a.asset_no} className="flex items-center gap-3">
-                            <span className="w-5 text-xs text-[var(--text-muted)] shrink-0">{i + 1}</span>
-                            <span className="w-28 text-sm text-[var(--text-secondary)] truncate shrink-0" title={a.asset_no}>{a.asset_no}</span>
-                            <div className="flex-1 h-2.5 rounded-full bg-[var(--surface)] overflow-hidden">
-                              <div className="h-full rounded-full" style={{ width: `${pctW}%`, backgroundColor: colorAt(i) }} />
-                            </div>
-                            <span className="w-24 text-right text-sm font-medium text-[var(--text-primary)]">{formatCurrencyCompact(a.total, activeCurrency)}</span>
-                            <span className="w-16 text-right text-[11px] text-[var(--text-muted)]">{fmtNum(a.services)} svc</span>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  )}
+                <div className="pmp-chart">
+                  {monthly.length === 0
+                    ? <div className="cc-empty">No cost history for this country yet.</div>
+                    : <Bar data={costChartData} options={costChartOpts} />}
                 </div>
               </div>
             )}
+          </Card>
+
+          <Card className="pmp-a-svc" title="Service analytics" sub="From recorded services"
+            action={hasServiceData ? (
+              <div className="pmp-svc-stats">
+                <span>Services <b>{fmtInt(pmStats.servicesCount)}</b></span>
+                <span>Total <b>{singleCountry ? fmtMoney(pmStats.totalServiceCost, moneyCurrency) : 'N/A'}</b></span>
+                <span>Average <b>{singleCountry && pmStats.avgCostPerService != null ? fmtMoney(pmStats.avgCostPerService, moneyCurrency) : 'N/A'}</b></span>
+              </div>
+            ) : null}>
+            <CardState state={{ ...pageState, loading: (notLoaded || history === null) && !error }} lines={4}
+              empty={!notLoaded && history !== null && !hasServiceData ? 'No services recorded yet. Record a service from the Plans tab to build cost and outcome analytics.' : null}>
+              {!singleCountry && <p className="pmp-note pmp-note-top">{MIXED_REASON} Counts and outcomes below cover every country.</p>}
+              <div className="pmp-svc-grid">
+                <div className="pmp-inner">
+                  <h3>Service cost by category</h3>
+                  {!singleCountry ? <div className="cc-empty">N/A</div> : catCostRows.length === 0 ? <div className="cc-empty">No categorised service cost yet.</div> : (
+                    <div className="pmp-bars">
+                      {catCostRows.map((c, i) => (
+                        <div key={c.category} className="pmp-bar-row">
+                          <span>{ASSET_CATEGORY_LABELS[c.category] || c.category}</span>
+                          <span className="cc-bar-track"><i style={{ width: `${c.pct}%`, background: categorical(catCostRows.length)[i] }} /></span>
+                          <b>{fmtMoney(c.value, moneyCurrency)}</b>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="pmp-inner">
+                  <h3>Service cost, last 12 months</h3>
+                  <div className="pmp-chart">
+                    {!singleCountry ? <div className="cc-empty">N/A</div> : pmMonthlyTotal > 0
+                      ? <Bar data={monthlyCostChart} options={barCostOpts} />
+                      : <div className="cc-empty">No service cost in the last 12 months.</div>}
+                  </div>
+                </div>
+                <div className="pmp-inner">
+                  <h3>Outcome breakdown</h3>
+                  {outcomeSegs.length === 0
+                    ? <div className="cc-empty">No recorded outcomes yet.</div>
+                    : <Donut segments={outcomeSegs} centerLabel="services" onSelect={(s) => { setTab('history'); setHistOutcome(s.key) }} />}
+                </div>
+                <div className="pmp-inner">
+                  <h3>Top cost assets</h3>
+                  {!singleCountry ? <div className="cc-empty">N/A</div> : pmTopAssets.length === 0 ? <div className="cc-empty">No asset level service cost yet.</div> : (
+                    <ol className="pmp-rank">
+                      {pmTopAssets.map((a, i) => (
+                        <li key={a.asset_no}>
+                          <span className="pmp-rank-n">{i + 1}</span>
+                          <button type="button" className="pmp-rank-main" onClick={() => { setTab('history'); setHistAsset(a.asset_no) }} title="Show this asset's service history">
+                            <b className="pmp-mono">{a.asset_no}</b>
+                            <span className="cc-bar-track"><i style={{ width: `${a.pct}%`, background: 'var(--cc-green)' }} /></span>
+                          </button>
+                          <span className="pmp-rank-val">{fmtMoney(a.value, moneyCurrency)}<small>{fmtInt(a.services)} svc</small></span>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+              </div>
+            </CardState>
           </Card>
         </div>
       )}
 
       {/* ══════════════════════════ PLANS ══════════════════════════ */}
       {tab === 'plans' && (
-        <div className="space-y-4">
-          {/* Filters */}
-          <Card>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                <input className="input pl-9 w-full" aria-label="Search plans" placeholder="Search plan, asset, category, site, assignee" value={search} onChange={(e) => setSearch(e.target.value)} />
-              </div>
-              <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
-                <option value="all">All statuses</option>
-                {PM_STATUSES.map((s) => <option key={s} value={s}>{PM_STATUS_META[s]?.label || s}</option>)}
-              </select>
-              <select className="input" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} aria-label="Category">
-                <option value="all">All categories</option>
-                {ASSET_CATEGORIES.map((c) => <option key={c} value={c}>{ASSET_CATEGORY_LABELS[c]}</option>)}
-              </select>
-              <button
-                onClick={() => setDueOnly((v) => !v)}
-                aria-pressed={dueOnly}
-                className={`min-h-[44px] text-sm inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border ${dueOnly ? 'bg-amber-500/15 text-amber-300 border-amber-500/40' : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-secondary)]'}`}
-              >
-                <AlertTriangle size={14} /> Due only
-              </button>
-              {hasPlanFilters && <button onClick={clearPlanFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-              <div className="flex items-center gap-2 ml-auto">
-                <span className="text-xs text-[var(--text-muted)]">{filteredPlans.length} of {plans.length}</span>
-                <button onClick={exportPlansExcel} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!planExportRows.length}><FileSpreadsheet size={14} /> Excel</button>
-                <button onClick={exportPlansPdf} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!planExportRows.length}><FileText size={14} /> PDF</button>
-              </div>
+        <Card title="Maintenance plans" sub={`${fmtInt(filteredPlans.length)} of ${fmtInt(plans.length)} plans`}
+          action={(
+            <div className="pmp-exports">
+              <button type="button" className="cc-btn-ghost" onClick={exportPlansExcel} disabled={!planExportRows.length}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
+              <button type="button" className="cc-btn-ghost" onClick={exportPlansPdf} disabled={!planExportRows.length}><FileText size={14} aria-hidden="true" /> PDF</button>
             </div>
-          </Card>
-
-          {/* Table */}
-          <EnterpriseTable
+          )}>
+          <div className="cc-filters pmp-filters">
+            <label className="cc-search">
+              <Search size={15} aria-hidden="true" />
+              <input aria-label="Search plans" placeholder="Search plan, asset, category, site, assignee" value={search} onChange={(e) => setSearch(e.target.value)} />
+            </label>
+            <select className="cc-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
+              <option value="all">All statuses</option>
+              {PM_STATUSES.map((s) => <option key={s} value={s}>{PM_STATUS_META[s]?.label || s}</option>)}
+            </select>
+            <select className="cc-select" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} aria-label="Category">
+              <option value="all">All categories</option>
+              {ASSET_CATEGORIES.map((c) => <option key={c} value={c}>{ASSET_CATEGORY_LABELS[c]}</option>)}
+            </select>
+            <button type="button" className={`cc-btn-ghost ${dueOnly ? 'pmp-on' : ''}`} aria-pressed={dueOnly} onClick={() => setDueOnly((v) => !v)}>
+              <AlertTriangle size={14} aria-hidden="true" /> Due only
+            </button>
+            {hasPlanFilters && <button type="button" className="cc-btn-ghost" onClick={clearPlanFilters}><X size={14} aria-hidden="true" /> Clear</button>}
+          </div>
+          <KitTable
             columns={planColumns}
-            data={filteredPlans}
+            rows={filteredPlans}
             getRowId={(p) => String(p.id)}
             loading={notLoaded && !error}
             error={notLoaded && error ? error : null}
             onRetry={load}
-            enableGlobalFilter={false}
-            enableExport={false}
-            emptyMessage={plans.length === 0 ? 'No maintenance plans yet. Create the first plan to get started.' : 'No plans match these filters.'}
             viewKey="pm-plans"
+            empty={plans.length === 0 ? 'No maintenance plans yet. Create the first plan to get started.' : 'No plans match these filters.'}
           />
-        </div>
+        </Card>
       )}
 
       {/* ══════════════════════════ SERVICE HISTORY ══════════════════════════ */}
       {tab === 'history' && (
-        <div className="space-y-4">
-          <Card>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative flex-1 min-w-[180px]">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                <input className="input pl-9 w-full" aria-label="Filter by asset number" placeholder="Filter by asset number" value={histAsset} onChange={(e) => setHistAsset(e.target.value)} />
+        <>
+          <div className="cc-kpis pmp-hist-kpis">
+            <Kpi icon={Wrench} tone="t-green" display={history === null ? 'N/A' : fmtInt(histStats.services)} label={`Services, ${fmtInt(histStats.assets)} assets`} loading={history === null && !error} />
+            <Kpi icon={Wallet} tone="t-purple" display={singleCountry ? rowMoney(histStats.totalCost) : 'N/A'} label="Total service cost" loading={history === null && !error}
+              title={!singleCountry ? MIXED_REASON : histStats.costedShare == null ? 'No services' : `${Math.round(histStats.costedShare * 100)}% of services costed`} />
+            <Kpi icon={Gauge} tone="t-blue" display={singleCountry ? rowMoney(histStats.avgCost) : 'N/A'} label="Average per service" loading={history === null && !error}
+              title={singleCountry ? 'Costed services only' : MIXED_REASON} />
+            <Kpi icon={ClipboardList} tone="t-amber" display={history === null ? 'N/A' : fmtInt(histStats.withWorkOrder)} label="Raised a work order" loading={history === null && !error}
+              title={histStats.services ? `${Math.round((histStats.withWorkOrder / histStats.services) * 100)}% of services` : 'No services'} />
+          </div>
+          <Card title="Service history" sub="Every recorded service. The summary above follows these filters."
+            action={(
+              <div className="pmp-exports">
+                <button type="button" className="cc-btn-ghost" onClick={exportHistExcel} disabled={!histExportRows.length}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
+                <button type="button" className="cc-btn-ghost" onClick={exportHistPdf} disabled={!histExportRows.length}><FileText size={14} aria-hidden="true" /> PDF</button>
               </div>
-              <select className="input" value={histProgram} onChange={(e) => setHistProgram(e.target.value)} aria-label="Plan">
+            )}>
+            <div className="cc-filters pmp-filters">
+              <label className="cc-search">
+                <Search size={15} aria-hidden="true" />
+                <input aria-label="Filter by asset number" placeholder="Filter by asset number" value={histAsset} onChange={(e) => setHistAsset(e.target.value)} />
+              </label>
+              <select className="cc-select" value={histProgram} onChange={(e) => setHistProgram(e.target.value)} aria-label="Plan">
                 <option value="all">All plans</option>
                 {plans.map((p) => <option key={p.id} value={String(p.id)}>{p.name}</option>)}
               </select>
-              <select className="input" value={histOutcome} onChange={(e) => setHistOutcome(e.target.value)} aria-label="Outcome">
+              <select className="cc-select" value={histOutcome} onChange={(e) => setHistOutcome(e.target.value)} aria-label="Outcome">
                 <option value="all">All outcomes</option>
                 {PM_OUTCOMES.map((o) => <option key={o} value={o}>{PM_OUTCOME_META[o]?.label || o}</option>)}
               </select>
-              <input type="date" className="input" value={histFrom} onChange={(e) => setHistFrom(e.target.value)} aria-label="From date" />
-              <input type="date" className="input" value={histTo} onChange={(e) => setHistTo(e.target.value)} aria-label="To date" />
-              {hasHistFilters && <button onClick={clearHistFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-              <div className="flex items-center gap-2 ml-auto">
-                <button onClick={exportHistExcel} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!histExportRows.length}><FileSpreadsheet size={14} /> Excel</button>
-                <button onClick={exportHistPdf} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!histExportRows.length}><FileText size={14} /> PDF</button>
-              </div>
+              <label className="pmp-date"><span>From</span><input type="date" className="cc-select" value={histFrom} onChange={(e) => setHistFrom(e.target.value)} aria-label="From date" /></label>
+              <label className="pmp-date"><span>To</span><input type="date" className="cc-select" value={histTo} onChange={(e) => setHistTo(e.target.value)} aria-label="To date" /></label>
+              {hasHistFilters && <button type="button" className="cc-btn-ghost" onClick={clearHistFilters}><X size={14} aria-hidden="true" /> Clear</button>}
             </div>
+            {!singleCountry && <p className="pmp-note pmp-note-top">Costs are shown without a currency on the All countries view because rows come from several countries. Choose one country to see them in its currency.</p>}
+            <KitTable
+              columns={histColumns}
+              rows={filteredHistory}
+              getRowId={(r) => String(r.id)}
+              loading={history === null && !error}
+              error={history === null && error ? error : null}
+              onRetry={load}
+              viewKey="pm-history"
+              empty={(history || []).length === 0 ? 'No services recorded yet. Record a service from the Plans tab.' : 'No services match these filters.'}
+            />
           </Card>
-
-          {/* Service summary: follows the filters above */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {[
-              { label: 'Services', value: history === null ? 'N/A' : histStats.services.toLocaleString(), sub: `${histStats.assets} assets` },
-              { label: 'Total service cost', value: money(histStats.totalCost), sub: histStats.costedShare == null ? 'No services' : `${Math.round(histStats.costedShare * 100)}% of services costed` },
-              { label: 'Average per service', value: money(histStats.avgCost), sub: 'Costed services only' },
-              { label: 'Raised a work order', value: history === null ? 'N/A' : histStats.withWorkOrder.toLocaleString(), sub: histStats.services ? `${Math.round((histStats.withWorkOrder / histStats.services) * 100)}% of services` : 'No services' },
-            ].map((k) => (
-              <Card key={k.label}>
-                <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                <p className="text-xl font-bold tabular-nums text-[var(--text-primary)] mt-1">{k.value}</p>
-                <p className="text-[11px] text-[var(--text-dim)] mt-0.5">{k.sub}</p>
-              </Card>
-            ))}
-          </div>
-
-          <EnterpriseTable
-            columns={histColumns}
-            data={filteredHistory}
-            getRowId={(r) => String(r.id)}
-            loading={history === null && !error}
-            error={history === null && error ? error : null}
-            onRetry={load}
-            enableGlobalFilter={false}
-            enableExport={false}
-            emptyMessage={(history || []).length === 0 ? 'No services recorded yet. Record a service from the Plans tab.' : 'No services match these filters.'}
-            viewKey="pm-history"
-          />
-        </div>
+        </>
       )}
 
       {/* ══════════════════════════ CREATE / EDIT MODAL ══════════════════════════ */}

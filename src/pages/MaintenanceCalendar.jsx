@@ -1,1076 +1,592 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// MaintenanceCalendar.jsx - Visual Maintenance Calendar · /maintenance-calendar
-// Combines Work Orders (target_completion) + Tyre Alerts (risk-based) into a
-// unified month/week/day calendar with KPI cards and upcoming events sidebar.
-// ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+/**
+ * Maintenance Calendar (route /maintenance-calendar) rebuilt on the Command
+ * Center kit. One calendar over three real sources:
+ *  - work orders with a target completion date (overdue when past and not done),
+ *  - at-risk tyres still fitted (Critical / High). Tyres carry no scheduled date,
+ *    so their replacement date is an ESTIMATE from today and is labelled so,
+ *  - active Preventive Maintenance plans by next due date (overdue in red).
+ * Reads page past the 1000-row server cap, so the KPI counts cover every row;
+ * when a safety ceiling is reached the page says so instead of undercounting
+ * silently. Shaping lives in src/lib/maintenanceCalendarView.js.
+ */
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import {
-  Calendar, ChevronLeft, ChevronRight, Clock, AlertTriangle,
-  Wrench, CircleDot, Filter, RefreshCw, X, CheckCircle,
-  AlertOctagon, Loader2, Eye, ChevronDown, Lock, ClipboardCheck,
+  CalendarDays, ChevronLeft, ChevronRight, Clock, AlertTriangle, AlertOctagon,
+  CalendarRange, CalendarCheck, Wrench, CircleDot, ClipboardCheck, RefreshCw,
+  FileSpreadsheet, Search, X, Lock, Info, Eye,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
-import { calendarDateKey as toDateStr, adjacentCalendarDate } from '../lib/calendarDate'
+import { adjacentCalendarDate } from '../lib/calendarDate'
 import { toUserMessage } from '../lib/safeError'
 import { listPmPrograms } from '../lib/api/pmPrograms'
-import { pmDueStatus } from '../lib/pmPrograms'
+import { exportToExcel, reportFileName } from '../lib/exportUtils'
 import { useSettings } from '../contexts/SettingsContext'
-import PageHeader from '../components/ui/PageHeader'
 import Modal from '../components/ui/Modal'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
+import { PageHero, Kpi, Card, CardState, Tabs, Donut, fmtInt } from '../components/commandCenter/kit'
+import {
+  DAY_NAMES, MONTH_NAMES, EVENT_TYPES, LEGEND_ORDER, SOURCE_OPTIONS, PRIORITIES,
+  startOfDay, addDays, dayKey, fmtDay, fmtDayLong,
+  buildEvents, filterEvents, activeFilterCount, siteOptions, sortByPriority, groupByDate,
+  agendaGroups, calendarKpis, sourceBreakdown, monthCells, weekDays, periodLabel, viewRange,
+  exportRows, EXPORT_COLUMNS, EXPORT_HEADERS,
+} from '../lib/maintenanceCalendarView'
+import './MaintenanceCalendar.css'
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-const DAY_NAMES    = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const MONTH_NAMES  = [
-  'January','February','March','April','May','June',
-  'July','August','September','October','November','December',
+const WO_CEILING = 20000
+const TYRE_CEILING = 5000
+const MAX_CHIPS = 3
+const VIEW_TABS = [
+  { key: 'month', label: 'Month' },
+  { key: 'week', label: 'Week' },
+  { key: 'day', label: 'Day' },
+  { key: 'agenda', label: 'Agenda' },
 ]
+const PRIORITY_PILL = { Critical: 'bad', High: 'orange', Medium: 'warn', Low: 'info' }
+const NARROW_QUERY = '(max-width: 760px)'
 
-const EVENT_COLORS = {
-  work_order:          { dot: 'bg-blue-500',   chip: 'bg-blue-900/60 border-blue-700 text-blue-300',    label: 'Work Order' },
-  critical_tyre:       { dot: 'bg-red-500',    chip: 'bg-red-900/60 border-red-700 text-red-300',       label: 'Critical Tyre' },
-  high_risk_tyre:      { dot: 'bg-orange-500', chip: 'bg-orange-900/60 border-orange-700 text-orange-300', label: 'High Risk Tyre' },
-  scheduled_maint:     { dot: 'bg-green-500',  chip: 'bg-green-900/60 border-green-700 text-green-300', label: 'Scheduled Maint.' },
-  pm_plan:             { dot: 'bg-indigo-500', chip: 'bg-indigo-900/60 border-indigo-700 text-indigo-300', label: 'PM Plan' },
-  overdue_pm:          { dot: 'bg-red-600',    chip: 'bg-red-950/70 border-red-600 text-red-200',       label: 'Overdue PM' },
-  overdue_work_order:  { dot: 'bg-red-600',    chip: 'bg-red-950/70 border-red-600 text-red-200',       label: 'Overdue' },
+function useNarrow() {
+  const get = () => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(NARROW_QUERY).matches : false)
+  const [narrow, setNarrow] = useState(get)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined
+    const mq = window.matchMedia(NARROW_QUERY)
+    const on = () => setNarrow(mq.matches)
+    mq.addEventListener?.('change', on)
+    return () => mq.removeEventListener?.('change', on)
+  }, [])
+  return narrow
 }
 
-// Static Tailwind classes so the JIT compiler does not purge dynamically
-// interpolated `text-${color}-400` utilities in production builds.
-const KPI_TEXT_COLOR = {
-  blue:   'text-blue-400',
-  red:    'text-red-400',
-  green:  'text-green-400',
-  orange: 'text-orange-400',
+function fmtTime(d) {
+  return d ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : ''
 }
 
-const PRIORITY_BADGE = {
-  Critical: 'bg-red-900/50 text-red-300 border-red-700',
-  High:     'bg-orange-900/50 text-orange-300 border-orange-700',
-  Medium:   'bg-yellow-900/50 text-yellow-300 border-yellow-700',
-  Low:      'bg-blue-900/50 text-blue-300 border-blue-700',
-}
-
-// ── Date helpers ──────────────────────────────────────────────────────────────
-function addDays(date, n) {
-  const d = new Date(date)
-  d.setDate(d.getDate() + n)
-  return d
-}
-
-function isSameDay(a, b) {
-  return a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-}
-
-function fmtDisplay(dateStr) {
-  if (!dateStr) return '-'
-  const d = new Date(dateStr + 'T00:00:00')
-  return d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
-}
-
-function fmtShort(dateStr) {
-  if (!dateStr) return '-'
-  const d = new Date(dateStr + 'T00:00:00')
-  return d.toLocaleDateString('en-US', { day: '2-digit', month: 'short' })
-}
-
-// ── Event builders ────────────────────────────────────────────────────────────
-function buildWorkOrderEvents(orders, todayStr) {
-  return orders
-    .filter(o => o.target_completion)
-    .map(o => {
-      const dateStr = toDateStr(o.target_completion)
-      if (!dateStr) return null
-      const isOverdue = dateStr < todayStr &&
-        !['Completed', 'Closed', 'Cancelled'].includes(o.status)
-      return {
-        id:          `wo-${o.id}`,
-        date:        dateStr,
-        type:        isOverdue ? 'overdue_work_order' : 'work_order',
-        priority:    o.priority || 'Medium',
-        title:       o.work_order_no || 'Work Order',
-        subtitle:    `${o.asset_no || '-'} · ${o.work_type || '-'}`,
-        asset:       o.asset_no || '-',
-        description: o.description || o.work_type || '-',
-        status:      o.status,
-        isOverdue,
-        raw:         o,
-        source:      'work_order',
-      }
-    })
-    .filter(Boolean)
-}
-
-function buildTyreEvents(tyres, todayStr) {
-  const today = new Date(todayStr + 'T00:00:00')
-  return tyres
-    .filter(t => ['Critical', 'High'].includes(t.risk_level))
-    .map(t => {
-      // Estimate replacement date:
-      //  - Tread depth <= 3mm → urgent: today + 3
-      //  - Critical risk, no removal km → today + 7
-      //  - High risk → today + 14
-      let daysOffset = 14
-      if (t.risk_level === 'Critical') daysOffset = 7
-      if (parseFloat(t.tread_depth) <= 3) daysOffset = 3
-
-      const targetDate = addDays(today, daysOffset)
-      const dateStr = toDateStr(targetDate)
-      const type = t.risk_level === 'Critical' ? 'critical_tyre' : 'high_risk_tyre'
-      return {
-        id:          `tyre-${t.id}`,
-        date:        dateStr,
-        type,
-        priority:    t.risk_level === 'Critical' ? 'Critical' : 'High',
-        title:       `${t.asset_no || t.asset_number || '-'}`,
-        subtitle:    `${t.risk_level} Risk · ${t.brand || '-'}`,
-        asset:       t.asset_no || t.asset_number || '-',
-        description: `Tread: ${t.tread_depth ?? '?'}mm · Brand: ${t.brand || '-'} · Serial: ${t.serial_no || '-'}`,
-        status:      'Pending Replacement',
-        isOverdue:   false,
-        raw:         t,
-        source:      'tyre',
-      }
-    })
-    .filter(e => e.date !== null)
-}
-
-// Preventive Maintenance plans: one event per active plan carrying a next_due
-// date. Overdue plans (pmDueStatus === 'overdue') render red; the rest indigo.
-function buildPmEvents(programs, todayStr, now) {
-  return programs
-    .filter(p => p.status === 'active' && p.next_due)
-    .map(p => {
-      const dateStr = toDateStr(p.next_due)
-      if (!dateStr) return null
-      const overdue = pmDueStatus(p, now) === 'overdue'
-      const asset = p.asset_no || p.asset_type || '-'
-      const interval = p.interval_value != null && p.interval_type
-        ? `Every ${p.interval_value} ${p.interval_type}`
-        : (p.interval_type || 'Preventive maintenance')
-      return {
-        id:          `pm-${p.id}`,
-        date:        dateStr,
-        type:        overdue ? 'overdue_pm' : 'pm_plan',
-        priority:    overdue ? 'Critical' : 'Medium',
-        title:       p.name || 'PM Plan',
-        subtitle:    `${asset} · ${interval}`,
-        asset,
-        description: p.notes || interval,
-        status:      overdue ? 'Overdue' : 'Scheduled',
-        isOverdue:   overdue,
-        raw:         p,
-        source:      'pm_plan',
-      }
-    })
-    .filter(Boolean)
-}
-
-// ── Main component ────────────────────────────────────────────────────────────
 export default function MaintenanceCalendar() {
-  const { activeCountry } = useSettings()
+  const { activeCountry, appSettings } = useSettings()
+  const narrow = useNarrow()
 
-  // Data
+  // ── Data ───────────────────────────────────────────────────────────────
   const [workOrders, setWorkOrders] = useState([])
   const [tyreRecords, setTyreRecords] = useState([])
   const [pmPrograms, setPmPrograms] = useState([])
-  const [loading, setLoading]       = useState(true)
-  const [error, setError]           = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [pmError, setPmError] = useState(null)
+  const [truncated, setTruncated] = useState({ wo: false, tyre: false })
   const [lastRefresh, setLastRefresh] = useState(null)
+  const [exportError, setExportError] = useState('')
 
-  // Calendar state
-  const today = useMemo(() => {
-    const d = new Date()
-    d.setHours(0, 0, 0, 0)
-    return d
-  }, [])
-  const todayStr = useMemo(() => toDateStr(today), [today])
+  const today = useMemo(() => startOfDay(new Date()), [])
+  const todayKey = dayKey(today)
 
+  // ── Calendar state ─────────────────────────────────────────────────────
   const [currentDate, setCurrentDate] = useState(() => {
-    const d = new Date()
+    const d = startOfDay(new Date())
     d.setDate(1)
-    d.setHours(0, 0, 0, 0)
     return d
   })
-  const [view, setView]               = useState('month') // 'month' | 'week' | 'day'
-  const [selectedDay, setSelectedDay] = useState(null)    // Date | null
+  const [view, setView] = useState('month')
+  const [selectedDay, setSelectedDay] = useState(() => startOfDay(new Date()))
   const [selectedEvent, setSelectedEvent] = useState(null)
-  // Approval-engine gate: locks the open event's strongest mutation (the jump to
-  // edit the underlying record) while its workflow is active (pending/in_review/
-  // returned) or locked (approved). Re-reported by EntityApprovalPanel.
+  // Approval gate: locks the open event's jump-to-record while its workflow is
+  // active or locked. Re-reported by EntityApprovalPanel.
   const [wfLocked, setWfLocked] = useState(false)
 
-  // Filters
-  const [typeFilter, setTypeFilter]   = useState('All')  // 'All' | 'Work Orders' | 'Tyre Alerts'
-  const [priorityFilter, setPriorityFilter] = useState('All')
-  const [showFilters, setShowFilters] = useState(false)
+  // ── Filters ────────────────────────────────────────────────────────────
+  const [source, setSource] = useState('All')
+  const [priority, setPriority] = useState('All')
+  const [site, setSite] = useState('All')
+  const [search, setSearch] = useState('')
+  const [overdueOnly, setOverdueOnly] = useState(false)
 
-  // ── Load data ───────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
+    setPmError(null)
     try {
+      const country = activeCountry && activeCountry !== 'All' ? activeCountry : null
       const [woRes, tyreRes, pmRes] = await Promise.all([
-        // Page past the 1000-row cap: the KPI cards below (overdue / due this week
-        // / upcoming 30 days) count over these rows, so a silent cap would
-        // undercount scheduled maintenance on a busy fleet.
+        // Paged past the 1000-row cap so the KPI counts cover every work order.
         fetchAllPages((from, to) => {
           let q = supabase
             .from('work_orders')
             .select('id,work_order_no,asset_no,work_type,priority,status,target_completion,description,site,country,opened_at')
             .not('target_completion', 'is', null)
             .order('target_completion', { ascending: true })
-          if (activeCountry && activeCountry !== 'All') q = q.eq('country', activeCountry)
+            .order('id')
+          if (country) q = q.eq('country', country)
           return q.range(from, to)
-        }, { max: 20000 }),
-        (() => {
+        }, { max: WO_CEILING }),
+        fetchAllPages((from, to) => {
           let q = supabase
             .from('tyre_records')
             .select('id,asset_no,asset_number,serial_no,brand,risk_level,tread_depth,km_at_fitment,km_at_removal,site,country,issue_date')
             .in('risk_level', ['Critical', 'High'])
-            .is('km_at_removal', null)     // still mounted
-          if (activeCountry && activeCountry !== 'All') q = q.eq('country', activeCountry)
-          return q.limit(500)
-        })(),
-        // Preventive Maintenance plans (country-scoped). listPmPrograms degrades
-        // to [] when the pm_programs table is not provisioned, so this never sinks
-        // the work-order / tyre loads.
-        listPmPrograms({ country: activeCountry }),
+            .is('km_at_removal', null) // still mounted
+            .order('id')
+          if (country) q = q.eq('country', country)
+          return q.range(from, to)
+        }, { max: TYRE_CEILING }),
+        // PM plans degrade on their own: a failed plan read must not hide the
+        // work orders and tyres, but it is reported, never shown as "no plans".
+        listPmPrograms({ country: activeCountry }).then((rows) => ({ rows }), (e) => ({ err: e })),
       ])
-
       if (woRes.error) throw woRes.error
       if (tyreRes.error) throw tyreRes.error
-
       setWorkOrders(woRes.data || [])
       setTyreRecords(tyreRes.data || [])
-      setPmPrograms(Array.isArray(pmRes) ? pmRes : [])
+      setTruncated({ wo: !!woRes.truncated, tyre: !!tyreRes.truncated })
+      if (pmRes.err) {
+        setPmPrograms([])
+        setPmError(toUserMessage(pmRes.err, 'Preventive maintenance plans could not be loaded.'))
+      } else {
+        setPmPrograms(Array.isArray(pmRes.rows) ? pmRes.rows : [])
+      }
       setLastRefresh(new Date())
     } catch (e) {
-      setError(toUserMessage(e))
+      setError(toUserMessage(e, 'Could not load the maintenance calendar.'))
     } finally {
       setLoading(false)
     }
   }, [activeCountry])
 
   useEffect(() => { load() }, [load])
-
-  // Reset the approval lock whenever a different event (or none) is opened in the
-  // detail modal; EntityApprovalPanel re-reports the true state via onStateChange.
   useEffect(() => { setWfLocked(false) }, [selectedEvent?.id])
 
-  // ── Build unified events ─────────────────────────────────────────────────────
-  const allEvents = useMemo(() => {
-    const woEvents   = buildWorkOrderEvents(workOrders, todayStr)
-    const tyreEvents = buildTyreEvents(tyreRecords, todayStr)
-    const pmEvents   = buildPmEvents(pmPrograms, todayStr, today)
-    return [...woEvents, ...tyreEvents, ...pmEvents]
-  }, [workOrders, tyreRecords, pmPrograms, todayStr, today])
-
-  // Apply filters
+  // ── Events ─────────────────────────────────────────────────────────────
+  const allEvents = useMemo(
+    () => buildEvents({ workOrders, tyres: tyreRecords, pmPrograms, today }),
+    [workOrders, tyreRecords, pmPrograms, today],
+  )
+  const sites = useMemo(() => siteOptions(allEvents), [allEvents])
+  const filters = { source, priority, site, search }
   const filteredEvents = useMemo(() => {
-    let ev = allEvents
-    if (typeFilter === 'Work Orders') ev = ev.filter(e => e.source === 'work_order')
-    if (typeFilter === 'Tyre Alerts') ev = ev.filter(e => e.source === 'tyre')
-    if (typeFilter === 'PM Plans') ev = ev.filter(e => e.source === 'pm_plan')
-    if (priorityFilter !== 'All') ev = ev.filter(e => e.priority === priorityFilter)
-    return ev
-  }, [allEvents, typeFilter, priorityFilter])
+    const base = filterEvents(allEvents, { source, priority, site, search })
+    return overdueOnly ? base.filter((e) => e.isOverdue) : base
+  }, [allEvents, source, priority, site, search, overdueOnly])
+  const nFilters = activeFilterCount(filters) + (overdueOnly ? 1 : 0)
+  const clearFilters = () => { setSource('All'); setPriority('All'); setSite('All'); setSearch(''); setOverdueOnly(false) }
 
-  // Bucket events by date string for O(1) lookup
-  const eventsByDate = useMemo(() => {
-    const map = {}
-    filteredEvents.forEach(ev => {
-      if (!map[ev.date]) map[ev.date] = []
-      map[ev.date].push(ev)
-    })
-    return map
-  }, [filteredEvents])
+  const eventsByDate = useMemo(() => groupByDate(filteredEvents), [filteredEvents])
+  const kpis = useMemo(() => calendarKpis(filteredEvents, today, currentDate), [filteredEvents, today, currentDate])
+  const breakdown = useMemo(() => sourceBreakdown(filteredEvents), [filteredEvents])
 
-  // ── KPI computation ──────────────────────────────────────────────────────────
-  const kpis = useMemo(() => {
-    const weekStart = new Date(today)
-    weekStart.setDate(today.getDate() - today.getDay())
-    const weekEnd = addDays(weekStart, 6)
-    const next30End = addDays(today, 30)
+  // On a phone the month and week grids collapse to the agenda list.
+  const effectiveView = narrow && (view === 'month' || view === 'week') ? 'agenda' : view
+  const range = useMemo(() => viewRange(effectiveView, currentDate, selectedDay), [effectiveView, currentDate, selectedDay])
+  const cells = useMemo(() => monthCells(currentDate), [currentDate])
+  const week = useMemo(() => weekDays(currentDate), [currentDate])
+  const agenda = useMemo(() => agendaGroups(filteredEvents, range.from, range.to), [filteredEvents, range])
+  const overdueOutside = useMemo(
+    () => filteredEvents.filter((e) => e.isOverdue && e.date < range.from).length,
+    [filteredEvents, range],
+  )
+  const selectedKey = dayKey(selectedDay || currentDate)
+  const selectedEvents = eventsByDate[selectedKey] || []
+  const upcoming = useMemo(
+    () => agendaGroups(filteredEvents, todayKey, dayKey(addDays(today, 14))),
+    [filteredEvents, todayKey, today],
+  )
+  const upcomingCount = upcoming.reduce((s, g) => s + g.events.length, 0)
+  const label = periodLabel(effectiveView, currentDate, selectedDay)
 
-    const eventsThisWeek = filteredEvents.filter(e => {
-      const d = new Date(e.date + 'T00:00:00')
-      return d >= weekStart && d <= weekEnd
-    }).length
-
-    const overdue = filteredEvents.filter(e => e.isOverdue).length
-
-    const upcoming30 = filteredEvents.filter(e => {
-      const d = new Date(e.date + 'T00:00:00')
-      return d >= today && d <= next30End
-    }).length
-
-    const criticalToday = filteredEvents.filter(e =>
-      e.date === todayStr && e.priority === 'Critical'
-    ).length
-
-    return { eventsThisWeek, overdue, upcoming30, criticalToday }
-  }, [filteredEvents, today, todayStr])
-
-  // ── Upcoming 14-day sidebar list ─────────────────────────────────────────────
-  const upcomingEvents = useMemo(() => {
-    const end14 = addDays(today, 14)
-    return filteredEvents
-      .filter(e => {
-        const d = new Date(e.date + 'T00:00:00')
-        return d >= today && d <= end14
-      })
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(0, 50)
-  }, [filteredEvents, today])
-
-  // ── Calendar grid helpers ────────────────────────────────────────────────────
-  // Month view: 6 × 7 grid
-  const monthCells = useMemo(() => {
-    if (view !== 'month') return []
-    const year  = currentDate.getFullYear()
-    const month = currentDate.getMonth()
-    const firstDay = new Date(year, month, 1)
-    const startCol = firstDay.getDay() // 0 = Sunday
-
-    const cells = []
-    // Leading empty cells from previous month
-    const prevMonthEnd = new Date(year, month, 0)
-    for (let i = startCol - 1; i >= 0; i--) {
-      const d = new Date(year, month - 1, prevMonthEnd.getDate() - i)
-      cells.push({ date: d, inMonth: false })
-    }
-    // Days of current month
-    const daysInMonth = new Date(year, month + 1, 0).getDate()
-    for (let d = 1; d <= daysInMonth; d++) {
-      cells.push({ date: new Date(year, month, d), inMonth: true })
-    }
-    // Trailing cells
-    const remaining = 42 - cells.length
-    for (let d = 1; d <= remaining; d++) {
-      cells.push({ date: new Date(year, month + 1, d), inMonth: false })
-    }
-    return cells
-  }, [currentDate, view])
-
-  // Week view: Mon-Sun (or Sun-Sat, we'll use Sun start)
-  const weekDays = useMemo(() => {
-    if (view !== 'week') return []
-    const base = view === 'week' ? currentDate : today
-    // find Sunday of current week
-    const d = new Date(base)
-    d.setDate(d.getDate() - d.getDay())
-    return Array.from({ length: 7 }, (_, i) => addDays(d, i))
-  }, [currentDate, view, today])
-
-  // Day view
-  const dayEvents = useMemo(() => {
-    if (view !== 'day') return []
-    const ds = toDateStr(selectedDay || currentDate)
-    return (eventsByDate[ds] || []).sort((a, b) => {
-      const pOrder = { Critical: 0, High: 1, Medium: 2, Low: 3 }
-      return (pOrder[a.priority] ?? 3) - (pOrder[b.priority] ?? 3)
-    })
-  }, [view, selectedDay, currentDate, eventsByDate])
-
-  // ── Navigation ───────────────────────────────────────────────────────────────
-  function navPrev() {
-    setCurrentDate(prev => adjacentCalendarDate(prev, selectedDay, view, -1))
-    setSelectedDay(null)
+  // ── Navigation ─────────────────────────────────────────────────────────
+  const navView = effectiveView === 'agenda' ? 'month' : effectiveView
+  function nav(dir) {
+    const next = adjacentCalendarDate(currentDate, selectedDay, navView, dir)
+    if (navView === 'day') { setSelectedDay(startOfDay(next)); setCurrentDate(startOfDay(next)) } else setCurrentDate(next)
   }
-
-  function navNext() {
-    setCurrentDate(prev => adjacentCalendarDate(prev, selectedDay, view, 1))
-    setSelectedDay(null)
-  }
-
   function goToday() {
-    const d = new Date()
-    d.setDate(view === 'month' ? 1 : d.getDate())
-    d.setHours(0, 0, 0, 0)
+    const d = startOfDay(new Date())
+    if (navView === 'month') d.setDate(1)
     setCurrentDate(d)
-    setSelectedDay(today)
+    setSelectedDay(startOfDay(new Date()))
+  }
+  function openDay(date) {
+    setSelectedDay(startOfDay(date))
+    setCurrentDate(startOfDay(date))
+    setView('day')
   }
 
-  // ── Period label ─────────────────────────────────────────────────────────────
-  const periodLabel = useMemo(() => {
-    if (view === 'month') {
-      return `${MONTH_NAMES[currentDate.getMonth()]} ${currentDate.getFullYear()}`
+  async function doExport() {
+    setExportError('')
+    try {
+      await exportToExcel(
+        exportRows(filteredEvents), EXPORT_COLUMNS, EXPORT_HEADERS,
+        reportFileName('Maintenance Calendar', activeCountry && activeCountry !== 'All' ? activeCountry : 'All countries', fmtDay(todayKey)),
+        'Events',
+        { title: 'Maintenance Calendar', company: appSettings?.company_name },
+      )
+    } catch (e) {
+      setExportError(toUserMessage(e, 'The export could not be created.'))
     }
-    if (view === 'week') {
-      const sun = new Date(currentDate)
-      sun.setDate(sun.getDate() - sun.getDay())
-      const sat = addDays(sun, 6)
-      return `${fmtShort(toDateStr(sun))} - ${fmtShort(toDateStr(sat))} ${sat.getFullYear()}`
-    }
-    const d = selectedDay || currentDate
-    return fmtDisplay(toDateStr(d))
-  }, [view, currentDate, selectedDay])
+  }
 
-  // ── Event chip renderer ───────────────────────────────────────────────────────
-  function EventChip({ event, compact = false }) {
-    const cfg = EVENT_COLORS[event.type] || EVENT_COLORS.work_order
-    return (
-      <button
-        onClick={e => { e.stopPropagation(); setSelectedEvent(event) }}
-        className={`w-full text-left px-1.5 py-0.5 rounded border text-[10px] leading-tight truncate flex items-center gap-1 transition-opacity hover:opacity-80 ${cfg.chip}`}
-        title={`${event.title} · ${event.subtitle}`}
-      >
-        <span className={`flex-shrink-0 w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-        <span className="truncate font-medium">{event.title}</span>
-        {!compact && <span className="truncate text-[9px] opacity-70">{event.subtitle}</span>}
+  const loadState = { loading, data: loading ? null : true, error, retry: load }
+
+  // ── Render helpers ─────────────────────────────────────────────────────
+  const renderChip = (ev) => (
+    <button
+      key={ev.id}
+      type="button"
+      className={`mc-chip tone-${EVENT_TYPES[ev.type]?.tone || 'blue'}`}
+      onClick={(e) => { e.stopPropagation(); setSelectedEvent(ev) }}
+      title={`${ev.title} | ${ev.subtitle}`}
+    >
+      <i aria-hidden="true" />
+      <span>{ev.title}</span>
+    </button>
+  )
+
+  const renderRow = (ev) => (
+    <li key={ev.id}>
+      <button type="button" className={`mc-ev tone-${EVENT_TYPES[ev.type]?.tone || 'blue'}`} onClick={() => setSelectedEvent(ev)}>
+        <i className="mc-ev-bar" aria-hidden="true" />
+        <span className="mc-ev-main">
+          <b>{ev.title}</b>
+          <small>{ev.subtitle}{ev.site ? ` | ${ev.site}` : ''}</small>
+        </span>
+        <span className="mc-ev-side">
+          <span className={`cc-pill ${PRIORITY_PILL[ev.priority] || 'muted'}`}>{ev.priority}</span>
+          {ev.isOverdue && <span className="cc-pill bad">Overdue</span>}
+          {ev.estimated && <span className="cc-pill muted" title="Tyres have no scheduled date. This date is estimated from the risk level and tread.">Estimated</span>}
+        </span>
       </button>
-    )
-  }
+    </li>
+  )
 
-  // ── Loading / error states ───────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <Loader2 className="animate-spin text-green-400 mx-auto mb-3" size={36} />
-          <p className="text-[var(--text-muted)] text-sm">Loading maintenance calendar...</p>
-        </div>
-      </div>
-    )
-  }
+  const legend = (
+    <ul className="mc-legend" aria-label="Legend">
+      {LEGEND_ORDER.map((k) => (
+        <li key={k} className={`tone-${EVENT_TYPES[k].tone}`}><i aria-hidden="true" />{EVENT_TYPES[k].label}</li>
+      ))}
+    </ul>
+  )
 
-  // ── RENDER ───────────────────────────────────────────────────────────────────
+  const donutSegments = [
+    { label: 'Work orders', count: breakdown.work_order, color: 'var(--cc-blue)', key: 'work_order' },
+    { label: 'Tyre alerts', count: breakdown.tyre, color: 'var(--cc-orange)', key: 'tyre' },
+    { label: 'PM plans', count: breakdown.pm_plan, color: 'var(--mc-indigo)', key: 'pm_plan' },
+  ]
+
   return (
-    <div className="space-y-5 pb-10">
-
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <PageHeader
+    <div className="cc mc-page">
+      <PageHero
+        icon={CalendarDays}
         title="Maintenance Calendar"
-        subtitle={`Unified view of work orders, tyre alerts and PM plans · ${filteredEvents.length} events${lastRefresh ? ` · Updated ${lastRefresh.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}` : ''}`}
-        icon={Calendar}
-        actions={<>
-          <button
-            onClick={() => setShowFilters(v => !v)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors ${
-              showFilters ? 'bg-green-900/30 border-green-700 text-green-300' : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            <Filter size={15} />Filters
-            {(typeFilter !== 'All' || priorityFilter !== 'All') && (
-              <span className="w-2 h-2 rounded-full bg-green-400" />
-            )}
-          </button>
-          <button
-            onClick={load}
-            className="p-2 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-            title="Refresh"
-          >
-            <RefreshCw size={16} />
-          </button>
-        </>}
+        lead="Work orders, tyre replacements and preventive maintenance plans on one calendar, so nothing due slips past its date."
+        stat={{ value: loading ? '...' : fmtInt(kpis.overdue), lines: ['Overdue', 'events'] }}
       />
 
-      {/* ── Error banner ────────────────────────────────────────────────────── */}
-      {error && (
-        <div className="bg-red-900/30 border border-red-700 rounded-xl p-4 flex items-center gap-3 text-red-300">
-          <AlertTriangle size={18} />
-          <span className="text-sm">{error}</span>
-          <button onClick={() => setError(null)} className="ml-auto"><X size={16} /></button>
+      <Card>
+        <div className="cc-filters mc-filters">
+          <label className="cc-search">
+            <Search size={15} aria-hidden="true" />
+            <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search asset, work order, plan or site" aria-label="Search events" />
+          </label>
+          <label className="cc-field">
+            <span>Source</span>
+            <select className="cc-select" value={source} onChange={(e) => setSource(e.target.value)}>
+              {SOURCE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </label>
+          <label className="cc-field">
+            <span>Priority</span>
+            <select className="cc-select" value={priority} onChange={(e) => setPriority(e.target.value)}>
+              <option value="All">All priorities</option>
+              {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </label>
+          <label className="cc-field">
+            <span>Site</span>
+            <select className="cc-select" value={site} onChange={(e) => setSite(e.target.value)}>
+              <option value="All">All sites</option>
+              {sites.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          <div className="mc-actions">
+            {nFilters > 0 && (
+              <button type="button" className="cc-btn-ghost" onClick={clearFilters}><X size={14} aria-hidden="true" />Clear ({nFilters})</button>
+            )}
+            <button type="button" className="cc-btn-ghost" onClick={doExport} disabled={loading || !filteredEvents.length}>
+              <FileSpreadsheet size={15} aria-hidden="true" />Excel
+            </button>
+            <button type="button" className="cc-icon-btn" onClick={load} aria-label="Refresh" title="Refresh" disabled={loading}>
+              <RefreshCw size={15} className={loading ? 'mc-spin' : ''} aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+        <p className="mc-scope">
+          {loading ? 'Loading events...' : `${fmtInt(filteredEvents.length)} of ${fmtInt(allEvents.length)} events shown`}
+          {overdueOnly && ' | Overdue only'}
+          {lastRefresh && ` | Updated ${fmtTime(lastRefresh)}`}
+        </p>
+        {exportError && <p className="mc-note bad" role="alert">{exportError}</p>}
+      </Card>
+
+      {(truncated.wo || truncated.tyre || pmError) && (
+        <div className="mc-banner" role="status">
+          <Info size={16} aria-hidden="true" />
+          <div>
+            {truncated.wo && <p>Only the first {fmtInt(WO_CEILING)} work orders with a target date were loaded. Counts may be low; pick a country to narrow the read.</p>}
+            {truncated.tyre && <p>Only the first {fmtInt(TYRE_CEILING)} at-risk tyres were loaded. Counts may be low; pick a country to narrow the read.</p>}
+            {pmError && <p>{pmError} Plans are missing from the calendar until this loads. <button type="button" className="cc-link cc-link-btn" onClick={load}>Retry</button></p>}
+          </div>
         </div>
       )}
 
-      {/* ── Filter panel ────────────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {showFilters && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            style={{ overflow: 'hidden' }}
-          >
-            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4 flex flex-wrap gap-3 items-center">
-              <div className="flex items-center gap-2">
-                <span className="text-[var(--text-muted)] text-xs font-medium">Type:</span>
-                {['All', 'Work Orders', 'Tyre Alerts', 'PM Plans'].map(opt => (
-                  <button
-                    key={opt}
-                    onClick={() => setTypeFilter(opt)}
-                    className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
-                      typeFilter === opt
-                        ? 'bg-green-900/40 border-green-700 text-green-300'
-                        : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                    }`}
-                  >{opt}</button>
-                ))}
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[var(--text-muted)] text-xs font-medium">Priority:</span>
-                {['All', 'Critical', 'High', 'Medium', 'Low'].map(opt => (
-                  <button
-                    key={opt}
-                    onClick={() => setPriorityFilter(opt)}
-                    className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
-                      priorityFilter === opt
-                        ? 'bg-green-900/40 border-green-700 text-green-300'
-                        : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                    }`}
-                  >{opt}</button>
-                ))}
-              </div>
-              {(typeFilter !== 'All' || priorityFilter !== 'All') && (
-                <button
-                  onClick={() => { setTypeFilter('All'); setPriorityFilter('All') }}
-                  className="px-3 py-1.5 text-xs rounded-lg border border-red-700 text-red-400 bg-red-900/20 hover:bg-red-900/40 transition-colors"
-                >
-                  Clear Filters
-                </button>
-              )}
-              <span className="ml-auto text-[var(--text-muted)] text-xs">{filteredEvents.length} matching events</span>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── KPI Cards ───────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          {
-            label: 'Events This Week',
-            value: kpis.eventsThisWeek,
-            icon: Calendar,
-            color: 'blue',
-            dotColor: 'bg-blue-500',
-            desc: 'Scheduled this week',
-          },
-          {
-            label: 'Overdue',
-            value: kpis.overdue,
-            icon: AlertOctagon,
-            color: 'red',
-            dotColor: 'bg-red-500',
-            desc: 'Past target, not completed',
-          },
-          {
-            label: 'Upcoming 30 Days',
-            value: kpis.upcoming30,
-            icon: Clock,
-            color: 'green',
-            dotColor: 'bg-green-500',
-            desc: 'Events in next 30 days',
-          },
-          {
-            label: 'Critical Alerts Today',
-            value: kpis.criticalToday,
-            icon: AlertTriangle,
-            color: 'orange',
-            dotColor: 'bg-orange-500',
-            desc: 'Require immediate action',
-          },
-        ].map(({ label, value, icon: Icon, color, dotColor, desc }) => (
-          <motion.div
-            key={label}
-            whileHover={{ y: -2 }}
-            className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4 relative overflow-hidden"
-          >
-            <div className={`absolute top-0 right-0 w-24 h-24 rounded-full opacity-5 ${dotColor}`}
-              style={{ transform: 'translate(30%, -30%)' }} />
-            <div className="flex items-center gap-2 mb-3">
-              <Icon size={16} className={KPI_TEXT_COLOR[color]} />
-              <span className="text-[var(--text-muted)] text-xs font-medium">{label}</span>
-            </div>
-            <div className={`text-3xl font-bold ${KPI_TEXT_COLOR[color]} mb-1`}>{value}</div>
-            <div className="text-[var(--text-dim)] text-xs">{desc}</div>
-          </motion.div>
-        ))}
+      <div className="cc-kpis mc-kpis">
+        <Kpi icon={AlertOctagon} tone="t-red" value={kpis.overdue} label="Overdue" loading={loading} danger={kpis.overdue > 0}
+          onClick={() => { setOverdueOnly((v) => !v); setView('agenda') }}
+          title={overdueOnly ? 'Show all events' : 'Show overdue events only'} />
+        <Kpi icon={CalendarRange} tone="t-amber" value={kpis.dueThisWeek} label="Due this week" loading={loading} />
+        <Kpi icon={Clock} tone="t-green" value={kpis.upcoming30} label="Upcoming 30 days" loading={loading} />
+        <Kpi icon={CalendarCheck} tone="t-blue" value={kpis.thisMonth} label={`Events in ${MONTH_NAMES[currentDate.getMonth()]}`} loading={loading} />
+        <Kpi icon={AlertTriangle} tone="t-orange" value={kpis.criticalToday} label="Critical today" loading={loading} />
       </div>
 
-      {/* ── Main layout: Calendar + Sidebar ─────────────────────────────────── */}
-      <div className="flex gap-5 items-start">
-
-        {/* ── Calendar panel ─────────────────────────────────────────────────── */}
-        <div className="flex-1 min-w-0 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl overflow-hidden">
-
-          {/* Calendar toolbar */}
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--input-border)]">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={navPrev}
-                className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)] transition-colors"
-              >
-                <ChevronLeft size={18} />
-              </button>
-              <button
-                onClick={navNext}
-                className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)] transition-colors"
-              >
-                <ChevronRight size={18} />
-              </button>
-              <button
-                onClick={goToday}
-                className="px-3 py-1 text-xs font-semibold rounded-lg border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-gray-500 transition-colors ml-1"
-              >
-                Today
-              </button>
-              <h2 className="text-[var(--text-primary)] font-semibold text-base ml-2 min-w-[180px]">{periodLabel}</h2>
+      <div className="mc-grid">
+        <Card className="mc-cal">
+          <div className="mc-toolbar">
+            <div className="mc-nav">
+              <button type="button" className="cc-icon-btn" onClick={() => nav(-1)} aria-label="Previous"><ChevronLeft size={16} /></button>
+              <button type="button" className="cc-icon-btn" onClick={() => nav(1)} aria-label="Next"><ChevronRight size={16} /></button>
+              <button type="button" className="cc-btn-ghost mc-today" onClick={goToday}>Today</button>
+              <h2 className="mc-period">{label}</h2>
             </div>
-            {/* View switcher */}
-            <div className="flex items-center gap-1 bg-[var(--input-bg)] rounded-lg p-1">
-              {['month', 'week', 'day'].map(v => (
-                <button
-                  key={v}
-                  onClick={() => setView(v)}
-                  className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
-                    view === v
-                      ? 'bg-green-700 text-white shadow'
-                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                  }`}
-                >
-                  {v.charAt(0).toUpperCase() + v.slice(1)}
-                </button>
-              ))}
-            </div>
+            <Tabs tabs={narrow ? VIEW_TABS.filter((t) => t.key === 'day' || t.key === 'agenda') : VIEW_TABS} value={effectiveView} onChange={setView} label="Calendar view" />
           </div>
 
-          {/* ── MONTH VIEW ─────────────────────────────────────────────────────── */}
-          {view === 'month' && (
-            <div>
-              {/* Day headers */}
-              <div className="grid grid-cols-7 border-b border-[var(--input-border)]">
-                {DAY_NAMES.map(d => (
-                  <div key={d} className="px-2 py-2 text-center text-[var(--text-muted)] text-[11px] font-semibold uppercase tracking-wider">
-                    {d}
-                  </div>
-                ))}
-              </div>
-              {/* Cells */}
-              <div className="grid grid-cols-7">
-                {monthCells.map((cell, idx) => {
-                  const ds = toDateStr(cell.date)
-                  const dayEvents = eventsByDate[ds] || []
-                  const isToday   = isSameDay(cell.date, today)
-                  const isSelected = selectedDay && isSameDay(cell.date, selectedDay)
-                  const MAX_CHIPS = 3
-
-                  return (
-                    <div
-                      key={idx}
-                      onClick={() => { setSelectedDay(cell.date); if (view !== 'day') {} }}
-                      className={`min-h-[100px] p-1.5 border-b border-r border-[var(--input-border)] cursor-pointer transition-colors ${
-                        cell.inMonth ? 'bg-[var(--surface-1)]' : 'bg-[var(--input-bg)]/50'
-                      } ${isSelected ? 'ring-1 ring-inset ring-green-600' : 'hover:bg-[var(--input-bg)]/40'}`}
-                    >
-                      {/* Day number */}
-                      <div className="flex items-center justify-between mb-1">
-                        <span className={`text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full ${
-                          isToday
-                            ? 'bg-green-600 text-white'
-                            : cell.inMonth
-                            ? 'text-[var(--text-secondary)]'
-                            : 'text-[var(--text-dim)]'
-                        }`}>
-                          {cell.date.getDate()}
-                        </span>
-                        {dayEvents.length > 0 && (
-                          <span className="text-[9px] text-[var(--text-dim)] font-medium">
-                            {dayEvents.length}
-                          </span>
-                        )}
-                      </div>
-                      {/* Event chips */}
-                      <div className="space-y-0.5">
-                        {dayEvents.slice(0, MAX_CHIPS).map(ev => (
-                          <EventChip key={ev.id} event={ev} compact />
-                        ))}
-                        {dayEvents.length > MAX_CHIPS && (
-                          <button
-                            onClick={e => { e.stopPropagation(); setSelectedDay(cell.date); setView('day') }}
-                            className="w-full text-left px-1.5 py-0.5 text-[10px] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
-                          >
-                            +{dayEvents.length - MAX_CHIPS} more
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ── WEEK VIEW ──────────────────────────────────────────────────────── */}
-          {view === 'week' && (
-            <div>
-              {/* Column headers */}
-              <div className="grid grid-cols-7 border-b border-[var(--input-border)]">
-                {weekDays.map((d, i) => {
-                  const ds = toDateStr(d)
-                  const count = (eventsByDate[ds] || []).length
-                  const isTod = isSameDay(d, today)
-                  return (
-                    <div
-                      key={i}
-                      className={`px-2 py-3 text-center border-r border-[var(--input-border)] last:border-r-0 ${
-                        isTod ? 'bg-green-900/10' : ''
-                      }`}
-                    >
-                      <div className="text-[var(--text-muted)] text-[11px] font-semibold uppercase mb-1">{DAY_NAMES[d.getDay()]}</div>
-                      <div className={`mx-auto w-8 h-8 flex items-center justify-center rounded-full text-sm font-bold ${
-                        isTod ? 'bg-green-600 text-white' : 'text-[var(--text-primary)]'
-                      }`}>
-                        {d.getDate()}
-                      </div>
-                      {count > 0 && (
-                        <div className="text-[10px] text-[var(--text-muted)] mt-0.5">{count} event{count > 1 ? 's' : ''}</div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-              {/* Event rows per day */}
-              <div className="grid grid-cols-7 min-h-[320px]">
-                {weekDays.map((d, i) => {
-                  const ds = toDateStr(d)
-                  const dayEvs = eventsByDate[ds] || []
-                  const isTod = isSameDay(d, today)
-                  return (
-                    <div
-                      key={i}
-                      onClick={() => { setSelectedDay(d) }}
-                      className={`p-2 border-r border-[var(--input-border)] last:border-r-0 cursor-pointer transition-colors hover:bg-[var(--input-bg)]/30 ${
-                        isTod ? 'bg-green-900/5' : ''
-                      }`}
-                    >
-                      {dayEvs.length === 0 && (
-                        <div className="h-full flex items-center justify-center">
-                          <span className="text-[var(--text-dim)] text-xs">-</span>
-                        </div>
-                      )}
-                      <div className="space-y-1">
-                        {dayEvs.map(ev => (
-                          <EventChip key={ev.id} event={ev} />
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ── DAY VIEW ───────────────────────────────────────────────────────── */}
-          {view === 'day' && (
-            <div className="p-5">
-              {/* Day header */}
-              <div className="flex items-center justify-between mb-5">
-                <div>
-                  <h3 className="text-[var(--text-primary)] font-semibold text-lg">
-                    {(selectedDay || currentDate).toLocaleDateString('en-US', {
-                      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-                    })}
-                  </h3>
-                  <p className="text-[var(--text-muted)] text-sm">{dayEvents.length} event{dayEvents.length !== 1 ? 's' : ''} scheduled</p>
-                </div>
-              </div>
-
-              {dayEvents.length === 0 ? (
-                <div className="text-center py-16">
-                  <CheckCircle size={40} className="mx-auto mb-3 text-green-800 opacity-40" />
-                  <p className="text-[var(--text-muted)]">No events scheduled for this day</p>
-                  <p className="text-[var(--text-dim)] text-sm mt-1">Navigate to a day with events or select from the calendar</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {dayEvents.map(ev => {
-                    const cfg = EVENT_COLORS[ev.type] || EVENT_COLORS.work_order
-                    const pbadge = PRIORITY_BADGE[ev.priority] || PRIORITY_BADGE.Medium
+          <CardState state={loadState} lines={8}>
+            {effectiveView === 'month' && (
+              <div className="mc-month" role="grid" aria-label={label}>
+                <div className="mc-dow" role="row">{DAY_NAMES.map((d) => <span key={d} role="columnheader">{d}</span>)}</div>
+                <div className="mc-cells">
+                  {cells.map((c) => {
+                    const evs = eventsByDate[c.key] || []
+                    const isToday = c.key === todayKey
+                    const isSel = c.key === selectedKey
+                    const hasOverdue = evs.some((e) => e.isOverdue)
                     return (
-                      <motion.div
-                        key={ev.id}
-                        whileHover={{ x: 3 }}
-                        onClick={() => setSelectedEvent(ev)}
-                        className={`flex items-start gap-4 p-4 rounded-xl border cursor-pointer transition-colors hover:bg-gray-800/50 ${cfg.chip}`}
+                      <div
+                        key={c.key}
+                        role="gridcell"
+                        tabIndex={0}
+                        aria-label={`${fmtDayLong(c.key)}, ${evs.length} events`}
+                        aria-selected={isSel}
+                        className={`mc-cell${c.inMonth ? '' : ' out'}${isToday ? ' today' : ''}${isSel ? ' sel' : ''}${hasOverdue ? ' has-overdue' : ''}`}
+                        onClick={() => setSelectedDay(startOfDay(c.date))}
+                        onDoubleClick={() => openDay(c.date)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedDay(startOfDay(c.date)) } }}
                       >
-                        <div className={`flex-shrink-0 w-3 h-3 rounded-full mt-1 ${cfg.dot}`} />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-white font-semibold text-sm">{ev.title}</span>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${pbadge}`}>{ev.priority}</span>
-                            {ev.isOverdue && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full border border-red-700 bg-red-900/40 text-red-300 font-medium">OVERDUE</span>
-                            )}
-                          </div>
-                          <p className="text-gray-400 text-xs mt-0.5">{ev.subtitle}</p>
-                          <p className="text-gray-500 text-xs mt-1 truncate">{ev.description}</p>
+                        <div className="mc-cell-head">
+                          <span className="mc-num">{c.date.getDate()}</span>
+                          {evs.length > 0 && <span className="mc-cnt">{evs.length}</span>}
                         </div>
-                        <div className="flex-shrink-0 flex items-center gap-2">
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full border ${cfg.chip}`}>
-                            {EVENT_COLORS[ev.type]?.label || ev.type}
-                          </span>
-                          <Eye size={14} className="text-gray-600" />
+                        <div className="mc-chips">
+                          {evs.slice(0, MAX_CHIPS).map((ev) => renderChip(ev))}
+                          {evs.length > MAX_CHIPS && (
+                            <button type="button" className="mc-more" onClick={(e) => { e.stopPropagation(); openDay(c.date) }}>
+                              {evs.length - MAX_CHIPS} more
+                            </button>
+                          )}
                         </div>
-                      </motion.div>
+                      </div>
                     )
                   })}
                 </div>
-              )}
-            </div>
-          )}
-
-          {/* Legend */}
-          <div className="px-5 py-3 border-t border-[var(--input-border)] flex flex-wrap gap-4">
-            {Object.entries(EVENT_COLORS).map(([key, cfg]) => (
-              <div key={key} className="flex items-center gap-1.5">
-                <span className={`w-2.5 h-2.5 rounded-full ${cfg.dot}`} />
-                <span className="text-[var(--text-muted)] text-[11px]">{cfg.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── Upcoming Events Sidebar ─────────────────────────────────────────── */}
-        <div className="w-80 flex-shrink-0 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl overflow-hidden">
-          <div className="px-4 py-3.5 border-b border-[var(--input-border)] flex items-center justify-between">
-            <div>
-              <h3 className="text-[var(--text-primary)] font-semibold text-sm">Upcoming Events</h3>
-              <p className="text-[var(--text-muted)] text-xs">Next 14 days · {upcomingEvents.length} events</p>
-            </div>
-            <Clock size={16} className="text-[var(--text-dim)]" />
-          </div>
-
-          <div className="overflow-y-auto max-h-[640px]">
-            {upcomingEvents.length === 0 ? (
-              <div className="text-center py-12">
-                <CheckCircle size={32} className="mx-auto mb-2 text-green-800 opacity-40" />
-                <p className="text-[var(--text-muted)] text-sm">No upcoming events</p>
-              </div>
-            ) : (
-              <div>
-                {(() => {
-                  // Group by date
-                  const grouped = {}
-                  upcomingEvents.forEach(ev => {
-                    if (!grouped[ev.date]) grouped[ev.date] = []
-                    grouped[ev.date].push(ev)
-                  })
-                  return Object.entries(grouped).map(([date, events]) => {
-                    const isToday = date === todayStr
-                    return (
-                      <div key={date}>
-                        <div className={`px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider sticky top-0 z-10 ${
-                          isToday
-                            ? 'bg-green-900/30 text-green-400 border-b border-green-900'
-                            : 'bg-[var(--surface-1)]/95 text-[var(--text-muted)] border-b border-[var(--input-border)]'
-                        }`}>
-                          {isToday ? '📅 Today' : fmtDisplay(date)}
-                        </div>
-                        {events.map(ev => {
-                          const cfg = EVENT_COLORS[ev.type] || EVENT_COLORS.work_order
-                          const pbadge = PRIORITY_BADGE[ev.priority] || PRIORITY_BADGE.Medium
-                          return (
-                            <button
-                              key={ev.id}
-                              onClick={() => setSelectedEvent(ev)}
-                              className="w-full text-left px-4 py-2.5 border-b border-[var(--input-border)] hover:bg-[var(--input-bg)]/50 transition-colors flex items-start gap-2.5"
-                            >
-                              <span className={`flex-shrink-0 w-2.5 h-2.5 rounded-full mt-1 ${cfg.dot}`} />
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="text-[var(--text-primary)] text-xs font-medium truncate">{ev.title}</span>
-                                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full border ${pbadge}`}>{ev.priority}</span>
-                                </div>
-                                <p className="text-[var(--text-muted)] text-[11px] truncate mt-0.5">{ev.subtitle}</p>
-                              </div>
-                              {ev.isOverdue && (
-                                <span className="flex-shrink-0 text-[9px] text-red-400 font-bold">OVR</span>
-                              )}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )
-                  })
-                })()}
               </div>
             )}
-          </div>
+
+            {effectiveView === 'week' && (
+              <div className="mc-week">
+                {week.map((d) => {
+                  const k = dayKey(d)
+                  const evs = eventsByDate[k] || []
+                  return (
+                    <div key={k} className={`mc-wcol${k === todayKey ? ' today' : ''}${k === selectedKey ? ' sel' : ''}`}>
+                      <button type="button" className="mc-whead" onClick={() => openDay(d)}>
+                        <span>{DAY_NAMES[d.getDay()]}</span>
+                        <b>{d.getDate()}</b>
+                        <small>{evs.length ? `${evs.length} event${evs.length > 1 ? 's' : ''}` : 'Free'}</small>
+                      </button>
+                      <div className="mc-wbody">
+                        {evs.map((ev) => renderChip(ev))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {effectiveView === 'day' && (
+              <div className="mc-day">
+                <p className="mc-day-sub">{fmtInt(selectedEvents.length)} event{selectedEvents.length === 1 ? '' : 's'} on {fmtDayLong(selectedKey)}</p>
+                {selectedEvents.length === 0
+                  ? <div className="cc-empty">Nothing is due on this day. Use the arrows or pick a day from the month view.</div>
+                  : <ul className="mc-evlist">{sortByPriority(selectedEvents).map((ev) => renderRow(ev))}</ul>}
+              </div>
+            )}
+
+            {effectiveView === 'agenda' && (
+              <div className="mc-agenda">
+                {overdueOutside > 0 && !overdueOnly && (
+                  <button type="button" className="mc-overdue-note" onClick={() => setOverdueOnly(true)}>
+                    <AlertOctagon size={14} aria-hidden="true" />
+                    {fmtInt(overdueOutside)} overdue event{overdueOutside === 1 ? '' : 's'} dated before {fmtDay(range.from)}. Show overdue only
+                  </button>
+                )}
+                {overdueOnly ? (
+                  (() => {
+                    const groups = agendaGroups(filteredEvents, '0000-01-01', '9999-12-31')
+                    return groups.length === 0
+                      ? <div className="cc-empty">No overdue events. Everything due is on track.</div>
+                      : groups.map((g) => (
+                        <section key={g.date} className="mc-agroup">
+                          <h3 className={g.date === todayKey ? 'today' : ''}>{g.date === todayKey ? 'Today' : fmtDayLong(g.date)}</h3>
+                          <ul className="mc-evlist">{g.events.map((ev) => renderRow(ev))}</ul>
+                        </section>
+                      ))
+                  })()
+                ) : agenda.length === 0 ? (
+                  <div className="cc-empty">No events between {fmtDay(range.from)} and {fmtDay(range.to)}{nFilters ? ' for these filters' : ''}.</div>
+                ) : agenda.map((g) => (
+                  <section key={g.date} className="mc-agroup">
+                    <h3 className={g.date === todayKey ? 'today' : ''}>{g.date === todayKey ? 'Today' : fmtDayLong(g.date)}</h3>
+                    <ul className="mc-evlist">{g.events.map((ev) => renderRow(ev))}</ul>
+                  </section>
+                ))}
+              </div>
+            )}
+          </CardState>
+
+          {legend}
+          {breakdown.tyre > 0 && (
+            <p className="mc-note"><Info size={12} aria-hidden="true" /> Tyre dates are estimated: tread at or under 3 mm in 3 days, Critical in 7, High in 14.</p>
+          )}
+        </Card>
+
+        <div className="mc-side">
+          {effectiveView !== 'day' && (
+            <Card title={selectedKey === todayKey ? 'Today' : fmtDayLong(selectedKey)} sub={`${fmtInt(selectedEvents.length)} event${selectedEvents.length === 1 ? '' : 's'}`}
+              action={<button type="button" className="cc-link cc-link-btn" onClick={() => setView('day')}>Open day <Eye size={13} aria-hidden="true" /></button>}>
+              <CardState state={loadState} lines={3} empty={!loading && !error && selectedEvents.length === 0 ? 'Nothing due on this day.' : null}>
+                <ul className="mc-evlist compact">{selectedEvents.slice(0, 6).map((ev) => renderRow(ev))}</ul>
+                {selectedEvents.length > 6 && <button type="button" className="cc-link cc-link-btn mc-seeall" onClick={() => setView('day')}>See all {selectedEvents.length}</button>}
+              </CardState>
+            </Card>
+          )}
+
+          {!narrow && (
+          <Card title="Next 14 days" sub={`${fmtInt(upcomingCount)} event${upcomingCount === 1 ? '' : 's'}`}>
+            <CardState state={loadState} lines={4} empty={!loading && !error && upcomingCount === 0 ? 'Nothing due in the next 14 days.' : null}>
+              <div className="mc-upcoming">
+                {upcoming.map((g) => (
+                  <section key={g.date} className="mc-agroup">
+                    <h3 className={g.date === todayKey ? 'today' : ''}>{g.date === todayKey ? 'Today' : fmtDay(g.date)}</h3>
+                    <ul className="mc-evlist compact">{g.events.map((ev) => renderRow(ev))}</ul>
+                  </section>
+                ))}
+              </div>
+            </CardState>
+          </Card>
+
+          )}
+
+          <Card title="By source" sub="Events matching the filters">
+            <CardState state={loadState} lines={3}>
+              <Donut
+                segments={donutSegments}
+                centerLabel="Events"
+                onSelect={(s) => setSource((cur) => (cur === s.key ? 'All' : s.key))}
+              />
+            </CardState>
+          </Card>
         </div>
       </div>
 
-      {/* ── Event Detail Modal ───────────────────────────────────────────────── */}
       <Modal
         open={!!selectedEvent}
         onClose={() => setSelectedEvent(null)}
         size="md"
         title={selectedEvent ? (
-          <span className="flex items-center gap-3">
-            <span className={`w-3 h-3 rounded-full flex-shrink-0 ${EVENT_COLORS[selectedEvent.type]?.dot || 'bg-gray-500'}`} aria-hidden="true" />
+          <span className="mc-modal-title">
+            <i className={`mc-dot tone-${EVENT_TYPES[selectedEvent.type]?.tone || 'blue'}`} aria-hidden="true" />
             {selectedEvent.title}
           </span>
         ) : null}
-        subtitle={selectedEvent ? `${EVENT_COLORS[selectedEvent.type]?.label || ''} · ${fmtDisplay(selectedEvent.date)}` : null}
+        subtitle={selectedEvent ? `${EVENT_TYPES[selectedEvent.type]?.label || ''} | ${fmtDay(selectedEvent.date)}` : null}
       >
         {selectedEvent && (
-              <div className="space-y-4">
-                {/* Badges */}
-                <div className="flex flex-wrap gap-2">
-                  <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${PRIORITY_BADGE[selectedEvent.priority] || PRIORITY_BADGE.Medium}`}>
-                    {selectedEvent.priority} Priority
-                  </span>
-                  <span className="text-xs px-2.5 py-1 rounded-full border border-[var(--input-border)] bg-[var(--input-bg)] text-[var(--text-secondary)]">
-                    {selectedEvent.status}
-                  </span>
-                  {selectedEvent.isOverdue && (
-                    <span className="text-xs px-2.5 py-1 rounded-full border border-red-700 bg-red-900/40 text-red-300 font-semibold">
-                      OVERDUE
-                    </span>
-                  )}
-                </div>
+          <div className="cc mc-modal">
+            <div className="mc-badges">
+              <span className={`cc-pill ${PRIORITY_PILL[selectedEvent.priority] || 'muted'}`}>{selectedEvent.priority} priority</span>
+              {selectedEvent.status && <span className="cc-pill muted">{selectedEvent.status}</span>}
+              {selectedEvent.isOverdue && <span className="cc-pill bad">Overdue</span>}
+              {selectedEvent.estimated && <span className="cc-pill muted">Estimated date</span>}
+            </div>
 
-                {/* Details grid */}
-                <div className="space-y-2.5">
-                  {[
-                    ['Asset',       selectedEvent.asset],
-                    ['Description', selectedEvent.description],
-                    ['Date',        fmtDisplay(selectedEvent.date)],
-                    selectedEvent.source === 'work_order' && selectedEvent.raw?.work_order_no
-                      ? ['Work Order #', selectedEvent.raw.work_order_no]
-                      : null,
-                    selectedEvent.source === 'work_order' && selectedEvent.raw?.work_type
-                      ? ['Work Type', selectedEvent.raw.work_type]
-                      : null,
-                    selectedEvent.source === 'work_order' && selectedEvent.raw?.technician_name
-                      ? ['Technician', selectedEvent.raw.technician_name]
-                      : null,
-                    selectedEvent.source === 'work_order' && selectedEvent.raw?.workshop_name
-                      ? ['Workshop', selectedEvent.raw.workshop_name]
-                      : null,
-                    selectedEvent.source === 'tyre' && selectedEvent.raw?.serial_no
-                      ? ['Serial No', selectedEvent.raw.serial_no]
-                      : null,
-                    selectedEvent.source === 'tyre' && selectedEvent.raw?.brand
-                      ? ['Brand', selectedEvent.raw.brand]
-                      : null,
-                    selectedEvent.source === 'tyre' && selectedEvent.raw?.tread_depth != null
-                      ? ['Tread Depth', `${selectedEvent.raw.tread_depth} mm`]
-                      : null,
-                    selectedEvent.source === 'pm_plan' && selectedEvent.raw?.interval_value != null && selectedEvent.raw?.interval_type
-                      ? ['Interval', `Every ${selectedEvent.raw.interval_value} ${selectedEvent.raw.interval_type}`]
-                      : null,
-                    selectedEvent.source === 'pm_plan' && selectedEvent.raw?.next_due
-                      ? ['Next Due', fmtDisplay(toDateStr(selectedEvent.raw.next_due))]
-                      : null,
-                    selectedEvent.source === 'pm_plan' && selectedEvent.raw?.last_done
-                      ? ['Last Done', fmtDisplay(toDateStr(selectedEvent.raw.last_done))]
-                      : null,
-                    selectedEvent.source === 'pm_plan' && selectedEvent.raw?.assigned_to
-                      ? ['Assigned To', selectedEvent.raw.assigned_to]
-                      : null,
-                    selectedEvent.raw?.site
-                      ? ['Site', selectedEvent.raw.site]
-                      : null,
-                  ].filter(Boolean).map(([label, value]) => (
-                    <div key={label} className="flex justify-between py-2 border-b border-[var(--input-border)]">
-                      <span className="text-[var(--text-muted)] text-sm">{label}</span>
-                      <span className="text-[var(--text-primary)] text-sm font-medium text-right max-w-[220px] truncate">{value || '-'}</span>
-                    </div>
-                  ))}
-                </div>
+            <dl className="mc-dl">
+              {[
+                ['Asset', selectedEvent.asset],
+                ['Details', selectedEvent.description],
+                ['Date', fmtDay(selectedEvent.date)],
+                selectedEvent.source === 'work_order' ? ['Work order', selectedEvent.raw?.work_order_no] : null,
+                selectedEvent.source === 'work_order' ? ['Work type', selectedEvent.raw?.work_type] : null,
+                selectedEvent.source === 'work_order' && selectedEvent.raw?.technician_name ? ['Technician', selectedEvent.raw.technician_name] : null,
+                selectedEvent.source === 'work_order' && selectedEvent.raw?.workshop_name ? ['Workshop', selectedEvent.raw.workshop_name] : null,
+                selectedEvent.source === 'tyre' ? ['Serial no', selectedEvent.raw?.serial_no] : null,
+                selectedEvent.source === 'tyre' ? ['Brand', selectedEvent.raw?.brand] : null,
+                selectedEvent.source === 'tyre' && selectedEvent.raw?.tread_depth != null ? ['Tread depth', `${selectedEvent.raw.tread_depth} mm`] : null,
+                selectedEvent.source === 'pm_plan' && selectedEvent.raw?.interval_value != null && selectedEvent.raw?.interval_type
+                  ? ['Interval', `Every ${selectedEvent.raw.interval_value} ${selectedEvent.raw.interval_type}`] : null,
+                selectedEvent.source === 'pm_plan' && selectedEvent.raw?.next_due ? ['Next due', fmtDay(dayKey(selectedEvent.raw.next_due))] : null,
+                selectedEvent.source === 'pm_plan' && selectedEvent.raw?.last_done ? ['Last done', fmtDay(dayKey(selectedEvent.raw.last_done))] : null,
+                selectedEvent.source === 'pm_plan' && selectedEvent.raw?.assigned_to ? ['Assigned to', selectedEvent.raw.assigned_to] : null,
+                ['Site', selectedEvent.site],
+              ].filter(Boolean).map(([k, v]) => (
+                <div key={k}><dt>{k}</dt><dd>{v || <span className="cc-na">N/A</span>}</dd></div>
+              ))}
+            </dl>
 
-                {/* Approval & Workflow Engine — gates the strongest mutation
-                    (jump to edit the underlying maintenance record) below. */}
-                <EntityApprovalPanel
-                  entityType="maintenance_request"
-                  entityId={selectedEvent.raw?.id ?? selectedEvent.id}
-                  entityLabel={selectedEvent.asset || selectedEvent.title || selectedEvent.id}
-                  context={{
-                    cost: selectedEvent.raw?.estimated_cost ?? selectedEvent.raw?.cost ?? null,
-                    priority: selectedEvent.priority,
-                    downtime_hours: selectedEvent.raw?.downtime_hours ?? null,
-                    asset_no: selectedEvent.asset,
-                    site: selectedEvent.raw?.site ?? null,
-                  }}
-                  onStateChange={({ isActive, isLocked }) => setWfLocked(!!(isActive || isLocked))}
-                  title="Maintenance Approval"
-                />
+            <EntityApprovalPanel
+              entityType="maintenance_request"
+              entityId={selectedEvent.raw?.id ?? selectedEvent.id}
+              entityLabel={selectedEvent.asset || selectedEvent.title || selectedEvent.id}
+              context={{
+                cost: selectedEvent.raw?.estimated_cost ?? selectedEvent.raw?.cost ?? null,
+                priority: selectedEvent.priority,
+                downtime_hours: selectedEvent.raw?.downtime_hours ?? null,
+                asset_no: selectedEvent.asset,
+                site: selectedEvent.raw?.site ?? null,
+              }}
+              onStateChange={({ isActive, isLocked }) => setWfLocked(!!(isActive || isLocked))}
+              title="Maintenance Approval"
+            />
 
-                {wfLocked && (
-                  <div className="flex items-center gap-1.5 text-xs text-[var(--accent)]">
-                    <Lock size={12} /> Locked, in approval
-                  </div>
-                )}
+            {wfLocked && <p className="mc-locked"><Lock size={12} aria-hidden="true" /> Locked, in approval</p>}
 
-                {/* Action row */}
-                <div className="flex gap-3 pt-1">
-                  {selectedEvent.source === 'work_order' && (
-                    wfLocked ? (
-                      <button
-                        type="button"
-                        disabled
-                        title="Locked, in approval"
-                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-700 text-white text-sm font-medium rounded-xl opacity-40 cursor-not-allowed"
-                      >
-                        <Lock size={15} /> View Work Order
-                      </button>
-                    ) : (
-                      <a
-                        href="/work-orders"
-                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-700 hover:bg-blue-600 text-white text-sm font-medium rounded-xl transition-colors"
-                        onClick={() => setSelectedEvent(null)}
-                      >
-                        <Wrench size={15} /> View Work Order
-                      </a>
-                    )
-                  )}
-                  {selectedEvent.source === 'tyre' && (
-                    wfLocked ? (
-                      <button
-                        type="button"
-                        disabled
-                        title="Locked, in approval"
-                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-orange-700 text-white text-sm font-medium rounded-xl opacity-40 cursor-not-allowed"
-                      >
-                        <Lock size={15} /> View Tyre Record
-                      </button>
-                    ) : (
-                      <a
-                        href="/tyres"
-                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-orange-700 hover:bg-orange-600 text-white text-sm font-medium rounded-xl transition-colors"
-                        onClick={() => setSelectedEvent(null)}
-                      >
-                        <CircleDot size={15} /> View Tyre Record
-                      </a>
-                    )
-                  )}
-                  {selectedEvent.source === 'pm_plan' && (
-                    wfLocked ? (
-                      <button
-                        type="button"
-                        disabled
-                        title="Locked, in approval"
-                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-indigo-700 text-white text-sm font-medium rounded-xl opacity-40 cursor-not-allowed"
-                      >
-                        <Lock size={15} /> View PM Plan
-                      </button>
-                    ) : (
-                      <a
-                        href="/pm-programs"
-                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-indigo-700 hover:bg-indigo-600 text-white text-sm font-medium rounded-xl transition-colors"
-                        onClick={() => setSelectedEvent(null)}
-                      >
-                        <ClipboardCheck size={15} /> View PM Plan
-                      </a>
-                    )
-                  )}
-                  <button
-                    onClick={() => setSelectedEvent(null)}
-                    className="btn-secondary"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
+            <div className="mc-modal-foot">
+              {(() => {
+                const target = {
+                  work_order: { to: '/work-orders', label: 'View work order', Icon: Wrench },
+                  tyre: { to: '/tyres', label: 'View tyre record', Icon: CircleDot },
+                  pm_plan: { to: '/pm-programs', label: 'View PM plan', Icon: ClipboardCheck },
+                }[selectedEvent.source]
+                if (!target) return null
+                const { Icon } = target
+                return wfLocked ? (
+                  <button type="button" className="cc-btn-primary" disabled title="Locked, in approval"><Lock size={15} aria-hidden="true" />{target.label}</button>
+                ) : (
+                  <Link to={target.to} className="cc-btn-primary" onClick={() => setSelectedEvent(null)}><Icon size={15} aria-hidden="true" />{target.label}</Link>
+                )
+              })()}
+              <button type="button" className="cc-btn-ghost" onClick={() => setSelectedEvent(null)}>Close</button>
+            </div>
+          </div>
         )}
       </Modal>
     </div>

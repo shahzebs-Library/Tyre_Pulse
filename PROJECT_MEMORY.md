@@ -31,6 +31,40 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - Verified: lint, tsc, 11/11 tests, build, Playwright sweep 12 pages x 320/390/768/1280 = 0 overflow (only the
   intentional contact honeypot off-screen).
 
+# ⚑ SESSION 2026-10-05 (part 12) — "PAGES WENT MISSING" CHECK. PR #381 merged (b72e3e3d).
+- Owner felt finished pages (Maintenance, Calendar) were removed/reverted. Audited: since 2026-09-28 NO page file,
+  route or nav link was removed on main (only additions; the only deletions were intentional marketing files);
+  no revert commits. Pages that shrank (WorkshopLive, FuelEfficiency, CustomData, Login) were refactors into
+  kit parts files; every feature verified still present.
+- ONE REAL LOSS FOUND + RECOVERED: commit 9328a66c (2026-09-29, branch claude/project-review-audit-t07hbp)
+  "failed reads and refused deletes now say so" never reached main. Cherry-picked into #381 (TyreRecords
+  conflict kept main's kit version, which already has error+Retry). Adds src/test/honestReadGuards.test.js.
+  CHECK TO REUSE: for each remote branch, `git diff C^ C | git apply --check --reverse` on origin/main; a
+  failing reverse apply means the commit's content is NOT in main (squash merges make ahead-counts useless).
+- MaintenanceCalendar.jsx + PmPrograms.jsx were NEVER rebuilt to a mockup on web (history checked). No
+  maintenance/calendar mockup exists in any upload or scratchpad on this machine (uploads = 4 admin screens,
+  6 improved modules, 16-screen zip; the 3 Oct-4 PNGs are social-media screenshots). Flutter maintenance WAS
+  matched to mock (part 9, 2026-09-27). Asked owner for the mockups before rebuilding.
+- Owner gave no preference, so BOTH pages were rebuilt on commandCenter/kit (no mockup, kit style): PmPrograms.jsx
+  (+ .css prefix `pmp-`, src/lib/pmProgramsView.js + test; every tab/modal/export kept; money N/A on All
+  countries instead of SAR+AED+EGP) and MaintenanceCalendar.jsx (+ .css, src/lib/maintenanceCalendarView.js +
+  test; month/week/day/agenda, paged reads with truncation banners, estimated tyre dates labelled, failed PM read
+  -> Retry, search/site filter, Excel). If the owner later sends mockups, re-match these two.
+
+# ⚑ SESSION 2026-10-05 (part 11) — RAW I18N KEYS ON SCREEN + RAW ERRORS ON SIGN-IN. No migration.
+- Owner: sign-in button showed "auth.login.signingIn". Cause: t() returns the KEY PATH when a key is missing
+  (falls back en -> key). Full scan of every literal t('ns.path') + prefix helpers (`const p = k => t(`ns.${k}`)`)
+  against src/locales/en+ar found 5 missing: auth.login.signingIn, common.clearSearch, analytics.site.title,
+  analytics.brand.title, workorders.exportTruncated. All added in en AND ar (+ auth.login.sendVerificationCode,
+  auth.login.errCodeInvalid replacing hard-coded English on Login).
+- GUARD: src/test/webI18nKeyCoverage.test.js scans all of src (not tests/locales) and fails on any key that does not
+  resolve to a STRING in en, or in ar when that namespace has an ar file. Mutation-checked (removing the en keys
+  fails it). RULE: `t(key) || 'fallback'` and `t(key, { defaultValue })` do NOTHING here - a missing key is
+  truthy text. Add the key instead.
+- SECURITY (auth page): Login.jsx rendered raw err.message / authErr.message / ssoErr.message / signIn rpcErr in 8
+  places and QrLoginPanel passed raw err.message up. All now go through safeError.toUserMessage(err, fallback).
+- Dynamic keys (t(`x.${var}`)) are only prefix-checked; a bad runtime suffix still renders its path.
+
 # ⚑ SESSION 2026-10-05 (part 10) — SIGN-IN + 2FA IN MARKETING LOOK; 16 PAGES RE-MATCHED TO MOCKUPS; NEW BUILDER WIDGETS.
 - SIGN-IN (src/pages/Login.jsx + components/auth/login/*): marketing system (asphalt #161616, signal yellow #FFC629 as a FILL
   behind dark text only, Archivo headline, slash logo), photo /login-art/riyadh-loader.webp (from marketing/public/photos).

@@ -27,10 +27,10 @@ const SLIDE_MS = 7000;
  * visibility-hidden, so their links cannot be tabbed into and screen readers
  * only hear the slide on screen.
  *
- * There is no pause button, at the owner's request. Rotation still holds while
- * the pointer or keyboard focus is inside the hero (so nobody loses the slide
- * they are reading), while the tab is hidden, and for visitors who asked their
- * system for reduced motion. The timer is the CSS progress bar itself, so all of
+ * There is no pause button, at the owner's request, and it keeps moving under
+ * the mouse (the owner wants Operations, Fleet and the rest to change on their
+ * own). Rotation holds only while keyboard focus is inside the hero, while the
+ * tab is hidden, and for visitors who asked their system for reduced motion. The timer is the CSS progress bar itself, so all of
  * those holds come from `animation-play-state`.
  */
 export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
@@ -62,9 +62,7 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
       className="home-hero"
       aria-roledescription="carousel"
       aria-label="Tyre Pulse overview"
-      onPointerEnter={() => setHold(true)}
-      onPointerLeave={() => setHold(false)}
-      onFocus={() => setHold(true)}
+      onFocus={(e) => { if ((e.target as HTMLElement).matches(":focus-visible")) setHold(true); }}
       onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setHold(false); }}
     >
       <div className="site-shell">

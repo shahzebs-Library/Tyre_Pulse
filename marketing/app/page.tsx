@@ -12,9 +12,10 @@ import { HeroCarousel, type HeroSlide } from "@/components/HeroCarousel";
 import { Photo, type PhotoKey } from "@/components/art/Photos";
 import { CountUp } from "@/components/motion/CountUp";
 import { InspectionDemo } from "@/components/motion/InspectionDemo";
+import { AssetCycle, LiveFeed, type LiveEvent } from "@/components/motion/HeroLive";
 import { Spotlight } from "@/components/motion/Spotlight";
 import {
-  ApprovalCard, AssetRecord, AssetStats, SignOffCard, CompleteCard, FleetCostPanel, NewInspectionCard, OfflineInspectionPhone,
+  ApprovalCard, AssetRecord, CompleteCard, FleetCostPanel, NewInspectionCard, OfflineInspectionPhone,
   OpsOverview, PartsCard,
 } from "@/components/mock/Screens";
 import { alternatesFor } from "./schema";
@@ -90,34 +91,58 @@ const FAQ = [
   ["We run more than one country.", "Each country and site sees only its own records, in its own currency, enforced in the database. Arabic and English are both supported."],
 ] as const;
 
+/* What the hero cards play through, one event at a time (sample data). */
+const OPS_EVENTS: LiveEvent[] = [
+  { icon: "inspect", text: "TM514 inspected at NHC", meta: "Ahmed K. · 07:42" },
+  { icon: "tyre", text: "LHR1 sidewall cut flagged", meta: "Photo attached", tone: "bad" },
+  { icon: "wrench", text: "WO-2026-0418 raised", meta: "Assigned to tyre bay", tone: "warn" },
+  { icon: "check", text: "Purchase approved", meta: "SAR 1,240 · Fleet manager" },
+  { icon: "tyre", text: "New tyre fitted on LHR1", meta: "Serial YMA55312 · 38 min" },
+  { icon: "truck", text: "TM514 back in service", meta: "Down 1 h 12 min" },
+];
+const WORKSHOP_EVENTS: LiveEvent[] = [
+  { icon: "truck", text: "GN041 breakdown reported", meta: "Red Sea site · 06:10", tone: "bad" },
+  { icon: "wrench", text: "Job card opened", meta: "Technician: R. Ali", tone: "warn" },
+  { icon: "gauge", text: "Parts issued from store", meta: "Fuel filter x2 · SAR 340" },
+  { icon: "wrench", text: "Repair completed", meta: "Labour 2.5 h" },
+  { icon: "check", text: "Supervisor signed off", meta: "Released to site" },
+];
+const INSPECTION_EVENTS: LiveEvent[] = [
+  { icon: "inspect", text: "Checklist started offline", meta: "WL012 · no signal" },
+  { icon: "gauge", text: "Meter read: 9,105 h", meta: "Saved on the phone" },
+  { icon: "camera", text: "2 photos captured", meta: "Bucket teeth worn", tone: "warn" },
+  { icon: "pen", text: "Inspector signed", meta: "S. Omar · 09:18" },
+  { icon: "check", text: "Synced when back in signal", meta: "Manager notified" },
+];
+
 const HERO_SLIDES: HeroSlide[] = [
   {
     id: "ops", tab: "Operations", kicker: "PMV: plant, machinery and vehicles",
     title: "Know which machines are down, why, and what they cost.",
     lead: "Your workshop, field teams and stores work from one record per machine, so nothing is retyped.",
     link: { href: "/platform", label: "Explore the platform" },
-    visual: <OpsOverview />,
+    visual: <div className="hc-live"><OpsOverview /><div className="hc-float"><LiveFeed title="Live activity" events={OPS_EVENTS} /></div></div>,
   },
   {
     id: "assets", tab: "Fleet and assets", kicker: "Fleet and asset lifecycle",
     title: "Every machine, one complete record.",
     lead: "Meters, tyres, documents, costs and history for each asset, from purchase to disposal.",
     link: { href: "/platform/fleet-assets", label: "See fleet and assets" },
-    visual: <div className="hc-photo hc-zoom"><Photo name="fleetLineup" position="50% 60%" sizes="(max-width: 900px) 110vw, 720px" /><div className="hc-float hc-float-wide"><AssetStats /></div></div>,
+    visual: <div className="hc-photo hc-zoom"><Photo name="fleetLineup" position="50% 60%" sizes="(max-width: 900px) 110vw, 720px" /><div className="hc-float hc-float-wide"><AssetCycle /></div></div>,
   },
   {
     id: "workshop", tab: "Workshop", kicker: "Maintenance and workshop",
     title: "Breakdowns back on site, sooner.",
     lead: "Job cards, technicians, parts and outside repairs in one queue your workshop runs from.",
     link: { href: "/platform/maintenance", label: "See maintenance" },
-    visual: <div className="hc-photo"><Photo name="technicianGenerator" position="45% 40%" sizes="(max-width: 900px) 100vw, 640px" /><div className="hc-float"><PartsCard /></div></div>,
+    visual: <div className="hc-photo"><Photo name="technicianGenerator" position="45% 40%" sizes="(max-width: 900px) 100vw, 640px" /><div className="hc-float"><LiveFeed title="Workshop today" events={WORKSHOP_EVENTS} /></div></div>,
   },
   {
     id: "inspections", tab: "Inspections", kicker: "Field inspections and safety",
     title: "Inspect in the field, even without signal.",
     lead: "Checklists, photos, meter readings and signatures on the phone. It syncs when the connection returns.",
     link: { href: "/platform/inspections", label: "See inspections" },
-    visual: <div className="hc-photo"><Photo name="engineer" position="50% 35%" sizes="(max-width: 900px) 100vw, 640px" /><div className="hc-float"><SignOffCard /></div></div>,
+    visual: <div className="hc-photo"><Photo name="engineer" position="50% 35%" sizes="(max-width: 900px) 100vw, 640px" /><div className="hc-float"><LiveFeed title="Field inspection" events={INSPECTION_EVENTS} /></div></div>,
   },
   {
     id: "costs", tab: "Costs", kicker: "Costs and reporting",

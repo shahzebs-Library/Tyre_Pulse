@@ -52,9 +52,10 @@ export default function InspectionsPage() {
           </div>
         </div>
       </section>
-      <section className="dark-band" aria-labelledby="demo-h">
+      <section className="bright-band" aria-labelledby="demo-h">
         <div className="site-shell">
           <h2 className="sec-h" id="demo-h">Watch one inspection, from scan to work order.</h2>
+          <p className="bright-lead">The phone in the yard and the web app in the office, side by side at every step.</p>
           <InspectionDemo />
         </div>
       </section>

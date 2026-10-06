@@ -1,0 +1,118 @@
+/* Checklists workspace (/checklists). Built on the Command Center tokens: the
+   wrapper carries class "cc" so every --cc-* variable resolves, light and dark. */
+.clw { min-width: 0; }
+.clw .cc-card { min-width: 0; }
+
+.clw-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+
+.clw-cols {
+  display: grid; gap: 14px; align-items: start;
+  grid-template-columns: minmax(260px, 0.95fr) minmax(0, 2.1fr) minmax(220px, 0.9fr);
+}
+.clw-side { display: grid; gap: 14px; min-width: 0; }
+.clw-bottom { display: grid; gap: 14px; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
+
+/* Submissions list */
+.clw-search { flex: none; min-width: 0; margin-bottom: 10px; }
+.clw-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.clw-row {
+  width: 100%; display: flex; align-items: center; gap: 10px; text-align: start; font: inherit; color: inherit;
+  background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 10px; padding: 8px 10px; cursor: pointer;
+}
+html.light .clw-row { background: #fff; }
+.clw-row:hover { border-color: var(--cc-green); }
+.clw-row[aria-pressed="true"] { border-color: var(--cc-green); background: var(--cc-green-tint); }
+.clw-row:focus-visible, .clw-sections button:focus-visible, .clw-link-row:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 2px; }
+.clw-row-main { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.clw-row-main b { font-size: 13px; color: var(--cc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clw-row-main span { font-size: 12px; color: var(--cc-ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clw-row-main small { font-size: 11px; color: var(--cc-ink-3); }
+.clw-glyph {
+  width: 34px; height: 34px; flex: none; border-radius: 9px; display: grid; place-items: center;
+  color: var(--cc-green); background: var(--cc-green-tint); font-size: 17px;
+}
+
+/* Selected submission */
+.clw-head { display: flex; gap: 12px; align-items: flex-start; }
+.clw-head-main { flex: 1; min-width: 0; }
+.clw-head-main h2 { margin: 0; font-size: 17px; font-weight: 700; color: var(--cc-ink); display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.clw-head-main > p { margin: 2px 0 0; font-size: 13px; color: var(--cc-ink-2); overflow-wrap: anywhere; }
+.clw-meta { margin: 10px 0 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 14px; }
+.clw-meta dt { font-size: 11px; color: var(--cc-ink-3); }
+.clw-meta dd { margin: 1px 0 0; font-size: 12.5px; color: var(--cc-ink); overflow-wrap: anywhere; }
+.clw-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 6px; }
+.clw-note { font-size: 12.5px; color: var(--cc-red); margin: 6px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.clw-sheet { display: grid; grid-template-columns: minmax(160px, 0.42fr) minmax(0, 1fr); gap: 12px; margin-top: 4px; }
+.clw-sections { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; align-content: start; }
+.clw-sections button {
+  width: 100%; display: flex; align-items: center; gap: 8px; text-align: start; font: inherit; font-size: 12.5px; color: var(--cc-ink-2);
+  background: none; border: 1px solid transparent; border-radius: 8px; padding: 7px 9px; cursor: pointer;
+}
+.clw-sections button:hover { background: var(--cc-inner); }
+.clw-sections button[aria-pressed="true"] { color: var(--cc-ink); font-weight: 600; border-color: var(--cc-green); background: var(--cc-green-tint); }
+.clw-sec-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.clw-sec-count { font-size: 11px; color: var(--cc-ink-3); font-variant-numeric: tabular-nums; }
+.clw-sec-ok { color: var(--cc-green); flex: none; }
+.clw-sec-bad { color: var(--cc-red); flex: none; }
+.clw-items { min-width: 0; overflow-x: auto; }
+.clw-item { display: grid; gap: 1px; }
+.clw-item small { font-size: 11px; color: var(--cc-ink-3); overflow-wrap: anywhere; }
+.clw-thumb { width: 40px; height: 32px; object-fit: cover; border-radius: 6px; border: 1px solid var(--cc-inner-border); }
+
+.clw-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+.clw-gallery-sm { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.clw-gallery figure { margin: 0; display: grid; gap: 4px; min-width: 0; }
+.clw-gallery img, .clw-photo-missing {
+  width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; border: 1px solid var(--cc-inner-border);
+  background: var(--cc-inner); display: grid; place-items: center; font-size: 11px; color: var(--cc-ink-3);
+}
+.clw-gallery figcaption { font-size: 11px; color: var(--cc-ink-2); overflow-wrap: anywhere; }
+.clw-more { margin-top: 8px; }
+
+.clw-history { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 12px; }
+.clw-history li { display: flex; gap: 10px; align-items: flex-start; }
+.clw-history i { width: 10px; height: 10px; border-radius: 50%; margin-top: 4px; flex: none; background: var(--cc-track); }
+.clw-h-done i { background: var(--cc-green); }
+.clw-h-current i { background: var(--cc-amber); }
+.clw-h-bad i { background: var(--cc-red); }
+.clw-h-info i { background: var(--cc-blue); }
+.clw-history b { display: block; font-size: 13px; color: var(--cc-ink); }
+.clw-history span { font-size: 12px; color: var(--cc-ink-2); }
+.clw-history p { margin: 3px 0 0; font-size: 12px; color: var(--cc-ink-2); overflow-wrap: anywhere; }
+
+/* Findings */
+.clw-findings { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.clw-findings li { display: flex; gap: 8px; align-items: flex-start; min-width: 0; }
+.clw-findings li > svg { color: var(--cc-red); flex: none; margin-top: 2px; }
+.clw-findings b { display: block; font-size: 12.5px; color: var(--cc-ink); overflow-wrap: anywhere; }
+.clw-findings span, .clw-findings small { display: block; font-size: 11.5px; color: var(--cc-ink-2); overflow-wrap: anywhere; }
+.clw-findings small { color: var(--cc-ink-3); }
+.clw-findings p { margin: 2px 0 0; font-size: 11.5px; color: var(--cc-ink-2); overflow-wrap: anywhere; }
+.clw-link-row { flex: 1; min-width: 0; text-align: start; font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.clw-link-row:hover b { color: var(--cc-green); }
+
+/* Trend */
+.clw-trend { width: 100%; height: auto; display: block; }
+.clw-trend-axis { display: flex; justify-content: space-between; gap: 6px; font-size: 10.5px; color: var(--cc-ink-3); margin-top: 2px; }
+.clw-legend { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.clw-legend li { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--cc-ink-2); }
+.clw-legend i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.clw-legend b { margin-left: auto; color: var(--cc-ink); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 1280px) {
+  .clw-cols { grid-template-columns: minmax(250px, 1fr) minmax(0, 2fr); }
+  .clw-side { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 1024px) {
+  .clw-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .clw-bottom { grid-template-columns: minmax(0, 1fr); }
+  .clw-cols { grid-template-columns: minmax(0, 1fr); }
+  .clw-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .clw-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .clw-side { grid-template-columns: minmax(0, 1fr); }
+  .clw-sheet { grid-template-columns: minmax(0, 1fr); }
+  .clw-head .cc-thumb { display: none; }
+}

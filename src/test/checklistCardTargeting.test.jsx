@@ -58,7 +58,7 @@ import Checklists from '../pages/Checklists'
 describe('Checklists template cards', () => {
   it('distinguishes the recorded checklist date from a later received date', async () => {
     render(<Checklists />)
-    await screen.findByText('Workshop Electrical Sheet')
+    await screen.findByRole('heading', { name: 'Workshop Electrical Sheet' })
     fireEvent.click(screen.getByRole('button', { name: /Recent Submissions/ }))
     expect(await screen.findByText(/Checklist date: .*23.*2026/)).toBeInTheDocument()
     expect(screen.getByText(/Received: .*12.*2026/)).toBeInTheDocument()
@@ -67,7 +67,7 @@ describe('Checklists template cards', () => {
   })
   it('never prints a raw icon name as text', async () => {
     render(<Checklists />)
-    await waitFor(() => expect(screen.getByText('Workshop Electrical Sheet')).toBeInTheDocument())
+    await screen.findByRole('heading', { name: 'Workshop Electrical Sheet' })
     // The bug, stated as an assertion: the stored value must not be readable.
     expect(screen.queryByText(/ClipboardCheck/)).toBeNull()
   })
@@ -80,7 +80,7 @@ describe('Checklists template cards', () => {
 
   it('shows a For: chip naming every targeted role', async () => {
     render(<Checklists />)
-    await waitFor(() => expect(screen.getByText('Workshop Electrical Sheet')).toBeInTheDocument())
+    await screen.findByRole('heading', { name: 'Workshop Electrical Sheet' })
     expect(screen.getByText(/For: Mechanic, Electrician/)).toBeInTheDocument()
     expect(screen.getByText(/For: Driver/)).toBeInTheDocument()
   })

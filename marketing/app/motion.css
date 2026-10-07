@@ -951,3 +951,7 @@ main:has(> .home-hero) > section:nth-of-type(n + 3) {
 .marquee:not(.in-view) .fv-img, .marquee:hover .fv-img { animation-play-state: paused; }
 @media (prefers-reduced-motion: reduce) { .fv-img { animation: none; } }
 @media (max-width: 600px) { .fv { width: 104px; height: 65px; border-radius: 10px; } .marquee li { padding: 8px 16px 8px 10px; } }
+
+/* Hero Operations slide: the live activity card sits inside the picture frame (bottom
+   corner) instead of hanging below it, where it covered the slide picker tabs. */
+.hc-visual > .hc-live > .hc-float { top: auto; bottom: 14px; right: 14px; }

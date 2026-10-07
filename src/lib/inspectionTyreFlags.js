@@ -448,14 +448,49 @@ export function vehicleTypesIn(rows = []) {
 
 const SEARCH_FIELDS = ['title', 'site', 'asset_no', 'tyre_serial', 'inspector', 'attendees']
 
-/** Does one inspection survive the register's site/region/inspector/date/search filters? */
+/**
+ * Sign-off filter. The register list does not download the signature images
+ * (they were over half its payload), so it reads the server's computed
+ * has_inspector_signature / has_approver_signature flags instead, falling back
+ * to the image itself on a full row. A flag that is unknown never matches a
+ * signature filter: we cannot claim a record is unsigned without knowing.
+ */
+export const SIGNOFF_FILTERS = Object.freeze([
+  { key: 'all', label: 'All sign-offs' },
+  { key: 'unsigned', label: 'Not signed by inspector' },
+  { key: 'not_approved', label: 'Not approved yet' },
+  { key: 'approved_unsigned', label: 'Approved, no approver signature' },
+])
+
+const signedFlag = (row, flag, image) => {
+  if (typeof row[flag] === 'boolean') return row[flag]
+  if (image in row) return Boolean(row[image])
+  return null
+}
+
+export function signoffMatches(row, key = 'all') {
+  if (!row) return false
+  if (!key || key === 'all') return true
+  if (key === 'unsigned') return signedFlag(row, 'has_inspector_signature', 'inspector_signature') === false
+  if (key === 'not_approved') {
+    return row.approval_status !== 'approved' && String(row.status || '').toLowerCase() !== 'cancelled'
+  }
+  if (key === 'approved_unsigned') {
+    return row.approval_status === 'approved'
+      && signedFlag(row, 'has_approver_signature', 'approver_signature') === false
+  }
+  return true
+}
+
+/** Does one inspection survive the register's site/region/inspector/date/search/sign-off filters? */
 export function inspectionMatchesFilters(row, filters = {}, { regionOf = null } = {}) {
   if (!row) return false
   const {
     site = 'all', region = 'all', inspector = 'all', vehicleType = 'all',
-    from = '', to = '', search = '',
+    from = '', to = '', search = '', signoff = 'all',
   } = filters || {}
 
+  if (!signoffMatches(row, signoff)) return false
   if (!selectionMatches(site, row.site)) return false
   // Vehicle type comes off the inspection's OWN column, which V245 normalises to
   // upper case - so the compare is case-folded rather than trusting either side.

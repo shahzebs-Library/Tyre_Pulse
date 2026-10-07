@@ -42,6 +42,9 @@ const LIST_COLS = PAGE_COLS
   .split(',')
   .filter((c) => c !== 'inspector_signature' && c !== 'approver_signature')
   .join(',')
+  // Computed by the server (migration 20261007100000) so the register can filter
+  // on "signed / not signed" without downloading the signature images.
+  + ',has_inspector_signature,has_approver_signature'
 
 /**
  * List inspections, newest first. Country-scoped (null-safe) and optionally

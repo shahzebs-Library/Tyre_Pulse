@@ -37,7 +37,7 @@ import { canSignInspection } from '../lib/inspectionApproval'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
 import { shapeRunningLife } from '../lib/tyreRunningLife'
-import { buildAssetFlagMap, inspectionOverview, focusMatches, focusSummary, scopeInspections, vehicleTypesIn } from '../lib/inspectionTyreFlags'
+import { buildAssetFlagMap, inspectionOverview, focusMatches, focusSummary, scopeInspections, vehicleTypesIn, SIGNOFF_FILTERS } from '../lib/inspectionTyreFlags'
 import { positionLabelMap, affectedTyresSummary, affectedTyreRowsForExport } from '../lib/inspectionView'
 import { tyreCompleteness, pendingCodes } from '../lib/tyreCompleteness'
 import { listSites, siteRegionMap, regionForSite, regionsIn } from '../lib/api/sites'
@@ -171,6 +171,8 @@ export default function Inspections() {
   const [filters, setFilter, , , setFilters] = useFilterState({
     search: '', status: 'all', site: 'all', region: 'all', inspector: 'all',
     vehicleType: 'all',
+    // Sign-off: all | unsigned | not_approved | approved_unsigned (SIGNOFF_FILTERS).
+    signoff: 'all',
     from: '', to: '',
     // Which overview tile the register is drilled into ('all' = none). URL-borne with
     // the rest, so a focused view survives Back from the tracking page and can be shared.
@@ -185,6 +187,7 @@ export default function Inspections() {
   // Vehicle type IS a column on the inspection (100% populated on the live table),
   // so unlike region it needs no resolver.
   const filterVehicleType = filters.vehicleType
+  const filterSignoff = filters.signoff || 'all'
   // Which overview tile the register is drilled into, if any.
   const filterFocus = filters.focus
   const [siteRows, setSiteRows]         = useState([])
@@ -196,6 +199,7 @@ export default function Inspections() {
   const [showFilters, setShowFilters]   = useState(
     () => filters.site !== 'all' || filters.region !== 'all'
       || filters.inspector !== 'all' || filters.vehicleType !== 'all'
+      || (filters.signoff && filters.signoff !== 'all')
       || !!filters.from || !!filters.to,
   )
   // Client-side date range on the register (scheduled_date, falling back to
@@ -568,14 +572,14 @@ export default function Inspections() {
         // nothing, with no error to show for it.
         site: toList(filterSite), region: toList(filterRegion),
         inspector: toList(filterInspector), vehicleType: toList(filterVehicleType),
-        from: filterFrom, to: filterTo, search,
+        from: filterFrom, to: filterTo, search, signoff: filterSignoff,
       },
       // Region lives on the site register, not on the inspection, so the resolver is
       // injected and the rule itself stays a pure, tested function.
       { regionOf: (site) => regionForSite(regionMap, site) },
     ),
     [tabFiltered, filterSite, filterRegion, filterInspector, filterVehicleType,
-      regionMap, filterFrom, filterTo, search],
+      regionMap, filterFrom, filterTo, search, filterSignoff],
   )
 
   // Only the machine classes the loaded inspections actually cover. The fleet
@@ -614,7 +618,7 @@ export default function Inspections() {
    * the tiles and already has its own banner under the search box.
    */
   const scopeActive = filterStatus !== 'all' || filterSite !== 'all' || filterRegion !== 'all'
-    || filterInspector !== 'all' || filterVehicleType !== 'all'
+    || filterInspector !== 'all' || filterVehicleType !== 'all' || filterSignoff !== 'all'
     || !!filterFrom || !!filterTo || !!search
 
   // Tile numbers over the SAME rows the table is showing (minus the drill-down).
@@ -664,7 +668,7 @@ export default function Inspections() {
    * so a narrowed result always opens on its first page.
    */
   const registerKey = [activeTab, filterStatus, filterSite, filterRegion, filterInspector,
-    filterVehicleType, filterFrom, filterTo, search, filterFocus].join('|')
+    filterVehicleType, filterSignoff, filterFrom, filterTo, search, filterFocus].join('|')
 
   // Puts the register back where it was scrolled to when the user returns from
   // the tyre-change tracking page. The table now scrolls with the page, so the
@@ -1848,7 +1852,7 @@ export default function Inspections() {
       {(() => {
         const advanced = [
           filterSite !== 'all', filterRegion !== 'all', filterInspector !== 'all',
-          filterVehicleType !== 'all', !!filterFrom, !!filterTo,
+          filterVehicleType !== 'all', filterSignoff !== 'all', !!filterFrom, !!filterTo,
         ].filter(Boolean).length
         // The tile drill-down counts as active too, so Clear reaches it. A filter the
         // user cannot see and cannot clear is the worst kind - it just looks like
@@ -1881,7 +1885,7 @@ export default function Inspections() {
                   onClick={() => {
                     setFilters({
                       search: '', site: 'all', region: 'all',
-                      inspector: 'all', vehicleType: 'all', from: '', to: '', focus: 'all',
+                      inspector: 'all', vehicleType: 'all', signoff: 'all', from: '', to: '', focus: 'all',
                     })
                   }}
                   type="button"
@@ -1968,6 +1972,14 @@ export default function Inspections() {
                     onChange={(next) => setFilter('inspector', fromList(next))}
                   />
                 )}
+                <select
+                  aria-label="Sign-off"
+                  className="input text-sm w-56"
+                  value={filterSignoff}
+                  onChange={e => setFilter('signoff', e.target.value)}
+                >
+                  {SIGNOFF_FILTERS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+                </select>
                 <DateField className="text-sm w-40" value={filterFrom} onChange={v => setFilter('from', v)} placeholder="From date" ariaLabel="From date" />
                 <DateField className="text-sm w-40" value={filterTo} onChange={v => setFilter('to', v)} placeholder="To date" ariaLabel="To date" min={filterFrom || undefined} />
               </div>

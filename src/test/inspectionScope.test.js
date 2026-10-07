@@ -370,3 +370,34 @@ describe('inspections service: decideInspectionApproval', () => {
     expect(src).not.toMatch(/message: raw/)
   })
 })
+
+describe('sign-off filter', () => {
+  const list = [
+    { id: 'a', status: 'Done', approval_status: 'approved', has_inspector_signature: true, has_approver_signature: true },
+    { id: 'b', status: 'Done', approval_status: 'approved', has_inspector_signature: true, has_approver_signature: false },
+    { id: 'c', status: 'In Progress', approval_status: 'pending_approval', has_inspector_signature: false, has_approver_signature: false },
+    { id: 'd', status: 'In Progress', approval_status: 'rejected', has_inspector_signature: true, has_approver_signature: false },
+    { id: 'e', status: 'Cancelled', approval_status: null, has_inspector_signature: false, has_approver_signature: false },
+    // Full row (viewer/PDF path): no computed flag, but the image itself is present.
+    { id: 'f', status: 'In Progress', approval_status: 'pending_approval', inspector_signature: '<svg/>' },
+    // Neither flag nor image loaded: unknown, so never claimed unsigned.
+    { id: 'g', status: 'In Progress', approval_status: 'pending_approval' },
+  ]
+  const ids = (signoff) => scopeInspections(list, { signoff }).map((r) => r.id)
+
+  it('all keeps every row', () => {
+    expect(ids('all')).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g'])
+  })
+  it('unsigned = no inspector signature, never an unknown row', () => {
+    expect(ids('unsigned')).toEqual(['c', 'e'])
+  })
+  it('not approved excludes approved and cancelled', () => {
+    expect(ids('not_approved')).toEqual(['c', 'd', 'f', 'g'])
+  })
+  it('approved without approver signature', () => {
+    expect(ids('approved_unsigned')).toEqual(['b'])
+  })
+  it('combines with the other filters', () => {
+    expect(scopeInspections(list, { signoff: 'not_approved', search: 'zzz' })).toEqual([])
+  })
+})

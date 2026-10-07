@@ -67,6 +67,28 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - FIXED photo: technician-phone.webp still carried the MaxiFlex glove print + cuff text (part 1 cleaned only
   technician-generator). Inpainted; original in git history. CWV local: CLS 0, LCP < 0.31 s.
 
+# ⚑ SESSION 2026-10-07 (app session) — INSPECTION PLAN "OVERDUE" AFTER SIGNING FIXED + SIGN-OFF FILTER. 2 migrations applied live.
+- Signing was never broken: 1,376 approved with both signatures; 172 approved Aug 4-19 lack an approver signature (before V602).
+- CAUSE of "signed but Overdue": get_schedule_adherence matched an inspection to a plan ONLY on the plan day..+grace_days(2),
+  so an approved inspection 3 days early/late left its plan Missed; and nothing ever set inspection_schedules.status
+  (245/245 'Scheduled'), so the web planner's per-inspector Missed counted every past plan.
+- 20261007090000_inspection_plan_match_window: RULE = an inspection completes a plan for the same asset (same org, country
+  agrees when both set) from inspection_plan_early_days() = 7 days BEFORE the plan date up to the day before the NEXT
+  non-cancelled plan for that asset (none = open). grace_days now only decides Due->Missed for an UNMATCHED plan.
+  Same rule in the RPC and in NEW trigger trg_complete_inspection_plans (AFTER INSERT/UPDATE OF status,inspection_date,asset_no
+  on inspections; DEFINER; sets matching plans 'Completed' when the inspection becomes Done; never raises).
+  Backfill: 9 plans Completed (_bak.inspection_plan_complete_20261007). Dry-run proved only 8 Missed/Due->Done + 2 ->Started.
+  Fixed PL053 (Done+rejected -> In Progress, unlocked) and TM402 (rejected but locked -> unlocked), _bak.inspection_fix_20261007.
+  Verified: trigger flips a plan only on approval (rolled-back test), manager RLS view identical, advisor clean.
+- REAL GAP, not a bug: 245 planned assets, only 12 ever inspected; ~160 plans genuinely Missed (mostly BP/BH plants).
+- 20261007100000_inspection_signed_flags: PostgREST computed columns has_inspector_signature(inspections) /
+  has_approver_signature(inspections) (INVOKER). The register list loads these, NOT the images (still 54% of payload).
+  Inspections register Filters panel has a "Sign-off" select: Not signed by inspector / Not approved yet /
+  Approved, no approver signature (SIGNOFF_FILTERS + signoffMatches in src/lib/inspectionTyreFlags.js; URL key `signoff`).
+  An unknown flag never matches a signature filter.
+- NOT FIXED, noted: lock_inspection_content compares profiles.role to lowercase 'admin'/'manager'/'director' while roles
+  are Title Case, so even Admins are blocked from editing a locked inspection's content (only the allowed approval columns pass).
+
 # ⚑ SESSION 2026-10-06 CLOSED CLEAN — PR #385 MERGED (squash 9f7783a7). No migration; next free migration unchanged.
 - #385 = Inspections + Checklists workspaces (part 2) + inspection report PDF (part 3) + Codex review fixes. All CI green
   before merge; production deploy for 9f7783a7 was QUEUED at close (re-check Vercel tyre-pulse `target: production` READY

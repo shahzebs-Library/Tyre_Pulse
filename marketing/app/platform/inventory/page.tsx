@@ -39,7 +39,7 @@ export default function InventoryPage() {
           </div>
         </div>
       </section>
-      <TourBand id="cost-tour" title="From store issue to cost per machine." lead="Watch spend split into tyres, spare parts and oil, then traced to the machines and sites behind it. Sample data." only={["cost"]} />
+      <TourBand id="cost-tour" title="From store issue to cost per machine." only={["cost"]} />
       <CtaBand title="See which parts each job actually consumed." text="Send a month of store issues. We tie them to job cards and machines in the demo." button="Book a demo on your data" />
     </PageFrame>
   );

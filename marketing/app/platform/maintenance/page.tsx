@@ -47,7 +47,7 @@ export default function MaintenancePage() {
           <Photo name="technicianGenerator" position="45% 40%" />
         </div>
       </section>
-      <TourBand id="workshop-tours" title="A breakdown and a service, from request to sign-off." lead="Follow a job through the workshop queue, then a preventive service that sets its own next due date. Sample data." only={["workshop", "maintenance"]} />
+      <TourBand id="workshop-tours" title="A breakdown and a service, from request to sign-off." only={["workshop", "maintenance"]} />
       <CtaBand title="Find the breakdowns your PM plan should have caught." text="Send a month of job cards. We split planned work from breakdowns, machine by machine." button="Book a demo on your data" />
     </PageFrame>
   );

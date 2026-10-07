@@ -5,6 +5,7 @@ import { ArrowRight } from "lucide-react";
 export function PageTop({ crumbs, title, lead, cta = true }: { crumbs: { href?: string; label: string }[]; title: string; lead: string; cta?: boolean }) {
   return (
     <section className="page-top">
+      <div className="ptop-tyre" aria-hidden="true"><i /><b /></div>
       <div className="site-shell">
         <nav aria-label="Breadcrumb">
           <ol className="crumbs">

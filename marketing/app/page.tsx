@@ -204,6 +204,7 @@ export default function HomePage() {
             <h2 className="sec-h" id="one-asset">Workshop, field and stores share one record per machine.</h2>
             <Tabs
               label="Platform areas"
+              autoplay={6000}
               items={[
                 { id: "fleet", label: "Fleet and assets", icon: <Truck size={20} aria-hidden="true" />, panel: <AssetRecord /> },
                 {
@@ -227,17 +228,18 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="dark-band" aria-labelledby="field-to-closed">
+        <section className="dark-band fx-live" aria-labelledby="field-to-closed">
           <div className="site-shell">
             <h2 className="sec-h" id="field-to-closed">From a field issue to a closed job.</h2>
             <p className="dark-lead">Six kinds of signal open a job. Each stage has one owner, and the platform does the routine work in between, so a machine is back on site the same day.</p>
             <div className="fx-signals" aria-label="What can open a job">
               <span className="fx-signals-h">Opens a job</span>
-              <ul>{SIGNALS.map((x) => <li key={x}>{x}</li>)}</ul>
+              <ul>{SIGNALS.map((x, i) => <li key={x} style={{ ["--i" as string]: i }}>{x}</li>)}</ul>
             </div>
+            <div className="fx-rail" aria-hidden="true"><i /></div>
             <ol className="fx-pipe">
               {PIPELINE.map(({ icon: Icon, stage, owner, text, auto, stat, statLabel }, i) => (
-                <li key={stage}>
+                <li key={stage} style={{ ["--i" as string]: i }}>
                   <div className="fx-top"><span className="flow-n" aria-hidden="true">{i + 1}</span><Icon size={22} aria-hidden="true" /><b className="fx-stat">{stat}<small>{statLabel}</small></b></div>
                   <h3>{stage}</h3>
                   <span className="fx-owner">{owner}</span>
@@ -294,7 +296,6 @@ export default function HomePage() {
         <section className="bright-band" aria-labelledby="demo-walkround">
           <div className="site-shell">
             <h2 className="sec-h" id="demo-walkround">See it work: the phone in the field, the web in the office.</h2>
-            <p className="bright-lead">Six short tours: tyre inspection, tyre intelligence with RFID, pressure and anomaly checks, breakdowns, accidents and claims, preventive maintenance, and cost per km. Pick one, or let it play. Tap the wheels, rows and bars to explore.</p>
             <Walkthrough />
           </div>
         </section>

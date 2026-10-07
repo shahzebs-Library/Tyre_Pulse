@@ -860,3 +860,49 @@ main:has(> .home-hero) > section:nth-of-type(n + 3) {
 /* Proof strip used on its own (no marquee under it). */
 .proof.proof-solo { padding: 56px 0 56px; border-top: 1px solid var(--line); }
 .incl-list { margin: 0; }
+
+/* Auto-advancing tabs: a thin bar fills under the active tab. */
+.tabs-auto [role="tab"] { position: relative; }
+.tab-prog { position: absolute; inset-inline-start: 0; bottom: 0; height: 3px; width: 100%; background: #161616; transform-origin: left center; transform: scaleX(0); }
+[dir="rtl"] .tab-prog { transform-origin: right center; }
+.tabs-auto[data-playing] .tab-prog { animation: tp-tab-fill var(--tab-ms, 6000ms) linear forwards; }
+@keyframes tp-tab-fill { to { transform: scaleX(1); } }
+.tabs-auto [role="tabpanel"]:not([hidden]) { animation: tp-tab-in .45s var(--ease-out) both; }
+@keyframes tp-tab-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* From a field issue to a closed job: signals light up, a token runs the pipeline,
+   each stage takes its turn. 9 s cycle, paused off screen via .in-view. */
+.fx-live .fx-signals li { animation: tp-fx-sig 6s ease-in-out infinite; animation-delay: calc(var(--i) * 1s); }
+@keyframes tp-fx-sig { 0%, 12% { border-color: var(--brand); color: #161616; background: var(--brand); } 20%, 100% { border-color: #3a3a36; color: #e8e8e2; background: #1f1f1d; } }
+.fx-rail { position: relative; height: 2px; margin: 0 0 14px; background: #33332f; border-radius: 2px; overflow: hidden; }
+.fx-rail i { position: absolute; top: 0; inset-inline-start: 0; width: 16.66%; height: 100%; background: var(--brand); box-shadow: 0 0 12px var(--brand); animation: tp-fx-run 9s steps(6, jump-none) infinite; }
+@keyframes tp-fx-run { from { translate: 0 0; } to { translate: 500% 0; } }
+[dir="rtl"] .fx-rail i { animation-name: tp-fx-run-rtl; }
+@keyframes tp-fx-run-rtl { from { translate: 0 0; } to { translate: -500% 0; } }
+.fx-live .fx-pipe > li { animation: tp-fx-stage 9s ease-in-out infinite; animation-delay: calc(var(--i) * 1.5s); }
+@keyframes tp-fx-stage {
+  0% { border-color: #33332f; transform: none; box-shadow: none; }
+  4%, 14% { border-color: var(--brand); transform: translateY(-4px); box-shadow: 0 10px 24px rgba(255, 198, 41, .16); }
+  20%, 100% { border-color: #33332f; transform: none; box-shadow: none; }
+}
+.fx-live:not(.in-view) .fx-signals li, .fx-live:not(.in-view) .fx-pipe > li, .fx-live:not(.in-view) .fx-rail i { animation-play-state: paused; }
+@media (max-width: 1180px) { .fx-rail { display: none; } }
+
+/* Inner page heroes: a slow 3D tyre turning behind the title. Transform-only, decorative. */
+.page-top { overflow: hidden; }
+.ptop-tyre { position: absolute; inset-inline-end: clamp(-60px, -2vw, 0px); top: 50%; width: clamp(220px, 24vw, 340px); aspect-ratio: 1; translate: 0 -50%; perspective: 900px; pointer-events: none; opacity: .9; }
+.ptop-tyre i { position: absolute; inset: 0; border-radius: 50%; transform: rotateX(58deg) rotateZ(0deg); animation: tp-tyre-spin 26s linear infinite;
+  background:
+    radial-gradient(circle, transparent 0 33%, #f5f4ef 33.5% 41%, transparent 41.5%),
+    radial-gradient(circle, #fff 0 32%, transparent 32.5%),
+    repeating-conic-gradient(#d9d6cb 0 4deg, #ecebe5 4deg 9deg);
+  -webkit-mask: radial-gradient(circle, transparent 0 31%, #000 31.5% 70%, transparent 70.5%);
+          mask: radial-gradient(circle, transparent 0 31%, #000 31.5% 70%, transparent 70.5%); }
+.ptop-tyre b { position: absolute; inset: 29%; border-radius: 50%; border: 3px solid var(--brand); transform: rotateX(58deg); opacity: .8; }
+@keyframes tp-tyre-spin { to { transform: rotateX(58deg) rotateZ(360deg); } }
+.ptop-tyre:not(.in-view) i { animation-play-state: paused; }
+.page-top .site-shell { position: relative; z-index: 1; }
+@media (max-width: 900px) { .ptop-tyre { display: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .fx-live .fx-signals li, .fx-live .fx-pipe > li, .fx-rail i, .ptop-tyre i, .tabs-auto[data-playing] .tab-prog, .tabs-auto [role="tabpanel"]:not([hidden]) { animation: none; }
+}

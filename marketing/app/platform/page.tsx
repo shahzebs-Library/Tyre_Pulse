@@ -90,7 +90,7 @@ export default function PlatformPage() {
           </ul>
         </div>
       </section>
-      <TourBand id="tours" title="Six workflows, played step by step." lead="Pick a module: inspections, tyres, workshop, accidents, maintenance or cost. Each one shows the phone and the web app moving together. Sample data." />
+      <TourBand id="tours" title="Six workflows, played step by step." />
       <ProofStrip id="platform-proof" title="Running a concrete fleet in production today." text="The same platform, the same modules, on one operation across three countries." />
       <CtaBand title="See your own fleet in Tyre Pulse." text="Bring an asset list and a month of job cards. We load them before the call." button="Book a demo on your data" />
     </PageFrame>

@@ -31,7 +31,7 @@ const GROUPS = [
 ].join(",");
 
 /** Endless animations that should only run while visible (see motion.css). */
-const LOOPS = ".cta-band, .marquee, .live-feed";
+const LOOPS = ".cta-band, .marquee, .live-feed, .fx-live, .ptop-tyre";
 
 const STEP_MS = 70;
 const MAX_STEPS = 7;

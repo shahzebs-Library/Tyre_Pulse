@@ -55,7 +55,6 @@ export default function InspectionsPage() {
       <section className="bright-band" aria-labelledby="demo-h">
         <div className="site-shell">
           <h2 className="sec-h" id="demo-h">Watch an inspection and a tyre alert become work orders.</h2>
-          <p className="bright-lead">The phone in the yard and the web app in the office, side by side at every step.</p>
           <Walkthrough only={["inspection", "tyres"]} />
         </div>
       </section>

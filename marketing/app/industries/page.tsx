@@ -41,7 +41,7 @@ export default function IndustriesPage() {
       </ul>
     </div></section>
     <ProofStrip id="ind-proof" title="Proven first in ready-mix concrete." text="Mixers, pumps and batching plants across three countries run on Tyre Pulse every day." />
-    <TourBand id="ind-tours" title="The workflows every model shares." lead="Inspections in the yard, jobs in the workshop and cost per machine in the office. Sample data." only={["inspection", "workshop", "cost"]} />
+    <TourBand id="ind-tours" title="The workflows every model shares." only={["inspection", "workshop", "cost"]} />
     <CTA />
   </PageFrame>;
 }

@@ -16,7 +16,7 @@ export type HeroSlide = {
 };
 
 /** How long each slide stays on screen. The progress bar in the selector is timed by the same value. */
-const SLIDE_MS = 7000;
+const SLIDE_MS = 5000;
 
 /**
  * Auto-rotating home hero. Every slide swaps the whole upper area (kicker,

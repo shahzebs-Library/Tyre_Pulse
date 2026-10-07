@@ -60,7 +60,7 @@ export default function FleetPage() {
           </div>
         </div>
       </section>
-      <TourBand id="asset-tours" title="What one machine costs, and what happens when it is damaged." lead="Watch a cost review and an accident case run against the same asset record. Sample data." only={["cost", "accident"]} />
+      <TourBand id="asset-tours" title="What one machine costs, and what happens when it is damaged." only={["cost", "accident"]} />
       <CtaBand title="Find the machines that cost more than they earn." text="Send your asset list. We show downtime and repair cost for each one in the demo." button="Book a demo on your data" />
     </PageFrame>
   );

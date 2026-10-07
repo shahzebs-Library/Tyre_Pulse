@@ -8,7 +8,7 @@ Source inspected: `daily morning update.xlsx` (2026-10-07), one sheet `October C
 - The body is split into **sections**. Each section is a one-cell title row (merged A:M)
   followed by its own header row, then data rows:
   - `TRANSIT MIXER` (24 rows)
-  - `M-PUMPS, STATIONARY PUMP, LINE PUMP, PLACING BOOM` (6 rows)
+  - `M-PUMPS, STATIONARY PUMP, LINE PUMP` (6 rows)
   - `WHEEL LOADERS, PICK UPS, BUS ...` (1 row)
   - `BT-PLANT, ICE PLANT, CHILLER ...` (5 rows)
   - `JOB CARD CLOSED DETAILS` (39 rows) - vehicles released/closed on the report date.

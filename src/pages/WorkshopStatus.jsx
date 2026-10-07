@@ -7,14 +7,21 @@
  * once here (workshop_status_my_permissions, fails closed) and passed to every
  * tab; the server re-checks every action regardless.
  *
- * Loop 5 ships the Daily upload tab only. Later loops add their tab to TABS;
- * no empty placeholder tab is rendered (the spec forbids placeholder screens).
+ * Active vehicles (Loop 7) is the default working tab; Daily upload (Loop 5)
+ * follows. Later loops add their tab to TABS; no empty placeholder tab is
+ * rendered (the spec forbids placeholder screens).
+ *
+ * `onUpdate` opens the Vehicle Update Drawer (Loop 8) for a record; the
+ * drawer saves through workshop_status_update_record, and bumping
+ * reloadKey refreshes the list.
  */
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Wrench } from 'lucide-react'
 import { PageHero, Tabs } from '../components/commandCenter/kit'
 import DailyUploadPanel from '../components/workshopStatus/DailyUploadPanel'
+import ActiveVehiclesPanel from '../components/workshopStatus/ActiveVehiclesPanel'
+import VehicleUpdateDrawer from '../components/workshopStatus/VehicleUpdateDrawer'
 import { useLanguage } from '../contexts/LanguageContext'
 import { loadMyWorkshopPermissions } from '../lib/api/workshopStatusPermissions'
 import { NO_WORKSHOP_PERMISSIONS } from '../lib/workshopStatus/permissions'
@@ -25,9 +32,10 @@ import '../components/workshopStatus/workshopStatus.css'
  * workshopStatus.page.tabs. Add new tabs here (and their panel below).
  */
 export const TABS = [
+  { key: 'active', labelKey: 'active' },
   { key: 'upload', labelKey: 'upload' },
 ]
-const DEFAULT_TAB = 'upload'
+const DEFAULT_TAB = 'active'
 
 export default function WorkshopStatus() {
   const { t } = useLanguage()
@@ -38,6 +46,9 @@ export default function WorkshopStatus() {
 
   const [permissions, setPermissions] = useState(NO_WORKSHOP_PERMISSIONS)
   const [permState, setPermState] = useState('loading') // loading | ready | error
+  const [editing, setEditing] = useState(null)
+  const [reloadKey, setReloadKey] = useState(0)
+  const refreshList = useCallback(() => setReloadKey((k) => k + 1), [])
 
   const loadPerms = useCallback(async () => {
     setPermState('loading')
@@ -72,6 +83,25 @@ export default function WorkshopStatus() {
           <p>{p('permLoadError')}</p>
         </div>
       )}
+
+      {tab === 'active' && (
+        <ActiveVehiclesPanel
+          permissions={permissions}
+          permState={permState}
+          onRetryPermissions={loadPerms}
+          onUpdate={setEditing}
+          reloadKey={reloadKey}
+        />
+      )}
+
+      <VehicleUpdateDrawer
+        record={editing}
+        open={!!editing}
+        permissions={permissions}
+        onClose={() => setEditing(null)}
+        onSaved={() => { setEditing(null); refreshList() }}
+        onReload={() => { setEditing(null); refreshList() }}
+      />
 
       {tab === 'upload' && (
         <DailyUploadPanel permissions={permissions} permState={permState} onRetryPermissions={loadPerms} />

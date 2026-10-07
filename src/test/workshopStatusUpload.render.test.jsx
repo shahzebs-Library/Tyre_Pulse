@@ -68,7 +68,7 @@ const RECORDS = [
 ]
 
 function setup() {
-  render(<MemoryRouter><WorkshopStatus /></MemoryRouter>)
+  render(<MemoryRouter initialEntries={['/daily-ops/workshop?tab=upload']}><WorkshopStatus /></MemoryRouter>)
 }
 
 async function uploadFile() {

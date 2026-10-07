@@ -1,0 +1,82 @@
+/* Workshop Status -> Active Vehicles (Loop 7). Prefix wks-av-. Command Center
+   tokens only (--cc-*), so light and dark both follow the kit. */
+.wks-av-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+
+.wks-av-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.wks-av-search { flex: 1 1 280px; position: relative; }
+.wks-av-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.wks-av-tools .is-on { border-color: var(--cc-green); color: var(--cc-ink); }
+.wks-av-sort { margin: 0; }
+.wks-av-sort select { min-width: 190px; }
+
+.wks-av-filters {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; align-items: end;
+  margin-top: 12px; padding: 12px; border: 1px solid var(--cc-inner-border); border-radius: 10px; background: var(--cc-inner);
+}
+.wks-av-checkbox { align-self: center; }
+
+.wks-av-columns {
+  margin: 12px 0 0; padding: 12px; border: 1px solid var(--cc-inner-border); border-radius: 10px; background: var(--cc-inner);
+  display: grid; gap: 8px; min-width: 0;
+}
+.wks-av-columns legend { padding: 0 4px; }
+.wks-av-colgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 2px 12px; }
+.wks-av-columns .cc-btn-ghost { justify-self: start; }
+
+.wks-av-count { margin: 12px 0 8px; }
+.wks-av-skel { display: grid; gap: 8px; }
+
+/* Table */
+.wks-av-table-wrap { overflow-x: auto; border: 1px solid var(--cc-inner-border); border-radius: 10px; max-width: 100%; }
+.wks-av-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; color: var(--cc-ink); }
+.wks-av-table th, .wks-av-table td {
+  padding: 8px 10px; text-align: start; vertical-align: top; border-bottom: 1px solid var(--cc-inner-border);
+  max-width: 260px; overflow-wrap: anywhere;
+}
+.wks-av-table thead th {
+  position: sticky; top: 0; z-index: 2; background: var(--cc-card-flat); color: var(--cc-ink-3);
+  font-size: 11.5px; font-weight: 600; white-space: nowrap;
+}
+.wks-av-table tbody tr:hover > * { background: var(--cc-green-tint); }
+.wks-av-table tbody tr.is-open > * { background: var(--cc-inner); }
+.wks-av-table .is-num { text-align: end; }
+.wks-av-sticky { position: sticky; inset-inline-start: 0; z-index: 1; background: var(--cc-card-flat); white-space: nowrap; }
+.wks-av-table thead .wks-av-sticky { z-index: 3; }
+.wks-av-exp { width: 40px; padding-inline: 4px !important; }
+.wks-av-toggle {
+  width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 8px;
+  background: none; color: var(--cc-ink-2); cursor: pointer;
+}
+.wks-av-toggle:hover { background: var(--cc-track); }
+.wks-av-toggle:focus-visible, .wks-av-sortbtn:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 1px; }
+[dir='rtl'] .wks-av-chev { transform: scaleX(-1); }
+.wks-av-sortbtn { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; min-height: 32px; }
+.wks-av-actions-h, .wks-av-actions { text-align: end; white-space: nowrap; }
+.wks-av-update { min-height: 36px; }
+.wks-av-c-complaint, .wks-av-c-next, .wks-av-c-workDone, .wks-av-c-remarks { min-width: 180px; }
+.wks-av-days { font-weight: 700; }
+.wks-av-days.warn { color: var(--cc-amber); }
+.wks-av-days.bad { color: var(--cc-red); }
+.wks-av-who { display: grid; gap: 1px; }
+.wks-av-who-name { font-weight: 600; }
+.wks-av-who-at { color: var(--cc-ink-3); font-size: 12px; white-space: nowrap; }
+
+.wks-av-detail-row td { background: var(--cc-inner); max-width: none; }
+.wks-av-detail { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 16px; margin: 4px 0; }
+.wks-av-detail div { min-width: 0; }
+.wks-av-detail dt { font-size: 11.5px; color: var(--cc-ink-3); }
+.wks-av-detail dd { margin: 2px 0 0; font-size: 13px; color: var(--cc-ink); overflow-wrap: anywhere; white-space: pre-wrap; }
+
+/* Cards (phone) */
+.wks-av-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.wks-av-card-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+.wks-av-cards { margin-bottom: 12px; }
+
+@media (max-width: 720px) {
+  .wks-av-tools { width: 100%; }
+  .wks-av-sort { flex: 1 1 auto; }
+  .wks-av-sort select { width: 100%; min-width: 0; }
+  .wks-av-hide-sm { display: none; }
+  .wks-av-columns { display: none; }
+  .wks-av-detail { grid-template-columns: 1fr; }
+}

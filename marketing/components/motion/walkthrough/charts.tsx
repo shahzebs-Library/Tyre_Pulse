@@ -123,7 +123,7 @@ export function Heatmap({
             const t = v / max;
             return (
               <i key={ci} className={t > 0.75 ? "hot" : undefined} style={{ ["--t" as string]: t.toFixed(2), animationDelay: `${(ri * cols.length + ci) * 0.012}s` }}
-                title={`${r}, ${cols[ci]}: ${v}${unit}`}>{t > 0.55 ? v : ""}</i>
+                title={`${r}, ${cols[ci]}: ${v}${unit}`}>{t > 0.75 ? v : ""}</i>
             );
           })}
         </div>

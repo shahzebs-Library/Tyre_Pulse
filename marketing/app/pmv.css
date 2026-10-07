@@ -212,7 +212,8 @@ a:focus-visible, button:focus-visible, [tabindex="0"]:focus-visible { outline: 3
 .ar-thumbs .more { background: #3a3a3a; color: #fff; display: grid; place-items: center; font-weight: 700; }
 .ar-info { margin: 0; display: grid; align-content: start; gap: 8px; font-size: .82rem; }
 .ar-info-h { font-weight: 800; margin-bottom: 2px; }
-.ar-info div { display: grid; grid-template-columns: 1fr 1.1fr; gap: 8px; }
+.ar-info-list { margin: 0; display: grid; gap: 8px; }
+.ar-info-list div { display: grid; grid-template-columns: 1fr 1.1fr; gap: 8px; }
 .ar-info dt { color: #56564f; }
 .ar-info dd { margin: 0; font-weight: 600; }
 .asset-stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-top: 14px; }

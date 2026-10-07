@@ -75,6 +75,14 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   technician-generator). Inpainted; original in git history. CWV local: CLS 0, LCP < 0.31 s.
 
 # ⚑ SESSION 2026-10-07 (app session) — INSPECTION PLAN "OVERDUE" AFTER SIGNING FIXED + SIGN-OFF FILTER. 2 migrations applied live.
+- CLOSED (2026-10-07): PR #396 squash-merged as 8ddbd75a after all CI green (web, mobile, marketing, analytics, report
+  engine, CodeQL js+py); merge-tree vs main (with marketing #397) clean. Production dpl_Qr3FUe2HRzTGJVXHQCmjjyWY3uUP READY
+  on 8ddbd75a (verified). Later main push c59fad6a (#398, Flutter-only) shows CANCELED = ignoreCommand skip, not a failure.
+  PR unsubscribed; branch claude/modest-hopper-5bnq8c realigned to origin/main. 3 migrations applied live this session:
+  090000 match window, 100000 signed flags, 110000 two-way reconcile (090000 trigger kept DISABLED). Next free migration
+  = any timestamp after 20261007110000.
+- STILL OPEN: ~160 plans genuinely Missed (BP/BH plants never inspected) = operational gap, not a bug; lock_inspection_content
+  role-case (lowercase vs Title Case) blocks even Admins editing a locked inspection's content - needs its own migration.
 - Signing was never broken: 1,376 approved with both signatures; 172 approved Aug 4-19 lack an approver signature (before V602).
 - CAUSE of "signed but Overdue": get_schedule_adherence matched an inspection to a plan ONLY on the plan day..+grace_days(2),
   so an approved inspection 3 days early/late left its plan Missed; and nothing ever set inspection_schedules.status

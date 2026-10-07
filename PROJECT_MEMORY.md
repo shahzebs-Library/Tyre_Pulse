@@ -31,6 +31,13 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   integration, reporting/export, upload history, stale Excel vs manual, security/deletion review, responsive QA, E2E,
   final review). Original rule was "no merge until loop 20"; the owner then said **"merged to main and apply migration"**
   (2026-10-07), so loops 1-12 were merged. Loops 13-20 are follow-up work on a fresh branch from main.
+- **LOOPS 13-20 (NOT STARTED, owner asked what they contain 2026-10-07; do on a FRESH branch from main, only when asked):**
+  13 Daily Ops overview integration (Workshop Status summary tile/strip on the Daily Ops overview) ·
+  14 Reporting/export (wider Excel/PDF + scheduled report) · 15 Upload history (past daily files, counts, who/when, re-open) ·
+  16 Stale Excel vs manual update (manual update newer than the daily file must not be overwritten; flag the conflict) ·
+  17 Security/deletion review (RLS, writers, permanent_delete, audit) · 18 Responsive QA (phone/tablet/desktop, RTL) ·
+  19 End-to-end testing (upload -> update -> release -> recover -> notify) · 20 Final review package (the original merge gate).
+  Still pending before/alongside them: apply `workshop_status_notify_scan()` + cron (needs owner approval or SQL editor paste).
 - Lives INSIDE Daily Ops at `/daily-ops/workshop` (ModuleRoute `daily_ops:workshop`), `src/pages/WorkshopStatus.jsx`,
   panels in `src/components/workshopStatus/`, pure logic `src/lib/workshopStatus/`, services `src/lib/api/workshopStatus*.js`.
   Tabs: Active vehicles / Activity / Workload / Released / Daily upload. NO job-card workflow. `asset_breakdowns` is

@@ -699,6 +699,8 @@ end $$;
 -- ---------------------------------------------------------------------------
 -- Role defaults: every role that has Daily Ops gets Workshop Status view by
 -- default; changeable per role / per user in Console -> Access Control.
+-- Only ENABLED rows are copied: a role with Daily Ops off gets no row here, so
+-- the explicit role matrix in the permissions migration can still grant it.
 -- Skipped where module_permissions does not exist (the test harness).
 -- ---------------------------------------------------------------------------
 do $$
@@ -707,7 +709,7 @@ begin
     insert into public.module_permissions (role, module_key, enabled, org_id)
     select mp.role, 'daily_ops:workshop', mp.enabled, null
       from public.module_permissions mp
-     where mp.module_key = 'daily_ops' and mp.org_id is null
+     where mp.module_key = 'daily_ops' and mp.org_id is null and mp.enabled
        and not exists (select 1 from public.module_permissions x
                         where x.role = mp.role and x.module_key = 'daily_ops:workshop' and x.org_id is null);
   end if;

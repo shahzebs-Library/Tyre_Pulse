@@ -115,12 +115,12 @@ test('1. migration applies cleanly, is re-runnable, and seeds daily_ops:workshop
     'workshop_status_upload_rows', 'workshop_status_uploads'])
   const seeded = async () => (await db.query(`select role, enabled, org_id from module_permissions
     where module_key = 'daily_ops:workshop' order by role`)).rows
+  // Only roles with Daily Ops ENABLED are copied; Reporter (off) gets no row.
   assert.deepEqual(await seeded(), [
-    { role: 'Manager', enabled: true, org_id: null },
-    { role: 'Reporter', enabled: false, org_id: null }
+    { role: 'Manager', enabled: true, org_id: null }
   ])
   await db.exec(MIGRATION) // re-running must not duplicate the seed
-  assert.equal((await seeded()).length, 2)
+  assert.equal((await seeded()).length, 1)
 })
 
 test('1b. the seed block is skipped when module_permissions does not exist', async () => {

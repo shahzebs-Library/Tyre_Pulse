@@ -5,6 +5,17 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ SESSION 2026-10-06 CLOSED CLEAN — PR #385 MERGED (squash 9f7783a7). No migration; next free migration unchanged.
+- #385 = Inspections + Checklists workspaces (part 2) + inspection report PDF (part 3) + Codex review fixes. All CI green
+  before merge; production deploy for 9f7783a7 was QUEUED at close (re-check Vercel tyre-pulse `target: production` READY
+  on that sha before claiming it live). Branch claude/modest-hopper-5bnq8c realigned to origin/main; PR unsubscribed;
+  safety-net trigger deleted. Nothing uncommitted, nothing pending.
+- Codex review bot: owner is disconnecting it from the GitHub repo themselves (no code action needed).
+- Full suite at close 12,222/12,223 (only checklistIcons, environmental). audit/checklist-report-review/*.pdf reverted.
+- NOT verified: the new PDF was rendered only via pdf.js screenshots in the harness, never opened by the owner on a
+  real inspection in production. The fallback (non-SVG) diagram shows mixer wheels uncoloured (pre-existing; the real
+  export captures the app SVG).
+
 # ⚑ SESSION 2026-10-06 (part 3) — INSPECTION REPORT PDF REBUILT TO THE OWNER'S 3-PAGE MOCKUP. No migration.
 - exportInspectionDetailPdf (src/lib/exportUtils.js): p1 Vehicle Details card (+ vehicle picture via vehiclePhoto(row),
   opts.vehiclePhotoUrl) / 5 summary tiles + Avg Pressure + Photos Attached / tyre map (app SVG, legend) / Inspection

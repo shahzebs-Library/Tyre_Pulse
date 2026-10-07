@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { BadgeDollarSign, Box, Building2, ChevronDown, CircleDot, ClipboardCheck, FileSpreadsheet, LayoutGrid, Mail, PlayCircle, ShieldCheck, Truck, Wrench } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { APP_URL } from "@/lib/site";
-import { MENU_GROUPS } from "@/lib/nav";
+import { MENU_GROUPS, menuHref } from "@/lib/nav";
 import { A11yStyles } from "./A11yStyles";
 import { Logo } from "./Logo";
 
@@ -103,7 +103,7 @@ export function Header({ locale = "en" }: { locale?: "en" | "ar" }) {
                     {m.items.map((it) => {
                       const Icon = ICONS[it.href] ?? LayoutGrid;
                       return (
-                        <Link key={it.href} href={it.href} onClick={closeAll} aria-current={pathname === it.href ? "page" : undefined}>
+                        <Link key={it.href} href={menuHref(it.href)} onClick={closeAll} aria-current={pathname === it.href ? "page" : undefined}>
                           <i className="dd-ic" aria-hidden="true"><Icon size={18} /></i>
                           <span className="dd-t"><b>{ar ? it.labelAr : it.label}</b><span>{ar ? it.textAr : it.text}</span></span>
                         </Link>
@@ -142,7 +142,7 @@ export function Header({ locale = "en" }: { locale?: "en" | "ar" }) {
             {MENUS.map((m, gi) => (
               <div key={m.id} className="mobile-group" style={{ "--rv-delay": `${gi * 60}ms` } as React.CSSProperties}>
                 <span className="mobile-group-h">{ar ? m.labelAr : m.label}</span>
-                {m.items.map((it) => <Link key={it.href} href={it.href} onClick={closeAll} aria-current={pathname === it.href ? "page" : undefined}>{ar ? it.labelAr : it.label}</Link>)}
+                {m.items.map((it) => <Link key={it.href} href={menuHref(it.href)} onClick={closeAll} aria-current={pathname === it.href ? "page" : undefined}>{ar ? it.labelAr : it.label}</Link>)}
               </div>
             ))}
             <div className="mobile-group" style={{ "--rv-delay": `${MENUS.length * 60}ms` } as React.CSSProperties}>

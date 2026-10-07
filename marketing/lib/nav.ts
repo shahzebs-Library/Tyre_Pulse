@@ -33,3 +33,12 @@ export const MENU_GROUPS = [
   { id: "solutions", label: "Solutions", labelAr: "الحلول", items: SOLUTION_PAGES },
   { id: "resources", label: "Resources", labelAr: "الموارد", items: RESOURCE_PAGES },
 ] as const;
+
+/**
+ * Where a menu link lands. Every page in the menus opens with the same PageTop banner, and the
+ * owner wants a menu click to arrive where the module details start, so page links jump to the
+ * `#details` anchor PageTop places right under the banner. Links that already carry a section
+ * (Product tours -> #tours) keep it.
+ */
+export const DETAILS_ANCHOR = "details";
+export const menuHref = (href: string) => (href.includes("#") ? href : `${href}#${DETAILS_ANCHOR}`);

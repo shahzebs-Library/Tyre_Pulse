@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { APP_STORE_URL } from "@/app/schema";
 import { APP_URL, CONTACT_EMAIL, LEGAL_LINKS, WHATSAPP_URL } from "@/lib/site";
-import { MENU_GROUPS } from "@/lib/nav";
+import { MENU_GROUPS, menuHref } from "@/lib/nav";
 import { Logo } from "./Logo";
 import { StoreBadges } from "./StoreBadges";
 
@@ -55,7 +55,7 @@ export function Footer({ locale = "en" }: { locale?: "en" | "ar" }) {
             <nav key={g.id} aria-label={ar ? g.labelAr : g.label}>
               <p className="footer-heading" aria-hidden="true">{ar ? g.labelAr : g.label}</p>
               <div className="footer-links">
-                {g.items.map((p) => <Link key={p.href} href={p.href}>{ar ? p.labelAr : p.label}</Link>)}
+                {g.items.map((p) => <Link key={p.href} href={menuHref(p.href)}>{ar ? p.labelAr : p.label}</Link>)}
                 {g.id === "resources" && (ar ? <Link href="/" lang="en">English</Link> : <Link href="/ar" lang="ar">العربية</Link>)}
               </div>
             </nav>

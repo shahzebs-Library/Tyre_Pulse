@@ -955,3 +955,7 @@ main:has(> .home-hero) > section:nth-of-type(n + 3) {
 /* Hero Operations slide: the live activity card sits inside the picture frame (bottom
    corner) instead of hanging below it, where it covered the slide picker tabs. */
 .hc-visual > .hc-live > .hc-float { top: auto; bottom: 14px; right: 14px; }
+
+/* Menu landing point at the foot of the page banner. html has scroll-padding-top: 80px for
+   the sticky header; the negative margin brings the details right up under the header. */
+.ptop-anchor { position: absolute; bottom: 0; left: 0; width: 1px; height: 1px; scroll-margin-top: -14px; }

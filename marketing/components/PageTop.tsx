@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Photo, type PhotoKey } from "./art/Photos";
+import { DETAILS_ANCHOR } from "@/lib/nav";
 
 /**
  * Inner-page opening: breadcrumb, title, one line of purpose, demo button.
@@ -43,6 +44,8 @@ export function PageTop({ crumbs, title, lead, cta = true, photo, photoPosition 
           </div>
         )}
       </div>
+      {/* Menu links land here: the first line of the module details, just under the header. */}
+      <span id={DETAILS_ANCHOR} className="ptop-anchor" aria-hidden="true" />
     </section>
   );
 }

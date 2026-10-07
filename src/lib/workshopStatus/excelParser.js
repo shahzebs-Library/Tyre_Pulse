@@ -118,7 +118,8 @@ const fullYear = (y) => (y < 100 ? 2000 + y : y)
 
 /** Excel serial day number -> ISO (1900 date system, Lotus leap bug included). */
 function serialToIso(n) {
-  const ms = Date.UTC(1899, 11, 30) + Math.round(n) * 86400000
+  // Floor, not round: the fraction is the time of day, and 13:00 must stay on its own day.
+  const ms = Date.UTC(1899, 11, 30) + Math.floor(n + 1e-9) * 86400000
   const dt = new Date(ms)
   return isoOf(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate())
 }
@@ -462,6 +463,52 @@ export function parseWorkshopWorkbook(parsed, opts = {}) {
   return best.preview
 }
 
+/** True for a real .xlsx (zip "PK") or legacy binary .xls (OLE2 D0 CF 11 E0). */
+function isBinaryWorkbook(buf) {
+  const b = new Uint8Array(buf, 0, Math.min(4, buf.byteLength))
+  return (b[0] === 0x50 && b[1] === 0x4b) || (b[0] === 0xd0 && b[1] === 0xcf && b[2] === 0x11 && b[3] === 0xe0)
+}
+
+/**
+ * Array-of-arrays for one SheetJS worksheet where DATE cells are JS Dates (local
+ * midnight, built from the serial's calendar parts, so no timezone shift) and
+ * every other cell is its formatted text, exactly as the shared reader gives it.
+ * Pure given the SheetJS module, exported for tests.
+ */
+export function worksheetToWorkshopAoa(ws, XLSX) {
+  if (!ws || !ws['!ref']) return []
+  const range = XLSX.utils.decode_range(ws['!ref'])
+  const aoa = []
+  for (let r = range.s.r; r <= range.e.r; r++) {
+    const out = []
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cell = ws[XLSX.utils.encode_cell({ r, c })]
+      out.push(cellValue(cell, XLSX))
+    }
+    aoa.push(out)
+  }
+  return aoa
+}
+
+function cellValue(cell, XLSX) {
+  if (!cell) return ''
+  if (cell.t === 'd' && cell.v instanceof Date) return cell.v
+  if (cell.t === 'n' && typeof cell.v === 'number' && cell.z && XLSX.SSF.is_date(cell.z)) {
+    const p = XLSX.SSF.parse_date_code(cell.v)
+    if (p && p.y) return new Date(p.y, p.m - 1, p.d)
+  }
+  if (cell.w != null) return cell.w
+  return cell.v == null ? '' : String(cell.v)
+}
+
+/** { sheets } from a binary workbook with real date values, or null when unreadable/empty. */
+async function readBinaryWorkbook(buf) {
+  const XLSX = await import('xlsx')
+  const wb = XLSX.read(new Uint8Array(buf), { type: 'array', cellDates: false, cellNF: true })
+  const sheets = (wb.SheetNames || []).map((name) => ({ name, aoa: worksheetToWorkshopAoa(wb.Sheets[name], XLSX) }))
+  return sheets.some((s) => s.aoa.some((r) => !isBlankRow(r))) ? { sheets } : null
+}
+
 export const MAX_WORKSHOP_FILE_BYTES = 10 * 1024 * 1024
 const ALLOWED_EXT = /\.(xlsx|xls|csv)$/i
 
@@ -480,7 +527,10 @@ export async function parseWorkshopFile(file, opts = {}) {
   const buf = await file.arrayBuffer()
   let parsed
   try {
-    parsed = await parseWorkbookRaw(buf, { fileName: name })
+    // A real binary workbook is read with its cell VALUES so a date cell formatted
+    // m/d/yy cannot arrive as month-first text and be read day-first. Markup .xls
+    // and CSV keep the shared text reader (their dates are text anyway).
+    parsed = (isBinaryWorkbook(buf) && await readBinaryWorkbook(buf)) || await parseWorkbookRaw(buf, { fileName: name })
   } catch {
     throw new Error('The file could not be read. Save it again as .xlsx and retry.')
   }

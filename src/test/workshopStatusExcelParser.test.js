@@ -184,3 +184,51 @@ describe('workshop Excel parser - synthetic files', () => {
     expect(out.fileHash).toMatch(/^[0-9a-f]{64}$/)
   })
 })
+
+describe('workshop Excel parser - real cell values for dates', () => {
+  const asFile = (buf, name = 'daily.xlsx') => {
+    const u8 = new Uint8Array(buf)
+    return { name, size: u8.length, arrayBuffer: async () => u8.slice().buffer }
+  }
+
+  it('a date cell formatted m/d/yy is read from its value, not as day-first text', async () => {
+    const XLSX = await import('xlsx')
+    const aoa = [['TRANSIT MIXER'], HEADER, ['1', 'TM700', '1234 ABC', 'JC/1', 'NHC', 'NO START', '', new Date(2026, 6, 5), '', 'WORKSHOP', '']]
+    const ws = XLSX.utils.aoa_to_sheet(aoa, { cellDates: true })
+    ws.H3.z = 'm/d/yy'
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'S')
+    const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx' })
+    // The text reader would see "7/5/26" and read 7 May; the value is 5 July.
+    const text = await parseWorkbookRaw(out, { fileName: 'x.xlsx' })
+    expect(text.sheets[0].aoa[2][7]).toBe('7/5/26')
+    const { preview } = await parseWorkshopFile(asFile(out), { today: '2026-07-10' })
+    expect(preview.active[0].data.ooc_since).toBe('2026-07-05')
+    expect(preview.active[0].data.days_down).toBe(5)
+  })
+
+  it('a date-time serial keeps its own day (no rounding into tomorrow)', () => {
+    // 46208 = 2026-07-05; .75 = 18:00.
+    expect(parseWorkshopDate(46208.75).value).toBe('2026-07-05')
+    expect(parseWorkshopDate('46208.75').value).toBe('2026-07-05')
+  })
+
+  it('text dates still parse day-first through the binary reader', async () => {
+    const XLSX = await import('xlsx')
+    const ws = XLSX.utils.aoa_to_sheet([['TRANSIT MIXER'], HEADER, row(1, 'TM701', '07/09/2026')])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'S')
+    const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx' })
+    const { preview } = await parseWorkshopFile(asFile(out), { today: '2026-09-10' })
+    expect(preview.active[0].data.ooc_since).toBe('2026-09-07')
+  })
+
+  it('the real fixture through parseWorkshopFile keeps its counts and dates', async () => {
+    const buf = fs.readFileSync(FIXTURE)
+    const { preview } = await parseWorkshopFile(asFile(buf))
+    expect(preview.reportDate).toBe('2026-10-07')
+    expect(preview.summary).toMatchObject({ active: 36, closed: 39, invalid: 0, duplicate: 0 })
+    const r = preview.active.find((x) => x.asset_no === 'TM599')
+    expect(r.data).toMatchObject({ ooc_since: '2026-09-29', excel_down_days: 8, days_down: 8 })
+  })
+})

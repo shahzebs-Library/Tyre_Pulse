@@ -58,7 +58,7 @@ export default function TyreManagementPage() {
   return (
     <PageFrame>
       <JsonLd data={breadcrumbSchema([{ name: "Home", path: "/" }, { name: "Solutions", path: "/solutions" }, { name: "Tyre management", path: PATH }])} />
-      <PageTop
+      <PageTop photo="loader" photoPosition="30% 60%"
         crumbs={[{ href: "/", label: "Home" }, { href: "/solutions", label: "Solutions" }, { label: "Tyre management" }]}
         title="Know what every tyre costs per kilometre."
         lead="Tyre management for GCC fleets: each tyre tracked by serial and wheel position, removals forecast from tread, and TPMS alerts through your telematics."

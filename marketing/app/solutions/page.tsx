@@ -27,7 +27,7 @@ export default function SolutionsPage() {
   return (
     <PageFrame>
       <JsonLd data={pageBreadcrumb("Solutions", "/solutions")} />
-      <PageTop
+      <PageTop photo="engineer" photoPosition="35% 20%"
         crumbs={[{ href: "/", label: "Home" }, { label: "Solutions" }]}
         title="Start from the problem you need solved."
         lead="Each page covers one use case: the problem, how Tyre Pulse handles it in three steps, the modules involved and what you need to start."

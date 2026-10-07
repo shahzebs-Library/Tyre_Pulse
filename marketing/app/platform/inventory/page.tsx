@@ -18,7 +18,7 @@ export default function InventoryPage() {
   return (
     <PageFrame>
       <JsonLd data={pageBreadcrumb("Inventory, procurement and reporting", "/platform/inventory")} />
-      <PageTop
+      <PageTop photo="riyadh" photoPosition="30% 90%"
         crumbs={[{ href: "/", label: "Home" }, { href: "/platform", label: "Platform" }, { label: "Inventory, procurement and reports" }]}
         title="Inventory, procurement and reporting"
         lead="See which parts each job consumed and what every machine costs to run, by site and by month."

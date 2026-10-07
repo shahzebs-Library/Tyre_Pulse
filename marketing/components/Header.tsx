@@ -2,23 +2,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowRight, BadgeDollarSign, Box, Building2, ChevronDown, ClipboardCheck, LayoutGrid, Mail, PlayCircle, ShieldCheck, Truck, Wrench } from "lucide-react";
+import { BadgeDollarSign, Box, Building2, ChevronDown, CircleDot, ClipboardCheck, FileSpreadsheet, LayoutGrid, Mail, PlayCircle, ShieldCheck, Truck, Wrench } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { APP_URL } from "@/lib/site";
-import { PLATFORM_PAGES, RESOURCE_PAGES, SOLUTION_PAGES } from "@/lib/nav";
+import { MENU_GROUPS } from "@/lib/nav";
 import { A11yStyles } from "./A11yStyles";
 import { Logo } from "./Logo";
 
-const MENUS = [
-  { id: "platform", label: "Platform", labelAr: "المنصة", items: PLATFORM_PAGES },
-  { id: "solutions", label: "Solutions", labelAr: "الحلول", items: SOLUTION_PAGES },
-  { id: "resources", label: "Resources", labelAr: "الموارد", items: RESOURCE_PAGES },
-] as const;
+const MENUS = MENU_GROUPS;
 
 /** One icon per menu entry, keyed by its link. */
 const ICONS: Record<string, typeof Truck> = {
   "/platform": LayoutGrid, "/platform/fleet-assets": Truck, "/platform/maintenance": Wrench, "/platform/inspections": ClipboardCheck,
-  "/platform/inventory": Box, "/industries": Building2, "/pricing": BadgeDollarSign, "/platform#tours": PlayCircle, "/security": ShieldCheck, "/contact": Mail,
+  "/platform/inventory": Box, "/solutions/tyre-management": CircleDot, "/solutions/ready-mix-fleet": Truck, "/solutions/spreadsheets-to-platform": FileSpreadsheet, "/industries": Building2, "/pricing": BadgeDollarSign, "/platform#tours": PlayCircle, "/security": ShieldCheck, "/contact": Mail,
 };
 
 /** Header copy per locale. The Arabic page links to the English pages, which are the only other locale. */
@@ -102,7 +98,7 @@ export function Header({ locale = "en" }: { locale?: "en" | "ar" }) {
                 {ar ? m.labelAr : m.label} <ChevronDown size={14} aria-hidden="true" />
               </button>
               {menu === m.id && (
-                <div className={`dropdown${m.id === "platform" ? " dropdown-mega" : ""}`} id={`menu-${m.id}`}>
+                <div className="dropdown" id={`menu-${m.id}`}>
                   <div className="dd-list">
                     {m.items.map((it) => {
                       const Icon = ICONS[it.href] ?? LayoutGrid;
@@ -114,13 +110,6 @@ export function Header({ locale = "en" }: { locale?: "en" | "ar" }) {
                       );
                     })}
                   </div>
-                  {m.id === "platform" && (
-                    <Link className="dd-feature" href="/platform#tours" onClick={closeAll}>
-                      <small>{ar ? "شاهد كيف يعمل" : "See it work"}</small>
-                      <b>{ar ? "الهاتف في الموقع والويب في المكتب" : "The phone in the field, the web in the office"}</b>
-                      <span>{ar ? "جولات المنتج" : "Play the product tours"} <ArrowRight size={14} aria-hidden="true" /></span>
-                    </Link>
-                  )}
                 </div>
               )}
             </div>

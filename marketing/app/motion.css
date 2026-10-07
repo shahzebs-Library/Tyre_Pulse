@@ -888,23 +888,20 @@ main:has(> .home-hero) > section:nth-of-type(n + 3) {
 .fx-live:not(.in-view) .fx-signals li, .fx-live:not(.in-view) .fx-pipe > li, .fx-live:not(.in-view) .fx-rail i { animation-play-state: paused; }
 @media (max-width: 1180px) { .fx-rail { display: none; } }
 
-/* Inner page heroes: a slow 3D tyre turning behind the title. Transform-only, decorative. */
+/* Inner page heroes: optional photo beside the title, as tall as the text block. */
 .page-top { overflow: hidden; }
-.ptop-tyre { position: absolute; inset-inline-end: clamp(-60px, -2vw, 0px); top: 50%; width: clamp(220px, 24vw, 340px); aspect-ratio: 1; translate: 0 -50%; perspective: 900px; pointer-events: none; opacity: .9; }
-.ptop-tyre i { position: absolute; inset: 0; border-radius: 50%; transform: rotateX(58deg) rotateZ(0deg); animation: tp-tyre-spin 26s linear infinite;
-  background:
-    radial-gradient(circle, transparent 0 33%, #f5f4ef 33.5% 41%, transparent 41.5%),
-    radial-gradient(circle, #fff 0 32%, transparent 32.5%),
-    repeating-conic-gradient(#d9d6cb 0 4deg, #ecebe5 4deg 9deg);
-  -webkit-mask: radial-gradient(circle, transparent 0 31%, #000 31.5% 70%, transparent 70.5%);
-          mask: radial-gradient(circle, transparent 0 31%, #000 31.5% 70%, transparent 70.5%); }
-.ptop-tyre b { position: absolute; inset: 29%; border-radius: 50%; border: 3px solid var(--brand); transform: rotateX(58deg); opacity: .8; }
-@keyframes tp-tyre-spin { to { transform: rotateX(58deg) rotateZ(360deg); } }
-.ptop-tyre:not(.in-view) i { animation-play-state: paused; }
 .page-top .site-shell { position: relative; z-index: 1; }
-@media (max-width: 900px) { .ptop-tyre { display: none; } }
+.ptop-split { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: clamp(24px, 3.4vw, 48px); align-items: stretch; }
+.ptop-cta { margin-top: 22px; }
+.ptop-photo { position: relative; min-height: 200px; border-radius: 12px; overflow: hidden; background: #e8e8e2; }
+.ptop-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+@media (prefers-reduced-motion: no-preference) { .page-top.has-photo .ptop-photo { animation: tp-visual-in .9s var(--ease-swift) both; } }
+@media (max-width: 900px) {
+  .ptop-split { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .ptop-photo { min-height: 0; aspect-ratio: 16 / 9; }
+}
 @media (prefers-reduced-motion: reduce) {
-  .fx-live .fx-signals li, .fx-live .fx-pipe > li, .fx-rail i, .ptop-tyre i, .tabs-auto[data-playing] .tab-prog, .tabs-auto [role="tabpanel"]:not([hidden]) { animation: none; }
+  .fx-live .fx-signals li, .fx-live .fx-pipe > li, .fx-rail i, .tabs-auto[data-playing] .tab-prog, .tabs-auto [role="tabpanel"]:not([hidden]) { animation: none; }
 }
 .form-fallback { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
 

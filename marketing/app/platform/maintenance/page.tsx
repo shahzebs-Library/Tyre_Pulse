@@ -20,7 +20,7 @@ export default function MaintenancePage() {
   return (
     <PageFrame>
       <JsonLd data={pageBreadcrumb("Maintenance and workshop", "/platform/maintenance")} />
-      <PageTop
+      <PageTop photo="technicianPhone" photoPosition="50% 30%"
         crumbs={[{ href: "/", label: "Home" }, { href: "/platform", label: "Platform" }, { label: "Maintenance and workshop" }]}
         title="Maintenance and workshop"
         lead="Get breakdowns back on site sooner. Job cards, technicians, parts and outside repairs run from one queue."

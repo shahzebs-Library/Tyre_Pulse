@@ -59,7 +59,7 @@ export default function ReadyMixFleetPage() {
   return (
     <PageFrame>
       <JsonLd data={breadcrumbSchema([{ name: "Home", path: "/" }, { name: "Solutions", path: "/solutions" }, { name: "Ready-mix fleet", path: PATH }])} />
-      <PageTop
+      <PageTop photo="fleetLineup"
         crumbs={[{ href: "/", label: "Home" }, { href: "/solutions", label: "Solutions" }, { label: "Ready-mix fleet" }]}
         title="Keep mixers and pumps on the pour."
         lead="Maintenance software for ready-mix fleets: service by engine hours, breakdowns timed from production out to production in, and cost per cubic metre."

@@ -20,7 +20,7 @@ export default function FleetPage() {
   return (
     <PageFrame>
       <JsonLd data={pageBreadcrumb("Fleet and asset management", "/platform/fleet-assets")} />
-      <PageTop
+      <PageTop photo="loader" photoPosition="40% 50%"
         crumbs={[{ href: "/", label: "Home" }, { href: "/platform", label: "Platform" }, { label: "Fleet and assets" }]}
         title="Fleet and asset management"
         lead="Keep complete records for all your plant, machinery and vehicles. Track utilisation, service history, costs and documents in one place."

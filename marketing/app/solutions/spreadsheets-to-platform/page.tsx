@@ -64,7 +64,7 @@ export default function SpreadsheetsToPlatformPage() {
   return (
     <PageFrame>
       <JsonLd data={breadcrumbSchema([{ name: "Home", path: "/" }, { name: "Solutions", path: "/solutions" }, { name: "Spreadsheets to platform", path: PATH }])} />
-      <PageTop
+      <PageTop photo="engineer" photoPosition="35% 20%"
         crumbs={[{ href: "/", label: "Home" }, { href: "/solutions", label: "Solutions" }, { label: "Spreadsheets to platform" }]}
         title="Move your fleet off spreadsheets without losing a row."
         lead="A factual comparison of spreadsheets, generic maintenance software and Tyre Pulse, and what moving your files across involves."

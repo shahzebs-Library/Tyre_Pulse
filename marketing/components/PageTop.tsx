@@ -1,11 +1,16 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { Photo, type PhotoKey } from "./art/Photos";
 
-/** Inner-page opening: breadcrumb, title, one line of purpose, demo button. */
-export function PageTop({ crumbs, title, lead, cta = true }: { crumbs: { href?: string; label: string }[]; title: string; lead: string; cta?: boolean }) {
+/**
+ * Inner-page opening: breadcrumb, title, one line of purpose, demo button.
+ * With a photo, it sits beside the text at exactly the text block's height (like the home
+ * hero), and the demo button moves under the lead.
+ */
+export function PageTop({ crumbs, title, lead, cta = true, photo, photoPosition }: { crumbs: { href?: string; label: string }[]; title: string; lead: string; cta?: boolean; photo?: PhotoKey; photoPosition?: string }) {
+  const button = cta && <Link className="btn btn-primary" href="/contact">Book a demo <ArrowRight className="cta-arrow" size={17} aria-hidden="true" /></Link>;
   return (
-    <section className="page-top">
-      <div className="ptop-tyre" aria-hidden="true"><i /><b /></div>
+    <section className={`page-top${photo ? " has-photo" : ""}`}>
       <div className="site-shell">
         <nav aria-label="Breadcrumb">
           <ol className="crumbs">
@@ -17,13 +22,26 @@ export function PageTop({ crumbs, title, lead, cta = true }: { crumbs: { href?: 
             ))}
           </ol>
         </nav>
-        <div className="page-top-grid">
-          <div>
-            <h1 className="page-h1">{title}</h1>
-            <p className="page-lead">{lead}</p>
+        {photo ? (
+          <div className="ptop-split">
+            <div className="ptop-copy">
+              <h1 className="page-h1">{title}</h1>
+              <p className="page-lead">{lead}</p>
+              {button && <div className="ptop-cta">{button}</div>}
+            </div>
+            <div className="ptop-photo">
+              <Photo name={photo} position={photoPosition} priority sizes="(max-width: 900px) 100vw, 45vw" />
+            </div>
           </div>
-          {cta && <Link className="btn btn-primary" href="/contact">Book a demo <ArrowRight className="cta-arrow" size={17} aria-hidden="true" /></Link>}
-        </div>
+        ) : (
+          <div className="page-top-grid">
+            <div>
+              <h1 className="page-h1">{title}</h1>
+              <p className="page-lead">{lead}</p>
+            </div>
+            {button}
+          </div>
+        )}
       </div>
     </section>
   );

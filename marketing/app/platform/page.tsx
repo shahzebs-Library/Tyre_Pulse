@@ -54,7 +54,7 @@ export default function PlatformPage() {
   return (
     <PageFrame>
       <JsonLd data={pageBreadcrumb("Platform", "/platform")} />
-      <PageTop
+      <PageTop photo="fleetLineup"
         crumbs={[{ href: "/", label: "Home" }, { label: "Platform" }]}
         title="A complete PMV management platform."
         lead="Mixers, pumps, loaders and generators: one record per machine, shared by the field, workshop, stores and finance."

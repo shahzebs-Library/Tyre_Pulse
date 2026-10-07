@@ -16,7 +16,20 @@ export const SOLUTION_PAGES = [
 ] as const;
 
 export const RESOURCE_PAGES = [
-  { href: "/platform#tours", label: "Product tours", text: "Six workflows, phone and web side by side", labelAr: "جولات المنتج", textAr: "ست مسارات عمل على الهاتف والويب" },
   { href: "/security", label: "Security", text: "Tenant isolation, roles, audit", labelAr: "الأمان", textAr: "عزل الشركات والأدوار وسجل التدقيق" },
   { href: "/contact", label: "Contact", text: "Book a demo or talk to sales", labelAr: "تواصل معنا", textAr: "احجز عرضاً أو تحدث إلى المبيعات" },
+] as const;
+
+/** Product tours sit at the end of the /platform page, so they close the Platform menu too. */
+export const TOURS_LINK = { href: "/platform#tours", label: "Product tours", text: "Six workflows, phone and web side by side", labelAr: "جولات المنتج", textAr: "ست مسارات عمل على الهاتف والويب" } as const;
+
+/**
+ * The ONE menu order, read by the header and the footer. Each group lists its pages in the
+ * order the content appears on the site (Platform: overview, the four module pages in the
+ * order /platform shows them, then the tours at the bottom). Keep header and footer on this.
+ */
+export const MENU_GROUPS = [
+  { id: "platform", label: "Platform", labelAr: "المنصة", items: [...PLATFORM_PAGES, TOURS_LINK] },
+  { id: "solutions", label: "Solutions", labelAr: "الحلول", items: SOLUTION_PAGES },
+  { id: "resources", label: "Resources", labelAr: "الموارد", items: RESOURCE_PAGES },
 ] as const;

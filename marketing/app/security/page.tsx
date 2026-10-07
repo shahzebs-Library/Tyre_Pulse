@@ -39,7 +39,7 @@ export default function SecurityPage() {
   return <PageFrame>
     <JsonLd data={faqSchema(SEC_FAQ, "/security")} />
     <JsonLd data={pageBreadcrumb("Security", "/security")} />
-    <PageTop crumbs={[{ href: "/", label: "Home" }, { label: "Security" }]} title="Control access without slowing down operations." lead="Platform ownership, company administration, locations, roles, financial visibility and approval authority are kept separate, and the database enforces it." />
+    <PageTop photo="engineer" photoPosition="35% 20%" crumbs={[{ href: "/", label: "Home" }, { label: "Security" }]} title="Control access without slowing down operations." lead="Platform ownership, company administration, locations, roles, financial visibility and approval authority are kept separate, and the database enforces it." />
     <section className="section-pad tight"><div className="site-shell">
       <ul className="sec-list">
         {items.map(([Icon, title, text]) => { const C = Icon as typeof ShieldCheck; return <li key={String(title)}><C size={28} strokeWidth={1.6} aria-hidden="true" /><div><h2>{String(title)}</h2><p>{String(text)}</p></div></li>; })}

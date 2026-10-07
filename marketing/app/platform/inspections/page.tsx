@@ -21,7 +21,7 @@ export default function InspectionsPage() {
   return (
     <PageFrame>
       <JsonLd data={pageBreadcrumb("Field inspections and safety", "/platform/inspections")} />
-      <PageTop
+      <PageTop photo="technicianPhone" photoPosition="50% 30%"
         crumbs={[{ href: "/", label: "Home" }, { href: "/platform", label: "Platform" }, { label: "Inspections and safety" }]}
         title="Field inspections and safety"
         lead="Catch tyre and safety defects on the daily walk-round, and turn each one into a tracked action."

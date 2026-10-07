@@ -242,6 +242,7 @@ const ROUTES_ADDED_SINCE_REGROUP = [
   '/store-material-issue',
   '/driver-workspace',
   '/request-access',
+  '/daily-ops/workshop',
 ]
 
 const catalogItems = () => NAV_CATALOG.flatMap((g) => g.items)

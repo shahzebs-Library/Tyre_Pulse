@@ -219,6 +219,13 @@ jobs:
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://jhssdmeruxtrlqnwfksc.supabase.co' }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_PROD || 'sb_publishable_UDEH7EeHA9S5-NNu4T-9Ug_R60IinrW' }}
+          # Crash reporting. Without a DSN the app runs with telemetry off and
+          # a crash on a tester's phone is never seen. A Sentry DSN is
+          # publishable (it only lets a client SEND events). Falls back to the
+          # mobile project's DSN (the same one mobile/eas.json ships); the
+          # Flutter build is told apart there by its environment tag and app
+          # version. Set the SENTRY_DSN_FLUTTER secret to give it its own project.
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN_FLUTTER || 'https://530f25f43a3bbbff1679122847a0d3ec@o4511151917301760.ingest.de.sentry.io/4511237697568848' }}
         run: |
           # APP_VERSION is the pubspec version name (before the +build). It is
           # what the forced-update gate compares against
@@ -231,7 +238,8 @@ jobs:
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
             --dart-define=APP_ENV=staging \
-            --dart-define=APP_VERSION="$APP_VERSION"
+            --dart-define=APP_VERSION="$APP_VERSION" \
+            --dart-define=SENTRY_DSN="$SENTRY_DSN"
 
       # OWNER RULE 2026-09-29: Flutter publishes straight to Closed testing
       # (Play track id 'alpha'). Production stays the owner's call only; the

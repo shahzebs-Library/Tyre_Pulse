@@ -6,7 +6,7 @@ import { PageTop, SubNav } from "@/components/PageTop";
 import { CtaBand } from "@/components/CtaBand";
 import { ConditionCard, DefectCard, MeterCard, OfflineInspectionPhone, SignOffCard } from "@/components/mock/Screens";
 import { Photo } from "@/components/art/Photos";
-import { InspectionDemo } from "@/components/motion/InspectionDemo";
+import { Walkthrough } from "@/components/motion/walkthrough/Walkthrough";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../../schema";
 import { OG_IMAGES } from "@/lib/site";
 
@@ -21,7 +21,7 @@ export default function InspectionsPage() {
   return (
     <PageFrame>
       <JsonLd data={pageBreadcrumb("Field inspections and safety", "/platform/inspections")} />
-      <PageTop
+      <PageTop photo="technicianPhone" photoPosition="50% 30%"
         crumbs={[{ href: "/", label: "Home" }, { href: "/platform", label: "Platform" }, { label: "Inspections and safety" }]}
         title="Field inspections and safety"
         lead="Catch tyre and safety defects on the daily walk-round, and turn each one into a tracked action."
@@ -54,9 +54,8 @@ export default function InspectionsPage() {
       </section>
       <section className="bright-band" aria-labelledby="demo-h">
         <div className="site-shell">
-          <h2 className="sec-h" id="demo-h">Watch one inspection, from scan to work order.</h2>
-          <p className="bright-lead">The phone in the yard and the web app in the office, side by side at every step.</p>
-          <InspectionDemo />
+          <h2 className="sec-h" id="demo-h">Watch an inspection and a tyre alert become work orders.</h2>
+          <Walkthrough only={["inspection", "tyres"]} />
         </div>
       </section>
       <section className="section-pad soft-bg anchor-sec" id="tyres" aria-labelledby="tyres-h">

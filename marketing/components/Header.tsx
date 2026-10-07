@@ -2,18 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown } from "lucide-react";
+import { BadgeDollarSign, Box, Building2, ChevronDown, CircleDot, ClipboardCheck, FileSpreadsheet, LayoutGrid, Mail, PlayCircle, ShieldCheck, Truck, Wrench } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { APP_URL } from "@/lib/site";
-import { PLATFORM_PAGES, RESOURCE_PAGES, SOLUTION_PAGES } from "@/lib/nav";
+import { MENU_GROUPS, menuHref } from "@/lib/nav";
 import { A11yStyles } from "./A11yStyles";
 import { Logo } from "./Logo";
 
-const MENUS = [
-  { id: "platform", label: "Platform", labelAr: "المنصة", items: PLATFORM_PAGES },
-  { id: "solutions", label: "Solutions", labelAr: "الحلول", items: SOLUTION_PAGES },
-  { id: "resources", label: "Resources", labelAr: "الموارد", items: RESOURCE_PAGES },
-] as const;
+const MENUS = MENU_GROUPS;
+
+/** One icon per menu entry, keyed by its link. */
+const ICONS: Record<string, typeof Truck> = {
+  "/platform": LayoutGrid, "/platform/fleet-assets": Truck, "/platform/maintenance": Wrench, "/platform/inspections": ClipboardCheck,
+  "/platform/inventory": Box, "/solutions/tyre-management": CircleDot, "/solutions/ready-mix-fleet": Truck, "/solutions/spreadsheets-to-platform": FileSpreadsheet, "/industries": Building2, "/pricing": BadgeDollarSign, "/platform#tours": PlayCircle, "/security": ShieldCheck, "/contact": Mail,
+};
 
 /** Header copy per locale. The Arabic page links to the English pages, which are the only other locale. */
 const COPY = {
@@ -44,6 +46,22 @@ export function Header({ locale = "en" }: { locale?: "en" | "ar" }) {
 
   const closeAll = useCallback(() => { setMenu(null); setMobile(false); }, []);
 
+  // Desktop with a real pointer: menus open on hover, with a short close delay so the
+  // pointer can travel from the label into the panel. Click and keyboard still work.
+  const hoverTimer = useRef<number | null>(null);
+  const canHover = () => typeof window !== "undefined" && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  const hoverOpen = (id: string) => {
+    if (!canHover()) return;
+    if (hoverTimer.current) window.clearTimeout(hoverTimer.current);
+    hoverTimer.current = window.setTimeout(() => setMenu(id), 90);
+  };
+  const hoverClose = () => {
+    if (!canHover()) return;
+    if (hoverTimer.current) window.clearTimeout(hoverTimer.current);
+    hoverTimer.current = window.setTimeout(() => setMenu(null), 180);
+  };
+  useEffect(() => () => { if (hoverTimer.current) window.clearTimeout(hoverTimer.current); }, []);
+
   // Escape closes and returns focus; a click outside the bar closes.
   useEffect(() => {
     if (!menu && !mobile) return;
@@ -68,7 +86,7 @@ export function Header({ locale = "en" }: { locale?: "en" | "ar" }) {
         <Link className="topbar-logo" href="/" aria-label={c.home}><Logo /></Link>
         <nav className="topnav" aria-label={c.main}>
           {MENUS.map((m) => (
-            <div className="topnav-item" key={m.id}>
+            <div className="topnav-item" key={m.id} onPointerEnter={() => hoverOpen(m.id)} onPointerLeave={hoverClose}>
               <button
                 id={`menu-btn-${m.id}`}
                 type="button"
@@ -81,11 +99,17 @@ export function Header({ locale = "en" }: { locale?: "en" | "ar" }) {
               </button>
               {menu === m.id && (
                 <div className="dropdown" id={`menu-${m.id}`}>
-                  {m.items.map((it) => (
-                    <Link key={it.href} href={it.href} onClick={closeAll} aria-current={pathname === it.href ? "page" : undefined}>
-                      <b>{ar ? it.labelAr : it.label}</b><span>{ar ? it.textAr : it.text}</span>
-                    </Link>
-                  ))}
+                  <div className="dd-list">
+                    {m.items.map((it) => {
+                      const Icon = ICONS[it.href] ?? LayoutGrid;
+                      return (
+                        <Link key={it.href} href={menuHref(it.href)} onClick={closeAll} aria-current={pathname === it.href ? "page" : undefined}>
+                          <i className="dd-ic" aria-hidden="true"><Icon size={18} /></i>
+                          <span className="dd-t"><b>{ar ? it.labelAr : it.label}</b><span>{ar ? it.textAr : it.text}</span></span>
+                        </Link>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
@@ -118,7 +142,7 @@ export function Header({ locale = "en" }: { locale?: "en" | "ar" }) {
             {MENUS.map((m, gi) => (
               <div key={m.id} className="mobile-group" style={{ "--rv-delay": `${gi * 60}ms` } as React.CSSProperties}>
                 <span className="mobile-group-h">{ar ? m.labelAr : m.label}</span>
-                {m.items.map((it) => <Link key={it.href} href={it.href} onClick={closeAll} aria-current={pathname === it.href ? "page" : undefined}>{ar ? it.labelAr : it.label}</Link>)}
+                {m.items.map((it) => <Link key={it.href} href={menuHref(it.href)} onClick={closeAll} aria-current={pathname === it.href ? "page" : undefined}>{ar ? it.labelAr : it.label}</Link>)}
               </div>
             ))}
             <div className="mobile-group" style={{ "--rv-delay": `${MENUS.length * 60}ms` } as React.CSSProperties}>

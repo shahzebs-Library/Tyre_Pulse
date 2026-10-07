@@ -4,6 +4,11 @@ import "./globals.css";
 import "./pmv.css";
 import "./motion.css";
 
+/*
+ * Both families ship as variable fonts, so listing fewer weights does not shrink the download:
+ * Archivo 700 and 800 resolve to the SAME woff2 file, and Inter is one variable file that covers
+ * every body weight in use (400 to 850). Measured on the build output, 2026-10-07.
+ */
 const display = Archivo({ subsets: ["latin"], weight: ["700", "800"], variable: "--font-display", display: "swap" });
 const body = Inter({ subsets: ["latin"], variable: "--font-body", display: "swap" });
 import { WhatsAppButton } from "@/components/WhatsAppButton";
@@ -68,7 +73,7 @@ export const viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${display.variable} ${body.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${display.variable} ${body.variable}`} data-scroll-behavior="smooth" suppressHydrationWarning>
       <body>
         <JsonLd data={siteSchemaGraph()} />
         <LocaleSync />

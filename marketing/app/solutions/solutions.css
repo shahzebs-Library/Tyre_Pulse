@@ -1,0 +1,45 @@
+/* Solution pages (/solutions/*). Prefix sol- so nothing here collides with pmv.css. */
+.sol-problem { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: start; }
+.sol-problem p { margin: 0 0 12px; color: #3b3b35; max-width: 60ch; }
+.sol-pains { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; border-top: 1px solid var(--line); }
+.sol-pains li { padding: 14px 0; border-bottom: 1px solid var(--line); display: grid; gap: 4px; }
+.sol-pains b { font-weight: 750; }
+.sol-pains span { color: var(--muted); font-size: .94rem; }
+
+.sol-modules { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.sol-modules a { display: grid; gap: 6px; height: 100%; padding: 20px; border: 1px solid var(--line); border-radius: 8px; background: #fff; min-height: 44px; }
+.sol-modules a:hover, .sol-modules a:focus-visible { border-color: #161616; }
+.sol-modules b { font-weight: 750; }
+.sol-modules span { color: var(--muted); font-size: .92rem; }
+.sol-modules em { font-style: normal; font-weight: 700; font-size: .88rem; display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; }
+
+.sol-start { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 40px; border-top: 1px solid var(--line); }
+.sol-start li { padding: 16px 0; border-bottom: 1px solid var(--line); display: grid; gap: 4px; }
+.sol-start b { font-weight: 750; }
+.sol-start span { color: var(--muted); font-size: .92rem; }
+.sol-tag { display: inline-block; font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; padding: 2px 8px; border-radius: 4px; background: var(--brand); color: #161616; width: max-content; }
+.sol-tag.opt { background: #ecebe6; }
+
+.sol-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.sol-table { width: 100%; min-width: 640px; border-collapse: collapse; font-size: .92rem; }
+.sol-table caption { text-align: start; padding: 14px 16px 0; color: var(--muted); font-size: .86rem; }
+.sol-table th, .sol-table td { text-align: start; vertical-align: top; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.sol-table thead th { background: #fafaf8; font-weight: 800; }
+.sol-table tbody th { font-weight: 700; width: 22%; }
+.sol-table td.sol-us { background: #fffbea; }
+.sol-table tbody tr:last-child th, .sol-table tbody tr:last-child td { border-bottom: 0; }
+
+.sol-cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.sol-cards a { display: grid; gap: 8px; height: 100%; padding: 24px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.sol-cards a:hover, .sol-cards a:focus-visible { border-color: #161616; }
+.sol-cards h2 { font-size: 1.15rem; margin: 0; }
+.sol-cards p { margin: 0; color: var(--muted); }
+.sol-cards em { font-style: normal; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; }
+
+@media (max-width: 900px) {
+  .sol-problem, .sol-start { grid-template-columns: minmax(0, 1fr); }
+  .sol-modules, .sol-cards { grid-template-columns: minmax(0, 1fr); }
+}
+@media (min-width: 600px) and (max-width: 900px) {
+  .sol-modules, .sol-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

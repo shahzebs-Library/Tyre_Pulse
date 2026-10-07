@@ -6,9 +6,16 @@ import { z } from "zod";
 const line = (min: number, max: number) =>
   z.string().transform((v) => v.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim()).pipe(z.string().min(min).max(max));
 
+// Optional phone / WhatsApp number. Loose on purpose: digits, spaces, +, -, ( and ), with
+// 6 to 20 digits in total. Control characters are folded like every single-line field.
+const phone = line(0, 40).refine(
+  (v) => v === "" || (/^[0-9+()\- ]+$/.test(v) && (v.match(/[0-9]/g)?.length ?? 0) >= 6 && (v.match(/[0-9]/g)?.length ?? 0) <= 20),
+);
+
 const requestSchema = z.object({
   name: line(2, 100),
   email: z.string().trim().email().max(200),
+  phone: phone.optional().default(""),
   company: line(2, 160),
   country: line(2, 100),
   fleetSize: line(1, 100),
@@ -17,7 +24,7 @@ const requestSchema = z.object({
   website: z.string().max(0).optional().default(""),
 });
 
-const FIELD_NAMES = new Set(["name", "email", "company", "country", "fleetSize", "industry", "message"]);
+const FIELD_NAMES = new Set(["name", "email", "phone", "company", "country", "fleetSize", "industry", "message"]);
 
 // A real request is well under 4 KB; anything far larger is refused before it is read.
 const MAX_BODY_BYTES = 16 * 1024;
@@ -150,7 +157,7 @@ export async function POST(request: Request) {
     if (!apiKey || !recipient || !sender) {
       return NextResponse.json({ message: "Demo requests are temporarily unavailable. Please try again later." }, { status: 503 });
     }
-    const { name, email, company, country, fleetSize, industry, message } = parsed.data;
+    const { name, email, phone: phoneNumber, company, country, fleetSize, industry, message } = parsed.data;
     const delivery = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -159,7 +166,7 @@ export async function POST(request: Request) {
         to: [recipient],
         reply_to: email,
         subject: "Tyre Pulse demo request",
-        text: [`Name: ${name}`, `Email: ${email}`, `Company: ${company}`, `Country: ${country}`, `Fleet size: ${fleetSize}`, `Industry: ${industry}`, "", message].join("\n"),
+        text: [`Name: ${name}`, `Email: ${email}`, ...(phoneNumber ? [`Phone: ${phoneNumber}`] : []), `Company: ${company}`, `Country: ${country}`, `Fleet size: ${fleetSize}`, `Industry: ${industry}`, "", message].join("\n"),
       }),
       signal: AbortSignal.timeout(10000),
     });

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { PageFrame } from "@/components/PageFrame";
 import { PageTop, SubNav } from "@/components/PageTop";
 import { CtaBand } from "@/components/CtaBand";
+import { TourBand } from "@/components/TourBand";
 import { FleetCostPanel, InventoryTable, PurchaseRequest } from "@/components/mock/Screens";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../../schema";
 import { OG_IMAGES } from "@/lib/site";
@@ -17,7 +18,7 @@ export default function InventoryPage() {
   return (
     <PageFrame>
       <JsonLd data={pageBreadcrumb("Inventory, procurement and reporting", "/platform/inventory")} />
-      <PageTop
+      <PageTop photo="riyadh" photoPosition="30% 90%"
         crumbs={[{ href: "/", label: "Home" }, { href: "/platform", label: "Platform" }, { label: "Inventory, procurement and reports" }]}
         title="Inventory, procurement and reporting"
         lead="See which parts each job consumed and what every machine costs to run, by site and by month."
@@ -38,6 +39,7 @@ export default function InventoryPage() {
           </div>
         </div>
       </section>
+      <TourBand id="cost-tour" title="From store issue to cost per machine." only={["cost"]} />
       <CtaBand title="See which parts each job actually consumed." text="Send a month of store issues. We tie them to job cards and machines in the demo." button="Book a demo on your data" />
     </PageFrame>
   );

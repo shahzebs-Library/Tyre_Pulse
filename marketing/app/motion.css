@@ -856,3 +856,106 @@ main:has(> .home-hero) > section:nth-of-type(n + 3) {
 .fx-charts .v-heat { font-size: 11px; } .fx-charts .v-heat i { height: 28px; font-size: 10.5px; }
 @media (max-width: 860px) { .fx-charts { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 480px) { .fx-charts .v-donut { flex-direction: column; align-items: stretch; } .fx-charts .v-donut-fig { align-self: center; } }
+
+/* Proof strip used on its own (no marquee under it). */
+.proof.proof-solo { padding: 56px 0 56px; border-top: 1px solid var(--line); }
+.incl-list { margin: 0; }
+
+/* Auto-advancing tabs: a thin bar fills under the active tab. */
+.tabs-auto [role="tab"] { position: relative; }
+.tab-prog { position: absolute; inset-inline-start: 0; bottom: 0; height: 3px; width: 100%; background: #161616; transform-origin: left center; transform: scaleX(0); }
+[dir="rtl"] .tab-prog { transform-origin: right center; }
+.tabs-auto[data-playing] .tab-prog { animation: tp-tab-fill var(--tab-ms, 6000ms) linear forwards; }
+@keyframes tp-tab-fill { to { transform: scaleX(1); } }
+.tabs-auto [role="tabpanel"]:not([hidden]) { animation: tp-tab-in .45s var(--ease-out) both; }
+@keyframes tp-tab-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* From a field issue to a closed job: signals light up, a token runs the pipeline,
+   each stage takes its turn. 9 s cycle, paused off screen via .in-view. */
+.fx-live .fx-signals li { animation: tp-fx-sig 6s ease-in-out infinite; animation-delay: calc(var(--i) * 1s); }
+@keyframes tp-fx-sig { 0%, 12% { border-color: var(--brand); color: #161616; background: var(--brand); } 20%, 100% { border-color: #3a3a36; color: #e8e8e2; background: #1f1f1d; } }
+.fx-rail { position: relative; height: 2px; margin: 0 0 14px; background: #33332f; border-radius: 2px; overflow: hidden; }
+.fx-rail i { position: absolute; top: 0; inset-inline-start: 0; width: 16.66%; height: 100%; background: var(--brand); box-shadow: 0 0 12px var(--brand); animation: tp-fx-run 9s steps(6, jump-none) infinite; }
+@keyframes tp-fx-run { from { translate: 0 0; } to { translate: 500% 0; } }
+[dir="rtl"] .fx-rail i { animation-name: tp-fx-run-rtl; }
+@keyframes tp-fx-run-rtl { from { translate: 0 0; } to { translate: -500% 0; } }
+.fx-live .fx-pipe > li { animation: tp-fx-stage 9s ease-in-out infinite; animation-delay: calc(var(--i) * 1.5s); }
+@keyframes tp-fx-stage {
+  0% { border-color: #33332f; transform: none; box-shadow: none; }
+  4%, 14% { border-color: var(--brand); transform: translateY(-4px); box-shadow: 0 10px 24px rgba(255, 198, 41, .16); }
+  20%, 100% { border-color: #33332f; transform: none; box-shadow: none; }
+}
+.fx-live:not(.in-view) .fx-signals li, .fx-live:not(.in-view) .fx-pipe > li, .fx-live:not(.in-view) .fx-rail i { animation-play-state: paused; }
+@media (max-width: 1180px) { .fx-rail { display: none; } }
+
+/* Inner page heroes: optional photo beside the title, as tall as the text block. */
+.page-top { overflow: hidden; }
+.page-top .site-shell { position: relative; z-index: 1; }
+.ptop-split { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: clamp(24px, 3.4vw, 48px); align-items: stretch; }
+.ptop-cta { margin-top: 22px; }
+.ptop-photo { position: relative; min-height: 200px; border-radius: 12px; overflow: hidden; background: #e8e8e2; }
+.ptop-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+@media (prefers-reduced-motion: no-preference) { .page-top.has-photo .ptop-photo { animation: tp-visual-in .9s var(--ease-swift) both; } }
+@media (max-width: 900px) {
+  .ptop-split { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .ptop-photo { min-height: 0; aspect-ratio: 16 / 9; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-live .fx-signals li, .fx-live .fx-pipe > li, .fx-rail i, .tabs-auto[data-playing] .tab-prog, .tabs-auto [role="tabpanel"]:not([hidden]) { animation: none; }
+}
+.form-fallback { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+
+/* Platform overview: the side list switches the panel in place. */
+.overview.overview-tabs { grid-template-columns: 260px minmax(0, 1fr); }
+.overview-tabs > [role="tabpanel"] { grid-column: 2; grid-row: 1; min-width: 0; }
+.overview-tabs > .ov-nav { grid-column: 1; grid-row: 1; display: grid; }
+.ov-nav [role="tab"] { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 0; border-radius: 5px; background: transparent; font: inherit; font-weight: 600; font-size: .92rem; min-height: 44px; text-align: start; color: var(--ink); cursor: pointer; }
+.ov-nav [role="tab"]:hover { background: #fff; }
+.ov-nav [role="tab"][aria-selected="true"] { background: var(--brand); font-weight: 800; }
+.ov-main h3 { font-family: var(--font-display), sans-serif; font-size: 1.5rem; margin: 0 0 10px; letter-spacing: -.02em; }
+@media (max-width: 900px) {
+  .overview.overview-tabs { grid-template-columns: minmax(0, 1fr); }
+  .overview-tabs > [role="tabpanel"], .overview-tabs > .ov-nav { grid-column: 1; grid-row: auto; }
+  .overview-tabs > .ov-nav { grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; }
+}
+
+/* Header menus: icon rows, a mega panel for Platform, and a hover bridge so the
+   pointer can cross the gap between the label and the panel. */
+.dropdown { width: 340px; padding: 8px; }
+.dropdown::before { content: ""; position: absolute; inset-inline: 0; top: -10px; height: 10px; }
+.dd-list { display: grid; gap: 2px; }
+.dropdown .dd-list a { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; align-items: center; padding: 10px; }
+.dd-ic { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 8px; background: #f4f3ee; color: #161616; font-style: normal; transition: background-color .15s ease; }
+.dropdown .dd-list a:hover .dd-ic, .dropdown .dd-list a[aria-current="page"] .dd-ic { background: var(--brand); }
+.dd-t { display: grid; gap: 1px; }
+.dd-t > span { font-size: .8rem; color: var(--muted); }
+.dropdown-mega { width: 620px; grid-template-columns: minmax(0, 1fr) 220px; gap: 8px; }
+.dd-feature { display: grid; align-content: end; gap: 8px; padding: 18px; border-radius: 8px; color: #fff; min-height: 100%;
+  background: linear-gradient(160deg, rgba(22,22,22,.55), #161616 70%), url("/photos/transit-mixer.webp") center 30% / cover; }
+.dd-feature small { color: var(--brand); font-weight: 700; font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; }
+.dd-feature b { font-size: 1rem; line-height: 1.3; }
+.dd-feature span { display: inline-flex; align-items: center; gap: 6px; font-size: .84rem; font-weight: 700; color: var(--brand); }
+.dd-feature:hover span svg { transform: translateX(3px); transition: transform .15s ease; }
+@media (max-width: 1100px) { .dropdown-mega { width: 340px; grid-template-columns: minmax(0, 1fr); } .dd-feature { display: none; } }
+
+/* Moving fleet strip: real (logo-free) photos of each asset type with its name.
+   Each photo drifts gently inside its tile; transform only, paused off screen and on hover. */
+.marquee li { gap: 12px; padding: 10px 22px 10px 14px; font-size: clamp(.95rem, 1.3vw, 1.08rem); }
+.marquee li::after { display: none; }
+.marquee li + li { border-inline-start: 1px solid var(--line); }
+.fv { flex: none; display: block; width: 150px; height: 94px; border-radius: 12px; overflow: hidden; background: #f4f3ee; box-shadow: inset 0 0 0 1px rgba(22,22,22,.06); }
+.fv-img { display: block; width: 100%; height: 100%; object-fit: cover; transform-origin: 50% 90%; animation: tp-fv-drift 4.8s ease-in-out infinite; will-change: transform; }
+.marquee li:nth-child(3n+2) .fv-img { animation-delay: -1.6s; }
+.marquee li:nth-child(3n) .fv-img { animation-delay: -3.2s; }
+@keyframes tp-fv-drift { 0%, 100% { transform: translate3d(0, 0, 0) scale(1); } 50% { transform: translate3d(-3px, -2px, 0) scale(1.035); } }
+.marquee:not(.in-view) .fv-img, .marquee:hover .fv-img { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .fv-img { animation: none; } }
+@media (max-width: 600px) { .fv { width: 104px; height: 65px; border-radius: 10px; } .marquee li { padding: 8px 16px 8px 10px; } }
+
+/* Hero Operations slide: the live activity card sits inside the picture frame (bottom
+   corner) instead of hanging below it, where it covered the slide picker tabs. */
+.hc-visual > .hc-live > .hc-float { top: auto; bottom: 14px; right: 14px; }
+
+/* Menu landing point at the foot of the page banner. html has scroll-padding-top: 80px for
+   the sticky header; the negative margin brings the details right up under the header. */
+.ptop-anchor { position: absolute; bottom: 0; left: 0; width: 1px; height: 1px; scroll-margin-top: -14px; }

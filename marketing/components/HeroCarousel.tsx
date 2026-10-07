@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { PROOF } from "@/lib/proof";
 
 export type HeroSlide = {
   id: string;
@@ -16,7 +17,22 @@ export type HeroSlide = {
 };
 
 /** How long each slide stays on screen. The progress bar in the selector is timed by the same value. */
-const SLIDE_MS = 7000;
+const SLIDE_MS = 5000;
+
+/**
+ * One proof line under the CTAs, built from the same measured figures as the proof strip
+ * (lib/proof.ts), so the hero can never quote a different number. Rendered on the server
+ * inside every slide's copy, so it is part of the first paint and adds no layout shift.
+ */
+const proofFigure = (label: string) => {
+  const p = PROOF.find((x) => x.label === label);
+  return p ? `${p.value.toLocaleString("en-US")}${p.suffix}` : null;
+};
+const PROOF_MACHINES = proofFigure("machines on record");
+const PROOF_JOBS = proofFigure("job cards");
+const PROOF_LINE = PROOF_MACHINES && PROOF_JOBS
+  ? `In live use: ${PROOF_MACHINES} machines and ${PROOF_JOBS} job cards on record.`
+  : null;
 
 /**
  * Auto-rotating home hero. Every slide swaps the whole upper area (kicker,
@@ -88,6 +104,7 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
                     <Link className="btn btn-primary" href="/contact">Book a demo <ArrowRight size={18} aria-hidden="true" /></Link>
                     <Link className="btn-text" href={s.link.href}>{s.link.label} <ArrowRight size={17} aria-hidden="true" /></Link>
                   </div>
+                  {PROOF_LINE && <p className="hc-proof">{PROOF_LINE}</p>}
                 </div>
                 <div className="hc-visual">{s.visual}</div>
               </div>

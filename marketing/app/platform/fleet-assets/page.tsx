@@ -3,6 +3,7 @@ import { CheckCircle2 } from "lucide-react";
 import { PageFrame } from "@/components/PageFrame";
 import { PageTop, SubNav } from "@/components/PageTop";
 import { CtaBand } from "@/components/CtaBand";
+import { TourBand } from "@/components/TourBand";
 import { AssetHistoryTable, AssetRecord, AssetStats, SampleTag } from "@/components/mock/Screens";
 import { Photo } from "@/components/art/Photos";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../../schema";
@@ -19,7 +20,7 @@ export default function FleetPage() {
   return (
     <PageFrame>
       <JsonLd data={pageBreadcrumb("Fleet and asset management", "/platform/fleet-assets")} />
-      <PageTop
+      <PageTop photo="loader" photoPosition="40% 50%"
         crumbs={[{ href: "/", label: "Home" }, { href: "/platform", label: "Platform" }, { label: "Fleet and assets" }]}
         title="Fleet and asset management"
         lead="Keep complete records for all your plant, machinery and vehicles. Track utilisation, service history, costs and documents in one place."
@@ -59,6 +60,7 @@ export default function FleetPage() {
           </div>
         </div>
       </section>
+      <TourBand id="asset-tours" title="What one machine costs, and what happens when it is damaged." only={["cost", "accident"]} />
       <CtaBand title="Find the machines that cost more than they earn." text="Send your asset list. We show downtime and repair cost for each one in the demo." button="Book a demo on your data" />
     </PageFrame>
   );

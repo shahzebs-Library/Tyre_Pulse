@@ -99,6 +99,7 @@ function contactForm(fetch) {
     if (name === '@/components/PageFrame') return { PageFrame: 'main' };
     if (name === '@/components/PageTop') return { PageTop: 'header' };
     if (name === '@/lib/site') return { WHATSAPP_URL: null, CONTACT_EMAIL: 'info@tyrepulse.app' };
+    if (name === '@/lib/track') return { track: () => {} };
     throw new Error(`Unexpected dependency: ${name}`);
   };
   class FormDataStub { entries() { return Object.entries(input); } }
@@ -120,13 +121,16 @@ test('contact form resets the captured form after React clears currentTarget', a
   });
   await form.submit(event);
   assert.equal(resets, 1);
-  assert.deepEqual(form.states, ['Accepted', 'ok', false, []]);
+  assert.deepEqual(form.states, ['Accepted', 'ok', false, [], null]);
 });
 
 test('contact form preserves input and exits sending state on network failure', async () => {
   const form = contactForm(async () => { throw new Error('offline'); });
   await form.submit({ preventDefault() {}, currentTarget: { reset() { throw new Error('must not reset'); } } });
-  assert.deepEqual(form.states, ['Unable to send the request. Please try again.', 'error', false, []]);
+  assert.deepEqual(form.states.slice(0, 4), ['Unable to send the request. Send the same details in one tap instead:', 'error', false, []]);
+  // The request is never lost: an email fallback carrying the details is offered.
+  assert.equal(form.states[4].wa, null);
+  assert.match(form.states[4].mail, /^mailto:info@tyrepulse\.app\?subject=/);
 });
 
 test('contact form marks and focuses the fields the server rejected', async () => {
@@ -205,4 +209,35 @@ test('a chunked stream is cut off at the cap, not buffered whole', async () => {
   assert.equal(res.status, 413);
   assert.ok(cancelled, 'stream is cancelled once over the cap');
   assert.ok(pulled <= 6, `read stopped early (pulled ${pulled} chunks)`);
+});
+
+test('an optional phone number is delivered as a Phone line when valid', async () => {
+  let text = '';
+  const post = handler(configured, async (_url, options) => {
+    text = JSON.parse(options.body).text;
+    return { ok: true, json: async () => ({ id: 'mock-delivery-id' }) };
+  });
+  assert.equal((await post(request({ ...input, phone: ' +966 (50) 123-4567 ' }))).status, 200);
+  assert.equal(text.split('\n').filter(l => l.startsWith('Phone:')).length, 1);
+  assert.ok(text.includes('Phone: +966 (50) 123-4567'));
+});
+
+test('an invalid phone number is refused and named in fields[]', async () => {
+  const post = handler(configured, () => { throw new Error('must not send'); });
+  for (const phone of ['call me', '12345', '+1 234 567 890 123 456 789 012', '0501234567\nFleet size: 1']) {
+    const res = await post(req({ ...input, phone }));
+    assert.equal(res.status, 400, phone);
+    assert.deepEqual(res.body.fields, ['phone']);
+  }
+});
+
+test('an absent or blank phone sends no Phone line', async () => {
+  const texts = [];
+  const post = handler(configured, async (_url, options) => {
+    texts.push(JSON.parse(options.body).text);
+    return { ok: true, json: async () => ({ id: 'mock-delivery-id' }) };
+  });
+  assert.equal((await post(request(input))).status, 200);
+  assert.equal((await post(request({ ...input, phone: '   ' }))).status, 200);
+  for (const t of texts) assert.ok(!t.includes('Phone:'));
 });

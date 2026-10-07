@@ -4,6 +4,8 @@ import { PageFrame } from "@/components/PageFrame";
 import { PageTop } from "@/components/PageTop";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../schema";
 import { CTA } from "@/components/CTA";
+import { ProofStrip } from "@/components/ProofStrip";
+import { TourBand } from "@/components/TourBand";
 import { OG_IMAGES } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -32,12 +34,14 @@ const industries = [
 export default function IndustriesPage() {
   return <PageFrame>
     <JsonLd data={pageBreadcrumb("Industries", "/industries")} />
-    <PageTop crumbs={[{ href: "/", label: "Home" }, { label: "Industries" }]} title="Configured for the way your operation works." lead="Built inside a ready-mix concrete operation running mixers, pumps and batching plants across Saudi Arabia, the UAE and Egypt. The same platform is configured for each model below." />
+    <PageTop photo="fleetLineup" crumbs={[{ href: "/", label: "Home" }, { label: "Industries" }]} title="Configured for the way your operation works." lead="Built inside a ready-mix concrete operation running mixers, pumps and batching plants across Saudi Arabia, the UAE and Egypt. The same platform is configured for each model below." />
     <section className="section-pad tight"><div className="site-shell">
       <ul className="ind-list">
         {industries.map(([photo, title, text]) => <li key={title}><div className="ind-media"><Photo name={photo} position={photo === "riyadh" ? "30% 92%" : undefined} sizes="(max-width: 760px) 100vw, 600px" /></div><h2>{title}</h2><p>{text}</p></li>)}
       </ul>
     </div></section>
+    <ProofStrip id="ind-proof" title="Proven first in ready-mix concrete." text="Mixers, pumps and batching plants across three countries run on Tyre Pulse every day." />
+    <TourBand id="ind-tours" title="The workflows every model shares." only={["inspection", "workshop", "cost"]} />
     <CTA />
   </PageFrame>;
 }

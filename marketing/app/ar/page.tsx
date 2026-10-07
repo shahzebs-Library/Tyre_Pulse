@@ -9,8 +9,13 @@ import { Photo } from "@/components/art/Photos";
 import { FleetCostPanel } from "@/components/mock/Screens";
 import { alternatesFor } from "../schema";
 import { OG_IMAGES } from "@/lib/site";
+import { ArProofStrip } from "./ArProofStrip";
 
-const arabic = IBM_Plex_Sans_Arabic({ subsets: ["arabic"], weight: ["400", "500", "700"], variable: "--font-arabic", display: "swap" });
+/*
+ * 400 for body text and 700 for headings and bold text (heavier CSS weights such as 800 resolve to 700).
+ * 500 was dropped: no element rendered on this page asks for weight 500, and its files cost about 55 KB (36 KB of it preloaded on this page).
+ */
+const arabic = IBM_Plex_Sans_Arabic({ subsets: ["arabic"], weight: ["400", "700"], variable: "--font-arabic", display: "swap" });
 
 export const metadata: Metadata = {
   title: { absolute: "تاير بالس | إدارة المعدات والآليات والمركبات" },
@@ -62,7 +67,7 @@ export default function ArabicPage() {
                 <p className="hero-lead">اربط الأصول والورشة والفرق الميدانية والمستودعات في مساحة عمل تشغيلية واحدة.</p>
                 <div className="hero-cta">
                   <Link className="btn btn-primary" href="/contact">احجز عرضاً <ArrowLeft size={18} aria-hidden="true" /></Link>
-                  <Link className="btn-text" href="/platform" hrefLang="en">استكشف المنصة (بالإنجليزية) <ArrowLeft size={17} aria-hidden="true" /></Link>
+                  <Link className="btn-text" href="/platform" hrefLang="en">تعرّف على المنصة<span className="sr-only">، الصفحة باللغة الإنجليزية</span> <ArrowLeft size={17} aria-hidden="true" /></Link>
                 </div>
               </div>
               <div className="hc-visual">
@@ -72,6 +77,8 @@ export default function ArabicPage() {
           </div>
         </div>
       </section>
+
+      <ArProofStrip />
 
       <section className="section-pad" aria-labelledby="ar-flow">
         <div className="site-shell">

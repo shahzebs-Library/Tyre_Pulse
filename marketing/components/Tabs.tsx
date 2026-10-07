@@ -14,12 +14,36 @@ export type TabItem = { id: string; label: string; icon?: React.ReactNode; panel
  * selected tab is brought into view. `data-fade` carries "start", "end" or both,
  * measured in reading direction so the fade is correct in Arabic too.
  */
-export function Tabs({ items, label, className = "tabbar" }: { items: TabItem[]; label: string; className?: string }) {
+export function Tabs({ items, label, className = "tabbar", autoplay, wrapClass }: { items: TabItem[]; label: string; className?: string; autoplay?: number; wrapClass?: string }) {
   const [active, setActive] = useState(0);
   const base = useId();
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const bar = useRef<HTMLDivElement | null>(null);
   const [fade, setFade] = useState("");
+  const root = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(false);
+  const [hold, setHold] = useState(false);
+  // A keyboard user takes over: auto-advance stops for good so focus never jumps.
+  const [stopped, setStopped] = useState(false);
+
+  // Optional auto-advance: only while on screen, the page is visible and the
+  // visitor is not hovering or focused inside; never under reduced motion.
+  useEffect(() => {
+    if (!autoplay || !root.current || !("IntersectionObserver" in window)) return;
+    const io = new IntersectionObserver(([e]) => setVisible(e.isIntersecting), { threshold: 0.35 });
+    io.observe(root.current);
+    return () => io.disconnect();
+  }, [autoplay]);
+
+  useEffect(() => {
+    if (!autoplay || !visible || hold || stopped) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const t = window.setTimeout(() => {
+      if (document.hidden) return;
+      setActive((a) => (a + 1) % items.length);
+    }, autoplay);
+    return () => window.clearTimeout(t);
+  }, [autoplay, visible, hold, stopped, active, items.length]);
 
   useEffect(() => {
     const el = bar.current;
@@ -50,7 +74,15 @@ export function Tabs({ items, label, className = "tabbar" }: { items: TabItem[];
   const move = (i: number) => select((i + items.length) % items.length, true);
 
   return (
-    <div>
+    <div
+      ref={root}
+      className={[autoplay ? "tabs-auto" : "", wrapClass ?? ""].filter(Boolean).join(" ") || undefined}
+      data-playing={autoplay && visible && !hold && !stopped ? "" : undefined}
+      style={autoplay ? { ["--tab-ms" as string]: `${autoplay}ms` } : undefined}
+      onPointerEnter={autoplay ? () => setHold(true) : undefined}
+      onPointerLeave={autoplay ? () => setHold(false) : undefined}
+      onKeyDown={autoplay ? () => setStopped(true) : undefined}
+    >
       <div ref={bar} className={className} role="tablist" aria-label={label} data-fade={fade || undefined}>
         {items.map((t, i) => (
           <button
@@ -71,6 +103,7 @@ export function Tabs({ items, label, className = "tabbar" }: { items: TabItem[];
             }}
           >
             {t.icon}{t.label}
+            {autoplay && i === active && <span key={active} className="tab-prog" aria-hidden="true" />}
           </button>
         ))}
       </div>

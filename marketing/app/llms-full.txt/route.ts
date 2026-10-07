@@ -49,6 +49,14 @@ ${moduleSection}
 3. Control. Progress, blockers, cost, service level and approval are tracked against that record.
 4. Understand. Results become KPIs, risks and actions, using the same controlled calculations that power the screens, the exports and the executive displays.
 
+## Use cases
+
+These pages on the site describe Tyre Pulse by the problem it solves.
+
+- Tyre management (${SITE_URL}/solutions/tyre-management). Every tyre is recorded by serial number, wheel position and odometer at fitment, removal and scrap, with the reason and who recorded it. Cost per kilometre is reported by brand and size, or per engine hour for plant. Removal dates are forecast from the tread trend recorded on inspections. RFID tags are optional; a read opens the tyre's history across vehicles. Live TPMS pressure arrives through the customer's existing telematics connection, and a tyre losing pressure raises an alert to the tyre team.
+- Ready-mix fleet (${SITE_URL}/solutions/ready-mix-fleet). Service plans for mixers, pumps, loaders, generators and plant by engine hours, kilometres or calendar. Job cards carry production out, workshop in, workshop out and production in times, so waiting time and repair time are reported separately. Cost per cubic metre divides maintenance, tyre and service-contract cost by the approved cubic metres the plants delivered, by region and month. Production volumes must be supplied for that figure.
+- Spreadsheets to platform (${SITE_URL}/solutions/spreadsheets-to-platform). A comparison of spreadsheets, generic maintenance tools and Tyre Pulse on tyre history, cost per kilometre, offline field capture, defect to job card, multi-currency reporting, access control, change history and setup effort. Existing spreadsheets and ERP exports are imported as they are, mapped to fields and checked for duplicates before saving.
+
 ## Platforms and availability
 
 Tyre Pulse runs in the following places.

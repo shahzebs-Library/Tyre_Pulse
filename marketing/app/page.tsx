@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   ArrowRight, BarChart3, Box, CheckCircle2, CircleDot, FileSignature,
-  Fuel, ShieldCheck, Truck, Wrench, ClipboardList, Settings, FileCheck2, Users, Monitor,
-  Smartphone, Tv,
+  Fuel, ShieldCheck, Truck, Wrench, ClipboardList, Settings, FileCheck2, Users,
 } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -17,10 +16,14 @@ import { Donut, Heatmap } from "@/components/motion/walkthrough/charts";
 import { AssetCycle, LiveFeed, type LiveEvent } from "@/components/motion/HeroLive";
 import { Spotlight } from "@/components/motion/Spotlight";
 import {
-  AssetRecord, FleetCostPanel, NewInspectionCard, OfflineInspectionPhone, OpsOverview,
+  AssetRecord, FleetCostPanel, NewInspectionCard, OpsOverview,
 } from "@/components/mock/Screens";
-import { alternatesFor } from "./schema";
+import { JsonLd, alternatesFor, faqSchema } from "./schema";
+import { HOME_FAQ } from "@/lib/faqs";
 import { OG_IMAGES } from "@/lib/site";
+import { RolesShowcase, type Role } from "@/components/RolesShowcase";
+import { PROOF } from "@/lib/proof";
+import { FLEET, FleetVehicle } from "@/components/art/FleetVehicles";
 
 export const metadata: Metadata = {
   title: { absolute: "Tyre Pulse | Complete control of your PMV operations" },
@@ -92,25 +95,8 @@ const MODULES: Module[] = [
   { icon: BarChart3, title: "Approvals and reporting", text: "Work orders and purchases routed to the right approver.", href: "/contact", tone: "brand" },
 ];
 
-/* Real figures from the ready-mix operation Tyre Pulse runs in today (rounded down). */
-const PROOF = [
-  { value: 1600, suffix: "+", label: "machines on record", text: "Mixers, pumps, loaders, generators and plant." },
-  { value: 89000, suffix: "+", label: "job cards", text: "Imported from the ERP and worked in the app." },
-  { value: 216000, suffix: "+", label: "expense lines", text: "Classified into tyres, spare parts and oil." },
-  { value: 3, suffix: "", label: "countries", text: "Saudi Arabia, the UAE and Egypt, each in its own currency." },
-];
 
-/* Asset classes the platform already tracks in production. */
-const ASSET_TYPES = [
-  "Transit mixers", "Concrete pumps", "Placing booms", "Wheel loaders", "Skid loaders", "Backhoes",
-  "Generators", "Batching plants", "Ice plants", "Pickups", "Staff buses", "Trailers", "Forklifts",
-];
-
-const FAQ = [
-  ["Our sites have weak signal.", "Inspections, photos, meter readings and signatures save on the phone and sync when the connection returns."],
-  ["Our data is in the ERP and in Excel.", "Job cards, expenses, tyre records and asset lists import from the files you already export, with duplicates checked before they land."],
-  ["We run more than one country.", "Each country and site sees only its own records, in its own currency, enforced in the database. Arabic and English are both supported."],
-] as const;
+const FAQ = HOME_FAQ;
 
 /* What the hero cards play through, one event at a time (sample data). */
 const OPS_EVENTS: LiveEvent[] = [
@@ -199,8 +185,8 @@ export default function HomePage() {
           <div className="marquee">
             <div className="site-shell marquee-viewport">
               <div className="marquee-track">
-                <ul aria-label="Asset types tracked">{ASSET_TYPES.map((t) => <li key={t}>{t}</li>)}</ul>
-                <ul aria-hidden="true">{ASSET_TYPES.map((t) => <li key={t}>{t}</li>)}</ul>
+                <ul aria-label="Asset types tracked">{FLEET.map(({ name, src, w, h }) => <li key={name}><FleetVehicle src={src} w={w} h={h} /><span>{name}</span></li>)}</ul>
+                <ul aria-hidden="true">{FLEET.map(({ name, src, w, h }) => <li key={name}><FleetVehicle src={src} w={w} h={h} /><span>{name}</span></li>)}</ul>
               </div>
             </div>
           </div>
@@ -211,6 +197,7 @@ export default function HomePage() {
             <h2 className="sec-h" id="one-asset">Workshop, field and stores share one record per machine.</h2>
             <Tabs
               label="Platform areas"
+              autoplay={6000}
               items={[
                 { id: "fleet", label: "Fleet and assets", icon: <Truck size={20} aria-hidden="true" />, panel: <AssetRecord /> },
                 {
@@ -234,17 +221,18 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="dark-band" aria-labelledby="field-to-closed">
+        <section className="dark-band fx-live" aria-labelledby="field-to-closed">
           <div className="site-shell">
             <h2 className="sec-h" id="field-to-closed">From a field issue to a closed job.</h2>
             <p className="dark-lead">Six kinds of signal open a job. Each stage has one owner, and the platform does the routine work in between, so a machine is back on site the same day.</p>
             <div className="fx-signals" aria-label="What can open a job">
               <span className="fx-signals-h">Opens a job</span>
-              <ul>{SIGNALS.map((x) => <li key={x}>{x}</li>)}</ul>
+              <ul>{SIGNALS.map((x, i) => <li key={x} style={{ ["--i" as string]: i }}>{x}</li>)}</ul>
             </div>
+            <div className="fx-rail" aria-hidden="true"><i /></div>
             <ol className="fx-pipe">
               {PIPELINE.map(({ icon: Icon, stage, owner, text, auto, stat, statLabel }, i) => (
-                <li key={stage}>
+                <li key={stage} style={{ ["--i" as string]: i }}>
                   <div className="fx-top"><span className="flow-n" aria-hidden="true">{i + 1}</span><Icon size={22} aria-hidden="true" /><b className="fx-stat">{stat}<small>{statLabel}</small></b></div>
                   <h3>{stage}</h3>
                   <span className="fx-owner">{owner}</span>
@@ -284,24 +272,13 @@ export default function HomePage() {
           <div className="site-shell">
             <h2 className="sec-h" id="people">Each role sees the work it owns.</h2>
             <p className="sec-lead">Seven roles, one record. Each person opens the app to their own queue, on the device they actually use, and nobody sees data from another country or site unless they are allowed to.</p>
-            <div className="people people-v2">
-              <div className="people-art">
-                <Photo name="technicianPhone" position="40% 30%" />
-                <OfflineInspectionPhone />
-              </div>
-              <Tabs
-                label="Roles"
-                className="role-tabs"
-                items={ROLES.map((r) => ({ id: r.id, label: r.label, panel: <RoleCopy {...r} /> }))}
-              />
-            </div>
+            <RolesShowcase roles={ROLES} />
           </div>
         </section>
 
         <section className="bright-band" aria-labelledby="demo-walkround">
           <div className="site-shell">
             <h2 className="sec-h" id="demo-walkround">See it work: the phone in the field, the web in the office.</h2>
-            <p className="bright-lead">Six short tours: tyre inspection, tyre intelligence with RFID, pressure and anomaly checks, breakdowns, accidents and claims, preventive maintenance, and cost per km. Pick one, or let it play. Tap the wheels, rows and bars to explore.</p>
             <Walkthrough />
           </div>
         </section>
@@ -332,12 +309,27 @@ export default function HomePage() {
           </div>
         </section>
 
+        <section className="section-pad soft-bg" aria-labelledby="rollout">
+          <div className="site-shell split split-top">
+            <div>
+              <h2 className="sec-h" id="rollout">From your spreadsheets to the phone in three steps.</h2>
+              <p className="panel-text">No blank system to fill by hand. You start from the records you already keep.</p>
+            </div>
+            <ol className="next-steps">
+              <li><b>Send what you already export.</b><span>An asset list, a month of job cards and your tyre records, in the formats your ERP and Excel produce.</span></li>
+              <li><b>We load and check it.</b><span>Columns are mapped, duplicates are caught and every row is tied to a machine, a site and a country.</span></li>
+              <li><b>Teams work on their own records.</b><span>Tyre men inspect on the phone, the workshop runs its queue and managers read cost per machine.</span></li>
+            </ol>
+          </div>
+        </section>
+
         <section className="section-pad tight" aria-labelledby="questions">
           <div className="site-shell">
             <h2 className="sec-h" id="questions">What fleet teams ask before a demo.</h2>
             <dl className="faq-list">
               {FAQ.map(([q, a]) => <div key={q}><dt>{q}</dt><dd>{a}</dd></div>)}
             </dl>
+            <JsonLd data={faqSchema(FAQ, "/")} />
           </div>
         </section>
 
@@ -348,12 +340,6 @@ export default function HomePage() {
   );
 }
 
-type Role = {
-  id: string; label: string; title: string; text: string;
-  screen: string[]; kpis: [string, string][]; devices: ("phone" | "web" | "tv")[];
-};
-
-/* Who uses Tyre Pulse and what each one sees first (sample figures). */
 const ROLES: Role[] = [
   { id: "driver", label: "Driver", title: "Report it before the next trip.", text: "Daily checks, meter readings and problems reported from the phone in a minute, in Arabic or English, with or without signal.",
     screen: ["Pre-trip checklist for this vehicle", "Report a problem with a photo", "Odometer or hour meter with a photo", "Accident report with GPS and damage marks"],
@@ -378,29 +364,3 @@ const ROLES: Role[] = [
     kpis: [["Fleet availability", "93%"], ["Cost per km", "SAR 0.93"]], devices: ["web", "tv"] },
 ];
 
-const DEVICE: Record<Role["devices"][number], [typeof Smartphone, string]> = {
-  phone: [Smartphone, "Phone, works offline"], web: [Monitor, "Web app"], tv: [Tv, "TV wallboard"],
-};
-
-function RoleCopy({ title, text, screen, kpis, devices }: Role) {
-  return (
-    <div className="role-copy">
-      <h3>{title}</h3>
-      <p>{text}</p>
-      <div className="role-grid">
-        <div>
-          <small className="role-h">First on their screen</small>
-          <ul className="role-list">{screen.map((x) => <li key={x}><CheckCircle2 size={15} aria-hidden="true" />{x}</li>)}</ul>
-        </div>
-        <div>
-          <small className="role-h">What they watch</small>
-          <dl className="role-kpis">{kpis.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
-          <p className="muted-sm role-sample">Sample figures</p>
-        </div>
-      </div>
-      <ul className="caps">
-        {devices.map((d) => { const [Icon, l] = DEVICE[d]; return <li key={d}><Icon size={20} aria-hidden={true} />{l}</li>; })}
-      </ul>
-    </div>
-  );
-}

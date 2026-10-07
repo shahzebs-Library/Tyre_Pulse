@@ -140,7 +140,7 @@ export const MODULES: ModuleDef[] = [
   // delay reason, parts and ETAs of the vehicles they are responsible for. The
   // server (workshop_status_can + RLS) is the real boundary; this only decides
   // who is offered the tile. Shop-floor trades + supervisors; admin implicit.
-  M('workshopStatus', 'Workshop Status',   'timer-outline',          'Maintenance',['manager', 'director', 'inspector', 'tyre_man', 'mechanic', 'electrician', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager']),
+  M('workshopStatus', 'Workshop Status',   'timer-outline',          'Maintenance',['manager', 'director', 'inspector', 'tyre_man', 'tyre_data_collector', 'mechanic', 'electrician', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager']),
   // Management ----------------------------------------------------------------
   M('overview',       'Overview',          'grid-outline',           'Management', []),
   M('reports',        'Reports',           'document-text-outline',  'Management', []),

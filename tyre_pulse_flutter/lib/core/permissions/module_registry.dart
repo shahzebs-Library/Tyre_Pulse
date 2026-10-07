@@ -74,9 +74,8 @@ enum ModuleKey {
   pm,
   workshop,
 
-  /// Daily Ops -> Workshop Status. FLUTTER-ONLY: the frozen Expo registry
-  /// never had it, so it is listed in [flutterOnlyModules] and the drift guard
-  /// skips it by name.
+  /// Daily Ops -> Workshop Status. Also in the Expo registry, so the drift
+  /// guard compares it like every other module.
   workshopStatus,
   // Management
   overview,
@@ -171,9 +170,7 @@ const Map<String, ModuleKey> webModuleKeyAliases = <String, ModuleKey>{
 /// a new field module can only be born here. The drift guard compares every
 /// OTHER module against the TypeScript and skips exactly these, by name - a
 /// module is never silently exempted.
-const Set<ModuleKey> flutterOnlyModules = <ModuleKey>{
-  ModuleKey.workshopStatus,
-};
+const Set<ModuleKey> flutterOnlyModules = <ModuleKey>{};
 
 /// Parses a `mobile:<webKey>` row to the phone module it means, via
 /// [webModuleKeyAliases]. Null for a phone key, an unknown key or a key
@@ -553,7 +550,7 @@ abstract final class ModuleRegistry {
         RoleId.electrician,
       },
     ),
-    // Flutter-only (see [flutterOnlyModules]). The role default (plus Fleet
+    // Workshop Status. The role default (plus Fleet
     // Supervisor in [flutterRoleDefaultExtensions]) MIRRORS the server seed in supabase/migrations/20261007100000_workshop_status_
     // permissions.sql (ground team, workshop supervisors, managers), so the
     // phone offers the screen to the same people the web does. The server

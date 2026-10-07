@@ -157,7 +157,7 @@ const Map<ModuleKey, Set<RoleId>> expectedDefaults = <ModuleKey, Set<RoleId>>{
     RoleId.mechanic,
     RoleId.electrician,
   },
-  // Flutter-only: mirrors the server seed of workshop_status permissions.
+  // Mirrors the server seed of workshop_status permissions.
   ModuleKey.workshopStatus: <RoleId>{
     RoleId.mechanic,
     RoleId.electrician,
@@ -210,10 +210,10 @@ const Set<ModuleKey> expectedAdminOnly = <ModuleKey>{
 void main() {
   group('registry shape', () {
     test('carries exactly 32 modules, one per ModuleKey', () {
-      // 31 from the Expo registry plus the Flutter-only Workshop Status.
+      // The Expo registry, Workshop Status included.
       expect(ModuleRegistry.all, hasLength(32));
       expect(ModuleKey.values, hasLength(32));
-      expect(flutterOnlyModules, <ModuleKey>{ModuleKey.workshopStatus});
+      expect(flutterOnlyModules, isEmpty);
 
       final Set<ModuleKey> defined =
           ModuleRegistry.all.map((ModuleDef d) => d.key).toSet();

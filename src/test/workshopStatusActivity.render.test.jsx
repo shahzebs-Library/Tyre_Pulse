@@ -98,7 +98,7 @@ describe('Activity log panel', () => {
     expect(t.getByText('Assignment')).toBeTruthy()
     expect(t.getByText('Excel confirmed')).toBeTruthy()
     expect(t.getByText('Upload #126, morning.xlsx')).toBeTruthy()
-    expect(t.getByText('2 added, 5 updated, 1 removed')).toBeTruthy()
+    expect(t.getByText('2 added, 5 updated, 1 released')).toBeTruthy()
     expect(listActivity).toHaveBeenCalledWith(expect.objectContaining({ country: 'KSA', limit: 100 }))
   })
 

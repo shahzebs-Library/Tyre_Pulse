@@ -68,7 +68,7 @@
       "fieldsChanged": "{n} fields changed",
       "fieldChange": "{field}: {from} to {to}",
       "rowsInFile": "{n} rows in file",
-      "uploadSummary": "{added} added, {updated} updated, {removed} removed",
+      "uploadSummary": "{added} added, {updated} updated, {removed} released",
       "excelRefresh": "Details refreshed from the Excel upload",
       "noDetail": "No further detail"
     },
@@ -84,7 +84,7 @@
       "upload_failed": "Excel failed",
       "excel_refresh": "Excel refresh",
       "added": "Vehicle added",
-      "removed": "Removed or released",
+      "removed": "Released, archived or deleted",
       "restore": "Restored",
       "attachment": "Attachment",
       "export": "Export"

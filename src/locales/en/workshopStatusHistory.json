@@ -40,7 +40,7 @@
     "assignment": "Assignment",
     "eta": "ETA change",
     "attachment": "Attachment",
-    "removal": "Removal or release",
+    "removal": "Release or archive",
     "restore": "Restore",
     "disposition": "Final disposition",
     "deletion": "Deletion",
@@ -52,13 +52,13 @@
     "system": "System"
   },
   "reasons": {
-    "listed_as_closed": "Removed from the current report: listed under closed job cards in the Excel.",
-    "missing_from_upload": "Removed from the current report: not present in the latest confirmed Excel upload."
+    "listed_as_closed": "Released from the workshop: listed under closed job cards in the Excel.",
+    "missing_from_upload": "Released from the workshop: not present in the latest confirmed Excel upload."
   },
   "events": {
     "added": "Vehicle added to the workshop report.",
     "excel_updated": "Vehicle details refreshed from the Daily Workshop Excel upload.",
-    "removed": "Vehicle removed from the current workshop report.",
+    "removed": "Vehicle released from the workshop (left the daily report).",
     "manual_update": "Workshop update saved.",
     "restored": "Vehicle restored to the current report.",
     "archived": "Vehicle archived.",

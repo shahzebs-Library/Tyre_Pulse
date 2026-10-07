@@ -32,7 +32,7 @@ export const CATEGORY_LABELS = Object.freeze({
   assignment: 'Assignment',
   eta: 'ETA change',
   attachment: 'Attachment',
-  removal: 'Removal / release',
+  removal: 'Release / archive',
   restore: 'Restore',
   disposition: 'Final disposition',
   deletion: 'Deletion',

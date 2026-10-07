@@ -65,8 +65,13 @@ describe('inspections page service - listInspectionsForPage', () => {
     // neither; the record viewer, the PDF and the approval modal each fetch the
     // one row they need through getInspectionForPage instead. Re-adding them
     // here would silently restore that cost.
-    expect(cols).not.toContain('inspector_signature')
-    expect(cols).not.toContain('approver_signature')
+    // Whole column names: the computed yes/no flags (has_inspector_signature)
+    // are wanted, the images are not.
+    const names = cols.split(',')
+    expect(names).not.toContain('inspector_signature')
+    expect(names).not.toContain('approver_signature')
+    expect(names).toContain('has_inspector_signature')
+    expect(names).toContain('has_approver_signature')
     // order + paging + scoping mirror the page's fetchAllPages callback
     expect(c.order).toContainEqual(['scheduled_date', { ascending: false }])
     // id tiebreak: scheduled_date is not unique and the page pages concurrently

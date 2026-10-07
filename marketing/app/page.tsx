@@ -18,7 +18,8 @@ import { Spotlight } from "@/components/motion/Spotlight";
 import {
   AssetRecord, FleetCostPanel, NewInspectionCard, OpsOverview,
 } from "@/components/mock/Screens";
-import { alternatesFor } from "./schema";
+import { JsonLd, alternatesFor, faqSchema } from "./schema";
+import { HOME_FAQ } from "@/lib/faqs";
 import { OG_IMAGES } from "@/lib/site";
 import { RolesShowcase, type Role } from "@/components/RolesShowcase";
 import { PROOF } from "@/lib/proof";
@@ -95,11 +96,7 @@ const MODULES: Module[] = [
 ];
 
 
-const FAQ = [
-  ["Our sites have weak signal.", "Inspections, photos, meter readings and signatures save on the phone and sync when the connection returns."],
-  ["Our data is in the ERP and in Excel.", "Job cards, expenses, tyre records and asset lists import from the files you already export, with duplicates checked before they land."],
-  ["We run more than one country.", "Each country and site sees only its own records, in its own currency, enforced in the database. Arabic and English are both supported."],
-] as const;
+const FAQ = HOME_FAQ;
 
 /* What the hero cards play through, one event at a time (sample data). */
 const OPS_EVENTS: LiveEvent[] = [
@@ -188,8 +185,8 @@ export default function HomePage() {
           <div className="marquee">
             <div className="site-shell marquee-viewport">
               <div className="marquee-track">
-                <ul aria-label="Asset types tracked">{FLEET.map(({ name, Art }) => <li key={name}><FleetVehicle Art={Art} /><span>{name}</span></li>)}</ul>
-                <ul aria-hidden="true">{FLEET.map(({ name, Art }) => <li key={name}><FleetVehicle Art={Art} /><span>{name}</span></li>)}</ul>
+                <ul aria-label="Asset types tracked">{FLEET.map(({ name, src, w, h }) => <li key={name}><FleetVehicle src={src} w={w} h={h} /><span>{name}</span></li>)}</ul>
+                <ul aria-hidden="true">{FLEET.map(({ name, src, w, h }) => <li key={name}><FleetVehicle src={src} w={w} h={h} /><span>{name}</span></li>)}</ul>
               </div>
             </div>
           </div>
@@ -332,6 +329,7 @@ export default function HomePage() {
             <dl className="faq-list">
               {FAQ.map(([q, a]) => <div key={q}><dt>{q}</dt><dd>{a}</dd></div>)}
             </dl>
+            <JsonLd data={faqSchema(FAQ, "/")} />
           </div>
         </section>
 

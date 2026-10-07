@@ -99,6 +99,7 @@ function contactForm(fetch) {
     if (name === '@/components/PageFrame') return { PageFrame: 'main' };
     if (name === '@/components/PageTop') return { PageTop: 'header' };
     if (name === '@/lib/site') return { WHATSAPP_URL: null, CONTACT_EMAIL: 'info@tyrepulse.app' };
+    if (name === '@/lib/track') return { track: () => {} };
     throw new Error(`Unexpected dependency: ${name}`);
   };
   class FormDataStub { entries() { return Object.entries(input); } }
@@ -208,4 +209,35 @@ test('a chunked stream is cut off at the cap, not buffered whole', async () => {
   assert.equal(res.status, 413);
   assert.ok(cancelled, 'stream is cancelled once over the cap');
   assert.ok(pulled <= 6, `read stopped early (pulled ${pulled} chunks)`);
+});
+
+test('an optional phone number is delivered as a Phone line when valid', async () => {
+  let text = '';
+  const post = handler(configured, async (_url, options) => {
+    text = JSON.parse(options.body).text;
+    return { ok: true, json: async () => ({ id: 'mock-delivery-id' }) };
+  });
+  assert.equal((await post(request({ ...input, phone: ' +966 (50) 123-4567 ' }))).status, 200);
+  assert.equal(text.split('\n').filter(l => l.startsWith('Phone:')).length, 1);
+  assert.ok(text.includes('Phone: +966 (50) 123-4567'));
+});
+
+test('an invalid phone number is refused and named in fields[]', async () => {
+  const post = handler(configured, () => { throw new Error('must not send'); });
+  for (const phone of ['call me', '12345', '+1 234 567 890 123 456 789 012', '0501234567\nFleet size: 1']) {
+    const res = await post(req({ ...input, phone }));
+    assert.equal(res.status, 400, phone);
+    assert.deepEqual(res.body.fields, ['phone']);
+  }
+});
+
+test('an absent or blank phone sends no Phone line', async () => {
+  const texts = [];
+  const post = handler(configured, async (_url, options) => {
+    texts.push(JSON.parse(options.body).text);
+    return { ok: true, json: async () => ({ id: 'mock-delivery-id' }) };
+  });
+  assert.equal((await post(request(input))).status, 200);
+  assert.equal((await post(request({ ...input, phone: '   ' }))).status, 200);
+  for (const t of texts) assert.ok(!t.includes('Phone:'));
 });

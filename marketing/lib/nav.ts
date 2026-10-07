@@ -8,6 +8,9 @@ export const PLATFORM_PAGES = [
 ] as const;
 
 export const SOLUTION_PAGES = [
+  { href: "/solutions/tyre-management", label: "Tyre management", text: "Cost per km, removal forecasts, TPMS alerts", labelAr: "إدارة الإطارات", textAr: "التكلفة لكل كيلومتر وتوقع الاستبدال وتنبيهات ضغط الإطارات" },
+  { href: "/solutions/ready-mix-fleet", label: "Ready-mix fleet", text: "Mixers, pumps, downtime, cost per m3", labelAr: "أسطول الخرسانة الجاهزة", textAr: "الخلاطات والمضخات والتوقف والتكلفة لكل متر مكعب" },
+  { href: "/solutions/spreadsheets-to-platform", label: "Spreadsheets to platform", text: "Compare approaches and move your files", labelAr: "من الجداول إلى المنصة", textAr: "قارن الطرق وانقل ملفاتك" },
   { href: "/industries", label: "Industries", text: "Construction, ready-mix, transport, rental", labelAr: "القطاعات", textAr: "الإنشاءات والخرسانة الجاهزة والنقل والتأجير" },
   { href: "/pricing", label: "Pricing", text: "Plans by fleet size and modules", labelAr: "الأسعار", textAr: "خطط حسب حجم الأسطول والوحدات" },
 ] as const;

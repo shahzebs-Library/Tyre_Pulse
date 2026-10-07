@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { Database, Fingerprint, KeyRound, LockKeyhole, ScrollText, ShieldCheck } from "lucide-react";
 import { PageFrame } from "@/components/PageFrame";
 import { PageTop } from "@/components/PageTop";
-import { JsonLd, alternatesFor, pageBreadcrumb } from "../schema";
+import { JsonLd, alternatesFor, faqSchema, pageBreadcrumb } from "../schema";
+import { SECURITY_FAQ as SEC_FAQ } from "@/lib/faqs";
 import { CTA } from "@/components/CTA";
 import { OG_IMAGES } from "@/lib/site";
 
@@ -34,14 +35,9 @@ const LAYERS = [
   ["The log keeps the evidence.", "Sign-ins, access changes, approvals and exports are written to an audit trail administrators can review."],
 ] as const;
 
-const SEC_FAQ = [
-  ["Who can see our data?", "Only users in your organisation, and only for the countries and sites they are assigned. The database enforces it on every query."],
-  ["Can a site user see another country?", "No. Country and site scope are applied in the database, so a direct request returns nothing outside the user's scope."],
-  ["Do you support MFA and single sign-on?", "Administrators sign in with a second factor, and single sign-on can be required per company once your identity provider is connected."],
-] as const;
-
 export default function SecurityPage() {
   return <PageFrame>
+    <JsonLd data={faqSchema(SEC_FAQ, "/security")} />
     <JsonLd data={pageBreadcrumb("Security", "/security")} />
     <PageTop crumbs={[{ href: "/", label: "Home" }, { label: "Security" }]} title="Control access without slowing down operations." lead="Platform ownership, company administration, locations, roles, financial visibility and approval authority are kept separate, and the database enforces it." />
     <section className="section-pad tight"><div className="site-shell">

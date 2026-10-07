@@ -2,6 +2,10 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode, type KeyboardEvent as ReactKeyboardEvent, type FormEvent } from "react";
+import { track } from "@/lib/track";
+import { ANUM_OPEN_EVENT } from "./MobileActionBar";
+import { AnumAvatar } from "./AnumAvatar";
+import { CONTACT_EMAIL } from "@/lib/site";
 import "./assistant.css";
 
 /**
@@ -44,6 +48,18 @@ const COPY = {
     fallbackNoWa: "I only have set answers for a few common questions, so I cannot answer that one well. Send it through the contact form and the team will reply.",
     contactLabel: "Use the contact form",
     waLabel: "Message us on WhatsApp",
+    minimize: "Minimize",
+    restore: "Restore",
+    maximize: "Maximize",
+    unmaximize: "Restore size",
+    more: "More options",
+    newChat: "Start a new conversation",
+    copyChat: "Copy conversation",
+    emailChat: "Email this conversation",
+    copied: "Conversation copied.",
+    copyFailed: "Could not copy. Select the text and copy it instead.",
+    emailSubject: "Question from the Tyre Pulse website",
+    you: "You",
   },
   ar: {
     greeting: "مرحبًا، أنا أنعم. كيف يمكنني مساعدتك؟",
@@ -62,6 +78,18 @@ const COPY = {
     fallbackNoWa: "لدي ردود محددة لعدد قليل من الأسئلة الشائعة فقط، لذلك لا أستطيع الإجابة عن هذا السؤال جيدًا. أرسله عبر نموذج التواصل وسيرد الفريق.",
     contactLabel: "نموذج التواصل",
     waLabel: "راسلنا عبر واتساب",
+    minimize: "تصغير",
+    restore: "استعادة",
+    maximize: "تكبير",
+    unmaximize: "استعادة الحجم",
+    more: "خيارات إضافية",
+    newChat: "بدء محادثة جديدة",
+    copyChat: "نسخ المحادثة",
+    emailChat: "إرسال المحادثة بالبريد",
+    copied: "تم نسخ المحادثة.",
+    copyFailed: "تعذر النسخ. حدد النص وانسخه يدويًا.",
+    emailSubject: "سؤال من موقع Tyre Pulse",
+    you: "أنت",
   },
 } as const;
 
@@ -166,11 +194,18 @@ export function AssistantWidget({ arabic, tucked, whatsappUrl, children }: Props
   const [bubble, setBubble] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [draft, setDraft] = useState("");
+  // Window state of the open panel: normal, minimized to its header, or maximized.
+  const [size, setSize] = useState<"normal" | "min" | "max">("normal");
+  const [menu, setMenu] = useState(false);
+  const [notice, setNotice] = useState("");
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
   const nextId = useRef(1);
   const launcherRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
+  // Where focus goes back to on close: the launcher on desktop, the bottom bar button on phones.
+  const returnRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
 
   // The greeting appears once per session, a few seconds in, never over an open panel.
@@ -193,17 +228,71 @@ export function AssistantWidget({ arabic, tucked, whatsappUrl, children }: Props
     setMsgs((prev) => [...prev, ...m.map((x) => ({ ...x, id: nextId.current++ }))]);
   }, []);
 
-  const openPanel = () => {
+  const intro = t.intro;
+  const openPanel = useCallback(() => {
     setBubble(false);
     markSeen();
-    if (msgs.length === 0) push([{ from: "bot", text: t.intro }]);
+    const active = document.activeElement;
+    returnRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
+    setMsgs((prev) => (prev.length === 0 ? [{ id: nextId.current++, from: "bot", text: intro }] : prev));
     setOpen(true);
-  };
+    track("assistant_open");
+  }, [intro]);
+
+  // The phone bottom bar opens the guide through a window event (the launcher is hidden there).
+  useEffect(() => {
+    window.addEventListener(ANUM_OPEN_EVENT, openPanel);
+    return () => window.removeEventListener(ANUM_OPEN_EVENT, openPanel);
+  }, [openPanel]);
 
   const closePanel = () => {
     setOpen(false);
-    launcherRef.current?.focus();
+    setMenu(false);
+    setSize("normal");
+    const back = returnRef.current;
+    // A hidden element (display: none) has no client rects; fall back to the launcher.
+    if (back && back.isConnected && back.getClientRects().length > 0) back.focus();
+    else launcherRef.current?.focus();
   };
+
+  // Header controls. Closing keeps the conversation (reopening shows it again);
+  // "New conversation" is the only thing that clears it.
+  const toggleMin = () => { setMenu(false); setSize((s) => (s === "min" ? "normal" : "min")); };
+  const toggleMax = () => { setMenu(false); setSize((s) => (s === "max" ? "normal" : "max")); };
+  const flash = (text: string) => {
+    setNotice(text);
+    window.setTimeout(() => setNotice(""), 2600);
+  };
+  const transcript = () =>
+    msgs.map((m) => `${m.from === "user" ? t.you : t.name}: ${m.text}`).join("\n\n");
+  const newChat = () => {
+    setMenu(false);
+    setMsgs([{ id: nextId.current++, from: "bot", text: intro }]);
+    setDraft("");
+    setSize((s) => (s === "min" ? "normal" : s));
+    track("assistant_new_chat");
+  };
+  const copyChat = async () => {
+    setMenu(false);
+    try {
+      await navigator.clipboard.writeText(transcript());
+      flash(t.copied);
+    } catch {
+      flash(t.copyFailed);
+    }
+  };
+  const emailHref = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(t.emailSubject)}&body=${encodeURIComponent(transcript().slice(0, 1800))}`;
+
+  // The menu closes on a click outside it.
+  useEffect(() => {
+    if (!menu) return;
+    const onDown = (e: PointerEvent) => {
+      const root = panelRef.current?.querySelector(".anum-menu-wrap");
+      if (root && !root.contains(e.target as Node)) setMenu(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [menu]);
 
   const dismissBubble = () => {
     setBubble(false);
@@ -228,7 +317,14 @@ export function AssistantWidget({ arabic, tucked, whatsappUrl, children }: Props
 
   // Escape closes; Tab stays inside the panel while it is open.
   const onPanelKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "Escape") { e.preventDefault(); closePanel(); return; }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      // Escape steps back one level: menu, then maximized, then the panel itself.
+      if (menu) { setMenu(false); menuBtnRef.current?.focus(); return; }
+      if (size === "max") { setSize("normal"); return; }
+      closePanel();
+      return;
+    }
     if (e.key !== "Tab" || !panelRef.current) return;
     const items = Array.from(panelRef.current.querySelectorAll<HTMLElement>("a[href], button:not([disabled]), input:not([disabled])"));
     if (items.length === 0) return;
@@ -245,7 +341,7 @@ export function AssistantWidget({ arabic, tucked, whatsappUrl, children }: Props
       {open ? (
         <div
           ref={panelRef}
-          className="anum-panel"
+          className={`anum-panel${size === "min" ? " is-min" : ""}${size === "max" ? " is-max" : ""}`}
           role="dialog"
           aria-modal="false"
           aria-label={t.dialog}
@@ -253,17 +349,66 @@ export function AssistantWidget({ arabic, tucked, whatsappUrl, children }: Props
           onKeyDown={onPanelKey}
         >
           <div className="anum-head">
-            <span className="anum-avatar" aria-hidden="true">{arabic ? "أ" : "A"}</span>
+            <span className="anum-avatar" aria-hidden="true"><AnumAvatar size={34} /></span>
             <div className="anum-who" id={titleId}>
               <b>{t.name}</b>
               <span>{t.role}</span>
             </div>
-            <button ref={closeRef} type="button" className="anum-x" onClick={closePanel} aria-label={t.close}>
-              <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-            </button>
+            <div className="anum-ctrls">
+              <div className="anum-menu-wrap">
+                <button
+                  ref={menuBtnRef}
+                  type="button"
+                  className="anum-x"
+                  aria-label={t.more}
+                  title={t.more}
+                  aria-haspopup="menu"
+                  aria-expanded={menu}
+                  onClick={() => setMenu((v) => !v)}
+                >
+                  <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="4.5" cy="10" r="1.6" fill="currentColor" /><circle cx="10" cy="10" r="1.6" fill="currentColor" /><circle cx="15.5" cy="10" r="1.6" fill="currentColor" /></svg>
+                </button>
+                {menu ? (
+                  <div className="anum-menu" role="menu" aria-label={t.more}>
+                    <button type="button" role="menuitem" onClick={newChat}>
+                      <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M4 10a6 6 0 1 0 2-4.5M4 3v3h3" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                      {t.newChat}
+                    </button>
+                    <button type="button" role="menuitem" onClick={copyChat}>
+                      <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><rect x="7" y="7" width="9" height="10" rx="2" stroke="currentColor" strokeWidth="1.8" fill="none" /><path d="M4 13V5a2 2 0 0 1 2-2h7" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" /></svg>
+                      {t.copyChat}
+                    </button>
+                    <a role="menuitem" href={emailHref} onClick={() => setMenu(false)}>
+                      <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><rect x="3" y="5" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.8" fill="none" /><path d="M3.5 6l6.5 5 6.5-5" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinejoin="round" /></svg>
+                      {t.emailChat}
+                    </a>
+                    {whatsappUrl ? (
+                      <a role="menuitem" href={whatsappUrl} target="_blank" rel="noopener noreferrer" onClick={() => setMenu(false)}>
+                        <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M4 16l1-3.2A6.5 6.5 0 1 1 7.6 15z" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinejoin="round" /></svg>
+                        {t.waLabel}
+                      </a>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+              <button type="button" className="anum-x" onClick={toggleMin} aria-label={size === "min" ? t.restore : t.minimize} title={size === "min" ? t.restore : t.minimize}>
+                {size === "min"
+                  ? <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M5 12l5-5 5 5" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  : <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M5 14h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>}
+              </button>
+              <button type="button" className="anum-x anum-max-btn" onClick={toggleMax} aria-label={size === "max" ? t.unmaximize : t.maximize} title={size === "max" ? t.unmaximize : t.maximize}>
+                {size === "max"
+                  ? <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><rect x="4" y="7" width="9" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.8" fill="none" /><path d="M7 7V5.5A1.5 1.5 0 0 1 8.5 4H14.5A1.5 1.5 0 0 1 16 5.5V11.5A1.5 1.5 0 0 1 14.5 13H13" stroke="currentColor" strokeWidth="1.8" fill="none" /></svg>
+                  : <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><rect x="4" y="4" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.8" fill="none" /></svg>}
+              </button>
+              <button ref={closeRef} type="button" className="anum-x" onClick={closePanel} aria-label={t.close} title={t.close}>
+                <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+              </button>
+            </div>
           </div>
+          {notice ? <p className="anum-notice" role="status">{notice}</p> : null}
 
-          <div ref={logRef} className="anum-log" aria-live="polite">
+          <div ref={logRef} className="anum-log" aria-live="polite" hidden={size === "min"}>
             {msgs.map((m) => (
               <div key={m.id} className={`anum-msg is-${m.from}`}>
                 <p>{m.text}</p>
@@ -278,13 +423,13 @@ export function AssistantWidget({ arabic, tucked, whatsappUrl, children }: Props
             ))}
           </div>
 
-          <div className="anum-quick" role="group" aria-label={arabic ? "أسئلة سريعة" : "Quick questions"}>
+          <div className="anum-quick" hidden={size === "min"} role="group" aria-label={arabic ? "أسئلة سريعة" : "Quick questions"}>
             {intents.map((it) => (
               <button key={it.id} type="button" onClick={() => answer(it, it.label)}>{it.label}</button>
             ))}
           </div>
 
-          <form className="anum-form" onSubmit={onSubmit}>
+          <form className="anum-form" onSubmit={onSubmit} hidden={size === "min"}>
             <input
               type="text"
               value={draft}
@@ -304,7 +449,7 @@ export function AssistantWidget({ arabic, tucked, whatsappUrl, children }: Props
       {!open && bubble ? (
         <div className="anum-bubble">
           <button type="button" className="anum-bubble-text" onClick={openPanel}>
-            <span className="anum-avatar sm" aria-hidden="true">{arabic ? "أ" : "A"}</span>
+            <span className="anum-avatar sm" aria-hidden="true"><AnumAvatar size={26} /></span>
             <span>{t.greeting}</span>
           </button>
           <button type="button" className="anum-bubble-x" onClick={dismissBubble} aria-label={t.dismiss}>
@@ -324,7 +469,7 @@ export function AssistantWidget({ arabic, tucked, whatsappUrl, children }: Props
       >
         {open
           ? <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" /></svg>
-          : <span aria-hidden="true">{arabic ? "أ" : "A"}</span>}
+          : <span className="anum-launcher-face" aria-hidden="true"><AnumAvatar size={44} /></span>}
       </button>
 
       {children}

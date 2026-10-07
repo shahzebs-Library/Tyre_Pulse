@@ -54,6 +54,10 @@
   font-size: .95rem;
 }
 .anum-avatar.sm { width: 26px; height: 26px; font-size: .8rem; }
+.anum-avatar, .anum-launcher-face { overflow: hidden; }
+.anum-face { display: block; }
+.anum-launcher-face { display: block; width: 100%; height: 100%; border-radius: 50%; }
+.anum-launcher-face .anum-face { width: 100%; height: 100%; }
 
 /* Greeting bubble */
 .anum-bubble {
@@ -237,6 +241,144 @@
 
 @media print { .tp-dock { display: none; } }
 
+/* Every width: on the home hero the dock waits until the visitor scrolls. On desktop the
+   launcher otherwise sat on top of the last hero tab (Costs) at 1280 and 1366 wide. */
+.tp-dock.is-tucked { opacity: 0; transform: translateY(12px); pointer-events: none; }
+.tp-dock.is-tucked > * { pointer-events: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .tp-dock { transition: opacity .2s ease, transform .2s cubic-bezier(.23, 1, .32, 1); }
+}
+
 /* Only the message log scrolls; the header, quick replies and input never get squeezed. */
 .anum-head, .anum-quick, .anum-form { flex: none; }
 .anum-panel { max-height: min(520px, calc(100dvh - 200px)); }
+
+/* Phones and small tablets: a slim bottom action bar replaces the floating bubbles, so
+   nothing floats over form fields or tabs. The dock keeps only the guide panel, opened
+   from the bar, and sits just above it. A spacer at the end of the page matches the bar
+   height so the last content is never hidden underneath it. */
+.tp-mbar, .tp-mbar-spacer { display: none; }
+@media (max-width: 768px) {
+  :root { --tp-mbar-h: 60px; }
+  .tp-mbar-spacer { display: block; height: calc(var(--tp-mbar-h) + env(safe-area-inset-bottom, 0px)); }
+  .tp-mbar {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 59;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    min-height: var(--tp-mbar-h);
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+    background: #161616;
+    border-top: 1px solid rgba(255, 255, 255, .12);
+    box-shadow: 0 -6px 20px rgba(0, 0, 0, .18);
+  }
+  .tp-mbar-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 8px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, .28);
+    background: transparent;
+    color: #fff;
+    font: inherit;
+    font-size: .88rem;
+    font-weight: 700;
+    line-height: 1.1;
+    text-align: center;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .tp-mbar-btn > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+  /* WhatsApp is icon-only (named by aria-label) and the guide sizes to its label, so the
+     primary action keeps the room and no label is cut off, down to 320px wide. */
+  .tp-mbar-btn.is-icon { flex: 0 0 48px; padding: 0; }
+  .tp-mbar-btn.is-anum { flex: 0 0 auto; padding: 0 12px; }
+  .tp-mbar-btn.is-primary { flex-grow: 1; background: #FFC629; border-color: #FFC629; color: #161616; }
+  .tp-mbar-btn:focus-visible { outline: 3px solid #FFC629; outline-offset: 2px; }
+  .tp-mbar-btn.is-primary:focus-visible { outline-color: #fff; }
+  .tp-mbar-avatar { flex: none; width: 22px; height: 22px; border-radius: 50%; overflow: hidden; display: block; }
+  .tp-mbar.is-tucked { transform: translateY(110%); pointer-events: none; }
+
+  /* The dock keeps only the panel; launcher, WhatsApp bubble and greeting move to the bar. */
+  .tp-dock { bottom: calc(var(--tp-mbar-h) + 10px + env(safe-area-inset-bottom, 0px)); }
+  .tp-dock .anum-launcher, .tp-dock .wa-float, .tp-dock .anum-bubble { display: none; }
+  .tp-dock.is-tucked { opacity: 1; transform: none; }
+  .anum-panel { max-height: min(520px, calc(100dvh - var(--tp-mbar-h) - 90px)); }
+}
+@media (max-width: 768px) and (prefers-reduced-motion: no-preference) {
+  .tp-mbar { transition: transform .22s cubic-bezier(.23, 1, .32, 1); }
+}
+@media print { .tp-mbar, .tp-mbar-spacer { display: none; } }
+
+/* Panel window controls: more menu, minimize, maximize, close. */
+.anum-ctrls { flex: none; display: flex; align-items: center; gap: 0; }
+.anum-ctrls .anum-x { width: 38px; height: 44px; }
+.anum-head .anum-x[aria-expanded="true"] { color: #FFC629; background: rgba(255, 255, 255, .1); }
+.anum-menu-wrap { position: relative; }
+.anum-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  inset-inline-end: 0;
+  z-index: 2;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 32px));
+  padding: 6px;
+  display: grid;
+  background: #fff;
+  color: #161616;
+  border: 1px solid rgba(22, 22, 22, .12);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .22);
+}
+.anum-menu button, .anum-menu a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: .88rem;
+  font-weight: 600;
+  text-align: start;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.anum-menu button:hover, .anum-menu a:hover, .anum-menu button:focus-visible, .anum-menu a:focus-visible { background: #f6f5f2; }
+.anum-menu svg { flex: none; color: #5c5c5c; }
+.anum-notice { margin: 0; padding: 8px 14px; font-size: .82rem; font-weight: 600; background: #fff6d6; color: #5a4100; border-bottom: 1px solid rgba(22, 22, 22, .08); }
+.anum-log[hidden], .anum-quick[hidden], .anum-form[hidden] { display: none; }
+
+/* Minimized: only the header bar stays, the conversation is kept. */
+.anum-panel.is-min { max-height: none; }
+/* Maximized: a large reading window; full screen on phones. */
+.anum-panel.is-max {
+  position: fixed;
+  inset-block: 16px;
+  inset-inline-end: 16px;
+  width: min(760px, calc(100vw - 32px));
+  max-height: none;
+  height: calc(100dvh - 32px);
+  z-index: 70;
+}
+.anum-panel.is-max .anum-msg { max-width: 72ch; }
+@media (max-width: 768px) {
+  .anum-panel.is-max { inset: 0; width: 100vw; height: 100dvh; border-radius: 0; border: 0; }
+  .anum-who span { display: none; }
+}
+@media (max-width: 360px) {
+  .anum-ctrls .anum-x { width: 34px; }
+}

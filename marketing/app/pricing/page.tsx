@@ -4,7 +4,8 @@ import { Check, CheckCircle2 } from "lucide-react";
 import { CTA } from "@/components/CTA";
 import { PageFrame } from "@/components/PageFrame";
 import { PageTop } from "@/components/PageTop";
-import { JsonLd, alternatesFor, pageBreadcrumb } from "../schema";
+import { JsonLd, alternatesFor, faqSchema, pageBreadcrumb } from "../schema";
+import { PRICING_FAQ as PRICE_FAQ } from "@/lib/faqs";
 import { OG_IMAGES } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -36,14 +37,9 @@ const INCLUDED = [
   "Onboarding on your own asset list",
 ];
 
-const PRICE_FAQ = [
-  ["Why is there no published price?", "Fleets differ by machine count, sites, countries and integrations. A quote on your numbers is cheaper than a list price padded to cover everyone."],
-  ["Can we start small?", "Yes. Start with one site or one module, such as tyres or inspections, and add the rest when it earns its place."],
-  ["What do you need from us to quote?", "Fleet size, number of users, the countries you run in and the systems you want connected. A short message is enough."],
-] as const;
-
 export default function PricingPage() {
   return <PageFrame>
+    <JsonLd data={faqSchema(PRICE_FAQ, "/pricing")} />
     <JsonLd data={pageBreadcrumb("Pricing", "/pricing")} />
     <PageTop crumbs={[{ href: "/", label: "Home" }, { label: "Pricing" }]} title="Start with the control you need. Expand when you are ready." lead="Pricing is based on fleet size, users, modules, countries and integrations. Send your fleet size and we reply with a figure." cta={false} />
     <section className="section-pad tight"><div className="site-shell">

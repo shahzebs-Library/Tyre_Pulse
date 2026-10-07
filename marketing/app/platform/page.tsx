@@ -59,8 +59,11 @@ export default function PlatformPage() {
         title="A complete PMV management platform."
         lead="Mixers, pumps, loaders and generators: one record per machine, shared by the field, workshop, stores and finance."
       />
-      <section className="section-pad tight-sm" aria-label="Platform areas">
+      {/* The tab panels carry h3 titles, so this section needs an h2 between them and the page h1.
+          It is visually hidden so the layout stays exactly as designed. */}
+      <section className="section-pad tight-sm" aria-labelledby="platform-areas">
         <div className="site-shell">
+          <h2 className="sr-only" id="platform-areas">Platform areas</h2>
           <Tabs
             label="Platform areas"
             className="ov-nav"

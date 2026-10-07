@@ -16,6 +16,7 @@
  */
 export { SITE_URL, APP_URL } from "@/lib/site";
 import { SITE_URL, APP_URL, WHATSAPP_URL } from "@/lib/site";
+import type { Faq } from "@/lib/faqs";
 
 export const ANDROID_PACKAGE = "com.shahzebrahman.tyrepulseinspector";
 export const ANDROID_APP_NAME = "Tyre Pulse Inspector";
@@ -206,6 +207,25 @@ export function pageBreadcrumb(name: string, path: string): Json {
     { name: "Home", path: "/" },
     { name, path },
   ]);
+}
+
+/**
+ * FAQPage markup for the questions a page actually shows. Pass the SAME list the
+ * page renders (from lib/faqs.ts) and emit it only on that page: Google requires
+ * FAQ structured data to match visible content on the page that carries it.
+ */
+export function faqSchema(items: ReadonlyArray<Faq>, path: string): Json {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "@id": `${SITE_URL}${path}#faq`,
+    inLanguage: "en",
+    mainEntity: items.map(([question, answer]) => ({
+      "@type": "Question",
+      name: question,
+      acceptedAnswer: { "@type": "Answer", text: answer },
+    })),
+  };
 }
 
 /**

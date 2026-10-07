@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Workshop Status - atomic upload staging and confirmation (Loop 6)
 -- ============================================================================
--- STATUS: AUTHORED, NOT APPLIED. Tested in PGlite (supabase/tests/
+-- STATUS: APPLIED to production 2026-10-07 (owner go-ahead). Tested in PGlite (supabase/tests/
 -- workshop_status_upload_confirm.test.mjs, applied on top of the Loop 1
 -- foundation and the Loop 2 permissions). Apply to production only on an
 -- explicit owner go-ahead, and only after 20261007090000 and 20261007100000.

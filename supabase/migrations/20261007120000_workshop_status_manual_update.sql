@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Workshop Status - manual vehicle update (Loop 8)
 -- ============================================================================
--- STATUS: AUTHORED, NOT APPLIED. Tested in PGlite (supabase/tests/
+-- STATUS: APPLIED to production 2026-10-07 (owner go-ahead). Tested in PGlite (supabase/tests/
 -- workshop_status_manual_update.test.mjs, applied on top of 20261007090000,
 -- 20261007100000 and 20261007110000). Apply to production only on an explicit
 -- owner go-ahead, and only after those three.

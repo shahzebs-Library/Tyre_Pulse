@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Workshop Status - permission model (Loop 2)
 -- ============================================================================
--- STATUS: AUTHORED, NOT APPLIED. Tested in PGlite (supabase/tests/
+-- STATUS: APPLIED to production 2026-10-07 (owner go-ahead). Tested in PGlite (supabase/tests/
 -- workshop_status_permissions.test.mjs, applied on top of the Loop 1
 -- foundation). Apply to production only on an explicit owner go-ahead, and
 -- only after 20261007090000_workshop_status_foundation.sql.

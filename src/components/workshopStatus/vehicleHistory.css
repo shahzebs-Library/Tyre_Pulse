@@ -1,0 +1,78 @@
+/* Vehicle History Drawer (Workshop Status, prefix wks-his-). Command Center
+   tokens only (--cc-*), so the drawer follows light and dark. The body and
+   footer carry .cc because SideDrawer portals to <body>. Read only: there is
+   no edit or delete styling here on purpose. */
+.wks-his { display: grid; gap: 12px; min-width: 0; }
+.wks-his .wks-banner { margin-top: 0; }
+
+.wks-his-note {
+  margin: 0; display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--cc-ink-3);
+}
+.wks-his-state {
+  display: flex; align-items: center; gap: 8px; padding: 18px 12px;
+  font-size: 13px; color: var(--cc-ink-2);
+  border: 1px dashed var(--cc-inner-border); border-radius: 12px; justify-content: center;
+}
+.wks-his-warn { margin: 0; font-size: 12px; color: var(--cc-amber); }
+
+.wks-his-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.wks-his-chip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 36px;
+  padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  color: var(--cc-ink-2); background: var(--cc-inner); border: 1px solid var(--cc-inner-border);
+  cursor: pointer;
+}
+.wks-his-chip.on { color: var(--cc-green-strong); background: var(--cc-green-tint); border-color: var(--cc-green); }
+.wks-his-chip:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 1px; }
+.wks-his-count { font-weight: 700; font-variant-numeric: tabular-nums; opacity: .8; }
+
+.wks-his-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.wks-his-entry {
+  position: relative; padding: 10px 12px; padding-inline-start: 16px;
+  border: 1px solid var(--cc-inner-border); border-radius: 12px; background: var(--cc-inner);
+  min-width: 0;
+}
+.wks-his-entry::before {
+  content: ''; position: absolute; inset-block: 10px; inset-inline-start: 0;
+  width: 3px; border-radius: 3px; background: var(--cc-ink-3);
+}
+.wks-his-entry.cat-import::before { background: var(--cc-green); }
+.wks-his-entry.cat-removal::before,
+.wks-his-entry.cat-deletion::before { background: var(--cc-red); }
+.wks-his-entry.cat-restore::before,
+.wks-his-entry.cat-disposition::before { background: var(--cc-amber); }
+
+.wks-his-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
+.wks-his-actor { font-size: 13px; color: var(--cc-ink); }
+.wks-his-time { font-size: 12px; color: var(--cc-ink-3); font-variant-numeric: tabular-nums; }
+.wks-his-source {
+  margin-inline-start: auto; font-size: 11px; font-weight: 700; padding: 2px 8px;
+  border-radius: 999px; border: 1px solid var(--cc-inner-border); color: var(--cc-ink-2);
+}
+.wks-his-source.src-excel { color: var(--cc-green-strong); background: var(--cc-green-tint); border-color: transparent; }
+.wks-his-source.src-manual { color: var(--cc-amber); background: var(--cc-amber-tint); border-color: transparent; }
+
+.wks-his-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.wks-his-tag { font-size: 11px; color: var(--cc-ink-3); }
+.wks-his-tag + .wks-his-tag::before { content: '/'; margin-inline-end: 4px; }
+.wks-his-summary { margin: 6px 0 0; font-size: 13px; color: var(--cc-ink-2); }
+
+.wks-his-changes { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.wks-his-change {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12px;
+  color: var(--cc-ink-2); overflow-wrap: anywhere;
+}
+.wks-his-field { font-weight: 700; color: var(--cc-ink); min-width: 140px; }
+.wks-his-old { text-decoration: line-through; color: var(--cc-ink-3); }
+.wks-his-new { color: var(--cc-ink); font-weight: 600; }
+.wks-his-arrow { color: var(--cc-ink-3); flex: none; }
+[dir='rtl'] .wks-his-arrow { transform: scaleX(-1); }
+
+.wks-his-more { justify-self: center; }
+.wks-his-foot { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; width: 100%; }
+
+@media (max-width: 480px) {
+  .wks-his-field { min-width: 0; flex-basis: 100%; }
+  .wks-his-foot > button { flex: 1 1 auto; justify-content: center; }
+}

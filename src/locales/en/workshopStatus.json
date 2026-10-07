@@ -229,7 +229,10 @@
       "blocker": "Blocker or escalation",
       "remarks": "Remarks",
       "lastUpload": "Last Excel upload",
-      "source": "Last update source"
-    }
+      "source": "Last update source",
+      "latestUpdate": "Latest update"
+    },
+    "latestCleared": "Cleared",
+    "latestNone": "No manual update yet"
   }
 }

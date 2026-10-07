@@ -15,6 +15,12 @@
  * writes). `reloadKey` changing reloads the list (after a save, for example).
  *
  * Last updated by / at are the server-captured name and time, never typed text.
+ *
+ * `focus` (Loop 12) is a deep link from a notification: { key, recordId } opens
+ * the exact vehicle (search set to its asset, row expanded), { key, vehicle }
+ * searches an asset number, { key, name, filters } applies a filter preset.
+ * Applied once per key; the note above the list says what is shown and offers
+ * "Show all vehicles" (`onClearFocus`).
  */
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -25,7 +31,10 @@ import { Card, Kpi, Pager, fmtInt } from '../commandCenter/kit'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useSettings } from '../../contexts/SettingsContext'
 import { toUserMessage } from '../../lib/safeError'
-import { loadActiveVehicles } from '../../lib/api/workshopStatusActive'
+import { loadActiveVehicles, loadPeopleNames } from '../../lib/api/workshopStatusActive'
+import { loadLatestManualUpdates } from '../../lib/api/workshopStatusLatest'
+import { latestUpdateText } from '../../lib/workshopStatus/latestUpdate'
+import { PEOPLE_FIELDS } from '../../lib/workshopStatus/updateForm'
 import { CURRENT_STAGES, DELAY_REASONS, PARTS_STATUSES } from '../../lib/workshopStatus/vocab'
 import {
   daysDown, freshness, lastUpdate, fmtDay, fmtDateTime, filterRecords, sortRecords, summarize,
@@ -96,7 +105,7 @@ function writeColumns(cols) {
 const blank = (v) => v == null || (typeof v === 'string' && v.trim() === '')
 const txt = (v) => (blank(v) ? null : String(v))
 
-export default function ActiveVehiclesPanel({ permissions, permState = 'ready', onRetryPermissions, onUpdate, onHistory, reloadKey = 0 }) {
+export default function ActiveVehiclesPanel({ permissions, permState = 'ready', onRetryPermissions, onUpdate, onHistory, reloadKey = 0, focus = null, onClearFocus }) {
   const { t } = useLanguage()
   const a = (k, v) => t(`workshopStatus.active.${k}`, v)
   const { activeCountry } = useSettings()
@@ -118,7 +127,9 @@ export default function ActiveVehiclesPanel({ permissions, permState = 'ready', 
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState('')
   const [now, setNow] = useState(() => new Date())
+  const [focusNote, setFocusNote] = useState(null)
   const runRef = useRef(0)
+  const appliedFocusRef = useRef('')
 
   const canView = permissions?.view === true
   const canUpdate = permissions?.update === true && typeof onUpdate === 'function'
@@ -148,6 +159,43 @@ export default function ActiveVehiclesPanel({ permissions, permState = 'ready', 
 
   // A new country starts on the first page with no expanded rows.
   useEffect(() => { setPage(0); setExpanded(new Set()) }, [country])
+
+  // Deep link from a notification, applied once per focus key. A record link
+  // waits for the list so it can find the vehicle by id.
+  const focusKey = focus?.key || ''
+  useEffect(() => {
+    if (!focusKey || appliedFocusRef.current === focusKey) return
+    if (focus.recordId) {
+      if (loading) return
+      appliedFocusRef.current = focusKey
+      const hit = rows.find((r) => r.id === focus.recordId)
+      if (hit) {
+        setFilters({ ...emptyFilters(), search: hit.asset_no })
+        setExpanded(new Set([hit.id]))
+        setFocusNote({ kind: 'vehicle', asset: hit.asset_no })
+      } else {
+        setFocusNote({ kind: 'recordGone' })
+      }
+    } else if (focus.vehicle) {
+      appliedFocusRef.current = focusKey
+      setFilters({ ...emptyFilters(), search: focus.vehicle })
+      setFocusNote({ kind: 'vehicle', asset: focus.vehicle })
+    } else if (focus.filters) {
+      appliedFocusRef.current = focusKey
+      setFilters({ ...emptyFilters(), ...focus.filters })
+      setFocusNote({ kind: focus.name || 'mine' })
+    } else {
+      return
+    }
+    setPage(0)
+  }, [focusKey, focus, rows, loading])
+
+  const clearFocus = () => {
+    setFocusNote(null)
+    setFilters(emptyFilters())
+    setPage(0)
+    if (typeof onClearFocus === 'function') onClearFocus()
+  }
 
   const filtered = useMemo(() => filterRecords(rows, filters, { now }), [rows, filters, now])
   const sorted = useMemo(() => sortRecords(filtered, sort, { now }), [filtered, sort, now])
@@ -279,10 +327,31 @@ export default function ActiveVehiclesPanel({ permissions, permState = 'ready', 
     setExporting(true); setExportError('')
     try {
       const keys = ['asset', ...(isAll ? ['country'] : []), ...COLUMN_KEYS.filter((k) => k !== 'fresh'), 'fresh']
-      const headers = keys.map((k) => a(`col.${k === 'asset' ? 'asset' : (COLUMNS.find((c) => c.key === k)?.label || k)}`))
+      keys.push('latestUpdate')
+      const headers = keys.map((k) => (k === 'latestUpdate'
+        ? a('col.latestUpdate')
+        : a(`col.${k === 'asset' ? 'asset' : (COLUMNS.find((c) => c.key === k)?.label || k)}`)))
+      // Latest manual update per vehicle (owner: printed data must carry it).
+      // Best effort: a failed read leaves the column empty, the export still runs.
+      const latest = await loadLatestManualUpdates(sorted.map((r) => r.id)).catch(() => new Map())
+      const personIds = []
+      for (const r of sorted) {
+        const e = latest.get(String(r.id))
+        for (const f of e?.details?.changed_fields || []) if (PEOPLE_FIELDS.includes(f) && r[f]) personIds.push(r[f])
+      }
+      const people = personIds.length ? await loadPeopleNames(personIds).catch(() => new Map()) : new Map()
+      const fmt = {
+        label: (f) => t(`workshopStatusHistory.fields.${f}`),
+        personName: (id) => people.get(String(id)) || null,
+        day: (v) => fmtDay(v) || String(v),
+        stamp: (v) => fmtDateTime(v) || String(v || ''),
+        cleared: a('latestCleared'),
+        system: a('systemUser'),
+      }
       const data = sorted.map((r) => {
         const o = { asset: r.asset_no }
-        for (const k of keys) if (k !== 'asset') o[k] = k === 'days' ? daysDown(r, now) : cellText(r, k)
+        for (const k of keys) if (k !== 'asset' && k !== 'latestUpdate') o[k] = k === 'days' ? daysDown(r, now) : cellText(r, k)
+        o.latestUpdate = latestUpdateText(r, latest.get(String(r.id)) || null, fmt) || a('latestNone')
         return o
       })
       const { exportToExcel, reportFileName } = await import('../../lib/exportUtils')
@@ -369,6 +438,17 @@ export default function ActiveVehiclesPanel({ permissions, permState = 'ready', 
         <Kpi icon={CalendarCheck} tone="t-green" value={stats.expectedToday} label={a('kpi.expectedToday')} loading={loading && !rows.length} onClick={() => preset({ expectedToday: true })} />
         <Kpi icon={UserX} tone="t-purple" value={stats.unassigned} label={a('kpi.unassigned')} loading={loading && !rows.length} onClick={() => preset({ responsible: UNASSIGNED })} />
       </div>
+
+      {focusNote && (
+        <div className="cc-card wks-banner warn" role="status" data-testid="wks-av-focus">
+          <p>{focusNote.kind === 'vehicle'
+            ? t('workshopStatusNotifications.focus.vehicle', { asset: focusNote.asset })
+            : t(`workshopStatusNotifications.focus.${focusNote.kind}`)}</p>
+          <button type="button" className="cc-btn-ghost wks-tap" onClick={clearFocus}>
+            <X size={14} aria-hidden="true" /> {t('workshopStatusNotifications.focus.clear')}
+          </button>
+        </div>
+      )}
 
       <Card>
         <div className="wks-av-toolbar">

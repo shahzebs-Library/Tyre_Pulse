@@ -132,7 +132,7 @@ export async function loadPeopleNames(ids: (string | null | undefined)[]): Promi
   for (let i = 0; i < list.length; i += 200) {
     try {
       const { data, error } = await supabase
-        .from('profiles').select('id,full_name,username').in('id', list.slice(i, i + 200))
+        .from('profiles').select('id,full_name,username').in('id', list.slice(i, i + 200)).limit(200)
       if (error) return out
       for (const p of (data as any[]) || []) out[p.id] = (p.full_name || p.username || '').trim()
     } catch {

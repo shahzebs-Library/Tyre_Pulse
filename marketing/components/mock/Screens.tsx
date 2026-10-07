@@ -166,10 +166,12 @@ export function AssetRecord({ wide = false }: { wide?: boolean }) {
             <Photo name="loaderBucket" className="thumb hide-sm" sizes="120px" />
           </div>
         </div>
-        <dl className="ar-info">
+        <div className="ar-info">
           <div className="ar-info-h">Key information</div>
-          {KEY_INFO.slice(0, wide ? 9 : 7).map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
-        </dl>
+          <dl className="ar-info-list">
+            {KEY_INFO.slice(0, wide ? 9 : 7).map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
+          </dl>
+        </div>
       </div>
     </figure>
   );

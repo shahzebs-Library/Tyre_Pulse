@@ -438,7 +438,7 @@
 .idemo-bars div { display: grid; grid-template-rows: auto 1fr auto; justify-items: center; gap: 3px; min-width: 0; }
 .idemo-bars i { align-self: end; width: 100%; max-width: 34px; border-radius: 4px 4px 2px 2px; background: #d9d6ca; transform-origin: bottom; }
 .idemo-bars .last i { background: var(--brand); }
-.idemo-bars .val { font-size: 9.5px; color: #8a8a83; }
+.idemo-bars .val { font-size: 9.5px; color: #6b6b64; }
 .idemo-bars .last .val { color: #161616; font-weight: 700; }
 .idemo-bars .m { font-size: 10px; color: #6b6b64; }
 .is-on .idemo-bars i { animation: idemo-grow .35s var(--ease-out, ease) both; }
@@ -549,7 +549,7 @@
 .wt-board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .wt-col { display: grid; align-content: start; gap: 6px; padding: 8px; border-radius: 9px; background: #f6f4ec; min-width: 0; }
 .wt-col small { display: flex; justify-content: space-between; font-weight: 700; font-size: 10.5px; color: #55554e; }
-.wt-col small em { font-style: normal; color: #8a8a83; }
+.wt-col small em { font-style: normal; color: #6b6b64; }
 .wt-card { display: grid; gap: 1px; padding: 7px 8px; border-radius: 7px; background: #fff; border: 1px solid #ecebe3; font-size: 10.5px; color: #55554e; }
 .wt-card b { color: #161616; font-size: 11.5px; }
 .wt-card.hot { border-color: #b42318; box-shadow: inset 3px 0 0 #b42318; }

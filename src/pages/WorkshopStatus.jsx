@@ -22,6 +22,7 @@ import { PageHero, Tabs } from '../components/commandCenter/kit'
 import DailyUploadPanel from '../components/workshopStatus/DailyUploadPanel'
 import ActiveVehiclesPanel from '../components/workshopStatus/ActiveVehiclesPanel'
 import VehicleUpdateDrawer from '../components/workshopStatus/VehicleUpdateDrawer'
+import VehicleHistoryDrawer from '../components/workshopStatus/VehicleHistoryDrawer'
 import ActivityLogPanel from '../components/workshopStatus/ActivityLogPanel'
 import TeamWorkloadPanel from '../components/workshopStatus/TeamWorkloadPanel'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -66,6 +67,7 @@ export default function WorkshopStatus() {
     ? requested
     : DEFAULT_TAB
   const [editing, setEditing] = useState(null)
+  const [historyOf, setHistoryOf] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
   const refreshList = useCallback(() => setReloadKey((k) => k + 1), [])
 
@@ -109,6 +111,7 @@ export default function WorkshopStatus() {
           permState={permState}
           onRetryPermissions={loadPerms}
           onUpdate={setEditing}
+          onHistory={setHistoryOf}
           reloadKey={reloadKey}
         />
       )}
@@ -121,6 +124,8 @@ export default function WorkshopStatus() {
         onSaved={() => { setEditing(null); refreshList() }}
         onReload={() => { setEditing(null); refreshList() }}
       />
+
+      <VehicleHistoryDrawer record={historyOf} open={!!historyOf} onClose={() => setHistoryOf(null)} />
 
       {tab === 'activity' && (
         <ActivityLogPanel permissions={permissions} permState={permState} onRetryPermissions={loadPerms} />

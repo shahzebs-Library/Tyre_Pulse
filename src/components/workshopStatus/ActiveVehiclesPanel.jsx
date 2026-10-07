@@ -19,7 +19,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Truck, Clock, AlertTriangle, CalendarCheck, UserX, Hourglass, Loader2, RotateCcw, Search, X,
-  SlidersHorizontal, Columns, Download, ChevronDown, ChevronRight, PencilLine, ShieldAlert,
+  SlidersHorizontal, Columns, Download, ChevronDown, ChevronRight, PencilLine, History, ShieldAlert,
 } from 'lucide-react'
 import { Card, Kpi, Pager, fmtInt } from '../commandCenter/kit'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -96,7 +96,7 @@ function writeColumns(cols) {
 const blank = (v) => v == null || (typeof v === 'string' && v.trim() === '')
 const txt = (v) => (blank(v) ? null : String(v))
 
-export default function ActiveVehiclesPanel({ permissions, permState = 'ready', onRetryPermissions, onUpdate, reloadKey = 0 }) {
+export default function ActiveVehiclesPanel({ permissions, permState = 'ready', onRetryPermissions, onUpdate, onHistory, reloadKey = 0 }) {
   const { t } = useLanguage()
   const a = (k, v) => t(`workshopStatus.active.${k}`, v)
   const { activeCountry } = useSettings()
@@ -340,12 +340,22 @@ export default function ActiveVehiclesPanel({ permissions, permState = 'ready', 
     </dl>
   )
 
-  const updateButton = (r) => (canUpdate ? (
-    <button type="button" className="cc-btn-ghost wks-tap wks-av-update" onClick={() => onUpdate(r)}
-      aria-label={a('updateFor', { asset: r.asset_no })}>
-      <PencilLine size={14} aria-hidden="true" /> {a('update')}
-    </button>
-  ) : null)
+  const updateButton = (r) => (
+    <>
+      {canUpdate && (
+        <button type="button" className="cc-btn-ghost wks-tap wks-av-update" onClick={() => onUpdate(r)}
+          aria-label={a('updateFor', { asset: r.asset_no })}>
+          <PencilLine size={14} aria-hidden="true" /> {a('update')}
+        </button>
+      )}
+      {typeof onHistory === 'function' && (
+        <button type="button" className="cc-btn-ghost wks-tap wks-av-update" onClick={() => onHistory(r)}
+          aria-label={a('historyFor', { asset: r.asset_no })}>
+          <History size={14} aria-hidden="true" /> {a('history')}
+        </button>
+      )}
+    </>
+  )
 
   return (
     <div className="wks-panel">

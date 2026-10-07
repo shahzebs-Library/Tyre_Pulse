@@ -13,14 +13,42 @@ const TEAMS = [
 ];
 const team = (sel: string) => TEAMS.find((t) => t.id === sel) ?? TEAMS[1];
 
-/** Damage zones on the outline, front-left marked. */
+/**
+ * Damage hotspots on the real truck photo (mirrored so the near side is the
+ * truck's left). x and y are percentages of the framed photo.
+ */
 const ZONES = [
-  { id: "fl", d: "M18 10 h22 v16 h-22 z", hit: true }, { id: "fr", d: "M60 10 h22 v16 h-22 z", hit: false },
-  { id: "l", d: "M14 30 h10 v58 h-10 z", hit: true }, { id: "r", d: "M76 30 h10 v58 h-10 z", hit: false },
-  { id: "rear", d: "M28 92 h44 v14 h-44 z", hit: false },
+  { id: "bumper", name: "Front bumper", side: "Front left", x: 17, y: 86, hit: true, level: "Moderate" },
+  { id: "lamp", name: "Left head lamp", side: "Front left", x: 27, y: 70, hit: true, level: "Moderate" },
+  { id: "door", name: "Cab door", side: "Left side", x: 41, y: 41, hit: false, level: "No damage" },
+  { id: "fwheel", name: "Front wheel", side: "Left side", x: 46, y: 84, hit: false, level: "No damage" },
+  { id: "drum", name: "Drum", side: "Body", x: 66, y: 37, hit: false, level: "No damage" },
+  { id: "rwheel", name: "Rear wheels", side: "Left side", x: 77.5, y: 75, hit: false, level: "No damage" },
 ];
+const zone = (sel: string) => ZONES.find((z) => z.id === sel);
 
-function Phone({ step, sel }: SceneProps) {
+/** The transit mixer photo with the marked zones; zones are tappable. */
+function DamageMap({ sel, choose, sizes }: { sel: string; choose: (id: string) => void; sizes: string }) {
+  return (
+    <div className="wt-dmg">
+      <Photo name="mixer" className="wt-dmg-img" sizes={sizes} alt="MX-152 transit mixer, left side, with the damaged zones marked" />
+      {ZONES.map((z) => (
+        <button
+          key={z.id}
+          type="button"
+          className={`wt-dmg-z${z.hit ? " hit" : ""}${sel === z.id ? " on" : ""}`}
+          style={{ left: `${z.x}%`, top: `${z.y}%` }}
+          aria-label={`${z.name}: ${z.hit ? "damaged" : "no damage"}`}
+          aria-pressed={sel === z.id}
+          onClick={() => choose(z.id)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function Phone({ step, sel, choose }: SceneProps) {
+  const z = zone(sel);
   return (
     <>
       <Pane on={step === "report"}>
@@ -37,11 +65,11 @@ function Phone({ step, sel }: SceneProps) {
       </Pane>
       <Pane on={step === "damage"}>
         <span className="muted-xs">Tap where it is damaged</span>
-        <svg className="wt-outline" viewBox="0 0 100 112" aria-hidden="true">
-          <rect x="24" y="6" width="52" height="100" rx="8" className="shell" />
-          {ZONES.map((z) => <path key={z.id} d={z.d} className={z.hit ? "hit" : ""} />)}
-        </svg>
-        <div className="idemo-reading bad"><b>Front left</b><span>Bumper, lamp</span><em>Moderate</em></div>
+        <DamageMap sel={sel} choose={choose} sizes="240px" />
+        <span className="wt-dmg-legend"><span><i />Damaged (2)</span><span><i className="ok" />Checked, no damage</span></span>
+        {z
+          ? <div className={`idemo-reading ${z.hit ? "bad" : "good"}`}><b>{z.side}</b><span>{z.name}</span><em>{z.level}</em></div>
+          : <div className="idemo-reading bad"><b>Front left</b><span>Bumper, lamp</span><em>Moderate</em></div>}
       </Pane>
       <Pane on={step === "teams"}>
         <Notice title={`Task for ${team(sel).name}`} body={team(sel).work} when="2 min" />
@@ -76,17 +104,16 @@ function Web({ step, sel, choose }: SceneProps) {
       </Pane>
       <Pane on={step === "damage"} className="web">
         <div className="idemo-web-h"><b>ACC-2026-0148 · damage</b><span className="pill pill-amber">Moderate</span></div>
-        <div className="idemo-defect">
-          <div className="idemo-photos">
-            <span className="t1"><Photo name="mixer" className="idemo-photo zoom-front" sizes="180px" alt="MX-152 front left damage" /></span>
-            <span className="t2"><Photo name="mixer" className="idemo-photo" sizes="180px" position="70% 50%" alt="MX-152 cab" /></span>
-          </div>
+        <div className="wt-dmg-web">
+          <DamageMap sel={sel} choose={choose} sizes="360px" />
           <ul>
-            <li><small>Zones</small>Front left, left side</li>
-            <li><small>Parts</small>Bumper, left head lamp</li>
+            <li><small>Zones</small>Front left</li>
+            <li><small>Parts</small>Front bumper, left head lamp</li>
+            <li><small>Selected</small>{zone(sel) ? `${zone(sel)!.name}, ${zone(sel)!.hit ? "damaged" : "no damage"}` : "Front bumper, damaged"}</li>
             <li><small>Fault</small>Under review</li>
           </ul>
         </div>
+        <div className="idemo-live"><i />Same marks the driver tapped, on the same photo of MX-152</div>
       </Pane>
       <Pane on={step === "teams"} className="web">
         <div className="idemo-web-h"><b>One case, every team</b><span className="muted-xs">Click a team</span></div>
@@ -145,7 +172,7 @@ export const accident: Scenario = {
   defaultSel: "hse",
   steps: [
     { id: "report", icon: ShieldAlert, title: "Report on the spot", text: "Photos, GPS and time from the phone. Plate, driver and site fill in from the asset.", url: "app.tyrepulse.app/accidents", nav: "Accidents", bell: true },
-    { id: "damage", icon: MapPin, title: "Mark the damage", text: "Tap the zones on the outline. The office sees the photos and the parts at once.", url: "app.tyrepulse.app/accidents/ACC-2026-0148", nav: "Accidents" },
+    { id: "damage", icon: MapPin, title: "Mark the damage", text: "Tap the damaged spots on the truck. The office sees the marks and the parts at once.", url: "app.tyrepulse.app/accidents/ACC-2026-0148", nav: "Accidents" },
     { id: "teams", icon: Users, title: "Every team its part", text: "Fleet, HSE, insurance, workshop and finance each get their own task. Click a team.", url: "app.tyrepulse.app/accidents/ACC-2026-0148/teams", nav: "Accidents" },
     { id: "claim", icon: FileText, title: "Claim, with every document", text: "Claimed, approved and deductible side by side, with the policy's checklist done.", url: "app.tyrepulse.app/accidents/ACC-2026-0148/claim", nav: "Accidents" },
     { id: "close", icon: Wallet, title: "Closed when all are done", text: "The case closes only when every team has signed off. Nothing is left half open.", url: "app.tyrepulse.app/accidents/ACC-2026-0148/closure", nav: "Accidents" },

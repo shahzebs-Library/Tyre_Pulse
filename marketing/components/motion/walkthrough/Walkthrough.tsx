@@ -9,6 +9,7 @@ import { accident } from "./accident";
 import { maintenance } from "./maintenance";
 import { cost } from "./cost";
 import { tyreIntel } from "./tyreIntel";
+import "./walkthrough-fit.css";
 
 /**
  * Product walk-throughs, one per module, each told on two screens at once:
@@ -91,26 +92,43 @@ export function Walkthrough({ only, initial }: { only?: ScenarioId[]; initial?: 
   const Phone = mod.Phone;
   const Web = mod.Web;
 
+  /* The label follows the pause choice, not viewport visibility, so the control is never a dead button. */
+  const toggle = (
+    <button
+      type="button"
+      className="idemo-toggle wt-toggle"
+      aria-label={paused ? "Play the walk-through" : "Pause the walk-through"}
+      onClick={() => setPaused((p) => !p)}
+    >
+      {paused ? <Play size={14} aria-hidden="true" /> : <Pause size={14} aria-hidden="true" />}
+      <span className="wt-toggle-t" aria-hidden="true">{paused ? "Play" : "Pause"}</span>
+    </button>
+  );
+
   return (
     <div
-      className="idemo"
+      className="idemo wt-fit"
       ref={rootRef}
       data-module={mod.id}
       data-step={current.id}
     >
       {list.length > 1 && (
-        <div className="wt-mods" role="tablist" aria-label="Choose a module">
-          {list.map((s, i) => {
-            const Icon = s.icon;
-            return (
-              <button key={s.id} type="button" role="tab" aria-selected={i === mi} className={i === mi ? "is-on" : ""} onClick={() => pickModule(i)}>
-                <Icon size={15} aria-hidden="true" />{s.label}
-              </button>
-            );
-          })}
+        <div className="wt-bar">
+          <div className="wt-mods" role="tablist" aria-label="Choose a module">
+            {list.map((s, i) => {
+              const Icon = s.icon;
+              return (
+                <button key={s.id} type="button" role="tab" aria-selected={i === mi} className={i === mi ? "is-on" : ""} onClick={() => pickModule(i)}>
+                  <Icon size={15} aria-hidden="true" />{s.label}
+                </button>
+              );
+            })}
+          </div>
+          {toggle}
         </div>
       )}
-      <p className="wt-pitch">{mod.pitch}</p>
+      {/* The module's one-line pitch stays for screen readers; on screen the step caption is the single line. */}
+      <p className="wt-pitch wt-sr">{mod.label}: {mod.pitch}</p>
 
       <ol className="idemo-steps" style={{ gridTemplateColumns: `repeat(${mod.steps.length}, minmax(0, 1fr))` }}>
         {mod.steps.map((s, i) => {
@@ -118,7 +136,7 @@ export function Walkthrough({ only, initial }: { only?: ScenarioId[]; initial?: 
           return (
             <li key={s.id}>
               <button type="button" className={i === step ? "is-on" : ""} aria-label={`Step ${i + 1}: ${s.title}`} aria-current={i === step ? "step" : undefined} onClick={() => pickStep(i)}>
-                <span className="idemo-n" aria-hidden="true"><Icon size={17} /></span>
+                <span className="idemo-n" aria-hidden="true"><Icon size={15} /></span>
                 <span className="idemo-st"><small>Step {i + 1}</small><b>{s.title}</b></span>
                 {i === step && running && <i className="idemo-timer" style={{ animationDuration: `${STEP_MS}ms` }} aria-hidden="true" />}
               </button>
@@ -127,9 +145,14 @@ export function Walkthrough({ only, initial }: { only?: ScenarioId[]; initial?: 
         })}
       </ol>
 
-      <p className="idemo-caption"><span aria-live="polite">{current.text}</span><span className="sample-tag">Sample data</span></p>
+      <p className="idemo-caption">
+        <span className="wt-line" aria-live="polite"><b className="wt-line-step">Step {step + 1} of {mod.steps.length}</b>{current.text}</span>
+        <span className="sample-tag">Sample data</span>
+        {list.length > 1 ? null : toggle}
+      </p>
 
       <div className="idemo-stage" key={mod.id}>
+        <div className="wt-phonebox">
         <figure className="iphone idemo-phone" aria-label={`Mobile app, ${mod.label}, step ${step + 1} of ${mod.steps.length}: ${current.title}`}>
           <span className="ip-btn ip-action" aria-hidden="true" /><span className="ip-btn ip-vol1" aria-hidden="true" />
           <span className="ip-btn ip-vol2" aria-hidden="true" /><span className="ip-btn ip-power" aria-hidden="true" />
@@ -153,6 +176,7 @@ export function Walkthrough({ only, initial }: { only?: ScenarioId[]; initial?: 
             <span className="ip-home" aria-hidden="true" />
           </div>
         </figure>
+        </div>
 
         <figure className="idemo-web" aria-label={`Web app, ${mod.label}, same step: ${current.title}`}>
           <div className="idemo-chrome" aria-hidden="true">
@@ -175,11 +199,6 @@ export function Walkthrough({ only, initial }: { only?: ScenarioId[]; initial?: 
         </figure>
       </div>
 
-      {/* The label follows the pause choice, not viewport visibility, so the control is never a dead button. */}
-      <button type="button" className="idemo-toggle" aria-pressed={paused} onClick={() => setPaused((p) => !p)}>
-        {paused ? <Play size={14} aria-hidden="true" /> : <Pause size={14} aria-hidden="true" />}
-        {paused ? "Play the walk-through" : "Pause the walk-through"}
-      </button>
     </div>
   );
 }

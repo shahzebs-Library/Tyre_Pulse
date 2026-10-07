@@ -120,13 +120,16 @@ test('contact form resets the captured form after React clears currentTarget', a
   });
   await form.submit(event);
   assert.equal(resets, 1);
-  assert.deepEqual(form.states, ['Accepted', 'ok', false, []]);
+  assert.deepEqual(form.states, ['Accepted', 'ok', false, [], null]);
 });
 
 test('contact form preserves input and exits sending state on network failure', async () => {
   const form = contactForm(async () => { throw new Error('offline'); });
   await form.submit({ preventDefault() {}, currentTarget: { reset() { throw new Error('must not reset'); } } });
-  assert.deepEqual(form.states, ['Unable to send the request. Please try again.', 'error', false, []]);
+  assert.deepEqual(form.states.slice(0, 4), ['Unable to send the request. Send the same details in one tap instead:', 'error', false, []]);
+  // The request is never lost: an email fallback carrying the details is offered.
+  assert.equal(form.states[4].wa, null);
+  assert.match(form.states[4].mail, /^mailto:info@tyrepulse\.app\?subject=/);
 });
 
 test('contact form marks and focuses the fields the server rejected', async () => {

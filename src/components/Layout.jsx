@@ -245,6 +245,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/live-fleet',          label: 'Live Fleet Status', parent: 'Live',  icon: Radio, adminOnly: A },
       { to: '/daily-ops',           label: 'Daily Ops', parent: 'Live',          icon: Coffee, adminOnly: A },
+      { to: '/daily-ops/workshop',  label: 'Workshop Status', parent: 'Live',    icon: Wrench },
       { to: '/gps-tracking',        label: 'GPS Tracking', parent: 'Live',       icon: Satellite, adminOnly: A },
       { to: '/fleet-health',        label: 'Fleet Health Board', parent: 'Live', icon: HeartPulse, adminOnly: A },
       { to: '/trip-replay',         label: 'Trip Replay', parent: 'Live',        icon: Play, adminOnly: A },

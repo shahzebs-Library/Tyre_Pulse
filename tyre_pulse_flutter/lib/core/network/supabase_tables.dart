@@ -169,6 +169,12 @@ abstract final class SupabaseTables {
   /// existed, which is why it used to sit in [knownFabrications].
   static const String repairRequests = 'repair_requests';
 
+  /// Daily Ops -> Workshop Status: one row per vehicle in the workshop's daily
+  /// Excel report. RLS scopes reads by org, country, site and the module's
+  /// `view` permission. Never written directly: the only writer from the phone
+  /// is [SupabaseRpcs.workshopStatusUpdateRecord].
+  static const String workshopStatusRecords = 'workshop_status_records';
+
   /// Every verified table name, for a drift test.
   ///
   /// A repository that needs a name not in this set is describing an object
@@ -217,6 +223,7 @@ abstract final class SupabaseTables {
     accidentCaseCommunications,
     engineHoursLogs,
     repairRequests,
+    workshopStatusRecords,
   };
 
   /// Names that were declared by the Kotlin rebuild and DO NOT EXIST.
@@ -383,6 +390,16 @@ abstract final class SupabaseRpcs {
   /// `p_match text default null`.
   static const String qrLoginPeek = 'qr_login_peek';
 
+  /// Workshop Status: the caller's own action flags as jsonb booleans
+  /// (`view`, `update`, `assign`, ...). Read fails closed.
+  static const String workshopStatusMyPermissions =
+      'workshop_status_my_permissions';
+
+  /// Workshop Status: the ONE writer (p_record_id, p_patch,
+  /// p_expected_updated_at). Stale expected_updated_at raises PT409.
+  static const String workshopStatusUpdateRecord =
+      'workshop_status_update_record';
+
   static const String getReportSnapshotAuthed = 'get_report_snapshot_authed';
   static const String getAccidentAudit = 'get_accident_audit';
 
@@ -421,6 +438,8 @@ abstract final class SupabaseRpcs {
     getAccidentAudit,
     qrLoginApprove,
     qrLoginPeek,
+    workshopStatusMyPermissions,
+    workshopStatusUpdateRecord,
   };
 
   /// Set-returning RPCs, which are capped at 1000 rows exactly as a table read

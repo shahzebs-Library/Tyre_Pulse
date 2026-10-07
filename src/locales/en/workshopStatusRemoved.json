@@ -1,0 +1,167 @@
+{
+  "tabs": {
+    "removed": "Released"
+  },
+  "title": "Released vehicles",
+  "lead": "Vehicles that left the daily Excel report. Record how each one left, restore one that was omitted by mistake, or archive old records.",
+  "loadingPerms": "Checking your access...",
+  "deniedTitle": "Released vehicles are not available",
+  "deniedBody": "You need the View removed vehicles permission to see vehicles that left the report. Ask an administrator.",
+  "retry": "Retry",
+  "loadErrorTitle": "The released vehicles could not be loaded",
+  "loadError": "Could not load the released vehicles.",
+  "loading": "Loading released vehicles...",
+  "history": "History",
+  "historyFor": "History of {asset}",
+  "actionFor": "{action}: {asset}",
+  "action": {
+    "disposition": "Disposition",
+    "restore": "Restore",
+    "archive": "Archive",
+    "unarchive": "Unarchive",
+    "soft_delete": "Delete",
+    "undelete": "Undelete",
+    "permanent_delete": "Erase"
+  },
+  "status": {
+    "released": "Released",
+    "archived": "Archived",
+    "deleted": "Deleted"
+  },
+  "kpi": {
+    "released": "Released",
+    "awaiting": "No disposition yet",
+    "archived": "Archived",
+    "deleted": "Deleted"
+  },
+  "searchLabel": "Search released vehicles",
+  "searchPlaceholder": "Asset, site, stage, person...",
+  "filters": "Filters",
+  "filtersCount": "Filters ({n})",
+  "clearFilters": "Clear filters",
+  "export": "Export Excel",
+  "exportTitle": "Workshop released vehicles",
+  "exportError": "The released vehicles could not be exported.",
+  "refresh": "Refresh",
+  "any": "Any",
+  "na": "N/A",
+  "upload": "Upload",
+  "col": {
+    "asset_no": "Vehicle",
+    "site": "Site",
+    "status": "Status",
+    "removed_at": "Released on",
+    "removed_by_upload": "Released by upload",
+    "removed_reason": "Why",
+    "previous_stage": "Last stage",
+    "previous_reason": "Last delay reason",
+    "previous_responsible": "Responsible person",
+    "disposition": "Final disposition",
+    "disposition_by": "Disposition by",
+    "disposition_at": "Disposition date",
+    "actions": "Actions"
+  },
+  "noDisposition": "Not recorded",
+  "disposition": {
+    "repair_completed": "Repair completed",
+    "returned_to_operation": "Returned to operation",
+    "transferred_site": "Transferred to another site",
+    "sent_external_workshop": "Sent to external workshop",
+    "vehicle_sold": "Vehicle sold",
+    "vehicle_scrapped": "Vehicle scrapped",
+    "wrong_entry": "Wrong entry",
+    "duplicate_entry": "Duplicate entry",
+    "other": "Other"
+  },
+  "removedReason": {
+    "missing_from_upload": "Not in the latest Excel",
+    "listed_as_closed": "Listed under closed in the Excel"
+  },
+  "count": "Showing {shown} of {total}",
+  "truncated": "Only the most recent 20,000 records are shown.",
+  "emptyTitle": "No released vehicles",
+  "emptyBody": "When a vehicle drops out of a confirmed daily Excel upload it appears here.",
+  "noMatchesTitle": "No vehicles match",
+  "noMatchesBody": "Change the search or clear the filters.",
+  "byUpload": "Upload {upload}",
+  "dispositionBy": "{name}, {at}",
+  "done": {
+    "disposition": "Final disposition saved.",
+    "restore": "Vehicle restored to the active report.",
+    "archive": "Record archived.",
+    "unarchive": "Record moved back to released.",
+    "soft_delete": "Record deleted. It can still be undeleted.",
+    "undelete": "Record undeleted.",
+    "permanent_delete": "Record erased. Its history is kept."
+  },
+  "cancel": "Cancel",
+  "reload": "Reload",
+  "confirm": {
+    "disposition": "Save disposition",
+    "restore": "Restore vehicle",
+    "archive": "Archive",
+    "unarchive": "Unarchive",
+    "soft_delete": "Delete",
+    "undelete": "Undelete",
+    "permanent_delete": "Erase for good"
+  },
+  "dialog": {
+    "disposition": {
+      "title": "Final disposition: {asset}",
+      "body": "Record how this vehicle left the workshop.",
+      "note": "Leaving the Excel does not prove the repair was finished. Record what actually happened."
+    },
+    "restore": {
+      "title": "Restore {asset}",
+      "body": "Put this vehicle back in the active workshop report.",
+      "note": "The release stays in the history. A restore event is added with your reason. Any recorded disposition is cleared."
+    },
+    "archive": {
+      "title": "Archive {asset}",
+      "body": "Move this record to the archive.",
+      "note": "Archived records stay searchable and can be unarchived."
+    },
+    "unarchive": {
+      "title": "Unarchive {asset}",
+      "body": "Move this record back to the released list.",
+      "note": "The archive stays in the history."
+    },
+    "soft_delete": {
+      "title": "Delete {asset}",
+      "body": "Hide a wrong or duplicate record.",
+      "note": "The record is not erased. It can be undeleted and every step is in the history."
+    },
+    "undelete": {
+      "title": "Undelete {asset}",
+      "body": "Bring this record back to the released list.",
+      "note": "The deletion stays in the history."
+    },
+    "permanent_delete": {
+      "title": "Erase {asset}",
+      "body": "Erase this record for good. This cannot be undone.",
+      "note": "Only a super admin can do this. The history of the vehicle, including this erase, is kept."
+    }
+  },
+  "chooseDisposition": "Choose a disposition",
+  "remarks": "Remarks (optional)",
+  "remarksRequired": "Remarks (required for Other)",
+  "reason": "Reason",
+  "reasonPlaceholder": {
+    "restore": "Example: Vehicle was omitted from Excel by mistake.",
+    "archive": "Example: Repair closed last month.",
+    "unarchive": "Example: Archived by mistake.",
+    "soft_delete": "Example: Duplicate of another entry.",
+    "undelete": "Example: Not a duplicate after all.",
+    "permanent_delete": "Example: Test record entered by mistake."
+  },
+  "errors": {
+    "record_changed": "Someone changed this vehicle while you were looking. Reload and try again.",
+    "already_active": "This vehicle is already in the active report, so this record cannot be restored.",
+    "not_found": "This vehicle could not be found. It may have been changed or you no longer have access.",
+    "denied": "You do not have permission to do this.",
+    "generic": "The action could not be completed.",
+    "chooseDisposition": "Choose a disposition.",
+    "remarksRequired": "Write remarks when the disposition is Other.",
+    "reasonShort": "Write a reason of at least {n} characters."
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "title": "Workshop notifications for you",
+  "unread": "{n} unread",
+  "markAll": "Mark all read",
+  "markRead": "Mark read",
+  "markReadFor": "Mark read: {title}",
+  "open": "Open",
+  "openFor": "Open: {title}",
+  "refresh": "Refresh notifications",
+  "retry": "Retry",
+  "loadError": "Could not load your workshop notifications.",
+  "showAll": "Show all {n}",
+  "showLess": "Show fewer",
+  "focus": {
+    "mine": "Showing the vehicles you are responsible for.",
+    "unassigned": "Showing vehicles with no responsible person.",
+    "not_today": "Showing vehicles not updated today.",
+    "over7": "Showing vehicles down for 7 days or more.",
+    "expected_today": "Showing vehicles expected to be released today.",
+    "ready": "Showing vehicles ready for release.",
+    "vehicle": "Showing vehicle {asset}.",
+    "recordGone": "This vehicle is no longer in the daily report. It may have been released; check the Released tab.",
+    "clear": "Show all vehicles"
+  }
+}

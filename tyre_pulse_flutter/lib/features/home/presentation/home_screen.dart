@@ -189,6 +189,7 @@ const List<HomeSectionSpec> _kHomeSections = <HomeSectionSpec>[
       HomeTileSpec(id: 'stock', module: ModuleKey.stock),
       HomeTileSpec(id: 'pm', module: ModuleKey.pm),
       HomeTileSpec(id: 'workshop', module: ModuleKey.workshop),
+      HomeTileSpec(id: 'workshopStatus', module: ModuleKey.workshopStatus),
     ],
   ),
   HomeSectionSpec(
@@ -2524,6 +2525,12 @@ class _DashboardActionCard extends StatelessWidget {
         icon: Icons.home_repair_service_outlined,
         approve: false,
       );
+    case 'workshopStatus':
+      return (
+        label: _catalogLabel(l10n.workshopStatusCopyCatalog, 'title'),
+        icon: Icons.car_repair_outlined,
+        approve: false,
+      );
     case 'overview':
       return (
         label: _catalogLabel(l10n.managementCopyCatalog, 'overviewTitle'),
@@ -2846,6 +2853,9 @@ void _openHomeTile(BuildContext context, String id) {
       return;
     case 'workshop':
       context.push(const WorkshopRoute().location);
+      return;
+    case 'workshopStatus':
+      context.push(const WorkshopStatusRoute().location);
       return;
     case 'overview':
       context.push(const OverviewRoute().location);

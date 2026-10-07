@@ -48,6 +48,8 @@ void main() {
       ModuleKey.reportAccident,
       ModuleKey.tasks,
       ModuleKey.workshop,
+      // No matrix row: the role default (server seed) applies.
+      ModuleKey.workshopStatus,
     });
   });
 
@@ -55,6 +57,7 @@ void main() {
     expect(reach('Fleet Supervisor', const <String, Object?>{}), <ModuleKey>{
       ModuleKey.accidents,
       ModuleKey.reportAccident,
+      ModuleKey.workshopStatus,
     });
   });
 

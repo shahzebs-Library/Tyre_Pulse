@@ -34,7 +34,12 @@ import 'package:tyre_pulse/app/router/routes.dart';
 /// of whatever model the notifications feature eventually builds.
 @immutable
 class TpNotificationTarget {
-  const TpNotificationTarget({this.type, this.entityType, this.entityId});
+  const TpNotificationTarget({
+    this.type,
+    this.entityType,
+    this.entityId,
+    this.link,
+  });
 
   /// `notifications.type`. Also the type of a local device notification.
   final String? type;
@@ -45,6 +50,14 @@ class TpNotificationTarget {
   /// `notifications.entity_id`. Null on local device notifications and on any
   /// row the server did not attribute.
   final String? entityId;
+
+  /// A web path the sender attached (push `data.link`), e.g.
+  /// `/daily-ops/workshop`. Matched only against known web paths, never
+  /// navigated to directly: a web path is not a phone route.
+  final String? link;
+
+  /// The link, lowercased and trimmed. Empty when absent.
+  String get linkKey => (link ?? '').toLowerCase().trim();
 
   /// The key the entity rules match on: the entity type, falling back to the
   /// type, lowercased. Mirrors the production `entity_type ?? type`.
@@ -114,6 +127,14 @@ TpRoute? notificationDestination(TpNotificationTarget target) {
     return const MyPlansRoute();
   }
 
+  // 2c. Daily Ops -> Workshop Status ("we uploaded the daily file, please
+  //     update your vehicles"). Ahead of rule 4, whose "workshop" substring
+  //     would otherwise open the job-card board instead. The web page is
+  //     `/daily-ops/workshop`; its phone twin is the Workshop Status list.
+  if (_isWorkshopStatus(type, entity, target.linkKey)) {
+    return const WorkshopStatusRoute();
+  }
+
   // 3. Checklist before workshop: the workshop bucket below matches "assign",
   //    which would otherwise swallow `checklist_assignment`.
   if (entity.contains('checklist')) {
@@ -162,4 +183,17 @@ TpRoute? notificationDestination(TpNotificationTarget target) {
   if (entity.contains('alert')) return const AlertsRoute();
 
   return null;
+}
+
+bool _isWorkshopStatus(String type, String entity, String link) {
+  if (link.startsWith('/daily-ops/workshop')) return true;
+  for (final String key in <String>[type, entity]) {
+    if (key.contains('workshop_status') ||
+        key.contains('workshop status') ||
+        key.contains('daily_ops') ||
+        key.contains('daily-ops')) {
+      return true;
+    }
+  }
+  return false;
 }

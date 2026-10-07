@@ -256,4 +256,35 @@ void main() {
       }
     });
   });
+
+  group('workshop status (Daily Ops) lands on the Workshop Status list', () {
+    test('by type or entity, ahead of the job-card workshop bucket', () {
+      expect(
+        route(type: 'workshop_status_upload'),
+        const WorkshopStatusRoute(),
+      );
+      expect(
+        route(type: 'info', entityType: 'workshop_status_records'),
+        const WorkshopStatusRoute(),
+      );
+      // A record id is not a work order id: still the list.
+      expect(
+        route(entityType: 'workshop_status', entityId: 'abc'),
+        const WorkshopStatusRoute(),
+      );
+    });
+
+    test('by the web link a push carries', () {
+      expect(
+        notificationDestination(
+          const TpNotificationTarget(type: 'info', link: '/daily-ops/workshop'),
+        ),
+        const WorkshopStatusRoute(),
+      );
+    });
+
+    test('the plain workshop board is unchanged', () {
+      expect(route(entityType: 'workshop'), const WorkshopRoute());
+    });
+  });
 }

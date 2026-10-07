@@ -71,6 +71,7 @@ final class RouteModule {
   static const RouteModule reportAccident = RouteModule('reportAccident');
   static const RouteModule workorders = RouteModule('workorders');
   static const RouteModule workshop = RouteModule('workshop');
+  static const RouteModule workshopStatus = RouteModule('workshopStatus');
   static const RouteModule pm = RouteModule('pm');
   static const RouteModule tasks = RouteModule('tasks');
   static const RouteModule rca = RouteModule('rca');
@@ -210,6 +211,9 @@ abstract final class TpRouteGuards {
     TpRouteId.workOrders: ModuleGuarded(RouteModule.workorders),
     TpRouteId.workOrderDetail: ModuleGuarded(RouteModule.workorders),
     TpRouteId.workshop: ModuleGuarded(RouteModule.workshop),
+    // The screen ALSO asks the server (workshop_status_my_permissions) and
+    // shows nothing unless it answers view = true; RLS is the boundary.
+    TpRouteId.workshopStatus: ModuleGuarded(RouteModule.workshopStatus),
     TpRouteId.preventiveMaintenance: ModuleGuarded(RouteModule.pm),
     TpRouteId.tasks: ModuleGuarded(RouteModule.tasks),
     TpRouteId.rca: ModuleGuarded(RouteModule.rca),

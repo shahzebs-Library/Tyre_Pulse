@@ -93,6 +93,9 @@ function RootLayout() {
       openRoute(notificationRoute({
         type: type || (data.type as string) || null,
         entity_type: (data.entity_type as string) ?? (data.entityType as string) ?? null,
+        entity_id: (data.entity_id as string) ?? (data.entityId as string) ?? null,
+        link: (data.link as string) ?? (data.url as string) ?? null,
+        asset_no: (data.asset_no as string) ?? (data.assetNo as string) ?? null,
       }))
     }
 

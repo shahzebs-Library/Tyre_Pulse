@@ -1,0 +1,22 @@
+/* Workshop Status -> Released (Loop 11). Builds on workshopStatus.css + activeVehicles.css. */
+.wks-banner.ok { background: var(--cc-green-tint); }
+.wks-banner.ok svg { color: var(--cc-green); }
+.wks-rm-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.wks-cards .wks-rm-actions { justify-content: flex-start; margin-top: 10px; }
+.wks-rm-asset { display: block; font-weight: 700; }
+.wks-rm-sub { display: block; font-size: 12px; font-weight: 400; margin-top: 2px; }
+.wks-rm-pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 999px; white-space: nowrap; }
+.wks-rm-pill.is-released { color: var(--cc-green); background: var(--cc-green-tint); }
+.wks-rm-pill.is-archived { color: var(--cc-purple); background: var(--cc-purple-tint); }
+.wks-rm-pill.is-deleted { color: var(--cc-red); background: var(--cc-red-tint); }
+.wks-rm-danger { color: var(--cc-red); }
+.cc-btn-primary.wks-rm-danger-btn { color: #fff; background: var(--cc-red); border-color: var(--cc-red); }
+.wks-rm-form { display: flex; flex-direction: column; gap: 10px; }
+.wks-rm-form .cc-field { display: flex; flex-direction: column; gap: 4px; }
+.wks-rm-footer { display: flex; flex-direction: row; gap: 8px; justify-content: flex-end; flex-wrap: wrap; width: 100%; }
+.wks-rm-footer button { width: auto; }
+.wks-rm-footer button { min-height: 44px; }
+.wks-rm-actions.is-compact { flex-wrap: nowrap; gap: 4px; }
+.wks-rm-actions.is-compact .cc-btn-ghost { padding: 8px; min-width: 36px; justify-content: center; }
+.cc.wks-rm-form, .cc.wks-rm-footer { background: transparent; padding: 0; }
+.cc.wks-rm-footer { flex-direction: row; align-items: center; }

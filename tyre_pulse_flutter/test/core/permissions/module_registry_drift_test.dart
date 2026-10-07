@@ -47,12 +47,12 @@ void main() {
             'shape in mobile/lib/permissions.ts has changed and this guard '
             'must be updated before it can be trusted again.',
       );
-      expect(parsed.length, ModuleRegistry.all.length);
+      expect(parsed.length, _expoModules.length);
     });
 
     test('the same set of module keys, exactly', () {
       final Set<String> dartKeys =
-          ModuleRegistry.all.map((ModuleDef d) => d.key.wireKey).toSet();
+          _expoModules.map((ModuleDef d) => d.key.wireKey).toSet();
       final Set<String> tsKeys = parsed.keys.toSet();
 
       expect(
@@ -68,7 +68,7 @@ void main() {
     });
 
     test('the same role default for every module', () {
-      for (final ModuleDef def in ModuleRegistry.all) {
+      for (final ModuleDef def in _expoModules) {
         final _ParsedModule? source = parsed[def.key.wireKey];
         expect(
           source,
@@ -90,7 +90,7 @@ void main() {
     test(
       'an empty TS role list means the Dart module is marked admin-only',
       () {
-        for (final ModuleDef def in ModuleRegistry.all) {
+        for (final ModuleDef def in _expoModules) {
           final _ParsedModule source = parsed[def.key.wireKey]!;
           expect(
             def.isAdminOnly,
@@ -103,7 +103,7 @@ void main() {
     );
 
     test('the same group and label for every module', () {
-      for (final ModuleDef def in ModuleRegistry.all) {
+      for (final ModuleDef def in _expoModules) {
         final _ParsedModule source = parsed[def.key.wireKey]!;
         expect(
           def.group.registryName,
@@ -114,6 +114,18 @@ void main() {
           def.defaultLabel,
           source.label,
           reason: 'label drift on ${def.key.wireKey}',
+        );
+      }
+    });
+
+    test('a Flutter-only module really is absent from the phone registry', () {
+      // An exemption that the phone later gained would hide real drift.
+      for (final ModuleKey key in flutterOnlyModules) {
+        expect(
+          parsed.containsKey(key.wireKey),
+          isFalse,
+          reason: '${key.wireKey} is now in mobile/lib/permissions.ts; remove '
+              'it from flutterOnlyModules so the guard compares it again',
         );
       }
     });
@@ -135,6 +147,12 @@ void main() {
     });
   });
 }
+
+/// Every module the frozen Expo registry is expected to carry: the whole Dart
+/// registry minus the explicitly named [flutterOnlyModules].
+List<ModuleDef> get _expoModules => ModuleRegistry.all
+    .where((ModuleDef d) => !flutterOnlyModules.contains(d.key))
+    .toList(growable: false);
 
 class _ParsedModule {
   const _ParsedModule({

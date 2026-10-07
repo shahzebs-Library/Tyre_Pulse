@@ -93,10 +93,49 @@ export async function markAllRead(userId: string): Promise<void> {
  * resolves every route this function can return against the real route table
  * read off the filesystem, so a folder path can never ship again.
  */
-export function notificationRoute(n: Pick<AppNotification, 'type' | 'entity_type'>): string | null {
+/** Extra fields a PUSH payload may carry (the notifications table has no link
+ * or asset column - only type / entity_type / entity_id). All optional. */
+export interface RouteHints {
+  entity_id?: string | null
+  /** Web path the notification points at, e.g. '/daily-ops/workshop'. Push data only. */
+  link?: string | null
+  /** Asset number, when a push names the vehicle but not the record id. */
+  asset_no?: string | null
+}
+
+/** Workshop Status (the daily workshop sheet), NOT Workshop Live job activity. */
+export function isWorkshopStatusNotification(
+  n: Pick<AppNotification, 'type' | 'entity_type'> & RouteHints,
+): boolean {
+  const t = String(n.type || '').toLowerCase()
+  const k = String(n.entity_type || '').toLowerCase()
+  const link = String(n.link || '').toLowerCase()
+  if (link.includes('/daily-ops/workshop') || link.includes('/workshop-status')) return true
+  const norm = (v: string) => v.replace(/[\s.-]+/g, '_')
+  return [t, k].some((v) => {
+    const x = norm(v)
+    return x.startsWith('workshop_status') || x.includes('daily_ops_workshop') || x.startsWith('daily_ops')
+  })
+}
+
+export function notificationRoute(n: Pick<AppNotification, 'type' | 'entity_type'> & RouteHints): string | null {
   const t = String(n.type || '').toLowerCase()
   const k = String(n.entity_type || n.type || '').toLowerCase()
   if (k === 'driver_workspace' || t === 'driver_workspace') return '/(app)/driver-workspace'
+
+  // Workshop Status: a daily upload or an assignment on the workshop sheet.
+  // Checked BEFORE the generic workshop bucket below (which routes job cards to
+  // Workshop Live). Opens the record when the row names it, else the list.
+  if (isWorkshopStatusNotification(n)) {
+    // Only a RECORD id opens the record; an upload/batch id would be a dead end.
+    const ent = String(n.entity_type || '').toLowerCase().replace(/[\s.-]+/g, '_')
+    const isRecord = ent === 'workshop_status' || ent === 'workshop_status_record' || ent === 'workshop_status_records'
+    const id = isRecord ? String(n.entity_id || '').trim() : ''
+    if (id) return `/(app)/workshop-status/${encodeURIComponent(id)}`
+    const asset = String(n.asset_no || '').trim()
+    if (asset) return `/(app)/workshop-status/${encodeURIComponent(asset)}`
+    return '/(app)/workshop-status'
+  }
 
   // 1. LOCAL device notifications (lib/notifications.ts). Matched on the EXACT
   //    type and matched FIRST, because their wording overlaps the entity

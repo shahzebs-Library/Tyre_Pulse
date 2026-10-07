@@ -134,6 +134,30 @@ export const MODULE_LABEL = Object.fromEntries(ALL_MODULES.map((m) => [m.key, m.
  * @type {Record<string, { key: string, label: string }[]>}
  */
 export const SUBMODULES = {
+  // Daily Ops -> Workshop Status. Unlike most sub-modules these are ENFORCED on
+  // the server: public.workshop_status_can() reads each key with
+  // app_user_can(key, 'view') and the RLS policies call it (migration
+  // 20261007100000). Mirror of WORKSHOP_ACTIONS in
+  // src/lib/workshopStatus/permissions.js. Permanent delete is super admin
+  // only and deliberately has NO key here, so it can never be granted.
+  daily_ops: [
+    { key: 'daily_ops:workshop', label: 'Workshop Status' },
+    { key: 'daily_ops:workshop:view_removed', label: 'Workshop Status: view removed vehicles' },
+    { key: 'daily_ops:workshop:view_uploads', label: 'Workshop Status: view uploads' },
+    { key: 'daily_ops:workshop:view_activity', label: 'Workshop Status: view activity log' },
+    { key: 'daily_ops:workshop:view_reports', label: 'Workshop Status: view reports' },
+    { key: 'daily_ops:workshop:view_audit', label: 'Workshop Status: view audit trail' },
+    { key: 'daily_ops:workshop:update', label: 'Workshop Status: update status' },
+    { key: 'daily_ops:workshop:upload', label: 'Workshop Status: upload daily Excel' },
+    { key: 'daily_ops:workshop:confirm', label: 'Workshop Status: confirm upload' },
+    { key: 'daily_ops:workshop:assign', label: 'Workshop Status: assign responsibility' },
+    { key: 'daily_ops:workshop:disposition', label: 'Workshop Status: record final disposition' },
+    { key: 'daily_ops:workshop:export', label: 'Workshop Status: export' },
+    { key: 'daily_ops:workshop:archive', label: 'Workshop Status: archive' },
+    { key: 'daily_ops:workshop:restore', label: 'Workshop Status: restore' },
+    { key: 'daily_ops:workshop:soft_delete', label: 'Workshop Status: delete (recoverable)' },
+    { key: 'daily_ops:workshop:configure', label: 'Workshop Status: configure module' },
+  ],
   accidents: [
     { key: 'accidents:incidents', label: 'Incidents' },
     { key: 'accidents:analytics', label: 'Analytics' },

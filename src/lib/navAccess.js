@@ -23,6 +23,7 @@ export const ALWAYS_ALLOWED_PATHS = new Set(['/settings', '/request-access'])
 export const NAV_MODULE_KEY = {
   '/': 'dashboard',
   '/daily-ops': 'daily_ops',
+  '/daily-ops/workshop': 'daily_ops:workshop',
   '/accidents': 'accidents',
   '/tyres': 'tyre_records',
   '/tyre-passport': 'tyre_passport',

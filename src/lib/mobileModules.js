@@ -61,6 +61,7 @@ export const MOBILE_MODULES = [
   { key: 'pm',             label: 'Maintenance Due',  group: 'Maintenance', roles: ['manager', 'director'] },
   // My Jobs: the shop-floor roles plus supervisors; admin always sees it.
   { key: 'workshop',       label: 'My Jobs',          group: 'Maintenance', roles: ['manager', 'director', 'inspector', 'tyre_man', 'mechanic', 'electrician'] },
+  { key: 'workshopStatus', label: 'Workshop Status',  group: 'Maintenance', roles: ['mechanic', 'electrician', 'inspector', 'tyre_man', 'tyre_data_collector', 'workshop_supervisor', 'maintenance_supervisor', 'workshop_area_manager', 'workshop_maintenance_area_manager', 'pmv_manager', 'manager', 'director', 'fleet_supervisor'] },
   // Management ----------------------------------------------------------------
   { key: 'overview',       label: 'Overview',         group: 'Management',  roles: [] },
   { key: 'reports',        label: 'Reports',          group: 'Management',  roles: [] },

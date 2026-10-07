@@ -7,8 +7,8 @@ import {
 } from '../lib/mobileModules'
 
 describe('mobileModules catalog', () => {
-  it('mirrors the Flutter registry: 31 modules, unique keys, grouped', () => {
-    expect(MOBILE_MODULES).toHaveLength(31)
+  it('mirrors the Flutter registry: 32 modules, unique keys, grouped', () => {
+    expect(MOBILE_MODULES).toHaveLength(32)
     const keys = MOBILE_MODULES.map((m) => m.key)
     expect(new Set(keys).size).toBe(keys.length)
     // the key strings that mobile matches on must be present verbatim.
@@ -109,7 +109,7 @@ describe('mirror does not drift from the Flutter module registry', () => {
   it('found the Flutter registry to compare against', () => {
     // If the Dart shape ever changes this parse yields {} and every assertion
     // below would vacuously pass, so prove it actually read something.
-    expect(Object.keys(flutter)).toHaveLength(31)
+    expect(Object.keys(flutter)).toHaveLength(32)
     expect(flutter.checklists.roles.length).toBeGreaterThan(5)
     expect(Object.keys(token).length).toBeGreaterThanOrEqual(15)
     expect(Object.keys(aliases).length).toBeGreaterThanOrEqual(8)

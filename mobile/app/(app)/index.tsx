@@ -169,6 +169,7 @@ const QUICK_ACTIONS: QuickAction[] = [
   { module: 'stock',          section: 'Maintenance', icon: 'cube-outline',           label: 'Stock Count',     route: '/(app)/stock' },
   { module: 'pm',             section: 'Maintenance', icon: 'build-outline',          label: 'Maintenance Due', route: '/(app)/maintenance' },
   { module: 'workshop',       section: 'Maintenance', icon: 'hammer-outline',         label: 'My Jobs',         route: '/(app)/workshop' },
+  { module: 'workshopStatus', section: 'Maintenance', icon: 'timer-outline',          label: 'Workshop Status', route: '/(app)/workshop-status' },
   { module: 'approvals',      section: 'Maintenance', icon: 'checkmark-done-outline', label: 'Inspection Approvals', route: '/(app)/inspection/approvals', tone: 'approve' },
   { module: 'approvals',      section: 'Maintenance', icon: 'clipboard-outline', label: 'Checklist Approvals', route: '/(app)/checklists/approvals', tone: 'approve', id: 'checklistApprovals' },
   { module: 'approvals',      section: 'Maintenance', icon: 'git-pull-request-outline', label: 'Operational Approvals', route: '/(app)/approvals', tone: 'approve', id: 'operationalApprovals' },

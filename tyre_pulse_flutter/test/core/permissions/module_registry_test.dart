@@ -157,6 +157,21 @@ const Map<ModuleKey, Set<RoleId>> expectedDefaults = <ModuleKey, Set<RoleId>>{
     RoleId.mechanic,
     RoleId.electrician,
   },
+  // Mirrors the server seed of workshop_status permissions.
+  ModuleKey.workshopStatus: <RoleId>{
+    RoleId.mechanic,
+    RoleId.electrician,
+    RoleId.inspector,
+    RoleId.tyreMan,
+    RoleId.tyreDataCollector,
+    RoleId.workshopSupervisor,
+    RoleId.maintenanceSupervisor,
+    RoleId.workshopAreaManager,
+    RoleId.workshopMaintenanceAreaManager,
+    RoleId.pmvManager,
+    RoleId.manager,
+    RoleId.director,
+  },
   ModuleKey.overview: <RoleId>{},
   ModuleKey.reports: <RoleId>{},
   ModuleKey.analytics: <RoleId>{},
@@ -194,9 +209,11 @@ const Set<ModuleKey> expectedAdminOnly = <ModuleKey>{
 
 void main() {
   group('registry shape', () {
-    test('carries exactly 31 modules, one per ModuleKey', () {
-      expect(ModuleRegistry.all, hasLength(31));
-      expect(ModuleKey.values, hasLength(31));
+    test('carries exactly 32 modules, one per ModuleKey', () {
+      // The Expo registry, Workshop Status included.
+      expect(ModuleRegistry.all, hasLength(32));
+      expect(ModuleKey.values, hasLength(32));
+      expect(flutterOnlyModules, isEmpty);
 
       final Set<ModuleKey> defined =
           ModuleRegistry.all.map((ModuleDef d) => d.key).toSet();
@@ -235,7 +252,7 @@ void main() {
     test('every group has at least one module and the counts are stable', () {
       expect(ModuleRegistry.inGroup(ModuleGroup.field), hasLength(9));
       expect(ModuleRegistry.inGroup(ModuleGroup.fleet), hasLength(5));
-      expect(ModuleRegistry.inGroup(ModuleGroup.maintenance), hasLength(8));
+      expect(ModuleRegistry.inGroup(ModuleGroup.maintenance), hasLength(9));
       expect(ModuleRegistry.inGroup(ModuleGroup.management), hasLength(6));
       expect(ModuleRegistry.inGroup(ModuleGroup.admin), hasLength(3));
     });

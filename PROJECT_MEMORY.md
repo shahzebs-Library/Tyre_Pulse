@@ -26,6 +26,42 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-10-07 — DAILY OPS -> WORKSHOP STATUS, LOOPS 1-12 DONE. PR #395 MERGED TO MAIN on owner instruction (loops 13-20 still open).
+- Spec + execution loop (20 loops) were owner uploads; loops 1-12 shipped, **13-20 still to do** (Daily Ops overview
+  integration, reporting/export, upload history, stale Excel vs manual, security/deletion review, responsive QA, E2E,
+  final review). Original rule was "no merge until loop 20"; the owner then said **"merged to main and apply migration"**
+  (2026-10-07), so loops 1-12 were merged. Loops 13-20 are follow-up work on a fresh branch from main.
+- Lives INSIDE Daily Ops at `/daily-ops/workshop` (ModuleRoute `daily_ops:workshop`), `src/pages/WorkshopStatus.jsx`,
+  panels in `src/components/workshopStatus/`, pure logic `src/lib/workshopStatus/`, services `src/lib/api/workshopStatus*.js`.
+  Tabs: Active vehicles / Activity / Workload / Released / Daily upload. NO job-card workflow. `asset_breakdowns` is
+  only LINKED, never modified.
+- **OWNER RULE: a vehicle missing from the daily Excel is RELEASED** (UI "Released", Arabic مُفرج عنها). DB tokens keep
+  `removed_from_current_report` / `removed`; never relabel the DB, only the UI.
+- Migrations: 20261007090000 foundation, 100000 permissions, 110000 upload confirm, 120000 manual update = **APPLIED**.
+  130000 removed/recovery (workshop_status_record_action) = **APPLIED** 2026-10-07. 140000 notifications = **APPLIED EXCEPT
+  `workshop_status_notify_scan()` + its pg_cron job `workshop-status-notify`** (table, config, helpers, upload trigger,
+  grants all live; every body md5-checked against the file). The scan body contains `delete from`, so the Supabase MCP
+  waits for a confirmation, times out at 60 s and ROLLS BACK (apply_migration AND execute_sql, tried both). To finish:
+  paste section 4 (the scan function) + its revoke + section 6 (cron.schedule) of the 140000 file into the Supabase SQL
+  editor, or run the MCP call while the owner is present to approve. Until then upload-confirm notices work; the hourly
+  threshold reminders (no update today, waiting 7+ days, overdue release...) do not.
+  Until applied the Released-tab actions and notifications fail on the preview.
+- Design: every write is a SECURITY DEFINER writer; who/when stamped server-side from auth.uid() via transaction-local
+  `workshop.*` settings; append-only `workshop_status_events`; stale save = errcode PT409 'record_changed' (never 40001);
+  permissions via `workshop_status_can(action)` / `workshop_status_my_permissions()` (fails closed); permanent_delete =
+  super admin only and only on a soft-deleted record. Upload compare applies `site_aliases` like normalize_site().
+- Notifications (140000): one notice per person per upload + hourly scan (pg_cron :20); recipients checked with the real
+  permission + RLS scope functions; dedupe table `workshop_status_notices`; delivered via `notifications` +
+  `workflow_notifications` push (no edge redeploy). Titles stored English only.
+- Export: Active vehicles Excel has a "Latest update" column (newest manual_update event: who, when, fields).
+- Expo (`mobile/app/(app)/workshop-status/`) + Flutter (`tyre_pulse_flutter/lib/features/workshop_status/`, ModuleKey
+  `workshopStatus`) both have list + update screens. It is in BOTH registries, so `flutterOnlyModules` is now EMPTY
+  (the drift test fails if a module is exempted but present in mobile/lib/permissions.ts). Web mirror
+  `src/lib/mobileModules.js` now 32 modules. NO mobile build run.
+- Tests: `node --test --test-concurrency=1 supabase/tests/workshop_status_*.test.mjs` (69 pass, PGlite). Known bug:
+  `workshop_status_stage_upload` errors when file hash is null (app always sends one). Open: workload definitions
+  ("waiting parts" / "repair in progress") await owner confirmation; phones can only "Assign to me".
+
 # ⚑ SESSION 2026-10-06 (part 6, marketing session) — SIX MODULE TOURS + CHART KIT + DEMO DATA ONLY (PR #390). marketing/ only.
 - Walk-through engine = marketing/components/motion/walkthrough/ (Walkthrough.tsx + one file per scenario: inspection,
   tyreIntel [RFID passport, TPMS, removal forecast, anomalies, brand cost/km], workshop, accident, maintenance, cost).

@@ -27,7 +27,8 @@ final class PushMessage {
   final String? body;
 
   /// The FCM data payload. `workflow-notify` sends `type`, `event_type`,
-  /// `entity_type`, `entity_id` and `instance_id` (each only when known).
+  /// `entity_type`, `entity_id` and `instance_id` (each only when known), and
+  /// may send a web `link` such as `/daily-ops/workshop`.
   final Map<String, String> data;
 
   String? _field(String key) {
@@ -45,6 +46,7 @@ final class PushMessage {
         type: _field('type') ?? _field('event_type'),
         entityType: _field('entity_type'),
         entityId: _field('entity_id'),
+        link: _field('link') ?? _field('url'),
       );
 
   /// Where a tap on this message goes. A message the mapping does not know

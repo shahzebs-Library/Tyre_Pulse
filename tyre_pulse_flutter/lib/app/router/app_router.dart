@@ -367,6 +367,11 @@ List<RouteBase> _buildRoutes() => <RouteBase>[
                 (TpRouteParameters _) => const WorkshopRoute(),
               ),
               _route(
+                TpRoutePaths.workshopStatus,
+                TpRouteId.workshopStatus,
+                (TpRouteParameters _) => const WorkshopStatusRoute(),
+              ),
+              _route(
                 TpRoutePaths.adminConsole,
                 TpRouteId.adminConsole,
                 (TpRouteParameters _) => const AdminConsoleRoute(),

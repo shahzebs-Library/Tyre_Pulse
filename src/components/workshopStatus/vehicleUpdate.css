@@ -1,0 +1,42 @@
+/* Vehicle Update Drawer (Workshop Status, prefix wks-upd-). Command Center
+   tokens only (--cc-*), so the drawer follows light and dark. The drawer body
+   and footer carry the .cc class because SideDrawer portals to <body>. */
+.wks-upd { display: grid; gap: 14px; min-width: 0; }
+.wks-upd .wks-banner { margin-top: 0; }
+
+.wks-upd-stamp {
+  margin: 0; padding: 10px 12px; border-radius: 10px; font-size: 13px; font-weight: 600;
+  color: var(--cc-ink); background: var(--cc-inner); border: 1px solid var(--cc-inner-border);
+  display: grid; gap: 2px;
+}
+.wks-upd-sub { font-weight: 400; font-size: 12px; color: var(--cc-ink-3); }
+
+.wks-upd-group { border: 1px solid var(--cc-inner-border); border-radius: 12px; padding: 12px; margin: 0; min-width: 0; }
+.wks-upd-group > legend { padding: 0 6px; font-size: 13px; font-weight: 700; color: var(--cc-ink); }
+.wks-upd-group > .wks-muted { margin-bottom: 8px; }
+
+.wks-upd-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.wks-upd-field { min-width: 0; }
+.wks-upd-wide { grid-column: 1 / -1; }
+
+.wks-upd-control {
+  width: 100%; min-height: 44px; box-sizing: border-box;
+  font-size: 13px; color: var(--cc-ink); background-color: var(--cc-inner);
+  border: 1px solid var(--cc-inner-border); border-radius: 8px; padding: 8px 10px;
+}
+select.wks-upd-control { padding-inline-end: 28px; }
+html.light .wks-upd-control { background-color: #fff; }
+.wks-upd-control:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 1px; }
+.wks-upd-control:disabled { opacity: .6; cursor: not-allowed; }
+.wks-upd-control[aria-invalid="true"] { border-color: var(--cc-red); }
+.wks-upd-text { resize: vertical; min-height: 72px; line-height: 1.45; font-family: inherit; }
+
+.wks-upd-err { font-size: 12px; color: var(--cc-red); }
+.wks-upd-attach { font-size: 12px; }
+
+.wks-upd-foot { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; width: 100%; }
+
+@media (max-width: 480px) {
+  .wks-upd-grid { grid-template-columns: 1fr; }
+  .wks-upd-foot > button { flex: 1 1 auto; justify-content: center; }
+}

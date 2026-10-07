@@ -19,6 +19,35 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-10-07 — DAILY OPS -> WORKSHOP STATUS, LOOPS 1-12 DONE. Branch claude/dreamy-faraday-9bwtmt (PR #395). NOT MERGED.
+- Spec + execution loop (20 loops) were owner uploads; loops 1-12 shipped, **13-20 still to do** (Daily Ops overview
+  integration, reporting/export, upload history, stale Excel vs manual, security/deletion review, responsive QA, E2E,
+  final review). Owner rule for this work: **do NOT merge to main** - after loop 20 hand over a review package (branch,
+  commits, migrations, tests, build, exact merge command). Owner later said "if all done merge" - condition not met.
+- Lives INSIDE Daily Ops at `/daily-ops/workshop` (ModuleRoute `daily_ops:workshop`), `src/pages/WorkshopStatus.jsx`,
+  panels in `src/components/workshopStatus/`, pure logic `src/lib/workshopStatus/`, services `src/lib/api/workshopStatus*.js`.
+  Tabs: Active vehicles / Activity / Workload / Released / Daily upload. NO job-card workflow. `asset_breakdowns` is
+  only LINKED, never modified.
+- **OWNER RULE: a vehicle missing from the daily Excel is RELEASED** (UI "Released", Arabic مُفرج عنها). DB tokens keep
+  `removed_from_current_report` / `removed`; never relabel the DB, only the UI.
+- Migrations: 20261007090000 foundation, 100000 permissions, 110000 upload confirm, 120000 manual update = **APPLIED**.
+  **130000 removed/recovery (workshop_status_record_action) and 140000 notifications = NOT APPLIED, need owner OK.**
+  Until applied the Released-tab actions and notifications fail on the preview.
+- Design: every write is a SECURITY DEFINER writer; who/when stamped server-side from auth.uid() via transaction-local
+  `workshop.*` settings; append-only `workshop_status_events`; stale save = errcode PT409 'record_changed' (never 40001);
+  permissions via `workshop_status_can(action)` / `workshop_status_my_permissions()` (fails closed); permanent_delete =
+  super admin only and only on a soft-deleted record. Upload compare applies `site_aliases` like normalize_site().
+- Notifications (140000): one notice per person per upload + hourly scan (pg_cron :20); recipients checked with the real
+  permission + RLS scope functions; dedupe table `workshop_status_notices`; delivered via `notifications` +
+  `workflow_notifications` push (no edge redeploy). Titles stored English only.
+- Export: Active vehicles Excel has a "Latest update" column (newest manual_update event: who, when, fields).
+- Expo (`mobile/app/(app)/workshop-status/`) + Flutter (`tyre_pulse_flutter/lib/features/workshop_status/`, ModuleKey
+  `workshopStatus`, Flutter-only set `flutterOnlyModules`) both have list + update screens. Web mirror
+  `src/lib/mobileModules.js` now 32 modules. NO mobile build run.
+- Tests: `node --test --test-concurrency=1 supabase/tests/workshop_status_*.test.mjs` (69 pass, PGlite). Known bug:
+  `workshop_status_stage_upload` errors when file hash is null (app always sends one). Open: workload definitions
+  ("waiting parts" / "repair in progress") await owner confirmation; phones can only "Assign to me".
+
 # ⚑ SESSION 2026-10-06 (part 6, marketing session) — SIX MODULE TOURS + CHART KIT + DEMO DATA ONLY (PR #390). marketing/ only.
 - Walk-through engine = marketing/components/motion/walkthrough/ (Walkthrough.tsx + one file per scenario: inspection,
   tyreIntel [RFID passport, TPMS, removal forecast, anomalies, brand cost/km], workshop, accident, maintenance, cost).

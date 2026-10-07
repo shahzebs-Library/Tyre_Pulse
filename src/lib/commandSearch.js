@@ -38,6 +38,7 @@ export const NAV_COMMANDS = [
   { id: 'actions',        label: 'Corrective Actions',   path: '/actions',     icon: 'ClipboardList' },
   { id: 'rca',            label: 'Root Cause',           path: '/rca',         icon: 'Search' },
   { id: 'daily-ops',      label: 'Daily Ops',            path: '/daily-ops',   icon: 'Calendar',      adminOnly: true },
+  { id: 'workshop-status', label: 'Workshop Status',     path: '/daily-ops/workshop', icon: 'Wrench', moduleKey: 'daily_ops:workshop', keywords: ['workshop', 'daily upload', 'morning update', 'out of service', 'breakdown list'] },
   { id: 'live-fleet',     label: 'Live Fleet Status',    path: '/live-fleet',  icon: 'Radio',         adminOnly: true },
   { id: 'serial-tracker', label: 'Serial Tracker',       path: '/serial-tracker', icon: 'QrCode',     adminOnly: true },
   { id: 'qr-labels',      label: 'QR Labels',            path: '/qr-labels',   icon: 'Tag',           adminOnly: true },

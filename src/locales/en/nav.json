@@ -32,6 +32,7 @@
     "/actions": "Corrective Actions",
     "/rca": "Root Cause",
     "/daily-ops": "Daily Ops",
+    "/daily-ops/workshop": "Workshop Status",
     "/live-fleet": "Live Fleet Status",
     "/serial-tracker": "Serial Tracker",
     "/qr-labels": "QR Labels",

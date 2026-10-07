@@ -298,6 +298,7 @@ const PressureIntelligence   = lazy(() => import('./pages/PressureIntelligence')
 const SupplierManagement     = lazy(() => import('./pages/SupplierManagement'))
 const FuelEfficiency         = lazy(() => import('./pages/FuelEfficiency'))
 const DailyOps               = lazy(() => import('./pages/DailyOps'))
+const WorkshopStatus         = lazy(() => import('./pages/WorkshopStatus'))
 const RotationSchedule       = lazy(() => import('./pages/RotationSchedule'))
 const KpiCommandCenter       = lazy(() => import('./pages/KpiCommandCenter'))
 const RecallTracker          = lazy(() => import('./pages/RecallTracker'))
@@ -662,6 +663,7 @@ function MainApp() {
                       <Route path="/tyre-specs"           element={<Safe><RoleRoute allowed={['Admin']}><TyreSpecifications /></RoleRoute></Safe>} />
                       <Route path="/rotation"             element={<Safe><RoleRoute allowed={['Admin']}><RotationSchedule /></RoleRoute></Safe>} />
                       <Route path="/daily-ops"            element={<Safe><ModuleRoute moduleKey="daily_ops"><DailyOps /></ModuleRoute></Safe>} />
+                      <Route path="/daily-ops/workshop"   element={<Safe><ModuleRoute moduleKey="daily_ops:workshop"><WorkshopStatus /></ModuleRoute></Safe>} />
                       {/* ── Intelligence ── */}
                       <Route path="/kpi-engine"              element={<Safe><ModuleRoute moduleKey="kpi_scorecard"><EngineeringKpi /></ModuleRoute></Safe>} />
                       <Route path="/kpi-command"             element={<Safe><ModuleRoute moduleKey="kpi_scorecard"><KpiCommandCenter /></ModuleRoute></Safe>} />

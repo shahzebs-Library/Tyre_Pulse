@@ -10,6 +10,9 @@ export default function ContactPage() {
   const [tone, setTone] = useState<"" | "ok" | "error">("");
   const [sending, setSending] = useState(false);
   const [invalid, setInvalid] = useState<string[]>([]);
+  // When delivery is down, the request is never lost: the visitor can send the same
+  // details on WhatsApp or by email in one tap.
+  const [fallback, setFallback] = useState<{ wa: string | null; mail: string } | null>(null);
   const bad = (f: string) => (invalid.includes(f) ? { "aria-invalid": true as const, "aria-describedby": "form-status" } : {});
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -20,8 +23,14 @@ export default function ContactPage() {
     setTone("");
     setStatus("");
     setInvalid([]);
+    setFallback(null);
     const form = new FormData(formElement);
     const payload = Object.fromEntries(form.entries());
+    const summary = ["Demo request", `Name: ${payload.name ?? ""}`, `Email: ${payload.email ?? ""}`, `Company: ${payload.company ?? ""}`, `Country: ${payload.country ?? ""}`, `Fleet size: ${payload.fleetSize ?? ""}`, `Industry: ${payload.industry ?? ""}`, String(payload.message ?? "")].join("\n");
+    const offerFallback = () => setFallback({
+      wa: WHATSAPP_URL ? `${WHATSAPP_URL}?text=${encodeURIComponent(summary)}` : null,
+      mail: `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("Tyre Pulse demo request")}&body=${encodeURIComponent(summary)}`,
+    });
     try {
       const res = await fetch("/api/contact", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await res.json();
@@ -31,9 +40,14 @@ export default function ContactPage() {
       setInvalid(fields);
       if (fields[0]) (formElement.elements.namedItem(fields[0]) as HTMLElement | null)?.focus();
       if (res.ok) formElement.reset();
+      else if (res.status >= 500) {
+        setStatus("Our form could not deliver your request just now. Send the same details in one tap instead:");
+        offerFallback();
+      }
     } catch {
-      setStatus("Unable to send the request. Please try again.");
+      setStatus("Unable to send the request. Send the same details in one tap instead:");
       setTone("error");
+      offerFallback();
     } finally {
       setSending(false);
     }
@@ -51,7 +65,7 @@ export default function ContactPage() {
         <div className="field"><label htmlFor="industry">Industry</label><select id="industry" name="industry" defaultValue=""><option value="" disabled>Select industry</option><option>Construction</option><option>Transport & Logistics</option><option>Ready-Mix Concrete</option><option>Heavy Equipment Rental</option><option>Workshop / Service Centre</option><option>Other</option></select></div>
         <div className="field full"><label htmlFor="message">Which machines, and what problem?</label><textarea id="message" name="message" maxLength={2000} {...bad("message")} placeholder="For example: 120 mixers, tyre cost per km rising, inspections still on paper" /></div>
         <div className="field full" aria-hidden="true" style={{ position: "absolute", left: -10000 }}><label htmlFor="website">Website</label><input id="website" name="website" tabIndex={-1} autoComplete="off" /></div>
-        <div className="field full"><button className="btn btn-primary" type="submit" disabled={sending} aria-busy={sending}>{sending ? "Sending" : "Request a demo"}{sending && <span className="btn-spin" aria-hidden="true" />}</button><p className="form-note">Your information is used only to respond to this request.</p><p id="form-status" className={`form-status${tone ? ` is-${tone}` : ""}`} role="status" aria-live="polite">{status}</p></div>
+        <div className="field full"><button className="btn btn-primary" type="submit" disabled={sending} aria-busy={sending}>{sending ? "Sending" : "Request a demo"}{sending && <span className="btn-spin" aria-hidden="true" />}</button><p className="form-note">Your information is used only to respond to this request.</p><p id="form-status" className={`form-status${tone ? ` is-${tone}` : ""}`} role="status" aria-live="polite">{status}</p>{fallback && <div className="form-fallback">{fallback.wa && <a className="btn btn-dark" href={fallback.wa} target="_blank" rel="noopener noreferrer">Send on WhatsApp</a>}<a className="btn btn-secondary" href={fallback.mail}>Send by email</a></div>}</div>
       </form>
     </div>
     <aside className="contact-aside" aria-labelledby="next-h">

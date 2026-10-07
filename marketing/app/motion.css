@@ -906,3 +906,18 @@ main:has(> .home-hero) > section:nth-of-type(n + 3) {
 @media (prefers-reduced-motion: reduce) {
   .fx-live .fx-signals li, .fx-live .fx-pipe > li, .fx-rail i, .ptop-tyre i, .tabs-auto[data-playing] .tab-prog, .tabs-auto [role="tabpanel"]:not([hidden]) { animation: none; }
 }
+.form-fallback { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+
+/* Platform overview: the side list switches the panel in place. */
+.overview.overview-tabs { grid-template-columns: 260px minmax(0, 1fr); }
+.overview-tabs > [role="tabpanel"] { grid-column: 2; grid-row: 1; min-width: 0; }
+.overview-tabs > .ov-nav { grid-column: 1; grid-row: 1; display: grid; }
+.ov-nav [role="tab"] { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 0; border-radius: 5px; background: transparent; font: inherit; font-weight: 600; font-size: .92rem; min-height: 44px; text-align: start; color: var(--ink); cursor: pointer; }
+.ov-nav [role="tab"]:hover { background: #fff; }
+.ov-nav [role="tab"][aria-selected="true"] { background: var(--brand); font-weight: 800; }
+.ov-main h3 { font-family: var(--font-display), sans-serif; font-size: 1.5rem; margin: 0 0 10px; letter-spacing: -.02em; }
+@media (max-width: 900px) {
+  .overview.overview-tabs { grid-template-columns: minmax(0, 1fr); }
+  .overview-tabs > [role="tabpanel"], .overview-tabs > .ov-nav { grid-column: 1; grid-row: auto; }
+  .overview-tabs > .ov-nav { grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; }
+}

@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   ArrowRight, BarChart3, Box, CheckCircle2, CircleDot, FileSignature,
-  Fuel, ShieldCheck, Truck, Wrench, ClipboardList, Settings, FileCheck2, Users, Monitor,
-  Smartphone, Tv,
+  Fuel, ShieldCheck, Truck, Wrench, ClipboardList, Settings, FileCheck2, Users,
 } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -17,10 +16,11 @@ import { Donut, Heatmap } from "@/components/motion/walkthrough/charts";
 import { AssetCycle, LiveFeed, type LiveEvent } from "@/components/motion/HeroLive";
 import { Spotlight } from "@/components/motion/Spotlight";
 import {
-  AssetRecord, FleetCostPanel, NewInspectionCard, OfflineInspectionPhone, OpsOverview,
+  AssetRecord, FleetCostPanel, NewInspectionCard, OpsOverview,
 } from "@/components/mock/Screens";
 import { alternatesFor } from "./schema";
 import { OG_IMAGES } from "@/lib/site";
+import { RolesShowcase, type Role } from "@/components/RolesShowcase";
 import { PROOF } from "@/lib/proof";
 
 export const metadata: Metadata = {
@@ -279,17 +279,7 @@ export default function HomePage() {
           <div className="site-shell">
             <h2 className="sec-h" id="people">Each role sees the work it owns.</h2>
             <p className="sec-lead">Seven roles, one record. Each person opens the app to their own queue, on the device they actually use, and nobody sees data from another country or site unless they are allowed to.</p>
-            <div className="people people-v2">
-              <div className="people-art">
-                <Photo name="technicianPhone" position="40% 30%" />
-                <OfflineInspectionPhone />
-              </div>
-              <Tabs
-                label="Roles"
-                className="role-tabs"
-                items={ROLES.map((r) => ({ id: r.id, label: r.label, panel: <RoleCopy {...r} /> }))}
-              />
-            </div>
+            <RolesShowcase roles={ROLES} />
           </div>
         </section>
 
@@ -356,12 +346,6 @@ export default function HomePage() {
   );
 }
 
-type Role = {
-  id: string; label: string; title: string; text: string;
-  screen: string[]; kpis: [string, string][]; devices: ("phone" | "web" | "tv")[];
-};
-
-/* Who uses Tyre Pulse and what each one sees first (sample figures). */
 const ROLES: Role[] = [
   { id: "driver", label: "Driver", title: "Report it before the next trip.", text: "Daily checks, meter readings and problems reported from the phone in a minute, in Arabic or English, with or without signal.",
     screen: ["Pre-trip checklist for this vehicle", "Report a problem with a photo", "Odometer or hour meter with a photo", "Accident report with GPS and damage marks"],
@@ -386,29 +370,3 @@ const ROLES: Role[] = [
     kpis: [["Fleet availability", "93%"], ["Cost per km", "SAR 0.93"]], devices: ["web", "tv"] },
 ];
 
-const DEVICE: Record<Role["devices"][number], [typeof Smartphone, string]> = {
-  phone: [Smartphone, "Phone, works offline"], web: [Monitor, "Web app"], tv: [Tv, "TV wallboard"],
-};
-
-function RoleCopy({ title, text, screen, kpis, devices }: Role) {
-  return (
-    <div className="role-copy">
-      <h3>{title}</h3>
-      <p>{text}</p>
-      <div className="role-grid">
-        <div>
-          <small className="role-h">First on their screen</small>
-          <ul className="role-list">{screen.map((x) => <li key={x}><CheckCircle2 size={15} aria-hidden="true" />{x}</li>)}</ul>
-        </div>
-        <div>
-          <small className="role-h">What they watch</small>
-          <dl className="role-kpis">{kpis.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
-          <p className="muted-sm role-sample">Sample figures</p>
-        </div>
-      </div>
-      <ul className="caps">
-        {devices.map((d) => { const [Icon, l] = DEVICE[d]; return <li key={d}><Icon size={20} aria-hidden={true} />{l}</li>; })}
-      </ul>
-    </div>
-  );
-}

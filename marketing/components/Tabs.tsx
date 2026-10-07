@@ -14,7 +14,7 @@ export type TabItem = { id: string; label: string; icon?: React.ReactNode; panel
  * selected tab is brought into view. `data-fade` carries "start", "end" or both,
  * measured in reading direction so the fade is correct in Arabic too.
  */
-export function Tabs({ items, label, className = "tabbar", autoplay }: { items: TabItem[]; label: string; className?: string; autoplay?: number }) {
+export function Tabs({ items, label, className = "tabbar", autoplay, wrapClass }: { items: TabItem[]; label: string; className?: string; autoplay?: number; wrapClass?: string }) {
   const [active, setActive] = useState(0);
   const base = useId();
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -76,7 +76,7 @@ export function Tabs({ items, label, className = "tabbar", autoplay }: { items: 
   return (
     <div
       ref={root}
-      className={autoplay ? "tabs-auto" : undefined}
+      className={[autoplay ? "tabs-auto" : "", wrapClass ?? ""].filter(Boolean).join(" ") || undefined}
       data-playing={autoplay && visible && !hold && !stopped ? "" : undefined}
       style={autoplay ? { ["--tab-ms" as string]: `${autoplay}ms` } : undefined}
       onPointerEnter={autoplay ? () => setHold(true) : undefined}

@@ -1,0 +1,30 @@
+/* Workshop Status -> Activity log + Team workload (Loop 10). Prefix wks-act-.
+   Command Center tokens only (--cc-*), so light and dark both follow the kit.
+   Table, toolbar and filter layout reuse activeVehicles.css (wks-av-*). */
+.wks-act-date { min-width: 0; }
+.wks-act-note { grid-column: 1 / -1; margin: 0; }
+.wks-act-time { white-space: nowrap; color: var(--cc-ink-3); }
+
+.wks-act-change { display: grid; gap: 2px; }
+.wks-act-field { font-weight: 600; color: var(--cc-ink); }
+.wks-act-vals { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.wks-act-old { color: var(--cc-ink-3); text-decoration: line-through; text-decoration-thickness: 1px; }
+.wks-act-arrow { color: var(--cc-ink-3); }
+.wks-act-new { color: var(--cc-ink); }
+.wks-act-detail { color: var(--cc-ink-2, var(--cc-ink)); }
+.wks-act-c-change { min-width: 220px; }
+
+.wks-act-pill { white-space: nowrap; }
+
+.wks-act-people { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
+.wks-act-chip {
+  display: inline-flex; flex-direction: column; gap: 2px; padding: 6px 10px;
+  border: 1px solid var(--cc-inner-border); border-radius: 10px; background: var(--cc-inner); font-size: 12.5px;
+}
+
+.wks-act-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+.wks-act-more { display: flex; justify-content: center; margin-top: 12px; }
+
+.wks-act-unassigned > * { font-style: italic; }
+.wks-act-warn { color: var(--cc-amber, #b45309); font-weight: 600; }
+.wks-act-total > * { font-weight: 700; border-top: 2px solid var(--cc-inner-border); background: var(--cc-card-flat); }

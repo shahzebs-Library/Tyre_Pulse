@@ -22,6 +22,8 @@ import { PageHero, Tabs } from '../components/commandCenter/kit'
 import DailyUploadPanel from '../components/workshopStatus/DailyUploadPanel'
 import ActiveVehiclesPanel from '../components/workshopStatus/ActiveVehiclesPanel'
 import VehicleUpdateDrawer from '../components/workshopStatus/VehicleUpdateDrawer'
+import ActivityLogPanel from '../components/workshopStatus/ActivityLogPanel'
+import TeamWorkloadPanel from '../components/workshopStatus/TeamWorkloadPanel'
 import { useLanguage } from '../contexts/LanguageContext'
 import { loadMyWorkshopPermissions } from '../lib/api/workshopStatusPermissions'
 import { NO_WORKSHOP_PERMISSIONS } from '../lib/workshopStatus/permissions'
@@ -29,23 +31,40 @@ import '../components/workshopStatus/workshopStatus.css'
 
 /**
  * Tabs in display order. `key` is the ?tab= value; `labelKey` resolves under
- * workshopStatus.page.tabs. Add new tabs here (and their panel below).
+ * workshopStatus.page.tabs, or under `ns` when a tab carries its own
+ * namespace. `requires` (any of) gates the tab on the caller's workshop
+ * permissions; the server still enforces every read. Add new tabs here (and
+ * their panel below).
  */
 export const TABS = [
   { key: 'active', labelKey: 'active' },
+  { key: 'activity', labelKey: 'activity', ns: 'workshopStatusActivity.tabs', requires: ['view_activity'] },
+  { key: 'workload', labelKey: 'workload', ns: 'workshopStatusActivity.tabs', requires: ['view_activity', 'view_reports'] },
   { key: 'upload', labelKey: 'upload' },
 ]
 const DEFAULT_TAB = 'active'
+
+/** Tabs the caller may see: a gated tab needs at least one of its `requires`. */
+export function visibleTabs(permissions) {
+  return TABS.filter((x) => !x.requires || x.requires.some((k) => permissions?.[k] === true))
+}
 
 export default function WorkshopStatus() {
   const { t } = useLanguage()
   const p = useCallback((k, v) => t(`workshopStatus.page.${k}`, v), [t])
   const [params, setParams] = useSearchParams()
   const requested = params.get('tab')
-  const tab = TABS.some((x) => x.key === requested) ? requested : DEFAULT_TAB
 
   const [permissions, setPermissions] = useState(NO_WORKSHOP_PERMISSIONS)
   const [permState, setPermState] = useState('loading') // loading | ready | error
+  const shownTabs = visibleTabs(permissions)
+  // While permissions load, a linked gated tab stays selected (its panel shows
+  // the loading state); once they are known, a tab the caller may not see
+  // falls back to the default.
+  const tab = shownTabs.some((x) => x.key === requested)
+    || (permState === 'loading' && TABS.some((x) => x.key === requested))
+    ? requested
+    : DEFAULT_TAB
   const [editing, setEditing] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
   const refreshList = useCallback(() => setReloadKey((k) => k + 1), [])
@@ -74,7 +93,7 @@ export default function WorkshopStatus() {
           label={p('tabsLabel')}
           value={tab}
           onChange={onTab}
-          tabs={TABS.map((x) => ({ key: x.key, label: t(`workshopStatus.page.tabs.${x.labelKey}`) }))}
+          tabs={shownTabs.map((x) => ({ key: x.key, label: t(`${x.ns || 'workshopStatus.page.tabs'}.${x.labelKey}`) }))}
         />
       </div>
 
@@ -102,6 +121,14 @@ export default function WorkshopStatus() {
         onSaved={() => { setEditing(null); refreshList() }}
         onReload={() => { setEditing(null); refreshList() }}
       />
+
+      {tab === 'activity' && (
+        <ActivityLogPanel permissions={permissions} permState={permState} onRetryPermissions={loadPerms} />
+      )}
+
+      {tab === 'workload' && (
+        <TeamWorkloadPanel permissions={permissions} permState={permState} onRetryPermissions={loadPerms} />
+      )}
 
       {tab === 'upload' && (
         <DailyUploadPanel permissions={permissions} permState={permState} onRetryPermissions={loadPerms} />

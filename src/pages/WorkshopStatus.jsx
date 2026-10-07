@@ -11,6 +11,9 @@
  * follows. Later loops add their tab to TABS; no empty placeholder tab is
  * rendered (the spec forbids placeholder screens).
  *
+ * Released (Loop 11) lists vehicles that left the report, with disposition,
+ * restore, archive and delete actions.
+ *
  * `onUpdate` opens the Vehicle Update Drawer (Loop 8) for a record; the
  * drawer saves through workshop_status_update_record, and bumping
  * reloadKey refreshes the list.
@@ -25,6 +28,7 @@ import VehicleUpdateDrawer from '../components/workshopStatus/VehicleUpdateDrawe
 import VehicleHistoryDrawer from '../components/workshopStatus/VehicleHistoryDrawer'
 import ActivityLogPanel from '../components/workshopStatus/ActivityLogPanel'
 import TeamWorkloadPanel from '../components/workshopStatus/TeamWorkloadPanel'
+import RemovedRecordsPanel from '../components/workshopStatus/RemovedRecordsPanel'
 import { useLanguage } from '../contexts/LanguageContext'
 import { loadMyWorkshopPermissions } from '../lib/api/workshopStatusPermissions'
 import { NO_WORKSHOP_PERMISSIONS } from '../lib/workshopStatus/permissions'
@@ -41,6 +45,7 @@ export const TABS = [
   { key: 'active', labelKey: 'active' },
   { key: 'activity', labelKey: 'activity', ns: 'workshopStatusActivity.tabs', requires: ['view_activity'] },
   { key: 'workload', labelKey: 'workload', ns: 'workshopStatusActivity.tabs', requires: ['view_activity', 'view_reports'] },
+  { key: 'removed', labelKey: 'removed', ns: 'workshopStatusRemoved.tabs', requires: ['view_removed'] },
   { key: 'upload', labelKey: 'upload' },
 ]
 const DEFAULT_TAB = 'active'
@@ -133,6 +138,16 @@ export default function WorkshopStatus() {
 
       {tab === 'workload' && (
         <TeamWorkloadPanel permissions={permissions} permState={permState} onRetryPermissions={loadPerms} />
+      )}
+
+      {tab === 'removed' && (
+        <RemovedRecordsPanel
+          permissions={permissions}
+          permState={permState}
+          onRetryPermissions={loadPerms}
+          onHistory={setHistoryOf}
+          onChanged={refreshList}
+        />
       )}
 
       {tab === 'upload' && (

@@ -64,16 +64,20 @@ const collapse = (v) => String(v).replace(/ /g, ' ').replace(/\s+/g, ' ').trim()
 
 /**
  * Site as the database will store it. PREVIEW MIRROR ONLY: the DB trigger
- * normalize_site() (plus the site_aliases table) is the authority. Mirrored
- * here: upper case, trim, collapse spaces, strip a trailing "-ST" / "_ST" store
- * suffix. "DIRIYAH-ST2" does not end in ST and is kept as is. Aliases are NOT
- * mirrored, so a value the alias table rewrites can still show as a change in
- * the preview while the server finds none.
+ * normalize_site() is the authority. Mirrored here in the same order: upper
+ * case, trim, collapse spaces, then the site_aliases table (pass it as a
+ * Map alias -> canonical) and, only when no alias matched, strip a trailing
+ * "-ST" / "_ST" store suffix. "DIRIYAH-ST2" does not end in ST and is kept.
+ * Without the alias map the preview can still show a change the server will
+ * not find.
  */
-export function normaliseSite(v) {
+export function normaliseSite(v, aliases) {
   if (v == null) return null
-  const s = collapse(v).toUpperCase().replace(/[-_]ST$/, '').trim()
-  return s || null
+  const s = collapse(v).toUpperCase()
+  if (!s) return null
+  const canon = aliases && typeof aliases.get === 'function' ? aliases.get(s) : null
+  if (canon) return canon
+  return s.replace(/[-_]ST$/, '').trim() || null
 }
 
 /**
@@ -81,7 +85,7 @@ export function normaliseSite(v) {
  * numbers -> number, site -> normalised site, other text -> trimmed, collapsed,
  * lower case (a case-only edit is not a change).
  */
-export function normaliseForCompare(field, value) {
+export function normaliseForCompare(field, value, opts = {}) {
   if (value == null) return null
   if (typeof value === 'string' && collapse(value) === '') return null
   if (DATE_FIELDS.has(field)) {
@@ -92,7 +96,7 @@ export function normaliseForCompare(field, value) {
     const n = typeof value === 'number' ? value : Number(collapse(value).replace(/,/g, ''))
     return Number.isFinite(n) ? n : collapse(value).toLowerCase()
   }
-  if (field === 'site') return normaliseSite(value)
+  if (field === 'site') return normaliseSite(value, opts.siteAliases)
   if (value instanceof Date) return parseWorkshopDate(value).value
   return collapse(value).toLowerCase()
 }
@@ -154,6 +158,7 @@ export function compareWorkshopUpload(preview, currentActiveRecords, options = {
   const invalidRecords = (Array.isArray(p.invalid) ? p.invalid : []).slice().sort(byAssetThenRow)
   const duplicateRecords = (Array.isArray(p.duplicates) ? p.duplicates : []).slice().sort(byAssetThenRow)
   const ignore = new Set(options.ignoreFields ?? DEFAULT_IGNORED_FIELDS)
+  const cmpOpts = { siteAliases: options.siteAliases || null }
   const fields = EXCEL_OWNED_FIELDS.filter((f) => !ignore.has(f))
   const country = options.country ? String(options.country).trim().toUpperCase() : null
 
@@ -187,7 +192,7 @@ export function compareWorkshopUpload(preview, currentActiveRecords, options = {
     }
     const changes = {}
     for (const f of fields) {
-      if (normaliseForCompare(f, record[f]) !== normaliseForCompare(f, data[f])) {
+      if (normaliseForCompare(f, record[f], cmpOpts) !== normaliseForCompare(f, data[f], cmpOpts)) {
         changes[f] = { from: record[f] ?? null, to: data[f] }
       }
     }

@@ -251,3 +251,15 @@ describe('compareWorkshopUpload - the real daily file', () => {
     expect(c.summary).toMatchObject({ new: 0, changed: 0, unchanged: 36, removed: 0 })
   })
 })
+
+describe('site alias mirror (normalize_site)', () => {
+  it('applies the alias table before the store suffix rule', async () => {
+    const { normaliseSite, normaliseForCompare } = await import('../lib/workshopStatus/compareUpload')
+    const aliases = new Map([['RIYADH - METRO', 'RIY-MET'], ['DIRIYAH-G1-ST', 'DIRIYAH-G1']])
+    expect(normaliseSite('  riyadh  -  metro ', aliases)).toBe('RIY-MET')
+    expect(normaliseSite('diriyah-g1-st', aliases)).toBe('DIRIYAH-G1')
+    expect(normaliseSite('JED-ST', aliases)).toBe('JED')
+    expect(normaliseSite('JED-ST')).toBe('JED')
+    expect(normaliseForCompare('site', 'Riyadh - Metro', { siteAliases: aliases })).toBe('RIY-MET')
+  })
+})

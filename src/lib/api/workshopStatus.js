@@ -38,6 +38,24 @@ function requireCountry(country) {
 }
 
 /**
+ * The site alias table (alias -> canonical), so the upload preview normalises
+ * a site exactly like the normalize_site() trigger. Best effort: a failed read
+ * returns an empty Map and the preview falls back to the suffix rule only.
+ *
+ * @returns {Promise<Map<string, string>>}
+ */
+export async function listSiteAliases() {
+  const out = new Map()
+  const { data, error } = await fetchAllPages((from, to) => supabase
+    .from('site_aliases').select('alias,canonical').order('alias', { ascending: true }).range(from, to), { max: 5000 })
+  if (error) return out
+  for (const r of data || []) {
+    if (r?.alias && r?.canonical) out.set(String(r.alias).trim().toUpperCase(), String(r.canonical).trim().toUpperCase())
+  }
+  return out
+}
+
+/**
  * Active (current report) records for one country, not soft-deleted, ordered by
  * asset then id so paging is stable. Pages past the 1000-row server cap.
  */

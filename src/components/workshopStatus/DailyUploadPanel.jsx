@@ -27,7 +27,7 @@ import { toUserMessage } from '../../lib/safeError'
 import { parseWorkshopFile } from '../../lib/workshopStatus/excelParser'
 import { compareWorkshopUpload, describeChange } from '../../lib/workshopStatus/compareUpload'
 import {
-  listActiveRecords, findPreviousUploadByHash, stageUpload, confirmUpload, cancelUpload, buildStagedRows,
+  listActiveRecords, findPreviousUploadByHash, stageUpload, confirmUpload, cancelUpload, buildStagedRows, listSiteAliases,
 } from '../../lib/api/workshopStatus'
 import './workshopStatus.css'
 
@@ -173,14 +173,16 @@ export default function DailyUploadPanel({ permissions, permState = 'ready', onR
   const compare = useCallback(async (pv, meta, forCountry, run) => {
     setPhase('comparing'); setRecordsError('')
     try {
-      const [records, previous] = await Promise.all([
+      const [records, previous, siteAliases] = await Promise.all([
         listActiveRecords({ country: forCountry }),
         meta?.fileHash
           ? findPreviousUploadByHash({ fileHash: meta.fileHash, country: forCountry }).catch(() => null)
           : Promise.resolve(null),
+        // Best effort: without the alias table the preview uses the suffix rule only.
+        Promise.resolve().then(() => listSiteAliases()).catch(() => null),
       ])
       if (run !== runRef.current) return
-      const cmp = compareWorkshopUpload(pv, records || [], { country: forCountry })
+      const cmp = compareWorkshopUpload(pv, records || [], { country: forCountry, siteAliases })
       setComparison(cmp)
       setDuplicateOf(previous || null)
       const first = REVIEW_TABS.find((k) => cmp.summary[k] > 0) || 'new'

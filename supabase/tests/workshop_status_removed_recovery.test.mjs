@@ -33,12 +33,7 @@ async function asUser (uid, fn) {
   try { return await fn() } finally { await db.exec('reset test.uid') }
 }
 const count = async (sql, params = []) => (await db.query(sql, params)).rows[0].n
-const update = (uid, recordId, patch, expected = null) => asUser(uid, async () => (await db.query(
-  'select public.workshop_status_update_record($1, $2, $3) r',
-  [recordId, JSON.stringify(patch), expected])).rows[0].r)
 const rec = async rid => (await db.query('select * from workshop_status_records where id = $1', [rid])).rows[0]
-const updatedAtText = async rid => (await db.query(
-  'select updated_at::text t from workshop_status_records where id = $1', [rid])).rows[0].t
 const events = async (rid, type) => (await db.query(
   'select * from workshop_status_events where record_id = $1 and event_type = $2 order by created_at, id',
   [rid, type])).rows

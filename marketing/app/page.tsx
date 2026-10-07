@@ -22,6 +22,7 @@ import { alternatesFor } from "./schema";
 import { OG_IMAGES } from "@/lib/site";
 import { RolesShowcase, type Role } from "@/components/RolesShowcase";
 import { PROOF } from "@/lib/proof";
+import { FLEET, FleetVehicle } from "@/components/art/FleetVehicles";
 
 export const metadata: Metadata = {
   title: { absolute: "Tyre Pulse | Complete control of your PMV operations" },
@@ -93,11 +94,6 @@ const MODULES: Module[] = [
   { icon: BarChart3, title: "Approvals and reporting", text: "Work orders and purchases routed to the right approver.", href: "/contact", tone: "brand" },
 ];
 
-/* Asset classes the platform already tracks in production. */
-const ASSET_TYPES = [
-  "Transit mixers", "Concrete pumps", "Placing booms", "Wheel loaders", "Skid loaders", "Backhoes",
-  "Generators", "Batching plants", "Ice plants", "Pickups", "Staff buses", "Trailers", "Forklifts",
-];
 
 const FAQ = [
   ["Our sites have weak signal.", "Inspections, photos, meter readings and signatures save on the phone and sync when the connection returns."],
@@ -192,8 +188,8 @@ export default function HomePage() {
           <div className="marquee">
             <div className="site-shell marquee-viewport">
               <div className="marquee-track">
-                <ul aria-label="Asset types tracked">{ASSET_TYPES.map((t) => <li key={t}>{t}</li>)}</ul>
-                <ul aria-hidden="true">{ASSET_TYPES.map((t) => <li key={t}>{t}</li>)}</ul>
+                <ul aria-label="Asset types tracked">{FLEET.map(({ name, Art }) => <li key={name}><FleetVehicle Art={Art} /><span>{name}</span></li>)}</ul>
+                <ul aria-hidden="true">{FLEET.map(({ name, Art }) => <li key={name}><FleetVehicle Art={Art} /><span>{name}</span></li>)}</ul>
               </div>
             </div>
           </div>

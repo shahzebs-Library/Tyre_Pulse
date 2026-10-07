@@ -13,6 +13,7 @@ export const SOLUTION_PAGES = [
 ] as const;
 
 export const RESOURCE_PAGES = [
+  { href: "/platform#tours", label: "Product tours", text: "Six workflows, phone and web side by side", labelAr: "جولات المنتج", textAr: "ست مسارات عمل على الهاتف والويب" },
   { href: "/security", label: "Security", text: "Tenant isolation, roles, audit", labelAr: "الأمان", textAr: "عزل الشركات والأدوار وسجل التدقيق" },
   { href: "/contact", label: "Contact", text: "Book a demo or talk to sales", labelAr: "تواصل معنا", textAr: "احجز عرضاً أو تحدث إلى المبيعات" },
 ] as const;

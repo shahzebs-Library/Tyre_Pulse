@@ -921,3 +921,36 @@ main:has(> .home-hero) > section:nth-of-type(n + 3) {
   .overview-tabs > [role="tabpanel"], .overview-tabs > .ov-nav { grid-column: 1; grid-row: auto; }
   .overview-tabs > .ov-nav { grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; }
 }
+
+/* Header menus: icon rows, a mega panel for Platform, and a hover bridge so the
+   pointer can cross the gap between the label and the panel. */
+.dropdown { width: 340px; padding: 8px; }
+.dropdown::before { content: ""; position: absolute; inset-inline: 0; top: -10px; height: 10px; }
+.dd-list { display: grid; gap: 2px; }
+.dropdown .dd-list a { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; align-items: center; padding: 10px; }
+.dd-ic { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 8px; background: #f4f3ee; color: #161616; font-style: normal; transition: background-color .15s ease; }
+.dropdown .dd-list a:hover .dd-ic, .dropdown .dd-list a[aria-current="page"] .dd-ic { background: var(--brand); }
+.dd-t { display: grid; gap: 1px; }
+.dd-t > span { font-size: .8rem; color: var(--muted); }
+.dropdown-mega { width: 620px; grid-template-columns: minmax(0, 1fr) 220px; gap: 8px; }
+.dd-feature { display: grid; align-content: end; gap: 8px; padding: 18px; border-radius: 8px; color: #fff; min-height: 100%;
+  background: linear-gradient(160deg, rgba(22,22,22,.55), #161616 70%), url("/photos/transit-mixer.webp") center 30% / cover; }
+.dd-feature small { color: var(--brand); font-weight: 700; font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; }
+.dd-feature b { font-size: 1rem; line-height: 1.3; }
+.dd-feature span { display: inline-flex; align-items: center; gap: 6px; font-size: .84rem; font-weight: 700; color: var(--brand); }
+.dd-feature:hover span svg { transform: translateX(3px); transition: transform .15s ease; }
+@media (max-width: 1100px) { .dropdown-mega { width: 340px; grid-template-columns: minmax(0, 1fr); } .dd-feature { display: none; } }
+
+/* Moving fleet strip: vehicle drawings with their names; wheels roll and the drum turns. */
+.marquee li { gap: 12px; padding: 12px 22px 12px 18px; font-size: clamp(.95rem, 1.3vw, 1.08rem); }
+.marquee li::after { display: none; }
+.marquee li + li { border-inline-start: 1px solid var(--line); }
+.fv { flex: none; overflow: visible; }
+.fv-wheel { animation: tp-roll 1.1s linear infinite; }
+.fv-drum { animation: tp-drum 1.4s linear infinite; }
+@keyframes tp-drum { to { stroke-dashoffset: -32; } }
+@keyframes tp-roll { to { transform: rotate(-360deg); } }
+[dir="rtl"] .fv { transform: scaleX(-1); }
+.marquee:not(.in-view) .fv-wheel, .marquee:not(.in-view) .fv-drum, .marquee:hover .fv-wheel, .marquee:hover .fv-drum { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .fv-wheel, .fv-drum { animation: none; } }
+@media (max-width: 600px) { .fv { width: 84px; height: 40px; } }

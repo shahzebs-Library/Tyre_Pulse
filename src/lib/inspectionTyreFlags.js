@@ -456,10 +456,10 @@ const SEARCH_FIELDS = ['title', 'site', 'asset_no', 'tyre_serial', 'inspector', 
  * signature filter: we cannot claim a record is unsigned without knowing.
  */
 export const SIGNOFF_FILTERS = Object.freeze([
-  { key: 'all', label: 'All sign-offs' },
-  { key: 'unsigned', label: 'Not signed by inspector' },
-  { key: 'not_approved', label: 'Not approved yet' },
-  { key: 'approved_unsigned', label: 'Approved, no approver signature' },
+  { key: 'all', labelKey: 'inspections.filters.signoff.all' },
+  { key: 'unsigned', labelKey: 'inspections.filters.signoff.unsigned' },
+  { key: 'not_approved', labelKey: 'inspections.filters.signoff.notApproved' },
+  { key: 'approved_unsigned', labelKey: 'inspections.filters.signoff.approvedUnsigned' },
 ])
 
 const signedFlag = (row, flag, image) => {

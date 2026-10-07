@@ -401,3 +401,17 @@ describe('sign-off filter', () => {
     expect(scopeInspections(list, { signoff: 'not_approved', search: 'zzz' })).toEqual([])
   })
 })
+
+describe('sign-off filter labels are translated', () => {
+  it('every option key resolves to a string in English and Arabic', async () => {
+    const { SIGNOFF_FILTERS } = await import('../lib/inspectionTyreFlags')
+    const en = JSON.parse(readFileSync(join(process.cwd(), 'src/locales/en/inspections.json'), 'utf8'))
+    const ar = JSON.parse(readFileSync(join(process.cwd(), 'src/locales/ar/inspections.json'), 'utf8'))
+    const get = (obj, key) => key.split('.').slice(1).reduce((o, k) => (o == null ? o : o[k]), obj)
+    for (const o of SIGNOFF_FILTERS) {
+      expect(typeof get(en, o.labelKey)).toBe('string')
+      expect(typeof get(ar, o.labelKey)).toBe('string')
+    }
+    expect(typeof get(ar, 'inspections.filters.signoff.label')).toBe('string')
+  })
+})

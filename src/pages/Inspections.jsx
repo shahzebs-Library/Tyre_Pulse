@@ -1973,12 +1973,12 @@ export default function Inspections() {
                   />
                 )}
                 <select
-                  aria-label="Sign-off"
+                  aria-label={t('inspections.filters.signoff.label')}
                   className="input text-sm w-56"
                   value={filterSignoff}
                   onChange={e => setFilter('signoff', e.target.value)}
                 >
-                  {SIGNOFF_FILTERS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+                  {SIGNOFF_FILTERS.map(o => <option key={o.key} value={o.key}>{t(o.labelKey)}</option>)}
                 </select>
                 <DateField className="text-sm w-40" value={filterFrom} onChange={v => setFilter('from', v)} placeholder="From date" ariaLabel="From date" />
                 <DateField className="text-sm w-40" value={filterTo} onChange={v => setFilter('to', v)} placeholder="To date" ariaLabel="To date" min={filterFrom || undefined} />

@@ -80,6 +80,14 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   Backfill: 9 plans Completed (_bak.inspection_plan_complete_20261007). Dry-run proved only 8 Missed/Due->Done + 2 ->Started.
   Fixed PL053 (Done+rejected -> In Progress, unlocked) and TM402 (rejected but locked -> unlocked), _bak.inspection_fix_20261007.
   Verified: trigger flips a plan only on approval (rolled-back test), manager RLS view identical, advisor clean.
+- 20261007110000_inspection_plan_reconcile (Codex P1 on #396): plan status is now kept in step BOTH ways. ONE matching rule
+  = inspection_plan_best_match(plan_id), used by get_schedule_adherence AND reconcile_inspection_plans(org, asset), which
+  triggers on inspections (insert/update/delete) and inspection_schedules (insert/update/delete; pg_trigger_depth guard)
+  call for the old and new asset. inspection_schedules.completed_inspection_id marks SYSTEM completions; only those are
+  ever reopened (a hand-set Completed with null id is never touched). Failures log to system_logs, never block a write.
+  trg_complete_inspection_plans from 090000 is DISABLED (not dropped - DROP stalls MCP). Verified rolled back: new plan
+  after a Done inspection -> Completed; inspection moved away -> Scheduled; back -> Completed; approval -> Completed.
+  GOTCHA: an MCP execute_sql containing DELETE waits for approval and times out - test "evidence gone" via an UPDATE.
 - REAL GAP, not a bug: 245 planned assets, only 12 ever inspected; ~160 plans genuinely Missed (mostly BP/BH plants).
 - 20261007100000_inspection_signed_flags: PostgREST computed columns has_inspector_signature(inspections) /
   has_approver_signature(inspections) (INVOKER). The register list loads these, NOT the images (still 54% of payload).

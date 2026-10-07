@@ -108,7 +108,14 @@
       "done": "Done"
     },
     "searchPlaceholder": "Search title, site, asset, inspector, attendees...",
-    "allSites": "All Sites"
+    "allSites": "All Sites",
+    "signoff": {
+      "label": "Sign-off",
+      "all": "All sign-offs",
+      "unsigned": "Not signed by inspector",
+      "notApproved": "Not approved yet",
+      "approvedUnsigned": "Approved, no approver signature"
+    }
   },
   "table": {
     "type": "Type",

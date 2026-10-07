@@ -30,7 +30,7 @@ export type ModuleKey =
   | 'reports' | 'analytics' | 'ai' | 'admin' | 'users' | 'meter' | 'tasks'
   | 'calendar' | 'reportIssue' | 'checklists' | 'approvals' | 'alerts'
   | 'history' | 'tyreChange' | 'team' | 'pm' | 'washing' | 'workshop'
-  | 'repairRequest'
+  | 'repairRequest' | 'workshopStatus'
 
 export interface ModuleDef {
   key: ModuleKey
@@ -136,6 +136,11 @@ export const MODULES: ModuleDef[] = [
   // who has been using it. Supervisors (manager/director) + admin see it too,
   // and a per-user grant can still extend it to anyone.
   M('workshop',       'My Jobs',           'construct-outline',      'Maintenance',['manager', 'director', 'inspector', 'tyre_man', 'mechanic', 'electrician']),
+  // Workshop Status (daily workshop sheet): the technician updates the stage,
+  // delay reason, parts and ETAs of the vehicles they are responsible for. The
+  // server (workshop_status_can + RLS) is the real boundary; this only decides
+  // who is offered the tile. Shop-floor trades + supervisors; admin implicit.
+  M('workshopStatus', 'Workshop Status',   'timer-outline',          'Maintenance',['manager', 'director', 'inspector', 'tyre_man', 'mechanic', 'electrician', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager']),
   // Management ----------------------------------------------------------------
   M('overview',       'Overview',          'grid-outline',           'Management', []),
   M('reports',        'Reports',           'document-text-outline',  'Management', []),

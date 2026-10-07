@@ -244,6 +244,8 @@ export default function AppLayout() {
           a name TAB_BAR already declares; the later declaration silently wins. */}
       <Tabs.Screen name="scanner"         options={{ href: null }} />
       <Tabs.Screen name="workshop"        options={{ href: null }} />
+      <Tabs.Screen name="workshop-status/index" options={{ href: null }} />
+      <Tabs.Screen name="workshop-status/[id]"  options={{ href: null }} />
       <Tabs.Screen name="calendar"        options={{ href: null }} />
       <Tabs.Screen name="maintenance"     options={{ href: null }} />
       <Tabs.Screen name="tasks"           options={{ href: null }} />

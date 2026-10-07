@@ -31,6 +31,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   integration, reporting/export, upload history, stale Excel vs manual, security/deletion review, responsive QA, E2E,
   final review). Original rule was "no merge until loop 20"; the owner then said **"merged to main and apply migration"**
   (2026-10-07), so loops 1-12 were merged. Loops 13-20 are follow-up work on a fresh branch from main.
+- 2026-10-07 (close): loops 13-20 scope note merged to main via PR #399 on owner instruction; branch claude/dreamy-faraday-9bwtmt realigned to main. Nothing uncommitted, nothing pending.
 - **LOOPS 13-20 (NOT STARTED, owner asked what they contain 2026-10-07; do on a FRESH branch from main, only when asked):**
   13 Daily Ops overview integration (Workshop Status summary tile/strip on the Daily Ops overview) ·
   14 Reporting/export (wider Excel/PDF + scheduled report) · 15 Upload history (past daily files, counts, who/when, re-open) ·

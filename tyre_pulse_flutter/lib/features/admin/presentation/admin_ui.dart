@@ -47,6 +47,7 @@ String adminModuleLabel(AppLocalizations l10n, ModuleKey key) => switch (key) {
       ModuleKey.stock => l10n.adminModuleStock,
       ModuleKey.pm => l10n.adminModulePm,
       ModuleKey.workshop => l10n.adminModuleWorkshop,
+      ModuleKey.workshopStatus => l10n.adminModuleWorkshopStatus,
       ModuleKey.overview => l10n.adminModuleOverview,
       ModuleKey.reports => l10n.adminModuleReports,
       ModuleKey.analytics => l10n.adminModuleAnalytics,

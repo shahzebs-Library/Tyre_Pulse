@@ -618,12 +618,30 @@ void main() {
       expect(find.text('My Inspections'), findsOneWidget);
       expect(find.text('Accident command centre'), findsWidgets);
       expect(find.text('Report an accident'), findsWidgets);
-      await tester.drag(sheet, const Offset(0, -850));
-      await tester.pumpAndSettle();
+      // Scrolled to, not dragged a fixed distance: the sheet's length changes
+      // whenever a module tile is added (Workshop Status, 2026-10-07).
+      final Finder sheetScroll = find.descendant(
+        of: sheet,
+        matching: find.byType(Scrollable),
+      );
+      await tester.scrollUntilVisible(
+        find.text('Maintenance Control Center'),
+        220,
+        scrollable: sheetScroll,
+      );
       expect(find.text('Maintenance Control Center'), findsOneWidget);
       expect(find.text('Maintenance & workshop'), findsWidgets);
-      await tester.drag(sheet, const Offset(0, -850));
-      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Workshop Status'),
+        220,
+        scrollable: sheetScroll,
+      );
+      expect(find.text('Workshop Status'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Fleet Overview'),
+        220,
+        scrollable: sheetScroll,
+      );
       expect(find.text('Fleet Overview'), findsOneWidget);
       expect(find.text('Financial report'), findsOneWidget);
       expect(find.text('Fleet Analytics'), findsOneWidget);

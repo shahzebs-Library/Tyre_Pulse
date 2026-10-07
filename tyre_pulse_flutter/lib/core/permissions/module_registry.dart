@@ -2,7 +2,9 @@
 ///
 /// Ported from `MODULES` in `mobile/lib/permissions.ts` and pinned by
 /// `docs/flutter-migration/04-role-permission-matrix.md` section 3. Thirty-one
-/// modules, five groups, and a default role list per module.
+/// modules, five groups, and a default role list per module - plus the
+/// Flutter-only modules in [flutterOnlyModules], which the frozen Expo
+/// registry never had.
 ///
 /// Three properties of the original are deliberately preserved:
 ///
@@ -71,6 +73,11 @@ enum ModuleKey {
   stock,
   pm,
   workshop,
+
+  /// Daily Ops -> Workshop Status. FLUTTER-ONLY: the frozen Expo registry
+  /// never had it, so it is listed in [flutterOnlyModules] and the drift guard
+  /// skips it by name.
+  workshopStatus,
   // Management
   overview,
   reports,
@@ -155,6 +162,17 @@ const Map<String, ModuleKey> webModuleKeyAliases = <String, ModuleKey>{
   'pm_programs': ModuleKey.pm,
   'repair_requests': ModuleKey.repairRequest,
   'user_management': ModuleKey.users,
+  // The web's composite key for Workshop Status (src/lib/navAccess.js).
+  'daily_ops:workshop': ModuleKey.workshopStatus,
+};
+
+/// Modules this app has and the frozen Expo registry (`mobile/lib/
+/// permissions.ts`) does not. The Expo app is retired and cannot be edited, so
+/// a new field module can only be born here. The drift guard compares every
+/// OTHER module against the TypeScript and skips exactly these, by name - a
+/// module is never silently exempted.
+const Set<ModuleKey> flutterOnlyModules = <ModuleKey>{
+  ModuleKey.workshopStatus,
 };
 
 /// Parses a `mobile:<webKey>` row to the phone module it means, via
@@ -278,6 +296,9 @@ const Map<ModuleKey, Set<RoleId>> flutterRoleDefaultExtensions =
     <ModuleKey, Set<RoleId>>{
   ModuleKey.accidents: <RoleId>{RoleId.fleetSupervisor},
   ModuleKey.reportAccident: <RoleId>{RoleId.fleetSupervisor},
+  // Workshop Status: the server seeds Fleet Supervisor in its managers group
+  // (20261007100000_workshop_status_permissions.sql).
+  ModuleKey.workshopStatus: <RoleId>{RoleId.fleetSupervisor},
 };
 
 /// The registry itself.
@@ -530,6 +551,31 @@ abstract final class ModuleRegistry {
         RoleId.tyreMan,
         RoleId.mechanic,
         RoleId.electrician,
+      },
+    ),
+    // Flutter-only (see [flutterOnlyModules]). The role default (plus Fleet
+    // Supervisor in [flutterRoleDefaultExtensions]) MIRRORS the server seed in supabase/migrations/20261007100000_workshop_status_
+    // permissions.sql (ground team, workshop supervisors, managers), so the
+    // phone offers the screen to the same people the web does. The server
+    // still decides: the screen reads workshop_status_my_permissions() and
+    // shows nothing unless it answers view = true.
+    ModuleDef.forRoles(
+      key: ModuleKey.workshopStatus,
+      defaultLabel: 'Workshop Status',
+      group: ModuleGroup.maintenance,
+      defaultRoles: <RoleId>{
+        RoleId.mechanic,
+        RoleId.electrician,
+        RoleId.inspector,
+        RoleId.tyreMan,
+        RoleId.tyreDataCollector,
+        RoleId.workshopSupervisor,
+        RoleId.maintenanceSupervisor,
+        RoleId.workshopAreaManager,
+        RoleId.workshopMaintenanceAreaManager,
+        RoleId.pmvManager,
+        RoleId.manager,
+        RoleId.director,
       },
     ),
     // --- Management --------------------------------------------------------

@@ -457,8 +457,8 @@ void main() {
   });
 
   group('allowedModulesFor', () {
-    test('an admin reaches all 31 modules', () {
-      expect(allowedModulesFor(state(role: adminRole)), hasLength(31));
+    test('an admin reaches all 32 modules', () {
+      expect(allowedModulesFor(state(role: adminRole)), hasLength(32));
     });
 
     test('a reporter reaches the six the registry gives them', () {
@@ -472,7 +472,8 @@ void main() {
       });
     });
 
-    test('a tyre data collector reaches serial and approvals only', () {
+    test('a tyre data collector reaches serial, approvals and workshop status',
+        () {
       // RECORDED: nine people hold this role, the largest non-Tyre-Man
       // population on the system, and it is a SIGNING role that cannot open a
       // checklist or run an inspection by default. Artifact 04 section 3.3
@@ -481,7 +482,13 @@ void main() {
         allowedModulesFor(
           state(role: const UserRole.known(RoleId.tyreDataCollector)),
         ),
-        <ModuleKey>{ModuleKey.serial, ModuleKey.approvals},
+        // Workshop Status: the server seeds this role in its ground team
+        // (20261007100000_workshop_status_permissions.sql).
+        <ModuleKey>{
+          ModuleKey.serial,
+          ModuleKey.approvals,
+          ModuleKey.workshopStatus,
+        },
       );
     });
 

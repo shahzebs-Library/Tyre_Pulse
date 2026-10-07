@@ -193,6 +193,9 @@ abstract final class TpRouteId {
   static const String workOrders = 'workOrders';
   static const String workOrderDetail = 'workOrderDetail';
   static const String workshop = 'workshop';
+
+  /// Daily Ops -> Workshop Status: the vehicles in the workshop's daily report.
+  static const String workshopStatus = 'workshopStatus';
   static const String adminConsole = 'adminConsole';
   static const String adminUsers = 'adminUsers';
   static const String adminAccess = 'adminAccess';
@@ -263,6 +266,7 @@ abstract final class TpRoutePaths {
   static const String preventiveMaintenance = '/maintenance';
   static const String workOrders = '/work-orders';
   static const String workshop = '/workshop';
+  static const String workshopStatus = '/workshop-status';
   static const String adminConsole = '/admin';
   static const String adminUsers = '/admin/users';
   static const String adminAccess = '/admin/access';
@@ -833,6 +837,18 @@ final class WorkshopRoute extends TpRoute {
 
   @override
   String get location => TpRoutePaths.workshop;
+}
+
+/// The workshop daily-report vehicles. A vehicle is opened from the list (no
+/// id on the route), so a notification lands on the list it can be acted from.
+final class WorkshopStatusRoute extends TpRoute {
+  const WorkshopStatusRoute();
+
+  @override
+  String get routeId => TpRouteId.workshopStatus;
+
+  @override
+  String get location => TpRoutePaths.workshopStatus;
 }
 
 final class AdminConsoleRoute extends TpRoute {

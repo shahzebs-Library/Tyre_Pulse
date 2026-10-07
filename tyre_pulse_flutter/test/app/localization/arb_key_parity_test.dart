@@ -585,10 +585,14 @@ void main() {
     // pass/fail was calculated, and the label on a photo that is neither on
     // this device nor stored as a server reference
     // (checklistDetailScoreOnly, checklistDetailPhotoUnavailable).
-    test('en, ar and ur each carry exactly 2214 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2214);
-      expect(_translatableKeys(ar).length, 2214);
-      expect(_translatableKeys(ur).length, 2214);
+    // 2214 + 3 = 2217. Workshop Status (Daily Ops): the screens' copy
+    // catalog, the stage / delay / parts display-label catalog, and the
+    // module label in the admin access editor (workshopStatusCopyCatalog,
+    // workshopStatusVocabCatalog, adminModuleWorkshopStatus).
+    test('en, ar and ur each carry exactly 2217 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2217);
+      expect(_translatableKeys(ar).length, 2217);
+      expect(_translatableKeys(ur).length, 2217);
     });
   });
 

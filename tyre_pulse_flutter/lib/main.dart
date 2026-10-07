@@ -80,6 +80,7 @@ import 'package:tyre_pulse/features/washing/washing_screen_registrations.dart';
 import 'package:tyre_pulse/features/work_orders/'
     'work_orders_screen_registrations.dart';
 import 'package:tyre_pulse/features/workshop/workshop_screen_registrations.dart';
+import 'package:tyre_pulse/features/workshop_status/workshop_status_screen_registrations.dart';
 
 /// A placeholder for this build's version until a real one is wired in.
 ///
@@ -367,6 +368,7 @@ Future<void> main() async {
               .withAll(homeScreenRegistrations)
               .withAll(workOrdersScreenRegistrations)
               .withAll(workshopScreenRegistrations)
+              .withAll(workshopStatusScreenRegistrations)
               .withAll(tyreExchangeScreenRegistrations)
               .withAll(globalSearchScreenRegistrations)
               .withAll(tasksScreenRegistrations)

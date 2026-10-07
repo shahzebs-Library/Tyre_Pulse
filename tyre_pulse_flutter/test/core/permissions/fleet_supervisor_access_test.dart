@@ -32,9 +32,15 @@ void main() {
   });
 
   test('gains nothing else: other modules stay closed', () {
+    // Workshop Status mirrors the server seed, which lists Fleet Supervisor
+    // among its managers.
     expect(
       allowedModulesFor(access),
-      <ModuleKey>{ModuleKey.reportAccident, ModuleKey.accidents},
+      <ModuleKey>{
+        ModuleKey.reportAccident,
+        ModuleKey.accidents,
+        ModuleKey.workshopStatus,
+      },
     );
   });
 

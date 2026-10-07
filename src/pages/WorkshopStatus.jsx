@@ -17,9 +17,14 @@
  * `onUpdate` opens the Vehicle Update Drawer (Loop 8) for a record; the
  * drawer saves through workshop_status_update_record, and bumping
  * reloadKey refreshes the list.
+ *
+ * Notifications (Loop 12): the caller's own Workshop Status notices show in a
+ * strip under the tab bar (WorkshopNotificationsPanel). Their deep links land
+ * here as ?record=<id> (exact vehicle), ?vehicle=<asset> (search) or
+ * ?focus=<preset> (filtered list); the Active vehicles tab applies them.
  */
-import { useCallback, useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Wrench } from 'lucide-react'
 import { PageHero, Tabs } from '../components/commandCenter/kit'
 import DailyUploadPanel from '../components/workshopStatus/DailyUploadPanel'
@@ -29,6 +34,9 @@ import VehicleHistoryDrawer from '../components/workshopStatus/VehicleHistoryDra
 import ActivityLogPanel from '../components/workshopStatus/ActivityLogPanel'
 import TeamWorkloadPanel from '../components/workshopStatus/TeamWorkloadPanel'
 import RemovedRecordsPanel from '../components/workshopStatus/RemovedRecordsPanel'
+import WorkshopNotificationsPanel from '../components/workshopStatus/WorkshopNotificationsPanel'
+import { getCurrentUserId } from '../lib/api/workshopStatusNotifications'
+import { focusFilters, WORKSHOP_FOCUS } from '../lib/workshopStatus/notificationLinks'
 import { useLanguage } from '../contexts/LanguageContext'
 import { loadMyWorkshopPermissions } from '../lib/api/workshopStatusPermissions'
 import { NO_WORKSHOP_PERMISSIONS } from '../lib/workshopStatus/permissions'
@@ -85,6 +93,33 @@ export default function WorkshopStatus() {
 
   useEffect(() => { loadPerms() }, [loadPerms])
 
+  // Deep link from a notification. `mine` needs the signed-in user's id.
+  const navigate = useNavigate()
+  const linkRecord = params.get('record') || ''
+  const linkVehicle = (params.get('vehicle') || '').trim()
+  const linkFocus = WORKSHOP_FOCUS.includes(params.get('focus')) ? params.get('focus') : ''
+  const [myId, setMyId] = useState(null)
+  useEffect(() => {
+    if (linkFocus !== 'mine' || myId) return
+    let live = true
+    getCurrentUserId().then((uid) => { if (live) setMyId(uid) })
+    return () => { live = false }
+  }, [linkFocus, myId])
+  const focus = useMemo(() => {
+    if (linkRecord) return { key: `record:${linkRecord}`, recordId: linkRecord }
+    if (linkVehicle) return { key: `vehicle:${linkVehicle}`, vehicle: linkVehicle }
+    if (linkFocus) {
+      const filters = focusFilters(linkFocus, myId)
+      return filters ? { key: `focus:${linkFocus}`, name: linkFocus, filters } : null
+    }
+    return null
+  }, [linkRecord, linkVehicle, linkFocus, myId])
+  const clearFocus = () => {
+    const next = new URLSearchParams(params)
+    for (const k of ['record', 'vehicle', 'focus']) next.delete(k)
+    setParams(next, { replace: true })
+  }
+
   const onTab = (key) => {
     const next = new URLSearchParams(params)
     if (key === DEFAULT_TAB) next.delete('tab'); else next.set('tab', key)
@@ -110,6 +145,10 @@ export default function WorkshopStatus() {
         </div>
       )}
 
+      {permState === 'ready' && permissions.view && (
+        <WorkshopNotificationsPanel onOpen={(to) => navigate(to)} reloadKey={reloadKey} />
+      )}
+
       {tab === 'active' && (
         <ActiveVehiclesPanel
           permissions={permissions}
@@ -118,6 +157,8 @@ export default function WorkshopStatus() {
           onUpdate={setEditing}
           onHistory={setHistoryOf}
           reloadKey={reloadKey}
+          focus={focus}
+          onClearFocus={clearFocus}
         />
       )}
 

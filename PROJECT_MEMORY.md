@@ -15,6 +15,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - Never force-push or reset a branch you did not create; never squash over another session's unmerged commits
   (check `git log origin/main..origin/<branch>` first). PROJECT_MEMORY.md is shared: add your own entry, never rewrite theirs.
 - 2026-10-06 later: marketing audit + round 2 (parts 4-5) re-verified (lint, tsc, 19/19 tests, build) and merged to main.
+- 2026-10-07: marketing pages deepened (branch claude/marketing-pages-depth): shared ProofStrip (lib/proof.ts = PROOF, one source) + TourBand (Walkthrough subset per page): platform=all 6, fleet-assets=cost+accident, maintenance=workshop+maintenance, inventory=cost, inspections=inspection+tyres, industries=inspection+workshop+cost. Pricing gained "included in every plan" + FAQ, security a 3-check list + FAQ, home a 3-step rollout. Verified lint/tsc/20 tests/build, sweep 0 overflow.
 - 2026-10-06 (latest): #390 (six module tours, chart kit, demo data) merged 22e5899f; #391 (live TPMS via telematics + Play/Pause fix) merged 928e9b25. Branch claude/marketing-tpms-play realigned to main. Nothing open on the marketing side.
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.

@@ -4,6 +4,8 @@ import { PageFrame } from "@/components/PageFrame";
 import { PageTop } from "@/components/PageTop";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../schema";
 import { CTA } from "@/components/CTA";
+import { ProofStrip } from "@/components/ProofStrip";
+import { TourBand } from "@/components/TourBand";
 import { OG_IMAGES } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -38,6 +40,8 @@ export default function IndustriesPage() {
         {industries.map(([photo, title, text]) => <li key={title}><div className="ind-media"><Photo name={photo} position={photo === "riyadh" ? "30% 92%" : undefined} sizes="(max-width: 760px) 100vw, 600px" /></div><h2>{title}</h2><p>{text}</p></li>)}
       </ul>
     </div></section>
+    <ProofStrip id="ind-proof" title="Proven first in ready-mix concrete." text="Mixers, pumps and batching plants across three countries run on Tyre Pulse every day." />
+    <TourBand id="ind-tours" title="The workflows every model shares." lead="Inspections in the yard, jobs in the workshop and cost per machine in the office. Sample data." only={["inspection", "workshop", "cost"]} />
     <CTA />
   </PageFrame>;
 }

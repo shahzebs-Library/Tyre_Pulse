@@ -856,3 +856,7 @@ main:has(> .home-hero) > section:nth-of-type(n + 3) {
 .fx-charts .v-heat { font-size: 11px; } .fx-charts .v-heat i { height: 28px; font-size: 10.5px; }
 @media (max-width: 860px) { .fx-charts { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 480px) { .fx-charts .v-donut { flex-direction: column; align-items: stretch; } .fx-charts .v-donut-fig { align-self: center; } }
+
+/* Proof strip used on its own (no marquee under it). */
+.proof.proof-solo { padding: 56px 0 56px; border-top: 1px solid var(--line); }
+.incl-list { margin: 0; }

@@ -6,7 +6,7 @@ import { PageTop, SubNav } from "@/components/PageTop";
 import { CtaBand } from "@/components/CtaBand";
 import { ConditionCard, DefectCard, MeterCard, OfflineInspectionPhone, SignOffCard } from "@/components/mock/Screens";
 import { Photo } from "@/components/art/Photos";
-import { InspectionDemo } from "@/components/motion/InspectionDemo";
+import { Walkthrough } from "@/components/motion/walkthrough/Walkthrough";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../../schema";
 import { OG_IMAGES } from "@/lib/site";
 
@@ -54,9 +54,9 @@ export default function InspectionsPage() {
       </section>
       <section className="bright-band" aria-labelledby="demo-h">
         <div className="site-shell">
-          <h2 className="sec-h" id="demo-h">Watch one inspection, from scan to work order.</h2>
+          <h2 className="sec-h" id="demo-h">Watch an inspection and a tyre alert become work orders.</h2>
           <p className="bright-lead">The phone in the yard and the web app in the office, side by side at every step.</p>
-          <InspectionDemo />
+          <Walkthrough only={["inspection", "tyres"]} />
         </div>
       </section>
       <section className="section-pad soft-bg anchor-sec" id="tyres" aria-labelledby="tyres-h">

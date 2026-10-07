@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { PageFrame } from "@/components/PageFrame";
 import { PageTop, SubNav } from "@/components/PageTop";
 import { CtaBand } from "@/components/CtaBand";
+import { TourBand } from "@/components/TourBand";
 import { FleetCostPanel, InventoryTable, PurchaseRequest } from "@/components/mock/Screens";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../../schema";
 import { OG_IMAGES } from "@/lib/site";
@@ -38,6 +39,7 @@ export default function InventoryPage() {
           </div>
         </div>
       </section>
+      <TourBand id="cost-tour" title="From store issue to cost per machine." lead="Watch spend split into tyres, spare parts and oil, then traced to the machines and sites behind it. Sample data." only={["cost"]} />
       <CtaBand title="See which parts each job actually consumed." text="Send a month of store issues. We tie them to job cards and machines in the demo." button="Book a demo on your data" />
     </PageFrame>
   );

@@ -3,6 +3,7 @@ import { CheckCircle2 } from "lucide-react";
 import { PageFrame } from "@/components/PageFrame";
 import { PageTop, SubNav } from "@/components/PageTop";
 import { CtaBand } from "@/components/CtaBand";
+import { TourBand } from "@/components/TourBand";
 import { PartsLabour, TechAllocation, WorkOrderDetails, WorkOrdersTable } from "@/components/mock/Screens";
 import { Photo } from "@/components/art/Photos";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../../schema";
@@ -46,6 +47,7 @@ export default function MaintenancePage() {
           <Photo name="technicianGenerator" position="45% 40%" />
         </div>
       </section>
+      <TourBand id="workshop-tours" title="A breakdown and a service, from request to sign-off." lead="Follow a job through the workshop queue, then a preventive service that sets its own next due date. Sample data." only={["workshop", "maintenance"]} />
       <CtaBand title="Find the breakdowns your PM plan should have caught." text="Send a month of job cards. We split planned work from breakdowns, machine by machine." button="Book a demo on your data" />
     </PageFrame>
   );

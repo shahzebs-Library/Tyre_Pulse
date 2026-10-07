@@ -21,6 +21,7 @@ import {
 } from "@/components/mock/Screens";
 import { alternatesFor } from "./schema";
 import { OG_IMAGES } from "@/lib/site";
+import { PROOF } from "@/lib/proof";
 
 export const metadata: Metadata = {
   title: { absolute: "Tyre Pulse | Complete control of your PMV operations" },
@@ -90,14 +91,6 @@ const MODULES: Module[] = [
   { icon: ShieldCheck, title: "Accidents and insurance", text: "Incidents, claims and policy details per machine.", href: "/contact" },
   { icon: Fuel, title: "Fuel and operating costs", text: "Operating cost by asset, site or project.", href: "/contact" },
   { icon: BarChart3, title: "Approvals and reporting", text: "Work orders and purchases routed to the right approver.", href: "/contact", tone: "brand" },
-];
-
-/* Real figures from the ready-mix operation Tyre Pulse runs in today (rounded down). */
-const PROOF = [
-  { value: 1600, suffix: "+", label: "machines on record", text: "Mixers, pumps, loaders, generators and plant." },
-  { value: 89000, suffix: "+", label: "job cards", text: "Imported from the ERP and worked in the app." },
-  { value: 216000, suffix: "+", label: "expense lines", text: "Classified into tyres, spare parts and oil." },
-  { value: 3, suffix: "", label: "countries", text: "Saudi Arabia, the UAE and Egypt, each in its own currency." },
 ];
 
 /* Asset classes the platform already tracks in production. */
@@ -329,6 +322,20 @@ export default function HomePage() {
                 })}
               </ul>
             </Spotlight>
+          </div>
+        </section>
+
+        <section className="section-pad soft-bg" aria-labelledby="rollout">
+          <div className="site-shell split split-top">
+            <div>
+              <h2 className="sec-h" id="rollout">From your spreadsheets to the phone in three steps.</h2>
+              <p className="panel-text">No blank system to fill by hand. You start from the records you already keep.</p>
+            </div>
+            <ol className="next-steps">
+              <li><b>Send what you already export.</b><span>An asset list, a month of job cards and your tyre records, in the formats your ERP and Excel produce.</span></li>
+              <li><b>We load and check it.</b><span>Columns are mapped, duplicates are caught and every row is tied to a machine, a site and a country.</span></li>
+              <li><b>Teams work on their own records.</b><span>Tyre men inspect on the phone, the workshop runs its queue and managers read cost per machine.</span></li>
+            </ol>
           </div>
         </section>
 

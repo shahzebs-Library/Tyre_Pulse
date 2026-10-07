@@ -6,6 +6,8 @@ import {
 import { PageFrame } from "@/components/PageFrame";
 import { PageTop } from "@/components/PageTop";
 import { CtaBand } from "@/components/CtaBand";
+import { ProofStrip } from "@/components/ProofStrip";
+import { TourBand } from "@/components/TourBand";
 import { AssetsWindow } from "@/components/mock/Screens";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../schema";
 import { OG_IMAGES } from "@/lib/site";
@@ -88,6 +90,8 @@ export default function PlatformPage() {
           </ul>
         </div>
       </section>
+      <TourBand id="tours" title="Six workflows, played step by step." lead="Pick a module: inspections, tyres, workshop, accidents, maintenance or cost. Each one shows the phone and the web app moving together. Sample data." />
+      <ProofStrip id="platform-proof" title="Running a concrete fleet in production today." text="The same platform, the same modules, on one operation across three countries." />
       <CtaBand title="See your own fleet in Tyre Pulse." text="Bring an asset list and a month of job cards. We load them before the call." button="Book a demo on your data" />
     </PageFrame>
   );

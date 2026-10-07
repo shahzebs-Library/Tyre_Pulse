@@ -104,7 +104,9 @@
       "claude/project-review-audit-t07hbp": false,
       "claude/workshop-job-card-flow": false,
       "feature/accident-case-web-redesign": false,
-      "claude/modest-hopper-5bnq8c": false
+      "claude/modest-hopper-5bnq8c": false,
+      "claude/marketing-audit-qc": false,
+      "claude/marketing-walkthrough": false
     }
   },
   "ignoreCommand": "node scripts/vercel-ignore-build.mjs"

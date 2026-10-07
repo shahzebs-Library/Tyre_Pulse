@@ -24,9 +24,14 @@ export function SampleTag() {
 }
 
 /** Scroll container for wide tables: keyboard focusable and named. */
-function TableScroll({ label, children }: { label: string; children: React.ReactNode }) {
+/**
+ * `adapt` turns the wrapper into a size container so a wide sample table drops its
+ * least important columns (see `.mt-adapt` in pmv.css) instead of clipping a word or
+ * forcing a sideways scroll inside a small frame such as the home hero.
+ */
+function TableScroll({ label, children, adapt = false }: { label: string; children: React.ReactNode; adapt?: boolean }) {
   return (
-    <div className="table-scroll" role="region" aria-label={label} tabIndex={0}>
+    <div className={adapt ? "table-scroll table-adapt" : "table-scroll"} role="region" aria-label={label} tabIndex={0}>
       {children}
     </div>
   );
@@ -88,12 +93,12 @@ export function OpsOverview() {
       <div className="mini-panel">
         <div className="mini-head"><strong>Priority work</strong><span className="link-sm">View all work orders</span></div>
         <div className="chips" aria-hidden="true"><b>All (28)</b><span>Overdue (8)</span><span>Due today (6)</span><span>Upcoming (14)</span></div>
-        <TableScroll label="Sample priority work">
-          <table className="mt">
-            <thead><tr><th>Asset</th><th>Description</th><th>Category</th><th>Status</th><th>Priority</th><th>Assigned to</th><th>Site</th><th>Due date</th></tr></thead>
+        <TableScroll label="Sample priority work" adapt>
+          <table className="mt mt-adapt">
+            <thead><tr><th>Asset</th><th>Description</th><th className="c-cat">Category</th><th className="c-status">Status</th><th className="c-pri">Priority</th><th className="c-who">Assigned to</th><th className="c-site">Site</th><th className="c-due">Due date</th></tr></thead>
             <tbody>
               {PRIORITY_WORK.map((r) => (
-                <tr key={r.asset}><td>{r.asset}</td><td>{r.desc}</td><td>{r.cat}</td><td><Pill label={r.status} /></td><td><span className={`pri pri-${r.pri}`}>{r.pri}</span></td><td>{r.who}</td><td>{r.site}</td><td>{r.due}</td></tr>
+                <tr key={r.asset}><td>{r.asset}</td><td>{r.desc}</td><td className="c-cat">{r.cat}</td><td className="c-status"><Pill label={r.status} /></td><td className="c-pri"><span className={`pri pri-${r.pri}`}>{r.pri}</span></td><td className="c-who">{r.who}</td><td className="c-site">{r.site}</td><td className="c-due">{r.due}</td></tr>
               ))}
             </tbody>
           </table>

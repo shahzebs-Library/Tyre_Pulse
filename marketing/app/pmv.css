@@ -138,6 +138,14 @@ a:focus-visible, button:focus-visible, [tabindex="0"]:focus-visible { outline: 3
 .mt td { padding: 7px 8px; border-bottom: 1px solid #efefea; }
 .mt-roomy { font-size: 12.5px; }
 .mt-roomy th, .mt-roomy td { padding: 10px 12px; }
+/* Adaptive sample table: the frame decides how many columns fit. Least important
+   columns go first, so no column is ever cut mid-word. */
+.table-adapt { container-type: inline-size; }
+@container (max-width: 640px) { .mt-adapt .c-cat, .mt-adapt .c-site { display: none; } }
+@container (max-width: 500px) { .mt-adapt .c-due { display: none; } }
+@container (max-width: 400px) { .mt-adapt .c-who { display: none; } }
+@container (max-width: 320px) { .mt-adapt .c-pri { display: none; } }
+@container (max-width: 250px) { .mt-adapt .c-status { display: none; } }
 .linkish { color: var(--info); font-weight: 600; }
 .type-cell { display: inline-flex; gap: 6px; align-items: center; }
 .type-cell svg { color: var(--brand-ink); }
@@ -154,8 +162,22 @@ a:focus-visible, button:focus-visible, [tabindex="0"]:focus-visible { outline: 3
 /* ---------- Module tabs ---------- */
 .section-pad { padding: 56px 0; }
 .tabbar { display: flex; border: 1px solid var(--line); border-radius: 4px; overflow-x: auto; margin-bottom: 18px; background: #fff; }
-.tabbar [role="tab"] { flex: 1 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 58px; padding: 0 20px; background: #fff; border: 0; border-right: 1px solid var(--line); font-weight: 600; font-size: .95rem; color: var(--ink); }
-.tabbar [role="tab"]:last-child { border-right: 0; }
+/* Tabs share the row: they grow to fill a wide shell and shrink their padding before
+   anything overflows, so a 1180px shell holds all five labels with no scrollbar. */
+.tabbar [role="tab"] { flex: 1 1 auto; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 58px; min-width: max-content; padding: 0 14px; background: #fff; border: 0; border-inline-end: 1px solid var(--line); font-weight: 600; font-size: .95rem; color: var(--ink); white-space: nowrap; }
+.tabbar [role="tab"] svg { flex: none; }
+@media (max-width: 1240px) { .tabbar [role="tab"] { padding: 0 10px; font-size: .9rem; gap: 6px; } }
+.tabbar [role="tab"]:last-child { border-inline-end: 0; }
+/* When the labels still do not fit (tablets, phones) the bar is an intentional scroll
+   strip: no scrollbar, snap to each tab, and the side with more tabs behind it fades. */
+.tabbar, .role-tabs { scrollbar-width: none; overscroll-behavior-x: contain; scroll-snap-type: x proximity; }
+.tabbar::-webkit-scrollbar, .role-tabs::-webkit-scrollbar { display: none; }
+.tabbar [role="tab"], .role-tabs [role="tab"] { scroll-snap-align: start; }
+.tabbar[data-fade="end"], .role-tabs[data-fade="end"] { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent); }
+.tabbar[data-fade="start"], .role-tabs[data-fade="start"] { -webkit-mask-image: linear-gradient(270deg, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(270deg, #000 calc(100% - 40px), transparent); }
+.tabbar[data-fade="start end"], .role-tabs[data-fade="start end"] { -webkit-mask-image: linear-gradient(90deg, transparent, #000 40px, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(90deg, transparent, #000 40px, #000 calc(100% - 40px), transparent); }
+[dir="rtl"] .tabbar[data-fade="end"], [dir="rtl"] .role-tabs[data-fade="end"] { -webkit-mask-image: linear-gradient(270deg, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(270deg, #000 calc(100% - 40px), transparent); }
+[dir="rtl"] .tabbar[data-fade="start"], [dir="rtl"] .role-tabs[data-fade="start"] { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent); }
 .tabbar [role="tab"][aria-selected="true"] { background: var(--brand); font-weight: 800; }
 .tab-panel { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; background: #fff; }
 .tab-panel > .art { min-height: 340px; }
@@ -247,8 +269,8 @@ a:focus-visible, button:focus-visible, [tabindex="0"]:focus-visible { outline: 3
 .people-art .art { position: absolute; inset: 0; }
 .people-art .phone { position: absolute; right: 16px; top: 18px; width: 210px; }
 .role-tabs { display: flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; margin-bottom: 22px; }
-.role-tabs [role="tab"] { flex: 1 0 auto; min-height: 44px; padding: 0 16px; background: #fff; border: 0; border-right: 1px solid var(--line); font-weight: 600; }
-.role-tabs [role="tab"]:last-child { border-right: 0; }
+.role-tabs [role="tab"] { flex: 1 0 auto; min-height: 44px; padding: 0 16px; background: #fff; border: 0; border-inline-end: 1px solid var(--line); font-weight: 600; }
+.role-tabs [role="tab"]:last-child { border-inline-end: 0; }
 .role-tabs [role="tab"][aria-selected="true"] { background: var(--brand); font-weight: 800; }
 .role-copy h3 { font-family: var(--font-display), sans-serif; font-size: 1.7rem; letter-spacing: -.02em; margin: 0 0 10px; }
 .role-copy p { color: #3b3b35; margin: 0 0 18px; max-width: 52ch; }
@@ -300,7 +322,7 @@ a:focus-visible, button:focus-visible, [tabindex="0"]:focus-visible { outline: 3
 /* ---------- Inner page hero ---------- */
 .crumbs { font-size: .84rem; color: var(--muted); margin: 0 0 14px; display: flex; gap: 8px; flex-wrap: wrap; }
 .crumbs { align-items: center; }
-.crumbs a { text-decoration: underline; text-underline-offset: 3px; display: inline-flex; align-items: center; min-height: 44px; }
+.crumbs a { text-decoration: underline; text-underline-offset: 3px; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; }
 .page-top { padding: 40px 0 26px; }
 .page-top-grid { display: flex; justify-content: space-between; gap: 24px; align-items: flex-end; flex-wrap: wrap; }
 .page-top .btn-primary { min-height: 52px; padding: 0 24px; }
@@ -422,7 +444,7 @@ a:focus-visible, button:focus-visible, [tabindex="0"]:focus-visible { outline: 3
 }
 .fake-input:has(> svg:first-child) { justify-content: flex-start; }
 .role-tabs { flex-wrap: nowrap; overflow-x: auto; }
-.role-tabs [role="tab"] { padding: 0 12px; white-space: nowrap; font-size: .9rem; }
+.role-tabs [role="tab"] { flex: 1 1 auto; min-width: max-content; padding: 0 clamp(10px, 1vw, 14px); white-space: nowrap; font-size: .9rem; }
 /* Arabic hero: the illustration replaces the retired 3D tyre scene. */
 .hero-stage::before { display: none; }
 .hero-stage > .art { border-radius: 6px; }
@@ -442,8 +464,20 @@ img.ph { height: auto; aspect-ratio: 4 / 3; }
 .sig-standalone { padding: 0; overflow: hidden; background: none; }
 .sig-standalone img.art { height: 100%; min-height: 360px; }
 .hero-stage > img.art { height: 100%; }
-.people-art img.art { width: 72%; right: auto; border-radius: 6px; }
-.people-art .phone { right: 0; top: 10px; width: 200px; }
+/* "Each role sees the work it owns": the photo fills the whole art cell and the phone
+   sits on top of its right edge, so the cell reads as one picture at any width and no
+   bare strip opens beside the phone when the shell is wide. The phone scales with the
+   cell; the copy column is allowed its full width so it does not leave a gap before the
+   signature photo. */
+@media (min-width: 1081px) {
+  .people { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, .48fr); gap: clamp(24px, 2.4vw, 40px); align-items: stretch; }
+  .people > div:has(> [role="tablist"]) { align-self: center; }
+}
+.people-art { min-height: clamp(360px, 27vw, 460px); background: #1e1e26; }
+.people-art img.art { width: 100%; right: 0; border-radius: 6px; }
+.people-art .phone { right: clamp(10px, 1.4vw, 20px); top: 50%; translate: 0 -50%; width: clamp(180px, 42%, 230px); }
+.people .role-copy p { max-width: 62ch; }
+.people .sig-standalone, .people .sig-standalone img.art { min-height: 100%; }
 @media (max-width: 720px) { .people-art img.art { width: 100%; } .people-art .phone { display: none; } }
 .wa-float { position: fixed; right: 18px; bottom: 18px; z-index: 60; width: 56px; height: 56px; border-radius: 50%; background: #1f8f4e; display: grid; place-items: center; box-shadow: 0 10px 24px rgba(0,0,0,.25); }
 .wa-float:hover { background: #17753f; }
@@ -500,15 +534,8 @@ img.ph { height: auto; aspect-ratio: 4 / 3; }
 .ind-list h2 { font-family: var(--font-display), sans-serif; font-size: 1.35rem; letter-spacing: -.015em; margin: 0; }
 .ind-list p { margin: 0; color: var(--muted); max-width: 56ch; }
 @media (max-width: 760px) { .ind-list { grid-template-columns: minmax(0,1fr); gap: 36px; } }
-/* Scroll-driven entry: pure CSS, only where supported, never for reduced motion; content is visible without it. */
-@supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: no-preference) {
-    .module-grid li, .eco-grid li, .sec-list li, .ind-list li, .price-card, .ar-steps li, .steps li {
-      animation: tp-rise linear both; animation-timeline: view(); animation-range: entry 0% entry 60%;
-    }
-    @keyframes tp-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
-  }
-}
+/* List entry is owned by components/motion/MotionRoot.tsx (one reveal engine). A second, CSS view-timeline
+   reveal used to run on the same lists, stacking two animations and leaving them hidden in print. */
 
 /* Copy-pass helpers (replace inline styles) */
 .section-pad.tight { padding-top: 0; }
@@ -550,8 +577,6 @@ a, button { -webkit-tap-highlight-color: transparent; }
 .crumbs li { display: flex; gap: 8px; align-items: center; }
 @media (max-width: 560px) {
   .wa-float { width: 48px; height: 48px; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
-  .tabbar { scroll-snap-type: x mandatory; -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
-  .tabbar [role="tab"] { scroll-snap-align: start; }
 }
 
 /* Phones: the WhatsApp button waits until the visitor scrolls past the first screen, so it

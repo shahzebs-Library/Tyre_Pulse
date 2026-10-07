@@ -48,6 +48,8 @@ const STEPS = [
 
 export default function ArabicPage() {
   return <div className={`rtl ar-page ${arabic.variable}`} lang="ar" dir="rtl">
+    {/* Sets <html lang> before first paint; LocaleSync keeps it right after navigation. */}
+    <script dangerouslySetInnerHTML={{ __html: "document.documentElement.lang='ar'" }} />
     <Header locale="ar" />
     <main id="main-content" tabIndex={-1}>
       <section className="home-hero" aria-label="تاير بالس">

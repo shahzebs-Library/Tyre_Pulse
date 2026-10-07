@@ -5,6 +5,68 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ TWO SESSIONS WORK THIS REPO IN PARALLEL (owner, 2026-10-06). EVERY SESSION FOLLOWS THIS.
+- One session works the APP (`src/`, e.g. branch claude/modest-hopper-5bnq8c), another the MARKETING site (`marketing/`,
+  branch claude/relaxed-planck-ur3ji5). Either can merge to main at any time without the other seeing it.
+- BEFORE starting work and BEFORE every push/merge: `git fetch origin` and read `git log origin/main` + open PRs. Never
+  assume main is where you left it.
+- Branch from / realign to the LATEST origin/main. Before merging, prove no clash: `git merge-tree --write-tree origin/main
+  <branch>` must be clean. Stay inside your own area; touch a file the other session owns only if the owner asks.
+- Never force-push or reset a branch you did not create; never squash over another session's unmerged commits
+  (check `git log origin/main..origin/<branch>` first). PROJECT_MEMORY.md is shared: add your own entry, never rewrite theirs.
+- 2026-10-06 later: marketing audit + round 2 (parts 4-5) re-verified (lint, tsc, 19/19 tests, build) and merged to main.
+- 2026-10-06 (latest): #390 (six module tours, chart kit, demo data) merged 22e5899f; #391 (live TPMS via telematics + Play/Pause fix) merged 928e9b25. Branch claude/marketing-tpms-play realigned to main. Nothing open on the marketing side.
+- 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
+  Inspections/Checklists workspace, other session) merged 9f7783a7.
+
+# ⚑ SESSION 2026-10-06 (part 6, marketing session) — SIX MODULE TOURS + CHART KIT + DEMO DATA ONLY (PR #390). marketing/ only.
+- Walk-through engine = marketing/components/motion/walkthrough/ (Walkthrough.tsx + one file per scenario: inspection,
+  tyreIntel [RFID passport, TPMS, removal forecast, anomalies, brand cost/km], workshop, accident, maintenance, cost).
+  Add a tour = new Scenario file + register in SCENARIOS. InspectionDemo = Walkthrough only=["inspection"].
+- Chart kit = walkthrough/charts.tsx (Donut, Gauge, Waterfall, Heatmap, SparkKpi) + `--v-*` palette in motion.css:
+  ink greys carry data, brand yellow marks only the key value, green/amber/red = status only. No pastels.
+- OWNER RULE: NO real asset codes, serials, job card prefixes or site names on the marketing site. Invented codes
+  (MX-214, PT-118, GN-305, WL-207) + general cities (Riyadh, Jeddah, Dammam, Dubai, Cairo); brands = Brand A/B/C.
+- Home "field issue to closed job" = 6 signals + 6 owned stages + sample job donut + downtime heatmap; "roles" = 7 roles.
+- OWNER RULING (2026-10-06, PR follow-up): TPMS reaches the platform through the customer's TELEMATICS connection, so the site
+  MAY promise live TPMS pressure alerts "via telematics" (this overrides the Codex P1 that had softened it to uploads only).
+- Walkthrough Play/Pause: hover/focus "hold" REMOVED - focus fired on mousedown, so clicking Pause read "not running" and
+  resumed instead. Button label follows `paused` (never viewport visibility, which left a dead Play button); reduced motion starts paused, picking a step/module never unpauses it, only Play does. Do not re-add a hold.
+
+# ⚑ SESSION 2026-10-06 (part 5, marketing session) — SPEED + SECURITY + ACCURACY ROUND 2 (same branch, MERGED to main with part 4). marketing/ only.
+- SPEED (measured, throttled phone 4x CPU / 1.6 Mbps / 150 ms RTT, 2 runs): home TBT 2.44 s -> ~1.0 s, LCP 2.66 -> ~1.6 s;
+  /ar LCP 2.62 -> ~2.0 s; every page LCP < 2.5 s, CLS ~0. Cause was native style/paint, not JS (JS ~0.8 s of 3.7 s):
+  live-dot pulse animated box-shadow (repaint every frame) -> transform/opacity pseudo; infinite loops (CTA stripes,
+  marquee, live dot) paused off screen via MotionRoot IO (.in-view); HeroLive feed stops re-rendering when scrolled away;
+  content-visibility:auto on below-fold sections of the HERO pages only (home, /ar) + footer.
+  GOTCHA: content-visibility on pages with #anchors makes the jump land off target (#documents landed -156px). It is
+  scoped with main:has(> .home-hero). Do not widen it to the platform pages.
+- SECURITY: next 16.3.4 -> 16.3.8 (GHSA-vcvr-r3jv-pc5j next/og RCE; not exploitable here, no next/og) + eslint-config-next
+  16.3.8; prod npm audit 0. Dev-only `braces` left: npm's fix downgrades eslint-config-next to v14 - do not apply.
+  Contact API: Sec-Fetch-Site cross-site -> 403, non-JSON content-type -> 415 (blocks form CSRF), body cap enforced on
+  the read text (holds for chunked bodies), rate limit keys on x-real-ip (Vercel-set, unspoofable) and counts only valid
+  requests. Validation 400 returns field NAMES only; form marks them aria-invalid + "(check this)", focuses the first,
+  clears a mark on edit; inputs carry the server's min/max lengths. Tests 13 -> 19, guards mutation-checked.
+- ACCURACY: security/pricing claims checked against the app (country RLS, support sessions, webhook admin, key rotation,
+  rate-limited public API) = backed. Proof figures match the DB (1,617 fleet / ~89.9k job cards / 216,792 lines).
+- MEASURE GOTCHA: `pgrep -f next-server` matches your own shell; use `pgrep -f "^next-server"`.
+
+# ⚑ SESSION 2026-10-06 (part 4, marketing session) — MARKETING AUDIT + QC (branch claude/marketing-audit-qc, MERGED to main 2026-10-06 on owner go-ahead). marketing/ only.
+- Playwright sweep 11 pages x 320/390/768/1366/1920/2560 = 66 combos: 0 overflow, 0 contrast/tap/console/alt findings after fixes.
+  GOTCHA: Playwright fullPage screenshots show BLANK bands on this site; that is a stitching artifact, not a defect. Judge
+  renders from a viewport set to the page height (setViewportSize) or per-viewport shots. Kill a stale `next start`
+  (pgrep next-server) before re-measuring or the old CSS chunk 404s and every contrast check is garbage.
+- FIXED: a second CSS `animation-timeline: view()` reveal in pmv.css ran on the SAME lists MotionRoot reveals (double
+  animation, lists hidden in print) - removed; MotionRoot is the one reveal engine. Breadcrumb Home link 38px -> 44px min.
+- FIXED a11y: /ar served <html lang="en"> (WCAG 3.1.1). components/LocaleSync.tsx sets html lang per path + Arabic skip
+  link; /ar has an inline pre-paint lang script; <html suppressHydrationWarning>.
+- FIXED security (app/api/contact): honeypot now answers 200 without delivering (bots learn nothing); 16 KB body cap (413);
+  single-line fields fold control chars/newlines so a value cannot forge an extra "Field:" line in the email. Tests 11 -> 13.
+  next.config: script-agnostic CSP (base-uri/form-action self, frame-ancestors/object-src none) + COOP same-origin.
+  No upgrade-insecure-requests (breaks http localhost; HSTS covers prod).
+- FIXED photo: technician-phone.webp still carried the MaxiFlex glove print + cuff text (part 1 cleaned only
+  technician-generator). Inpainted; original in git history. CWV local: CLS 0, LCP < 0.31 s.
+
 # ⚑ SESSION 2026-10-06 CLOSED CLEAN — PR #385 MERGED (squash 9f7783a7). No migration; next free migration unchanged.
 - #385 = Inspections + Checklists workspaces (part 2) + inspection report PDF (part 3) + Codex review fixes. All CI green
   before merge; production deploy for 9f7783a7 was QUEUED at close (re-check Vercel tyre-pulse `target: production` READY

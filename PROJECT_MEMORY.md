@@ -19,11 +19,11 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
-# ⚑ SESSION 2026-10-07 — DAILY OPS -> WORKSHOP STATUS, LOOPS 1-12 DONE. Branch claude/dreamy-faraday-9bwtmt (PR #395). NOT MERGED.
+# ⚑ SESSION 2026-10-07 — DAILY OPS -> WORKSHOP STATUS, LOOPS 1-12 DONE. PR #395 MERGED TO MAIN on owner instruction (loops 13-20 still open).
 - Spec + execution loop (20 loops) were owner uploads; loops 1-12 shipped, **13-20 still to do** (Daily Ops overview
   integration, reporting/export, upload history, stale Excel vs manual, security/deletion review, responsive QA, E2E,
-  final review). Owner rule for this work: **do NOT merge to main** - after loop 20 hand over a review package (branch,
-  commits, migrations, tests, build, exact merge command). Owner later said "if all done merge" - condition not met.
+  final review). Original rule was "no merge until loop 20"; the owner then said **"merged to main and apply migration"**
+  (2026-10-07), so loops 1-12 were merged. Loops 13-20 are follow-up work on a fresh branch from main.
 - Lives INSIDE Daily Ops at `/daily-ops/workshop` (ModuleRoute `daily_ops:workshop`), `src/pages/WorkshopStatus.jsx`,
   panels in `src/components/workshopStatus/`, pure logic `src/lib/workshopStatus/`, services `src/lib/api/workshopStatus*.js`.
   Tabs: Active vehicles / Activity / Workload / Released / Daily upload. NO job-card workflow. `asset_breakdowns` is
@@ -31,7 +31,13 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - **OWNER RULE: a vehicle missing from the daily Excel is RELEASED** (UI "Released", Arabic مُفرج عنها). DB tokens keep
   `removed_from_current_report` / `removed`; never relabel the DB, only the UI.
 - Migrations: 20261007090000 foundation, 100000 permissions, 110000 upload confirm, 120000 manual update = **APPLIED**.
-  **130000 removed/recovery (workshop_status_record_action) and 140000 notifications = NOT APPLIED, need owner OK.**
+  130000 removed/recovery (workshop_status_record_action) = **APPLIED** 2026-10-07. 140000 notifications = **APPLIED EXCEPT
+  `workshop_status_notify_scan()` + its pg_cron job `workshop-status-notify`** (table, config, helpers, upload trigger,
+  grants all live; every body md5-checked against the file). The scan body contains `delete from`, so the Supabase MCP
+  waits for a confirmation, times out at 60 s and ROLLS BACK (apply_migration AND execute_sql, tried both). To finish:
+  paste section 4 (the scan function) + its revoke + section 6 (cron.schedule) of the 140000 file into the Supabase SQL
+  editor, or run the MCP call while the owner is present to approve. Until then upload-confirm notices work; the hourly
+  threshold reminders (no update today, waiting 7+ days, overdue release...) do not.
   Until applied the Released-tab actions and notifications fail on the preview.
 - Design: every write is a SECURITY DEFINER writer; who/when stamped server-side from auth.uid() via transaction-local
   `workshop.*` settings; append-only `workshop_status_events`; stale save = errcode PT409 'record_changed' (never 40001);
@@ -42,7 +48,8 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   `workflow_notifications` push (no edge redeploy). Titles stored English only.
 - Export: Active vehicles Excel has a "Latest update" column (newest manual_update event: who, when, fields).
 - Expo (`mobile/app/(app)/workshop-status/`) + Flutter (`tyre_pulse_flutter/lib/features/workshop_status/`, ModuleKey
-  `workshopStatus`, Flutter-only set `flutterOnlyModules`) both have list + update screens. Web mirror
+  `workshopStatus`) both have list + update screens. It is in BOTH registries, so `flutterOnlyModules` is now EMPTY
+  (the drift test fails if a module is exempted but present in mobile/lib/permissions.ts). Web mirror
   `src/lib/mobileModules.js` now 32 modules. NO mobile build run.
 - Tests: `node --test --test-concurrency=1 supabase/tests/workshop_status_*.test.mjs` (69 pass, PGlite). Known bug:
   `workshop_status_stage_upload` errors when file hash is null (app always sends one). Open: workload definitions

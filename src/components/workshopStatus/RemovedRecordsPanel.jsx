@@ -27,6 +27,7 @@ import {
 } from '../../lib/workshopStatus/removedView'
 import './workshopStatus.css'
 import './activeVehicles.css'
+import './vehicleUpdate.css'
 import './removed.css'
 
 const ACTION_ICON = {
@@ -158,14 +159,14 @@ export default function RemovedRecordsPanel({ permissions, permState = 'ready', 
     )
   }
 
-  const actionButtons = (r) => {
+  const actionButtons = (r, compact = false) => {
     const acts = availableActions(r, permissions)
     return (
-      <div className="wks-rm-actions">
+      <div className={`wks-rm-actions ${compact ? 'is-compact' : ''}`}>
         {typeof onHistory === 'function' && (
           <button type="button" className="cc-btn-ghost wks-tap" onClick={() => onHistory(r)}
-            aria-label={m('historyFor', { asset: r.asset_no })}>
-            <History size={14} aria-hidden="true" /> {m('history')}
+            aria-label={m('historyFor', { asset: r.asset_no })} title={compact ? m('history') : undefined}>
+            <History size={14} aria-hidden="true" /> {!compact && m('history')}
           </button>
         )}
         {acts.map((a) => {
@@ -173,8 +174,9 @@ export default function RemovedRecordsPanel({ permissions, permState = 'ready', 
           return (
             <button key={a} type="button" className={`cc-btn-ghost wks-tap ${DANGER.has(a) ? 'wks-rm-danger' : ''}`}
               onClick={() => { setNotice(''); setDialog({ record: r, action: a }) }}
-              aria-label={m('actionFor', { action: m(`action.${a}`), asset: r.asset_no })}>
-              <Icon size={14} aria-hidden="true" /> {m(`action.${a}`)}
+              aria-label={m('actionFor', { action: m(`action.${a}`), asset: r.asset_no })}
+              title={compact ? m(`action.${a}`) : undefined}>
+              <Icon size={14} aria-hidden="true" /> {!compact && m(`action.${a}`)}
             </button>
           )
         })}
@@ -337,7 +339,7 @@ export default function RemovedRecordsPanel({ permissions, permState = 'ready', 
                           </span>
                         )}
                       </td>
-                      <td>{actionButtons(r)}</td>
+                      <td>{actionButtons(r, true)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -414,12 +416,12 @@ function ActionDialog({ record, action, m, onClose, onDone, onStale }) {
   }
 
   const footer = (
-    <div className="wks-rm-footer">
+    <div className="cc wks-rm-footer">
       <button type="button" className="cc-btn-ghost wks-tap" onClick={onClose} disabled={saving}>{m('cancel')}</button>
       {stale ? (
-        <button type="button" className="cc-btn wks-tap" onClick={onStale}>{m('reload')}</button>
+        <button type="button" className="cc-btn-primary wks-tap" onClick={onStale}>{m('reload')}</button>
       ) : (
-        <button type="submit" form="wks-rm-form" className={`cc-btn wks-tap ${DANGER.has(action) ? 'wks-rm-danger-btn' : ''}`} disabled={saving}>
+        <button type="submit" form="wks-rm-form" className={`cc-btn-primary wks-tap ${DANGER.has(action) ? 'wks-rm-danger-btn' : ''}`} disabled={saving}>
           {saving && <Loader2 size={14} className="wks-spin" aria-hidden="true" />} {m(`confirm.${action}`)}
         </button>
       )}
@@ -429,13 +431,13 @@ function ActionDialog({ record, action, m, onClose, onDone, onStale }) {
   return (
     <Modal open onClose={saving ? () => {} : onClose} title={m(`dialog.${action}.title`, { asset: record.asset_no })}
       subtitle={m(`dialog.${action}.body`)} size="md" footer={footer}>
-      <form id="wks-rm-form" className="wks-rm-form" onSubmit={submit} noValidate>
+      <form id="wks-rm-form" className="cc wks-rm-form" onSubmit={submit} noValidate>
         {err && <div className="wks-banner bad" role="alert"><AlertTriangle size={16} aria-hidden="true" /><p>{err}</p></div>}
         {isDisp && (
           <>
             <label className="cc-field">
               <span>{m('col.disposition')}</span>
-              <select className="cc-select wks-tap" value={disposition} onChange={(e) => setDisposition(e.target.value)}
+              <select className="cc-select wks-upd-control" value={disposition} onChange={(e) => setDisposition(e.target.value)}
                 aria-invalid={touched && !disposition}>
                 <option value="">{m('chooseDisposition')}</option>
                 {DISPOSITIONS.map((d) => <option key={d} value={d}>{m(`disposition.${d}`)}</option>)}

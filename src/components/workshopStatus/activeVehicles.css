@@ -80,3 +80,11 @@
   .wks-av-columns { display: none; }
   .wks-av-detail { grid-template-columns: 1fr; }
 }
+/* Short codes never wrap mid-word; the row actions stay in view while the
+   wide table scrolls sideways. */
+.wks-av-c-site, .wks-av-c-country, .wks-av-c-daysDown, .wks-av-c-mr, .wks-av-c-po { white-space: nowrap; }
+.wks-av-table td.wks-av-actions, .wks-av-table th.wks-av-actions-h {
+  position: sticky; inset-inline-end: 0; z-index: 1; background: var(--cc-card-flat);
+  box-shadow: -6px 0 8px -6px rgba(0, 0, 0, 0.18);
+}
+.wks-av-table thead th.wks-av-actions-h { z-index: 3; }

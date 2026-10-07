@@ -10,9 +10,13 @@
 .wks-rm-pill.is-archived { color: var(--cc-purple); background: var(--cc-purple-tint); }
 .wks-rm-pill.is-deleted { color: var(--cc-red); background: var(--cc-red-tint); }
 .wks-rm-danger { color: var(--cc-red); }
-.wks-rm-danger-btn { color: var(--cc-red); border-color: var(--cc-red); }
-.wks-rm-danger-btn:hover { background: var(--cc-red-tint); }
+.cc-btn-primary.wks-rm-danger-btn { color: #fff; background: var(--cc-red); border-color: var(--cc-red); }
 .wks-rm-form { display: flex; flex-direction: column; gap: 10px; }
 .wks-rm-form .cc-field { display: flex; flex-direction: column; gap: 4px; }
-.wks-rm-footer { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
-.wks-rm-footer .cc-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; }
+.wks-rm-footer { display: flex; flex-direction: row; gap: 8px; justify-content: flex-end; flex-wrap: wrap; width: 100%; }
+.wks-rm-footer button { width: auto; }
+.wks-rm-footer button { min-height: 44px; }
+.wks-rm-actions.is-compact { flex-wrap: nowrap; gap: 4px; }
+.wks-rm-actions.is-compact .cc-btn-ghost { padding: 8px; min-width: 36px; justify-content: center; }
+.cc.wks-rm-form, .cc.wks-rm-footer { background: transparent; padding: 0; }
+.cc.wks-rm-footer { flex-direction: row; align-items: center; }

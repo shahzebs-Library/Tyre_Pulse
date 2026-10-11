@@ -24,13 +24,19 @@ vi.mock('../lib/api', () => ({
     backfillAllOrphanAssets: vi.fn(),
   },
 }))
-for (const name of [
-  'BrandGapSection', 'TyreLearningSection', 'TyrePriceSection', 'JobcardDateSection', 'DupKeyTyresSection',
-  'SerialMultiAssetSection', 'FreetextTyreSection', 'TyreLifeCapSection', 'DataQualityScorecard',
-  'AssetMasterSection', 'DataTrustSection',
-]) {
-  vi.mock(`../components/reconciliation/${name}`, () => ({ default: () => null }))
-}
+// One literal vi.mock per section: vitest hoists vi.mock statically, so a loop
+// with a template path never applied and the real sections rendered.
+vi.mock('../components/reconciliation/BrandGapSection', () => ({ default: () => null }))
+vi.mock('../components/reconciliation/TyreLearningSection', () => ({ default: () => null }))
+vi.mock('../components/reconciliation/TyrePriceSection', () => ({ default: () => null }))
+vi.mock('../components/reconciliation/JobcardDateSection', () => ({ default: () => null }))
+vi.mock('../components/reconciliation/DupKeyTyresSection', () => ({ default: () => null }))
+vi.mock('../components/reconciliation/SerialMultiAssetSection', () => ({ default: () => null }))
+vi.mock('../components/reconciliation/FreetextTyreSection', () => ({ default: () => null }))
+vi.mock('../components/reconciliation/TyreLifeCapSection', () => ({ default: () => null }))
+vi.mock('../components/reconciliation/DataQualityScorecard', () => ({ default: () => null }))
+vi.mock('../components/reconciliation/AssetMasterSection', () => ({ default: () => null }))
+vi.mock('../components/reconciliation/DataTrustSection', () => ({ default: () => null }))
 
 import DataReconciliation from '../pages/DataReconciliation'
 

@@ -163,5 +163,6 @@
     "chooseDisposition": "اختر تصرفًا.",
     "remarksRequired": "اكتب ملاحظات عند اختيار أخرى.",
     "reasonShort": "اكتب سببًا لا يقل عن {n} أحرف."
-  }
+  },
+  "exportPdf": "تصدير PDF"
 }

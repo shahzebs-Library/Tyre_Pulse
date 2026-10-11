@@ -233,6 +233,17 @@
       "latestUpdate": "Latest update"
     },
     "latestCleared": "Cleared",
-    "latestNone": "No manual update yet"
+    "latestNone": "No manual update yet",
+    "exportPdf": "Export PDF",
+    "exportSummary": "Management summary",
+    "summaryTitle": "Workshop Status management summary",
+    "summaryCol": {
+      "section": "Section",
+      "item": "Item",
+      "count": "Vehicles",
+      "share": "Share"
+    },
+    "summaryEmpty": "No vehicles are in the workshop report right now.",
+    "summaryTruncated": "Partial list: only the first vehicles loaded are counted"
   }
 }

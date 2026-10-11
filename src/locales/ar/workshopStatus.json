@@ -233,6 +233,17 @@
       "latestUpdate": "آخر تحديث"
     },
     "latestCleared": "تم المسح",
-    "latestNone": "لا يوجد تحديث يدوي بعد"
+    "latestNone": "لا يوجد تحديث يدوي بعد",
+    "exportPdf": "تصدير PDF",
+    "exportSummary": "ملخص الإدارة",
+    "summaryTitle": "ملخص الإدارة لحالة الورشة",
+    "summaryCol": {
+      "section": "القسم",
+      "item": "البند",
+      "count": "المركبات",
+      "share": "النسبة"
+    },
+    "summaryEmpty": "لا توجد مركبات في تقرير الورشة حاليا.",
+    "summaryTruncated": "قائمة جزئية: تم احتساب المركبات المحملة أولا فقط"
   }
 }

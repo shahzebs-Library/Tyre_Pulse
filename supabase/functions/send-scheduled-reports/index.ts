@@ -237,6 +237,7 @@ const TYPE_LABEL: Record<string, string> = {
   vendor: 'Vendor / Procurement Report',
   pm: 'Preventive Maintenance due',
   workshop: 'Workshop Summary',
+  workshop_status: 'Workshop Vehicle Status',
 }
 
 /** Friendly label for any report_type, incl. custom 'builder:<template-id>' layouts. */
@@ -793,8 +794,10 @@ type DatasetDigestCfg = {
   groups: Array<[string, string]> // [label, column]
   recent: Array<[string, string]> // [column, header]
   moneyCols: string[]             // recent-table columns rendered as money
-  eqFilter?: Record<string, string> // optional exact-match filters (e.g. status='active')
+  eqFilter?: Record<string, string | boolean> // optional exact-match filters (e.g. status='active')
+  nullFilter?: string[]             // columns that must be NULL (e.g. soft-delete deleted_at)
   orderAscending?: boolean          // sort dateCol ascending (forward-looking dates like next_due)
+  snapshot?: boolean                // a current-state list: the coverage window is NOT applied
 }
 
 const DATASET_DIGEST: Record<string, DatasetDigestCfg> = {
@@ -860,6 +863,19 @@ const DATASET_DIGEST: Record<string, DatasetDigestCfg> = {
     recent: [['opened_at', 'Opened'], ['work_order_no', 'WO No'], ['asset_no', 'Asset'], ['work_type', 'Type'], ['status', 'Status'], ['priority', 'Priority'], ['technician_name', 'Technician'], ['site', 'Site'], ['total_cost', 'Cost']],
     moneyCols: ['total_cost'],
   },
+  // Workshop Status (Daily Ops): vehicles currently in the workshop per the
+  // latest confirmed daily file plus manual updates. A current-state snapshot
+  // (snapshot: true), oldest out-of-service first, never money.
+  workshop_status: {
+    table: 'workshop_status_records', dateCol: 'ooc_since', money: null, accent: '#4338ca',
+    groups: [['Site', 'site'], ['Stage', 'current_stage'], ['Delay reason', 'delay_reason'], ['Parts', 'parts_status']],
+    recent: [['ooc_since', 'Out Since'], ['asset_no', 'Asset'], ['site', 'Site'], ['vehicle_category', 'Category'], ['current_stage', 'Stage'], ['delay_reason', 'Delay Reason'], ['parts_status', 'Parts'], ['expected_release_date', 'Expected Release']],
+    moneyCols: [],
+    eqFilter: { current_active: true },
+    nullFilter: ['deleted_at'],
+    orderAscending: true,
+    snapshot: true,
+  },
 }
 
 type DatasetDigest = {
@@ -878,6 +894,7 @@ type DatasetDigest = {
 // deno-lint-ignore no-explicit-any
 function scopeDatasetQuery(q: any, cfg: DatasetDigestCfg, orgId: string | null, win: { from: string | null; to: string | null }) {
   if (cfg.eqFilter) for (const [col, val] of Object.entries(cfg.eqFilter)) q = q.eq(col, val)
+  if (cfg.nullFilter) for (const col of cfg.nullFilter) q = q.is(col, null)
   // Service role bypasses RLS, so scope to the schedule's org explicitly.
   if (orgId) q = q.eq('organisation_id', orgId)
   // The schedule's configured coverage window (see resolvePeriodBounds). Prior
@@ -885,6 +902,10 @@ function scopeDatasetQuery(q: any, cfg: DatasetDigestCfg, orgId: string | null, 
   // owner picked - "Yesterday" or a 3-day custom range would still show
   // all-time data. Missing bounds (custom with no dates set) leave the query
   // unfiltered rather than narrowing it to nothing.
+  // A snapshot dataset (vehicles in the workshop RIGHT NOW) is a current-state
+  // list: filtering it by the period would drop every vehicle that went out of
+  // service before the window started, which is exactly the long-waiting ones.
+  if (cfg.snapshot) return q
   if (win.from) q = q.gte(cfg.dateCol, win.from)
   if (win.to)   q = q.lte(cfg.dateCol, win.to)
   return q

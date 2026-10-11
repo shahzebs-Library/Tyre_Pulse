@@ -521,7 +521,7 @@ export default function FitmentValidation() {
         <Kpi icon={AlertTriangle} tone="t-red" display={fleetFailed ? 'N/A' : undefined} value={audit.mismatch} label="Non-compliant" danger={audit.mismatch > 0} loading={kpiLoading} onClick={() => { setTab('audit'); setASeverity('critical') }} />
         <Kpi icon={HelpCircle} tone="t-amber" display={fleetFailed ? 'N/A' : undefined} value={audit.unknown} label="Unclear / Missing Data" loading={kpiLoading} onClick={() => { setTab('audit'); setASeverity('data') }} title="No spec size on the vehicle or no fitted tyre recorded" />
         <Kpi icon={Percent} tone="t-blue" display={fleetFailed || audit.compliancePct == null ? 'N/A' : `${audit.compliancePct}%`} label="Fleet Compliance Rate" loading={kpiLoading} title="Correct size as a share of assets that could be checked" />
-        <Kpi icon={ListChecks} tone="t-purple" display={activeRuleCount == null ? 'N/A' : undefined} value={activeRuleCount} label="Active Fitment Rules" onClick={() => setTab('rules')} title={activeRuleCount == null ? 'Rules could not be read' : `${rs.active} active policy rules and ${specs.length} specification rows from Tyre Specifications`} />
+        <Kpi icon={ListChecks} tone="t-purple" display={activeRuleCount == null ? 'N/A' : undefined} value={activeRuleCount} label="Active Fitment Rules" loading={!rulesError && !refError && (rules === null || specs == null)} onClick={() => setTab('rules')} title={activeRuleCount == null ? 'Rules could not be read' : `${rs.active} active policy rules and ${specs.length} specification rows from Tyre Specifications`} />
       </div>
 
       <Card className="fv-tabbar">

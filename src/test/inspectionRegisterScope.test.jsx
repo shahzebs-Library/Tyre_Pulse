@@ -120,6 +120,7 @@ describe('inspection register scope changes', () => {
     rerender({ country: 'KSA', enabled: false })
     await act(async () => { read.resolve({ data: [{ id: 'old' }], error: null }) })
     expect(result.current.rows).toEqual([])
-    expect(result.current.loading).toBe(false)
+    // Waiting on sign-in is still loading: a false here painted N/A tiles.
+    expect(result.current.loading).toBe(true)
   })
 })

@@ -98,6 +98,8 @@ export default function SanyDelayPenalty() {
 
   const now = useMemo(() => new Date(), [ledger]) // eslint-disable-line react-hooks/exhaustive-deps
   const summary = useMemo(() => summarizeLedger(ledger, { now }), [ledger, now])
+  const kv = (v) => (loading ? '...' : v)
+  const ks = (v) => (loading ? undefined : v)
   const bySite = useMemo(() => groupPenalties(ledger, (r) => r.site, { limit: 6 }), [ledger])
   const repeats = useMemo(() => repeatAssets(ledger).slice(0, 6), [ledger])
   const trend = useMemo(() => monthlyTrend(ledger).slice(-12), [ledger])
@@ -356,16 +358,17 @@ export default function SanyDelayPenalty() {
       )}
       {notice && <div className="mb-3 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-400">{notice}</div>}
 
-      {/* KPI strip */}
+      {/* KPI strip: a neutral placeholder until the ledger read lands, so the
+          tiles never flash zero amounts before the real figures arrive. */}
       <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Kpi icon={Receipt} label="Penalty to deduct" value={fmtSar(summary.toDeduct)} hint="Draft + deducted rows. Waived rows are excluded." />
-        <Kpi icon={Clock} label="Outstanding (draft)" value={fmtSar(summary.outstanding)} sub={`${summary.countByStatus.draft} row(s) not yet deducted`} />
-        <Kpi icon={CheckCircle2} label="Already deducted" value={fmtSar(summary.byStatus.deducted)} sub={`${fmtPct(summary.deductedPct)} of the penalty`} />
-        <Kpi icon={Timer} label="Total downtime" value={fmtHrs(summary.hours)} sub={summary.avgDowntimeDays == null ? 'Average N/A' : `Average ${summary.avgDowntimeDays} days per repair`} />
-        <Kpi icon={AlertTriangle} label={`Drafts over ${DRAFT_OVERDUE_DAYS} days`} value={summary.overdueDrafts} sub={summary.overdueDrafts ? fmtSar(summary.overdueDraftAmount) : 'None overdue'} tone={summary.overdueDrafts ? 'warn' : ''} />
-        <Kpi icon={FileText} label="Invoice coverage" value={fmtPct(summary.invoiceCoveragePct)} sub={`${summary.distinctInvoices} SANY invoice(s) referenced`} />
-        <Kpi icon={ShieldAlert} label="Rows with data issues" value={summary.issueRows} sub={summary.unpriced ? `${summary.unpriced} row(s) with no penalty amount` : 'All rows priced'} tone={summary.issueRows ? 'warn' : ''} />
-        <Kpi icon={Receipt} label="Waived" value={fmtSar(summary.byStatus.waived)} sub={`${summary.countByStatus.waived} row(s), ${summary.count} total`} />
+        <Kpi icon={Receipt} label="Penalty to deduct" value={kv(fmtSar(summary.toDeduct))} hint="Draft + deducted rows. Waived rows are excluded." />
+        <Kpi icon={Clock} label="Outstanding (draft)" value={kv(fmtSar(summary.outstanding))} sub={ks(`${summary.countByStatus.draft} row(s) not yet deducted`)} />
+        <Kpi icon={CheckCircle2} label="Already deducted" value={kv(fmtSar(summary.byStatus.deducted))} sub={ks(`${fmtPct(summary.deductedPct)} of the penalty`)} />
+        <Kpi icon={Timer} label="Total downtime" value={kv(fmtHrs(summary.hours))} sub={ks(summary.avgDowntimeDays == null ? 'Average N/A' : `Average ${summary.avgDowntimeDays} days per repair`)} />
+        <Kpi icon={AlertTriangle} label={`Drafts over ${DRAFT_OVERDUE_DAYS} days`} value={kv(summary.overdueDrafts)} sub={ks(summary.overdueDrafts ? fmtSar(summary.overdueDraftAmount) : 'None overdue')} tone={summary.overdueDrafts ? 'warn' : ''} />
+        <Kpi icon={FileText} label="Invoice coverage" value={kv(fmtPct(summary.invoiceCoveragePct))} sub={ks(`${summary.distinctInvoices} SANY invoice(s) referenced`)} />
+        <Kpi icon={ShieldAlert} label="Rows with data issues" value={kv(summary.issueRows)} sub={ks(summary.unpriced ? `${summary.unpriced} row(s) with no penalty amount` : 'All rows priced')} tone={summary.issueRows ? 'warn' : ''} />
+        <Kpi icon={Receipt} label="Waived" value={kv(fmtSar(summary.byStatus.waived))} sub={ks(`${summary.countByStatus.waived} row(s), ${summary.count} total`)} />
       </div>
       {summary.foreignCurrency > 0 && (
         <p className="mb-4 text-xs text-amber-400">{summary.foreignCurrency} row(s) are in a currency other than SAR and are left out of every total above.</p>

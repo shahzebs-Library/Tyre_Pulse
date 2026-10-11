@@ -439,11 +439,13 @@ export default function FleetMaster() {
 
   // ── summary cards ─────────────────────────────────────────────────────────────
   const [summary, setSummary] = useState(null)
+  const [summaryFailed, setSummaryFailed] = useState(false)
   const summaryPending = countryChanged || search !== debouncedSearch || !summary
 
   useEffect(() => {
     let cancelled = false
     setSummary(null)
+    setSummaryFailed(false)
     setSummaryCapped(false)
     if (search !== debouncedSearch) return () => { cancelled = true }
     async function loadSummary() {
@@ -469,6 +471,7 @@ export default function FleetMaster() {
         })
       } catch (e) {
         console.error(e)
+        if (!cancelled) setSummaryFailed(true)
       }
     }
     loadSummary()
@@ -861,7 +864,9 @@ export default function FleetMaster() {
       }
     : undefined
 
-  const kpiVal = (v) => (summaryPending || v == null ? 'N/A' : fmtInt(v))
+  // While the summary is still loading the tile shows a neutral placeholder;
+  // N/A is kept for a failed read or a value the summary genuinely lacks.
+  const kpiVal = (v) => (summaryFailed ? 'N/A' : summaryPending ? '...' : v == null ? 'N/A' : fmtInt(v))
 
   return (
     <div className="cc fm-page">

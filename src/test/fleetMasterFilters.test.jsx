@@ -76,7 +76,7 @@ describe('Fleet Master filter transitions', () => {
     h.country = 'UAE'
     view.rerender(tree('/fleet-master'))
     expect(screen.queryByText('7')).toBeNull()
-    expect(screen.getAllByText('N/A').length).toBeGreaterThanOrEqual(6)
+    expect(screen.getAllByText('...').length).toBeGreaterThanOrEqual(6)
   })
 
   it('rejects an old record response during the search debounce', async () => {

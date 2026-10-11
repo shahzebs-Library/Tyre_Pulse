@@ -117,8 +117,9 @@ describe('work orders - server-side paging', () => {
 })
 
 /**
- * MIRROR: public.wo_status_canonical(text) in MIGRATIONS_V586_* must fold
- * exactly as normalizeWoStatus() does. CHANGE BOTH TOGETHER.
+ * MIRROR: public.wo_status_canonical(text) (MIGRATIONS_V586_*, rewritten as an
+ * inlinable expression in supabase/migrations/20261011110000_most_used_read_paths.sql)
+ * must fold exactly as normalizeWoStatus() does. CHANGE BOTH TOGETHER.
  *
  * Every pair below was executed against the live function and returned the
  * value asserted here, so this table is a real cross-check of the two

@@ -65,6 +65,25 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   wrapping app_current_org in get_expense_by_country (no gain). No missing FK indexes on any big table.
 - Fixed 2 pre-existing red tests: reportSharingAnalytics toTime ignored a numeric clock (real bug); dataReconciliationPage
   test's vi.mock loop with a template path never hoisted (use one literal vi.mock per module).
+- **PART 2 (migration 20261011110000, APPLIED LIVE): most-used read paths, picked from pg_stat_statements.**
+  (a) **GENERIC PLANS were the hidden cost.** PostgREST pools connections, so after ~5 calls Postgres caches a generic
+  plan for any function with nullable filters ("p_from is null or event_date >= p_from") and it can no longer use the
+  date/country index. 74 read RPCs (get_*/report_*/reference_*...) now `SET plan_cache_mode = force_custom_plan`
+  (_cost_* + get_cost_cpk_overview already had it). get_expense_by_country 3.1 s -> 0.2 s, maintenance snapshot
+  1-5 s -> 0.6 s, fleet renewal 1.6 -> 0.45 s; every payload md5-identical. RULE: any new read RPC with nullable
+  filter args gets this setting.
+  (b) **wo_status_canonical cost ~32 us/row (1.9 s over KSA work orders)** because SET search_path + a CTE blocked
+  inlining. Rewritten as one inlinable expression (no SET, on purpose, comment on the function): Work Orders page
+  ~2.4 s -> ~0.6 s, stats -> ~0.5 s under RLS. 36 edge strings + the test's 19 live cases, 0 mismatches.
+  (c) **Org-leading composite indexes are useless to normal users**: the RLS org predicate is
+  `org = app_current_org() OR is_super_admin()`, an OR the planner cannot use as an index condition. Indexes that
+  should serve user reads must LEAD WITH country (or the filtered column). Added parts_consumption(country,
+  event_date desc): Expenses "newest record" probe 2.7 s -> 3 ms.
+  (d) cron_health_watch (every 5 min) read all of cron.job_run_details (103 MB, unindexable) = 2.5-3.5 s + a 103 MB
+  read through the 256 MB cache every run. Now uses _cron_watch_state(), which binary-searches runid (PK, assigned in
+  start order) for the last day: 2.5 s -> 57-73 ms, identical decisions on all 23 jobs. _cron_health() unchanged.
+  Checked and fine (do not chase): get_tyre_running_life ~0.3-0.7 s/page now; the 4 every-minute jobs do <1 ms of
+  work (their ~20 ms is pg_cron overhead); work_orders rfr list 20 ms; reference_asset_options 35 ms.
 
 # ⚑ SESSION 2026-10-07 — DAILY OPS -> WORKSHOP STATUS, LOOPS 1-12 DONE. PR #395 MERGED TO MAIN on owner instruction (loops 13-20 still open).
 - Spec + execution loop (20 loops) were owner uploads; loops 1-12 shipped, **13-20 still to do** (Daily Ops overview

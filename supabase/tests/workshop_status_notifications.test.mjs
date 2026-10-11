@@ -17,6 +17,7 @@ const CONFIRM = read('20261007110000_workshop_status_upload_confirm.sql')
 const MANUAL = read('20261007120000_workshop_status_manual_update.sql')
 const RECOVERY = read('20261007130000_workshop_status_removed_recovery.sql')
 const NOTIFY = read('20261007140000_workshop_status_notifications.sql')
+const NOTIFY_APPLIED = read('20261011120000_workshop_status_notify_scan_applied.sql')
 
 const id = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`
 const org = id(900)
@@ -157,12 +158,14 @@ before(async () => {
   await db.exec(MANUAL)
   await db.exec(RECOVERY)
   await db.exec(NOTIFY)
+  await db.exec(NOTIFY_APPLIED)
 })
 
 after(async () => { await db.close() })
 
-test('migration is marked not applied and grants nothing to clients', async () => {
-  assert.match(NOTIFY, /STATUS: NOT APPLIED/)
+test('migration is marked applied and grants nothing to clients', async () => {
+  assert.match(NOTIFY, /STATUS: APPLIED/)
+  assert.doesNotMatch(NOTIFY_APPLIED, /delete\s+from/i)
   const fns = ['workshop_status_notify_scan(timestamptz)', 'workshop_status_notify_upload(uuid,jsonb)',
     'workshop_status_recipient_scope(uuid)', 'workshop_status_notice_candidates(uuid)',
     'workshop_status_notice_send(uuid,uuid,text,text,text,text,uuid,text)']

@@ -31,7 +31,10 @@ export const STATUS_META = {
 
 const toTime = (v) => {
   if (v == null || v === '') return null
-  const t = v instanceof Date ? v.getTime() : Date.parse(v)
+  // A number is already epoch ms: enrichShares hands linkStatus its resolved
+  // clock as one, and Date.parse(number) is NaN, which silently swapped the
+  // injected time for the real clock.
+  const t = typeof v === 'number' ? v : v instanceof Date ? v.getTime() : Date.parse(v)
   return Number.isFinite(t) ? t : null
 }
 const nowMs = (now) => {

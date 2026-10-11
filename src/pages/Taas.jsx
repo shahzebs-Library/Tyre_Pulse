@@ -275,7 +275,9 @@ export default function Taas() {
     },
   ], [openEdit, currency, nowMs])
 
-  const mrrValue = !kpi ? 'N/A' : kpi.mrr == null ? 'N/A' : formatCurrencyCompact(kpi.mrr, kpi.mrrCurrency || currency)
+  // Before the first read lands, tiles show a neutral placeholder, not N/A.
+  const kpiNa = !loaded && !error ? '...' : 'N/A'
+  const mrrValue = !kpi ? kpiNa : kpi.mrr == null ? 'N/A' : formatCurrencyCompact(kpi.mrr, kpi.mrrCurrency || currency)
   const mrrSub = !kpi ? null : kpi.mixedCurrency
     ? `Mixed currencies: ${Object.entries(kpi.mrrByCurrency).map(([c, v]) => formatCurrencyCompact(v, c)).join(', ')}`
     : `${kpi.liveCount} live contract(s)`
@@ -325,12 +327,12 @@ export default function Taas() {
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Subscriptions" value={kpi ? kpi.totalSubscriptions : 'N/A'} sub={kpi ? `${kpi.trialCount} on trial` : null} icon={Repeat} tone="text-[var(--text-primary)]" />
-        <Kpi label="Active contracts" value={kpi ? kpi.activeCount : 'N/A'} icon={Activity} tone="text-green-500" />
+        <Kpi label="Subscriptions" value={kpi ? kpi.totalSubscriptions : kpiNa} sub={kpi ? `${kpi.trialCount} on trial` : null} icon={Repeat} tone="text-[var(--text-primary)]" />
+        <Kpi label="Active contracts" value={kpi ? kpi.activeCount : kpiNa} icon={Activity} tone="text-green-500" />
         <Kpi label="Monthly recurring revenue" value={mrrValue} sub={mrrSub} icon={CircleDollarSign} tone="text-amber-500" />
-        <Kpi label="Tyres covered" value={kpi ? kpi.totalTyresCovered.toLocaleString() : 'N/A'} icon={Package} tone="text-sky-500" />
-        <Kpi label="Avg utilisation" value={kpi?.avgUtilization == null ? 'N/A' : `${kpi.avgUtilization}%`} sub={kpi ? `${kpi.overrunCount} over committed km` : null} icon={TrendingUp} tone="text-indigo-500" />
-        <Kpi label="Renewals due (30d)" value={kpi ? kpi.renewalsDue30d : 'N/A'} sub={kpi ? `${kpi.renewalsOverdue} overdue` : null} icon={CalendarClock} tone={kpi && (kpi.renewalsDue30d > 0 || kpi.renewalsOverdue > 0) ? 'text-orange-500' : 'text-[var(--text-primary)]'} />
+        <Kpi label="Tyres covered" value={kpi ? kpi.totalTyresCovered.toLocaleString() : kpiNa} icon={Package} tone="text-sky-500" />
+        <Kpi label="Avg utilisation" value={kpi == null ? kpiNa : kpi.avgUtilization == null ? 'N/A' : `${kpi.avgUtilization}%`} sub={kpi ? `${kpi.overrunCount} over committed km` : null} icon={TrendingUp} tone="text-indigo-500" />
+        <Kpi label="Renewals due (30d)" value={kpi ? kpi.renewalsDue30d : kpiNa} sub={kpi ? `${kpi.renewalsOverdue} overdue` : null} icon={CalendarClock} tone={kpi && (kpi.renewalsDue30d > 0 || kpi.renewalsOverdue > 0) ? 'text-orange-500' : 'text-[var(--text-primary)]'} />
       </div>
 
       {/* Revenue by plan + Renewals due */}

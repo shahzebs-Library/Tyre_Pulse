@@ -131,6 +131,8 @@ export default function SsoConfiguration() {
 
   const loaded = Array.isArray(rows)
   const kpi = useMemo(() => (loaded ? ssoKpis(rows, nowMs) : null), [rows, loaded, nowMs])
+  // Before the first read lands, tiles show a neutral placeholder, not N/A.
+  const kpiNa = !loaded && !error ? '...' : 'N/A'
   const protocolBreakdown = useMemo(() => byProtocol(rows || []), [rows])
   const attention = useMemo(() => certAttention(rows || [], nowMs), [rows, nowMs])
   const countryOptions = useMemo(() => [...new Set((rows || []).map((r) => r.country).filter(Boolean))].sort(), [rows])
@@ -325,12 +327,12 @@ export default function SsoConfiguration() {
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Connections" value={kpi ? kpi.totalConnections : 'N/A'} icon={Network} tone="text-[var(--text-primary)]" />
-        <Kpi label="Active" value={kpi ? kpi.activeCount : 'N/A'} icon={ShieldCheck} tone="text-green-500" />
-        <Kpi label="SSO enforced" value={kpi ? kpi.enforcedCount : 'N/A'} sub={kpi?.enforcementRate == null ? null : `${kpi.enforcementRate}% of connections`} icon={Lock} tone="text-indigo-500" />
-        <Kpi label="Certs expiring" value={kpi ? kpi.expiringCertCount : 'N/A'} sub={kpi ? `${kpi.noCertCount} with no expiry recorded` : null} icon={ShieldAlert} tone={kpi && kpi.expiringCertCount > 0 ? 'text-amber-500' : 'text-[var(--text-primary)]'} />
-        <Kpi label="JIT provisioning" value={kpi ? kpi.jitEnabledCount : 'N/A'} icon={Users} tone="text-sky-500" />
-        <Kpi label="Domains covered" value={kpi ? kpi.domainsCovered : 'N/A'} icon={Globe} tone="text-violet-500" />
+        <Kpi label="Connections" value={kpi ? kpi.totalConnections : kpiNa} icon={Network} tone="text-[var(--text-primary)]" />
+        <Kpi label="Active" value={kpi ? kpi.activeCount : kpiNa} icon={ShieldCheck} tone="text-green-500" />
+        <Kpi label="SSO enforced" value={kpi ? kpi.enforcedCount : kpiNa} sub={kpi?.enforcementRate == null ? null : `${kpi.enforcementRate}% of connections`} icon={Lock} tone="text-indigo-500" />
+        <Kpi label="Certs expiring" value={kpi ? kpi.expiringCertCount : kpiNa} sub={kpi ? `${kpi.noCertCount} with no expiry recorded` : null} icon={ShieldAlert} tone={kpi && kpi.expiringCertCount > 0 ? 'text-amber-500' : 'text-[var(--text-primary)]'} />
+        <Kpi label="JIT provisioning" value={kpi ? kpi.jitEnabledCount : kpiNa} icon={Users} tone="text-sky-500" />
+        <Kpi label="Domains covered" value={kpi ? kpi.domainsCovered : kpiNa} icon={Globe} tone="text-violet-500" />
       </div>
 
       {/* Certificate attention strip */}

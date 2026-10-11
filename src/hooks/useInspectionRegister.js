@@ -9,7 +9,10 @@ export default function useInspectionRegister({ country, createdBy, actorId, rol
   const latest = useLatestRequest()
   const scope = JSON.stringify([country ?? null, createdBy ?? null, actorId ?? null, role ?? null, enabled])
   const currentScope = useRef(scope)
-  const [state, setState] = useState({ scope, rows: [], loading: enabled, error: null })
+  // `enabled` is false only while sign-in is still resolving, which is WAITING,
+  // not finished: reporting loading:false there painted every tile as N/A / 0
+  // for a beat before the real figures arrived. So disabled reads as loading.
+  const [state, setState] = useState({ scope, rows: [], loading: true, error: null })
   useLayoutEffect(() => {
     currentScope.current = scope
     return () => {
@@ -38,10 +41,10 @@ export default function useInspectionRegister({ country, createdBy, actorId, rol
 
   useEffect(() => {
     if (enabled) reload()
-    else setState({ scope, rows: [], loading: false, error: null })
+    else setState({ scope, rows: [], loading: true, error: null })
     return latest.cancel
   }, [reload, latest, enabled, scope])
   // Hide the previous scope immediately, including before effect cleanup runs.
-  const current = state.scope === scope ? state : { rows: [], loading: enabled, error: null }
+  const current = state.scope === scope ? state : { rows: [], loading: true, error: null }
   return { ...current, reload }
 }

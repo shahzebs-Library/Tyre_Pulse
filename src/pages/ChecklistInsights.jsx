@@ -244,7 +244,7 @@ export default function ChecklistInsights() {
       const isoDay = (date) => date.toISOString().slice(0, 10)
       const [tpls, subs, compliance, approvalAges] = await Promise.all([
         listTemplates({ country }),
-        listSubmissions({ country }),
+        listSubmissions({ country, lean: true }),
         getComplianceMonitor({ from: isoDay(from), to: isoDay(today), country })
           .then((rows) => ({ rows, error: null }))
           .catch((monitorError) => ({ rows: [], error: monitorError })),

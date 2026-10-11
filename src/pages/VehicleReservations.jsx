@@ -422,7 +422,7 @@ export default function VehicleReservations() {
 
   // ── Render helpers ──────────────────────────────────────────────────────────
   const listState = { loading: na && !failed, data: rows, error: failed ? 'Vehicle reservations are unavailable.' : null, retry: load }
-  const kpiVal = (n) => (na ? 'N/A' : fmtInt(n))
+  const kpiVal = (n) => (na ? (failed ? 'N/A' : '...') : fmtInt(n))
   const trendMax = Math.max(1, ...trend.map((m) => m.bookings + m.cancelled))
   const trendTotal = trend.reduce((s, m) => s + m.bookings + m.cancelled, 0)
   const demandMax = Math.max(1, ...demand.map((d) => d.bookings))

@@ -70,8 +70,10 @@ describe('inspections page service - listInspectionsForPage', () => {
     const names = cols.split(',')
     expect(names).not.toContain('inspector_signature')
     expect(names).not.toContain('approver_signature')
-    expect(names).toContain('has_inspector_signature')
-    expect(names).toContain('has_approver_signature')
+    // Read from the STORED flags under the old names - a computed column here
+    // takes the whole row and detoasts every signature image on the server.
+    expect(names).toContain('has_inspector_signature:inspector_signed')
+    expect(names).toContain('has_approver_signature:approver_signed')
     // order + paging + scoping mirror the page's fetchAllPages callback
     expect(c.order).toContainEqual(['scheduled_date', { ascending: false }])
     // id tiebreak: scheduled_date is not unique and the page pages concurrently

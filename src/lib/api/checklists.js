@@ -47,6 +47,16 @@ const SUBMISSION_COLS =
   // approver_* is now the FINAL one (the area manager on a two-stage sheet).
   + 'document_no,supervisor_name,supervisor_signature,supervisor_by,supervisor_at'
 
+// Register/insights reads: everything EXCEPT the drawn signature images. Those
+// are ~60% of a checklist row and no list renders them - the viewer drawer, the
+// workspace detail and the PDF each load the one full record through
+// getSubmission. Same lesson as the inspections register (LIST_COLS there).
+const SIGNATURE_IMAGE_COLS = new Set(['signature_data', 'signatures', 'approver_signature', 'supervisor_signature'])
+const SUBMISSION_LIST_COLS = SUBMISSION_COLS
+  .split(',')
+  .filter((c) => c && !SIGNATURE_IMAGE_COLS.has(c))
+  .join(',')
+
 const PHOTO_BUCKET = 'tyre-photos' // shared media bucket (private — served via signed URLs)
 const SIGNED_URL_TTL_SECONDS = 60 * 60
 
@@ -254,9 +264,10 @@ export async function deleteTemplate(id) {
  * Submission register, newest received first. `from`/`to` filter receipt dates.
  * Operational month reports use listMonthlySubmissions to include late syncs.
  */
-export async function listSubmissions({ country, templateId, assetNo, from, to, limit } = {}) {
+export async function listSubmissions({ country, templateId, assetNo, from, to, limit, lean = false } = {}) {
+  const cols = lean ? SUBMISSION_LIST_COLS : SUBMISSION_COLS
   const query = () => {
-    let q = supabase.from('checklist_submissions').select(SUBMISSION_COLS)
+    let q = supabase.from('checklist_submissions').select(cols)
     if (templateId) q = q.eq('template_id', templateId)
     if (assetNo) q = q.eq('asset_no', assetNo)
     if (from) q = q.gte('created_at', `${String(from).slice(0, 10)}T00:00:00.000Z`)
@@ -267,7 +278,7 @@ export async function listSubmissions({ country, templateId, assetNo, from, to, 
   // Callers requesting the latest single sheet retain their bounded read.
   if (limit != null) return unwrap(await query().limit(limit)) || []
   const result = await fetchAllPages((start, end) => query().range(start, end),
-    { pageSize: 500, max: 10000, concurrency: 1 })
+    { pageSize: 500, max: 10000, concurrency: 4 })
   const rows = unwrap(result) || []
   if (result.truncated) throw new Error('Checklist history exceeds the display limit. Narrow the filters.')
   return rows

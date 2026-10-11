@@ -292,6 +292,8 @@ export default function VehicleHandover() {
     setDamagedOnly(false); setFromDate(''); setToDate(''); setSearch('')
   }
   const na = rows === null
+  // First read still in flight: tiles show a neutral placeholder, not N/A.
+  const kpiLoading = na && !error && !notProvisioned
   const trendTotal = trend.reduce((s, m) => s + m.checkouts + m.checkins, 0)
   const trendData = {
     labels: trend.map((m) => m.month),
@@ -709,15 +711,15 @@ export default function VehicleHandover() {
       {tab === 'register' && (
         <>
           <div className="cc-kpis vh-kpis">
-            <Kpi icon={ClipboardCheck} tone="t-green" loading={refreshing && na} display={na ? 'N/A' : fmtInt(kpi.totalReports)} label={na ? 'Handover reports' : `Handover reports, ${kpi.last30Days} in 30 days`} />
-            <Kpi icon={LogOut} tone="t-amber" display={na ? 'N/A' : fmtInt(kpi.checkoutCount)} label="Check-outs" onClick={() => setTypeFilter('checkout')} />
-            <Kpi icon={LogIn} tone="t-blue" display={na ? 'N/A' : fmtInt(kpi.checkinCount)} label="Check-ins" onClick={() => setTypeFilter('checkin')} />
-            <Kpi icon={Car} tone="t-orange" display={na ? 'N/A' : fmtInt(kpi.stillOut)} label="Vehicles still out" />
-            <Kpi icon={ShieldAlert} tone="t-red" display={na ? 'N/A' : fmtRate(kpi.poorRate)} label={na ? 'Poor condition rate' : `Poor condition, ${kpi.poorConditionCount} of ${kpi.ratedReports} rated`} />
-            <Kpi icon={AlertTriangle} tone="t-amber" display={na ? 'N/A' : fmtRate(kpi.damageRate)} label={na ? 'Reports with damage' : `With damage, ${kpi.totalDamages} logged`} onClick={() => setDamagedOnly(true)} />
+            <Kpi icon={ClipboardCheck} tone="t-green" loading={kpiLoading} display={na ? 'N/A' : fmtInt(kpi.totalReports)} label={na ? 'Handover reports' : `Handover reports, ${kpi.last30Days} in 30 days`} />
+            <Kpi icon={LogOut} tone="t-amber" loading={kpiLoading} display={na ? 'N/A' : fmtInt(kpi.checkoutCount)} label="Check-outs" onClick={() => setTypeFilter('checkout')} />
+            <Kpi icon={LogIn} tone="t-blue" loading={kpiLoading} display={na ? 'N/A' : fmtInt(kpi.checkinCount)} label="Check-ins" onClick={() => setTypeFilter('checkin')} />
+            <Kpi icon={Car} tone="t-orange" loading={kpiLoading} display={na ? 'N/A' : fmtInt(kpi.stillOut)} label="Vehicles still out" />
+            <Kpi icon={ShieldAlert} tone="t-red" loading={kpiLoading} display={na ? 'N/A' : fmtRate(kpi.poorRate)} label={na ? 'Poor condition rate' : `Poor condition, ${kpi.poorConditionCount} of ${kpi.ratedReports} rated`} />
+            <Kpi icon={AlertTriangle} tone="t-amber" loading={kpiLoading} display={na ? 'N/A' : fmtRate(kpi.damageRate)} label={na ? 'Reports with damage' : `With damage, ${kpi.totalDamages} logged`} onClick={() => setDamagedOnly(true)} />
           </div>
           <div className="vh-kpi-foot">
-            <span><Fuel size={13} aria-hidden="true" /> Average fuel at handover: <b>{na ? 'N/A' : fmtRate(kpi.avgFuelPct)}</b></span>
+            <span><Fuel size={13} aria-hidden="true" /> Average fuel at handover: <b>{na ? (kpiLoading ? '...' : 'N/A') : fmtRate(kpi.avgFuelPct)}</b></span>
             <span><Users size={13} aria-hidden="true" /> Drivers involved: <b>{na ? 'N/A' : fmtInt(kpi.distinctDrivers)}</b> across <b>{na ? 'N/A' : fmtInt(kpi.distinctAssets)}</b> assets</span>
             {hasFilters && !na && <span>These figures cover the {filtered.length} reports matching the current filters.</span>}
           </div>

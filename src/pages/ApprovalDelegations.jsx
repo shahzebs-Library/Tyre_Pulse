@@ -149,6 +149,8 @@ export default function ApprovalDelegations() {
 
   const loaded = Array.isArray(rows)
   const kpi = useMemo(() => (loaded ? delegationKpis(rows, { now: nowMs }) : null), [rows, loaded, nowMs])
+  // Before the first read lands, tiles show a neutral placeholder, not N/A.
+  const kpiNa = !loaded && !error ? '...' : 'N/A'
   const mine = useMemo(() => (rows || []).filter((r) => r.delegator_id === myId), [rows, myId])
   const filtered = useMemo(
     () => filterDelegations(rows || [], { status: statusFilter, scope: scopeFilter, search }, nowMs, nameOf),
@@ -327,12 +329,12 @@ export default function ApprovalDelegations() {
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Delegations" value={kpi ? kpi.total : 'N/A'} sub={kpi ? `${kpi.distinctDelegates} acting approver(s)` : null} icon={Users} tone="text-[var(--text-primary)]" />
-        <Kpi label="Active now" value={kpi ? kpi.activeCount : 'N/A'} icon={ShieldCheck} tone="text-green-500" />
-        <Kpi label="Upcoming" value={kpi ? kpi.upcomingCount : 'N/A'} icon={CalendarClock} tone="text-sky-500" />
-        <Kpi label={`Ending in ${kpi?.soonDays ?? 7} days`} value={kpi ? kpi.endingSoon : 'N/A'} icon={Hourglass} tone={kpi && kpi.endingSoon > 0 ? 'text-orange-500' : 'text-[var(--text-primary)]'} />
-        <Kpi label="Open-ended (active)" value={kpi ? kpi.openEnded : 'N/A'} sub="no end date set" icon={InfinityIcon} tone="text-violet-500" />
-        <Kpi label="Expired" value={kpi ? kpi.expiredCount : 'N/A'} icon={Clock} tone="text-amber-500" />
+        <Kpi label="Delegations" value={kpi ? kpi.total : kpiNa} sub={kpi ? `${kpi.distinctDelegates} acting approver(s)` : null} icon={Users} tone="text-[var(--text-primary)]" />
+        <Kpi label="Active now" value={kpi ? kpi.activeCount : kpiNa} icon={ShieldCheck} tone="text-green-500" />
+        <Kpi label="Upcoming" value={kpi ? kpi.upcomingCount : kpiNa} icon={CalendarClock} tone="text-sky-500" />
+        <Kpi label={`Ending in ${kpi?.soonDays ?? 7} days`} value={kpi ? kpi.endingSoon : kpiNa} icon={Hourglass} tone={kpi && kpi.endingSoon > 0 ? 'text-orange-500' : 'text-[var(--text-primary)]'} />
+        <Kpi label="Open-ended (active)" value={kpi ? kpi.openEnded : kpiNa} sub="no end date set" icon={InfinityIcon} tone="text-violet-500" />
+        <Kpi label="Expired" value={kpi ? kpi.expiredCount : kpiNa} icon={Clock} tone="text-amber-500" />
       </div>
 
       {/* My delegations */}

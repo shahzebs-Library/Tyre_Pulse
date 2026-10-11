@@ -254,7 +254,9 @@ export default function Tachograph() {
     },
   ], [openEdit])
 
-  const na = (v) => (kpi == null || v == null ? 'N/A' : v)
+  // Before the first read lands, tiles show a neutral placeholder, not N/A.
+  const kpiNa = !loaded && !error ? '...' : 'N/A'
+  const na = (v) => (kpi == null ? kpiNa : v == null ? 'N/A' : v)
 
   return (
     <div className="space-y-6">
@@ -304,8 +306,8 @@ export default function Tachograph() {
         <Kpi label="Records" value={na(kpi?.totalRecords)} sub={kpi ? `${kpi.recordsInWindow} in last ${kpi.windowDays} days` : null} icon={FileClock} tone="text-[var(--text-primary)]" />
         <Kpi label="Drivers" value={na(kpi?.distinctDrivers)} icon={Users} tone="text-sky-500" />
         <Kpi label="Infringements" value={na(kpi?.totalInfringements)} sub={kpi ? `${kpi.overDriveDays} over the 9h daily limit` : null} icon={ShieldAlert} tone="text-red-500" />
-        <Kpi label="Compliance rate" value={kpi?.complianceRate == null ? 'N/A' : `${kpi.complianceRate}%`} sub={kpi ? `${kpi.infringingRecords} record(s) with an infringement` : null} icon={ShieldCheck} tone="text-emerald-500" />
-        <Kpi label="Avg driving / record" value={kpi?.avgDrivingMin == null ? 'N/A' : fmtDuration(kpi.avgDrivingMin)} sub={kpi?.totalDistanceKm == null ? 'No distance recorded' : `${kpi.totalDistanceKm.toLocaleString()} km total`} icon={Timer} tone="text-indigo-500" />
+        <Kpi label="Compliance rate" value={kpi == null ? kpiNa : kpi.complianceRate == null ? 'N/A' : `${kpi.complianceRate}%`} sub={kpi ? `${kpi.infringingRecords} record(s) with an infringement` : null} icon={ShieldCheck} tone="text-emerald-500" />
+        <Kpi label="Avg driving / record" value={kpi == null ? kpiNa : kpi.avgDrivingMin == null ? 'N/A' : fmtDuration(kpi.avgDrivingMin)} sub={kpi?.totalDistanceKm == null ? 'No distance recorded' : `${kpi.totalDistanceKm.toLocaleString()} km total`} icon={Timer} tone="text-indigo-500" />
         <Kpi label="Flagged" value={na(kpi?.flaggedCount)} icon={BadgeAlert} tone="text-amber-500" />
       </div>
 

@@ -42,9 +42,11 @@ const LIST_COLS = PAGE_COLS
   .split(',')
   .filter((c) => c !== 'inspector_signature' && c !== 'approver_signature')
   .join(',')
-  // Computed by the server (migration 20261007100000) so the register can filter
-  // on "signed / not signed" without downloading the signature images.
-  + ',has_inspector_signature,has_approver_signature'
+  // Stored yes/no flags (migration 20261011090000), aliased to the names the
+  // register already reads. They used to be computed columns that took the whole
+  // row, which made Postgres detoast every signature image and sort ~7 MB on disk
+  // for each page; the stored columns cost one byte each.
+  + ',has_inspector_signature:inspector_signed,has_approver_signature:approver_signed'
 
 /**
  * List inspections, newest first. Country-scoped (null-safe) and optionally

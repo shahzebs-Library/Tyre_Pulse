@@ -141,7 +141,7 @@ export default function Checklists() {
     try {
       const [tpls, subs] = await Promise.all([
         listTemplates({ status: 'published', country: activeCountry }),
-        listSubmissions({ country: activeCountry }),
+        listSubmissions({ country: activeCountry, lean: true }),
       ])
       setTemplates(Array.isArray(tpls) ? tpls : [])
       setSubmissions(Array.isArray(subs) ? subs : [])

@@ -26,6 +26,28 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-10-11 — SPEED PASS (inspections, checklists, N/A flash, DB load). Migrations 20261011090000 + 20261011100000 APPLIED LIVE. PR #400.
+- **Inspection register was the slowest DB read (272 ms, ~7,200 buffers/call).** has_inspector/approver_signature were computed
+  columns taking the WHOLE ROW with SET search_path (no inlining) -> every signature image detoasted + full row sorted on disk.
+  Now plain columns `inspections.inspector_signed / approver_signed`, stamped by trigger `zz_stamp_inspection_signed_flags`;
+  the register reads them as `has_inspector_signature:inspector_signed`. 7,432 -> 506 buffers.
+  **GOTCHA (proven, rolled back): GENERATED columns broke editing** - trg_lock_inspection_content and z_approval_document_guard
+  diff to_jsonb(OLD) vs to_jsonb(NEW), and a generated column is not computed yet in a BEFORE trigger, so every update of a
+  locked inspection was refused. RULE: never add a generated column to inspections/checklist_submissions; the `zz_` trigger name
+  is load-bearing (fires after both diff triggers).
+- Checklist lists (`listSubmissions({lean:true})`) skip the 4 signature-image columns (~60% of a row); detail/PDF use getSubmission.
+- **N/A flash:** useInspectionRegister reported loading:false while auth resolved -> tiles painted N/A/0 first. Disabled now = loading.
+  11 more pages show "..." on KPI tiles until first load (honest N/A after load unchanged).
+- **cron.job_run_details was 469k rows / 103 MB, never purged, no start_time index (owned by supabase_admin - we CANNOT index it).**
+  cron_health_watch (every 5 min) seq-scanned it = the largest single DB load (3,114 x 779 ms). Purged >30 days into
+  `_bak.cron_run_details_20261011` (303,917 rows, restorable) + daily job `cron-run-history-retention` 01:47 UTC.
+- tyre_size_key / cpk_unit_for_asset_type: SET search_path removed (blocks inlining; GUC swap per row) -> get_tyre_running_life
+  2x faster, byte-identical. Expect 2 `function_search_path_mutable` lints for these two ON PURPOSE (comment on each).
+- MEASURED + REFUSED: pg_trgm on work_orders search (RLS keeps the seq scan), rfr_no partial index (already 5 ms),
+  wrapping app_current_org in get_expense_by_country (no gain). No missing FK indexes on any big table.
+- Fixed 2 pre-existing red tests: reportSharingAnalytics toTime ignored a numeric clock (real bug); dataReconciliationPage
+  test's vi.mock loop with a template path never hoisted (use one literal vi.mock per module).
+
 # ⚑ SESSION 2026-10-07 — DAILY OPS -> WORKSHOP STATUS, LOOPS 1-12 DONE. PR #395 MERGED TO MAIN on owner instruction (loops 13-20 still open).
 - Spec + execution loop (20 loops) were owner uploads; loops 1-12 shipped, **13-20 still to do** (Daily Ops overview
   integration, reporting/export, upload history, stale Excel vs manual, security/deletion review, responsive QA, E2E,

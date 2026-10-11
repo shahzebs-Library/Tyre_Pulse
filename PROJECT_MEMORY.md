@@ -26,6 +26,24 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-10-11 (app session, branch claude/modest-hopper-5bnq8c) — WORKSHOP STATUS LOOPS 13-17. PUSHED, NOT MERGED.
+- **TWO SESSIONS DID LOOPS 13-20 IN PARALLEL.** Session "Pull main" (branch claude/dreamy-faraday-9bwtmt, unpushed at the
+  time) applied LIVE with NO repo file here: workshop_status_export_log, _export_log_uploads, _stale_file_guard
+  (kept_newer_manual_update rule, workshop_status_local_day, uploads.kept_count), _upload_country_scope,
+  _event_immutable_search_path. RECONCILE BOTH BRANCHES BEFORE MERGING EITHER (same files, same DB functions).
+- Notify scan + cron `workshop-status-notify` (20 * * * *) LIVE in the no-DELETE form (20261011120000 supersedes
+  sections 4+6 of 20261007140000). 90-day notices purge still deferred (needs owner approval: it deletes rows).
+- Loop 13: Daily Ops overview strip (DailyOpsWorkshopStrip, lib/workshopStatus/dailyOpsSummary.js). Code only.
+- Loop 14: Active/Released PDF + Management summary PDF + scheduled report type `workshop_status`.
+  20261011130000 (report_type CHECK += workshop_status) APPLIED LIVE. send-scheduled-reports digest branch is in the
+  repo but NOT DEPLOYED (deploy via CLI or deploy + byte-diff; never hand-inline the 1,100-line fn).
+- Loop 15-16: upload history panel + per-row keep/take conflict UI. **20261011140000 is NOT APPLIED and must not be
+  applied as-is**: it copies the July 110000 stage/confirm bodies and would overwrite the parallel session's live rule.
+  Owner was offered: (1) keep theirs + adapt UI [recommended], (2) rebase ours on live, (3) one session stops.
+- Loop 17: security review clean; one fix APPLIED LIVE (20261011150000): upload/confirm need app_sees_all_sites().
+  Verified rolled back (Workshop Supervisor narrowed to NHC -> upload f, view t).
+- Loops 18-20 (responsive/RTL QA, E2E, final review) NOT STARTED, on hold until the reconcile decision.
+
 # ⚑ SESSION 2026-10-11 — SPEED PASS (inspections, checklists, N/A flash, DB load). Migrations 20261011090000 + 20261011100000 APPLIED LIVE. PR #400.
 - **Inspection register was the slowest DB read (272 ms, ~7,200 buffers/call).** has_inspector/approver_signature were computed
   columns taking the WHOLE ROW with SET search_path (no inlining) -> every signature image detoasted + full row sorted on disk.

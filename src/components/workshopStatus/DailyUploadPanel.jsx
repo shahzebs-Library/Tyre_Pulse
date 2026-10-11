@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   UploadCloud, FileSpreadsheet, Loader2, AlertTriangle, CheckCircle2, Search, X,
-  PlusCircle, PencilLine, Equal, MinusCircle, Archive, Ban, Copy, ShieldAlert, RotateCcw,
+  PlusCircle, PencilLine, Equal, MinusCircle, Archive, Ban, Copy, ShieldAlert, RotateCcw, Scale,
 } from 'lucide-react'
 import { Card, Kpi, Tabs, KitTable, fmtInt } from '../commandCenter/kit'
 import Modal from '../ui/Modal'
@@ -25,14 +25,18 @@ import { useLanguage } from '../../contexts/LanguageContext'
 import { useSettings, COUNTRIES } from '../../contexts/SettingsContext'
 import { toUserMessage } from '../../lib/safeError'
 import { parseWorkshopFile } from '../../lib/workshopStatus/excelParser'
-import { compareWorkshopUpload, describeChange } from '../../lib/workshopStatus/compareUpload'
+import {
+  compareWorkshopUpload, describeChange, normaliseResolution, resolutionSummary,
+} from '../../lib/workshopStatus/compareUpload'
+import UploadHistoryPanel from './UploadHistoryPanel'
 import {
   listActiveRecords, findPreviousUploadByHash, stageUpload, confirmUpload, cancelUpload, buildStagedRows, listSiteAliases,
 } from '../../lib/api/workshopStatus'
 import './workshopStatus.css'
 
-const REVIEW_TABS = ['new', 'changed', 'unchanged', 'removed', 'closed', 'invalid', 'duplicate']
+const REVIEW_TABS = ['conflict', 'new', 'changed', 'unchanged', 'removed', 'closed', 'invalid', 'duplicate']
 const KPI_META = {
+  conflict: { icon: Scale, tone: 't-red' },
   new: { icon: PlusCircle, tone: 't-green' },
   changed: { icon: PencilLine, tone: 't-blue' },
   unchanged: { icon: Equal, tone: 't-blue' },
@@ -42,6 +46,8 @@ const KPI_META = {
   duplicate: { icon: Copy, tone: 't-amber' },
 }
 const SUMMARY_KEYS = ['new', 'updated', 'unchanged', 'removed', 'closed', 'invalid', 'duplicate', 'previous_active', 'active_after']
+/** Shown only when the server reports them (migration 20261011140000). */
+const CONFLICT_SUMMARY_KEYS = ['conflicts', 'kept_manual']
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 /** yyyy-mm-dd (or an ISO timestamp) -> "07 Oct 2026"; anything else as given. */
@@ -67,13 +73,36 @@ function parseErrorMessage(err, fallback) {
   return toUserMessage(err, fallback)
 }
 
+/** ISO timestamp -> "07 Oct 2026 14:05" (local), or '-'. */
+export function fmtWhen(v) {
+  if (!v) return '-'
+  const d = new Date(v)
+  if (Number.isNaN(d.getTime())) return String(v)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${p(d.getDate())} ${MONTHS[d.getMonth()]} ${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
 const errCode = (err) => (err && typeof err === 'object' && typeof err.code === 'string' ? err.code : '')
 
+const MANUAL_FIELDS = ['current_stage', 'delay_reason', 'remarks']
+
 /** Display rows for one review tab, from the comparison. */
-function itemsFor(tab, cmp) {
+function itemsFor(tab, cmp, choices) {
   if (!cmp) return []
   const warn = (row) => (row?.warnings?.length ? row.warnings.join('; ') : null)
   switch (tab) {
+    case 'conflict':
+      return (cmp.conflictRecords || []).map((r) => ({
+        id: `k-${r.asset_no}`, asset: r.asset_no, kind: r.kind,
+        changes: r.kind === 'changed'
+          ? Object.entries(r.changes || {}).map(([f, c]) => describeChange(f, c.from, c.to))
+          : [],
+        reason: r.reason || null,
+        manualAt: r.record?.last_manual_update_at || null,
+        manualBy: r.record?.last_updated_by_name || null,
+        manual: MANUAL_FIELDS.map((f) => [f, r.record?.[f]]).filter(([, v]) => v != null && String(v).trim() !== ''),
+        choice: normaliseResolution(choices?.[r.asset_no]),
+      }))
     case 'new':
       return cmp.newRecords.map((r) => ({
         id: `n-${r.asset_no}`, asset: r.asset_no, rowNumber: r.row?.rowNumber ?? null,
@@ -139,8 +168,10 @@ export default function DailyUploadPanel({ permissions, permState = 'ready', onR
   const [reviewTab, setReviewTab] = useState('new')
   const [search, setSearch] = useState('')
   const [dragOver, setDragOver] = useState(false)
+  const [choices, setChoices] = useState({}) // asset -> 'keep_manual' | 'take_file'
+  const [historyKey, setHistoryKey] = useState(0)
 
-  const stagedRef = useRef(null) // { uploadId, uploadNo } once staged on the server
+  const stagedRef = useRef(null) // { uploadId, uploadNo, choicesKey } once staged on the server
   const runRef = useRef(0) // guards against a slow earlier file finishing after a newer one
   const inputRef = useRef(null)
 
@@ -162,7 +193,7 @@ export default function DailyUploadPanel({ permissions, permState = 'ready', onR
     setPhase('idle'); setFileMeta(null); setPreview(null); setComparison(null)
     setDuplicateOf(null); setAckDuplicate(false); setParseError(''); setRecordsError('')
     setSubmitError(''); setStaleNotice(false); setConfirmOpen(false); setResult(null)
-    setReviewTab('new'); setSearch('')
+    setReviewTab('new'); setSearch(''); setChoices({})
     if (inputRef.current) inputRef.current.value = ''
   }, [discardStaged])
 
@@ -184,6 +215,7 @@ export default function DailyUploadPanel({ permissions, permState = 'ready', onR
       if (run !== runRef.current) return
       const cmp = compareWorkshopUpload(pv, records || [], { country: forCountry, siteAliases })
       setComparison(cmp)
+      setChoices({})
       setDuplicateOf(previous || null)
       const first = REVIEW_TABS.find((k) => cmp.summary[k] > 0) || 'new'
       setReviewTab((cur) => (cmp.summary[cur] > 0 ? cur : first))
@@ -245,7 +277,13 @@ export default function DailyUploadPanel({ permissions, permState = 'ready', onR
     if (!comparison || !preview || submitting) return
     setSubmitting(true); setSubmitError(''); setStaleNotice(false)
     try {
+      const choicesKey = JSON.stringify(Object.keys(choices).sort().map((k) => [k, normaliseResolution(choices[k])]))
       let staged = stagedRef.current
+      if (staged && staged.choicesKey !== choicesKey) {
+        // The conflict choices travel with the staged rows: re-stage when they changed.
+        discardStaged()
+        staged = null
+      }
       if (!staged) {
         const res = await stageUpload({
           country,
@@ -256,9 +294,9 @@ export default function DailyUploadPanel({ permissions, permState = 'ready', onR
           reportDate: preview.reportDate,
           headerMap: preview.headerMap,
           unmappedHeaders: preview.unmappedHeaders,
-          rows: buildStagedRows(comparison, preview),
+          rows: buildStagedRows(comparison, preview, { resolutions: choices }),
         })
-        staged = { uploadId: res?.uploadId, uploadNo: res?.uploadNo ?? null }
+        staged = { uploadId: res?.uploadId, uploadNo: res?.uploadNo ?? null, choicesKey }
         stagedRef.current = staged
         if (res?.duplicateOf && !ackDuplicate) {
           // The server saw this file before the preview did. Ask first.
@@ -273,6 +311,7 @@ export default function DailyUploadPanel({ permissions, permState = 'ready', onR
       setResult({ summary: summary || {}, uploadNo: staged.uploadNo, country })
       setConfirmOpen(false)
       setPhase('success')
+      setHistoryKey((k) => k + 1)
     } catch (err) {
       setConfirmOpen(false)
       const code = errCode(err)
@@ -292,10 +331,26 @@ export default function DailyUploadPanel({ permissions, permState = 'ready', onR
   }
 
   const items = useMemo(() => {
-    const all = itemsFor(reviewTab, comparison)
+    const all = itemsFor(reviewTab, comparison, choices)
     const q = search.trim().toUpperCase().replace(/\s+/g, '')
     return q ? all.filter((it) => String(it.asset || '').toUpperCase().includes(q)) : all
-  }, [reviewTab, comparison, search])
+  }, [reviewTab, comparison, search, choices])
+
+  const setChoice = useCallback((asset, value) => {
+    setChoices((cur) => ({ ...cur, [asset]: normaliseResolution(value) }))
+  }, [])
+  const setAllChoices = useCallback((value) => {
+    setChoices(() => Object.fromEntries((comparison?.conflictRecords || []).map((c) => [c.asset_no, normaliseResolution(value)])))
+  }, [comparison])
+  const resolved = useMemo(() => resolutionSummary(comparison, choices), [comparison, choices])
+  const canViewHistory = permissions?.view_uploads === true
+  const history = canViewHistory ? (
+    <UploadHistoryPanel
+      countries={countries}
+      defaultCountry={country || ''}
+      refreshKey={historyKey}
+    />
+  ) : null
 
   // ── Permission states ──────────────────────────────────────────────────────
   if (permState === 'loading') {
@@ -308,7 +363,7 @@ export default function DailyUploadPanel({ permissions, permState = 'ready', onR
     )
   }
   if (!canUpload) {
-    return (
+    const denied = (
       <Card>
         <div className="wks-state wks-state-col" role="alert">
           <ShieldAlert size={26} aria-hidden="true" className="wks-ico-warn" />
@@ -322,12 +377,14 @@ export default function DailyUploadPanel({ permissions, permState = 'ready', onR
         </div>
       </Card>
     )
+    return history ? <div className="wks-panel">{denied}{history}</div> : denied
   }
 
   // ── Success ────────────────────────────────────────────────────────────────
   if (phase === 'success' && result) {
     const s = result.summary
     return (
+      <div className="wks-panel">
       <Card>
         <div className="wks-success" role="status" aria-live="polite">
           <CheckCircle2 size={26} aria-hidden="true" className="wks-ico-good" />
@@ -341,7 +398,7 @@ export default function DailyUploadPanel({ permissions, permState = 'ready', onR
           </div>
         </div>
         <dl className="wks-summary-grid">
-          {SUMMARY_KEYS.map((k) => (
+          {[...SUMMARY_KEYS, ...CONFLICT_SUMMARY_KEYS.filter((k) => s[k] != null)].map((k) => (
             <div key={k} className="wks-summary-cell">
               <dt>{w(`summary.${k}`)}</dt>
               <dd>{fmtInt(s[k])}</dd>
@@ -354,6 +411,8 @@ export default function DailyUploadPanel({ permissions, permState = 'ready', onR
           </button>
         </div>
       </Card>
+      {history}
+      </div>
     )
   }
 
@@ -362,7 +421,8 @@ export default function DailyUploadPanel({ permissions, permState = 'ready', onR
   const blockedByDuplicate = Boolean(duplicateOf) && !ackDuplicate
   const confirmDisabled = !comparison || submitting || busy || !canConfirm || blockedByDuplicate || Boolean(recordsError)
 
-  const columns = columnsFor(reviewTab, w)
+  const columns = columnsFor(reviewTab, w, setChoice)
+  const visibleTabs = REVIEW_TABS.filter((k) => k !== 'conflict' || summary?.conflict > 0)
 
   return (
     <div className="wks-panel">
@@ -469,6 +529,28 @@ export default function DailyUploadPanel({ permissions, permState = 'ready', onR
             </div>
           )}
 
+          {summary.conflict > 0 && (
+            <div className="cc-card wks-banner warn" role="status" data-testid="wks-conflict-banner">
+              <Scale size={17} aria-hidden="true" />
+              <div>
+                <strong>{w('conflictTitle', { count: summary.conflict })}</strong>
+                <p>{w('conflictBody')}</p>
+                <p className="wks-muted">{w('conflictChoices', { keep: resolved.keep, take: resolved.take })}</p>
+                <div className="wks-actions wks-actions-start">
+                  <button type="button" className="cc-btn-ghost wks-tap" onClick={() => { setReviewTab('conflict') }}>
+                    {w('conflictReview')}
+                  </button>
+                  <button type="button" className="cc-btn-ghost wks-tap" onClick={() => setAllChoices('keep_manual')} disabled={submitting}>
+                    {w('conflictKeepAll')}
+                  </button>
+                  <button type="button" className="cc-btn-ghost wks-tap" onClick={() => setAllChoices('take_file')} disabled={submitting}>
+                    {w('conflictTakeAll')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <Card title={w('previewTitle')} sub={w('previewSub')}>
             <dl className="wks-meta">
               <div><dt>{w('fileName')}</dt><dd>{fileMeta?.fileName}</dd></div>
@@ -478,14 +560,14 @@ export default function DailyUploadPanel({ permissions, permState = 'ready', onR
               <div><dt>{w('rowsInFile')}</dt><dd>{fmtInt(summary.rowsInFile)}</dd></div>
             </dl>
             <div className="wks-kpis">
-              {REVIEW_TABS.map((k) => (
+              {visibleTabs.map((k) => (
                 <Kpi
                   key={k}
                   icon={KPI_META[k].icon}
                   tone={KPI_META[k].tone}
                   value={summary[k]}
                   label={w(`kpi.${k}`)}
-                  danger={k === 'invalid' && summary.invalid > 0}
+                  danger={(k === 'invalid' && summary.invalid > 0) || (k === 'conflict' && summary.conflict > 0)}
                   onClick={() => setReviewTab(k)}
                 />
               ))}
@@ -505,9 +587,9 @@ export default function DailyUploadPanel({ permissions, permState = 'ready', onR
                 label={w('reviewLabel')}
                 value={reviewTab}
                 onChange={setReviewTab}
-                tabs={REVIEW_TABS.map((k) => ({
+                tabs={visibleTabs.map((k) => ({
                   key: k, label: w(`kpi.${k}`), count: summary[k],
-                  countTone: k === 'invalid' && summary.invalid ? 'red' : '',
+                  countTone: (k === 'invalid' && summary.invalid) || k === 'conflict' ? 'red' : '',
                 }))}
               />
               <label className="cc-search wks-search">
@@ -615,6 +697,7 @@ export default function DailyUploadPanel({ permissions, permState = 'ready', onR
                 <li>{w('dialogUnchanged', { count: summary.unchanged })}</li>
                 <li>{w('dialogRemoved', { count: summary.removed })}</li>
                 <li>{w('dialogSkipped', { count: summary.invalid + summary.duplicate })}</li>
+                {summary.conflict > 0 && <li>{w('dialogConflicts', { count: summary.conflict, keep: resolved.keep, take: resolved.take })}</li>}
               </ul>
               <p className="wks-muted">{w('dialogRemovedNote')}</p>
               <p className="wks-muted">{w('dialogOwnedNote')}</p>
@@ -622,17 +705,54 @@ export default function DailyUploadPanel({ permissions, permState = 'ready', onR
           </Modal>
         </>
       )}
+
+      {history}
     </div>
   )
 }
 
-function columnsFor(tab, w) {
+function columnsFor(tab, w, setChoice) {
   const asset = { key: 'asset', header: w('col.asset'), cell: (r) => <span className="wks-mono">{r.asset || '-'}</span> }
   const row = { key: 'rowNumber', header: w('col.row'), numeric: true }
   const site = { key: 'site', header: w('col.site') }
   const jobCard = { key: 'jobCard', header: w('col.jobCard') }
   const notes = { key: 'notes', header: w('col.notes') }
   switch (tab) {
+    case 'conflict':
+      return [asset, {
+        key: 'file', header: w('col.fileSays'), sortable: false,
+        cell: (r) => (r.kind === 'changed'
+          ? <ul className="wks-changes">{r.changes.map((c) => <li key={c}>{c}</li>)}</ul>
+          : <span className="cc-pill warn">{w(`reason.${r.reason || 'missing_from_upload'}`)}</span>),
+      }, {
+        key: 'manual', header: w('col.manualSays'), sortable: false,
+        cell: (r) => (
+          <div>
+            <p className="wks-muted">{w('manualUpdated', { name: r.manualBy || w('duplicateUnknownName'), when: fmtWhen(r.manualAt) })}</p>
+            {r.manual.length > 0 && (
+              <ul className="wks-changes">{r.manual.map(([f, v]) => <li key={f}>{w(`manualField.${f}`)}: {String(v)}</li>)}</ul>
+            )}
+          </div>
+        ),
+      }, {
+        key: 'choice', header: w('col.choice'), sortable: false,
+        cell: (r) => (
+          <div className="wks-seg" role="radiogroup" aria-label={w('choiceLabel', { asset: r.asset })}>
+            {['keep_manual', 'take_file'].map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                role="radio"
+                aria-checked={r.choice === opt}
+                className={`wks-seg-btn wks-tap ${r.choice === opt ? 'is-on' : ''}`}
+                onClick={() => setChoice && setChoice(r.asset, opt)}
+              >
+                {w(`choice.${opt}`)}
+              </button>
+            ))}
+          </div>
+        ),
+      }]
     case 'new':
       return [asset, { key: 'category', header: w('col.category') }, site, jobCard,
         { key: 'complaint', header: w('col.complaint') }, { key: 'since', header: w('col.since') },

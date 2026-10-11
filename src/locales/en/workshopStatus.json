@@ -50,7 +50,8 @@
       "removed": "Released",
       "closed": "Closed",
       "invalid": "Invalid",
-      "duplicate": "Duplicate"
+      "duplicate": "Duplicate",
+      "conflict": "Conflicts"
     },
     "reviewLabel": "Review the upload",
     "searchLabel": "Search by asset number",
@@ -63,7 +64,8 @@
       "removed": "No vehicles are released from the active list.",
       "closed": "No vehicles are listed only under closed details.",
       "invalid": "No invalid rows. Every row has a vehicle number and readable dates.",
-      "duplicate": "No vehicle appears twice in the open sections."
+      "duplicate": "No vehicle appears twice in the open sections.",
+      "conflict": "No vehicle was updated in TyrePulse after this file was made."
     },
     "col": {
       "asset": "Asset no.",
@@ -77,7 +79,10 @@
       "changes": "Changes",
       "reason": "Reason",
       "notes": "Notes",
-      "errors": "Problems"
+      "errors": "Problems",
+      "fileSays": "What the file would do",
+      "manualSays": "Newer TyrePulse update",
+      "choice": "Keep which?"
     },
     "reason": {
       "missing_from_upload": "Released (not in today's file)",
@@ -111,13 +116,33 @@
       "invalid": "Invalid",
       "duplicate": "Duplicate",
       "previous_active": "Active before",
-      "active_after": "Active now"
+      "active_after": "Active now",
+      "conflicts": "Conflicts",
+      "kept_manual": "Kept TyrePulse"
     },
     "uploadAnother": "Upload another file",
     "staleNotice": "Another upload was confirmed while you were reviewing. The comparison has been run again against the latest list. Check the changes and confirm again.",
     "failureTitle": "The upload was not applied",
     "failureKept": "Nothing was changed on the server. Your preview is kept, so you can try again.",
-    "fallbackError": "Something went wrong. Please try again."
+    "fallbackError": "Something went wrong. Please try again.",
+    "choice": {
+      "keep_manual": "Keep TyrePulse",
+      "take_file": "Take the file"
+    },
+    "choiceLabel": "Choose what to keep for {asset}",
+    "manualUpdated": "Updated by {name} on {when}",
+    "manualField": {
+      "current_stage": "Stage",
+      "delay_reason": "Delay reason",
+      "remarks": "Remarks"
+    },
+    "conflictTitle": "{count} vehicles were updated in TyrePulse on or after this file's report date",
+    "conflictBody": "This file is older than (or from the same day as) those updates. By default the vehicles stay exactly as they are in TyrePulse: their details are not overwritten and none of them is released. Choose \"Take the file\" for any vehicle where the file is right.",
+    "conflictChoices": "{keep} will keep the TyrePulse values, {take} will take the file.",
+    "conflictReview": "Review conflicts",
+    "conflictKeepAll": "Keep TyrePulse for all",
+    "conflictTakeAll": "Take the file for all",
+    "dialogConflicts": "{count} conflicts with a newer TyrePulse update: keep TyrePulse for {keep}, take the file for {take}"
   },
   "active": {
     "loadingPerms": "Checking your workshop permissions...",
@@ -245,5 +270,97 @@
     },
     "summaryEmpty": "No vehicles are in the workshop report right now.",
     "summaryTruncated": "Partial list: only the first vehicles loaded are counted"
+  },
+  "history": {
+    "title": "Upload history",
+    "sub": "Every daily file uploaded so far, newest first. Open one to see its rows (read only).",
+    "filtersLabel": "Filter the upload history",
+    "country": "Country",
+    "allCountries": "All countries",
+    "from": "Uploaded from",
+    "to": "Uploaded to",
+    "stateFilter": "Result",
+    "allStates": "All results",
+    "clear": "Clear filters",
+    "state": {
+      "confirmed": "Confirmed",
+      "abandoned": "Not confirmed",
+      "failed": "Failed"
+    },
+    "col": {
+      "uploadNo": "No.",
+      "fileName": "File",
+      "sheet": "Sheet",
+      "reportDate": "Report date",
+      "country": "Country",
+      "rows": "Rows",
+      "newCount": "New",
+      "changedCount": "Changed",
+      "unchangedCount": "Unchanged",
+      "releasedCount": "Released",
+      "conflictCount": "Conflicts",
+      "keptManualCount": "Kept TyrePulse",
+      "invalidCount": "Invalid",
+      "duplicateCount": "Duplicate",
+      "uploadedBy": "Uploaded by",
+      "uploadedAt": "Uploaded at",
+      "state": "Result",
+      "confirmedBy": "Confirmed by",
+      "confirmedAt": "Confirmed at"
+    },
+    "dcol": {
+      "rowNumber": "Row",
+      "section": "Section",
+      "asset": "Asset no.",
+      "site": "Location",
+      "outcome": "Outcome",
+      "jobCard": "Job card",
+      "complaint": "Complaint",
+      "changes": "Changes",
+      "releaseReason": "Release reason",
+      "conflict": "Conflict",
+      "requested": "Choice made",
+      "applied": "Choice applied",
+      "manualAt": "TyrePulse update at",
+      "manualBy": "TyrePulse update by",
+      "errors": "Problems"
+    },
+    "releaseReason": {
+      "missing_from_upload": "Released (not in the file)",
+      "listed_as_closed": "Released (listed under closed details)"
+    },
+    "resolution": {
+      "keep_manual": "Kept TyrePulse",
+      "take_file": "Took the file",
+      "pending": "Newer TyrePulse update"
+    },
+    "manualBy": "updated by {name} on {when}",
+    "none": "Not in file",
+    "loading": "Loading the upload history...",
+    "loadError": "Could not load the upload history.",
+    "retry": "Try again",
+    "empty": "No daily file has been uploaded yet.",
+    "emptyFiltered": "No upload matches these filters.",
+    "export": "Export Excel",
+    "exportTitle": "Workshop Status - upload history",
+    "exportError": "Could not create the Excel file.",
+    "noun": "uploads",
+    "openHint": "Select an upload to see the rows it contained.",
+    "detailTitle": "Upload {no}: {file}",
+    "readOnly": "Read only. This is the file as it was uploaded; nothing here can be changed.",
+    "rowsLoading": "Loading the rows of this upload...",
+    "rowsError": "Could not load the rows of this upload.",
+    "rowsEmpty": "This upload has no rows.",
+    "rowsTruncated": "Only the first rows of this upload are shown.",
+    "detailTabs": "Rows by outcome",
+    "allRows": "All rows",
+    "conflicts": "Conflicts",
+    "searchLabel": "Search by asset number",
+    "searchPlaceholder": "Search asset no.",
+    "noMatches": "No rows match.",
+    "exportRows": "Export rows",
+    "detailExportTitle": "Workshop Status - upload rows",
+    "close": "Close",
+    "emptyCountry": "No daily file has been uploaded for {country} yet."
   }
 }

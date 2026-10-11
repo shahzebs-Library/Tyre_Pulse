@@ -96,3 +96,17 @@
 .wks-summary-cell dt { font-size: 11.5px; color: var(--cc-ink-3); }
 .wks-summary-cell dd { margin: 2px 0 0; font-size: 20px; font-weight: 700; color: var(--cc-ink); }
 .cc.wks-modal { gap: 0; }
+
+/* Loop 16: stale file vs newer TyrePulse update - per-row choice. */
+.wks-seg { display: inline-flex; border: 1px solid var(--cc-inner-border); border-radius: 10px; overflow: hidden; background: var(--cc-inner); }
+.wks-seg-btn { border: 0; background: transparent; color: var(--cc-ink-2); font-size: 12.5px; font-weight: 600; padding: 6px 10px; min-height: 36px; cursor: pointer; }
+.wks-seg-btn + .wks-seg-btn { border-inline-start: 1px solid var(--cc-inner-border); }
+.wks-seg-btn.is-on { background: var(--cc-green-tint); color: var(--cc-ink); }
+.wks-seg-btn:focus-visible { outline: 2px solid var(--cc-green); outline-offset: -2px; }
+.wks-actions-start { justify-content: flex-start; flex-wrap: wrap; margin-top: 8px; }
+
+/* Loop 15: upload history. */
+.wks-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 12px; }
+.wks-filters .cc-field { min-width: 150px; }
+.wks-item-btn { display: block; width: 100%; text-align: start; background: none; border: 0; padding: 0; color: inherit; cursor: pointer; }
+.wks-item-btn:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 2px; border-radius: 8px; }

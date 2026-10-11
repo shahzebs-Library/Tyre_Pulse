@@ -16,6 +16,12 @@
  *     evidence only (reason 'listed_as_closed'); the final disposition is always
  *     entered by a person.
  *   - Output is sorted by asset number so the preview and the server agree.
+ *   - Stale file vs newer manual update (Loop 16): a 'changed' or 'removed'
+ *     vehicle whose record carries a manual update (last_manual_update_at) on or
+ *     after the file's report date, in the country's local calendar day, is a
+ *     conflict ('manual_newer'). Default resolution keeps the record as it is.
+ *     Mirror of workshop_status_manual_newer() in migration 20261011140000 -
+ *     CHANGE BOTH TOGETHER.
  */
 
 import { normaliseAssetNo, parseWorkshopDate } from './excelParser.js'
@@ -50,6 +56,54 @@ export const FIELD_LABELS = Object.freeze({
 })
 
 const DATE_FIELDS = new Set(['ooc_since'])
+
+/** Conflict kinds and the two choices a person can make (DB tokens). */
+export const CONFLICT_MANUAL_NEWER = 'manual_newer'
+export const RESOLUTIONS = Object.freeze(['keep_manual', 'take_file'])
+export const DEFAULT_RESOLUTION = 'keep_manual'
+
+/** Country -> IANA time zone (mirror of workshop_status_local_date). */
+const COUNTRY_TZ = Object.freeze({ KSA: 'Asia/Riyadh', 'SAUDI ARABIA': 'Asia/Riyadh', UAE: 'Asia/Dubai', EGYPT: 'Africa/Cairo' })
+
+/** Time zone used to read a timestamp's calendar day for a country. */
+export function countryTimeZone(country) {
+  return COUNTRY_TZ[String(country ?? '').trim().toUpperCase()] || 'UTC'
+}
+
+/**
+ * yyyy-mm-dd of a timestamp in the country's local time, or null when the
+ * value is not a valid date.
+ */
+export function localDay(ts, country) {
+  if (ts == null || ts === '') return null
+  const d = ts instanceof Date ? ts : new Date(ts)
+  if (Number.isNaN(d.getTime())) return null
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: countryTimeZone(country), year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(d)
+    const get = (t) => parts.find((p) => p.type === t)?.value
+    return `${get('year')}-${get('month')}-${get('day')}`
+  } catch {
+    return d.toISOString().slice(0, 10)
+  }
+}
+
+/**
+ * True when a manual update is on or after the file's report date (local day).
+ * No report date or no manual update -> false (cannot be judged / nothing newer).
+ */
+export function isManualNewer(manualAt, reportDate, country) {
+  const report = parseWorkshopDate(reportDate).value
+  if (!report) return false
+  const day = localDay(manualAt, country)
+  return Boolean(day) && day >= report
+}
+
+/** A valid resolution token, else the default (keep the manual values). */
+export function normaliseResolution(v) {
+  return RESOLUTIONS.includes(v) ? v : DEFAULT_RESOLUTION
+}
 const NUMBER_FIELDS = new Set(['excel_down_days'])
 
 /**
@@ -140,16 +194,40 @@ function snapshot(record) {
     current_stage: record.current_stage ?? null,
     delay_reason: record.delay_reason ?? null,
     responsible_user_id: record.responsible_user_id ?? null,
+    remarks: record.remarks ?? null,
+    last_manual_update_at: record.last_manual_update_at ?? null,
+    last_updated_by_name: record.last_updated_by_name ?? null,
   }
+}
+
+/**
+ * Apply per-asset conflict choices to a comparison: how many conflicting
+ * vehicles keep the TyrePulse values and how many take the file. A missing
+ * choice counts as keep (the server default).
+ * @param {object} comparison  compareWorkshopUpload result
+ * @param {Record<string, string>|Map<string,string>} [choices]  asset -> resolution
+ */
+export function resolutionSummary(comparison, choices) {
+  const list = comparison?.conflictRecords || []
+  const get = (a) => (choices && typeof choices.get === 'function' ? choices.get(a) : choices?.[a])
+  let keep = 0
+  let take = 0
+  for (const c of list) {
+    if (normaliseResolution(get(c.asset_no)) === 'take_file') take += 1
+    else keep += 1
+  }
+  return { total: list.length, keep, take }
 }
 
 /**
  * Compare a preview with the currently active records of the same org + country.
  * @param {object} preview  parseWorkshopSheet / parseWorkshopWorkbook result
  * @param {Array<object>} currentActiveRecords  workshop_status_records rows (current_active = true)
- * @param {{ country?: string, ignoreFields?: string[] }} [options]
+ * @param {{ country?: string, ignoreFields?: string[], reportDate?: string }} [options]
  *   ignoreFields: Excel-owned fields to leave out of the comparison (e.g. a
  *   caller may choose to ignore excel_down_days, which grows by one every day).
+ *   reportDate: the file's report date (defaults to preview.reportDate); used to
+ *   flag a newer manual update as a conflict.
  */
 export function compareWorkshopUpload(preview, currentActiveRecords, options = {}) {
   const p = preview || {}
@@ -161,6 +239,9 @@ export function compareWorkshopUpload(preview, currentActiveRecords, options = {
   const cmpOpts = { siteAliases: options.siteAliases || null }
   const fields = EXCEL_OWNED_FIELDS.filter((f) => !ignore.has(f))
   const country = options.country ? String(options.country).trim().toUpperCase() : null
+  const reportDate = options.reportDate !== undefined ? options.reportDate : p.reportDate
+  const conflictFor = (record) => (isManualNewer(record?.last_manual_update_at, reportDate, record?.country ?? options.country)
+    ? CONFLICT_MANUAL_NEWER : null)
 
   // Current active records, keyed by canonical asset. The DB allows one active
   // record per org + country + asset; if two arrive anyway the first id wins.
@@ -196,7 +277,12 @@ export function compareWorkshopUpload(preview, currentActiveRecords, options = {
         changes[f] = { from: record[f] ?? null, to: data[f] }
       }
     }
-    if (Object.keys(changes).length) changedRecords.push({ asset_no: asset, recordId: record.id ?? null, row, changes })
+    if (Object.keys(changes).length) {
+      const item = { asset_no: asset, recordId: record.id ?? null, row, changes }
+      const conflict = conflictFor(record)
+      if (conflict) Object.assign(item, { conflict, record: snapshot(record) })
+      changedRecords.push(item)
+    }
     else unchangedRecords.push({ asset_no: asset, recordId: record.id ?? null, row })
   }
 
@@ -217,6 +303,8 @@ export function compareWorkshopUpload(preview, currentActiveRecords, options = {
       reason: closedRow ? 'listed_as_closed' : 'missing_from_upload',
     }
     if (closedRow) item.closedRow = closedRow
+    const conflict = conflictFor(record)
+    if (conflict) item.conflict = conflict
     removedRecords.push(item)
   }
 
@@ -231,6 +319,10 @@ export function compareWorkshopUpload(preview, currentActiveRecords, options = {
   closedRecords.sort((a, b) => byAsset(a, b) || (a.row.rowNumber ?? 0) - (b.row.rowNumber ?? 0))
 
   const removedAlsoListedClosed = removedRecords.filter((r) => r.reason === 'listed_as_closed')
+  const conflictRecords = [
+    ...changedRecords.filter((r) => r.conflict).map((r) => ({ kind: 'changed', ...r })),
+    ...removedRecords.filter((r) => r.conflict).map((r) => ({ kind: 'removed', ...r })),
+  ].sort(byAsset)
 
   return {
     newRecords,
@@ -241,7 +333,9 @@ export function compareWorkshopUpload(preview, currentActiveRecords, options = {
     invalidRecords,
     duplicateRecords,
     removedAlsoListedClosed,
+    conflictRecords,
     summary: {
+      conflict: conflictRecords.length,
       previousActive: current.size,
       rowsInFile: active.length + invalidRecords.length + duplicateRecords.length + closedRows.length,
       new: newRecords.length,

@@ -26,7 +26,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
-# ⚑ SESSION 2026-10-12 — STORE KEEPER STOCK ENTRY + EXPO OTA HOTFIX PATH RE-OPENED. PRs #401 #402 #403 merged. No migration.
+# ⚑ SESSION 2026-10-12 — STORE KEEPER STOCK ENTRY + EXPO OTA HOTFIX PATH RE-OPENED. PRs #401 #402 #403 #404 merged. No migration. SESSION CLOSED CLEAN.
 - **#401 speed pass merged** (migration 20261011110000 already live; see the 10-11 PART 2 entry). Prod READY on 210bbb9.
 - **Store Keeper (7 users, all approved) can now ADD stock items and post quantities on mobile; min/critical levels stay
   ADMIN-only (set on web Stock Management, which shows Low/Critical).** Mobile matrix already had mobile:stock /

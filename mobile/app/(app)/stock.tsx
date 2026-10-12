@@ -12,7 +12,6 @@ import { useLanguage } from '../../contexts/LanguageContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useRealtime } from '../../hooks/useRealtime'
 import { useModuleGuard } from '../../hooks/useRoleGuard'
-import { canCountStock } from '../../lib/permissions'
 import { isAdmin } from '../../lib/types'
 import { setStockCount, adjustStock, statusFor, createStockRecord, listStockSites } from '../../lib/stock'
 import { Theme, StatusKind, spacing, radius, elevation } from '../../lib/theme'
@@ -95,7 +94,7 @@ import { withModuleGuard } from '../../components/ModuleGuard'
 export default withModuleGuard(StockScreen, 'stock')
 
 function StockScreen() {
-  const { profile, isSuperAdmin } = useAuth()
+  const { profile, isSuperAdmin, canAccess } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()
   const s = useMemo(() => makeStyles(theme), [theme])
@@ -135,7 +134,11 @@ function StockScreen() {
 
   const { allowed } = useModuleGuard('stock')
   const textAlign = isRTL ? 'right' : 'left'
-  const mayAdjust = canCountStock(profile?.role)
+  // Counting and adding stock follows the same access rule that opens this
+  // screen (role default + the admin's mobile role matrix + per-user grants).
+  // It used to read the role default alone, so a role the admin had switched
+  // Stock on for (Store Keeper) could open the screen but not record anything.
+  const mayAdjust = canAccess('stock')
   // Reorder thresholds (min/critical) are admin-only: role admin or super-admin.
   const mayEditThresholds = isAdmin(profile?.role) || isSuperAdmin === true
 

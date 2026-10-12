@@ -26,6 +26,38 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-10-12 — STORE KEEPER STOCK ENTRY + EXPO OTA HOTFIX PATH RE-OPENED. PRs #401 #402 #403 #404 merged. No migration. SESSION CLOSED CLEAN.
+- **#401 speed pass merged** (migration 20261011110000 already live; see the 10-11 PART 2 entry). Prod READY on 210bbb9.
+- **Store Keeper (7 users, all approved) can now ADD stock items and post quantities on mobile; min/critical levels stay
+  ADMIN-only (set on web Stock Management, which shows Low/Critical).** Mobile matrix already had mobile:stock /
+  mobile:stockManage / mobile:tasks = true for 'Store Keeper'. Three gaps closed:
+  (a) **DB (live, data-only):** organisations.settings permission_overrides += "Store Keeper": {stock: {create: true}}
+      (Company A; double-encoded string, same jsonb_set-on-parsed technique as Fleet Supervisor accidents). Verified by
+      impersonating Wasim khan, rolled back: app_user_can('stock','create')=true, 'edit'=false, stock_records insert OK,
+      post_stock_movement 'receipt' 4->10. stock_records INSERT = Manager/Admin OR app_user_can('stock','create');
+      post_stock_movement is DEFINER, any approved user (it recomputes Low/Critical from the row's levels).
+  (b) **Expo (#402):** stock.tsx mayAdjust read canCountStock(role) = the hard-coded role default (manager, inspector)
+      and IGNORED the mobile matrix, so a role the admin switched Stock on for could open the screen but never record
+      anything. Now `canAccess('stock')`. Store Keeper still normalises to 'reporter' on mobile (no store_keeper in
+      UserRole) - fine, access flows through the matrix. ALSO gives add/+- to Maintenance Supervisor, Tyre Data
+      Collector, Tire Planning Engineer, Workshop Maintenance Area Manager (they also have mobile:stock=true).
+      Expo has NO Stock Management screen; mobile:stockManage does nothing there.
+  (c) **Flutter:** no change needed - its stock screen allows add/count to anyone who can open the module.
+- **EXPO OTA HOTFIX PATH RE-ENABLED (#403, owner: "merge and release it for ota").** Expo STORE builds stay retired;
+  only eas-update.yml is live again. It takes `source_ref` and a guard REFUSES the run unless the ref descends from the
+  installed binary commit, keeps mobile/app.json, eas.json, package.json, package-lock.json, plugins/ byte-identical
+  to it, and changes <= 20 mobile files (Codex P1 on #403: `main` must never be publishable).
+  **Production Expo binary = 1.6.0, built from 6c27046** (release-play run 39, 2026-08-19); system_config
+  mobile_min_version = mobile_latest_version = 1.6.0. runtimeVersion policy = appVersion, channel `production`.
+  RULE: an Expo OTA = branch cut from 6c27046 + ONLY the fix, then dispatch eas-update.yml with that source_ref.
+  NEVER publish from main: since 6c27046 main carries ~5 weeks of device-untested mobile JS (990a747 squash, #372,
+  #395 Workshop Status, #394 expo 54.0.36->.37 / expo-updates .19->.20 in the lockfile).
+  **Published 2026-10-12:** branch `ota/mobile-1.6.0-stock` (feb7b7c5 = 6c27046 + the stock fix), EAS update group
+  a44f587b-4096-4282-8280-44774294b695 (android 01a12eda-1ae1-7973-..., ios 01a12eda-1ae1-7596-...). EXPO_TOKEN secret
+  works. Phones get it after two app opens. NOT verified on a device yet; roll back from the EAS dashboard if needed.
+- Merge rule followed: realign `claude/eager-cerf-julbis` to origin/main after each squash (force-with-lease only after
+  `git diff origin/main origin/<branch>` is empty).
+
 # ⚑ SESSION 2026-10-11 — SPEED PASS (inspections, checklists, N/A flash, DB load). Migrations 20261011090000 + 20261011100000 APPLIED LIVE. PR #400.
 - **Inspection register was the slowest DB read (272 ms, ~7,200 buffers/call).** has_inspector/approver_signature were computed
   columns taking the WHOLE ROW with SET search_path (no inlining) -> every signature image detoasted + full row sorted on disk.

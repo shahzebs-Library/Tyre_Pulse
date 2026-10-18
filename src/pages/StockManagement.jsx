@@ -128,6 +128,7 @@ export default function StockManagement() {
   const { profile, hasCapability } = useAuth()
   const { appSettings, activeCountry } = useSettings()
   const { branding } = useTenant()
+  const stockScope = `${activeCountry}|${profile?.organisation_id || profile?.org_id}|${profile?.id}`
   const [records, setRecords]       = useState([])
   const [loading, setLoading]       = useState(true)
   const [showForm, setShowForm]     = useState(false)
@@ -183,6 +184,8 @@ export default function StockManagement() {
   const latestStock = useLatestRequest()
   const load = useCallback(async () => {
     const stale = latestStock.begin()
+    setRecords([])
+    setVelocityMap({})
     setLoading(true)
     setLoadError('')
     try {
@@ -207,7 +210,7 @@ export default function StockManagement() {
     }
   }, [activeCountry, t, latestStock])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load() }, [load, stockScope])
 
   // Stable identities on purpose. Modal's behaviour hook lists `onClose` in its
   // dependency array, so an inline arrow re-runs the effect on EVERY render of
@@ -599,8 +602,8 @@ export default function StockManagement() {
   ], [t])
 
   if (entryOpen) return <StockQuickEntry
-    key={`${activeCountry}|${profile?.organisation_id}|${profile?.id}`}
-    records={records} initialSite={siteFilter === 'all' ? '' : siteFilter}
+    key={`${activeCountry}|${profile?.organisation_id || profile?.org_id}|${profile?.id}`}
+    records={records.filter(r => r.country === activeCountry)} initialSite={siteFilter === 'all' ? '' : siteFilter}
     onClose={() => setEntryOpen(false)}
     onSaved={result => { setEntryOpen(false); setEntryMessage(`${result.items.length} stock item${result.items.length === 1 ? '' : 's'} saved with movement history.`); load() }}
   />

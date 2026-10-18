@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { stockKind, stockUnit, stockDraft, entryErrors, entryPayload, existingStockOptions } from '../lib/stockQuickEntry'
 describe('stock quick-entry item and quantity rules',()=>{
- it.each([['315/80R22.5 Triangle','tyre'],['22.5 x 8.25 wheel rim','rim'],['Tubeless tyre valve','accessory'],['Wheel nut','accessory'],['Oil filter',null],['Hydraulic valve',null],['Tyre fitting service',null],['Engine oil',null]])('classifies %s as %s',(description,kind)=>expect(stockKind(description)).toBe(kind))
+ it.each([['315/80R22.5 Triangle','tyre'],['22.5 x 8.25 wheel rim','rim'],['Tubeless tyre valve','accessory'],['Wheel nut','accessory'],['Wheel rim nut','accessory'],['Tyre inflator gauge','accessory'],['Tyre repair glue','accessory'],['Oil filter',null],['Hydraulic valve',null],['Tyre fitting service',null],['Engine oil',null]])('classifies %s as %s',(description,kind)=>expect(stockKind(description)).toBe(kind))
  it('does not copy a source issue quantity or fabricate missing units',()=>{
   const draft=stockDraft({key:'x',source:'dtr',qty:99,name:'Truck tyre',kind:'tyre'})
   expect(draft.quantity).toBe('');expect(draft.unit).toBe('');expect(stockUnit('EA')).toBe('PCS');expect(stockUnit('unknown')).toBe('')

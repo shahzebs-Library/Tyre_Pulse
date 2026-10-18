@@ -14,9 +14,9 @@ export const normalizeStockText = value => String(value ?? '').toUpperCase().rep
 export function stockKind(description) {
   const d = String(description || '').toLowerCase()
   if (/\b(filter|lubricant|coolant|engine oil|hydraulic oil|labour|labor|service|fitting charge)\b/.test(d)) return null
-  if (/\b(rim|wheel disc)\b/.test(d)) return 'rim'
   const size = /\d{3}\s*\/\s*\d{2}\s*r?\s*\d{2}|\d{2}\.\d{1,2}\s*[-r]\s*\d{2}|\d{4}\s*r\s*\d{2}/i.test(d)
-  if (/\b(valve|tube|flap|patch|repair kit|nut|stud)\b/.test(d) && (/\b(tyre|tire|wheel)\b/.test(d) || size)) return 'accessory'
+  if (/\b(valve|tube|flap|patch|repair kit|nut|stud|glue|cement|gauge|lever|inflator|balancing weight|bead sealer|tyre paste|tire paste|tyre soap|tire soap)\b/.test(d) && (/\b(tyre|tire|wheel|rim)\b/.test(d) || size)) return 'accessory'
+  if (/\b(rim|wheel disc)\b/.test(d)) return 'rim'
   if (size || /\b(tyre|tire)\b/.test(d)) return 'tyre'
   return null
 }

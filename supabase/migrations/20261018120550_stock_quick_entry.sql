@@ -8,12 +8,12 @@ ALTER TABLE public.stock_movements ADD CONSTRAINT stock_movements_movement_type_
  'In','Out','Adjustment','Initial','Reorder','Scrap','receipt','return','transfer_in','adjustment_up',
  'issue','transfer_out','scrap','adjustment_down','stocktake'));
 CREATE OR REPLACE FUNCTION public.stock_item_kind(p_name text)
-RETURNS text LANGUAGE sql IMMUTABLE SET search_path=public AS $$
+RETURNS text LANGUAGE sql IMMUTABLE SET search_path=public,pg_temp AS $$
  SELECT CASE
  WHEN p_name ~* '\m(filter|lubricant|coolant|engine oil|hydraulic oil|labour|labor|service|fitting charge)\M' THEN NULL
+ WHEN p_name ~* '\m(valve|tube|flap|patch|repair kit|nut|stud|glue|cement|gauge|lever|inflator|balancing weight|bead sealer|tyre paste|tire paste|tyre soap|tire soap)\M' AND
+  (p_name ~* '\m(tyre|tire|wheel|rim)\M' OR p_name ~* '[0-9]{3}[[:space:]]*/[[:space:]]*[0-9]{2}[[:space:]]*r?[[:space:]]*[0-9]{2}|[0-9]{2}\.[0-9]{1,2}[[:space:]]*[-r][[:space:]]*[0-9]{2}|[0-9]{4}[[:space:]]*r[[:space:]]*[0-9]{2}') THEN 'accessory'
  WHEN p_name ~* '\m(rim|wheel disc)\M' THEN 'rim'
- WHEN p_name ~* '\m(valve|tube|flap|patch|repair kit|nut|stud)\M' AND
-  (p_name ~* '\m(tyre|tire|wheel)\M' OR p_name ~* '[0-9]{3}[[:space:]]*/[[:space:]]*[0-9]{2}[[:space:]]*r?[[:space:]]*[0-9]{2}|[0-9]{2}\.[0-9]{1,2}[[:space:]]*[-r][[:space:]]*[0-9]{2}|[0-9]{4}[[:space:]]*r[[:space:]]*[0-9]{2}') THEN 'accessory'
  WHEN p_name ~* '\m(tyre|tire)\M|[0-9]{3}[[:space:]]*/[[:space:]]*[0-9]{2}[[:space:]]*r?[[:space:]]*[0-9]{2}|[0-9]{2}\.[0-9]{1,2}[[:space:]]*[-r][[:space:]]*[0-9]{2}|[0-9]{4}[[:space:]]*r[[:space:]]*[0-9]{2}' THEN 'tyre'
  ELSE NULL END;
 $$;
@@ -23,7 +23,7 @@ GRANT EXECUTE ON FUNCTION public.stock_item_kind(text) TO authenticated;
 -- Private-to-the-RPC resolver. Unlike broad expense access, this exposes only
 -- physical tyre/rim item identity, with explicit org/country/site predicates.
 CREATE OR REPLACE FUNCTION public.stock_entry_resolve(p_source text,p_id text,p_country text,p_site text)
-RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
 DECLARE d jsonb;
 BEGIN
  IF p_source='material' THEN
@@ -35,7 +35,7 @@ BEGIN
   SELECT jsonb_build_object('source','mis','source_id',m.id,'code',m.item_code,'name',m.item_description,
    'kind',stock_item_kind(m.item_description),'brand',m.brand,'unit',m.uom,'reference',m.issue_number,'date',m.txn_date,'label','MIS / ERP') INTO d
   FROM parts_consumption m WHERE m.id::text=p_id AND m.organisation_id=app_current_org() AND m.country=p_country
-   AND (app_sees_all_sites() OR upper(btrim(m.cost_center))=ANY(coalesce(app_site_scope(),'{}'::text[]))
+   AND (coalesce(app_sees_all_sites(),false) OR upper(btrim(m.cost_center))=ANY(coalesce(app_site_scope(),'{}'::text[]))
     OR upper(btrim(m.site))=ANY(coalesce(app_site_scope(),'{}'::text[])) OR upper(btrim(m.store_code))=ANY(coalesce(app_site_scope(),'{}'::text[])));
  ELSIF p_source='dtr' THEN
   SELECT jsonb_build_object('source','dtr','source_id',t.id,'code','','name',coalesce(nullif(btrim(t.description),''),concat_ws(' ',t.brand,t.size,'tyre')),
@@ -52,12 +52,12 @@ $$;
 REVOKE ALL ON FUNCTION public.stock_entry_resolve(text,text,text,text) FROM PUBLIC,anon,authenticated;
 
 CREATE OR REPLACE FUNCTION public.stock_item_suggestions(p_country text,p_site text,p_query text)
-RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public AS $$
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public,pg_temp AS $$
 DECLARE q text:=regexp_replace(upper(coalesce(p_query,'')),'[^A-Z0-9]','','g'); r record; d jsonb; out jsonb:='[]'; seen text[]:='{}';
 BEGIN
- IF auth.uid() IS NULL OR NOT is_approved_and_unlocked() OR app_current_org() IS NULL OR NOT app_user_can('stock','view') THEN RAISE EXCEPTION 'Stock access is required.' USING ERRCODE='42501'; END IF;
- IF nullif(btrim(p_country),'') IS NULL OR p_country='All' OR NOT app_write_country_ok(p_country)
-  OR nullif(btrim(p_site),'') IS NULL OR NOT (app_sees_all_sites() OR upper(btrim(p_site))=ANY(coalesce(app_site_scope(),'{}'::text[]))) THEN
+ IF auth.uid() IS NULL OR (is_approved_and_unlocked() IS NOT TRUE) OR app_current_org() IS NULL OR (app_user_can('stock','view') IS NOT TRUE) THEN RAISE EXCEPTION 'Stock access is required.' USING ERRCODE='42501'; END IF;
+ IF nullif(btrim(p_country),'') IS NULL OR p_country='All' OR (app_write_country_ok(p_country) IS NOT TRUE)
+  OR nullif(btrim(p_site),'') IS NULL OR NOT (coalesce(app_sees_all_sites(),false) OR upper(btrim(p_site))=ANY(coalesce(app_site_scope(),'{}'::text[]))) THEN
   RAISE EXCEPTION 'Choose a permitted country and site.' USING ERRCODE='42501'; END IF;
  IF length(q)<2 THEN RETURN out; END IF;
  IF length(q)>80 THEN RAISE EXCEPTION 'Search is too long.' USING ERRCODE='22023'; END IF;
@@ -70,7 +70,7 @@ BEGIN
   UNION ALL
   (SELECT 'mis',m.id::text FROM parts_consumption m WHERE m.organisation_id=app_current_org() AND m.country=p_country
    AND stock_item_kind(m.item_description) IS NOT NULL
-   AND (app_sees_all_sites() OR upper(btrim(m.cost_center))=ANY(coalesce(app_site_scope(),'{}'::text[])) OR upper(btrim(m.site))=ANY(coalesce(app_site_scope(),'{}'::text[])) OR upper(btrim(m.store_code))=ANY(coalesce(app_site_scope(),'{}'::text[])))
+   AND (coalesce(app_sees_all_sites(),false) OR upper(btrim(m.cost_center))=ANY(coalesce(app_site_scope(),'{}'::text[])) OR upper(btrim(m.site))=ANY(coalesce(app_site_scope(),'{}'::text[])) OR upper(btrim(m.store_code))=ANY(coalesce(app_site_scope(),'{}'::text[])))
    AND regexp_replace(upper(concat_ws(' ',m.item_code,m.item_description,m.brand)),'[^A-Z0-9]','','g') LIKE '%'||q||'%'
    ORDER BY m.txn_date DESC,m.id LIMIT 60)
   UNION ALL
@@ -104,17 +104,17 @@ REVOKE ALL ON public.stock_entry_requests FROM PUBLIC,anon,authenticated;
 GRANT SELECT ON public.stock_entry_requests TO authenticated;
 CREATE POLICY stock_entry_requests_read ON public.stock_entry_requests FOR SELECT TO authenticated
  USING (organisation_id=app_current_org() AND app_user_can('stock','view') AND is_approved_and_unlocked()
-  AND app_write_country_ok(country) AND (app_sees_all_sites() OR upper(btrim(site))=ANY(coalesce(app_site_scope(),'{}'::text[]))));
+  AND app_write_country_ok(country) AND (coalesce(app_sees_all_sites(),false) OR upper(btrim(site))=ANY(coalesce(app_site_scope(),'{}'::text[]))));
 
 CREATE OR REPLACE FUNCTION public.save_stock_entry(p_request_id uuid,p_country text,p_site text,p_mode text,p_reference text,p_notes text,p_lines jsonb)
-RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
 DECLARE v_org uuid:=app_current_org(); v_uid uuid:=auth.uid(); l jsonb; d jsonb; meta jsonb; r stock_records%ROWTYPE;
  req stock_entry_requests%ROWTYPE; fingerprint text; out jsonb:='[]'; seen text[]:='{}'; key text;
  qty numeric; before_qty integer; after_qty integer; change_qty integer; status text; movement uuid;
 BEGIN
- IF v_uid IS NULL OR v_org IS NULL OR NOT is_approved_and_unlocked() OR NOT app_user_can('stock','view') THEN RAISE EXCEPTION 'Stock access is required.' USING ERRCODE='42501'; END IF;
- IF p_request_id IS NULL OR nullif(btrim(p_country),'') IS NULL OR p_country='All' OR NOT app_write_country_ok(p_country)
- OR nullif(btrim(p_site),'') IS NULL OR NOT (app_sees_all_sites() OR upper(btrim(p_site))=ANY(coalesce(app_site_scope(),'{}'::text[]))) THEN RAISE EXCEPTION 'Choose a permitted country and site.' USING ERRCODE='42501'; END IF;
+ IF v_uid IS NULL OR v_org IS NULL OR (is_approved_and_unlocked() IS NOT TRUE) OR (app_user_can('stock','view') IS NOT TRUE) THEN RAISE EXCEPTION 'Stock access is required.' USING ERRCODE='42501'; END IF;
+ IF p_request_id IS NULL OR nullif(btrim(p_country),'') IS NULL OR p_country='All' OR (app_write_country_ok(p_country) IS NOT TRUE)
+ OR nullif(btrim(p_site),'') IS NULL OR NOT (coalesce(app_sees_all_sites(),false) OR upper(btrim(p_site))=ANY(coalesce(app_site_scope(),'{}'::text[]))) THEN RAISE EXCEPTION 'Choose a permitted country and site.' USING ERRCODE='42501'; END IF;
  IF p_mode NOT IN ('count','receipt') OR p_mode IS NULL OR jsonb_typeof(p_lines) IS DISTINCT FROM 'array' THEN RAISE EXCEPTION 'Invalid entry.' USING ERRCODE='22023'; END IF;
  IF jsonb_array_length(p_lines) NOT BETWEEN 1 AND 100 OR length(coalesce(p_notes,''))>1000 OR length(coalesce(p_reference,''))>200
  OR (p_mode='receipt' AND nullif(btrim(p_reference),'') IS NULL) THEN RAISE EXCEPTION 'Check item count and receipt reference.' USING ERRCODE='22023'; END IF;
@@ -133,18 +133,18 @@ BEGIN
   IF l->>'unit' IS NULL OR l->>'unit' NOT IN ('PCS','SET','PAIR','BOX','KG','L') THEN RAISE EXCEPTION 'Confirm the unit of measure.' USING ERRCODE='22023'; END IF;
   r:=NULL;
   IF nullif(l->>'stock_id','') IS NOT NULL THEN
-   IF NOT app_user_can('stock','edit') THEN RAISE EXCEPTION 'Stock edit permission is required.' USING ERRCODE='42501'; END IF;
+   IF (app_user_can('stock','edit') IS NOT TRUE) THEN RAISE EXCEPTION 'Stock edit permission is required.' USING ERRCODE='42501'; END IF;
    SELECT * INTO r FROM stock_records WHERE id=(l->>'stock_id')::uuid FOR UPDATE;
-   IF r.id IS NULL OR r.organisation_id IS DISTINCT FROM v_org OR r.country IS DISTINCT FROM p_country OR upper(btrim(r.site))<>upper(btrim(p_site)) THEN RAISE EXCEPTION 'Stock item is outside this store.' USING ERRCODE='42501'; END IF;
+   IF r.id IS NULL OR r.organisation_id IS DISTINCT FROM v_org OR r.country IS DISTINCT FROM p_country OR upper(btrim(r.site)) IS DISTINCT FROM upper(btrim(p_site)) THEN RAISE EXCEPTION 'Stock item is outside this store.' USING ERRCODE='42501'; END IF;
    IF (l->>'expected_qty')::integer IS DISTINCT FROM r.stock_qty OR (l->>'expected_updated_at')::timestamptz IS DISTINCT FROM r.updated_at THEN RAISE EXCEPTION 'Stock changed while you were counting. Refresh and review the latest balance.' USING ERRCODE='40001'; END IF;
    meta:=coalesce(r.custom_data->'stock_item','{}');
    IF nullif(meta->>'unit','') IS NOT NULL AND meta->>'unit'<>l->>'unit' THEN RAISE EXCEPTION 'The recorded unit cannot be changed during a count.' USING ERRCODE='22023'; END IF;
    key:='stock:'||r.id;
   ELSE
-   IF NOT app_user_can('stock','create') THEN RAISE EXCEPTION 'Stock create permission is required.' USING ERRCODE='42501'; END IF;
+   IF (app_user_can('stock','create') IS NOT TRUE) THEN RAISE EXCEPTION 'Stock create permission is required.' USING ERRCODE='42501'; END IF;
    IF l->>'source'='manual' THEN
     IF l->>'kind' IS NULL OR l->>'kind' NOT IN ('tyre','rim','accessory') OR nullif(btrim(l->>'name'),'') IS NULL OR l->>'name' ~* '\m(filter|lubricant|coolant|engine oil|hydraulic oil|labour|labor|service|fitting charge)\M' OR length(l->>'name')>500 OR length(coalesce(l->>'code',''))>100 THEN RAISE EXCEPTION 'Check the manual item details.' USING ERRCODE='22023'; END IF;
-    d:=l||jsonb_build_object('key',CASE WHEN nullif(btrim(l->>'code'),'') IS NOT NULL THEN 'code:'||upper(btrim(l->>'code')) ELSE 'manual:'||md5(upper(btrim(l->>'name'))) END);
+    d:=l||jsonb_build_object('key',CASE WHEN nullif(btrim(l->>'code'),'') IS NOT NULL THEN 'code:'||upper(btrim(l->>'code')) ELSE 'manual:'||md5(upper(jsonb_build_array(btrim(l->>'name'),l->>'brand',l->>'size',l->>'kind')::text)) END);
    ELSE d:=stock_entry_resolve(l->>'source',l->>'source_id',p_country,p_site);
    END IF;
    IF d IS NULL THEN RAISE EXCEPTION 'This MIS/DTR item is unavailable in your scope. Search again.' USING ERRCODE='42501'; END IF;
@@ -180,16 +180,16 @@ REVOKE ALL ON FUNCTION public.save_stock_entry(uuid,text,text,text,text,text,jso
 GRANT EXECUTE ON FUNCTION public.save_stock_entry(uuid,text,text,text,text,text,jsonb) TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.transfer_stock_entry(p_request_id uuid,p_from uuid,p_to uuid,p_qty integer,p_expected_from integer,p_expected_to integer,p_notes text DEFAULT '')
-RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
 DECLARE a stock_records%ROWTYPE; b stock_records%ROWTYPE; req stock_entry_requests%ROWTYPE; h text; ma jsonb; mb jsonb; v_result jsonb;
 BEGIN
- IF auth.uid() IS NULL OR app_current_org() IS NULL OR NOT is_approved_and_unlocked() OR NOT app_user_can('stock','edit') THEN RAISE EXCEPTION 'Stock edit permission is required.' USING ERRCODE='42501'; END IF;
+ IF auth.uid() IS NULL OR app_current_org() IS NULL OR (is_approved_and_unlocked() IS NOT TRUE) OR (app_user_can('stock','edit') IS NOT TRUE) THEN RAISE EXCEPTION 'Stock edit permission is required.' USING ERRCODE='42501'; END IF;
  IF p_request_id IS NULL OR p_from IS NULL OR p_to IS NULL OR p_from=p_to OR p_qty IS NULL OR p_qty<=0 OR length(coalesce(p_notes,''))>1000 THEN RAISE EXCEPTION 'Check transfer items and quantity.' USING ERRCODE='22023'; END IF;
  PERFORM id FROM stock_records WHERE id IN (p_from,p_to) ORDER BY id FOR UPDATE;
  SELECT * INTO a FROM stock_records WHERE id=p_from; SELECT * INTO b FROM stock_records WHERE id=p_to;
  IF a.id IS NULL OR b.id IS NULL OR a.organisation_id IS DISTINCT FROM app_current_org() OR b.organisation_id IS DISTINCT FROM app_current_org()
- OR a.country IS NULL OR b.country IS NULL OR nullif(btrim(a.site),'') IS NULL OR nullif(btrim(b.site),'') IS NULL OR a.country IS DISTINCT FROM b.country OR NOT app_write_country_ok(a.country) OR NOT app_write_country_ok(b.country)
- OR NOT (app_sees_all_sites() OR (upper(btrim(a.site))=ANY(coalesce(app_site_scope(),'{}'::text[])) AND upper(btrim(b.site))=ANY(coalesce(app_site_scope(),'{}'::text[])))) THEN RAISE EXCEPTION 'Transfer items are outside your scope.' USING ERRCODE='42501'; END IF;
+ OR a.country IS NULL OR b.country IS NULL OR nullif(btrim(a.site),'') IS NULL OR nullif(btrim(b.site),'') IS NULL OR a.country IS DISTINCT FROM b.country OR (app_write_country_ok(a.country) IS NOT TRUE) OR (app_write_country_ok(b.country) IS NOT TRUE)
+ OR NOT (coalesce(app_sees_all_sites(),false) OR (upper(btrim(a.site))=ANY(coalesce(app_site_scope(),'{}'::text[])) AND upper(btrim(b.site))=ANY(coalesce(app_site_scope(),'{}'::text[])))) THEN RAISE EXCEPTION 'Transfer items are outside your scope.' USING ERRCODE='42501'; END IF;
  IF upper(btrim(a.site))=upper(btrim(b.site)) THEN RAISE EXCEPTION 'Choose different source and destination sites.' USING ERRCODE='22023'; END IF;
  h:=md5(jsonb_build_array('transfer',p_from,p_to,p_qty,p_expected_from,p_expected_to,p_notes)::text);
  INSERT INTO stock_entry_requests(id,organisation_id,country,site,created_by,payload_hash) VALUES(p_request_id,app_current_org(),a.country,a.site,auth.uid(),h) ON CONFLICT DO NOTHING;

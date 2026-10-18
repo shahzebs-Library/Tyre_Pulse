@@ -13,7 +13,7 @@ test('stock quick entry: source scope, atomic counts, receipts, concurrency and 
    CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$SELECT nullif(current_setting('test.actor',true),'')::uuid$$;
    CREATE FUNCTION app_current_org() RETURNS uuid LANGUAGE sql AS $$SELECT '${id(10)}'::uuid$$;
    CREATE FUNCTION is_approved_and_unlocked() RETURNS boolean LANGUAGE sql AS $$SELECT current_setting('test.active',true)='yes'$$;
-   CREATE FUNCTION app_user_can(m text,c text) RETURNS boolean LANGUAGE sql AS $$SELECT current_setting('test.cap_'||c,true)='yes'$$;
+   CREATE FUNCTION app_user_can(m text,c text) RETURNS boolean LANGUAGE sql AS $$SELECT nullif(current_setting('test.cap_'||c,true),'null')='yes'$$;
    CREATE FUNCTION app_write_country_ok(c text) RETURNS boolean LANGUAGE sql AS $$SELECT c='KSA'$$;
    CREATE FUNCTION app_sees_all_sites() RETURNS boolean LANGUAGE sql AS $$SELECT false$$;
    CREATE FUNCTION app_site_scope() RETURNS text[] LANGUAGE sql AS $$SELECT ARRAY['SITE-A','SITE-B']$$;
@@ -88,7 +88,8 @@ test('stock quick entry: source scope, atomic counts, receipts, concurrency and 
    await assert.rejects(save([{...tyre,source:'manual',name:'Oil filter',kind:'tyre'}]),e=>e.code==='22023')
    await save([tyre]); const row=(await sql('SELECT * FROM stock_records'))[0]
    await db.exec("SET test.cap_edit='no'"); await assert.rejects(save([await existing(row,22)],{requestId:id(101)}),e=>e.code==='42501')
-   await db.exec("SET test.active='no'"); await assert.rejects(save([tyre],{requestId:id(102)}),e=>e.code==='42501')
+   await db.exec("SET test.cap_view='null'"); await assert.rejects(save([tyre],{requestId:id(102)}),e=>e.code==='42501')
+   await db.exec("SET test.cap_view='yes'; SET test.active='no'"); await assert.rejects(save([tyre],{requestId:id(102)}),e=>e.code==='42501')
   })
   await t.test('transfers name both matching items and post both legs exactly once', async () => {
    await reset(); await save([tyre]); await save([{...tyre,quantity:10}],{requestId:id(101),site:'SITE-B'})

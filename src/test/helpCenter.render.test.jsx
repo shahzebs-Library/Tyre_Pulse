@@ -62,4 +62,14 @@ describe('Help & Support user view', () => {
     await screen.findByText('Newly submitted report')
   })
 
+  it('does not show database setup commands when support is unavailable', async () => {
+    const error = new Error('missing relation'); error.code = '42P01'
+    h.tickets.mockRejectedValue(error)
+    show('/help?section=tickets')
+    await screen.findByRole('alert')
+    expect(screen.getByRole('alert')).toHaveTextContent('temporarily unavailable')
+    expect(document.body.textContent).not.toMatch(/MIGRATIONS|CREATE TABLE|Apply.*sql/i)
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+  })
+
 })

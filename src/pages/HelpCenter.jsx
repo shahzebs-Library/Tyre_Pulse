@@ -449,17 +449,10 @@ function TicketList({ triage, reloadKey, emptyHint, initialSelectedId = null }) 
   ], [triage])
 
   if (error === 'missing') {
-    return (
-      <div className="card border border-amber-800/50 flex items-start gap-3">
-        <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
-        <div>
-          <p className="text-amber-300 font-medium">Support tickets are not enabled on this database yet.</p>
-          <p className="text-[var(--text-muted)] text-sm mt-1">
-            Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V127_SUPPORT_TICKETS.sql</span>, then reload.
-          </p>
-        </div>
-      </div>
-    )
+    return <div role="alert" className="card space-y-3">
+      <p className="text-sm text-[var(--text-secondary)]">Support requests are temporarily unavailable. Please try again or report the problem.</p>
+      <button type="button" onClick={load} className="btn-secondary text-sm inline-flex items-center gap-2"><RefreshCw size={14} /> Retry</button>
+    </div>
   }
 
   if (error) {

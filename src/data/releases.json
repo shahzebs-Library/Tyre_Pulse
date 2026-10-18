@@ -8,7 +8,7 @@
           "stock"
         ],
         "text": {
-          "en": "Stock item search now uses dedicated indexes limited to tyres, rims and related accessories. MIS and DTR item lookups use indexed record identities and reuse request-scoped access checks for faster suggestions while retaining organisation, country and site restrictions."
+          "en": "Stock item search now uses dedicated indexes limited to tyres, rims and related accessories. MIS and DTR item lookups use indexed record identities and reuse request-scoped access checks for faster suggestions while retaining organisation, country and site restrictions. New item entries default to New condition and PCS when no source unit is recorded; existing stock values stay unchanged."
         }
       }
     ]

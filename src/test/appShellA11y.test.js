@@ -15,6 +15,7 @@ const read = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n')
 const LAYOUT = read('src/components/Layout.jsx')
 const CSS = read('src/index.css')
 const NOTIF = read('src/components/NotificationCenter.jsx')
+const NOTIF_CSS = read('src/components/notificationCenter.css')
 const PALETTE = read('src/components/CommandPalette.jsx')
 
 function luminance(hex) {
@@ -45,7 +46,11 @@ describe('app shell landmarks', () => {
 
 describe('sidebar behaviour', () => {
   it('group toggles report their expanded state and control their list', () => {
-    expect(LAYOUT).toMatch(/onClick=\{\(\) => toggleGroup\(groupId\)\}\s+aria-expanded=\{!isCollapsed\}\s+aria-controls=/)
+    const toggle = LAYOUT.match(/<button\b[^>]*onClick=\{\(\) => toggleGroup\(groupId\)\}[^>]*>/)?.[0]
+    expect(toggle).toBeTruthy()
+    expect(toggle).toContain('aria-expanded={!isCollapsed}')
+    expect(toggle).toContain('aria-controls={`nav-group-${groupDomId(groupId)}`}')
+    expect(toggle).toContain('disabled={Boolean(normalizedModuleQuery)}')
     expect(LAYOUT).toMatch(/id=\{`nav-group-\$\{groupDomId\(groupId\)\}`\}/)
   })
 
@@ -59,8 +64,8 @@ describe('sidebar behaviour', () => {
     expect(tag).toMatch(/_outOfContext \? \{ opacity: 0\.45 \}/)
   })
 
-  it('the closed mobile drawer is inert and the drawer mirrors in RTL', () => {
-    expect(LAYOUT).toMatch(/inert=\{isMobile && !sidebarOpen \? true : undefined\}/)
+  it('the closed sidebar is inert on every viewport and the drawer mirrors in RTL', () => {
+    expect(LAYOUT).toMatch(/inert=\{!sidebarOpen \? true : undefined\}/)
     expect(LAYOUT).toMatch(/isRTL \? 'right-0' : 'left-0'/)
     expect(LAYOUT).toMatch(/isRTL \? drawerWidth : -drawerWidth/)
   })
@@ -113,7 +118,9 @@ describe('notification centre', () => {
 
   it('rows are keyboard operable and the panel anchors to the logical end', () => {
     expect(NOTIF).toMatch(/role="button"\s+tabIndex=\{0\}/)
-    expect(NOTIF).toMatch(/absolute end-0 top-9 w-80/)
+    expect(NOTIF).toMatch(/role="dialog"\s+aria-label="Notifications"\s+className="tp-notification-panel"/)
+    expect(NOTIF_CSS).toMatch(/\.tp-notification-panel\s*\{[^}]*position:\s*absolute;[^}]*inset-inline-end:\s*0;/)
+    expect(NOTIF_CSS).toMatch(/@media \(max-width: 640px\)\s*\{\s*\.tp-notification-panel\s*\{[^}]*position:\s*fixed;[^}]*inset-inline:\s*12px;/)
   })
 })
 

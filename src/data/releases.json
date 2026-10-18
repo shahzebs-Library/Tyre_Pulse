@@ -1,5 +1,10 @@
 [
   {
+    "id": "2026.10.18.4",
+    "date": "2026-10-18",
+    "changes": [{"modules": ["budgets"], "text": {"en": "Cost Center, Budget Planner and Budgets now share the Command Center's green workspace style, clearer page navigation and responsive headers. Cost Center separates period controls from exports and explains record-filter scope. Budget Planner keeps navigation available during loading and errors. Budgets brings the monthly site register ahead of its supporting chart, with clearer monthly and annual view descriptions. Existing calculations, exports and budget editing permissions are retained."}}]
+  },
+  {
     "id": "2026.10.18.3",
     "date": "2026-10-18",
     "changes": [{"modules": [], "text": {"en": "Help & Support now brings module-aware guides, personal support tickets, problem reports, access requests and update history into a clearer workspace. Recent requests show real personal records, with loading, retry and partial-error states. Profile details remain top-right with photo, male/female avatar and initials options."}}]

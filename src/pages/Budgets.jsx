@@ -16,7 +16,7 @@ import {
   Plus, Save, Download, FileText, PiggyBank, Search, X, AlertTriangle, RefreshCw,
   Wallet, TrendingUp, Percent, AlertCircle, Building2,
 } from 'lucide-react'
-import PageHeader from '../components/ui/PageHeader'
+import PageHeader from '../components/budgets/FinancePageHeader'
 import Card, { CardBody, CardHeader } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
 import BudgetTabs from '../components/budgets/BudgetTabs'
@@ -64,16 +64,16 @@ const sortable = (fn) => ({
 const CHART_OPTS = {
   responsive: true,
   maintainAspectRatio: false,
-  plugins: { legend: { labels: { color: 'var(--text-muted)' } } },
+  plugins: { legend: { labels: { color: '#8593a5' } } },
   scales: {
-    x: { grid: { color: 'var(--panel-2)' }, ticks: { color: 'var(--text-muted)' } },
-    y: { grid: { color: 'var(--panel-2)' }, ticks: { color: 'var(--text-muted)' }, beginAtZero: true },
+    x: { grid: { color: 'rgba(148,163,184,0.16)' }, ticks: { color: '#8593a5' } },
+    y: { grid: { color: 'rgba(148,163,184,0.16)' }, ticks: { color: '#8593a5' }, beginAtZero: true },
   },
 }
 
 function Kpi({ label, value, sub, icon: Icon, tone = 'text-[var(--text-primary)]', loading }) {
   return (
-    <Card>
+    <Card className="finance-kpi">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-[var(--text-muted)]">{label}</p>
         {Icon && <Icon size={16} className={tone} aria-hidden="true" />}
@@ -258,7 +258,7 @@ export default function Budgets() {
         {
           label: t('budgets.columns.budget', { currency: activeCurrency }),
           data: visibleRows.map((r) => r.budget),
-          backgroundColor: withAlpha(colorAt(0), 0.7),
+          backgroundColor: 'rgba(148,163,184,0.35)',
           borderRadius: 4,
         },
         {
@@ -485,7 +485,7 @@ export default function Budgets() {
   const utilTone = (pct) => (pct == null ? 'text-[var(--text-muted)]' : BAND_TONE[pct >= 100 ? 'over' : pct >= 80 ? 'warn' : 'ok'])
 
   return (
-    <div className="space-y-4">
+    <div className="finance-workspace space-y-4">
       <BudgetTabs />
       <PageHeader
         title={t('budgets.title')}
@@ -509,7 +509,7 @@ export default function Budgets() {
       />
 
       {/* View mode */}
-      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Budget view">
+      <div className="finance-view-switch" role="tablist" aria-label="Budget view">
         {[['month', t('budgets.viewModes.month')], ['annual', t('budgets.viewModes.annual')]].map(([val, label]) => (
           <button
             key={val}
@@ -517,12 +517,18 @@ export default function Budgets() {
             role="tab"
             aria-selected={viewMode === val}
             onClick={() => setViewMode(val)}
-            className={`px-4 min-h-[44px] rounded-lg text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 ${viewMode === val ? 'bg-blue-600 text-white' : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+
           >
             {label}
           </button>
         ))}
       </div>
+
+      <p className="finance-view-description">
+        {viewMode === 'month'
+          ? 'Monthly site allocations, actual tyre spend and utilisation for the selected period.'
+          : 'Edit monthly site allocations across the financial year, then save your changes together.'}
+      </p>
 
       {loadError && <ErrorCard message={loadError} onRetry={load} />}
       {actionError && (
@@ -574,7 +580,7 @@ export default function Budgets() {
       {/* ── MONTHLY VIEW ──────────────────────────────────────────────────── */}
       {viewMode === 'month' && !loadError && (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="finance-kpis grid grid-cols-2 lg:grid-cols-5 gap-3">
             <Kpi loading={loading} label={t('budgets.kpi.totalBudget')} icon={Wallet} value={formatCurrencyCompact(monthSummary.totalBudget, activeCurrency)} sub={`${monthSummary.sites} site${monthSummary.sites === 1 ? '' : 's'}`} />
             <Kpi loading={loading} label={t('budgets.kpi.totalSpent')} icon={TrendingUp}
               tone={monthSummary.totalSpend > monthSummary.totalBudget ? 'text-red-400' : 'text-green-400'}
@@ -614,16 +620,9 @@ export default function Budgets() {
             </Card>
           )}
 
-          {!loading && monthlyChartData && (
-            <Card>
-              <CardHeader title={`${t('budgets.columns.budget', { currency: activeCurrency })} vs ${t('budgets.columns.spent', { currency: activeCurrency })}`} />
-              <CardBody style={{ height: 280 }}>
-                <Bar data={monthlyChartData} options={CHART_OPTS} aria-label="Budget versus spend by site" role="img" />
-              </CardBody>
-            </Card>
-          )}
 
           <Card pad="none" clip>
+            <div className="finance-register-title"><CardHeader title="Site budget register" description="Monthly budgets, actual tyre spend and utilisation by site." /></div>
             <EnterpriseTable
               viewKey="budgets"
               reportMeta={reportMeta}
@@ -640,13 +639,23 @@ export default function Budgets() {
               emptyMessage={allMonthRows.length === 0 ? t('budgets.states.noBudgetsPeriod') : 'No sites match these filters.'}
             />
           </Card>
+
+          {!loading && monthlyChartData && (
+            <Card>
+              <CardHeader title={`${t('budgets.columns.budget', { currency: activeCurrency })} vs ${t('budgets.columns.spent', { currency: activeCurrency })}`} />
+              <CardBody style={{ height: 280 }}>
+                <Bar data={monthlyChartData} options={CHART_OPTS} aria-label="Budget versus spend by site" role="img" />
+              </CardBody>
+            </Card>
+          )}
+
         </>
       )}
 
       {/* ── ANNUAL PLANNER ────────────────────────────────────────────────── */}
       {viewMode === 'annual' && !loadError && (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="finance-kpis grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Kpi loading={loading} label="Annual budget" icon={Wallet} value={formatCurrencyCompact(yearSummary.budget, activeCurrency)} sub={`${yearSummary.sites} site${yearSummary.sites === 1 ? '' : 's'}`} />
             <Kpi loading={loading} label="Actual spend" icon={TrendingUp}
               tone={yearSummary.spend > yearSummary.budget ? 'text-red-400' : 'text-green-400'}

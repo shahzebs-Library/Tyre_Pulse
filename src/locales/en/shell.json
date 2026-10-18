@@ -113,5 +113,61 @@
   "workspaceNames": {"overview": "Home", "fleet": "Fleet", "tyres": "Tyres", "workshop": "Workshop", "inspections": "Inspections", "drivers": "Drivers", "logistics": "Logistics", "inventory": "Stores", "accidents": "Claims", "finance": "Finance", "reports": "Reports", "automation": "Automation", "admin": "Admin"},
   "avatarStyle": "Avatar style",
   "avatarStyles": {"male": "Male", "female": "Female"},
-  "employeeId": "Employee ID"
+  "employeeId": "Employee ID",
+  "helpHub": {
+  "title": "Help & Support",
+  "subtitle": "Find answers, get help and follow your requests.",
+  "reportProblem": "Report a problem",
+  "findTopic": "Find a help topic",
+  "search": "Search guides, modules or common questions",
+  "scopeNote": "Help for the modules you can access.",
+  "sidebarNote": "Your requests and updates, in one place.",
+  "startGuide": "Start with a guide",
+  "commonQuestions": "Common questions",
+  "recent": "Your recent requests",
+  "viewTickets": "View tickets",
+  "viewRequest": "View request",
+  "viewUpdate": "View update",
+  "loading": "Loading your requests...",
+  "partialError": "Some requests could not be loaded. Your list may be incomplete.",
+  "retry": "Retry",
+  "noRequests": "No requests yet",
+  "noRequestsHint": "Your own questions and reports will appear here.",
+  "dateUnavailable": "Date unavailable",
+  "accessTitle": "Need a feature you cannot access?",
+  "accessDescription": "Ask your administrator to review your access. Submitting a request does not grant permissions.",
+  "askQuestion": "Ask a question",
+  "questionHint": "For a question or feature request, send a support ticket. For application errors, use Report a problem.",
+  "triage": "Team ticket triage",
+  "noTeamTickets": "No support tickets have been raised in your organisation yet.",
+  "nav": {
+    "overview": "Help overview",
+    "guides": "Knowledge base",
+    "tickets": "My support requests",
+    "problems": "My reported problems",
+    "access": "Request access",
+    "updates": "Update history",
+    "question": "Ask a question"
+  },
+  "source": {
+    "ticket": "Support question",
+    "problem": "Problem report"
+  },
+  "status": {
+    "open": "Open",
+    "in_progress": "In progress",
+    "resolved": "Resolved",
+    "closed": "Closed"
+  },
+  "guide": {
+    "inspections": "Inspections & checklists",
+    "inspectionsDescription": "Photos, readings, signatures and submitting your work.",
+    "tyres": "Tyre records & serial tracking",
+    "tyresDescription": "Find a tyre and understand its recorded history.",
+    "workshop": "Workshop & work orders",
+    "workshopDescription": "Follow job cards, assigned work and repair progress.",
+    "account": "Account & access",
+    "accountDescription": "Update your profile, reset your password or request access."
+  }
+}
 }

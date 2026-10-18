@@ -22,13 +22,15 @@ export const TICKET_STATUSES = ['open', 'in_progress', 'resolved', 'closed']
  * can opt into "just mine"). Optional status/country filters.
  */
 export async function listTickets({ mine = false, status, country, limit = 200 } = {}) {
+  let uid = null
+  if (mine) {
+    const { data: auth, error } = await supabase.auth.getUser()
+    if (error || !auth?.user?.id) throw new Error('Sign in to view your support requests.')
+    uid = auth.user.id
+  }
   let q = supabase.from('support_tickets').select(COLS)
   if (status) q = q.eq('status', status)
-  if (mine) {
-    const { data: auth } = await supabase.auth.getUser()
-    const uid = auth?.user?.id
-    if (uid) q = q.eq('created_by', uid)
-  }
+  if (uid) q = q.eq('created_by', uid)
   q = applyCountry(q, country)
   return unwrap(await q.order('created_at', { ascending: false }).limit(limit)) || []
 }

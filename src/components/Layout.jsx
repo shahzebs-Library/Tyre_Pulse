@@ -16,6 +16,8 @@ import {
 } from '../lib/navFavorites'
 import TopBar from './shell/TopBar'
 import ModuleRail from './shell/ModuleRail'
+import HelpNavigation from './support/HelpNavigation'
+import '../pages/helpCenter.css'
 import './shell/workspaceShell.css'
 
 // Built-in roles have hardcoded sidebar rules below; any other (non-empty) role
@@ -856,6 +858,7 @@ export default function Layout({ children }) {
   const [moduleQuery, setModuleQuery] = useState('')
   const moduleSearchRef = useRef(null)
   const normalizedModuleQuery = moduleQuery.trim().toLocaleLowerCase()
+  const helpWorkspace = location.pathname === '/help' && (!selectedWorkspace || selectedWorkspace === '__help')
   const [alertCount, setAlertCount]           = useState(0)
   // NOTE: there was a `hoveredItem` state here, set by onMouseEnter/onMouseLeave
   // on every nav link and READ BY NOTHING. Moving the mouse across the sidebar
@@ -889,7 +892,7 @@ export default function Layout({ children }) {
     const activeGroup = effectiveGroups.find(group => group.items.some(item =>
       item.to === location.pathname || (item.to !== '/' && location.pathname.startsWith(`${item.to}/`)),
     ))
-    setSelectedWorkspace(activeGroup ? (activeGroup.key || activeGroup.label) : null)
+    setSelectedWorkspace(location.pathname === '/help' ? '__help' : activeGroup ? (activeGroup.key || activeGroup.label) : null)
     if (activeGroup) setCollapsedGroups(previous => {
       const next = new Set(previous)
       next.delete(activeGroup.key || activeGroup.label)
@@ -1165,7 +1168,8 @@ export default function Layout({ children }) {
       </AnimatePresence>
 
       {!isMobile && <ModuleRail groups={railGroups} selected={selectedGroup ? selectedWorkspace : null}
-        appIcon={appIcon} hasCustomIcon={hasCustomIcon}
+        appIcon={appIcon} hasCustomIcon={hasCustomIcon} helpActive={helpWorkspace}
+        onHelp={() => { setSelectedWorkspace('__help'); setSidebarOpen(true) }}
         onSelect={id => { setSelectedWorkspace(id); setModuleQuery(''); setSidebarOpen(true) }} />}
 
       {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
@@ -1198,7 +1202,7 @@ export default function Layout({ children }) {
         >
           <div className="tp-workspace-heading">
             {isMobile && <BrandIcon src={appIcon} custom={hasCustomIcon} size={24} />}
-            <span>{selectedGroup ? groupHeadingFor(t, selectedGroup) : tOr(t, 'shell.allModules', 'All modules')}</span>
+            <span>{helpWorkspace ? t('shell.helpHub.title') : selectedGroup ? groupHeadingFor(t, selectedGroup) : tOr(t, 'shell.allModules', 'All modules')}</span>
           </div>
 
           {isMobile && (
@@ -1221,7 +1225,7 @@ export default function Layout({ children }) {
           )}
         </div>
 
-        <div className="tp-module-search-wrap">
+        {!helpWorkspace && <div className="tp-module-search-wrap">
           {sidebarOpen ? (
             <div className="tp-module-search">
               <Search size={15} aria-hidden="true" />
@@ -1251,7 +1255,7 @@ export default function Layout({ children }) {
               <Search size={17} />
             </button>
           )}
-        </div>
+        </div>}
 
         {/* ── Nav ────────────────────────────────────────────────────────────── */}
         <nav
@@ -1259,6 +1263,7 @@ export default function Layout({ children }) {
           className="flex-1 overflow-y-auto py-1.5 px-2"
           style={{ scrollbarWidth: 'thin' }}
         >
+          {helpWorkspace ? <HelpNavigation /> : <>
           {/* ── Favourites ───────────────────────────────────────────────────
               Pinned at the top, above the groups, and only when the user has at
               least one favourite they can actually open. Collapsed (icon-only)
@@ -1480,7 +1485,9 @@ export default function Layout({ children }) {
               super admins. The console is reached ONLY by opening /console
               directly, in its own tab, behind its own sign-in (see App.jsx
               ConsoleSurfaceGate). Do not re-add a console link to this nav. */}
+          </>}
         </nav>
+        {!helpWorkspace && (
         <div className="tp-sidebar-help">
           <NavLink to="/help" title={tOr(t, 'shell.helpCenter', 'Help Center')}
             aria-label={tOr(t, 'shell.helpCenter', 'Help Center')}>
@@ -1489,6 +1496,7 @@ export default function Layout({ children }) {
             {sidebarOpen && <ChevronRight size={14} className="ms-auto rtl-flip" aria-hidden="true" />}
           </NavLink>
         </div>
+        )}
 
 
         {/* The user footer (avatar, role, app version, theme, notifications,

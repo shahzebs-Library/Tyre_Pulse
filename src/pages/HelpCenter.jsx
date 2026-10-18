@@ -15,8 +15,15 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   LifeBuoy, Search, ChevronDown, Send, Inbox, ShieldQuestion, Bug, Lightbulb,
   Database, UserCog, HelpCircle, CheckCircle2, Clock, Loader2, RefreshCw,
-  AlertTriangle, MessageSquare, X, Download, FileText,
+  AlertTriangle, MessageSquare, X, Download, FileText, Plus,
 } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { useLanguage } from '../contexts/LanguageContext'
+import { useWorkspaceNavigation } from '../contexts/WorkspaceNavigationContext'
+import ReportProblemDialog from '../components/support/ReportProblemDialog'
+import HelpOverview from '../components/support/HelpOverview'
+import { scopedHelp } from '../lib/helpHub'
+import './helpCenter.css'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import {
   ticketKpis, filterTickets, sortTickets, ticketExportRows, TICKET_EXPORT_COLUMNS,
@@ -28,7 +35,7 @@ import {
   listTickets, createTicket, respondToTicket, updateTicket,
   TICKET_CATEGORIES, TICKET_SEVERITIES,
 } from '../lib/api/support'
-import { FAQ_CATEGORIES, searchFaqs, groupFaqsByCategory, visibleFaqsForRole } from '../lib/help/faqs'
+import { searchFaqs, groupFaqsByCategory } from '../lib/help/faqs'
 import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation } from '../lib/api/_client'
 
@@ -83,37 +90,20 @@ function FaqItem({ faq }) {
   )
 }
 
-function FaqPanel({ onAskInstead, role }) {
-  const [query, setQuery] = useState('')
-  const [activeCat, setActiveCat] = useState('All')
-  // Only help for areas this role can actually use.
-  const scoped = useMemo(() => visibleFaqsForRole(role), [role])
+function FaqPanel({ onAskInstead, scoped, query, activeCat, setActiveCat }) {
   const categories = useMemo(() => {
     const present = new Set(scoped.map((f) => f.category))
-    return FAQ_CATEGORIES.filter((c) => present.has(c))
+    return [...present]
   }, [scoped])
   const results = useMemo(() => {
     let list = searchFaqs(query, scoped)
-    if (activeCat !== 'All') list = list.filter((f) => f.category === activeCat)
+    if (activeCat !== 'All') list = list.filter((f) => activeCat.split('|').includes(f.category))
     return groupFaqsByCategory(list)
   }, [query, activeCat, scoped])
   const total = results.reduce((n, [, list]) => n + list.length, 0)
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-          <input
-            className="input pl-9 w-full"
-            placeholder="Search help articles…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            aria-label="Search FAQs"
-          />
-        </div>
-      </div>
-
       <div className="flex flex-wrap gap-2">
         {['All', ...categories].map((c) => (
           <button
@@ -157,7 +147,7 @@ function FaqPanel({ onAskInstead, role }) {
 }
 
 // ─── Report-an-issue form ─────────────────────────────────────────────────────
-function ReportForm({ onSubmitted }) {
+function ReportForm({ onSubmitted, onViewTickets }) {
   const { profile } = useAuth()
   const { activeCountry } = useSettings() || {}
   const [form, setForm] = useState({ subject: '', category: 'question', severity: 'medium', message: '' })
@@ -203,8 +193,9 @@ function ReportForm({ onSubmitted }) {
       <div className="card text-center py-10 space-y-3">
         <CheckCircle2 size={32} className="mx-auto text-green-400" />
         <p className="text-[var(--text-primary)] font-semibold">Thanks, your issue has been sent.</p>
-        <p className="text-sm text-[var(--text-muted)]">Your administrator has been notified. Track progress under My tickets.</p>
-        <button className="btn-secondary text-sm" onClick={() => setDone(false)}>Report another</button>
+        <p className="text-sm text-[var(--text-muted)]">Your support request was saved. Follow its status and support response under My support requests.</p>
+        <button className="btn-secondary text-sm" onClick={() => setDone(false)}>Ask another question</button>
+        <button type="button" className="btn-primary text-sm" onClick={onViewTickets}>My support requests</button>
       </div>
     )
   }
@@ -212,10 +203,10 @@ function ReportForm({ onSubmitted }) {
   return (
     <form onSubmit={submit} className="card space-y-4 max-w-2xl">
       <div>
-        <label className="label">Subject</label>
+        <label className="label" htmlFor="help-subject">Subject</label>
         <input
           className="input w-full"
-          placeholder="Briefly, what’s the problem?"
+          id="help-subject" placeholder="Briefly, what is your question?"
           value={form.subject}
           maxLength={200}
           onChange={(e) => set('subject', e.target.value)}
@@ -223,14 +214,14 @@ function ReportForm({ onSubmitted }) {
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="label">Category</label>
-          <select className="input w-full" value={form.category} onChange={(e) => set('category', e.target.value)}>
+          <label className="label" htmlFor="help-category">Category</label>
+          <select id="help-category" className="input w-full" value={form.category} onChange={(e) => set('category', e.target.value)}>
             {TICKET_CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_META[c]?.label || c}</option>)}
           </select>
         </div>
         <div>
-          <label className="label">Severity</label>
-          <select className="input w-full" value={form.severity} onChange={(e) => set('severity', e.target.value)}>
+          <label className="label" htmlFor="help-severity">Severity</label>
+          <select id="help-severity" className="input w-full" value={form.severity} onChange={(e) => set('severity', e.target.value)}>
             {TICKET_SEVERITIES.map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
           </select>
         </div>
@@ -240,7 +231,7 @@ function ReportForm({ onSubmitted }) {
         <textarea
           className="input w-full min-h-[140px] resize-y"
           placeholder="What happened, what did you expect, and how can we reproduce it? Include the page/asset if relevant."
-          value={form.message}
+          id="help-message" value={form.message}
           maxLength={8000}
           onChange={(e) => set('message', e.target.value)}
         />
@@ -372,7 +363,7 @@ function TicketKpi({ label, value, sub }) {
   )
 }
 
-function TicketList({ triage, reloadKey, emptyHint }) {
+function TicketList({ triage, reloadKey, emptyHint, initialSelectedId = null }) {
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -381,7 +372,7 @@ function TicketList({ triage, reloadKey, emptyHint }) {
   const [search, setSearch] = useState('')
   const [awaiting, setAwaiting] = useState(false)
   const [view, setView] = useState('cards')
-  const [selectedId, setSelectedId] = useState(null)
+  const [selectedId, setSelectedId] = useState(initialSelectedId)
 
   const load = useCallback(async () => {
     setError('')
@@ -610,7 +601,7 @@ function TicketList({ triage, reloadKey, emptyHint }) {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((t) => <TicketCard key={t.id} ticket={t} triage={triage} onChanged={patchRow} />)}
+          {filtered.map((t) => <TicketCard key={t.id} ticket={t} triage={triage} onChanged={patchRow} defaultExpanded={String(t.id) === initialSelectedId} />)}
         </div>
       )}
     </div>
@@ -619,63 +610,41 @@ function TicketList({ triage, reloadKey, emptyHint }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function HelpCenter() {
-  const { profile } = useAuth()
-  const isTriage = TRIAGE_ROLES.includes(profile?.role)
-  const [tab, setTab] = useState('faqs')
+  const auth = useAuth() || {}
+  const { t } = useLanguage()
+  const navigation = useWorkspaceNavigation()
+  const [params, setParams] = useSearchParams()
+  const isTriage = TRIAGE_ROLES.includes(auth.profile?.role)
+  const requestedSection = params.get('section') || 'overview'
+  const tab = ['overview', 'guides', 'tickets', 'question', ...(isTriage ? ['triage'] : [])].includes(requestedSection) ? requestedSection : 'overview'
+  const query = params.get('q') || ''
+  const category = params.get('category') || 'All'
+  const paths = useMemo(() => navigation.map(item => item.to), [navigation])
+  const faqs = useMemo(() => scopedHelp(paths), [paths])
+  const [reporting, setReporting] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
-
-  const tabs = useMemo(() => {
-    const base = [
-      { key: 'faqs', label: 'FAQs', icon: HelpCircle },
-      { key: 'report', label: 'Report an issue', icon: Send },
-      { key: 'mine', label: 'My tickets', icon: Inbox },
-    ]
-    if (isTriage) base.push({ key: 'triage', label: 'Triage', icon: ShieldQuestion })
-    return base
-  }, [isTriage])
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-start gap-3">
-        <div className="w-11 h-11 rounded-xl bg-[var(--brand-subtle)] flex items-center justify-center shrink-0">
-          <LifeBuoy size={22} className="text-[var(--brand-bright)]" />
-        </div>
-        <div>
-          <h1 className="text-xl font-bold text-[var(--text-primary)]">Help &amp; Support</h1>
-          <p className="text-sm text-[var(--text-muted)] mt-0.5">
-            Search the knowledge base, report a problem, or track your tickets.
-          </p>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-1 border-b border-[var(--input-border)]">
-        {tabs.map((t) => {
-          const Icon = t.icon
-          return (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setTab(t.key)}
-              className={`px-4 py-2.5 text-sm font-medium inline-flex items-center gap-2 border-b-2 -mb-px transition-colors ${
-                tab === t.key
-                  ? 'border-[var(--brand-bright)] text-[var(--brand-bright)]'
-                  : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              <Icon size={15} /> {t.label}
-            </button>
-          )
-        })}
-      </div>
-
-      {tab === 'faqs' && <FaqPanel role={profile?.role} onAskInstead={() => setTab('report')} />}
-      {tab === 'report' && <ReportForm onSubmitted={() => setReloadKey((k) => k + 1)} />}
-      {tab === 'mine' && (
-        <TicketList triage={false} reloadKey={reloadKey} emptyHint="Issues you report will appear here so you can track their status." />
-      )}
-      {tab === 'triage' && isTriage && (
-        <TicketList triage reloadKey={reloadKey} emptyHint="No support tickets have been raised in your organisation yet." />
-      )}
+  function go(section, extras = {}) {
+    const next = new URLSearchParams({ section, ...extras })
+    setParams(next)
+  }
+  const common = faqs.filter(faq => ['gs-navigation', 'in-sync', 'ro-roles'].includes(faq.id))
+  return <div className="tp-help-hub">
+    <div className="tp-help-heading"><div><h1>{t('shell.helpHub.title')}</h1><p>{t('shell.helpHub.subtitle')}</p></div>
+      <button type="button" className="btn-primary" onClick={() => setReporting(true)}><AlertTriangle size={17} /> {t('shell.helpHub.reportProblem')}</button>
     </div>
-  )
+    <div className="tp-help-search-region"><label><Search size={20} aria-hidden="true" /><input type="search" aria-label={t('shell.helpHub.search')} placeholder={t('shell.helpHub.search')}
+      value={query} onChange={event => { const next = new URLSearchParams(params); next.set('section', 'guides'); next.set('q', event.target.value); next.delete('category'); setParams(next, { replace: true }) }} /></label><p>{t('shell.helpHub.scopeNote')}</p></div>
+    <div className="tp-help-tabs" role="group" aria-label={t('shell.helpHub.title')}>
+      {['overview', 'guides', 'tickets', 'question'].map(section => <button key={section} type="button" aria-pressed={tab === section} onClick={() => go(section)}>{t(`shell.helpHub.nav.${section}`)}</button>)}
+      {isTriage && <button type="button" aria-pressed={tab === 'triage'} onClick={() => go('triage')}><ShieldQuestion size={14} /> {t('shell.helpHub.triage')}</button>}
+    </div>
+    {tab === 'overview' && <HelpOverview refreshKey={reloadKey} paths={paths} onGuide={value => go('guides', { category: value })} onTickets={id => go('tickets', id ? { ticket: id } : {})}
+      renderFaq={() => common.map(faq => <FaqItem key={faq.id} faq={faq} />)} />}
+    {tab === 'guides' && <section className="tp-help-section"><h2>{t('shell.helpHub.nav.guides')}</h2><FaqPanel scoped={faqs} query={query} activeCat={category} setActiveCat={value => go('guides', { q: query, category: value })} onAskInstead={() => go('question')} /></section>}
+    {tab === 'tickets' && <section className="tp-help-section"><div className="tp-help-section-title"><h2>{t('shell.helpHub.nav.tickets')}</h2><button type="button" onClick={() => go('question')}><Plus size={14} /> {t('shell.helpHub.askQuestion')}</button></div><TicketList key={params.get('ticket') || 'mine'} triage={false} reloadKey={reloadKey} initialSelectedId={params.get('ticket')} emptyHint={t('shell.helpHub.noRequestsHint')} /></section>}
+    {tab === 'question' && <section className="tp-help-section tp-help-question"><h2>{t('shell.helpHub.askQuestion')}</h2><p>{t('shell.helpHub.questionHint')}</p><ReportForm onSubmitted={() => setReloadKey(value => value + 1)} onViewTickets={() => go('tickets')} /></section>}
+    {tab === 'triage' && isTriage && <section className="tp-help-section"><h2>{t('shell.helpHub.triage')}</h2><TicketList triage reloadKey={reloadKey} emptyHint={t('shell.helpHub.noTeamTickets')} /></section>}
+    <div className="tp-help-bottom-links"><Link to="/my-problems">{t('shell.helpHub.nav.problems')}</Link><Link to="/request-access">{t('shell.helpHub.nav.access')}</Link><Link to="/settings?tab=about">{t('shell.helpHub.nav.updates')}</Link></div>
+    <ReportProblemDialog open={reporting} onClose={() => { setReporting(false); setReloadKey(value => value + 1) }} />
+  </div>
 }

@@ -1,5 +1,10 @@
 [
   {
+    "id": "2026.10.18.3",
+    "date": "2026-10-18",
+    "changes": [{"modules": [], "text": {"en": "Help & Support now brings module-aware guides, personal support tickets, problem reports, access requests and update history into a clearer workspace. Recent requests show real personal records, with loading, retry and partial-error states. Profile details remain top-right with photo, male/female avatar and initials options."}}]
+  },
+  {
     "id": "2026.10.18.2",
     "date": "2026-10-18",
     "changes": [{

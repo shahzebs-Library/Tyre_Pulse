@@ -20,7 +20,7 @@ import {
   ArcElement, Title, Tooltip, Legend, Filler,
 } from 'chart.js'
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
-import PageHeader from '../components/ui/PageHeader'
+import PageHeader from '../components/budgets/FinancePageHeader'
 import BudgetTabs from '../components/budgets/BudgetTabs'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useReportMeta } from '../hooks/useReportMeta'
@@ -62,7 +62,7 @@ const CHART_BASE = {
   plugins: {
     legend: { labels: { color: '#9ca3af', font: { size: 11 } } },
     tooltip: {
-      backgroundColor: 'var(--panel-2)',
+      backgroundColor: '#17231d',
       titleColor: '#f3f4f6',
       bodyColor: '#9ca3af',
       borderColor: 'rgba(59,130,246,0.3)',
@@ -70,8 +70,8 @@ const CHART_BASE = {
     },
   },
   scales: {
-    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
-    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
+    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'rgba(148,163,184,0.16)' } },
+    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'rgba(148,163,184,0.16)' } },
   },
 }
 
@@ -270,8 +270,8 @@ export default function BudgetPlanner() {
           type: 'bar',
           label: t('budgetplanner.chart.budget'),
           data: monthlyBudgets,
-          backgroundColor: 'rgba(59,130,246,0.4)',
-          borderColor: '#3b82f6',
+          backgroundColor: 'rgba(148,163,184,0.28)',
+          borderColor: '#94a3b8',
           borderWidth: 1,
           yAxisID: 'y',
         },
@@ -755,14 +755,19 @@ export default function BudgetPlanner() {
   }, [activeCurrency, t, isAdmin, editingSite, editValue, saving])
 
   if (loading || budgetsLoading) return (
-    <div className="flex items-center justify-center h-96">
+    <div className="finance-workspace space-y-4">
+      <BudgetTabs />
+      <div className="flex items-center justify-center h-96">
       <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
       <span className="ml-3 text-[var(--text-muted)]">{t('budgetplanner.loading')}</span>
+      </div>
     </div>
   )
 
   if (error || budgetsError) return (
-    <div className="flex items-center justify-center h-96">
+    <div className="finance-workspace space-y-4">
+      <BudgetTabs />
+      <div className="flex items-center justify-center h-96">
       <div role="alert" className="bg-red-900/30 border border-red-800 rounded-xl p-6 text-center">
         <AlertTriangle className="w-8 h-8 text-red-400 mx-auto mb-2" />
         <p className="text-red-300 font-medium">{t('budgetplanner.error.title')}</p>
@@ -773,17 +778,19 @@ export default function BudgetPlanner() {
           className="mt-4 px-4 min-h-[44px] bg-red-800 hover:bg-red-700 text-white rounded-lg text-sm"
         >{t('budgetplanner.error.retry')}</button>
       </div>
+      </div>
     </div>
   )
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="finance-workspace space-y-4 pb-10">
 
       <BudgetTabs />
       {/* ── Header ── */}
       <PageHeader
         title={t('budgetplanner.title')}
         subtitle={t('budgetplanner.subtitle')}
+        scope={`Tyre-spend planning · ${selectedYear} · ${activeCountry || 'All countries'} · ${activeCurrency}`}
         icon={DollarSign}
         actions={<>
           <div className="flex items-center gap-1 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-1.5">
@@ -821,22 +828,6 @@ export default function BudgetPlanner() {
         </>}
       />
 
-      {/* ── Status Bar ── */}
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.05 }}
-        className="card px-5 py-3 flex flex-wrap items-center gap-4 text-sm">
-        <span className="text-[var(--text-muted)] font-medium">{t('budgetplanner.statusBar.fy', { year: selectedYear })}</span>
-        <span className="text-[var(--text-dim)]">|</span>
-        <span className="text-[var(--text-muted)]">{t('budgetplanner.statusBar.budgetSet')} <span className="text-blue-400 font-semibold">{fmt(annualBudget, activeCurrency)}</span></span>
-        <span className="text-[var(--text-dim)]">|</span>
-        <span className="text-[var(--text-muted)]">{t('budgetplanner.statusBar.actualYtd')} <span className="text-[var(--text-primary)] font-semibold">{fmt(ytdActual, activeCurrency)}</span></span>
-        <span className="text-[var(--text-dim)]">|</span>
-        <span className="text-[var(--text-muted)]">{t('budgetplanner.statusBar.variance')} <span className={`font-semibold ${varColor(variance)}`}>{fmt(variance, activeCurrency)}</span></span>
-        <span className="text-[var(--text-dim)]">|</span>
-        <span className="text-[var(--text-muted)]">{t('budgetplanner.statusBar.pctUsed')} <span className={`font-semibold ${pctUsed == null ? 'text-[var(--text-secondary)]' : pctUsed > 100 ? 'text-red-400' : pctUsed > 90 ? 'text-amber-400' : 'text-green-400'}`}>{fmtPct(pctUsed)}</span></span>
-        <span className="text-[var(--text-dim)]">|</span>
-        <span className="text-[var(--text-muted)]">{t('budgetplanner.statusBar.projectedYe')} <span className={`font-semibold ${!hasBudget || projectedYearEnd == null ? 'text-[var(--text-secondary)]' : projectedYearEnd > annualBudget ? 'text-red-400' : 'text-green-400'}`}>{fmt(projectedYearEnd, activeCurrency)}</span></span>
-      </motion.div>
-
       {/* ── Save Error Banner ── */}
       {saveError && (
         <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
@@ -870,7 +861,7 @@ export default function BudgetPlanner() {
       )}
 
       {/* ── KPI Cards ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="finance-kpis grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
         {[
           {
             label: t('budgetplanner.kpi.annualBudget'),
@@ -911,40 +902,41 @@ export default function BudgetPlanner() {
             red: 'text-red-400 bg-red-900/20 border-red-900',
             amber: 'text-amber-400 bg-amber-900/20 border-amber-900',
           }
-          const [textCls, bgCls, borderCls] = (colorMap[kpi.color] || colorMap.blue).split(' ')
+          const [textCls] = (colorMap[kpi.color] || colorMap.blue).split(' ')
           return (
             <motion.div
               key={kpi.label}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
-              className={`bg-[var(--surface-1)] border ${borderCls} rounded-xl p-4 relative`}
+              className="finance-kpi"
             >
-              <div className={`inline-flex p-2 rounded-lg ${bgCls} mb-3`}>
+              <div className="finance-kpi-icon">
                 <kpi.icon className={`w-5 h-5 ${textCls}`} />
               </div>
-              <p className="text-[var(--text-muted)] text-xs mb-1">{kpi.label}</p>
+              <p className="finance-kpi-label">{kpi.label}</p>
               {kpi.editing ? (
                 <div className="flex items-center gap-1">
                   <input
                     type="number"
+                    aria-label="Annual budget amount"
                     value={annualEditValue}
                     onChange={e => setAnnualEditValue(e.target.value)}
                     className="w-full bg-[var(--input-bg)] border border-blue-600 text-[var(--text-primary)] rounded px-2 py-1 text-sm focus:outline-none"
                     autoFocus
                     onKeyDown={e => { if (e.key === 'Enter') saveAnnualBudget(); if (e.key === 'Escape') setEditingAnnual(false) }}
                   />
-                  <button onClick={saveAnnualBudget} disabled={saving} className="p-1 text-green-400 hover:text-green-300 disabled:opacity-50">
+                  <button onClick={saveAnnualBudget} aria-label="Save annual budget" disabled={saving} className="p-1 text-green-400 hover:text-green-300 disabled:opacity-50">
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   </button>
-                  <button onClick={() => setEditingAnnual(false)} className="p-1 text-[var(--text-muted)] hover:text-[var(--text-secondary)]"><X className="w-4 h-4" /></button>
+                  <button onClick={() => setEditingAnnual(false)} aria-label="Cancel annual budget edit" className="p-1 text-[var(--text-muted)] hover:text-[var(--text-secondary)]"><X className="w-4 h-4" /></button>
                 </div>
               ) : (
-                <p className={`text-xl font-bold ${textCls}`}>{kpi.value}</p>
+                <p className={`finance-kpi-value ${textCls}`}>{kpi.value}</p>
               )}
               {kpi.sub && <p className="text-[var(--text-muted)] text-xs mt-1">{kpi.sub}</p>}
               {kpi.editable && !kpi.editing && (
-                <button onClick={kpi.onEdit} className="absolute top-3 right-3 p-1 text-[var(--text-dim)] hover:text-[var(--text-secondary)] transition-colors">
+                <button onClick={kpi.onEdit} aria-label={`Edit ${kpi.label}`} className="absolute top-3 end-3 p-2 text-[var(--text-dim)] hover:text-[var(--text-secondary)] transition-colors">
                   <Edit2 className="w-3.5 h-3.5" />
                 </button>
               )}
@@ -1017,7 +1009,7 @@ export default function BudgetPlanner() {
 
       {/* ── Site Budget Allocation ── */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
-        className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+        className="finance-panel border rounded-xl overflow-hidden">
         <div className="p-5 border-b border-[var(--input-border)] flex items-center justify-between">
           <h2 className="text-[var(--text-primary)] font-semibold flex items-center gap-2">
             <Target className="w-5 h-5 text-green-400" />
@@ -1261,7 +1253,7 @@ export default function BudgetPlanner() {
         </motion.div>
 
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }}
-          className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+          className="finance-panel border rounded-xl overflow-hidden">
           <div className="p-5 border-b border-[var(--input-border)]">
             <h2 className="text-[var(--text-primary)] font-semibold flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-amber-400" />

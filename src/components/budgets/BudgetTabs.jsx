@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { DollarSign, CalendarClock, Layers } from 'lucide-react'
+import './financeWorkspace.css'
 
 /**
  * BudgetTabs — shared sub-navigation for the consolidated "Budgets & Cost"
@@ -9,30 +10,27 @@ import { DollarSign, CalendarClock, Layers } from 'lucide-react'
  * items. Each route still exists independently; this only unifies the UX.
  */
 const TABS = [
-  { to: '/budgets',        label: 'Budgets',        icon: DollarSign },
-  { to: '/budget-planner', label: 'Budget Planner', icon: CalendarClock },
-  { to: '/cost-center',    label: 'Cost Center',    icon: Layers },
+  { to: '/cost-center', label: 'Cost Center', description: 'Actual costs & fleet efficiency', icon: Layers },
+  { to: '/budget-planner', label: 'Budget Planner', description: 'Annual plans & spending scenarios', icon: CalendarClock },
+  { to: '/budgets', label: 'Budgets', description: 'Site allocations & utilisation', icon: DollarSign },
 ]
 
 export default function BudgetTabs() {
   return (
-    <div className="flex flex-wrap gap-2 border-b border-[var(--border-bright)] pb-3">
-      {TABS.map(({ to, label, icon: Icon }) => (
+    <nav className="finance-nav" aria-label="Budgets and cost pages">
+      {TABS.map(({ to, label, description, icon: Icon }) => (
         <NavLink
           key={to}
           to={to}
           end
           className={({ isActive }) =>
-            `inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors ${
-              isActive
-                ? 'bg-emerald-600 text-white'
-                : 'bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`
+            `finance-nav-link${isActive ? ' is-active' : ''}`
           }
         >
-          <Icon size={15} /> {label}
+          <span className="finance-nav-icon"><Icon size={20} aria-hidden="true" /></span>
+          <span><strong>{label}</strong><small>{description}</small></span>
         </NavLink>
       ))}
-    </div>
+    </nav>
   )
 }

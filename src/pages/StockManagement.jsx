@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { stock } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -12,6 +12,9 @@ import StatTile from '../components/ui/StatTile'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import StockQuickEntry from '../components/stock/StockQuickEntry'
+import { transferStockEntry } from '../lib/api/stockQuickEntry'
+import { stockItem } from '../lib/stockQuickEntry'
 import Card, { CardBody, CardHeader } from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
@@ -122,12 +125,14 @@ function SortedPagedTable({ columns, rows, defaultSort, getRowId, emptyMessage, 
 
 export default function StockManagement() {
   const { t } = useLanguage()
-  const { profile } = useAuth()
+  const { profile, hasCapability } = useAuth()
   const { appSettings, activeCountry } = useSettings()
   const { branding } = useTenant()
   const [records, setRecords]       = useState([])
   const [loading, setLoading]       = useState(true)
   const [showForm, setShowForm]     = useState(false)
+  const [entryOpen, setEntryOpen] = useState(false)
+  const [entryMessage, setEntryMessage] = useState('')
   const [form, setForm]             = useState(EMPTY_FORM)
   const [editId, setEditId]         = useState(null)
   const [saving, setSaving]         = useState(false)
@@ -158,7 +163,7 @@ export default function StockManagement() {
   const [tlError, setTlError]           = useState('')
 
   // Transfer tab state
-  const [transferForm, setTransferForm] = useState({ fromSite: '', toSite: '', qty: 1, notes: '' })
+  const [transferForm, setTransferForm] = useState({ fromSite: '', toSite: '', fromId: '', toId: '', qty: 1, notes: '' })
   const [transferring, setTransferring] = useState(false)
   const [transferMsg, setTransferMsg]   = useState('')
   const [transferError, setTransferError] = useState('')
@@ -175,25 +180,32 @@ export default function StockManagement() {
   const [siteFilter, setSiteFilter]   = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
 
+  const latestStock = useLatestRequest()
   const load = useCallback(async () => {
+    const stale = latestStock.begin()
     setLoading(true)
     setLoadError('')
     try {
       const stockRecords = await stock.listStockRecords({ country: activeCountry }) ?? []
+      if (stale()) return
       setRecords(stockRecords)
       // Velocity from tyre issues over the last 3 months. Best-effort: a failed
       // velocity read leaves cover as N/A instead of failing the stock register.
       let velData = []
       try { velData = await stock.listTyreIssuesSince(velocitySince(new Date(), 3)) ?? [] } catch { velData = null }
-      setVelocityMap(velData ? buildVelocityMap(stockRecords, velData, 3) : {})
+      if (stale()) return
+      const countsBySite = stockRecords.reduce((out, row) => { out[row.site] = (out[row.site] || 0) + 1; return out }, {})
+      const legacyAggregates = stockRecords.filter(row => !row.custom_data?.stock_item && countsBySite[row.site] === 1)
+      setVelocityMap(velData ? buildVelocityMap(legacyAggregates, velData, 3) : {})
     } catch (err) {
+      if (stale()) return
       // A failed read must never render as an empty register.
       setRecords([])
       setLoadError(toUserMessage(err, t('stock.errors.loadFailed')))
     } finally {
-      setLoading(false)
+      if (!stale()) setLoading(false)
     }
-  }, [activeCountry, t])
+  }, [activeCountry, t, latestStock])
 
   useEffect(() => { load() }, [load])
 
@@ -205,7 +217,7 @@ export default function StockManagement() {
   const closeHistory = useCallback(() => setHistoryFor(null), [])
   const closeForm = useCallback(() => setShowForm(false), [])
 
-  function startAdd() { setForm(EMPTY_FORM); setEditId(null); setShowForm(true); setError('') }
+  function startAdd() { setEntryOpen(true); setEntryMessage('') }
   function startEdit(r) {
     setForm({
       site: r.site, description: r.description ?? '',
@@ -238,14 +250,15 @@ export default function StockManagement() {
     let stockId = editId
     try {
       if (editId) {
-        await stock.updateStockRecord(editId, payload)
+        const { stock_qty: _qty, stock_status: _status, ...details } = payload
+        await stock.updateStockRecord(editId, details)
       } else {
         const ins = await stock.insertStockRecord(payload)
         stockId = ins.id
       }
     } catch (err) { setError(toUserMessage(err)); setSaving(false); return }
 
-    const qtyChange = editId ? newQty - prevQty : newQty
+    const qtyChange = editId ? 0 : newQty
     if (qtyChange !== 0 || !editId) {
       // Best-effort audit movement - original ignored insert errors here.
       try {
@@ -309,6 +322,12 @@ export default function StockManagement() {
   }
 
   // ── Inter-site Transfer ─────────────────────────────────────────────────────
+  const transferRecord = side => {
+    const selected = transferForm[side + 'Id']
+    const choices = records.filter(r => r.site === transferForm[side + 'Site'])
+    return selected ? choices.find(r => String(r.id) === selected) : choices.length === 1 ? choices[0] : null
+  }
+  const transferRequest = useRef(null)
   async function submitTransfer(e) {
     e.preventDefault()
     setTransferError('')
@@ -324,8 +343,8 @@ export default function StockManagement() {
     if (fromSite === toSite)  { setTransferError(t('stock.transfer.errors.sameSite')); return }
     if (transferQty < 1)      { setTransferError(t('stock.transfer.errors.minQty')); return }
 
-    const fromRecord = records.find(r => r.site === fromSite)
-    const toRecord   = records.find(r => r.site === toSite)
+    const fromRecord = transferRecord('from')
+    const toRecord   = transferRecord('to')
 
     if (!fromRecord) { setTransferError(t('stock.transfer.errors.noRecordForSite', { site: fromSite })); return }
     if (!toRecord)   { setTransferError(t('stock.transfer.errors.noRecordForSite', { site: toSite })); return }
@@ -336,22 +355,15 @@ export default function StockManagement() {
 
     setTransferring(true)
 
-    const reasonOut = `Transfer to ${toSite}${notes ? ': ' + notes : ''}`
-    const reasonIn  = `Transfer from ${fromSite}${notes ? ': ' + notes : ''}`
-
-    // Two atomic ledger legs. Each RPC row-locks its stock row and negative-guards.
+    const transferPayload = JSON.stringify([fromRecord.id, toRecord.id, transferQty, notes, fromRecord.stock_qty, toRecord.stock_qty])
+    if (transferRequest.current?.payload !== transferPayload) transferRequest.current = { payload: transferPayload, id: crypto.randomUUID() }
     try {
-      await stock.postStockMovement({ stockId: fromRecord.id, type: 'transfer_out', qty: transferQty, reason: reasonOut, reference: notes })
-    } catch (outErr) { setTransferError(toUserMessage(outErr)); setTransferring(false); return }
-    try {
-      await stock.postStockMovement({ stockId: toRecord.id, type: 'transfer_in', qty: transferQty, reason: reasonIn, reference: notes })
-    } catch (inErr) {
-      setTransferError(t('stock.transfer.errors.inboundFailed', { message: toUserMessage(inErr) }))
-      setTransferring(false); await load(); return
-    }
+      await transferStockEntry({ requestId: transferRequest.current.id, from: fromRecord, to: toRecord, quantity: transferQty, notes })
+    } catch (err) { setTransferError(toUserMessage(err)); setTransferring(false); return }
+    transferRequest.current = null
 
     setTransferMsg(t('stock.transfer.successMsg', { qty: transferQty, fromSite, toSite }))
-    setTransferForm({ fromSite: '', toSite: '', qty: 1, notes: '' })
+    setTransferForm({ fromSite: '', toSite: '', fromId: '', toId: '', qty: 1, notes: '' })
     setTransferring(false)
     await load()
   }
@@ -490,7 +502,7 @@ export default function StockManagement() {
     { id: 'site', header: t('stock.table.columns.site'), sort: r => r.site, size: 130, firstDir: 'asc',
       cell: r => <span className="font-medium text-[var(--text-primary)]">{r.site || 'N/A'}</span> },
     { id: 'description', header: t('stock.table.columns.description'), sort: r => r.description, size: 200, firstDir: 'asc',
-      cell: r => <span className="text-[var(--text-secondary)]">{r.description || 'N/A'}</span> },
+      cell: r => <div><span className="font-medium text-[var(--text-primary)]">{stockItem(r).code || r.description || 'N/A'}</span>{stockItem(r).code && <p className="text-xs text-[var(--text-muted)] mt-1">{r.description}</p>}{stockItem(r).unit && <p className="text-xs text-[var(--text-muted)] mt-1">{stockItem(r).condition} · {stockItem(r).unit}{stockItem(r).bin ? ` · ${stockItem(r).bin}` : ''}</p>}</div> },
     { id: 'stock_qty', header: t('stock.table.columns.stock'), sort: r => r.stock_qty, size: 90, align: 'right',
       cell: r => <span className="tabular-nums font-semibold text-[var(--text-primary)]">{r.stock_qty ?? 'N/A'}</span> },
     { id: 'min_level', header: t('stock.table.columns.min'), sort: r => r.min_level, size: 80, align: 'right',
@@ -586,9 +598,17 @@ export default function StockManagement() {
       cell: m => <span className="text-[var(--text-muted)]">{m.reference_no || 'None'}</span> },
   ], [t])
 
+  if (entryOpen) return <StockQuickEntry
+    key={`${activeCountry}|${profile?.organisation_id}|${profile?.id}`}
+    records={records} initialSite={siteFilter === 'all' ? '' : siteFilter}
+    onClose={() => setEntryOpen(false)}
+    onSaved={result => { setEntryOpen(false); setEntryMessage(`${result.items.length} stock item${result.items.length === 1 ? '' : 's'} saved with movement history.`); load() }}
+  />
+
   return (
-    <div className="space-y-4">
+    <div className="stock-workspace space-y-4">
       <PageHeader
+        className="stock-register-heading"
         title={t('stock.title')}
         subtitle={t('stock.subtitle', { count: records.length })}
         icon={Package}
@@ -607,6 +627,7 @@ export default function StockManagement() {
               <FileText size={14} aria-hidden="true" /> {t('stock.actions.pdf')}
             </button>
             <button type="button" onClick={startAdd}
+              disabled={typeof hasCapability !== 'function' || (!hasCapability('stock', 'create') && !hasCapability('stock', 'edit'))}
               className={`btn-primary min-h-[44px] flex items-center gap-2 text-sm ${FOCUS}`}>
               <Plus size={16} aria-hidden="true" /> {t('stock.actions.addStock')}
             </button>
@@ -614,6 +635,8 @@ export default function StockManagement() {
         }
       />
 
+      {entryMessage && <p role="status" className="stock-notice">{entryMessage}</p>}
+      <p className="text-xs text-[var(--text-muted)]">Add Stock lets you search MIS / ERP and DTR items, confirm details and record what is physically in your store. New deliveries use a separate receipt entry.</p>
       {loadError && (
         <div role="alert" className="card p-4 flex flex-wrap items-center gap-3 border border-red-500/40">
           <AlertTriangle size={18} className="text-red-500 shrink-0" aria-hidden="true" />
@@ -651,7 +674,7 @@ export default function StockManagement() {
           {/* KPI strip (covers the filtered view) */}
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
             <StatTile icon={Boxes} label="Stock items" value={loading ? '...' : kpis.items.toLocaleString()}
-              sub={kpis.units === null ? 'Units not recorded' : `${kpis.units.toLocaleString()} units on hand`} />
+              sub="Balances are shown per item and unit" />
             <StatTile icon={AlertTriangle} label={t('stock.statuses.Critical')} value={kpis.counts.Critical.toLocaleString()}
               sub="At or below critical level" tone={kpis.counts.Critical > 0 ? 'crit' : 'neutral'} />
             <StatTile icon={AlertTriangle} label={t('stock.statuses.Low')} value={kpis.counts.Low.toLocaleString()}
@@ -671,9 +694,9 @@ export default function StockManagement() {
               <label className="block lg:col-span-2">
                 <span className="text-xs text-[var(--text-dim)] mb-1.5 block">Search</span>
                 <span className="relative block">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+                  <Search size={14} className="absolute start-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
                   <input type="search" value={search} onChange={e => setSearch(e.target.value)}
-                    placeholder="Site, description, action" className={`w-full pl-9 ${CTRL}`} />
+                    placeholder="Site, item code, description or brand" className={`w-full ps-9 ${CTRL}`} />
                 </span>
               </label>
               <label className="block">
@@ -748,11 +771,9 @@ export default function StockManagement() {
                       const fromSite = e.target.value
                       setTransferError('')
                       setTransferMsg('')
-                      // Auto-fill description from first matching record
-                      const matchRec = records.find(r => r.site === fromSite)
                       setTransferForm(f => ({
                         ...f,
-                        fromSite,
+                        fromSite, fromId: '', toId: '',
                         toSite: f.toSite === fromSite ? '' : f.toSite,
                         qty: 1,
                       }))
@@ -765,7 +786,7 @@ export default function StockManagement() {
                     ))}
                   </select>
                   {transferForm.fromSite && (() => {
-                    const rec = records.find(r => r.site === transferForm.fromSite)
+                    const rec = transferRecord('from')
                     return rec ? (
                       <p className="text-xs text-[var(--text-muted)] mt-1">{t('stock.transfer.availablePrefix')} <span className="text-[var(--text-secondary)] font-medium">{rec.stock_qty}</span> {t('stock.transfer.unitsSuffix')}</p>
                     ) : null
@@ -779,7 +800,7 @@ export default function StockManagement() {
                     onChange={e => {
                       setTransferError('')
                       setTransferMsg('')
-                      setTransferForm(f => ({ ...f, toSite: e.target.value }))
+                      setTransferForm(f => ({ ...f, toSite: e.target.value, toId: '' }))
                     }}
                     required
                   >
@@ -789,7 +810,7 @@ export default function StockManagement() {
                     ))}
                   </select>
                   {transferForm.toSite && (() => {
-                    const rec = records.find(r => r.site === transferForm.toSite)
+                    const rec = transferRecord('to')
                     return rec ? (
                       <p className="text-xs text-[var(--text-muted)] mt-1">{t('stock.transfer.currentPrefix')} <span className="text-[var(--text-secondary)] font-medium">{rec.stock_qty}</span> {t('stock.transfer.unitsSuffix')}</p>
                     ) : null
@@ -797,13 +818,22 @@ export default function StockManagement() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {['from', 'to'].map(side => <label key={side} className="label">{side === 'from' ? 'Source item' : 'Destination item'}
+                  <select className="input" aria-label={side === 'from' ? 'Source item' : 'Destination item'} required
+                    value={transferRecord(side)?.id || ''} onChange={e => setTransferForm(f => ({ ...f, [side + 'Id']: e.target.value }))}>
+                    <option value="">Choose an item at this site</option>
+                    {records.filter(r => r.site === transferForm[side + 'Site']).map(r => <option key={r.id} value={r.id}>{stockItem(r).code ? `${stockItem(r).code} · ` : ''}{r.description || r.site} · {r.stock_qty} {stockItem(r).unit || 'units'}{stockItem(r).bin ? ` · ${stockItem(r).bin}` : ''}</option>)}
+                  </select>
+                </label>)}
+              </div>
               <div>
                 <label className="label">{t('stock.transfer.quantity')}</label>
                 <input
                   type="number"
                   className="input"
                   min={1}
-                  max={records.find(r => r.site === transferForm.fromSite)?.stock_qty ?? undefined}
+                  max={transferRecord('from')?.stock_qty ?? undefined}
                   value={transferForm.qty}
                   onChange={e => {
                     setTransferError('')
@@ -829,8 +859,8 @@ export default function StockManagement() {
                 <div className="bg-[var(--input-bg)]/50 border border-[var(--input-border)] rounded-lg p-3 text-xs text-[var(--text-muted)] space-y-1">
                   <p className="text-[var(--text-secondary)] font-medium text-xs mb-2">{t('stock.transfer.previewTitle')}</p>
                   {(() => {
-                    const from = records.find(r => r.site === transferForm.fromSite)
-                    const to   = records.find(r => r.site === transferForm.toSite)
+                    const from = transferRecord('from')
+                    const to   = transferRecord('to')
                     const qty  = +transferForm.qty
                     return (
                       <>
@@ -863,7 +893,7 @@ export default function StockManagement() {
                   exists. The second workflow step conditions on context.qty
                   (auto-skips when qty < 10), so qty MUST be numeric. */}
               {(() => {
-                const fromRecord = records.find(r => r.site === transferForm.fromSite)
+                const fromRecord = transferRecord('from')
                 if (!fromRecord || !transferForm.toSite || +transferForm.qty < 1) return null
                 return (
                   <div className="space-y-2">
@@ -892,7 +922,7 @@ export default function StockManagement() {
 
               <button
                 type="submit"
-                disabled={transferring || transferWfLocked || !transferForm.fromSite || !transferForm.toSite || transferForm.qty < 1}
+                disabled={transferring || transferWfLocked || !transferForm.fromSite || !transferForm.toSite || !transferRecord('from') || !transferRecord('to') || transferForm.qty < 1}
                 title={transferWfLocked ? 'Locked, in approval' : undefined}
                 className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50"
               >
@@ -1151,7 +1181,7 @@ export default function StockManagement() {
                 <input className="input" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder={t('stock.form.descriptionPlaceholder')} />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div><label className="label">{t('stock.form.stockQty')}</label><input type="number" className="input" value={form.stock_qty} onChange={e => setForm(f => ({ ...f, stock_qty: +e.target.value }))} min={0} /></div>
+                <div><label className="label">{t('stock.form.stockQty')}</label><input type="number" className="input" value={form.stock_qty} readOnly title="Use Add Stock to record a physical count or receipt." min={0} /></div>
                 <div><label className="label">{t('stock.form.minLevel')}</label><input type="number" className="input" value={form.min_level} onChange={e => setForm(f => ({ ...f, min_level: +e.target.value }))} min={0} /></div>
                 <div><label className="label">{t('stock.form.criticalLevel')}</label><input type="number" className="input" value={form.critical_level} onChange={e => setForm(f => ({ ...f, critical_level: +e.target.value }))} min={0} /></div>
               </div>

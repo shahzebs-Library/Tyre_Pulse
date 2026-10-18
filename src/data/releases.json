@@ -1,5 +1,19 @@
 [
   {
+    "id": "2026.10.18.6",
+    "date": "2026-10-18",
+    "changes": [
+      {
+        "modules": [
+          "stock"
+        ],
+        "text": {
+          "en": "Stock item search now uses dedicated indexes limited to tyres, rims and related accessories. MIS and DTR item lookups use indexed record identities and reuse request-scoped access checks for faster suggestions while retaining organisation, country and site restrictions."
+        }
+      }
+    ]
+  },
+  {
     "id": "2026.10.18.5",
     "date": "2026-10-18",
     "changes": [{"modules": ["stock"], "text": {"en": "Stock Management now supports searchable MIS/ERP and DTR item suggestions, manual tyre/rim items, batch physical counts, separate delivery receipts and a confirmation screen. Counts set the final quantity instead of adding it again. Entries retain item source details and movement history, check for changed balances and duplicate submissions, and preserve stock permissions and existing approval locks. Transfers now select explicit matching items and post both sides together."}}]

@@ -3,6 +3,8 @@ import { readFile } from 'node:fs/promises'
 import { test } from 'node:test'
 import { PGlite } from '@electric-sql/pglite'
 const migration = await readFile(new URL('../migrations/20261018120550_stock_quick_entry.sql', import.meta.url), 'utf8')
+const searchMigration = await readFile(new URL('../migrations/20261018130608_stock_lookup_search_indexes.sql', import.meta.url), 'utf8')
+const uuidMigration = await readFile(new URL('../migrations/20261018130855_stock_lookup_uuid_identity.sql', import.meta.url), 'utf8')
 const id = n => `00000000-0000-0000-0000-${String(n).padStart(12,'0')}`
 
 test('stock quick entry: source scope, atomic counts, receipts, concurrency and permissions', async t => {
@@ -22,20 +24,22 @@ test('stock quick entry: source scope, atomic counts, receipts, concurrency and 
    CREATE TABLE stock_records(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),organisation_id uuid,country text,region text,site text,description text,brand text,tyre_size text,stock_qty integer,min_level integer DEFAULT 0,critical_level integer DEFAULT 0,stock_status text,custom_data jsonb,updated_by uuid,updated_at timestamptz DEFAULT now(),last_counted_at timestamptz);
    CREATE TABLE stock_movements(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),stock_id uuid,site text,description text,movement_type text CHECK(movement_type IN ('stocktake','receipt','transfer_in','transfer_out')),qty_before integer,qty_change integer,qty_after integer,reason text,reference_no text,created_by uuid,organisation_id uuid);
    CREATE TABLE material_master(id uuid PRIMARY KEY,organisation_id uuid,country text,item_code text,item_name text,category text,brand text,uom text,reviewed boolean);
-   CREATE TABLE parts_consumption(id bigint PRIMARY KEY,organisation_id uuid,country text,item_code text,item_description text,issue_number text,txn_date date,cost_center text,store_code text,site text,brand text,uom text);
+   CREATE TABLE parts_consumption(id uuid PRIMARY KEY,organisation_id uuid,country text,item_code text,item_description text,issue_number text,txn_date date,cost_center text,store_code text,site text,brand text,uom text);
    CREATE TABLE tyre_records(id uuid PRIMARY KEY,organisation_id uuid,country text,site text,description text,brand text,size text,job_card text,mis_number text,issue_date date,qty integer);
    CREATE TABLE workflow_instances(id uuid DEFAULT gen_random_uuid(),organisation_id uuid,entity_type text,entity_id text,status text);
    CREATE TABLE audits(id uuid DEFAULT gen_random_uuid(),event text,entity text,entity_id text,before_data jsonb,after_data jsonb);
    CREATE FUNCTION record_audit_event(e text,t text,i text,b jsonb,a jsonb) RETURNS void LANGUAGE sql AS $$INSERT INTO audits(event,entity,entity_id,before_data,after_data) VALUES(e,t,i,b,a)$$;
    INSERT INTO material_master VALUES('${id(20)}','${id(10)}','KSA','TY-01','315/80 R22.5 Triangle tyre','tyre','Triangle','PCS',true),('${id(21)}','${id(10)}','UAE','OTHER','315/80 R22.5 tyre','tyre','Triangle','PCS',true),('${id(22)}','${id(11)}','KSA','FOREIGN','315/80 R22.5 tyre','tyre','Triangle','PCS',true);
-   INSERT INTO parts_consumption(id,organisation_id,country,item_code,item_description,issue_number,txn_date,cost_center,store_code) VALUES(1,'${id(10)}','KSA','RIM-01','22.5 x 8.25 steel rim','MIS-1',CURRENT_DATE,'SITE-A','STORE-A'),(2,'${id(10)}','KSA','F-01','Oil filter','MIS-2',CURRENT_DATE,'SITE-A','STORE-A'),(3,'${id(10)}','KSA','HIDDEN','22.5 steel rim','MIS-3',CURRENT_DATE,'SITE-C','STORE-C');
+   INSERT INTO parts_consumption(id,organisation_id,country,item_code,item_description,issue_number,txn_date,cost_center,store_code) VALUES('${id(41)}', '${id(10)}','KSA','RIM-01','22.5 x 8.25 steel rim','MIS-1',CURRENT_DATE,'SITE-A','STORE-A'),('${id(42)}', '${id(10)}','KSA','F-01','Oil filter','MIS-2',CURRENT_DATE,'SITE-A','STORE-A'),('${id(43)}', '${id(10)}','KSA','HIDDEN','22.5 steel rim','MIS-3',CURRENT_DATE,'SITE-C','STORE-C');
    INSERT INTO tyre_records VALUES('${id(30)}','${id(10)}','KSA','SITE-A','12.00 R24 Techking tyre','Techking','12.00 R24','DTR-1','MIS-4',CURRENT_DATE,99),('${id(31)}','${id(10)}','KSA','SITE-C','12.00 R24 tyre','Techking','12.00 R24','DTR-X','MIS-X',CURRENT_DATE,88);`)
   await db.exec(migration)
+  await db.exec(searchMigration)
+  await db.exec(uuidMigration)
   await db.exec(`SET test.actor='${id(1)}'; SET test.active='yes'; SET test.cap_view='yes'; SET test.cap_create='yes'; SET test.cap_edit='yes';`)
   const reset = async () => db.exec(`TRUNCATE stock_records,stock_movements,stock_entry_requests,workflow_instances,audits; SET test.actor='${id(1)}'; SET test.active='yes'; SET test.cap_view='yes'; SET test.cap_create='yes'; SET test.cap_edit='yes';`)
   const save = async (lines, {requestId=id(100),site='SITE-A',country='KSA',mode='count',reference='',notes=''}={}) => (await sql('SELECT save_stock_entry($1,$2,$3,$4,$5,$6,$7::jsonb) AS result',[requestId,country,site,mode,reference,notes,JSON.stringify(lines)]))[0].result
   const tyre = {source:'material',source_id:id(20),name:'FORGED NAME',code:'FORGED',kind:'tyre',quantity:36,unit:'PCS',condition:'New',bin:'A1'}
-  const rim = {source:'mis',source_id:'1',quantity:6,unit:'PCS',condition:'Serviceable',bin:'B1'}
+  const rim = {source:'mis',source_id:id(41),quantity:6,unit:'PCS',condition:'Serviceable',bin:'B1'}
   const existing = async (record,quantity) => ({stock_id:record.id,quantity,unit:'PCS',expected_qty:record.stock_qty,expected_updated_at:record.updated_at.toISOString()})
 
   await t.test('lookup exposes only tyre/rim identity within org, country and permitted source sites', async () => {
@@ -45,6 +49,14 @@ test('stock quick entry: source scope, atomic counts, receipts, concurrency and 
    assert.equal((await sql("SELECT stock_item_suggestions('KSA','SITE-A','rim') AS items"))[0].items.length,1)
    await assert.rejects(sql("SELECT stock_item_suggestions('UAE','SITE-A','315')"),e=>e.code==='42501')
    await assert.rejects(sql("SELECT stock_item_suggestions('KSA','SITE-C','315')"),e=>e.code==='42501')
+  })
+  await t.test('search indexes exclude unrelated ERP items and lookup uses typed primary keys', async () => {
+   const indexes=await sql("SELECT indexname,indexdef FROM pg_indexes WHERE indexname LIKE '%stock_lookup_idx'")
+   assert.equal(indexes.length,3)
+   assert.match(indexes.find(x=>x.indexname==='parts_consumption_stock_lookup_idx').indexdef,/stock_item_kind/)
+   assert.match(uuidMigration,/m\.id=p_id::uuid/)
+   assert.match(searchMigration,/t\.id=p_id::uuid/)
+   assert.equal((await sql("SELECT stock_item_suggestions('KSA','SITE-A','315 / 80 r22.5') AS items"))[0].items.length,1)
   })
   await t.test('count sets final on hand, retains source identity and audits every line atomically', async () => {
    await reset(); await save([tyre,rim]); let rows=await sql('SELECT * FROM stock_records ORDER BY description')
@@ -67,7 +79,7 @@ test('stock quick entry: source scope, atomic counts, receipts, concurrency and 
    await assert.rejects(save([tyre],{mode:'receipt',requestId:id(102)}),e=>e.code==='22023')
   })
   await t.test('a bad second line rolls back stock, requests, audit and movements', async () => {
-   await reset(); await assert.rejects(save([tyre,{...rim,source_id:'999'}]))
+   await reset(); await assert.rejects(save([tyre,{...rim,source_id:id(999)}]))
    for(const table of ['stock_records','stock_movements','audits','stock_entry_requests']) assert.equal((await sql(`SELECT * FROM ${table}`)).length,0)
   })
   await t.test('stale balances, duplicates, locked workflows and cross-scope ids cannot post', async () => {
@@ -84,7 +96,7 @@ test('stock quick entry: source scope, atomic counts, receipts, concurrency and 
    await reset(); await db.exec("SET test.cap_create='no'"); await assert.rejects(save([tyre]),e=>e.code==='42501')
    await db.exec("SET test.cap_create='yes'"); await assert.rejects(save([{...tyre,quantity:1.5}]),e=>e.code==='22023')
    await assert.rejects(save([{...tyre,unit:''}]),e=>e.code==='22023')
-   await assert.rejects(save([{source:'mis',source_id:'2',quantity:1,unit:'PCS',condition:'New',bin:''}]),e=>e.code==='42501')
+   await assert.rejects(save([{source:'mis',source_id:id(42),quantity:1,unit:'PCS',condition:'New',bin:''}]),e=>e.code==='42501')
    await assert.rejects(save([{...tyre,source:'manual',name:'Oil filter',kind:'tyre'}]),e=>e.code==='22023')
    await save([tyre]); const row=(await sql('SELECT * FROM stock_records'))[0]
    await db.exec("SET test.cap_edit='no'"); await assert.rejects(save([await existing(row,22)],{requestId:id(101)}),e=>e.code==='42501')

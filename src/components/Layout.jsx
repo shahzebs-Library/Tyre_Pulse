@@ -15,6 +15,7 @@ import {
   MAX_FAVORITES, loadFavorites, toggleFavorite, pushRecent, visibleFavorites,
 } from '../lib/navFavorites'
 import TopBar from './shell/TopBar'
+import ModuleRail from './shell/ModuleRail'
 import './shell/workspaceShell.css'
 
 // Built-in roles have hardcoded sidebar rules below; any other (non-empty) role
@@ -785,11 +786,9 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
   )
 }
 
-// Widths per the shell spec: 260-280 expanded, 68-72 collapsed. Was 240/54,
-// which was tight for a nav that now carries group headings AND sub-headings,
-// and too narrow collapsed for an icon plus its active indicator.
+// Desktop keeps the module rail visible when the contextual sidebar closes.
 const SIDEBAR_EXPANDED = 280
-const SIDEBAR_COLLAPSED = 64
+const SIDEBAR_COLLAPSED = 0
 // Mobile drawer: min(86vw, MOBILE_DRAWER_MAX) so it fits a 360px phone and does
 // not sprawl on a tablet. Was a flat 240px on every device.
 const MOBILE_DRAWER_MAX = 360
@@ -853,6 +852,7 @@ export default function Layout({ children }) {
     () => typeof window !== 'undefined' ? window.innerWidth >= 768 : true,
   )
   const [collapsedGroups, setCollapsedGroups] = useState(new Set())
+  const [selectedWorkspace, setSelectedWorkspace] = useState(null)
   const [moduleQuery, setModuleQuery] = useState('')
   const moduleSearchRef = useRef(null)
   const normalizedModuleQuery = moduleQuery.trim().toLocaleLowerCase()
@@ -889,6 +889,7 @@ export default function Layout({ children }) {
     const activeGroup = effectiveGroups.find(group => group.items.some(item =>
       item.to === location.pathname || (item.to !== '/' && location.pathname.startsWith(`${item.to}/`)),
     ))
+    setSelectedWorkspace(activeGroup ? (activeGroup.key || activeGroup.label) : null)
     if (activeGroup) setCollapsedGroups(previous => {
       const next = new Set(previous)
       next.delete(activeGroup.key || activeGroup.label)
@@ -944,6 +945,23 @@ export default function Layout({ children }) {
   const workspaceNavigation = useMemo(() => [...navByRoute.values()]
     .filter(entry => entry.groupAllowed && canSeeRoute(entry.item.to))
     .map(entry => ({ ...entry.item, label: entry.label })), [navByRoute, canSeeRoute])
+
+  const railGroups = effectiveGroups.filter(group => shouldShowGroup(group, profile)
+    && group.items.some(item => canSeeRoute(item.to))).map(group => {
+      const id = group.key || group.label
+      const workspaceNames = {
+        'Overview': ['overview', LayoutDashboard], 'Fleet & Assets': ['fleet', TruckIc],
+        'Tyre Management': ['tyres', TyreIc], 'Workshop & Maintenance': ['workshop', Wrench],
+        'Inspections & Compliance': ['inspections', ClipboardCheck], 'Drivers & Safety': ['drivers', Users],
+        'Monitoring & Logistics': ['logistics', Navigation], 'Inventory & Procurement': ['inventory', Boxes],
+        'Accidents & Claims': ['accidents', ShieldAlert], 'Finance & Commercial': ['finance', Wallet],
+        'Analytics & Reports': ['reports', BarChart2], 'Automation': ['automation', Zap], 'Administration': ['admin', Settings],
+      }
+      const descriptor = workspaceNames[id]
+      return { id, label: groupHeadingFor(t, group), shortLabel: descriptor ? tOr(t, `shell.workspaceNames.${descriptor[0]}`, groupHeadingFor(t, group)) : groupHeadingFor(t, group), icon: descriptor?.[1] || LayoutGrid }
+    })
+  const selectedGroup = !isMobile && railGroups.some(group => group.id === selectedWorkspace)
+    ? effectiveGroups.find(group => (group.key || group.label) === selectedWorkspace) : null
 
   const favoriteItems = useMemo(
     () => visibleFavorites(favorites, navIndex, canSeeRoute)
@@ -1146,11 +1164,15 @@ export default function Layout({ children }) {
         )}
       </AnimatePresence>
 
+      {!isMobile && <ModuleRail groups={railGroups} selected={selectedGroup ? selectedWorkspace : null}
+        appIcon={appIcon} hasCustomIcon={hasCustomIcon}
+        onSelect={id => { setSelectedWorkspace(id); setModuleQuery(''); setSidebarOpen(true) }} />}
+
       {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
       <motion.aside
         ref={asideRef}
         // Off-screen drawer: out of the tab order and the accessibility tree.
-        inert={isMobile && !sidebarOpen ? true : undefined}
+        inert={!sidebarOpen ? true : undefined}
         role={drawerOpen ? 'dialog' : undefined}
         aria-modal={drawerOpen ? true : undefined}
         aria-label={drawerOpen ? tOr(t, 'shell.menu', 'Menu') : undefined}
@@ -1174,40 +1196,9 @@ export default function Layout({ children }) {
           className={`flex items-center h-[64px] px-3 flex-shrink-0 ${!sidebarOpen ? 'justify-center' : ''}`}
           style={{ borderBottom: '1px solid rgba(22,163,74,0.1)' }}
         >
-          <div className="flex items-center gap-2.5 flex-1 min-w-0">
-            {/* logo mark */}
-            <div
-              className="flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center relative"
-              style={{
-                background: 'linear-gradient(135deg, rgba(22,163,74,0.18) 0%, rgba(22,163,74,0.08) 100%)',
-                border: '1px solid rgba(22,163,74,0.3)',
-                boxShadow: 'none',
-              }}
-            >
-              <BrandIcon src={appIcon} custom={hasCustomIcon} size={18} />
-              {/* pulse ring */}
-              <div className="absolute inset-0 rounded-xl animate-ping-green opacity-0 group-hover:opacity-100"
-                style={{ background: 'rgba(22,163,74,0.15)' }} />
-            </div>
-
-            <AnimatePresence>
-              {sidebarOpen && (
-                <motion.div
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -8 }}
-                  transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                  className="min-w-0"
-                >
-                  <span className="tp-wordmark font-extrabold text-[15px] tracking-tight whitespace-nowrap leading-none block">
-                    TyrePulse
-                  </span>
-                  <span className="text-[9px] text-gray-600 tracking-[0.12em] uppercase font-medium">
-                    {tOr(t, 'shell.fleetIntelligence', 'Fleet Intelligence')}
-                  </span>
-                </motion.div>
-              )}
-            </AnimatePresence>
+          <div className="tp-workspace-heading">
+            {isMobile && <BrandIcon src={appIcon} custom={hasCustomIcon} size={24} />}
+            <span>{selectedGroup ? groupHeadingFor(t, selectedGroup) : tOr(t, 'shell.allModules', 'All modules')}</span>
           </div>
 
           {isMobile && (
@@ -1273,7 +1264,7 @@ export default function Layout({ children }) {
               least one favourite they can actually open. Collapsed (icon-only)
               sidebar skips it: there is no room for a second icon list and the
               star control needs a label to be meaningful. */}
-          {sidebarOpen && !normalizedModuleQuery && favoriteItems.length > 0 && (
+          {sidebarOpen && !selectedGroup && !normalizedModuleQuery && favoriteItems.length > 0 && (
             <div className="mb-1" data-testid="nav-favorites">
               <p className="px-2.5 pt-2 pb-1.5 text-[9.5px] font-bold uppercase tracking-[0.11em] text-gray-700">
                 {tOr(t, 'shell.pinned', 'Pinned')}
@@ -1313,6 +1304,7 @@ export default function Layout({ children }) {
 
           {effectiveGroups.map((group) => {
             const { items } = group
+            if (selectedGroup && !normalizedModuleQuery && group !== selectedGroup) return null
             // Stable identity = the group's default key (survives renames) for the
             // React key, collapse state, and translation lookup.
             const groupId = group.key || group.label

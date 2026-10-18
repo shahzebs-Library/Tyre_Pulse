@@ -4,7 +4,7 @@
     "date": "2026-10-18",
     "changes": [{
       "modules": [],
-      "text": {"en": "The web workspace has a cleaner header and sidebar, module search across permitted pages, clearer pinned shortcuts and active navigation, and a compact icon rail. Existing country, language, theme, create and profile controls remain available."}
+      "text": {"en": "The web workspace has a cleaner header, a slim module rail with contextual navigation, module search and pinned shortcuts. The account menu is easier to read and supports a cropped headshot, a locally generated avatar, or initials. Pictures can be replaced or removed. Existing country, language, theme, create and profile controls remain available."}
     }]
   },
   {

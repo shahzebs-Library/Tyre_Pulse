@@ -142,12 +142,12 @@ export default function TopBar({
       {/* Brand. Below 640px the wordmark drops and the mark carries the brand
           alone: a 360px bar has to fit menu, brand, context, search, bell and
           avatar, and the mark is the part that stays recognisable when small. */}
-      {(isMobile || !sidebarOpen) && <div className="tp-header-brand flex items-center gap-2 min-w-0 flex-shrink-0">
+      <div className="tp-header-brand flex items-center gap-2 min-w-0 flex-shrink-0">
         <BrandIcon src={appIcon} custom={hasCustomIcon} size={isMobile ? 20 : 18} className="flex-shrink-0" />
         <span className="tp-wordmark font-extrabold text-sm tracking-tight hidden sm:inline">
           TyrePulse
         </span>
-      </div>}
+      </div>
 
       {/* ── Desktop: wide search trigger carrying its keyboard hint ─────────── */}
       {!isMobile && (

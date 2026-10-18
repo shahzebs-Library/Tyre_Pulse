@@ -28,7 +28,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { ChevronDown, LogOut, User, HelpCircle, Info, MapPin, Building2, LifeBuoy, ListChecks } from 'lucide-react'
+import { ChevronDown, LogOut, User, HelpCircle, Info, MapPin, Building2, LifeBuoy, ListChecks, Camera, X, ChevronRight } from 'lucide-react'
 import useAnchoredPopover from '../ui/useAnchoredPopover'
 import ThemeToggle from '../ui/ThemeToggle'
 import LanguageSwitcher from '../LanguageSwitcher'
@@ -36,6 +36,9 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useSettings } from '../../contexts/SettingsContext'
 import { contextLabel } from '../../lib/workingContext'
+import ProfileAvatar from './ProfileAvatar'
+import AvatarEditor from './AvatarEditor'
+import './profileMenu.css'
 import ReportProblemDialog from '../support/ReportProblemDialog'
 
 /**
@@ -101,6 +104,7 @@ export default function ProfileMenu({
   includePreferences = true,
   showLanguage = false,
   className = '',
+  compact = false,
 }) {
   const { profile, signOut } = useAuth() || {}
   const { t } = useLanguage()
@@ -111,12 +115,13 @@ export default function ProfileMenu({
   const [open, setOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const [reporting, setReporting] = useState(false)
+  const [editingPicture, setEditingPicture] = useState(false)
   const rootRef = useRef(null)
   // nav:'menu' gives the panel the arrow-key model its role=menu advertises;
   // the hook owns it so all five shell menus behave identically.
   const { triggerRef, panelRef, coords } = useAnchoredPopover(open, {
-    width: 268,
-    height: 420,
+    width: 360,
+    height: 590,
     align: 'right',
     nav: 'menu',
     onRequestClose: () => setOpen(false),
@@ -138,7 +143,6 @@ export default function ProfileMenu({
   }, [open, panelRef])
 
   const name = profile?.full_name || profile?.username || 'User'
-  const initial = (profile?.full_name?.[0] || profile?.username?.[0] || 'U').toUpperCase()
   const company = plainConfig(appSettings?.company_name) || appSettings?.company_name || 'TyrePulse'
   const appVersion = plainConfig(systemConfig?.app_version)
   const locationLabel = useMemo(
@@ -173,23 +177,13 @@ export default function ProfileMenu({
         title={name}
         className={`tp-touch-target flex items-center gap-1 rounded-xl transition-colors hover:bg-green-400/10 ps-0.5 pe-1 py-0.5 ${className}`}
       >
-        <span
-          className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-          style={{
-            background: 'linear-gradient(135deg, #16a34a, #15803d)',
-            boxShadow: '0 0 14px rgba(22,163,74,0.45)',
-            border: '1px solid rgba(22,163,74,0.4)',
-          }}
-          aria-hidden="true"
-        >
-          {initial}
-        </span>
-        <ChevronDown
+        <ProfileAvatar profile={profile} size={compact ? 36 : 34} />
+        {!compact && <ChevronDown
           size={12}
           aria-hidden="true"
           className={`flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
           style={{ color: 'var(--panel-ink-4)' }}
-        />
+        />}
       </button>
 
       {open && coords && createPortal(
@@ -197,21 +191,21 @@ export default function ProfileMenu({
           ref={panelRef}
           role="menu"
           aria-label={tx(t, 'shell.account', 'Account')}
-          className="tp-popover w-[268px] p-0"
+          className="tp-popover tp-account-panel p-0"
           style={{ top: coords.top, left: coords.left, maxHeight: coords.maxHeight }}
         >
-          {/* ── Identity ──────────────────────────────────────────────────── */}
-          <div className="px-3 py-2.5" style={{ borderBottom: '1px solid var(--border-dim)' }}>
-            <div className="flex items-start gap-2 min-w-0">
-              <span
-                className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}
-                aria-hidden="true"
-              >
-                {initial}
-              </span>
+          <div className="tp-account-title">
+            <strong>{tx(t, 'shell.account', 'Account')}</strong>
+            <button type="button" role="menuitem" onClick={() => setOpen(false)} aria-label={tx(t, 'shell.closeAccount', 'Close account menu')}><X size={17} /></button>
+          </div>
+          <div className="tp-account-identity">
+            <div className="flex items-center gap-3 min-w-0">
+              <button type="button" role="menuitem" className="tp-account-photo" onClick={() => { setOpen(false); setEditingPicture(true) }} aria-label={tx(t, 'shell.changePicture', 'Change picture')}>
+                <ProfileAvatar profile={profile} size={58} />
+                <span className="tp-account-camera"><Camera size={11} /></span>
+              </button>
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-bold truncate leading-tight" style={{ color: 'var(--text-primary)' }}>
+                <p className="text-[16px] font-semibold truncate leading-tight" style={{ color: 'var(--text-primary)' }}>
                   {name}
                 </p>
                 {profile?.role && (
@@ -222,7 +216,7 @@ export default function ProfileMenu({
               </div>
             </div>
 
-            <div className="mt-2 space-y-1">
+            <div className="mt-3 space-y-1.5">
               <p className="flex items-center gap-1.5 text-[11px] min-w-0" style={{ color: 'var(--text-muted)' }}>
                 <Building2 size={11} aria-hidden="true" className="flex-shrink-0" />
                 <span className="truncate">{company}</span>
@@ -241,6 +235,7 @@ export default function ProfileMenu({
           {/* ── Actions ───────────────────────────────────────────────────── */}
           <div className="p-1.5">
             <MenuItem icon={User} label={tx(t, 'common.profile', 'Profile')} onClick={() => go('/settings')} />
+            <MenuItem icon={Camera} label={tx(t, 'shell.changePicture', 'Change picture')} onClick={() => { setOpen(false); setEditingPicture(true) }} />
             <MenuItem icon={HelpCircle} label={tx(t, 'common.help', 'Help')} onClick={() => go('/help')} />
             <MenuItem
               icon={LifeBuoy}
@@ -315,6 +310,7 @@ export default function ProfileMenu({
         </div>,
         document.body,
       )}
+      <AvatarEditor open={editingPicture} onClose={() => setEditingPicture(false)} />
       <ReportProblemDialog open={reporting} onClose={() => setReporting(false)} />
     </div>
   )
@@ -330,7 +326,8 @@ function MenuItem({ icon: Icon, label, onClick }) {
       style={{ color: 'var(--text-secondary)' }}
     >
       {Icon && <Icon size={14} aria-hidden="true" className="flex-shrink-0" style={{ color: 'var(--text-dim)' }} />}
-      <span className="truncate">{label}</span>
+      <span className="truncate flex-1">{label}</span>
+      <ChevronRight size={14} className="rtl-flip" aria-hidden="true" />
     </button>
   )
 }

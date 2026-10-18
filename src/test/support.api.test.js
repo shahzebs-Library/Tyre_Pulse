@@ -70,6 +70,12 @@ describe('support ticket service', () => {
     expect(h.state.last._calls.or[0]).toMatch(/country\.eq\.KSA/)
   })
 
+  it('fails closed for personal tickets when no authenticated identity is available', async () => {
+    h.state.uid = null
+    await expect(svc.listTickets({ mine: true })).rejects.toThrow(/Sign in/)
+    expect(h.state.last).toBeNull()
+  })
+
   it('updateTicket sends status and leaves trusted timestamps to the database', async () => {
     h.state.result = { data: { id: 't1' }, error: null }
     await svc.updateTicket('t1', { status: 'resolved' })

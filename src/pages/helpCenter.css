@@ -1,0 +1,52 @@
+.tp-help-hub { color: var(--text-primary); max-width: 1500px; margin-inline: auto; }
+.tp-help-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 22px; }
+.tp-help-heading h1 { font-size: 28px; line-height: 1.3; font-weight: 700; letter-spacing: -.025em; }
+.tp-help-heading p { margin-top: 8px; color: var(--text-muted); font-size: 14px; }
+.tp-help-heading .btn-primary { display: inline-flex; align-items: center; gap: 9px; min-height: 42px; padding-inline: 17px; font-size: 13px; }
+.tp-help-search-region { padding: 20px 24px 16px; border-radius: 12px; background: var(--brand-subtle); margin-bottom: 16px; }
+.tp-help-search-region label { display: flex; align-items: center; gap: 12px; padding-inline: 15px; min-height: 47px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-1); color: var(--text-muted); }
+.tp-help-search-region input { background: transparent; border: 0; outline: 0; box-shadow: none; color: var(--text-primary); font-size: 14px; width: 100%; min-width: 0; padding-block: 12px; }
+.tp-help-search-region label:focus-within { outline: 2px solid var(--brand); outline-offset: 2px; }
+.tp-help-search-region p { font-size: 12px; color: var(--text-muted); margin-top: 9px; }
+.tp-help-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 20px; }
+.tp-help-tabs button { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; min-height: 36px; border-radius: 7px; font-size: 12px; color: var(--text-muted); }
+.tp-help-tabs button[aria-pressed='true'] { background: var(--brand-subtle); color: var(--brand-on-tint); font-weight: 600; }
+.tp-help-columns { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(290px, 1fr); gap: 20px; align-items: start; }
+.tp-help-main-column, .tp-help-secondary-column { display: grid; gap: 18px; min-width: 0; }
+.tp-help-section { padding: 20px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface-1); box-shadow: 0 2px 5px rgb(0 0 0 / 2%); min-width: 0; }
+.tp-help-section h2, .tp-help-access h2 { font-size: 17px; font-weight: 650; letter-spacing: -.015em; margin-bottom: 16px; }
+.tp-help-guides { border-top: 1px solid var(--border); }
+.tp-help-guides button { display: flex; align-items: center; gap: 15px; width: 100%; padding-block: 19px; border-bottom: 1px solid var(--border); text-align: start; }
+.tp-help-guides button:last-child { border-bottom: 0; padding-bottom: 4px; }
+.tp-help-guides strong { display: block; font-size: 14px; font-weight: 600; }
+.tp-help-guides strong + span { display: block; color: var(--text-muted); font-size: 12px; margin-top: 5px; line-height: 1.5; }
+.tp-help-guides button:hover strong { color: var(--brand-on-tint); }
+.tp-help-guide-icon { display: grid; place-items: center; width: 42px; height: 42px; flex-shrink: 0; border-radius: 50%; color: var(--brand-on-tint); background: var(--brand-subtle); }
+.tp-help-section-title { display: flex; align-items: start; justify-content: space-between; gap: 10px; }
+.tp-help-section-title button, .tp-help-recent-list button, .tp-help-recent-list a, .tp-help-all-problems { display: inline-flex; align-items: center; gap: 6px; color: var(--brand-on-tint); font-size: 12px; }
+.tp-help-section-title > button { white-space: nowrap; }
+.tp-help-recent-list li { padding-block: 17px; border-top: 1px solid var(--border); }
+.tp-help-request-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.tp-help-request-head strong { font-size: 13px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.tp-help-status { border-radius: 20px; font-size: 10px; padding: 3px 8px; background: var(--brand-subtle); color: var(--brand-on-tint); flex-shrink: 0; }
+.tp-help-request-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--text-muted); margin: 8px 0 12px; }
+.tp-help-all-problems { border-top: 1px solid var(--border); padding-top: 14px; }
+.tp-help-access { display: flex; align-items: flex-start; gap: 16px; padding: 24px; background: var(--brand-subtle); border-radius: 11px; }
+.tp-help-access > svg { flex-shrink: 0; color: var(--brand-on-tint); }
+.tp-help-access h2 { font-size: 15px; margin: 0 0 8px; }
+.tp-help-access p { font-size: 12px; line-height: 1.5; color: var(--text-muted); }
+.tp-help-access a { display: inline-block; padding: 8px 14px; border: 1px solid var(--brand); border-radius: 7px; margin-top: 16px; font-size: 12px; color: var(--brand-on-tint); background: var(--surface-1); }
+.tp-help-no-requests { display: flex; align-items: center; flex-direction: column; gap: 9px; padding: 22px 4px; text-align: center; color: var(--text-muted); font-size: 13px; }
+.tp-help-no-requests span { font-size: 12px; }
+.tp-help-load-error { padding: 10px 0; color: var(--text-muted); font-size: 12px; }
+.tp-help-load-error button { display: inline-flex; align-items: center; gap: 6px; margin-top: 7px; color: var(--brand-on-tint); }
+.tp-help-bottom-links { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 22px; padding-block: 12px; color: var(--text-muted); font-size: 12px; }
+.tp-help-navigation { min-height: 100%; padding-top: 12px; display: flex; flex-direction: column; }
+.tp-help-navigation a { display: flex; align-items: center; gap: 11px; padding: 11px 12px; }
+.tp-help-navigation-note { margin-top: auto; padding: 24px 12px 12px; font-size: 11px; line-height: 1.6; color: var(--panel-ink-3); }
+.tp-rail-footer > a[aria-current='page'] { color: var(--brand-on-tint); background: var(--brand-subtle); border-radius: 7px; }
+.tp-help-question { max-width: 860px; }
+.tp-help-question > p { color: var(--text-muted); font-size: 13px; margin-bottom: 20px; }
+.tp-help-hub button:focus-visible, .tp-help-hub a:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
+@media (max-width: 1150px) { .tp-help-columns { grid-template-columns: minmax(0, 1fr); } .tp-help-secondary-column { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .tp-help-heading { flex-direction: column; } .tp-help-heading h1 { font-size: 24px; } .tp-help-search-region { padding: 15px; } .tp-help-section { padding: 15px; } .tp-help-secondary-column { grid-template-columns: minmax(0, 1fr); } }

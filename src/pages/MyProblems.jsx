@@ -9,6 +9,7 @@
  * Honest rendering: a missing target time or version is "N/A"; an unloadable
  * list shows an error with Retry, never an empty list.
  */
+import { useSearchParams } from 'react-router-dom'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { LifeBuoy, Search, AlertTriangle, RefreshCw, ChevronDown, CheckCircle2, Clock } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
@@ -57,7 +58,8 @@ export default function MyProblems() {
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
-  const [expanded, setExpanded] = useState(null)
+  const [params] = useSearchParams()
+  const [expanded, setExpanded] = useState(() => params.get('issue'))
   const [history, setHistory] = useState({})
   const [reporting, setReporting] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)

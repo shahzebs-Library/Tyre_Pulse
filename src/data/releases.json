@@ -1,5 +1,13 @@
 [
   {
+    "id": "2026.10.18.2",
+    "date": "2026-10-18",
+    "changes": [{
+      "modules": [],
+      "text": {"en": "The web workspace has a cleaner header and sidebar, module search across permitted pages, clearer pinned shortcuts and active navigation, and a compact icon rail. Existing country, language, theme, create and profile controls remain available."}
+    }]
+  },
+  {
     "id": "2026.10.18.1",
     "date": "2026-10-18",
     "changes": [

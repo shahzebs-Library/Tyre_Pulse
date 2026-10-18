@@ -179,6 +179,40 @@ afterEach(() => { cleanup(); localStorage.clear() })
 
 /* ── Sidebar ────────────────────────────────────────────────────────────────── */
 
+describe('sidebar module search', () => {
+  it('finds permitted modules inside collapsed groups and restores navigation on clear', () => {
+    renderLayout({ auth: { profile: { role: 'Admin' } } })
+    const nav = screen.getByRole('navigation', { name: 'Main navigation' })
+    fireEvent.click(within(nav).getByRole('button', { name: 'Tyre Management' }))
+    expect(nav.querySelector('a[href="/pressure-intel"]')).toBeNull()
+    const search = screen.getByRole('searchbox', { name: 'Find a module' })
+    fireEvent.change(search, { target: { value: '  PRESSURE  ' } })
+    expect(nav.querySelector('a[href="/pressure-intel"]')).toBeInTheDocument()
+    expect(nav.querySelector('a[href="/fleet-master"]')).toBeNull()
+    fireEvent.keyDown(search, { key: 'Escape' })
+    expect(search).toHaveValue('')
+    expect(nav.querySelector('a[href="/fleet-master"]')).toBeInTheDocument()
+  })
+
+  it('never exposes revoked modules through a matching group or search term', () => {
+    renderLayout({ auth: { hasPermission: key => key !== 'audit_trail' } })
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Find a module' }), { target: { value: 'Audit Trail' } })
+    expect(document.querySelector('a[href="/audit"]')).toBeNull()
+    expect(screen.getByRole('status')).toHaveTextContent('No matching modules')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Clear search' })[0])
+    expect(screen.getByRole('searchbox', { name: 'Find a module' })).toHaveValue('')
+  })
+
+  it('clears the query after navigation and keeps the destination highlighted', () => {
+    renderLayout()
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Find a module' }), { target: { value: 'Tyre Records' } })
+    fireEvent.click(document.querySelector('nav a[href="/tyres"]'))
+    expect(screen.getByTestId('pathname')).toHaveTextContent('/tyres')
+    expect(screen.getByRole('searchbox', { name: 'Find a module' })).toHaveValue('')
+    expect(document.querySelector('nav a[href="/tyres"]')).toHaveAttribute('aria-current', 'page')
+  })
+})
+
 describe('sidebar Favourites section', () => {
   it('hides a pinned route the user is not allowed to open', () => {
     // '/tyres' -> tyre_records, '/audit' -> audit_trail (navAccess.NAV_MODULE_KEY).

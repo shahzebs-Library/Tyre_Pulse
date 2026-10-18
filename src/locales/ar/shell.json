@@ -83,5 +83,8 @@
   "myProblemsHistory": "السجل",
   "myProblemsHideHistory": "إخفاء السجل",
   "myProblemsHistoryEmpty": "لا يوجد سجل بعد.",
-  "myProblemsUpdateHint": "حدّث التطبيق إلى الإصدار {version} أو أحدث للحصول على الإصلاح."
+  "myProblemsUpdateHint": "حدّث التطبيق إلى الإصدار {version} أو أحدث للحصول على الإصلاح.",
+  "findModule": "ابحث عن وحدة",
+  "pinned": "المثبتة",
+  "noModules": "لا توجد وحدات مطابقة"
 }

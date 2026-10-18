@@ -21,7 +21,7 @@
  * reason, and hides itself entirely for anyone with fewer than two creation
  * destinations - see GlobalCreate.
  *
- * Height is 52px so it lines up exactly with the sidebar's own logo row.
+ * Height is 64px so it lines up exactly with the sidebar's own logo row.
  * Colours come from CSS vars (--panel-deep / --panel-ink-*) which flip with
  * `html.light`, so the bar reads correctly in both themes without a second
  * palette.
@@ -72,7 +72,7 @@ function isMacPlatform() {
   return /Mac|iPhone|iPad|iPod/i.test(s)
 }
 
-const BAR_HEIGHT = 52
+const BAR_HEIGHT = 64
 
 /**
  * @param {object}   props
@@ -112,7 +112,7 @@ export default function TopBar({
   return (
     <header
       role="banner"
-      className="flex-shrink-0 sticky top-0 z-30 flex items-center gap-2 px-2.5 sm:px-3"
+      className="tp-workspace-header flex-shrink-0 sticky top-0 z-30 flex items-center gap-2 px-2.5 sm:px-4"
       style={{
         height: BAR_HEIGHT,
         background: 'var(--panel-deep)',
@@ -142,12 +142,12 @@ export default function TopBar({
       {/* Brand. Below 640px the wordmark drops and the mark carries the brand
           alone: a 360px bar has to fit menu, brand, context, search, bell and
           avatar, and the mark is the part that stays recognisable when small. */}
-      <div className="flex items-center gap-2 min-w-0 flex-shrink-0">
+      {(isMobile || !sidebarOpen) && <div className="tp-header-brand flex items-center gap-2 min-w-0 flex-shrink-0">
         <BrandIcon src={appIcon} custom={hasCustomIcon} size={isMobile ? 20 : 18} className="flex-shrink-0" />
         <span className="tp-wordmark font-extrabold text-sm tracking-tight hidden sm:inline">
           TyrePulse
         </span>
-      </div>
+      </div>}
 
       {/* ── Desktop: wide search trigger carrying its keyboard hint ─────────── */}
       {!isMobile && (
@@ -155,7 +155,7 @@ export default function TopBar({
           type="button"
           onClick={openSearch}
           aria-label={searchLabel}
-          className="ms-2 flex items-center gap-2 h-8 px-3 rounded-xl min-w-0 flex-1 max-w-md text-xs transition-colors hover:text-green-400 group"
+          className="tp-global-search ms-2 flex items-center gap-2 h-10 px-3 rounded-xl min-w-0 flex-1 max-w-lg text-xs transition-colors group"
           style={{
             color: 'var(--panel-ink-3)',
             background: 'rgba(22,163,74,0.04)',
@@ -185,7 +185,7 @@ export default function TopBar({
       </div>
 
       {/* ── Right cluster ──────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 flex-shrink-0">
+      <div className="tp-header-controls flex items-center gap-1 flex-shrink-0">
         {!isMobile && (
           <>
             {/* Secondary by design: GlobalCreate renders NOTHING unless the user

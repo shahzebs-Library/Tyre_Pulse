@@ -15,6 +15,7 @@ import {
   MAX_FAVORITES, loadFavorites, toggleFavorite, pushRecent, visibleFavorites,
 } from '../lib/navFavorites'
 import TopBar from './shell/TopBar'
+import './shell/workspaceShell.css'
 
 // Built-in roles have hardcoded sidebar rules below; any other (non-empty) role
 // is an admin-defined CUSTOM role whose sidebar is derived from its module grants.
@@ -787,8 +788,8 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
 // Widths per the shell spec: 260-280 expanded, 68-72 collapsed. Was 240/54,
 // which was tight for a nav that now carries group headings AND sub-headings,
 // and too narrow collapsed for an icon plus its active indicator.
-const SIDEBAR_EXPANDED = 264
-const SIDEBAR_COLLAPSED = 70
+const SIDEBAR_EXPANDED = 280
+const SIDEBAR_COLLAPSED = 64
 // Mobile drawer: min(86vw, MOBILE_DRAWER_MAX) so it fits a 360px phone and does
 // not sprawl on a tablet. Was a flat 240px on every device.
 const MOBILE_DRAWER_MAX = 360
@@ -852,6 +853,9 @@ export default function Layout({ children }) {
     () => typeof window !== 'undefined' ? window.innerWidth >= 768 : true,
   )
   const [collapsedGroups, setCollapsedGroups] = useState(new Set())
+  const [moduleQuery, setModuleQuery] = useState('')
+  const moduleSearchRef = useRef(null)
+  const normalizedModuleQuery = moduleQuery.trim().toLocaleLowerCase()
   const [alertCount, setAlertCount]           = useState(0)
   // NOTE: there was a `hoveredItem` state here, set by onMouseEnter/onMouseLeave
   // on every nav link and READ BY NOTHING. Moving the mouse across the sidebar
@@ -873,6 +877,24 @@ export default function Layout({ children }) {
   }, [])
 
   const effectiveGroups = useMemo(() => applyNavLayout(NAV_GROUPS, navLayout), [navLayout])
+
+  // Navigation search filters only the permission-checked catalogue below.
+  const matchesModule = (item, group) => !normalizedModuleQuery || [
+    navLabelFor(t, item.to, item.label), groupHeadingFor(t, group),
+    item.parent && tOr(t, `nav.parents.${item.parent}`, item.parent),
+  ].filter(Boolean).some(value => value.toLocaleLowerCase().includes(normalizedModuleQuery))
+
+  useEffect(() => {
+    setModuleQuery('')
+    const activeGroup = effectiveGroups.find(group => group.items.some(item =>
+      item.to === location.pathname || (item.to !== '/' && location.pathname.startsWith(`${item.to}/`)),
+    ))
+    if (activeGroup) setCollapsedGroups(previous => {
+      const next = new Set(previous)
+      next.delete(activeGroup.key || activeGroup.label)
+      return next
+    })
+  }, [location.pathname, effectiveGroups])
 
   // ── Favourites + recents ───────────────────────────────────────────────────
   // Storage holds ROUTES ONLY (see src/lib/navFavorites.js). Everything a
@@ -1134,7 +1156,7 @@ export default function Layout({ children }) {
         aria-label={drawerOpen ? tOr(t, 'shell.menu', 'Menu') : undefined}
         // RTL: the drawer belongs to the start edge, which is the RIGHT in
         // Arabic, and it slides out towards that edge.
-        className={`flex-shrink-0 flex flex-col ${isMobile ? `fixed top-0 ${isRTL ? 'right-0' : 'left-0'} h-full z-50` : 'relative z-20'}`}
+        className={`tp-workspace-sidebar flex-shrink-0 flex flex-col ${isMobile ? `fixed top-0 ${isRTL ? 'right-0' : 'left-0'} h-full z-50` : 'relative z-20'}`}
         animate={
           isMobile
             ? { x: sidebarOpen ? 0 : (isRTL ? drawerWidth : -drawerWidth), width: drawerWidth }
@@ -1149,7 +1171,7 @@ export default function Layout({ children }) {
 
         {/* ── Logo row ──────────────────────────────────────────────────────── */}
         <div
-          className={`flex items-center h-[52px] px-3 flex-shrink-0 ${!sidebarOpen ? 'justify-center' : ''}`}
+          className={`flex items-center h-[64px] px-3 flex-shrink-0 ${!sidebarOpen ? 'justify-center' : ''}`}
           style={{ borderBottom: '1px solid rgba(22,163,74,0.1)' }}
         >
           <div className="flex items-center gap-2.5 flex-1 min-w-0">
@@ -1159,7 +1181,7 @@ export default function Layout({ children }) {
               style={{
                 background: 'linear-gradient(135deg, rgba(22,163,74,0.18) 0%, rgba(22,163,74,0.08) 100%)',
                 border: '1px solid rgba(22,163,74,0.3)',
-                boxShadow: '0 0 20px rgba(22,163,74,0.4), inset 0 1px 0 rgba(255,255,255,0.06)',
+                boxShadow: 'none',
               }}
             >
               <BrandIcon src={appIcon} custom={hasCustomIcon} size={18} />
@@ -1181,13 +1203,14 @@ export default function Layout({ children }) {
                     TyrePulse
                   </span>
                   <span className="text-[9px] text-gray-600 tracking-[0.12em] uppercase font-medium">
-                    Fleet Intelligence
+                    {tOr(t, 'shell.fleetIntelligence', 'Fleet Intelligence')}
                   </span>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
 
+          {isMobile && (
           <button
             type="button"
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -1204,14 +1227,40 @@ export default function Layout({ children }) {
               {sidebarOpen ? <X size={13} /> : <Menu size={13} />}
             </motion.div>
           </button>
+          )}
         </div>
 
-        {/* Search, working context and language used to live here. They are
-            global controls, not navigation, so they now sit in <TopBar>. The
-            sidebar is navigation only. The old hardcoded All/KSA/UAE/EGY pill
-            row is gone: it could not scale past three countries and it mixed an
-            aggregation mode into everyday operations. See WorkingContextSelector
-            (operations) and ReportingScopeBar (analytics). */}
+        <div className="tp-module-search-wrap">
+          {sidebarOpen ? (
+            <div className="tp-module-search">
+              <Search size={15} aria-hidden="true" />
+              <input
+                ref={moduleSearchRef}
+                type="search"
+                value={moduleQuery}
+                onChange={event => setModuleQuery(event.target.value)}
+                onKeyDown={event => {
+                  if (event.key === 'Escape' && moduleQuery) {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    setModuleQuery('')
+                  }
+                }}
+                aria-label={tOr(t, 'shell.findModule', 'Find a module')}
+                placeholder={tOr(t, 'shell.findModule', 'Find a module')}
+              />
+              {moduleQuery && <button type="button" onClick={() => { setModuleQuery(''); moduleSearchRef.current?.focus() }}
+                aria-label={tOr(t, 'common.clearSearch', 'Clear search')}><X size={14} /></button>}
+            </div>
+          ) : (
+            <button className="tp-rail-search" type="button"
+              title={tOr(t, 'shell.findModule', 'Find a module')}
+              aria-label={tOr(t, 'shell.findModule', 'Find a module')}
+              onClick={() => { setSidebarOpen(true); requestAnimationFrame(() => moduleSearchRef.current?.focus()) }}>
+              <Search size={17} />
+            </button>
+          )}
+        </div>
 
         {/* ── Nav ────────────────────────────────────────────────────────────── */}
         <nav
@@ -1224,10 +1273,10 @@ export default function Layout({ children }) {
               least one favourite they can actually open. Collapsed (icon-only)
               sidebar skips it: there is no room for a second icon list and the
               star control needs a label to be meaningful. */}
-          {sidebarOpen && favoriteItems.length > 0 && (
+          {sidebarOpen && !normalizedModuleQuery && favoriteItems.length > 0 && (
             <div className="mb-1" data-testid="nav-favorites">
               <p className="px-2.5 pt-2 pb-1.5 text-[9.5px] font-bold uppercase tracking-[0.11em] text-gray-700">
-                {tOr(t, 'nav.favorites.heading', 'Favourites')}
+                {tOr(t, 'shell.pinned', 'Pinned')}
               </p>
               {favNote === 'full' && (
                 <p className="px-2.5 pb-1.5 text-[9.5px] leading-snug" style={{ color: 'var(--text-dim)' }}>
@@ -1268,9 +1317,9 @@ export default function Layout({ children }) {
             // React key, collapse state, and translation lookup.
             const groupId = group.key || group.label
             if (!shouldShowGroup(group, profile)) return null
-            const visibleItems = items.filter(item => shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry))
+            const visibleItems = items.filter(item => shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry) && matchesModule(item, group))
             if (visibleItems.length === 0) return null
-            const isCollapsed = collapsedGroups.has(groupId)
+            const isCollapsed = !normalizedModuleQuery && collapsedGroups.has(groupId)
             const groupHeading = groupHeadingFor(t, group)
             return (
               <div key={groupId} className="mb-0.5">
@@ -1278,6 +1327,7 @@ export default function Layout({ children }) {
                   <button
                     type="button"
                     onClick={() => toggleGroup(groupId)}
+                    disabled={Boolean(normalizedModuleQuery)}
                     aria-expanded={!isCollapsed}
                     aria-controls={`nav-group-${groupDomId(groupId)}`}
                     className="w-full flex items-center justify-between px-2.5 pt-3 pb-1.5 group/sec cursor-pointer"
@@ -1338,6 +1388,7 @@ export default function Layout({ children }) {
                         <div className="relative group/fav">
                         <NavLink
                           to={to}
+                          aria-label={navLabel}
                           end={end}
                           title={_outOfContext
                             ? `${navLabel} - no data in ${activeCountry}`
@@ -1422,12 +1473,31 @@ export default function Layout({ children }) {
             )
           })}
 
+          {normalizedModuleQuery && !workspaceNavigation.some(item => {
+            const entry = navByRoute.get(item.to)
+            const group = effectiveGroups.find(candidate => candidate.items.some(nav => nav.to === item.to))
+            return entry && group && matchesModule(entry.item, group)
+          }) && <div className="tp-module-empty" role="status">
+            <Search size={20} aria-hidden="true" />
+            <p>{tOr(t, 'shell.noModules', 'No matching modules')}</p>
+            <button type="button" onClick={() => setModuleQuery('')}>{tOr(t, 'common.clearSearch', 'Clear search')}</button>
+          </div>}
+
           {/* NO System Console entry here - by explicit instruction the main
               app frontend never surfaces the console, not even to admins or
               super admins. The console is reached ONLY by opening /console
               directly, in its own tab, behind its own sign-in (see App.jsx
               ConsoleSurfaceGate). Do not re-add a console link to this nav. */}
         </nav>
+        <div className="tp-sidebar-help">
+          <NavLink to="/help" title={tOr(t, 'shell.helpCenter', 'Help Center')}
+            aria-label={tOr(t, 'shell.helpCenter', 'Help Center')}>
+            <LifeBuoy size={17} aria-hidden="true" />
+            {sidebarOpen && <span>{tOr(t, 'shell.helpCenter', 'Help Center')}</span>}
+            {sidebarOpen && <ChevronRight size={14} className="ms-auto rtl-flip" aria-hidden="true" />}
+          </NavLink>
+        </div>
+
 
         {/* The user footer (avatar, role, app version, theme, notifications,
             sign-out) moved into <ProfileMenu> in the top bar, so each of those

@@ -83,5 +83,8 @@
   "myProblemsHistory": "History",
   "myProblemsHideHistory": "Hide history",
   "myProblemsHistoryEmpty": "No history yet.",
-  "myProblemsUpdateHint": "Update the app to version {version} or later to get the fix."
+  "myProblemsUpdateHint": "Update the app to version {version} or later to get the fix.",
+  "findModule": "Find a module",
+  "pinned": "Pinned",
+  "noModules": "No matching modules"
 }

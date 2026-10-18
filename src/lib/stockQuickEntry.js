@@ -56,7 +56,8 @@ export function stockDraft(option) {
     stock_id: option.stock?.id || null,
     expected_qty: option.stock?.stock_qty ?? null,
     expected_updated_at: option.stock?.updated_at || null,
-    quantity: '', unit: stockUnit(option.unit), condition: meta.condition || 'Unspecified',
+    quantity: '', unit: stockUnit(option.unit) || (option.stock ? '' : 'PCS'),
+    condition: meta.condition || (option.stock ? 'Unspecified' : 'New'),
     bin: meta.bin || '', size: option.size || tyreSizeFrom(option.name),
   }
 }

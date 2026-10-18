@@ -13,7 +13,7 @@ import './stockWorkspace.css'
 const UNITS = ['PCS', 'SET', 'PAIR', 'BOX', 'KG', 'L']
 const CONDITIONS = ['Unspecified', 'New', 'Serviceable', 'Retread']
 const sourceLabel = source => ({ stock: 'Existing stock', material: 'MIS / ERP catalogue', mis: 'MIS / ERP', dtr: 'DTR / tyre record', manual: 'Manual item' })[source] || source
-const emptyManual = { name: '', code: '', kind: 'tyre', brand: '', size: '', unit: '' }
+const emptyManual = { name: '', code: '', kind: 'tyre', brand: '', size: '', unit: 'PCS' }
 
 export default function StockQuickEntry({ records, initialSite = '', onClose, onSaved }) {
   const { profile, hasCapability } = useAuth()

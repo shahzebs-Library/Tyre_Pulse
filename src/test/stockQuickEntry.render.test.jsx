@@ -24,12 +24,13 @@ describe('approved stock quick-entry workflow',()=>{
   await waitFor(()=>expect(saved).toHaveBeenCalled())
   expect(h.save).toHaveBeenCalledWith(expect.objectContaining({country:'KSA',site:'SITE-A',mode:'count',lines:[expect.objectContaining({stock_id:'s1',expected_qty:24,quantity:36,unit:'PCS'})]}))
  })
- it('requires a physical quantity and unit after a DTR suggestion; issued quantities never prefill',async()=>{
+ it('defaults DTR items to New and PCS but still requires a physical count',async()=>{
   h.search.mockResolvedValue([{key:'dtr:one',source:'dtr',source_id:'t1',name:'12.00 R24 tyre',brand:'Techking',size:'12.00 R24',kind:'tyre',qty:99,reference:'DTR-1'}])
   mount();await search('Techking');fireEvent.click(await screen.findByRole('button',{name:/12.00 R24 tyre/}))
   expect(screen.getByRole('spinbutton',{name:'Physical count for 12.00 R24 tyre'}).value).toBe('')
   fireEvent.click(screen.getByRole('button',{name:'Review 1 item'}));expect(screen.getByRole('alert').textContent).toMatch(/whole count/)
-  fireEvent.change(screen.getByRole('spinbutton'),{target:{value:'0'}});fireEvent.change(screen.getByLabelText('Unit for 12.00 R24 tyre'),{target:{value:'PCS'}})
+  expect(screen.getByLabelText('Unit for 12.00 R24 tyre').value).toBe('PCS');expect(screen.getByLabelText('Condition for 12.00 R24 tyre').value).toBe('New')
+  fireEvent.change(screen.getByRole('spinbutton'),{target:{value:'0'}})
   fireEvent.click(screen.getByRole('button',{name:'Review 1 item'}));expect(screen.getByRole('heading',{level:1}).textContent).toBe('Confirm current stock')
  })
  it('keeps receipts separate, requires one reference and reuses the same identifier after a network error',async()=>{
@@ -52,7 +53,7 @@ describe('approved stock quick-entry workflow',()=>{
  })
  it('supports a manual rim without an invented ERP code and adds it to the same batch',async()=>{
   mount();fireEvent.click(screen.getByRole('button',{name:/Cannot find it/}));fireEvent.change(screen.getByLabelText('Category'),{target:{value:'rim'}})
-  fireEvent.change(screen.getByLabelText('Description *'),{target:{value:'22.5 x 8.25 steel rim'}});fireEvent.change(screen.getByLabelText('Unit *'),{target:{value:'PCS'}})
+  fireEvent.change(screen.getByLabelText('Description *'),{target:{value:'22.5 x 8.25 steel rim'}});expect(screen.getByLabelText('Unit *').value).toBe('PCS')
   fireEvent.click(screen.getByRole('button',{name:'Add item to count'}));expect(screen.queryByRole('dialog')).toBeNull();expect(screen.getByRole('spinbutton',{name:'Physical count for 22.5 x 8.25 steel rim'})).toBeTruthy()
  })
 })

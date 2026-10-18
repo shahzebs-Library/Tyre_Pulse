@@ -28,7 +28,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { ChevronDown, LogOut, User, HelpCircle, Info, MapPin, Building2, LifeBuoy, ListChecks, Camera, X, ChevronRight } from 'lucide-react'
+import { ChevronDown, LogOut, User, HelpCircle, Info, MapPin, Building2, LifeBuoy, ListChecks, Camera, X, ChevronRight, Mail, BadgeCheck } from 'lucide-react'
 import useAnchoredPopover from '../ui/useAnchoredPopover'
 import ThemeToggle from '../ui/ThemeToggle'
 import LanguageSwitcher from '../LanguageSwitcher'
@@ -217,6 +217,9 @@ export default function ProfileMenu({
             </div>
 
             <div className="mt-3 space-y-1.5">
+              {profile?.email && <p className="tp-account-detail"><Mail size={12} aria-hidden="true" /><span title={profile.email}>{profile.email}</span></p>}
+              {profile?.employee_id && <p className="tp-account-detail"><BadgeCheck size={12} aria-hidden="true" /><span>{tx(t, 'shell.employeeId', 'Employee ID')}: {profile.employee_id}</span></p>}
+
               <p className="flex items-center gap-1.5 text-[11px] min-w-0" style={{ color: 'var(--text-muted)' }}>
                 <Building2 size={11} aria-hidden="true" className="flex-shrink-0" />
                 <span className="truncate">{company}</span>

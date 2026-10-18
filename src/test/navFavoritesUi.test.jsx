@@ -188,6 +188,7 @@ describe('workspace module rail', () => {
     expect(nav.querySelector('a[href="/tyres"]')).toBeInTheDocument()
     expect(nav.querySelector('a[href="/fleet-master"]')).toBeNull()
     const rail = screen.getByRole('navigation', { name: 'Workspaces' })
+    expect(within(rail.closest('.tp-module-rail')).queryByRole('button', { name: /account:/i })).toBeNull()
     fireEvent.click(within(rail).getByRole('button', { name: 'Fleet & Assets' }))
     expect(nav.querySelector('a[href="/fleet-master"]')).toBeInTheDocument()
     expect(nav.querySelector('a[href="/tyres"]')).toBeNull()

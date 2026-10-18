@@ -14,6 +14,7 @@ export default function AvatarEditor({ open, onClose }) {
   const [file, setFile] = useState(null)
   const [draft, setDraft] = useState(undefined)
   const [preset, setPreset] = useState('green')
+  const [avatarStyle, setAvatarStyle] = useState('male')
   const [zoom, setZoom] = useState(1)
   const [vertical, setVertical] = useState(50)
   const [busy, setBusy] = useState(false)
@@ -22,7 +23,7 @@ export default function AvatarEditor({ open, onClose }) {
   const owner = useRef(profile?.id)
   useEffect(() => {
     owner.current = profile?.id
-    setFile(null); setDraft(undefined); setError(''); setZoom(1); setVertical(50); setMode('photo'); setPreset('green')
+    setFile(null); setDraft(undefined); setError(''); setZoom(1); setVertical(50); setMode('photo'); setPreset('green'); setAvatarStyle('male')
   }, [open, profile?.id])
   useEffect(() => {
     let alive = true
@@ -33,11 +34,11 @@ export default function AvatarEditor({ open, onClose }) {
         .catch(() => { if (alive) { setDraft(undefined); setError('invalidPhoto') } }) }, 120)
       return () => { alive = false; clearTimeout(timer) }
     } else {
-      try { setDraft(makeAvatar(profile?.full_name || profile?.username, preset, mode === 'avatar')); setError('') }
+      try { setDraft(makeAvatar(profile?.full_name || profile?.username, preset, mode === 'avatar', avatarStyle)); setError('') }
       catch { setDraft(undefined); setError('invalidPhoto') }
     }
     return () => { alive = false }
-  }, [open, mode, file, zoom, vertical, preset, profile?.full_name, profile?.username])
+  }, [open, mode, file, zoom, vertical, preset, avatarStyle, profile?.full_name, profile?.username])
   async function save(value) {
     const id = profile?.id
     setBusy(true); setError('')
@@ -63,6 +64,10 @@ export default function AvatarEditor({ open, onClose }) {
       {[[ 'photo', Upload, 'uploadPhoto' ], ['avatar', User, 'createAvatar'], ['initials', Type, 'useInitials']].map(([key, Icon, label]) =>
         <button type="button" key={key} disabled={busy} aria-pressed={mode === key} onClick={() => { setMode(key); setDraft(undefined); setError('') }}><Icon size={15} />{t(`shell.${label}`)}</button>)}
     </div>
+    {mode === 'avatar' && <div className="tp-avatar-style" role="group" aria-label={t('shell.avatarStyle')}>
+      {['male', 'female'].map(style => <button key={style} type="button" disabled={busy} aria-pressed={avatarStyle === style}
+        onClick={() => { setDraft(undefined); setAvatarStyle(style) }}>{t(`shell.avatarStyles.${style}`)}</button>)}
+    </div>}
     <div className="tp-avatar-preview"><ProfileAvatar profile={profile} source={draft} size={120} />{file && mode === 'photo' && !draft && !error && <span>{t('shell.preparingPicture')}</span>}</div>
     {mode === 'photo' ? <>
       <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" onChange={choose} hidden aria-label={t('shell.uploadPhoto')} />

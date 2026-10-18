@@ -60,19 +60,30 @@ export async function cropAvatarPhoto(file, zoom, vertical) {
 }
 
 // Built locally with canvas. No third-party avatar service receives a name/photo.
-export function makeAvatar(name, preset, illustrated = false) {
+export function makeAvatar(name, preset, illustrated = false, style = 'male') {
   const canvas = thumbnailCanvas()
   const context = canvas.getContext('2d')
   if (!context) throw new Error('canvas')
   context.fillStyle = AVATAR_COLORS[preset] || AVATAR_COLORS.green
   context.fillRect(0, 0, 192, 192)
   if (illustrated) {
-    context.fillStyle = '#e2e8f0'
+    const female = style === 'female'
+    if (female) {
+      context.fillStyle = '#253343'
+      context.beginPath(); context.ellipse(96, 98, 47, 63, 0, 0, Math.PI * 2); context.fill()
+    }
+    context.fillStyle = female ? '#fce7f3' : '#e2e8f0'
     context.beginPath(); context.ellipse(96, 192, 69, 66, 0, 0, Math.PI * 2); context.fill()
     context.fillStyle = '#f2c5a7'
     context.beginPath(); context.ellipse(96, 88, 37, 43, 0, 0, Math.PI * 2); context.fill()
     context.fillStyle = '#253343'
-    context.beginPath(); context.ellipse(96, 61, 39, 23, -0.15, Math.PI, Math.PI * 2); context.fill()
+    context.beginPath(); context.ellipse(96, 61, female ? 43 : 39, female ? 27 : 23, female ? -0.25 : -0.15, Math.PI, Math.PI * 2); context.fill()
+    if (female) {
+      context.beginPath(); context.ellipse(64, 80, 10, 28, 0.25, 0, Math.PI * 2); context.fill()
+      context.fillStyle = '#fbbf24'
+      context.beginPath(); context.arc(61, 105, 4, 0, Math.PI * 2); context.arc(131, 105, 4, 0, Math.PI * 2); context.fill()
+      context.fillStyle = '#253343'
+    }
     context.beginPath(); context.arc(83, 88, 3, 0, Math.PI * 2); context.arc(109, 88, 3, 0, Math.PI * 2); context.fill()
     context.strokeStyle = '#8b4e3a'; context.lineWidth = 3
     context.beginPath(); context.arc(96, 101, 11, 0.2, Math.PI - 0.2); context.stroke()

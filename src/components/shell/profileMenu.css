@@ -23,3 +23,10 @@
 .tp-avatar-colors { display: flex; justify-content: center; gap: 10px; padding: 5px 0 15px; }
 .tp-avatar-colors button { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; color: #fff; border: 2px solid transparent; }
 .tp-avatar-colors button[aria-pressed='true'] { outline: 2px solid var(--brand); outline-offset: 3px; }
+
+.tp-account-detail { display: flex; align-items: center; gap: 7px; color: var(--text-muted); font-size: 11px; min-width: 0; }
+.tp-account-detail svg { flex-shrink: 0; }
+.tp-account-detail span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-avatar-style { display: flex; justify-content: center; gap: 6px; padding-top: 16px; }
+.tp-avatar-style button { min-width: 94px; min-height: 36px; border: 1px solid var(--border); border-radius: 8px; color: var(--text-secondary); font-size: 13px; }
+.tp-avatar-style button[aria-pressed='true'] { background: var(--brand-subtle); color: var(--brand-on-tint); border-color: var(--brand); font-weight: 600; }

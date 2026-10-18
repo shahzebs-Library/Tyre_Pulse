@@ -1,7 +1,6 @@
 import { LayoutGrid, HelpCircle } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import BrandIcon from '../ui/BrandIcon'
-import ProfileMenu from './ProfileMenu'
 import { useLanguage } from '../../contexts/LanguageContext'
 
 function tx(t, key, fallback) { const value = t(key); return !value || value === key ? fallback : value }
@@ -19,7 +18,6 @@ export default function ModuleRail({ groups, selected, onSelect, appIcon, hasCus
     <div className="tp-rail-footer">
       <button type="button" aria-label={tx(t, 'shell.allModules', 'All modules')} title={tx(t, 'shell.allModules', 'All modules')} aria-pressed={!selected} onClick={() => onSelect(null)}><LayoutGrid size={21} /><span>{tx(t, 'shell.allModules', 'All modules')}</span></button>
       <Link to="/help" title={tx(t, 'common.help', 'Help')} aria-label={tx(t, 'common.help', 'Help')}><HelpCircle size={20} /></Link>
-      <ProfileMenu compact />
     </div>
   </div>
 }

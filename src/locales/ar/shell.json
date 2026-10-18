@@ -110,5 +110,8 @@
   "allModules": "جميع الوحدات",
   "workspaces": "مساحات العمل",
   "avatarColors": {"green": "أخضر", "blue": "أزرق", "violet": "بنفسجي", "amber": "كهرماني", "rose": "وردي", "slate": "رمادي"},
-  "workspaceNames": {"overview": "الرئيسية", "fleet": "الأسطول", "tyres": "الإطارات", "workshop": "الورشة", "inspections": "الفحوصات", "drivers": "السائقون", "logistics": "اللوجستيات", "inventory": "المخازن", "accidents": "المطالبات", "finance": "المالية", "reports": "التقارير", "automation": "الأتمتة", "admin": "الإدارة"}
+  "workspaceNames": {"overview": "الرئيسية", "fleet": "الأسطول", "tyres": "الإطارات", "workshop": "الورشة", "inspections": "الفحوصات", "drivers": "السائقون", "logistics": "اللوجستيات", "inventory": "المخازن", "accidents": "المطالبات", "finance": "المالية", "reports": "التقارير", "automation": "الأتمتة", "admin": "الإدارة"},
+  "avatarStyle": "نمط الصورة الرمزية",
+  "avatarStyles": {"male": "رجل", "female": "امرأة"},
+  "employeeId": "الرقم الوظيفي"
 }

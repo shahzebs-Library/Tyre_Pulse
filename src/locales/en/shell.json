@@ -110,5 +110,8 @@
   "allModules": "All modules",
   "workspaces": "Workspaces",
   "avatarColors": {"green": "Green", "blue": "Blue", "violet": "Violet", "amber": "Amber", "rose": "Rose", "slate": "Slate"},
-  "workspaceNames": {"overview": "Home", "fleet": "Fleet", "tyres": "Tyres", "workshop": "Workshop", "inspections": "Inspections", "drivers": "Drivers", "logistics": "Logistics", "inventory": "Stores", "accidents": "Claims", "finance": "Finance", "reports": "Reports", "automation": "Automation", "admin": "Admin"}
+  "workspaceNames": {"overview": "Home", "fleet": "Fleet", "tyres": "Tyres", "workshop": "Workshop", "inspections": "Inspections", "drivers": "Drivers", "logistics": "Logistics", "inventory": "Stores", "accidents": "Claims", "finance": "Finance", "reports": "Reports", "automation": "Automation", "admin": "Admin"},
+  "avatarStyle": "Avatar style",
+  "avatarStyles": {"male": "Male", "female": "Female"},
+  "employeeId": "Employee ID"
 }

@@ -1,5 +1,19 @@
 [
   {
+    "id": "2026.10.18.1",
+    "date": "2026-10-18",
+    "changes": [
+      {
+        "modules": [
+          "alerts"
+        ],
+        "text": {
+          "en": "The notification inbox now supports search, approval, critical and read filters, expandable record updates, clearer review actions and actual loaded counts. Updates are grouped only when they refer to the same record; existing approval routes and read actions are retained."
+        }
+      }
+    ]
+  },
+  {
     "id": "2026.09.24.1",
     "date": "2026-09-24",
     "changes": [{

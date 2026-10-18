@@ -107,7 +107,7 @@ export function filterStock(rows = [], { search = '', site = 'all', status = 'al
     if (site !== 'all' && r.site !== site) return false
     if (status !== 'all' && r.status !== status) return false
     if (q) {
-      const hay = [r.site, r.description, r.management_action].filter(Boolean).join(' ').toLowerCase()
+      const hay = [r.site, r.description, r.management_action, r.brand, r.tyre_size, r.custom_data?.stock_item?.code].filter(Boolean).join(' ').toLowerCase()
       if (!hay.includes(q)) return false
     }
     return true

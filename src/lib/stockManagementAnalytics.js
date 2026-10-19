@@ -180,6 +180,30 @@ export function timelineSummary(days = [], now = new Date()) {
 }
 
 /** Current counted tyre stock. Only piece-based tyre lines can be summed safely. */
+function extractTyreSize(value) {
+  const text = String(value || '')
+  // Metric truck and passenger sizes: 315/80 R22.5, 235-70R16, 385-65R22.5.
+  const metric = text.match(/\b(\d{3})\s*([/-])\s*(\d{2,3})\s*r\s*(\d{2}(?:\.\d)?)/i)
+  if (metric) return `${metric[1]}/${metric[3]}R${metric[4]}`
+
+  // Flotation sizes: 10-16.5 and 23.5-25.
+  const flotation = text.match(/\b(\d{1,2}(?:\.\d{1,2})?)\s*-\s*(\d{2}(?:\.\d)?)\b/i)
+  if (flotation) return `${flotation[1]}-${flotation[2]}`
+
+  // Commercial/light truck sizes: 11R22.5, 7.00 R16, 195 R 15C.
+  const commercial = text.match(/\b(\d{1,3}(?:\.\d{1,2})?)\s*r\s*(\d{2}(?:\.\d)?)/i)
+  if (commercial) return `${commercial[1]}R${commercial[2]}`
+  return ''
+}
+
+function normalizeTyreSize(...values) {
+  for (const value of values) {
+    const parsed = extractTyreSize(value)
+    if (parsed) return parsed
+  }
+  return ''
+}
+
 export function summarizeTyreStock(rows = []) {
   let pcs = 0
   let tyreLines = 0
@@ -189,13 +213,16 @@ export function summarizeTyreStock(rows = []) {
     const meta = row?.custom_data?.stock_item || {}
     const kind = String(meta.kind || '').toLowerCase()
     const description = String(row?.description || '')
-    const inferredTyre = Boolean(row?.tyre_size) || /\b(tyre|tire)\b|\d{3}\s*\/\s*\d{2}\s*r?\s*\d{2}|\d{2}\.\d{1,2}\s*[-r]\s*\d{2}/i.test(description)
+    const sourceName = String(meta.source?.name || '')
+    const searchable = `${description} ${sourceName}`
+    const inferredTyre = Boolean(row?.tyre_size || meta.size) || /\b(tyre|tire)\b|\d{3}\s*[/-]\s*\d{2,3}\s*r\s*\d{2}|\d{1,3}(?:\.\d{1,2})?\s*r\s*\d{2}/i.test(searchable)
     if (kind ? kind !== 'tyre' : !inferredTyre) continue
     tyreLines++
     const unit = String(meta.unit || '').trim().toUpperCase()
-    const descriptionSize = description.match(/\d{3}\s*\/\s*\d{2}\s*r?\s*\d{2}(?:\.\d)?|\d{2}\.\d{1,2}\s*[-r]\s*\d{2}(?:\.\d)?|\d{4}\s*r\s*\d{2}(?:\.\d)?|\d{2}\s*r\s*\d{2}(?:\.\d)?/i)?.[0]
-    const size = String(meta.size || row?.tyre_size || descriptionSize || '').trim()
-    const knownTyreSize = Boolean(size) || /\d{3}\s*\/\s*\d{2}\s*r?\s*\d{2}|\d{2}\.\d{1,2}\s*[-r]\s*\d{2}/i.test(description)
+    // Prefer the imported item name when it has a complete dimension; it can
+    // repair legacy tyre_size fields that were truncated during import.
+    const size = normalizeTyreSize(description, sourceName, meta.size, row?.tyre_size)
+    const knownTyreSize = Boolean(size)
     const pieceUnit = ['PCS', 'PC', 'EA', 'EACH', 'PIECE', 'PIECES', 'NO', 'NOS'].includes(unit)
     if (!pieceUnit && !(unit === '' && knownTyreSize)) {
       nonPcsLines++
@@ -211,7 +238,9 @@ export function summarizeTyreStock(rows = []) {
     pcs,
     tyreLines,
     nonPcsLines,
-    bySize: [...bySize].map(([size, quantity]) => ({ size, quantity })).sort((a, b) => b.quantity - a.quantity || a.size.localeCompare(b.size)),
+    bySize: [...bySize].filter(([, quantity]) => quantity > 0)
+      .map(([size, quantity]) => ({ size, quantity }))
+      .sort((a, b) => b.quantity - a.quantity || a.size.localeCompare(b.size)),
   }
 }
 
@@ -228,7 +257,7 @@ export function summarizeTyreStockBySite(rows = []) {
   const sites = [...bySite.values()].map(({ site, country, rows: siteRows }) => {
     const summary = summarizeTyreStock(siteRows)
     return { site, country, key: JSON.stringify([country, site]), total: summary.pcs, bySize: summary.bySize }
-  }).filter(site => site.bySize.length > 0)
+  }).filter(site => site.total > 0 && site.bySize.length > 0)
     .sort((a, b) => b.total - a.total || a.site.localeCompare(b.site) || a.country.localeCompare(b.country))
   const totals = summarizeTyreStock(rows)
   return { sites, sizes: totals.bySize.map(item => item.size), pcs: totals.pcs }

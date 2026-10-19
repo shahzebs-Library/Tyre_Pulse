@@ -15,7 +15,7 @@ it('offers every imported document year and loads the selected year from the ser
  expect(screen.getByRole('option',{name:'2018 · Uploaded issue records'})).toBeTruthy()
  fireEvent.change(screen.getByLabelText('History period'),{target:{value:'2018'}})
  await waitFor(()=>expect(h.list).toHaveBeenLastCalledWith(expect.objectContaining({country:'KSA',from:'2018-01-01',to:'2018-12-31'})))
- expect(screen.getByText(/Original filenames were not retained/)).toBeTruthy()
+ expect(screen.queryByText(/Original filenames were not retained/)).toBeNull()
 })
 it('allows retry of unavailable history without claiming the uploads are empty',async()=>{
  h.coverage.mockRejectedValueOnce(new Error('Unavailable'));render(<MemoryRouter><StoreMaterialIssue/></MemoryRouter>)

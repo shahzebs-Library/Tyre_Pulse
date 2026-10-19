@@ -1,5 +1,19 @@
 [
   {
+    "id": "2026.10.19.2",
+    "date": "2026-10-19",
+    "changes": [
+      {
+        "modules": [
+          "store_material_issue"
+        ],
+        "text": {
+          "en": "MIS opens on this month to keep the initial register fast, while older history remains available by year or custom dates. Search, site and store filters run in the database, with search debounced to avoid repeated requests. The issue form keeps only a short stock availability note instead of a long explanation."
+        }
+      }
+    ]
+  },
+  {
     "id": "2026.10.19.1",
     "date": "2026-10-19",
     "changes": [

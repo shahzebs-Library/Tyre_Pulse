@@ -6,7 +6,7 @@ beforeEach(()=>{
  h.results=[];h.queries=[];h.from.mockReset().mockImplementation(table=>{
   const result=h.results.shift() || {data:[],error:null}
   const q={table,steps:[],then:(resolve,reject)=>Promise.resolve(result).then(resolve,reject)}
-  for(const name of ['select','not','order','limit','eq','is','gte','lte','range'])q[name]=(...args)=>{q.steps.push([name,...args]);return q}
+  for(const name of ['select','not','order','limit','eq','is','gte','lte','range','or'])q[name]=(...args)=>{q.steps.push([name,...args]);return q}
   h.queries.push(q);return q
  })
 })
@@ -29,4 +29,12 @@ it('reads all material categories and source details within a selected historica
  expect(h.queries[0].steps).toContainEqual(['gte','event_date','2018-01-01'])
  expect(h.queries[0].steps).toContainEqual(['lte','event_date','2018-12-31'])
  expect(h.queries[0].steps.find(s=>s[0]==='select')[1]).toContain('source_system')
+})
+it('applies site, store and text search in the database query',async()=>{
+ h.results=[{data:[]},{count:0}]
+ await listSlipsFromConsumption({country:'KSA',from:'2026-01-01',to:'2026-12-31',site:'Riyadh',store:'Central',search:'MIS-22',max:100})
+ expect(h.queries[0].steps).toContainEqual(['eq','site','Riyadh'])
+ expect(h.queries[0].steps).toContainEqual(['eq','store_code','Central'])
+ expect(h.queries[0].steps.find(s=>s[0]==='or')?.[1]).toContain('issue_number.ilike.%MIS-22%')
+ expect(h.queries[1].steps).toContainEqual(['eq','store_code','Central'])
 })

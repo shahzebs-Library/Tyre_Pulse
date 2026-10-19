@@ -39,7 +39,7 @@ const LINE_COLS = [
   'asset_code', 'asset_description', 'asset_type', 'site', 'store_code', 'cost_center',
   'item_code', 'item_description', 'qty', 'uom', 'unit_cost',
   'line_cost', 'tyre_cost', 'spare_cost', 'oil_cost', 'cost_category',
-  'currency', 'country',
+  'currency', 'country', 'source_system', 'source_row',
 ].join(', ')
 
 /** Default ceiling for one register read. ~26k lines a year, so a 12-month
@@ -74,6 +74,21 @@ function sanitizeSearch(term) {
 /* ------------------------------------------------------------------ *
  * 1. The slips that already exist, inside parts_consumption           *
  * ------------------------------------------------------------------ */
+
+/** Coverage uses the same RLS-protected source as the register, without
+ * downloading historical lines or relying on administrator import history. */
+export async function getMaterialIssueCoverage({ country } = {}) {
+  const boundary = (ascending) => {
+    let q = supabase.from('parts_consumption').select('event_date')
+      .not('issue_number', 'is', null).not('event_date', 'is', null)
+      .order('event_date', { ascending }).order('id', { ascending }).limit(1)
+    if (country && country !== 'All') q = q.eq('country', country)
+    return q
+  }
+  const [first, last] = await Promise.all([boundary(true), boundary(false)])
+  if (first.error || last.error) throw toServiceError(first.error || last.error, 'Could not read uploaded MIS history.')
+  return { first: first.data?.[0]?.event_date || null, last: last.data?.[0]?.event_date || null }
+}
 
 /**
  * The real store document register, folded out of the expense lines.

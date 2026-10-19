@@ -1,5 +1,19 @@
 [
   {
+    "id": "2026.10.19.1",
+    "date": "2026-10-19",
+    "changes": [
+      {
+        "modules": [
+          "store_material_issue"
+        ],
+        "text": {
+          "en": "Store Material Issue now shows the date coverage of accessible imported MIS history and offers a year picker for older uploaded records. Slips include recorded source system, source row and units in their item details and exports. The register retains all material categories, country and access restrictions, and capped-read notices. Legacy filenames are not inferred where they were never saved."
+        }
+      }
+    ]
+  },
+  {
     "id": "2026.10.18.6",
     "date": "2026-10-18",
     "changes": [

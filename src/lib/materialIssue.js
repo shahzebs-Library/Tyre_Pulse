@@ -810,6 +810,9 @@ export const LINE_EXPORT_COLUMNS = Object.freeze([
   { key: 'currency', header: 'Currency' },
   { key: 'site', header: 'Site' },
   { key: 'store_code', header: 'Store' },
+  { key: 'uom', header: 'Unit' },
+  { key: 'source_system', header: 'Import source' },
+  { key: 'source_row', header: 'Source row' },
 ])
 
 /**
@@ -830,6 +833,9 @@ export function lineExportRows(lines = []) {
     currency: cell(l?.currency),
     site: cell(l?.site),
     store_code: cell(l?.store_code),
+    uom: cell(l?.uom),
+    source_system: cell(l?.source_system),
+    source_row: cell(l?.source_row),
   }))
 }
 

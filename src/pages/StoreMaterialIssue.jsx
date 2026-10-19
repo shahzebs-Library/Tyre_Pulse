@@ -83,6 +83,11 @@ function isoDay(d) {
   const p = (n) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
+function monthStart() {
+  const d = new Date()
+  d.setDate(1)
+  return isoDay(d)
+}
 function monthsAgo(n) {
   const d = new Date()
   d.setMonth(d.getMonth() - n)
@@ -182,12 +187,17 @@ export default function StoreMaterialIssue() {
 
   const [coverage, setCoverage] = useState(null)
   const [coverageError, setCoverageError] = useState('')
-  const [historyPeriod, setHistoryPeriod] = useState('recent')
+  const [historyPeriod, setHistoryPeriod] = useState('month')
   const [coverageRefresh, setCoverageRefresh] = useState(0)
   const historyYears = useMemo(() => issueHistoryYears(coverage), [coverage])
-  const [from, setFrom] = useState(monthsAgo(12))
+  const [from, setFrom] = useState(monthStart())
   const [to, setTo] = useState(isoDay(new Date()))
   const [filters, setFilters] = useState({ site: 'All', store: 'All', docType: 'All', search: '' })
+  const [querySearch, setQuerySearch] = useState('')
+  useEffect(() => {
+    const timer = setTimeout(() => setQuerySearch(filters.search), 300)
+    return () => clearTimeout(timer)
+  }, [filters.search])
   const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
   const clearFilters = () => setFilters({ site: 'All', store: 'All', docType: 'All', search: '' })
   const hasFilters = filters.site !== 'All' || filters.store !== 'All'
@@ -211,7 +221,8 @@ export default function StoreMaterialIssue() {
   }, [activeCountry, coverageRefresh])
   function choosePeriod(value) {
     setHistoryPeriod(value)
-    if (value === 'recent') { setFrom(monthsAgo(12)); setTo(isoDay(new Date())) }
+    if (value === 'month') { setFrom(monthStart()); setTo(isoDay(new Date())) }
+    else if (value === 'recent') { setFrom(monthsAgo(12)); setTo(isoDay(new Date())) }
     else if (/^\d{4}$/.test(value)) { setFrom(`${value}-01-01`); setTo(`${value}-12-31`) }
   }
   const registerRequest = useRef(0)
@@ -223,9 +234,14 @@ export default function StoreMaterialIssue() {
     setError(''); setSlips([]); setServerSummary(null); setTruncated(false); setUnslipped(null)
     setExpanded(null); setExpandedLines([]); setExpandError('')
     try {
-      const res = await listSlipsFromConsumption({
-        country: activeCountry, from, to, max: DEFAULT_LINE_MAX,
-      })
+      const [res, s] = await Promise.all([
+        listSlipsFromConsumption({
+          country: activeCountry, from, to,
+          site: filters.site, store: filters.store, search: querySearch,
+          max: DEFAULT_LINE_MAX,
+        }),
+        getIssueSummary({ country: activeCountry, from, to }),
+      ])
       if (request !== registerRequest.current) return
       setSlips(res.slips)
       setTruncated(res.truncated)
@@ -233,8 +249,7 @@ export default function StoreMaterialIssue() {
       setLoadedAt(new Date())
       // Best effort: the server aggregate is the authoritative window total when
       // the client read was capped. A failure here must never fail the page.
-      const s = await getIssueSummary({ country: activeCountry, from, to })
-      if (request === registerRequest.current) setServerSummary(s.ok ? s.data : null)
+      setServerSummary(s.ok ? s.data : null)
     } catch (err) {
       if (request !== registerRequest.current) return
       setError(toUserMessage(err, 'Could not load the material issue register.'))
@@ -242,12 +257,18 @@ export default function StoreMaterialIssue() {
     } finally {
       if (request === registerRequest.current) setLoading(false)
     }
-  }, [activeCountry, from, to])
+  }, [activeCountry, from, to, filters.site, filters.store, querySearch])
 
   useEffect(() => { load(); return () => { registerRequest.current += 1 } }, [load])
 
   // --- Derived --------------------------------------------------------------
-  const options = useMemo(() => slipFilterOptions(slips), [slips])
+  const options = useMemo(() => {
+    const available = slipFilterOptions(slips)
+    return {
+      sites: [...new Set([...available.sites, ...(filters.site !== 'All' ? [filters.site] : [])])].sort(),
+      stores: [...new Set([...available.stores, ...(filters.store !== 'All' ? [filters.store] : [])])].sort(),
+    }
+  }, [slips, filters.site, filters.store])
 
   const filtered = useMemo(() => filterSlips(slips, filters), [slips, filters])
 
@@ -340,23 +361,6 @@ export default function StoreMaterialIssue() {
         </Notice>
       )}
 
-      {/* What this register is, and what it cannot tell you. Stated up front
-          rather than left for a reader to assume. */}
-      <Notice icon={Info} title="What this page reads, and what it cannot show">
-        <p>
-          A Material Issue Slip is the document the store raises when it issues parts
-          against a job card. These slips are read from the expense lines themselves
-          (the slip number the store already stamps on every line), so this register
-          covers real history, not only slips raised in this app.
-        </p>
-        <p>
-          <strong className="text-[var(--text-secondary)]">All imported material categories are included.</strong>{' '}
-          This register shows uploaded issue records for tyres, spares, oils and other materials.
-          The tyre-only suggestions in Stock Management do not filter this page.
-          There is no live on-hand balance on this page. Issued quantities are historical consumption, not the current store balance.
-        </p>
-      </Notice>
-
       <Card className="gap-[var(--space-3)]">
         <CardHeader icon={FileSpreadsheet} title="Uploaded MIS history"
           description="Browse imported issue records by their document year, regardless of when the file was uploaded." />
@@ -366,10 +370,10 @@ export default function StoreMaterialIssue() {
             : <p className="text-sm text-[var(--text-secondary)]">{coverage.first
               ? `Imported issue dates: ${coverage.first} to ${coverage.last}. Choose a year below to view older uploads.`
               : 'No imported issue records are available in your current country and access scope.'}</p>}
-        <p className="text-xs text-[var(--text-muted)]">Original filenames were not retained for legacy ERP rows. Open a slip to see its recorded source system and source row. No filename is inferred.</p>
         <label className="text-xs text-[var(--text-muted)] space-y-1 max-w-xs">
           <span>History period</span>
           <select className={inputCls} value={historyPeriod} onChange={e => choosePeriod(e.target.value)}>
+            <option value="month">This month</option>
             <option value="recent">Last 12 months</option>
             {historyYears.map(year => <option key={year} value={year}>{year} · Uploaded issue records</option>)}
             <option value="custom">Custom dates</option>
@@ -1052,19 +1056,6 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
 
   return (
     <div className="space-y-4">
-      <Notice icon={Info} title="Before you issue">
-        <p>
-          <strong className="text-[var(--text-secondary)]">No on-hand balance is shown,
-          and none is checked.</strong> Stock is recorded by site and description with no
-          item code, so it cannot be matched to the item codes on a slip. This screen
-          records what was issued; it does not know what is on the shelf.
-        </p>
-        <p>
-          Item codes are not unique across countries, so a slip must name one country
-          before items can be picked.
-        </p>
-      </Notice>
-
       {saved && (
         <Notice tone="info" icon={Check} title="Slip saved.">
           <p>Slip <span className="font-mono">{txt(saved)}</span> has been recorded.</p>
@@ -1080,7 +1071,7 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
           real in-flow results list inside this card, and the country/document
           controls are native <select>, so nothing here wants cropping. */}
       <Card>
-        <CardHeader title="Slip details" />
+        <CardHeader title="Slip details" description="Stock availability is not checked when recording an issue." />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <label className="text-xs text-[var(--text-muted)] space-y-1">
             <span>Document type</span>

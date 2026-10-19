@@ -109,7 +109,7 @@ export async function getMaterialIssueCoverage({ country } = {}) {
  * @returns {Promise<{slips:Array, lines:Array, truncated:boolean, unslipped:number}>}
  */
 export async function listSlipsFromConsumption(opts = {}) {
-  const { country, from, to, site, search, max = DEFAULT_LINE_MAX } = opts
+  const { country, from, to, site, store, search, max = DEFAULT_LINE_MAX } = opts
 
   const build = (fromIdx, toIdx) => {
     let q = supabase
@@ -125,6 +125,7 @@ export async function listSlipsFromConsumption(opts = {}) {
     if (from) q = q.gte('event_date', from)
     if (to) q = q.lte('event_date', to)
     if (site && site !== 'All') q = q.eq('site', site)
+    if (store && store !== 'All') q = q.eq('store_code', store)
     const s = sanitizeSearch(search)
     if (s) {
       q = q.or(
@@ -135,7 +136,11 @@ export async function listSlipsFromConsumption(opts = {}) {
     return q
   }
 
-  const { data, error, truncated } = await fetchAllPages(build, { max })
+  const [pageResult, unslipped] = await Promise.all([
+    fetchAllPages(build, { max }),
+    countUnslippedLines({ country, from, to, site, store }),
+  ])
+  const { data, error, truncated } = pageResult
   if (error) {
     if (isMissingRelation(error)) {
       return { slips: [], lines: [], truncated: false, unslipped: null, missing: true }
@@ -151,7 +156,7 @@ export async function listSlipsFromConsumption(opts = {}) {
     // slip numbers out server-side, so counting them in `rows` would always be
     // zero and would read as "we checked and found none" when we never looked.
     // A head count answers over the WHOLE window, not just the capped read.
-    unslipped: await countUnslippedLines({ country, from, to, site }),
+    unslipped,
     missing: false,
   }
 }
@@ -168,7 +173,7 @@ export async function listSlipsFromConsumption(opts = {}) {
  *
  * @returns {Promise<number|null>}
  */
-export async function countUnslippedLines({ country, from, to, site } = {}) {
+export async function countUnslippedLines({ country, from, to, site, store } = {}) {
   try {
     let q = supabase
       .from('parts_consumption')
@@ -178,6 +183,7 @@ export async function countUnslippedLines({ country, from, to, site } = {}) {
     if (from) q = q.gte('event_date', from)
     if (to) q = q.lte('event_date', to)
     if (site && site !== 'All') q = q.eq('site', site)
+    if (store && store !== 'All') q = q.eq('store_code', store)
     const { count, error } = await q
     if (error) return null
     return Number.isFinite(count) ? count : null

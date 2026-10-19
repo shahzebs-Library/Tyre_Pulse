@@ -234,6 +234,7 @@ const TYPE_LABEL: Record<string, string> = {
   accidents: 'Accident & Incident Report',
   claims: 'Insurance Claims Summary',
   stock: 'Stock & Goods Receipts',
+  tyre_stock_alert: 'Tyre Low-Stock Alert',
   vendor: 'Vendor / Procurement Report',
   pm: 'Preventive Maintenance due',
   workshop: 'Workshop Summary',
@@ -872,6 +873,93 @@ type DatasetDigest = {
   recent: Record<string, unknown>[]
 }
 
+type LowTyreStockRow = {
+  site: string
+  country: string
+  size: string
+  brand: string
+  description: string
+  quantity: number
+  unit: string
+  minimum: number
+  critical: number
+  level: 'Critical' | 'Low'
+}
+
+function emailText(value: unknown): string {
+  const escaped: Record<string, string> = {
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }
+  return String(value ?? '').replace(/[&<>"']/g, (ch) => escaped[ch] ?? ch)
+}
+
+function sizeFromDescription(description: string): string {
+  return description.match(/\d{3}\s*\/\s*\d{2}\s*r?\s*\d{2}(?:\.\d)?|\d{2}\.\d{1,2}\s*[-r]\s*\d{2}|\d{4}\s*r\s*\d{2}/i)?.[0] ?? ''
+}
+
+/** A service-role read must always have an explicit tenant; page through the
+ *  whole tenant inventory so the alert cannot silently miss lines after 1,000. */
+// deno-lint-ignore no-explicit-any
+async function lowTyreStock(svc: any, orgId: string | null): Promise<LowTyreStockRow[]> {
+  if (!orgId) throw new Error('Tyre stock alerts require an organisation-scoped schedule.')
+  const columns = 'id,site,country,description,stock_qty,min_level,critical_level,brand,tyre_size,custom_data'
+  const rows: Record<string, any>[] = []
+  const pageSize = 1000
+  for (let from = 0; from < 25_000; from += pageSize) {
+    const { data, error } = await svc.from('stock_records').select(columns)
+      .eq('organisation_id', orgId).order('id').range(from, from + pageSize - 1)
+    if (error) throw new Error(`stock_records query failed: ${error.message}`)
+    const page = (data ?? []) as Record<string, any>[]
+    rows.push(...page)
+    if (page.length < pageSize) break
+    if (from + pageSize >= 25_000) throw new Error('This organisation has more than 25,000 stock lines; the tyre alert was stopped to avoid an incomplete email.')
+  }
+  return rows.flatMap((row) => {
+    const meta = row.custom_data?.stock_item ?? {}
+    const kind = String(meta.kind ?? '').toLowerCase()
+    const description = String(row.description ?? '')
+    const size = String(meta.size || row.tyre_size || sizeFromDescription(description)).trim()
+    const inferredTyre = Boolean(size) || /\b(tyre|tire)\b/i.test(description)
+    if (kind ? kind !== 'tyre' : !inferredTyre) return []
+    const quantity = Number(row.stock_qty)
+    const minimum = Number(row.min_level)
+    const critical = Number(row.critical_level)
+    if (!Number.isFinite(quantity) || !Number.isFinite(minimum) || quantity > minimum) return []
+    return [{
+      site: String(row.site || 'Unassigned'),
+      country: String(row.country || 'N/A'),
+      size: size || 'Size not recorded',
+      brand: String(row.brand || meta.brand || ''),
+      description,
+      quantity,
+      unit: String(meta.unit || 'units'),
+      minimum,
+      critical: Number.isFinite(critical) ? critical : 0,
+      level: quantity <= (Number.isFinite(critical) ? critical : 0) ? 'Critical' as const : 'Low' as const,
+    }]
+  }).sort((a, b) => (a.level === b.level ? 0 : a.level === 'Critical' ? -1 : 1)
+    || a.quantity - b.quantity || a.country.localeCompare(b.country) || a.site.localeCompare(b.site) || a.size.localeCompare(b.size))
+}
+
+function renderTyreStockAlert(s: Schedule, rows: LowTyreStockRow[], appUrl: string): string {
+  const genAt = new Date().toISOString().slice(0, 16).replace('T', ' ')
+  const bySize = new Map<string, { count: number; quantity: number; gap: number }>()
+  for (const row of rows) {
+    const agg = bySize.get(row.size) ?? { count: 0, quantity: 0, gap: 0 }
+    agg.count++
+    agg.quantity += row.quantity
+    agg.gap += Math.max(0, row.minimum - row.quantity)
+    bySize.set(row.size, agg)
+  }
+  const sizeRows = [...bySize].sort((a, b) => b[1].count - a[1].count).map(([size, v]) =>
+    `<tr><td style="padding:7px;border-bottom:1px solid #eef2f7">${emailText(size)}</td><td style="padding:7px;text-align:right;border-bottom:1px solid #eef2f7">${num(v.count)}</td><td style="padding:7px;text-align:right;border-bottom:1px solid #eef2f7">${num(v.quantity)}</td><td style="padding:7px;text-align:right;border-bottom:1px solid #eef2f7">${num(v.gap)}</td></tr>`).join('')
+  const rowsHtml = rows.map((row) => {
+    const tone = row.level === 'Critical' ? '#b91c1c' : '#b45309'
+    return `<tr><td style="padding:7px;border-bottom:1px solid #eef2f7">${emailText(row.country)}</td><td style="padding:7px;border-bottom:1px solid #eef2f7">${emailText(row.site)}</td><td style="padding:7px;border-bottom:1px solid #eef2f7">${emailText(row.size)}</td><td style="padding:7px;border-bottom:1px solid #eef2f7">${emailText(row.brand || row.description || 'N/A')}</td><td style="padding:7px;text-align:right;border-bottom:1px solid #eef2f7;font-weight:700">${num(row.quantity)} ${emailText(row.unit)}</td><td style="padding:7px;text-align:right;border-bottom:1px solid #eef2f7">${num(row.minimum)} ${emailText(row.unit)}</td><td style="padding:7px;color:${tone};font-weight:800;border-bottom:1px solid #eef2f7">${row.level}</td></tr>`
+  }).join('')
+  return `<div style="font-family:Arial,sans-serif;max-width:760px;margin:auto;color:#0f172a;background:#fff"><div style="background:#111827;border-radius:12px 12px 0 0;padding:22px 26px;color:#fff"><div style="font-size:19px;font-weight:800">TyrePulse Tyre Low-Stock Alert</div><div style="font-size:12px;color:#d1d5db;margin-top:4px">Schedule: ${emailText(s.name)} | generated ${genAt} UTC</div></div><div style="border:1px solid #e2e8f0;border-top:0;border-radius:0 0 12px 12px;padding:22px 26px"><div style="background:#fff7ed;border-left:4px solid #f59e0b;border-radius:8px;padding:12px 16px;font-size:14px;line-height:1.6"><b>${num(rows.length)} tyre stock line(s)</b> are at or below their minimum reorder level. Review the listed size and site, then arrange replenishment.</div><h2 style="font-size:13px;margin:20px 0 8px;text-transform:uppercase">Low stock by tyre size</h2><table role="presentation" width="100%" cellspacing="0" style="font-size:12px;border-collapse:collapse"><tr style="background:#f8fafc;font-weight:700"><td style="padding:7px">Tyre size</td><td style="padding:7px;text-align:right">Low lines</td><td style="padding:7px;text-align:right">On hand</td><td style="padding:7px;text-align:right">Below minimum</td></tr>${sizeRows}</table><h2 style="font-size:13px;margin:20px 0 8px;text-transform:uppercase">Items to reorder</h2><div style="overflow-x:auto"><table role="presentation" width="100%" cellspacing="0" style="font-size:11px;border-collapse:collapse"><tr style="background:#f8fafc;font-weight:700"><td style="padding:7px">Country</td><td style="padding:7px">Site</td><td style="padding:7px">Size</td><td style="padding:7px">Brand / item</td><td style="padding:7px;text-align:right">On hand</td><td style="padding:7px;text-align:right">Minimum</td><td style="padding:7px">Level</td></tr>${rowsHtml}</table></div><p style="font-size:11px;color:#64748b;margin-top:16px">An alert is sent only when a tyre stock line is at or below its saved minimum level. Current stock is read from TyrePulse Stock Management.</p><a href="${emailText(appUrl)}" style="display:inline-block;background:#facc15;color:#111827;font-weight:700;font-size:13px;padding:11px 20px;border-radius:8px;text-decoration:none;margin-top:4px">Open Stock Management</a></div></div>`
+}
+
 /** Apply the schedule's own eq/org/date-window filters to a query - shared by
  *  the exact head-count and the row-fetching query below so they can never
  *  disagree about which rows are in scope. */
@@ -1021,11 +1109,16 @@ function renderDatasetHtml(s: Schedule, cfg: DatasetDigestCfg, d: DatasetDigest,
  *  period-scoped figure. The fallback branch (unknown report type) keeps the
  *  old header with no window claim. */
 // deno-lint-ignore no-explicit-any
-async function renderForSchedule(svc: any, s: Schedule, appUrl: string, currency: string): Promise<{ subject: string; html: string }> {
+async function renderForSchedule(svc: any, s: Schedule, appUrl: string, currency: string): Promise<{ subject: string; html: string; shouldSend?: boolean }> {
   const type = s.report_type ?? ''
   const win = resolvePeriodBounds(s, new Date())
   let html: string
-  if (type === 'claims') {
+  if (type === 'tyre_stock_alert') {
+    const rows = await lowTyreStock(svc, s.org_id)
+    const subject = asciiSafe(`TyrePulse Tyre Low-Stock Alert: ${s.name}`)
+    if (!rows.length) return { subject, html: '', shouldSend: false }
+    return { subject, html: asciiSafe(renderTyreStockAlert(s, rows, `${appUrl.replace(/\/+$/, '')}/stock`)), shouldSend: true }
+  } else if (type === 'claims') {
     html = renderClaimsHtml(s, await buildClaimsDigest(svc, s.org_id, win), appUrl, currency, win.label)
   } else if (type === 'executive') {
     html = renderHtml(s, await buildDigest(svc, s.org_id), appUrl, currency, win.label)
@@ -1105,7 +1198,12 @@ async function handleSendNow(req: Request, svc: any): Promise<Response> {
 
   const now = new Date()
   try {
-    const { subject, html } = await renderForSchedule(svc, s as Schedule, APP_URL, await systemCurrency(svc))
+    const rendered = await renderForSchedule(svc, s as Schedule, APP_URL, await systemCurrency(svc))
+    if (rendered.shouldSend === false) {
+      await svc.from('report_schedules').update({ last_status: 'no_alert', last_error: null, updated_at: now.toISOString() }).eq('id', s.id)
+      return jsonResponse(req, { sent: false, skipped: true, recipients: 0, reason: 'No tyre stock is at or below its minimum level.' })
+    }
+    const { subject, html } = rendered
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
@@ -1114,7 +1212,7 @@ async function handleSendNow(req: Request, svc: any): Promise<Response> {
     if (!res.ok) throw new Error(`Resend ${res.status}: ${(await res.text()).slice(0, 300)}`)
 
     await svc.from('report_schedules')
-      .update({ last_sent_at: now.toISOString(), updated_at: now.toISOString() })
+      .update({ last_sent_at: now.toISOString(), last_status: 'sent', last_error: null, updated_at: now.toISOString() })
       .eq('id', s.id)
     await svc.from('report_send_log').insert({
       schedule_id: s.id, schedule_name: `${s.name} (send now)`, report_type: s.report_type,
@@ -1124,6 +1222,7 @@ async function handleSendNow(req: Request, svc: any): Promise<Response> {
   } catch (e) {
     const msg = String((e as Error)?.message ?? e).slice(0, 300)
     console.error('send-now: report send failed', e)
+    await svc.from('report_schedules').update({ last_status: 'failed', last_error: msg, updated_at: now.toISOString() }).eq('id', s.id)
     await svc.from('report_send_log').insert({
       schedule_id: s.id, schedule_name: `${s.name} (send now)`, report_type: s.report_type,
       recipients, status: 'failed', error: msg,
@@ -1172,6 +1271,7 @@ serve(async (req) => {
 
   let sent = 0
   let failed = 0
+  let skipped = 0
   let first = true
 
   for (const s of (due ?? []) as Schedule[]) {
@@ -1187,7 +1287,15 @@ serve(async (req) => {
 
       // Insurance Claims Summary + custom Report Builder layouts get the
       // claims-desk digest; every other type the executive digest.
-      const { subject, html } = await renderForSchedule(svc, s, APP_URL, currency)
+      const rendered = await renderForSchedule(svc, s, APP_URL, currency)
+      if (rendered.shouldSend === false) {
+        await svc.from('report_schedules')
+          .update({ last_status: 'no_alert', last_error: null, next_run_at: computeNextRun(s, now), updated_at: now.toISOString() })
+          .eq('id', s.id)
+        skipped++
+        continue
+      }
+      const { subject, html } = rendered
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
@@ -1196,7 +1304,7 @@ serve(async (req) => {
       if (!res.ok) throw new Error(`Resend ${res.status}: ${(await res.text()).slice(0, 300)}`)
 
       await svc.from('report_schedules')
-        .update({ last_sent_at: now.toISOString(), next_run_at: computeNextRun(s, now), updated_at: now.toISOString() })
+        .update({ last_sent_at: now.toISOString(), last_status: 'sent', last_error: null, next_run_at: computeNextRun(s, now), updated_at: now.toISOString() })
         .eq('id', s.id)
       await svc.from('report_send_log').insert({
         schedule_id: s.id, schedule_name: s.name, report_type: s.report_type,
@@ -1205,18 +1313,19 @@ serve(async (req) => {
       sent++
     } catch (e) {
       // back off one hour so a broken schedule doesn't retry every 15 minutes
+      const errMsg = String((e as Error)?.message ?? e).slice(0, 500)
       await svc.from('report_schedules')
-        .update({ next_run_at: new Date(now.getTime() + 3_600_000).toISOString(), updated_at: now.toISOString() })
+        .update({ last_status: 'failed', last_error: errMsg, next_run_at: new Date(now.getTime() + 3_600_000).toISOString(), updated_at: now.toISOString() })
         .eq('id', s.id)
       await svc.from('report_send_log').insert({
         schedule_id: s.id, schedule_name: s.name, report_type: s.report_type,
-        recipients, status: 'failed', error: String((e as Error)?.message ?? e).slice(0, 500),
+        recipients, status: 'failed', error: errMsg,
       })
       failed++
     }
   }
 
-  return new Response(JSON.stringify({ processed: (due ?? []).length, sent, failed }), {
+  return new Response(JSON.stringify({ processed: (due ?? []).length, sent, failed, skipped }), {
     headers: { 'Content-Type': 'application/json' },
   })
 })

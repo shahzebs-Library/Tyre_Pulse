@@ -20,6 +20,23 @@
     "transfer": "Transfer",
     "timeline": "Timeline"
   },
+  "companyTyres": {
+    "title": "Company tyre stock",
+    "piecesOnHand": "pieces on hand",
+    "allCountries": "All accessible countries",
+    "unitExcluded": "{count} tyre line(s) excluded because the unit is not confirmed as pieces",
+    "currentBySize": "Current stock by size",
+    "changeTimeline": "Tyre changes over time",
+    "lastSixMonths": "Last six months",
+    "recordedChanges": "recorded changes",
+    "monthlyChartLabel": "Monthly recorded tyre changes, {total} total over six months",
+    "changeDefinition": "Based on positive tyre record quantities and issue date.",
+    "changedBySize": "Changed by tyre size",
+    "openTimeline": "Details",
+    "changed": "changed",
+    "noChanges": "No tyre changes recorded in this period.",
+    "unavailable": "Size breakdown unavailable."
+  },
   "statuses": {
     "OK": "OK",
     "Low": "Low",

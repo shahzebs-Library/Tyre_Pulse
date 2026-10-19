@@ -179,6 +179,87 @@ export function timelineSummary(days = [], now = new Date()) {
   }
 }
 
+/** Current counted tyre stock. Only piece-based tyre lines can be summed safely. */
+export function summarizeTyreStock(rows = []) {
+  let pcs = 0
+  let tyreLines = 0
+  let nonPcsLines = 0
+  const bySize = new Map()
+  for (const row of rows || []) {
+    const meta = row?.custom_data?.stock_item || {}
+    const kind = String(meta.kind || '').toLowerCase()
+    const description = String(row?.description || '')
+    const inferredTyre = Boolean(row?.tyre_size) || /\b(tyre|tire)\b|\d{3}\s*\/\s*\d{2}\s*r?\s*\d{2}|\d{2}\.\d{1,2}\s*[-r]\s*\d{2}/i.test(description)
+    if (kind ? kind !== 'tyre' : !inferredTyre) continue
+    tyreLines++
+    const unit = String(meta.unit || '').trim().toUpperCase()
+    const size = String(meta.size || row?.tyre_size || '').trim()
+    const knownTyreSize = Boolean(size) || /\d{3}\s*\/\s*\d{2}\s*r?\s*\d{2}|\d{2}\.\d{1,2}\s*[-r]\s*\d{2}/i.test(description)
+    const pieceUnit = ['PCS', 'PC', 'EA', 'EACH', 'PIECE', 'PIECES', 'NO', 'NOS'].includes(unit)
+    if (!pieceUnit && !(unit === '' && knownTyreSize)) {
+      nonPcsLines++
+      continue
+    }
+    const qty = num(row?.stock_qty)
+    if (qty === null) { nonPcsLines++; continue }
+    pcs += qty
+    const label = size || 'Size not recorded'
+    bySize.set(label, (bySize.get(label) || 0) + qty)
+  }
+  return {
+    pcs,
+    tyreLines,
+    nonPcsLines,
+    bySize: [...bySize].map(([size, quantity]) => ({ size, quantity })).sort((a, b) => b.quantity - a.quantity || a.size.localeCompare(b.size)),
+  }
+}
+
+/** Tyre stock lines at or below their configured reorder threshold. */
+export function lowTyreStockRows(rows = []) {
+  return (rows || []).filter(row => {
+    const meta = row?.custom_data?.stock_item || {}
+    const kind = String(meta.kind || '').toLowerCase()
+    const description = String(row?.description || '')
+    const tyreSize = String(meta.size || row?.tyre_size || '')
+    const inferredTyre = Boolean(tyreSize) || /\b(tyre|tire)\b|\d{3}\s*\/\s*\d{2}\s*r?\s*\d{2}|\d{2}\.\d{1,2}\s*[-r]\s*\d{2}/i.test(description)
+    if (kind ? kind !== 'tyre' : !inferredTyre) return false
+    const qty = num(row?.stock_qty)
+    const minimum = num(row?.min_level)
+    return qty !== null && minimum !== null && qty <= minimum
+  })
+}
+
+/** Six-month tyre change/issue summary; positive quantities are issued, returns are excluded. */
+export function tyreChangeSummary(records = [], now = new Date(), monthCount = 6) {
+  const months = []
+  for (let offset = monthCount - 1; offset >= 0; offset--) {
+    const date = new Date(now.getFullYear(), now.getMonth() - offset, 1)
+    months.push({
+      key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+      label: date.toLocaleDateString(undefined, { month: 'short' }),
+      quantity: 0,
+    })
+  }
+  const monthIndex = new Map(months.map((month, index) => [month.key, index]))
+  const sizes = new Map()
+  for (const row of records || []) {
+    const date = String(row?.issue_date || '').slice(0, 10)
+    const index = monthIndex.get(date.slice(0, 7))
+    if (index === undefined) continue
+    const rawQty = num(row?.qty)
+    const qty = rawQty === null ? 1 : rawQty
+    if (qty <= 0) continue
+    months[index].quantity += qty
+    const size = String(row?.size || '').trim() || 'Size not recorded'
+    sizes.set(size, (sizes.get(size) || 0) + qty)
+  }
+  return {
+    total: months.reduce((sum, month) => sum + month.quantity, 0),
+    months,
+    bySize: [...sizes].map(([size, quantity]) => ({ size, quantity })).sort((a, b) => b.quantity - a.quantity || a.size.localeCompare(b.size)),
+  }
+}
+
 export const STOCK_EXPORT_COLS = ['site', 'description', 'stock_qty', 'min_level', 'critical_level', 'reorder_qty', 'status', 'velocity', 'days_left', 'suggestion', 'action']
 export const STOCK_EXPORT_HEADERS = ['Site', 'Description', 'Stock Qty', 'Min Level', 'Critical Level', 'Reorder Qty', 'Status', 'Velocity (per month)', 'Days Left', 'Suggested Reorder', 'Action']
 

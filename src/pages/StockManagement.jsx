@@ -31,7 +31,7 @@ import { sortRows, nextSort } from '../lib/consoleTable'
 import {
   deriveStatus, buildVelocityMap, enrichStock, filterStock, summarizeStock, timelineByDate,
   timelineSummary, coverBand, stockExportRows, STOCK_EXPORT_COLS, STOCK_EXPORT_HEADERS, STATUSES,
-  todayStr, offsetDate, firstOfMonth, velocitySince,
+  todayStr, offsetDate, firstOfMonth, velocitySince, localDay, summarizeTyreStock, tyreChangeSummary,
 } from '../lib/stockManagementAnalytics'
 
 // exportUtils pulls the PDF/Excel report engines that most sessions never
@@ -163,6 +163,11 @@ export default function StockManagement() {
   const [tlLoading, setTlLoading]       = useState(false)
   const [tlError, setTlError]           = useState('')
 
+  // Compact company-wide tyre picture above the stock filters.
+  const [tyreChangeRows, setTyreChangeRows] = useState([])
+  const [tyreChangeLoading, setTyreChangeLoading] = useState(true)
+  const [tyreChangeError, setTyreChangeError] = useState('')
+
   // Transfer tab state
   const [transferForm, setTransferForm] = useState({ fromSite: '', toSite: '', fromId: '', toId: '', qty: 1, notes: '' })
   const [transferring, setTransferring] = useState(false)
@@ -180,6 +185,28 @@ export default function StockManagement() {
   const [search, setSearch]           = useState('')
   const [siteFilter, setSiteFilter]   = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
+
+  const latestTyreSummary = useLatestRequest()
+  const loadTyreSummary = useCallback(async () => {
+    const stale = latestTyreSummary.begin()
+    setTyreChangeLoading(true)
+    setTyreChangeError('')
+    const today = new Date()
+    const from = localDay(new Date(today.getFullYear(), today.getMonth() - 5, 1))
+    try {
+      const rows = await stock.listTyreIssuesInRange({ from, to: todayStr(today), country: activeCountry })
+      if (stale()) return
+      setTyreChangeRows(rows || [])
+    } catch (err) {
+      if (stale()) return
+      setTyreChangeRows([])
+      setTyreChangeError(toUserMessage(err, 'Tyre change summary could not be loaded.'))
+    } finally {
+      if (!stale()) setTyreChangeLoading(false)
+    }
+  }, [activeCountry, latestTyreSummary])
+
+  useEffect(() => { loadTyreSummary() }, [loadTyreSummary, stockScope])
 
   const latestStock = useLatestRequest()
   const load = useCallback(async () => {
@@ -409,6 +436,9 @@ export default function StockManagement() {
     [enriched, search, siteFilter, statusFilter],
   )
   const kpis = useMemo(() => summarizeStock(visibleStock), [visibleStock])
+  const tyreStock = useMemo(() => summarizeTyreStock(records), [records])
+  const tyreChanges = useMemo(() => tyreChangeSummary(tyreChangeRows, new Date()), [tyreChangeRows])
+  const maxMonthlyChanges = Math.max(1, ...tyreChanges.months.map(month => month.quantity))
   const filtersActive = search.trim() !== '' || siteFilter !== 'all' || statusFilter !== 'all'
   const clearFilters = () => { setSearch(''); setSiteFilter('all'); setStatusFilter('all') }
 
@@ -674,6 +704,72 @@ export default function StockManagement() {
       {/* ── STOCK LEVELS TAB ─────────────────────────────────────────────────── */}
       {activeTab === 'stock' && (
         <>
+          <section className="grid grid-cols-1 xl:grid-cols-[minmax(220px,0.8fr)_minmax(320px,1.1fr)_minmax(300px,1fr)] gap-3" aria-label={t('stock.companyTyres.title')}>
+            <div className="card p-4 min-w-0">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">{t('stock.companyTyres.title')}</p>
+                  <p className="mt-2 text-3xl font-bold tabular-nums text-[var(--text-primary)]">{loading ? '…' : tyreStock.pcs.toLocaleString()}</p>
+                  <p className="text-sm text-[var(--text-secondary)]">{t('stock.companyTyres.piecesOnHand')}</p>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">{activeCountry === 'All' ? t('stock.companyTyres.allCountries') : activeCountry}</p>
+                </div>
+                <Boxes size={19} className="text-[var(--accent)]" aria-hidden="true" />
+              </div>
+              {tyreStock.nonPcsLines > 0 && <p className="mt-3 text-xs text-amber-600">{t('stock.companyTyres.unitExcluded', { count: tyreStock.nonPcsLines })}</p>}
+              {tyreStockBySize.length > 0 && (
+                <div className="mt-4 border-t border-[var(--input-border)] pt-3">
+                  <p className="mb-2 text-xs font-semibold text-[var(--text-secondary)]">{t('stock.companyTyres.currentBySize')}</p>
+                  <div className="max-h-32 space-y-1 overflow-auto">
+                    {tyreStockBySize.map(item => <div key={item.size} className="flex justify-between gap-3 text-xs">
+                      <span className="truncate text-[var(--text-secondary)]">{item.size}</span>
+                      <span className="shrink-0 font-semibold tabular-nums text-[var(--text-primary)]">{item.quantity.toLocaleString()} PCS</span>
+                    </div>)}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="card p-4 min-w-0">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">{t('stock.companyTyres.changeTimeline')}</p>
+                  <p className="text-xs text-[var(--text-muted)]">{t('stock.companyTyres.lastSixMonths')} · {tyreChangeLoading ? '…' : tyreChanges.total.toLocaleString()} {t('stock.companyTyres.recordedChanges')}</p>
+                </div>
+                <Clock size={17} className="text-[var(--accent)]" aria-hidden="true" />
+              </div>
+              {tyreChangeError ? <p role="status" className="mt-4 text-xs text-amber-600">{tyreChangeError}</p> : (
+                <div className="mt-4 flex h-28 items-end justify-between gap-2" role="img" aria-label={t('stock.companyTyres.monthlyChartLabel', { total: tyreChanges.total })}>
+                  {tyreChanges.months.map(month => (
+                    <div key={month.key} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
+                      <span className="text-[10px] tabular-nums text-[var(--text-muted)]">{month.quantity || ''}</span>
+                      <div className="w-full max-w-9 rounded-t bg-[var(--accent)]" style={{ height: Math.max(month.quantity ? 8 : 2, (month.quantity / maxMonthlyChanges) * 66) + 'px', opacity: month.quantity ? 0.9 : 0.2 }} />
+                      <span className="text-[10px] text-[var(--text-muted)]">{month.label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="mt-2 text-[11px] text-[var(--text-muted)]">{t('stock.companyTyres.changeDefinition')}</p>
+            </div>
+
+            <div className="card p-4 min-w-0">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">{t('stock.companyTyres.changedBySize')}</p>
+                  <p className="text-xs text-[var(--text-muted)]">{t('stock.companyTyres.lastSixMonths')}</p>
+                </div>
+                <button type="button" onClick={() => setActiveTab('timeline')} className={`text-xs font-medium text-[var(--accent)] ${FOCUS}`}>{t('stock.companyTyres.openTimeline')} →</button>
+              </div>
+              {tyreChangeLoading ? <p className="mt-4 text-sm text-[var(--text-muted)]">{t('stock.timeline.loading')}</p>
+                : tyreChangeError ? <p className="mt-4 text-xs text-amber-600">{t('stock.companyTyres.unavailable')}</p>
+                  : tyreChanges.bySize.length ? <div className="mt-3 max-h-36 space-y-2 overflow-auto">
+                    {tyreChanges.bySize.map(item => <div key={item.size} className="flex items-center justify-between gap-3 text-sm">
+                      <span className="truncate text-[var(--text-secondary)]">{item.size}</span>
+                      <span className="shrink-0 rounded-full bg-[var(--input-bg)] px-2.5 py-1 text-xs font-semibold tabular-nums text-[var(--text-primary)]">{item.quantity.toLocaleString()} {t('stock.companyTyres.changed')}</span>
+                    </div>)}
+                  </div> : <p className="mt-4 text-sm text-[var(--text-muted)]">{t('stock.companyTyres.noChanges')}</p>}
+            </div>
+          </section>
+
           {/* KPI strip (covers the filtered view) */}
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
             <StatTile icon={Boxes} label="Stock items" value={loading ? '...' : kpis.items.toLocaleString()}

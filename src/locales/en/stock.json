@@ -17,8 +17,27 @@
   },
   "tabs": {
     "stock": "Stock Levels",
+    "bySite": "Tyres by Site & Size",
     "transfer": "Transfer",
     "timeline": "Timeline"
+  },
+  "tyreBySite": {
+    "title": "Tyre stock by site and size",
+    "subtitle": "Current piece count at each site, split by tyre size.",
+    "search": "Search site or tyre size",
+    "total": "Total tyre stock",
+    "sites": "Sites with tyre stock",
+    "sitesWithStock": "Sites with countable tyre stock",
+    "sizes": "Tyre sizes",
+    "distinctSizes": "Distinct sizes in stock",
+    "empty": "No countable tyre stock is recorded for this country.",
+    "noMatch": "No sites or sizes match your search.",
+    "site": "Site",
+    "siteStore": "Site / store",
+    "allLocations": "All locations",
+    "locationTotal": "Location total",
+    "companyTotal": "Company total",
+    "tableLabel": "Current tyre pieces by site and size"
   },
   "companyTyres": {
     "title": "Company tyre stock",

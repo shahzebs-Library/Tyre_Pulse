@@ -716,11 +716,11 @@ export default function StockManagement() {
                 <Boxes size={19} className="text-[var(--accent)]" aria-hidden="true" />
               </div>
               {tyreStock.nonPcsLines > 0 && <p className="mt-3 text-xs text-amber-600">{t('stock.companyTyres.unitExcluded', { count: tyreStock.nonPcsLines })}</p>}
-              {tyreStockBySize.length > 0 && (
+              {tyreStock.bySize.length > 0 && (
                 <div className="mt-4 border-t border-[var(--input-border)] pt-3">
                   <p className="mb-2 text-xs font-semibold text-[var(--text-secondary)]">{t('stock.companyTyres.currentBySize')}</p>
                   <div className="max-h-32 space-y-1 overflow-auto">
-                    {tyreStockBySize.map(item => <div key={item.size} className="flex justify-between gap-3 text-xs">
+                    {tyreStock.bySize.map(item => <div key={item.size} className="flex justify-between gap-3 text-xs">
                       <span className="truncate text-[var(--text-secondary)]">{item.size}</span>
                       <span className="shrink-0 font-semibold tabular-nums text-[var(--text-primary)]">{item.quantity.toLocaleString()} PCS</span>
                     </div>)}

@@ -23,6 +23,7 @@ import { listTemplates as listAccidentReportTemplates } from './accidentReportTe
 import { reportDateLabel } from '../exportUtils'
 import { ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
+import { lowTyreStockRows } from '../stockManagementAnalytics'
 
 // Select every column so the page keeps listing schedules even before V218 is
 // applied (the new fields simply read back undefined until the migration lands).
@@ -41,6 +42,7 @@ export const REPORT_TYPES = [
   { value: 'accidents',  label: 'Accident & Incident' },
   { value: 'claims',     label: 'Insurance Claims Summary' },
   { value: 'stock',      label: 'Stock & Receipts' },
+  { value: 'tyre_stock_alert', label: 'Tyre Low-Stock Alert' },
   { value: 'vendor',     label: 'Vendor / Procurement' },
   { value: 'pm',         label: 'Preventive Maintenance' },
   { value: 'workshop',   label: 'Workshop Summary' },
@@ -120,6 +122,13 @@ const DATASETS = {
     table: 'goods_receipts', dateCol: 'received_date', title: 'Stock & Goods Receipts',
     cols:    ['received_date', 'grn_no', 'po_ref', 'supplier', 'item', 'qty_ordered', 'qty_received', 'condition', 'status'],
     headers: ['Received', 'GRN', 'PO Ref', 'Supplier', 'Item', 'Ordered', 'Received', 'Condition', 'Status'],
+  },
+  tyre_stock_alert: {
+    table: 'stock_records', dateCol: 'updated_at', title: 'Tyre Low-Stock Alert',
+    cols: ['updated_at', 'site', 'country', 'tyre_size', 'brand', 'description', 'stock_qty', 'unit', 'min_level', 'critical_level', 'level'],
+    queryCols: ['id', 'updated_at', 'site', 'country', 'tyre_size', 'brand', 'description', 'stock_qty', 'min_level', 'critical_level', 'custom_data'],
+    headers: ['Updated', 'Site', 'Country', 'Tyre Size', 'Brand', 'Item', 'On Hand', 'Unit', 'Minimum', 'Critical', 'Level'],
+    currentState: true,
   },
   vendor: {
     table: 'purchase_orders', dateCol: 'order_date', title: 'Vendor / Procurement Report',
@@ -329,10 +338,10 @@ export async function fetchReportRows(reportType, { from, to, country } = {}) {
   // A fresh query per page: a PostgREST builder is mutable, so one shared
   // builder would let concurrent pages overwrite each other's range.
   const build = () => {
-    let q = supabase.from(ds.table).select(ds.cols.join(','))
+    let q = supabase.from(ds.table).select((ds.queryCols || ds.cols).join(','))
     q = applyCountry(q, country)
-    if (from) q = q.gte(ds.dateCol, from)
-    if (to)   q = q.lte(ds.dateCol, to)
+    if (!ds.currentState && from) q = q.gte(ds.dateCol, from)
+    if (!ds.currentState && to)   q = q.lte(ds.dateCol, to)
     if (ds.eqFilter) for (const [col, val] of Object.entries(ds.eqFilter)) q = q.eq(col, val)
     if (ds.orFilter) q = q.or(ds.orFilter)
     // id tiebreak keeps page boundaries stable on a non-unique date.
@@ -341,5 +350,18 @@ export async function fetchReportRows(reportType, { from, to, country } = {}) {
   // The server caps one response at 1000 rows, so page up to the report ceiling.
   const { data, error, truncated } = await fetchAllPages((a, b) => build().range(a, b), { pageSize: 1000, max: REPORT_ROW_MAX })
   if (error) throw new ServiceError(toUserMessage(error), error.code, error)
-  return { rows: data ?? [], dataset: ds, truncated: !!truncated }
+  let rows = data ?? []
+  if (reportType === 'tyre_stock_alert') {
+    rows = lowTyreStockRows(rows).map(row => {
+      const meta = row?.custom_data?.stock_item || {}
+      const size = meta.size || row.tyre_size || String(row.description || '').match(/\d{3}\s*\/\s*\d{2}\s*r?\s*\d{2}(?:\.\d)?|\d{2}\.\d{1,2}\s*[-r]\s*\d{2}|\d{4}\s*r\s*\d{2}/i)?.[0] || 'Size not recorded'
+      return {
+        ...row,
+        tyre_size: size,
+        unit: meta.unit || 'Unit not recorded',
+        level: Number(row.stock_qty) <= Number(row.critical_level) ? 'Critical' : 'Low',
+      }
+    })
+  }
+  return { rows, dataset: ds, truncated: !!truncated }
 }

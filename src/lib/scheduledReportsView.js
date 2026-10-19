@@ -28,6 +28,7 @@ export const MODULE_OF = {
   accidents: 'Safety',
   claims: 'Insurance',
   stock: 'Inventory',
+  tyre_stock_alert: 'Inventory',
   vendor: 'Procurement',
   pm: 'Maintenance',
   workshop: 'Workshop',

@@ -3,6 +3,7 @@ import {
   deriveStatus, buildVelocityMap, reorderSuggestion, coverBand, enrichStock, filterStock,
   summarizeStock, timelineByDate, timelineSummary, todayStr, offsetDate, firstOfMonth,
   velocitySince, stockExportRows, STOCK_EXPORT_COLS, STOCK_EXPORT_HEADERS,
+  summarizeTyreStock, tyreChangeSummary, lowTyreStockRows,
 } from '../lib/stockManagementAnalytics'
 
 const NOW = new Date(2026, 8, 26, 10, 0, 0) // local 26 Sep 2026
@@ -104,5 +105,52 @@ describe('timeline', () => {
     expect(s.busiest.date).toBe('2026-09-25')
     expect(timelineSummary([], NOW).changePct).toBeNull()
     expect(timelineSummary([], NOW).busiest).toBeNull()
+  })
+})
+
+describe('company tyre summary', () => {
+  it('sums only confirmed piece-based tyre stock and groups it by size', () => {
+    const summary = summarizeTyreStock([
+      { description: 'Tyre 315/80R22.5', tyre_size: '315/80R22.5', stock_qty: 8, custom_data: { stock_item: { kind: 'tyre', unit: 'PCS', size: '315/80R22.5' } } },
+      { description: 'Tyre 315/80R22.5', stock_qty: 4, custom_data: { stock_item: { kind: 'tyre', unit: 'PCS', size: '315/80R22.5' } } },
+      { description: 'Tyre set 385/65R22.5', stock_qty: 2, custom_data: { stock_item: { kind: 'tyre', unit: 'SET' } } },
+      { description: 'Wheel rim', stock_qty: 10, custom_data: { stock_item: { kind: 'rim', unit: 'PCS' } } },
+      { description: 'Tyre 12.00R24', stock_qty: 3, tyre_size: '12.00R24' },
+    ])
+    expect(summary.pcs).toBe(15)
+    expect(summary.nonPcsLines).toBe(1)
+    expect(summary.bySize).toEqual([
+      { size: '315/80R22.5', quantity: 12 },
+      { size: '12.00R24', quantity: 3 },
+    ])
+  })
+
+  it('counts recorded changes by size and month, excluding returns and out-of-window rows', () => {
+    const summary = tyreChangeSummary([
+      { issue_date: '2026-09-02', size: '315/80R22.5', qty: 3 },
+      { issue_date: '2026-09-03', size: '315/80R22.5', qty: 2 },
+      { issue_date: '2026-08-12', size: '385/65R22.5', qty: 4 },
+      { issue_date: '2026-07-12', size: null, qty: null },
+      { issue_date: '2026-09-04', size: '315/80R22.5', qty: -1 },
+      { issue_date: '2026-03-30', size: '315/80R22.5', qty: 99 },
+    ], NOW)
+    expect(summary.total).toBe(10)
+    expect(summary.months.map(month => month.quantity)).toEqual([0, 0, 0, 1, 4, 5])
+    expect(summary.bySize).toEqual([
+      { size: '315/80R22.5', quantity: 5 },
+      { size: '385/65R22.5', quantity: 4 },
+      { size: 'Size not recorded', quantity: 1 },
+    ])
+  })
+
+  it('flags only tyre stock lines at or below their minimum', () => {
+    const flagged = lowTyreStockRows([
+      { description: '315/80R22.5 tyre', stock_qty: 3, min_level: 5 },
+      { description: 'Tyre 12.00R24', stock_qty: 5, min_level: 5 },
+      { description: 'Tyre 385/65R22.5', stock_qty: 7, min_level: 5 },
+      { description: 'Wheel rim', stock_qty: 0, min_level: 5 },
+      { description: '315/80R22.5 tyre', stock_qty: 0, min_level: 5, custom_data: { stock_item: { kind: 'rim' } } },
+    ])
+    expect(flagged.map(row => row.stock_qty)).toEqual([3, 5])
   })
 })

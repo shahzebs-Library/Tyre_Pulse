@@ -16,7 +16,7 @@ const MOVEMENT_COLS =
 
 // Tyre issue rows drive stock velocity / timeline analytics on this page. Only
 // the three columns those computations need - nothing wider.
-const TYRE_ISSUE_COLS = 'site,qty,issue_date'
+const TYRE_ISSUE_COLS = 'site,qty,issue_date,size'
 
 /**
  * List stock records, most recently updated first. Country-scoped (null-safe)

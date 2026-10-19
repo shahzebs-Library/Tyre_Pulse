@@ -78,6 +78,32 @@ describe('scheduledReports - claims report type', () => {
   })
 })
 
+describe('scheduled tyre stock alert report', () => {
+  it('uses current tyre stock and does not narrow the alert to the report date window', async () => {
+    expect(sched.REPORT_TYPES.some((r) => r.value === 'tyre_stock_alert')).toBe(true)
+    const ds = sched.datasetFor('tyre_stock_alert')
+    expect(ds.table).toBe('stock_records')
+    expect(ds.queryCols).toContain('custom_data')
+    expect(ds.cols).toContain('level')
+    expect(ds.cols).toHaveLength(ds.headers.length)
+
+    h.state.result = { data: [
+      { id: 'low', site: 'Site A', country: 'KSA', description: 'Tyre 315/80R22.5', tyre_size: '315/80R22.5', stock_qty: 2, min_level: 5, critical_level: 3, custom_data: { stock_item: { kind: 'tyre', unit: 'PCS' } } },
+      { id: 'ok', site: 'Site A', country: 'KSA', description: 'Tyre 385/65R22.5', tyre_size: '385/65R22.5', stock_qty: 8, min_level: 5, critical_level: 3, custom_data: { stock_item: { kind: 'tyre', unit: 'PCS' } } },
+      { id: 'rim', site: 'Site A', country: 'KSA', description: 'Wheel rim', stock_qty: 0, min_level: 4, critical_level: 2, custom_data: { stock_item: { kind: 'rim', unit: 'PCS' } } },
+    ], error: null }
+    const { rows } = await sched.fetchReportRows('tyre_stock_alert', {
+      from: '2026-10-01', to: '2026-10-19', country: 'KSA',
+    })
+    expect(rows.map((r) => r.id)).toEqual(['low'])
+    expect(rows[0]).toMatchObject({ tyre_size: '315/80R22.5', unit: 'PCS', level: 'Critical' })
+    expect(h.state.last._table).toBe('stock_records')
+    expect(h.state.last._calls.gte).toHaveLength(0)
+    expect(h.state.last._calls.lte).toHaveLength(0)
+    expect(h.state.last._calls.or).toContain('country.eq.KSA,country.is.null')
+  })
+})
+
 describe('scheduleOrgId', () => {
   it('prefers org_id', () => {
     expect(sched.scheduleOrgId({ org_id: 'a', organisation_id: 'b' })).toBe('a')

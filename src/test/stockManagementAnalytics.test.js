@@ -3,7 +3,7 @@ import {
   deriveStatus, buildVelocityMap, reorderSuggestion, coverBand, enrichStock, filterStock,
   summarizeStock, timelineByDate, timelineSummary, todayStr, offsetDate, firstOfMonth,
   velocitySince, stockExportRows, STOCK_EXPORT_COLS, STOCK_EXPORT_HEADERS,
-  summarizeTyreStock, tyreChangeSummary, lowTyreStockRows,
+  summarizeTyreStock, summarizeTyreStockBySite, tyreChangeSummary, lowTyreStockRows,
 } from '../lib/stockManagementAnalytics'
 
 const NOW = new Date(2026, 8, 26, 10, 0, 0) // local 26 Sep 2026
@@ -123,6 +123,25 @@ describe('company tyre summary', () => {
       { size: '315/80R22.5', quantity: 12 },
       { size: '12.00R24', quantity: 3 },
     ])
+  })
+
+  it('builds a site by size matrix from current tyre balances and keeps totals aligned', () => {
+    const rows = [
+      { site: 'Qiddiya G1', description: '315/80R22.5 tyre', stock_qty: 12, custom_data: { stock_item: { kind: 'tyre', unit: 'PCS' } } },
+      { site: 'Qiddiya G1', description: '385/65R22.5 tyre', stock_qty: 4, custom_data: { stock_item: { kind: 'tyre', unit: 'PCS' } } },
+      { site: 'Diriyah 2', description: '315/80R22.5 tyre', stock_qty: 7, custom_data: { stock_item: { kind: 'tyre', unit: 'PCS' } } },
+      { site: 'Diriyah 2', description: 'Rim 22.5', stock_qty: 5, custom_data: { stock_item: { kind: 'rim', unit: 'PCS' } } },
+      { site: 'Qiddiya G1', description: 'Tyre set 11R22.5', stock_qty: 2, custom_data: { stock_item: { kind: 'tyre', unit: 'SET' } } },
+    ]
+    const summary = summarizeTyreStockBySite(rows)
+    expect(summary).toEqual({
+      pcs: 23,
+      sizes: ['315/80R22.5', '385/65R22.5'],
+      sites: [
+        { site: 'Qiddiya G1', country: '', key: '["","Qiddiya G1"]', total: 16, bySize: [{ size: '315/80R22.5', quantity: 12 }, { size: '385/65R22.5', quantity: 4 }] },
+        { site: 'Diriyah 2', country: '', key: '["","Diriyah 2"]', total: 7, bySize: [{ size: '315/80R22.5', quantity: 7 }] },
+      ],
+    })
   })
 
   it('counts recorded changes by size and month, excluding returns and out-of-window rows', () => {

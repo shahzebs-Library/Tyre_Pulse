@@ -193,7 +193,8 @@ export function summarizeTyreStock(rows = []) {
     if (kind ? kind !== 'tyre' : !inferredTyre) continue
     tyreLines++
     const unit = String(meta.unit || '').trim().toUpperCase()
-    const size = String(meta.size || row?.tyre_size || '').trim()
+    const descriptionSize = description.match(/\d{3}\s*\/\s*\d{2}\s*r?\s*\d{2}(?:\.\d)?|\d{2}\.\d{1,2}\s*[-r]\s*\d{2}(?:\.\d)?|\d{4}\s*r\s*\d{2}(?:\.\d)?|\d{2}\s*r\s*\d{2}(?:\.\d)?/i)?.[0]
+    const size = String(meta.size || row?.tyre_size || descriptionSize || '').trim()
     const knownTyreSize = Boolean(size) || /\d{3}\s*\/\s*\d{2}\s*r?\s*\d{2}|\d{2}\.\d{1,2}\s*[-r]\s*\d{2}/i.test(description)
     const pieceUnit = ['PCS', 'PC', 'EA', 'EACH', 'PIECE', 'PIECES', 'NO', 'NOS'].includes(unit)
     if (!pieceUnit && !(unit === '' && knownTyreSize)) {
@@ -212,6 +213,25 @@ export function summarizeTyreStock(rows = []) {
     nonPcsLines,
     bySize: [...bySize].map(([size, quantity]) => ({ size, quantity })).sort((a, b) => b.quantity - a.quantity || a.size.localeCompare(b.size)),
   }
+}
+
+/** Current piece-based tyre balances grouped into a site-by-size matrix. */
+export function summarizeTyreStockBySite(rows = []) {
+  const bySite = new Map()
+  for (const row of rows || []) {
+    const site = String(row?.site || '').trim() || 'Site not recorded'
+    const country = String(row?.country || '').trim()
+    const key = `${country}\u0001${site}`
+    if (!bySite.has(key)) bySite.set(key, { site, country, rows: [] })
+    bySite.get(key).rows.push(row)
+  }
+  const sites = [...bySite.values()].map(({ site, country, rows: siteRows }) => {
+    const summary = summarizeTyreStock(siteRows)
+    return { site, country, key: JSON.stringify([country, site]), total: summary.pcs, bySize: summary.bySize }
+  }).filter(site => site.bySize.length > 0)
+    .sort((a, b) => b.total - a.total || a.site.localeCompare(b.site) || a.country.localeCompare(b.country))
+  const totals = summarizeTyreStock(rows)
+  return { sites, sizes: totals.bySize.map(item => item.size), pcs: totals.pcs }
 }
 
 /** Tyre stock lines at or below their configured reorder threshold. */

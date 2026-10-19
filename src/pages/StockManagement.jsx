@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { stock } from '../lib/api'
+import { listSites } from '../lib/api/sites'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
@@ -31,7 +32,7 @@ import { sortRows, nextSort } from '../lib/consoleTable'
 import {
   deriveStatus, buildVelocityMap, enrichStock, filterStock, summarizeStock, timelineByDate,
   timelineSummary, coverBand, stockExportRows, STOCK_EXPORT_COLS, STOCK_EXPORT_HEADERS, STATUSES,
-  todayStr, offsetDate, firstOfMonth, velocitySince, localDay, summarizeTyreStock, tyreChangeSummary,
+  todayStr, offsetDate, firstOfMonth, velocitySince, localDay, summarizeTyreStock, summarizeTyreStockBySite, tyreChangeSummary,
 } from '../lib/stockManagementAnalytics'
 
 // exportUtils pulls the PDF/Excel report engines that most sessions never
@@ -126,7 +127,7 @@ function SortedPagedTable({ columns, rows, defaultSort, getRowId, emptyMessage, 
 export default function StockManagement() {
   const { t } = useLanguage()
   const { profile, hasCapability } = useAuth()
-  const { appSettings, activeCountry } = useSettings()
+  const { appSettings, activeCountry, workingContext } = useSettings()
   const { branding } = useTenant()
   const stockScope = `${activeCountry}|${profile?.organisation_id || profile?.org_id}|${profile?.id}`
   const [records, setRecords]       = useState([])
@@ -185,6 +186,9 @@ export default function StockManagement() {
   const [search, setSearch]           = useState('')
   const [siteFilter, setSiteFilter]   = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [siteSizeSearch, setSiteSizeSearch] = useState('')
+  const [siteMasterRows, setSiteMasterRows] = useState([])
+  const [siteSizeLocation, setSiteSizeLocation] = useState('all')
 
   const latestTyreSummary = useLatestRequest()
   const loadTyreSummary = useCallback(async () => {
@@ -238,6 +242,15 @@ export default function StockManagement() {
   }, [activeCountry, t, latestStock])
 
   useEffect(() => { load() }, [load, stockScope])
+
+  useEffect(() => {
+    if (activeTab !== 'by-site') return undefined
+    let cancelled = false
+    listSites({ country: activeCountry, activeOnly: true })
+      .then(rows => { if (!cancelled) setSiteMasterRows(rows || []) })
+      .catch(() => { if (!cancelled) setSiteMasterRows([]) })
+    return () => { cancelled = true }
+  }, [activeTab, activeCountry])
 
   // Stable identities on purpose. Modal's behaviour hook lists `onClose` in its
   // dependency array, so an inline arrow re-runs the effect on EVERY render of
@@ -437,6 +450,17 @@ export default function StockManagement() {
   )
   const kpis = useMemo(() => summarizeStock(visibleStock), [visibleStock])
   const tyreStock = useMemo(() => summarizeTyreStock(records), [records])
+  const tyreSiteStock = useMemo(() => summarizeTyreStockBySite(records), [records])
+  const selectedTyreSiteRows = useMemo(() => siteSizeLocation === 'all'
+    ? tyreSiteStock.sites
+    : tyreSiteStock.sites.filter(row => row.key === siteSizeLocation), [siteSizeLocation, tyreSiteStock])
+  const siteViewSizes = useMemo(() => [...new Set(selectedTyreSiteRows.flatMap(row => row.bySize.map(item => item.size)))].sort((a, b) => a.localeCompare(b)), [selectedTyreSiteRows])
+  const siteViewTotal = useMemo(() => selectedTyreSiteRows.reduce((sum, row) => sum + row.total, 0), [selectedTyreSiteRows])
+  const visibleTyreSites = useMemo(() => {
+    const q = siteSizeSearch.trim().toLowerCase()
+    if (!q) return selectedTyreSiteRows
+    return selectedTyreSiteRows.filter(row => `${row.site} ${row.country}`.toLowerCase().includes(q) || row.bySize.some(item => item.size.toLowerCase().includes(q)))
+  }, [selectedTyreSiteRows, siteSizeSearch])
   const tyreChanges = useMemo(() => tyreChangeSummary(tyreChangeRows, new Date()), [tyreChangeRows])
   const maxMonthlyChanges = Math.max(1, ...tyreChanges.months.map(month => month.quantity))
   const filtersActive = search.trim() !== '' || siteFilter !== 'all' || statusFilter !== 'all'
@@ -518,11 +542,33 @@ export default function StockManagement() {
   }
 
   const sites = useMemo(() => [...new Set(records.map(r => r.site).filter(Boolean))].sort(), [records])
+  const siteLocations = useMemo(() => {
+    const locations = new Map()
+    const add = (country, name) => {
+      const site = String(name || '').trim()
+      if (!site) return
+      const c = String(country || '').trim()
+      if (activeCountry !== 'All' && c && c.toLowerCase() !== activeCountry.toLowerCase()) return
+      const key = JSON.stringify([c, site])
+      if (!locations.has(key)) locations.set(key, { key, country: c, name: site })
+    }
+    for (const row of siteMasterRows) add(row.country, row.name)
+    for (const row of records) add(row.country, row.site)
+    return [...locations.values()].sort((a, b) => a.name.localeCompare(b.name) || a.country.localeCompare(b.country))
+  }, [activeCountry, records, siteMasterRows])
+  useEffect(() => {
+    if (!workingContext?.site) { setSiteSizeLocation('all'); return }
+    const wantedCountry = activeCountry === 'All' ? String(workingContext.country || '') : activeCountry
+    const match = siteLocations.find(site => site.name === workingContext.site && (!wantedCountry || site.country.toLowerCase() === wantedCountry.toLowerCase()))
+      || siteLocations.find(site => site.name === workingContext.site)
+    setSiteSizeLocation(match?.key || 'all')
+  }, [activeCountry, siteLocations, workingContext?.country, workingContext?.site])
+  const selectedSiteName = siteLocations.find(site => site.key === siteSizeLocation)?.name || ''
 
   // Tabs: show Transfer only if >= 2 sites
   const tabs = useMemo(() => {
-    const base = [['stock', t('stock.tabs.stock')], ['timeline', t('stock.tabs.timeline')]]
-    if (sites.length >= 2) return [['stock', t('stock.tabs.stock')], ['transfer', t('stock.tabs.transfer')], ['timeline', t('stock.tabs.timeline')]]
+    const base = [['stock', t('stock.tabs.stock')], ['by-site', t('stock.tabs.bySite')], ['timeline', t('stock.tabs.timeline')]]
+    if (sites.length >= 2) return [['stock', t('stock.tabs.stock')], ['by-site', t('stock.tabs.bySite')], ['transfer', t('stock.tabs.transfer')], ['timeline', t('stock.tabs.timeline')]]
     return base
   }, [sites, t])
 
@@ -633,7 +679,8 @@ export default function StockManagement() {
 
   if (entryOpen) return <StockQuickEntry
     key={`${activeCountry}|${profile?.organisation_id || profile?.org_id}|${profile?.id}`}
-    records={records.filter(r => r.country === activeCountry)} initialSite={siteFilter === 'all' ? '' : siteFilter}
+    records={records.filter(r => r.country === activeCountry)}
+    initialSite={selectedSiteName || (siteFilter === 'all' ? workingContext?.site || '' : siteFilter)}
     onClose={() => setEntryOpen(false)}
     onSaved={result => { setEntryOpen(false); setEntryMessage(`${result.items.length} stock item${result.items.length === 1 ? '' : 's'} saved with movement history.`); load() }}
   />
@@ -835,6 +882,73 @@ export default function StockManagement() {
             emptyMessage={records.length === 0 ? t('stock.table.emptyTitle') : 'No stock items match these filters'}
           />
         </>
+      )}
+
+      {/* ── TYRE STOCK BY SITE AND SIZE ──────────────────────────────────────── */}
+      {activeTab === 'by-site' && (
+        <section className="space-y-4" aria-labelledby="tyre-stock-by-site-title">
+          <div className="card p-4 sm:p-5 space-y-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 id="tyre-stock-by-site-title" className="text-lg font-semibold text-[var(--text-primary)]">{t('stock.tyreBySite.title')}</h2>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">{t('stock.tyreBySite.subtitle')}</p>
+              </div>
+              <div className="grid w-full gap-3 sm:w-auto sm:grid-cols-2">
+                <label className="block min-w-56">
+                  <span className="mb-1 block text-xs text-[var(--text-muted)]">{t('stock.tyreBySite.siteStore')}</span>
+                  <select className={`input min-h-[44px] w-full ${FOCUS}`} value={siteSizeLocation} onChange={e => setSiteSizeLocation(e.target.value)}>
+                    <option value="all">{t('stock.tyreBySite.allLocations')}</option>
+                    {siteLocations.map(site => <option key={site.key} value={site.key}>{site.name}{activeCountry === 'All' && site.country ? ` · ${site.country}` : ''}</option>)}
+                  </select>
+                </label>
+                <label className="relative block min-w-56 self-end">
+                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+                  <input className={`input min-h-[44px] pl-9 ${FOCUS}`} value={siteSizeSearch} onChange={e => setSiteSizeSearch(e.target.value)} placeholder={t('stock.tyreBySite.search')} aria-label={t('stock.tyreBySite.search')} />
+                </label>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <StatTile icon={Boxes} label={t('stock.tyreBySite.total')} value={loading ? '…' : siteViewTotal.toLocaleString()} sub="PCS" />
+              <StatTile icon={MapPin} label={t('stock.tyreBySite.sites')} value={loading ? '…' : selectedTyreSiteRows.length.toLocaleString()} sub={t('stock.tyreBySite.sitesWithStock')} />
+              <StatTile icon={Package} label={t('stock.tyreBySite.sizes')} value={loading ? '…' : siteViewSizes.length.toLocaleString()} sub={t('stock.tyreBySite.distinctSizes')} />
+            </div>
+
+            {tyreStock.nonPcsLines > 0 && <p className="text-xs text-amber-600">{t('stock.companyTyres.unitExcluded', { count: tyreStock.nonPcsLines })}</p>}
+
+            {loadError ? <p role="alert" className="text-sm text-red-500">{loadError}</p> : loading ? <p role="status" className="text-sm text-[var(--text-muted)]">{t('stock.timeline.loading')}</p>
+              : selectedTyreSiteRows.length === 0 ? <p className="py-8 text-center text-sm text-[var(--text-muted)]">{t('stock.tyreBySite.empty')}</p>
+                : <div className="overflow-x-auto rounded-lg border border-[var(--input-border)]">
+                  <table className="w-full min-w-max border-collapse text-sm" aria-label={t('stock.tyreBySite.tableLabel')}>
+                    <thead className="bg-[var(--input-bg)] text-xs text-[var(--text-secondary)]">
+                      <tr>
+                        <th scope="col" className="sticky left-0 z-10 min-w-48 bg-[var(--input-bg)] px-3 py-3 text-left font-semibold">{t('stock.tyreBySite.site')}</th>
+                        {siteViewSizes.map(size => <th key={size} scope="col" className="min-w-28 px-3 py-3 text-right font-semibold">{size}</th>)}
+                        <th scope="col" className="min-w-28 px-3 py-3 text-right font-semibold">{t('stock.tyreBySite.total')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleTyreSites.map(row => {
+                        const sizeQty = new Map(row.bySize.map(item => [item.size, item.quantity]))
+                        return <tr key={row.site} className="border-t border-[var(--input-border)] hover:bg-[var(--input-bg)]/50">
+                          <th scope="row" className="sticky left-0 bg-[var(--panel-bg)] px-3 py-3 text-left font-medium text-[var(--text-primary)]">{row.site}{activeCountry === 'All' && row.country ? <span className="ml-2 text-xs font-normal text-[var(--text-muted)]">{row.country}</span> : null}</th>
+                          {siteViewSizes.map(size => <td key={size} className="px-3 py-3 text-right tabular-nums text-[var(--text-secondary)]">{(sizeQty.get(size) || 0).toLocaleString()}</td>)}
+                          <td className="px-3 py-3 text-right font-semibold tabular-nums text-[var(--text-primary)]">{row.total.toLocaleString()}</td>
+                        </tr>
+                      })}
+                      {visibleTyreSites.length === 0 && <tr><td colSpan={siteViewSizes.length + 2} className="px-3 py-8 text-center text-sm text-[var(--text-muted)]">{t('stock.tyreBySite.noMatch')}</td></tr>}
+                    </tbody>
+                    <tfoot className="border-t-2 border-[var(--input-border)] bg-[var(--input-bg)] font-semibold text-[var(--text-primary)]">
+                      <tr>
+                        <th scope="row" className="sticky left-0 bg-[var(--input-bg)] px-3 py-3 text-left">{siteSizeLocation === 'all' ? t('stock.tyreBySite.companyTotal') : t('stock.tyreBySite.locationTotal')}</th>
+                        {siteViewSizes.map(size => <td key={size} className="px-3 py-3 text-right tabular-nums">{selectedTyreSiteRows.reduce((sum, row) => sum + (row.bySize.find(item => item.size === size)?.quantity || 0), 0).toLocaleString()}</td>)}
+                        <td className="px-3 py-3 text-right tabular-nums">{siteViewTotal.toLocaleString()}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>}
+          </div>
+        </section>
       )}
 
       {/* ── TRANSFER TAB ──────────────────────────────────────────────────────── */}

@@ -19,8 +19,8 @@ import { supabase, unwrap, fetchAllOrThrow } from './_client'
 // access-control UI reads (who/what/effect/why/when) without leaking internal
 // bookkeeping columns beyond what is surfaced.
 export const COLS =
-  'id,organisation_id,user_id,module_key,capability,effect,note,' +
-  'expires_at,granted_by,created_at,updated_at'
+  'id,org_id,user_id,module_key,capability,effect,note,' +
+  'expires_at,granted_by,created_at'
 
 /** True when the failure is "table does not exist yet" (pre-migration). */
 function isMissingRelation(err) {

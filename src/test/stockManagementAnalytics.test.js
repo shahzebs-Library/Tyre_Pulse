@@ -144,6 +144,50 @@ describe('company tyre summary', () => {
     })
   })
 
+  it('recovers imported tyre sizes and merges equivalent size formatting', () => {
+    const imported = [
+      ['TIRE 10-16.5', 2],
+      ['TIRE 11R22.5 TL 16PR', 7],
+      ['TIRE 195 R 15C-6PR NEW MODEL 2007 TOYOTA', 1],
+      ['TIRE 195R15 6PR', 3],
+      ['TIRE 205R16 /689', 3],
+      ['TIRE 235-70R16 TL ROA', 6],
+      ['TIRE 235-75R17.5 TL 16PR', 8],
+      ['TIRE 385-65R22.5', 21],
+      ['TIRE 7.00 R16 10PR R 230TT BRIDGESTONE', 6],
+      ['TIRE 9.00R20 HANK', 5],
+    ].map(([name, stock_qty]) => ({
+      description: '', stock_qty, site: 'NHC',
+      custom_data: { stock_item: { kind: 'tyre', unit: 'PCS', source: { name } } },
+    }))
+    imported.push(
+      { description: 'TIRE 315/80 R22.5 TECHKING', stock_qty: 45, site: 'NHC', tyre_size: '315/80 R22.5', custom_data: { stock_item: { kind: 'tyre', unit: 'PCS' } } },
+      { description: 'TIRE 315/80R22.5 Double coin', stock_qty: 35, site: 'NHC', custom_data: { stock_item: { kind: 'tyre', unit: 'PCS' } } },
+      { description: 'TIRE 95 R 15C-6PR', stock_qty: 2, site: 'NHC', tyre_size: '95 R 15', custom_data: { stock_item: { kind: 'tyre', unit: 'PCS' } } },
+    )
+    const summary = summarizeTyreStockBySite(imported)
+    expect(summary.pcs).toBe(144)
+    expect(summary.sizes).toEqual(expect.arrayContaining([
+      '10-16.5', '11R22.5', '195R15', '205R16', '235/70R16',
+      '235/75R17.5', '385/65R22.5', '7.00R16', '9.00R20', '95R15', '315/80R22.5',
+    ]))
+    expect(summary.sizes).not.toContain('Size not recorded')
+    expect(summary.sites[0].bySize.find(({ size }) => size === '315/80R22.5').quantity).toBe(80)
+    expect(summary.sites[0].bySize.find(({ size }) => size === '195R15').quantity).toBe(4)
+  })
+
+  it('hides sizes and sites whose counted tyre stock is zero', () => {
+    const summary = summarizeTyreStockBySite([
+      { site: 'NHC', description: 'TIRE 315/80 R22.5', stock_qty: 5, custom_data: { stock_item: { kind: 'tyre', unit: 'PCS' } } },
+      { site: 'NHC', description: 'TIRE 17.5R25', stock_qty: 0, custom_data: { stock_item: { kind: 'tyre', unit: 'PCS' } } },
+      { site: 'DIRIYAH', description: 'TIRE 17.5R25', stock_qty: 0, custom_data: { stock_item: { kind: 'tyre', unit: 'PCS' } } },
+    ])
+    expect(summary.sites).toHaveLength(1)
+    expect(summary.sites[0].site).toBe('NHC')
+    expect(summary.sites[0].bySize).toEqual([{ size: '315/80R22.5', quantity: 5 }])
+    expect(summary.sizes).toEqual(['315/80R22.5'])
+  })
+
   it('counts recorded changes by size and month, excluding returns and out-of-window rows', () => {
     const summary = tyreChangeSummary([
       { issue_date: '2026-09-02', size: '315/80R22.5', qty: 3 },

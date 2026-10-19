@@ -107,3 +107,11 @@ export function slipLineRows(lines, slipCurrency) {
     currency: l.currency || slipCurrency || null,
   }))
 }
+
+/** Each year is a bounded server window, including years before the default view. */
+export function issueHistoryYears(coverage) {
+  const first = Number(String(coverage?.first || '').slice(0, 4))
+  const last = Number(String(coverage?.last || '').slice(0, 4))
+  if (!Number.isInteger(first) || !Number.isInteger(last) || first < 1900 || last < first || last > 2200) return []
+  return Array.from({ length: last - first + 1 }, (_, i) => String(last - i))
+}

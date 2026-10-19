@@ -40,7 +40,7 @@ import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import {
-  listSlipsFromConsumption, getSlipLines, getIssueSummary,
+  listSlipsFromConsumption, getSlipLines, getIssueSummary, getMaterialIssueCoverage,
   materialIssuesProvisioned, listMaterialIssues, createMaterialIssue,
   listIssuableJobCards, DEFAULT_LINE_MAX,
 } from '../lib/api/materialIssue'
@@ -58,7 +58,7 @@ import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../
 import { toUserMessage } from '../lib/safeError'
 import {
   singleCurrencyOf, headlineValue, categoryShare, docTypeShare, returnFlag,
-  recentSlipRows, topItemRows, slipLineRows,
+  recentSlipRows, topItemRows, slipLineRows, issueHistoryYears,
 } from '../lib/storeMaterialIssueAnalytics'
 
 const WRITE_ROLES = new Set(['Admin', 'Manager', 'Director'])
@@ -180,6 +180,11 @@ export default function StoreMaterialIssue() {
   const [serverSummary, setServerSummary] = useState(null)
   const [loadedAt, setLoadedAt] = useState(null)
 
+  const [coverage, setCoverage] = useState(null)
+  const [coverageError, setCoverageError] = useState('')
+  const [historyPeriod, setHistoryPeriod] = useState('recent')
+  const [coverageRefresh, setCoverageRefresh] = useState(0)
+  const historyYears = useMemo(() => issueHistoryYears(coverage), [coverage])
   const [from, setFrom] = useState(monthsAgo(12))
   const [to, setTo] = useState(isoDay(new Date()))
   const [filters, setFilters] = useState({ site: 'All', store: 'All', docType: 'All', search: '' })
@@ -193,14 +198,35 @@ export default function StoreMaterialIssue() {
   const [expandLoading, setExpandLoading] = useState(false)
   const [expandError, setExpandError] = useState('')
 
+  // Coverage includes all accessible uploads, independent of the chosen date window.
+  useEffect(() => {
+    let current = true
+    setCoverage(null); setCoverageError('')
+    getMaterialIssueCoverage({ country: activeCountry }).then(result => {
+      if (current) setCoverage(result)
+    }).catch(err => {
+      if (current) setCoverageError(toUserMessage(err, 'Could not read uploaded MIS history.'))
+    })
+    return () => { current = false }
+  }, [activeCountry, coverageRefresh])
+  function choosePeriod(value) {
+    setHistoryPeriod(value)
+    if (value === 'recent') { setFrom(monthsAgo(12)); setTo(isoDay(new Date())) }
+    else if (/^\d{4}$/.test(value)) { setFrom(`${value}-01-01`); setTo(`${value}-12-31`) }
+  }
+  const registerRequest = useRef(0)
+
   // --- Load the historical register -----------------------------------------
   const load = useCallback(async () => {
+    const request = ++registerRequest.current
     setLoading(true)
-    setError('')
+    setError(''); setSlips([]); setServerSummary(null); setTruncated(false); setUnslipped(null)
+    setExpanded(null); setExpandedLines([]); setExpandError('')
     try {
       const res = await listSlipsFromConsumption({
         country: activeCountry, from, to, max: DEFAULT_LINE_MAX,
       })
+      if (request !== registerRequest.current) return
       setSlips(res.slips)
       setTruncated(res.truncated)
       setUnslipped(res.unslipped)
@@ -208,16 +234,17 @@ export default function StoreMaterialIssue() {
       // Best effort: the server aggregate is the authoritative window total when
       // the client read was capped. A failure here must never fail the page.
       const s = await getIssueSummary({ country: activeCountry, from, to })
-      setServerSummary(s.ok ? s.data : null)
+      if (request === registerRequest.current) setServerSummary(s.ok ? s.data : null)
     } catch (err) {
+      if (request !== registerRequest.current) return
       setError(toUserMessage(err, 'Could not load the material issue register.'))
       setSlips([])
     } finally {
-      setLoading(false)
+      if (request === registerRequest.current) setLoading(false)
     }
   }, [activeCountry, from, to])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load(); return () => { registerRequest.current += 1 } }, [load])
 
   // --- Derived --------------------------------------------------------------
   const options = useMemo(() => slipFilterOptions(slips), [slips])
@@ -323,12 +350,32 @@ export default function StoreMaterialIssue() {
           covers real history, not only slips raised in this app.
         </p>
         <p>
-          <strong className="text-[var(--text-secondary)]">There is no live on-hand
-          balance on this page.</strong> Stock is recorded by site and description with
-          no item code, so it cannot be matched to the item codes a slip carries. Any
-          "stock after issue" figure here would be invented, so none is shown.
+          <strong className="text-[var(--text-secondary)]">All imported material categories are included.</strong>{' '}
+          This register shows uploaded issue records for tyres, spares, oils and other materials.
+          The tyre-only suggestions in Stock Management do not filter this page.
+          There is no live on-hand balance on this page. Issued quantities are historical consumption, not the current store balance.
         </p>
       </Notice>
+
+      <Card className="gap-[var(--space-3)]">
+        <CardHeader icon={FileSpreadsheet} title="Uploaded MIS history"
+          description="Browse imported issue records by their document year, regardless of when the file was uploaded." />
+        {coverageError ? <p role="alert" className="text-sm text-[var(--text-secondary)]">{coverageError}{' '}
+          <button className={btnCls} onClick={() => setCoverageRefresh(n => n + 1)}>Retry history</button></p>
+          : coverage === null ? <p role="status" className="text-sm text-[var(--text-muted)]">Checking available history...</p>
+            : <p className="text-sm text-[var(--text-secondary)]">{coverage.first
+              ? `Imported issue dates: ${coverage.first} to ${coverage.last}. Choose a year below to view older uploads.`
+              : 'No imported issue records are available in your current country and access scope.'}</p>}
+        <p className="text-xs text-[var(--text-muted)]">Original filenames were not retained for legacy ERP rows. Open a slip to see its recorded source system and source row. No filename is inferred.</p>
+        <label className="text-xs text-[var(--text-muted)] space-y-1 max-w-xs">
+          <span>History period</span>
+          <select className={inputCls} value={historyPeriod} onChange={e => choosePeriod(e.target.value)}>
+            <option value="recent">Last 12 months</option>
+            {historyYears.map(year => <option key={year} value={year}>{year} · Uploaded issue records</option>)}
+            <option value="custom">Custom dates</option>
+          </select>
+        </label>
+      </Card>
 
       {/* Window + filters. No `clip`: every control here is a native <select> or
           <input type="date">, whose popups the browser paints outside the
@@ -343,11 +390,11 @@ export default function StoreMaterialIssue() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           <label className="text-xs text-[var(--text-muted)] space-y-1">
             <span>From</span>
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inputCls} />
+            <input type="date" value={from} onChange={(e) => { setHistoryPeriod('custom'); setFrom(e.target.value) }} className={inputCls} />
           </label>
           <label className="text-xs text-[var(--text-muted)] space-y-1">
             <span>To</span>
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={inputCls} />
+            <input type="date" value={to} onChange={(e) => { setHistoryPeriod('custom'); setTo(e.target.value) }} className={inputCls} />
           </label>
           <label className="text-xs text-[var(--text-muted)] space-y-1">
             <span>Document</span>
@@ -653,6 +700,9 @@ function SlipLines({ slip, lines, linesLoading, linesError, onClose, onLinesExce
   const columns = useMemo(() => [
     { id: 'code', header: 'Item code', accessorFn: (l) => txt(l.item_code), cell: ({ row }) => <span className="font-mono">{txt(row.original.item_code)}</span> },
     { id: 'desc', header: 'Description', accessorFn: (l) => txt(l.item_description) },
+    { id: 'uom', header: 'Unit', accessorFn: (l) => txt(l.uom) },
+    { id: 'source', header: 'Import source', accessorFn: (l) => txt(l.source_system) },
+    { id: 'sourceRow', header: 'Source row', accessorFn: (l) => txt(l.source_row) },
     { id: 'qty', header: 'Qty', accessorFn: (l) => Number(l.qty) || 0, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.qty, 2) },
     {
       id: 'unit', header: 'Unit cost', accessorFn: (l) => l.unit_cost ?? -1, meta: { align: 'right' },

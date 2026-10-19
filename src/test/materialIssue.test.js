@@ -597,6 +597,7 @@ vi.mock('../lib/api/materialIssue', async () => {
     })),
     getSlipLines: vi.fn(async () => SLIP_ROWS),
     getIssueSummary: vi.fn(async () => ({ ok: false, data: null })),
+    getMaterialIssueCoverage: vi.fn(async () => ({ first: '2018-09-22', last: '2026-10-17' })),
     materialIssuesProvisioned: vi.fn(async () => true),
     listMaterialIssues: vi.fn(async () => ({ rows: [], missing: false })),
     listMaterialIssueLines: vi.fn(async () => []),

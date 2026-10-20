@@ -46,7 +46,14 @@ export function fmtCur(n, currency, decimals = 0) {
 /** Whole days an action has been open; null when there is no valid creation date. */
 export function daysOpen(createdAt, now = new Date()) {
   if (!createdAt) return null
-  const t = new Date(createdAt).getTime()
+  // Date-only values represent a local calendar date. Parsing YYYY-MM-DD as
+  // UTC moves it into the previous local evening in UTC+ timezones and can
+  // undercount an action's age by one day.
+  const dateOnly = String(createdAt).match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  const date = dateOnly
+    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+    : new Date(createdAt)
+  const t = date.getTime()
   if (Number.isNaN(t)) return null
   return Math.max(0, Math.floor((now.getTime() - t) / DAY_MS))
 }

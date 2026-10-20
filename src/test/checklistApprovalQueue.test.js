@@ -19,6 +19,11 @@ vi.mock('../lib/api/_client', () => ({
     return res?.data
   },
   applyCountry: (q) => q,
+  fetchAllPages: async (page) => {
+    const { data, error } = await page(0, 499)
+    return { data: data || [], error: error || null, truncated: false }
+  },
+  toServiceError: (err) => err,
   isMissingRelation: (err) => err?.code === '42P01',
 }))
 

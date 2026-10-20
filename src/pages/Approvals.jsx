@@ -255,9 +255,9 @@ function toInspectionItem(i) {
 
 function MetricCard({ icon: Icon, label, value, tone, loading }) {
   return (
-    <div className="card border border-[var(--border-dim)] bg-[var(--surface-1)]">
+    <div className="card border border-[var(--border-dim)] bg-[var(--surface-1)] !p-3">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider">{label}</span>
+        <span className="text-[11px] font-medium text-[var(--text-secondary)] tracking-wide">{label}</span>
         <Icon className={`w-4 h-4 ${TONE_TEXT[tone] || 'text-[var(--text-secondary)]'}`} />
       </div>
       {loading ? (
@@ -282,7 +282,7 @@ function MetricStrip({ metrics, loading }) {
   ]
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2">
       {cards.map(c => (
         <MetricCard
           key={c.key}
@@ -294,7 +294,6 @@ function MetricStrip({ metrics, loading }) {
         />
       ))}
       </div>
-      <p className="text-xs font-semibold text-[var(--text-secondary)]">Pending by source</p>
     </div>
   )
 }
@@ -885,6 +884,7 @@ export default function Approvals() {
   // Bulk selection. Keyed `source:id` because ids are only unique within a source.
   const [picked, setPicked] = useState(() => new Set())
   const [bulk, setBulk] = useState({ busy: false, result: null })
+  const [returnDialog, setReturnDialog] = useState({ open: false, reason: '' })
 
   const load = useCallback(async () => {
     const current = ++generation.current
@@ -1119,7 +1119,10 @@ export default function Approvals() {
       accessorFn: row => row.source === SOURCE.workflow
         ? row.step_started_at || row.started_at
         : row.created_at,
-      cell: ({ getValue }) => <span className="whitespace-nowrap text-sm text-[var(--text-muted)]">{relTime(getValue()) || '—'}</span>,
+      cell: ({ getValue }) => {
+        const old = ageMs(getValue()) > 3 * 86400000
+        return <span className={`whitespace-nowrap text-sm ${old ? 'font-semibold text-red-400' : 'text-[var(--text-muted)]'}`} title={old ? 'Waiting more than 3 days' : undefined}>{relTime(getValue()) || '—'}</span>
+      },
       sortingFn: 'datetime',
     },
     {
@@ -1133,6 +1136,18 @@ export default function Approvals() {
         : row.original.source === SOURCE.signoff_gap
           ? <span className="inline-flex rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-1 text-xs font-medium text-orange-300">Never asked</span>
           : <span className="inline-flex rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-300">{row.original.stageSummary?.text || 'Pending'}</span>,
+    },
+    {
+      id: 'review',
+      header: '',
+      enableSorting: false,
+      cell: ({ row }) => (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); openRow(row.original) }}
+          className="inline-flex items-center gap-1 rounded-lg border border-orange-500/40 bg-orange-500/10 px-3 py-1.5 text-xs font-semibold text-orange-200 hover:bg-orange-500/20"
+        >Review <ChevronRight className="w-3.5 h-3.5" /></button>
+      ),
     },
   ], [])
 
@@ -1207,18 +1222,16 @@ export default function Approvals() {
   useEffect(() => { setPicked(new Set()); setBulk({ busy: false, result: null }) },
     [activeBucket, q, sourceFilter, siteFilter])
 
-  async function runBulk(action) {
+  async function runBulk(action, reasonText = null) {
     if (!pickedItems.length || bulkLock.current) return
     const current = generation.current
     let reason = null
     if (action === 'reject') {
-      // A checklist return REQUIRES a note (the service enforces it), so ask once
-      // for the whole batch rather than failing every row with the same message.
-      reason = window.prompt(
-        `Why are these ${pickedItems.length} item(s) being returned? This note is recorded on each one.`,
-      )
-      if (reason == null) return
-      if (!reason.trim()) { setBulk({ busy: false, result: { failed: [], ok: [], note: 'A reason is required to return items.' } }); return }
+      // A checklist return REQUIRES a note (the service enforces it), so it is
+      // asked once for the whole batch (see the return dialog) rather than
+      // failing every row with the same message.
+      reason = (reasonText || '').trim()
+      if (!reason) { setBulk({ busy: false, result: { failed: [], ok: [], note: 'A reason is required to return items.' } }); return }
     }
     // Approving inspections in a batch needs a signature - the approver's saved
     // mark, applied to each. Load it up front and refuse rather than store an
@@ -1276,6 +1289,26 @@ export default function Approvals() {
         <EngineUnavailable message={fatalError} onRetry={load} retrying={loading} />
       ) : (
         <>
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-orange-500/25 bg-orange-500/[0.06] px-4 py-3">
+            <div className="flex-1 min-w-[220px]">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">
+                {loading || pendingQueueUnavailable ? 'Checking what needs you…'
+                  : myPendingCount > 0 ? `${myPendingCount} approval${myPendingCount === 1 ? '' : 's'} waiting for you`
+                    : 'Nothing is waiting for you right now'}
+              </p>
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                How it works: pick a row, read it, then press Approve or Return. Use the tabs below to see overdue, returned and finished items.
+              </p>
+            </div>
+            {!loading && !pendingQueueUnavailable && myPendingCount > 0 && (
+              <button
+                type="button"
+                className="btn-primary text-sm"
+                onClick={() => { setActiveBucket('pending'); setAssignedToMeOnly(true) }}
+              >Show only mine</button>
+            )}
+          </div>
+
           <MetricStrip metrics={metrics} loading={loading} />
 
           {!loading && sourceErrors.length > 0 && (
@@ -1393,7 +1426,7 @@ export default function Approvals() {
 
           {/* Batch actions remain above the register and operate only on eligible rows. */}
           {canActNonWorkflow && bulkableList.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-xl border border-[var(--border-dim)] bg-[var(--surface-2)]">
+            <div className="sticky top-2 z-20 flex flex-wrap items-center gap-2 px-3 py-2 rounded-xl border border-[var(--border-dim)] bg-[var(--surface-2)] shadow-lg">
               <button
                 type="button"
                 onClick={() => setPicked(allPicked ? new Set() : new Set(bulkableList.map(keyOf)))}
@@ -1424,7 +1457,7 @@ export default function Approvals() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => runBulk('reject')}
+                  onClick={() => setReturnDialog({ open: true, reason: '' })}
                   disabled={!pickedItems.length || bulk.busy}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-500/15 text-red-300 border border-red-500/30 hover:bg-red-500/25 disabled:opacity-40"
                 ><Ban className="w-3.5 h-3.5" />Return selected</button>
@@ -1467,6 +1500,37 @@ export default function Approvals() {
           />
         </>
       )}
+
+      <Modal
+        open={returnDialog.open}
+        onClose={() => setReturnDialog({ open: false, reason: '' })}
+        title={`Return ${pickedItems.length} item${pickedItems.length === 1 ? '' : 's'} for correction`}
+        subtitle="The person who submitted each one sees this note."
+        size="sm"
+        footer={(
+          <div className="flex justify-end gap-2">
+            <button type="button" className="btn-secondary text-sm" onClick={() => setReturnDialog({ open: false, reason: '' })}>Cancel</button>
+            <button
+              type="button"
+              className="btn-primary text-sm disabled:opacity-40"
+              disabled={!returnDialog.reason.trim() || bulk.busy}
+              onClick={() => { const r = returnDialog.reason; setReturnDialog({ open: false, reason: '' }); runBulk('reject', r) }}
+            >Return items</button>
+          </div>
+        )}
+      >
+        <label className="block text-sm">
+          <span className="mb-1 block text-[var(--text-secondary)]">What needs to be corrected?</span>
+          <textarea
+            autoFocus
+            rows={4}
+            className="input w-full"
+            value={returnDialog.reason}
+            onChange={e => setReturnDialog(d => ({ ...d, reason: e.target.value }))}
+            placeholder="For example: tyre pressure missing on the rear axle"
+          />
+        </label>
+      </Modal>
 
       <AnimatePresence>
         {selected && (

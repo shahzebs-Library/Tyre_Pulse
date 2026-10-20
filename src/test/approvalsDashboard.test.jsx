@@ -183,9 +183,9 @@ describe('Unified approval dashboard', () => {
     expect(screen.getByText('Approval Dashboard')).toBeInTheDocument()
 
     // Source-specific metric cards exist.
-    await waitFor(() => expect(screen.getByText('Workflows')).toBeInTheDocument())
-    expect(screen.getByText('Closures')).toBeInTheDocument()
-    expect(screen.getByText('Checklists')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getAllByText('Workflows').length).toBeGreaterThan(0))
+    expect(screen.getAllByText('Closures').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Checklists').length).toBeGreaterThan(0)
 
     // total_pending = 1 workflow + 1 closure + 1 checklist = 3.
     const pendingBadge = screen.getByText('3 pending')
@@ -332,6 +332,26 @@ describe('Unified approval dashboard', () => {
     expect(screen.getByText(/Closure request: TRK-01/)).toBeInTheDocument()
     expect(screen.getByText('Select all 1')).toBeInTheDocument()
     expect(screen.queryByRole('checkbox', { name: /Daily Safety Check/ })).not.toBeInTheDocument()
+  })
+
+  it('marks totals incomplete when an approval source fails instead of showing a false zero', async () => {
+    workflows.getApprovalDashboard.mockRejectedValueOnce(new Error('network unavailable'))
+    queue.listAccidentClosures.mockResolvedValueOnce([])
+    queue.listChecklistApprovals.mockResolvedValueOnce([])
+    queue.listInspectionApprovals.mockResolvedValueOnce([])
+    renderPage()
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Workflows')
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0)
+    expect(screen.getByText(/pending totals and empty states are incomplete/i)).toBeInTheDocument()
+    expect(screen.queryByText('0 pending')).not.toBeInTheDocument()
+  })
+
+  it('does not display a data-intake query failure as zero pending batches', async () => {
+    queue.countDataIntakePending.mockRejectedValueOnce(new Error('permission denied'))
+    renderPage()
+    expect(await screen.findByText(/data-intake approval count unavailable/i)).toBeInTheDocument()
+    expect(screen.getAllByRole('status').some(node => node.textContent.includes('Data intake'))).toBe(true)
   })
 
   it('shows the fatal error state only when every source fails', async () => {

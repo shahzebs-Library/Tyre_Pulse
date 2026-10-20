@@ -314,28 +314,27 @@ export async function countDataIntakePending({ country } = {}) {
       return count || 0
     } catch (err) {
       if (isMissingRelation(err) || isMissingFunction(err)) return 0
-      // A permission/other error should not blank the whole dashboard — treat as 0.
-      return 0
+      // An inaccessible count is unknown, not zero. Let the dashboard mark the
+      // intake source unavailable instead of presenting a false empty count.
+      throw err
     }
   }
 
-  const batches = await countOf(() => {
+  const [batches, uploads] = await Promise.all([countOf(() => {
     let q = supabase
       .from('import_batches')
       .select('id', { count: 'exact', head: true })
       .eq('approval_status', 'pending_approval')
     q = applyCountry(q, country)
     return q
-  })
-
-  const uploads = await countOf(() => {
+  }), countOf(() => {
     let q = supabase
       .from('pending_uploads')
       .select('id', { count: 'exact', head: true })
       .eq('status', 'pending')
     q = applyCountry(q, country)
     return q
-  })
+  })])
 
   return batches + uploads
 }

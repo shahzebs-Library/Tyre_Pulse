@@ -22,7 +22,25 @@
  * a missing-relation guard so an un-provisioned table degrades to an honest
  * empty result instead of throwing. No fabricated rows — every item is real.
  */
-import { supabase, unwrap, applyCountry, toServiceError } from './_client'
+import { supabase, unwrap, applyCountry, toServiceError, fetchAllPages } from './_client'
+
+const APPROVAL_QUEUE_ROW_CAP = 5000
+
+async function readApprovalRows(page) {
+  const { data, error, truncated } = await fetchAllPages(page, {
+    pageSize: 500,
+    max: APPROVAL_QUEUE_ROW_CAP,
+  })
+  if (error) throw toServiceError(error)
+  const rows = data || []
+  if (truncated) Object.defineProperty(rows, 'truncated', { value: true })
+  return rows
+}
+
+function carryTruncation(source, target) {
+  if (source?.truncated) Object.defineProperty(target, 'truncated', { value: true })
+  return target
+}
 
 /** True when the failure is "table/relation does not exist yet" (pre-migration). */
 function isMissingRelation(err) {
@@ -58,14 +76,13 @@ const ACCIDENT_CLOSURE_COLS =
  */
 export async function listAccidentClosures({ country } = {}) {
   try {
-    let q = supabase
-      .from('accidents')
-      .select(ACCIDENT_CLOSURE_COLS)
-      .eq('closure_status', 'pending_closure')
-      .order('close_requested_at', { ascending: true, nullsFirst: false })
-      .limit(500)
-    q = applyCountry(q, country)
-    return unwrap(await q) || []
+    return await readApprovalRows((from, to) => {
+      let q = supabase.from('accidents').select(ACCIDENT_CLOSURE_COLS)
+        .eq('closure_status', 'pending_closure')
+      q = applyCountry(q, country)
+      return q.order('close_requested_at', { ascending: true, nullsFirst: false })
+        .order('id', { ascending: true }).range(from, to)
+    })
   } catch (err) {
     if (isMissingRelation(err)) return []
     throw toServiceError(err)
@@ -131,14 +148,12 @@ export const CHECKLIST_WAITING_STATUSES = ['pending', 'pending_area_manager']
  */
 export async function listChecklistApprovals({ country } = {}) {
   try {
-    let q = supabase
-      .from('checklist_submissions')
-      .select(CHECKLIST_COLS)
-      .in('approval_status', CHECKLIST_WAITING_STATUSES)
-      .order('submitted_at', { ascending: true })
-      .limit(500)
-    q = applyCountry(q, country)
-    const rows = unwrap(await q) || []
+    const rows = await readApprovalRows((from, to) => {
+      let q = supabase.from('checklist_submissions').select(CHECKLIST_COLS)
+        .in('approval_status', CHECKLIST_WAITING_STATUSES)
+      q = applyCountry(q, country)
+      return q.order('submitted_at', { ascending: true }).order('id', { ascending: true }).range(from, to)
+    })
     return attachTemplateRules(rows)
   } catch (err) {
     if (isMissingRelation(err)) return []
@@ -155,13 +170,14 @@ async function attachTemplateRules(rows) {
   const ids = Array.from(new Set(rows.map((r) => r.template_id).filter(Boolean)))
   if (!ids.length) return rows
   try {
-    const tpl = unwrap(await supabase
+    const tpl = await readApprovalRows((from, to) => supabase
       .from('checklist_templates')
       .select('id,name,require_area_manager')
       .in('id', ids)
-      .limit(500)) || []
+      .order('id', { ascending: true })
+      .range(from, to))
     const byId = new Map(tpl.map((t) => [t.id, t]))
-    return rows.map((r) => {
+    const enriched = rows.map((r) => {
       const t = byId.get(r.template_id)
       return {
         ...r,
@@ -169,6 +185,7 @@ async function attachTemplateRules(rows) {
         require_area_manager: !!t?.require_area_manager,
       }
     })
+    return carryTruncation(tpl, carryTruncation(rows, enriched))
   } catch {
     return rows
   }
@@ -254,14 +271,11 @@ const INSPECTION_COLS =
  */
 export async function listInspectionApprovals({ country } = {}) {
   try {
-    let q = supabase
-      .from('inspections')
-      .select(INSPECTION_COLS)
-      .eq('approval_status', 'pending_approval')
-      .order('created_at', { ascending: true })
-      .limit(500)
-    q = applyCountry(q, country)
-    return unwrap(await q) || []
+    return await readApprovalRows((from, to) => {
+      let q = supabase.from('inspections').select(INSPECTION_COLS).eq('approval_status', 'pending_approval')
+      q = applyCountry(q, country)
+      return q.order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to)
+    })
   } catch (err) {
     if (isMissingRelation(err)) return []
     throw toServiceError(err)
@@ -362,25 +376,25 @@ export async function countDataIntakePending({ country } = {}) {
  */
 export async function listChecklistSignoffGaps({ country } = {}) {
   try {
-    const templates = unwrap(await supabase
+    const templates = await readApprovalRows((from, to) => supabase
       .from('checklist_templates')
       .select('id,name')
       .eq('require_approval', true)
-      .limit(500)) || []
+      .order('id', { ascending: true })
+      .range(from, to))
     const ids = templates.map((t) => t.id).filter(Boolean)
     if (!ids.length) return []
 
     const nameById = new Map(templates.map((t) => [t.id, t.name]))
-    let q = supabase
-      .from('checklist_submissions')
-      .select(CHECKLIST_COLS)
-      .in('template_id', ids)
-      .eq('approval_status', 'not_required')
-      .order('submitted_at', { ascending: false })
-      .limit(500)
-    q = applyCountry(q, country)
-    const rows = unwrap(await q) || []
-    return rows.map((r) => ({ ...r, template_name: r.template_name || nameById.get(r.template_id) || null }))
+    const rows = await readApprovalRows((from, to) => {
+      let q = supabase.from('checklist_submissions').select(CHECKLIST_COLS)
+        .in('template_id', ids).eq('approval_status', 'not_required')
+      q = applyCountry(q, country)
+      return q.order('submitted_at', { ascending: false }).order('id', { ascending: true }).range(from, to)
+    })
+    return carryTruncation(templates, carryTruncation(rows,
+      rows.map((r) => ({ ...r, template_name: r.template_name || nameById.get(r.template_id) || null })),
+    ))
   } catch (err) {
     if (isMissingRelation(err)) return []
     throw toServiceError(err)

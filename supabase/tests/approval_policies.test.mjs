@@ -8,6 +8,7 @@ const baseline = await readFile(new URL('./fixtures/approval_legacy_baseline.sql
 const workflowBaseline = await readFile(new URL('./fixtures/approval_workflow_baseline.sql', import.meta.url), 'utf8');
 const inspectionLockBaseline = await readFile(new URL('./fixtures/approval_inspection_lock_baseline.sql', import.meta.url), 'utf8');
 const preExecutionMigration=await readFile(new URL('../migrations/20260910185625_approval_pre_execution_gates.sql',import.meta.url),'utf8');
+const approvalsQueueMigration=await readFile(new URL('../migrations/20261020084137_approvals_queue_full_pending_records.sql',import.meta.url),'utf8');
 const tyreBaseline=await readFile(new URL('./fixtures/approval_tyre_baseline.sql',import.meta.url),'utf8');
 const uuid = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 const org = uuid(1), admin = uuid(2), submitter = uuid(3), reviewer = uuid(4), otherOrg = uuid(5), reviewer2 = uuid(6), publisher=uuid(8);
@@ -90,6 +91,7 @@ test('governed approvals: tenant isolation, publication, snapshots, domain gates
   await db.exec('CREATE TRIGGER trg_guard_checklist_approval_stages BEFORE UPDATE ON checklist_submissions FOR EACH ROW EXECUTE FUNCTION guard_checklist_approval_stages();');
   await db.exec(migration);
   await db.exec(preExecutionMigration);
+  await db.exec(approvalsQueueMigration);
   await db.exec(`CREATE TRIGGER trg_notify_checklist_decision AFTER UPDATE ON checklist_submissions FOR EACH ROW WHEN (OLD.approval_status IS DISTINCT FROM NEW.approval_status) EXECUTE FUNCTION notify_submission_decision();
    CREATE TRIGGER trg_notify_inspection_decision AFTER UPDATE ON inspections FOR EACH ROW WHEN (OLD.approval_status IS DISTINCT FROM NEW.approval_status) EXECUTE FUNCTION notify_submission_decision();`);
   await db.exec(`GRANT USAGE ON SCHEMA auth TO authenticated; GRANT SELECT,INSERT,UPDATE ON inspections,checklist_submissions,workflow_instances,workflow_step_events,work_orders,tyre_records TO authenticated;
@@ -283,6 +285,19 @@ test('governed approvals: tenant isolation, publication, snapshots, domain gates
    assert.ok(await scalar("SELECT count(*)::int FROM notifications WHERE title='Checklist returned for correction'")>0);
    assert.ok(await scalar("SELECT count(*)::int FROM notifications WHERE title='Checklist rejected'")>0);
    await db.exec('SET ROLE authenticated');
+  });
+  await t.test('approval dashboard returns all pending workflow rows with their recorded site', async () => {
+   await db.exec(`RESET ROLE;
+    INSERT INTO workflow_instances(id,organisation_id,entity_type,entity_id,entity_label,definition_name,steps,current_step,status,context,started_by,step_started_at)
+    SELECT ('00000000-0000-0000-0001-'||lpad(n::text,12,'0'))::uuid,'${org}','work_order',n::text,'Work order '||n,'Work approval',
+      '[{"name":"Manager review","approver_role":"PMV Manager","sla_hours":24}]'::jsonb,0,'pending',
+      '{"approval_matrix":false,"content":{"country":"KSA","site":"JEDDAH"}}'::jsonb,'${submitter}',now() - (n||' minutes')::interval
+    FROM generate_series(1,30) n;
+    SET ROLE authenticated; SET test.actor='${reviewer}';`);
+   const result=await scalar('SELECT approval_dashboard()');
+   assert.ok(result.metrics.pending_count >= 30);
+   assert.equal(result.buckets.pending.length,result.metrics.pending_count);
+   assert.ok(result.buckets.pending.every(row=>row.site==='JEDDAH' && row.country==='KSA'));
   });
  } finally { await db.close(); }
 });

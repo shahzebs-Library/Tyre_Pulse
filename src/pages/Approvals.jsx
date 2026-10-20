@@ -4,7 +4,7 @@ import {
   CheckSquare, X, Search, Clock, Inbox, Filter, AlertTriangle,
   ClipboardList, CheckCircle2, XCircle, Undo2, RefreshCw,
   ChevronRight, ServerCrash, Car, ClipboardCheck, Database, Loader2,
-  ExternalLink, GitBranch, AlertOctagon, Square, Ban, PenLine,
+  ExternalLink, GitBranch, AlertOctagon, Square, Ban, PenLine, MapPin,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import * as workflows from '../lib/api/workflows'
@@ -347,6 +347,14 @@ function InstanceRow({ instance, bucketKey, onOpen }) {
           {step && (
             <span className="text-[var(--text-secondary)]"> · Step {idx + 1}/{total}: {step.name}</span>
           )}
+          {(instance.current_approver_role || step?.approver_role) && (
+            <span className="text-[var(--text-secondary)]"> · Waiting for {instance.current_approver_role || step.approver_role}</span>
+          )}
+        </p>
+        <p className="text-[var(--text-muted)] text-[11px] truncate mt-1 inline-flex items-center gap-1">
+          <MapPin className="w-3 h-3 shrink-0" />
+          {[instance.site || 'Site not recorded', instance.country].filter(Boolean).join(' · ')}
+          {instance.entity_id && <span> · Ref {instance.entity_id}</span>}
         </p>
       </div>
 
@@ -395,8 +403,10 @@ function GenericRow({ item, onOpen, selectable = false, picked = false, onToggle
         </div>
         <p className="text-[var(--text-muted)] text-xs truncate mt-0.5">
           {item.subtitle}
-          {item.site && <span className="text-[var(--text-muted)]"> · {item.site}</span>}
-          {item.country && <span className="text-[var(--text-muted)]"> · {item.country}</span>}
+        </p>
+        <p className="text-[var(--text-muted)] text-[11px] truncate mt-1 inline-flex items-center gap-1">
+          <MapPin className="w-3 h-3 shrink-0" />
+          {[item.site || 'Site not recorded', item.country].filter(Boolean).join(' · ')}
         </p>
       </div>
       <div className="hidden md:flex flex-col items-end gap-1 shrink-0">
@@ -482,6 +492,8 @@ function LegacyDetailDrawer({ instance, actionable, onClose, onActed }) {
         <>
           {instance.definition_name || 'Workflow'}
           {step && <span> · Step {idx + 1}/{total}: {step.name}</span>}
+          <span> · Waiting for {instance.current_approver_role || step?.approver_role || 'approver'}</span>
+          <span> · {[instance.site || 'Site not recorded', instance.country].filter(Boolean).join(' · ')}</span>
         </>
       }
       onClose={onClose}
@@ -970,6 +982,7 @@ export default function Approvals() {
   const [fatalError, setFatalError] = useState(null)
   const [workflowError, setWorkflowError] = useState(null)
   const [sourceErrors, setSourceErrors] = useState([])
+  const [incompleteSources, setIncompleteSources] = useState([])
   const [metricsRaw, setMetricsRaw] = useState(null)
   const [buckets, setBuckets]   = useState(EMPTY_BUCKETS)
   const [closures, setClosures] = useState([])
@@ -980,6 +993,7 @@ export default function Approvals() {
   const [updatedAt, setUpdatedAt] = useState(null)
 
   const [activeBucket, setActiveBucket] = useState('pending')
+  const [assignedToMeOnly, setAssignedToMeOnly] = useState(false)
   const [search, setSearch] = useState('')
   const [sourceFilter, setSourceFilter] = useState('all')
   const [siteFilter, setSiteFilter] = useState('all')
@@ -997,9 +1011,10 @@ export default function Approvals() {
     setWorkflowError(null)
     const country = activeCountry
 
-    const [dashR, mineR, closuresR, checklistR, intakeR, gapsR, inspectionsR] = await Promise.allSettled([
+    const [dashR, mineR, delegatedR, closuresR, checklistR, intakeR, gapsR, inspectionsR] = await Promise.allSettled([
       workflows.getApprovalDashboard(),
       workflows.myPendingApprovals(),
+      workflows.myDelegatedApprovals(),
       queue.listAccidentClosures({ country }),
       queue.listChecklistApprovals({ country }),
       queue.countDataIntakePending({ country }),
@@ -1020,6 +1035,17 @@ export default function Approvals() {
     if (gapsR.status !== 'fulfilled') failedSources.push('Missed sign-offs')
     if (intakeR.status !== 'fulfilled') failedSources.push('Data intake')
     setSourceErrors(failedSources)
+    const cappedSources = []
+    if (dashboardValid && Number(dashR.value?.metrics?.pending_count) > (dashR.value?.buckets?.pending || []).length) {
+      // A server or proxy may still cap an RPC response. Keep the metric visible,
+      // but never imply the returned queue is complete in that case.
+      cappedSources.push('Workflows')
+    }
+    if (closuresR.status === 'fulfilled' && closuresR.value?.truncated) cappedSources.push('Accident closures')
+    if (checklistR.status === 'fulfilled' && checklistR.value?.truncated) cappedSources.push('Checklist sign-offs')
+    if (inspectionsR.status === 'fulfilled' && inspectionsR.value?.truncated) cappedSources.push('Inspection sign-offs')
+    if (gapsR.status === 'fulfilled' && gapsR.value?.truncated) cappedSources.push('Missed sign-offs')
+    setIncompleteSources(cappedSources)
     if (dashboardValid) {
       setBuckets(Object.fromEntries(Object.entries({ ...EMPTY_BUCKETS, ...(dashR.value?.buckets || {}) })
         .map(([key, rows]) => [key, rows.filter(row => matchesCountry(row, country))])))
@@ -1032,7 +1058,10 @@ export default function Approvals() {
       setWorkflowError(toUserMessage(dashR.reason, 'Workflow engine unavailable'))
     }
     setActionableIds(new Set(
-      mineR.status === 'fulfilled' ? (mineR.value || []).map(r => r.id) : [],
+      [
+        ...(mineR.status === 'fulfilled' ? mineR.value || [] : []),
+        ...(delegatedR.status === 'fulfilled' ? delegatedR.value || [] : []),
+      ].map(r => r.id),
     ))
     setClosures(closuresR.status === 'fulfilled' ? (closuresR.value || []).map(toClosureItem) : [])
     setChecklistItems(checklistR.status === 'fulfilled' ? (checklistR.value || []).map(toChecklistItem) : [])
@@ -1051,6 +1080,7 @@ export default function Approvals() {
   useEffect(() => {
     setBuckets(EMPTY_BUCKETS); setMetricsRaw(null); setClosures([]); setChecklistItems([])
     setInspectionItems([]); setSignoffGaps([]); setIntakeCount(null); setSourceErrors([]); setActionableIds(new Set())
+    setIncompleteSources([])
     setSelected(null); setSelectedGeneric(null); setPicked(new Set()); setBulk({ busy: false, result: null })
     setSiteFilter('all'); setUpdatedAt(null)
     load()
@@ -1062,24 +1092,34 @@ export default function Approvals() {
     return mergePendingApprovals(buckets.pending || [], [...closures, ...checklistItems, ...inspectionItems])
   }, [buckets.pending, closures, checklistItems, inspectionItems])
 
+  const pendingQueueUnavailable = sourceErrors.some(name =>
+    ['Workflows', 'Accident closures', 'Checklist sign-offs', 'Inspection sign-offs'].includes(name),
+  ) || incompleteSources.some(name =>
+    ['Workflows', 'Accident closures', 'Checklist sign-offs', 'Inspection sign-offs'].includes(name),
+  )
+
   const counts = useMemo(() => ({
     workflow_pending:  sourceErrors.includes('Workflows') ? null : mergedPending.filter(i => i.source === SOURCE.workflow).length,
     closures_pending:  sourceErrors.includes('Accident closures') ? null : closures.length,
     checklist_pending: sourceErrors.includes('Checklist sign-offs') ? null : mergedPending.filter(i => i.source === SOURCE.checklist).length,
     inspection_pending: sourceErrors.includes('Inspection sign-offs') ? null : mergedPending.filter(i => i.source === SOURCE.inspection).length,
-    total_pending:     sourceErrors.length ? null : mergedPending.length,
+    total_pending:     pendingQueueUnavailable ? null : mergedPending.length,
     overdue:           sourceErrors.includes('Workflows') ? null : (buckets.overdue || []).length,
     returned:          sourceErrors.includes('Workflows') ? null : (buckets.returned || []).length,
     rejected:          sourceErrors.includes('Workflows') ? null : (buckets.rejected || []).length,
     recently_approved: sourceErrors.includes('Workflows') ? null : (buckets.recently_approved || []).length,
     signoff_gaps:      sourceErrors.includes('Missed sign-offs') ? null : signoffGaps.length,
-  }), [buckets, closures, mergedPending, signoffGaps, sourceErrors])
+  }), [buckets, closures, mergedPending, signoffGaps, sourceErrors, pendingQueueUnavailable])
 
   const metrics = useMemo(() => {
     const m = metricsRaw && typeof metricsRaw === 'object' ? metricsRaw : {}
     return {
       ...counts,
-      overdue:           m.overdue ?? counts.overdue,
+      overdue:           m.overdue_count ?? m.overdue ?? counts.overdue,
+      returned:          m.returned_count ?? counts.returned,
+      rejected:          m.rejected_count ?? counts.rejected,
+      // The RPC bucket is intentionally the latest 25, so its row count is the
+      // displayed tab count rather than the lifetime approved_count metric.
       recently_approved: m.recently_approved ?? m.approved_recent ?? counts.recently_approved,
     }
   }, [metricsRaw, counts])
@@ -1097,36 +1137,57 @@ export default function Approvals() {
     if (sourceFilter !== 'all' && i.source !== sourceFilter) return false
     if (siteFilter !== 'all' && i.site !== siteFilter) return false
     if (!q) return true
-    return (i.title || '').toLowerCase().includes(q)
-      || (i.subtitle || '').toLowerCase().includes(q)
-      || (i.site || '').toLowerCase().includes(q)
+    return [i.title, i.subtitle, i.site, i.country, i.documentNo, i.id,
+      i.raw?.asset_no, i.raw?.tyre_serial, i.raw?.document_no, i.raw?.title]
+      .some(value => String(value || '').toLowerCase().includes(q))
   }, [sourceFilter, siteFilter, q])
 
   const matchWorkflow = useCallback((i) => {
     if (sourceFilter !== 'all' && sourceFilter !== SOURCE.workflow) return false
     if (siteFilter !== 'all' && i.site !== siteFilter) return false
     if (!q) return true
-    return (entityLabelOf(i).toLowerCase().includes(q))
-      || (i.definition_name || '').toLowerCase().includes(q)
-      || (i.entity_type || '').toLowerCase().includes(q)
+    return [entityLabelOf(i), i.definition_name, i.entity_type, i.entity_id, i.site, i.country,
+      i.current_step_name, i.current_approver_role]
+      .some(value => String(value || '').toLowerCase().includes(q))
   }, [sourceFilter, siteFilter, q])
+
+  const canActOnItem = useCallback((item) => {
+    if (item.source === SOURCE.workflow || item.governed) {
+      return actionableIds.has(item.workflowId || item.id)
+    }
+    if (item.source === SOURCE.accident_closure) return canActNonWorkflow
+    if (item.source === SOURCE.checklist) {
+      return canDecide(templateRulesOf(item.raw), item.raw, profile?.role,
+        { isSuperAdmin: !!profile?.is_super_admin })
+    }
+    if (item.source === SOURCE.inspection) {
+      return canSignInspection(profile?.role, { isSuperAdmin: !!profile?.is_super_admin })
+    }
+    return false
+  }, [actionableIds, canActNonWorkflow, profile?.role, profile?.is_super_admin])
+
+  const myPendingCount = useMemo(
+    () => mergedPending.filter(canActOnItem).length,
+    [mergedPending, canActOnItem],
+  )
 
   // The active bucket content. Only "pending" is merged; the workflow lifecycle
   // buckets (overdue/returned/rejected/recently_approved) stay workflow-native.
   const activeList = useMemo(() => {
     if (activeBucket === 'pending') {
       return mergedPending.filter(i =>
-        i.source === SOURCE.workflow ? matchWorkflow(i) : matchGeneric(i),
+        (!assignedToMeOnly || canActOnItem(i)) &&
+        (i.source === SOURCE.workflow ? matchWorkflow(i) : matchGeneric(i)),
       )
     }
     if (activeBucket === 'signoff_gaps') return signoffGaps.filter(matchGeneric)
     return (buckets[activeBucket] || [])
       .map(i => ({ ...i, source: SOURCE.workflow }))
       .filter(matchWorkflow)
-  }, [activeBucket, mergedPending, buckets, matchWorkflow, matchGeneric, signoffGaps])
+  }, [activeBucket, mergedPending, buckets, matchWorkflow, matchGeneric, signoffGaps, assignedToMeOnly, canActOnItem])
 
   const activeBucketUnavailable = activeBucket === 'pending'
-    ? sourceErrors.some(name => ['Workflows', 'Accident closures', 'Checklist sign-offs', 'Inspection sign-offs'].includes(name))
+    ? pendingQueueUnavailable
     : activeBucket === 'signoff_gaps'
       ? sourceErrors.includes('Missed sign-offs')
       : sourceErrors.includes('Workflows')
@@ -1137,7 +1198,7 @@ export default function Approvals() {
     [actionableIds],
   )
 
-  const hasFilters = q || sourceFilter !== 'all' || siteFilter !== 'all'
+  const hasFilters = q || sourceFilter !== 'all' || siteFilter !== 'all' || assignedToMeOnly
 
   // Only accident closures and checklist sign-offs can be decided in bulk. A
   // workflow instance cannot: its next step may demand a signature, a cost or a
@@ -1273,6 +1334,13 @@ export default function Approvals() {
             </div>
           )}
 
+          {!loading && incompleteSources.length > 0 && (
+            <div role="status" className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-sm text-amber-200">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>Some approval lists reached the 5,000 record safety limit: {incompleteSources.join(', ')}. Only the first 5,000 are available in this view; contact an administrator if the approval you need is missing.</span>
+            </div>
+          )}
+
           {/* Workflow engine degraded notice (other sources still shown) */}
           {!loading && workflowError && (
             <div className="flex items-center gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-sm text-amber-300">
@@ -1292,6 +1360,29 @@ export default function Approvals() {
           {/* Data-intake deep link (never duplicates the intake commit flow) */}
           {!loading && <DataIntakeCard count={intakeCount} onGo={() => navigate('/upload-approvals')} />}
 
+          {activeBucket === 'pending' && (
+            <div className="flex flex-wrap items-center gap-2" aria-label="Pending approval view">
+              <span className="text-xs font-semibold text-[var(--text-secondary)] mr-1">Show:</span>
+              <button
+                type="button"
+                aria-pressed={!assignedToMeOnly}
+                onClick={() => setAssignedToMeOnly(false)}
+                className={`px-3 py-2 rounded-lg border text-xs font-semibold transition-colors ${!assignedToMeOnly ? 'bg-orange-500/15 text-orange-200 border-orange-500/40' : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--input-border)] hover:text-[var(--text-primary)]'}`}
+              >
+                All pending {metrics.total_pending == null ? '·' : `· ${metrics.total_pending}`}
+              </button>
+              <button
+                type="button"
+                aria-pressed={assignedToMeOnly}
+                onClick={() => setAssignedToMeOnly(true)}
+                className={`px-3 py-2 rounded-lg border text-xs font-semibold transition-colors ${assignedToMeOnly ? 'bg-orange-500/15 text-orange-200 border-orange-500/40' : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--input-border)] hover:text-[var(--text-primary)]'}`}
+              >
+                Assigned to me {pendingQueueUnavailable ? '· —' : `· ${myPendingCount}`}
+              </button>
+              <span className="text-[11px] text-[var(--text-muted)]">Sorted oldest first. Open a row to review the record and approval route.</span>
+            </div>
+          )}
+
           {/* Filters */}
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
             <div className="relative flex-1 sm:max-w-sm">
@@ -1300,7 +1391,7 @@ export default function Approvals() {
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search entity, workflow or checklist…"
+                placeholder="Search asset, document, site or approval…"
                 className="w-full bg-[var(--surface-2)] border border-[var(--input-border)] rounded-xl pl-9 pr-9 py-2.5 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
               />
               {search && (
@@ -1408,7 +1499,7 @@ export default function Approvals() {
                 </p>
                 {hasFilters && (
                   <button
-                    onClick={() => { setSearch(''); setSourceFilter('all'); setSiteFilter('all') }}
+                    onClick={() => { setSearch(''); setSourceFilter('all'); setSiteFilter('all'); setAssignedToMeOnly(false) }}
                     className="mt-3 text-orange-400 text-xs hover:text-orange-300 inline-flex items-center gap-1"
                   >
                     <Filter className="w-3 h-3" /> Clear filters

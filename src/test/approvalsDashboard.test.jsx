@@ -15,6 +15,7 @@ vi.mock('../lib/api/approvalDecisions', () => ({
 vi.mock('../lib/api/workflows', () => ({
   getApprovalDashboard: vi.fn(),
   myPendingApprovals: vi.fn(),
+  myDelegatedApprovals: vi.fn(),
   listStepEvents: vi.fn(),
   actOnWorkflow: vi.fn(),
   returnWorkflow: vi.fn(),
@@ -159,6 +160,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   workflows.getApprovalDashboard.mockResolvedValue(DASHBOARD)
   workflows.myPendingApprovals.mockResolvedValue([{ id: 'wi-1' }])
+  workflows.myDelegatedApprovals.mockResolvedValue([])
   workflows.listStepEvents.mockResolvedValue([])
   workflows.actOnWorkflow.mockResolvedValue({ status: 'approved' })
   workflows.returnWorkflow.mockResolvedValue({ status: 'returned' })
@@ -197,6 +199,25 @@ describe('Unified approval dashboard', () => {
     await waitFor(() => expect(screen.getByText('Vehicle ABC-123 · Tyre Replacement')).toBeInTheDocument())
     expect(screen.getByText(/Closure request: TRK-01 · Collision/)).toBeInTheDocument()
     expect(screen.getByText('Daily Safety Check')).toBeInTheDocument()
+  })
+
+  it('shows the location and approval stage on each pending workflow row', async () => {
+    workflows.getApprovalDashboard.mockResolvedValue({ buckets: { pending: [makeInstance({
+      site: 'NHC', country: 'KSA', current_approver_role: 'PMV Manager', current_step_name: 'Manager Review',
+    })] } })
+    renderPage()
+    await screen.findByText('Vehicle ABC-123 · Tyre Replacement')
+    expect(screen.getByText(/Waiting for PMV Manager/)).toBeInTheDocument()
+    expect(screen.getByText(/NHC · KSA/)).toBeInTheDocument()
+  })
+
+  it('filters pending rows to items the signed-in user can act on', async () => {
+    renderPage()
+    await screen.findByText('Daily Safety Check')
+    fireEvent.click(screen.getByRole('button', { name: /Assigned to me/ }))
+    expect(screen.getByText('Vehicle ABC-123 · Tyre Replacement')).toBeInTheDocument()
+    expect(screen.getByText(/Closure request: TRK-01/)).toBeInTheDocument()
+    expect(screen.queryByText('Daily Safety Check')).not.toBeInTheDocument()
   })
 
   it('deep-links to the data-intake approvals surface when batches are pending', async () => {
@@ -316,7 +337,7 @@ describe('Unified approval dashboard', () => {
     renderPage()
     await waitFor(() => expect(screen.getByText('Vehicle ABC-123 · Tyre Replacement')).toBeInTheDocument())
 
-    fireEvent.change(screen.getByPlaceholderText(/Search entity, workflow or checklist/i), {
+    fireEvent.change(screen.getByPlaceholderText(/Search asset, document, site or approval/i), {
       target: { value: 'nonexistent-entity' },
     })
 

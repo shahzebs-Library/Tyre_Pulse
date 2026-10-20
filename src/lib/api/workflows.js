@@ -20,7 +20,7 @@ const DEFINITION_COLS =
 // steps is the immutable snapshot taken at start. Omits organisation_id /
 // source_event_id (RLS-scoped / internal linkage).
 const INSTANCE_COLS =
-  'id,definition_id,definition_name,entity_type,entity_id,entity_label,steps,current_step,step_started_at,status,context,started_by,started_at,completed_at'
+  'id,definition_id,definition_name,entity_type,entity_id,entity_label,steps,current_step,approval_route_revision,step_started_at,status,context,started_by,started_at,completed_at'
 
 // Append-only audit trail columns for the instance timeline. Includes the
 // V116 capture columns (signature_data / printed_name / photo_urls / gps /
@@ -226,7 +226,7 @@ export async function myDelegatedApprovals() {
       unwrap(
         await supabase
           .from('approval_delegations')
-          .select('id,delegator_id,delegate_id,entity_type,active,starts_at,ends_at')
+          .select('id,delegator_id,delegate_id,entity_type,active,starts_at,ends_at,approval_workflow_id,approval_stage_token')
           .eq('delegate_id', uid),
       ) || []
     const nowMs = Date.now()
@@ -270,7 +270,15 @@ export async function myDelegatedApprovals() {
       )
       const stepRole = String(steps[idx]?.approver_role || '').toLowerCase()
       if (!stepRole) continue
+      const stageToken = `${inst.id}:${inst.current_step ?? 0}:${inst.approval_route_revision ?? 0}`
       const match = active.find((d) => {
+        // Governed delegations are bound to one workflow stage. Matching them
+        // by role alone would expose every other pending workflow for that role.
+        if (d.approval_workflow_id) {
+          return d.approval_workflow_id === inst.id
+            && d.approval_stage_token === stageToken
+            && roleById.get(d.delegator_id) === stepRole
+        }
         if (d.entity_type && d.entity_type !== inst.entity_type) return false
         return roleById.get(d.delegator_id) === stepRole
       })

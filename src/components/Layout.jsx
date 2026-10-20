@@ -631,8 +631,8 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
   return (
     <MotionConfig reducedMotion="user">
     <div
-      className="min-h-screen flex flex-col"
-      style={{ background: '#f0f5f1' }}
+      className="h-screen min-h-0 flex flex-col overflow-hidden"
+      style={{ background: '#f0f5f1', height: '100dvh' }}
     >
       <a href="#main-content" className="tp-skip-link">
         {tOr(t, 'shell.skipToContent', 'Skip to main content')}
@@ -730,7 +730,7 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
       <main
         id="main-content"
         tabIndex={-1}
-        className="flex-1 overflow-auto px-3 outline-none"
+        className="flex-1 min-h-0 min-w-0 overflow-auto overscroll-y-contain px-3 outline-none"
         style={{
           paddingTop: 'calc(52px + env(safe-area-inset-top))',
           paddingBottom: 'calc(66px + env(safe-area-inset-bottom))',
@@ -1146,7 +1146,7 @@ export default function Layout({ children }) {
     // the group accordions or the page-enter transition. This makes every motion
     // component in the shell honour the OS setting; nothing changes otherwise.
     <MotionConfig reducedMotion="user">
-    <div className="flex h-screen overflow-hidden" style={{ background: 'transparent' }}>
+    <div className="flex h-screen min-h-0 overflow-hidden" style={{ background: 'transparent', height: '100dvh' }}>
       <a href="#main-content" className="tp-skip-link">
         {tOr(t, 'shell.skipToContent', 'Skip to main content')}
       </a>
@@ -1182,7 +1182,7 @@ export default function Layout({ children }) {
         aria-label={drawerOpen ? tOr(t, 'shell.menu', 'Menu') : undefined}
         // RTL: the drawer belongs to the start edge, which is the RIGHT in
         // Arabic, and it slides out towards that edge.
-        className={`tp-workspace-sidebar flex-shrink-0 flex flex-col ${isMobile ? `fixed top-0 ${isRTL ? 'right-0' : 'left-0'} h-full z-50` : 'relative z-20'}`}
+        className={`tp-workspace-sidebar min-h-0 flex-shrink-0 flex flex-col ${isMobile ? `fixed top-0 ${isRTL ? 'right-0' : 'left-0'} h-full z-50` : 'relative z-20'}`}
         animate={
           isMobile
             ? { x: sidebarOpen ? 0 : (isRTL ? drawerWidth : -drawerWidth), width: drawerWidth }
@@ -1260,7 +1260,7 @@ export default function Layout({ children }) {
         {/* ── Nav ────────────────────────────────────────────────────────────── */}
         <nav
           aria-label={tOr(t, 'shell.primaryNav', 'Main navigation')}
-          className="flex-1 overflow-y-auto py-1.5 px-2"
+          className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain py-1.5 px-2"
           style={{ scrollbarWidth: 'thin' }}
         >
           {helpWorkspace ? <HelpNavigation /> : <>
@@ -1513,7 +1513,7 @@ export default function Layout({ children }) {
           52px mobile header), leaving the sidebar for navigation only. It sits
           as a sibling ABOVE <main> in a flex column, so it stays visible without
           needing position:fixed or a matching paddingTop on the scroll area. */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
         <TopBar
           onToggleSidebar={() => setSidebarOpen(v => !v)}
           sidebarOpen={sidebarOpen}
@@ -1526,7 +1526,7 @@ export default function Layout({ children }) {
         <main
           id="main-content"
           tabIndex={-1}
-          className="flex-1 overflow-y-auto outline-none"
+          className="flex-1 min-w-0 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain outline-none"
           style={{
             scrollbarWidth: 'thin',
             paddingBottom: isMobile ? 'calc(54px + env(safe-area-inset-bottom))' : 0,

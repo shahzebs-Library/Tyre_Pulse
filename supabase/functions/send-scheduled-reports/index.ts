@@ -1054,14 +1054,21 @@ function renderDatasetHtml(s: Schedule, cfg: DatasetDigestCfg, d: DatasetDigest,
   // The window the schedule was actually configured for - never inferred from
   // the data alone, or an empty window would print "N/A" instead of naming
   // the period that legitimately found nothing.
-  const coverage = windowLabel || ((d.first || d.last) ? `${dateShort(d.first)} to ${dateShort(d.last)}` : 'N/A')
+  // A snapshot dataset ignores the coverage window entirely, so it must never
+  // be labelled with that window: it describes the list as of this send.
+  const coverage = cfg.snapshot
+    ? `the current snapshot (${genAt} UTC)`
+    : (windowLabel || ((d.first || d.last) ? `${dateShort(d.first)} to ${dateShort(d.last)}` : 'N/A'))
   const label = typeLabel(s.report_type)
 
   const summary = d.count === 0
-    ? `No ${label.toLowerCase()} records were found for ${coverage}. Widen the schedule's coverage period to see more.`
-    : `<b>${num(d.count)}</b> record(s) in ${coverage}` +
-      `${cfg.money ? `, totalling <b>${money(d.moneySum, currency)}</b>` : ''}. ` +
-      `<b>${num(d.recent30)}</b> of those were added in the last 30 days.`
+    ? (cfg.snapshot ? `No ${label.toLowerCase()} records are in ${coverage}.` : `No ${label.toLowerCase()} records were found for ${coverage}. Widen the schedule's coverage period to see more.`)
+    : cfg.snapshot
+      ? `<b>${num(d.count)}</b> record(s) in ${coverage}. ` +
+        `<b>${num(d.recent30)}</b> of those started in the last 30 days.`
+      : `<b>${num(d.count)}</b> record(s) in ${coverage}` +
+        `${cfg.money ? `, totalling <b>${money(d.moneySum, currency)}</b>` : ''}. ` +
+        `<b>${num(d.recent30)}</b> of those were added in the last 30 days.`
 
   // Group breakdowns, three columns per row.
   const groupRows: string[] = []

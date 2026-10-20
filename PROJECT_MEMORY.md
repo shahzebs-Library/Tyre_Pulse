@@ -69,7 +69,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - Loop 14: Active/Released PDF + Management summary PDF + scheduled report type `workshop_status`.
   20261011130000 (report_type CHECK += workshop_status) APPLIED LIVE. send-scheduled-reports digest branch is in the
   repo but NOT DEPLOYED (deploy via CLI or deploy + byte-diff; never hand-inline the 1,100-line fn).
-- Loop 15-16: upload history panel + per-row keep/take conflict UI. **20261011140000 is NOT APPLIED and must not be
+- Loop 15-16: upload history panel + per-row keep/take conflict UI. **20261011140000 (moved to supabase/pending_migrations/ on 2026-10-20 so no deploy can apply it) is NOT APPLIED and must not be
   applied as-is**: it copies the July 110000 stage/confirm bodies and would overwrite the parallel session's live rule.
   Owner was offered: (1) keep theirs + adapt UI [recommended], (2) rebase ours on live, (3) one session stops.
 - Loop 17: security review clean; one fix APPLIED LIVE (20261011150000): upload/confirm need app_sees_all_sites().

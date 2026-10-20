@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'
 
-// PGlite harness for supabase/migrations/20261011140000_workshop_status_stale_conflict.sql
+// PGlite harness for supabase/pending_migrations/20261011140000_workshop_status_stale_conflict.sql
 // (Loop 16: a stale daily Excel must not overwrite a newer manual update),
 // applied on top of the foundation, permissions, upload confirm, manual update
 // and removed-recovery migrations. Also covers the null-file-hash stage fix.
@@ -14,7 +14,7 @@ const PERMISSIONS = read('20261007100000_workshop_status_permissions.sql')
 const CONFIRM = read('20261007110000_workshop_status_upload_confirm.sql')
 const MANUAL = read('20261007120000_workshop_status_manual_update.sql')
 const RECOVERY = read('20261007130000_workshop_status_removed_recovery.sql')
-const STALE = read('20261011140000_workshop_status_stale_conflict.sql')
+const STALE = readFileSync(new URL('../pending_migrations/20261011140000_workshop_status_stale_conflict.sql', import.meta.url), 'utf8')
 
 const id = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`
 const org = id(900)

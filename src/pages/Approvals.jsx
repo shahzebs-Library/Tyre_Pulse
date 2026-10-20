@@ -872,6 +872,7 @@ export default function Approvals() {
   const [intakeCount, setIntakeCount] = useState(null)
   const [actionableIds, setActionableIds] = useState(() => new Set())
   const [updatedAt, setUpdatedAt] = useState(null)
+  const [assignmentUnknown, setAssignmentUnknown] = useState(false)
 
   const [activeBucket, setActiveBucket] = useState('pending')
   const [assignedToMeOnly, setAssignedToMeOnly] = useState(false)
@@ -952,6 +953,8 @@ export default function Approvals() {
       setMetricsRaw(null)
       setWorkflowError(toUserMessage(dashR.reason, 'Workflow engine unavailable'))
     }
+    // If either "assigned to me" lookup failed, a zero would be a guess, not a fact.
+    setAssignmentUnknown(mineR.status !== 'fulfilled' || delegatedR.status !== 'fulfilled')
     setActionableIds(new Set(
       [
         ...(mineR.status === 'fulfilled' ? mineR.value || [] : []),
@@ -1120,7 +1123,7 @@ export default function Approvals() {
         ? row.step_started_at || row.started_at
         : row.created_at,
       cell: ({ getValue }) => {
-        const old = ageMs(getValue()) > 3 * 86400000
+        const old = ['pending', 'overdue'].includes(activeBucket) && ageMs(getValue()) > 3 * 86400000
         return <span className={`whitespace-nowrap text-sm ${old ? 'font-semibold text-red-400' : 'text-[var(--text-muted)]'}`} title={old ? 'Waiting more than 3 days' : undefined}>{relTime(getValue()) || '—'}</span>
       },
       sortingFn: 'datetime',
@@ -1149,7 +1152,7 @@ export default function Approvals() {
         >Review <ChevronRight className="w-3.5 h-3.5" /></button>
       ),
     },
-  ], [])
+  ], [activeBucket])
 
   const rowSelection = useMemo(() => Object.fromEntries([...picked].map(key => [key, true])), [picked])
 
@@ -1292,7 +1295,7 @@ export default function Approvals() {
           <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-orange-500/25 bg-orange-500/[0.06] px-4 py-3">
             <div className="flex-1 min-w-[220px]">
               <p className="text-sm font-semibold text-[var(--text-primary)]">
-                {loading || pendingQueueUnavailable ? 'Checking what needs you…'
+                {loading || pendingQueueUnavailable || assignmentUnknown ? (loading ? 'Checking what needs you…' : 'Could not check what is assigned to you. Press refresh to try again.')
                   : myPendingCount > 0 ? `${myPendingCount} approval${myPendingCount === 1 ? '' : 's'} waiting for you`
                     : 'Nothing is waiting for you right now'}
               </p>
@@ -1300,7 +1303,7 @@ export default function Approvals() {
                 How it works: pick a row, read it, then press Approve or Return. Use the tabs below to see overdue, returned and finished items.
               </p>
             </div>
-            {!loading && !pendingQueueUnavailable && myPendingCount > 0 && (
+            {!loading && !pendingQueueUnavailable && !assignmentUnknown && myPendingCount > 0 && (
               <button
                 type="button"
                 className="btn-primary text-sm"

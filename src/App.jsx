@@ -386,10 +386,12 @@ function HomeRoute() {
   return executiveHomeAllowed(auth) ? <CommandCenterPage key={profile?.id} /> : <MyWorkspace />
 }
 
-// Keep the marketing URL public while preserving the existing signed-in app
-// home for members who already have a profile.
+// Serve the marketing fallback on the app project's root, but keep the
+// dedicated app hostname focused on sign-in and the operational workspace.
 function PublicRootRoute() {
   const { profile, loading } = useAuth()
+  const isDedicatedAppHost = typeof window !== 'undefined' && window.location.hostname === 'app.tyrepulse.app'
+  if (isDedicatedAppHost && !loading && !profile) return <Navigate to="/login" replace />
   if (loading || !profile) return <Safe><PublicMarketingHome /></Safe>
   return (
     <ProtectedRoute>

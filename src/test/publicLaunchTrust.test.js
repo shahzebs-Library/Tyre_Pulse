@@ -11,6 +11,8 @@ describe('public launch trust surfaces', () => {
     expect(app).toContain('<Route path="/support"')
     expect(app).toContain('<Route path="/contact"')
     expect(app).toContain('<Route path="/"               element={<PublicRootRoute />} />')
+    expect(app).toContain("window.location.hostname === 'app.tyrepulse.app'")
+    expect(app).toContain('if (isDedicatedAppHost && !loading && !profile) return <Navigate to="/login" replace />')
     expect(app.indexOf('<Route path="/"               element={<PublicRootRoute />} />')).toBeLessThan(app.indexOf('path="/*"'))
     expect(app).toContain('<Route path="/status"')
     expect(app).toContain('<Route path="/privacy"')

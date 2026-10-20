@@ -238,6 +238,7 @@ const TYPE_LABEL: Record<string, string> = {
   vendor: 'Vendor / Procurement Report',
   pm: 'Preventive Maintenance due',
   workshop: 'Workshop Summary',
+  workshop_status: 'Workshop Vehicle Status',
 }
 
 /** Friendly label for any report_type, incl. custom 'builder:<template-id>' layouts. */
@@ -794,8 +795,10 @@ type DatasetDigestCfg = {
   groups: Array<[string, string]> // [label, column]
   recent: Array<[string, string]> // [column, header]
   moneyCols: string[]             // recent-table columns rendered as money
-  eqFilter?: Record<string, string> // optional exact-match filters (e.g. status='active')
+  eqFilter?: Record<string, string | boolean> // optional exact-match filters (e.g. status='active')
+  nullFilter?: string[]             // columns that must be NULL (e.g. soft-delete deleted_at)
   orderAscending?: boolean          // sort dateCol ascending (forward-looking dates like next_due)
+  snapshot?: boolean                // a current-state list: the coverage window is NOT applied
 }
 
 const DATASET_DIGEST: Record<string, DatasetDigestCfg> = {
@@ -860,6 +863,19 @@ const DATASET_DIGEST: Record<string, DatasetDigestCfg> = {
     groups: [['Status', 'status'], ['Work type', 'work_type'], ['Site', 'site'], ['Priority', 'priority']],
     recent: [['opened_at', 'Opened'], ['work_order_no', 'WO No'], ['asset_no', 'Asset'], ['work_type', 'Type'], ['status', 'Status'], ['priority', 'Priority'], ['technician_name', 'Technician'], ['site', 'Site'], ['total_cost', 'Cost']],
     moneyCols: ['total_cost'],
+  },
+  // Workshop Status (Daily Ops): vehicles currently in the workshop per the
+  // latest confirmed daily file plus manual updates. A current-state snapshot
+  // (snapshot: true), oldest out-of-service first, never money.
+  workshop_status: {
+    table: 'workshop_status_records', dateCol: 'ooc_since', money: null, accent: '#4338ca',
+    groups: [['Site', 'site'], ['Stage', 'current_stage'], ['Delay reason', 'delay_reason'], ['Parts', 'parts_status']],
+    recent: [['ooc_since', 'Out Since'], ['asset_no', 'Asset'], ['site', 'Site'], ['vehicle_category', 'Category'], ['current_stage', 'Stage'], ['delay_reason', 'Delay Reason'], ['parts_status', 'Parts'], ['expected_release_date', 'Expected Release']],
+    moneyCols: [],
+    eqFilter: { current_active: true },
+    nullFilter: ['deleted_at'],
+    orderAscending: true,
+    snapshot: true,
   },
 }
 
@@ -966,6 +982,7 @@ function renderTyreStockAlert(s: Schedule, rows: LowTyreStockRow[], appUrl: stri
 // deno-lint-ignore no-explicit-any
 function scopeDatasetQuery(q: any, cfg: DatasetDigestCfg, orgId: string | null, win: { from: string | null; to: string | null }) {
   if (cfg.eqFilter) for (const [col, val] of Object.entries(cfg.eqFilter)) q = q.eq(col, val)
+  if (cfg.nullFilter) for (const col of cfg.nullFilter) q = q.is(col, null)
   // Service role bypasses RLS, so scope to the schedule's org explicitly.
   if (orgId) q = q.eq('organisation_id', orgId)
   // The schedule's configured coverage window (see resolvePeriodBounds). Prior
@@ -973,6 +990,10 @@ function scopeDatasetQuery(q: any, cfg: DatasetDigestCfg, orgId: string | null, 
   // owner picked - "Yesterday" or a 3-day custom range would still show
   // all-time data. Missing bounds (custom with no dates set) leave the query
   // unfiltered rather than narrowing it to nothing.
+  // A snapshot dataset (vehicles in the workshop RIGHT NOW) is a current-state
+  // list: filtering it by the period would drop every vehicle that went out of
+  // service before the window started, which is exactly the long-waiting ones.
+  if (cfg.snapshot) return q
   if (win.from) q = q.gte(cfg.dateCol, win.from)
   if (win.to)   q = q.lte(cfg.dateCol, win.to)
   return q
@@ -1033,14 +1054,21 @@ function renderDatasetHtml(s: Schedule, cfg: DatasetDigestCfg, d: DatasetDigest,
   // The window the schedule was actually configured for - never inferred from
   // the data alone, or an empty window would print "N/A" instead of naming
   // the period that legitimately found nothing.
-  const coverage = windowLabel || ((d.first || d.last) ? `${dateShort(d.first)} to ${dateShort(d.last)}` : 'N/A')
+  // A snapshot dataset ignores the coverage window entirely, so it must never
+  // be labelled with that window: it describes the list as of this send.
+  const coverage = cfg.snapshot
+    ? `the current snapshot (${genAt} UTC)`
+    : (windowLabel || ((d.first || d.last) ? `${dateShort(d.first)} to ${dateShort(d.last)}` : 'N/A'))
   const label = typeLabel(s.report_type)
 
   const summary = d.count === 0
-    ? `No ${label.toLowerCase()} records were found for ${coverage}. Widen the schedule's coverage period to see more.`
-    : `<b>${num(d.count)}</b> record(s) in ${coverage}` +
-      `${cfg.money ? `, totalling <b>${money(d.moneySum, currency)}</b>` : ''}. ` +
-      `<b>${num(d.recent30)}</b> of those were added in the last 30 days.`
+    ? (cfg.snapshot ? `No ${label.toLowerCase()} records are in ${coverage}.` : `No ${label.toLowerCase()} records were found for ${coverage}. Widen the schedule's coverage period to see more.`)
+    : cfg.snapshot
+      ? `<b>${num(d.count)}</b> record(s) in ${coverage}. ` +
+        `<b>${num(d.recent30)}</b> of those started in the last 30 days.`
+      : `<b>${num(d.count)}</b> record(s) in ${coverage}` +
+        `${cfg.money ? `, totalling <b>${money(d.moneySum, currency)}</b>` : ''}. ` +
+        `<b>${num(d.recent30)}</b> of those were added in the last 30 days.`
 
   // Group breakdowns, three columns per row.
   const groupRows: string[] = []

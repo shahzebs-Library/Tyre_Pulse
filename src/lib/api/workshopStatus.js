@@ -10,6 +10,7 @@
  * evidence for the upload register, not instructions.
  */
 import { supabase, fetchAllPages, ServiceError, toServiceError } from './_client'
+import { normaliseResolution } from '../workshopStatus/compareUpload'
 
 /** Columns the Workshop Status list reads (explicit, least privilege). */
 export const RECORD_COLS = [
@@ -123,6 +124,7 @@ export async function stageUpload({
     uploadId: data?.upload_id ?? null,
     uploadNo: data?.upload_no ?? null,
     duplicateOf: data?.duplicate_of ?? null,
+    conflicts: Number.isFinite(Number(data?.conflicts)) ? Number(data.conflicts) : 0,
   }
 }
 
@@ -163,13 +165,25 @@ export async function cancelUpload(uploadId) {
  * Turn a compareWorkshopUpload() result + the preview it was built from into the
  * p_rows array for stageUpload: one row per preview row, plus one 'removed' row
  * per record that would leave the report.
+ *
+ * `resolutions` (asset -> 'keep_manual' | 'take_file') carries the person's
+ * choice for a conflicting row (a newer manual update, Loop 16). A conflicting
+ * row always gets a resolution (keep_manual when no choice was made); the
+ * server re-checks the conflict at confirm time and only then reads it.
  */
-export function buildStagedRows(comparison, preview) {
+export function buildStagedRows(comparison, preview, { resolutions } = {}) {
   const cmp = comparison || {}
   const p = preview || {}
+  const choiceFor = (asset) => normaliseResolution(
+    resolutions && typeof resolutions.get === 'function' ? resolutions.get(asset) : resolutions?.[asset])
   const byRow = new Map()
   for (const r of cmp.newRecords || []) byRow.set(r.row, { outcome: 'new', recordId: null, changes: {} })
-  for (const r of cmp.changedRecords || []) byRow.set(r.row, { outcome: 'changed', recordId: r.recordId ?? null, changes: r.changes || {} })
+  for (const r of cmp.changedRecords || []) {
+    byRow.set(r.row, {
+      outcome: 'changed', recordId: r.recordId ?? null, changes: r.changes || {},
+      resolution: r.conflict ? choiceFor(r.asset_no) : null,
+    })
+  }
   for (const r of cmp.unchangedRecords || []) byRow.set(r.row, { outcome: 'unchanged', recordId: r.recordId ?? null, changes: {} })
 
   const sourceRows = Array.isArray(p.rows) && p.rows.length
@@ -182,15 +196,18 @@ export function buildStagedRows(comparison, preview) {
     let outcome
     let recordId = null
     let changes = {}
+    let resolution = null
     if (row.status === 'invalid') outcome = 'invalid'
     else if (row.status === 'duplicate') outcome = 'duplicate'
     else if (row.status === 'closed') outcome = 'closed'
     else {
       const hit = byRow.get(row)
-      if (hit) ({ outcome, recordId, changes } = hit)
-      else outcome = 'duplicate' // an active row the comparison skipped (repeat asset)
+      if (hit) {
+        ({ outcome, recordId, changes } = hit)
+        resolution = hit.resolution || null
+      } else outcome = 'duplicate' // an active row the comparison skipped (repeat asset)
     }
-    out.push({
+    const staged = {
       row_number: row.rowNumber ?? null,
       section: row.section ?? null,
       asset_no: row.asset_no ?? row.data?.asset_no ?? null,
@@ -201,10 +218,12 @@ export function buildStagedRows(comparison, preview) {
       changes,
       errors: Array.isArray(row.errors) ? row.errors.map(String) : [],
       record_id: recordId,
-    })
+    }
+    if (resolution) staged.resolution = resolution
+    out.push(staged)
   }
   for (const r of cmp.removedRecords || []) {
-    out.push({
+    const staged = {
       row_number: null,
       section: null,
       asset_no: r.asset_no ?? null,
@@ -215,7 +234,9 @@ export function buildStagedRows(comparison, preview) {
       changes: {},
       errors: [],
       record_id: r.recordId ?? null,
-    })
+    }
+    if (r.conflict) staged.resolution = choiceFor(r.asset_no)
+    out.push(staged)
   }
   return out
 }

@@ -41,7 +41,15 @@ vi.mock('../lib/api/workshopStatus', () => ({
   buildStagedRows: vi.fn(() => [{ staged: 'row' }]),
 }))
 
+vi.mock('../lib/api/workshopStatusUploads', () => ({
+  listUploadHistory: vi.fn(async () => ({ rows: [], total: 0 })),
+  listAllUploadHistory: vi.fn(async () => ({ rows: [], truncated: false })),
+  listUploadRows: vi.fn(async () => ({ rows: [], truncated: false })),
+  getUploadConfirmDetails: vi.fn(async () => null),
+}))
+
 import WorkshopStatus from '../pages/WorkshopStatus'
+import * as hist from '../lib/api/workshopStatusUploads'
 import { parseWorkshopFile, parseWorkshopSheet } from '../lib/workshopStatus/excelParser'
 import * as api from '../lib/api/workshopStatus'
 
@@ -89,6 +97,8 @@ beforeEach(() => {
   parseWorkshopFile.mockResolvedValue({ preview, fileHash: 'hash1', fileName: 'daily.xlsx', fileSize: 100 })
   api.listActiveRecords.mockResolvedValue(RECORDS)
   api.findPreviousUploadByHash.mockResolvedValue(null)
+  hist.listUploadHistory.mockResolvedValue({ rows: [], total: 0 })
+  hist.listUploadRows.mockResolvedValue({ rows: [], truncated: false })
   api.stageUpload.mockResolvedValue({ uploadId: 'up1', uploadNo: 'WS-KSA-0001', duplicateOf: null })
   api.confirmUpload.mockResolvedValue({ new: 1, updated: 1, unchanged: 0, removed: 2, closed: 1, invalid: 1, duplicate: 1, previous_active: 3, active_after: 2 })
 })
@@ -196,6 +206,67 @@ describe('Workshop Status daily upload', () => {
     expect(screen.queryByText(/does not exist/)).toBeNull()
     expect(screen.getByText('Upload preview')).toBeTruthy()
     expect(screen.queryByText('Upload confirmed')).toBeNull()
+  })
+
+  it('flags vehicles updated in TyrePulse after the file, keeps them by default, and sends each choice', async () => {
+    api.listActiveRecords.mockResolvedValue(RECORDS.map((r) => (r.id === 'r2' || r.id === 'r5'
+      ? { ...r, last_manual_update_at: '2026-10-07T08:00:00Z', last_updated_by_name: 'Super Visor', current_stage: 'Testing' }
+      : r)))
+    await uploadFile()
+    expect(screen.getByTestId('wks-conflict-banner')).toBeTruthy()
+    expect(screen.getByText(/2 vehicles were updated in TyrePulse on or after this file's report date/)).toBeTruthy()
+    fireEvent.click(tab(/^Conflicts\s*2$/))
+    const panel = screen.getByTestId('wks-review-conflict')
+    expect(within(panel).getAllByText('Complaint: Old complaint -> Engine').length).toBeGreaterThan(0)
+    expect(within(panel).getAllByText(/Updated by Super Visor on/).length).toBeGreaterThan(0)
+    expect(within(panel).getAllByText('Stage: Testing').length).toBeGreaterThan(0)
+    const groups = within(panel).getAllByRole('radiogroup', { name: /TM500/ })
+    expect(within(groups[0]).getByRole('radio', { name: 'Keep TyrePulse' }).getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(within(groups[0]).getByRole('radio', { name: 'Take the file' }))
+    expect(screen.getByText('1 will keep the TyrePulse values, 1 will take the file.')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /Confirm upload/ }))
+    expect(await screen.findByText(/2 conflicts with a newer TyrePulse update: keep TyrePulse for 1, take the file for 1/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, confirm upload' }))
+    await screen.findByText('Upload confirmed')
+    expect(api.buildStagedRows).toHaveBeenCalledWith(expect.anything(), expect.anything(), { resolutions: { TM500: 'take_file' } })
+  })
+
+  it('lists past uploads with who and when, and opens one read-only', async () => {
+    perms.value = { upload: true, confirm: true, view_uploads: true }
+    hist.listUploadHistory.mockResolvedValue({ total: 1, rows: [{
+      id: 'u9', upload_no: 9, country: 'KSA', file_name: 'morning-06.xlsx', sheet_name: 'Oct', report_date: '2026-10-06',
+      status: 'cancelled', uploaded_by_name: 'Ali', uploaded_at: '2026-10-06T06:00:00Z', total_rows: 12,
+      new_count: 1, updated_count: 0, unchanged_count: 9, removed_count: 2,
+    }] })
+    hist.listUploadRows.mockResolvedValue({ truncated: false, rows: [
+      { id: 'x1', row_number: 1, asset_no: 'TM100', outcome: 'new', data: { job_card_ref: 'JC/1' } },
+      { id: 'x2', row_number: null, asset_no: 'TM500', outcome: 'removed', raw: { removal_reason: 'missing_from_upload' } },
+    ] })
+    setup()
+    const box = await screen.findByTestId('wks-upload-history')
+    await within(box).findAllByText('morning-06.xlsx')
+    expect(within(box).getAllByText('Not confirmed').length).toBeGreaterThan(0)
+    expect(within(box).getAllByText('Ali').length).toBeGreaterThan(0)
+    expect(hist.listUploadHistory).toHaveBeenCalledWith(expect.objectContaining({ country: 'KSA', page: 0, pageSize: 25 }))
+    fireEvent.click(within(box).getAllByText('morning-06.xlsx')[0])
+    const detail = await screen.findByTestId('wks-upload-detail')
+    expect(await within(detail).findAllByText('TM100')).toBeTruthy()
+    expect(within(detail).getAllByText('Released (not in the file)').length).toBeGreaterThan(0)
+    expect(within(detail).getByText(/Read only/)).toBeTruthy()
+    expect(hist.listUploadRows).toHaveBeenCalledWith('u9')
+  })
+
+  it('shows the history to a viewer without upload rights, with an honest error and retry', async () => {
+    perms.value = { upload: false, confirm: false, view_uploads: true }
+    hist.listUploadHistory.mockRejectedValueOnce({ code: '42501', message: 'permission denied for table workshop_status_uploads' })
+    setup()
+    expect(await screen.findByText('You cannot upload the daily workshop file')).toBeTruthy()
+    const box = await screen.findByTestId('wks-upload-history')
+    expect(await within(box).findByRole('alert')).toBeTruthy()
+    expect(screen.queryByText(/permission denied for table/)).toBeNull()
+    fireEvent.click(within(box).getByRole('button', { name: /Try again/ }))
+    expect(await within(box).findByText('No daily file has been uploaded for KSA yet.')).toBeTruthy()
   })
 
   it('shows the parser message for an unusable file', async () => {

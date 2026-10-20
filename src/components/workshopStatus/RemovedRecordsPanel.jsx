@@ -10,7 +10,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  AlertTriangle, Archive, ArchiveRestore, CheckCircle2, Download, History, Loader2, PackageCheck,
+  AlertTriangle, Archive, ArchiveRestore, CheckCircle2, Download, FileText, History, Loader2, PackageCheck,
   RotateCcw, Search, ShieldAlert, SlidersHorizontal, Trash2, Undo2, X,
 } from 'lucide-react'
 import { Card, Kpi, fmtInt } from '../commandCenter/kit'
@@ -20,6 +20,7 @@ import { useSettings } from '../../contexts/SettingsContext'
 import { toUserMessage } from '../../lib/safeError'
 import { loadRemovedRecords, runRecordAction } from '../../lib/api/workshopStatusRemoved'
 import { fmtDateTime, localDay } from '../../lib/workshopStatus/activeView'
+import { makeEnglishT, toAscii } from '../../lib/workshopStatus/pdfText'
 import {
   DISPOSITIONS, DISPOSITION_OTHER, REMOVED_STATUS, STATUS_ORDER, MIN_REASON,
   activeRemovedFilterCount, availableActions, emptyRemovedFilters, filterRemoved, needsReason,
@@ -101,31 +102,42 @@ export default function RemovedRecordsPanel({ permissions, permState = 'ready', 
     if (action === 'restore' && typeof onChanged === 'function') onChanged()
   }
 
-  const exportExcel = async () => {
+  const exportFile = async (kind) => {
     if (!shown.length || exporting) return
-    setExporting(true); setExportError('')
+    setExporting(kind); setExportError('')
     try {
+      // PDF text is English + ASCII whatever the screen language (jsPDF cannot
+      // shape Arabic); Excel keeps the on-screen language.
+      const tr = kind === 'pdf'
+        ? makeEnglishT((await import('../../locales/en/workshopStatusRemoved.json')).default)
+        : m
+      const fix = kind === 'pdf' ? (v) => toAscii(v) : (v) => v
+      const na = tr('na')
       const keys = ['asset_no', 'site', 'status', 'removed_at', 'removed_by_upload', 'removed_reason',
         'previous_stage', 'previous_reason', 'previous_responsible', 'disposition', 'disposition_by', 'disposition_at']
-      const headers = keys.map((k) => m(`col.${k}`))
+      const headers = keys.map((k) => tr(`col.${k}`))
       const out = shown.map((r) => ({
-        asset_no: r.asset_no,
-        site: r.site || m('na'),
-        status: m(`status.${removedStatus(r)}`),
-        removed_at: r.removed_at ? fmtDateTime(r.removed_at) : m('na'),
-        removed_by_upload: uploadLabel(r.removed_by_upload),
-        removed_reason: reasonLabel(r.removed_reason),
-        previous_stage: r.previous_current_stage || m('na'),
-        previous_reason: r.previous_delay_reason || m('na'),
-        previous_responsible: r.previous_responsible_name || m('na'),
-        disposition: dispLabel(r.final_disposition),
-        disposition_by: r.final_disposition_by_name || m('na'),
-        disposition_at: r.final_disposition_at ? fmtDateTime(r.final_disposition_at) : m('na'),
+        asset_no: fix(r.asset_no),
+        site: fix(r.site) || na,
+        status: tr(`status.${removedStatus(r)}`),
+        removed_at: r.removed_at ? fmtDateTime(r.removed_at) : na,
+        removed_by_upload: r.removed_by_upload ? (r.removed_by_upload.upload_no ? `#${r.removed_by_upload.upload_no}` : tr('upload')) : na,
+        removed_reason: r.removed_reason ? tr(`removedReason.${r.removed_reason}`) : na,
+        previous_stage: fix(r.previous_current_stage) || na,
+        previous_reason: fix(r.previous_delay_reason) || na,
+        previous_responsible: fix(r.previous_responsible_name) || na,
+        disposition: r.final_disposition ? tr(`disposition.${r.final_disposition}`) : tr('noDisposition'),
+        disposition_by: fix(r.final_disposition_by_name) || na,
+        disposition_at: r.final_disposition_at ? fmtDateTime(r.final_disposition_at) : na,
       }))
-      const { exportToExcel, reportFileName } = await import('../../lib/exportUtils')
-      await exportToExcel(out, keys, headers,
-        reportFileName('Workshop Released Vehicles', isAll ? 'All countries' : country, localDay(new Date())),
-        'Released', { title: m('exportTitle') })
+      const { exportToExcel, exportToPdf, reportFileName } = await import('../../lib/exportUtils')
+      const name = reportFileName('Workshop Released Vehicles', isAll ? 'All countries' : country, localDay(new Date()))
+      if (kind === 'pdf') {
+        await exportToPdf(out, keys.map((k, i) => ({ key: k, header: headers[i] })), tr('exportTitle'), name, 'landscape', '',
+          { subtitleNote: truncated ? tr('truncated') : undefined })
+      } else {
+        await exportToExcel(out, keys, headers, name, 'Released', { title: m('exportTitle') })
+      }
     } catch (err) {
       setExportError(toUserMessage(err, m('exportError')))
     } finally {
@@ -222,9 +234,14 @@ export default function RemovedRecordsPanel({ permissions, permState = 'ready', 
               <SlidersHorizontal size={14} aria-hidden="true" /> {filterCount ? m('filtersCount', { n: filterCount }) : m('filters')}
             </button>
             {canExport && (
-              <button type="button" className="cc-btn-ghost wks-tap" onClick={exportExcel} disabled={!shown.length || exporting}>
-                {exporting ? <Loader2 size={14} className="wks-spin" aria-hidden="true" /> : <Download size={14} aria-hidden="true" />} {m('export')}
-              </button>
+              <>
+                <button type="button" className="cc-btn-ghost wks-tap" onClick={() => exportFile('excel')} disabled={!shown.length || !!exporting}>
+                  {exporting === 'excel' ? <Loader2 size={14} className="wks-spin" aria-hidden="true" /> : <Download size={14} aria-hidden="true" />} {m('export')}
+                </button>
+                <button type="button" className="cc-btn-ghost wks-tap" onClick={() => exportFile('pdf')} disabled={!shown.length || !!exporting}>
+                  {exporting === 'pdf' ? <Loader2 size={14} className="wks-spin" aria-hidden="true" /> : <FileText size={14} aria-hidden="true" />} {m('exportPdf')}
+                </button>
+              </>
             )}
             <button type="button" className="cc-btn-ghost wks-tap" onClick={load} disabled={loading} aria-label={m('refresh')}>
               <RotateCcw size={14} aria-hidden="true" className={loading ? 'wks-spin' : ''} />

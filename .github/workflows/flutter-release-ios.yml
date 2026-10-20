@@ -1,0 +1,143 @@
+name: Flutter Release - iOS TestFlight
+
+# BUILDS the Flutter app for iPhone/iPad and UPLOADS it to App Store Connect
+# (it then appears under TestFlight and in the version page's Build list).
+# Bundle id comes from the committed ios/ project: com.shahzebrahman.tyrepulseinspector.
+#
+# workflow_dispatch ONLY, on purpose: every run is a real upload to Apple.
+# Nothing may start it from a push or a PR.
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
+#   APPSTORE_ISSUER_ID  - App Store Connect API issuer id.
+#   APPSTORE_KEY_ID     - the API key id.
+#   APPSTORE_KEY_P8     - the full text of the downloaded AuthKey_XXXX.p8 file.
+#   APPLE_TEAM_ID       - the 10 character Apple developer Team ID.
+# The key needs the App Manager role so Xcode can create the distribution
+# certificate and provisioning profile (cloud signing) by itself.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: "App version shown in the store. Must equal the version on the App Store Connect page (1.0)."
+        required: true
+        default: "1.0.0"
+
+defaults:
+  run:
+    working-directory: tyre_pulse_flutter
+
+jobs:
+  build_and_upload:
+    name: Build signed IPA and upload to App Store Connect
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the Apple secrets exist
+        env:
+          ISSUER: ${{ secrets.APPSTORE_ISSUER_ID }}
+          KEYID: ${{ secrets.APPSTORE_KEY_ID }}
+          P8: ${{ secrets.APPSTORE_KEY_P8 }}
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for n in ISSUER KEYID P8 TEAM; do
+            if [ -z "${!n}" ]; then echo "::error::Missing secret for $n. Add APPSTORE_ISSUER_ID, APPSTORE_KEY_ID, APPSTORE_KEY_P8 and APPLE_TEAM_ID."; exit 1; fi
+          done
+
+      - name: Guard - bundle id must match the App Store Connect record
+        run: |
+          grep -q "PRODUCT_BUNDLE_IDENTIFIER = com.shahzebrahman.tyrepulseinspector;" ios/Runner.xcodeproj/project.pbxproj \
+            || { echo "::error::ios bundle id is not com.shahzebrahman.tyrepulseinspector (the App Store Connect record)."; exit 1; }
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.2
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Generate sources
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Write the App Store Connect API key
+        env:
+          KEYID: ${{ secrets.APPSTORE_KEY_ID }}
+          P8: ${{ secrets.APPSTORE_KEY_P8 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          printf '%s\n' "$P8" > "$RUNNER_TEMP/keys/AuthKey_${KEYID}.p8"
+          grep -q "BEGIN PRIVATE KEY" "$RUNNER_TEMP/keys/AuthKey_${KEYID}.p8" || { echo "::error::APPSTORE_KEY_P8 does not look like a .p8 key. Paste the whole file text including the BEGIN and END lines."; exit 1; }
+
+      - name: Build the iOS app (no signing yet)
+        # Same Supabase and Sentry settings the Android release uses.
+        # Build number = the workflow run number, so each upload is higher
+        # than the last (Apple rejects a repeated build number).
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://jhssdmeruxtrlqnwfksc.supabase.co' }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_PROD || 'sb_publishable_UDEH7EeHA9S5-NNu4T-9Ug_R60IinrW' }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN_FLUTTER || 'https://530f25f43a3bbbff1679122847a0d3ec@o4511151917301760.ingest.de.sentry.io/4511237697568848' }}
+          VERSION_NAME: ${{ inputs.version_name }}
+        run: |
+          flutter build ios --release --no-codesign \
+            --build-name "$VERSION_NAME" \
+            --build-number "${{ github.run_number }}" \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+            --dart-define=APP_ENV=staging \
+            --dart-define=APP_VERSION="$VERSION_NAME" \
+            --dart-define=SENTRY_DSN="$SENTRY_DSN"
+
+      - name: Archive with automatic cloud signing
+        env:
+          KEYID: ${{ secrets.APPSTORE_KEY_ID }}
+          ISSUER: ${{ secrets.APPSTORE_ISSUER_ID }}
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcodebuild archive \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${KEYID}.p8" \
+            -authenticationKeyID "$KEYID" \
+            -authenticationKeyIssuerID "$ISSUER" \
+            DEVELOPMENT_TEAM="$TEAM" \
+            CODE_SIGN_STYLE=Automatic
+
+      - name: Export and upload to App Store Connect
+        env:
+          KEYID: ${{ secrets.APPSTORE_KEY_ID }}
+          ISSUER: ${{ secrets.APPSTORE_ISSUER_ID }}
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$TEAM</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${KEYID}.p8" \
+            -authenticationKeyID "$KEYID" \
+            -authenticationKeyIssuerID "$ISSUER"
+
+      - name: Remove the API key from the runner
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/keys"

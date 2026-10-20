@@ -109,7 +109,7 @@ describe('stageUpload / confirmUpload / cancelUpload', () => {
       country: ' KSA ', fileName: 'daily.xlsx', fileHash: 'abc', fileSize: 10.4, sheetName: 'Oct',
       reportDate: '2026-10-07', headerMap: { a: 'b' }, unmappedHeaders: ['X'], rows: [{ outcome: 'new' }],
     })
-    expect(res).toEqual({ uploadId: 'u1', uploadNo: 7, duplicateOf: { id: 'u0', upload_no: 6 } })
+    expect(res).toEqual({ uploadId: 'u1', uploadNo: 7, duplicateOf: { id: 'u0', upload_no: 6 }, conflicts: 0 })
     expect(h.state.calls[0]).toEqual(['workshop_status_stage_upload', {
       p_country: 'KSA', p_file_name: 'daily.xlsx', p_file_hash: 'abc', p_file_size: 10, p_sheet_name: 'Oct',
       p_report_date: '2026-10-07', p_header_map: { a: 'b' }, p_unmapped: ['X'], p_rows: [{ outcome: 'new' }],

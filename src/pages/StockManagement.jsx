@@ -461,6 +461,46 @@ export default function StockManagement() {
     if (!q) return selectedTyreSiteRows
     return selectedTyreSiteRows.filter(row => `${row.site} ${row.country}`.toLowerCase().includes(q) || row.bySize.some(item => item.size.toLowerCase().includes(q)))
   }, [selectedTyreSiteRows, siteSizeSearch])
+  const tyreSiteTableData = useMemo(() => {
+    const rows = visibleTyreSites.map(row => ({
+      id: row.site,
+      label: row.site,
+      country: row.country,
+      qty: new Map(row.bySize.map(item => [item.size, item.quantity])),
+      total: row.total,
+    }))
+    if (rows.length === 0) return rows
+    const qty = new Map(siteViewSizes.map(size => [size, selectedTyreSiteRows.reduce((sum, row) => sum + (row.bySize.find(item => item.size === size)?.quantity || 0), 0)]))
+    return [...rows, { id: '__total__', label: siteSizeLocation === 'all' ? t('stock.tyreBySite.companyTotal') : t('stock.tyreBySite.locationTotal'), isTotal: true, qty, total: siteViewTotal }]
+  }, [visibleTyreSites, siteViewSizes, selectedTyreSiteRows, siteSizeLocation, siteViewTotal, t])
+
+  const tyreSiteColumns = useMemo(() => [
+    {
+      id: 'site',
+      header: t('stock.tyreBySite.site'),
+      accessorFn: row => row.label,
+      cell: ({ row: { original: r } }) => (
+        <span className={r.isTotal ? 'font-semibold text-[var(--text-primary)]' : 'font-medium text-[var(--text-primary)]'}>
+          {r.label}{!r.isTotal && activeCountry === 'All' && r.country ? <span className="ml-2 text-xs font-normal text-[var(--text-muted)]">{r.country}</span> : null}
+        </span>
+      ),
+    },
+    ...siteViewSizes.map(size => ({
+      id: `size:${size}`,
+      header: size,
+      accessorFn: row => row.qty.get(size) || 0,
+      cell: ({ getValue, row: { original: r } }) => <span className={`tabular-nums ${r.isTotal ? 'font-semibold text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>{getValue().toLocaleString()}</span>,
+      meta: { align: 'right' },
+    })),
+    {
+      id: 'total',
+      header: t('stock.tyreBySite.total'),
+      accessorFn: row => row.total,
+      cell: ({ getValue }) => <span className="font-semibold tabular-nums text-[var(--text-primary)]">{getValue().toLocaleString()}</span>,
+      meta: { align: 'right' },
+    },
+  ], [siteViewSizes, activeCountry, t])
+
   const tyreChanges = useMemo(() => tyreChangeSummary(tyreChangeRows, new Date()), [tyreChangeRows])
   const maxMonthlyChanges = Math.max(1, ...tyreChanges.months.map(month => month.quantity))
   const filtersActive = search.trim() !== '' || siteFilter !== 'all' || statusFilter !== 'all'
@@ -918,35 +958,21 @@ export default function StockManagement() {
 
             {loadError ? <p role="alert" className="text-sm text-red-500">{loadError}</p> : loading ? <p role="status" className="text-sm text-[var(--text-muted)]">{t('stock.timeline.loading')}</p>
               : selectedTyreSiteRows.length === 0 ? <p className="py-8 text-center text-sm text-[var(--text-muted)]">{t('stock.tyreBySite.empty')}</p>
-                : <div className="overflow-x-auto rounded-lg border border-[var(--input-border)]">
-                  <table className="w-full min-w-max border-collapse text-sm" aria-label={t('stock.tyreBySite.tableLabel')}>
-                    <thead className="bg-[var(--input-bg)] text-xs text-[var(--text-secondary)]">
-                      <tr>
-                        <th scope="col" className="sticky left-0 z-10 min-w-48 bg-[var(--input-bg)] px-3 py-3 text-left font-semibold">{t('stock.tyreBySite.site')}</th>
-                        {siteViewSizes.map(size => <th key={size} scope="col" className="min-w-28 px-3 py-3 text-right font-semibold">{size}</th>)}
-                        <th scope="col" className="min-w-28 px-3 py-3 text-right font-semibold">{t('stock.tyreBySite.total')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visibleTyreSites.map(row => {
-                        const sizeQty = new Map(row.bySize.map(item => [item.size, item.quantity]))
-                        return <tr key={row.site} className="border-t border-[var(--input-border)] hover:bg-[var(--input-bg)]/50">
-                          <th scope="row" className="sticky left-0 bg-[var(--panel-bg)] px-3 py-3 text-left font-medium text-[var(--text-primary)]">{row.site}{activeCountry === 'All' && row.country ? <span className="ml-2 text-xs font-normal text-[var(--text-muted)]">{row.country}</span> : null}</th>
-                          {siteViewSizes.map(size => <td key={size} className="px-3 py-3 text-right tabular-nums text-[var(--text-secondary)]">{(sizeQty.get(size) || 0).toLocaleString()}</td>)}
-                          <td className="px-3 py-3 text-right font-semibold tabular-nums text-[var(--text-primary)]">{row.total.toLocaleString()}</td>
-                        </tr>
-                      })}
-                      {visibleTyreSites.length === 0 && <tr><td colSpan={siteViewSizes.length + 2} className="px-3 py-8 text-center text-sm text-[var(--text-muted)]">{t('stock.tyreBySite.noMatch')}</td></tr>}
-                    </tbody>
-                    <tfoot className="border-t-2 border-[var(--input-border)] bg-[var(--input-bg)] font-semibold text-[var(--text-primary)]">
-                      <tr>
-                        <th scope="row" className="sticky left-0 bg-[var(--input-bg)] px-3 py-3 text-left">{siteSizeLocation === 'all' ? t('stock.tyreBySite.companyTotal') : t('stock.tyreBySite.locationTotal')}</th>
-                        {siteViewSizes.map(size => <td key={size} className="px-3 py-3 text-right tabular-nums">{selectedTyreSiteRows.reduce((sum, row) => sum + (row.bySize.find(item => item.size === size)?.quantity || 0), 0).toLocaleString()}</td>)}
-                        <td className="px-3 py-3 text-right tabular-nums">{siteViewTotal.toLocaleString()}</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>}
+                : <EnterpriseTable
+                  columns={tyreSiteColumns}
+                  data={tyreSiteTableData}
+                  getRowId={row => row.id}
+                  enableGlobalFilter={false}
+                  enableColumnFilters={false}
+                  enableSorting={false}
+                  enableColumnVisibility={false}
+                  stickyFirstColumn
+                  pageSizeOptions={[500]}
+                  initialPageSize={500}
+                  showPagination={false}
+                  emptyMessage={t('stock.tyreBySite.noMatch')}
+                  exportFileName="tyre_stock_by_site"
+                />}
           </div>
         </section>
       )}

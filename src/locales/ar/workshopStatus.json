@@ -50,7 +50,8 @@
       "removed": "مُفرج عنها",
       "closed": "مغلقة",
       "invalid": "غير صالحة",
-      "duplicate": "مكررة"
+      "duplicate": "مكررة",
+      "conflict": "تعارضات"
     },
     "reviewLabel": "مراجعة الرفع",
     "searchLabel": "البحث برقم الأصل",
@@ -63,7 +64,8 @@
       "removed": "لا توجد مركبات يُفرج عنها من القائمة النشطة.",
       "closed": "لا توجد مركبات مدرجة فقط ضمن التفاصيل المغلقة.",
       "invalid": "لا توجد صفوف غير صالحة. كل صف يحتوي على رقم مركبة وتواريخ مقروءة.",
-      "duplicate": "لا توجد مركبة تظهر مرتين في الأقسام المفتوحة."
+      "duplicate": "لا توجد مركبة تظهر مرتين في الأقسام المفتوحة.",
+      "conflict": "لم يتم تحديث أي مركبة في TyrePulse بعد إعداد هذا الملف."
     },
     "col": {
       "asset": "رقم الأصل",
@@ -77,7 +79,10 @@
       "changes": "التغييرات",
       "reason": "السبب",
       "notes": "ملاحظات",
-      "errors": "المشكلات"
+      "errors": "المشكلات",
+      "fileSays": "ما سيفعله الملف",
+      "manualSays": "تحديث أحدث في TyrePulse",
+      "choice": "ماذا نحتفظ؟"
     },
     "reason": {
       "missing_from_upload": "مُفرج عنها (غير موجودة في ملف اليوم)",
@@ -111,13 +116,33 @@
       "invalid": "غير صالحة",
       "duplicate": "مكررة",
       "previous_active": "النشطة قبل الرفع",
-      "active_after": "النشطة الآن"
+      "active_after": "النشطة الآن",
+      "conflicts": "تعارضات",
+      "kept_manual": "تم الاحتفاظ بـ TyrePulse"
     },
     "uploadAnother": "رفع ملف آخر",
     "staleNotice": "تم تأكيد رفع آخر أثناء مراجعتك. أُعيدت المقارنة مع أحدث قائمة. راجع التغييرات وأكّد مرة أخرى.",
     "failureTitle": "لم يتم تطبيق الرفع",
     "failureKept": "لم يتغير شيء على الخادم. تم الاحتفاظ بالمعاينة لتتمكن من المحاولة مرة أخرى.",
-    "fallbackError": "حدث خطأ ما. يرجى المحاولة مرة أخرى."
+    "fallbackError": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
+    "choice": {
+      "keep_manual": "الاحتفاظ بـ TyrePulse",
+      "take_file": "اعتماد الملف"
+    },
+    "choiceLabel": "اختر ما تحتفظ به للمركبة {asset}",
+    "manualUpdated": "حدّثها {name} في {when}",
+    "manualField": {
+      "current_stage": "المرحلة",
+      "delay_reason": "سبب التأخير",
+      "remarks": "ملاحظات"
+    },
+    "conflictTitle": "تم تحديث {count} مركبة في TyrePulse في تاريخ تقرير هذا الملف أو بعده",
+    "conflictBody": "هذا الملف أقدم من تلك التحديثات (أو من اليوم نفسه). افتراضياً تبقى المركبات كما هي في TyrePulse: لا تُستبدل بياناتها ولا يُفرج عن أي منها. اختر \"اعتماد الملف\" لأي مركبة يكون فيها الملف صحيحاً.",
+    "conflictChoices": "{keep} ستحتفظ بقيم TyrePulse و{take} ستعتمد الملف.",
+    "conflictReview": "مراجعة التعارضات",
+    "conflictKeepAll": "الاحتفاظ بـ TyrePulse للكل",
+    "conflictTakeAll": "اعتماد الملف للكل",
+    "dialogConflicts": "{count} تعارضات مع تحديث أحدث في TyrePulse: الاحتفاظ بـ TyrePulse لـ {keep} واعتماد الملف لـ {take}"
   },
   "active": {
     "loadingPerms": "جار التحقق من صلاحيات الورشة...",
@@ -233,6 +258,109 @@
       "latestUpdate": "آخر تحديث"
     },
     "latestCleared": "تم المسح",
-    "latestNone": "لا يوجد تحديث يدوي بعد"
+    "latestNone": "لا يوجد تحديث يدوي بعد",
+    "exportPdf": "تصدير PDF",
+    "exportSummary": "ملخص الإدارة",
+    "summaryTitle": "ملخص الإدارة لحالة الورشة",
+    "summaryCol": {
+      "section": "القسم",
+      "item": "البند",
+      "count": "المركبات",
+      "share": "النسبة"
+    },
+    "summaryEmpty": "لا توجد مركبات في تقرير الورشة حاليا.",
+    "summaryTruncated": "قائمة جزئية: تم احتساب المركبات المحملة أولا فقط"
+  },
+  "history": {
+    "title": "سجل الرفع",
+    "sub": "كل ملف يومي تم رفعه حتى الآن، الأحدث أولاً. افتح أي ملف لعرض صفوفه (للقراءة فقط).",
+    "filtersLabel": "تصفية سجل الرفع",
+    "country": "الدولة",
+    "allCountries": "كل الدول",
+    "from": "تاريخ الرفع من",
+    "to": "تاريخ الرفع إلى",
+    "stateFilter": "النتيجة",
+    "allStates": "كل النتائج",
+    "clear": "مسح عوامل التصفية",
+    "state": {
+      "confirmed": "مؤكد",
+      "abandoned": "غير مؤكد",
+      "failed": "فشل"
+    },
+    "col": {
+      "uploadNo": "الرقم",
+      "fileName": "الملف",
+      "sheet": "الورقة",
+      "reportDate": "تاريخ التقرير",
+      "country": "الدولة",
+      "rows": "الصفوف",
+      "newCount": "جديد",
+      "changedCount": "متغير",
+      "unchangedCount": "دون تغيير",
+      "releasedCount": "مُفرج عنها",
+      "conflictCount": "تعارضات",
+      "keptManualCount": "تم الاحتفاظ بـ TyrePulse",
+      "invalidCount": "غير صالح",
+      "duplicateCount": "مكرر",
+      "uploadedBy": "رفعه",
+      "uploadedAt": "وقت الرفع",
+      "state": "النتيجة",
+      "confirmedBy": "أكده",
+      "confirmedAt": "وقت التأكيد"
+    },
+    "dcol": {
+      "rowNumber": "الصف",
+      "section": "القسم",
+      "asset": "رقم الأصل",
+      "site": "الموقع",
+      "outcome": "النتيجة",
+      "jobCard": "بطاقة العمل",
+      "complaint": "الشكوى",
+      "changes": "التغييرات",
+      "releaseReason": "سبب الإفراج",
+      "conflict": "التعارض",
+      "requested": "الخيار المطلوب",
+      "applied": "الخيار المطبق",
+      "manualAt": "وقت تحديث TyrePulse",
+      "manualBy": "محدِّث TyrePulse",
+      "errors": "المشكلات"
+    },
+    "releaseReason": {
+      "missing_from_upload": "مُفرج عنها (غير موجودة في الملف)",
+      "listed_as_closed": "مُفرج عنها (مدرجة ضمن التفاصيل المغلقة)"
+    },
+    "resolution": {
+      "keep_manual": "تم الاحتفاظ بـ TyrePulse",
+      "take_file": "تم اعتماد الملف",
+      "pending": "تحديث أحدث في TyrePulse"
+    },
+    "manualBy": "حدّثها {name} في {when}",
+    "none": "غير موجود في الملف",
+    "loading": "جارٍ تحميل سجل الرفع...",
+    "loadError": "تعذر تحميل سجل الرفع.",
+    "retry": "إعادة المحاولة",
+    "empty": "لم يتم رفع أي ملف يومي بعد.",
+    "emptyFiltered": "لا يوجد رفع يطابق عوامل التصفية.",
+    "export": "تصدير Excel",
+    "exportTitle": "حالة الورشة - سجل الرفع",
+    "exportError": "تعذر إنشاء ملف Excel.",
+    "noun": "عمليات رفع",
+    "openHint": "اختر عملية رفع لعرض الصفوف التي احتواها الملف.",
+    "detailTitle": "الرفع {no}: {file}",
+    "readOnly": "للقراءة فقط. هذا الملف كما تم رفعه؛ لا يمكن تغيير أي شيء هنا.",
+    "rowsLoading": "جارٍ تحميل صفوف هذا الرفع...",
+    "rowsError": "تعذر تحميل صفوف هذا الرفع.",
+    "rowsEmpty": "لا يحتوي هذا الرفع على صفوف.",
+    "rowsTruncated": "يتم عرض الصفوف الأولى فقط من هذا الرفع.",
+    "detailTabs": "الصفوف حسب النتيجة",
+    "allRows": "كل الصفوف",
+    "conflicts": "تعارضات",
+    "searchLabel": "البحث برقم الأصل",
+    "searchPlaceholder": "ابحث عن رقم الأصل",
+    "noMatches": "لا توجد صفوف مطابقة.",
+    "exportRows": "تصدير الصفوف",
+    "detailExportTitle": "حالة الورشة - صفوف الرفع",
+    "close": "إغلاق",
+    "emptyCountry": "لم يتم رفع أي ملف يومي لـ {country} بعد."
   }
 }

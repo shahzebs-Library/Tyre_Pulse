@@ -25,13 +25,16 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Truck, Clock, AlertTriangle, CalendarCheck, UserX, Hourglass, Loader2, RotateCcw, Search, X,
-  SlidersHorizontal, Columns, Download, ChevronDown, ChevronRight, PencilLine, History, ShieldAlert,
+  SlidersHorizontal, Columns, Download, FileText, FileBarChart, ChevronDown, ChevronRight, PencilLine, History, ShieldAlert,
 } from 'lucide-react'
 import { Card, Kpi, Pager, fmtInt } from '../commandCenter/kit'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useSettings } from '../../contexts/SettingsContext'
 import { toUserMessage } from '../../lib/safeError'
 import { loadActiveVehicles, loadPeopleNames } from '../../lib/api/workshopStatusActive'
+import { loadRemovedRecords } from '../../lib/api/workshopStatusRemoved'
+import { buildManagementSummary, summaryRows } from '../../lib/workshopStatus/managementSummary'
+import { makeEnglishT, toAscii } from '../../lib/workshopStatus/pdfText'
 import { loadLatestManualUpdates } from '../../lib/api/workshopStatusLatest'
 import { latestUpdateText } from '../../lib/workshopStatus/latestUpdate'
 import { PEOPLE_FIELDS } from '../../lib/workshopStatus/updateForm'
@@ -80,6 +83,13 @@ const COLUMNS = [
 ]
 const COLUMN_KEYS = COLUMNS.map((c) => c.key)
 const DEFAULT_COLUMNS = COLUMNS.filter((c) => c.def).map((c) => c.key)
+
+/** Columns the landscape PDF carries (Excel keeps every column). */
+const PDF_KEYS = ['asset', 'country', 'site', 'days', 'stage', 'delay', 'parts', 'responsible', 'expected', 'lastBy']
+const PDF_HEADER = {
+  asset: 'asset', country: 'country', site: 'site', days: 'daysDown', stage: 'stage', delay: 'delayReason',
+  parts: 'partsStatus', responsible: 'responsible', expected: 'expectedRelease', lastBy: 'lastUpdated',
+}
 
 /** Fields shown in the expanded row, in order. */
 const DETAIL_FIELDS = ['workDone', 'actionTaken', 'detailed', 'mr', 'po', 'partDate', 'blocker', 'remarks',
@@ -322,10 +332,9 @@ export default function ActiveVehiclesPanel({ permissions, permState = 'ready', 
   }, [cols, isAll])
 
   // ── Export ────────────────────────────────────────────────────────────────
-  const exportExcel = async () => {
-    if (!sorted.length || exporting) return
-    setExporting(true); setExportError('')
-    try {
+  // Builds the exported table once; Excel and PDF share it so the two files
+  // can never disagree about the rows on screen.
+  const buildExport = async () => {
       const keys = ['asset', ...(isAll ? ['country'] : []), ...COLUMN_KEYS.filter((k) => k !== 'fresh'), 'fresh']
       keys.push('latestUpdate')
       const headers = keys.map((k) => (k === 'latestUpdate'
@@ -354,9 +363,72 @@ export default function ActiveVehiclesPanel({ permissions, permState = 'ready', 
         o.latestUpdate = latestUpdateText(r, latest.get(String(r.id)) || null, fmt) || a('latestNone')
         return o
       })
-      const { exportToExcel, reportFileName } = await import('../../lib/exportUtils')
-      await exportToExcel(data, keys, headers,
-        reportFileName('Workshop Active Vehicles', isAll ? 'All countries' : country, localDay(now)),
+      return { keys, headers, data }
+  }
+
+  const exportFileName = (reportFileName, base) =>
+    reportFileName(base, isAll ? 'All countries' : country, localDay(now))
+
+  const runExport = async (kind) => {
+    if (exporting) return
+    if (kind !== 'summary' && !sorted.length) return
+    setExporting(kind); setExportError('')
+    try {
+      const xu = await import('../../lib/exportUtils')
+      // PDF text is English + ASCII whatever the screen language (jsPDF cannot
+      // shape Arabic); Excel below keeps the on-screen language.
+      const enA = kind === 'excel' ? null
+        : makeEnglishT((await import('../../locales/en/workshopStatus.json')).default, 'active')
+      if (kind === 'summary') {
+        // Management summary covers the WHOLE active list (not the filtered
+        // view) plus the released list. A failed released read is reported in
+        // the PDF as "could not be read", never as zero vehicles released.
+        const released = permissions?.view_removed === true
+          ? await loadRemovedRecords({ country }).then((r) => r?.rows || []).catch(() => null)
+          : null
+        const summary = buildManagementSummary({ active: rows, released, now })
+        const out = summaryRows(summary)
+        const cols = [
+          { key: 'section', header: enA('summaryCol.section') },
+          { key: 'item', header: enA('summaryCol.item') },
+          { key: 'count', header: enA('summaryCol.count') },
+          { key: 'share', header: enA('summaryCol.share') },
+        ]
+        await xu.exportToPdf(out, cols, enA('summaryTitle'),
+          exportFileName(xu.reportFileName, 'Workshop Status Summary'), 'portrait', '',
+          { subtitleNote: [isAll ? 'All countries' : country, truncated ? enA('summaryTruncated') : null].filter(Boolean).join(' | '),
+            emptyHint: enA('summaryEmpty') })
+        return
+      }
+      if (kind === 'pdf') {
+        // PDF keeps the columns a page can carry; Excel keeps every column.
+        const keys = PDF_KEYS.filter((k) => k !== 'country' || isAll)
+        const na = enA('na')
+        const val = (v) => (v == null || v === '' ? na : toAscii(String(v)))
+        const rowsOut = sorted.map((r) => {
+          const u = lastUpdate(r)
+          const d = daysDown(r, now)
+          return {
+            asset: val(r.asset_no),
+            country: val(r.country),
+            site: val(r.site),
+            days: d == null ? na : d,
+            stage: val(r.current_stage),
+            delay: val(r.delay_reason),
+            parts: val(r.parts_status),
+            responsible: blank(r.responsible_user_id) ? enA('notAssigned') : val(r.responsible_name || enA('unknownPerson')),
+            expected: val(fmtDay(r.expected_release_date) || r.excel_expected_release),
+            lastBy: (!u.by && !u.at) ? na : val([u.by || enA('systemUser'), fmtDateTime(u.at)].filter(Boolean).join(', ')),
+          }
+        })
+        await xu.exportToPdf(rowsOut, keys.map((k) => ({ key: k, header: enA(`col.${PDF_HEADER[k]}`) })),
+          enA('exportTitle'), exportFileName(xu.reportFileName, 'Workshop Active Vehicles'), 'landscape', '',
+          { subtitleNote: truncated ? enA('summaryTruncated') : undefined })
+        return
+      }
+      const { keys, headers, data } = await buildExport()
+      await xu.exportToExcel(data, keys, headers,
+        exportFileName(xu.reportFileName, 'Workshop Active Vehicles'),
         'Active vehicles', { title: a('exportTitle') })
     } catch (err) {
       setExportError(toUserMessage(err, a('exportError')))
@@ -364,6 +436,7 @@ export default function ActiveVehiclesPanel({ permissions, permState = 'ready', 
       setExporting(false)
     }
   }
+  const exportExcel = () => runExport('excel')
 
   // ── Permission states ─────────────────────────────────────────────────────
   if (permState === 'loading') {
@@ -482,9 +555,17 @@ export default function ActiveVehiclesPanel({ permissions, permState = 'ready', 
               <Columns size={14} aria-hidden="true" /> {a('columns')}
             </button>
             {canExport && (
-              <button type="button" className="cc-btn-ghost wks-tap" onClick={exportExcel} disabled={!sorted.length || exporting}>
-                {exporting ? <Loader2 size={14} className="wks-spin" aria-hidden="true" /> : <Download size={14} aria-hidden="true" />} {a('export')}
-              </button>
+              <>
+                <button type="button" className="cc-btn-ghost wks-tap" onClick={exportExcel} disabled={!sorted.length || !!exporting}>
+                  {exporting === 'excel' ? <Loader2 size={14} className="wks-spin" aria-hidden="true" /> : <Download size={14} aria-hidden="true" />} {a('export')}
+                </button>
+                <button type="button" className="cc-btn-ghost wks-tap" onClick={() => runExport('pdf')} disabled={!sorted.length || !!exporting}>
+                  {exporting === 'pdf' ? <Loader2 size={14} className="wks-spin" aria-hidden="true" /> : <FileText size={14} aria-hidden="true" />} {a('exportPdf')}
+                </button>
+                <button type="button" className="cc-btn-ghost wks-tap" onClick={() => runExport('summary')} disabled={loading || !!exporting}>
+                  {exporting === 'summary' ? <Loader2 size={14} className="wks-spin" aria-hidden="true" /> : <FileBarChart size={14} aria-hidden="true" />} {a('exportSummary')}
+                </button>
+              </>
             )}
             <button type="button" className="cc-btn-ghost wks-tap" onClick={load} disabled={loading} aria-label={a('refresh')}>
               <RotateCcw size={14} aria-hidden="true" className={loading ? 'wks-spin' : ''} />

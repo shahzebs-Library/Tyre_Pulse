@@ -163,5 +163,6 @@
     "chooseDisposition": "Choose a disposition.",
     "remarksRequired": "Write remarks when the disposition is Other.",
     "reasonShort": "Write a reason of at least {n} characters."
-  }
+  },
+  "exportPdf": "Export PDF"
 }

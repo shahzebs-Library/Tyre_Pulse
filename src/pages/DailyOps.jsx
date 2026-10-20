@@ -45,6 +45,7 @@ import { toUserMessage } from '../lib/safeError'
 import { listActionItems, listActionItemHistory, subscribeToActionItems, transitionActionItem } from '../lib/api/actionCenter'
 import { listShiftHandovers, submitShiftHandover, reviewShiftHandover } from '../lib/api/operationalWorkflow'
 import { WO_STATUSES } from '../lib/workOrderStatus'
+import DailyOpsWorkshopStrip from '../components/workshopStatus/DailyOpsWorkshopStrip'
 import './DailyOps.css'
 
 const NA = <span className="cc-na">N/A</span>
@@ -573,6 +574,9 @@ export default function DailyOps() {
           label={<>On-time completion<small className="do-kpi-sub">{kpis.onTime.judged ? `${fmtInt(kpis.onTime.judged)} jobs with a target, last 30 days` : 'No completed job with a target date'}</small></>}
           title="Completed work orders whose completion date is on or before the target, over the 30-day window." />
       </div>
+
+      {/* Workshop Status summary (renders nothing unless the caller may view Workshop Status) */}
+      <DailyOpsWorkshopStrip country={activeCountry} />
 
       {/* Row 1: location, operations overview, job details */}
       <div className="do-grid">

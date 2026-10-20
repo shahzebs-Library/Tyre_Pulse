@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const h = vi.hoisted(() => {
   const state = { result: { data: [], error: null }, last: null }
   function from(table) {
-    const calls = { eq: [], or: [], gte: [], lte: [], select: null, order: null, limit: null }
+    const calls = { eq: [], or: [], gte: [], lte: [], is: [], select: null, order: null, limit: null }
     const b = {
       _table: table,
       _calls: calls,
@@ -17,6 +17,7 @@ const h = vi.hoisted(() => {
       or(e) { calls.or.push(e); return b },
       gte(c, v) { calls.gte.push([c, v]); return b },
       lte(c, v) { calls.lte.push([c, v]); return b },
+      is(c, v) { calls.is.push([c, v]); return b },
       then(onF, onR) { return Promise.resolve(state.result).then(onF, onR) },
     }
     state.last = b
@@ -126,5 +127,24 @@ describe('ScheduledReports page payload', () => {
     const src = fs.readFileSync('src/pages/ScheduledReports.jsx', 'utf8')
     expect(src).toContain('scheduleOrgId(profile)')
     expect(src).not.toMatch(/org_id:\s*profile\?\.org_id\s*\?\?\s*null/)
+  })
+})
+
+describe('scheduledReports - workshop_status report type', () => {
+  it('registers the Workshop Vehicle Status type over workshop_status_records', () => {
+    expect(sched.REPORT_TYPES.some((r) => r.value === 'workshop_status')).toBe(true)
+    const ds = sched.datasetFor('workshop_status')
+    expect(ds.table).toBe('workshop_status_records')
+    expect(ds.cols.length).toBe(ds.headers.length)
+    expect(ds.cols).not.toContain('excel_data')
+  })
+
+  it('reads the current snapshot: active, not deleted, and ignores the period', async () => {
+    await sched.fetchReportRows('workshop_status', { from: '2026-01-01', to: '2026-01-31', country: 'KSA' })
+    const c = h.state.last._calls
+    expect(c.eq).toContainEqual(['current_active', true])
+    expect(c.is).toContainEqual(['deleted_at', null])
+    expect(c.gte).toEqual([])
+    expect(c.lte).toEqual([])
   })
 })

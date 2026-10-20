@@ -46,6 +46,7 @@ export const REPORT_TYPES = [
   { value: 'vendor',     label: 'Vendor / Procurement' },
   { value: 'pm',         label: 'Preventive Maintenance' },
   { value: 'workshop',   label: 'Workshop Summary' },
+  { value: 'workshop_status', label: 'Workshop Vehicle Status' },
 ]
 
 export const FREQUENCIES = [
@@ -155,6 +156,20 @@ const DATASETS = {
     // shared workshopLive engine.
     cols:    ['opened_at', 'work_order_no', 'asset_no', 'site', 'work_type', 'status', 'priority', 'technician_name', 'target_completion', 'vor'],
     headers: ['Opened', 'WO No', 'Asset', 'Site', 'Work Type', 'Status', 'Priority', 'Technician', 'Target', 'VOR'],
+  },
+  workshop_status: {
+    table: 'workshop_status_records', dateCol: 'ooc_since', title: 'Workshop Vehicle Status',
+    // Daily Ops > Workshop Status: vehicles in the workshop RIGHT NOW (latest
+    // confirmed daily file + manual updates). A current-state snapshot, so the
+    // coverage period is NOT applied (currentState) - filtering on ooc_since would
+    // drop the longest-waiting vehicles, which are the point of the report.
+    // Soft-deleted rows never count; oldest out-of-service first.
+    cols:    ['ooc_since', 'asset_no', 'reg_no', 'site', 'vehicle_category', 'excel_down_days', 'current_stage', 'delay_reason', 'parts_status', 'expected_release_date', 'last_manual_update_at'],
+    headers: ['Out Since', 'Asset', 'Reg No', 'Site', 'Category', 'Down Days', 'Stage', 'Delay Reason', 'Parts', 'Expected Release', 'Last Update'],
+    eqFilter: { current_active: true },
+    nullFilter: ['deleted_at'],
+    orderAscending: true,
+    currentState: true,
   },
 }
 
@@ -343,6 +358,7 @@ export async function fetchReportRows(reportType, { from, to, country } = {}) {
     if (!ds.currentState && from) q = q.gte(ds.dateCol, from)
     if (!ds.currentState && to)   q = q.lte(ds.dateCol, to)
     if (ds.eqFilter) for (const [col, val] of Object.entries(ds.eqFilter)) q = q.eq(col, val)
+    if (ds.nullFilter) for (const col of ds.nullFilter) q = q.is(col, null)
     if (ds.orFilter) q = q.or(ds.orFilter)
     // id tiebreak keeps page boundaries stable on a non-unique date.
     return q.order(ds.dateCol, { ascending: ds.orderAscending === true, nullsFirst: false }).order('id', { ascending: true })

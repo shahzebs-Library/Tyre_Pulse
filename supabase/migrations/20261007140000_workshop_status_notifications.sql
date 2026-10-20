@@ -1,10 +1,11 @@
 -- ============================================================================
 -- Workshop Status - notifications (Loop 12)
 -- ============================================================================
--- STATUS: NOT APPLIED. Tested in PGlite (supabase/tests/
--- workshop_status_notifications.test.mjs, applied on top of 20261007090000,
--- 20261007100000, 20261007110000, 20261007120000 and 20261007130000). Apply to
--- production only on an explicit owner go-ahead, and only after those five.
+-- STATUS: APPLIED (2026-10-07 everything except section 4 + 6; the scan and its
+-- cron landed 2026-10-11 in the no-DELETE form recorded in
+-- 20261011120000_workshop_status_notify_scan_applied.sql, which SUPERSEDES
+-- sections 4 + 6 below). Tested in PGlite (supabase/tests/
+-- workshop_status_notifications.test.mjs, on top of 20261007090000..130000).
 --
 -- NO NEW NOTIFICATION SYSTEM. Every notice lands in the EXISTING places:
 --   * public.notifications - the per-user bell read by the web Notification

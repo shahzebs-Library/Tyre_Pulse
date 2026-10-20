@@ -1,0 +1,25 @@
+{
+  "strip": {
+    "title": "Workshop Status",
+    "sub": "Vehicles in the workshop report today. Select a figure to open it.",
+    "open": "Open Workshop Status",
+    "na": "N/A",
+    "retry": "Retry",
+    "errorAll": "Workshop Status figures could not be loaded. They read N/A until a retry succeeds.",
+    "errorPartial": "Some Workshop Status figures could not be loaded. Those read N/A.",
+    "capped": "Capped view. The workshop list is larger than the display limit; pick a country for exact counts.",
+    "empty": "No vehicles are in the workshop report and no daily file has been uploaded yet.",
+    "active": "In workshop",
+    "activeHint": "Vehicles currently listed in the daily workshop report.",
+    "waiting7": "Down more than 7 days",
+    "waiting7Hint": "Active vehicles out of operation for more than 7 days.",
+    "overdue": "Overdue release",
+    "overdueHint": "Active vehicles whose expected release date has already passed.",
+    "releasedToday": "Released today",
+    "releasedTodayHint": "Vehicles that left the daily workshop report today.",
+    "lastUpload": "Last daily upload",
+    "lastUploadBy": "Last daily upload by {name}",
+    "lastUploadHint": "The most recent confirmed daily workshop Excel file.",
+    "noUpload": "No upload yet"
+  }
+}

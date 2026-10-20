@@ -1,79 +1,28 @@
-/**
- * NotificationCenter.jsx
- * Realtime notification bell with dropdown panel.
- * Severity-coded rows, relative timestamps, individual dismiss, mark-all-read, clear-all.
- */
-
+/** Live notification inbox. Presentation changes reuse the existing feed/actions. */
 import { useRef, useEffect, useCallback, useState, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import {
-  Bell,
-  BellRing,
-  X,
-  CheckCircle,
-  AlertTriangle,
-  AlertOctagon,
-  ArrowRight,
-  RefreshCw,
-  Info,
+  Bell, BellRing, X, CheckCircle, AlertTriangle, AlertOctagon,
+  ArrowRight, RefreshCw, Info, Search, ChevronDown, Settings, FileCheck,
 } from 'lucide-react'
 import { useRealtimeAlerts } from '../hooks/useRealtimeAlerts'
 import { useFeatureGate } from '../hooks/useFeatureFlags'
 import { groupByDay } from '../lib/notifications'
+import { filterInboxNotifications, groupInboxUpdates } from '../lib/notificationInbox'
 import { isWorkshopNotification, workshopNotificationLink } from '../lib/workshopStatus/notificationLinks'
+import './notificationCenter.css'
 
-// ─── Severity config ──────────────────────────────────────────────────────────
-
-const SEVERITY_CONFIG = {
-  Critical: {
-    border:  'border-red-500',
-    bg:      'bg-red-500/10',
-    icon:    AlertOctagon,
-    iconCls: 'text-red-500',
-    badge:   'bg-red-600',
-    dot:     'bg-red-500',
-  },
-  High: {
-    border:  'border-orange-500',
-    bg:      'bg-orange-500/10',
-    icon:    AlertTriangle,
-    iconCls: 'text-orange-500',
-    badge:   'bg-orange-500',
-    dot:     'bg-orange-500',
-  },
-  Medium: {
-    border:  'border-yellow-500',
-    bg:      'bg-yellow-500/10',
-    icon:    AlertTriangle,
-    iconCls: 'text-yellow-500',
-    badge:   'bg-yellow-500',
-    dot:     'bg-yellow-500',
-  },
-  Low: {
-    border:  'border-blue-500',
-    bg:      'bg-blue-500/10',
-    icon:    Info,
-    iconCls: 'text-blue-500',
-    badge:   'bg-blue-500',
-    dot:     'bg-blue-500',
-  },
+const SEVERITY = {
+  Critical: { icon: AlertOctagon, tone: 'critical' },
+  High: { icon: AlertTriangle, tone: 'high' },
+  Medium: { icon: AlertTriangle, tone: 'medium' },
+  Low: { icon: Info, tone: 'low' },
 }
+const FILTERS = [['inbox', 'Inbox'], ['approvals', 'Approvals'], ['critical', 'Critical'], ['read', 'Read']]
 
-function getSeverityConfig(severity) {
-  return SEVERITY_CONFIG[severity] || SEVERITY_CONFIG.Low
-}
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-/**
- * Route a DB-backed notification to the surface where it is acted on.
- * 'approval' rows (a submission awaiting sign-off) land on the unified
- * Approval Dashboard; 'approval_decision' rows (your work was decided)
- * land on the page holding the record. Null = tap only marks read.
- */
+// Keep routing identical to the live panel; review decisions stay on guarded pages.
 function notificationLink(n) {
-  // Workshop Status notices (Loop 12) open the exact vehicle or filtered list.
   if (isWorkshopNotification(n)) return workshopNotificationLink(n)
   if (n.type === 'driver_workspace') return '/driver-workspace'
   if (n.type === 'approval') return '/approvals'
@@ -83,334 +32,139 @@ function notificationLink(n) {
   return null
 }
 
-function NotificationRow({ notification, onMarkRead, onDismiss, relativeTime, onNavigate }) {
-  const cfg = getSeverityConfig(notification.severity)
-  const Icon = cfg.icon
-
-  function handleClick() {
-    if (!notification.read) onMarkRead(notification.id)
-    const to = notificationLink(notification)
-    if (to) onNavigate?.(to)
+function NotificationRow({ group, expanded, onToggle, onMarkRead, onDismiss, relativeTime, onNavigate, detailId }) {
+  const cfg = SEVERITY[group.severity] || SEVERITY.Low
+  const Icon = group.type === 'approval' ? FileCheck : cfg.icon
+  const to = notificationLink(group)
+  const markGroupRead = () => group.items.filter(n => !n.read).forEach(n => onMarkRead(n.id))
+  const openRecord = () => {
+    markGroupRead()
+    onNavigate(to)
   }
-
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, x: 12 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 12, height: 0, marginBottom: 0 }}
-      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-      className={`
-        relative flex gap-3 px-3 py-2.5 border-s-2 cursor-pointer
-        transition-colors duration-150
-        ${cfg.border}
-        ${notification.read ? 'bg-transparent hover:bg-gray-800/40' : `${cfg.bg} hover:bg-gray-800/60`}
-      `}
-      style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
-      onClick={handleClick}
-      // A clickable row must also be reachable and operable from the keyboard.
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.target !== e.currentTarget) return
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick() }
-      }}
-    >
-      {/* Unread indicator dot */}
-      {!notification.read && (
-        <span aria-hidden="true" className={`absolute top-3 end-8 w-1.5 h-1.5 rounded-full flex-shrink-0 ${cfg.dot}`} />
-      )}
-
-      {/* Severity icon */}
-      <div className="flex-shrink-0 mt-0.5">
-        <Icon size={14} aria-hidden="true" className={cfg.iconCls} />
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <p className={`text-xs font-semibold truncate leading-snug ${notification.read ? 'text-gray-400' : 'text-gray-100'}`}>
-          {notification.title}
-        </p>
-        <p className="text-[11px] text-gray-500 leading-snug mt-0.5 line-clamp-2">
-          {notification.message}
-        </p>
-        <div className="flex items-center gap-2 mt-1">
-          {notification.assetNo && (
-            <span className="text-[10px] font-mono bg-gray-800 text-gray-500 px-1.5 py-0.5 rounded">
-              {notification.assetNo}
-            </span>
-          )}
-          <span className="text-[10px] text-gray-600">
-            {relativeTime(notification.timestamp)}
-          </span>
-        </div>
-      </div>
-
-      {/* Dismiss button */}
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); onDismiss(notification.id) }}
-        onKeyDown={(e) => e.stopPropagation()}
-        className="flex-shrink-0 self-start mt-0.5 text-gray-700 hover:text-red-400 transition-colors p-0.5 rounded"
-        aria-label="Dismiss notification"
-      >
-        <X size={11} />
+    <article className={`tp-notification-row tp-notification-${cfg.tone}${expanded ? ' is-expanded' : ''}${group.read ? ' is-read' : ''}`}>
+      <button type="button" role="button" tabIndex={0} className="tp-notification-summary"
+        onClick={onToggle} aria-expanded={expanded} aria-controls={expanded ? detailId : undefined}>
+        <span className="tp-notification-icon" aria-hidden="true"><Icon size={19} /></span>
+        <span className="tp-notification-copy">
+          <span className="tp-notification-title">{group.title}</span>
+          {group.assetNo && <span className="tp-notification-asset">{group.assetNo}</span>}
+          {!expanded && <span className="tp-notification-message">{group.message}</span>}
+          {group.items.length > 1 && <span className="tp-notification-updates">{group.items.length} updates</span>}
+        </span>
+        <span className="tp-notification-meta">
+          <span>{relativeTime(group.timestamp)}</span>
+          {!group.read && <span className="tp-notification-unread" aria-label="Unread" />}
+          <ChevronDown size={14} aria-hidden="true" className="tp-notification-chevron" />
+        </span>
       </button>
-    </motion.div>
-  )
-}
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center py-10 px-4 gap-3">
-      <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center">
-        <Bell size={18} className="text-gray-600" />
-      </div>
-      <p className="text-xs text-gray-600 text-center">No notifications</p>
-    </div>
-  )
-}
-
-function LoadingState() {
-  return (
-    <div className="px-3 py-3 space-y-3" aria-label="Loading notifications">
-      {[0, 1, 2].map(i => (
-        <div key={i} className="flex gap-3 animate-pulse">
-          <div className="w-4 h-4 rounded bg-gray-800 flex-shrink-0" />
-          <div className="flex-1 space-y-1.5">
-            <div className="h-2.5 bg-gray-800 rounded w-3/4" />
-            <div className="h-2 bg-gray-800/70 rounded w-full" />
-            <div className="h-2 bg-gray-800/50 rounded w-1/3" />
-          </div>
+      {expanded && <div className="tp-notification-detail" id={detailId}>
+        <p className="tp-notification-body">{group.message}</p>
+        <span className="tp-notification-priority">{group.severity || 'Low'} priority</span>
+        {group.items.length > 1 && <ol className="tp-notification-history" aria-label="Grouped updates">
+          {group.items.map(item => <li key={item.id}>
+            <span>{item.message || item.title}</span><small>{relativeTime(item.timestamp)}{!item.read ? ' · Unread' : ''}</small>
+          </li>)}
+        </ol>}
+        <div className="tp-notification-actions">
+          {to && <button type="button" className="tp-notification-primary" onClick={openRecord}>
+            {group.type === 'approval' ? 'Review approval' : 'Open record'}<ArrowRight size={14} aria-hidden="true" />
+          </button>}
+          {!group.read && <button type="button" className="tp-notification-text-action" onClick={markGroupRead}>Mark read</button>}
+          <button type="button" className="tp-notification-dismiss" onClick={() => group.items.forEach(n => onDismiss(n.id))}>
+            Dismiss{group.items.length > 1 ? ' updates' : ''}
+          </button>
         </div>
-      ))}
-    </div>
+      </div>}
+    </article>
   )
 }
-
-function ErrorState({ message, onRetry }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-8 px-4 gap-3">
-      <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
-        <AlertTriangle size={18} className="text-red-400" />
-      </div>
-      <p className="text-xs text-gray-500 text-center">{message || 'Failed to load notifications'}</p>
-      <button
-        onClick={onRetry}
-        className="flex items-center gap-1.5 text-[11px] text-gray-400 hover:text-green-400 transition-colors border border-gray-700/60 rounded-md px-2 py-1"
-      >
-        <RefreshCw size={11} />
-        Retry
-      </button>
-    </div>
-  )
-}
-
-// ─── Main component ───────────────────────────────────────────────────────────
 
 export default function NotificationCenter() {
-  const {
-    notifications,
-    unreadCount,
-    loading,
-    error,
-    refresh,
-    markRead,
-    markAllRead,
-    clearAll,
-    dismiss,
-    relativeTime,
-  } = useRealtimeAlerts()
-
+  const { notifications, unreadCount, loading, error, refresh, markRead, markAllRead, clearAll, dismiss, relativeTime } = useRealtimeAlerts()
   const notificationsEnabled = useFeatureGate('notifications_center')
   const navigate = useNavigate()
+  const reduceMotion = useReducedMotion()
   const [open, setOpen] = useState(false)
-  const panelRef  = useRef(null)
+  const [filter, setFilter] = useState('inbox')
+  const [query, setQuery] = useState('')
+  const [expandedId, setExpandedId] = useState(undefined)
+  const panelRef = useRef(null)
   const buttonRef = useRef(null)
+  const searchRef = useRef(null)
 
-  // Close on outside click
-  const handleOutsideClick = useCallback((e) => {
-    if (
-      panelRef.current  && !panelRef.current.contains(e.target) &&
-      buttonRef.current && !buttonRef.current.contains(e.target)
-    ) {
-      setOpen(false)
-    }
+  const closePanel = useCallback(() => { setOpen(false); buttonRef.current?.focus() }, [])
+  const handleOutsideClick = useCallback(e => {
+    if (panelRef.current && !panelRef.current.contains(e.target) && buttonRef.current && !buttonRef.current.contains(e.target)) setOpen(false)
   }, [])
-
   useEffect(() => {
-    if (open) {
-      document.addEventListener('mousedown', handleOutsideClick)
-    } else {
-      document.removeEventListener('mousedown', handleOutsideClick)
-    }
+    if (!open) return undefined
+    document.addEventListener('mousedown', handleOutsideClick)
+    searchRef.current?.focus()
     return () => document.removeEventListener('mousedown', handleOutsideClick)
   }, [open, handleOutsideClick])
-
-  // Close on Escape - only while open, and hand focus back to the bell. The
-  // listener used to be attached for the life of the app, so every Escape
-  // pressed anywhere (a modal, the command palette) also ran this, and a
-  // keyboard user who closed the panel was left focused on nothing.
   useEffect(() => {
     if (!open) return undefined
     function onKey(e) {
       if (e.key !== 'Escape') return
       setOpen(false)
       const active = document.activeElement
-      if (!active || active === document.body || panelRef.current?.contains(active)) {
-        buttonRef.current?.focus()
-      }
+      if (!active || active === document.body || panelRef.current?.contains(active)) buttonRef.current?.focus()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
 
+  const visible = useMemo(() => filterInboxNotifications(notifications, filter, query), [notifications, filter, query])
+  const updates = useMemo(() => groupInboxUpdates(visible), [visible])
+  const dayGroups = useMemo(() => groupByDay(updates), [updates])
+  const selectedId = expandedId === undefined ? dayGroups[0]?.items[0]?.id : expandedId
   const hasCritical = notifications.some(n => n.severity === 'Critical' && !n.read)
-  const dayGroups = useMemo(() => groupByDay(notifications), [notifications])
 
   if (!notificationsEnabled) return null
-
-  return (
-    <div className="relative flex-shrink-0">
-      {/* Bell button */}
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-controls={open ? 'tp-notification-panel' : undefined}
-        className="relative flex items-center justify-center w-7 h-7 rounded-md text-gray-700 hover:text-green-400 transition-colors hover:bg-green-400/10"
-        aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
-        title="Notifications"
-      >
-        {unreadCount > 0
-          ? <BellRing size={14} aria-hidden="true" className={hasCritical ? 'text-red-400 animate-pulse' : 'text-orange-400'} />
-          : <Bell size={14} aria-hidden="true" />
-        }
-
-        {/* Badge */}
-        {unreadCount > 0 && (
-          <motion.span
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            aria-hidden="true"
-            className="absolute -top-1 -end-1 min-w-[14px] h-3.5 flex items-center justify-center rounded-full text-[9px] font-bold text-white bg-red-600 px-0.5 leading-none"
-            style={{ boxShadow: '0 0 6px rgba(239,68,68,0.7)' }}
-          >
-            {unreadCount > 9 ? '9+' : unreadCount}
-          </motion.span>
-        )}
-      </button>
-
-      {/* Dropdown panel */}
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            ref={panelRef}
-            id="tp-notification-panel"
-            role="dialog"
-            aria-label="Notifications"
-            className="absolute end-0 top-9 w-80 max-w-[calc(100vw-1rem)] bg-gray-900 border border-gray-700/60 rounded-xl shadow-2xl z-50 overflow-hidden"
-            style={{ boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.04)' }}
-            initial={{ opacity: 0, y: -8, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.97 }}
-            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-          >
-            {/* Top edge accent */}
-            <div className="h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(239,68,68,0.5), transparent)' }} />
-
-            {/* Header */}
-            <div className="flex items-center justify-between px-3 py-2.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-              <div className="flex items-center gap-2">
-                <Bell size={13} className="text-gray-500" />
-                <span className="text-xs font-semibold text-gray-200">Notifications</span>
-                {unreadCount > 0 && (
-                  <span className="text-[10px] bg-red-600/80 text-white rounded-full px-1.5 py-0.5 font-bold leading-none">
-                    {unreadCount}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-3">
-                {unreadCount > 0 && (
-                  <button
-                    onClick={markAllRead}
-                    className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-green-400 transition-colors"
-                  >
-                    <CheckCircle size={11} />
-                    Mark all read
-                  </button>
-                )}
-                {notifications.length > 0 && (
-                  <button
-                    onClick={clearAll}
-                    className="text-[11px] text-gray-600 hover:text-red-400 transition-colors"
-                  >
-                    Clear all
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Notification list */}
-            <div className="max-h-96 overflow-y-auto overflow-x-hidden">
-              {loading && notifications.length === 0 ? (
-                <LoadingState />
-              ) : error && notifications.length === 0 ? (
-                <ErrorState message={error} onRetry={refresh} />
-              ) : notifications.length === 0 ? (
-                <EmptyState />
-              ) : (
-                dayGroups.map(group => (
-                  <div key={group.key}>
-                    <div
-                      className="sticky top-0 z-10 px-3 py-1 bg-gray-900/95 backdrop-blur-sm text-[10px] font-semibold uppercase tracking-wider text-gray-600"
-                      style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
-                    >
-                      {group.label}
-                    </div>
-                    <AnimatePresence initial={false}>
-                      {group.items.map(notif => (
-                        <NotificationRow
-                          key={notif.id}
-                          notification={notif}
-                          onMarkRead={markRead}
-                          onDismiss={dismiss}
-                          relativeTime={relativeTime}
-                          onNavigate={(to) => { setOpen(false); navigate(to) }}
-                        />
-                      ))}
-                    </AnimatePresence>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Footer */}
-            <div
-              className="flex items-center justify-between px-3 py-2"
-              style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}
-            >
-              {notifications.length > 0 ? (
-                <span className="text-[10px] text-gray-700">
-                  Showing {notifications.length} of {MAX_NOTIFICATIONS_LABEL} max
-                </span>
-              ) : <span />}
-              <Link
-                to="/alerts"
-                onClick={() => setOpen(false)}
-                className="flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-green-400 transition-colors"
-              >
-                View all
-                <ArrowRight size={11} aria-hidden="true" className="rtl:rotate-180" />
-              </Link>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  )
+  return <div className="relative flex-shrink-0">
+    <button ref={buttonRef} type="button" onClick={() => setOpen(v => !v)}
+      aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? 'tp-notification-panel' : undefined}
+      className="tp-notification-bell" aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`} title="Notifications">
+      {unreadCount > 0 ? <BellRing size={17} aria-hidden="true" className={hasCritical ? 'text-red-400' : ''} /> : <Bell size={17} aria-hidden="true" />}
+      {unreadCount > 0 && <span aria-hidden="true" className="tp-notification-bell-count">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+    </button>
+    <AnimatePresence>
+      {open && <motion.div ref={panelRef} id="tp-notification-panel" role="dialog" aria-label="Notifications" className="tp-notification-panel"
+        initial={reduceMotion ? false : { opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: reduceMotion ? 0 : -6 }} transition={{ duration: reduceMotion ? 0 : 0.15 }}>
+        <div className="tp-notification-heading">
+          <div><div className="tp-notification-heading-line"><Bell size={21} aria-hidden="true" /><h2>Notifications</h2><span className="tp-notification-count">{unreadCount} unread</span></div>
+            <p>Stay on top of fleet activity.</p></div>
+          <button type="button" className="tp-notification-close" onClick={closePanel} aria-label="Close notifications"><X size={19} /></button>
+        </div>
+        <div className="tp-notification-filters" role="group" aria-label="Filter notifications">
+          {FILTERS.map(([id, label]) => <button type="button" key={id} aria-pressed={filter === id} onClick={() => { setFilter(id); setExpandedId(undefined) }}>{label}</button>)}
+        </div>
+        <div className="tp-notification-tools">
+          <label className="tp-notification-search"><Search size={16} aria-hidden="true" /><span className="sr-only">Search notifications</span>
+            <input ref={searchRef} type="search" value={query} onChange={e => { setQuery(e.target.value); setExpandedId(undefined) }} placeholder="Search vehicle, site or message" /></label>
+          <div className="tp-notification-toolbar">
+            <button type="button" disabled={unreadCount === 0} onClick={markAllRead}><CheckCircle size={14} aria-hidden="true" />Mark all read</button>
+            <Link to="/settings?tab=notifications" onClick={() => setOpen(false)}><Settings size={14} aria-hidden="true" />Notification settings</Link>
+          </div>
+        </div>
+        {error && <div className="tp-notification-error" role="alert"><span>{error}</span><button type="button" onClick={refresh}><RefreshCw size={13} aria-hidden="true" />Retry</button></div>}
+        <div className="tp-notification-list" aria-busy={loading}>
+          {loading && notifications.length === 0 ? <div className="tp-notification-empty" role="status">Loading notifications…</div>
+            : notifications.length === 0 ? <div className="tp-notification-empty"><Bell size={25} aria-hidden="true" /><strong>{error ? 'Notifications unavailable' : 'You’re all caught up'}</strong><span>{error ? 'Retry to load your notifications.' : 'New fleet activity will appear here.'}</span></div>
+              : updates.length === 0 ? <div className="tp-notification-empty"><Search size={24} aria-hidden="true" /><strong>No matching notifications</strong><span>Try another search or filter.</span><button type="button" onClick={() => { setFilter('inbox'); setQuery(''); setExpandedId(undefined) }}>Reset filters</button></div>
+                : dayGroups.map(day => <section key={day.key} aria-label={day.label}>
+                  <h3 className="tp-notification-day">{day.label}</h3>
+                  {day.items.map((group, i) => <NotificationRow key={group.id} group={group} detailId={`tp-notification-${day.key}-${i}`}
+                    expanded={selectedId === group.id} onToggle={() => setExpandedId(selectedId === group.id ? null : group.id)}
+                    onMarkRead={markRead} onDismiss={dismiss} relativeTime={relativeTime} onNavigate={to => { setOpen(false); navigate(to) }} />)}
+                </section>)}
+        </div>
+        <div className="tp-notification-footer"><div><span>{visible.length} of {notifications.length} loaded</span>
+          {notifications.length > 0 && <button type="button" onClick={clearAll}>Clear loaded feed</button>}</div>
+          <Link to="/alerts" onClick={() => setOpen(false)}>View all alerts<ArrowRight size={14} aria-hidden="true" className="rtl:rotate-180" /></Link>
+        </div>
+      </motion.div>}
+    </AnimatePresence>
+  </div>
 }
-
-const MAX_NOTIFICATIONS_LABEL = 50

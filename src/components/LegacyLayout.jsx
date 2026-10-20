@@ -542,8 +542,8 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
 
   return (
     <div
-      className="min-h-screen flex flex-col"
-      style={{ background: '#f0f5f1' }}
+      className="h-screen min-h-0 flex flex-col overflow-hidden"
+      style={{ background: '#f0f5f1', height: '100dvh' }}
     >
       {/* Fixed top header - light */}
       <header
@@ -635,7 +635,7 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
 
       {/* Scrollable content */}
       <main
-        className="flex-1 overflow-auto px-3"
+        className="flex-1 min-h-0 min-w-0 overflow-auto overscroll-y-contain px-3"
         style={{
           paddingTop: 'calc(52px + env(safe-area-inset-top))',
           paddingBottom: 'calc(66px + env(safe-area-inset-bottom))',
@@ -897,7 +897,7 @@ export default function LegacyLayout({ children }) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: 'transparent' }}>
+    <div className="flex h-screen min-h-0 overflow-hidden" style={{ background: 'transparent', height: '100dvh' }}>
 
       {/* ── Mobile backdrop ──────────────────────────────────────────────────── */}
       <AnimatePresence>
@@ -917,7 +917,7 @@ export default function LegacyLayout({ children }) {
 
       {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
       <motion.aside
-        className={`flex-shrink-0 flex flex-col ${isMobile ? 'fixed top-0 left-0 h-full z-50' : 'relative z-20'}`}
+        className={`min-h-0 flex-shrink-0 flex flex-col ${isMobile ? 'fixed top-0 left-0 h-full z-50' : 'relative z-20'}`}
         animate={
           isMobile
             ? { x: sidebarOpen ? 0 : -SIDEBAR_EXPANDED, width: SIDEBAR_EXPANDED }
@@ -1037,7 +1037,7 @@ export default function LegacyLayout({ children }) {
         </AnimatePresence>
 
         {/* ── Nav ────────────────────────────────────────────────────────────── */}
-        <nav className="flex-1 overflow-y-auto py-1.5 px-2" style={{ scrollbarWidth: 'thin' }}>
+        <nav className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain py-1.5 px-2" style={{ scrollbarWidth: 'thin' }}>
           {effectiveGroups.map((group) => {
             const { items } = group
             // Stable identity = the group's default key (survives renames) for the
@@ -1289,7 +1289,7 @@ export default function LegacyLayout({ children }) {
 
       {/* ── Main content ────────────────────────────────────────────────────── */}
       <main
-        className="flex-1 overflow-y-auto"
+        className="flex-1 min-w-0 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain"
         style={{
           scrollbarWidth: 'thin',
           paddingTop: isMobile ? 52 : 0,

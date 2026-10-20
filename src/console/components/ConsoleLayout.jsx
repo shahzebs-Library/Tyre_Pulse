@@ -232,14 +232,14 @@ export default function ConsoleLayout() {
   }
 
   return (
-    <div className="console-root flex h-screen bg-[#0a0a0f] text-white overflow-hidden">
+    <div className="console-root flex h-screen min-h-0 bg-[#0a0a0f] text-white overflow-hidden" style={{ height: '100dvh' }}>
       <a href="#console-main"
         onClick={(e) => { e.preventDefault(); document.getElementById('console-main')?.focus() }}
         className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:px-3 focus:py-2 focus:rounded-lg focus:bg-orange-500 focus:text-black focus:text-xs focus:font-semibold">
         Skip to content
       </a>
       {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
-      <aside aria-label="Console navigation" className={`${sidebarOpen ? 'w-56' : 'w-14'} flex-shrink-0 flex flex-col border-r border-gray-800/80 transition-all duration-200 bg-gray-950`}>
+      <aside aria-label="Console navigation" className={`${sidebarOpen ? 'w-56' : 'w-14'} min-h-0 flex-shrink-0 flex flex-col border-r border-gray-800/80 transition-all duration-200 bg-gray-950`}>
         {/* Logo */}
         <div className="h-14 flex items-center px-3 border-b border-gray-800/80 gap-3">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
@@ -310,7 +310,7 @@ export default function ConsoleLayout() {
             </div>
           </div>
         )}
-        <nav aria-label="Console pages" className="flex-1 overflow-y-auto py-2 px-2">
+        <nav aria-label="Console pages" className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain py-2 px-2">
           {visibleGroups.length === 0 && sidebarOpen && (
             <p className="text-[11px] text-gray-500 px-2 py-4 text-center" role="status">No page matches that.</p>
           )}
@@ -390,7 +390,7 @@ export default function ConsoleLayout() {
       <ConsoleCommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} groups={NAV_GROUPS} />
 
       {/* ── Main content ────────────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
         {/* Top bar */}
         <header className="h-14 flex-shrink-0 border-b border-gray-800/80 flex items-center px-3 sm:px-6 gap-2 sm:gap-4 bg-gray-950/50">
           <div className="flex items-center gap-2">
@@ -434,7 +434,7 @@ export default function ConsoleLayout() {
         )}
 
         {/* Page content */}
-        <main id="console-main" tabIndex={-1} className="flex-1 overflow-y-auto p-3 sm:p-6 focus:outline-none">
+        <main id="console-main" tabIndex={-1} className="flex-1 min-w-0 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain p-3 sm:p-6 focus:outline-none">
           <Suspense fallback={<div className="p-8 text-sm text-gray-400" role="status">Loading</div>}>
             <Outlet />
           </Suspense>

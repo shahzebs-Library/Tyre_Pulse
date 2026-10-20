@@ -107,7 +107,7 @@ export function filterStock(rows = [], { search = '', site = 'all', status = 'al
     if (site !== 'all' && r.site !== site) return false
     if (status !== 'all' && r.status !== status) return false
     if (q) {
-      const hay = [r.site, r.description, r.management_action].filter(Boolean).join(' ').toLowerCase()
+      const hay = [r.site, r.description, r.management_action, r.brand, r.tyre_size, r.custom_data?.stock_item?.code].filter(Boolean).join(' ').toLowerCase()
       if (!hay.includes(q)) return false
     }
     return true
@@ -176,6 +176,136 @@ export function timelineSummary(days = [], now = new Date()) {
     net: totalIn - totalOut,
     activeDays: days.length,
     busiest: busiest && busiest.out > 0 ? busiest : null,
+  }
+}
+
+/** Current counted tyre stock. Only piece-based tyre lines can be summed safely. */
+function extractTyreSize(value) {
+  const text = String(value || '')
+  // Metric truck and passenger sizes: 315/80 R22.5, 235-70R16, 385-65R22.5.
+  const metric = text.match(/\b(\d{3})\s*([/-])\s*(\d{2,3})\s*r\s*(\d{2}(?:\.\d)?)/i)
+  if (metric) return `${metric[1]}/${metric[3]}R${metric[4]}`
+
+  // Flotation sizes: 10-16.5 and 23.5-25.
+  const flotation = text.match(/\b(\d{1,2}(?:\.\d{1,2})?)\s*-\s*(\d{2}(?:\.\d)?)\b/i)
+  if (flotation) return `${flotation[1]}-${flotation[2]}`
+
+  // Commercial/light truck sizes: 11R22.5, 7.00 R16, 195 R 15C.
+  const commercial = text.match(/\b(\d{1,3}(?:\.\d{1,2})?)\s*r\s*(\d{2}(?:\.\d)?)/i)
+  if (commercial) return `${commercial[1]}R${commercial[2]}`
+  return ''
+}
+
+function normalizeTyreSize(...values) {
+  for (const value of values) {
+    const parsed = extractTyreSize(value)
+    if (parsed) return parsed
+  }
+  return ''
+}
+
+export function summarizeTyreStock(rows = []) {
+  let pcs = 0
+  let tyreLines = 0
+  let nonPcsLines = 0
+  const bySize = new Map()
+  for (const row of rows || []) {
+    const meta = row?.custom_data?.stock_item || {}
+    const kind = String(meta.kind || '').toLowerCase()
+    const description = String(row?.description || '')
+    const sourceName = String(meta.source?.name || '')
+    const searchable = `${description} ${sourceName}`
+    const inferredTyre = Boolean(row?.tyre_size || meta.size) || /\b(tyre|tire)\b|\d{3}\s*[/-]\s*\d{2,3}\s*r\s*\d{2}|\d{1,3}(?:\.\d{1,2})?\s*r\s*\d{2}/i.test(searchable)
+    if (kind ? kind !== 'tyre' : !inferredTyre) continue
+    tyreLines++
+    const unit = String(meta.unit || '').trim().toUpperCase()
+    // Prefer the imported item name when it has a complete dimension; it can
+    // repair legacy tyre_size fields that were truncated during import.
+    const size = normalizeTyreSize(description, sourceName, meta.size, row?.tyre_size)
+    const knownTyreSize = Boolean(size)
+    const pieceUnit = ['PCS', 'PC', 'EA', 'EACH', 'PIECE', 'PIECES', 'NO', 'NOS'].includes(unit)
+    if (!pieceUnit && !(unit === '' && knownTyreSize)) {
+      nonPcsLines++
+      continue
+    }
+    const qty = num(row?.stock_qty)
+    if (qty === null) { nonPcsLines++; continue }
+    pcs += qty
+    const label = size || 'Size not recorded'
+    bySize.set(label, (bySize.get(label) || 0) + qty)
+  }
+  return {
+    pcs,
+    tyreLines,
+    nonPcsLines,
+    bySize: [...bySize].filter(([, quantity]) => quantity > 0)
+      .map(([size, quantity]) => ({ size, quantity }))
+      .sort((a, b) => b.quantity - a.quantity || a.size.localeCompare(b.size)),
+  }
+}
+
+/** Current piece-based tyre balances grouped into a site-by-size matrix. */
+export function summarizeTyreStockBySite(rows = []) {
+  const bySite = new Map()
+  for (const row of rows || []) {
+    const site = String(row?.site || '').trim() || 'Site not recorded'
+    const country = String(row?.country || '').trim()
+    const key = `${country}\u0001${site}`
+    if (!bySite.has(key)) bySite.set(key, { site, country, rows: [] })
+    bySite.get(key).rows.push(row)
+  }
+  const sites = [...bySite.values()].map(({ site, country, rows: siteRows }) => {
+    const summary = summarizeTyreStock(siteRows)
+    return { site, country, key: JSON.stringify([country, site]), total: summary.pcs, bySize: summary.bySize }
+  }).filter(site => site.total > 0 && site.bySize.length > 0)
+    .sort((a, b) => b.total - a.total || a.site.localeCompare(b.site) || a.country.localeCompare(b.country))
+  const totals = summarizeTyreStock(rows)
+  return { sites, sizes: totals.bySize.map(item => item.size), pcs: totals.pcs }
+}
+
+/** Tyre stock lines at or below their configured reorder threshold. */
+export function lowTyreStockRows(rows = []) {
+  return (rows || []).filter(row => {
+    const meta = row?.custom_data?.stock_item || {}
+    const kind = String(meta.kind || '').toLowerCase()
+    const description = String(row?.description || '')
+    const tyreSize = String(meta.size || row?.tyre_size || '')
+    const inferredTyre = Boolean(tyreSize) || /\b(tyre|tire)\b|\d{3}\s*\/\s*\d{2}\s*r?\s*\d{2}|\d{2}\.\d{1,2}\s*[-r]\s*\d{2}/i.test(description)
+    if (kind ? kind !== 'tyre' : !inferredTyre) return false
+    const qty = num(row?.stock_qty)
+    const minimum = num(row?.min_level)
+    return qty !== null && minimum !== null && qty <= minimum
+  })
+}
+
+/** Six-month tyre change/issue summary; positive quantities are issued, returns are excluded. */
+export function tyreChangeSummary(records = [], now = new Date(), monthCount = 6) {
+  const months = []
+  for (let offset = monthCount - 1; offset >= 0; offset--) {
+    const date = new Date(now.getFullYear(), now.getMonth() - offset, 1)
+    months.push({
+      key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+      label: date.toLocaleDateString(undefined, { month: 'short' }),
+      quantity: 0,
+    })
+  }
+  const monthIndex = new Map(months.map((month, index) => [month.key, index]))
+  const sizes = new Map()
+  for (const row of records || []) {
+    const date = String(row?.issue_date || '').slice(0, 10)
+    const index = monthIndex.get(date.slice(0, 7))
+    if (index === undefined) continue
+    const rawQty = num(row?.qty)
+    const qty = rawQty === null ? 1 : rawQty
+    if (qty <= 0) continue
+    months[index].quantity += qty
+    const size = String(row?.size || '').trim() || 'Size not recorded'
+    sizes.set(size, (sizes.get(size) || 0) + qty)
+  }
+  return {
+    total: months.reduce((sum, month) => sum + month.quantity, 0),
+    months,
+    bySize: [...sizes].map(([size, quantity]) => ({ size, quantity })).sort((a, b) => b.quantity - a.quantity || a.size.localeCompare(b.size)),
   }
 }
 

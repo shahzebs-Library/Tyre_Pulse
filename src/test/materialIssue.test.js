@@ -597,6 +597,7 @@ vi.mock('../lib/api/materialIssue', async () => {
     })),
     getSlipLines: vi.fn(async () => SLIP_ROWS),
     getIssueSummary: vi.fn(async () => ({ ok: false, data: null })),
+    getMaterialIssueCoverage: vi.fn(async () => ({ first: '2018-09-22', last: '2026-10-17' })),
     materialIssuesProvisioned: vi.fn(async () => true),
     listMaterialIssues: vi.fn(async () => ({ rows: [], missing: false })),
     listMaterialIssueLines: vi.fn(async () => []),
@@ -633,10 +634,19 @@ describe('StoreMaterialIssue page renders', () => {
     }
   })
 
-  it('states the on-hand-balance limitation instead of implying a balance', async () => {
+  it('keeps operational history controls without showing a long explanation block', async () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByText('Issue register').length).toBeGreaterThan(0))
-    expect(screen.getAllByText(/no live on-hand balance/i).length).toBeGreaterThan(0)
+    expect(screen.getByText('History period')).toBeTruthy()
+    expect(screen.queryByText('What this page reads, and what it cannot show')).toBeNull()
+  })
+
+  it('keeps the issue form stock warning to one short sentence', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getAllByText('Issue register').length).toBeGreaterThan(0))
+    fireEvent.click(screen.getAllByRole('button').find((b) => b.textContent?.trim() === 'Raise an issue'))
+    await waitFor(() => expect(screen.getByText('Stock availability is not checked when recording an issue.')).toBeTruthy())
+    expect(screen.queryByText(/stock is recorded by site and description/i)).toBeNull()
   })
 
   it('surfaces the return-booked-as-a-charge finding on the Returns tab', async () => {

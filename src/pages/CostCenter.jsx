@@ -23,7 +23,7 @@ import {
   groupBySite, groupByBrand, groupByVehicle, groupByMonth, buildAnomalies, roiFor,
   cpkDelta, monthLabel, movingAvg, topShare, productionSummary,
 } from '../lib/costCenterAnalytics'
-import PageHeader from '../components/ui/PageHeader'
+import PageHeader from '../components/budgets/FinancePageHeader'
 import DateField from '../components/ui/DateField'
 import FilterBar from '../components/ui/FilterBar'
 import StatTile from '../components/ui/StatTile'
@@ -120,7 +120,7 @@ function dateFromPreset(days) {
 
 const ICON_BTN = 'inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg border border-[var(--border-dim)] bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] transition-colors disabled:opacity-50'
 const TEXT_BTN = 'inline-flex items-center gap-1.5 min-h-[44px] px-3 rounded-lg border border-[var(--border-dim)] bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] transition-colors disabled:opacity-50'
-const PANEL = 'rounded-xl border border-[var(--border-dim)] p-5 bg-[var(--surface-1)]'
+const PANEL = 'finance-panel rounded-xl border border-[var(--border-dim)] p-5 bg-[var(--surface-1)]'
 
 // ── Main Component ───────────────────────────────────────────────────────────────
 export default function CostCenter() {
@@ -506,7 +506,7 @@ export default function CostCenter() {
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <motion.div
-      className="space-y-6"
+      className="finance-workspace space-y-4"
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
@@ -517,8 +517,7 @@ export default function CostCenter() {
       <PageHeader
         title={t('costcenter.title')}
         subtitle={t('costcenter.subtitle')}
-        icon={DollarSign}
-        actions={<>
+        toolbar={<><span className="finance-toolbar-label">Analysis period</span>
           <SegmentedControl
             ariaLabel="Period"
             size="sm"
@@ -537,6 +536,9 @@ export default function CostCenter() {
             onChange={(v) => { setDateTo(v); setPreset('custom') }}
             placeholder="To date" ariaLabel="To date" min={dateFrom || undefined}
           />
+        </>}
+        icon={DollarSign}
+        actions={<>
           <button
             type="button"
             onClick={refreshAll}
@@ -609,7 +611,7 @@ export default function CostCenter() {
           )}
 
           {/* ── 1. KPI strip ─────────────────────────────────────────────────── */}
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+          <div className="finance-kpis grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
             <StatTile
               index={0}
               icon={DollarSign}
@@ -681,6 +683,12 @@ export default function CostCenter() {
             <p className="text-xs text-[var(--text-muted)] -mt-3">
               These filters narrow the CPK figures, charts, tables and anomalies to {scoped.length.toLocaleString()} of {normalised.length.toLocaleString()} tyre records.
               The spend figures read the expense grid for the whole {activeCountry && activeCountry !== 'All' ? activeCountry : 'selected'} scope and are not narrowed by site, brand or search.
+            </p>
+          )}
+
+          {!hasActiveFilters && (
+            <p className="text-xs text-[var(--text-muted)]">
+              Site, brand and search filters apply to tyre CPK and record analysis. Spend follows the selected country and date range.
             </p>
           )}
 

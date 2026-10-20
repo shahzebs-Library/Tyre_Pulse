@@ -7,7 +7,7 @@ import { supabase, unwrap, applyCountry, applyCountries, countryList, fetchAllPa
 import { toUserMessage } from '../safeError'
 
 const COLS =
-  'id,site,description,stock_qty,min_level,critical_level,stock_status,reorder_qty,management_action,region,country,updated_by,updated_at'
+  'id,site,description,stock_qty,min_level,critical_level,stock_status,reorder_qty,management_action,region,country,updated_by,updated_at,custom_data,brand,tyre_size,last_counted_at'
 
 // Movement ledger (stock_movements). Full row - the movement-history modal
 // renders every audit field.
@@ -16,7 +16,7 @@ const MOVEMENT_COLS =
 
 // Tyre issue rows drive stock velocity / timeline analytics on this page. Only
 // the three columns those computations need - nothing wider.
-const TYRE_ISSUE_COLS = 'site,qty,issue_date'
+const TYRE_ISSUE_COLS = 'site,qty,issue_date,size'
 
 /**
  * List stock records, most recently updated first. Country-scoped (null-safe)

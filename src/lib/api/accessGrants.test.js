@@ -34,6 +34,10 @@ beforeEach(() => {
 })
 
 describe('service layer - access grants', () => {
+  it('selects only columns present in the deployed grant ledger', () => {
+    expect(grants.COLS).toBe('id,org_id,user_id,module_key,capability,effect,note,expires_at,granted_by,created_at')
+  })
+
   it('listUserGrants reads user_access_grants scoped by user_id, newest first', async () => {
     h.state.result = { data: [{ id: 'g1', module_key: 'analytics' }], error: null }
     const rows = await grants.listUserGrants('u1')

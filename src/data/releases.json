@@ -1,5 +1,84 @@
 [
   {
+    "id": "2026.10.19.2",
+    "date": "2026-10-19",
+    "changes": [
+      {
+        "modules": [
+          "store_material_issue"
+        ],
+        "text": {
+          "en": "MIS opens on this month to keep the initial register fast, while older history remains available by year or custom dates. Search, site and store filters run in the database, with search debounced to avoid repeated requests. The issue form keeps only a short stock availability note instead of a long explanation."
+        }
+      }
+    ]
+  },
+  {
+    "id": "2026.10.19.1",
+    "date": "2026-10-19",
+    "changes": [
+      {
+        "modules": [
+          "store_material_issue"
+        ],
+        "text": {
+          "en": "Store Material Issue now shows the date coverage of accessible imported MIS history and offers a year picker for older uploaded records. Slips include recorded source system, source row and units in their item details and exports. The register retains all material categories, country and access restrictions, and capped-read notices. Legacy filenames are not inferred where they were never saved."
+        }
+      }
+    ]
+  },
+  {
+    "id": "2026.10.18.6",
+    "date": "2026-10-18",
+    "changes": [
+      {
+        "modules": [
+          "stock"
+        ],
+        "text": {
+          "en": "Stock item search now uses dedicated indexes limited to tyres, rims and related accessories. MIS and DTR item lookups use indexed record identities and reuse request-scoped access checks for faster suggestions while retaining organisation, country and site restrictions. New item entries default to New condition and PCS when no source unit is recorded; existing stock values stay unchanged."
+        }
+      }
+    ]
+  },
+  {
+    "id": "2026.10.18.5",
+    "date": "2026-10-18",
+    "changes": [{"modules": ["stock"], "text": {"en": "Stock Management now supports searchable MIS/ERP and DTR item suggestions, manual tyre/rim items, batch physical counts, separate delivery receipts and a confirmation screen. Counts set the final quantity instead of adding it again. Entries retain item source details and movement history, check for changed balances and duplicate submissions, and preserve stock permissions and existing approval locks. Transfers now select explicit matching items and post both sides together."}}]
+  },
+  {
+    "id": "2026.10.18.4",
+    "date": "2026-10-18",
+    "changes": [{"modules": ["budgets"], "text": {"en": "Cost Center, Budget Planner and Budgets now share the Command Center's green workspace style, clearer page navigation and responsive headers. Cost Center separates period controls from exports and explains record-filter scope. Budget Planner keeps navigation available during loading and errors. Budgets brings the monthly site register ahead of its supporting chart, with clearer monthly and annual view descriptions. Existing calculations, exports and budget editing permissions are retained."}}]
+  },
+  {
+    "id": "2026.10.18.3",
+    "date": "2026-10-18",
+    "changes": [{"modules": [], "text": {"en": "Help & Support now brings module-aware guides, personal support tickets, problem reports, access requests and update history into a clearer workspace. Recent requests show real personal records, with loading, retry and partial-error states. Profile details remain top-right with photo, male/female avatar and initials options."}}]
+  },
+  {
+    "id": "2026.10.18.2",
+    "date": "2026-10-18",
+    "changes": [{
+      "modules": [],
+      "text": {"en": "The web workspace has a cleaner header, a slim module rail with contextual navigation, module search and pinned shortcuts. Account details and the profile picture remain in the top-right menu only. The menu supports a cropped headshot, male or female avatar styles, or initials. Pictures can be replaced or removed. Existing country, language, theme, create and profile controls remain available."}
+    }]
+  },
+  {
+    "id": "2026.10.18.1",
+    "date": "2026-10-18",
+    "changes": [
+      {
+        "modules": [
+          "alerts"
+        ],
+        "text": {
+          "en": "The notification inbox now supports search, approval, critical and read filters, expandable record updates, clearer review actions and actual loaded counts. Updates are grouped only when they refer to the same record; existing approval routes and read actions are retained."
+        }
+      }
+    ]
+  },
+  {
     "id": "2026.09.24.1",
     "date": "2026-09-24",
     "changes": [{

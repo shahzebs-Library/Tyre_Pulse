@@ -146,6 +146,7 @@ const ICON_CFG = {
   accidents:  { Icon: AlertTriangle, color: 'text-red-400',     bg: 'bg-red-400/10'    },
   claims:     { Icon: ShieldCheck,   color: 'text-indigo-400',  bg: 'bg-indigo-400/10' },
   stock:      { Icon: Package,       color: 'text-emerald-400', bg: 'bg-emerald-400/10' },
+  tyre_stock_alert: { Icon: Package, color: 'text-amber-400', bg: 'bg-amber-400/10' },
   vendor:     { Icon: Building2,     color: 'text-cyan-400',    bg: 'bg-cyan-400/10'   },
   builder:    { Icon: LayoutTemplate, color: 'text-pink-400',   bg: 'bg-pink-400/10'   },
 }
@@ -513,7 +514,15 @@ function ScheduleModal({ title, onClose, onSave, saving, form, setForm, formErro
           {/* Report Type */}
           <div>
             <FieldLabel htmlFor="sr-type" required>{td('schedreports.modal.reportType', 'Report Type')}</FieldLabel>
-            <SelectField id="sr-type" value={form.report_type} onChange={v => setForm(f => ({ ...f, report_type: v }))}>
+            <SelectField id="sr-type" value={form.report_type} onChange={v => setForm(f => ({
+              ...f,
+              report_type: v,
+              ...(v === 'tyre_stock_alert' ? {
+                name: f.name || 'Daily tyre low-stock alert',
+                frequency: 'daily',
+                time_of_day: '08:00',
+              } : {}),
+            }))}>
               <optgroup label={td('schedreports.modal.standardReports', 'Standard reports')}>
                 {REPORT_TYPES.map(r => (
                   <option key={r.value} value={r.value}>{td(`schedreports.reportTypes.${r.value}`, r.label)}</option>
@@ -527,6 +536,12 @@ function ScheduleModal({ title, onClose, onSave, saving, form, setForm, formErro
                 </optgroup>
               )}
             </SelectField>
+            {form.report_type === 'tyre_stock_alert' && (
+              <p className="mt-1.5 flex items-start gap-1.5 text-xs text-[var(--text-muted)]">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-amber-400" aria-hidden="true" />
+                {td('schedreports.modal.tyreStockAlertHint', 'Only sends an email when a tyre stock line is at or below its minimum. The email lists tyre size, site, current balance and reorder threshold. Add the storekeeper or manager email addresses below.')}
+              </p>
+            )}
             {isBuilderType(form.report_type) && (
               <p className="text-xs text-[var(--text-muted)] mt-1.5 flex items-start gap-1.5">
                 <LayoutTemplate className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-pink-400" />
@@ -597,6 +612,7 @@ function ScheduleModal({ title, onClose, onSave, saving, form, setForm, formErro
             </div>
           )}
 
+          {form.report_type !== 'tyre_stock_alert' && <>
           {/* Coverage period */}
           <div>
             <FieldLabel htmlFor="sr-period" required>{td('schedreports.modal.period', 'Report Covers')}</FieldLabel>
@@ -640,6 +656,7 @@ function ScheduleModal({ title, onClose, onSave, saving, form, setForm, formErro
               })}
             </div>
           </div>
+          </>}
 
           {/* Recipients */}
           <div>
@@ -1184,6 +1201,11 @@ export default function ScheduledReports() {
         throw new Error(msg || 'Send failed')
       }
       if (data?.error) throw new Error(data.error)
+      if (data?.skipped) {
+        setSchedules(prev => prev.map(x => (x.id === s.id ? { ...x, last_status: 'no_alert' } : x)))
+        setToast({ type: 'warn', text: td('schedreports.toast.noTyreAlert', 'No tyre stock is at or below its minimum, so no email alert was sent.') })
+        return
+      }
       const stamp = new Date().toISOString()
       setSchedules(prev => prev.map(x => (x.id === s.id ? { ...x, last_sent_at: stamp } : x)))
       fetchJobRuns() // the edge fn logs this delivery to report_send_log

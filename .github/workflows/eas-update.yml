@@ -6,8 +6,11 @@ name: OTA Update (EAS Update)
 # Trigger: manually (Actions -> Run workflow).
 # Required secret: EXPO_TOKEN (expo.dev -> Account -> Access tokens)
 
-# RETIRED 2026-09-27: mobile releases use flutter-release-play.yml (Flutter app).
-# This workflow fails on purpose if run, and no tag triggers it.
+# Expo store BUILDS stay retired (2026-09-27, Flutter is the mobile path), but the
+# owner re-enabled OTA hotfixes for the Expo app still in production (2026-10-12).
+# `source_ref` must be a branch cut from the commit the installed binary was built
+# from (1.6.0 = 6c27046), so an update carries only the intended fix. Publishing
+# from main would ship every later, device-untested mobile change.
 on:
   workflow_dispatch:
     inputs:
@@ -15,19 +18,39 @@ on:
         description: 'Short release note shown in the EAS dashboard'
         required: true
         default: 'Bug fixes and improvements'
+      source_ref:
+        description: 'Branch to publish (cut from the installed binary commit)'
+        required: true
 
 jobs:
   update:
     name: Push OTA update to production channel
     runs-on: ubuntu-latest
     steps:
-      - name: Retired - mobile releases are Flutter only
-        run: |
-          echo "::error::This Expo release path is RETIRED. Mobile builds and releases use the Flutter app (tyre_pulse_flutter/) via flutter-release-play.yml."
-          exit 1
-
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.inputs.source_ref }}
+          fetch-depth: 0
+
+      # Refuse anything that is not a hotfix on top of the installed binary:
+      # the source must descend from the binary commit and keep its native
+      # config (app.json, eas.json, lockfile) byte-identical, so `main` or any
+      # other ref carrying unrelated or native changes cannot reach phones.
+      - name: Verify source matches the installed binary
+        env:
+          BINARY_COMMIT: 6c27046587254b1ba3c8475c04b23c57f1200f98 # Expo 1.6.0
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$BINARY_COMMIT" HEAD \
+            || { echo "::error::source_ref does not descend from the 1.6.0 binary commit"; exit 1; }
+          if ! git diff --quiet "$BINARY_COMMIT" HEAD -- mobile/app.json mobile/eas.json mobile/package.json mobile/package-lock.json mobile/plugins; then
+            echo "::error::source_ref changes native config; that needs a store build, not an OTA"; exit 1
+          fi
+          changed=$(git diff --name-only "$BINARY_COMMIT" HEAD -- mobile | wc -l)
+          echo "Mobile files changed vs the binary: $changed"
+          git diff --stat "$BINARY_COMMIT" HEAD -- mobile
+          [ "$changed" -le 20 ] || { echo "::error::$changed mobile files changed; an OTA hotfix should be small"; exit 1; }
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

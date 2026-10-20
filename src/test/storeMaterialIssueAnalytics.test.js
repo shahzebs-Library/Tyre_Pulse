@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   singleCurrencyOf, headlineValue, categoryShare, docTypeShare, returnFlag,
-  recentSlipRows, recentSlipCount, topItemRows, slipLineRows,
+  recentSlipRows, recentSlipCount, topItemRows, slipLineRows, issueHistoryYears,
 } from '../lib/storeMaterialIssueAnalytics'
 
 describe('storeMaterialIssueAnalytics', () => {
@@ -62,4 +62,10 @@ describe('storeMaterialIssueAnalytics', () => {
     expect(l[0]).toMatchObject({ rowKey: '9', currency: 'SAR' })
     expect(l[1]).toMatchObject({ rowKey: 'line-1', currency: 'AED' })
   })
+})
+
+it('offers all covered history years newest first, and does not invent coverage',()=>{
+ expect(issueHistoryYears({first:'2018-09-22',last:'2026-10-17'})).toEqual(['2026','2025','2024','2023','2022','2021','2020','2019','2018'])
+ expect(issueHistoryYears(null)).toEqual([])
+ expect(issueHistoryYears({first:'2026-01-01',last:'2018-01-01'})).toEqual([])
 })

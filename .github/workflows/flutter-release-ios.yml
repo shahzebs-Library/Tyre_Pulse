@@ -91,24 +91,21 @@ jobs:
             --dart-define=APP_VERSION="$VERSION_NAME" \
             --dart-define=SENTRY_DSN="$SENTRY_DSN"
 
-      - name: Archive with automatic cloud signing
-        env:
-          KEYID: ${{ secrets.APPSTORE_KEY_ID }}
-          ISSUER: ${{ secrets.APPSTORE_ISSUER_ID }}
-          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+      - name: Archive (unsigned; signing happens at export)
         run: |
+          # Archiving signed with automatic signing needs a registered test
+          # device for a Development profile, which this account does not have.
+          # Archive unsigned instead; the export step signs with the cloud
+          # managed Apple Distribution certificate and App Store profile.
           xcodebuild archive \
             -workspace ios/Runner.xcworkspace \
             -scheme Runner \
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${KEYID}.p8" \
-            -authenticationKeyID "$KEYID" \
-            -authenticationKeyIssuerID "$ISSUER" \
-            DEVELOPMENT_TEAM="$TEAM" \
-            CODE_SIGN_STYLE=Automatic
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
 
       - name: Export and upload to App Store Connect
         env:

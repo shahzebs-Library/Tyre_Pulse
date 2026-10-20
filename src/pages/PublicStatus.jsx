@@ -20,7 +20,7 @@ export default function PublicStatus() {
         </a>
       )}
       <PublicSection title="Having trouble now?">
-        <p>Visit <a className="font-semibold text-green-700 hover:underline" href="/support">Support</a> and include the affected workflow and approximate incident time.</p>
+        <p>Visit <a className="font-semibold text-green-700 hover:underline" href="/contact">Support</a> and include the affected workflow and approximate incident time.</p>
       </PublicSection>
     </PublicTrustPage>
   )

@@ -338,6 +338,7 @@ const DataDeletion           = lazy(() => import('./pages/DataDeletion'))
 const Privacy                = lazy(() => import('./pages/Privacy'))
 const Terms                  = lazy(() => import('./pages/Terms'))
 const PublicSupport          = lazy(() => import('./pages/PublicSupport'))
+const PublicMarketingHome    = lazy(() => import('./pages/PublicMarketingHome'))
 const PublicStatus           = lazy(() => import('./pages/PublicStatus'))
 const EventStream            = lazy(() => import('./pages/EventStream'))
 const Approvals              = lazy(() => import('./pages/Approvals'))
@@ -383,6 +384,28 @@ function HomeRoute() {
   if (isChecklistOnlyRole(profile?.role) && moduleAvailable(auth, 'checklists')) return <Navigate to="/checklists" replace />
   if (profile?.role === 'Tyre Man' && moduleAvailable(auth, 'inspections')) return <Navigate to="/inspections" replace />
   return executiveHomeAllowed(auth) ? <CommandCenterPage key={profile?.id} /> : <MyWorkspace />
+}
+
+// Serve the marketing fallback on the app project's root, but keep the
+// dedicated app hostname focused on sign-in and the operational workspace.
+function PublicRootRoute() {
+  const { profile, loading } = useAuth()
+  const isDedicatedAppHost = typeof window !== 'undefined' && window.location.hostname === 'app.tyrepulse.app'
+  if (isDedicatedAppHost && !loading && !profile) return <Navigate to="/login" replace />
+  if (loading || !profile) return <Safe><PublicMarketingHome /></Safe>
+  return (
+    <ProtectedRoute>
+      <MaintenanceGate>
+        <AppShell>
+          <SubscriptionGate>
+            <ChecklistOnlyGate>
+              <Safe><HomeRoute /></Safe>
+            </ChecklistOnlyGate>
+          </SubscriptionGate>
+        </AppShell>
+      </MaintenanceGate>
+    </ProtectedRoute>
+  )
 }
 
 // ── Checklist-only access gate ────────────────────────────────────────────────
@@ -552,6 +575,7 @@ function MainApp() {
         <Suspense fallback={<LoadingSpinner />}>
           <Routes>
             <Route path="/login"          element={<Login />} />
+            <Route path="/"               element={<PublicRootRoute />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             {/* PUBLIC account & data deletion page - the URL for the Google Play
                 Data Safety form's deletion mechanism. Anon, no app shell. */}
@@ -563,6 +587,9 @@ function MainApp() {
             <Route path="/terms"           element={<Safe><Terms /></Safe>} />
             <Route path="/terms-of-service" element={<LegacyRedirect to="/terms" />} />
             <Route path="/support"         element={<Safe><PublicSupport /></Safe>} />
+            {/* Store listing support URL. Keep this public so a signed-out
+                customer can reach help from https://tyrepulse.app/contact. */}
+            <Route path="/contact"         element={<Safe><PublicSupport /></Safe>} />
             <Route path="/status"          element={<Safe><PublicStatus /></Safe>} />
             {/* Public, light-theme, auto-rotating TV/kiosk report viewer (V251/V252
                 share token) - ANON, no chrome. The single public report-share surface

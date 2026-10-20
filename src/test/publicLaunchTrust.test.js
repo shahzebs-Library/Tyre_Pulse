@@ -9,13 +9,18 @@ describe('public launch trust surfaces', () => {
     const app = read('src/App.jsx')
     expect(app).toContain('<Route path="/terms"')
     expect(app).toContain('<Route path="/support"')
+    expect(app).toContain('<Route path="/contact"')
+    expect(app).toContain('<Route path="/"               element={<PublicRootRoute />} />')
+    expect(app).toContain("window.location.hostname === 'app.tyrepulse.app'")
+    expect(app).toContain('if (isDedicatedAppHost && !loading && !profile) return <Navigate to="/login" replace />')
+    expect(app.indexOf('<Route path="/"               element={<PublicRootRoute />} />')).toBeLessThan(app.indexOf('path="/*"'))
     expect(app).toContain('<Route path="/status"')
     expect(app).toContain('<Route path="/privacy"')
   })
 
   it('links every trust destination from the sign-in footer', () => {
     const login = read('src/pages/Login.jsx')
-    for (const route of ['/privacy', '/terms', '/support', '/status']) {
+    for (const route of ['/privacy', '/terms', '/contact', '/status']) {
       expect(login).toContain(`'${route}'`)
     }
   })

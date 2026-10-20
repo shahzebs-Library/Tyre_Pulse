@@ -261,6 +261,9 @@
 .next-steps b { font-weight: 750; }
 .next-steps span { color: var(--muted); font-size: .92rem; }
 .contact-direct { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.contact-support { border-top: 1px solid var(--line); padding-top: 18px; }
+.contact-support h2 { margin: 0 0 6px; font-family: var(--font-display), var(--font-body), sans-serif; font-weight: 800; font-size: 1.1rem; letter-spacing: -.02em; }
+.contact-support p { margin: 0 0 8px; color: var(--muted); font-size: .92rem; }
 .form-status:empty { display: none; }
 .form-status { margin: 4px 0 0; padding: 12px 14px; border-radius: 8px; font-weight: 600; animation: tp-rise-in .35s var(--ease-out) both; }
 .form-status.is-ok { background: #e3f4e9; color: #17663a; }

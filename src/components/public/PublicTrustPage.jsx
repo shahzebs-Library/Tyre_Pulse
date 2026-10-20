@@ -19,7 +19,7 @@ export default function PublicTrustPage({ title, eyebrow, intro, children }) {
           <Link className="hover:text-green-700" to="/login">Sign in</Link>
           <Link className="hover:text-green-700" to="/privacy">Privacy</Link>
           <Link className="hover:text-green-700" to="/terms">Terms</Link>
-          <Link className="hover:text-green-700" to="/support">Support</Link>
+          <Link className="hover:text-green-700" to="/contact">Support</Link>
           <Link className="hover:text-green-700" to="/status">Service status</Link>
         </footer>
       </div>

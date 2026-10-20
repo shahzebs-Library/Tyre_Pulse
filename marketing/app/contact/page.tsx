@@ -81,6 +81,11 @@ export default function ContactPage() {
         {WHATSAPP_URL && <a className="btn btn-dark" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" onClick={() => track("whatsapp_click", { source: "contact_aside" })}>Message us on WhatsApp</a>}
         <a className="btn-text" href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
       </div>
+      <div className="contact-support">
+        <h2>Already using Tyre Pulse?</h2>
+        <p>For account access, sign-in, or app support, email our team. You can reach us here without signing in.</p>
+        <a className="btn-text" href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("Tyre Pulse customer support")}`}>Contact customer support</a>
+      </div>
     </aside>
     </div></section>
   </PageFrame>;

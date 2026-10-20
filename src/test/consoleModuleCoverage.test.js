@@ -32,6 +32,7 @@ const NOT_A_MODULE = {
   '/terms-of-service': 'public legal page',
   '/status': 'public status page',
   '/support': 'public support page',
+  '/contact': 'public support contact page',
   '/report-builder': 'sub-page of Reports (SectionTabs, admin-only, governed by report builder access)',
   '/checklist-builder': 'sub-page of Checklists (author roles)',
   '/automation-rules/builder': 'sub-page of Automation Rules',

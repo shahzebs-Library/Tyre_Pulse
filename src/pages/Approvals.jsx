@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  CheckSquare, X, Search, Clock, Inbox, Filter, AlertTriangle,
+  CheckSquare, X, Clock, Inbox, Filter, AlertTriangle,
   ClipboardList, CheckCircle2, XCircle, Undo2, RefreshCw,
   ChevronRight, ServerCrash, Car, ClipboardCheck, Database, Loader2,
-  ExternalLink, GitBranch, AlertOctagon, Square, Ban, PenLine, MapPin,
+  ExternalLink, GitBranch, AlertOctagon, Square, Ban, PenLine,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import * as workflows from '../lib/api/workflows'
@@ -17,6 +17,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatDistanceToNow } from 'date-fns'
 import PageHeader from '../components/ui/PageHeader'
+import FilterBar from '../components/ui/FilterBar'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
 import Modal from '../components/ui/Modal'
 import ApprovalStatusBadge from '../components/workflow/ApprovalStatusBadge'
 import ApprovalAction from '../components/workflow/ApprovalAction'
@@ -293,16 +295,6 @@ function MetricStrip({ metrics, loading }) {
       ))}
       </div>
       <p className="text-xs font-semibold text-[var(--text-secondary)]">Pending by source</p>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          ['workflow_pending', 'Workflows', GitBranch, 'blue'],
-          ['closures_pending', 'Closures', Car, 'red'],
-          ['checklist_pending', 'Checklists', ClipboardCheck, 'teal'],
-          ['inspection_pending', 'Inspections', ClipboardList, 'amber'],
-        ].map(([key, label, icon, tone]) => (
-          <MetricCard key={key} icon={icon} label={label} tone={tone} loading={loading} value={metrics?.[key]} />
-        ))}
-      </div>
     </div>
   )
 }
@@ -320,116 +312,6 @@ function SourceBadge({ source }) {
 }
 
 // ─── Rows ─────────────────────────────────────────────────────────────────────────
-
-function InstanceRow({ instance, bucketKey, onOpen }) {
-  const { step, idx, total } = currentStepOf(instance)
-  const sla = bucketKey === 'pending' || bucketKey === 'overdue' ? slaState(instance) : null
-  const overdue = bucketKey === 'overdue' || sla?.overdue
-  const timeRef = bucketKey === 'recently_approved'
-    ? instance.completed_at
-    : instance.step_started_at || instance.started_at
-
-  return (
-    <button
-      onClick={() => onOpen(instance)}
-      className={`w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl border transition-all hover:border-[var(--border-bright)] ${
-        overdue ? 'border-red-800/60 bg-red-950/20' : 'border-[var(--border-dim)] bg-[var(--surface-1)]'
-      }`}
-    >
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <SourceBadge source={SOURCE.workflow} />
-          <p className="text-[var(--text-primary)] text-sm font-medium truncate">{entityLabelOf(instance)}</p>
-        </div>
-        <p className="text-[var(--text-muted)] text-xs truncate mt-0.5">
-          {instance.definition_name || 'Workflow'}
-          {instance.entity_type && <span className="text-[var(--text-muted)]"> · {instance.entity_type}</span>}
-          {step && (
-            <span className="text-[var(--text-secondary)]"> · Step {idx + 1}/{total}: {step.name}</span>
-          )}
-          {(instance.current_approver_role || step?.approver_role) && (
-            <span className="text-[var(--text-secondary)]"> · Waiting for {instance.current_approver_role || step.approver_role}</span>
-          )}
-        </p>
-        <p className="text-[var(--text-muted)] text-[11px] truncate mt-1 inline-flex items-center gap-1">
-          <MapPin className="w-3 h-3 shrink-0" />
-          {[instance.site || 'Site not recorded', instance.country].filter(Boolean).join(' · ')}
-          {instance.entity_id && <span> · Ref {instance.entity_id}</span>}
-        </p>
-      </div>
-
-      <div className="hidden md:flex flex-col items-end gap-1 shrink-0">
-        <span className={`text-xs whitespace-nowrap ${overdue ? 'text-red-400 font-semibold' : 'text-[var(--text-muted)]'}`}>
-          {overdue && <AlertTriangle className="w-3 h-3 inline mr-1 -mt-0.5" />}
-          {sla?.dueLabel || relTime(timeRef) || 'N/A'}
-        </span>
-      </div>
-
-      <ApprovalStatusBadge status={instance.status} />
-      <ChevronRight className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
-    </button>
-  )
-}
-
-/** Row for a non-workflow approval item (accident closure / checklist / gap). */
-function GenericRow({ item, onOpen, selectable = false, picked = false, onTogglePick }) {
-  const meta = SOURCE_META[item.source] || SOURCE_META.workflow
-  const isGap = item.source === SOURCE.signoff_gap
-  return (
-    <div
-      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border bg-[var(--surface-1)] transition-all ${
-        picked ? 'border-orange-500/60 bg-orange-500/[0.04]' : 'border-[var(--border-dim)] hover:border-[var(--border-bright)]'
-      }`}
-    >
-      {/* The checkbox is its own control, not part of the row button: clicking it
-          must select without opening the drawer. */}
-      {selectable && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onTogglePick?.(item) }}
-          aria-label={picked ? 'Deselect' : 'Select'}
-          className="shrink-0 text-[var(--text-muted)] hover:text-orange-300"
-        >
-          {picked ? <CheckSquare className="w-4 h-4 text-orange-400" /> : <Square className="w-4 h-4" />}
-        </button>
-      )}
-      <button onClick={() => onOpen(item)} className="flex-1 min-w-0 text-left flex items-center gap-3">
-      <div className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${TONE_BADGE[meta.tone] || TONE_BADGE.blue}`}>
-        <meta.icon className="w-4 h-4" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <SourceBadge source={item.source} />
-          <p className="text-[var(--text-primary)] text-sm font-medium truncate">{item.title}</p>
-        </div>
-        <p className="text-[var(--text-muted)] text-xs truncate mt-0.5">
-          {item.subtitle}
-        </p>
-        <p className="text-[var(--text-muted)] text-[11px] truncate mt-1 inline-flex items-center gap-1">
-          <MapPin className="w-3 h-3 shrink-0" />
-          {[item.site || 'Site not recorded', item.country].filter(Boolean).join(' · ')}
-        </p>
-      </div>
-      <div className="hidden md:flex flex-col items-end gap-1 shrink-0">
-        <span className="text-xs whitespace-nowrap text-[var(--text-muted)]">{relTime(item.created_at) || 'N/A'}</span>
-      </div>
-      {/* A gap is not pending anybody's decision - the moment to sign passed. */}
-      {isGap ? (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold bg-orange-500/15 text-orange-300 border-orange-500/30">
-          <AlertOctagon className="w-3 h-3" /> Never asked
-        </span>
-      ) : (
-        // "Pending" told the reader nothing about WHO is holding it. A checklist
-        // says which rung it is waiting on, which is the whole point of the
-        // second stage existing.
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold bg-amber-500/15 text-amber-300 border-amber-500/30 whitespace-nowrap">
-          <Clock className="w-3 h-3" /> {item.stageSummary?.text || 'Pending'}
-        </span>
-      )}
-      <ChevronRight className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
-      </button>
-    </div>
-  )
-}
 
 // ─── Detail drawer (workflow engine) ─────────────────────────────────────────────
 
@@ -1041,6 +923,19 @@ export default function Approvals() {
       // but never imply the returned queue is complete in that case.
       cappedSources.push('Workflows')
     }
+    if (dashboardValid && (!country || country === 'All')) {
+      const lifecycleBuckets = [
+        ['overdue', 'overdue_count', 'Overdue workflows'],
+        ['returned', 'returned_count', 'Returned workflows'],
+        ['rejected', 'rejected_count', 'Rejected workflows'],
+        ['recently_approved', 'approved_count', 'Recently approved workflows'],
+      ]
+      for (const [bucket, metric, label] of lifecycleBuckets) {
+        const total = Number(dashR.value?.metrics?.[metric])
+        const loaded = (dashR.value?.buckets?.[bucket] || []).length
+        if (Number.isFinite(total) && total > loaded) cappedSources.push(`${label} (${loaded} of ${total})`)
+      }
+    }
     if (closuresR.status === 'fulfilled' && closuresR.value?.truncated) cappedSources.push('Accident closures')
     if (checklistR.status === 'fulfilled' && checklistR.value?.truncated) cappedSources.push('Checklist sign-offs')
     if (inspectionsR.status === 'fulfilled' && inspectionsR.value?.truncated) cappedSources.push('Inspection sign-offs')
@@ -1185,6 +1080,63 @@ export default function Approvals() {
       .map(i => ({ ...i, source: SOURCE.workflow }))
       .filter(matchWorkflow)
   }, [activeBucket, mergedPending, buckets, matchWorkflow, matchGeneric, signoffGaps, assignedToMeOnly, canActOnItem])
+
+  const columns = useMemo(() => [
+    {
+      id: 'approval',
+      header: 'Approval',
+      accessorFn: row => row.source === SOURCE.workflow ? entityLabelOf(row) : row.title,
+      size: 340,
+      cell: ({ row }) => {
+        const item = row.original
+        const title = item.source === SOURCE.workflow ? entityLabelOf(item) : item.title
+        const subtitle = item.source === SOURCE.workflow
+          ? [item.definition_name || 'Workflow', item.entity_type, item.entity_id && `Ref ${item.entity_id}`].filter(Boolean).join(' · ')
+          : item.subtitle
+        return <div className="min-w-0 py-0.5">
+          <div className="flex items-center gap-2"><SourceBadge source={item.source} /><span className="font-medium text-[var(--text-primary)] truncate">{title}</span></div>
+          <p className="text-xs text-[var(--text-muted)] truncate mt-1">{subtitle || 'Approval request'}</p>
+        </div>
+      },
+    },
+    {
+      id: 'waiting_on',
+      header: 'Waiting on',
+      accessorFn: row => row.source === SOURCE.workflow
+        ? `Waiting for ${row.current_approver_role || currentStepOf(row).step?.approver_role || 'Approver'}`
+        : row.stageSummary?.text || (row.source === SOURCE.signoff_gap ? 'Sign-off missing' : 'Approver'),
+      cell: ({ getValue }) => <span className="text-sm text-[var(--text-secondary)]">{getValue()}</span>,
+    },
+    {
+      id: 'site',
+      header: 'Site',
+      accessorFn: row => [row.site, row.country].filter(Boolean).join(' · ') || '—',
+      cell: ({ getValue }) => <span className="text-sm text-[var(--text-secondary)]">{getValue()}</span>,
+    },
+    {
+      id: 'submitted',
+      header: 'Submitted',
+      accessorFn: row => row.source === SOURCE.workflow
+        ? row.step_started_at || row.started_at
+        : row.created_at,
+      cell: ({ getValue }) => <span className="whitespace-nowrap text-sm text-[var(--text-muted)]">{relTime(getValue()) || '—'}</span>,
+      sortingFn: 'datetime',
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      accessorFn: row => row.source === SOURCE.workflow
+        ? row.status
+        : row.source === SOURCE.signoff_gap ? 'Missed sign-off' : row.stageSummary?.text || 'Pending',
+      cell: ({ row }) => row.original.source === SOURCE.workflow
+        ? <ApprovalStatusBadge status={row.original.status} />
+        : row.original.source === SOURCE.signoff_gap
+          ? <span className="inline-flex rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-1 text-xs font-medium text-orange-300">Never asked</span>
+          : <span className="inline-flex rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-300">{row.original.stageSummary?.text || 'Pending'}</span>,
+    },
+  ], [])
+
+  const rowSelection = useMemo(() => Object.fromEntries([...picked].map(key => [key, true])), [picked])
 
   const activeBucketUnavailable = activeBucket === 'pending'
     ? pendingQueueUnavailable
@@ -1337,7 +1289,7 @@ export default function Approvals() {
           {!loading && incompleteSources.length > 0 && (
             <div role="status" className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-sm text-amber-200">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>Some approval lists reached the 5,000 record safety limit: {incompleteSources.join(', ')}. Only the first 5,000 are available in this view; contact an administrator if the approval you need is missing.</span>
+              <span>Some approval queues are incomplete. This view has only loaded part of: {incompleteSources.join(', ')}.</span>
             </div>
           )}
 
@@ -1360,80 +1312,52 @@ export default function Approvals() {
           {/* Data-intake deep link (never duplicates the intake commit flow) */}
           {!loading && <DataIntakeCard count={intakeCount} onGo={() => navigate('/upload-approvals')} />}
 
-          {activeBucket === 'pending' && (
-            <div className="flex flex-wrap items-center gap-2" aria-label="Pending approval view">
-              <span className="text-xs font-semibold text-[var(--text-secondary)] mr-1">Show:</span>
-              <button
-                type="button"
-                aria-pressed={!assignedToMeOnly}
-                onClick={() => setAssignedToMeOnly(false)}
-                className={`px-3 py-2 rounded-lg border text-xs font-semibold transition-colors ${!assignedToMeOnly ? 'bg-orange-500/15 text-orange-200 border-orange-500/40' : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--input-border)] hover:text-[var(--text-primary)]'}`}
-              >
-                All pending {metrics.total_pending == null ? '·' : `· ${metrics.total_pending}`}
-              </button>
-              <button
-                type="button"
-                aria-pressed={assignedToMeOnly}
-                onClick={() => setAssignedToMeOnly(true)}
-                className={`px-3 py-2 rounded-lg border text-xs font-semibold transition-colors ${assignedToMeOnly ? 'bg-orange-500/15 text-orange-200 border-orange-500/40' : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--input-border)] hover:text-[var(--text-primary)]'}`}
-              >
-                Assigned to me {pendingQueueUnavailable ? '· —' : `· ${myPendingCount}`}
-              </button>
-              <span className="text-[11px] text-[var(--text-muted)]">Sorted oldest first. Open a row to review the record and approval route.</span>
-            </div>
-          )}
-
-          {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-            <div className="relative flex-1 sm:max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-              <input
-                type="text"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search asset, document, site or approval…"
-                className="w-full bg-[var(--surface-2)] border border-[var(--input-border)] rounded-xl pl-9 pr-9 py-2.5 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
-              />
-              {search && (
+          <FilterBar
+            search={search}
+            onSearch={setSearch}
+            placeholder="Search asset, document, site or approval…"
+            searchLabel="Search approvals"
+            selects={[
+              {
+                key: 'approval-source',
+                value: sourceFilter,
+                onChange: setSourceFilter,
+                ariaLabel: 'Filter by approval type',
+                options: [
+                  { value: 'all', label: 'All approval types' },
+                  ...Object.entries(SOURCE_META).map(([value, meta]) => ({ value, label: meta.label })),
+                ],
+              },
+              ...(siteOptions.length ? [{
+                key: 'approval-site',
+                value: siteFilter,
+                onChange: setSiteFilter,
+                ariaLabel: 'Filter by site',
+                options: [{ value: 'all', label: 'All sites' }, ...siteOptions.map(site => ({ value: site, label: site }))],
+              }] : []),
+            ]}
+            onClearAll={hasFilters ? () => {
+              setSearch(''); setSourceFilter('all'); setSiteFilter('all'); setAssignedToMeOnly(false)
+            } : undefined}
+          >
+            <span className="px-1 text-xs text-[var(--text-muted)]">{activeList.length} approvals</span>
+            {activeBucket === 'pending' && (
+              <div className="flex items-center gap-1 rounded-xl border border-[var(--border-dim)] p-1">
                 <button
-                  onClick={() => setSearch('')}
-                  aria-label="Clear search"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)] pointer-events-none" />
-              <select
-                value={sourceFilter}
-                onChange={e => setSourceFilter(e.target.value)}
-                aria-label="Filter by approval type"
-                className="appearance-none bg-[var(--surface-2)] border border-[var(--input-border)] rounded-xl pl-9 pr-8 py-2.5 text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
-              >
-                <option value="all">All approval types</option>
-                <option value={SOURCE.workflow}>Workflow</option>
-                <option value={SOURCE.accident_closure}>Accident closure</option>
-                <option value={SOURCE.checklist}>Checklist sign-off</option>
-                <option value={SOURCE.inspection}>Inspection sign-off</option>
-              </select>
-            </div>
-            {siteOptions.length > 0 && (
-              <div className="relative">
-                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)] pointer-events-none" />
-                <select
-                  value={siteFilter}
-                  onChange={e => setSiteFilter(e.target.value)}
-                  aria-label="Filter by site"
-                  className="appearance-none bg-[var(--surface-2)] border border-[var(--input-border)] rounded-xl pl-9 pr-8 py-2.5 text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
-                >
-                  <option value="all">All sites</option>
-                  {siteOptions.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
+                  type="button"
+                  aria-pressed={!assignedToMeOnly}
+                  onClick={() => setAssignedToMeOnly(false)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${!assignedToMeOnly ? 'bg-orange-500/15 text-orange-200' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                >All pending · {metrics.total_pending == null ? '—' : metrics.total_pending}</button>
+                <button
+                  type="button"
+                  aria-pressed={assignedToMeOnly}
+                  onClick={() => setAssignedToMeOnly(true)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${assignedToMeOnly ? 'bg-orange-500/15 text-orange-200' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                >Assigned to me · {pendingQueueUnavailable ? '—' : myPendingCount}</button>
               </div>
             )}
-          </div>
+          </FilterBar>
 
           {/* Bucket tabs */}
           <div className="flex flex-wrap gap-2 border-b border-[var(--border-dim)] pb-3">
@@ -1461,159 +1385,86 @@ export default function Approvals() {
             })}
           </div>
 
-          {/* Bucket list */}
-          {loading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="h-16 rounded-xl bg-[var(--surface-2)] border border-[var(--border-dim)] animate-pulse" />
-              ))}
-            </div>
-          ) : activeList.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-              <div className="w-16 h-16 rounded-full bg-[var(--surface-2)] border border-[var(--input-border)] flex items-center justify-center">
-                {activeBucket === 'recently_approved'
-                  ? <CheckCircle2 className="w-7 h-7 text-green-500" />
-                  : <Inbox className="w-7 h-7 text-[var(--text-muted)]" />}
-              </div>
-              <div>
-                <p className="text-gray-300 text-sm font-medium">
-                  {activeBucketUnavailable && !hasFilters
-                    ? 'Could not verify this queue'
-                    : hasFilters
-                    ? 'No approvals match your filters'
-                    : `Nothing in ${BUCKETS.find(b => b.key === activeBucket)?.label}`}
-                </p>
-                <p className="text-[var(--text-muted)] text-xs mt-1">
-                  {activeBucketUnavailable && !hasFilters
-                    ? 'At least one approval source did not load. Retry to confirm whether anything is waiting.'
-                    : hasFilters
-                    ? 'Try a different search term, type or site.'
-                    : activeBucket === 'overdue'
-                      ? 'No workflow approvals have breached their SLA. Nicely on top of it.'
-                      : activeBucket === 'pending'
-                        ? 'New approvals appear here as they are raised.'
-                        : activeBucket === 'signoff_gaps'
-                          ? 'Every submission from a template that requires sign-off actually went through '
-                            + 'the approval queue. Nothing slipped past.'
-                          : 'Workflow items will appear here as they move through the engine.'}
-                </p>
-                {hasFilters && (
-                  <button
-                    onClick={() => { setSearch(''); setSourceFilter('all'); setSiteFilter('all'); setAssignedToMeOnly(false) }}
-                    className="mt-3 text-orange-400 text-xs hover:text-orange-300 inline-flex items-center gap-1"
-                  >
-                    <Filter className="w-3 h-3" /> Clear filters
-                  </button>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {activeBucket === 'signoff_gaps' && (
-                <div className="px-3 py-2 rounded-xl border border-orange-500/30 bg-orange-500/[0.06] text-xs text-orange-200">
-                  These checklists came from a template that requires sign-off, but were recorded as not
-                  needing one, so they never appeared in the Pending queue. Open one to record the sign-off
-                  now. An empty Pending tab does not mean nothing needed signing.
-                </div>
-              )}
-              {/* Bulk bar. Only shown when something in view can actually be
-                  decided in bulk, so it never appears above a list of workflow
-                  instances it cannot act on. */}
-              {canActNonWorkflow && bulkableList.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-xl border border-[var(--border-dim)] bg-[var(--surface-2)]">
-                  <button
-                    onClick={() => setPicked(allPicked ? new Set() : new Set(bulkableList.map(keyOf)))}
-                    className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                  >
-                    {allPicked ? <CheckSquare className="w-4 h-4 text-orange-400" /> : <Square className="w-4 h-4" />}
-                    {allPicked ? 'Clear selection' : `Select all ${bulkableList.length}`}
-                  </button>
-                  <span className="text-xs text-[var(--text-muted)]">
-                    {pickedItems.length} selected
-                  </span>
-                  {activeList.length > bulkableList.length && (
-                    <span className="text-[11px] text-[var(--text-muted)]">
-                      {activeList.length - bulkableList.length} item(s) in this list must be opened
-                      individually
-                    </span>
-                  )}
-                  {pickedChecklists.length > 0 && (
-                    <span className="text-[11px] text-amber-400">
-                      A checklist sign-off needs a signature, so open each one to approve it. They can
-                      still be returned together.
-                    </span>
-                  )}
-                  {pickedInspections.length > 0 && (
-                    <span className="text-[11px] text-[var(--text-muted)] inline-flex items-center gap-1">
-                      <PenLine className="w-3 h-3" />
-                      Your saved signature is applied to each inspection you approve here.
-                    </span>
-                  )}
-                  <div className="ml-auto flex items-center gap-2">
-                    <button
-                      onClick={() => runBulk('approve')}
-                      disabled={!pickedItems.length || bulk.busy || pickedChecklists.length > 0}
-                      title={pickedChecklists.length > 0
-                        ? 'A checklist sign-off needs a signature against that sheet, so open each one to approve it.'
-                        : undefined}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-500/15 text-green-300 border border-green-500/30 hover:bg-green-500/25 disabled:opacity-40"
-                    >
-                      {bulk.busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                      Approve selected
-                    </button>
-                    <button
-                      onClick={() => runBulk('reject')}
-                      disabled={!pickedItems.length || bulk.busy}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-500/15 text-red-300 border border-red-500/30 hover:bg-red-500/25 disabled:opacity-40"
-                    >
-                      <Ban className="w-3.5 h-3.5" /> Return selected
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Per-item outcome. Never "12 approved" unless twelve succeeded:
-                  each approval is separately permissioned and separately stateful,
-                  so a partial result is the normal case and has to be readable. */}
-              {bulk.result && (
-                <div className="px-3 py-2 rounded-xl border border-[var(--border-dim)] bg-[var(--surface-1)] text-xs space-y-1">
-                  {bulk.result.note && <p className="text-amber-300">{bulk.result.note}</p>}
-                  {bulk.result.ok?.length > 0 && (
-                    <p className="text-green-300">
-                      {bulk.result.ok.length} item(s) {bulk.result.action === 'approve' ? 'approved' : 'returned'}.
-                    </p>
-                  )}
-                  {bulk.result.failed?.length > 0 && (
-                    <div className="text-red-300">
-                      <p>{bulk.result.failed.length} could not be actioned:</p>
-                      <ul className="mt-0.5 space-y-0.5">
-                        {bulk.result.failed.slice(0, 6).map(f => (
-                          <li key={`${f.item.source}:${f.item.id}`} className="text-[var(--text-muted)]">
-                            <span className="text-[var(--text-secondary)]">{f.item.title}</span> - {f.error}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {activeList.map(row => (
-                row.source === SOURCE.workflow ? (
-                  <InstanceRow key={`wf-${row.id}`} instance={row} bucketKey={activeBucket} onOpen={openRow} />
-                ) : (
-                  <GenericRow
-                    key={`${row.source}-${row.id}`}
-                    item={row}
-                    onOpen={openRow}
-                    selectable={canActNonWorkflow && bulkableList.includes(row)}
-                    picked={picked.has(keyOf(row))}
-                    onTogglePick={togglePick}
-                  />
-                )
-              ))}
+          {activeBucket === 'signoff_gaps' && (
+            <div className="px-3 py-2 rounded-xl border border-orange-500/30 bg-orange-500/[0.06] text-xs text-orange-200">
+              These checklists came from a template that requires sign-off, but were recorded as not needing one, so they never appeared in the Pending queue. Open one to record the sign-off now. An empty Pending tab does not mean nothing needed signing.
             </div>
           )}
+
+          {/* Batch actions remain above the register and operate only on eligible rows. */}
+          {canActNonWorkflow && bulkableList.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-xl border border-[var(--border-dim)] bg-[var(--surface-2)]">
+              <button
+                type="button"
+                onClick={() => setPicked(allPicked ? new Set() : new Set(bulkableList.map(keyOf)))}
+                className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              >
+                {allPicked ? <CheckSquare className="w-4 h-4 text-orange-400" /> : <Square className="w-4 h-4" />}
+                {allPicked ? 'Clear selection' : `Select all ${bulkableList.length}`}
+              </button>
+              <span className="text-xs text-[var(--text-muted)]">{pickedItems.length} selected</span>
+              {activeList.length > bulkableList.length && (
+                <span className="text-[11px] text-[var(--text-muted)]">{activeList.length - bulkableList.length} item(s) must be opened individually.</span>
+              )}
+              {pickedChecklists.length > 0 && (
+                <span className="text-[11px] text-amber-400">Checklist approvals require an individual signature. They can still be returned together.</span>
+              )}
+              {pickedInspections.length > 0 && (
+                <span className="text-[11px] text-[var(--text-muted)] inline-flex items-center gap-1"><PenLine className="w-3 h-3" />Your saved signature will be applied to each selected inspection.</span>
+              )}
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => runBulk('approve')}
+                  disabled={!pickedItems.length || bulk.busy || pickedChecklists.length > 0}
+                  title={pickedChecklists.length > 0 ? 'Checklist approvals require an individual signature.' : undefined}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-500/15 text-green-300 border border-green-500/30 hover:bg-green-500/25 disabled:opacity-40"
+                >
+                  {bulk.busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}Approve selected
+                </button>
+                <button
+                  type="button"
+                  onClick={() => runBulk('reject')}
+                  disabled={!pickedItems.length || bulk.busy}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-500/15 text-red-300 border border-red-500/30 hover:bg-red-500/25 disabled:opacity-40"
+                ><Ban className="w-3.5 h-3.5" />Return selected</button>
+              </div>
+            </div>
+          )}
+
+          {bulk.result && (
+            <div className="px-3 py-2 rounded-xl border border-[var(--border-dim)] bg-[var(--surface-1)] text-xs space-y-1" role="status">
+              {bulk.result.note && <p className="text-amber-300">{bulk.result.note}</p>}
+              {bulk.result.ok?.length > 0 && <p className="text-green-300">{bulk.result.ok.length} item(s) {bulk.result.action === 'approve' ? 'approved' : 'returned'}.</p>}
+              {bulk.result.failed?.length > 0 && <div className="text-red-300"><p>{bulk.result.failed.length} could not be actioned:</p><ul className="mt-0.5 space-y-0.5">{bulk.result.failed.slice(0, 6).map(f => <li key={`${f.item.source}:${f.item.id}`} className="text-[var(--text-muted)]"><span className="text-[var(--text-secondary)]">{f.item.title}</span> - {f.error}</li>)}</ul></div>}
+            </div>
+          )}
+
+          <EnterpriseTable
+            columns={columns}
+            data={activeList}
+            getRowId={row => `${row.source}:${row.id}`}
+            loading={loading}
+            enableGlobalFilter={false}
+            enableColumnFilters={false}
+            enableRowSelection={row => canActNonWorkflow && bulkableList.some(item => keyOf(item) === row.id)}
+            rowSelection={rowSelection}
+            onRowSelectionChange={updater => {
+              const next = typeof updater === 'function' ? updater(rowSelection) : updater
+              setPicked(new Set(Object.keys(next).filter(key => next[key])))
+            }}
+            onRowClick={openRow}
+            viewKey="approval-dashboard"
+            initialPageSize={25}
+            resetPageKey={`${activeBucket}:${sourceFilter}:${siteFilter}:${assignedToMeOnly}:${q}`}
+            emptyMessage={activeBucketUnavailable && !hasFilters
+              ? 'Could not verify this queue. Retry to confirm whether approvals are waiting.'
+              : hasFilters
+                ? 'No approvals match your filters.'
+                : activeBucket === 'signoff_gaps' && !activeBucketUnavailable
+                  ? 'Nothing slipped past. Every required sign-off entered the approval queue.'
+                  : `Nothing in ${BUCKETS.find(bucket => bucket.key === activeBucket)?.label || 'this queue'}.`}
+          />
         </>
       )}
 

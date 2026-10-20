@@ -368,6 +368,17 @@ describe('Unified approval dashboard', () => {
     expect(screen.queryByText('0 pending')).not.toBeInTheDocument()
   })
 
+  it('marks lifecycle queues incomplete when the server count exceeds the rows returned', async () => {
+    workflows.getApprovalDashboard.mockResolvedValueOnce({
+      ...DASHBOARD,
+      metrics: { ...DASHBOARD.metrics, overdue_count: 30, returned_count: 40, rejected_count: 50, approved_count: 60 },
+    })
+    renderPage()
+
+    expect(await screen.findByText(/Overdue workflows \(1 of 30\)/)).toBeInTheDocument()
+    expect(screen.getByText(/approval queues are incomplete/i)).toBeInTheDocument()
+  })
+
   it('does not display a data-intake query failure as zero pending batches', async () => {
     queue.countDataIntakePending.mockRejectedValueOnce(new Error('permission denied'))
     renderPage()

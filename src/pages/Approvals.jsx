@@ -261,7 +261,7 @@ function MetricCard({ icon: Icon, label, value, tone, loading }) {
       {loading ? (
         <div className="mt-2 h-8 w-16 rounded bg-[var(--surface-2)] animate-pulse" />
       ) : (
-        <p className={`mt-1 text-2xl font-bold ${TONE_TEXT[tone] || 'text-[var(--text-primary)]'}`}>{value ?? 0}</p>
+        <p className={`mt-1 text-2xl font-bold ${TONE_TEXT[tone] || 'text-[var(--text-primary)]'}`}>{value == null ? '—' : value}</p>
       )}
     </div>
   )
@@ -279,7 +279,8 @@ function MetricStrip({ metrics, loading }) {
     { key: 'recently_approved', label: 'Recently Approved', tone: 'green', icon: CheckCircle2 },
   ]
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       {cards.map(c => (
         <MetricCard
           key={c.key}
@@ -290,6 +291,18 @@ function MetricStrip({ metrics, loading }) {
           value={metrics?.[c.key]}
         />
       ))}
+      </div>
+      <p className="text-xs font-semibold text-[var(--text-secondary)]">Pending by source</p>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          ['workflow_pending', 'Workflows', GitBranch, 'blue'],
+          ['closures_pending', 'Closures', Car, 'red'],
+          ['checklist_pending', 'Checklists', ClipboardCheck, 'teal'],
+          ['inspection_pending', 'Inspections', ClipboardList, 'amber'],
+        ].map(([key, label, icon, tone]) => (
+          <MetricCard key={key} icon={icon} label={label} tone={tone} loading={loading} value={metrics?.[key]} />
+        ))}
+      </div>
     </div>
   )
 }
@@ -885,7 +898,7 @@ function DrawerShell({ title, badge, subtitle, onClose, busy = false, children }
 // ─── Data-intake deep-link card ──────────────────────────────────────────────────
 
 function DataIntakeCard({ count, onGo }) {
-  if (!count) return null
+  if (count === 0) return null
   return (
     <button
       onClick={onGo}
@@ -896,7 +909,7 @@ function DataIntakeCard({ count, onGo }) {
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-[var(--text-primary)] text-sm font-medium">
-          {count} data-intake {count === 1 ? 'batch' : 'batches'} awaiting approval
+          {count == null ? 'Data-intake approval count unavailable' : `${count} data-intake ${count === 1 ? 'batch' : 'batches'} awaiting approval`}
         </p>
         <p className="text-[var(--text-muted)] text-xs mt-0.5">Reviewed on the Data Intake Approvals screen (staged rows + commit)</p>
       </div>
@@ -956,12 +969,13 @@ export default function Approvals() {
   const [loading, setLoading]   = useState(true)
   const [fatalError, setFatalError] = useState(null)
   const [workflowError, setWorkflowError] = useState(null)
+  const [sourceErrors, setSourceErrors] = useState([])
   const [metricsRaw, setMetricsRaw] = useState(null)
   const [buckets, setBuckets]   = useState(EMPTY_BUCKETS)
   const [closures, setClosures] = useState([])
   const [checklistItems, setChecklistItems] = useState([])
   const [inspectionItems, setInspectionItems] = useState([])
-  const [intakeCount, setIntakeCount] = useState(0)
+  const [intakeCount, setIntakeCount] = useState(null)
   const [actionableIds, setActionableIds] = useState(() => new Set())
   const [updatedAt, setUpdatedAt] = useState(null)
 
@@ -994,9 +1008,18 @@ export default function Approvals() {
     ])
     if (current !== generation.current) return
 
-    // Workflow engine (non-fatal — the other sources still render).
+    // Keep source failures explicit. A failed query is unknown, never an empty
+    // queue; reachable sources remain usable while the warning names the gaps.
     const dashboardValid = dashR.status === 'fulfilled' && dashR.value?.buckets
       && Object.values(dashR.value.buckets).every(Array.isArray)
+    const failedSources = []
+    if (!dashboardValid) failedSources.push('Workflows')
+    if (closuresR.status !== 'fulfilled') failedSources.push('Accident closures')
+    if (checklistR.status !== 'fulfilled') failedSources.push('Checklist sign-offs')
+    if (inspectionsR.status !== 'fulfilled') failedSources.push('Inspection sign-offs')
+    if (gapsR.status !== 'fulfilled') failedSources.push('Missed sign-offs')
+    if (intakeR.status !== 'fulfilled') failedSources.push('Data intake')
+    setSourceErrors(failedSources)
     if (dashboardValid) {
       setBuckets(Object.fromEntries(Object.entries({ ...EMPTY_BUCKETS, ...(dashR.value?.buckets || {}) })
         .map(([key, rows]) => [key, rows.filter(row => matchesCountry(row, country))])))
@@ -1013,12 +1036,12 @@ export default function Approvals() {
     ))
     setClosures(closuresR.status === 'fulfilled' ? (closuresR.value || []).map(toClosureItem) : [])
     setChecklistItems(checklistR.status === 'fulfilled' ? (checklistR.value || []).map(toChecklistItem) : [])
-    setIntakeCount(intakeR.status === 'fulfilled' ? (intakeR.value || 0) : 0)
+    setIntakeCount(intakeR.status === 'fulfilled' ? (intakeR.value || 0) : null)
     setSignoffGaps(gapsR.status === 'fulfilled' ? (gapsR.value || []).map(toSignoffGapItem) : [])
     setInspectionItems(inspectionsR.status === 'fulfilled' ? (inspectionsR.value || []).map(toInspectionItem) : [])
 
     // Fatal only when EVERY primary source failed.
-    const anyOk = [dashR, closuresR, checklistR, inspectionsR, gapsR, intakeR].some(r => r.status === 'fulfilled')
+    const anyOk = [dashR, closuresR, checklistR, inspectionsR].some(r => r.status === 'fulfilled')
     if (!anyOk) setFatalError(toUserMessage(dashR.reason, 'Failed to load approvals'))
 
     setUpdatedAt(new Date())
@@ -1027,7 +1050,7 @@ export default function Approvals() {
 
   useEffect(() => {
     setBuckets(EMPTY_BUCKETS); setMetricsRaw(null); setClosures([]); setChecklistItems([])
-    setInspectionItems([]); setSignoffGaps([]); setIntakeCount(0); setActionableIds(new Set())
+    setInspectionItems([]); setSignoffGaps([]); setIntakeCount(null); setSourceErrors([]); setActionableIds(new Set())
     setSelected(null); setSelectedGeneric(null); setPicked(new Set()); setBulk({ busy: false, result: null })
     setSiteFilter('all'); setUpdatedAt(null)
     load()
@@ -1040,17 +1063,17 @@ export default function Approvals() {
   }, [buckets.pending, closures, checklistItems, inspectionItems])
 
   const counts = useMemo(() => ({
-    workflow_pending:  mergedPending.filter(i => i.source === SOURCE.workflow).length,
-    closures_pending:  closures.length,
-    checklist_pending: mergedPending.filter(i => i.source === SOURCE.checklist).length,
-    inspection_pending: mergedPending.filter(i => i.source === SOURCE.inspection).length,
-    total_pending:     mergedPending.length,
-    overdue:           (buckets.overdue || []).length,
-    returned:          (buckets.returned || []).length,
-    rejected:          (buckets.rejected || []).length,
-    recently_approved: (buckets.recently_approved || []).length,
-    signoff_gaps:      signoffGaps.length,
-  }), [buckets, closures, mergedPending, signoffGaps])
+    workflow_pending:  sourceErrors.includes('Workflows') ? null : mergedPending.filter(i => i.source === SOURCE.workflow).length,
+    closures_pending:  sourceErrors.includes('Accident closures') ? null : closures.length,
+    checklist_pending: sourceErrors.includes('Checklist sign-offs') ? null : mergedPending.filter(i => i.source === SOURCE.checklist).length,
+    inspection_pending: sourceErrors.includes('Inspection sign-offs') ? null : mergedPending.filter(i => i.source === SOURCE.inspection).length,
+    total_pending:     sourceErrors.length ? null : mergedPending.length,
+    overdue:           sourceErrors.includes('Workflows') ? null : (buckets.overdue || []).length,
+    returned:          sourceErrors.includes('Workflows') ? null : (buckets.returned || []).length,
+    rejected:          sourceErrors.includes('Workflows') ? null : (buckets.rejected || []).length,
+    recently_approved: sourceErrors.includes('Workflows') ? null : (buckets.recently_approved || []).length,
+    signoff_gaps:      sourceErrors.includes('Missed sign-offs') ? null : signoffGaps.length,
+  }), [buckets, closures, mergedPending, signoffGaps, sourceErrors])
 
   const metrics = useMemo(() => {
     const m = metricsRaw && typeof metricsRaw === 'object' ? metricsRaw : {}
@@ -1101,6 +1124,12 @@ export default function Approvals() {
       .map(i => ({ ...i, source: SOURCE.workflow }))
       .filter(matchWorkflow)
   }, [activeBucket, mergedPending, buckets, matchWorkflow, matchGeneric, signoffGaps])
+
+  const activeBucketUnavailable = activeBucket === 'pending'
+    ? sourceErrors.some(name => ['Workflows', 'Accident closures', 'Checklist sign-offs', 'Inspection sign-offs'].includes(name))
+    : activeBucket === 'signoff_gaps'
+      ? sourceErrors.includes('Missed sign-offs')
+      : sourceErrors.includes('Workflows')
 
   const isActionable = useCallback(
     (instance) => actionableIds.has(instance?.id)
@@ -1224,7 +1253,7 @@ export default function Approvals() {
         title="Approval Dashboard"
         subtitle="Every pending approval across your organisation: workflows, accident closures, checklist and inspection sign-offs"
         icon={CheckSquare}
-        badge={loading ? undefined : (metrics.total_pending ? `${metrics.total_pending} pending` : undefined)}
+        badge={loading || metrics.total_pending == null ? undefined : `${metrics.total_pending} pending`}
         onRefresh={load}
         refreshing={loading}
         updatedAt={updatedAt}
@@ -1235,6 +1264,14 @@ export default function Approvals() {
       ) : (
         <>
           <MetricStrip metrics={metrics} loading={loading} />
+
+          {!loading && sourceErrors.length > 0 && (
+            <div role="status" className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-sm text-amber-200">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span className="flex-1">Some approval sources could not be checked: {sourceErrors.join(', ')}. Visible rows are from sources that loaded; pending totals and empty states are incomplete.</span>
+              <button onClick={load} className="shrink-0 px-2.5 py-1 text-xs font-semibold text-amber-100 bg-amber-500/15 hover:bg-amber-500/25 rounded-lg border border-amber-500/30">Retry</button>
+            </div>
+          )}
 
           {/* Workflow engine degraded notice (other sources still shown) */}
           {!loading && workflowError && (
@@ -1310,7 +1347,7 @@ export default function Approvals() {
           {/* Bucket tabs */}
           <div className="flex flex-wrap gap-2 border-b border-[var(--border-dim)] pb-3">
             {BUCKETS.map(b => {
-              const count = b.key === 'pending' ? counts.total_pending : (buckets[b.key] || []).length
+              const count = b.key === 'pending' ? counts.total_pending : metrics[b.key]
               const active = activeBucket === b.key
               const Icon = b.icon
               return (
@@ -1326,7 +1363,7 @@ export default function Approvals() {
                   <Icon className="w-3.5 h-3.5" />
                   {b.label}
                   <span className={`ml-0.5 px-1.5 rounded-full text-[10px] ${active ? 'bg-black/30' : 'bg-[var(--surface-3)]'}`}>
-                    {loading ? '·' : count}
+                    {loading ? '·' : count == null ? '—' : count}
                   </span>
                 </button>
               )
@@ -1349,12 +1386,16 @@ export default function Approvals() {
               </div>
               <div>
                 <p className="text-gray-300 text-sm font-medium">
-                  {hasFilters
+                  {activeBucketUnavailable && !hasFilters
+                    ? 'Could not verify this queue'
+                    : hasFilters
                     ? 'No approvals match your filters'
                     : `Nothing in ${BUCKETS.find(b => b.key === activeBucket)?.label}`}
                 </p>
                 <p className="text-[var(--text-muted)] text-xs mt-1">
-                  {hasFilters
+                  {activeBucketUnavailable && !hasFilters
+                    ? 'At least one approval source did not load. Retry to confirm whether anything is waiting.'
+                    : hasFilters
                     ? 'Try a different search term, type or site.'
                     : activeBucket === 'overdue'
                       ? 'No workflow approvals have breached their SLA. Nicely on top of it.'

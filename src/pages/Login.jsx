@@ -416,7 +416,7 @@ export default function Login() {
   const footerLinks = [
     [t('auth.login.footerPrivacy'), '/privacy'],
     [t('auth.login.footerTerms'), '/terms'],
-    [t('auth.login.footerSupport'), '/support'],
+    [t('auth.login.footerSupport'), '/contact'],
     ['Status', '/status'],
   ]
 
@@ -710,7 +710,7 @@ export default function Login() {
                     For security, TyrePulse gives the same response whether or not an account exists. Codes expire after 10 minutes.
                   </p>
                   <p style={{ margin:0, fontSize:11, color:'var(--login-text-faint)', lineHeight:1.5 }}>
-                    Cannot access your verified contact? <Link to="/support" style={{ color:'var(--brand-on-tint)', fontWeight:700, textDecoration:'underline' }}>Contact support</Link>.
+                    Cannot access your verified contact? <Link to="/contact" style={{ color:'var(--brand-on-tint)', fontWeight:700, textDecoration:'underline' }}>Contact support</Link>.
                   </p>
                 </motion.form>
               )}

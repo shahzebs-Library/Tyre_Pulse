@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   toIsoDay, parseDay, monthBounds, yearBounds, defaultWindow, monthLabel,
-  periodName, previousPeriodName, resolveDefaultPeriod, ALL_TIME, MIN_MONTHS,
+  periodName, previousPeriodName, resolveDefaultPeriod, ALL_TIME, MIN_MONTHS, currentMonthToDate,
 } from '../lib/defaultPeriod'
 
 const AUG = new Date(2026, 7, 11)  // 11 Aug 2026, local
@@ -20,6 +20,9 @@ describe('toIsoDay', () => {
 })
 
 describe('bounds', () => {
+  it('returns a local calendar month-to-date window', () => {
+    expect(currentMonthToDate(new Date(2026, 9, 20, 23, 30))).toEqual({ from: '2026-10-01', to: '2026-10-20' })
+  })
   it('monthBounds covers the whole month including the last day', () => {
     expect(monthBounds(AUG)).toEqual({ from: '2026-08-01', to: '2026-08-31' })
     expect(monthBounds(new Date(2024, 1, 10)).to).toBe('2024-02-29')

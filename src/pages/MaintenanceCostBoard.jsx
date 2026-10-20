@@ -40,6 +40,7 @@ import { compareValues } from '../lib/consoleTable'
 import { stylize, ACCENTS } from '../lib/reportColors'
 import { reportFileName, reportDateLabel, exportToExcel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { currentMonthToDate } from '../lib/defaultPeriod'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -47,7 +48,7 @@ ChartJS.register(
 )
 
 const LS_KEY = 'maintenanceBoard.sections.v1'
-const FILTER_DEFAULTS = { q: '', rowType: '', site: '', from: '', to: '' }
+const FILTER_DEFAULTS = Object.freeze({ q: '', rowType: '', site: '', ...currentMonthToDate() })
 const SECTIONS = [
   ['kpis', 'KPIs', Wallet],
   ['spend', 'Spend', PieChart],

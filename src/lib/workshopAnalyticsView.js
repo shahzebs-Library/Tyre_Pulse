@@ -36,9 +36,10 @@ export function daysAgo(n, now) {
   return isoDay(d)
 }
 
-/** Default filter window: the last 14 days to today, all sites. */
+/** Default filter window: current month to date, all sites. */
 export function defaultFilters(now) {
-  return { from: daysAgo(DEFAULT_WINDOW_DAYS, now), to: isoDay(toDate(now)), site: 'All' }
+  const d = toDate(now)
+  return { from: isoDay(new Date(d.getFullYear(), d.getMonth(), 1)), to: isoDay(d), site: 'All' }
 }
 
 /** Quick-range presets. `This month` starts on the local first of the month. */

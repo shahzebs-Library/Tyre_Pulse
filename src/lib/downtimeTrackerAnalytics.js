@@ -21,6 +21,7 @@ export const SEVERITY_HOURS = { Critical: 4, High: 3, Medium: 2, Low: 2 }
 export const SEVERITY_WEIGHT = { Critical: 3, High: 2, Medium: 1, Low: 0.5 }
 export const RISK_LEVELS = ['Critical', 'High', 'Medium', 'Low']
 export const PERIOD_PRESETS = [
+  { label: 'This month', days: 'month' },
   { label: '30d', days: 30 },
   { label: '90d', days: 90 },
   { label: '6m', days: 180 },
@@ -33,6 +34,10 @@ const DAY = 86400000
 const toMs = (now) => (now instanceof Date ? now.getTime() : Number(now))
 
 export function periodStart(days, now) {
+  if (days === 'month') {
+    const d = new Date(toMs(now))
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+  }
   if (!days) return null
   const d = new Date(toMs(now))
   d.setDate(d.getDate() - days)

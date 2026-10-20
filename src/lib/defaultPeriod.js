@@ -44,6 +44,15 @@ export function monthBounds(date) {
   }
 }
 
+/** Current calendar month through today, using the user's local date. */
+export function currentMonthToDate(now) {
+  const d = parseDay(now) || new Date()
+  return {
+    from: toIsoDay(new Date(d.getFullYear(), d.getMonth(), 1)),
+    to: toIsoDay(d),
+  }
+}
+
 /** The whole calendar year containing `date`. */
 export function yearBounds(date) {
   const d = parseDay(date) || new Date()

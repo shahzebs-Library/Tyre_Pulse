@@ -2,7 +2,7 @@ name: Flutter Release - iOS TestFlight
 
 # BUILDS the Flutter app for iPhone/iPad and UPLOADS it to App Store Connect
 # (it then appears under TestFlight and in the version page's Build list).
-# Bundle id comes from the committed ios/ project: com.shahzebrahman.tyrePulse.
+# Bundle id comes from the committed ios/ project: com.shahzebrahman.tyrepulseinspector.
 #
 # workflow_dispatch ONLY, on purpose: every run is a real upload to Apple.
 # Nothing may start it from a push or a PR.
@@ -45,6 +45,11 @@ jobs:
           for n in ISSUER KEYID P8 TEAM; do
             if [ -z "${!n}" ]; then echo "::error::Missing secret for $n. Add APPSTORE_ISSUER_ID, APPSTORE_KEY_ID, APPSTORE_KEY_P8 and APPLE_TEAM_ID."; exit 1; fi
           done
+
+      - name: Guard - bundle id must match the App Store Connect record
+        run: |
+          grep -q "PRODUCT_BUNDLE_IDENTIFIER = com.shahzebrahman.tyrepulseinspector;" ios/Runner.xcodeproj/project.pbxproj \
+            || { echo "::error::ios bundle id is not com.shahzebrahman.tyrepulseinspector (the App Store Connect record)."; exit 1; }
 
       - uses: subosito/flutter-action@v2
         with:

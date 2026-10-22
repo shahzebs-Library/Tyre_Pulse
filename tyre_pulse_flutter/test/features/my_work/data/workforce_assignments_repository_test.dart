@@ -25,8 +25,7 @@ void main() {
     });
   });
 
-  group('transition failures are classified without leaking database text',
-      () {
+  group('transition failures are classified without leaking database text', () {
     test('guard exceptions and check violations are rejections', () {
       expect(
         classifyWorkforceTransitionError(

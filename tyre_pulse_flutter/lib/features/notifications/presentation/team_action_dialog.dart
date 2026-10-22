@@ -48,20 +48,29 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
       if (uid == null || widget.actionId.isEmpty) {
         throw StateError('Sign in to view this assignment.');
       }
-      final Map<String, dynamic>? row = await _db.from('action_items')
-          .select('id,title,status,assigned_user_id,source,due_date,recommended_action,blocked_reason,resolution')
-          .eq('id', widget.actionId).eq('assigned_user_id', uid).maybeSingle();
-      if (row == null) throw StateError('This action is not assigned to your account.');
-      final List<Map<String, dynamic>> evidence = await _db.from('team_action_evidence')
+      final Map<String, dynamic>? row = await _db
+          .from('action_items')
+          .select(
+              'id,title,status,assigned_user_id,source,due_date,recommended_action,blocked_reason,resolution')
+          .eq('id', widget.actionId)
+          .eq('assigned_user_id', uid)
+          .maybeSingle();
+      if (row == null)
+        throw StateError('This action is not assigned to your account.');
+      final List<Map<String, dynamic>> evidence = await _db
+          .from('team_action_evidence')
           .select('id,storage_path,mime_type,created_at')
-          .eq('action_id', widget.actionId).order('created_at', ascending: false).limit(100);
-      if (mounted) setState(() {
-        _evidence = evidence;
-        _action = row;
-        _reason.text = row['blocked_reason']?.toString() ?? '';
-        _resolution.text = row['resolution']?.toString() ?? '';
-        _error = null;
-      });
+          .eq('action_id', widget.actionId)
+          .order('created_at', ascending: false)
+          .limit(100);
+      if (mounted)
+        setState(() {
+          _evidence = evidence;
+          _action = row;
+          _reason.text = row['blocked_reason']?.toString() ?? '';
+          _resolution.text = row['resolution']?.toString() ?? '';
+          _error = null;
+        });
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
@@ -72,14 +81,19 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
   Future<void> _transition(String status) async {
     if (_saving || _action == null) return;
     if (status == 'blocked' && _reason.text.trim().length < 5) {
-      setState(() => _error = 'Enter at least five characters explaining the blockage.');
+      setState(() =>
+          _error = 'Enter at least five characters explaining the blockage.');
       return;
     }
     if (status == 'resolved' && _resolution.text.trim().length < 10) {
-      setState(() => _error = 'Describe the completed work (at least ten characters).');
+      setState(() =>
+          _error = 'Describe the completed work (at least ten characters).');
       return;
     }
-    setState(() { _saving = true; _error = null; });
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
     try {
       await _db.rpc('tp_employee_action_transition', params: <String, dynamic>{
         'p_action_id': widget.actionId,
@@ -97,26 +111,36 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
 
   Future<void> _uploadPhoto() async {
     if (_uploading || _action == null) return;
-    setState(() { _uploading = true; _error = null; });
+    setState(() {
+      _uploading = true;
+      _error = null;
+    });
     try {
       final uid = _db.auth.currentUser?.id;
       if (uid == null) throw StateError('Please sign in.');
       final XFile? photo = await ImagePicker().pickImage(
-        source: ImageSource.gallery, imageQuality: 83, maxWidth: 2200,
+        source: ImageSource.gallery,
+        imageQuality: 83,
+        maxWidth: 2200,
       );
       if (photo == null) return;
       final bytes = await photo.readAsBytes();
       if (bytes.isEmpty || bytes.length > 10485760) {
         throw StateError('Photo must be below 10 MB.');
       }
-      final String path = '$uid/${widget.actionId}/${DateTime.now().microsecondsSinceEpoch}.jpg';
+      final String path =
+          '$uid/${widget.actionId}/${DateTime.now().microsecondsSinceEpoch}.jpg';
       await _db.storage.from('team-action-evidence').uploadBinary(path, bytes,
-        fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: false));
+          fileOptions:
+              const FileOptions(contentType: 'image/jpeg', upsert: false));
       await _db.from('team_action_evidence').insert(<String, dynamic>{
-        'action_id': widget.actionId, 'uploaded_by': uid,
-        'storage_path': path, 'mime_type': 'image/jpeg',
+        'action_id': widget.actionId,
+        'uploaded_by': uid,
+        'storage_path': path,
+        'mime_type': 'image/jpeg',
       });
-      if (mounted) setState(() => _evidenceMessage = 'Photo uploaded securely.');
+      if (mounted)
+        setState(() => _evidenceMessage = 'Photo uploaded securely.');
       await _load();
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
@@ -127,7 +151,10 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
 
   Future<void> _attachDocument() async {
     if (_uploading || _action == null) return;
-    setState(() { _uploading = true; _error = null; });
+    setState(() {
+      _uploading = true;
+      _error = null;
+    });
     String? uploadedPath;
     try {
       final uid = _db.auth.currentUser?.id;
@@ -143,29 +170,36 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
         'png' => 'image/png',
         'webp' => 'image/webp',
         'jpg' || 'jpeg' => 'image/jpeg',
-        _ => throw StateError('Only PDF and JPG, PNG or WEBP files are allowed.'),
+        _ =>
+          throw StateError('Only PDF and JPG, PNG or WEBP files are allowed.'),
       };
       final bytes = await file.readAsBytes();
       if (bytes.isEmpty || bytes.length > 10485760) {
         throw StateError('Evidence must be between 1 byte and 10 MB.');
       }
-      final path = '$uid/${widget.actionId}/${DateTime.now().microsecondsSinceEpoch}.$extension';
+      final path =
+          '$uid/${widget.actionId}/${DateTime.now().microsecondsSinceEpoch}.$extension';
       await _db.storage.from('team-action-evidence').uploadBinary(path, bytes,
-        fileOptions: FileOptions(contentType: mime, upsert: false));
+          fileOptions: FileOptions(contentType: mime, upsert: false));
       uploadedPath = path;
       await _db.from('team_action_evidence').insert(<String, dynamic>{
-        'action_id': widget.actionId, 'uploaded_by': uid,
-        'storage_path': path, 'mime_type': mime,
+        'action_id': widget.actionId,
+        'uploaded_by': uid,
+        'storage_path': path,
+        'mime_type': mime,
       });
       uploadedPath = null;
-      if (mounted) setState(() => _evidenceMessage = 'Evidence securely uploaded.');
+      if (mounted)
+        setState(() => _evidenceMessage = 'Evidence securely uploaded.');
       await _load();
     } catch (error) {
       // A failed metadata insert must not leave an accessible orphan in storage.
       if (uploadedPath != null) {
         try {
-          await _db.storage.from('team-action-evidence').remove(<String>[uploadedPath]);
-        } catch (_) { /* keep original error; server cleanup can reconcile */ }
+          await _db.storage
+              .from('team-action-evidence')
+              .remove(<String>[uploadedPath]);
+        } catch (_) {/* keep original error; server cleanup can reconcile */}
       }
       if (mounted) setState(() => _error = error.toString());
     } finally {
@@ -177,7 +211,9 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
     try {
       final path = item['storage_path']?.toString() ?? '';
       if (path.isEmpty) return;
-      final signed = await _db.storage.from('team-action-evidence').createSignedUrl(path, 60);
+      final signed = await _db.storage
+          .from('team-action-evidence')
+          .createSignedUrl(path, 60);
       final uri = Uri.parse(signed);
       if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
         throw StateError('Could not open the evidence attachment.');
@@ -205,12 +241,16 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               if (_loading) const LinearProgressIndicator(),
-              if (_error != null) Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error))),
+              if (_error != null)
+                Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Text(_error!,
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.error))),
               if (_evidenceMessage != null) Text(_evidenceMessage!),
               if (row != null) ...<Widget>[
-                Text(row['title']?.toString() ?? 'Action', style: Theme.of(context).textTheme.titleMedium),
+                Text(row['title']?.toString() ?? 'Action',
+                    style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
                 Text(row['recommended_action']?.toString() ?? ''),
                 const SizedBox(height: 8),
@@ -218,43 +258,67 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
                 if (open || accepted || working || blocked) ...<Widget>[
                   const SizedBox(height: 12),
                   if (open || accepted || working)
-                    TextField(controller: _reason, maxLength: 4000, maxLines: 2,
-                      decoration: const InputDecoration(labelText: 'Block reason', border: OutlineInputBorder())),
+                    TextField(
+                        controller: _reason,
+                        maxLength: 4000,
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                            labelText: 'Block reason',
+                            border: OutlineInputBorder())),
                   if (working)
-                    TextField(controller: _resolution, maxLength: 4000, maxLines: 3,
-                      decoration: const InputDecoration(labelText: 'Completion details', border: OutlineInputBorder())),
+                    TextField(
+                        controller: _resolution,
+                        maxLength: 4000,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                            labelText: 'Completion details',
+                            border: OutlineInputBorder())),
                 ],
                 if (_evidence.isNotEmpty) ...<Widget>[
                   const SizedBox(height: 12),
                   Text('Evidence (${_evidence.length})'),
                   for (final file in _evidence)
-                    TextButton(onPressed: () => _openEvidence(file),
-                      child: Text(file['storage_path']?.toString().split('/').last ?? 'Evidence')),
+                    TextButton(
+                        onPressed: () => _openEvidence(file),
+                        child: Text(
+                            file['storage_path']?.toString().split('/').last ??
+                                'Evidence')),
                 ],
-                if (status == 'resolved') Text('Resolution: ${row['resolution'] ?? ''}'),
+                if (status == 'resolved')
+                  Text('Resolution: ${row['resolution'] ?? ''}'),
               ],
             ],
           ),
         ),
       ),
       actions: <Widget>[
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close')),
         if (row != null && (open || accepted || working || blocked))
-          TextButton(onPressed: _uploading ? null : _uploadPhoto,
-            child: Text(_uploading ? 'Uploading…' : 'Select photo evidence')),
+          TextButton(
+              onPressed: _uploading ? null : _uploadPhoto,
+              child: Text(_uploading ? 'Uploading…' : 'Select photo evidence')),
         if (row != null && (open || accepted || working || blocked))
-          TextButton(onPressed: _uploading ? null : _attachDocument,
-            child: const Text('Attach PDF or file')),
-        if (open) TextButton(onPressed: _saving ? null : () => _transition('acknowledged'),
-            child: const Text('Accept')),
+          TextButton(
+              onPressed: _uploading ? null : _attachDocument,
+              child: const Text('Attach PDF or file')),
+        if (open)
+          TextButton(
+              onPressed: _saving ? null : () => _transition('acknowledged'),
+              child: const Text('Accept')),
         if (open || accepted || blocked)
-          TextButton(onPressed: _saving ? null : () => _transition('in_progress'),
+          TextButton(
+              onPressed: _saving ? null : () => _transition('in_progress'),
               child: const Text('Start work')),
         if (open || accepted || working)
-          TextButton(onPressed: _saving ? null : () => _transition('blocked'),
+          TextButton(
+              onPressed: _saving ? null : () => _transition('blocked'),
               child: const Text('Blocked')),
-        if (working) FilledButton(onPressed: _saving ? null : () => _transition('resolved'),
-            child: const Text('Complete')),
+        if (working)
+          FilledButton(
+              onPressed: _saving ? null : () => _transition('resolved'),
+              child: const Text('Complete')),
       ],
     );
   }

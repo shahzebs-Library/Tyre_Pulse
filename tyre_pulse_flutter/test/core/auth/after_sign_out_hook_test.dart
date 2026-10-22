@@ -27,7 +27,8 @@ final class _Rig {
           foreground: foreground,
         ),
         afterSignOutProvider.overrideWith(
-          (Ref ref) => hook ??
+          (Ref ref) =>
+              hook ??
               () async {
                 runs++;
               },

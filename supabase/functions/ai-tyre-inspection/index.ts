@@ -246,7 +246,7 @@ async function work(req:Request) {
       let binary = "";
       for (const byte of bytes) binary += String.fromCharCode(byte);
       const base64 = btoa(binary);
-      const prompt = "Inspect this commercial vehicle tyre photograph. Return ONLY a JSON object containing assessable (boolean), reason (string), defects (array of objects with type, description, severity, visibleEvidence), recommendation (string). Note whether the image is clear enough. Distinguish normal visible wear from defects; flag uncertain findings. Do NOT invent groove depth millimetres, remaining tread percentage, remaining kilometres, engine readings, tyre pressure or roadworthiness certification.";
+      const prompt = "Inspect this commercial vehicle tyre photograph. Return a short, valid JSON object with keys assessable (boolean), reason (string), defects (max 4 items each containing type, description, severity, visibleEvidence), recommendation (string). Keep each description under 80 characters. Output no markdown, no commentary. Note whether the image is clear enough. Distinguish normal visible wear from defects; flag uncertain findings. Do NOT invent groove depth millimetres, remaining tread percentage, remaining kilometres, engine readings, tyre pressure or roadworthiness certification.";
       const ctl = new AbortController();
       const timeout = setTimeout(()=>ctl.abort(),25000);
       let provider: any;
@@ -256,7 +256,7 @@ async function work(req:Request) {
             method:"POST",signal:ctl.signal,
             headers:{"x-api-key":providerKey,"anthropic-version":"2023-06-01","content-type":"application/json"},
             body:JSON.stringify({
-              model, max_tokens:650,
+              model, max_tokens:1100,
               messages:[{role:"user",content:[
                 {type:"text",text:prompt},
                 {type:"image",source:{type:"base64",media_type:file.type,data:base64}},
@@ -276,7 +276,7 @@ async function work(req:Request) {
             method:"POST",signal:ctl.signal,
             headers:{"x-goog-api-key":providerKey,"content-type":"application/json"},
             body:JSON.stringify({
-              generationConfig:{responseMimeType:"application/json",maxOutputTokens:650,temperature:0.1},
+              generationConfig:{responseMimeType:"application/json",maxOutputTokens:1100,temperature:0.1},
               contents:[{parts:[{text:prompt},{inline_data:{mime_type:file.type,data:base64}}]}],
             }),
           });

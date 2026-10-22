@@ -30,6 +30,7 @@ import 'package:tyre_pulse/features/my_work/domain/my_work_board.dart';
 import 'package:tyre_pulse/features/my_work/domain/my_work_item.dart';
 import 'package:tyre_pulse/features/my_work/my_work_providers.dart';
 import 'package:tyre_pulse/features/my_work/presentation/my_work_widgets.dart';
+import 'package:tyre_pulse/features/my_work/presentation/workforce_assignments_panel.dart';
 
 abstract final class TasksScreenKeys {
   static Key task(String id) => MyWorkKeys.item(id);
@@ -134,6 +135,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
         ),
         children: <Widget>[
           _Header(access: access, now: now),
+          const WorkforceAssignmentsPanel(),
           const SizedBox(height: TpSpace.lg),
           _TabRow(
             selected: _tab,

@@ -63,6 +63,7 @@ export const NAV_MODULE_KEY = {
   '/position-intelligence': 'position_intelligence',
   '/pressure-intel': 'pressure_intelligence',
   '/inspection-intelligence': 'inspections',
+  '/ai-tyre-inspection': 'inspections',
   '/root-cause': 'root_cause_engine',
   '/predictive-maintenance': 'predictive_maintenance',
   '/vendor-intelligence': 'vendor_intelligence',

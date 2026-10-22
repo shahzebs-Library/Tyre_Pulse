@@ -12,6 +12,9 @@ name: Flutter Release - iOS TestFlight
 #   APPSTORE_KEY_ID     - the API key id.
 #   APPSTORE_KEY_P8     - the full text of the downloaded AuthKey_XXXX.p8 file.
 #   APPLE_TEAM_ID       - the 10 character Apple developer Team ID.
+#   GOOGLE_SERVICE_INFO_PLIST - content of the Firebase iOS app's GoogleService-Info.plist
+#                         (raw XML or base64). Required for push; injected at build time,
+#                         never committed. See docs/message-team-canonical-handoff.md (iOS push / APNs checklist).
 # The key needs the App Manager role so Xcode can create the distribution
 # certificate and provisioning profile (cloud signing) by itself.
 
@@ -22,6 +25,10 @@ on:
         description: "App version shown in the store. Must equal the version on the App Store Connect page (1.0)."
         required: true
         default: "1.0.0"
+      allow_without_push:
+        description: "Build even if the GOOGLE_SERVICE_INFO_PLIST secret is missing (the app will have NO push on iOS)."
+        type: boolean
+        default: false
 
 defaults:
   run:
@@ -62,6 +69,24 @@ jobs:
 
       - name: Generate sources
         run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Inject GoogleService-Info.plist from the secret (never committed)
+        env:
+          GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
+          EXPECTED_BUNDLE_ID: com.shahzebrahman.tyrepulseinspector
+          ALLOW_WITHOUT_PUSH: ${{ inputs.allow_without_push }}
+        run: |
+          set +e
+          gem list -i xcodeproj >/dev/null 2>&1 || sudo gem install xcodeproj --no-document
+          ios/ci/inject_google_service_info.sh
+          rc=$?
+          set -e
+          if [ "$rc" = "3" ] && [ "$ALLOW_WITHOUT_PUSH" = "true" ]; then
+            echo "::warning::Building WITHOUT GoogleService-Info.plist. iOS push will not work in this build."
+          elif [ "$rc" != "0" ]; then
+            echo "::error::Firebase plist injection failed (code $rc). Add the GOOGLE_SERVICE_INFO_PLIST secret or run with allow_without_push."
+            exit 1
+          fi
 
       - name: Write the App Store Connect API key
         env:
@@ -135,6 +160,6 @@ jobs:
             -authenticationKeyID "$KEYID" \
             -authenticationKeyIssuerID "$ISSUER"
 
-      - name: Remove the API key from the runner
+      - name: Remove the API key and Firebase plist from the runner
         if: always()
-        run: rm -rf "$RUNNER_TEMP/keys"
+        run: rm -rf "$RUNNER_TEMP/keys" ios/Runner/GoogleService-Info.plist

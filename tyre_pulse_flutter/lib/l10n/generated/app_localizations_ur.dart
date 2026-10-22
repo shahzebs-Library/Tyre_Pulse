@@ -2843,7 +2843,7 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get notificationInboxCopyCatalog =>
-      'title=اطلاعات~markAll=سب کو پڑھا ہوا کریں~fallbackTitle=اطلاع~emptyTitle=آپ تمام تازہ معلومات دیکھ چکے ہیں~emptyBody=ذمہ داریاں، منظوریوں اور عملی اپ ڈیٹس یہاں نظر آئیں گی۔~loadFailed=اطلاعات لوڈ نہیں ہو سکیں۔ دوبارہ کوشش کے لیے نیچے کھینچیں۔~markFailed=اس اطلاع کو پڑھا ہوا نہیں کیا جا سکا۔~markAllFailed=تمام اطلاعات کو پڑھا ہوا نہیں کیا جا سکا۔~justNow=ابھی~minutesAgo=%count% منٹ پہلے~hoursAgo=%count% گھنٹے پہلے~daysAgo=%count% دن پہلے';
+      'title=اطلاعات~markAll=سب کو پڑھا ہوا کریں~fallbackTitle=اطلاع~emptyTitle=آپ تمام تازہ معلومات دیکھ چکے ہیں~emptyBody=ذمہ داریاں، منظوریوں اور عملی اپ ڈیٹس یہاں نظر آئیں گی۔~loadFailed=اطلاعات لوڈ نہیں ہو سکیں۔ دوبارہ کوشش کے لیے نیچے کھینچیں۔~markFailed=اس اطلاع کو پڑھا ہوا نہیں کیا جا سکا۔~markAllFailed=تمام اطلاعات کو پڑھا ہوا نہیں کیا جا سکا۔~justNow=ابھی~minutesAgo=%count% منٹ پہلے~hoursAgo=%count% گھنٹے پہلے~daysAgo=%count% دن پہلے~messageUnavailable=یہ پیغام اب دستیاب نہیں یا آپ کے اکاؤنٹ کو نہیں بھیجا گیا تھا۔';
 
   @override
   String get reportIssueCopyCatalog =>

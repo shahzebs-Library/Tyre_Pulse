@@ -55,6 +55,21 @@ export async function listTeamReplies(broadcastId) {
   return data || []
 }
 
+/**
+ * Push queue / provider-result rows for one broadcast (manager-only via RLS; an
+ * unauthorised caller simply gets no rows). Reflects provider acceptance, never OS delivery.
+ */
+export async function listBroadcastPushQueue(broadcastId) {
+  if (!broadcastId) return []
+  const { data, error } = await supabase.from('workflow_notifications')
+    .select('status,attempts,result,last_error,created_at,delivered_at')
+    .eq('event_type', 'broadcast.sent')
+    .eq('payload->>entity_id', broadcastId)
+    .limit(50)
+  if (error) throw toServiceError(error)
+  return data || []
+}
+
 export async function replyToTeamMessage(broadcastId, body) {
   const value = String(body || '').trim()
   if (!broadcastId || !value || value.length > 4000) throw new Error('Reply must be 1 to 4,000 characters.')

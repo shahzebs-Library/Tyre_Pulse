@@ -2829,7 +2829,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get notificationInboxCopyCatalog =>
-      'title=Notifications~markAll=Mark all read~fallbackTitle=Notification~emptyTitle=You\'re all caught up~emptyBody=Assignments, approvals and operational updates will appear here.~loadFailed=Could not load notifications. Pull down to retry.~markFailed=Could not mark this notification as read.~markAllFailed=Could not mark all notifications as read.~justNow=Just now~minutesAgo=%count%m ago~hoursAgo=%count%h ago~daysAgo=%count%d ago';
+      'title=Notifications~markAll=Mark all read~fallbackTitle=Notification~emptyTitle=You\'re all caught up~emptyBody=Assignments, approvals and operational updates will appear here.~loadFailed=Could not load notifications. Pull down to retry.~markFailed=Could not mark this notification as read.~markAllFailed=Could not mark all notifications as read.~justNow=Just now~minutesAgo=%count%m ago~hoursAgo=%count%h ago~daysAgo=%count%d ago~messageUnavailable=This message is no longer available or was not sent to your account.';
 
   @override
   String get reportIssueCopyCatalog =>

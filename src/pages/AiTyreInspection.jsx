@@ -47,13 +47,16 @@ function HistoricInspectionBackfill() {
     setRunning(true);setError('');setResult(null)
     try{
       const dates=saudiRange(from,through)
-      let page=0,scanned=0,eligible=0,created=0
-      while (page<25) {
-        const res=await backfillAiInspectionRange({...dates,page})
+      let page=0,scanned=0,eligible=0,created=0,skipped=0
+      while (page<60) {
+        let res
+        try{res=await backfillAiInspectionRange({...dates,page})}
+        catch(e){await new Promise(r=>setTimeout(r,1500));res=await backfillAiInspectionRange({...dates,page})}
         scanned+=Number(res.scanned||0)
         eligible+=Number(res.eligible||0)
         created+=Number(res.created||0)
-        setResult({scanned,eligible,created,more:res.next_page!=null})
+        skipped+=Number(res.skipped_existing||0)
+        setResult({scanned,eligible,created,skipped,more:res.next_page!=null})
         if(res.next_page==null)break
         page=res.next_page
       }
@@ -70,7 +73,7 @@ function HistoricInspectionBackfill() {
     </form>
     {error&&<p role="alert" className="text-sm text-red-500 mt-3">{error}</p>}
     {result&&<div role="status" className="mt-3 rounded-lg border border-[var(--border-dim)] p-3 text-sm">
-      Inspections checked: <strong>{result.scanned}</strong> · Eligible photos: <strong>{result.eligible}</strong> · Newly queued: <strong>{result.created}</strong>
+      Inspections checked: <strong>{result.scanned}</strong> · Eligible photos: <strong>{result.eligible}</strong> · Already analysed or queued (skipped): <strong>{result.skipped}</strong> · Newly queued: <strong>{result.created}</strong>
       {result.more&&<p className="text-xs text-amber-500 mt-1">More records remain for this range; select a shorter range for a complete batch.</p>}
     </div>}
   </Card>

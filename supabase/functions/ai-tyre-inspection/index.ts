@@ -150,7 +150,8 @@ async function backfill(req: Request, payload: Json) {
      end-start>32*86400000||!Number.isInteger(page)||page<0||page>100){
     return fail("Invalid date range or page",400);
   }
-  const PAGE_SIZE=100;
+  const PAGE_SIZE=50;
+  const dryRun=payload.dry_run===true;
   const {data:inspections,error}=await client.from("inspections")
     .select("id,organisation_id,tyre_conditions,created_at")
     .eq("organisation_id",profile.organisation_id)
@@ -160,24 +161,43 @@ async function backfill(req: Request, payload: Json) {
     .order("id",{ascending:true})
     .range(page*PAGE_SIZE,(page+1)*PAGE_SIZE-1);
   if(error)return fail("Could not read historical inspections",500);
-  let eligible=0,created=0;
-  for(const inspection of inspections||[]){
-    const refs=eligibleEvidence(inspection);
-    eligible+=refs.length;
-    for(const item of refs){
-      const hash=await fingerprint(item.ref);
+  const list=inspections||[];
+  // Only photographs with NO job yet are candidates: one prefetch instead of a write per photo.
+  const existing=new Set<string>();
+  if(list.length){
+    const {data:jobs,error:jobsError}=await admin.from("ai_tyre_inspection_jobs")
+      .select("inspection_id,tyre_position,photo_ref")
+      .eq("organisation_id",profile.organisation_id)
+      .in("inspection_id",list.map(i=>i.id));
+    if(jobsError)return fail("Could not read existing AI jobs",500);
+    (jobs||[]).forEach(j=>existing.add(`${j.inspection_id}|${j.tyre_position}|${j.photo_ref}`));
+  }
+  let eligible=0,skippedExisting=0;
+  const pending:{organisation_id:string;inspection_id:string;tyre_position:string;photo_ref:string}[]=[];
+  for(const inspection of list){
+    for(const item of eligibleEvidence(inspection)){
+      eligible++;
+      if(existing.has(`${inspection.id}|${item.position}|${item.ref}`)){skippedExisting++;continue;}
+      pending.push({organisation_id:inspection.organisation_id,inspection_id:inspection.id,
+        tyre_position:item.position,photo_ref:item.ref});
+    }
+  }
+  let created=0;
+  if(!dryRun&&pending.length){
+    const hashes=await Promise.all(pending.map(x=>fingerprint(x.photo_ref)));
+    const rows=pending.map((x,i)=>({...x,photo_sha256:hashes[i],status:"pending"}));
+    for(let i=0;i<rows.length;i+=200){
       const {data:inserted,error:queueError}=await admin.from("ai_tyre_inspection_jobs")
-        .upsert({organisation_id:inspection.organisation_id,
-          inspection_id:inspection.id,tyre_position:item.position,
-          photo_ref:item.ref,photo_sha256:hash,status:"pending"},
+        .upsert(rows.slice(i,i+200),
           {onConflict:"organisation_id,inspection_id,tyre_position,photo_sha256",ignoreDuplicates:true})
         .select("id");
       if(queueError)return fail("Historical queue could not be completed",500);
-      if(inserted?.length)created++;
+      created+=inserted?.length||0;
     }
   }
-  return response({scanned:(inspections||[]).length,eligible,created,
-    page,next_page:(inspections||[]).length===PAGE_SIZE?page+1:null});
+  return response({scanned:list.length,eligible,skipped_existing:skippedExisting,
+    pending:pending.length,created,dry_run:dryRun,
+    page,next_page:list.length===PAGE_SIZE?page+1:null});
 }
 async function review(req:Request, payload:Json) {
   const { profile, user, client } = await authenticated(req);

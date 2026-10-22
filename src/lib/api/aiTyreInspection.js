@@ -121,7 +121,11 @@ export async function backfillAiInspectionRange({from,to,page=0}) {
   const {data,error}=await supabase.functions.invoke('ai-tyre-inspection',{
     body:{action:'backfill',from,to,page},
   })
-  if(error)throw error
+  if(error){
+    // FunctionsFetchError = request never reached the function (CORS / not deployed).
+    if(error.name==='FunctionsFetchError')throw new Error('The AI service could not be reached. Reload the page; if it persists the function needs redeploying.')
+    throw error
+  }
   return data
 }
 

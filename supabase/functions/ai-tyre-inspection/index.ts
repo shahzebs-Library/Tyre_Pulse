@@ -4,9 +4,25 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
 type Json = Record<string, unknown>;
+const ALLOWED_ORIGINS = [
+  ...(Deno.env.get("AI_ALLOWED_ORIGIN") ?? "").split(",").map(x => x.trim()).filter(Boolean),
+  "https://app.tyrepulse.app",
+  "https://tyrepulse.app",
+  "https://www.tyrepulse.app",
+  "http://localhost:5173",
+  "http://localhost:5174",
+];
+// Echo the caller origin only when allow-listed; a fixed single origin made the
+// browser block every call from tyrepulse.app / www as "Failed to send a request".
+let currentOrigin = ALLOWED_ORIGINS[0] ?? "https://app.tyrepulse.app";
+const originFor = (req: Request) => {
+  const o = req.headers.get("origin") ?? "";
+  return ALLOWED_ORIGINS.includes(o) ? o : (ALLOWED_ORIGINS[0] ?? "https://app.tyrepulse.app");
+};
 const cors = {
-  "access-control-allow-origin": Deno.env.get("AI_ALLOWED_ORIGIN") ?? "https://app.tyrepulse.app",
-  "access-control-allow-headers": "authorization, apikey, content-type, x-worker-secret",
+  get "access-control-allow-origin"() { return currentOrigin; },
+  "vary": "Origin",
+  "access-control-allow-headers": "authorization, apikey, content-type, x-client-info, x-worker-secret",
   "access-control-allow-methods": "POST, OPTIONS",
 };
 const response = (payload: Json, status = 200) =>
@@ -349,6 +365,7 @@ async function work(req:Request) {
   return response({ processed, claimed:(items||[]).length });
 }
 Deno.serve(async req => {
+  currentOrigin = originFor(req);
   if (req.method === "OPTIONS") return new Response(null,{headers:cors});
   if (req.method !== "POST") return fail("Method not allowed",405);
   try {

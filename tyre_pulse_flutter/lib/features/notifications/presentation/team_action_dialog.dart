@@ -1,6 +1,7 @@
 library;
 
 import 'dart:async';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -20,6 +21,8 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
   Map<String, dynamic>? _action;
   bool _loading = true;
   bool _saving = false;
+  bool _uploading = false;
+  String? _evidenceMessage;
   String? _error;
   SupabaseClient get _db => Supabase.instance.client;
 
@@ -85,6 +88,35 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
     }
   }
 
+  Future<void> _uploadPhoto() async {
+    if (_uploading || _action == null) return;
+    setState(() { _uploading = true; _error = null; });
+    try {
+      final uid = _db.auth.currentUser?.id;
+      if (uid == null) throw StateError('Please sign in.');
+      final XFile? photo = await ImagePicker().pickImage(
+        source: ImageSource.camera, imageQuality: 83, maxWidth: 2200,
+      );
+      if (photo == null) return;
+      final bytes = await photo.readAsBytes();
+      if (bytes.isEmpty || bytes.length > 10485760) {
+        throw StateError('Photo must be below 10 MB.');
+      }
+      final String path = '$uid/${widget.actionId}/${DateTime.now().microsecondsSinceEpoch}.jpg';
+      await _db.storage.from('team-action-evidence').uploadBinary(path, bytes,
+        fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: false));
+      await _db.from('team_action_evidence').insert(<String, dynamic>{
+        'action_id': widget.actionId, 'uploaded_by': uid,
+        'storage_path': path, 'mime_type': 'image/jpeg',
+      });
+      if (mounted) setState(() => _evidenceMessage = 'Photo uploaded securely.');
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final row = _action;
@@ -106,6 +138,7 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
               if (_error != null) Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error))),
+              if (_evidenceMessage != null) Text(_evidenceMessage!),
               if (row != null) ...<Widget>[
                 Text(row['title']?.toString() ?? 'Action', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
@@ -129,6 +162,9 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
       ),
       actions: <Widget>[
         TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
+        if (row != null && (open || accepted || working || blocked))
+          TextButton(onPressed: _uploading ? null : _uploadPhoto,
+            child: Text(_uploading ? 'Uploading…' : 'Attach photo evidence')),
         if (open) TextButton(onPressed: _saving ? null : () => _transition('acknowledged'),
             child: const Text('Accept')),
         if (open || accepted || blocked)

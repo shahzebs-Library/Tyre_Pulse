@@ -78,6 +78,6 @@ export function toUserMessage(err: unknown, fallback: string = GENERIC): string 
 }
 
 /** Dev-only detail for logging (never rendered to users in production). */
-export function errorDetail(err: AnyErr): string {
+export function errorDetail(err: unknown): string {
   return raw(err) || codeOf(err) || 'unknown'
 }

@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Illustration from '../components/illustrations/Illustration'
-import { ensureActionItem } from '../lib/api/actionCenter'
+import { ensureActionItem, listActionItems } from '../lib/api/actionCenter'
 import { supabase } from '../lib/api/_client'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -100,6 +100,9 @@ export default function Broadcast() {
   const [taskError, setTaskError] = useState('')
   const [assignees, setAssignees] = useState([])
   const [assigneeError, setAssigneeError] = useState('')
+  const [followUps, setFollowUps] = useState([])
+  const [followUpsError, setFollowUpsError] = useState('')
+  const [followUpsLoading, setFollowUpsLoading] = useState(false)
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }))
 
@@ -124,6 +127,16 @@ export default function Broadcast() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  const loadFollowUps = useCallback(async () => {
+    setFollowUpsLoading(true); setFollowUpsError('')
+    try {
+      const rows = await listActionItems({ country: activeCountry, limit: 2000 })
+      setFollowUps(rows.filter((row) => String(row.source || '').startsWith('broadcast:')))
+    } catch (e) { setFollowUpsError(toUserMessage(e, 'Could not load follow-up tasks.')) }
+    finally { setFollowUpsLoading(false) }
+  }, [activeCountry])
+  useEffect(() => { loadFollowUps() }, [loadFollowUps])
 
   useEffect(() => {
     let mounted = true
@@ -200,6 +213,7 @@ export default function Broadcast() {
       })
       if (!item?.id) throw new Error('Task was not confirmed by Action Center.')
       setTaskResult(item)
+      await loadFollowUps()
     } catch (e) { setTaskError(toUserMessage(e, 'Could not create the follow-up task.')) }
     finally { setTaskSaving(false) }
   }
@@ -354,6 +368,36 @@ export default function Broadcast() {
           </button>
         </div>
       </div>
+
+      <section className="card space-y-3" aria-label="Message follow-up tasks">
+        <div className="flex items-center justify-between gap-3">
+          <div><h3 className="text-sm font-semibold text-[var(--text-primary)]">Message follow-up tasks</h3>
+            <p className="text-xs text-[var(--text-secondary)]">Actions created from sent communications. Progress and completion are managed in Action Center.</p></div>
+          <button type="button" className="btn-ghost text-xs" onClick={loadFollowUps} disabled={followUpsLoading}><RefreshCcw size={13} /> Refresh</button>
+        </div>
+        {followUpsError && <p role="alert" className="text-sm text-red-400">{followUpsError}</p>}
+        {followUpsLoading && <p role="status" className="text-xs text-[var(--text-muted)]">Loading tasks…</p>}
+        {!followUpsLoading && !followUpsError && !followUps.length && <p className="text-xs text-[var(--text-muted)]">No follow-up tasks found in the current country scope.</p>}
+        {followUps.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-xs text-left">
+              <thead><tr className="border-b border-[var(--border-subtle)] text-[var(--text-muted)]">
+                <th className="px-2 py-2">Task</th><th className="px-2 py-2">Assigned to</th><th className="px-2 py-2">Due</th><th className="px-2 py-2">Status</th><th className="px-2 py-2">Action</th>
+              </tr></thead>
+              <tbody>{followUps.slice(0, 50).map((task) => (
+                <tr key={task.id} className="border-b border-[var(--border-subtle)]">
+                  <td className="px-2 py-3 font-medium text-[var(--text-primary)]">{task.title}</td>
+                  <td className="px-2 py-3 text-[var(--text-secondary)]">{task.assigned_to || 'Unassigned'}</td>
+                  <td className="px-2 py-3 text-[var(--text-secondary)]">{task.due_date || 'Not set'}</td>
+                  <td className="px-2 py-3 text-[var(--text-secondary)]">{String(task.status || 'open').replaceAll('_', ' ')}</td>
+                  <td className="px-2 py-3"><a className="text-[var(--accent)] underline" href="/action-center">Open</a></td>
+                </tr>
+              ))}</tbody>
+            </table>
+            {followUps.length > 50 && <p className="text-xs text-[var(--text-muted)] p-2">Showing the latest 50 tasks. Open Action Center for the complete register.</p>}
+          </div>
+        )}
+      </section>
 
       <HistorySection
         history={history}

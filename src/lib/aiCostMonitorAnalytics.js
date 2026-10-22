@@ -33,7 +33,7 @@ export function rowTokens(r) {
 
 /** Cost of a row in USD; failed calls carry no spend. */
 export function rowCost(r, pricing = {}) {
-  return isSuccessRow(r) ? estimateRowCost(r, pricing) : 0
+  return isSuccessRow(r) || r?.cost_usd != null ? estimateRowCost(r, pricing) : 0
 }
 
 export function formatUSD(n) {
@@ -77,7 +77,7 @@ export function filterLogs(rows = [], { feature = 'all', model = 'all', status =
 function spendBySite(rows, pricing) {
   const map = new Map()
   for (const r of rows) {
-    if (!isSuccessRow(r)) continue
+    if (!isSuccessRow(r) && r.cost_usd == null) continue
     const key = r.site || 'No site'
     const s = map.get(key) || { site: key, cost: 0, calls: 0, tokens: 0 }
     s.cost += estimateRowCost(r, pricing)
@@ -95,6 +95,9 @@ function spendBySite(rows, pricing) {
  */
 export function buildAiCostReport(rows = [], { pricing = {}, days = 30, now = Date.now() } = {}) {
   const u = summarizeUsage(rows, pricing)
+  const failedBillable = rows.filter(r=>!isSuccessRow(r) && r.cost_usd != null)
+  const failedChargedCost = failedBillable.reduce((sum,r)=>sum+rowCost(r,pricing),0)
+  const failedChargedTokens = failedBillable.reduce((sum,r)=>sum+rowTokens(r),0)
   const total = rows.length
 
   // Spend trend: second half of the window vs the first half.
@@ -116,10 +119,12 @@ export function buildAiCostReport(rows = [], { pricing = {}, days = 30, now = Da
   const bySite = spendBySite(rows, pricing)
 
   return {
-    totalCost: u.totalCalls > 0 ? u.totalCost : (total > 0 ? 0 : null),
-    totalTokens: u.totalTokens,
-    promptTokens: u.promptTokens,
-    completionTokens: u.completionTokens,
+    totalCost: total ? u.totalCost + failedChargedCost : null,
+    failedChargedCost,
+    failedChargedTokens,
+    totalTokens: u.totalTokens + failedChargedTokens,
+    promptTokens: u.promptTokens + failedBillable.reduce((sum,r)=>sum+num(r.prompt_tokens),0),
+    completionTokens: u.completionTokens + failedBillable.reduce((sum,r)=>sum+num(r.completion_tokens),0),
     totalRequests: total,
     successCalls: u.totalCalls,
     failedCalls: u.failedCalls,
@@ -158,7 +163,7 @@ export function logExportRows(rows = [], pricing = {}) {
     site: r.site || 'N/A',
     prompt_tokens: num(r.prompt_tokens),
     completion_tokens: num(r.completion_tokens),
-    cost: isSuccessRow(r) ? Number(estimateRowCost(r, pricing).toFixed(6)) : 'Not billed',
+    cost: r.cost_usd != null || isSuccessRow(r) ? Number(rowCost(r, pricing).toFixed(6)) : 'Unknown',
     error: r.error || '',
   }))
 }

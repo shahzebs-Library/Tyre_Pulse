@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Illustration from '../components/illustrations/Illustration'
+import MessageEngagement from '../components/team/MessageEngagement'
 import { ensureActionItem, listActionItems } from '../lib/api/actionCenter'
 import { supabase } from '../lib/api/_client'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
@@ -398,6 +399,8 @@ export default function Broadcast() {
           </div>
         )}
       </section>
+
+      <MessageEngagement history={history} />
 
       <HistorySection
         history={history}

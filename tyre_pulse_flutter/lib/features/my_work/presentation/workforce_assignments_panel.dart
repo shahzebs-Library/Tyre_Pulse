@@ -13,7 +13,7 @@ final workforceAssignmentsRepositoryProvider =
 });
 
 final workforceAssignmentsProvider =
-    FutureProvider.autoDispose<List<WorkforceAssignment>>((ref) async {
+    FutureProvider.autoDispose<WorkforceAssignmentSnapshot>((ref) async {
   return ref.read(workforceAssignmentsRepositoryProvider).listMine();
 });
 
@@ -47,10 +47,16 @@ class WorkforceAssignmentsPanel extends ConsumerWidget {
                   ),
                 ],
               ),
-              data: (items) => items.isEmpty
+              data: (snapshot) => snapshot.items.isEmpty
                   ? const Text('No company assignments recorded.')
                   : Column(
-                      children: items.map((item) {
+                      children: [
+                        if (snapshot.offline)
+                          const Padding(
+                            padding: EdgeInsets.only(bottom: 8),
+                            child: Text('Offline cached assignments. Status changes require a connection.'),
+                          ),
+                        ...snapshot.items.map((item) {
                         final next = item.nextAction;
                         return ListTile(
                           title: Text(item.title),
@@ -58,7 +64,7 @@ class WorkforceAssignmentsPanel extends ConsumerWidget {
                             '${item.site ?? 'Site unspecified'} · '
                             '${item.status} · ${item.priority}',
                           ),
-                          trailing: next == null
+                          trailing: next == null || snapshot.offline
                               ? null
                               : TextButton(
                                   onPressed: () async {
@@ -90,7 +96,8 @@ class WorkforceAssignmentsPanel extends ConsumerWidget {
                                   ),
                                 ),
                         );
-                      }).toList(),
+                      }),
+                      ],
                     ),
             ),
           ],

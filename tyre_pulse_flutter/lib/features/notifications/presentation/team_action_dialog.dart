@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Action Center task assigned through Message the Team.
 /// Every mutation runs through the employee-scoped backend RPC.
@@ -128,11 +129,9 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
       final path = item['storage_path']?.toString() ?? '';
       if (path.isEmpty) return;
       final signed = await _db.storage.from('team-action-evidence').createSignedUrl(path, 60);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Secure evidence link (60 seconds): $signed'),
-          duration: const Duration(seconds: 10),
-        ));
+      final uri = Uri.parse(signed);
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        throw StateError('Could not open the evidence attachment.');
       }
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());

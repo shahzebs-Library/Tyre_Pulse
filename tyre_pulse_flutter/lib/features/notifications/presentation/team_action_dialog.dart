@@ -2,6 +2,7 @@ library;
 
 import 'dart:async';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -124,6 +125,54 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
     }
   }
 
+  Future<void> _attachDocument() async {
+    if (_uploading || _action == null) return;
+    setState(() { _uploading = true; _error = null; });
+    String? uploadedPath;
+    try {
+      final uid = _db.auth.currentUser?.id;
+      if (uid == null) throw StateError('Please sign in.');
+      final PlatformFile? file = await FilePicker.pickFile(
+        type: FileType.custom,
+        allowedExtensions: <String>['pdf', 'jpg', 'jpeg', 'png', 'webp'],
+      );
+      if (file == null) return;
+      final extension = (file.extension ?? '').toLowerCase();
+      final mime = switch (extension) {
+        'pdf' => 'application/pdf',
+        'png' => 'image/png',
+        'webp' => 'image/webp',
+        'jpg' || 'jpeg' => 'image/jpeg',
+        _ => throw StateError('Only PDF and JPG, PNG or WEBP files are allowed.'),
+      };
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty || bytes.length > 10485760) {
+        throw StateError('Evidence must be between 1 byte and 10 MB.');
+      }
+      final path = '$uid/${widget.actionId}/${DateTime.now().microsecondsSinceEpoch}.$extension';
+      await _db.storage.from('team-action-evidence').uploadBinary(path, bytes,
+        fileOptions: FileOptions(contentType: mime, upsert: false));
+      uploadedPath = path;
+      await _db.from('team_action_evidence').insert(<String, dynamic>{
+        'action_id': widget.actionId, 'uploaded_by': uid,
+        'storage_path': path, 'mime_type': mime,
+      });
+      uploadedPath = null;
+      if (mounted) setState(() => _evidenceMessage = 'Evidence securely uploaded.');
+      await _load();
+    } catch (error) {
+      // A failed metadata insert must not leave an accessible orphan in storage.
+      if (uploadedPath != null) {
+        try {
+          await _db.storage.from('team-action-evidence').remove(<String>[uploadedPath]);
+        } catch (_) { /* keep original error; server cleanup can reconcile */ }
+      }
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
   Future<void> _openEvidence(Map<String, dynamic> item) async {
     try {
       final path = item['storage_path']?.toString() ?? '';
@@ -193,6 +242,9 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
         if (row != null && (open || accepted || working || blocked))
           TextButton(onPressed: _uploading ? null : _uploadPhoto,
             child: Text(_uploading ? 'Uploading…' : 'Select photo evidence')),
+        if (row != null && (open || accepted || working || blocked))
+          TextButton(onPressed: _uploading ? null : _attachDocument,
+            child: const Text('Attach PDF or file')),
         if (open) TextButton(onPressed: _saving ? null : () => _transition('acknowledged'),
             child: const Text('Accept')),
         if (open || accepted || blocked)

@@ -287,7 +287,7 @@ async function work(req:Request) {
       const output = providerName === "anthropic"
         ? provider?.content?.filter((part:Json)=>part.type==="text").map((part:Json)=>part.text).join("")
         : provider?.candidates?.[0]?.content?.parts?.[0]?.text;
-      const cleanOutput = String(output || "").replace(/^\`\`\`(?:json)?\\s*/i,"").replace(/\\s*\`\`\`$/,"");
+      const cleanOutput = String(output || "").replace(/^`{3}(?:json)?\s*/i,"").replace(/\s*`{3}$/,"");
       const analysis = normalizeAnalysis(JSON.parse(cleanOutput));
       const usage = providerName === "anthropic" ? provider?.usage : provider?.usageMetadata;
       const inputTokens = providerName === "anthropic" ? Number(usage?.input_tokens) : Number(usage?.promptTokenCount);

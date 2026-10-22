@@ -18,6 +18,7 @@ import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/notifications/domain/app_notification.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
 import 'package:tyre_pulse/features/notifications/presentation/notifications_copy.dart';
+import 'package:tyre_pulse/features/notifications/presentation/team_action_dialog.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({required this.backFallback, super.key});
@@ -100,6 +101,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   }
 
   void _open(AppNotification row, NotificationsCopy copy) {
+    if (row.type == 'action_assigned' && row.entityId != null) {
+      if (!_isRead(row)) {
+        setState(() => _optimisticallyRead.add(row.id));
+        unawaited(_persistRead(row.id, copy));
+      }
+      unawaited(showDialog<void>(context: context,
+        builder: (BuildContext context) => TeamActionDialog(actionId: row.entityId!)));
+      return;
+    }
     if (row.type == 'broadcast' && row.entityId != null) {
       if (!_isRead(row)) {
         setState(() => _optimisticallyRead.add(row.id));

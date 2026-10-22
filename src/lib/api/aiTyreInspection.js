@@ -11,6 +11,7 @@ const JOB_FIELDS = [
   'id','inspection_id','tyre_position','photo_ref','status','analysis',
   'cost_usd','input_tokens','output_tokens','total_tokens','provider',
   'model_version','created_at','updated_at','attempts','error_message',
+  'review_status','reviewer_note','reviewed_at',
 ].join(',')
 const MEASUREMENT_FIELDS = [
   'id','inspection_id','tyre_position','tyre_serial','original_mm',

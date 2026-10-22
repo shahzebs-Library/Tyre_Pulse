@@ -10,6 +10,19 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class WorkforceAssignment {
+  factory WorkforceAssignment.fromJson(Map<String, dynamic> json) {
+    return WorkforceAssignment(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      status: json['status'] as String,
+      priority: json['priority'] as String? ?? 'normal',
+      site: json['site'] as String?,
+      instructions: json['instructions'] as String?,
+      dueAt: json['due_at'] == null
+          ? null
+          : DateTime.parse(json['due_at'] as String),
+    );
+  }
   const WorkforceAssignment({
     required this.id,
     required this.title,
@@ -27,20 +40,6 @@ class WorkforceAssignment {
   final String? site;
   final String? instructions;
   final DateTime? dueAt;
-
-  factory WorkforceAssignment.fromJson(Map<String, dynamic> json) {
-    return WorkforceAssignment(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      status: json['status'] as String,
-      priority: json['priority'] as String? ?? 'normal',
-      site: json['site'] as String?,
-      instructions: json['instructions'] as String?,
-      dueAt: json['due_at'] == null
-          ? null
-          : DateTime.parse(json['due_at'] as String),
-    );
-  }
 
   String? get nextAction => switch (status) {
         'assigned' => 'acknowledged',
@@ -81,9 +80,11 @@ class WorkforceAssignmentsRepository {
       await storage.write(key: cacheKey, value: jsonEncode(rows));
       return WorkforceAssignmentSnapshot(
         items: (rows as List<dynamic>)
-            .map((row) => WorkforceAssignment.fromJson(
-                  Map<String, dynamic>.from(row as Map),
-                ))
+            .map(
+              (row) => WorkforceAssignment.fromJson(
+                Map<String, dynamic>.from(row as Map),
+              ),
+            )
             .toList(growable: false),
         offline: false,
       );
@@ -93,9 +94,11 @@ class WorkforceAssignmentsRepository {
       final decoded = jsonDecode(saved) as List<dynamic>;
       return WorkforceAssignmentSnapshot(
         items: decoded
-            .map((row) => WorkforceAssignment.fromJson(
-                  Map<String, dynamic>.from(row as Map),
-                ))
+            .map(
+              (row) => WorkforceAssignment.fromJson(
+                Map<String, dynamic>.from(row as Map),
+              ),
+            )
             .toList(growable: false),
         offline: true,
       );

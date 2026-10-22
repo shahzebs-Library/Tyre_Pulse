@@ -54,49 +54,54 @@ class WorkforceAssignmentsPanel extends ConsumerWidget {
                         if (snapshot.offline)
                           const Padding(
                             padding: EdgeInsets.only(bottom: 8),
-                            child: Text('Offline cached assignments. Status changes require a connection.'),
+                            child: Text(
+                              'Offline cached assignments. Status changes require a connection.',
+                            ),
                           ),
                         ...snapshot.items.map((item) {
-                        final next = item.nextAction;
-                        return ListTile(
-                          title: Text(item.title),
-                          subtitle: Text(
-                            '${item.site ?? 'Site unspecified'} · '
-                            '${item.status} · ${item.priority}',
-                          ),
-                          trailing: next == null || snapshot.offline
-                              ? null
-                              : TextButton(
-                                  onPressed: () async {
-                                    try {
-                                      await ref
-                                          .read(workforceAssignmentsRepositoryProvider)
-                                          .advance(item);
-                                      ref.invalidate(
-                                        workforceAssignmentsProvider,
-                                      );
-                                    } catch (_) {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text(
-                                              'Update not confirmed. Reconnect and refresh.',
-                                            ),
-                                          ),
+                          final next = item.nextAction;
+                          return ListTile(
+                            title: Text(item.title),
+                            subtitle: Text(
+                              '${item.site ?? 'Site unspecified'} · '
+                              '${item.status} · ${item.priority}',
+                            ),
+                            trailing: next == null || snapshot.offline
+                                ? null
+                                : TextButton(
+                                    onPressed: () async {
+                                      try {
+                                        await ref
+                                            .read(
+                                              workforceAssignmentsRepositoryProvider,
+                                            )
+                                            .advance(item);
+                                        ref.invalidate(
+                                          workforceAssignmentsProvider,
                                         );
+                                      } catch (_) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'Update not confirmed. Reconnect and refresh.',
+                                              ),
+                                            ),
+                                          );
+                                        }
                                       }
-                                    }
-                                  },
-                                  child: Text(
-                                    next == 'acknowledged'
-                                        ? 'Acknowledge'
-                                        : next == 'submitted'
-                                            ? 'Submit'
-                                            : 'Start',
+                                    },
+                                    child: Text(
+                                      next == 'acknowledged'
+                                          ? 'Acknowledge'
+                                          : next == 'submitted'
+                                              ? 'Submit'
+                                              : 'Start',
+                                    ),
                                   ),
-                                ),
-                        );
-                      }),
+                          );
+                        }),
                       ],
                     ),
             ),

@@ -12,7 +12,9 @@
 /// to the boot and login redirects.
 library;
 
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/app_router.dart';
@@ -75,13 +77,36 @@ class _PushBindingState extends ConsumerState<PushBinding> {
   }
 
   void _open(PushMessage message) {
+    unawaited(_logDeviceEvent(message, 'opened_by_user'));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ref.read(routerProvider).push(message.destination.location);
+      final type = message.target.entityType ?? message.target.type ?? '';
+      final id = message.target.id;
+      if (id != null && (type == 'broadcast' || type == 'action_item' || type == 'broadcast.sent' || type == 'action.assigned')) {
+        final uri = Uri(path: '/notifications', queryParameters: <String, String>{'target_type': type, 'target_id': id});
+        ref.read(routerProvider).push(uri.toString());
+      } else {
+        ref.read(routerProvider).push(message.destination.location);
+      }
     });
   }
 
+  Future<void> _logDeviceEvent(PushMessage message, String event) async {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    final fcmId = message.messageId;
+    if (uid == null || fcmId == null || fcmId.isEmpty) return;
+    final kind = message.target.entityType ?? message.target.type;
+    try {
+      await Supabase.instance.client.from('team_push_device_events').upsert(<String, dynamic>{
+        'user_id': uid, 'fcm_message_id': fcmId, 'event_type': event,
+        'entity_type': kind,
+        'entity_id': message.target.id,
+      }, onConflict: 'user_id,fcm_message_id,event_type');
+    } catch (_) { /* app delivery must not be blocked by telemetry */ }
+  }
+
   void _showBanner(PushMessage message) {
+    unawaited(_logDeviceEvent(message, 'received_foreground'));
     if (!mounted) return;
     final ScaffoldMessengerState? messenger =
         ScaffoldMessenger.maybeOf(context);

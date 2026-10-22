@@ -150,6 +150,8 @@ export default function Broadcast() {
   const [siteOptions, setSiteOptions] = useState([])
   const [siteRecords, setSiteRecords] = useState([])
   const [audience, setAudience] = useState(null)
+  const [audienceLoading, setAudienceLoading] = useState(true)
+  const [audienceError, setAudienceError] = useState('')
   const [history, setHistory] = useState([])
   const [historyError, setHistoryError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -220,13 +222,24 @@ export default function Broadcast() {
     return () => { mounted = false }
   }, [])
 
-  // Re-count whenever the audience changes, so the number on screen always
-  // describes the audience currently selected rather than a previous one.
+  // A selection invalidates the previous audience immediately. A stale count
+  // must never authorize sending to a different set of recipients.
   useEffect(() => {
     let alive = true
+    setAudience(null)
+    setAudienceError('')
+    setAudienceLoading(true)
     previewAudience({ roles, countries, sites })
-      .then((a) => { if (alive) setAudience(a) })
-      .catch(() => { if (alive) setAudience(null) })
+      .then((response) => {
+        if (!alive) return
+        if (!response?.ok) {
+          setAudienceError('Recipient preview is unavailable. Check audience permissions or retry.')
+        } else setAudience(response)
+      })
+      .catch((e) => {
+        if (alive) setAudienceError(toUserMessage(e, 'Could not verify the selected recipients.'))
+      })
+      .finally(() => { if (alive) setAudienceLoading(false) })
     return () => { alive = false }
   }, [roles, countries, sites])
 
@@ -237,7 +250,7 @@ export default function Broadcast() {
   }, [siteOptions, siteRecords, countries, sites])
 
   const problem = useMemo(() => validateBroadcast(form), [form])
-  const canSend = !problem && !sending && (audience?.total ?? 0) > 0
+  const canSend = !problem && !sending && !audienceLoading && !audienceError && audience?.ok && (audience?.total ?? 0) > 0
 
   async function send() {
     setSending(true); setError(''); setResult(null); setTaskResult(null); setTaskError('')
@@ -432,10 +445,10 @@ export default function Broadcast() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border-subtle)] pt-3">
           <div className="flex flex-wrap items-center gap-4 text-sm">
             <span className="flex items-center gap-1.5 text-[var(--text-secondary)]">
-              <Users size={14} /> {audience ? audience.total : '-'} in the app
+              <Users size={14} /> {audienceLoading ? 'Checking…' : audience ? audience.total : '—'} recipients in the app
             </span>
             <span className="flex items-center gap-1.5 text-[var(--text-secondary)]">
-              <Smartphone size={14} /> {audience ? audience.with_app : '-'} with a phone
+              <Smartphone size={14} /> {audienceLoading ? 'Checking…' : audience ? audience.with_app : '—'} signed-in phones
             </span>
           </div>
           <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
@@ -445,6 +458,8 @@ export default function Broadcast() {
           </label>
         </div>
 
+        {audienceError && <p role="alert" className="text-xs text-red-400">{audienceError}</p>}
+        {!audienceLoading && audience?.total === 0 && <p role="status" className="text-xs text-amber-400">No active recipients match these filters. Adjust the audience before sending.</p>}
         {audience && (
           <p className="text-[11px] text-[var(--text-tertiary)]">{reachNote(audience)}</p>
         )}

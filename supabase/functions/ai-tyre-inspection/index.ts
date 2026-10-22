@@ -207,8 +207,22 @@ async function work(req:Request) {
       const provider = await completion.json();
       const output = provider?.candidates?.[0]?.content?.parts?.[0]?.text;
       const analysis = normalizeAnalysis(JSON.parse(String(output || "{}")));
+      const usage = provider?.usageMetadata || {};
+      const inputTokens = Number(usage.promptTokenCount);
+      const outputTokens = Number(usage.candidatesTokenCount);
+      const hasUsage = Number.isFinite(inputTokens) && Number.isFinite(outputTokens);
+      const inputRate = Number(Deno.env.get("AI_INPUT_USD_PER_MILLION"));
+      const outputRate = Number(Deno.env.get("AI_OUTPUT_USD_PER_MILLION"));
+      const hasRates = Number.isFinite(inputRate) && Number.isFinite(outputRate) && inputRate > 0 && outputRate > 0;
+      const estimatedCost = hasUsage && hasRates ? Number(((inputTokens*inputRate+outputTokens*outputRate)/1e6).toFixed(6)) : null;
       await admin.from("ai_tyre_inspection_jobs").update({
         status:"completed",analysis,model_version:model,
+        provider:"google", input_tokens:hasUsage?inputTokens:null,
+        output_tokens:hasUsage?outputTokens:null,
+        total_tokens:hasUsage?Number(usage.totalTokenCount ?? inputTokens+outputTokens):null,
+        pricing_usd_per_million_input:hasRates?inputRate:null,
+        pricing_usd_per_million_output:hasRates?outputRate:null,
+        cost_usd:estimatedCost,billed_at:hasUsage?new Date().toISOString():null,
         updated_at:new Date().toISOString(),error_message:null,
       }).eq("id",job.id).eq("status","processing");
       processed++;

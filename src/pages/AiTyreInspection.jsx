@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ClipboardCheck, RefreshCw, ShieldAlert, SearchCheck, Ruler, X, Image as ImageIcon, ClipboardList, AlertCircle, FileText } from 'lucide-react'
 import { resolveStorageUrl } from '../lib/storageRefs'
-import { inspectablePhotoRefs, summarizeEvidence, normalizePositionConditions, measurementReading } from '../lib/aiTyreInspectionDomain'
+import { inspectablePhotoRefs, summarizeEvidence, normalizePositionConditions, normalizePhotographs, measurementReading } from '../lib/aiTyreInspectionDomain'
 import { buildInspectionAiAppendix, INSPECTION_AI_PRINT_STYLES } from '../lib/aiTyreInspectionReport'
 import PageHeader from '../components/ui/PageHeader'
 import Card from '../components/ui/Card'
@@ -10,7 +10,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { toUserMessage } from '../lib/safeError'
 import { listInspectionsForPage } from '../lib/api/inspections'
 import { calculateTread, conditionRequiresAnalysis } from '../lib/aiTyreInspection'
-import { readInspectionMeasurements, recordDepthMeasurement, readInspectionAnalysis, enqueueInspectionPhotos, reviewAiFinding, summarizeInspectionAiCosts, backfillAiInspectionRange } from '../lib/api/aiTyreInspection'
+import { readInspectionMeasurements, recordDepthMeasurement, readInspectionAnalysis, enqueueInspectionPhotos, reviewAiFinding, summarizeInspectionAiCosts, backfillAiInspectionRange, screenInspectionPhotos } from '../lib/api/aiTyreInspection'
 
 /** Calendar day selection in Saudi Arabia; always preserve local midnight. */
 function saudiDay(value) {
@@ -154,6 +154,13 @@ export default function AiTyreInspection() {
 
 function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
   const evidence = useMemo(() => summarizeEvidence(inspection), [inspection])
+  const allPhotosCount = useMemo(() => Object.values(normalizePositionConditions(inspection)).reduce(
+    (sum, entry) => sum + (entry && typeof entry==='object' ? [
+      ...normalizePhotographs(entry.photo_url),
+      ...normalizePhotographs(entry.photo),
+      ...normalizePhotographs(entry.photos),
+      ...normalizePhotographs(entry.photo_refs),
+    ].length : 0), 0), [inspection])
   const conditions = useMemo(() => normalizePositionConditions(inspection), [inspection])
   const readings = useMemo(() => Object.entries(conditions).map(([position, data]) => ({
     position, condition:data?.condition || 'Not recorded',
@@ -175,6 +182,17 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
   const [analysisLoading,setAnalysisLoading]=useState(false)
   const refreshAnalysis=useCallback(async()=>{try{setAnalysisJobs(await readInspectionAnalysis([inspection.id]));setAnalysisError('')}catch(e){setAnalysisError(toUserMessage(e,'Could not load AI results'))}},[inspection.id])
   useEffect(()=>{refreshAnalysis()},[refreshAnalysis])
+  const screenAll=async()=>{
+    setAnalysisLoading(true)
+    setAnalysisError('')
+    try {
+      await screenInspectionPhotos(inspection.id)
+      await refreshAnalysis()
+      onTab('analysis')
+    } catch(e) {
+      setAnalysisError(toUserMessage(e,'Could not start visual screening'))
+    } finally { setAnalysisLoading(false) }
+  }
   const enqueue=async()=>{setAnalysisLoading(true);try{await enqueueInspectionPhotos(inspection.id);await refreshAnalysis()}catch(e){setAnalysisError(toUserMessage(e,'Could not queue photos'))}finally{setAnalysisLoading(false)}}
   const decide=async(job,decision)=>{setAnalysisLoading(true);try{await reviewAiFinding(job.id,decision,'Reviewed by supervisor');await refreshAnalysis()}catch(e){setAnalysisError(toUserMessage(e,'Could not save review'))}finally{setAnalysisLoading(false)}}
   const [measurementError,setMeasurementError]=useState('')
@@ -293,8 +311,8 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
         {activeTab==='analysis' && <>
           <Card>
             <div className="flex justify-between items-start gap-4 flex-wrap">
-              <div><h3 className="font-semibold">AI photo review</h3><p className="text-xs text-[var(--text-muted)] mt-1">The server analyzes eligible defect photos. Findings require qualified human review.</p></div>
-              <div className="flex gap-2"><button className="btn-secondary" onClick={refreshAnalysis} disabled={analysisLoading}>Refresh</button><button className="btn-primary" onClick={enqueue} disabled={analysisLoading||!evidence.photos.length}>{analysisLoading?'Working…':'Queue defect photos'}</button></div>
+              <div><h3 className="font-semibold">AI photo review</h3><p className="text-xs text-[var(--text-muted)] mt-1">The background worker can inspect visible damage or, on demand, screen all photographed tyres without a gauge. It identifies patterns, not exact tread-depth millimetres. Findings require qualified review.</p></div>
+              <div className="flex gap-2"><button className="btn-secondary" onClick={refreshAnalysis} disabled={analysisLoading}>Refresh</button><button className="btn-primary" onClick={enqueue} disabled={analysisLoading||!evidence.photos.length}>{analysisLoading?'Working…':'Queue defect photos'}</button><button className="btn-secondary" type="button" onClick={screenAll} disabled={analysisLoading||!allPhotosCount}>{analysisLoading?'Working…':'Screen all photographed tyres'}</button></div>
             </div>
             {analysisError && <p role="alert" className="text-red-500 text-sm mt-3">{analysisError}</p>}
           </Card>

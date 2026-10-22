@@ -5,7 +5,7 @@ Production mobile application: Flutter only. Web reporting: existing Message the
 
 ## Implemented in this branch
 1. Per-user mobile-observed FCM events in `team_push_device_events`. The signed-in Flutter client records `received_foreground` when an FCM message reaches the active app and `opened_by_user` on notification tap. Conflict key makes repeats idempotent. RLS restricts insertion to self, and broadcast sender may see events only for their own broadcast. Manager engagement panel displays distinct employee counts for observed foreground and opened events. **Not an OS delivery guarantee**: FCM HTTP v1 acceptance, a background notification shown by OS, and an actual tap are three different stages. Foreground/opened event uploads are queued locally (bounded to 100 per signed-in user) when offline and retried after sign-in or the next observed push. This does not constitute OS-level background delivery proof.
-2. Task evidence remains in the private Supabase bucket `team-action-evidence` with employee/action-aware RLS and 10MB MIME allowlist. Flutter now lists uploaded evidence and obtains 60-second signed URLs to open attachments via `url_launcher`. Existing Flutter image picker uploads compressed gallery JPG images. **PDF and arbitrary document picking is not yet implemented**, because the current Flutter dependency set does not include a cross-platform document-picker plugin. This branch does not misrepresent that as complete.
+2. Task evidence remains in the private Supabase bucket `team-action-evidence` with employee/action-aware RLS and 10MB MIME allowlist. Flutter now lists uploaded evidence and obtains 60-second signed URLs to open attachments via `url_launcher`. Flutter gallery JPEG upload is preserved. Native file selection for PDF/JPG/PNG/WEBP is now implemented with the pinned `file_picker: 13.1.0` dependency, size/type validation, private upload, metadata registration, and best-effort cleanup on metadata failure. Signed viewing URLs expire after 60 seconds. **Flutter pubspec.lock regeneration and builds are still required** because the dependency was added through the GitHub connector without a locally installed Flutter SDK.
 3. Flutter push tap for `broadcast.sent` or `action.assigned` now carries target type/UUID as route query parameters to the signed-in notifications inbox. The inbox matches an authorized notification row, then opens the exact broadcast acknowledgment dialog or assigned-task dialog. Broadcast send SQL now includes `entity_id` in the push payload. Unknown/unmatched notifications still show the inbox instead of an unauthorized/blank record.
 4. Added `team_message_push_routing_test.dart` to cover type and entity ID resolution to the inbox. Full CI suite and device tests have not been run by this connector-only session.
 
@@ -13,6 +13,7 @@ Production mobile application: Flutter only. Web reporting: existing Message the
 - `team_push_device_events` (audit table + RLS)
 - `broadcast_push_target_entity_id` (broadcast sender RPC includes entity_id)
 - `team_broadcast_sender_push_event_visibility` (sender read policy)
+- `team_action_orphan_storage_cleanup` (cleanup policy)
 All migration SQL files are included under `supabase/migrations/` in this branch.
 
 ## Distinguish status accurately

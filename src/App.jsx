@@ -655,7 +655,7 @@ function MainApp() {
                       <Route path="/broadcast" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']} moduleKey="broadcast"><Broadcast /></RoleRoute></Safe>} />
                       <Route path="/rca"         element={<Safe><ModuleRoute moduleKey="rca"><RcaRecords /></ModuleRoute></Safe>} />
                       <Route path="/inspections" element={<Safe><ModuleRoute moduleKey="inspections"><Inspections /></ModuleRoute></Safe>} />
-                      <Route path="/ai-tyre-inspection" element={<Safe><ModuleRoute moduleKey="inspections"><AiTyreInspection /></ModuleRoute></Safe>} />
+                      <Route path="/ai-tyre-inspection" element={<Safe><RoleRoute allowed={['Admin','Manager','Director','Maintenance Supervisor','Tyre Man','Tyre Data Collector']} moduleKey="inspections"><ModuleRoute moduleKey="inspections"><AiTyreInspection /></ModuleRoute></RoleRoute></Safe>} />
 <Route path="/alerts"      element={<Safe><ModuleRoute moduleKey="alerts"><Alerts /></ModuleRoute></Safe>} />
                       <Route path="/alert-thresholds" element={<Safe><ModuleRoute moduleKey="alerts"><AlertThresholds /></ModuleRoute></Safe>} />
                       <Route path="/fleet-master"         element={<Safe><ModuleRoute moduleKey="fleet_master"><FleetMaster /></ModuleRoute></Safe>} />

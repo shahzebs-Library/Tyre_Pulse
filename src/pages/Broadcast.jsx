@@ -45,6 +45,14 @@ const fmtDate = (d) => {
 }
 
 /** Searchable, compact multi-select. Empty selection explicitly means the full audience. */
+const followUpColumns = [
+  { id: 'title', header: 'Task', accessorFn: (t) => t.title, cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.title}</span> },
+  { id: 'assigned', header: 'Assigned to', accessorFn: (t) => t.assigned_to || 'Unassigned' },
+  { id: 'due', header: 'Due', accessorFn: (t) => t.due_date || 'Not set' },
+  { id: 'status', header: 'Status', accessorFn: (t) => String(t.status || 'open').replaceAll('_', ' ') },
+  { id: 'action', header: 'Action', enableSorting: false, cell: () => <a className="text-[var(--accent)] underline" href="/action-center">Open</a> },
+]
+
 function AudienceSelect({ label, options, value, onChange, allLabel, hint }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -483,21 +491,18 @@ export default function Broadcast() {
         {followUpsLoading && <p role="status" className="text-xs text-[var(--text-muted)]">Loading tasks…</p>}
         {!followUpsLoading && !followUpsError && !followUps.length && <p className="text-xs text-[var(--text-muted)]">No follow-up tasks found in the current country scope.</p>}
         {followUps.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] text-xs text-left">
-              <thead><tr className="border-b border-[var(--border-subtle)] text-[var(--text-muted)]">
-                <th className="px-2 py-2">Task</th><th className="px-2 py-2">Assigned to</th><th className="px-2 py-2">Due</th><th className="px-2 py-2">Status</th><th className="px-2 py-2">Action</th>
-              </tr></thead>
-              <tbody>{followUps.slice(0, 50).map((task) => (
-                <tr key={task.id} className="border-b border-[var(--border-subtle)]">
-                  <td className="px-2 py-3 font-medium text-[var(--text-primary)]">{task.title}</td>
-                  <td className="px-2 py-3 text-[var(--text-secondary)]">{task.assigned_to || 'Unassigned'}</td>
-                  <td className="px-2 py-3 text-[var(--text-secondary)]">{task.due_date || 'Not set'}</td>
-                  <td className="px-2 py-3 text-[var(--text-secondary)]">{String(task.status || 'open').replaceAll('_', ' ')}</td>
-                  <td className="px-2 py-3"><a className="text-[var(--accent)] underline" href="/action-center">Open</a></td>
-                </tr>
-              ))}</tbody>
-            </table>
+          <div>
+            <EnterpriseTable
+              columns={followUpColumns}
+              data={followUps.slice(0, 50)}
+              getRowId={(task) => String(task.id)}
+              enableGlobalFilter={false}
+              enableColumnFilters={false}
+              enableColumnVisibility={false}
+              enableExport={false}
+              initialPageSize={25}
+              emptyMessage="No follow-up tasks"
+            />
             {followUps.length > 50 && <p className="text-xs text-[var(--text-muted)] p-2">Showing the latest 50 tasks. Open Action Center for the complete register.</p>}
           </div>
         )}

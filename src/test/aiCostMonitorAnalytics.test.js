@@ -12,10 +12,16 @@ const pricing = { 'claude-haiku-4-5': { input: 1, output: 5 } }
 const rows = [
   { id: 1, model: 'claude-haiku-4-5', feature: 'chat', prompt_tokens: 1000000, completion_tokens: 0, cost_usd: null, site: 'NHC', status: 'success', created_at: '2026-09-25T10:00:00Z' },
   { id: 2, model: 'claude-haiku-4-5', feature: 'report', prompt_tokens: 0, completion_tokens: 0, cost_usd: 2, site: 'JED', status: 'success', created_at: '2026-09-05T10:00:00Z' },
-  { id: 3, model: 'claude-haiku-4-5', feature: 'chat', prompt_tokens: 500, completion_tokens: 0, cost_usd: 9, site: 'NHC', status: 'error', error: 'upstream 500', created_at: '2026-09-26T10:00:00Z' },
+  { id: 3, model: 'claude-haiku-4-5', feature: 'chat', prompt_tokens: 500, completion_tokens: 0, cost_usd: null, site: 'NHC', status: 'error', error: 'upstream 500', created_at: '2026-09-26T10:00:00Z' },
 ]
 
 describe('aiCostMonitorAnalytics', () => {
+  it('bills a failed call only when the provider recorded a charge', () => {
+    const failedBilled = { id: 4, model: 'claude-haiku-4-5', feature: 'chat', prompt_tokens: 500, completion_tokens: 0, cost_usd: 9, status: 'error', created_at: '2026-09-26T10:00:00Z' }
+    expect(rowCost(failedBilled, pricing)).toBe(9)
+    expect(buildAiCostReport([...rows, failedBilled], { pricing, days: 30, now: NOW }).failedChargedCost).toBe(9)
+  })
+
   it('prices successful calls and never bills a failed one', () => {
     expect(rowCost(rows[0], pricing)).toBe(1)
     expect(rowCost(rows[1], pricing)).toBe(2)
@@ -61,7 +67,7 @@ describe('aiCostMonitorAnalytics', () => {
     expect(formatTokens(2_000_000)).toBe('2.0M')
     expect(formatUSD(0.001)).toBe('$0.0010')
     const out = logExportRows(rows, pricing)
-    expect(out[2].cost).toBe('Not billed')
+    expect(out[2].cost).toBe('Unknown')
     expect(out[0].cost).toBe(1)
     expect(out[0].created_at).toBe('2026-09-25 10:00')
   })

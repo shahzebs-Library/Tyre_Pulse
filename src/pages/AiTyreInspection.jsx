@@ -7,6 +7,7 @@ import { buildInspectionAiAppendix, INSPECTION_AI_PRINT_STYLES } from '../lib/ai
 import PageHeader from '../components/ui/PageHeader'
 import Card from '../components/ui/Card'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import SideDrawer from '../components/ui/SideDrawer'
 import { useSettings } from '../contexts/SettingsContext'
 import { toUserMessage } from '../lib/safeError'
 import { listInspectionsForPage } from '../lib/api/inspections'
@@ -343,16 +344,22 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
       reportFileName('AI Tyre Inspection '+(inspection.asset_no||'vehicle'),inspection.inspection_date||'inspection',reportDateLabel()))
   }
 
-  return <div className="fixed inset-0 z-[55] bg-black/60 flex justify-end" role="presentation" onClick={onClose}>
-    <div className="bg-[var(--panel)] text-[var(--text-primary)] h-full w-full max-w-4xl overflow-y-auto shadow-2xl" role="dialog" aria-modal="true" aria-label="AI tyre inspection details" onClick={e=>e.stopPropagation()}>
+  const readingColumns = useMemo(() => [
+    { id: 'position', header: 'Position', accessorFn: (i) => positionLabel(i.position), cell: ({ row }) => <span className="font-semibold">{positionLabel(row.original.position)}</span> },
+    { id: 'condition', header: 'Condition', accessorFn: (i) => i.condition },
+    { id: 'measured', header: 'Measured depth', accessorFn: (i) => (i.calculation.valid ? i.calculation.reading.worstMm + ' mm' : 'Not measured') },
+    { id: 'usable', header: 'Remaining usable', accessorFn: (i) => (i.calculation.valid ? i.calculation.reading.remainingMm + ' mm' : '-') },
+    { id: 'pct', header: 'Remaining %', accessorFn: (i) => (i.calculation.valid ? i.calculation.reading.remainingPercent + '%' : '-') },
+    { id: 'verification', header: 'Verification', accessorFn: (i) => (i.calculation.valid ? 'Recorded measurement' : 'Measurement required') },
+  ], [inspection]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return <SideDrawer open onClose={onClose} size="xl" title={inspection.asset_no || 'Unknown vehicle'} closeLabel="Close details" bodyClassName="p-0">
+    <div className="text-[var(--text-primary)]">
       <div className="sticky top-0 z-10 bg-[var(--panel)] border-b border-[var(--border-dim)] px-5 py-4">
-        <div className="flex justify-between gap-4 items-start">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]"><ClipboardCheck size={14}/> Inspection detail</div>
-            <h2 className="text-xl font-bold mt-1">{inspection.asset_no || 'Unknown vehicle'}</h2><button className="btn-secondary mt-3 inline-flex items-center gap-2 text-sm" type="button" onClick={exportDetailedExcel}><Download size={15}/> Download full AI inspection Excel</button>
-            <p className="text-xs text-[var(--text-secondary)] mt-1">{inspection.site || 'Site not recorded'} · {inspection.inspection_date || 'Date not recorded'} · {inspection.inspector || 'Inspector not recorded'}</p>
-          </div>
-          <button className="btn-secondary p-2" type="button" aria-label="Close details" onClick={onClose}><X size={18}/></button>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]"><ClipboardCheck size={14}/> Inspection detail</div>
+          <button className="btn-secondary mt-3 inline-flex items-center gap-2 text-sm" type="button" onClick={exportDetailedExcel}><Download size={15}/> Download full AI inspection Excel</button>
+          <p className="text-xs text-[var(--text-secondary)] mt-1">{inspection.site || 'Site not recorded'} · {inspection.inspection_date || 'Date not recorded'} · {inspection.inspector || 'Inspector not recorded'}</p>
         </div>
         <div className="flex gap-2 flex-wrap mt-4" role="tablist">
           {tabs.map(([id,label,Icon])=><button key={id} role="tab" aria-selected={id===activeTab}
@@ -389,18 +396,16 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
             <Metric label="Complete readings" value={verified.length}/>
             <Metric label="Need verification" value={missing.length}/>
           </div>
-          <div className="overflow-x-auto rounded-xl border border-[var(--border-dim)]">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-[var(--panel-2)] text-[var(--text-secondary)]"><tr>{['Position','Condition','Measured depth','Remaining usable','Remaining %','Verification'].map(h=><th className="p-3 whitespace-nowrap" key={h}>{h}</th>)}</tr></thead>
-              <tbody>{displayedReadings.map(item=><tr key={item.position} className="border-t border-[var(--border-dim)]">
-                <td className="p-3 font-semibold">{positionLabel(item.position)}</td><td className="p-3">{item.condition}</td>
-                <td className="p-3">{item.calculation.valid?item.calculation.reading.worstMm+' mm':'Not measured'}</td>
-                <td className="p-3">{item.calculation.valid?item.calculation.reading.remainingMm+' mm':'—'}</td>
-                <td className="p-3">{item.calculation.valid?item.calculation.reading.remainingPercent+'%':'—'}</td>
-                <td className="p-3">{item.calculation.valid?'Recorded measurement':'Measurement required'}</td>
-              </tr>)}</tbody>
-            </table>
-          </div>
+          <EnterpriseTable
+            columns={readingColumns}
+            data={displayedReadings}
+            getRowId={(item)=>String(item.position)}
+            enableGlobalFilter={false}
+            enableColumnFilters={false}
+            enableColumnVisibility={false}
+            enableExport={false}
+            emptyMessage="No tyre positions recorded"
+          />
           <Card><h3 className="font-semibold mb-3">Record a verified gauge reading</h3><form onSubmit={saveMeasurement} className="space-y-3"><div className="grid grid-cols-2 sm:grid-cols-3 gap-3">{[["position","Tyre position"],["tyreSerial","Tyre serial"],["originalMm","Original tread mm"],["minimumMm","Minimum tread mm"],["innerMm","Inner mm"],["centerMm","Centre mm"],["outerMm","Outer mm"],["odometerKm","Odometer km"]].map(([key,label])=><label key={key} className="text-xs text-[var(--text-secondary)]">{label}<input className="input w-full mt-1" required={["position","originalMm","minimumMm"].includes(key)} type={["position","tyreSerial"].includes(key)?"text":"number"} step="0.01" min="0" value={form[key]} onChange={e=>setForm(f=>({...f,[key]:e.target.value}))}/></label>)}</div><label className="text-xs text-[var(--text-secondary)]">Measurement source<select className="input w-full mt-1" value={form.source} onChange={e=>setForm(f=>({...f,source:e.target.value}))}><option value="manual_gauge">Manual physical gauge</option><option value="digital_gauge">Digital physical gauge</option><option value="calibrated_device">Calibrated measurement device</option></select></label><p className="text-xs text-[var(--text-muted)]">Provide at least one groove reading. Source and original/minimum depths must be verified.</p><button className="btn-primary" type="submit" disabled={savingMeasurement}>{savingMeasurement?"Saving…":"Save physical reading"}</button></form></Card>
           {measurementError && <p role="alert" className="text-red-500">{measurementError}</p>}
           <Card><h3 className="font-semibold mb-2">Stored physical measurement history</h3><div className="space-y-2">{storedMeasurements.map(m=><div key={m.id} className="text-sm border-b border-[var(--border-dim)] pb-2">{positionLabel(m.tyre_position)} · {m.source} · Inner {m.inner_mm??"—"} / Centre {m.center_mm??"—"} / Outer {m.outer_mm??"—"} mm · {m.measured_at}</div>)}{!storedMeasurements.length && <p className="text-sm text-[var(--text-muted)]">No physical readings submitted through this module yet.</p>}</div></Card>
@@ -438,7 +443,7 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
         </>}
       </div>
     </div>
-  </div>
+  </SideDrawer>
 }
 function Metric({label,value}) {
   return <div className="rounded-lg border border-[var(--border-dim)] bg-[var(--panel-2)] p-3"><div className="text-xs text-[var(--text-muted)]">{label}</div><div className="text-xl font-bold mt-1">{value}</div></div>

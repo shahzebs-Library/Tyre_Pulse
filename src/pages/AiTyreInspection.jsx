@@ -100,6 +100,9 @@ export default function AiTyreInspection() {
   const [siteFilter,setSiteFilter]=useState('all')
   const [conditionFilter,setConditionFilter]=useState('all')
   const [statusFilter,setStatusFilter]=useState('all')
+  const [aiStatusFilter,setAiStatusFilter]=useState('all')
+  const [reviewFilter,setReviewFilter]=useState('all')
+  const [aiJobsByInspection,setAiJobsByInspection]=useState({})
   const [dateFrom,setDateFrom]=useState('')
   const [dateTo,setDateTo]=useState('')
   const load = useCallback(async () => {
@@ -112,6 +115,20 @@ export default function AiTyreInspection() {
     finally { setLoading(false) }
   }, [activeCountry])
   useEffect(() => { load() }, [load])
+  useEffect(()=>{
+    let active=true
+    const ids=rows.map(r=>r.id).filter(Boolean)
+    if(!ids.length){setAiJobsByInspection({});return}
+    Promise.all(Array.from({length:Math.ceil(ids.length/100)},(_,i)=>readInspectionAnalysis(ids.slice(i*100,(i+1)*100))))
+      .then(pages=>{
+        if(!active)return
+        const grouped={}
+        pages.flat().forEach(j=>(grouped[j.inspection_id] ||= []).push(j))
+        setAiJobsByInspection(grouped)
+      }).catch(()=>{if(active)setAiJobsByInspection({})})
+    return ()=>{active=false}
+  },[rows])
+
   const records = useMemo(() => rows.filter(r => String(r.asset_no||'').toLowerCase().includes(search.toLowerCase()) ||
     String(r.site||'').toLowerCase().includes(search.toLowerCase())).map(row => {
       const positions = Object.entries(row.tyre_conditions || {}).filter(([,v])=>v && typeof v==='object')
@@ -131,6 +148,10 @@ export default function AiTyreInspection() {
     if(filter==='photos' && !r.photosForReview)return false
     if(filter==='measurements' && !r.measuredCount)return false
     if(filter==='missing' && !r.needsMeasurement)return false
+    const jobs=aiJobsByInspection[r.id]||[]
+    if(aiStatusFilter==='none' && jobs.length)return false
+    if(aiStatusFilter!=='all' && aiStatusFilter!=='none' && !jobs.some(j=>j.status===aiStatusFilter))return false
+    if(reviewFilter!=='all' && !jobs.some(j=>(j.review_status||'unreviewed')===reviewFilter))return false
     if(siteFilter!=='all' && r.site!==siteFilter)return false
     if(statusFilter!=='all' && r.status!==statusFilter)return false
     if(dateFrom && String(r.inspection_date||'').slice(0,10)<dateFrom)return false
@@ -138,7 +159,7 @@ export default function AiTyreInspection() {
     if(conditionFilter!=='all' && !Object.values(normalizePositionConditions(r)).some(v=>v?.condition===conditionFilter))return false
     return true
   })
-  const resetFilters=()=>{setSearch('');setFilter('all');setSiteFilter('all');setStatusFilter('all');setConditionFilter('all');setDateFrom('');setDateTo('')}
+  const resetFilters=()=>{setSearch('');setFilter('all');setSiteFilter('all');setStatusFilter('all');setConditionFilter('all');setAiStatusFilter('all');setReviewFilter('all');setDateFrom('');setDateTo('')}
 
   const columns = [
     { accessorKey:'inspection_date', header:'Date', cell:({row:{original:r}})=>r.inspection_date||'Not recorded' },
@@ -169,6 +190,8 @@ export default function AiTyreInspection() {
         <label className="text-xs text-[var(--text-secondary)]">Site<select className="input w-full mt-1" value={siteFilter} onChange={e=>setSiteFilter(e.target.value)}><option value="all">All sites</option>{sites.map(s=><option key={s} value={s}>{s}</option>)}</select></label>
         <label className="text-xs text-[var(--text-secondary)]">Tyre condition<select className="input w-full mt-1" value={conditionFilter} onChange={e=>setConditionFilter(e.target.value)}><option value="all">All conditions</option>{conditions.map(s=><option key={s} value={s}>{s}</option>)}</select></label>
         <label className="text-xs text-[var(--text-secondary)]">Inspection status<select className="input w-full mt-1" value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="all">All statuses</option>{statuses.map(s=><option key={s} value={s}>{s}</option>)}</select></label>
+        <label className="text-xs text-[var(--text-secondary)]">AI analysis status<select className="input w-full mt-1" value={aiStatusFilter} onChange={e=>setAiStatusFilter(e.target.value)}>{[['all','All AI statuses'],['none','Not requested'],['pending','Pending'],['processing','Processing'],['completed','Completed'],['failed','Failed']].map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
+        <label className="text-xs text-[var(--text-secondary)]">Supervisor review<select className="input w-full mt-1" value={reviewFilter} onChange={e=>setReviewFilter(e.target.value)}>{[['all','All review states'],['unreviewed','Not reviewed'],['accepted','Accepted'],['rejected','Rejected'],['corrected','Corrected']].map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
         <label className="text-xs text-[var(--text-secondary)]">From date<input className="input w-full mt-1" type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label>
         <label className="text-xs text-[var(--text-secondary)]">Through date<input className="input w-full mt-1" type="date" min={dateFrom||undefined} value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label>
         <div className="flex items-end gap-3"><button className="btn-secondary" type="button" onClick={resetFilters}>Clear all filters</button><span className="text-xs text-[var(--text-muted)]">{visibleRecords.length} matching</span></div>

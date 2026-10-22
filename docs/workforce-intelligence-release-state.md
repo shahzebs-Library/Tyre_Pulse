@@ -18,12 +18,12 @@ Database: `workforce_*` migrations and existing `profiles` table.
 `profiles` contains `id`, `employee_id`, `username`, `full_name`, `role`, `site`, `approved`, `locked`. There is **no separate designation field**. The role filter is labeled designation/role for convenience but must not be marketed as HR designation data.
 
 ## Not yet certified
-- Flutter durable offline assignment status writes using the central protected command registry and conflict-safe replay.
+- Flutter durable offline assignment status queue: code written on branch feature/workforce-offline-estimation-20261023, unverified (no SDK, no device). See docs/workforce-intelligence/OFFLINE_ASSIGNMENTS.md.
 - Physical FCM delivery confirmation on Android and iOS.
-- Historical calibration of work estimates against trustworthy completed observations.
-- Staff/supervisor permission and production end-to-end acceptance.
+- Historical work estimates: SQL, engine and web display written and tested; migration 20261023090000 not applied; needs staging verification.
+- Permission matrix and workflow tests pass in PGlite; production end-to-end acceptance still open. Supervisor role has employee-level access only.
 - Android/iOS release build green gates.
-- All root web UI/design-system and Vehicle Washing regression tests passing.
+- Root design-system ratchet (raw table in Broadcast.jsx and AiTyreInspection.jsx, overlay) and washPage.render tests fail in this worktree; the files involved are not touched by this change (not re-run on a clean base).
 These must be tested; never mark them complete from source presence or an unverified build.
 
 ## Release protocol

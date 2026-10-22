@@ -1,9 +1,12 @@
 import {useEffect,useMemo,useState,useCallback} from 'react'
+import {Chart as ChartJS,CategoryScale,LinearScale,BarElement,Tooltip,Legend} from 'chart.js'
+import {Bar} from 'react-chartjs-2'
 import {ClipboardCheck,Clock,Plus,RefreshCw,CheckCircle2,AlertTriangle,Send} from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import {useAuth} from '../contexts/AuthContext'
 import {addDailyEntry,getMyDailyReport,ensureDailyReport,submitDailyReport,listReviewQueue,reviewDailyReport} from '../lib/api/workforceDaily'
+ChartJS.register(CategoryScale,LinearScale,BarElement,Tooltip,Legend)
 const dateNow=()=>new Date().toLocaleDateString('en-CA')
 const categories=['productive','coordination','reporting','training','break','blocked','unassigned']
 const cleanDate=s=>String(s||'').slice(0,10)
@@ -34,6 +37,8 @@ export default function WorkforceDailyWork(){
  const total=entries.reduce((n,e)=>n+Math.max(0,(Date.parse(e.ended_at)-Date.parse(e.started_at))/60000),0)
  const blocked=entries.filter(e=>e.category==='blocked').reduce((n,e)=>n+(Date.parse(e.ended_at)-Date.parse(e.started_at))/60000,0)
  const editable=!record.report||['draft','returned'].includes(record.report.status)
+ const durationByCategory=useMemo(()=>categories.map(c=>Math.round(entries.filter(e=>e.category===c).reduce((n,e)=>n+Math.max(0,(Date.parse(e.ended_at)-Date.parse(e.started_at))/60000),0))),[entries])
+ const durationChart=useMemo(()=>({labels:categories.map(c=>c.replace('_',' ')),datasets:[{label:'Recorded minutes',data:durationByCategory,backgroundColor:'rgba(32,150,110,0.72)',borderRadius:5}]}),[durationByCategory])
  async function run(fn){setSaving(true);setError('');setNotice('');try{await fn();await load();setNotice('Saved successfully')}catch(e){setError(e.message||'Operation failed')}finally{setSaving(false)}}
  const columns=useMemo(()=>[
   {accessorKey:'title',header:'Activity',size:240},
@@ -71,6 +76,7 @@ export default function WorkforceDailyWork(){
   <Tile label="Recorded minutes" value={Math.round(total)} Icon={Clock}/>
   <Tile label="Blocked minutes" value={Math.round(blocked)} Icon={AlertTriangle}/>
  </div>
+ <div className="card space-y-3"><h2 className="font-semibold">Recorded work distribution</h2><div className="h-56"><Bar data={durationChart} options={{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,title:{display:true,text:"Minutes"}}}}}/></div><p className="text-xs text-[var(--text-muted)]">Recorded activity only. No inferred productivity or unrecorded time included.</p></div>
  <div className="card space-y-3">
   <div className="flex justify-between items-center gap-2"><div><h2 className="font-semibold">Activity timeline</h2><p className="text-sm text-[var(--text-muted)]">Actual timestamps and deliverables. Unrecorded time is not treated as idle.</p></div>
   {editable&&<button className="btn-primary flex items-center gap-2" type="button" onClick={()=>setShowForm(v=>!v)}><Plus size={16}/>Add activity</button>}</div>

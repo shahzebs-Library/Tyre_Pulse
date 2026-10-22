@@ -21,6 +21,18 @@ TpRoute? route({String? type, String? entityType, String? entityId}) {
 }
 
 void main() {
+  test('workforce assignment push opens Flutter My Work', () {
+    expect(
+      route(type: 'info', entityType: 'workforce_assignment'),
+      const TasksRoute(),
+    );
+    expect(
+      route(type: 'workforce.assignment_push', entityType: 'workforce_assignment',
+        entityId: '00000000-0000-0000-0000-000000000010'),
+      const TasksRoute(),
+    );
+  });
+
   group('local device notifications win on exact type', () {
     test('an inspection reminder opens a NEW inspection', () {
       // The string contains "inspection" and would otherwise fall into the

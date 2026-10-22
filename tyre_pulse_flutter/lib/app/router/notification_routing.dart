@@ -85,6 +85,8 @@ TpRoute? notificationDestination(TpNotificationTarget target) {
   final String type = target.typeKey;
   final String entity = target.entityKey;
   final String? id = target.id;
+  if (type == 'action_assigned' || entity == 'action_item') return const TasksRoute();
+  if (type == 'broadcast' || entity == 'broadcast') return const NotificationsRoute();
   if (type == 'driver_workspace' || entity == 'driver_workspace') {
     return const ProfileRoute();
   }

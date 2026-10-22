@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Action Center task assigned through Message the Team.
 /// Every mutation runs through the employee-scoped backend RPC.
@@ -23,6 +24,7 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
   bool _saving = false;
   bool _uploading = false;
   String? _evidenceMessage;
+  List<Map<String, dynamic>> _evidence = <Map<String, dynamic>>[];
   String? _error;
   SupabaseClient get _db => Supabase.instance.client;
 
@@ -49,7 +51,11 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
           .select('id,title,status,assigned_user_id,source,due_date,recommended_action,blocked_reason,resolution')
           .eq('id', widget.actionId).eq('assigned_user_id', uid).maybeSingle();
       if (row == null) throw StateError('This action is not assigned to your account.');
+      final List<Map<String, dynamic>> evidence = await _db.from('team_action_evidence')
+          .select('id,storage_path,mime_type,created_at')
+          .eq('action_id', widget.actionId).order('created_at', ascending: false).limit(100);
       if (mounted) setState(() {
+        _evidence = evidence;
         _action = row;
         _reason.text = row['blocked_reason']?.toString() ?? '';
         _resolution.text = row['resolution']?.toString() ?? '';
@@ -110,10 +116,25 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
         'storage_path': path, 'mime_type': 'image/jpeg',
       });
       if (mounted) setState(() => _evidenceMessage = 'Photo uploaded securely.');
+      await _load();
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     } finally {
       if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  Future<void> _openEvidence(Map<String, dynamic> item) async {
+    try {
+      final path = item['storage_path']?.toString() ?? '';
+      if (path.isEmpty) return;
+      final signed = await _db.storage.from('team-action-evidence').createSignedUrl(path, 60);
+      final uri = Uri.parse(signed);
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        throw StateError('Could not open the evidence attachment.');
+      }
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
     }
   }
 
@@ -153,6 +174,13 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
                   if (working)
                     TextField(controller: _resolution, maxLength: 4000, maxLines: 3,
                       decoration: const InputDecoration(labelText: 'Completion details', border: OutlineInputBorder())),
+                ],
+                if (_evidence.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 12),
+                  Text('Evidence (${_evidence.length})'),
+                  for (final file in _evidence)
+                    TextButton(onPressed: () => _openEvidence(file),
+                      child: Text(file['storage_path']?.toString().split('/').last ?? 'Evidence')),
                 ],
                 if (status == 'resolved') Text('Resolution: ${row['resolution'] ?? ''}'),
               ],

@@ -7,12 +7,13 @@ export default function MessageEngagement({ history = [] }) {
   const [messageId, setMessageId] = useState('')
   const [receipts, setReceipts] = useState([])
   const [replies, setReplies] = useState([])
+  const [pushEvents, setPushEvents] = useState([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [refresh, setRefresh] = useState(0)
   const selected = history.find((h) => h.id === messageId)
   useEffect(() => {
-    if (!messageId) { setReceipts([]); setReplies([]); return }
+    if (!messageId) { setReceipts([]); setReplies([]); setPushEvents([]); setPushEvents([]); return }
     let active = true
     setLoading(true); setError('')
     Promise.all([
@@ -22,17 +23,23 @@ export default function MessageEngagement({ history = [] }) {
       supabase.from('broadcast_replies')
         .select('id,author_id,body,created_at')
         .eq('broadcast_id', messageId).order('created_at', { ascending: true }).limit(500),
-    ]).then(([r, m]) => {
+      supabase.from('team_push_device_events')
+        .select('user_id,event_type,occurred_at')
+        .eq('entity_id', messageId).limit(5000),
+    ]).then(([r, m, p]) => {
       if (!active) return
-      if (r.error || m.error) throw r.error || m.error
+      if (r.error || m.error || p.error) throw r.error || m.error || p.error
       setReceipts(r.data || [])
       setReplies(m.data || [])
+      setPushEvents(p.data || [])
     }).catch((e) => { if (active) { setError(toUserMessage(e, 'Could not load message engagement.')); setReceipts([]); setReplies([]) } })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [messageId, refresh])
   const read = receipts.filter((r) => !!r.read_at).length
   const acknowledged = receipts.filter((r) => !!r.acknowledged_at).length
+  const foregroundReceived = new Set(pushEvents.filter((e) => e.event_type === 'received_foreground').map((e) => e.user_id)).size
+  const openedFromPush = new Set(pushEvents.filter((e) => e.event_type === 'opened_by_user').map((e) => e.user_id)).size
   return <section className="card space-y-4" aria-label="Recipient engagement">
     <div className="flex flex-wrap justify-between gap-3">
       <div>
@@ -52,12 +59,14 @@ export default function MessageEngagement({ history = [] }) {
     {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
     {loading && <p role="status" className="text-xs text-[var(--text-muted)]">Loading recipient activity…</p>}
     {messageId && !error && !loading && <>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
         {[
           ['Addressed', selected?.recipient_count ?? 'N/A'],
           ['Receipts recorded', receipts.length],
           ['Read by employee', read],
           ['Acknowledged', acknowledged],
+          ['Foreground received (device-reported)', foregroundReceived],
+          ['Opened via push', openedFromPush],
         ].map(([label, value]) => <div key={label} className="rounded-lg border border-[var(--border-subtle)] p-3">
           <p className="text-xs text-[var(--text-muted)]">{label}</p>
           <p className="mt-1 text-xl font-semibold text-[var(--text-primary)]">{value}</p>

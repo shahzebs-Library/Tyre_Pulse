@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ClipboardCheck, RefreshCw, ShieldAlert, SearchCheck, Ruler, X, Image as ImageIcon, ClipboardList, AlertCircle, FileText } from 'lucide-react'
+import { ClipboardCheck, RefreshCw, ShieldAlert, SearchCheck, Ruler, X, Image as ImageIcon, ClipboardList, AlertCircle, FileText, Download } from 'lucide-react'
 import { resolveStorageUrl } from '../lib/storageRefs'
+import { displayPositionCode, inspectionTypeHint } from '../lib/tyreBay'
 import { inspectablePhotoRefs, summarizeEvidence, normalizePositionConditions, normalizePhotographs, measurementReading } from '../lib/aiTyreInspectionDomain'
 import { buildInspectionAiAppendix, INSPECTION_AI_PRINT_STYLES } from '../lib/aiTyreInspectionReport'
 import PageHeader from '../components/ui/PageHeader'
@@ -72,7 +73,7 @@ function PhotoCaptureGuide() {
   return <Card>
     <h3 className="font-semibold mb-2">How to capture a measurable tyre inspection</h3>
     <ol className="text-sm text-[var(--text-secondary)] list-decimal ml-5 space-y-2">
-      <li>Identify the vehicle and exact tyre position (for example F1L or R2Ri) before taking photos. Keep each photo linked to that position.</li>
+      <li>Identify the vehicle and exact canonical tyre position (for example LHF1 or RHRO) before taking photos. Keep each photo linked to that position.</li>
       <li>Take an overall tread-face photograph in good, even light, with the full tread width visible and the camera roughly perpendicular to the tread.</li>
       <li>Take a close-up of every cut, bulge, exposed cord, cracking or uneven-wear area, plus a sidewall photo when relevant. Keep the image sharp and avoid glare.</li>
       <li>Measure tread depth using a physical depth gauge in the main grooves at inner, centre and outer tread bands. Photograph the gauge in each groove with its scale/display clearly readable.</li>
@@ -153,6 +154,7 @@ export default function AiTyreInspection() {
 
 
 function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
+  const positionLabel = (position) => displayPositionCode(inspectionTypeHint(inspection), position)
   const evidence = useMemo(() => summarizeEvidence(inspection), [inspection])
   const allPhotosCount = useMemo(() => Object.values(normalizePositionConditions(inspection)).reduce(
     (sum, entry) => sum + (entry && typeof entry==='object' ? [
@@ -245,13 +247,56 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
   const missing=displayedReadings.filter(item=>!item.calculation.valid)
   const verified=displayedReadings.filter(item=>item.calculation.valid)
   const appendix=buildInspectionAiAppendix({inspection,jobs:analysisJobs,measurements:storedMeasurements})
+  async function exportDetailedExcel() {
+    const { exportToExcel, reportFileName, reportDateLabel } = await import('../lib/exportUtils')
+    const columns = [
+      ['vehicle','Vehicle'],['site','Site / location'],['date','Inspection date'],
+      ['inspector','Inspector'],['inspection_id','Inspection ID'],
+      ['position','Tyre position (fleet map)'],['internal_position','Stored slot ID'],
+      ['condition','Inspector condition'],['photos','Linked photograph count'],
+      ['photo_references','Photo reference(s)'],['ai_status','AI status'],
+      ['review_status','Supervisor review'],['assessable','Image assessable'],
+      ['findings','AI visible findings'],['severity','Finding severity'],
+      ['recommendation','Recommended action'],['model','AI model'],
+      ['estimated_cost_usd','Estimated AI cost USD'],
+      ['measured_mm','Verified minimum tread mm'],['remaining_mm','Remaining usable mm'],
+      ['remaining_percent','Remaining percent'],['measurement_status','Measurement verification'],
+    ]
+    const rows = displayedReadings.map(item => {
+      const findings=analysisJobs.filter(job=>job.tyre_position===item.position)
+      const photos=evidence.allPhotos.filter(photo=>photo.position===item.position)
+      const reading=item.calculation
+      return {
+        vehicle:inspection.asset_no || '',site:inspection.site || '',
+        date:inspection.inspection_date || '',inspector:inspection.inspector || '',
+        inspection_id:inspection.id,position:positionLabel(item.position),internal_position:item.position,
+        condition:item.condition,photos:photos.length,
+        photo_references:photos.map(photo=>photo.ref).join(' | '),
+        ai_status:findings.length?findings.map(job=>job.status).join('; '):'Not requested',
+        review_status:findings.map(job=>job.review_status||'unreviewed').join('; ')||'Not reviewed',
+        assessable:findings.map(job=>job.analysis?.assessable===true?'Yes':'No').join('; '),
+        findings:findings.flatMap(job=>(job.analysis?.defects||[]).map(defect=>[defect.type,defect.description,defect.visibleEvidence].filter(Boolean).join(': '))).join(' | '),
+        severity:findings.flatMap(job=>(job.analysis?.defects||[]).map(defect=>defect.severity)).join('; '),
+        recommendation:findings.map(job=>job.analysis?.recommendation||'').filter(Boolean).join(' | '),
+        model:findings.map(job=>job.model_version||'').filter(Boolean).join('; '),
+        estimated_cost_usd:findings.reduce((sum,job)=>sum+Number(job.cost_usd||0),0),
+        measured_mm:reading.valid?reading.reading.worstMm:'Not measured',
+        remaining_mm:reading.valid?reading.reading.remainingMm:'',
+        remaining_percent:reading.valid?reading.reading.remainingPercent:'',
+        measurement_status:reading.valid?'Recorded physical measurement':'Measurement required',
+      }
+    })
+    exportToExcel(rows,columns.map(([key])=>key),columns.map(([,header])=>header),
+      reportFileName('AI Tyre Inspection '+(inspection.asset_no||'vehicle'),inspection.inspection_date||'inspection',reportDateLabel()))
+  }
+
   return <div className="fixed inset-0 z-[55] bg-black/60 flex justify-end" role="presentation" onClick={onClose}>
     <div className="bg-[var(--panel)] text-[var(--text-primary)] h-full w-full max-w-4xl overflow-y-auto shadow-2xl" role="dialog" aria-modal="true" aria-label="AI tyre inspection details" onClick={e=>e.stopPropagation()}>
       <div className="sticky top-0 z-10 bg-[var(--panel)] border-b border-[var(--border-dim)] px-5 py-4">
         <div className="flex justify-between gap-4 items-start">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]"><ClipboardCheck size={14}/> Inspection detail</div>
-            <h2 className="text-xl font-bold mt-1">{inspection.asset_no || 'Unknown vehicle'}</h2>
+            <h2 className="text-xl font-bold mt-1">{inspection.asset_no || 'Unknown vehicle'}</h2><button className="btn-secondary mt-3 inline-flex items-center gap-2 text-sm" type="button" onClick={exportDetailedExcel}><Download size={15}/> Download full AI inspection Excel</button>
             <p className="text-xs text-[var(--text-secondary)] mt-1">{inspection.site || 'Site not recorded'} · {inspection.inspection_date || 'Date not recorded'} · {inspection.inspector || 'Inspector not recorded'}</p>
           </div>
           <button className="btn-secondary p-2" type="button" aria-label="Close details" onClick={onClose}><X size={18}/></button>
@@ -270,12 +315,12 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
             <Metric label="Photos available" value={evidence.allPhotoCount}/>
             <Metric label="No evidence" value={evidence.abnormalPositionsMissingPhotos.length}/>
           </div>
-          {evidence.abnormalPositionsMissingPhotos.length>0 && <div className="rounded-lg p-3 border border-amber-500/30 bg-amber-500/10 flex items-start gap-2 text-sm"><AlertCircle size={17} className="text-amber-500 shrink-0"/><span>No photo is linked to abnormal positions: {evidence.abnormalPositionsMissingPhotos.join(', ')}. Request evidence from the inspector.</span></div>}
+          {evidence.abnormalPositionsMissingPhotos.length>0 && <div className="rounded-lg p-3 border border-amber-500/30 bg-amber-500/10 flex items-start gap-2 text-sm"><AlertCircle size={17} className="text-amber-500 shrink-0"/><span>No photo is linked to abnormal positions: {evidence.abnormalPositionsMissingPhotos.map(positionLabel).join(', ')}. Request evidence from the inspector.</span></div>}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {evidence.allPhotos.map(photo=>{
               const key=photo.position+':'+photo.ref
               return <div key={key} className="rounded-xl border border-[var(--border-dim)] overflow-hidden">
-                <div className="p-3 flex justify-between items-center"><span className="font-semibold">{photo.position}</span><span className="text-xs text-[var(--text-muted)]">{photo.condition}</span></div>
+                <div className="p-3 flex justify-between items-center"><span className="font-semibold">{positionLabel(photo.position)}</span><span className="text-xs text-[var(--text-muted)]">{photo.condition}</span></div>
                 {photoUrls[key]?<a href={photoUrls[key]} target="_blank" rel="noopener noreferrer"><img src={photoUrls[key]} className="w-full h-56 object-contain bg-[var(--panel-2)]" alt={'Tyre evidence at '+photo.position}/></a>:
                   <div className="h-56 flex items-center justify-center text-xs text-[var(--text-muted)] bg-[var(--panel-2)]">{photoErrors[key]?'Photo unavailable. Check storage permissions.':'Resolving secure photo…'}</div>}
                 <div className="px-3 py-2 text-xs text-[var(--text-muted)]">Image evidence only. Exact tread depth requires a gauge reading.</div>
@@ -295,7 +340,7 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
             <table className="w-full text-sm text-left">
               <thead className="bg-[var(--panel-2)] text-[var(--text-secondary)]"><tr>{['Position','Condition','Measured depth','Remaining usable','Remaining %','Verification'].map(h=><th className="p-3 whitespace-nowrap" key={h}>{h}</th>)}</tr></thead>
               <tbody>{displayedReadings.map(item=><tr key={item.position} className="border-t border-[var(--border-dim)]">
-                <td className="p-3 font-semibold">{item.position}</td><td className="p-3">{item.condition}</td>
+                <td className="p-3 font-semibold">{positionLabel(item.position)}</td><td className="p-3">{item.condition}</td>
                 <td className="p-3">{item.calculation.valid?item.calculation.reading.worstMm+' mm':'Not measured'}</td>
                 <td className="p-3">{item.calculation.valid?item.calculation.reading.remainingMm+' mm':'—'}</td>
                 <td className="p-3">{item.calculation.valid?item.calculation.reading.remainingPercent+'%':'—'}</td>
@@ -305,7 +350,7 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
           </div>
           <Card><h3 className="font-semibold mb-3">Record a verified gauge reading</h3><form onSubmit={saveMeasurement} className="space-y-3"><div className="grid grid-cols-2 sm:grid-cols-3 gap-3">{[["position","Tyre position"],["tyreSerial","Tyre serial"],["originalMm","Original tread mm"],["minimumMm","Minimum tread mm"],["innerMm","Inner mm"],["centerMm","Centre mm"],["outerMm","Outer mm"],["odometerKm","Odometer km"]].map(([key,label])=><label key={key} className="text-xs text-[var(--text-secondary)]">{label}<input className="input w-full mt-1" required={["position","originalMm","minimumMm"].includes(key)} type={["position","tyreSerial"].includes(key)?"text":"number"} step="0.01" min="0" value={form[key]} onChange={e=>setForm(f=>({...f,[key]:e.target.value}))}/></label>)}</div><label className="text-xs text-[var(--text-secondary)]">Measurement source<select className="input w-full mt-1" value={form.source} onChange={e=>setForm(f=>({...f,source:e.target.value}))}><option value="manual_gauge">Manual physical gauge</option><option value="digital_gauge">Digital physical gauge</option><option value="calibrated_device">Calibrated measurement device</option></select></label><p className="text-xs text-[var(--text-muted)]">Provide at least one groove reading. Source and original/minimum depths must be verified.</p><button className="btn-primary" type="submit" disabled={savingMeasurement}>{savingMeasurement?"Saving…":"Save physical reading"}</button></form></Card>
           {measurementError && <p role="alert" className="text-red-500">{measurementError}</p>}
-          <Card><h3 className="font-semibold mb-2">Stored physical measurement history</h3><div className="space-y-2">{storedMeasurements.map(m=><div key={m.id} className="text-sm border-b border-[var(--border-dim)] pb-2">{m.tyre_position} · {m.source} · Inner {m.inner_mm??"—"} / Centre {m.center_mm??"—"} / Outer {m.outer_mm??"—"} mm · {m.measured_at}</div>)}{!storedMeasurements.length && <p className="text-sm text-[var(--text-muted)]">No physical readings submitted through this module yet.</p>}</div></Card>
+          <Card><h3 className="font-semibold mb-2">Stored physical measurement history</h3><div className="space-y-2">{storedMeasurements.map(m=><div key={m.id} className="text-sm border-b border-[var(--border-dim)] pb-2">{positionLabel(m.tyre_position)} · {m.source} · Inner {m.inner_mm??"—"} / Centre {m.center_mm??"—"} / Outer {m.outer_mm??"—"} mm · {m.measured_at}</div>)}{!storedMeasurements.length && <p className="text-sm text-[var(--text-muted)]">No physical readings submitted through this module yet.</p>}</div></Card>
           <p className="text-xs text-[var(--text-muted)]">Only physically sourced and validated measurements are eligible for authoritative remaining-tread figures. This screen does not infer millimetres from photographs.</p>
         </>}
         {activeTab==='analysis' && <>
@@ -320,7 +365,7 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
           <Card><div className="flex justify-between gap-3 flex-wrap"><div><p className="text-xs text-[var(--text-muted)]">AI inference cost for this inspection</p><p className="text-xl font-bold">{expense?.priced?`${expense.costUsd.toFixed(6)}`:"Not priced yet"}</p></div><div className="text-xs text-[var(--text-muted)]">Input tokens: {expense?.inputTokens||0} · Output tokens: {expense?.outputTokens||0} · Unpriced jobs: {expense?.unpriced||0}</div></div><p className="text-xs text-[var(--text-muted)] mt-2">Provider token usage is recorded on completion. USD estimates require verified provider pricing configured in the worker; unpriced calls are never shown as free.</p></Card>
           <p className="text-xs text-[var(--text-muted)]">Compare each AI finding with the original position-linked image before accepting it. Accept only after a qualified reviewer checks the photograph. An AI result is not an independent safety assessment.</p>
           <div className="space-y-3">{analysisJobs.map(job=><Card key={job.id}>
-            <div className="flex justify-between items-center gap-3"><h4 className="font-semibold">{job.tyre_position}</h4><span className="text-xs">{job.status} · {job.review_status||'unreviewed'}</span></div>{photoUrls[job.tyre_position+':'+job.photo_ref] && <div className="mt-3"><a href={photoUrls[job.tyre_position+':'+job.photo_ref]} rel="noopener noreferrer" target="_blank" aria-label={'Inspect original tyre photo for '+job.tyre_position}><img src={photoUrls[job.tyre_position+':'+job.photo_ref]} alt={'Original tyre photo for supervisor verification at '+job.tyre_position} className="h-48 max-w-full rounded-lg border border-[var(--border-dim)] object-contain" /></a><p className="text-xs text-[var(--text-muted)] mt-1">Original photograph — enlarge and compare before review</p></div>}
+            <div className="flex justify-between items-center gap-3"><h4 className="font-semibold">{positionLabel(job.tyre_position)}</h4><span className="text-xs">{job.status} · {job.review_status||'unreviewed'}</span></div>{photoUrls[job.tyre_position+':'+job.photo_ref] && <div className="mt-3"><a href={photoUrls[job.tyre_position+':'+job.photo_ref]} rel="noopener noreferrer" target="_blank" aria-label={'Inspect original tyre photo for '+job.tyre_position}><img src={photoUrls[job.tyre_position+':'+job.photo_ref]} alt={'Original tyre photo for supervisor verification at '+job.tyre_position} className="h-48 max-w-full rounded-lg border border-[var(--border-dim)] object-contain" /></a><p className="text-xs text-[var(--text-muted)] mt-1">Original photograph — enlarge and compare before review</p></div>}
             {job.analysis?<div className="mt-3 space-y-2"><p className="text-sm">{job.analysis.assessable?'Visual assessment available':(job.analysis.reason||'Image unassessable')}</p>{(job.analysis.defects||[]).map((d,i)=><p key={i} className="text-sm border-l-2 border-amber-500 pl-3">{d.type}: {d.description} ({d.severity})</p>)}<p className="text-sm text-[var(--text-secondary)]">{job.analysis.recommendation}</p></div>:<p className="text-xs text-[var(--text-muted)] mt-2">No completed visual finding available.</p>}
             {job.status==='completed' && (!job.review_status || job.review_status==='unreviewed')&&<div className="flex gap-2 flex-wrap mt-3"><button className="btn-secondary" disabled={analysisLoading} onClick={()=>decide(job,'accepted')}>Accept observation</button><button className="btn-secondary" disabled={analysisLoading} onClick={()=>decide(job,'rejected')}>Reject observation</button></div>}
           </Card>)}</div>

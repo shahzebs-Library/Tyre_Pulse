@@ -97,6 +97,7 @@ const ConsoleAccessControl = lazyConsolePage('ConsoleAccessControl', 'Access Con
 const ConsoleSecurity      = lazyConsolePage('ConsoleSecurity', 'Security')
 
 // ── Lazy page imports ─────────────────────────────────────────────────────
+const AiTyreInspection = lazy(() => import('./pages/AiTyreInspection'))
 const Login                  = lazy(() => import('./pages/Login'))
 const CommandCenterPage      = lazy(() => import('./pages/CommandCenter'))
 
@@ -653,6 +654,7 @@ function MainApp() {
                       <Route path="/broadcast" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']} moduleKey="broadcast"><Broadcast /></RoleRoute></Safe>} />
                       <Route path="/rca"         element={<Safe><ModuleRoute moduleKey="rca"><RcaRecords /></ModuleRoute></Safe>} />
                       <Route path="/inspections" element={<Safe><ModuleRoute moduleKey="inspections"><Inspections /></ModuleRoute></Safe>} />
+                      <Route path="/ai-tyre-inspection" element={<Safe><ModuleRoute moduleKey="inspections"><AiTyreInspection /></ModuleRoute></Safe>} />
 <Route path="/alerts"      element={<Safe><ModuleRoute moduleKey="alerts"><Alerts /></ModuleRoute></Safe>} />
                       <Route path="/alert-thresholds" element={<Safe><ModuleRoute moduleKey="alerts"><AlertThresholds /></ModuleRoute></Safe>} />
                       <Route path="/fleet-master"         element={<Safe><ModuleRoute moduleKey="fleet_master"><FleetMaster /></ModuleRoute></Safe>} />

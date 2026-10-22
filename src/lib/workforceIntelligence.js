@@ -46,11 +46,13 @@ export function summarizeWorkday({shift_start,shift_end,activities=[],excluded_b
   for(const k of WORK_CATEGORIES) minutes[k]=round(minutes[k])
   const recorded=round(Object.values(minutes).reduce((a,b)=>a+b,0))
   const shift=round((end-start)/60000)
-  const unavailable=round(Math.min(shift,excluded_break_minutes))
-  const available=round(Math.max(0,shift-unavailable))
+  // A scheduled break allowance and a recorded break may describe the same
+  // minutes. Exclude the larger of the two, never both.
+  const excludedBreak=round(Math.min(shift,Math.max(excluded_break_minutes,minutes.break)))
+  const available=round(Math.max(0,shift-excludedBreak))
   const unattributed=round(Math.max(0,shift-recorded))
   const productive=round(minutes.productive+minutes.coordination+minutes.reporting)
-  const utilizationDenominator=Math.max(0,available-Math.min(minutes.break,available))
+  const utilizationDenominator=available
   return {valid:true,errors:[],minutes,shift_minutes:shift,available_minutes:available,
     recorded_minutes:recorded,unattributed_minutes:unattributed,
     productive_minutes:productive,

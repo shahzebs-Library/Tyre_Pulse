@@ -26,6 +26,7 @@ const isCustomNavRole = (role) => !!role && !BUILTIN_NAV_ROLES.has(role)
 // App.jsx ModuleRoute wrappers (moduleKey). Routes without a nav entry or gate
 // are open to every authenticated role except Inspector (see isCommandVisible).
 export const NAV_COMMANDS = [
+  { id: 'workforce-daily', label: 'My Day & Team Reviews', path: '/workforce-daily', icon: 'ClipboardCheck', keywords: ['workforce', 'daily work', 'timesheet', 'employee productivity'] },
   // Overview
   { id: 'dashboard',      label: 'Command Center',       path: '/',            icon: 'LayoutDashboard', keywords: ['dashboard', 'home', 'overview'] },
   { id: 'tyres',          label: 'Tyre Records',         path: '/tyres',       icon: 'CircleDot' },

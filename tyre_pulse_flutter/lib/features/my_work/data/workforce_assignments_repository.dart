@@ -4,6 +4,9 @@
 /// permissions. Offline replay needs an approved command-registry extension.
 library;
 
+import 'dart:convert';
+
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class WorkforceAssignment {
@@ -48,25 +51,53 @@ class WorkforceAssignment {
       };
 }
 
+class WorkforceAssignmentSnapshot {
+  const WorkforceAssignmentSnapshot({required this.items, required this.offline});
+  final List<WorkforceAssignment> items;
+  final bool offline;
+}
+
 class WorkforceAssignmentsRepository {
   const WorkforceAssignmentsRepository(this._client);
 
   final SupabaseClient _client;
 
-  Future<List<WorkforceAssignment>> listMine() async {
+  Future<WorkforceAssignmentSnapshot> listMine() async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) throw StateError('Not signed in');
-    final rows = await _client
-        .from('workforce_assignments')
-        .select('id,title,instructions,site,status,priority,due_at')
-        .eq('assigned_to', userId)
-        .order('created_at', ascending: false)
-        .limit(100);
-    return (rows as List<dynamic>)
-        .map((row) => WorkforceAssignment.fromJson(
-              Map<String, dynamic>.from(row as Map),
-            ))
-        .toList(growable: false);
+    final preferences = await SharedPreferences.getInstance();
+    // The cache is identity-scoped so another signed-in user cannot inherit
+    // a prior employee's task list on the same device.
+    final cacheKey = 'workforce_assignments_v1_$userId';
+    try {
+      final rows = await _client
+          .from('workforce_assignments')
+          .select('id,title,instructions,site,status,priority,due_at')
+          .eq('assigned_to', userId)
+          .order('created_at', ascending: false)
+          .limit(100);
+      await preferences.setString(cacheKey, jsonEncode(rows));
+      return WorkforceAssignmentSnapshot(
+        items: (rows as List<dynamic>)
+            .map((row) => WorkforceAssignment.fromJson(
+                  Map<String, dynamic>.from(row as Map),
+                ))
+            .toList(growable: false),
+        offline: false,
+      );
+    } catch (_) {
+      final saved = preferences.getString(cacheKey);
+      if (saved == null) rethrow;
+      final decoded = jsonDecode(saved) as List<dynamic>;
+      return WorkforceAssignmentSnapshot(
+        items: decoded
+            .map((row) => WorkforceAssignment.fromJson(
+                  Map<String, dynamic>.from(row as Map),
+                ))
+            .toList(growable: false),
+        offline: true,
+      );
+    }
   }
 
   Future<void> advance(WorkforceAssignment item) async {

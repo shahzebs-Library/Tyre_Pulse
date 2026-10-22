@@ -198,3 +198,54 @@ export async function processJob(d: Deps, job: JobRow): Promise<Outcome> {
     return "failed";
   }
 }
+
+export interface DrainDeps {
+  /** Oldest pending jobs, at most n. */
+  fetchBatch: (n: number) => Promise<JobRow[]>;
+  /** Atomically move pending -> processing (and count the attempt). False when another worker won. */
+  claim: (job: JobRow) => Promise<boolean>;
+  process: (job: JobRow) => Promise<Outcome>;
+  nowMs: () => number;
+}
+export interface DrainOptions { batchSize: number; maxBatches: number; budgetMs: number }
+export const DEFAULT_DRAIN: DrainOptions = { batchSize: 4, maxBatches: 10, budgetMs: 90_000 };
+export type DrainStop = "empty" | "deferred" | "time" | "batches" | "no_progress" | "queue_error";
+export interface DrainResult {
+  processed: number; failed: number; deferred: number; skipped: number; claimed: number;
+  batches: number; stoppedBecause: DrainStop;
+}
+
+/**
+ * Drains the pending queue in bounded batches inside ONE worker run, instead of a single batch per
+ * cron tick. Stops when the queue is empty, the daily budget defers a job, the wall-clock budget is
+ * used up (checked before every job so an edge-function timeout cannot cut a paid call short), the
+ * batch cap is hit, or a whole batch was claimed by other workers (no progress, so no spinning).
+ * A job is claimed before it is processed and processJob never retries, so draining cannot cause a
+ * second paid call for the same photograph.
+ */
+export async function drainQueue(d: DrainDeps, opts: Partial<DrainOptions> = {}): Promise<DrainResult> {
+  const o = { ...DEFAULT_DRAIN, ...opts };
+  const started = d.nowMs();
+  const r: DrainResult = { processed: 0, failed: 0, deferred: 0, skipped: 0, claimed: 0, batches: 0, stoppedBecause: "empty" };
+  while (r.batches < o.maxBatches) {
+    let batch: JobRow[];
+    try { batch = await d.fetchBatch(o.batchSize); }
+    catch { r.stoppedBecause = "queue_error"; return r; }
+    if (!batch.length) { r.stoppedBecause = "empty"; return r; }
+    r.batches++;
+    let claimedThisBatch = 0;
+    for (const job of batch) {
+      if (d.nowMs() - started >= o.budgetMs) { r.stoppedBecause = "time"; return r; }
+      if (!(await d.claim(job))) continue;
+      claimedThisBatch++; r.claimed++;
+      const outcome = await d.process(job);
+      if (outcome === "completed") r.processed++;
+      else if (outcome === "failed") r.failed++;
+      else if (outcome === "skipped_prior_attempt") r.skipped++;
+      else if (outcome === "deferred") { r.deferred++; r.stoppedBecause = "deferred"; return r; }
+    }
+    if (!claimedThisBatch) { r.stoppedBecause = "no_progress"; return r; }
+  }
+  r.stoppedBecause = "batches";
+  return r;
+}

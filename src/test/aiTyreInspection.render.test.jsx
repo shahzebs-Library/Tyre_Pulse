@@ -8,7 +8,7 @@ const api = vi.hoisted(() => ({
 vi.mock('../contexts/SettingsContext', () => ({ useSettings: () => ({ activeCountry: 'KSA' }) }))
 vi.mock('../contexts/LanguageContext', () => ({ useLanguage: () => ({ t: (k, d) => d || k, language: 'en', dir: 'ltr' }) }))
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ profile: { role: 'Manager' } }) }))
-vi.mock('../lib/api/inspections', () => ({ listInspectionsForAiRegister: (...a) => api.list(...a) }))
+vi.mock('../lib/api/inspections', () => ({ listAiRegisterFiltered: (...a) => api.list(...a) }))
 vi.mock('../lib/api/sites', () => ({ listDataSiteOptions: () => Promise.resolve(['NHC']) }))
 vi.mock('../lib/api/aiTyreInspection', () => ({
   readInspectionAnalysis: (...a) => api.jobs(...a),

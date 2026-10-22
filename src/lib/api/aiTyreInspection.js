@@ -59,3 +59,21 @@ export function indexByInspection(rows) {
     return map
   },new Map())
 }
+
+/** Database RPC derives organisation and recorded_by from the authenticated session. */
+export async function recordDepthMeasurement(values) {
+  const {data,error}=await supabase.rpc('record_ai_tyre_depth',{
+    p_inspection_id:values.inspectionId,
+    p_position:values.position,
+    p_source:values.source,
+    p_original:Number(values.originalMm),
+    p_minimum:Number(values.minimumMm),
+    p_inner:values.innerMm===''?null:Number(values.innerMm),
+    p_center:values.centerMm===''?null:Number(values.centerMm),
+    p_outer:values.outerMm===''?null:Number(values.outerMm),
+    p_odometer:values.odometerKm===''?null:Number(values.odometerKm),
+    p_serial:values.tyreSerial || null,
+  })
+  if(error)throw error
+  return data
+}

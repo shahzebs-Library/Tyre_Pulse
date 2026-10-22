@@ -1,7 +1,9 @@
 /// Remote workforce assignments backed by verified Supabase tables.
 ///
-/// Status transitions are online-only: the database checks current state and
-/// permissions. Offline replay needs an approved command-registry extension.
+/// Reads only. Status changes go through [WorkforceTransitionEngine]
+/// (`workforce_sync_engine.dart`): a durable per-user queue delivered to the
+/// idempotent `workforce_assignment_transition` database function, so a change
+/// made offline is kept, shown as pending, and reconciled when it syncs.
 library;
 
 import 'dart:convert';
@@ -41,14 +43,6 @@ class WorkforceAssignment {
           : DateTime.parse(json['due_at'] as String),
     );
   }
-
-  String? get nextAction => switch (status) {
-        'assigned' => 'acknowledged',
-        'acknowledged' => 'in_progress',
-        'in_progress' => 'submitted',
-        'blocked' => 'in_progress',
-        _ => null,
-      };
 }
 
 class WorkforceAssignmentSnapshot {
@@ -99,25 +93,6 @@ class WorkforceAssignmentsRepository {
             .toList(growable: false),
         offline: true,
       );
-    }
-  }
-
-  Future<void> advance(WorkforceAssignment item) async {
-    final next = item.nextAction;
-    if (next == null) {
-      throw StateError('No available transition for this assignment');
-    }
-    final userId = _client.auth.currentUser?.id;
-    if (userId == null) throw StateError('Not signed in');
-    final changed = await _client
-        .from('workforce_assignments')
-        .update({'status': next})
-        .eq('id', item.id)
-        .eq('assigned_to', userId)
-        .eq('status', item.status)
-        .select('id');
-    if (changed.isEmpty) {
-      throw StateError('Assignment changed or permission denied. Refresh.');
     }
   }
 }

@@ -67,3 +67,19 @@ Branch `feature/message-team-audience-ux-20261022` from `main`; **do not merge u
 
 ## Merge overview at this checkpoint
 Earlier code PRs #426/#428/#431/#433: merged based on previous GitHub checks and discussion. **PR #435 is pending**, includes new audience UI work; no claim of passing CI or production acceptance at this checkpoint.
+
+## Workforce / My Work hardening: verified vs unverified (branch `feature/workforce-hardening-20261022`, 2026-10-22)
+Scope: workforce utilisation, company assignments (web panel, Flutter My Work lane, SQL). No AI inspection or broadcast composer files were touched.
+
+**Verified (actually run in the agent environment)**
+- Web: `vitest` on `src/test/workforce*` plus `webI18nKeyCoverage` and `navTreeParity` (10 files, 60 tests, all pass); `eslint` on touched files (0 errors; 2 pre-existing `exhaustive-deps` warnings); `vite build` succeeds.
+- New web coverage: utilisation (zero/one/many activities, scheduled vs recorded break counted once, overlaps rejected not summed, outside-shift, naive timestamps), assignment directory search/role filter (Arabic names, nulls, locked/unapproved never offered), assignment board search + status/priority filter, page states (error with Retry, empty, filtered-empty, "Showing x of y"), English/Arabic key and placeholder parity for the new `workforce` locale namespace.
+- SQL (PGlite, `node --test supabase/tests/workforce_assignments_hardening.test.mjs`, 21 pass): cross-tenant refusal for assignment create/read/update, spoofed `assigned_by`, employee transition guard (invalid jumps, content edits, reassign, closed work immutable), push enqueue (no token = in-app notification only and no queue row; many tokens = one queue row with all devices; status updates never re-notify; push failure never blocks creation).
+- **Real defect found and fixed:** the `workforce_assignments_create` policy compared `p.organisation_id=organisation_id` inside an `EXISTS`; the unqualified name bound to the profile row, so the check was always true and a manager could assign work to an employee of another organisation. Without the new migration `20261022130000_workforce_assignment_tenant_check.sql` three of those tests fail; with it all pass. The migration is **authored, not applied to the live database**.
+
+**Not verified (no Flutter SDK, devices or live database in this environment)**
+- Flutter: `flutter analyze`, `dart format`, `flutter test` and any build were NOT run. Dart changes were written to repository conventions but are uncompiled, including the generated-l10n string edits (applied by script to `app_localizations_{en,ar,ur}.dart`; ARB key count stays 2217, `arb_key_parity_test` not executed). Run `flutter pub get && dart format . && flutter analyze && flutter test` first.
+- Flutter changes: single-slot encrypted assignment cache stamped with the user id (another user's read deletes it; expires after 30 days), cleared on sign-out and when a session ends by itself (`afterSignOutProvider`, wired in `main.dart`); My Work lane states loading / error + Retry / empty / offline (read-only); server-rejected, conflicting, denied and network transition failures show a plain message with Refresh or Retry (no raw database text); automatic provider retry disabled so the error state is honest. New Dart tests: cache, failure classification, panel widget states incl. Arabic/RTL, copy parity, sign-out hook.
+- Not run: live migration apply, RLS against real Supabase, on-device cold start and offline behaviour, TalkBack/VoiceOver, push delivery.
+- Pre-existing and unrelated: `designSystemRatchet.test.js` fails on `AiTyreInspection.jsx` / `Broadcast.jsx` (raw table / overlay); not touched here as instructed.
+- Web i18n limit: only the new assignment search/filter/state strings are in the `workforce` namespace; the rest of `WorkforceDailyWork.jsx` is still hard-coded English (pre-existing) and needs a follow-up pass.

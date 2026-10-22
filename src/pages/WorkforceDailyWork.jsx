@@ -7,6 +7,7 @@ import EnterpriseTable from '../components/ui/EnterpriseTable'
 import {useAuth} from '../contexts/AuthContext'
 import {estimateWork} from '../lib/workforceIntelligence'
 import {listWorkforceAssignments,assignWork,listAssignableEmployees} from '../lib/api/workforceAssignments'
+import {listWorkEvidence,uploadWorkEvidence,openWorkEvidence} from '../lib/api/workforceEvidence'
 import {addDailyEntry,getMyDailyReport,ensureDailyReport,submitDailyReport,listReviewQueue,reviewDailyReport} from '../lib/api/workforceDaily'
 ChartJS.register(CategoryScale,LinearScale,BarElement,Tooltip,Legend)
 const dateNow=()=>new Date().toLocaleDateString('en-CA')
@@ -21,6 +22,7 @@ export default function WorkforceDailyWork(){
  const [record,setRecord]=useState({report:null,entries:[]})
  const [queue,setQueue]=useState([])
  const [work,setWork]=useState([]),[employees,setEmployees]=useState([])
+ const [evidence,setEvidence]=useState([])
  const [newWork,setNewWork]=useState({title:'',assigned_to:'',site:'',priority:'normal',due_at:'',instructions:''})
  const [tab,setTab]=useState('my-day')
  const [loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('')
@@ -33,6 +35,7 @@ export default function WorkforceDailyWork(){
   setLoading(true);setError('')
   try{
    const own=await getMyDailyReport(date);setRecord(own)
+   setEvidence(own.report?await listWorkEvidence(own.report.id):[])
    setSummary(own.report?.summary||'');setNextActions(own.report?.next_actions||'')
    if(isManager){setQueue(await listReviewQueue());setWork(await listWorkforceAssignments());setEmployees(await listAssignableEmployees())}
    else setWork(await listWorkforceAssignments({mine:true}))
@@ -127,6 +130,16 @@ export default function WorkforceDailyWork(){
  <Tile label="Difference (min)" value={estimate.unexplained_variance_minutes} Icon={AlertTriangle}/>
  </div>:<p role="alert" className="text-sm text-[var(--text-muted)]">Enter valid positive task standard, quantity and factor.</p>}
  <p className="text-xs text-[var(--text-muted)]">The result is an estimate only. No automated personnel decision or fabricated confidence is produced.</p></div>
+ <div className="card space-y-3">
+ <div><h2 className="text-lg font-semibold">Work evidence and attachments</h2><p className="text-xs text-[var(--text-muted)]">Private JPG, PNG or PDF evidence, maximum 10 MB each. Files are linked to the employee report and available to authorized reviewers.</p></div>
+ {editable&&<label className="text-sm block">Attach evidence
+ <input type="file" accept="image/jpeg,image/png,application/pdf" className="input block w-full mt-2" disabled={saving} onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(file)run(async()=>{const report=record.report||await ensureDailyReport(date,profile?.site);await uploadWorkEvidence({report,file})})}}/>
+ </label>}
+ {evidence.length?<div className="space-y-2">{evidence.map(file=><div key={file.id} className="flex items-center justify-between gap-2 border-b border-[var(--input-border)] py-2">
+ <div className="min-w-0"><p className="text-sm truncate">{file.file_name}</p><p className="text-xs text-[var(--text-muted)]">{(file.byte_size/1024).toFixed(1)} KB</p></div>
+ <button type="button" className="btn-secondary" onClick={async()=>{try{const url=await openWorkEvidence(file.object_path);window.open(url,'_blank','noopener,noreferrer')}catch(err){setError(err.message||'Could not open evidence')}}}>View file</button>
+ </div>)}</div>:<p className="text-sm text-[var(--text-muted)]">No evidence attached to this daily report.</p>}
+ </div>
  <div className="card space-y-3">
   <div className="flex justify-between items-center"><h2 className="text-lg font-semibold">End-of-day submission</h2><span className="text-xs font-semibold uppercase text-[var(--accent)]">{record.report?.status||'not started'}</span></div>
   <label className="block text-sm space-y-1">Work completed and results<textarea disabled={!editable} className="input w-full" rows={3} value={summary} onChange={e=>setSummary(e.target.value)}/></label>

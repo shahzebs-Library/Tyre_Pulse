@@ -10,7 +10,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { toUserMessage } from '../lib/safeError'
 import { listInspectionsForPage } from '../lib/api/inspections'
 import { calculateTread, conditionRequiresAnalysis } from '../lib/aiTyreInspection'
-import { readInspectionMeasurements, recordDepthMeasurement } from '../lib/api/aiTyreInspection'
+import { readInspectionMeasurements, recordDepthMeasurement, readInspectionAnalysis, enqueueInspectionPhotos, reviewAiFinding } from '../lib/api/aiTyreInspection'
 
 function photoCount(row) {
   const conditions = row?.tyre_conditions || {}
@@ -96,6 +96,13 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
     }),
   })), [conditions,inspection.id])
   const [storedMeasurements,setStoredMeasurements]=useState([])
+  const [analysisJobs,setAnalysisJobs]=useState([])
+  const [analysisError,setAnalysisError]=useState('')
+  const [analysisLoading,setAnalysisLoading]=useState(false)
+  const refreshAnalysis=useCallback(async()=>{try{setAnalysisJobs(await readInspectionAnalysis([inspection.id]));setAnalysisError('')}catch(e){setAnalysisError(toUserMessage(e,'Could not load AI results'))}},[inspection.id])
+  useEffect(()=>{refreshAnalysis()},[refreshAnalysis])
+  const enqueue=async()=>{setAnalysisLoading(true);try{await enqueueInspectionPhotos(inspection.id);await refreshAnalysis()}catch(e){setAnalysisError(toUserMessage(e,'Could not queue photos'))}finally{setAnalysisLoading(false)}}
+  const decide=async(job,decision)=>{setAnalysisLoading(true);try{await reviewAiFinding(job.id,decision,'Reviewed by supervisor');await refreshAnalysis()}catch(e){setAnalysisError(toUserMessage(e,'Could not save review'))}finally{setAnalysisLoading(false)}}
   const [measurementError,setMeasurementError]=useState('')
   const [savingMeasurement,setSavingMeasurement]=useState(false)
   const [form,setForm]=useState({position:'',source:'manual_gauge',originalMm:'',minimumMm:'',innerMm:'',centerMm:'',outerMm:'',odometerKm:'',tyreSerial:''})
@@ -127,7 +134,7 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
   ]
   const missing=readings.filter(item=>!item.calculation.valid)
   const verified=readings.filter(item=>item.calculation.valid)
-  const appendix=buildInspectionAiAppendix({inspection,jobs:[],measurements:[]})
+  const appendix=buildInspectionAiAppendix({inspection,jobs:analysisJobs,measurements:storedMeasurements})
   return <div className="fixed inset-0 z-[55] bg-black/60 flex justify-end" role="presentation" onClick={onClose}>
     <div className="bg-[var(--panel)] text-[var(--text-primary)] h-full w-full max-w-4xl overflow-y-auto shadow-2xl" role="dialog" aria-modal="true" aria-label="AI tyre inspection details" onClick={e=>e.stopPropagation()}>
       <div className="sticky top-0 z-10 bg-[var(--panel)] border-b border-[var(--border-dim)] px-5 py-4">
@@ -191,16 +198,23 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
           <p className="text-xs text-[var(--text-muted)]">Only physically sourced and validated measurements are eligible for authoritative remaining-tread figures. This screen does not infer millimetres from photographs.</p>
         </>}
         {activeTab==='analysis' && <>
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
-            <div className="flex items-center gap-2 font-semibold text-sm"><ShieldAlert size={18}/> Backend AI integration not deployed</div>
-            <p className="text-sm mt-2">This module currently identifies eligible defect photographs and stores no invented model findings. Background analysis, tenant-authorized results, qualified reviews and production API integration must be deployed before live AI status is available.</p>
-          </div>
-          <h3 className="font-semibold">Inspection eligibility</h3>
-          <div className="space-y-2">{evidence.photos.map((photo,index)=><div key={index} className="border border-[var(--border-dim)] rounded-lg p-3 flex flex-wrap justify-between gap-2"><span>{photo.position} · {photo.condition}</span><span className="text-xs text-[var(--text-muted)]">Awaiting secure processing service</span></div>)}</div>
-          {!evidence.photos.length && <EmptyState icon={ScanSearch} title="No images to analyze" description="Attach damage evidence to a tyre position during inspection."/>}
+          <Card>
+            <div className="flex justify-between items-start gap-4 flex-wrap">
+              <div><h3 className="font-semibold">AI photo review</h3><p className="text-xs text-[var(--text-muted)] mt-1">The server analyzes eligible defect photos. Findings require qualified human review.</p></div>
+              <div className="flex gap-2"><button className="btn-secondary" onClick={refreshAnalysis} disabled={analysisLoading}>Refresh</button><button className="btn-primary" onClick={enqueue} disabled={analysisLoading||!evidence.photos.length}>{analysisLoading?'Working…':'Queue defect photos'}</button></div>
+            </div>
+            {analysisError && <p role="alert" className="text-red-500 text-sm mt-3">{analysisError}</p>}
+          </Card>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3"><Metric label="Queued" value={analysisJobs.length}/><Metric label="Completed" value={analysisJobs.filter(j=>j.status==='completed').length}/><Metric label="Pending" value={analysisJobs.filter(j=>['pending','processing'].includes(j.status)).length}/><Metric label="Failed" value={analysisJobs.filter(j=>j.status==='failed').length}/></div>
+          <div className="space-y-3">{analysisJobs.map(job=><Card key={job.id}>
+            <div className="flex justify-between items-center gap-3"><h4 className="font-semibold">{job.tyre_position}</h4><span className="text-xs">{job.status} · {job.review_status||'unreviewed'}</span></div>
+            {job.analysis?<div className="mt-3 space-y-2"><p className="text-sm">{job.analysis.assessable?'Visual assessment available':(job.analysis.reason||'Image unassessable')}</p>{(job.analysis.defects||[]).map((d,i)=><p key={i} className="text-sm border-l-2 border-amber-500 pl-3">{d.type}: {d.description} ({d.severity})</p>)}<p className="text-sm text-[var(--text-secondary)]">{job.analysis.recommendation}</p></div>:<p className="text-xs text-[var(--text-muted)] mt-2">No completed visual finding available.</p>}
+            {job.status==='completed' && (!job.review_status || job.review_status==='unreviewed')&&<div className="flex gap-2 flex-wrap mt-3"><button className="btn-secondary" disabled={analysisLoading} onClick={()=>decide(job,'accepted')}>Accept observation</button><button className="btn-secondary" disabled={analysisLoading} onClick={()=>decide(job,'rejected')}>Reject observation</button></div>}
+          </Card>)}</div>
+          {!analysisJobs.length && <EmptyState icon={ScanSearch} title="No queued image analysis" description="Request server-side analysis to create jobs for the linked abnormal-tyre photographs."/>}
         </>}
         {activeTab==='report' && <>
-          <p className="text-xs text-[var(--text-muted)]">Preview of the new advisory appendix. This is not yet integrated with the centralized PDF exporter.</p>
+          <p className="text-xs text-[var(--text-muted)]">Preview of the AI analysis appendix from current database readings. A centralized production PDF endpoint is still required.</p>
           <div className="rounded-lg border border-[var(--border-dim)] bg-white text-slate-900 p-5 overflow-x-auto">
             <style>{INSPECTION_AI_PRINT_STYLES}</style>
             <div dangerouslySetInnerHTML={{__html:appendix}}/>

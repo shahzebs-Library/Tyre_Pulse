@@ -22,6 +22,16 @@ describe('photo selection',()=>{
   it('returns each abnormal position photo without any fixed photo count',()=>{
     expect(inspectablePhotoRefs(inspection)).toHaveLength(3)
   })
+  it('supports Flutter photo_url and explicit gauge-free screening for healthy tyres',()=>{
+    const sample={id:'x',tyre_conditions:{
+      FL:{condition:'Damaged',photo_url:'tp-storage://inspection/FL.jpg'},
+      FR:{condition:'Good',photo_url:'tp-storage://inspection/FR.jpg'},
+    }}
+    expect(inspectablePhotoRefs(sample).map(p=>p.position)).toEqual(['FL'])
+    expect(inspectablePhotoRefs(sample,{includeHealthy:true}).map(p=>p.position)).toEqual(['FL','FR'])
+    expect(summarizeEvidence(sample).allPhotoCount).toBe(2)
+    expect(summarizeEvidence(sample).defectPhotos).toBe(1)
+  })
   it('excludes a good tyre from automatic AI defect analysis',()=>{
     expect(inspectablePhotoRefs(inspection).some(p=>p.position==='FR')).toBe(false)
   })

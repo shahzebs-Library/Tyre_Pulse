@@ -6,7 +6,7 @@ import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import {useAuth} from '../contexts/AuthContext'
 import {estimateWork} from '../lib/workforceIntelligence'
-import {listWorkforceAssignments,assignWork,listAssignableEmployees} from '../lib/api/workforceAssignments'
+import {listWorkforceAssignments,assignWork,listAssignableEmployees,setWorkStatus} from '../lib/api/workforceAssignments'
 import {listWorkEvidence,uploadWorkEvidence,openWorkEvidence} from '../lib/api/workforceEvidence'
 import {addDailyEntry,getMyDailyReport,ensureDailyReport,submitDailyReport,listReviewQueue,reviewDailyReport} from '../lib/api/workforceDaily'
 ChartJS.register(CategoryScale,LinearScale,BarElement,Tooltip,Legend)
@@ -64,7 +64,8 @@ export default function WorkforceDailyWork(){
  {accessorKey:'site',header:'Site'},
  {accessorKey:'priority',header:'Priority'},
  {accessorKey:'status',header:'Status'},
- {id:'due',header:'Deadline',accessorFn:r=>dtForLocal(r.due_at)}
+ {id:'due',header:'Deadline',accessorFn:r=>dtForLocal(r.due_at)},
+ {id:'action',header:'Next step',enableSorting:false,cell:({row})=>{const item=row.original;const next={assigned:'acknowledged',acknowledged:'in_progress',in_progress:'submitted',blocked:'in_progress'}[item.status];return next?<button className="btn-secondary" type="button" disabled={saving} onClick={()=>run(()=>setWorkStatus(item.id,next))}>{({acknowledged:'Acknowledge',in_progress:'Start / resume',submitted:'Submit work'})[next]}</button>:<span className="text-xs text-[var(--text-muted)]">No employee action</span>}}
  ],[])
  const reviewColumns=useMemo(()=>[
   {accessorKey:'employee_id',header:'Employee ID',size:200},

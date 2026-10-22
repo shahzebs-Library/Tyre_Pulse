@@ -74,7 +74,7 @@ async function inspectionFor(client: ReturnType<typeof createClient>, id: string
   if (error || !data) throw new Error("inspection not available");
   return data;
 }
-function eligibleEvidence(inspection: Json) {
+function eligibleEvidence(inspection: Json, includeHealthy = false) {
   const result: { position:string; ref:string; condition:string }[] = [];
   const conditions = inspection.tyre_conditions && typeof inspection.tyre_conditions === "object"
     ? inspection.tyre_conditions as Json : {};
@@ -82,7 +82,7 @@ function eligibleEvidence(inspection: Json) {
     if (!value || typeof value !== "object") continue;
     const data = value as Json;
     const condition = str(data.condition || data.status, 120);
-    if (!eligibleCondition(condition)) continue;
+    if (!includeHealthy && !eligibleCondition(condition)) continue;
     const seen = new Set<string>();
     for (const ref of [...photos(data.photo_url), ...photos(data.photo), ...photos(data.photos), ...photos(data.photo_refs)]) {
       if (!parsedStorage(ref) || seen.has(ref)) continue;
@@ -98,7 +98,9 @@ async function enqueue(req: Request, payload: Json) {
   const inspection = await inspectionFor(client, payload.inspection_id);
   if (inspection.organisation_id !== profile.organisation_id) return fail("Inspection unavailable", 403);
   if (!["Admin","Manager","Director","Maintenance Supervisor","Tyre Man"].includes(profile.role)) return fail("Inspection operation not authorized",403);
-  const evidence = eligibleEvidence(inspection);
+  // Full visual screening is only user requested; automatic queue remains defect-only.
+  const includeHealthy = payload.action === "screen";
+  const evidence = eligibleEvidence(inspection, includeHealthy);
   let created = 0;
   for (const item of evidence) {
     // Path-hash is an idempotency identifier, not proof that bytes are immutable.
@@ -293,7 +295,7 @@ Deno.serve(async req => {
   try {
     const payload = await req.json() as Json;
     if (!payload || typeof payload !== "object") return fail("Invalid request");
-    if (payload.action === "enqueue") return await enqueue(req,payload);
+    if (payload.action === "enqueue" || payload.action === "screen") return await enqueue(req,payload);
     if (payload.action === "review") return await review(req,payload);
     if (payload.action === "backfill") return await backfill(req,payload);
     if (payload.action === "work") return await work(req);

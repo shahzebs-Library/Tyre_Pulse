@@ -158,6 +158,7 @@ const NAV_GROUPS = [
       { to: '/batteries',           label: 'Battery Lifecycle',  icon: BatteryCharging, adminOnly: A },
       { to: '/telematics-devices',  label: 'Telematics Devices', icon: Router, adminOnly: A },
       { to: '/shifts',              label: 'Shift Scheduling',   icon: CalendarClock, adminOnly: A },
+      { to: '/workforce-daily', label: 'My Day & Team Reviews', icon: ClipboardCheck },
       { to: '/speed-limiter',       label: 'Speed Limiter',      icon: Gauge, adminOnly: A },
       { to: '/engine-hours',        label: 'Engine Hours',       icon: Gauge, adminOnly: A },
       { to: '/odometer-logs',       label: 'Odometer Logs',      icon: Activity },

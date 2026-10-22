@@ -124,3 +124,14 @@ export async function backfillAiInspectionRange({from,to,page=0}) {
   if(error)throw error
   return data
 }
+
+/** On-demand gauge-free visual screening of all photographed tyre positions.
+ * All depth/remaining-life figures remain unmeasured unless gauge data exists.
+ */
+export async function screenInspectionPhotos(inspectionId) {
+  const {data,error}=await supabase.functions.invoke('ai-tyre-inspection',{
+    body:{action:'screen',inspection_id:inspectionId},
+  })
+  if(error)throw error
+  return data
+}

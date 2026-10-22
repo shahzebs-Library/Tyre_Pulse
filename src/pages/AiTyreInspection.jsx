@@ -14,7 +14,7 @@ import { readInspectionMeasurements, recordDepthMeasurement, readInspectionAnaly
 
 /** Calendar day selection in Saudi Arabia; always preserve local midnight. */
 function saudiDay(value) {
-  return /^\\d{4}-\\d{2}-\\d{2}$/.test(value) ? new Date(value+'T00:00:00+03:00') : null
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(value+'T00:00:00+03:00') : null
 }
 function saudiRange(from, through) {
   const start=saudiDay(from)

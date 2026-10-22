@@ -258,8 +258,9 @@ async function work(req:Request) {
       const inputTokens = Number(usage.promptTokenCount);
       const outputTokens = Number(usage.candidatesTokenCount);
       const hasUsage = Number.isFinite(inputTokens) && Number.isFinite(outputTokens);
-      const inputRate = Number(Deno.env.get("AI_INPUT_USD_PER_MILLION"));
-      const outputRate = Number(Deno.env.get("AI_OUTPUT_USD_PER_MILLION"));
+      const defaultRate = model === "gemini-2.5-flash-lite" ? [0.10, 0.40] : null;
+      const inputRate = Number(Deno.env.get("AI_INPUT_USD_PER_MILLION") || defaultRate?.[0]);
+      const outputRate = Number(Deno.env.get("AI_OUTPUT_USD_PER_MILLION") || defaultRate?.[1]);
       const hasRates = Number.isFinite(inputRate) && Number.isFinite(outputRate) && inputRate > 0 && outputRate > 0;
       const estimatedCost = hasUsage && hasRates ? Number(((inputTokens*inputRate+outputTokens*outputRate)/1e6).toFixed(6)) : null;
       await admin.from("ai_tyre_inspection_jobs").update({

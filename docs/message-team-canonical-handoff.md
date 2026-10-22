@@ -67,3 +67,28 @@ Branch `feature/message-team-audience-ux-20261022` from `main`; **do not merge u
 
 ## Merge overview at this checkpoint
 Earlier code PRs #426/#428/#431/#433: merged based on previous GitHub checks and discussion. **PR #435 is pending**, includes new audience UI work; no claim of passing CI or production acceptance at this checkpoint.
+
+## Audience completion (2026-10-23, branch `feature/broadcast-audience-complete-20261023`, from `main` 2e0b56f3)
+Code only. No live DB, no device, no CI run was available; everything below was verified with local eslint/vitest/vite build only.
+
+What changed (items 1-7 of "Current web form specifics" above):
+- **Pickers are now built from real data, never static lists** (`src/lib/broadcastAudience.js`, loaded by `loadAudienceDirectory()` in `src/lib/api/broadcast.js`):
+  - *Job roles* = distinct `profiles.role` of approved, unlocked people in the caller's organisation + that organisation's active `custom_roles`. Values keep the EXACT stored case/spelling because `broadcast_send`/`broadcast_audience` filter with `p.role = any(p_roles)`. Option hints show how many eligible people hold the role. `ASSIGNABLE_BUILTIN_ROLES` is no longer used here (it listed roles nobody holds).
+  - *Countries* = countries of the organisation's active sites + countries held by its eligible people (server test is `p.country && p_countries`). The static `COUNTRIES` constant is no longer used on this page.
+  - *Sites* = active sites of the caller's organisation, normalised like the DB (`normalize_site`: upper, trim, collapse spaces, `site_aliases`, trailing `-ST`/`_ST` strip), de-duplicated on the canonical value, narrowed by selected countries. Canonical values are what `profiles.sites` stores, which is what the server overlaps with (`p.sites && (p_sites || ['ALL'])`). A site chosen earlier stays on offer/as a chip after the country filter changes. Foreign-organisation and inactive sites are dropped client-side (RLS is still the boundary; super admins can read other orgs, hence the explicit filter).
+  - After the directory loads, selections that are not in it are pruned. The first preview is not requested until the directory is ready.
+- **Zero selection still means ALL.** When nothing narrows the audience the page shows a warning checkbox ("No filter is selected ... Tick to confirm") that must be ticked before Send; ticking resets on every audience change. Send additionally needs the latest server preview to have succeeded with a non-zero total (unchanged).
+- **New reusable `src/components/ui/MultiCombobox.jsx`** (ARIA editable combobox + `role=listbox` `aria-multiselectable`, `aria-activedescendant`, option `aria-setsize/posinset`, portalled via `useAnchoredPopover` so `.card` does not clip it). Keys: ArrowUp/Down (wrap), Home/End (list open and search empty, or Ctrl), Enter and Space (empty search) toggle, Escape closes and keeps focus (second Escape clears search), typing filters and highlights the first match (type-ahead), Tab closes. Chips with named remove buttons, `+N more`, live count, "Select all N matching" and "Clear" as real buttons. Search is case/diacritic/Arabic-letter-variant insensitive and every token must match.
+- **Follow-up assignment**: employee picker is a multi-select over the same component, searchable by name, username, employee ID, role, site, country and Arabic names. One Action Center task is created per person with source key `broadcast:<messageId>:<userId>` (retry creates only the missing ones; per-person success/failure is shown). The free-text site input is replaced by a dropdown of the registered, canonical site directory.
+- **Follow-up table** is now `EnterpriseTable` (hand-built `<table>` removed from `Broadcast.jsx`).
+- Old `AudienceSelect` (non-ARIA checkbox popover) was deleted.
+
+Tests added (all passing locally): `src/test/broadcastAudience.test.js` (roles/countries/sites against server-predicate mirrors, dedupe, foreign org, Arabic search), `src/test/multiCombobox.test.jsx` (ARIA + keyboard), `src/test/broadcastPage.render.test.jsx` (page: options from data, everyone confirmation, stale preview invalidation, zero recipients block, per-person tasks).
+
+Known limits / not verified:
+- The server predicates are mirrored in `serverRoleMatch/serverCountryMatch/serverSiteMatch` from the committed migration `20261022115000_broadcast_push_target_entity_id.sql` (broadcast_send). The `broadcast_audience` body itself is not in the repo (live definition only); it is assumed to use the same predicate, as V569 documents. Re-check against the live function.
+- Site values carry no country (the RPC takes names only), so a name that exists in two countries is one option labelled with both. A country-qualified site ID would need an RPC change.
+- `profiles` is read org-wide, up to 20,000 rows; a truncated or failed read is reported on the page ("Could not load the complete list of ...") rather than shown as a short list. `site_aliases` read failure silently falls back to suffix-only normalisation (existing `listSiteAliases` behaviour).
+- `designSystemRatchet.test.js` currently FAILS on this base (raw `<table>` and `fixed inset-0` count 0 -> 1). The only offender is `src/pages/AiTyreInspection.jsx`, which this change does not touch; `Broadcast.jsx` contributes none.
+- No screen-reader or real mobile-browser pass was done; layout uses responsive grids (1/2/3 columns) but was only checked by tests and build.
+- CI has not been run on this branch; PR not opened.

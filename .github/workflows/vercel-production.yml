@@ -1,0 +1,58 @@
+name: Deploy Tyre Pulse to Vercel
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tyre-pulse-vercel-production
+  cancel-in-progress: false
+
+jobs:
+  production:
+    name: Build and deploy Tyre Pulse
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Configure Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Check deployment credentials
+        shell: bash
+        run: |
+          for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing GitHub Actions secret: $name"
+              exit 1
+            fi
+          done
+          if [[ "$VERCEL_ORG_ID" != "team_Y0LVromY4EL05QQkXQvb55uN" ]] || [[ "$VERCEL_PROJECT_ID" != "prj_5csYUyBoIN8RFDnHLX8sdO46uZYT" ]]; then
+            echo "::error::Vercel IDs do not match the verified tyre-pulse production project."
+            exit 1
+          fi
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel production settings
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build production application
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy production build
+        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"

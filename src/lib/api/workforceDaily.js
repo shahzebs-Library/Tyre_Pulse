@@ -43,3 +43,10 @@ export async function reviewDailyReport(id,decision,note) {
 export function dailyReportMetrics(entries,shiftStart,shiftEnd) {
  return summarizeWorkday({shift_start:shiftStart,shift_end:shiftEnd,activities:entries})
 }
+
+export async function getDailyReportForReview(id){
+ if(!id)throw new ServiceError('Report id required')
+ const report=unwrap(await supabase.from('workforce_daily_reports').select(REPORT_COLS).eq('id',id).single())
+ const entries=unwrap(await supabase.from('workforce_daily_entries').select(ENTRY_COLS).eq('report_id',id).order('started_at'))
+ return {report,entries}
+}

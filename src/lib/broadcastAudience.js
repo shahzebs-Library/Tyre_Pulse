@@ -193,7 +193,7 @@ const siteNames = (p) => [...new Set([clean(p?.site), ...arr(p?.sites).map(clean
 export function toEmployeeOption(p) {
   const name = clean(p.full_name) || clean(p.username) || String(p.id)
   const sites = siteNames(p)
-  const hint = [clean(p.role), sites.join(', ')].filter(Boolean).join(' · ')
+  const hint = [clean(p.role), sites.join(', ')].filter(Boolean).join(' | ')
   return {
     value: String(p.id),
     label: clean(p.employee_id) ? `${name} (${clean(p.employee_id)})` : name,
@@ -253,5 +253,5 @@ export function isEveryone({ roles = [], countries = [], sites = [] } = {}) {
 export function audienceSummary({ roles = [], countries = [], sites = [] } = {}) {
   const part = (list, all, noun) => (arr(list).length
     ? `${arr(list).length === 1 ? arr(list)[0] : `${arr(list).length} ${noun}`}` : all)
-  return `${part(roles, 'All job roles', 'job roles')} · ${part(countries, 'all countries', 'countries')} · ${part(sites, 'all sites', 'sites')}`
+  return `${part(roles, 'All job roles', 'job roles')} | ${part(countries, 'all countries', 'countries')} | ${part(sites, 'all sites', 'sites')}`
 }

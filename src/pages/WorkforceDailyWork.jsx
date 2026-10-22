@@ -19,7 +19,7 @@ ChartJS.register(CategoryScale,LinearScale,BarElement,Tooltip,Legend)
 const dateNow=()=>new Date().toLocaleDateString('en-CA')
 const categories=['productive','coordination','reporting','training','break','blocked','unassigned']
 const cleanDate=s=>String(s||'').slice(0,10)
-const dtForLocal=v=>v?new Date(v).toLocaleString(): '—'
+const dtForLocal=v=>v?new Date(v).toLocaleString(): 'N/A'
 function Tile({label,value,Icon}) {return <div className="card"><div className="flex items-center justify-between"><span className="text-xs text-[var(--text-muted)]">{label}</span><Icon size={17} className="text-[var(--accent)]"/></div><div className="text-3xl font-bold mt-2 tabular-nums">{value}</div></div>}
 export default function WorkforceDailyWork(){
  const {profile}=useAuth()
@@ -147,7 +147,7 @@ export default function WorkforceDailyWork(){
  {boardView==='table'?<EnterpriseTable columns={assignmentColumns} data={visibleWork} loading={loading} emptyMessage={boardEmpty}/>:boardView==='board'?
  <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3">{['assigned','acknowledged','in_progress','blocked','submitted'].map(status=><section className="card space-y-2" key={status}>
  <h3 className="text-sm font-semibold capitalize">{status.replace('_',' ')} ({visibleWork.filter(w=>w.status===status).length})</h3>
- {visibleWork.filter(w=>w.status===status).map(w=><div key={w.id} className="rounded-lg border border-[var(--input-border)] p-3 space-y-1"><p className="text-sm font-semibold">{w.title}</p><p className="text-xs text-[var(--text-muted)]">{w.site||'No site'} · {w.priority}</p><p className="text-xs">{w.due_at?dtForLocal(w.due_at):'Unscheduled'}</p></div>)}
+ {visibleWork.filter(w=>w.status===status).map(w=><div key={w.id} className="rounded-lg border border-[var(--input-border)] p-3 space-y-1"><p className="text-sm font-semibold">{w.title}</p><p className="text-xs text-[var(--text-muted)]">{w.site||'No site'} | {w.priority}</p><p className="text-xs">{w.due_at?dtForLocal(w.due_at):'Unscheduled'}</p></div>)}
  </section>)}</div>:
  <EnterpriseTable columns={assignmentColumns} data={[...visibleWork].sort((a,b)=>String(a.due_at||'9999').localeCompare(String(b.due_at||'9999')))} loading={loading} emptyMessage={boardFiltered?boardEmpty:t('workforce.board.noSchedule')}/>}
  {isManager&&<div className="grid grid-cols-1 xl:grid-cols-2 gap-3">

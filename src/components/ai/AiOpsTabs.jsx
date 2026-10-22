@@ -157,7 +157,7 @@ export function AiOperationsTab({ country }) {
                 {s.byModel.length === 0 ? <p className="text-sm text-[var(--text-muted)]">No data.</p> :
                   s.byModel.map((m) => (
                     <Bar key={m.model} label={m.model} value={m.cost} max={maxModel}
-                      right={`${fmtTokens(m.tokens)} · ${fmtUSD(m.cost)}`} />
+                      right={`${fmtTokens(m.tokens)} | ${fmtUSD(m.cost)}`} />
                   ))}
               </div>
             </div>
@@ -167,7 +167,7 @@ export function AiOperationsTab({ country }) {
                 {s.byFeature.length === 0 ? <p className="text-sm text-[var(--text-muted)]">No data.</p> :
                   s.byFeature.map((f) => (
                     <Bar key={f.feature} label={f.feature} value={f.cost} max={maxFeature} color="#3b82f6"
-                      right={`${f.calls} calls · ${fmtUSD(f.cost)}`} />
+                      right={`${f.calls} calls | ${fmtUSD(f.cost)}`} />
                   ))}
               </div>
             </div>
@@ -196,7 +196,7 @@ export function AiOperationsTab({ country }) {
               <h3 className="font-semibold mb-3 flex items-center gap-2 text-red-300">
                 <XCircle size={16} /> Recent failed requests
                 <span className="ml-2 text-xs font-normal text-[var(--text-muted)]">
-                  {Object.entries(s.failureBreakdown).map(([k, v]) => `${k}: ${v}`).join(' · ')}
+                  {Object.entries(s.failureBreakdown).map(([k, v]) => `${k}: ${v}`).join(' | ')}
                 </span>
               </h3>
               <div className="overflow-x-auto">

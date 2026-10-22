@@ -1,5 +1,5 @@
 // Role is the actual profiles field; job designation is not separately recorded.
-export const employeeLabel = p => [p.full_name || p.username || 'Unnamed account', p.employee_id ? `ID: ${p.employee_id}` : null, p.role || null, p.site || null].filter(Boolean).join(' · ')
+export const employeeLabel = p => [p.full_name || p.username || 'Unnamed account', p.employee_id ? `ID: ${p.employee_id}` : null, p.role || null, p.site || null].filter(Boolean).join(' | ')
 export function findAssignableEmployees(employees, {search='',role='all'}={}) {
  const term=String(search).trim().toLocaleLowerCase()
  return employees.filter(p=>{

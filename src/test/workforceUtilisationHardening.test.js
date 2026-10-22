@@ -106,7 +106,7 @@ describe('assignment directory search and role filter edge cases', () => {
   })
   it('matches Arabic names and tolerates null fields', () => {
     expect(findAssignableEmployees(people, { search: 'عمر' }).map(p => p.id)).toEqual(['u3'])
-    expect(employeeLabel(people[2])).toBe('عمر الفاروق · Technician')
+    expect(employeeLabel(people[2])).toBe('عمر الفاروق | Technician')
   })
   it('role filter combined with search narrows both ways; locked is never offered', () => {
     expect(findAssignableEmployees(people, { role: 'Driver', search: 'ghost' })).toEqual([])

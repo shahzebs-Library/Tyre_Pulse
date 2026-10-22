@@ -6,6 +6,7 @@ import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import {useAuth} from '../contexts/AuthContext'
 import {estimateWork} from '../lib/workforceIntelligence'
+import {workforceBoardKpis,assignmentStatusSeries} from '../lib/workforceAnalytics'
 import {listWorkforceAssignments,assignWork,listAssignableEmployees,setWorkStatus} from '../lib/api/workforceAssignments'
 import {listWorkEvidence,uploadWorkEvidence,openWorkEvidence} from '../lib/api/workforceEvidence'
 import {addDailyEntry,getMyDailyReport,getDailyReportForReview,ensureDailyReport,submitDailyReport,listReviewQueue,reviewDailyReport} from '../lib/api/workforceDaily'
@@ -44,6 +45,8 @@ export default function WorkforceDailyWork(){
   }catch(e){setError(e.message||'Unable to load daily work')}finally{setLoading(false)}
  },[date,isManager])
  useEffect(()=>{load()},[load])
+ const board=useMemo(()=>workforceBoardKpis(work,queue),[work,queue])
+ const boardChart=useMemo(()=>({labels:assignmentStatusSeries(work).map(x=>x.status.replace('_',' ')),datasets:[{label:'Assignments',data:assignmentStatusSeries(work).map(x=>x.count),backgroundColor:'rgba(32,150,110,0.72)',borderRadius:5}]}),[work])
  const entries=record.entries
  const completed=entries.filter(e=>e.category==='productive').length
  const total=entries.reduce((n,e)=>n+Math.max(0,(Date.parse(e.ended_at)-Date.parse(e.started_at))/60000),0)
@@ -91,7 +94,7 @@ export default function WorkforceDailyWork(){
  </div>
  {error&&<div role="alert" className="card text-red-500 flex items-center gap-2"><AlertTriangle size={18}/>{error}</div>}
  {notice&&<div role="status" className="card text-green-600">{notice}</div>}
- {tab==='assignments'?<div className="card space-y-3"><h2 className="font-semibold">Company work assignments</h2>
+ {tab==='assignments'?<div className="card space-y-3"><h2 className="font-semibold">Company work assignments</h2><div className="grid grid-cols-2 md:grid-cols-4 gap-3"><Tile label="Assigned" value={board.assigned} Icon={ClipboardCheck}/><Tile label="In progress" value={board.active} Icon={Clock}/><Tile label="Blocked" value={board.blocked} Icon={AlertTriangle}/><Tile label="Awaiting review" value={board.pending_verification} Icon={Send}/></div><div className="h-56"><Bar data={boardChart} options={{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}}/></div><p className="text-xs text-[var(--text-muted)]">Observed status counts. These figures are not employee productivity scores.</p>
  {isManager&&<form className="grid grid-cols-1 md:grid-cols-2 gap-3" onSubmit={e=>{e.preventDefault();run(async()=>{await assignWork({...newWork,due_at:newWork.due_at?new Date(newWork.due_at).toISOString():null});setNewWork({title:'',assigned_to:'',site:'',priority:'normal',due_at:'',instructions:''})})}}>
  <label className="text-sm">Work title<input className="input w-full" required value={newWork.title} onChange={e=>setNewWork(w=>({...w,title:e.target.value}))}/></label>
  <label className="text-sm">Assigned employee<select className="input w-full" required value={newWork.assigned_to} onChange={e=>setNewWork(w=>({...w,assigned_to:e.target.value}))}><option value="">Choose employee</option>{employees.map(p=><option key={p.id} value={p.id}>{p.full_name||p.id} {p.site?`(${p.site})`:''}</option>)}</select></label>

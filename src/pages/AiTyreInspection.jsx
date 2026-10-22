@@ -177,8 +177,8 @@ export default function AiTyreInspection() {
       <Card><div className="flex items-center gap-2 text-sm"><ShieldAlert size={17}/> Defect photos for review</div><div className="text-2xl font-semibold mt-2">{records.reduce((sum,r)=>sum+r.photosForReview,0)}</div></Card>
       <Card><div className="flex items-center gap-2 text-sm"><Ruler size={17}/> Measured tyre positions</div><div className="text-2xl font-semibold mt-2">{records.reduce((sum,r)=>sum+r.measuredCount,0)}</div></Card>
     </div>
-    <PhotoCaptureGuide/>
-    <HistoricInspectionBackfill/>
+    <details className="rounded-xl border border-[var(--border-dim)] px-4 py-3"><summary className="cursor-pointer font-medium">Photo capture guide — expand when needed</summary><div className="mt-3"><PhotoCaptureGuide/></div></details>
+    <details className="rounded-xl border border-[var(--border-dim)] px-4 py-3"><summary className="cursor-pointer font-medium">Historical AI backfill — managers only</summary><div className="mt-3"><HistoricInspectionBackfill/></div></details>
     <Card>
       <div className="flex flex-wrap justify-between gap-3 mb-3">
         <div><h2 className="font-semibold">Inspection evidence register</h2><p className="text-xs text-[var(--text-muted)]">Showing latest 200 records; absence of a reading is never estimated from a photograph.</p></div>
@@ -230,6 +230,8 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
   })), [conditions,inspection.id])
   const [storedMeasurements,setStoredMeasurements]=useState([])
   const [analysisJobs,setAnalysisJobs]=useState([])
+  const [reviewNotes,setReviewNotes]=useState({})
+  const [showCaptureGuide,setShowCaptureGuide]=useState(false)
   const expense=useMemo(()=>summarizeInspectionAiCosts(analysisJobs)[0], [analysisJobs])
   const [analysisError,setAnalysisError]=useState('')
   const [analysisLoading,setAnalysisLoading]=useState(false)
@@ -247,7 +249,7 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
     } finally { setAnalysisLoading(false) }
   }
   const enqueue=async()=>{setAnalysisLoading(true);try{await enqueueInspectionPhotos(inspection.id);await refreshAnalysis()}catch(e){setAnalysisError(toUserMessage(e,'Could not queue photos'))}finally{setAnalysisLoading(false)}}
-  const decide=async(job,decision)=>{setAnalysisLoading(true);try{await reviewAiFinding(job.id,decision,'Reviewed by supervisor');await refreshAnalysis()}catch(e){setAnalysisError(toUserMessage(e,'Could not save review'))}finally{setAnalysisLoading(false)}}
+  const decide=async(job,decision)=>{setAnalysisLoading(true);try{await reviewAiFinding(job.id,decision,reviewNotes[job.id]?.trim() || (decision==='accepted'?'Reviewer confirmed visible evidence':'Reviewer rejected finding; reason not specified'));await refreshAnalysis()}catch(e){setAnalysisError(toUserMessage(e,'Could not save review'))}finally{setAnalysisLoading(false)}}
   const [measurementError,setMeasurementError]=useState('')
   const [savingMeasurement,setSavingMeasurement]=useState(false)
   const [form,setForm]=useState({position:'',source:'manual_gauge',originalMm:'',minimumMm:'',innerMm:'',centerMm:'',outerMm:'',odometerKm:'',tyreSerial:''})
@@ -381,7 +383,7 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
           {!evidence.allPhotos.length && <EmptyState icon={ImageIcon} title="No tyre photographs" description="Photos will appear here when inspectors attach photos to tyre positions."/>}
         </>}
         {activeTab==='measurements' && <>
-          <PhotoCaptureGuide/>
+          <details className="text-sm"><summary className="cursor-pointer">How to capture gauge evidence</summary><PhotoCaptureGuide/></details>
           <div className="grid grid-cols-3 gap-3">
             <Metric label="Positions" value={readings.length}/>
             <Metric label="Complete readings" value={verified.length}/>
@@ -414,11 +416,15 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
           </Card>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3"><Metric label="Queued" value={analysisJobs.length}/><Metric label="Completed" value={analysisJobs.filter(j=>j.status==='completed').length}/><Metric label="Pending" value={analysisJobs.filter(j=>['pending','processing'].includes(j.status)).length}/><Metric label="Failed" value={analysisJobs.filter(j=>j.status==='failed').length}/></div>
           <Card><div className="flex justify-between gap-3 flex-wrap"><div><p className="text-xs text-[var(--text-muted)]">AI inference cost for this inspection</p><p className="text-xl font-bold">{expense?.priced?`${expense.costUsd.toFixed(6)}`:"Not priced yet"}</p></div><div className="text-xs text-[var(--text-muted)]">Input tokens: {expense?.inputTokens||0} · Output tokens: {expense?.outputTokens||0} · Unpriced jobs: {expense?.unpriced||0}</div></div><p className="text-xs text-[var(--text-muted)] mt-2">Provider token usage is recorded on completion. USD estimates require verified provider pricing configured in the worker; unpriced calls are never shown as free.</p></Card>
-          <p className="text-xs text-[var(--text-muted)]">Compare each AI finding with the original position-linked image before accepting it. Accept only after a qualified reviewer checks the photograph. An AI result is not an independent safety assessment.</p>
+          <div className="rounded-xl border border-[var(--border-dim)] p-3 text-sm"><strong>Review quality summary</strong><div className="flex flex-wrap gap-4 mt-2">
+            <span>Accepted: {analysisJobs.filter(j=>j.review_status==='accepted').length}</span>
+            <span>Rejected: {analysisJobs.filter(j=>j.review_status==='rejected').length}</span>
+            <span>Awaiting review: {analysisJobs.filter(j=>j.status==='completed' && (!j.review_status||j.review_status==='unreviewed')).length}</span>
+          </div><p className="text-xs text-[var(--text-muted)] mt-1">Your decisions and reasons are retained as structured feedback for future quality evaluation. No automatic model retraining or unsafe auto-approval is performed.</p></div>
           <div className="space-y-3">{analysisJobs.map(job=><Card key={job.id}>
             <div className="flex justify-between items-center gap-3"><h4 className="font-semibold">{positionLabel(job.tyre_position)}</h4><span className="text-xs">{job.status} · {job.review_status||'unreviewed'}</span></div>{photoUrls[job.tyre_position+':'+job.photo_ref] && <div className="mt-3"><a href={photoUrls[job.tyre_position+':'+job.photo_ref]} rel="noopener noreferrer" target="_blank" aria-label={'Inspect original tyre photo for '+job.tyre_position}><img src={photoUrls[job.tyre_position+':'+job.photo_ref]} alt={'Original tyre photo for supervisor verification at '+job.tyre_position} className="h-48 max-w-full rounded-lg border border-[var(--border-dim)] object-contain" /></a><p className="text-xs text-[var(--text-muted)] mt-1">Original photograph — enlarge and compare before review</p></div>}
             {job.analysis?<div className="mt-3 space-y-2"><p className="text-sm">{job.analysis.assessable?'Visual assessment available':(job.analysis.reason||'Image unassessable')}</p>{(job.analysis.defects||[]).map((d,i)=><p key={i} className="text-sm border-l-2 border-amber-500 pl-3">{d.type}: {d.description} ({d.severity})</p>)}<p className="text-sm text-[var(--text-secondary)]">{job.analysis.recommendation}</p></div>:<p className="text-xs text-[var(--text-muted)] mt-2">No completed visual finding available.</p>}
-            {job.status==='completed' && (!job.review_status || job.review_status==='unreviewed')&&<div className="flex gap-2 flex-wrap mt-3"><button className="btn-secondary" disabled={analysisLoading} onClick={()=>decide(job,'accepted')}>Accept observation</button><button className="btn-secondary" disabled={analysisLoading} onClick={()=>decide(job,'rejected')}>Reject observation</button></div>}
+            {job.status==='completed' && (!job.review_status || job.review_status==='unreviewed')&&<div className="mt-3 space-y-2"><label className="block text-xs text-[var(--text-secondary)]">Review reason / improvement feedback<textarea className="input block w-full mt-1" rows={2} placeholder="Describe the confirmed damage, false positive, blur, or missing evidence" value={reviewNotes[job.id]||''} onChange={e=>setReviewNotes(v=>({...v,[job.id]:e.target.value}))}/></label><div className="flex gap-2 flex-wrap"><button className="btn-secondary" disabled={analysisLoading} onClick={()=>decide(job,'accepted')}>Accept observation</button><button className="btn-secondary" disabled={analysisLoading} onClick={()=>decide(job,'rejected')}>Reject observation</button></div></div>}
           </Card>)}</div>
           {!analysisJobs.length && <EmptyState icon={SearchCheck} title="No queued image analysis" description="Request server-side analysis to create jobs for the linked abnormal-tyre photographs."/>}
         </>}

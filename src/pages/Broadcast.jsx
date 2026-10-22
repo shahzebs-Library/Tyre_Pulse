@@ -9,10 +9,10 @@
  * people of whom 2 carry the app is not a message to 35 phones. Presenting one
  * number would let someone believe the fleet had been reached.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Megaphone, Send, RefreshCcw, Users, Smartphone, AlertTriangle, Check,
-  Download, FileText, Search, Languages, Inbox, Clock,
+  Download, FileText, Search, Languages, Inbox, Clock, ChevronDown, X, CheckCheck,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Illustration from '../components/illustrations/Illustration'
@@ -44,30 +44,94 @@ const fmtDate = (d) => {
     : dt.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
-/** Multi-select rendered as toggle chips - a native multi-select is unusable on a phone. */
-function ChipPicker({ label, options, value, onChange, allLabel }) {
-  const toggle = (v) => onChange(value.includes(v) ? value.filter((x) => x !== v) : value.concat(v))
+/** Searchable, compact multi-select. Empty selection explicitly means the full audience. */
+function AudienceSelect({ label, options, value, onChange, allLabel, hint }) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const root = useRef(null)
+  const searchRef = useRef(null)
+  const visible = useMemo(() => options.filter((item) =>
+    String(item).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())), [options, query])
+  const toggle = (item) => onChange(value.includes(item)
+    ? value.filter((selected) => selected !== item) : [...value, item])
+
+  useEffect(() => {
+    if (!open) return undefined
+    const outside = (event) => {
+      if (!root.current?.contains(event.target)) setOpen(false)
+    }
+    const escape = (event) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', outside)
+    document.addEventListener('keydown', escape)
+    searchRef.current?.focus()
+    return () => {
+      document.removeEventListener('pointerdown', outside)
+      document.removeEventListener('keydown', escape)
+    }
+  }, [open])
+
   return (
-    <div className="flex flex-col gap-1.5">
-      <span className={labelCls}>{label}</span>
-      <div className="flex flex-wrap gap-1.5">
-        <button type="button" onClick={() => onChange([])}
-          className={`rounded-full px-3 py-1 text-xs border transition ${
-            value.length === 0
-              ? 'border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent)]'
-              : 'border-[var(--border-subtle)] text-[var(--text-secondary)]'}`}>
-          {allLabel}
-        </button>
-        {options.map((o) => (
-          <button key={o} type="button" onClick={() => toggle(o)}
-            className={`rounded-full px-3 py-1 text-xs border transition ${
-              value.includes(o)
-                ? 'border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent)]'
-                : 'border-[var(--border-subtle)] text-[var(--text-secondary)]'}`}>
-            {o}
-          </button>
-        ))}
-      </div>
+    <div ref={root} className="relative min-w-0">
+      <label className={labelCls}>{label}</label>
+      <button type="button" aria-label={`Select ${label.toLowerCase()}`}
+        aria-expanded={open} aria-haspopup="true"
+        onClick={() => setOpen((current) => !current)}
+        className={`${inputCls} mt-1 flex min-h-10 items-center justify-between gap-2 text-left hover:border-[var(--accent)]`}>
+        <span className="min-w-0 truncate">{value.length === 0
+          ? allLabel : value.length === 1 ? value[0] : `${value.length} selected`}</span>
+        <ChevronDown size={16} className="shrink-0 text-[var(--text-muted)]" />
+      </button>
+      <p className="mt-1 text-[11px] text-[var(--text-muted)]">{hint}</p>
+      {value.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {value.slice(0, 3).map((item) => (
+            <button key={item} type="button" onClick={() => toggle(item)}
+              title={`Remove ${item}`}
+              className="inline-flex max-w-full items-center gap-1 rounded-md border border-[var(--border-subtle)] bg-[var(--input-bg)] px-2 py-1 text-[11px] text-[var(--text-secondary)]">
+              <span className="truncate">{item}</span><X size={12} />
+            </button>
+          ))}
+          {value.length > 3 && <span className="px-2 py-1 text-xs text-[var(--text-muted)]">+{value.length - 3} more</span>}
+        </div>
+      )}
+      {open && (
+        <div role="group" aria-label={`${label} options`}
+          className="absolute left-0 right-0 top-full z-40 mt-2 min-w-[240px] rounded-xl border border-[var(--border-subtle)] bg-[var(--card-bg)] p-3 shadow-xl">
+          <div className="relative">
+            <Search size={15} className="pointer-events-none absolute left-3 top-2.5 text-[var(--text-muted)]" />
+            <input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)}
+              aria-label={`Search ${label.toLowerCase()}`} placeholder={`Search ${label.toLowerCase()}…`}
+              className={`${inputCls} pl-9`} />
+          </div>
+          <div className="my-2 flex items-center justify-between gap-2 border-b border-[var(--border-subtle)] pb-2">
+            <button type="button" onClick={() => onChange([])}
+              className="text-xs font-medium text-[var(--accent)]">{allLabel}</button>
+            <button type="button" disabled={visible.length === 0}
+              onClick={() => onChange([...new Set([...value, ...visible])])}
+              className="inline-flex items-center gap-1 text-xs text-[var(--text-secondary)] disabled:opacity-40">
+              <CheckCheck size={13} /> Select matches
+            </button>
+          </div>
+          <div className="max-h-56 overflow-y-auto" role="group" aria-label={label}>
+            {visible.length === 0 ? (
+              <p className="px-2 py-3 text-xs text-[var(--text-muted)]">No matching options.</p>
+            ) : visible.map((item) => (
+              <label key={item} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--hover-bg)]">
+                <input type="checkbox" checked={value.includes(item)}
+                  onChange={() => toggle(item)} className="accent-[var(--accent)]" />
+                <span className="break-words">{item}</span>
+              </label>
+            ))}
+          </div>
+          <div className="mt-2 flex items-center justify-between border-t border-[var(--border-subtle)] pt-2 text-xs text-[var(--text-muted)]">
+            <span>{value.length ? `${value.length} selected` : allLabel}</span>
+            <button type="button" onClick={() => { setOpen(false); setQuery('') }}
+              className="rounded-md bg-[var(--accent)] px-3 py-1.5 font-semibold text-white">Done</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -84,6 +148,7 @@ export default function Broadcast() {
 
   const [roleOptions, setRoleOptions] = useState(ASSIGNABLE_BUILTIN_ROLES)
   const [siteOptions, setSiteOptions] = useState([])
+  const [siteRecords, setSiteRecords] = useState([])
   const [audience, setAudience] = useState(null)
   const [history, setHistory] = useState([])
   const [historyError, setHistoryError] = useState('')
@@ -120,6 +185,7 @@ export default function Broadcast() {
         }),
       ])
       setRoleOptions(Array.isArray(ro) && ro.length ? ro : ASSIGNABLE_BUILTIN_ROLES)
+      setSiteRecords(si || [])
       setSiteOptions([...new Set((si || []).map((s) => s.name || s.site_name).filter(Boolean))].sort())
       setHistory(Array.isArray(hi) ? hi : [])
     } catch (e) {
@@ -163,6 +229,12 @@ export default function Broadcast() {
       .catch(() => { if (alive) setAudience(null) })
     return () => { alive = false }
   }, [roles, countries, sites])
+
+  const visibleSiteOptions = useMemo(() => {
+    if (!countries.length) return siteOptions
+    const available = siteRecords.filter((site) => !site.country || countries.includes(site.country))
+    return [...new Set([...available.map((site) => site.name || site.site_name).filter(Boolean), ...sites])].sort()
+  }, [siteOptions, siteRecords, countries, sites])
 
   const problem = useMemo(() => validateBroadcast(form), [form])
   const canSend = !problem && !sending && (audience?.total ?? 0) > 0
@@ -332,14 +404,30 @@ export default function Broadcast() {
           receives both rather than losing half the message.
         </p>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <ChipPicker label="Job title" allLabel="Everyone"
-            options={roleOptions} value={roles} onChange={setRoles} />
-          <ChipPicker label="Country" allLabel="All countries"
-            options={COUNTRIES} value={countries} onChange={setCountries} />
-          <ChipPicker label="Site" allLabel="All sites"
-            options={siteOptions} value={sites} onChange={setSites} />
-        </div>
+        <section aria-label="Message audience" className="rounded-xl border border-[var(--border-subtle)] bg-[var(--input-bg)]/30 p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">Who should receive this?</h3>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">Choose job roles, countries and sites. Filters work together to narrow the audience.</p>
+            </div>
+            <button type="button" onClick={() => { setRoles([]); setCountries([]); setSites([]) }}
+              className="text-xs text-[var(--accent)] underline underline-offset-2">Reset audience</button>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <AudienceSelect label="Job role" allLabel="All job roles"
+              hint="Select specific employee roles or leave everyone."
+              options={roleOptions} value={roles} onChange={setRoles} />
+            <AudienceSelect label="Country" allLabel="All countries"
+              hint="Restrict by operating country."
+              options={COUNTRIES} value={countries} onChange={setCountries} />
+            <AudienceSelect label="Site" allLabel="All sites"
+              hint="Find sites by name without scrolling through the entire register."
+              options={visibleSiteOptions} value={sites} onChange={setSites} />
+          </div>
+          <p className="text-xs text-[var(--text-secondary)]">
+            Audience: {roles.length ? roles.join(', ') : 'All roles'} · {countries.length ? countries.join(', ') : 'All countries'} · {sites.length ? `${sites.length} selected site(s)` : 'All sites'}
+          </p>
+        </section>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border-subtle)] pt-3">
           <div className="flex flex-wrap items-center gap-4 text-sm">

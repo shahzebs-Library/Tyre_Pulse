@@ -39,3 +39,7 @@ enable_signup = true
 # contact enrollment/status/removal validates the caller's bearer token.
 [functions.account-recovery]
 verify_jwt = false
+
+# Cron uses its own high-entropy worker secret; user calls verify auth.getUser.
+[functions.ai-tyre-inspection]
+verify_jwt = false

@@ -16,15 +16,28 @@ const rows = [
 ]
 
 describe('aiCostMonitorAnalytics', () => {
-  it('prices successful calls and never bills a failed one', () => {
+  it('prices successful calls; a failed call is billed only when its cost was recorded', () => {
     expect(rowCost(rows[0], pricing)).toBe(1)
     expect(rowCost(rows[1], pricing)).toBe(2)
-    expect(rowCost(rows[2], pricing)).toBe(0)
+    expect(rowCost(rows[2], pricing)).toBe(9) // failed but charged (recorded cost_usd)
+    expect(rowCost({ ...rows[2], cost_usd: null }, pricing)).toBe(0) // failed, usage unknown: not guessed
+  })
+
+  it('aggregates known failed charges into spend and counts unknown-cost failures separately', () => {
+    const unknownFailure = { id: 4, model: 'claude-haiku-5-5', feature: 'ai_tyre_inspection', prompt_tokens: 0, completion_tokens: 0, cost_usd: null, status: 'error', error: 'timeout (usage unknown)', created_at: '2026-09-26T11:00:00Z' }
+    const chargedFailure = { id: 5, model: 'claude-haiku-5-5', feature: 'ai_tyre_inspection', prompt_tokens: 1000, completion_tokens: 200, cost_usd: 0.0002, status: 'error', error: 'Unusable model response (JSON validation)', created_at: '2026-09-26T12:00:00Z' }
+    const r = buildAiCostReport([...rows, unknownFailure, chargedFailure], { pricing, days: 30, now: NOW })
+    expect(r.failedChargedCost).toBeCloseTo(9.0002, 6)
+    expect(r.failedChargedTokens).toBe(500 + 1200)
+    expect(r.failedUnknownCostCalls).toBe(1)
+    expect(r.totalCost).toBeCloseTo(12.0002, 6) // 3 successful + 9.0002 charged failures; unknown failure NOT counted as free or guessed
+    expect(logExportRows([unknownFailure], pricing)[0].cost).toBe('Unknown')
   })
 
   it('builds the headline report with failures and trend', () => {
     const r = buildAiCostReport(rows, { pricing, days: 30, now: NOW })
-    expect(r.totalCost).toBe(3)
+    expect(r.totalCost).toBe(12) // 3 from successes + 9 recorded charge on the failed call
+    expect(r.failedUnknownCostCalls).toBe(0)
     expect(r.successCalls).toBe(2)
     expect(r.failedCalls).toBe(1)
     expect(r.failureRate).toBeCloseTo(33.33, 1)
@@ -32,7 +45,7 @@ describe('aiCostMonitorAnalytics', () => {
     expect(r.costPerMillionTokens).toBeCloseTo(3)
     // first half (before Sep 12) = 2, second half = 1 -> -50%
     expect(r.spendTrendPct).toBe(-50)
-    expect(r.bySite[0]).toMatchObject({ site: 'JED', cost: 2 })
+    expect(r.bySite[0]).toMatchObject({ site: 'NHC', cost: 10 }) // 1 success + 9 recorded failure charge
     expect(r.byModel[0].share).toBe(100)
     expect(r.failureBreakdown).toEqual([{ status: 'error', count: 1 }])
   })
@@ -61,7 +74,7 @@ describe('aiCostMonitorAnalytics', () => {
     expect(formatTokens(2_000_000)).toBe('2.0M')
     expect(formatUSD(0.001)).toBe('$0.0010')
     const out = logExportRows(rows, pricing)
-    expect(out[2].cost).toBe('Not billed')
+    expect(out[2].cost).toBe(9)
     expect(out[0].cost).toBe(1)
     expect(out[0].created_at).toBe('2026-09-25 10:00')
   })

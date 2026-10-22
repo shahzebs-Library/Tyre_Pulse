@@ -121,7 +121,10 @@ export function isWorkshopStatusNotification(
 export function notificationRoute(n: Pick<AppNotification, 'type' | 'entity_type'> & RouteHints): string | null {
   const t = String(n.type || '').toLowerCase()
   const k = String(n.entity_type || n.type || '').toLowerCase()
-  if (t === 'action_assigned' || k === 'action_item') return '/(app)/tasks'
+  if (t === 'action_assigned' || k === 'action_item') {
+    const actionId = String(n.entity_id || '').trim()
+    return actionId ? `/(app)/action-follow-up/${encodeURIComponent(actionId)}` : '/(app)/tasks'
+  }
   if (t === 'broadcast' || k === 'broadcast') {
     const messageId = String(n.entity_id || '').trim()
     return messageId ? `/(app)/team-message/${encodeURIComponent(messageId)}` : '/(app)/notifications'

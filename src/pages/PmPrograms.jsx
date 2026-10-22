@@ -66,6 +66,7 @@ import {
 import { loadGovernedCostSplit } from '../lib/api/governedCost'
 import { generateWorkOrderNo, insertWorkOrder } from '../lib/api/workOrders'
 import { listParts } from '../lib/api/partsCatalog'
+import { currentMonthToDate } from '../lib/defaultPeriod'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import {
   sumPartsCost, intervalSummary, filterPlans, filterHistory, dueSortValue, historySummary,
@@ -104,7 +105,10 @@ function monthLabel(m) {
   const idx = Number(mo) - 1
   return idx >= 0 && idx < 12 ? `${MON[idx]} ${String(y).slice(2)}` : String(m)
 }
-const todayISO = () => new Date().toISOString().slice(0, 10)
+const todayISO = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 function Pill({ meta, fallback }) {
   return <span className={`cc-pill ${pillClass(meta?.tone)}`}>{meta?.label || fallback || 'N/A'}</span>
@@ -155,8 +159,8 @@ export default function PmPrograms() {
   const [histAsset, setHistAsset] = useState('')
   const [histProgram, setHistProgram] = useState('all')
   const [histOutcome, setHistOutcome] = useState('all')
-  const [histFrom, setHistFrom] = useState('')
-  const [histTo, setHistTo] = useState('')
+  const [histFrom, setHistFrom] = useState(() => currentMonthToDate().from)
+  const [histTo, setHistTo] = useState(() => currentMonthToDate().to)
 
   // Create / edit modal
   const [modalOpen, setModalOpen] = useState(false)

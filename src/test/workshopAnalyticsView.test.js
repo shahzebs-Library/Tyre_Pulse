@@ -13,14 +13,14 @@ describe('date windows use the LOCAL calendar day', () => {
     expect(isoDay(NOW)).toBe('2026-09-12')
     expect(daysAgo(7, NOW)).toBe('2026-09-05')
   })
-  it('default window is the last 14 days, all sites', () => {
-    expect(defaultFilters(NOW)).toEqual({ from: '2026-08-29', to: '2026-09-12', site: 'All' })
+  it('default window is the current month to date, all sites', () => {
+    expect(defaultFilters(NOW)).toEqual({ from: '2026-09-01', to: '2026-09-12', site: 'All' })
   })
   it('quick ranges and the active one', () => {
     const r = quickRanges(NOW)
     expect(r.map((q) => q.id)).toEqual(['7', '14', '30', 'month'])
     expect(r.find((q) => q.id === 'month').from).toBe('2026-09-01')
-    expect(activeQuickRange(defaultFilters(NOW), NOW)).toBe('14')
+    expect(activeQuickRange(defaultFilters(NOW), NOW)).toBe('month')
     expect(activeQuickRange({ from: '2020-01-01', to: '2020-01-02' }, NOW)).toBeNull()
   })
   it('counts only filters that differ from the default', () => {

@@ -236,6 +236,11 @@ async function work(req:Request) {
       .eq("id",job.id).eq("status","pending").select("id").maybeSingle();
     if (!claimed) continue;
     try {
+      // Stop repeated paid attempts until an operator has explicitly reviewed failures.
+      if (job.attempts > 0) {
+        await admin.from("ai_tyre_inspection_jobs").update({status:"failed",error_message:"Prior attempt requires manual review",updated_at:new Date().toISOString()}).eq("id",job.id).eq("status","processing");
+        continue;
+      }
       const ref = parsedStorage(job.photo_ref);
       if (!ref) throw new Error("Invalid private media reference");
       const {data:file,error:readError} = await admin.storage.from(ref.bucket).download(ref.path);
@@ -287,8 +292,6 @@ async function work(req:Request) {
       const output = providerName === "anthropic"
         ? provider?.content?.filter((part:Json)=>part.type==="text").map((part:Json)=>part.text).join("")
         : provider?.candidates?.[0]?.content?.parts?.[0]?.text;
-      const cleanOutput = String(output || "").replace(/^`{3}(?:json)?\s*/i,"").replace(/\s*`{3}$/,"");
-      const analysis = normalizeAnalysis(JSON.parse(cleanOutput));
       const usage = providerName === "anthropic" ? provider?.usage : provider?.usageMetadata;
       const inputTokens = providerName === "anthropic" ? Number(usage?.input_tokens) : Number(usage?.promptTokenCount);
       const outputTokens = providerName === "anthropic" ? Number(usage?.output_tokens) : Number(usage?.candidatesTokenCount);
@@ -301,6 +304,28 @@ async function work(req:Request) {
       const hasRates = Number.isFinite(inputRate) && Number.isFinite(outputRate) && inputRate>0 && outputRate>0;
       const estimatedCost = hasUsage && hasRates
         ? Number(((inputTokens*inputRate+outputTokens*outputRate)/1e6).toFixed(6)) : null;
+
+      // Meter model usage before parsing: malformed JSON can still be billable.
+      let analysis: Json;
+      try {
+        const cleanOutput = String(output || "").replace(/^`{3}(?:json)?\s*/i,"").replace(/\s*`{3}$/,"");
+      analysis = normalizeAnalysis(JSON.parse(cleanOutput));
+      } catch (_parseError) {
+        await admin.from("ai_token_logs").insert({
+          organisation_id:job.organisation_id,model,feature:"ai_tyre_inspection",
+          prompt_tokens:hasUsage?inputTokens:0,completion_tokens:hasUsage?outputTokens:0,
+          cost_usd:estimatedCost,status:"error",error:"Unusable model response (JSON validation)",
+        });
+        await admin.from("ai_tyre_inspection_jobs").update({
+          status:"failed",error_message:"Unusable model response; manual review required; no automatic paid retry",
+          input_tokens:hasUsage?inputTokens:null,output_tokens:hasUsage?outputTokens:null,
+          total_tokens:hasUsage?inputTokens+outputTokens:null,
+          provider:providerName,model_version:model,cost_usd:estimatedCost,
+          billed_at:hasUsage?new Date().toISOString():null,
+          updated_at:new Date().toISOString(),
+        }).eq("id",job.id).eq("status","processing");
+        continue;
+      }
       await admin.from("ai_tyre_inspection_jobs").update({
         status:"completed",analysis,model_version:model,
         provider:providerName, input_tokens:hasUsage?inputTokens:null,
@@ -313,7 +338,7 @@ async function work(req:Request) {
       }).eq("id",job.id).eq("status","processing");
       processed++;
     } catch (error) {
-      const retry = job.attempts+1 < retryMax;
+      const retry = false; // No automatic paid retries, including malformed output.
       await admin.from("ai_tyre_inspection_jobs").update({
         status:retry?"pending":"failed",
         error_message:str(error instanceof Error?error.message:"AI processing error",160),

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ClipboardCheck, RefreshCw, ShieldAlert, ScanSearch, Ruler, X, Image as ImageIcon, ClipboardList, AlertCircle, FileText } from 'lucide-react'
+import { ClipboardCheck, RefreshCw, ShieldAlert, SearchCheck, Ruler, X, Image as ImageIcon, ClipboardList, AlertCircle, FileText } from 'lucide-react'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { inspectablePhotoRefs, summarizeEvidence, normalizePositionConditions, measurementReading } from '../lib/aiTyreInspectionDomain'
 import { buildInspectionAiAppendix, INSPECTION_AI_PRINT_STYLES } from '../lib/aiTyreInspectionReport'
@@ -114,7 +114,7 @@ export default function AiTyreInspection() {
     { accessorKey:'status', header:'Inspection status', cell:({row:{original:r}})=>r.status||'Unknown' },
   ]
   return <div className="space-y-4">
-    <PageHeader title="AI Tyre Inspection" subtitle="Verified measurements and defect evidence. AI processing will appear only when the secure background service is configured." icon={ScanSearch} />
+    <PageHeader title="AI Tyre Inspection" subtitle="Verified measurements and defect evidence. AI processing will appear only when the secure background service is configured." icon={SearchCheck} />
     <div className="grid gap-3 sm:grid-cols-3">
       <Card><div className="flex items-center gap-2 text-sm"><ClipboardCheck size={17}/> Inspections loaded</div><div className="text-2xl font-semibold mt-2">{records.length}</div></Card>
       <Card><div className="flex items-center gap-2 text-sm"><ShieldAlert size={17}/> Defect photos for review</div><div className="text-2xl font-semibold mt-2">{records.reduce((sum,r)=>sum+r.photosForReview,0)}</div></Card>
@@ -187,7 +187,7 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
   const tabs=[
     ['evidence','Damage evidence',ImageIcon],
     ['measurements','Tread measurements',Ruler],
-    ['analysis','AI analysis status',ScanSearch],
+    ['analysis','AI analysis status',SearchCheck],
     ['report','Report preview',FileText],
   ]
   const missing=readings.filter(item=>!item.calculation.valid)
@@ -270,7 +270,7 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
             {job.analysis?<div className="mt-3 space-y-2"><p className="text-sm">{job.analysis.assessable?'Visual assessment available':(job.analysis.reason||'Image unassessable')}</p>{(job.analysis.defects||[]).map((d,i)=><p key={i} className="text-sm border-l-2 border-amber-500 pl-3">{d.type}: {d.description} ({d.severity})</p>)}<p className="text-sm text-[var(--text-secondary)]">{job.analysis.recommendation}</p></div>:<p className="text-xs text-[var(--text-muted)] mt-2">No completed visual finding available.</p>}
             {job.status==='completed' && (!job.review_status || job.review_status==='unreviewed')&&<div className="flex gap-2 flex-wrap mt-3"><button className="btn-secondary" disabled={analysisLoading} onClick={()=>decide(job,'accepted')}>Accept observation</button><button className="btn-secondary" disabled={analysisLoading} onClick={()=>decide(job,'rejected')}>Reject observation</button></div>}
           </Card>)}</div>
-          {!analysisJobs.length && <EmptyState icon={ScanSearch} title="No queued image analysis" description="Request server-side analysis to create jobs for the linked abnormal-tyre photographs."/>}
+          {!analysisJobs.length && <EmptyState icon={SearchCheck} title="No queued image analysis" description="Request server-side analysis to create jobs for the linked abnormal-tyre photographs."/>}
         </>}
         {activeTab==='report' && <>
           <p className="text-xs text-[var(--text-muted)]">Preview of the AI analysis appendix from current database readings. A centralized production PDF endpoint is still required.</p>

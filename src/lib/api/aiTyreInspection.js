@@ -112,3 +112,14 @@ export function summarizeInspectionAiCosts(jobs) {
   }
   return [...byInspection.values()].map(x=>({...x,costUsd:Number(x.costUsd.toFixed(6))}))
 }
+
+/** Backfill one bounded page of historical inspections through server authorization.
+ * Date range is interpreted as absolute ISO timestamps.
+ */
+export async function backfillAiInspectionRange({from,to,page=0}) {
+  const {data,error}=await supabase.functions.invoke('ai-tyre-inspection',{
+    body:{action:'backfill',from,to,page},
+  })
+  if(error)throw error
+  return data
+}

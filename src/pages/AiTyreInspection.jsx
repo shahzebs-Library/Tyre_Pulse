@@ -10,7 +10,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { toUserMessage } from '../lib/safeError'
 import { listInspectionsForPage } from '../lib/api/inspections'
 import { calculateTread, conditionRequiresAnalysis } from '../lib/aiTyreInspection'
-import { readInspectionMeasurements, recordDepthMeasurement, readInspectionAnalysis, enqueueInspectionPhotos, reviewAiFinding } from '../lib/api/aiTyreInspection'
+import { readInspectionMeasurements, recordDepthMeasurement, readInspectionAnalysis, enqueueInspectionPhotos, reviewAiFinding, summarizeInspectionAiCosts } from '../lib/api/aiTyreInspection'
 
 function photoCount(row) {
   const conditions = row?.tyre_conditions || {}
@@ -97,6 +97,7 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
   })), [conditions,inspection.id])
   const [storedMeasurements,setStoredMeasurements]=useState([])
   const [analysisJobs,setAnalysisJobs]=useState([])
+  const expense=useMemo(()=>summarizeInspectionAiCosts(analysisJobs)[0], [analysisJobs])
   const [analysisError,setAnalysisError]=useState('')
   const [analysisLoading,setAnalysisLoading]=useState(false)
   const refreshAnalysis=useCallback(async()=>{try{setAnalysisJobs(await readInspectionAnalysis([inspection.id]));setAnalysisError('')}catch(e){setAnalysisError(toUserMessage(e,'Could not load AI results'))}},[inspection.id])
@@ -206,6 +207,7 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
             {analysisError && <p role="alert" className="text-red-500 text-sm mt-3">{analysisError}</p>}
           </Card>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3"><Metric label="Queued" value={analysisJobs.length}/><Metric label="Completed" value={analysisJobs.filter(j=>j.status==='completed').length}/><Metric label="Pending" value={analysisJobs.filter(j=>['pending','processing'].includes(j.status)).length}/><Metric label="Failed" value={analysisJobs.filter(j=>j.status==='failed').length}/></div>
+          <Card><div className="flex justify-between gap-3 flex-wrap"><div><p className="text-xs text-[var(--text-muted)]">AI inference cost for this inspection</p><p className="text-xl font-bold">{expense?.priced?`${expense.costUsd.toFixed(6)}`:"Not priced yet"}</p></div><div className="text-xs text-[var(--text-muted)]">Input tokens: {expense?.inputTokens||0} · Output tokens: {expense?.outputTokens||0} · Unpriced jobs: {expense?.unpriced||0}</div></div><p className="text-xs text-[var(--text-muted)] mt-2">Provider token usage is recorded on completion. USD estimates require verified provider pricing configured in the worker; unpriced calls are never shown as free.</p></Card>
           <div className="space-y-3">{analysisJobs.map(job=><Card key={job.id}>
             <div className="flex justify-between items-center gap-3"><h4 className="font-semibold">{job.tyre_position}</h4><span className="text-xs">{job.status} · {job.review_status||'unreviewed'}</span></div>
             {job.analysis?<div className="mt-3 space-y-2"><p className="text-sm">{job.analysis.assessable?'Visual assessment available':(job.analysis.reason||'Image unassessable')}</p>{(job.analysis.defects||[]).map((d,i)=><p key={i} className="text-sm border-l-2 border-amber-500 pl-3">{d.type}: {d.description} ({d.severity})</p>)}<p className="text-sm text-[var(--text-secondary)]">{job.analysis.recommendation}</p></div>:<p className="text-xs text-[var(--text-muted)] mt-2">No completed visual finding available.</p>}

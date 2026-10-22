@@ -77,3 +77,20 @@ export async function recordDepthMeasurement(values) {
   if(error)throw error
   return data
 }
+
+/** Request server-side photo analysis; no model credentials are held in the browser. */
+export async function enqueueInspectionPhotos(inspectionId) {
+  const {data,error}=await supabase.functions.invoke('ai-tyre-inspection',{
+    body:{action:'enqueue',inspection_id:inspectionId},
+  })
+  if(error)throw error
+  return data
+}
+/** Role verification and audit transition happen in the Edge Function. */
+export async function reviewAiFinding(jobId,decision,note='') {
+  const {data,error}=await supabase.functions.invoke('ai-tyre-inspection',{
+    body:{action:'review',job_id:jobId,decision,note},
+  })
+  if(error)throw error
+  return data
+}

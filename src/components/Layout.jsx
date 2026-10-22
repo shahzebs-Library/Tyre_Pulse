@@ -197,6 +197,7 @@ const NAV_GROUPS = [
       { to: '/workshop-absence', label: 'Absence & Attendance', parent: 'People', icon: CalendarCheck2, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/technician-scorecard', label: 'Technician Scorecard', parent: 'People', icon: Award, adminOnly: A },
       { to: '/shifts',              label: 'Shift Scheduling', parent: 'People',   icon: CalendarClock, adminOnly: A },
+      { to: '/workforce-daily', label: 'My Day & Team Reviews', parent: 'People', icon: ClipboardCheck },
       { to: '/parts-requests', label: 'Parts Requests', parent: 'Parts & Tools', icon: Boxes, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/equipment',       label: 'Tool & Equipment', parent: 'Parts & Tools',   icon: Wrench, adminOnly: A },
       { to: '/workshop-analytics', label: 'Workshop Analytics', parent: 'Analysis', icon: TrendingUp, roles: ['Admin', 'Manager', 'Director'] },

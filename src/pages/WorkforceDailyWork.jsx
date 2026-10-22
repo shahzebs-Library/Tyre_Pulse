@@ -6,6 +6,7 @@ import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import {useAuth} from '../contexts/AuthContext'
 import {estimateWork} from '../lib/workforceIntelligence'
+import {listWorkforceAssignments,assignWork,listAssignableEmployees} from '../lib/api/workforceAssignments'
 import {addDailyEntry,getMyDailyReport,ensureDailyReport,submitDailyReport,listReviewQueue,reviewDailyReport} from '../lib/api/workforceDaily'
 ChartJS.register(CategoryScale,LinearScale,BarElement,Tooltip,Legend)
 const dateNow=()=>new Date().toLocaleDateString('en-CA')
@@ -19,6 +20,8 @@ export default function WorkforceDailyWork(){
  const [date,setDate]=useState(dateNow)
  const [record,setRecord]=useState({report:null,entries:[]})
  const [queue,setQueue]=useState([])
+ const [work,setWork]=useState([]),[employees,setEmployees]=useState([])
+ const [newWork,setNewWork]=useState({title:'',assigned_to:'',site:'',priority:'normal',due_at:'',instructions:''})
  const [tab,setTab]=useState('my-day')
  const [loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('')
  const [summary,setSummary]=useState(''),[nextActions,setNextActions]=useState('')
@@ -31,7 +34,8 @@ export default function WorkforceDailyWork(){
   try{
    const own=await getMyDailyReport(date);setRecord(own)
    setSummary(own.report?.summary||'');setNextActions(own.report?.next_actions||'')
-   if(isManager) setQueue(await listReviewQueue())
+   if(isManager){setQueue(await listReviewQueue());setWork(await listWorkforceAssignments());setEmployees(await listAssignableEmployees())}
+   else setWork(await listWorkforceAssignments({mine:true}))
   }catch(e){setError(e.message||'Unable to load daily work')}finally{setLoading(false)}
  },[date,isManager])
  useEffect(()=>{load()},[load])
@@ -51,6 +55,14 @@ export default function WorkforceDailyWork(){
   {accessorKey:'deliverable',header:'Result / evidence',size:200},
   {accessorKey:'blocked_reason',header:'Delay reason',size:170}
  ],[])
+ const assignmentColumns=useMemo(()=>[
+ {accessorKey:'title',header:'Assigned task'},
+ {accessorKey:'assigned_to',header:'Employee ID'},
+ {accessorKey:'site',header:'Site'},
+ {accessorKey:'priority',header:'Priority'},
+ {accessorKey:'status',header:'Status'},
+ {id:'due',header:'Deadline',accessorFn:r=>dtForLocal(r.due_at)}
+ ],[])
  const reviewColumns=useMemo(()=>[
   {accessorKey:'employee_id',header:'Employee ID',size:200},
   {accessorKey:'work_date',header:'Date',size:120},
@@ -66,12 +78,22 @@ export default function WorkforceDailyWork(){
  <PageHeader title="Workforce Daily Work" subtitle="Employee activity, shift submissions and verified results across your organization."/>
  <div className="flex flex-wrap items-center gap-2">
   <button type="button" className={tab==='my-day'?'btn-primary':'btn-secondary'} onClick={()=>setTab('my-day')}>My Day</button>
+  <button type="button" className={tab==='assignments'?'btn-primary':'btn-secondary'} onClick={()=>setTab('assignments')}>Team Assignments</button>
   {isManager&&<button type="button" className={tab==='reviews'?'btn-primary':'btn-secondary'} onClick={()=>setTab('reviews')}>Manager Review ({queue.length})</button>}
   <div className="ml-auto flex gap-2 items-center"><label htmlFor="work-date" className="text-sm">Work date</label><input id="work-date" className="input" type="date" value={date} onChange={e=>setDate(cleanDate(e.target.value))}/><button type="button" className="btn-secondary" aria-label="Refresh" onClick={load}><RefreshCw size={16}/></button></div>
  </div>
  {error&&<div role="alert" className="card text-red-500 flex items-center gap-2"><AlertTriangle size={18}/>{error}</div>}
  {notice&&<div role="status" className="card text-green-600">{notice}</div>}
- {tab==='reviews'&&isManager?<div className="card"><h2 className="text-lg font-semibold mb-3">Awaiting manager verification</h2><EnterpriseTable columns={reviewColumns} data={queue} loading={loading} emptyMessage="No daily reports awaiting review."/></div>:
+ {tab==='assignments'?<div className="card space-y-3"><h2 className="font-semibold">Company work assignments</h2>
+ {isManager&&<form className="grid grid-cols-1 md:grid-cols-2 gap-3" onSubmit={e=>{e.preventDefault();run(async()=>{await assignWork({...newWork,due_at:newWork.due_at?new Date(newWork.due_at).toISOString():null});setNewWork({title:'',assigned_to:'',site:'',priority:'normal',due_at:'',instructions:''})})}}>
+ <label className="text-sm">Work title<input className="input w-full" required value={newWork.title} onChange={e=>setNewWork(w=>({...w,title:e.target.value}))}/></label>
+ <label className="text-sm">Assigned employee<select className="input w-full" required value={newWork.assigned_to} onChange={e=>setNewWork(w=>({...w,assigned_to:e.target.value}))}><option value="">Choose employee</option>{employees.map(p=><option key={p.id} value={p.id}>{p.full_name||p.id} {p.site?`(${p.site})`:''}</option>)}</select></label>
+ <label className="text-sm">Site<input className="input w-full" value={newWork.site} onChange={e=>setNewWork(w=>({...w,site:e.target.value}))}/></label>
+ <label className="text-sm">Priority<select className="input w-full" value={newWork.priority} onChange={e=>setNewWork(w=>({...w,priority:e.target.value}))}>{['low','normal','high','critical'].map(x=><option key={x}>{x}</option>)}</select></label>
+ <label className="text-sm">Due time<input type="datetime-local" className="input w-full" value={newWork.due_at} onChange={e=>setNewWork(w=>({...w,due_at:e.target.value}))}/></label>
+ <label className="text-sm">Instructions<input className="input w-full" value={newWork.instructions} onChange={e=>setNewWork(w=>({...w,instructions:e.target.value}))}/></label>
+ <button className="btn-primary" disabled={saving}>Assign work</button></form>}
+ <EnterpriseTable columns={assignmentColumns} data={work} loading={loading} emptyMessage="No assignments in this view."/></div>:tab==='reviews'&&isManager?<div className="card"><h2 className="text-lg font-semibold mb-3">Awaiting manager verification</h2><EnterpriseTable columns={reviewColumns} data={queue} loading={loading} emptyMessage="No daily reports awaiting review."/></div>:
  <>
  <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
   <Tile label="Activities recorded" value={entries.length} Icon={ClipboardCheck}/>

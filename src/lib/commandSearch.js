@@ -27,6 +27,7 @@ const isCustomNavRole = (role) => !!role && !BUILTIN_NAV_ROLES.has(role)
 // are open to every authenticated role except Inspector (see isCommandVisible).
 export const NAV_COMMANDS = [
   { id: 'workforce-daily', label: 'My Day & Team Reviews', path: '/workforce-daily', icon: 'ClipboardCheck', keywords: ['workforce', 'daily work', 'timesheet', 'employee productivity'] },
+  { id: 'ai-tyre-inspection', label: 'AI Tyre Inspection', path: '/ai-tyre-inspection', icon: 'ScanSearch', keywords: ['tyre inspection','damage photo','artificial intelligence'] },
   // Overview
   { id: 'dashboard',      label: 'Command Center',       path: '/',            icon: 'LayoutDashboard', keywords: ['dashboard', 'home', 'overview'] },
   { id: 'tyres',          label: 'Tyre Records',         path: '/tyres',       icon: 'CircleDot' },

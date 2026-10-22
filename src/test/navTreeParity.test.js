@@ -244,6 +244,7 @@ const ROUTES_ADDED_SINCE_REGROUP = [
   '/request-access',
   '/daily-ops/workshop',
   '/workforce-daily',
+  '/ai-tyre-inspection',
 ]
 
 const catalogItems = () => NAV_CATALOG.flatMap((g) => g.items)

@@ -261,6 +261,7 @@ export function migrationTitle(name) {
 export const EDGE_FUNCTIONS = Object.freeze([
   { name: 'account-recovery', what: 'Self-service account recovery', auth: 'In code' },
   { name: 'admin-revoke-sessions', what: 'Signs a user out everywhere', auth: 'In code' },
+  { name: 'ai-tyre-inspection', what: 'AI tyre inspection and evidence analysis', auth: 'In code' },
   { name: 'ai-orchestrator', what: 'Routes a question to the right agent', auth: 'In code' },
   { name: 'billing-checkout', what: 'Stripe checkout (billing not live)', auth: 'In code' },
   { name: 'billing-webhook', what: 'Stripe events (billing not live)', auth: 'Signature' },

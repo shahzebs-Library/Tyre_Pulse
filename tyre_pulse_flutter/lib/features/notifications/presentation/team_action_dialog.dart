@@ -95,7 +95,7 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
       final uid = _db.auth.currentUser?.id;
       if (uid == null) throw StateError('Please sign in.');
       final XFile? photo = await ImagePicker().pickImage(
-        source: ImageSource.camera, imageQuality: 83, maxWidth: 2200,
+        source: ImageSource.gallery, imageQuality: 83, maxWidth: 2200,
       );
       if (photo == null) return;
       final bytes = await photo.readAsBytes();
@@ -164,7 +164,7 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
         TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
         if (row != null && (open || accepted || working || blocked))
           TextButton(onPressed: _uploading ? null : _uploadPhoto,
-            child: Text(_uploading ? 'Uploading…' : 'Attach photo evidence')),
+            child: Text(_uploading ? 'Uploading…' : 'Select photo evidence')),
         if (open) TextButton(onPressed: _saving ? null : () => _transition('acknowledged'),
             child: const Text('Accept')),
         if (open || accepted || blocked)

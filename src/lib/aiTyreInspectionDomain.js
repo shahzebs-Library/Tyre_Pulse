@@ -54,14 +54,14 @@ export function normalizePhotographs(value) {
   return [v]
 }
 
-export function inspectablePhotoRefs(inspection) {
+export function inspectablePhotoRefs(inspection, { includeHealthy = false } = {}) {
   const result = []
   const seen = new Set()
   const conditions = normalizePositionConditions(inspection)
   for (const [position, item] of Object.entries(conditions)) {
     const entry = asObject(item)
     const condition = cleanText(entry.condition || entry.status || entry.risk, 100)
-    if (!conditionRequiresAnalysis(condition)) continue
+    if (!includeHealthy && !conditionRequiresAnalysis(condition)) continue
     const photos = [
       ...normalizePhotographs(entry.photo_url),
       ...normalizePhotographs(entry.photo_uri),
@@ -86,6 +86,7 @@ export function summarizeEvidence(inspection) {
   const abnormal = allPositions.filter(([, item]) =>
     conditionRequiresAnalysis(asObject(item).condition || asObject(item).status))
   const photos = inspectablePhotoRefs(inspection)
+  const allPhotos = inspectablePhotoRefs(inspection, { includeHealthy: true })
   const coveredPositions = new Set(photos.map(item => item.position))
   return {
     positions: allPositions.length,
@@ -96,6 +97,8 @@ export function summarizeEvidence(inspection) {
       .map(([position]) => position)
       .filter(position => !coveredPositions.has(position)),
     photos,
+    allPhotos,
+    allPhotoCount: allPhotos.length,
   }
 }
 

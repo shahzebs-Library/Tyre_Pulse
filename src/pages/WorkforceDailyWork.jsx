@@ -7,6 +7,7 @@ import EnterpriseTable from '../components/ui/EnterpriseTable'
 import {useAuth} from '../contexts/AuthContext'
 import {estimateWork} from '../lib/workforceIntelligence'
 import {workforceBoardKpis,assignmentStatusSeries} from '../lib/workforceAnalytics'
+import {employeeLabel,findAssignableEmployees} from '../lib/workforceEmployeeDirectory'
 import {listWorkforceAssignments,assignWork,listAssignableEmployees,setWorkStatus,listWorkDependencies,addWorkDependency,listWorkStandards,addWorkStandard} from '../lib/api/workforceAssignments'
 import {listWorkEvidence,uploadWorkEvidence,openWorkEvidence} from '../lib/api/workforceEvidence'
 import {addDailyEntry,getMyDailyReport,getDailyReportForReview,ensureDailyReport,submitDailyReport,listReviewQueue,reviewDailyReport} from '../lib/api/workforceDaily'
@@ -23,6 +24,7 @@ export default function WorkforceDailyWork(){
  const [record,setRecord]=useState({report:null,entries:[]})
  const [queue,setQueue]=useState([])
  const [work,setWork]=useState([]),[employees,setEmployees]=useState([])
+ const [employeeSearch,setEmployeeSearch]=useState(''),[designationFilter,setDesignationFilter]=useState('all')
  const [evidence,setEvidence]=useState([])
  const [dependencies,setDependencies]=useState([]),[standards,setStandards]=useState([])
  const [dependencyForm,setDependencyForm]=useState({predecessor_id:'',successor_id:''})
@@ -50,6 +52,10 @@ export default function WorkforceDailyWork(){
  },[date,isManager])
  useEffect(()=>{load()},[load])
  const board=useMemo(()=>workforceBoardKpis(work,queue),[work,queue])
+ const designationOptions=useMemo(()=>[...new Set(employees.map(p=>p.role).filter(Boolean))].sort(),[employees])
+ const selectableEmployees=useMemo(()=>findAssignableEmployees(employees,{search:employeeSearch,role:designationFilter}),[employees,employeeSearch,designationFilter])
+ const selectedEmployee=employees.find(p=>p.id===newWork.assigned_to)
+ const employeeById=useMemo(()=>new Map(employees.map(p=>[p.id,p])),[employees])
  const boardChart=useMemo(()=>({labels:assignmentStatusSeries(work).map(x=>x.status.replace('_',' ')),datasets:[{label:'Assignments',data:assignmentStatusSeries(work).map(x=>x.count),backgroundColor:'rgba(32,150,110,0.72)',borderRadius:5}]}),[work])
  const entries=record.entries
  const completed=entries.filter(e=>e.category==='productive').length
@@ -69,13 +75,13 @@ export default function WorkforceDailyWork(){
  ],[])
  const assignmentColumns=useMemo(()=>[
  {accessorKey:'title',header:'Assigned task'},
- {accessorKey:'assigned_to',header:'Employee ID'},
+ {id:'employee',header:'Employee',accessorFn:r=>employeeById.has(r.assigned_to)?employeeLabel(employeeById.get(r.assigned_to)):r.assigned_to},
  {accessorKey:'site',header:'Site'},
  {accessorKey:'priority',header:'Priority'},
  {accessorKey:'status',header:'Status'},
  {id:'due',header:'Deadline',accessorFn:r=>dtForLocal(r.due_at)},
  {id:'action',header:'Next step',enableSorting:false,cell:({row})=>{const item=row.original;const next={assigned:'acknowledged',acknowledged:'in_progress',in_progress:'submitted',blocked:'in_progress'}[item.status];return next?<button className="btn-secondary" type="button" disabled={saving} onClick={()=>run(()=>setWorkStatus(item.id,next))}>{({acknowledged:'Acknowledge',in_progress:'Start / resume',submitted:'Submit work'})[next]}</button>:<span className="text-xs text-[var(--text-muted)]">No employee action</span>}}
- ],[])
+ ],[employeeById,saving])
  const openReview=async id=>{setError('');try{const detail=await getDailyReportForReview(id);setReviewDetail(detail);setReviewEvidence(await listWorkEvidence(id))}catch(e){setError(e.message||'Could not open report')}}
  const reviewColumns=useMemo(()=>[
   {accessorKey:'employee_id',header:'Employee ID',size:200},
@@ -99,9 +105,17 @@ export default function WorkforceDailyWork(){
  {error&&<div role="alert" className="card text-red-500 flex items-center gap-2"><AlertTriangle size={18}/>{error}</div>}
  {notice&&<div role="status" className="card text-green-600">{notice}</div>}
  {tab==='assignments'?<div className="card space-y-3"><h2 className="font-semibold">Company work assignments</h2><div className="grid grid-cols-2 md:grid-cols-4 gap-3"><Tile label="Assigned" value={board.assigned} Icon={ClipboardCheck}/><Tile label="In progress" value={board.active} Icon={Clock}/><Tile label="Blocked" value={board.blocked} Icon={AlertTriangle}/><Tile label="Awaiting review" value={board.pending_verification} Icon={Send}/></div><div className="h-56"><Bar data={boardChart} options={{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}}/></div><p className="text-xs text-[var(--text-muted)]">Observed status counts. These figures are not employee productivity scores.</p>
- {isManager&&<form className="grid grid-cols-1 md:grid-cols-2 gap-3" onSubmit={e=>{e.preventDefault();run(async()=>{await assignWork({...newWork,due_at:newWork.due_at?new Date(newWork.due_at).toISOString():null});setNewWork({title:'',assigned_to:'',site:'',priority:'normal',due_at:'',instructions:''})})}}>
+ {isManager&&<form className="grid grid-cols-1 md:grid-cols-2 gap-3" onSubmit={e=>{e.preventDefault();run(async()=>{await assignWork({...newWork,due_at:newWork.due_at?new Date(newWork.due_at).toISOString():null});setNewWork({title:'',assigned_to:'',site:'',priority:'normal',due_at:'',instructions:''});setEmployeeSearch('');setDesignationFilter('all')})}}>
  <label className="text-sm">Work title<input className="input w-full" required value={newWork.title} onChange={e=>setNewWork(w=>({...w,title:e.target.value}))}/></label>
- <label className="text-sm">Assigned employee<select className="input w-full" required value={newWork.assigned_to} onChange={e=>setNewWork(w=>({...w,assigned_to:e.target.value}))}><option value="">Choose employee</option>{employees.map(p=><option key={p.id} value={p.id}>{p.full_name||p.id} {p.site?`(${p.site})`:''}</option>)}</select></label>
+ <fieldset className="md:col-span-2 rounded-lg border border-[var(--input-border)] p-3 space-y-3"><legend className="font-semibold px-1">Assign to employee</legend>
+ <p className="text-xs text-[var(--text-muted)]">Search by exact employee ID, full name, username or account ID, then filter by recorded role/designation. Only approved, unlocked accounts are selectable.</p>
+ <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+ <label className="text-sm">Employee ID or name<input className="input w-full" type="search" autoComplete="off" placeholder="Search employee ID or full name" value={employeeSearch} onChange={e=>setEmployeeSearch(e.target.value)}/></label>
+ <label className="text-sm">Designation / role<select className="input w-full" value={designationFilter} onChange={e=>setDesignationFilter(e.target.value)}><option value="all">All roles</option>{designationOptions.map(role=><option key={role} value={role}>{role}</option>)}</select></label>
+ </div>
+ <label className="block text-sm">Assigned employee<select className="input w-full" aria-label="Assigned employee" required value={newWork.assigned_to} onChange={e=>setNewWork(w=>({...w,assigned_to:e.target.value}))}><option value="">Choose employee ({selectableEmployees.length} matches)</option>{selectableEmployees.map(p=><option key={p.id} value={p.id}>{employeeLabel(p)}</option>)}{selectedEmployee&&!selectableEmployees.some(p=>p.id===selectedEmployee.id)&&<option value={selectedEmployee.id}>{employeeLabel(selectedEmployee)} (selected; outside filter)</option>}</select></label>
+ {selectedEmployee?<div className="rounded-lg bg-[var(--panel)] border border-[var(--input-border)] px-3 py-2 text-sm"><strong>Selected:</strong> {employeeLabel(selectedEmployee)}</div>:<p className="text-xs text-[var(--text-muted)]">{selectableEmployees.length===0?'No matching active employee found. Clear the search or change the role filter.':'Select one employee to continue.'}</p>}
+ </fieldset>
  <label className="text-sm">Site<input className="input w-full" value={newWork.site} onChange={e=>setNewWork(w=>({...w,site:e.target.value}))}/></label>
  <label className="text-sm">Priority<select className="input w-full" value={newWork.priority} onChange={e=>setNewWork(w=>({...w,priority:e.target.value}))}>{['low','normal','high','critical'].map(x=><option key={x}>{x}</option>)}</select></label>
  <label className="text-sm">Due time<input type="datetime-local" className="input w-full" value={newWork.due_at} onChange={e=>setNewWork(w=>({...w,due_at:e.target.value}))}/></label>

@@ -120,7 +120,7 @@ export async function exportDamagePdf(rows, { title = 'AI damage report', dateRa
   const withLinks = await attachPhotoLinks(rows)
   const groups = groupByDecision(withLinks)
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-  const PW = doc.internal.pageSize.width, PH = doc.internal.pageSize.height
+  const PH = doc.internal.pageSize.height
   doc.setFontSize(16); doc.text(title, 14, 16)
   doc.setFontSize(9); doc.setTextColor(90)
   doc.text(`${dateRange ? dateRange + '  |  ' : ''}Generated ${new Date().toISOString().slice(0, 10)}`, 14, 22)

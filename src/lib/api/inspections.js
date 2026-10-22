@@ -193,7 +193,7 @@ export async function listAiRegisterFiltered({
   const ids = (idRows || []).map((r) => r.id)
   const count = idRows?.length ? Number(idRows[0].total) : 0
   if (!ids.length) return { data: [], error: null, count }
-  const { data, error: readError } = await supabase.from('inspections').select(LIST_COLS).in('id', ids)
+  const { data, error: readError } = await supabase.from('inspections').select(LIST_COLS).in('id', ids).limit(500)
   if (readError) return { data: null, error: readError, count }
   const rank = new Map(ids.map((id, i) => [id, i]))
   return { data: (data || []).slice().sort((a, b) => rank.get(a.id) - rank.get(b.id)), error: null, count }

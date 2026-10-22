@@ -51,6 +51,12 @@ FOR EACH ROW EXECUTE FUNCTION public.workforce_guard_daily_entry();
 CREATE OR REPLACE FUNCTION public.workforce_guard_report_update() RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
 BEGIN
  IF OLD.status='verified' THEN RAISE EXCEPTION 'Verified report is immutable'; END IF;
+ IF NEW.organisation_id IS DISTINCT FROM OLD.organisation_id OR NEW.employee_id IS DISTINCT FROM OLD.employee_id OR NEW.work_date IS DISTINCT FROM OLD.work_date
+ THEN RAISE EXCEPTION 'Report identity cannot be changed'; END IF;
+ IF OLD.status IN ('draft','returned') AND NEW.status IN ('draft','submitted') THEN
+   IF NEW.reviewed_by IS DISTINCT FROM OLD.reviewed_by OR NEW.reviewed_at IS DISTINCT FROM OLD.reviewed_at OR NEW.review_note IS DISTINCT FROM OLD.review_note
+   THEN RAISE EXCEPTION 'Employee cannot write review fields'; END IF;
+ END IF;
  IF OLD.status='submitted' THEN
    IF ROW(NEW.organisation_id,NEW.employee_id,NEW.work_date,NEW.site,NEW.summary,NEW.next_actions,NEW.submitted_at,NEW.created_at)
       IS DISTINCT FROM ROW(OLD.organisation_id,OLD.employee_id,OLD.work_date,OLD.site,OLD.summary,OLD.next_actions,OLD.submitted_at,OLD.created_at)

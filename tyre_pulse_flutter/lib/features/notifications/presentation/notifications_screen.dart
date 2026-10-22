@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart' show DateFormat;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tyre_pulse/app/router/notification_routing.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
@@ -17,6 +18,7 @@ import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/notifications/domain/app_notification.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
 import 'package:tyre_pulse/features/notifications/presentation/notifications_copy.dart';
+import 'package:tyre_pulse/features/notifications/presentation/team_action_dialog.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({required this.backFallback, super.key});
@@ -99,6 +101,24 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   }
 
   void _open(AppNotification row, NotificationsCopy copy) {
+    if (row.type == 'action_assigned' && row.entityId != null) {
+      if (!_isRead(row)) {
+        setState(() => _optimisticallyRead.add(row.id));
+        unawaited(_persistRead(row.id, copy));
+      }
+      unawaited(showDialog<void>(context: context,
+        builder: (BuildContext context) => TeamActionDialog(actionId: row.entityId!)));
+      return;
+    }
+    if (row.type == 'broadcast' && row.entityId != null) {
+      if (!_isRead(row)) {
+        setState(() => _optimisticallyRead.add(row.id));
+        unawaited(_persistRead(row.id, copy));
+      }
+      unawaited(showDialog<void>(context: context,
+        builder: (BuildContext context) => _TeamMessageDialog(notification: row)));
+      return;
+    }
     if (!_isRead(row)) {
       setState(() => _optimisticallyRead.add(row.id));
       unawaited(_persistRead(row.id, copy));
@@ -374,4 +394,128 @@ class _NotificationsFailure extends StatelessWidget {
       onRetry: () => unawaited(onRetry()),
     );
   }
+}
+
+/// In-app broadcast detail. Only the signed-in recipient can acknowledge or reply,
+/// subject to Supabase RLS on the receipt/reply tables.
+class _TeamMessageDialog extends StatefulWidget {
+  const _TeamMessageDialog({required this.notification});
+  final AppNotification notification;
+
+  @override
+  State<_TeamMessageDialog> createState() => _TeamMessageDialogState();
+}
+
+class _TeamMessageDialogState extends State<_TeamMessageDialog> {
+  final TextEditingController _reply = TextEditingController();
+  bool _busy = false;
+  bool _acknowledged = false;
+  String? _error;
+  List<Map<String, dynamic>> _thread = <Map<String, dynamic>>[];
+
+  SupabaseClient get _db => Supabase.instance.client;
+  String get _messageId => widget.notification.entityId ?? '';
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  @override
+  void dispose() {
+    _reply.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final String? uid = _db.auth.currentUser?.id;
+      if (uid == null || _messageId.isEmpty) throw StateError('Sign in to view this message.');
+      final List<Map<String, dynamic>> receipt = await _db
+          .from('broadcast_recipient_receipts').select('read_at,acknowledged_at')
+          .eq('broadcast_id', _messageId).eq('recipient_id', uid).limit(1);
+      if (receipt.isEmpty) throw StateError('Message is not available to this account.');
+      if (receipt.first['read_at'] == null) {
+        await _db.from('broadcast_recipient_receipts')
+            .update(<String, dynamic>{'read_at': DateTime.now().toUtc().toIso8601String()})
+            .eq('broadcast_id', _messageId).eq('recipient_id', uid).isFilter('read_at', null);
+      }
+      final List<Map<String, dynamic>> replies = await _db.from('broadcast_replies')
+          .select('id,body,author_id,created_at').eq('broadcast_id', _messageId)
+          .order('created_at', ascending: true).limit(250);
+      if (mounted) setState(() {
+        _acknowledged = receipt.first['acknowledged_at'] != null;
+        _thread = replies;
+        _error = null;
+      });
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    }
+  }
+
+  Future<void> _ack() async {
+    if (_busy || _acknowledged) return;
+    setState(() => _busy = true);
+    try {
+      final uid = _db.auth.currentUser?.id;
+      if (uid == null) throw StateError('Not signed in.');
+      final at = DateTime.now().toUtc().toIso8601String();
+      await _db.from('broadcast_recipient_receipts')
+          .update(<String, dynamic>{'acknowledged_at': at, 'read_at': at})
+          .eq('broadcast_id', _messageId).eq('recipient_id', uid).isFilter('acknowledged_at', null);
+      if (mounted) setState(() => _acknowledged = true);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _send() async {
+    final body = _reply.text.trim();
+    if (_busy || body.isEmpty || body.length > 4000) return;
+    setState(() => _busy = true);
+    try {
+      final uid = _db.auth.currentUser?.id;
+      if (uid == null) throw StateError('Not signed in.');
+      await _db.from('broadcast_replies').insert(<String, dynamic>{
+        'broadcast_id': _messageId, 'author_id': uid, 'body': body,
+      });
+      _reply.clear();
+      await _load();
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.notification.title ?? 'Team message'),
+    content: SizedBox(
+      width: 480,
+      child: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+          Text(widget.notification.body ?? ''),
+          const SizedBox(height: 16),
+          if (_error != null) Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          Text(_acknowledged ? 'Acknowledged' : 'Acknowledgement required'),
+          const SizedBox(height: 12),
+          for (final row in _thread)
+            Padding(padding: const EdgeInsets.only(bottom: 9),
+              child: Text(row['body']?.toString() ?? '')),
+          TextField(controller: _reply, maxLength: 4000, maxLines: 3,
+            decoration: const InputDecoration(labelText: 'Reply to team', border: OutlineInputBorder())),
+        ]),
+      ),
+    ),
+    actions: <Widget>[
+      TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
+      TextButton(onPressed: _busy || _acknowledged ? null : _ack,
+        child: Text(_acknowledged ? 'Acknowledged' : 'Acknowledge')),
+      FilledButton(onPressed: _busy ? null : _send, child: const Text('Send reply')),
+    ],
+  );
 }

@@ -147,7 +147,7 @@ export default function DowntimeTracker() {
   const [now, setNow] = useState(() => Date.now())
 
   // Filters
-  const [period, setPeriod] = useState('All')
+  const [period, setPeriod] = useState('This month')
   const [woTruncated, setWoTruncated] = useState(false)
   const [siteFilter, setSiteFilter] = useState('')
   const [countryFilter, setCountryFilter] = useState('')

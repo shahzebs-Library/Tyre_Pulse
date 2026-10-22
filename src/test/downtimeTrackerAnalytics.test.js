@@ -16,6 +16,7 @@ const events = [
 describe('downtimeTrackerAnalytics', () => {
   it('computes period starts and month windows from an injected clock', () => {
     expect(presetStart('All', NOW)).toBeNull()
+    expect(presetStart('This month', NOW)).toBe('2026-09-01')
     expect(presetStart('30d', NOW)).toBe('2026-08-28')
     const m = last12Months(NOW)
     expect(m).toHaveLength(12)

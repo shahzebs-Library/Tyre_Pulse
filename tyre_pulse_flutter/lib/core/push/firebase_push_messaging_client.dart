@@ -1,10 +1,8 @@
 /// Firebase Cloud Messaging behind [PushMessagingClient].
 ///
-/// The ONLY file that imports Firebase. Android only: the Android app reads
-/// `android/app/google-services.json` through the Google services Gradle
-/// plugin, so `Firebase.initializeApp()` needs no options. iOS has no
-/// `GoogleService-Info.plist` and no APNs setup yet, so it reports
-/// unsupported instead of failing on every launch.
+/// Android and iOS Firebase Messaging client. iOS requires GoogleService-Info.plist,
+/// an APNs key uploaded to Firebase and the Push Notifications capability.
+/// Until configured, initialization fails safely without blocking sign-in.
 ///
 /// Initialisation failure is NEVER fatal: [initialize] returns false and the
 /// app runs exactly as it did before push existed.
@@ -25,7 +23,8 @@ final class FirebasePushMessagingClient implements PushMessagingClient {
   Object? _lastError;
 
   bool get _supportedPlatform =>
-      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+      !kIsWeb && (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
 
   FirebaseMessaging get _messaging => FirebaseMessaging.instance;
 
@@ -75,6 +74,11 @@ final class FirebasePushMessagingClient implements PushMessagingClient {
   Future<String?> getToken() async {
     if (_ready != true) return null;
     try {
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        // APNs registration must complete before requesting FCM token on iOS.
+        final apns = await _messaging.getAPNSToken();
+        if (apns == null || apns.isEmpty) return null;
+      }
       final String? token = await _messaging.getToken();
       if (token == null || token.trim().isEmpty) return null;
       return token.trim();

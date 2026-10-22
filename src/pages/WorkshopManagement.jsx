@@ -82,6 +82,7 @@ const PRIORITIES = ['Critical','High','Medium','Low']
 // user has not set one, matching the 12-month charts) plus a hard row ceiling.
 const WORK_ORDER_CEILING = 20000
 const DEFAULT_WINDOW_MONTHS = 12
+const isoLocalDay = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 
 // First day of the month DEFAULT_WINDOW_MONTHS-1 back, so the default window
 // lines up exactly with the 12-month chart buckets (full coverage, no
@@ -89,7 +90,7 @@ const DEFAULT_WINDOW_MONTHS = 12
 function defaultWindowFrom() {
   const d = new Date()
   const from = new Date(d.getFullYear(), d.getMonth() - (DEFAULT_WINDOW_MONTHS - 1), 1)
-  return from.toISOString().slice(0, 10)
+  return isoLocalDay(from)
 }
 
 function windowFromLabel(iso) {
@@ -175,9 +176,15 @@ function RateBar({ value, good = 80, fair = 60 }) {
 function applyDatePreset(days) {
   if (!days) return { from: '', to: '' }
   const to = new Date()
+  if (days === 'month') {
+    return {
+      from: `${to.getFullYear()}-${String(to.getMonth() + 1).padStart(2, '0')}-01`,
+      to: `${to.getFullYear()}-${String(to.getMonth() + 1).padStart(2, '0')}-${String(to.getDate()).padStart(2, '0')}`,
+    }
+  }
   const from = new Date()
   from.setDate(from.getDate() - days)
-  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) }
+  return { from: isoLocalDay(from), to: isoLocalDay(to) }
 }
 
 // ── KPI Card ───────────────────────────────────────────────────────────────────
@@ -248,8 +255,11 @@ export default function WorkshopManagement() {
   const [status, setStatus]       = useState('')
   const [priority, setPriority]   = useState('')
   const [techSearch, setTechSearch] = useState('')
-  const [dateFrom, setDateFrom]   = useState('')
-  const [dateTo, setDateTo]       = useState('')
+  const [dateFrom, setDateFrom]   = useState(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+  })
+  const [dateTo, setDateTo]       = useState(() => isoLocalDay(new Date()))
   const [search, setSearch]       = useState('')
   const [activeTab, setActiveTab] = useState('overview')
 
@@ -270,13 +280,13 @@ export default function WorkshopManagement() {
     const effFrom = dateFrom || defaultWindowFrom()
 
     // Headline financial KPIs come from the server aggregate so they stay
-    // correct even when the grid below is capped. The RPC only knows
-    // site/country/date, so it is scoped by the explicit date filter only
-    // (all-time by default, matching the previous behaviour of these tiles).
+    // correct even when the grid below is capped. Keep the aggregate on the
+    // same bounded date window as the grid (12 months by default, or the
+    // selected month/range) so costs and jobs describe the same scope.
     const snapPromise = getMaintenanceSnapshot({
       site: site || null,
       country: activeCountry,
-      from: dateFrom || null,
+      from: effFrom,
       to: dateTo || null,
     }).catch(() => ({ ok: false }))
 
@@ -677,7 +687,7 @@ export default function WorkshopManagement() {
               <span className="sr-only" id="wm-presets">Quick date ranges</span>
               <div className="flex items-center gap-1 flex-wrap" role="group" aria-labelledby="wm-presets">
                 <Calendar className="w-4 h-4 text-[var(--text-muted)]" aria-hidden="true" />
-                {[{ label: '30d', days: 30, name: 'Last 30 days' }, { label: '90d', days: 90, name: 'Last 90 days' }, { label: '6m', days: 180, name: 'Last 6 months' }, { label: '1yr', days: 365, name: 'Last 12 months' }].map(p => (
+                {[{ label: 'Month', days: 'month', name: 'This month' }, { label: '30d', days: 30, name: 'Last 30 days' }, { label: '90d', days: 90, name: 'Last 90 days' }, { label: '6m', days: 180, name: 'Last 6 months' }, { label: '1yr', days: 365, name: 'Last 12 months' }].map(p => (
                   <button
                     key={p.label}
                     type="button"

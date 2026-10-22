@@ -79,6 +79,7 @@ import WashDetailsForm from '../components/washing/WashDetailsForm'
 import WashRecordViewer from '../components/washing/WashRecordViewer'
 import WashAdvancedFilters from '../components/washing/WashAdvancedFilters'
 import { isMissingRelation } from '../lib/api/_client'
+import { currentMonthToDate } from '../lib/defaultPeriod'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, ArcElement,
@@ -91,7 +92,7 @@ const WASH_FILTER_DEFAULTS = Object.freeze({
   search: '', status: 'all', site: 'all', area: 'all', type: 'all',
   region: 'all', vehicleType: 'all', enteredBy: 'all', correctedBy: 'all',
   washedBy: 'all', bay: 'all', photos: 'all', chemicals: 'all',
-  corrections: 'all', dateBasis: 'wash', from: '', to: '',
+  corrections: 'all', dateBasis: 'wash', ...currentMonthToDate(),
 })
 
 const TABS = [
@@ -147,7 +148,10 @@ function nowHHMM() {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-const todayISO = () => new Date().toISOString().slice(0, 10)
+const todayISO = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 function fmtDate(v) {
   if (!v) return 'N/A'
   const d = new Date(v)
@@ -170,15 +174,15 @@ function fmtWas(v) {
 // Date helpers for the quick ranges.
 function firstOfMonth() {
   const d = new Date()
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
 }
 function firstOfYear() {
-  return new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10)
+  return `${new Date().getFullYear()}-01-01`
 }
 function daysAgo(n) {
   const d = new Date()
   d.setDate(d.getDate() - n)
-  return d.toISOString().slice(0, 10)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 // Shared light-legible chart options (grid var resolved by chartVarPlugin).
@@ -262,7 +266,14 @@ export default function VehicleWashing() {
     setRefreshing(true)
     setError('')
     try {
-      const data = await enrichWashPeople(await listWashRecords({ country: activeCountry }))
+      const data = await enrichWashPeople(await listWashRecords({
+        country: activeCountry,
+        // The reporting default is month-to-date. Keep the server read inside
+        // that same window so the UI does not download the entire wash history.
+        // Created-date mode uses client-side dates and therefore remains unbounded.
+        from: filters.dateBasis === 'created' ? undefined : filters.from || undefined,
+        to: filters.dateBasis === 'created' ? undefined : filters.to || undefined,
+      }))
       const fleet = canReadFleet ? await washExportFleet(data) : []
       const fleetMap = new Map(fleet.map(v => [washVehicleKey(v),v]))
       if (ticket !== loadTicket.current) return
@@ -277,7 +288,7 @@ export default function VehicleWashing() {
     } finally {
       if (ticket === loadTicket.current) { setLoading(false); setRefreshing(false) }
     }
-  }, [activeCountry, canReadFleet])
+  }, [activeCountry, canReadFleet, filters.dateBasis, filters.from, filters.to])
 
   useEffect(() => { setLoading(true); setRows([]); setViewRow(null); load() }, [load, profile?.id, profile?.organisation_id])
 

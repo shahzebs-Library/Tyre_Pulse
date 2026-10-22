@@ -122,7 +122,10 @@ export function notificationRoute(n: Pick<AppNotification, 'type' | 'entity_type
   const t = String(n.type || '').toLowerCase()
   const k = String(n.entity_type || n.type || '').toLowerCase()
   if (t === 'action_assigned' || k === 'action_item') return '/(app)/tasks'
-  if (t === 'broadcast' || k === 'broadcast') return '/(app)/notifications'
+  if (t === 'broadcast' || k === 'broadcast') {
+    const messageId = String(n.entity_id || '').trim()
+    return messageId ? `/(app)/team-message/${encodeURIComponent(messageId)}` : '/(app)/notifications'
+  }
   if (k === 'driver_workspace' || t === 'driver_workspace') return '/(app)/driver-workspace'
 
   // Workshop Status: a daily upload or an assignment on the workshop sheet.

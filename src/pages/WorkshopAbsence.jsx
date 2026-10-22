@@ -114,12 +114,12 @@ export default function WorkshopAbsence() {
   const [missing, setMissing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
 
-  const [filters, setFilters] = useState({ from: daysAgo(7), to: todayISO(), site: 'All' })
+  const [filters, setFilters] = useState({ from: firstOfMonth(), to: todayISO(), site: 'All' })
   const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
   const [statusFilter, setStatusFilter] = useState('')
   const [query, setQuery] = useState('')
   const resetFilters = () => {
-    setFilters({ from: daysAgo(7), to: todayISO(), site: 'All' })
+    setFilters({ from: firstOfMonth(), to: todayISO(), site: 'All' })
     setStatusFilter('')
     setQuery('')
   }

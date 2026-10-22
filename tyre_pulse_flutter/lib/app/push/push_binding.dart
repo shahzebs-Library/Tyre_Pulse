@@ -14,10 +14,11 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/app_router.dart';
 import 'package:tyre_pulse/core/auth/auth_controller.dart';
@@ -86,8 +87,18 @@ class _PushBindingState extends ConsumerState<PushBinding> {
       if (!mounted) return;
       final type = message.target.entityType ?? message.target.type ?? '';
       final id = message.target.id;
-      if (id != null && (type == 'broadcast' || type == 'action_item' || type == 'broadcast.sent' || type == 'action.assigned')) {
-        final uri = Uri(path: '/notifications', queryParameters: <String, String>{'target_type': type, 'target_id': id});
+      if (id != null &&
+          (type == 'broadcast' ||
+              type == 'action_item' ||
+              type == 'broadcast.sent' ||
+              type == 'action.assigned')) {
+        final uri = Uri(
+          path: '/notifications',
+          queryParameters: <String, String>{
+            'target_type': type,
+            'target_id': id,
+          },
+        );
         ref.read(routerProvider).push(uri.toString());
       } else {
         ref.read(routerProvider).push(message.destination.location);
@@ -98,7 +109,8 @@ class _PushBindingState extends ConsumerState<PushBinding> {
   /// Queue app-observed FCM events so a temporary network failure does not
   /// silently discard them. Stored per signed-in user; bounded at 100 items.
   void _queueReceiptWork(Future<void> Function() operation) {
-    _receiptWork = _receiptWork.then((_) => operation()).catchError((Object _) {});
+    _receiptWork =
+        _receiptWork.then((_) => operation()).catchError((Object _) {});
   }
 
   Future<void> _logDeviceEvent(PushMessage message, String event) async {
@@ -121,9 +133,12 @@ class _PushBindingState extends ConsumerState<PushBinding> {
       if (!pending.contains(record)) {
         pending.add(record);
         // Prevent unbounded accumulation on devices without connectivity.
-        await prefs.setStringList(key, pending.length > 100
-            ? pending.sublist(pending.length - 100)
-            : pending);
+        await prefs.setStringList(
+          key,
+          pending.length > 100
+              ? pending.sublist(pending.length - 100)
+              : pending,
+        );
       }
       await _flushDeviceEvents(uid);
     });
@@ -143,7 +158,8 @@ class _PushBindingState extends ConsumerState<PushBinding> {
       }
       try {
         final record = jsonDecode(serialized) as Map<String, dynamic>;
-        await Supabase.instance.client.from('team_push_device_events')
+        await Supabase.instance.client
+            .from('team_push_device_events')
             .upsert(record, onConflict: 'user_id,fcm_message_id,event_type');
       } catch (_) {
         remaining.add(serialized);

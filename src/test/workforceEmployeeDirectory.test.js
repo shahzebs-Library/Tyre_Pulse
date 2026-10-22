@@ -20,6 +20,6 @@ describe('workforce assignment directory',()=>{
   expect(findAssignableEmployees(people).map(p=>p.id)).toEqual(['uuid-2','uuid-1'])
  })
  it('displays full identity and designation',()=>{
-  expect(employeeLabel(people[0])).toContain('Muhammad Ali Khan · ID: E-009 · Technician')
+  expect(employeeLabel(people[0])).toContain('Muhammad Ali Khan | ID: E-009 | Technician')
  })
 })

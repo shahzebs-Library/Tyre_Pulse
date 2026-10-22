@@ -166,7 +166,7 @@ describe('selection helpers', () => {
   it('zero selections everywhere means everyone, and is announced', () => {
     expect(isEveryone({})).toBe(true)
     expect(isEveryone({ roles: ['Driver'] })).toBe(false)
-    expect(audienceSummary({})).toBe('All job roles · all countries · all sites')
-    expect(audienceSummary({ roles: ['A', 'B'], countries: ['KSA'], sites: ['NHC'] })).toBe('2 job roles · KSA · NHC')
+    expect(audienceSummary({})).toBe('All job roles | all countries | all sites')
+    expect(audienceSummary({ roles: ['A', 'B'], countries: ['KSA'], sites: ['NHC'] })).toBe('2 job roles | KSA | NHC')
   })
 })

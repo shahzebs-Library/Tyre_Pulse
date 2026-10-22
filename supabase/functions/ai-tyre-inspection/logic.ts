@@ -15,7 +15,7 @@ export type Json = Record<string, unknown>;
 export const ENQUEUE_ROLES = ["admin", "manager", "director", "maintenance supervisor", "tyre man"] as const;
 export const REVIEW_ROLES = ["admin", "manager", "director", "maintenance supervisor"] as const;
 export const BACKFILL_ROLES = ["admin", "manager", "director", "maintenance supervisor", "pmv manager"] as const;
-export const PROMPT_VERSION = "tyre-photo-v1";
+export const PROMPT_VERSION = "tyre-photo-v2";
 
 const norm = (role: unknown) => String(role ?? "").trim().toLowerCase();
 export const roleAllowed = (role: unknown, allowed: readonly string[]) => allowed.includes(norm(role));
@@ -23,8 +23,10 @@ export const canEnqueue = (role: unknown) => roleAllowed(role, ENQUEUE_ROLES);
 export const canReview = (role: unknown) => roleAllowed(role, REVIEW_ROLES);
 export const canBackfill = (role: unknown) => roleAllowed(role, BACKFILL_ROLES);
 
+// Model text is shown to users: em/en dashes are replaced by commas so reports stay plain ASCII punctuation.
+const plain = (v: string) => v.replace(/\s*[\u2014\u2013]\s*/g, ", ");
 export const str = (value: unknown, length = 300) =>
-  typeof value === "string" ? value.trim().slice(0, length) : "";
+  typeof value === "string" ? plain(value.trim()).slice(0, length) : "";
 
 export function normalizeAnalysis(raw: unknown): Json {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Invalid AI response");

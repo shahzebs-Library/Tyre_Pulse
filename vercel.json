@@ -85,6 +85,18 @@
   ],
   "redirects": [
     {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "www.tyrepulse.app" }],
+      "destination": "https://app.tyrepulse.app/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "tyrepulse.app" }],
+      "destination": "https://app.tyrepulse.app/:path*",
+      "permanent": false
+    },
+    {
       "source": "/ai-cost-monitor",
       "has": [
         {

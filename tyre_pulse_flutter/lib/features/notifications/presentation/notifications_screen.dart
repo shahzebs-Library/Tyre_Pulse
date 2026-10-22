@@ -51,11 +51,19 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final key = '$targetType:$targetId';
     if (targetId != null && key != _handledDeepLink && currentRows.isNotEmpty) {
       _handledDeepLink = key;
-      final match = currentRows.where((row) => row.entityId == targetId &&
-        ((targetType == 'action_item' && row.type == 'action_assigned') ||
-         (targetType == 'broadcast' && row.type == 'broadcast') ||
-         (targetType == 'action.assigned' && row.type == 'action_assigned') ||
-         (targetType == 'broadcast.sent' && row.type == 'broadcast'))).toList();
+      final match = currentRows
+          .where(
+            (row) =>
+                row.entityId == targetId &&
+                ((targetType == 'action_item' &&
+                        row.type == 'action_assigned') ||
+                    (targetType == 'broadcast' && row.type == 'broadcast') ||
+                    (targetType == 'action.assigned' &&
+                        row.type == 'action_assigned') ||
+                    (targetType == 'broadcast.sent' &&
+                        row.type == 'broadcast')),
+          )
+          .toList();
       if (match.isNotEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _open(match.first, copy);
@@ -124,8 +132,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         setState(() => _optimisticallyRead.add(row.id));
         unawaited(_persistRead(row.id, copy));
       }
-      unawaited(showDialog<void>(context: context,
-        builder: (BuildContext context) => TeamActionDialog(actionId: row.entityId!)));
+      unawaited(
+        showDialog<void>(
+          context: context,
+          builder: (BuildContext context) =>
+              TeamActionDialog(actionId: row.entityId!),
+        ),
+      );
       return;
     }
     if (row.type == 'broadcast' && row.entityId != null) {
@@ -133,8 +146,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         setState(() => _optimisticallyRead.add(row.id));
         unawaited(_persistRead(row.id, copy));
       }
-      unawaited(showDialog<void>(context: context,
-        builder: (BuildContext context) => _TeamMessageDialog(notification: row)));
+      unawaited(
+        showDialog<void>(
+          context: context,
+          builder: (BuildContext context) =>
+              _TeamMessageDialog(notification: row),
+        ),
+      );
       return;
     }
     if (!_isRead(row)) {
@@ -449,24 +467,41 @@ class _TeamMessageDialogState extends State<_TeamMessageDialog> {
   Future<void> _load() async {
     try {
       final String? uid = _db.auth.currentUser?.id;
-      if (uid == null || _messageId.isEmpty) throw StateError('Sign in to view this message.');
-      final List<Map<String, dynamic>> receipt = await _db
-          .from('broadcast_recipient_receipts').select('read_at,acknowledged_at')
-          .eq('broadcast_id', _messageId).eq('recipient_id', uid).limit(1);
-      if (receipt.isEmpty) throw StateError('Message is not available to this account.');
-      if (receipt.first['read_at'] == null) {
-        await _db.from('broadcast_recipient_receipts')
-            .update(<String, dynamic>{'read_at': DateTime.now().toUtc().toIso8601String()})
-            .eq('broadcast_id', _messageId).eq('recipient_id', uid).isFilter('read_at', null);
+      if (uid == null || _messageId.isEmpty) {
+        throw StateError('Sign in to view this message.');
       }
-      final List<Map<String, dynamic>> replies = await _db.from('broadcast_replies')
-          .select('id,body,author_id,created_at').eq('broadcast_id', _messageId)
-          .order('created_at', ascending: true).limit(250);
-      if (mounted) setState(() {
-        _acknowledged = receipt.first['acknowledged_at'] != null;
-        _thread = replies;
-        _error = null;
-      });
+      final List<Map<String, dynamic>> receipt = await _db
+          .from('broadcast_recipient_receipts')
+          .select('read_at,acknowledged_at')
+          .eq('broadcast_id', _messageId)
+          .eq('recipient_id', uid)
+          .limit(1);
+      if (receipt.isEmpty) {
+        throw StateError('Message is not available to this account.');
+      }
+      if (receipt.first['read_at'] == null) {
+        await _db
+            .from('broadcast_recipient_receipts')
+            .update(<String, dynamic>{
+              'read_at': DateTime.now().toUtc().toIso8601String(),
+            })
+            .eq('broadcast_id', _messageId)
+            .eq('recipient_id', uid)
+            .isFilter('read_at', null);
+      }
+      final List<Map<String, dynamic>> replies = await _db
+          .from('broadcast_replies')
+          .select('id,body,author_id,created_at')
+          .eq('broadcast_id', _messageId)
+          .order('created_at', ascending: true)
+          .limit(250);
+      if (mounted) {
+        setState(() {
+          _acknowledged = receipt.first['acknowledged_at'] != null;
+          _thread = replies;
+          _error = null;
+        });
+      }
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     }
@@ -479,9 +514,12 @@ class _TeamMessageDialogState extends State<_TeamMessageDialog> {
       final uid = _db.auth.currentUser?.id;
       if (uid == null) throw StateError('Not signed in.');
       final at = DateTime.now().toUtc().toIso8601String();
-      await _db.from('broadcast_recipient_receipts')
+      await _db
+          .from('broadcast_recipient_receipts')
           .update(<String, dynamic>{'acknowledged_at': at, 'read_at': at})
-          .eq('broadcast_id', _messageId).eq('recipient_id', uid).isFilter('acknowledged_at', null);
+          .eq('broadcast_id', _messageId)
+          .eq('recipient_id', uid)
+          .isFilter('acknowledged_at', null);
       if (mounted) setState(() => _acknowledged = true);
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
@@ -498,7 +536,9 @@ class _TeamMessageDialogState extends State<_TeamMessageDialog> {
       final uid = _db.auth.currentUser?.id;
       if (uid == null) throw StateError('Not signed in.');
       await _db.from('broadcast_replies').insert(<String, dynamic>{
-        'broadcast_id': _messageId, 'author_id': uid, 'body': body,
+        'broadcast_id': _messageId,
+        'author_id': uid,
+        'body': body,
       });
       _reply.clear();
       await _load();
@@ -511,29 +551,58 @@ class _TeamMessageDialogState extends State<_TeamMessageDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: Text(widget.notification.title ?? 'Team message'),
-    content: SizedBox(
-      width: 480,
-      child: SingleChildScrollView(
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-          Text(widget.notification.body ?? ''),
-          const SizedBox(height: 16),
-          if (_error != null) Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-          Text(_acknowledged ? 'Acknowledged' : 'Acknowledgement required'),
-          const SizedBox(height: 12),
-          for (final row in _thread)
-            Padding(padding: const EdgeInsets.only(bottom: 9),
-              child: Text(row['body']?.toString() ?? '')),
-          TextField(controller: _reply, maxLength: 4000, maxLines: 3,
-            decoration: const InputDecoration(labelText: 'Reply to team', border: OutlineInputBorder())),
-        ]),
-      ),
-    ),
-    actions: <Widget>[
-      TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
-      TextButton(onPressed: _busy || _acknowledged ? null : _ack,
-        child: Text(_acknowledged ? 'Acknowledged' : 'Acknowledge')),
-      FilledButton(onPressed: _busy ? null : _send, child: const Text('Send reply')),
-    ],
-  );
+        title: Text(widget.notification.title ?? 'Team message'),
+        content: SizedBox(
+          width: 480,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(widget.notification.body ?? ''),
+                const SizedBox(height: 16),
+                if (_error != null)
+                  Text(
+                    _error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                Text(
+                  _acknowledged ? 'Acknowledged' : 'Acknowledgement required',
+                ),
+                const SizedBox(height: 12),
+                for (final row in _thread)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 9),
+                    child: Text(row['body']?.toString() ?? ''),
+                  ),
+                TextField(
+                  controller: _reply,
+                  maxLength: 4000,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Reply to team',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+          TextButton(
+            onPressed: _busy || _acknowledged ? null : _ack,
+            child: Text(_acknowledged ? 'Acknowledged' : 'Acknowledge'),
+          ),
+          FilledButton(
+            onPressed: _busy ? null : _send,
+            child: const Text('Send reply'),
+          ),
+        ],
+      );
 }

@@ -319,7 +319,7 @@ export default function Broadcast() {
               <div className="md:col-span-4 flex flex-wrap items-center gap-3 justify-end">
                 {taskError && <p role="alert" className="text-xs text-red-400">{taskError}</p>}
                 <button type="button" onClick={createFollowUp} disabled={taskSaving || !result.id} className="btn-primary disabled:opacity-40">
-                  {taskSaving ? 'Creating tasks…' : `Create ${followUp.assigneeIds.length > 1 ? `${followUp.assigneeIds.length} Action Center tasks` : 'Action Center task'}`}
+                  {taskSaving ? 'Creating tasks...' : `Create ${followUp.assigneeIds.length > 1 ? `${followUp.assigneeIds.length} Action Center tasks` : 'Action Center task'}`}
                 </button>
               </div>
             </div>
@@ -406,10 +406,10 @@ export default function Broadcast() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border-subtle)] pt-3">
           <div className="flex flex-wrap items-center gap-4 text-sm">
             <span className="flex items-center gap-1.5 text-[var(--text-secondary)]">
-              <Users size={14} /> {audienceLoading ? 'Checking…' : audience ? audience.total : '—'} recipients in the app
+              <Users size={14} /> {audienceLoading ? 'Checking...' : audience ? audience.total : 'N/A'} recipients in the app
             </span>
             <span className="flex items-center gap-1.5 text-[var(--text-secondary)]">
-              <Smartphone size={14} /> {audienceLoading ? 'Checking…' : audience ? audience.with_app : '—'} signed-in phones
+              <Smartphone size={14} /> {audienceLoading ? 'Checking...' : audience ? audience.with_app : 'N/A'} signed-in phones
             </span>
           </div>
           <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
@@ -441,7 +441,7 @@ export default function Broadcast() {
           <button type="button" className="btn-ghost text-xs" onClick={loadFollowUps} disabled={followUpsLoading}><RefreshCcw size={13} /> Refresh</button>
         </div>
         {followUpsError && <p role="alert" className="text-sm text-red-400">{followUpsError}</p>}
-        {followUpsLoading && <p role="status" className="text-xs text-[var(--text-muted)]">Loading tasks…</p>}
+        {followUpsLoading && <p role="status" className="text-xs text-[var(--text-muted)]">Loading tasks...</p>}
         {!followUpsLoading && !followUpsError && !followUps.length && <p className="text-xs text-[var(--text-muted)]">No follow-up tasks found in the current country scope.</p>}
         {followUps.length > 0 && (
           <EnterpriseTable

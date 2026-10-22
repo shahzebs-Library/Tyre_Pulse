@@ -257,7 +257,7 @@ async function callProvider(cfg: { providerName: string; providerKey: string; mo
     return { provider, output };
   } finally { clearTimeout(timeout); }
 }
-const PROMPT = "Inspect this commercial vehicle tyre photograph. Return a short, valid JSON object with keys assessable (boolean), reason (string), defects (max 4 items each containing type, description, severity, visibleEvidence), recommendation (string). Keep each description under 80 characters. Output no markdown, no commentary. Note whether the image is clear enough. Distinguish normal visible wear from defects; flag uncertain findings. Do NOT invent groove depth millimetres, remaining tread percentage, remaining kilometres, engine readings, tyre pressure or roadworthiness certification.";
+const PROMPT = "Inspect this commercial vehicle tyre photograph. Return a short, valid JSON object with keys assessable (boolean), reason (string), defects (max 4 items each containing type, description, severity, visibleEvidence), recommendation (string). Keep each description under 80 characters. Output no markdown, no commentary. Never use em dashes or en dashes. Note whether the image is clear enough. Distinguish normal visible wear from defects; flag uncertain findings. Do NOT invent groove depth millimetres, remaining tread percentage, remaining kilometres, engine readings, tyre pressure or roadworthiness certification.";
 
 async function work(req:Request) {
   // Cron workers authenticate using the dedicated x-worker-secret header.

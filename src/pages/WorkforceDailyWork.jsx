@@ -5,6 +5,7 @@ import {ClipboardCheck,Clock,Plus,RefreshCw,CheckCircle2,AlertTriangle,Send} fro
 import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import {useAuth} from '../contexts/AuthContext'
+import {estimateWork} from '../lib/workforceIntelligence'
 import {addDailyEntry,getMyDailyReport,ensureDailyReport,submitDailyReport,listReviewQueue,reviewDailyReport} from '../lib/api/workforceDaily'
 ChartJS.register(CategoryScale,LinearScale,BarElement,Tooltip,Legend)
 const dateNow=()=>new Date().toLocaleDateString('en-CA')
@@ -23,6 +24,8 @@ export default function WorkforceDailyWork(){
  const [summary,setSummary]=useState(''),[nextActions,setNextActions]=useState('')
  const [form,setForm]=useState({title:'',details:'',deliverable:'',category:'productive',started_at:'',ended_at:'',blocked_reason:''})
  const [showForm,setShowForm]=useState(false)
+ const [est,setEst]=useState({qty:'1',standard:'30',complexity:'1',delay:'0',actual:'45'})
+ const estimate=useMemo(()=>{try{return estimateWork({quantity:Number(est.qty),standard_minutes:Number(est.standard),complexity_factor:Number(est.complexity),verified_external_delay_minutes:Number(est.delay),actual_elapsed_minutes:Number(est.actual),standard_approved:false})}catch{return null}},[est])
  const load=useCallback(async()=>{
   setLoading(true);setError('')
   try{
@@ -92,6 +95,16 @@ export default function WorkforceDailyWork(){
   </form>}
   <EnterpriseTable columns={columns} data={entries} loading={loading} emptyMessage="No activities recorded for this workday."/>
  </div>
+ <div className="card space-y-3"><div><h2 className="text-lg font-semibold">Work duration estimate</h2><p className="text-sm text-[var(--text-muted)]">Provisional calculation, not an approved performance standard. Supervisors must validate inputs and reasons.</p></div>
+ <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+ {([['qty','Quantity'],['standard','Min / unit'],['complexity','Complexity factor'],['delay','Verified delay (min)'],['actual','Elapsed (min)']]).map(([key,label])=><label className="text-xs space-y-1" key={key}>{label}<input className="input w-full" type="number" min={key==='qty'||key==='standard'||key==='complexity'?'0.01':'0'} step="any" value={est[key]} onChange={e=>setEst(x=>({...x,[key]:e.target.value}))}/></label>)}
+ </div>
+ {estimate?<div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+ <Tile label="Expected effort (min)" value={estimate.effort_minutes} Icon={Clock}/>
+ <Tile label="Expected elapsed (min)" value={estimate.expected_elapsed_minutes} Icon={Clock}/>
+ <Tile label="Difference (min)" value={estimate.unexplained_variance_minutes} Icon={AlertTriangle}/>
+ </div>:<p role="alert" className="text-sm text-[var(--text-muted)]">Enter valid positive task standard, quantity and factor.</p>}
+ <p className="text-xs text-[var(--text-muted)]">The result is an estimate only. No automated personnel decision or fabricated confidence is produced.</p></div>
  <div className="card space-y-3">
   <div className="flex justify-between items-center"><h2 className="text-lg font-semibold">End-of-day submission</h2><span className="text-xs font-semibold uppercase text-[var(--accent)]">{record.report?.status||'not started'}</span></div>
   <label className="block text-sm space-y-1">Work completed and results<textarea disabled={!editable} className="input w-full" rows={3} value={summary} onChange={e=>setSummary(e.target.value)}/></label>

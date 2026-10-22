@@ -88,6 +88,9 @@ TpRoute? notificationDestination(TpNotificationTarget target) {
   if (type == 'action_assigned' || entity == 'action_item') {
     return const TasksRoute();
   }
+  if (entity == 'workforce_assignment') {
+    return const TasksRoute();
+  }
   if (type == 'broadcast' || entity == 'broadcast') return const NotificationsRoute();
   if (type == 'driver_workspace' || entity == 'driver_workspace') {
     return const ProfileRoute();

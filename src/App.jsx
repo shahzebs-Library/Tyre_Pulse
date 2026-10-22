@@ -159,6 +159,7 @@ const Batteries              = lazy(() => import('./pages/Batteries'))
 const TelematicsDevices      = lazy(() => import('./pages/TelematicsDevices'))
 const FuelDelivery           = lazy(() => import('./pages/FuelDelivery'))
 const ShiftScheduling        = lazy(() => import('./pages/ShiftScheduling'))
+const WorkforceDailyWork = lazy(() => import('./pages/WorkforceDailyWork'))
 const Equipment              = lazy(() => import('./pages/Equipment'))
 const TyreServiceEvents      = lazy(() => import('./pages/TyreServiceEvents'))
 const DriverExpenses         = lazy(() => import('./pages/DriverExpenses'))
@@ -797,6 +798,7 @@ function MainApp() {
                       <Route path="/telematics-devices"    element={<Safe><RoleRoute allowed={['Admin']}><TelematicsDevices /></RoleRoute></Safe>} />
                       <Route path="/fuel-delivery"         element={<Safe><RoleRoute allowed={['Admin']}><FuelDelivery /></RoleRoute></Safe>} />
                       <Route path="/shifts"                element={<Safe><RoleRoute allowed={['Admin']}><ModuleRoute moduleKey="shifts"><ShiftScheduling /></ModuleRoute></RoleRoute></Safe>} />
+                      <Route path="/workforce-daily" element={<Safe><WorkforceDailyWork /></Safe>} />
                       <Route path="/equipment"             element={<Safe><RoleRoute allowed={['Admin']}><Equipment /></RoleRoute></Safe>} />
                       <Route path="/tyre-service-events"   element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><TyreServiceEvents /></RoleRoute></Safe>} />
                       <Route path="/driver-expenses"       element={<Safe><RoleRoute allowed={['Admin']}><DriverExpenses /></RoleRoute></Safe>} />

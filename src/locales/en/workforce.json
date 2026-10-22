@@ -1,0 +1,33 @@
+{
+  "board": {
+    "filterLabel": "Filter assignments",
+    "searchLabel": "Search assignments",
+    "searchPlaceholder": "Title, site, employee name or ID",
+    "status": "Status",
+    "allStatuses": "All statuses",
+    "priority": "Priority",
+    "allPriorities": "All priorities",
+    "loading": "Loading assignments...",
+    "showing": "Showing {shown} of {total} assignments",
+    "clearFilters": "Clear filters",
+    "empty": "No assignments in this view.",
+    "noMatch": "No assignments match the current search or filters.",
+    "noSchedule": "No scheduled assignments.",
+    "retry": "Retry"
+  },
+  "status": {
+    "assigned": "assigned",
+    "acknowledged": "acknowledged",
+    "in_progress": "in progress",
+    "blocked": "blocked",
+    "submitted": "submitted",
+    "verified": "verified",
+    "cancelled": "cancelled"
+  },
+  "priority": {
+    "low": "low",
+    "normal": "normal",
+    "high": "high",
+    "critical": "critical"
+  }
+}

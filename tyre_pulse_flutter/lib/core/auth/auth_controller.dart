@@ -225,8 +225,19 @@ final class AuthController extends Notifier<AuthState> {
       unawaited(_cache.clear());
     }
 
+    unawaited(_runAfterSignOut());
     ref.read(workspaceControllerProvider.notifier).clear();
     state = const AuthState.signedOut();
+  }
+
+  /// Runs [afterSignOutProvider]. Never throws: clean-up must not be able to
+  /// keep anyone from reaching the login screen.
+  Future<void> _runAfterSignOut() async {
+    try {
+      await ref.read(afterSignOutProvider)();
+    } on Object {
+      // Deliberately ignored - see above.
+    }
   }
 
   // --------------------------------------------------------------------
@@ -250,6 +261,7 @@ final class AuthController extends Notifier<AuthState> {
       _workspaceAdopted = false;
       _forgetPermissions();
       unawaited(_auth.stopAutoRefresh());
+      unawaited(_runAfterSignOut());
       ref.read(workspaceControllerProvider.notifier).clear();
       state = const AuthState.signedOut();
       return;

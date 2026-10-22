@@ -1,0 +1,33 @@
+{
+  "board": {
+    "filterLabel": "تصفية المهام",
+    "searchLabel": "بحث في المهام",
+    "searchPlaceholder": "العنوان أو الموقع أو اسم الموظف أو رقمه",
+    "status": "الحالة",
+    "allStatuses": "كل الحالات",
+    "priority": "الأولوية",
+    "allPriorities": "كل الأولويات",
+    "loading": "جارٍ تحميل المهام...",
+    "showing": "عرض {shown} من {total} مهمة",
+    "clearFilters": "مسح التصفية",
+    "empty": "لا توجد مهام في هذا العرض.",
+    "noMatch": "لا توجد مهام تطابق البحث أو التصفية الحالية.",
+    "noSchedule": "لا توجد مهام مجدولة.",
+    "retry": "إعادة المحاولة"
+  },
+  "status": {
+    "assigned": "مسندة",
+    "acknowledged": "تم تأكيد الاستلام",
+    "in_progress": "قيد التنفيذ",
+    "blocked": "متوقفة",
+    "submitted": "مرسلة",
+    "verified": "معتمدة",
+    "cancelled": "ملغاة"
+  },
+  "priority": {
+    "low": "منخفضة",
+    "normal": "عادية",
+    "high": "مرتفعة",
+    "critical": "حرجة"
+  }
+}

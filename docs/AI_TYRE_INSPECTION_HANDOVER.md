@@ -75,3 +75,38 @@ Commits `49d1412c`, `c0f8f013` on `main` added combinations of vehicle/site sear
 - Commit `099afcc5`: converted the long capture guide and manager-only historical backfill into collapsed optional sections; added human review quality summary (accepted/rejected/unreviewed), reviewer reason textarea, and persisted review note with the decision. These reasons are durable supervised feedback for *future evaluation*, not automatic online model weight updates.
 - Existing detailed **Download full AI inspection Excel** per vehicle remains available. No new separate reporting dashboard was created.
 - **Pending**: browser login as Sajid to confirm actual RLS read; role-specific UI hiding of actions the Edge Function refuses; test reviewer decisions and Excel export; live Vercel build checks; aggregate feedback outcomes for prompt evaluation and expert-confirmed training dataset. Do not claim continuous learning or autonomous model retraining until that controlled evaluation pipeline exists.
+
+## 2026-10-23 — Hardening pass (branch `feature/ai-inspection-hardening-20261022`): code-done vs still needs live validation
+
+**Nothing below has been applied to the live database, deployed as an edge function, or exercised in a browser or with real photos.** Distinguish *committed in the branch* from *deployed* from *validated*.
+
+### Code-done and covered by automated tests (committed in branch only)
+
+| Handover item | What changed | Evidence |
+|---|---|---|
+| P1-6 automated tests: malformed provider output, token/cost logging, unknown-vs-zero cost, spending ceiling, no second paid retry, failed-cost aggregation, tenant/role refusal | Worker job logic extracted to `supabase/functions/ai-tyre-inspection/logic.ts` (pure, no Deno globals) so it is testable; `index.ts` wires real Supabase/provider dependencies. | `src/test/aiTyreWorker.test.js` (28 tests, injected fakes), `src/test/aiCostMonitorAnalytics.test.js` (failed-cost aggregation, unknown-cost failures), `logic.ts` passes `tsc --strict` |
+| P1-7 account for ALL provider attempts incl. non-JSON errors and timeouts | Each attempt is recorded before the request (`provider_attempts`, `provider_called_at`). Timeout, HTTP error, non-JSON body and malformed output all become `failed` jobs with `failure_kind`, an `ai_token_logs` error row, and a budget settlement. When usage is not returned the cost stays **NULL (unknown), never 0**, and the budget is charged the reservation. | worker tests above |
+| P1-7 atomic concurrency-safe daily budget | Migration `20261023090000_ai_tyre_budget_reservation_and_feedback.sql` (NOT APPLIED): `ai_tyre_daily_budget`, `ai_tyre_reserve_budget` (conditional UPDATE under the day row lock; one reservation per job), `ai_tyre_settle_budget` (exactly once), `ai_tyre_fail_stale_processing` (stalled locks fail for manual review, never retry). Service-role only. The worker **fails closed**: no reservation, no paid call. | `supabase/tests/ai_tyre_budget_reservation.test.mjs` runs the real migration in PGlite (5 tests). PGlite is single-connection, so true multi-connection contention is **not** proven; see live checks. |
+| P1 UI matches backend role gates | `src/lib/aiTyreInspectionRoles.js` mirrors the edge-function role lists (parity test fails on drift). Queue/screen buttons are disabled, review controls and the historic-backfill section are hidden, and a notice explains read-only access. Tyre Data Collector (Sajid-style) can open the page and read results but cannot queue, review or backfill. | `aiTyreWorker.test.js` (role matrix, parity), `aiTyreReviewFeedback.test.js` (page wiring scan) |
+| Server-side date/site query + pagination for the register | `listInspectionsForAiRegister` (in `src/lib/api/inspections.js`): date range, site, status and vehicle/site text are applied in the database with an exact total and 50-row pages (stable `inspection_date desc, id` order). The fixed latest-200 window is gone. Site list comes from `reference_site_options`. | `aiTyreReviewFeedback.test.js` |
+| Reviewer-feedback aggregate | RPC `get_ai_tyre_review_feedback(from,to)` (SECURITY INVOKER, supervisor roles, tenant scoped by existing RLS) plus an "evaluation data" panel with Excel download. Counts accepted/rejected/corrected per model and prompt version (worker now stamps `prompt_version = tyre-photo-v1`). Rates are of reviewed findings and show N/A when nothing was reviewed. **Labelled evaluation data only; nothing is trained, tuned or fed back automatically.** | PGlite test + `aiTyreReviewFeedback.test.js` |
+
+### Behaviour changes to be aware of
+- The daily ceiling is now a **reservation** (`AI_RESERVE_USD_PER_CALL`, default $0.01 per call, `AI_DAILY_LIMIT_USD` default $1/day, UTC day, global not per tenant). A job that cannot reserve is returned to `pending` un-attempted and the run stops. An actual cost above the reservation is still booked, so the limit is "effectively hard for the worker", not a provider-side billing cap. Unknown-usage attempts are booked at the reservation amount.
+- Stalled `processing` jobs (>15 min) are failed for manual review at the start of each worker run because the provider may already have been billed.
+- Register filters for photos, measured positions, tyre condition, AI job status and review status still apply to the loaded 50-row page only (they depend on per-position JSON or job rows).
+- Role comparison in the edge function is now case-insensitive for every action (lists unchanged). `PMV Manager` may backfill but not queue or review, as before.
+- `Failed model calls with unknown cost` is a separate notice in AI Cost Monitor; those calls are not counted as free and not guessed.
+
+### Deploy order (when the owner approves)
+1. Review and apply the migration (`database-migration-safety`; pre-flight is in the file header, rollback included).
+2. Deploy the edge function (`index.ts` + `logic.ts`; `index.ts` could not be type-checked here because Deno is not installed, only syntax-checked with esbuild). Deploying the function before the migration makes the worker defer every job.
+3. Deploy the web build.
+
+### Still NOT done / needs live, browser or photo validation
+- **P0 real photograph validation** by an authorised supervisor, with expert adjudication. Untouched by this pass.
+- **P0 live failed-charge metering** after a real malformed response, comparing `ai_tyre_inspection_jobs`, `ai_token_logs`, `ai_tyre_daily_budget` and the provider invoice.
+- **P0 cron HTTP 200, stalled-lock reaping and queue drain** against the live project, and a multi-connection concurrency test of `ai_tyre_reserve_budget`.
+- **P0 tenant/role security test** as real users (including Sajid) through the deployed function and RLS; the new tests only prove the role lists and source-level tenant checks.
+- **P1 deployment and rendering** (Vercel build, console errors, dark/light UI, 390px layout of the new register footer and feedback panel). No browser run was possible here.
+- Continuous learning/model improvement is **not** implemented. The feedback aggregate is evaluation data for a future, expert-confirmed process only.

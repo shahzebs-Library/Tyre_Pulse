@@ -135,3 +135,17 @@ export async function screenInspectionPhotos(inspectionId) {
   if(error)throw error
   return data
 }
+
+/** Evaluation-only aggregate of reviewer decisions per model / prompt version.
+ * SECURITY INVOKER RPC: scoped to the caller's organisation and supervisor roles by the database.
+ * Dates are YYYY-MM-DD or empty. Never used to train or tune a model.
+ */
+export async function getAiReviewFeedback({ from = null, to = null } = {}) {
+  const ymd = /^\d{4}-\d{2}-\d{2}$/
+  const { data, error } = await supabase.rpc('get_ai_tyre_review_feedback', {
+    p_from: from && ymd.test(from) ? from : null,
+    p_to: to && ymd.test(to) ? to : null,
+  })
+  if (error) throw error
+  return data || []
+}

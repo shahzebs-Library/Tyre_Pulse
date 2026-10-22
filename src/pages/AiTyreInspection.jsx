@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ClipboardCheck, RefreshCw, ShieldAlert, SearchCheck, Ruler, X, Image as ImageIcon, ClipboardList, AlertCircle, FileText, Download } from 'lucide-react'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { displayPositionCode, inspectionTypeHint } from '../lib/tyreBay'
@@ -9,9 +9,14 @@ import Card from '../components/ui/Card'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useSettings } from '../contexts/SettingsContext'
 import { toUserMessage } from '../lib/safeError'
-import { listInspectionsForPage } from '../lib/api/inspections'
+import { listInspectionsForAiRegister } from '../lib/api/inspections'
+import { listDataSiteOptions } from '../lib/api/sites'
+import { useAuth } from '../contexts/AuthContext'
+import { canQueueAiAnalysis, canReviewAiFinding, canBackfillAi, canViewAiFeedback, aiActionNotice } from '../lib/aiTyreInspectionRoles'
+import { shapeFeedbackRows, summarizeFeedback, feedbackExportRows, FEEDBACK_EXPORT_COLUMNS, FEEDBACK_DISCLAIMER } from '../lib/aiTyreReviewFeedback'
+import { exportToExcel } from '../lib/exportUtils'
 import { calculateTread, conditionRequiresAnalysis } from '../lib/aiTyreInspection'
-import { readInspectionMeasurements, recordDepthMeasurement, readInspectionAnalysis, enqueueInspectionPhotos, reviewAiFinding, summarizeInspectionAiCosts, backfillAiInspectionRange, screenInspectionPhotos } from '../lib/api/aiTyreInspection'
+import { readInspectionMeasurements, recordDepthMeasurement, readInspectionAnalysis, enqueueInspectionPhotos, reviewAiFinding, summarizeInspectionAiCosts, backfillAiInspectionRange, screenInspectionPhotos, getAiReviewFeedback } from '../lib/api/aiTyreInspection'
 
 /** Calendar day selection in Saudi Arabia; always preserve local midnight. */
 function saudiDay(value) {
@@ -69,6 +74,39 @@ function HistoricInspectionBackfill() {
   </Card>
 }
 
+/** Reviewer decisions per model/prompt. EVALUATION DATA ONLY: nothing here trains or tunes a model. */
+function ReviewFeedbackPanel() {
+  const [rows,setRows]=useState(null)
+  const [loading,setLoading]=useState(false)
+  const [error,setError]=useState('')
+  const [from,setFrom]=useState('')
+  const [to,setTo]=useState('')
+  const load=useCallback(async()=>{
+    setLoading(true);setError('')
+    try{setRows(shapeFeedbackRows(await getAiReviewFeedback({from,to})))}
+    catch(err){setError(toUserMessage(err,'Could not load reviewer feedback'));setRows(null)}
+    finally{setLoading(false)}
+  },[from,to])
+  const total=useMemo(()=>rows?summarizeFeedback(rows):null,[rows])
+  const download=()=>exportToExcel(feedbackExportRows(rows||[]),FEEDBACK_EXPORT_COLUMNS.map(([k])=>k),FEEDBACK_EXPORT_COLUMNS.map(([,h])=>h),'AI tyre reviewer feedback (evaluation data)','Reviewer feedback')
+  return <Card>
+    <h2 className="font-semibold">Reviewer feedback: evaluation data</h2>
+    <p className="text-xs text-[var(--text-muted)] mt-1 mb-3">{FEEDBACK_DISCLAIMER}</p>
+    <div className="flex flex-wrap gap-3 items-end">
+      <label className="text-xs text-[var(--text-secondary)]">From<input type="date" className="input mt-1 block" value={from} onChange={e=>setFrom(e.target.value)}/></label>
+      <label className="text-xs text-[var(--text-secondary)]">Through<input type="date" className="input mt-1 block" min={from||undefined} value={to} onChange={e=>setTo(e.target.value)}/></label>
+      <button type="button" className="btn-secondary" onClick={load} disabled={loading}>{loading?'Loading…':'Load summary'}</button>
+      <button type="button" className="btn-secondary" onClick={download} disabled={!rows?.length}><Download size={14}/> Download Excel</button>
+    </div>
+    {error&&<p role="alert" className="text-sm text-red-500 mt-3">{error}</p>}
+    {rows&&!rows.length&&<p className="text-sm text-[var(--text-muted)] mt-3">No AI jobs in this range.</p>}
+    {rows&&rows.length>0&&<div className="overflow-x-auto mt-3"><table className="w-full text-sm"><thead><tr className="text-left text-xs text-[var(--text-muted)]">{['Model','Prompt','Jobs','Reviewed','Accepted','Rejected','Corrected','Awaiting','Accept %','Reject %'].map(h=><th key={h} className="p-2">{h}</th>)}</tr></thead>
+      <tbody>{rows.map(r=><tr key={r.model+'|'+r.prompt} className="border-t border-[var(--border-dim)]"><td className="p-2">{r.model}</td><td className="p-2">{r.prompt}</td><td className="p-2">{r.jobs}</td><td className="p-2">{r.reviewed}</td><td className="p-2">{r.accepted}</td><td className="p-2">{r.rejected}</td><td className="p-2">{r.corrected}</td><td className="p-2">{r.unreviewed}</td><td className="p-2">{r.acceptRate==null?'N/A':r.acceptRate+'%'}</td><td className="p-2">{r.rejectRate==null?'N/A':r.rejectRate+'%'}</td></tr>)}
+      <tr className="border-t-2 border-[var(--border-dim)] font-semibold"><td className="p-2" colSpan={2}>All</td><td className="p-2">{total.jobs}</td><td className="p-2">{total.reviewed}</td><td className="p-2">{total.accepted}</td><td className="p-2">{total.rejected}</td><td className="p-2">{total.corrected}</td><td className="p-2">{total.unreviewed}</td><td className="p-2">{total.acceptRate==null?'N/A':total.acceptRate+'%'}</td><td className="p-2">{total.rejectRate==null?'N/A':total.rejectRate+'%'}</td></tr></tbody></table>
+      <p className="text-xs text-[var(--text-muted)] mt-2">Percentages are of reviewed findings and show N/A when nothing was reviewed. A high accept rate is not proof of accuracy; it reflects reviewer opinion only.</p></div>}
+  </Card>
+}
+
 function PhotoCaptureGuide() {
   return <Card>
     <h3 className="font-semibold mb-2">How to capture a measurable tyre inspection</h3>
@@ -90,6 +128,15 @@ function photoCount(row) {
 }
 export default function AiTyreInspection() {
   const { activeCountry } = useSettings()
+  const { profile } = useAuth()
+  const role = profile?.role
+  const mayBackfill = canBackfillAi(role)
+  const mayViewFeedback = canViewAiFeedback(role)
+  const [page, setPage] = useState(0)
+  const [total, setTotal] = useState(0)
+  const [siteOptions, setSiteOptions] = useState([])
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const PAGE_SIZE = 50
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -105,16 +152,32 @@ export default function AiTyreInspection() {
   const [aiJobsByInspection,setAiJobsByInspection]=useState({})
   const [dateFrom,setDateFrom]=useState('')
   const [dateTo,setDateTo]=useState('')
+  const requestSeq = useRef(0)
   const load = useCallback(async () => {
+    const seq = ++requestSeq.current
     setLoading(true); setError('')
     try {
-      const { data, error: queryError } = await listInspectionsForPage({ from:0, to:199, country:activeCountry })
+      // Date, site, status and vehicle/site text are applied by the database with an exact total.
+      const { data, error: queryError, count } = await listInspectionsForAiRegister({
+        page, pageSize:PAGE_SIZE, country:activeCountry, dateFrom, dateTo,
+        site:siteFilter, status:statusFilter, search:debouncedSearch,
+      })
       if (queryError) throw queryError
+      if (seq !== requestSeq.current) return // a newer request superseded this one
       setRows(data || [])
+      setTotal(Number.isFinite(count) ? count : (data||[]).length)
     } catch (err) { setError(toUserMessage(err,'Unable to load inspections')) }
-    finally { setLoading(false) }
-  }, [activeCountry])
+    finally { if (seq === requestSeq.current) setLoading(false) }
+  }, [activeCountry,page,dateFrom,dateTo,siteFilter,statusFilter,debouncedSearch])
   useEffect(() => { load() }, [load])
+  useEffect(()=>{const t=setTimeout(()=>setDebouncedSearch(search),350);return ()=>clearTimeout(t)},[search])
+  // Any server-side filter change returns to the first page.
+  useEffect(()=>{setPage(0)},[activeCountry,dateFrom,dateTo,siteFilter,statusFilter,debouncedSearch])
+  useEffect(()=>{
+    let active=true
+    listDataSiteOptions(activeCountry).then(v=>{if(active)setSiteOptions(v)}).catch(()=>{if(active)setSiteOptions([])})
+    return ()=>{active=false}
+  },[activeCountry])
   useEffect(()=>{
     let active=true
     const ids=rows.map(r=>r.id).filter(Boolean)
@@ -129,8 +192,7 @@ export default function AiTyreInspection() {
     return ()=>{active=false}
   },[rows])
 
-  const records = useMemo(() => rows.filter(r => String(r.asset_no||'').toLowerCase().includes(search.toLowerCase()) ||
-    String(r.site||'').toLowerCase().includes(search.toLowerCase())).map(row => {
+  const records = useMemo(() => rows.map(row => {
       const positions = Object.entries(row.tyre_conditions || {}).filter(([,v])=>v && typeof v==='object')
       const measured = positions.map(([position,v]) => ({ position, ...calculateTread({
         originalMm:v.original_tread_mm ?? v.original_mm,
@@ -140,10 +202,10 @@ export default function AiTyreInspection() {
       return {...row, photosForReview:photoCount(row),
         measuredCount:measured.filter(v=>v.status!=='measurement_required').length,
         needsMeasurement:measured.filter(v=>v.status==='measurement_required').length}
-    }), [rows,search])
-  const sites = useMemo(()=>[...new Set(rows.map(r=>r.site).filter(Boolean))].sort(),[rows])
+    }), [rows])
+  const sites = useMemo(()=>[...new Set([...siteOptions,...(siteFilter!=='all'?[siteFilter]:[])])].sort(),[siteOptions,siteFilter])
   const conditions = useMemo(()=>[...new Set(rows.flatMap(r=>Object.values(normalizePositionConditions(r)).map(v=>v?.condition).filter(Boolean)))].sort(),[rows])
-  const statuses = useMemo(()=>[...new Set(rows.map(r=>r.status).filter(Boolean))].sort(),[rows])
+  const statuses = ['Scheduled','In Progress','Done','Overdue','Cancelled']
   const visibleRecords = records.filter(r=>{
     if(filter==='photos' && !r.photosForReview)return false
     if(filter==='measurements' && !r.measuredCount)return false
@@ -152,10 +214,6 @@ export default function AiTyreInspection() {
     if(aiStatusFilter==='none' && jobs.length)return false
     if(aiStatusFilter!=='all' && aiStatusFilter!=='none' && !jobs.some(j=>j.status===aiStatusFilter))return false
     if(reviewFilter!=='all' && !jobs.some(j=>(j.review_status||'unreviewed')===reviewFilter))return false
-    if(siteFilter!=='all' && r.site!==siteFilter)return false
-    if(statusFilter!=='all' && r.status!==statusFilter)return false
-    if(dateFrom && String(r.inspection_date||'').slice(0,10)<dateFrom)return false
-    if(dateTo && String(r.inspection_date||'').slice(0,10)>dateTo)return false
     if(conditionFilter!=='all' && !Object.values(normalizePositionConditions(r)).some(v=>v?.condition===conditionFilter))return false
     return true
   })
@@ -173,15 +231,17 @@ export default function AiTyreInspection() {
   return <div className="space-y-4">
     <PageHeader title="AI Tyre Inspection" subtitle="Verified measurements and defect evidence. AI processing will appear only when the secure background service is configured." icon={SearchCheck} />
     <div className="grid gap-3 sm:grid-cols-3">
-      <Card><div className="flex items-center gap-2 text-sm"><ClipboardCheck size={17}/> Inspections loaded</div><div className="text-2xl font-semibold mt-2">{records.length}</div></Card>
+      <Card><div className="flex items-center gap-2 text-sm"><ClipboardCheck size={17}/> Inspections loaded</div><div className="text-2xl font-semibold mt-2">{records.length}</div><div className="text-xs text-[var(--text-muted)]">on this page, {total} match on the server</div></Card>
       <Card><div className="flex items-center gap-2 text-sm"><ShieldAlert size={17}/> Defect photos for review</div><div className="text-2xl font-semibold mt-2">{records.reduce((sum,r)=>sum+r.photosForReview,0)}</div></Card>
       <Card><div className="flex items-center gap-2 text-sm"><Ruler size={17}/> Measured tyre positions</div><div className="text-2xl font-semibold mt-2">{records.reduce((sum,r)=>sum+r.measuredCount,0)}</div></Card>
     </div>
     <details className="rounded-xl border border-[var(--border-dim)] px-4 py-3"><summary className="cursor-pointer font-medium">Photo capture guide — expand when needed</summary><div className="mt-3"><PhotoCaptureGuide/></div></details>
-    <details className="rounded-xl border border-[var(--border-dim)] px-4 py-3"><summary className="cursor-pointer font-medium">Historical AI backfill — managers only</summary><div className="mt-3"><HistoricInspectionBackfill/></div></details>
+    {aiActionNotice(role)&&<p role="note" className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">{aiActionNotice(role)}</p>}
+    {mayBackfill&&<details className="rounded-xl border border-[var(--border-dim)] px-4 py-3"><summary className="cursor-pointer font-medium">Historical AI backfill — managers only</summary><div className="mt-3"><HistoricInspectionBackfill/></div></details>}
+    {mayViewFeedback&&<details className="rounded-xl border border-[var(--border-dim)] px-4 py-3"><summary className="cursor-pointer font-medium">Reviewer feedback: evaluation data</summary><div className="mt-3"><ReviewFeedbackPanel/></div></details>}
     <Card>
       <div className="flex flex-wrap justify-between gap-3 mb-3">
-        <div><h2 className="font-semibold">Inspection evidence register</h2><p className="text-xs text-[var(--text-muted)]">Showing latest 200 records; absence of a reading is never estimated from a photograph.</p></div>
+        <div><h2 className="font-semibold">Inspection evidence register</h2><p className="text-xs text-[var(--text-muted)]">Date, site, status and search filter the whole register on the server. Photo, measurement, condition, AI-status and review filters apply to the page shown. Absence of a reading is never estimated from a photograph.</p></div>
         <button type="button" className="btn btn-secondary" onClick={load} disabled={loading}><RefreshCw size={15}/> Refresh</button>
       </div>
       <div className="flex flex-wrap gap-2 mb-3" role="group" aria-label="Filter inspection evidence">{[['all','All'],['photos','With defect photos'],['measurements','Measured'],['missing','Missing measurements']].map(([key,label])=><button key={key} type="button" onClick={()=>setFilter(key)} aria-pressed={filter===key} className={'rounded-md border px-3 py-1.5 text-xs '+(filter===key?'bg-brand-subtle border-brand-bright text-brand-bright':'border-[var(--border-dim)] text-[var(--text-secondary)]')}>{label}</button>)}</div>
@@ -198,13 +258,19 @@ export default function AiTyreInspection() {
       </div>
       {error && <p role="alert" className="text-red-500 mb-3">{error}</p>}
       {loading ? <p>Loading inspections…</p> : <EnterpriseTable columns={columns} data={visibleRecords} emptyMessage="No inspections found" />}
+      <div className="flex items-center justify-between gap-3 mt-3 text-sm">
+        <span className="text-xs text-[var(--text-muted)]">{total?`${page*PAGE_SIZE+1}-${Math.min((page+1)*PAGE_SIZE,total)} of ${total}`:'0 inspections'}</span>
+        <div className="flex gap-2"><button type="button" className="btn-secondary" disabled={loading||page===0} onClick={()=>setPage(p=>Math.max(0,p-1))}>Previous</button><button type="button" className="btn-secondary" disabled={loading||(page+1)*PAGE_SIZE>=total} onClick={()=>setPage(p=>p+1)}>Next</button></div>
+      </div>
     </Card>
-    {selected && <InspectionDetail inspection={selected} activeTab={tab} onTab={setTab} onClose={()=>setSelected(null)} />}
+    {selected && <InspectionDetail inspection={selected} role={role} activeTab={tab} onTab={setTab} onClose={()=>setSelected(null)} />}
   </div>
 }
 
 
-function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
+function InspectionDetail({ inspection, role, activeTab, onTab, onClose }) {
+  const mayQueue = canQueueAiAnalysis(role)
+  const mayReview = canReviewAiFinding(role)
   const positionLabel = (position) => displayPositionCode(inspectionTypeHint(inspection), position)
   const evidence = useMemo(() => summarizeEvidence(inspection), [inspection])
   const allPhotosCount = useMemo(() => Object.values(normalizePositionConditions(inspection)).reduce(
@@ -410,7 +476,7 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
           <Card>
             <div className="flex justify-between items-start gap-4 flex-wrap">
               <div><h3 className="font-semibold">AI photo review</h3><p className="text-xs text-[var(--text-muted)] mt-1">The background worker can inspect visible damage or, on demand, screen all photographed tyres without a gauge. It identifies patterns, not exact tread-depth millimetres. Findings require qualified review.</p></div>
-              <div className="flex gap-2"><button className="btn-secondary" onClick={refreshAnalysis} disabled={analysisLoading}>Refresh</button><button className="btn-primary" onClick={enqueue} disabled={analysisLoading||!evidence.photos.length}>{analysisLoading?'Working…':'Queue defect photos'}</button><button className="btn-secondary" type="button" onClick={screenAll} disabled={analysisLoading||!evidence.allPhotoCount}>{analysisLoading?'Working…':'Screen all photographed tyres'}</button></div>
+              <div className="flex gap-2"><button className="btn-secondary" onClick={refreshAnalysis} disabled={analysisLoading}>Refresh</button><button className="btn-primary" onClick={enqueue} disabled={!mayQueue||analysisLoading||!evidence.photos.length} title={mayQueue?undefined:'Your role cannot queue AI analysis'}>{analysisLoading?'Working…':'Queue defect photos'}</button><button className="btn-secondary" type="button" onClick={screenAll} disabled={!mayQueue||analysisLoading||!evidence.allPhotoCount} title={mayQueue?undefined:'Your role cannot queue AI analysis'}>{analysisLoading?'Working…':'Screen all photographed tyres'}</button></div>
             </div>
             {analysisError && <p role="alert" className="text-red-500 text-sm mt-3">{analysisError}</p>}
           </Card>
@@ -424,7 +490,7 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
           <div className="space-y-3">{analysisJobs.map(job=><Card key={job.id}>
             <div className="flex justify-between items-center gap-3"><h4 className="font-semibold">{positionLabel(job.tyre_position)}</h4><span className="text-xs">{job.status} · {job.review_status||'unreviewed'}</span></div>{photoUrls[job.tyre_position+':'+job.photo_ref] && <div className="mt-3"><a href={photoUrls[job.tyre_position+':'+job.photo_ref]} rel="noopener noreferrer" target="_blank" aria-label={'Inspect original tyre photo for '+job.tyre_position}><img src={photoUrls[job.tyre_position+':'+job.photo_ref]} alt={'Original tyre photo for supervisor verification at '+job.tyre_position} className="h-48 max-w-full rounded-lg border border-[var(--border-dim)] object-contain" /></a><p className="text-xs text-[var(--text-muted)] mt-1">Original photograph — enlarge and compare before review</p></div>}
             {job.analysis?<div className="mt-3 space-y-2"><p className="text-sm">{job.analysis.assessable?'Visual assessment available':(job.analysis.reason||'Image unassessable')}</p>{(job.analysis.defects||[]).map((d,i)=><p key={i} className="text-sm border-l-2 border-amber-500 pl-3">{d.type}: {d.description} ({d.severity})</p>)}<p className="text-sm text-[var(--text-secondary)]">{job.analysis.recommendation}</p></div>:<p className="text-xs text-[var(--text-muted)] mt-2">No completed visual finding available.</p>}
-            {job.status==='completed' && (!job.review_status || job.review_status==='unreviewed')&&<div className="mt-3 space-y-2"><label className="block text-xs text-[var(--text-secondary)]">Review reason / improvement feedback<textarea className="input block w-full mt-1" rows={2} placeholder="Describe the confirmed damage, false positive, blur, or missing evidence" value={reviewNotes[job.id]||''} onChange={e=>setReviewNotes(v=>({...v,[job.id]:e.target.value}))}/></label><div className="flex gap-2 flex-wrap"><button className="btn-secondary" disabled={analysisLoading} onClick={()=>decide(job,'accepted')}>Accept observation</button><button className="btn-secondary" disabled={analysisLoading} onClick={()=>decide(job,'rejected')}>Reject observation</button></div></div>}
+            {mayReview && job.status==='completed' && (!job.review_status || job.review_status==='unreviewed')&&<div className="mt-3 space-y-2"><label className="block text-xs text-[var(--text-secondary)]">Review reason / improvement feedback<textarea className="input block w-full mt-1" rows={2} placeholder="Describe the confirmed damage, false positive, blur, or missing evidence" value={reviewNotes[job.id]||''} onChange={e=>setReviewNotes(v=>({...v,[job.id]:e.target.value}))}/></label><div className="flex gap-2 flex-wrap"><button className="btn-secondary" disabled={analysisLoading} onClick={()=>decide(job,'accepted')}>Accept observation</button><button className="btn-secondary" disabled={analysisLoading} onClick={()=>decide(job,'rejected')}>Reject observation</button></div></div>}
           </Card>)}</div>
           {!analysisJobs.length && <EmptyState icon={SearchCheck} title="No queued image analysis" description="Request server-side analysis to create jobs for the linked abnormal-tyre photographs."/>}
         </>}

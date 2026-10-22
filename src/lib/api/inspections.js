@@ -117,6 +117,44 @@ export function listInspectionsForPage({ from, to, country, createdBy } = {}) {
   return q
 }
 
+/** YYYY-MM-DD plus one day (UTC arithmetic on a date-only value; no timezone drift). */
+function nextDay(ymd) {
+  const d = new Date(`${ymd}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + 1)
+  return d.toISOString().slice(0, 10)
+}
+const YMD = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Server-side paged register query for the AI Tyre Inspection page.
+ * Date, site, status and vehicle/site text are applied IN THE DATABASE (not to a fixed
+ * "latest 200" window), with an exact total so the page can say "51-100 of 1,380".
+ * Returns the raw `{ data, error, count }`. RLS still scopes rows to the caller.
+ *
+ * Filters that depend on per-position JSON or AI job rows (condition, photos, measured,
+ * AI status, review status) are NOT expressible here and stay on the loaded page.
+ */
+export function listInspectionsForAiRegister({
+  page = 0, pageSize = 50, country, dateFrom, dateTo, site, status, search,
+} = {}) {
+  const size = Math.min(Math.max(Number(pageSize) || 50, 1), 200)
+  const from = Math.max(Number(page) || 0, 0) * size
+  let q = supabase
+    .from('inspections')
+    .select(LIST_COLS, { count: 'exact' })
+    .order('inspection_date', { ascending: false, nullsFirst: false })
+    .order('id', { ascending: true })
+    .range(from, from + size - 1)
+  if (country && country !== 'All') q = q.eq('country', country)
+  if (dateFrom && YMD.test(dateFrom)) q = q.gte('inspection_date', dateFrom)
+  if (dateTo && YMD.test(dateTo)) q = q.lt('inspection_date', nextDay(dateTo))
+  if (site && site !== 'all') q = q.eq('site', site)
+  if (status && status !== 'all') q = q.eq('status', status)
+  const term = String(search ?? '').replace(/[,()\\*%_]/g, '').trim()
+  if (term) q = q.or(`asset_no.ilike.%${term}%,site.ilike.%${term}%`)
+  return q
+}
+
 /** Get one inspection by id for the page (approval landing / detail). */
 export async function getInspectionForPage(id) {
   return unwrap(await supabase.from('inspections').select(PAGE_COLS).eq('id', id).single())

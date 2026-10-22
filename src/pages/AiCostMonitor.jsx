@@ -234,6 +234,9 @@ export default function AiCostMonitor() {
         )}
       />
 
+      {report.failedUnknownCostCalls > 0 && <div role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+        <strong>{report.failedUnknownCostCalls} failed model call(s) have unknown cost.</strong> The provider reported no usage, so they are not counted as free and are not in the total above; reconcile with the provider invoice.
+      </div>}
       {report.failedChargedCost > 0 && <div role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
         <strong>Failed model calls also incurred estimated charges:</strong> {formatUSD(report.failedChargedCost)} and {formatTokens(report.failedChargedTokens)} tokens.
         These are included in total spend; unknown-cost failures are not assumed free.

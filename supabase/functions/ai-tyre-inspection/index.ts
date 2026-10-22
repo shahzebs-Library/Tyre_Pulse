@@ -205,7 +205,7 @@ function normalizeAnalysis(raw: unknown): Json {
     humanReviewRequired:true, exactTreadDepthMm:null, remainingTreadLifeKm:null };
 }
 async function work(req:Request) {
-  // Gateway JWT validation is disabled for this endpoint: scheduled requests use\n  // an independently checked, high-entropy worker secret. User actions must\n  // still present a valid bearer token verified via auth.getUser().\n  const provided = req.headers.get("x-worker-secret");
+  // Gateway JWT validation is disabled for the cron worker; access is checked\n  // with a dedicated worker secret. Interactive actions still verify the user JWT.\n  const provided = req.headers.get("x-worker-secret");
   const expected = Deno.env.get("AI_WORKER_SECRET");
   if (!expected || !provided || provided !== expected) return fail("Worker unauthorized",403);
   const providerKey = Deno.env.get("AI_PROVIDER_KEY");

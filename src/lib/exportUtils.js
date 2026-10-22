@@ -1787,6 +1787,28 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   }
 
 
+  // Optional AI review note. Keep the established inspection PDF and layout.
+  // Advisory visual observations never replace the tyreman's recorded findings.
+  if (Array.isArray(opts.aiFindings) && opts.aiFindings.length) {
+    const notes = opts.aiFindings.slice(0, 8).map((job) => {
+      const finding = job.analysis || {}
+      const types = Array.isArray(finding.defects)
+        ? finding.defects.slice(0, 3).map(d => String(d.type || 'uncertain').replace(/_/g, ' ')).join(', ')
+        : ''
+      const state = job.review_status === 'accepted' ? 'Supervisor reviewed' : 'AI suggestion pending review'
+      return String(job.tyre_position || 'Position') + ': ' +
+        (finding.assessable === false ? 'Photo unable to assess' : (types || 'Visual inspection observation')) +
+        ' (' + state + ')'
+    })
+    const wrapped = notes.map(note => doc.splitTextToSize(note, W - 12))
+    const height = wrapped.reduce((n, lines) => n + lines.length * 3.5 + 2, 5)
+    y = ensure(y, height + 10)
+    y = _insSection(doc, 'AI Photo Review (Advisory)', y, mx, accent) + 2
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...P.ink)
+    wrapped.forEach(lines => { doc.text(lines, mx + 4, y + 3); y += lines.length * 3.5 + 2 })
+    y += 6
+  }
+
   // ── PAGE 2: Tyre Inspection Details ────────────────────────────────────────
   if (posRows.length) {
     // Readings start page 2, unless the findings already spilled onto it.

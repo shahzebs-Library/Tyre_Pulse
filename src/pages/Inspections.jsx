@@ -5,6 +5,7 @@ import useInspectionRegister from '../hooks/useInspectionRegister'
 import { useScrollRestore } from '../hooks/useScrollRestore'
 import { supabase } from '../lib/supabase'
 import * as inspectionsApi from '../lib/api/inspections'
+import { readInspectionAnalysis } from '../lib/api/aiTyreInspection'
 import * as correctiveActions from '../lib/api/correctiveActions'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -421,9 +422,10 @@ export default function Inspections() {
         // operator sees. Falls back to the programmatic map when absent.
         const svgEl = pdfDiagramRef.current?.querySelector('svg[data-tyre-map]') || null
         const diagramBg = (await getDiagramBg().catch(() => '')) || '#000000'
+        const aiJobs = await readInspectionAnalysis([pdfRow.id]).catch(() => [])
         await exportInspectionDetailPdf(pdfRow, {
           branding: await brandingForPdf(branding), company, photos, lifeRows, svgEl, diagramBg,
-          vehiclePhotoUrl: vehiclePhoto(pdfRow),
+          vehiclePhotoUrl: vehiclePhoto(pdfRow), aiFindings: aiJobs.filter(j => j.status === 'completed'),
         })
       } catch (err) { if (!cancelled) setPdfError(toUserMessage(err, 'Could not create the inspection PDF. Retry the download.')) }
       finally { if (!cancelled) { setPdfRow(null); setPdfBusyId(null) } }

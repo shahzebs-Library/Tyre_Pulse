@@ -49,3 +49,11 @@ where status='completed' order by updated_at desc limit 8;
 ```
 
 Preserve user secrets; do not reveal keys in reports. **Distinguish committed / deployed / tested / operational**. Update this handover after each substantive deployment. Avoid many small PRs; keep approved code on main once verified.
+\n
+## 2026-10-22 follow-up: live output verification (do not claim independent image validation)
+
+- Live queue: **17 completed, 1 failed, 18 pending** (36 total).
+- `ai_token_logs` has **1 error record** for `feature='ai_tyre_inspection'`: failed-call logging is now exercised, but invoice reconciliation remains outstanding.
+- Examined the stored analysis JSON of five recent completed position-linked jobs. All include human-review-required flags and numeric depth remains null. Findings are generally described as **uncertain**, with repeated comments about blurred/angled views, dust, residue and missing sidewall coverage.
+- Inspected examples from positions R2Li, R1Lo, R2Ro and R2Lo in the database, including photo storage references and AI finding structures. **No original photo pixels were inspected**: current Supabase integration can query records but cannot fetch private Storage image bytes. Therefore accuracy versus image, false-positive rate and missed-dangerous-defect rate remain **NOT VALIDATED**. Do not auto-approve any findings.
+- Next authorized reviewer must open each original tyre photo in the web AI Inspection screen and compare with associated defect text; record matching/contradicted/uncertain assessments and requests for retake, then test PDF and costs. Priority: first five completed findings and at least five photos with no detected defects. Require expert adjudication before production acceptance.

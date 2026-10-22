@@ -208,6 +208,7 @@ const NAV_GROUPS = [
     label: 'Inspections & Compliance',
     items: [
       { to: '/inspections',            label: 'Inspections', parent: 'Inspections',         icon: ClipboardCheck },
+      { to: '/ai-tyre-inspection', label: 'AI Tyre Inspection', parent: 'Inspections', icon: Activity, adminOnly: A },
       { to: '/inspection-planner',     label: 'Inspection Planner', parent: 'Inspections',  icon: CalendarClock },
       { to: '/inspection-intelligence', label: 'Inspection Intelligence', parent: 'Inspections', icon: Activity, adminOnly: A },
       { to: '/dvir',                   label: 'DVIR Reports', parent: 'Inspections',        icon: ClipboardCheck, adminOnly: A },

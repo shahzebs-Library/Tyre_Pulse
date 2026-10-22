@@ -9,12 +9,6 @@
  *   if (error) Alert.alert('Error', toUserMessage(error))
  */
 
-type AnyErr =
-  | { message?: unknown; code?: unknown; status?: unknown; error_description?: unknown; name?: unknown }
-  | string
-  | null
-  | undefined
-
 const GENERIC = 'Something went wrong. Please try again.'
 
 // Substrings that indicate a raw backend/DB/internal error we must NOT show.
@@ -26,14 +20,14 @@ const LEAKY = [
   'http', 'econn', 'fetch', 'xhr', 'stack', 'at object.', 'select ', 'insert ', 'update ',
 ]
 
-const raw = (e: AnyErr): string => {
+const raw = (e: unknown): string => {
   if (!e) return ''
   if (typeof e === 'string') return e
   const m = (e as any).message
   return typeof m === 'string' ? m : ''
 }
 
-const codeOf = (e: AnyErr): string => {
+const codeOf = (e: unknown): string => {
   if (!e || typeof e === 'string') return ''
   return String((e as any).code ?? (e as any).status ?? '')
 }
@@ -49,7 +43,7 @@ function isLeaky(msg: string): boolean {
  * @param err     the caught error / Supabase error
  * @param fallback message to use when nothing specific and safe applies
  */
-export function toUserMessage(err: AnyErr, fallback: string = GENERIC): string {
+export function toUserMessage(err: unknown, fallback: string = GENERIC): string {
   const msg = raw(err).trim()
   const code = codeOf(err)
   const low = msg.toLowerCase()

@@ -3,7 +3,7 @@
 Status: code complete on branch `feature/workforce-offline-estimation-20261023`. Not applied, not run on a device.
 
 ## Code done and tested (web + database)
-- Migration `supabase/migrations/20261023090000_workforce_transitions_and_estimation.sql` (NOT applied).
+- Migration `supabase/migrations/20261023091000_workforce_transitions_and_estimation.sql` (NOT applied).
   - `workforce_assignment_transition(...)`: one audited, idempotent status change. Replaying an idempotency key is success; reusing a key for a different action is refused; a stale transition is refused with the current status. Block, return and cancel require a note.
   - Append-only `workforce_assignment_events` ledger. The client clock is clamped server-side (`effective_at`).
   - `workforce_assignment_durations` view and `workforce_duration_estimate(...)`: median and quartiles of ACTIVE minutes (time in progress) from completed assignments, tiered task+vehicle+role, task+vehicle, task+role, task. Minimum 5 samples, otherwise "not enough history". Nothing is invented.

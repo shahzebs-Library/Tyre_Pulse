@@ -25,7 +25,7 @@ vi.mock('../lib/api/workforceEvidence', () => ({
 vi.mock('../lib/api/workforceAssignments', () => ({
   listWorkforceAssignments: api.listWorkforceAssignments, listAssignableEmployees: api.listAssignableEmployees,
   listWorkDependencies: api.listWorkDependencies, listWorkStandards: api.listWorkStandards,
-  assignWork: vi.fn(), setWorkStatus: vi.fn(), addWorkDependency: vi.fn(), addWorkStandard: vi.fn(),
+  assignWork: vi.fn(), setWorkStatus: vi.fn(), transitionAssignment: vi.fn(), addWorkDependency: vi.fn(), addWorkStandard: vi.fn(),
 }))
 
 import WorkforceDailyWork from '../pages/WorkforceDailyWork'

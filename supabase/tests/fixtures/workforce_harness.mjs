@@ -23,7 +23,7 @@ const MIGRATIONS = [
   '20261022111000_workforce_assignment_execution.sql',
   '20261022112500_workforce_manager_permissions.sql',
   '20261022113000_workforce_transition_guard.sql',
-  '20261023090000_workforce_transitions_and_estimation.sql',
+  '20261023091000_workforce_transitions_and_estimation.sql',
 ]
 export const migrationSql = Object.fromEntries(MIGRATIONS.map(f =>
   [f, readFileSync(new URL(`../../migrations/${f}`, import.meta.url), 'utf8')]))

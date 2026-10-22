@@ -2,7 +2,7 @@
  * Workforce work-duration estimation from HISTORICAL completed assignments.
  *
  * Pure functions, no I/O. Mirrors the database objects in
- * supabase/migrations/20261023090000_workforce_transitions_and_estimation.sql:
+ * supabase/migrations/20261023091000_workforce_transitions_and_estimation.sql:
  *   - computeActiveMinutes()  <->  view workforce_assignment_durations
  *   - percentile()            <->  percentile_cont (linear interpolation)
  *   - pickEstimate()          decides what the screen may say about the SQL tier statistics.

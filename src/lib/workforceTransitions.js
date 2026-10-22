@@ -2,7 +2,7 @@
  * Workforce assignment transition vocabulary (web).
  *
  * Mirrors the CASE block of public.workforce_assignment_transition() in
- * supabase/migrations/20261023090000_workforce_transitions_and_estimation.sql and the Dart
+ * supabase/migrations/20261023091000_workforce_transitions_and_estimation.sql and the Dart
  * enum in tyre_pulse_flutter/lib/features/my_work/domain/workforce_transition.dart.
  * src/test/workforceTransitions.test.js fails when either copy drifts from the SQL.
  * The database is the authority; this table only decides which buttons to offer.

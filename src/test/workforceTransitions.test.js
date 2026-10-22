@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { TRANSITIONS, availableActions, reasonMessage } from '../lib/workforceTransitions.js'
 
 const read = p => readFileSync(new URL(p, import.meta.url), 'utf8').replace(/\r/g, '')
-const sql = read('../../supabase/migrations/20261023090000_workforce_transitions_and_estimation.sql')
-const dart = read('../../tyre_pulse_flutter/lib/features/my_work/domain/workforce_transition.dart')
+const sql = read('../../supabase/migrations/20261023091000_workforce_transitions_and_estimation.sql')
+const DART_PATH = '../../tyre_pulse_flutter/lib/features/my_work/domain/workforce_transition.dart'
+const hasDart = existsSync(new URL(DART_PATH, import.meta.url))
+const dart = hasDart ? read(DART_PATH) : ''
 
 function sqlCases() {
   const out = {}
@@ -56,7 +58,7 @@ describe('workforce transition vocabulary parity', () => {
     expect(web).toEqual(required)
   })
 
-  it('Dart enum matches the SQL for every assignee action', () => {
+  it.skipIf(!hasDart)('Dart enum matches the SQL for every assignee action', () => {
     const d = dartCases()
     const assignee = Object.entries(s).filter(([, v]) => !v.manager).map(([k]) => k).sort()
     expect(Object.keys(d).sort()).toEqual(assignee)

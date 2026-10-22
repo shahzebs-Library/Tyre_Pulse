@@ -97,6 +97,11 @@ export default function AiTyreInspection() {
   const [selected, setSelected] = useState(null)
   const [tab, setTab] = useState('evidence')
   const [filter, setFilter] = useState('all')
+  const [siteFilter,setSiteFilter]=useState('all')
+  const [conditionFilter,setConditionFilter]=useState('all')
+  const [statusFilter,setStatusFilter]=useState('all')
+  const [dateFrom,setDateFrom]=useState('')
+  const [dateTo,setDateTo]=useState('')
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
@@ -119,7 +124,22 @@ export default function AiTyreInspection() {
         measuredCount:measured.filter(v=>v.status!=='measurement_required').length,
         needsMeasurement:measured.filter(v=>v.status==='measurement_required').length}
     }), [rows,search])
-  const visibleRecords = records.filter(r => filter === 'all' || (filter === 'photos' && r.photosForReview > 0) || (filter === 'measurements' && r.measuredCount > 0) || (filter === 'missing' && r.needsMeasurement > 0))
+  const sites = useMemo(()=>[...new Set(rows.map(r=>r.site).filter(Boolean))].sort(),[rows])
+  const conditions = useMemo(()=>[...new Set(rows.flatMap(r=>Object.values(normalizePositionConditions(r)).map(v=>v?.condition).filter(Boolean)))].sort(),[rows])
+  const statuses = useMemo(()=>[...new Set(rows.map(r=>r.status).filter(Boolean))].sort(),[rows])
+  const visibleRecords = records.filter(r=>{
+    if(filter==='photos' && !r.photosForReview)return false
+    if(filter==='measurements' && !r.measuredCount)return false
+    if(filter==='missing' && !r.needsMeasurement)return false
+    if(siteFilter!=='all' && r.site!==siteFilter)return false
+    if(statusFilter!=='all' && r.status!==statusFilter)return false
+    if(dateFrom && String(r.inspection_date||'').slice(0,10)<dateFrom)return false
+    if(dateTo && String(r.inspection_date||'').slice(0,10)>dateTo)return false
+    if(conditionFilter!=='all' && !Object.values(normalizePositionConditions(r)).some(v=>v?.condition===conditionFilter))return false
+    return true
+  })
+  const resetFilters=()=>{setSearch('');setFilter('all');setSiteFilter('all');setStatusFilter('all');setConditionFilter('all');setDateFrom('');setDateTo('')}
+
   const columns = [
     { accessorKey:'inspection_date', header:'Date', cell:({row:{original:r}})=>r.inspection_date||'Not recorded' },
     { accessorKey:'asset_no', header:'Vehicle', cell:({row:{original:r}})=><button type="button" className="text-brand-bright hover:underline font-semibold" onClick={()=>{setSelected(r);setTab('evidence')}}>{r.asset_no||'Not recorded'}</button> },
@@ -145,6 +165,14 @@ export default function AiTyreInspection() {
       </div>
       <div className="flex flex-wrap gap-2 mb-3" role="group" aria-label="Filter inspection evidence">{[['all','All'],['photos','With defect photos'],['measurements','Measured'],['missing','Missing measurements']].map(([key,label])=><button key={key} type="button" onClick={()=>setFilter(key)} aria-pressed={filter===key} className={'rounded-md border px-3 py-1.5 text-xs '+(filter===key?'bg-brand-subtle border-brand-bright text-brand-bright':'border-[var(--border-dim)] text-[var(--text-secondary)]')}>{label}</button>)}</div>
       <input className="input w-full max-w-sm mb-3" aria-label="Search vehicle or site" placeholder="Search vehicle or site" value={search} onChange={e=>setSearch(e.target.value)}/>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3" aria-label="Advanced inspection filters">
+        <label className="text-xs text-[var(--text-secondary)]">Site<select className="input w-full mt-1" value={siteFilter} onChange={e=>setSiteFilter(e.target.value)}><option value="all">All sites</option>{sites.map(s=><option key={s} value={s}>{s}</option>)}</select></label>
+        <label className="text-xs text-[var(--text-secondary)]">Tyre condition<select className="input w-full mt-1" value={conditionFilter} onChange={e=>setConditionFilter(e.target.value)}><option value="all">All conditions</option>{conditions.map(s=><option key={s} value={s}>{s}</option>)}</select></label>
+        <label className="text-xs text-[var(--text-secondary)]">Inspection status<select className="input w-full mt-1" value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="all">All statuses</option>{statuses.map(s=><option key={s} value={s}>{s}</option>)}</select></label>
+        <label className="text-xs text-[var(--text-secondary)]">From date<input className="input w-full mt-1" type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label>
+        <label className="text-xs text-[var(--text-secondary)]">Through date<input className="input w-full mt-1" type="date" min={dateFrom||undefined} value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label>
+        <div className="flex items-end gap-3"><button className="btn-secondary" type="button" onClick={resetFilters}>Clear all filters</button><span className="text-xs text-[var(--text-muted)]">{visibleRecords.length} matching</span></div>
+      </div>
       {error && <p role="alert" className="text-red-500 mb-3">{error}</p>}
       {loading ? <p>Loading inspections…</p> : <EnterpriseTable columns={columns} data={visibleRecords} emptyMessage="No inspections found" />}
     </Card>

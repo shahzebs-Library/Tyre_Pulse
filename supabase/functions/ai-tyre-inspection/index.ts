@@ -212,9 +212,19 @@ async function work(req:Request) {
   const provided = req.headers.get("x-worker-secret");
   const expected = Deno.env.get("AI_WORKER_SECRET");
   if (!expected || !provided || provided !== expected) return fail("Worker unauthorized",403);
-  const providerKey = Deno.env.get("AI_PROVIDER_KEY");
-  const model = Deno.env.get("AI_MODEL") || "gemini-2.5-flash-lite";
+  const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+  const providerName = anthropicKey ? "anthropic" : "google";
+  const providerKey = anthropicKey || Deno.env.get("AI_PROVIDER_KEY");
+  const model = Deno.env.get("AI_MODEL") || (anthropicKey ? "claude-haiku-5-5" : "gemini-2.5-flash-lite");
   if (!providerKey) return fail("AI provider is not configured",503);
+  // A default USD daily ceiling prevents unattended image jobs from running up a bill.
+  const dailyLimit = Math.max(0, Math.min(Number(Deno.env.get("AI_DAILY_LIMIT_USD") ?? "1"), 100));
+  const dayStart = new Date(); dayStart.setUTCHours(0,0,0,0);
+  const {data:charges,error:chargesError} = await admin.from("ai_tyre_inspection_jobs")
+    .select("cost_usd").gte("billed_at",dayStart.toISOString()).not("cost_usd","is",null);
+  if (chargesError) return fail("Unable to enforce AI spending ceiling",503);
+  const spent = (charges || []).reduce((sum,row)=>sum + Number(row.cost_usd || 0),0);
+  if (spent >= dailyLimit) return response({processed:0,reason:"Daily AI spending limit reached",dailyLimit,spent});
   const {data:items,error} = await admin.from("ai_tyre_inspection_jobs")
     .select("id,organisation_id,inspection_id,photo_ref,tyre_position,attempts")
     .eq("status","pending").order("created_at",{ascending:true}).limit(4);
@@ -236,42 +246,66 @@ async function work(req:Request) {
       let binary = "";
       for (const byte of bytes) binary += String.fromCharCode(byte);
       const base64 = btoa(binary);
-      const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" +
-        encodeURIComponent(model) + ":generateContent";
+      const prompt = "Inspect this commercial vehicle tyre photograph. Return ONLY a JSON object containing assessable (boolean), reason (string), defects (array of objects with type, description, severity, visibleEvidence), recommendation (string). Note whether the image is clear enough. Distinguish normal visible wear from defects; flag uncertain findings. Do NOT invent groove depth millimetres, remaining tread percentage, remaining kilometres, engine readings, tyre pressure or roadworthiness certification.";
       const ctl = new AbortController();
       const timeout = setTimeout(()=>ctl.abort(),25000);
-      let completion: Response;
+      let provider: any;
       try {
-        completion = await fetch(endpoint,{
-          method:"POST", signal:ctl.signal,
-          headers:{"x-goog-api-key":providerKey,"content-type":"application/json"},
-          body:JSON.stringify({
-            generationConfig:{responseMimeType:"application/json",maxOutputTokens:900,temperature:0.1},
-            contents:[{parts:[
-              {text:"Inspect the commercial vehicle tyre photo for visible damage ONLY. Return JSON with assessable boolean, reason, defects array (type, description, severity, visibleEvidence), recommendation. Do not infer tyre depth millimetres, lifespan, pressure or safety certification. Use uncertain when unclear."},
-              {inline_data:{mime_type:file.type,data:base64}},
-            ]}],
-          }),
-        });
+        if (providerName === "anthropic") {
+          const completion = await fetch("https://api.anthropic.com/v1/messages",{
+            method:"POST",signal:ctl.signal,
+            headers:{"x-api-key":providerKey,"anthropic-version":"2023-06-01","content-type":"application/json"},
+            body:JSON.stringify({
+              model, max_tokens:650,
+              messages:[{role:"user",content:[
+                {type:"text",text:prompt},
+                {type:"image",source:{type:"base64",media_type:file.type,data:base64}},
+              ]}],
+            }),
+          });
+          if (!completion.ok) {
+            if ([401,403,400].includes(completion.status)) throw new Error("Anthropic credentials or model access unavailable");
+            if (completion.status === 429) throw new Error("Anthropic rate limit");
+            throw new Error("Anthropic provider request failed");
+          }
+          provider = await completion.json();
+        } else {
+          const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" +
+            encodeURIComponent(model) + ":generateContent";
+          const completion = await fetch(endpoint,{
+            method:"POST",signal:ctl.signal,
+            headers:{"x-goog-api-key":providerKey,"content-type":"application/json"},
+            body:JSON.stringify({
+              generationConfig:{responseMimeType:"application/json",maxOutputTokens:650,temperature:0.1},
+              contents:[{parts:[{text:prompt},{inline_data:{mime_type:file.type,data:base64}}]}],
+            }),
+          });
+          if (!completion.ok) throw new Error("Google provider request failed");
+          provider = await completion.json();
+        }
       } finally { clearTimeout(timeout); }
-      if (!completion.ok) throw new Error("AI provider request failed");
-      const provider = await completion.json();
-      const output = provider?.candidates?.[0]?.content?.parts?.[0]?.text;
-      const analysis = normalizeAnalysis(JSON.parse(String(output || "{}")));
-      const usage = provider?.usageMetadata || {};
-      const inputTokens = Number(usage.promptTokenCount);
-      const outputTokens = Number(usage.candidatesTokenCount);
-      const hasUsage = Number.isFinite(inputTokens) && Number.isFinite(outputTokens);
-      const defaultRate = model === "gemini-2.5-flash-lite" ? [0.10, 0.40] : null;
-      const inputRate = Number(Deno.env.get("AI_INPUT_USD_PER_MILLION") || defaultRate?.[0]);
-      const outputRate = Number(Deno.env.get("AI_OUTPUT_USD_PER_MILLION") || defaultRate?.[1]);
-      const hasRates = Number.isFinite(inputRate) && Number.isFinite(outputRate) && inputRate > 0 && outputRate > 0;
-      const estimatedCost = hasUsage && hasRates ? Number(((inputTokens*inputRate+outputTokens*outputRate)/1e6).toFixed(6)) : null;
+      const output = providerName === "anthropic"
+        ? provider?.content?.filter((part:Json)=>part.type==="text").map((part:Json)=>part.text).join("")
+        : provider?.candidates?.[0]?.content?.parts?.[0]?.text;
+      const cleanOutput = String(output || "").replace(/^\`\`\`(?:json)?\\s*/i,"").replace(/\\s*\`\`\`$/,"");
+      const analysis = normalizeAnalysis(JSON.parse(cleanOutput));
+      const usage = providerName === "anthropic" ? provider?.usage : provider?.usageMetadata;
+      const inputTokens = providerName === "anthropic" ? Number(usage?.input_tokens) : Number(usage?.promptTokenCount);
+      const outputTokens = providerName === "anthropic" ? Number(usage?.output_tokens) : Number(usage?.candidatesTokenCount);
+      const hasUsage = usage != null && Number.isFinite(inputTokens) && Number.isFinite(outputTokens);
+      const standardRate = providerName === "anthropic"
+        ? (model === "claude-haiku-5-5" ? [0.10,0.50] : model === "claude-sonnet-5-5" ? [2,10] : null)
+        : (model === "gemini-2.5-flash-lite" ? [0.10,0.40] : null);
+      const inputRate = Number(Deno.env.get("AI_INPUT_USD_PER_MILLION") ?? standardRate?.[0]);
+      const outputRate = Number(Deno.env.get("AI_OUTPUT_USD_PER_MILLION") ?? standardRate?.[1]);
+      const hasRates = Number.isFinite(inputRate) && Number.isFinite(outputRate) && inputRate>0 && outputRate>0;
+      const estimatedCost = hasUsage && hasRates
+        ? Number(((inputTokens*inputRate+outputTokens*outputRate)/1e6).toFixed(6)) : null;
       await admin.from("ai_tyre_inspection_jobs").update({
         status:"completed",analysis,model_version:model,
-        provider:"google", input_tokens:hasUsage?inputTokens:null,
+        provider:providerName, input_tokens:hasUsage?inputTokens:null,
         output_tokens:hasUsage?outputTokens:null,
-        total_tokens:hasUsage?Number(usage.totalTokenCount ?? inputTokens+outputTokens):null,
+        total_tokens:hasUsage?Number(usage?.totalTokenCount ?? inputTokens+outputTokens):null,
         pricing_usd_per_million_input:hasRates?inputRate:null,
         pricing_usd_per_million_output:hasRates?outputRate:null,
         cost_usd:estimatedCost,billed_at:hasUsage?new Date().toISOString():null,

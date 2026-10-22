@@ -206,8 +206,26 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
     ['analysis','AI analysis status',SearchCheck],
     ['report','Report preview',FileText],
   ]
-  const missing=readings.filter(item=>!item.calculation.valid)
-  const verified=readings.filter(item=>item.calculation.valid)
+  const latestSavedByPosition=useMemo(()=>{
+    const result=new Map()
+    for(const row of storedMeasurements){
+      const current=result.get(row.tyre_position)
+      if(!current || Date.parse(row.measured_at)>Date.parse(current.measured_at))result.set(row.tyre_position,row)
+    }
+    return result
+  },[storedMeasurements])
+  const displayedReadings=readings.map(item=>{
+    const saved=latestSavedByPosition.get(item.position)
+    if(!saved)return item
+    return {...item,calculation:measurementReading({
+      inspectionId:inspection.id,position:item.position,
+      originalMm:saved.original_mm,minimumMm:saved.minimum_mm,
+      innerMm:saved.inner_mm,centerMm:saved.center_mm,outerMm:saved.outer_mm,
+      source:saved.source,measuredAt:saved.measured_at,
+    })}
+  })
+  const missing=displayedReadings.filter(item=>!item.calculation.valid)
+  const verified=displayedReadings.filter(item=>item.calculation.valid)
   const appendix=buildInspectionAiAppendix({inspection,jobs:analysisJobs,measurements:storedMeasurements})
   return <div className="fixed inset-0 z-[55] bg-black/60 flex justify-end" role="presentation" onClick={onClose}>
     <div className="bg-[var(--panel)] text-[var(--text-primary)] h-full w-full max-w-4xl overflow-y-auto shadow-2xl" role="dialog" aria-modal="true" aria-label="AI tyre inspection details" onClick={e=>e.stopPropagation()}>
@@ -258,7 +276,7 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
           <div className="overflow-x-auto rounded-xl border border-[var(--border-dim)]">
             <table className="w-full text-sm text-left">
               <thead className="bg-[var(--panel-2)] text-[var(--text-secondary)]"><tr>{['Position','Condition','Measured depth','Remaining usable','Remaining %','Verification'].map(h=><th className="p-3 whitespace-nowrap" key={h}>{h}</th>)}</tr></thead>
-              <tbody>{readings.map(item=><tr key={item.position} className="border-t border-[var(--border-dim)]">
+              <tbody>{displayedReadings.map(item=><tr key={item.position} className="border-t border-[var(--border-dim)]">
                 <td className="p-3 font-semibold">{item.position}</td><td className="p-3">{item.condition}</td>
                 <td className="p-3">{item.calculation.valid?item.calculation.reading.worstMm+' mm':'Not measured'}</td>
                 <td className="p-3">{item.calculation.valid?item.calculation.reading.remainingMm+' mm':'—'}</td>

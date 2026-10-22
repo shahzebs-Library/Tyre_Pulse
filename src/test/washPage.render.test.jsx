@@ -1,10 +1,11 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { it, expect, vi } from 'vitest'
-const h=vi.hoisted(()=>({rows:[
-  {id:'wash-1',asset_no:'TEST-1',created_by:'person-1',entry_name:'First recorder',created_at:'2026-09-21T08:00:00Z',wash_date:'2026-09-21',status:'Completed',site:'Site A',wash_type:'Full',wash_details:{version:1,chemical_status:'none',chemicals:[],checklist:[{label:'Cab interior',result:'fail',note:'Dust remains'}]}},
-  {id:'wash-2',asset_no:'TEST-2',created_by:'person-2',entry_name:'Second recorder',created_at:'2026-09-21T09:00:00Z',wash_date:'2026-09-21',status:'Scheduled',site:'Site B',wash_type:'Exterior'},
-]}))
+// Fixtures use today's date: the page defaults to the current month, so fixed dates expire.
+const h=vi.hoisted(()=>{const day=new Date().toISOString().slice(0,10);return {rows:[
+  {id:'wash-1',asset_no:'TEST-1',created_by:'person-1',entry_name:'First recorder',created_at:`${day}T08:00:00Z`,wash_date:day,status:'Completed',site:'Site A',wash_type:'Full',wash_details:{version:1,chemical_status:'none',chemicals:[],checklist:[{label:'Cab interior',result:'fail',note:'Dust remains'}]}},
+  {id:'wash-2',asset_no:'TEST-2',created_by:'person-2',entry_name:'Second recorder',created_at:`${day}T09:00:00Z`,wash_date:day,status:'Scheduled',site:'Site B',wash_type:'Exterior'},
+]}})
 vi.mock('../contexts/SettingsContext',()=>({useSettings:()=>({activeCountry:'All',activeCurrency:'SAR'})}))
 vi.mock('../contexts/AuthContext',()=>({useAuth:()=>({profile:{id:'person-1',role:'Admin',organisation_id:'org'},hasPermission:()=>true,isSuperAdmin:false})}))
 vi.mock('../hooks/useReportMeta',()=>({useReportMeta:()=>({})}))

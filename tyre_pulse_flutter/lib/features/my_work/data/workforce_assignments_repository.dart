@@ -6,7 +6,7 @@ library;
 
 import 'dart:convert';
 
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class WorkforceAssignment {
@@ -65,7 +65,7 @@ class WorkforceAssignmentsRepository {
   Future<WorkforceAssignmentSnapshot> listMine() async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) throw StateError('Not signed in');
-    final preferences = await SharedPreferences.getInstance();
+    const storage = FlutterSecureStorage();
     // The cache is identity-scoped so another signed-in user cannot inherit
     // a prior employee's task list on the same device.
     final cacheKey = 'workforce_assignments_v1_$userId';
@@ -76,7 +76,7 @@ class WorkforceAssignmentsRepository {
           .eq('assigned_to', userId)
           .order('created_at', ascending: false)
           .limit(100);
-      await preferences.setString(cacheKey, jsonEncode(rows));
+      await storage.write(key: cacheKey, value: jsonEncode(rows));
       return WorkforceAssignmentSnapshot(
         items: (rows as List<dynamic>)
             .map((row) => WorkforceAssignment.fromJson(
@@ -86,7 +86,7 @@ class WorkforceAssignmentsRepository {
         offline: false,
       );
     } catch (_) {
-      final saved = preferences.getString(cacheKey);
+      final saved = await storage.read(key: cacheKey);
       if (saved == null) rethrow;
       final decoded = jsonDecode(saved) as List<dynamic>;
       return WorkforceAssignmentSnapshot(

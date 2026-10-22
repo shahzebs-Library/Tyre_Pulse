@@ -23,7 +23,8 @@ final class FirebasePushMessagingClient implements PushMessagingClient {
   Object? _lastError;
 
   bool get _supportedPlatform =>
-      !kIsWeb && (defaultTargetPlatform == TargetPlatform.android ||
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
 
   FirebaseMessaging get _messaging => FirebaseMessaging.instance;

@@ -107,21 +107,6 @@ function ReviewFeedbackPanel() {
   </Card>
 }
 
-function PhotoCaptureGuide() {
-  return <Card>
-    <h3 className="font-semibold mb-2">How to capture a measurable tyre inspection</h3>
-    <ol className="text-sm text-[var(--text-secondary)] list-decimal ml-5 space-y-2">
-      <li>Identify the vehicle and exact canonical tyre position (for example LHF1 or RHRO) before taking photos. Keep each photo linked to that position.</li>
-      <li>Take an overall tread-face photograph in good, even light, with the full tread width visible and the camera roughly perpendicular to the tread.</li>
-      <li>Take a close-up of every cut, bulge, exposed cord, cracking or uneven-wear area, plus a sidewall photo when relevant. Keep the image sharp and avoid glare.</li>
-      <li>Measure tread depth using a physical depth gauge in the main grooves at inner, centre and outer tread bands. Photograph the gauge in each groove with its scale/display clearly readable.</li>
-      <li>Enter the measured millimetres under Tread measurements, with the gauge source and the tyre's verified original and minimum permitted depths. A gauge photograph supports review but does not automatically certify a measurement.</li>
-      <li>For remaining mileage or wear trends, record the odometer and repeat gauge measurements against the same tyre serial over time. If measurements are missing, the report must say Not measured.</li>
-    </ol>
-    <p className="text-xs mt-3 text-[var(--text-muted)]">A standard photograph alone has no reliable millimetre scale; AI can flag visible abnormalities but must not invent exact depths, engine-hour readings, or service-life predictions.</p>
-  </Card>
-}
-
 function photoCount(row) {
   const conditions = row?.tyre_conditions || {}
   return Object.values(conditions).filter(p => p && typeof p === 'object' && (p.photo_url || p.photo || p.photos || p.photo_refs) && conditionRequiresAnalysis(p.condition)).length
@@ -235,7 +220,6 @@ export default function AiTyreInspection() {
       <Card><div className="flex items-center gap-2 text-sm"><ShieldAlert size={17}/> Defect photos for review</div><div className="text-2xl font-semibold mt-2">{records.reduce((sum,r)=>sum+r.photosForReview,0)}</div></Card>
       <Card><div className="flex items-center gap-2 text-sm"><Ruler size={17}/> Measured tyre positions</div><div className="text-2xl font-semibold mt-2">{records.reduce((sum,r)=>sum+r.measuredCount,0)}</div></Card>
     </div>
-    <details className="rounded-xl border border-[var(--border-dim)] px-4 py-3"><summary className="cursor-pointer font-medium">Photo capture guide — expand when needed</summary><div className="mt-3"><PhotoCaptureGuide/></div></details>
     {aiActionNotice(role)&&<p role="note" className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">{aiActionNotice(role)}</p>}
     {mayBackfill&&<details className="rounded-xl border border-[var(--border-dim)] px-4 py-3"><summary className="cursor-pointer font-medium">Historical AI backfill — managers only</summary><div className="mt-3"><HistoricInspectionBackfill/></div></details>}
     {mayViewFeedback&&<details className="rounded-xl border border-[var(--border-dim)] px-4 py-3"><summary className="cursor-pointer font-medium">Reviewer feedback: evaluation data</summary><div className="mt-3"><ReviewFeedbackPanel/></div></details>}
@@ -297,7 +281,6 @@ function InspectionDetail({ inspection, role, activeTab, onTab, onClose }) {
   const [storedMeasurements,setStoredMeasurements]=useState([])
   const [analysisJobs,setAnalysisJobs]=useState([])
   const [reviewNotes,setReviewNotes]=useState({})
-  const [showCaptureGuide,setShowCaptureGuide]=useState(false)
   const [analysisError,setAnalysisError]=useState('')
   const [analysisLoading,setAnalysisLoading]=useState(false)
   const refreshAnalysis=useCallback(async()=>{try{setAnalysisJobs(await readInspectionAnalysis([inspection.id]));setAnalysisError('')}catch(e){setAnalysisError(toUserMessage(e,'Could not load AI results'))}},[inspection.id])
@@ -446,7 +429,6 @@ function InspectionDetail({ inspection, role, activeTab, onTab, onClose }) {
           {!evidence.allPhotos.length && <EmptyState icon={ImageIcon} title="No tyre photographs" description="Photos will appear here when inspectors attach photos to tyre positions."/>}
         </>}
         {activeTab==='measurements' && <>
-          <details className="text-sm"><summary className="cursor-pointer">How to capture gauge evidence</summary><PhotoCaptureGuide/></details>
           <div className="grid grid-cols-3 gap-3">
             <Metric label="Positions" value={readings.length}/>
             <Metric label="Complete readings" value={verified.length}/>

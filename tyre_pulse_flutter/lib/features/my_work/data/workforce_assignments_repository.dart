@@ -52,7 +52,10 @@ class WorkforceAssignment {
 }
 
 class WorkforceAssignmentSnapshot {
-  const WorkforceAssignmentSnapshot({required this.items, required this.offline});
+  const WorkforceAssignmentSnapshot({
+    required this.items,
+    required this.offline,
+  });
   final List<WorkforceAssignment> items;
   final bool offline;
 }
@@ -66,8 +69,7 @@ class WorkforceAssignmentsRepository {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) throw StateError('Not signed in');
     const storage = FlutterSecureStorage();
-    // The cache is identity-scoped so another signed-in user cannot inherit
-    // a prior employee's task list on the same device.
+    // The encrypted cache is identity-scoped to prevent account crossover.
     final cacheKey = 'workforce_assignments_v1_$userId';
     try {
       final rows = await _client

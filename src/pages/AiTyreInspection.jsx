@@ -15,6 +15,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { canQueueAiAnalysis, canReviewAiFinding, canBackfillAi, canViewAiFeedback, aiActionNotice } from '../lib/aiTyreInspectionRoles'
 import { shapeFeedbackRows, summarizeFeedback, feedbackExportRows, FEEDBACK_EXPORT_COLUMNS, FEEDBACK_DISCLAIMER } from '../lib/aiTyreReviewFeedback'
 import { exportToExcel } from '../lib/exportUtils'
+import { buildDamageRows, exportDamageExcel, exportDamagePdf } from '../lib/aiDamageReport'
 import { calculateTread, conditionRequiresAnalysis } from '../lib/aiTyreInspection'
 import { readInspectionMeasurements, recordDepthMeasurement, readInspectionAnalysis, enqueueInspectionPhotos, reviewAiFinding, backfillAiInspectionRange, screenInspectionPhotos, getAiReviewFeedback } from '../lib/api/aiTyreInspection'
 
@@ -202,6 +203,16 @@ export default function AiTyreInspection() {
     if(conditionFilter!=='all' && !Object.values(normalizePositionConditions(r)).some(v=>v?.condition===conditionFilter))return false
     return true
   })
+  const [reporting,setReporting]=useState(false)
+  const damageRows=useMemo(()=>buildDamageRows(visibleRecords,aiJobsByInspection,(i,p)=>displayPositionCode(inspectionTypeHint(i),p)),[visibleRecords,aiJobsByInspection])
+  const runReport=async(kind)=>{
+    setReporting(true);setError('')
+    try{
+      const dateRange=[dateFrom&&`From ${dateFrom}`,dateTo&&`Through ${dateTo}`].filter(Boolean).join(' ')
+      await (kind==='pdf'?exportDamagePdf:exportDamageExcel)(damageRows,{dateRange})
+    }catch(e){setError(toUserMessage(e,'Could not create the report'))}
+    finally{setReporting(false)}
+  }
   const resetFilters=()=>{setSearch('');setFilter('all');setSiteFilter('all');setStatusFilter('all');setConditionFilter('all');setAiStatusFilter('all');setReviewFilter('all');setDateFrom('');setDateTo('')}
 
   const columns = [
@@ -226,7 +237,11 @@ export default function AiTyreInspection() {
     <Card>
       <div className="flex flex-wrap justify-between gap-3 mb-3">
         <div><h2 className="font-semibold">Inspection evidence register</h2><p className="text-xs text-[var(--text-muted)]">Date, site, status and search filter the whole register on the server. Photo, measurement, condition, AI-status and review filters apply to the page shown. Absence of a reading is never estimated from a photograph.</p></div>
-        <button type="button" className="btn btn-secondary" onClick={load} disabled={loading}><RefreshCw size={15}/> Refresh</button>
+        <div className="flex flex-wrap gap-2 items-start">
+          <button type="button" className="btn btn-secondary" disabled={reporting||!damageRows.length} onClick={()=>runReport('excel')} title="Accepted / rejected / corrected / awaiting findings with photo links"><Download size={15}/> Excel report</button>
+          <button type="button" className="btn btn-secondary" disabled={reporting||!damageRows.length} onClick={()=>runReport('pdf')} title="Findings with damage photos, grouped by supervisor decision"><FileText size={15}/> PDF report</button>
+          <button type="button" className="btn btn-secondary" onClick={load} disabled={loading}><RefreshCw size={15}/> Refresh</button>
+        </div>
       </div>
       <div className="flex flex-wrap gap-2 mb-3" role="group" aria-label="Filter inspection evidence">{[['all','All'],['photos','With defect photos'],['measurements','Measured'],['missing','Missing measurements']].map(([key,label])=><button key={key} type="button" onClick={()=>setFilter(key)} aria-pressed={filter===key} className={'rounded-md border px-3 py-1.5 text-xs '+(filter===key?'bg-brand-subtle border-brand-bright text-brand-bright':'border-[var(--border-dim)] text-[var(--text-secondary)]')}>{label}</button>)}</div>
       <input className="input w-full max-w-sm mb-3" aria-label="Search vehicle or site" placeholder="Search vehicle or site" value={search} onChange={e=>setSearch(e.target.value)}/>

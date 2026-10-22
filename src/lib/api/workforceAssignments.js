@@ -1,4 +1,4 @@
-import {supabase,unwrap,ServiceError} from './_client'
+import {supabase,unwrap,ServiceError,fetchAllPages} from './_client'
 export const COLUMNS='id,organisation_id,assigned_to,assigned_by,title,instructions,site,priority,status,due_at,estimated_minutes,source_module,source_record_id,created_at,updated_at'
 export async function listWorkforceAssignments({mine=false,status=null,limit=300}={}) {
  if(limit<1||limit>500) throw new ServiceError('Invalid page size')
@@ -13,9 +13,11 @@ export async function assignWork(values) {
  return unwrap(await supabase.from('workforce_assignments').insert(payload).select(COLUMNS).single())
 }
 export async function listAssignableEmployees(){
- const {data,error}=await supabase.from('profiles').select('id,full_name,role,site').order('id').limit(500)
- if(error) throw new ServiceError('Unable to load employees',error.code,error)
- return data
+ const result=await fetchAllPages((from,to)=>supabase.from('profiles')
+  .select('id,employee_id,username,full_name,role,site,approved,locked')
+  .eq('approved',true).eq('locked',false).order('id',{ascending:true}).range(from,to),{max:20000})
+ if(result.error||result.truncated) throw new ServiceError('Unable to load a complete employee directory')
+ return result.data||[]
 }
 export async function setWorkStatus(id,status){
  if(!['assigned','acknowledged','in_progress','blocked','submitted','verified','cancelled'].includes(status))throw new ServiceError('Invalid work status')

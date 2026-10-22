@@ -17,7 +17,7 @@ import {
 import PageHeader from '../components/ui/PageHeader'
 import Illustration from '../components/illustrations/Illustration'
 import { ensureActionItem, listActionItems } from '../lib/api/actionCenter'
-import { supabase } from '../lib/api/_client'
+import { supabase, fetchAllPages } from '../lib/api/_client'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import {
@@ -141,13 +141,13 @@ export default function Broadcast() {
   useEffect(() => {
     let mounted = true
     async function loadAssignees() {
-      const { data, error: readError } = await supabase.from('profiles')
+      const result = await fetchAllPages((from, to) => supabase.from('profiles')
         .select('id,full_name,username,site,country,approved,locked')
         .eq('approved', true).eq('locked', false)
-        .order('full_name', { ascending: true }).limit(1000)
+        .order('id', { ascending: true }).range(from, to), { max: 20000 })
       if (!mounted) return
-      if (readError) { setAssigneeError('Could not load employee accounts.'); setAssignees([]) }
-      else { setAssignees(data || []); setAssigneeError('') }
+      if (result.error || result.truncated) { setAssigneeError('Could not load a complete employee list.'); setAssignees([]) }
+      else { setAssignees(result.data || []); setAssigneeError('') }
     }
     loadAssignees().catch(() => { if (mounted) setAssigneeError('Could not load employee accounts.') })
     return () => { mounted = false }

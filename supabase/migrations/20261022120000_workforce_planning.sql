@@ -15,7 +15,7 @@ CREATE POLICY workforce_dependencies_read ON public.workforce_dependencies FOR S
 CREATE POLICY workforce_dependencies_create ON public.workforce_dependencies FOR INSERT TO authenticated
  WITH CHECK(public.workforce_is_manager() AND EXISTS(
   SELECT 1 FROM public.workforce_assignments a JOIN public.workforce_assignments b ON b.id=successor_id
-  WHERE a.id=predecessor_id AND a.organisation_id=organisation_id AND b.organisation_id=organisation_id));
+  WHERE a.id=predecessor_id AND a.organisation_id=public.app_current_org() AND b.organisation_id=public.app_current_org()));
 CREATE POLICY workforce_dependencies_delete ON public.workforce_dependencies FOR DELETE TO authenticated USING(public.workforce_is_manager());
 GRANT SELECT,INSERT,DELETE ON public.workforce_dependencies TO authenticated;
 CREATE TABLE IF NOT EXISTS public.workforce_work_standards(

@@ -134,3 +134,28 @@ Verified here: eslint (0 errors on touched files), targeted vitest (345 tests ac
 - The engine only reads physical gauge rows. It must never be fed AI photo findings or invent a millimetre value.
 - Estimates are trend aids. Do not present a replace-soon flag as a safety certification.
 - Position display goes through `displayPositionCode(inspectionTypeHint(row), stored)`; the stored key is never rewritten.
+
+## 2026-10-23 — Spec completion pass (branch `feature/spec-completion-20261023`): FINAL honest status table
+
+Nothing here is applied to the live database, deployed as an edge function, or seen in a browser. "Code-done" means committed, covered by the named automated test, and lint/ratchet/build checked locally.
+
+| Item | Status | Where | Evidence |
+|---|---|---|---|
+| P0 queue draining | **Code-done** (was PARTIAL: one batch of 4 per 5-minute tick) | `drainQueue` in `supabase/functions/ai-tyre-inspection/logic.ts`, wired in `index.ts` `work()` (reaper first, claim-before-process, 4 per batch, max 10 batches, 90 s wall budget) | `src/test/aiTyreDrain.test.js` (9): 18-job backlog in one run, batch cap, budget deferral stops the run, time budget, failed/prior-attempt never reprocessed, lost claims never spin, queue error |
+| P0 failed-token billing | Code-done (earlier pass) | `processJob` in `logic.ts` | `aiTyreWorker.test.js`; `aiCostMonitorAnalytics.test.js` |
+| P0 supervisor review tests | Code-done (earlier pass) | role lists + parity in `aiTyreInspectionRoles.js` | `aiTyreWorker.test.js` role/tenant block |
+| PDF findings | Code-done (earlier pass) | `aiDamageReport.js`, `aiTyreInspectionReport.js` | `aiTyreInspectionReport.test.js`, damage report tests |
+| P1 position labels | Code-done (earlier pass) | `displayPositionCode` | `aiTyrePositionLabels.test.js` |
+| P1 Excel report | Code-done (earlier pass) | `aiTyreInspectionExport.js` | `aiTyreInspectionExport.test.js` |
+| P1 filters over the whole register | **Code-done** (was PARTIAL: condition, photo, AI-status, review filters only covered the loaded 50-row page) | Migration `20261023100000_ai_tyre_register_server_filters_and_labelled_findings.sql` (`ai_tyre_register_page`, SECURITY INVOKER, exact total, stable paging); client `listAiRegisterFiltered` in `src/lib/api/inspections.js`; page passes all filters | `supabase/tests/ai_tyre_register_filters.test.mjs` (PGlite, real SQL, 7 tests), `src/test/aiTyreRegisterDeepFilters.test.js` (5) |
+| P1 cost-monitor blank screen | **Code-done** (loading skeleton, error with Retry, empty message already existed; now locked by tests) | `src/pages/AiCostMonitor.jsx` | `src/test/aiCostMonitor.render.test.jsx` (5): loading, error + Retry with no raw DB text, zero rows, null cost/missing date/unknown status rows, payload without rows |
+| P1 E2E-style tests | Code-done | worker harness, drain harness, PGlite SQL tests, page render tests | listed above |
+| P2 learning pipeline | **Code-done as an evaluation pipeline** (was PARTIAL: aggregate only) | RPC `get_ai_tyre_labelled_findings` (supervisor roles, INVOKER); `shapeLabelledFindings`, `labelledJsonl`, `labelledExportRows` in `aiTyreReviewFeedback.js`; Excel and JSONL download in the reviewer-feedback panel | `src/test/aiTyreLabelledFindings.test.js` (6), PGlite test for the RPC and its role gate. **No model is retrained, tuned or re-prompted automatically.** |
+| Measured / missing-measurement chips beyond the loaded page | **Still page-level** | depends on gauge maths (`calculateTread`) on per-position JSON | stated in the page text; not a requested filter |
+
+### Needs live DB / deploy / device / owner (cannot be closed in code)
+1. Apply migrations `20261023090000_ai_tyre_budget_reservation_and_feedback.sql` then `20261023100000_ai_tyre_register_server_filters_and_labelled_findings.sql` (pre-flight and rollback are in each header). **The web register and the feedback panel call the new RPCs; apply the migration BEFORE shipping the web build, or condition/photo/AI/review filters and labelled export show an error.** Deploy the edge function after `20261023090000`.
+2. Edge function `index.ts` and `logic.ts` deploy; Deno type-check (Deno not installed here; esbuild syntax check only). Confirm cron HTTP 200 and that a real backlog drains (watch `stoppedBecause` in the response).
+3. P0 real photograph adjudication by an authorised supervisor; live failed-charge reconciliation against the provider invoice; multi-connection budget concurrency test.
+4. Real-user role/tenant test (including Sajid) through the deployed function; browser pass (console errors, dark/light, 390 px) of the register footer, feedback panel and cost monitor.
+5. Continuous learning is **not** implemented and must not be claimed; the labelled export is input for a future, expert-confirmed evaluation.

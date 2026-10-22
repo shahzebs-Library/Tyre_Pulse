@@ -140,6 +140,18 @@ export async function screenInspectionPhotos(inspectionId) {
   return data
 }
 
+/** Per-finding labelled review rows (supervisor roles; INVOKER rpc, tenant scoped by RLS). Evaluation only. */
+export async function getAiLabelledFindings({ from = null, to = null, limit = 5000 } = {}) {
+  const ymd = /^\d{4}-\d{2}-\d{2}$/
+  const { data, error } = await supabase.rpc('get_ai_tyre_labelled_findings', {
+    p_from: from && ymd.test(from) ? from : null,
+    p_to: to && ymd.test(to) ? to : null,
+    p_limit: Math.min(Math.max(Number(limit) || 5000, 1), 20000),
+  })
+  if (error) throw error
+  return data || []
+}
+
 /** Evaluation-only aggregate of reviewer decisions per model / prompt version.
  * SECURITY INVOKER RPC: scoped to the caller's organisation and supervisor roles by the database.
  * Dates are YYYY-MM-DD or empty. Never used to train or tune a model.

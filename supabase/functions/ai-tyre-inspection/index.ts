@@ -3,8 +3,8 @@
 // Request modes: enqueue (JWT), review (JWT), work (service secret).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import {
-  canBackfill, canEnqueue, canReview, resolveRates, processJob, ProviderCallError, str,
-  type Deps, type Json, type Photo,
+  canBackfill, canEnqueue, canReview, resolveRates, processJob, drainQueue, ProviderCallError, str,
+  type Deps, type Json, type JobRow, type Photo,
 } from "./logic.ts";
 
 const ALLOWED_ORIGINS = [
@@ -279,11 +279,6 @@ async function work(req:Request) {
   const { error: reapError } = await admin.rpc("ai_tyre_fail_stale_processing", { p_minutes: 15 });
   if (reapError) return fail("Unable to reconcile stalled AI jobs",503);
 
-  const {data:items,error} = await admin.from("ai_tyre_inspection_jobs")
-    .select("id,organisation_id,inspection_id,photo_ref,tyre_position,attempts")
-    .eq("status","pending").order("created_at",{ascending:true}).limit(4);
-  if (error) return fail("Queue unavailable",500);
-
   const deps: Deps = {
     config: { providerName, model, rates, reserveUsd, dailyLimitUsd: dailyLimit },
     now: () => new Date(),
@@ -317,17 +312,26 @@ async function work(req:Request) {
     callProvider: (photo) => callProvider({ providerName, providerKey, model }, PROMPT, photo),
   };
 
-  let processed = 0, deferred = 0;
-  for (const job of items || []) {
-    const {data: claimed} = await admin.from("ai_tyre_inspection_jobs")
-      .update({status:"processing",attempts:job.attempts+1,updated_at:new Date().toISOString()})
-      .eq("id",job.id).eq("status","pending").select("id").maybeSingle();
-    if (!claimed) continue;
-    const outcome = await processJob(deps, job);
-    if (outcome === "completed") processed++;
-    if (outcome === "deferred") { deferred++; break; } // ceiling reached: stop the run
-  }
-  return response({ processed, deferred, claimed:(items||[]).length, dailyLimit });
+  // Drain the queue in bounded batches (time- and budget-limited) instead of one batch per tick.
+  const drained = await drainQueue({
+    fetchBatch: async (n) => {
+      const {data,error} = await admin.from("ai_tyre_inspection_jobs")
+        .select("id,organisation_id,inspection_id,photo_ref,tyre_position,attempts")
+        .eq("status","pending").order("created_at",{ascending:true}).limit(n);
+      if (error) throw new Error("Queue unavailable");
+      return (data || []) as JobRow[];
+    },
+    claim: async (job) => {
+      const {data: claimed} = await admin.from("ai_tyre_inspection_jobs")
+        .update({status:"processing",attempts:job.attempts+1,updated_at:new Date().toISOString()})
+        .eq("id",job.id).eq("status","pending").select("id").maybeSingle();
+      return !!claimed;
+    },
+    process: (job) => processJob(deps, job),
+    nowMs: () => Date.now(),
+  });
+  if (drained.stoppedBecause === "queue_error" && drained.batches === 0) return fail("Queue unavailable",500);
+  return response({ ...drained, dailyLimit });
 }
 Deno.serve(async req => {
   { const o = req.headers.get("origin") ?? ""; currentOrigin = ALLOWED_ORIGINS.includes(o) ? o : (ALLOWED_ORIGINS[0] ?? "https://app.tyrepulse.app"); }

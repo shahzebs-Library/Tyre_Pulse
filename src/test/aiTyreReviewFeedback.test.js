@@ -91,7 +91,7 @@ describe('page wiring', () => {
     const src = readFileSync(path.resolve(process.cwd(), 'src/pages/AiTyreInspection.jsx'), 'utf8')
     expect(src).not.toMatch(/listInspectionsForPage/)
     expect(src).not.toMatch(/to:199/)
-    expect(src).toMatch(/listInspectionsForAiRegister/)
+    expect(src).toMatch(/listAiRegisterFiltered/)
     expect(src).toMatch(/mayBackfill&&<details/)
     expect(src).toMatch(/mayViewFeedback&&<details/)
     expect(src).toMatch(/mayReview && job\.status==='completed'/)

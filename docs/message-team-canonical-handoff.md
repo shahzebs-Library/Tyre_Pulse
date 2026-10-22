@@ -128,3 +128,19 @@ Known limits / not verified:
 - `designSystemRatchet.test.js` currently FAILS on this base (raw `<table>` and `fixed inset-0` count 0 -> 1). The only offender is `src/pages/AiTyreInspection.jsx`, which this change does not touch; `Broadcast.jsx` contributes none.
 - No screen-reader or real mobile-browser pass was done; layout uses responsive grids (1/2/3 columns) but was only checked by tests and build.
 - CI has not been run on this branch; PR not opened.
+
+## Spec completion status (2026-10-23, branch `feature/spec-completion-20261023`) — FINAL honest table
+No Flutter files were touched in this pass. No live DB, device or CI was available.
+
+| Item | Status | Evidence |
+|---|---|---|
+| Real job roles / site directory / countries from org data | Code-done | `src/lib/broadcastAudience.js`, `broadcastAudience.test.js`, `broadcastPage.render.test.jsx` |
+| Employee search and multi-selection for follow-ups | Code-done | `MultiCombobox` + page tests |
+| Registered-site follow-up (no free text) | Code-done | `broadcastPage.render.test.jsx` |
+| EnterpriseTable for the follow-up table | Code-done | `designSystemRatchet.test.js` green on this branch |
+| Dropdown accessibility (combobox/listbox, keys, focus) | Code-done in code and jsdom tests; **no screen-reader or real-browser pass** | `multiCombobox.test.jsx` |
+| Delivery states (queued / accepted_by_fcm / opened_in_app / failed) | Code-done | `teamDeliveryStates.test.js`; nothing is labelled OS-delivered |
+| Backend security tests (PGlite) | Code-done for tasks, evidence metadata, bucket config, storage policies, push events (`supabase/tests/team_action_negative_access.test.mjs`) | |
+| Evidence validation | Code-done: DB `mime_type` CHECK, private bucket 10 MB + MIME allow-list, assignee-only storage policies, Flutter picker limit, web workforce upload guard (`workforceEvidence.js`) | Storage API enforcement of size/MIME and signed-URL expiry **cannot be exercised in PGlite** |
+| **Receipts / replies RLS tests** | **MISSING (needs live or a committed DDL)**: `broadcast_recipient_receipts` and `broadcast_replies` exist live only; the repo file for them is comments, not DDL, so PGlite cannot test other-employee / other-org access. Run a rolled-back impersonation test on the live DB, or commit the table DDL first. | |
+| Flutter builds, cold-start routing, iOS APNs, real handset delivery | Owner / CI | |

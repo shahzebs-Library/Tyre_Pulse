@@ -9,18 +9,18 @@ import EnterpriseTable from '../components/ui/EnterpriseTable'
 import SideDrawer from '../components/ui/SideDrawer'
 import { useSettings } from '../contexts/SettingsContext'
 import { toUserMessage } from '../lib/safeError'
-import { listInspectionsForAiRegister } from '../lib/api/inspections'
+import { listAiRegisterFiltered } from '../lib/api/inspections'
 import { listDataSiteOptions } from '../lib/api/sites'
 import { useAuth } from '../contexts/AuthContext'
 import { canQueueAiAnalysis, canReviewAiFinding, canBackfillAi, canViewAiFeedback, aiActionNotice } from '../lib/aiTyreInspectionRoles'
-import { shapeFeedbackRows, summarizeFeedback, feedbackExportRows, FEEDBACK_EXPORT_COLUMNS, FEEDBACK_DISCLAIMER } from '../lib/aiTyreReviewFeedback'
+import { shapeFeedbackRows, summarizeFeedback, feedbackExportRows, FEEDBACK_EXPORT_COLUMNS, FEEDBACK_DISCLAIMER, shapeLabelledFindings, labelledSummary, labelledExportRows, labelledJsonl, LABELLED_EXPORT_COLUMNS } from '../lib/aiTyreReviewFeedback'
 import { buildDamageRows, exportDamageExcel, exportDamagePdf } from '../lib/aiDamageReport'
 import { calculateTread, conditionRequiresAnalysis } from '../lib/aiTyreInspection'
 import { analyzeMeasurements, describeSeries } from '../lib/tyreMeasurementEngine'
 import { exportInspectionExcel } from '../lib/aiTyreInspectionExport'
 import { applyRegisterFilters, conditionOptions } from '../lib/aiTyreInspectionFilters'
 import LazyTyrePhoto from '../components/aiInspection/LazyTyrePhoto'
-import { readInspectionMeasurements, recordDepthMeasurement, readInspectionAnalysis, enqueueInspectionPhotos, reviewAiFinding, backfillAiInspectionRange, screenInspectionPhotos, getAiReviewFeedback } from '../lib/api/aiTyreInspection'
+import { readInspectionMeasurements, recordDepthMeasurement, readInspectionAnalysis, enqueueInspectionPhotos, reviewAiFinding, backfillAiInspectionRange, screenInspectionPhotos, getAiReviewFeedback, getAiLabelledFindings } from '../lib/api/aiTyreInspection'
 
 /** Calendar day selection in Saudi Arabia; always preserve local midnight. */
 function saudiDay(value) {
@@ -106,6 +106,27 @@ function ReviewFeedbackPanel() {
   },[from,to])
   const total=useMemo(()=>rows?summarizeFeedback(rows):null,[rows])
   const download=async()=>{const {exportToExcel}=await import('../lib/exportUtils');exportToExcel(feedbackExportRows(rows||[]),FEEDBACK_EXPORT_COLUMNS.map(([k])=>k),FEEDBACK_EXPORT_COLUMNS.map(([,h])=>h),'AI tyre reviewer feedback (evaluation data)','Reviewer feedback')}
+  const [labelBusy,setLabelBusy]=useState(false)
+  const [labelNote,setLabelNote]=useState('')
+  const downloadLabelled=async(kind)=>{
+    setLabelBusy(true);setError('');setLabelNote('')
+    try{
+      const shaped=shapeLabelledFindings(await getAiLabelledFindings({from,to}))
+      const s=labelledSummary(shaped)
+      if(!shaped.length){setLabelNote('No reviewed findings in this range yet. Accept, reject or correct findings first.');return}
+      const base=`AI tyre labelled findings (evaluation data) ${from||'start'} to ${to||'today'}`
+      if(kind==='jsonl'){
+        const url=URL.createObjectURL(new Blob([labelledJsonl(shaped)],{type:'application/x-ndjson'}))
+        const a=document.createElement('a');a.href=url;a.download=base.replace(/[^A-Za-z0-9 ()]+/g,' ').trim()+'.jsonl';a.click()
+        setTimeout(()=>URL.revokeObjectURL(url),1000)
+      }else{
+        const {exportToExcel}=await import('../lib/exportUtils')
+        exportToExcel(labelledExportRows(shaped),LABELLED_EXPORT_COLUMNS.map(([k])=>k),LABELLED_EXPORT_COLUMNS.map(([,h])=>h),base,'Labelled findings')
+      }
+      setLabelNote(`${s.total} labelled findings exported: ${s.accepted} accepted, ${s.rejected} rejected, ${s.corrected} corrected. ${s.negativeWithoutNote} rejected or corrected without a reviewer note.`)
+    }catch(err){setError(toUserMessage(err,'Could not export labelled findings'))}
+    finally{setLabelBusy(false)}
+  }
   return <Card>
     <h2 className="font-semibold">Reviewer feedback: evaluation data</h2>
     <p className="text-xs text-[var(--text-muted)] mt-1 mb-3">{FEEDBACK_DISCLAIMER}</p>
@@ -115,6 +136,12 @@ function ReviewFeedbackPanel() {
       <button type="button" className="btn-secondary" onClick={load} disabled={loading}>{loading?'Loading…':'Load summary'}</button>
       <button type="button" className="btn-secondary" onClick={download} disabled={!rows?.length}><Download size={14}/> Download Excel</button>
     </div>
+    <div className="flex flex-wrap gap-3 items-center mt-3">
+      <button type="button" className="btn-secondary" onClick={()=>downloadLabelled('xlsx')} disabled={labelBusy}><Download size={14}/> Labelled findings (Excel)</button>
+      <button type="button" className="btn-secondary" onClick={()=>downloadLabelled('jsonl')} disabled={labelBusy}><Download size={14}/> Labelled findings (JSONL)</button>
+      <span className="text-xs text-[var(--text-muted)]">One row per reviewed finding with the reviewer decision and note, for offline evaluation.</span>
+    </div>
+    {labelNote&&<p role="status" className="text-sm mt-2">{labelNote}</p>}
     {error&&<p role="alert" className="text-sm text-red-500 mt-3">{error}</p>}
     {rows&&!rows.length&&<p className="text-sm text-[var(--text-muted)] mt-3">No AI jobs in this range.</p>}
     {rows&&rows.length>0&&<div className="mt-3">
@@ -128,6 +155,7 @@ function photoCount(row) {
   const conditions = row?.tyre_conditions || {}
   return Object.values(conditions).filter(p => p && typeof p === 'object' && (p.photo_url || p.photo || p.photos || p.photo_refs) && conditionRequiresAnalysis(p.condition)).length
 }
+const DEFAULT_CONDITIONS=['Good','Wear','Worn','Damaged','Damage','Flat','Puncture']
 export default function AiTyreInspection() {
   const { activeCountry } = useSettings()
   const { profile } = useAuth()
@@ -160,9 +188,10 @@ export default function AiTyreInspection() {
     setLoading(true); setError('')
     try {
       // Date, site, status and vehicle/site text are applied by the database with an exact total.
-      const { data, error: queryError, count } = await listInspectionsForAiRegister({
+      const { data, error: queryError, count } = await listAiRegisterFiltered({
         page, pageSize:PAGE_SIZE, country:activeCountry, dateFrom, dateTo,
         site:siteFilter, status:statusFilter, search:debouncedSearch,
+        condition:conditionFilter, photos:filter==='photos', aiStatus:aiStatusFilter, review:reviewFilter,
       })
       if (queryError) throw queryError
       if (seq !== requestSeq.current) return // a newer request superseded this one
@@ -170,11 +199,11 @@ export default function AiTyreInspection() {
       setTotal(Number.isFinite(count) ? count : (data||[]).length)
     } catch (err) { setError(toUserMessage(err,'Unable to load inspections')) }
     finally { if (seq === requestSeq.current) setLoading(false) }
-  }, [activeCountry,page,dateFrom,dateTo,siteFilter,statusFilter,debouncedSearch])
+  }, [activeCountry,page,dateFrom,dateTo,siteFilter,statusFilter,debouncedSearch,conditionFilter,filter,aiStatusFilter,reviewFilter])
   useEffect(() => { load() }, [load])
   useEffect(()=>{const t=setTimeout(()=>setDebouncedSearch(search),350);return ()=>clearTimeout(t)},[search])
   // Any server-side filter change returns to the first page.
-  useEffect(()=>{setPage(0)},[activeCountry,dateFrom,dateTo,siteFilter,statusFilter,debouncedSearch])
+  useEffect(()=>{setPage(0)},[activeCountry,dateFrom,dateTo,siteFilter,statusFilter,debouncedSearch,conditionFilter,filter,aiStatusFilter,reviewFilter])
   useEffect(()=>{
     let active=true
     listDataSiteOptions(activeCountry).then(v=>{if(active)setSiteOptions(v)}).catch(()=>{if(active)setSiteOptions([])})
@@ -206,7 +235,7 @@ export default function AiTyreInspection() {
         needsMeasurement:measured.filter(v=>v.status==='measurement_required').length}
     }), [rows])
   const sites = useMemo(()=>[...new Set([...siteOptions,...(siteFilter!=='all'?[siteFilter]:[])])].sort(),[siteOptions,siteFilter])
-  const conditions = useMemo(()=>conditionOptions(rows),[rows])
+  const conditions = useMemo(()=>[...new Set([...DEFAULT_CONDITIONS,...conditionOptions(rows),...(conditionFilter!=='all'?[conditionFilter]:[])])].sort(),[rows,conditionFilter])
   const statuses = ['Scheduled','In Progress','Done','Overdue','Cancelled']
   const visibleRecords = useMemo(()=>applyRegisterFilters(records,aiJobsByInspection,{
     quick:filter,site:siteFilter,status:statusFilter,condition:conditionFilter,
@@ -256,7 +285,7 @@ export default function AiTyreInspection() {
     {mayViewFeedback&&<details className="rounded-xl border border-[var(--border-dim)] px-4 py-3"><summary className="cursor-pointer font-medium">Reviewer feedback: evaluation data</summary><div className="mt-3"><ReviewFeedbackPanel/></div></details>}
     <Card>
       <div className="flex flex-wrap justify-between gap-3 mb-3">
-        <div><h2 className="font-semibold">Inspection evidence register</h2><p className="text-xs text-[var(--text-muted)]">Date, site, status and search filter the whole register on the server. Photo, measurement, condition, AI-status and review filters apply to the page shown. Absence of a reading is never estimated from a photograph.</p></div>
+        <div><h2 className="font-semibold">Inspection evidence register</h2><p className="text-xs text-[var(--text-muted)]">Date, site, status, search, condition, defect-photo, AI-status and review filters all run on the server across the whole register. Only the measured and missing-measurement chips apply to the page shown. Absence of a reading is never estimated from a photograph.</p></div>
         <div className="flex flex-wrap gap-2 items-start">
           <button type="button" className="btn btn-secondary" disabled={reporting||!damageRows.length} onClick={()=>runReport('excel')} title="Accepted / rejected / corrected / awaiting findings with photo links"><Download size={15}/> Excel report</button>
           <button type="button" className="btn btn-secondary" disabled={reporting||!damageRows.length} onClick={()=>runReport('pdf')} title="Findings with damage photos, grouped by supervisor decision"><FileText size={15}/> PDF report</button>

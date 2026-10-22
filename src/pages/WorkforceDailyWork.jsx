@@ -8,7 +8,7 @@ import {useAuth} from '../contexts/AuthContext'
 import {estimateWork} from '../lib/workforceIntelligence'
 import {listWorkforceAssignments,assignWork,listAssignableEmployees,setWorkStatus} from '../lib/api/workforceAssignments'
 import {listWorkEvidence,uploadWorkEvidence,openWorkEvidence} from '../lib/api/workforceEvidence'
-import {addDailyEntry,getMyDailyReport,ensureDailyReport,submitDailyReport,listReviewQueue,reviewDailyReport} from '../lib/api/workforceDaily'
+import {addDailyEntry,getMyDailyReport,getDailyReportForReview,ensureDailyReport,submitDailyReport,listReviewQueue,reviewDailyReport} from '../lib/api/workforceDaily'
 ChartJS.register(CategoryScale,LinearScale,BarElement,Tooltip,Legend)
 const dateNow=()=>new Date().toLocaleDateString('en-CA')
 const categories=['productive','coordination','reporting','training','break','blocked','unassigned']
@@ -23,6 +23,8 @@ export default function WorkforceDailyWork(){
  const [queue,setQueue]=useState([])
  const [work,setWork]=useState([]),[employees,setEmployees]=useState([])
  const [evidence,setEvidence]=useState([])
+ const [reviewDetail,setReviewDetail]=useState(null)
+ const [reviewEvidence,setReviewEvidence]=useState([])
  const [newWork,setNewWork]=useState({title:'',assigned_to:'',site:'',priority:'normal',due_at:'',instructions:''})
  const [tab,setTab]=useState('my-day')
  const [loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('')
@@ -67,6 +69,7 @@ export default function WorkforceDailyWork(){
  {id:'due',header:'Deadline',accessorFn:r=>dtForLocal(r.due_at)},
  {id:'action',header:'Next step',enableSorting:false,cell:({row})=>{const item=row.original;const next={assigned:'acknowledged',acknowledged:'in_progress',in_progress:'submitted',blocked:'in_progress'}[item.status];return next?<button className="btn-secondary" type="button" disabled={saving} onClick={()=>run(()=>setWorkStatus(item.id,next))}>{({acknowledged:'Acknowledge',in_progress:'Start / resume',submitted:'Submit work'})[next]}</button>:<span className="text-xs text-[var(--text-muted)]">No employee action</span>}}
  ],[])
+ const openReview=async id=>{setError('');try{const detail=await getDailyReportForReview(id);setReviewDetail(detail);setReviewEvidence(await listWorkEvidence(id))}catch(e){setError(e.message||'Could not open report')}}
  const reviewColumns=useMemo(()=>[
   {accessorKey:'employee_id',header:'Employee ID',size:200},
   {accessorKey:'work_date',header:'Date',size:120},
@@ -74,7 +77,7 @@ export default function WorkforceDailyWork(){
   {accessorKey:'summary',header:'Submitted summary',size:260},
   {id:'submitted',header:'Submitted',accessorFn:r=>dtForLocal(r.submitted_at)},
   {id:'actions',header:'Supervisor decision',enableSorting:false,cell:({row})=><div className="flex gap-2">
-   <button type="button" className="btn-primary" disabled={saving} onClick={()=>run(()=>reviewDailyReport(row.original.id,'verified','Reviewed and verified'))}>Verify</button>
+   <button type="button" className="btn-secondary" disabled={saving} onClick={()=>openReview(row.original.id)}>Inspect</button>
    <button type="button" className="btn-secondary" disabled={saving} onClick={()=>{const reason=window.prompt('Reason for return');if(reason?.trim())run(()=>reviewDailyReport(row.original.id,'returned',reason))}}>Return</button>
   </div>}
  ],[saving,load])
@@ -97,7 +100,18 @@ export default function WorkforceDailyWork(){
  <label className="text-sm">Due time<input type="datetime-local" className="input w-full" value={newWork.due_at} onChange={e=>setNewWork(w=>({...w,due_at:e.target.value}))}/></label>
  <label className="text-sm">Instructions<input className="input w-full" value={newWork.instructions} onChange={e=>setNewWork(w=>({...w,instructions:e.target.value}))}/></label>
  <button className="btn-primary" disabled={saving}>Assign work</button></form>}
- <EnterpriseTable columns={assignmentColumns} data={work} loading={loading} emptyMessage="No assignments in this view."/></div>:tab==='reviews'&&isManager?<div className="card"><h2 className="text-lg font-semibold mb-3">Awaiting manager verification</h2><EnterpriseTable columns={reviewColumns} data={queue} loading={loading} emptyMessage="No daily reports awaiting review."/></div>:
+ <EnterpriseTable columns={assignmentColumns} data={work} loading={loading} emptyMessage="No assignments in this view."/></div>:tab==='reviews'&&isManager?<div className="card"><h2 className="text-lg font-semibold mb-3">Awaiting manager verification</h2><EnterpriseTable columns={reviewColumns} data={queue} loading={loading} emptyMessage="No daily reports awaiting review."/>
+ {reviewDetail&&<section className="mt-5 space-y-3 border-t border-[var(--input-border)] pt-4">
+ <div className="flex items-center justify-between"><h3 className="font-semibold">Employee report details</h3><button type="button" className="btn-secondary" onClick={()=>setReviewDetail(null)}>Close</button></div>
+ <p className="text-sm">Employee: {reviewDetail.report.employee_id} • Date: {reviewDetail.report.work_date} • Site: {reviewDetail.report.site||'Not specified'}</p>
+ <p className="text-sm whitespace-pre-wrap">{reviewDetail.report.summary}</p>
+ <h4 className="font-semibold">Verified activity evidence</h4>
+ <EnterpriseTable columns={columns} data={reviewDetail.entries} emptyMessage="No report activity found."/>
+ <div className="space-y-2">{reviewEvidence.map(file=><div key={file.id} className="flex items-center justify-between gap-2"><span className="text-sm">{file.file_name}</span><button type="button" className="btn-secondary" onClick={async()=>{try{window.open(await openWorkEvidence(file.object_path),'_blank','noopener,noreferrer')}catch(e){setError(e.message)}}}>Open evidence</button></div>)}</div>
+ <p className="text-xs text-[var(--text-muted)]">Check original tasks, actual duration, external blockers and documentation before verification.</p>
+ <div className="flex gap-2"><button type="button" className="btn-primary" disabled={saving} onClick={()=>run(async()=>{await reviewDailyReport(reviewDetail.report.id,'verified','Evidence and work activity reviewed');setReviewDetail(null)})}>Verify report</button><button type="button" className="btn-secondary" disabled={saving} onClick={()=>{const reason=window.prompt('Explain why this report needs correction');if(reason?.trim())run(async()=>{await reviewDailyReport(reviewDetail.report.id,'returned',reason);setReviewDetail(null)})}}>Return for correction</button></div>
+ </section>}
+ </div>:
  <>
  <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
   <Tile label="Activities recorded" value={entries.length} Icon={ClipboardCheck}/>

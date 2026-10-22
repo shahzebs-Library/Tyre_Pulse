@@ -1,0 +1,21 @@
+-- Live applied on 2026-10-22 to Tyre_pulse (jhssdmeruxtrlqnwfksc).
+-- See Supabase migration history: broadcast_recipient_receipts_and_replies
+-- and broadcast_receipt_capture_and_action_assignment_alerts.
+-- This repository record explains the existing live objects. Do not blindly
+-- replay over new databases without reviewing the baseline broadcast migration.
+--
+-- Tables:
+--   broadcast_recipient_receipts(broadcast_id, recipient_id, read_at, acknowledged_at)
+--   broadcast_replies(broadcast_id, author_id, body, created_at)
+-- Both have RLS enabled. Receipt SELECT allowed to recipient and sender;
+-- UPDATE limited to read_at / acknowledged_at on recipient-owned rows.
+-- Reply SELECT allowed to participants; INSERT restricted to recipients.
+--
+-- Triggers:
+--   tp_broadcast_set_sender (broadcast_messages BEFORE INSERT)
+--   tp_broadcast_recipient_from_notification (notifications AFTER INSERT)
+--   tp_action_assignee_notification (action_items AFTER INSERT/assigned-user change)
+--
+-- Historic notifications were backfilled into receipt rows.
+-- Verified creation in database, but external push delivery confirmation
+-- requires provider callbacks and device-side telemetry not implemented yet.

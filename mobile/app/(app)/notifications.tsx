@@ -86,6 +86,10 @@ function NotificationsScreen() {
       markRead(n.id).catch(() => {})
       DeviceEventEmitter.emit(UNREAD_EVENT, (rows || []).filter((r) => !r.read && r.id !== n.id).length)
     }
+    if (n.type === 'broadcast' && n.entity_id) {
+      supabase.from('broadcast_recipient_receipts').update({ read_at: new Date().toISOString() })
+        .eq('broadcast_id', n.entity_id).is('read_at', null).then(() => {})
+    }
     const route = notificationRoute(n)
     if (route) router.push(route as any)
   }, [router, rows])

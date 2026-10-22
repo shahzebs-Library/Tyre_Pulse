@@ -117,6 +117,53 @@ async function enqueue(req: Request, payload: Json) {
   }
   return response({ inspection_id: inspection.id, eligible: evidence.length, enqueued:created });
 }
+/** Organization-bound on-demand backfill. Range is capped and paged by created_at.
+ * Requires a managerial role. Evidence lookup reuses exactly the regular enqueue
+ * allowlist, so inspecting historic rows never grants access to arbitrary URLs.
+ */
+async function backfill(req: Request, payload: Json) {
+  const {profile,client} = await authenticated(req);
+  const role=String(profile.role||"").toLowerCase();
+  if(!["admin","manager","director","maintenance supervisor","pmv manager"].includes(role)){
+    return fail("Manager role required",403);
+  }
+  const from=str(payload.from,40);
+  const to=str(payload.to,40);
+  const page=Number(payload.page??0);
+  const start=Date.parse(from),end=Date.parse(to);
+  if(!Number.isFinite(start)||!Number.isFinite(end)||end<=start||
+     end-start>32*86400000||!Number.isInteger(page)||page<0||page>100){
+    return fail("Invalid date range or page",400);
+  }
+  const PAGE_SIZE=100;
+  const {data:inspections,error}=await client.from("inspections")
+    .select("id,organisation_id,tyre_conditions,created_at")
+    .eq("organisation_id",profile.organisation_id)
+    .gte("created_at",new Date(start).toISOString())
+    .lt("created_at",new Date(end).toISOString())
+    .order("created_at",{ascending:true})
+    .order("id",{ascending:true})
+    .range(page*PAGE_SIZE,(page+1)*PAGE_SIZE-1);
+  if(error)return fail("Could not read historical inspections",500);
+  let eligible=0,created=0;
+  for(const inspection of inspections||[]){
+    const refs=eligibleEvidence(inspection);
+    eligible+=refs.length;
+    for(const item of refs){
+      const hash=await fingerprint(item.ref);
+      const {data:inserted,error:queueError}=await admin.from("ai_tyre_inspection_jobs")
+        .upsert({organisation_id:inspection.organisation_id,
+          inspection_id:inspection.id,tyre_position:item.position,
+          photo_ref:item.ref,photo_sha256:hash,status:"pending"},
+          {onConflict:"organisation_id,inspection_id,tyre_position,photo_sha256",ignoreDuplicates:true})
+        .select("id");
+      if(queueError)return fail("Historical queue could not be completed",500);
+      if(inserted?.length)created++;
+    }
+  }
+  return response({scanned:(inspections||[]).length,eligible,created,
+    page,next_page:(inspections||[]).length===PAGE_SIZE?page+1:null});
+}
 async function review(req:Request, payload:Json) {
   const { profile, user, client } = await authenticated(req);
   if (!["Admin","Manager","Director","Maintenance Supervisor"].includes(profile.role)) {
@@ -245,6 +292,7 @@ Deno.serve(async req => {
     if (!payload || typeof payload !== "object") return fail("Invalid request");
     if (payload.action === "enqueue") return await enqueue(req,payload);
     if (payload.action === "review") return await review(req,payload);
+    if (payload.action === "backfill") return await backfill(req,payload);
     if (payload.action === "work") return await work(req);
     return fail("Unknown action");
   } catch (error) {

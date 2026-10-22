@@ -17,7 +17,7 @@ import {
 import PageHeader from '../components/ui/PageHeader'
 import Illustration from '../components/illustrations/Illustration'
 import { ensureActionItem } from '../lib/api/actionCenter'
-import { supabase, toServiceError } from '../lib/api/_client'
+import { supabase } from '../lib/api/_client'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import {

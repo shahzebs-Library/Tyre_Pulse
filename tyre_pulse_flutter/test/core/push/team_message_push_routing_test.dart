@@ -4,9 +4,7 @@ import 'package:tyre_pulse/app/router/routes.dart';
 
 void main() {
   group('Message the Team FCM routes', () {
-    test(
-        'broadcast with exact entity ID enters notification inbox for detail handoff',
-        () {
+    test('broadcast with exact entity ID enters notification inbox for detail handoff', () {
       const msg = PushMessage(messageId: 'fcm-123', data: <String, String>{
         'event_type': 'broadcast.sent',
         'entity_type': 'broadcast',

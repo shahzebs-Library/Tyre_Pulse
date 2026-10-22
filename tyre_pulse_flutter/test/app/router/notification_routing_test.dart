@@ -27,16 +27,13 @@ void main() {
       const TasksRoute(),
     );
     expect(
-      route(
-          type: 'workforce.assignment_push',
-          entityType: 'workforce_assignment',
-          entityId: '00000000-0000-0000-0000-000000000010'),
+      route(type: 'workforce.assignment_push', entityType: 'workforce_assignment',
+        entityId: '00000000-0000-0000-0000-000000000010'),
       const TasksRoute(),
     );
   });
 
-  test('existing message and broadcast notification destinations stay intact',
-      () {
+  test('existing message and broadcast notification destinations stay intact', () {
     expect(route(type: 'action.assigned'), const NotificationsRoute());
     expect(route(type: 'broadcast.sent'), const NotificationsRoute());
   });

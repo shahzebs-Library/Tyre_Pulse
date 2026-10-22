@@ -2835,7 +2835,7 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get tasksCopyCatalog =>
-      'title=میرا کام~today=آج~assignedTab=تفویض شدہ~dueToday=آج واجب~inProgress=جاری~completed=مکمل~urgent=فوری~upcoming=آنے والا~open=کھلے~emptyTitle=کوئی کام نہیں~emptyMessage=اس منظر سے کوئی کام مطابقت نہیں رکھتا۔~loadError=میرا کام ابھی لوڈ نہیں ہو سکا۔~due=مقررہ تاریخ~assigned=تفویض شدہ~unassigned=غیر تفویض شدہ~normal=عام~overdue=تاخیر شدہ~details=کام کی تفصیل~description=تفصیل~site=سائٹ~asset=اثاثہ~priority=ترجیح~status=حالت~view=دیکھیں~reportIssue=مسئلہ رپورٹ کریں~retry=دوبارہ کوشش~wfTitle=کمپنی کے تفویض کردہ کام~wfLoadError=تفویض کردہ کام لوڈ نہیں ہو سکا۔~wfEmpty=کمپنی کا کوئی تفویض کردہ کام درج نہیں ہے۔~wfOffline=آف لائن محفوظ کردہ کام۔ حیثیت تبدیل کرنے کے لیے انٹرنیٹ ضروری ہے۔~wfSiteUnspecified=سائٹ نامعلوم~wfAcknowledge=وصولی کی تصدیق~wfStart=شروع کریں~wfSubmit=جمع کریں~wfRefresh=تازہ کریں~wfRejected=سرور نے یہ تبدیلی قبول نہیں کی۔ ممکن ہے کام آگے بڑھ چکا ہو یا بند ہو گیا ہو۔ موجودہ حیثیت دیکھنے کے لیے تازہ کریں۔~wfConflict=یہ کام تبدیل ہو گیا ہے یا اب آپ کے نام نہیں رہا۔ تازہ کر کے دوبارہ کوشش کریں۔~wfDenied=آپ کو اس کام کو تبدیل کرنے کی اجازت نہیں ہے۔~wfNetwork=کنکشن نہیں ہے۔ تبدیلی نہیں بھیجی گئی۔ انٹرنیٹ آنے پر دوبارہ کوشش کریں۔~wfS_assigned=تفویض شدہ~wfS_acknowledged=تصدیق شدہ~wfS_in_progress=جاری~wfS_blocked=رکا ہوا~wfS_submitted=جمع شدہ~wfS_verified=منظور شدہ~wfS_cancelled=منسوخ~wfP_low=کم~wfP_normal=عام~wfP_high=زیادہ~wfP_critical=فوری';
+      'title=میرا کام~today=آج~assignedTab=تفویض شدہ~dueToday=آج واجب~inProgress=جاری~completed=مکمل~urgent=فوری~upcoming=آنے والا~open=کھلے~emptyTitle=کوئی کام نہیں~emptyMessage=اس منظر سے کوئی کام مطابقت نہیں رکھتا۔~loadError=میرا کام ابھی لوڈ نہیں ہو سکا۔~due=مقررہ تاریخ~assigned=تفویض شدہ~unassigned=غیر تفویض شدہ~normal=عام~overdue=تاخیر شدہ~details=کام کی تفصیل~description=تفصیل~site=سائٹ~asset=اثاثہ~priority=ترجیح~status=حالت~view=دیکھیں~reportIssue=مسئلہ رپورٹ کریں~retry=دوبارہ کوشش';
 
   @override
   String get alertsCopyCatalog =>
@@ -2843,7 +2843,7 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get notificationInboxCopyCatalog =>
-      'title=اطلاعات~markAll=سب کو پڑھا ہوا کریں~fallbackTitle=اطلاع~emptyTitle=آپ تمام تازہ معلومات دیکھ چکے ہیں~emptyBody=ذمہ داریاں، منظوریوں اور عملی اپ ڈیٹس یہاں نظر آئیں گی۔~loadFailed=اطلاعات لوڈ نہیں ہو سکیں۔ دوبارہ کوشش کے لیے نیچے کھینچیں۔~markFailed=اس اطلاع کو پڑھا ہوا نہیں کیا جا سکا۔~markAllFailed=تمام اطلاعات کو پڑھا ہوا نہیں کیا جا سکا۔~justNow=ابھی~minutesAgo=%count% منٹ پہلے~hoursAgo=%count% گھنٹے پہلے~daysAgo=%count% دن پہلے~messageUnavailable=یہ پیغام اب دستیاب نہیں یا آپ کے اکاؤنٹ کو نہیں بھیجا گیا تھا۔';
+      'title=اطلاعات~markAll=سب کو پڑھا ہوا کریں~fallbackTitle=اطلاع~emptyTitle=آپ تمام تازہ معلومات دیکھ چکے ہیں~emptyBody=ذمہ داریاں، منظوریوں اور عملی اپ ڈیٹس یہاں نظر آئیں گی۔~loadFailed=اطلاعات لوڈ نہیں ہو سکیں۔ دوبارہ کوشش کے لیے نیچے کھینچیں۔~markFailed=اس اطلاع کو پڑھا ہوا نہیں کیا جا سکا۔~markAllFailed=تمام اطلاعات کو پڑھا ہوا نہیں کیا جا سکا۔~justNow=ابھی~minutesAgo=%count% منٹ پہلے~hoursAgo=%count% گھنٹے پہلے~daysAgo=%count% دن پہلے';
 
   @override
   String get reportIssueCopyCatalog =>

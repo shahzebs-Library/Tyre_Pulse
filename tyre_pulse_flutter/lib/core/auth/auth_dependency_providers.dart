@@ -123,13 +123,5 @@ final Provider<Duration> sessionRestoreTimeoutDurationProvider =
 final Provider<Future<void> Function()> beforeSignOutProvider =
     Provider<Future<void> Function()>((ref) => () async {});
 
-/// Local clean-up that runs AFTER the session has ended (today: wiping the
-/// signed-out person's offline work-assignment cache so the next account on
-/// this device can never read it). Best-effort and bounded by nothing: it is
-/// fire-and-forget, and `AuthController` swallows every failure. The default
-/// does nothing; `main.dart` overrides it.
-final Provider<Future<void> Function()> afterSignOutProvider =
-    Provider<Future<void> Function()>((ref) => () async {});
-
 /// The upper bound `AuthController.signOut` gives [beforeSignOutProvider].
 const Duration beforeSignOutTimeout = Duration(seconds: 5);

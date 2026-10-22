@@ -2821,7 +2821,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tasksCopyCatalog =>
-      'title=My Work~today=Today~assignedTab=Assigned~dueToday=Due today~inProgress=In Progress~completed=Completed~urgent=Urgent~upcoming=Upcoming~open=open~emptyTitle=No tasks~emptyMessage=No work matches this view.~loadError=My work could not be loaded right now.~due=Due~assigned=Assigned to~unassigned=Unassigned~normal=Normal~overdue=Overdue~details=Task details~description=Description~site=Site~asset=Asset~priority=Priority~status=Status~view=View~reportIssue=Report an issue~retry=Retry~wfTitle=Company assignments~wfLoadError=Could not load assigned work.~wfEmpty=No company assignments recorded.~wfOffline=Offline cached assignments. Status changes require a connection.~wfSiteUnspecified=Site unspecified~wfAcknowledge=Acknowledge~wfStart=Start~wfSubmit=Submit~wfRefresh=Refresh~wfRejected=The server did not accept this update. The assignment may have moved on or been closed. Refresh to see its current status.~wfConflict=This assignment changed or is no longer yours. Refresh and try again.~wfDenied=You are not allowed to change this assignment.~wfNetwork=No connection. The update was not sent. Try again when you are online.~wfS_assigned=Assigned~wfS_acknowledged=Acknowledged~wfS_in_progress=In progress~wfS_blocked=Blocked~wfS_submitted=Submitted~wfS_verified=Verified~wfS_cancelled=Cancelled~wfP_low=Low~wfP_normal=Normal~wfP_high=High~wfP_critical=Critical';
+      'title=My Work~today=Today~assignedTab=Assigned~dueToday=Due today~inProgress=In Progress~completed=Completed~urgent=Urgent~upcoming=Upcoming~open=open~emptyTitle=No tasks~emptyMessage=No work matches this view.~loadError=My work could not be loaded right now.~due=Due~assigned=Assigned to~unassigned=Unassigned~normal=Normal~overdue=Overdue~details=Task details~description=Description~site=Site~asset=Asset~priority=Priority~status=Status~view=View~reportIssue=Report an issue~retry=Retry';
 
   @override
   String get alertsCopyCatalog =>
@@ -2829,7 +2829,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get notificationInboxCopyCatalog =>
-      'title=Notifications~markAll=Mark all read~fallbackTitle=Notification~emptyTitle=You\'re all caught up~emptyBody=Assignments, approvals and operational updates will appear here.~loadFailed=Could not load notifications. Pull down to retry.~markFailed=Could not mark this notification as read.~markAllFailed=Could not mark all notifications as read.~justNow=Just now~minutesAgo=%count%m ago~hoursAgo=%count%h ago~daysAgo=%count%d ago~messageUnavailable=This message is no longer available or was not sent to your account.';
+      'title=Notifications~markAll=Mark all read~fallbackTitle=Notification~emptyTitle=You\'re all caught up~emptyBody=Assignments, approvals and operational updates will appear here.~loadFailed=Could not load notifications. Pull down to retry.~markFailed=Could not mark this notification as read.~markAllFailed=Could not mark all notifications as read.~justNow=Just now~minutesAgo=%count%m ago~hoursAgo=%count%h ago~daysAgo=%count%d ago';
 
   @override
   String get reportIssueCopyCatalog =>

@@ -17,6 +17,7 @@ import {
 import PageHeader from '../components/ui/PageHeader'
 import Illustration from '../components/illustrations/Illustration'
 import { ensureActionItem } from '../lib/api/actionCenter'
+import { supabase, toServiceError } from '../lib/api/_client'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import {
@@ -93,10 +94,12 @@ export default function Broadcast() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
-  const [followUp, setFollowUp] = useState({ title: '', assignee: '', due: '', site: '' })
+  const [followUp, setFollowUp] = useState({ title: '', assigneeId: '', due: '', site: '' })
   const [taskSaving, setTaskSaving] = useState(false)
   const [taskResult, setTaskResult] = useState(null)
   const [taskError, setTaskError] = useState('')
+  const [assignees, setAssignees] = useState([])
+  const [assigneeError, setAssigneeError] = useState('')
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }))
 
@@ -122,6 +125,21 @@ export default function Broadcast() {
 
   useEffect(() => { load() }, [load])
 
+  useEffect(() => {
+    let mounted = true
+    async function loadAssignees() {
+      const { data, error: readError } = await supabase.from('profiles')
+        .select('id,full_name,username,site,country,approved,locked')
+        .eq('approved', true).eq('locked', false)
+        .order('full_name', { ascending: true }).limit(1000)
+      if (!mounted) return
+      if (readError) { setAssigneeError('Could not load employee accounts.'); setAssignees([]) }
+      else { setAssignees(data || []); setAssigneeError('') }
+    }
+    loadAssignees().catch(() => { if (mounted) setAssigneeError('Could not load employee accounts.') })
+    return () => { mounted = false }
+  }, [])
+
   // Re-count whenever the audience changes, so the number on screen always
   // describes the audience currently selected rather than a previous one.
   useEffect(() => {
@@ -146,7 +164,7 @@ export default function Broadcast() {
         return
       }
       setResult(r)
-      setFollowUp({ title: form.title, assignee: '', due: '', site: sites.length === 1 ? sites[0] : '' })
+      setFollowUp({ title: form.title, assigneeId: '', due: '', site: sites.length === 1 ? sites[0] : '' })
       setForm({ title: '', body: '', titleAr: '', bodyAr: '', sendPush: true })
       setHistory(await listBroadcasts().catch(() => history))
     } catch (e) {
@@ -159,10 +177,12 @@ export default function Broadcast() {
   // Retrying this operation uses a stable source key to avoid duplicate actions.
   async function createFollowUp() {
     if (!result?.ok || !result.id || taskSaving || taskResult) return
-    if (!followUp.title.trim() || !followUp.assignee.trim() || !followUp.due) {
+    if (!followUp.title.trim() || !followUp.assigneeId || !followUp.due) {
       setTaskError('Enter a task title, responsible person and due date.')
       return
     }
+    const employee = assignees.find((person) => person.id === followUp.assigneeId)
+    if (!employee) { setTaskError('Choose a valid active employee account.'); return }
     setTaskSaving(true); setTaskError('')
     try {
       const { item } = await ensureActionItem({
@@ -170,7 +190,8 @@ export default function Broadcast() {
         source: `broadcast:${result.id}`,
         category: 'other',
         severity: 'medium',
-        assigned_to: followUp.assignee.trim(),
+        assigned_to: employee.full_name || employee.username || employee.id,
+        assigned_user_id: employee.id,
         due_date: followUp.due,
         site: followUp.site.trim() || null,
         country: countries.length === 1 ? countries[0] : null,
@@ -240,7 +261,11 @@ export default function Broadcast() {
               <label className="flex flex-col gap-1 md:col-span-2"><span className={labelCls}>Task title</span>
                 <input className={inputCls} maxLength={300} value={followUp.title} onChange={(e) => setFollowUp((f) => ({ ...f, title: e.target.value }))} /></label>
               <label className="flex flex-col gap-1"><span className={labelCls}>Responsible person</span>
-                <input className={inputCls} maxLength={200} value={followUp.assignee} placeholder="Employee name" onChange={(e) => setFollowUp((f) => ({ ...f, assignee: e.target.value }))} /></label>
+                <select className={inputCls} value={followUp.assigneeId} onChange={(e) => setFollowUp((f) => ({ ...f, assigneeId: e.target.value }))}>
+                  <option value="">Select employee account</option>
+                  {assignees.map((person) => <option key={person.id} value={person.id}>{person.full_name || person.username || person.id}{person.site ? ` · ${person.site}` : ''}</option>)}
+                </select>
+                {assigneeError && <span className="text-xs text-red-400">{assigneeError}</span>}</label>
               <label className="flex flex-col gap-1"><span className={labelCls}>Due date</span>
                 <input className={inputCls} type="date" value={followUp.due} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setFollowUp((f) => ({ ...f, due: e.target.value }))} /></label>
               <label className="flex flex-col gap-1"><span className={labelCls}>Site (optional)</span>
@@ -251,7 +276,7 @@ export default function Broadcast() {
               </div>
             </div>
           )}
-          <p className="text-[11px] text-[var(--text-tertiary)]">Assignment is stored as an Action Center item. Automatic task-assignment phone push and recipient read receipts are not yet enabled by this change.</p>
+          <p className="text-[11px] text-[var(--text-tertiary)]">Assignment is linked to an employee account and stored as an Action Center item. Automatic task-assignment phone push and recipient read receipts are not yet enabled by this change.</p>
         </section>
       )}
 

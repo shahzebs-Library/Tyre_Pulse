@@ -1,57 +1,51 @@
-# AI Tyre Inspection — implementation handover
+# AI Tyre Inspection — Next Agent Handover
 
-**Last verified:** 2026-10-22 (Riyadh). **Repository:** shahzebs-Library/Tyre_Pulse. **Branch:** main. **Supabase project:** jhssdmeruxtrlqnwfksc. **Worker:** ai-tyre-inspection.
+Updated 2026-10-22. Branch `main`. Supabase project `jhssdmeruxtrlqnwfksc`.
 
-## Verified live state
-- Query `select status,count(*) from public.ai_tyre_inspection_jobs group by status;` returned **8 completed, 28 pending** (36 jobs total).
-- Pending rows still include error: `Unterminated string in JSON at position 97 (line 3 column 73)`. Do not assume all 36 jobs will complete.
-- Supabase Edge Function version **16 ACTIVE** was deployed with Anthropic support and bounded output. Completion of 8 jobs confirms storage of results, but **review, invoice-equivalent cost accuracy and PDF rendering have not been end-to-end verified**.
-- Web/Vercel build and domain redirect deployment success are **not verified**. Last observed Vercel deployments queued/building.
+## Verified, implemented and deployed
 
-## Implemented (code committed to main)
-1. Position-linked Flutter inspection media: `tyre_conditions.<position>.photo_url` recognized in SQL trigger, Edge Function, domain evidence extraction, and UI; other photo formats retained. Database backfill for Oct 21 Riyadh scanned 39 inspections and created 36 jobs.
-2. Database: `ai_tyre_inspection_jobs`, autoqueue trigger on `inspections.tyre_conditions` insert/update, bounded backfill routine; job metrics and estimated USD cost columns.
-3. Cron worker dispatcher configured every 5 minutes. Edge Function `verify_jwt=false` permits cron gateway access **only because the work action validates `x-worker-secret`**, while interactive actions verify Supabase JWT + organization/role. Previously encountered 401 (gateway), then 500 (`provided is not defined`), then 503 (missing Gemini key): these were addressed. Validate worker response status anew after changes.
-4. Both manual queued defect photos and on-demand **screen all photographed tyres**, including condition Good. Automatic trigger remains abnormal-tyre-only for cost control.
-5. Gauge-free AI visual assessment: model may describe observable damage, uneven wear, assessability and recommendations. **Never fabricate numeric tread depth, pressure, remaining tyre life, or roadworthiness.** Verified groove depths require physical gauge source, separate measurement record and review.
-6. Anthropic provider selected when `ANTHROPIC_API_KEY` exists, otherwise Google selected when `AI_PROVIDER_KEY` exists. Default model names currently coded: `claude-haiku-5-5` / `gemini-2.5-flash-lite`; **verify model availability and published rates**. There is no automatic Sonnet escalation. Anthropic integration requests images through Messages API; Google through generateContent.
-7. Worker has a configurable application-side **estimated daily USD cap** (`AI_DAILY_LIMIT_USD`, default 1), image payload size restriction, capped responses, max 4 claimed jobs per run and token/cost tracking. This cap is not a guaranteed billing cap and may omit failed/unpriced requests.
-8. Human review accept/reject UI with server-side role checks; AI results in inspection appendix, existing inspection PDF addition, per-inspection costs, date-bounded historical backfill UI. Capturing guide for photographs and physical gauge readings added.
-9. `www.tyrepulse.app/ai-cost-monitor` conditional redirect to `app.tyrepulse.app/ai-cost-monitor` authored in `vercel.json` (production behavior not yet verified).
+- Flutter position-linked photo references (`tyre_conditions[position].photo_url`) recognized in the database auto-queue, edge function, and web evidence view.
+- Automatic abnormal-tyre evidence queue; authenticated manual full-position screening including photos of healthy tyres; historical backfill; five-minute scheduler.
+- Claude Haiku model integration with Gemini as optional fallback; visual findings cannot certify mm tread depth without physical measurements; supervisor review operations exist.
+- Worker Edge Function **version 17 ACTIVE**, uploaded 2026-10-22. Mainline changes committed.
+- **No automatic paid retry** of an attempted photo. Previously attempted pending jobs are marked failed for manual review instead of calling the model again. Bad model JSON becomes a failed job requiring manual investigation.
+- **On malformed Claude output with usage metadata**, worker now records tokens, model, cost estimate, reason and failed status in `ai_tyre_inspection_jobs` and `ai_token_logs`. Token data is recorded before JSON validation, so the provider charge is not lost.
+- AI Cost Monitor's report engine and page now include known paid failed requests in estimated spend and token totals and display the charged-failure amount. Unpriced failures remain unknown, not assumed free.
+- Conservative estimated USD ceiling (`AI_DAILY_LIMIT_USD`, default $1/day). This is *not* a hard provider billing cap; concurrent work and unknown/missing-usage failures can exceed it. Anthropic costs may differ from estimated price rules.
 
-## Still pending — next agent priorities (do not mark done without evidence)
-**P0** Verify latest jobs reach completed reliably. Inspect `ai_tyre_inspection_jobs` error_message and Edge logs. The earlier Claude response was truncated / malformed JSON. Confirm the latest 1100-token compact-JSON prompt solves it; implement a robust validation/response strategy without unlimited paid retries. Handle failed jobs and stale processing locks safely; distinguish provider errors from invalid images.
-**P0** Confirm credentials/model config securely via Supabase secrets (do NOT print keys), correct model IDs/pricing from official Anthropic docs, and record real `usage` fields. Confirm billing estimates for image input, output, retries, cache and thinking if applicable.
-**P0** Test end-to-end with a real, tenant-authorized inspection photograph: queue -> worker -> structured finding -> supervisor decision -> PDF appendix -> cost tracking. Validate RLS / cross-tenant and role boundaries.
-**P1** Fix the code/UI inconsistency around photo counts, healthy-position screening, latest saved depth measurements, and report export. Add automated tests and inspect Vercel successful production deployment, app domain/marketing redirects and `/ai-cost-monitor` blank screen.
-**P1** Production PDF: verify current Inspection > Download PDF actually includes only authorized reviewed findings and physical measurements. The preview is not a centralized production PDF endpoint; don't advertise one until built and tested.
-**P1** Cost guardrail: harden concurrent worker reservation/cap to prevent overspend; price unknown models as unpriced, never silently 0. Limit huge backfills and implement optional manager confirmations.
-**P2** Image-quality grading (blur, low light, angle, tyre position), retake requests, and evidence audit. Benchmark against expert-labelled tyre images to quantify missed safety-relevant damage / false positives. Do NOT claim validated mm from ordinary photos.
+## Last live state
 
-## Working files
-- `supabase/functions/ai-tyre-inspection/index.ts` — auth, queue, backfill, worker, Anthropic/Google, cost.
-- `supabase/migrations/20261022130000_ai_tyre_autoqueue_usage.sql` and `20261022140000_ai_tyre_flutter_photo_link.sql`.
-- `src/lib/aiTyreInspectionDomain.js`, `src/lib/aiTyreInspectionDomain.test.js` — image refs, readings, evidence summary.
-- `src/lib/api/aiTyreInspection.js` — server data and actions.
-- `src/pages/AiTyreInspection.jsx` — UI, photo guidance, manual screening, review, costs, preview.
-- `src/lib/aiTyreInspectionReport.js` — appendix; `src/lib/exportUtils.js` and `src/pages/Inspections.jsx` — existing report integration.
-- `vercel.json` — app route redirect.
-- CI: `.github/workflows/vercel-production.yml` — private repo CLI alternative; direct Vercel Git deploy may also occur when repository public.
+Database check immediately after deployment: **14 completed**, **22 pending**, **36 total**; completed-job estimated cost **$0.012204**. At that instant no `ai_token_logs` entries were returned for `feature='ai_tyre_inspection'`. Do **not** claim the new failed-charge logging works end to end until a controlled malformed-output test succeeds. Jobs produced before v17 may have consumed unmetered tokens. Do not infer provider-billed totals from these estimates.
 
-## Verification SQL (read-only)
+## Pending — highest priority
+
+1. **P0: Real photograph validation is not done.** Authorized supervisor needs to inspect a set of actual private storage photo originals against AI results, annotate correct/missed/false-positive damage and evaluate image clarity. A structured AI result alone is **not** proof of inspection quality. Record expert adjudication and never auto-certify safety.
+2. **P0: Verify failed-charge metering live** after an actual malformed response. Check `ai_tyre_inspection_jobs` for failed job with non-null tokens/cost and `ai_token_logs` for matching `ai_tyre_inspection` row. Ensure failed requests without usage are labelled *unknown*, not zero.
+3. **P0: Verify cron calls remain HTTP 200**, stalled processing locks, and that pending jobs are drained with spending ceiling intact. Ensure no second paid retry for a failed job.
+4. **P0: Test tenant/role security**, supervisor accept/reject and existing Inspection PDF report output against authoritative backend readings. The preview is not a separate production PDF endpoint.
+5. **P1: Validate deployment** for `app.tyrepulse.app`, `www.tyrepulse.app/ai-cost-monitor` redirect and runtime rendering; check actual browser console for blank/dark UI and Vercel latest build.
+6. **P1: Add automated integration tests** of malformed provider outputs, token usage logging, spending ceiling, manual review, failed-cost aggregation, and no-repeat inference. Existing unit tests alone do not prove deployed functioning.
+7. **P1: Consider accounting of ALL provider attempts**, including non-JSON provider errors and timeouts; some provider failures may be billed even when usage is unavailable. Use an atomic concurrency-safe budget reservation if a true hard limit is needed.
+
+## Technical paths
+
+- `supabase/functions/ai-tyre-inspection/index.ts`: edge auth, provider calls, queue/worker, retry guard, failed response metering.
+- `src/lib/api/aiOps.js`: unified `ai_token_logs` reader.
+- `src/lib/aiCostMonitorAnalytics.js`, `src/pages/AiCostMonitor.jsx`: known charged failures included in dashboard/report.
+- `src/pages/AiTyreInspection.jsx`, `src/lib/aiTyreInspectionDomain.js`, `src/lib/api/aiTyreInspection.js`: visual inspection, tyre-photo linkage, physical readings, role review.
+- `src/lib/aiTyreInspectionReport.js`, `src/lib/exportUtils.js`, `src/pages/Inspections.jsx`: report composition.
+
+## Safe read-only checks
+
 ```sql
-select status,count(*) as jobs,max(error_message) as example_error
+select status,count(*) as jobs,sum(coalesce(cost_usd,0)) as estimated_usd
 from public.ai_tyre_inspection_jobs group by status order by status;
-select count(*) as reviewed
+select status,count(*) from public.ai_token_logs
+where feature='ai_tyre_inspection' group by status;
+select id,inspection_id,tyre_position,review_status,
+       input_tokens,output_tokens,cost_usd
 from public.ai_tyre_inspection_jobs
-where review_status in ('accepted','rejected','corrected');
-select provider,model_version,count(*) as completed_jobs,
-       sum(input_tokens) as input_tokens,sum(output_tokens) as output_tokens,
-       sum(cost_usd) as estimated_cost_usd
-from public.ai_tyre_inspection_jobs
-where status='completed'
-group by provider,model_version;
+where status='completed' order by updated_at desc limit 8;
 ```
 
-## Agent working agreement
-Continue in **main** or one consolidated PR, not a stream of tiny PRs. Prefer verified functionality over line count. Preserve existing inspection screens and PDF format. Treat “deployed,” “merged,” “tested,” and “operational” as different milestones. Never overwrite secrets or claim completion without live evidence. Update this handover every substantive change, listing commit, deployment, verification and remaining blockers.
+Preserve user secrets; do not reveal keys in reports. **Distinguish committed / deployed / tested / operational**. Update this handover after each substantive deployment. Avoid many small PRs; keep approved code on main once verified.

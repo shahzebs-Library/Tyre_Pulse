@@ -63,6 +63,8 @@ export function inspectablePhotoRefs(inspection) {
     const condition = cleanText(entry.condition || entry.status || entry.risk, 100)
     if (!conditionRequiresAnalysis(condition)) continue
     const photos = [
+      ...normalizePhotographs(entry.photo_url),
+      ...normalizePhotographs(entry.photo_uri),
       ...normalizePhotographs(entry.photo),
       ...normalizePhotographs(entry.photos),
       ...normalizePhotographs(entry.photo_refs),

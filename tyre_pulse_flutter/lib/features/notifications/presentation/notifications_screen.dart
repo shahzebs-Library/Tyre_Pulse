@@ -45,7 +45,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       AsyncData<List<AppNotification>>(:final value) => value,
       _ => const <AppNotification>[],
     };
-    final params = GoRouterState.of(context).uri.queryParameters;
+    final params = GoRouter.maybeOf(context) == null
+        ? const <String, String>{}
+        : GoRouterState.of(context).uri.queryParameters;
     final targetId = params['target_id'];
     final targetType = params['target_type'];
     final key = '$targetType:$targetId';
@@ -160,7 +162,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       unawaited(_persistRead(row.id, copy));
     }
     final TpRoute? destination = notificationDestination(row.target);
-    if (destination != null) context.push(destination.location);
+    if (destination != null && GoRouter.maybeOf(context) != null) {
+      unawaited(context.push<void>(destination.location));
+    }
   }
 
   Future<void> _persistRead(String id, NotificationsCopy copy) async {

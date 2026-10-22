@@ -278,6 +278,15 @@ jobs:
       - name: Generate sources
         run: dart run build_runner build --delete-conflicting-outputs
 
+      - name: Inject GoogleService-Info.plist when the secret is available
+        # Skipped silently on forks/PRs without secrets. Validates bundle id + bundling.
+        env:
+          GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
+        run: |
+          if [ -z "$GOOGLE_SERVICE_INFO_PLIST" ]; then echo "No GOOGLE_SERVICE_INFO_PLIST secret; building without Firebase iOS config."; exit 0; fi
+          gem list -i xcodeproj >/dev/null 2>&1 || sudo gem install xcodeproj --no-document
+          ios/ci/inject_google_service_info.sh
+
       - name: Build iOS without code signing
         # Spec section 56: iOS is a day-one target, not a later phase. This job
         # exists so an iOS-breaking change is caught on the commit that causes

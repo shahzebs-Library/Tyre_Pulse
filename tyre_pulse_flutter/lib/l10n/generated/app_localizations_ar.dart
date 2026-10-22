@@ -2837,7 +2837,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get notificationInboxCopyCatalog =>
-      'title=الإشعارات~markAll=تعيين الكل كمقروء~fallbackTitle=إشعار~emptyTitle=اطلعت على كل المستجدات~emptyBody=ستظهر هنا المهام والموافقات والتحديثات التشغيلية.~loadFailed=تعذر تحميل الإشعارات. اسحب للأسفل لإعادة المحاولة.~markFailed=تعذر تعيين هذا الإشعار كمقروء.~markAllFailed=تعذر تعيين جميع الإشعارات كمقروءة.~justNow=الآن~minutesAgo=قبل %count% د~hoursAgo=قبل %count% س~daysAgo=قبل %count% ي';
+      'title=الإشعارات~markAll=تعيين الكل كمقروء~fallbackTitle=إشعار~emptyTitle=اطلعت على كل المستجدات~emptyBody=ستظهر هنا المهام والموافقات والتحديثات التشغيلية.~loadFailed=تعذر تحميل الإشعارات. اسحب للأسفل لإعادة المحاولة.~markFailed=تعذر تعيين هذا الإشعار كمقروء.~markAllFailed=تعذر تعيين جميع الإشعارات كمقروءة.~justNow=الآن~minutesAgo=قبل %count% د~hoursAgo=قبل %count% س~daysAgo=قبل %count% ي~messageUnavailable=هذه الرسالة لم تعد متاحة أو لم تُرسل إلى حسابك.';
 
   @override
   String get reportIssueCopyCatalog =>

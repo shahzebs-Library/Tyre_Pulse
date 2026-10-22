@@ -97,6 +97,7 @@ async function enqueue(req: Request, payload: Json) {
   if (!isUUID(payload.inspection_id)) return fail("Valid inspection ID required");
   const inspection = await inspectionFor(client, payload.inspection_id);
   if (inspection.organisation_id !== profile.organisation_id) return fail("Inspection unavailable", 403);
+  if (!["Admin","Manager","Director","Maintenance Supervisor","Tyre Man"].includes(profile.role)) return fail("Inspection operation not authorized",403);
   const evidence = eligibleEvidence(inspection);
   let created = 0;
   for (const item of evidence) {

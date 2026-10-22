@@ -10,7 +10,63 @@ import { useSettings } from '../contexts/SettingsContext'
 import { toUserMessage } from '../lib/safeError'
 import { listInspectionsForPage } from '../lib/api/inspections'
 import { calculateTread, conditionRequiresAnalysis } from '../lib/aiTyreInspection'
-import { readInspectionMeasurements, recordDepthMeasurement, readInspectionAnalysis, enqueueInspectionPhotos, reviewAiFinding } from '../lib/api/aiTyreInspection'
+import { readInspectionMeasurements, recordDepthMeasurement, readInspectionAnalysis, enqueueInspectionPhotos, reviewAiFinding, summarizeInspectionAiCosts, backfillAiInspectionRange } from '../lib/api/aiTyreInspection'
+
+/** Calendar day selection in Saudi Arabia; always preserve local midnight. */
+function saudiDay(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(value+'T00:00:00+03:00') : null
+}
+function saudiRange(from, through) {
+  const start=saudiDay(from)
+  const last=saudiDay(through)
+  if (!start || !last || !Number.isFinite(start.getTime()) || !Number.isFinite(last.getTime())) {
+    throw new Error('Choose a valid start and end date.')
+  }
+  const end=new Date(last.getTime()+86400000)
+  if (end<=start || end-start>32*86400000) {
+    throw new Error('Select a date range of 1 to 32 days.')
+  }
+  return {from:start.toISOString(),to:end.toISOString()}
+}
+function HistoricInspectionBackfill() {
+  const [from,setFrom]=useState('')
+  const [through,setThrough]=useState('')
+  const [running,setRunning]=useState(false)
+  const [error,setError]=useState('')
+  const [result,setResult]=useState(null)
+  const run=async(event)=>{
+    event.preventDefault()
+    setRunning(true);setError('');setResult(null)
+    try{
+      const dates=saudiRange(from,through)
+      let page=0,scanned=0,eligible=0,created=0
+      while (page<25) {
+        const res=await backfillAiInspectionRange({...dates,page})
+        scanned+=Number(res.scanned||0)
+        eligible+=Number(res.eligible||0)
+        created+=Number(res.created||0)
+        setResult({scanned,eligible,created,more:res.next_page!=null})
+        if(res.next_page==null)break
+        page=res.next_page
+      }
+    }catch(err){setError(toUserMessage(err,'Unable to queue the selected inspections'))}
+    finally{setRunning(false)}
+  }
+  return <Card>
+    <h2 className="font-semibold">Analyze previous inspections</h2>
+    <p className="text-xs text-[var(--text-muted)] mt-1 mb-4">Authorized managers can queue eligible damage photographs from saved inspections. Dates use Saudi Arabia time. Already queued photographs are skipped; inspecting a date range does not charge by itself.</p>
+    <form onSubmit={run} className="flex flex-wrap gap-3 items-end">
+      <label className="text-xs text-[var(--text-secondary)]">From<input type="date" className="input mt-1 block" required value={from} onChange={e=>setFrom(e.target.value)}/></label>
+      <label className="text-xs text-[var(--text-secondary)]">Through<input type="date" className="input mt-1 block" required value={through} onChange={e=>setThrough(e.target.value)}/></label>
+      <button className="btn-primary" type="submit" disabled={running}>{running?'Queuing inspections…':'Queue historical inspections'}</button>
+    </form>
+    {error&&<p role="alert" className="text-sm text-red-500 mt-3">{error}</p>}
+    {result&&<div role="status" className="mt-3 rounded-lg border border-[var(--border-dim)] p-3 text-sm">
+      Inspections checked: <strong>{result.scanned}</strong> · Eligible photos: <strong>{result.eligible}</strong> · Newly queued: <strong>{result.created}</strong>
+      {result.more&&<p className="text-xs text-amber-500 mt-1">More records remain for this range; select a shorter range for a complete batch.</p>}
+    </div>}
+  </Card>
+}
 
 function photoCount(row) {
   const conditions = row?.tyre_conditions || {}
@@ -64,6 +120,7 @@ export default function AiTyreInspection() {
       <Card><div className="flex items-center gap-2 text-sm"><ShieldAlert size={17}/> Defect photos for review</div><div className="text-2xl font-semibold mt-2">{records.reduce((sum,r)=>sum+r.photosForReview,0)}</div></Card>
       <Card><div className="flex items-center gap-2 text-sm"><Ruler size={17}/> Measured tyre positions</div><div className="text-2xl font-semibold mt-2">{records.reduce((sum,r)=>sum+r.measuredCount,0)}</div></Card>
     </div>
+    <HistoricInspectionBackfill/>
     <Card>
       <div className="flex flex-wrap justify-between gap-3 mb-3">
         <div><h2 className="font-semibold">Inspection evidence register</h2><p className="text-xs text-[var(--text-muted)]">Showing latest 200 records; absence of a reading is never estimated from a photograph.</p></div>
@@ -97,6 +154,7 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
   })), [conditions,inspection.id])
   const [storedMeasurements,setStoredMeasurements]=useState([])
   const [analysisJobs,setAnalysisJobs]=useState([])
+  const expense=useMemo(()=>summarizeInspectionAiCosts(analysisJobs)[0], [analysisJobs])
   const [analysisError,setAnalysisError]=useState('')
   const [analysisLoading,setAnalysisLoading]=useState(false)
   const refreshAnalysis=useCallback(async()=>{try{setAnalysisJobs(await readInspectionAnalysis([inspection.id]));setAnalysisError('')}catch(e){setAnalysisError(toUserMessage(e,'Could not load AI results'))}},[inspection.id])
@@ -206,6 +264,7 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
             {analysisError && <p role="alert" className="text-red-500 text-sm mt-3">{analysisError}</p>}
           </Card>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3"><Metric label="Queued" value={analysisJobs.length}/><Metric label="Completed" value={analysisJobs.filter(j=>j.status==='completed').length}/><Metric label="Pending" value={analysisJobs.filter(j=>['pending','processing'].includes(j.status)).length}/><Metric label="Failed" value={analysisJobs.filter(j=>j.status==='failed').length}/></div>
+          <Card><div className="flex justify-between gap-3 flex-wrap"><div><p className="text-xs text-[var(--text-muted)]">AI inference cost for this inspection</p><p className="text-xl font-bold">{expense?.priced?`${expense.costUsd.toFixed(6)}`:"Not priced yet"}</p></div><div className="text-xs text-[var(--text-muted)]">Input tokens: {expense?.inputTokens||0} · Output tokens: {expense?.outputTokens||0} · Unpriced jobs: {expense?.unpriced||0}</div></div><p className="text-xs text-[var(--text-muted)] mt-2">Provider token usage is recorded on completion. USD estimates require verified provider pricing configured in the worker; unpriced calls are never shown as free.</p></Card>
           <div className="space-y-3">{analysisJobs.map(job=><Card key={job.id}>
             <div className="flex justify-between items-center gap-3"><h4 className="font-semibold">{job.tyre_position}</h4><span className="text-xs">{job.status} · {job.review_status||'unreviewed'}</span></div>
             {job.analysis?<div className="mt-3 space-y-2"><p className="text-sm">{job.analysis.assessable?'Visual assessment available':(job.analysis.reason||'Image unassessable')}</p>{(job.analysis.defects||[]).map((d,i)=><p key={i} className="text-sm border-l-2 border-amber-500 pl-3">{d.type}: {d.description} ({d.severity})</p>)}<p className="text-sm text-[var(--text-secondary)]">{job.analysis.recommendation}</p></div>:<p className="text-xs text-[var(--text-muted)] mt-2">No completed visual finding available.</p>}

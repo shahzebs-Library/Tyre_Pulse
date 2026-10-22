@@ -84,7 +84,7 @@ function eligibleEvidence(inspection: Json) {
     const condition = str(data.condition || data.status, 120);
     if (!eligibleCondition(condition)) continue;
     const seen = new Set<string>();
-    for (const ref of [...photos(data.photo), ...photos(data.photos), ...photos(data.photo_refs)]) {
+    for (const ref of [...photos(data.photo_url), ...photos(data.photo), ...photos(data.photos), ...photos(data.photo_refs)]) {
       if (!parsedStorage(ref) || seen.has(ref)) continue;
       seen.add(ref);
       result.push({ position: position.slice(0,80), ref, condition });
@@ -116,6 +116,53 @@ async function enqueue(req: Request, payload: Json) {
     created++;
   }
   return response({ inspection_id: inspection.id, eligible: evidence.length, enqueued:created });
+}
+/** Organization-bound on-demand backfill. Range is capped and paged by created_at.
+ * Requires a managerial role. Evidence lookup reuses exactly the regular enqueue
+ * allowlist, so inspecting historic rows never grants access to arbitrary URLs.
+ */
+async function backfill(req: Request, payload: Json) {
+  const {profile,client} = await authenticated(req);
+  const role=String(profile.role||"").toLowerCase();
+  if(!["admin","manager","director","maintenance supervisor","pmv manager"].includes(role)){
+    return fail("Manager role required",403);
+  }
+  const from=str(payload.from,40);
+  const to=str(payload.to,40);
+  const page=Number(payload.page??0);
+  const start=Date.parse(from),end=Date.parse(to);
+  if(!Number.isFinite(start)||!Number.isFinite(end)||end<=start||
+     end-start>32*86400000||!Number.isInteger(page)||page<0||page>100){
+    return fail("Invalid date range or page",400);
+  }
+  const PAGE_SIZE=100;
+  const {data:inspections,error}=await client.from("inspections")
+    .select("id,organisation_id,tyre_conditions,created_at")
+    .eq("organisation_id",profile.organisation_id)
+    .gte("created_at",new Date(start).toISOString())
+    .lt("created_at",new Date(end).toISOString())
+    .order("created_at",{ascending:true})
+    .order("id",{ascending:true})
+    .range(page*PAGE_SIZE,(page+1)*PAGE_SIZE-1);
+  if(error)return fail("Could not read historical inspections",500);
+  let eligible=0,created=0;
+  for(const inspection of inspections||[]){
+    const refs=eligibleEvidence(inspection);
+    eligible+=refs.length;
+    for(const item of refs){
+      const hash=await fingerprint(item.ref);
+      const {data:inserted,error:queueError}=await admin.from("ai_tyre_inspection_jobs")
+        .upsert({organisation_id:inspection.organisation_id,
+          inspection_id:inspection.id,tyre_position:item.position,
+          photo_ref:item.ref,photo_sha256:hash,status:"pending"},
+          {onConflict:"organisation_id,inspection_id,tyre_position,photo_sha256",ignoreDuplicates:true})
+        .select("id");
+      if(queueError)return fail("Historical queue could not be completed",500);
+      if(inserted?.length)created++;
+    }
+  }
+  return response({scanned:(inspections||[]).length,eligible,created,
+    page,next_page:(inspections||[]).length===PAGE_SIZE?page+1:null});
 }
 async function review(req:Request, payload:Json) {
   const { profile, user, client } = await authenticated(req);
@@ -158,7 +205,7 @@ function normalizeAnalysis(raw: unknown): Json {
     humanReviewRequired:true, exactTreadDepthMm:null, remainingTreadLifeKm:null };
 }
 async function work(req:Request) {
-  const provided = req.headers.get("x-worker-secret");
+  // Gateway JWT validation is disabled for this endpoint: scheduled requests use\n  // an independently checked, high-entropy worker secret. User actions must\n  // still present a valid bearer token verified via auth.getUser().\n  const provided = req.headers.get("x-worker-secret");
   const expected = Deno.env.get("AI_WORKER_SECRET");
   if (!expected || !provided || provided !== expected) return fail("Worker unauthorized",403);
   const providerKey = Deno.env.get("AI_PROVIDER_KEY");
@@ -207,8 +254,23 @@ async function work(req:Request) {
       const provider = await completion.json();
       const output = provider?.candidates?.[0]?.content?.parts?.[0]?.text;
       const analysis = normalizeAnalysis(JSON.parse(String(output || "{}")));
+      const usage = provider?.usageMetadata || {};
+      const inputTokens = Number(usage.promptTokenCount);
+      const outputTokens = Number(usage.candidatesTokenCount);
+      const hasUsage = Number.isFinite(inputTokens) && Number.isFinite(outputTokens);
+      const defaultRate = model === "gemini-2.5-flash-lite" ? [0.10, 0.40] : null;
+      const inputRate = Number(Deno.env.get("AI_INPUT_USD_PER_MILLION") || defaultRate?.[0]);
+      const outputRate = Number(Deno.env.get("AI_OUTPUT_USD_PER_MILLION") || defaultRate?.[1]);
+      const hasRates = Number.isFinite(inputRate) && Number.isFinite(outputRate) && inputRate > 0 && outputRate > 0;
+      const estimatedCost = hasUsage && hasRates ? Number(((inputTokens*inputRate+outputTokens*outputRate)/1e6).toFixed(6)) : null;
       await admin.from("ai_tyre_inspection_jobs").update({
         status:"completed",analysis,model_version:model,
+        provider:"google", input_tokens:hasUsage?inputTokens:null,
+        output_tokens:hasUsage?outputTokens:null,
+        total_tokens:hasUsage?Number(usage.totalTokenCount ?? inputTokens+outputTokens):null,
+        pricing_usd_per_million_input:hasRates?inputRate:null,
+        pricing_usd_per_million_output:hasRates?outputRate:null,
+        cost_usd:estimatedCost,billed_at:hasUsage?new Date().toISOString():null,
         updated_at:new Date().toISOString(),error_message:null,
       }).eq("id",job.id).eq("status","processing");
       processed++;
@@ -231,6 +293,7 @@ Deno.serve(async req => {
     if (!payload || typeof payload !== "object") return fail("Invalid request");
     if (payload.action === "enqueue") return await enqueue(req,payload);
     if (payload.action === "review") return await review(req,payload);
+    if (payload.action === "backfill") return await backfill(req,payload);
     if (payload.action === "work") return await work(req);
     return fail("Unknown action");
   } catch (error) {

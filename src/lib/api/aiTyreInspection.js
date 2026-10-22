@@ -9,7 +9,9 @@ import { supabase } from './_client'
 
 const JOB_FIELDS = [
   'id','inspection_id','tyre_position','photo_ref','status','analysis',
+  'cost_usd','input_tokens','output_tokens','total_tokens','provider',
   'model_version','created_at','updated_at','attempts','error_message',
+  'review_status','reviewer_note','reviewed_at',
 ].join(',')
 const MEASUREMENT_FIELDS = [
   'id','inspection_id','tyre_position','tyre_serial','original_mm',
@@ -90,6 +92,34 @@ export async function enqueueInspectionPhotos(inspectionId) {
 export async function reviewAiFinding(jobId,decision,note='') {
   const {data,error}=await supabase.functions.invoke('ai-tyre-inspection',{
     body:{action:'review',job_id:jobId,decision,note},
+  })
+  if(error)throw error
+  return data
+}
+
+/** Actual provider-token accounting from completed, tenant-scoped AI jobs. */
+export function summarizeInspectionAiCosts(jobs) {
+  const byInspection=new Map()
+  for(const job of jobs||[]) {
+    const id=job.inspection_id
+    const current=byInspection.get(id)||{inspectionId:id,images:0,priced:0,unpriced:0,costUsd:0,inputTokens:0,outputTokens:0}
+    current.images++
+    const cost=job.cost_usd==null?null:Number(job.cost_usd)
+    if(cost!==null&&Number.isFinite(cost)){current.costUsd+=cost;current.priced++}
+    else current.unpriced++
+    current.inputTokens+=Number(job.input_tokens||0)
+    current.outputTokens+=Number(job.output_tokens||0)
+    byInspection.set(id,current)
+  }
+  return [...byInspection.values()].map(x=>({...x,costUsd:Number(x.costUsd.toFixed(6))}))
+}
+
+/** Backfill one bounded page of historical inspections through server authorization.
+ * Date range is interpreted as absolute ISO timestamps.
+ */
+export async function backfillAiInspectionRange({from,to,page=0}) {
+  const {data,error}=await supabase.functions.invoke('ai-tyre-inspection',{
+    body:{action:'backfill',from,to,page},
   })
   if(error)throw error
   return data

@@ -46,3 +46,38 @@ export async function resolveStorageUrls(values) {
   const urls = await Promise.all((values ?? []).map(value => resolveStorageUrl(value)))
   return urls.filter(Boolean)
 }
+
+const SIGN_BATCH = 100
+
+/**
+ * Resolve many refs to URLs with ONE createSignedUrls call per bucket per 100 paths
+ * (instead of one request per photo). Returns { [ref]: url | null }; a ref that
+ * cannot be signed maps to null so callers can say "not available".
+ */
+export async function resolveStorageUrlMap(values) {
+  const out = {}
+  const byBucket = new Map()
+  for (const value of new Set((values ?? []).filter(v => typeof v === 'string' && v))) {
+    const ref = parseStorageRef(value)
+    if (!ref) { out[value] = await resolveStorageUrl(value); continue }
+    if (!byBucket.has(ref.bucket)) byBucket.set(ref.bucket, [])
+    byBucket.get(ref.bucket).push({ value, path: ref.path })
+  }
+  for (const [bucket, items] of byBucket) {
+    for (let i = 0; i < items.length; i += SIGN_BATCH) {
+      const chunk = items.slice(i, i + SIGN_BATCH)
+      let signed = null
+      try {
+        const { data, error } = await supabase.storage.from(bucket)
+          .createSignedUrls(chunk.map(item => item.path), SIGNED_URL_TTL_SECONDS)
+        if (!error) signed = data
+      } catch { /* every ref in the chunk stays null */ }
+      const byPath = new Map((signed ?? []).map(entry => [entry.path, entry]))
+      for (const item of chunk) {
+        const entry = byPath.get(item.path)
+        out[item.value] = entry && !entry.error ? (entry.signedUrl ?? null) : null
+      }
+    }
+  }
+  return out
+}

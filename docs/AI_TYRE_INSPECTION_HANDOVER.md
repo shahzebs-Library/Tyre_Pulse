@@ -110,3 +110,27 @@ Commits `49d1412c`, `c0f8f013` on `main` added combinations of vehicle/site sear
 - **P0 tenant/role security test** as real users (including Sajid) through the deployed function and RLS; the new tests only prove the role lists and source-level tenant checks.
 - **P1 deployment and rendering** (Vercel build, console errors, dark/light UI, 390px layout of the new register footer and feedback panel). No browser run was possible here.
 - Continuous learning/model improvement is **not** implemented. The feedback aggregate is evaluation data for a future, expert-confirmed process only.
+
+## 2026-10-22 — Measurement engine, correctness tests and performance (branch `feature/ai-engine-advanced-20261023`)
+
+Code only. No migration, no edge function change (`supabase/functions/ai-tyre-inspection/index.ts` untouched), no live DB, no browser.
+
+### Code done vs needs live
+
+| Area | Code done and unit-tested here | Needs live / real data / browser |
+|---|---|---|
+| Measurement engine `src/lib/tyreMeasurementEngine.js` | Reading validation (impossible depth, future date, bad limits/odometer, duplicates, same-instant conflicts); per tyre series (asset + position + serial); wear rate mm/1000 km (mm/day when no odometer); remaining km/days with 90% band (3+ readings; 2 readings give a point estimate flagged low confidence); new series when depth rises (replaced/retreaded); odometer regression ignored; inner/centre/outer hints (alignment, under/over-inflation, marked indicative); replace-soon flag (uses the conservative end of the band); leave-one-out comparison with the median of other vehicles. Everything is `null`/"Not measured" when data is insufficient. 30 tests. | The thresholds in `ENGINE_LIMITS` (wear-rate ceiling 4 mm/1000 km, 2 mm shoulder gap, 1.5 mm centre gap, replace margin 1.5 mm / 10,000 km / 30 days) are engineering defaults, **not calibrated against this fleet**. A tyre/fleet engineer must confirm them against real gauge history before anyone acts on a flag. `ai_tyre_depth_measurements` currently holds few or no repeated readings, so most rows will read "Not measured" until gauge data is recorded. |
+| Measurements tab | "Wear analysis from repeated gauge readings" table (EnterpriseTable) plus a side drawer per tyre (SideDrawer) and a "Data checks" list of excluded/suspicious readings. Fetches the vehicle's own inspections and same-type peers on the loaded page in ONE batched query. Render-tested with mocked data. | Not seen in a real browser (390 px layout, dark/light). Fleet comparison only covers the loaded page (<=100 inspections), not the whole fleet. |
+| Position labels | Every layout key and every slot round-trips slot -> canonical code -> slot, codes are unique and have left/right mirrors, real vehicle types and asset prefixes map correctly. **Bug fixed:** the 4-wheel layouts (Pickup, Wheel loader, Skid loader) displayed the rear-right slot as `RR` instead of `RHR1` (`canonicalToSlotId` now matches an exact stored slot id first). | Checking labels against the physical tyre-position diagram on a real vehicle. |
+| Excel (per vehicle) | Row building moved to `src/lib/aiTyreInspectionExport.js`; columns, canonical + stored position, joins of several jobs, "Not measured"/"Not requested" states and file name are tested. New columns: wear rate, estimated km to limit, replace soon, uneven-wear hint. | Opening a real generated file in Excel. |
+| Damage report Excel/PDF | Row mapping, decision grouping (Accepted/Rejected/Corrected/Awaiting), one sheet per group, summary counts, PDF page and table per group, empty-group message, photo-limit note: all asserted through mocked writers. | Real PDF/Excel visual check with real signed photos; PDF thumbnails need a browser (canvas). |
+| Combined filters | `src/lib/aiTyreInspectionFilters.js` (site + date + condition + AI status + review status + chips) and the server query builder `listInspectionsForAiRegister` (country, date range, site, status, sanitized text, paging clamp) are tested, including filter-injection characters. | Running against the real database and RLS. Condition, photo, measured, AI-status and review filters still apply to the loaded page of 50, not the whole register. |
+| Performance | Heavy derivations memoized (visible rows, damage rows, readings, appendix, engine); photo URLs resolved lazily on scroll through a shared cache (dedupe, 40-minute TTL, 4 concurrent); damage report signs links with one `createSignedUrls` call per bucket per 100 photos; the reviewer-feedback table no longer pulls `exportUtils` into the page chunk; the page stays lazy-routed. | Measuring real load time and Supabase request counts in a browser. |
+| Design ratchet | Reviewer-feedback raw `<table>` (it was failing `designSystemRatchet` before this change) replaced with EnterpriseTable. Ratchet green. | |
+
+Verified here: eslint (0 errors on touched files), targeted vitest (345 tests across 19 files), `vite build`.
+
+### Rules for whoever continues
+- The engine only reads physical gauge rows. It must never be fed AI photo findings or invent a millimetre value.
+- Estimates are trend aids. Do not present a replace-soon flag as a safety certification.
+- Position display goes through `displayPositionCode(inspectionTypeHint(row), stored)`; the stored key is never rewritten.

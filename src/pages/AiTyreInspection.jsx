@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ClipboardCheck, RefreshCw, ShieldAlert, SearchCheck, Ruler, X, Image as ImageIcon, ClipboardList, AlertCircle, FileText, Download } from 'lucide-react'
-import { resolveStorageUrl } from '../lib/storageRefs'
 import { displayPositionCode, inspectionTypeHint } from '../lib/tyreBay'
 import { inspectablePhotoRefs, summarizeEvidence, normalizePositionConditions, normalizePhotographs, measurementReading } from '../lib/aiTyreInspectionDomain'
 import { buildInspectionAiAppendix, INSPECTION_AI_PRINT_STYLES } from '../lib/aiTyreInspectionReport'
@@ -15,9 +14,12 @@ import { listDataSiteOptions } from '../lib/api/sites'
 import { useAuth } from '../contexts/AuthContext'
 import { canQueueAiAnalysis, canReviewAiFinding, canBackfillAi, canViewAiFeedback, aiActionNotice } from '../lib/aiTyreInspectionRoles'
 import { shapeFeedbackRows, summarizeFeedback, feedbackExportRows, FEEDBACK_EXPORT_COLUMNS, FEEDBACK_DISCLAIMER } from '../lib/aiTyreReviewFeedback'
-import { exportToExcel } from '../lib/exportUtils'
 import { buildDamageRows, exportDamageExcel, exportDamagePdf } from '../lib/aiDamageReport'
 import { calculateTread, conditionRequiresAnalysis } from '../lib/aiTyreInspection'
+import { analyzeMeasurements, describeSeries } from '../lib/tyreMeasurementEngine'
+import { exportInspectionExcel } from '../lib/aiTyreInspectionExport'
+import { applyRegisterFilters, conditionOptions } from '../lib/aiTyreInspectionFilters'
+import LazyTyrePhoto from '../components/aiInspection/LazyTyrePhoto'
 import { readInspectionMeasurements, recordDepthMeasurement, readInspectionAnalysis, enqueueInspectionPhotos, reviewAiFinding, backfillAiInspectionRange, screenInspectionPhotos, getAiReviewFeedback } from '../lib/api/aiTyreInspection'
 
 /** Calendar day selection in Saudi Arabia; always preserve local midnight. */
@@ -79,15 +81,16 @@ function HistoricInspectionBackfill() {
   </Card>
 }
 
-/** Reviewer decisions per model/prompt. EVALUATION DATA ONLY: nothing here trains or tunes a model. */
-const pctCell=(v)=>v==null?'N/A':v+'%'
-const FEEDBACK_COLUMNS=[
-  {accessorKey:'model',header:'Model'},{accessorKey:'prompt',header:'Prompt'},{accessorKey:'jobs',header:'Jobs'},
-  {accessorKey:'reviewed',header:'Reviewed'},{accessorKey:'accepted',header:'Accepted'},{accessorKey:'rejected',header:'Rejected'},
-  {accessorKey:'corrected',header:'Corrected'},{accessorKey:'unreviewed',header:'Awaiting'},
-  {accessorKey:'acceptRate',header:'Accept %',cell:({getValue})=>pctCell(getValue())},
-  {accessorKey:'rejectRate',header:'Reject %',cell:({getValue})=>pctCell(getValue())},
+const pctCell = (v) => (v == null ? 'N/A' : v + '%')
+const feedbackColumns = [
+  { accessorKey: 'model', header: 'Model' }, { accessorKey: 'prompt', header: 'Prompt' },
+  { accessorKey: 'jobs', header: 'Jobs' }, { accessorKey: 'reviewed', header: 'Reviewed' },
+  { accessorKey: 'accepted', header: 'Accepted' }, { accessorKey: 'rejected', header: 'Rejected' },
+  { accessorKey: 'corrected', header: 'Corrected' }, { accessorKey: 'unreviewed', header: 'Awaiting' },
+  { id: 'acceptRate', header: 'Accept %', accessorFn: (r) => pctCell(r.acceptRate) },
+  { id: 'rejectRate', header: 'Reject %', accessorFn: (r) => pctCell(r.rejectRate) },
 ]
+/** Reviewer decisions per model/prompt. EVALUATION DATA ONLY: nothing here trains or tunes a model. */
 
 function ReviewFeedbackPanel() {
   const [rows,setRows]=useState(null)
@@ -102,7 +105,7 @@ function ReviewFeedbackPanel() {
     finally{setLoading(false)}
   },[from,to])
   const total=useMemo(()=>rows?summarizeFeedback(rows):null,[rows])
-  const download=()=>exportToExcel(feedbackExportRows(rows||[]),FEEDBACK_EXPORT_COLUMNS.map(([k])=>k),FEEDBACK_EXPORT_COLUMNS.map(([,h])=>h),'AI tyre reviewer feedback (evaluation data)','Reviewer feedback')
+  const download=async()=>{const {exportToExcel}=await import('../lib/exportUtils');exportToExcel(feedbackExportRows(rows||[]),FEEDBACK_EXPORT_COLUMNS.map(([k])=>k),FEEDBACK_EXPORT_COLUMNS.map(([,h])=>h),'AI tyre reviewer feedback (evaluation data)','Reviewer feedback')}
   return <Card>
     <h2 className="font-semibold">Reviewer feedback: evaluation data</h2>
     <p className="text-xs text-[var(--text-muted)] mt-1 mb-3">{FEEDBACK_DISCLAIMER}</p>
@@ -114,13 +117,9 @@ function ReviewFeedbackPanel() {
     </div>
     {error&&<p role="alert" className="text-sm text-red-500 mt-3">{error}</p>}
     {rows&&!rows.length&&<p className="text-sm text-[var(--text-muted)] mt-3">No AI jobs in this range.</p>}
-    {rows&&rows.length>0&&<div className="mt-3"><EnterpriseTable
-        columns={FEEDBACK_COLUMNS}
-        data={[...rows.map(r=>({...r,id:r.model+'|'+r.prompt})),{id:'__all',model:'All',prompt:'',jobs:total.jobs,reviewed:total.reviewed,accepted:total.accepted,rejected:total.rejected,corrected:total.corrected,unreviewed:total.unreviewed,acceptRate:total.acceptRate,rejectRate:total.rejectRate}]}
-        getRowId={(r)=>r.id}
-        enableGlobalFilter={false} enableColumnFilters={false} enableColumnVisibility={false} enableExport={false}
-        emptyMessage="No AI jobs in this range."
-      />
+    {rows&&rows.length>0&&<div className="mt-3">
+      <EnterpriseTable columns={feedbackColumns} data={rows} getRowId={(r)=>r.model+'|'+r.prompt} enableGlobalFilter={false} enableColumnFilters={false} enableColumnVisibility={false} enableExport={false} emptyMessage="No AI jobs in this range."/>
+      <p className="text-sm font-semibold mt-2">All models: {total.jobs} jobs · {total.reviewed} reviewed · {total.accepted} accepted · {total.rejected} rejected · {total.corrected} corrected · {total.unreviewed} awaiting · accept {total.acceptRate==null?'N/A':total.acceptRate+'%'} · reject {total.rejectRate==null?'N/A':total.rejectRate+'%'}</p>
       <p className="text-xs text-[var(--text-muted)] mt-2">Percentages are of reviewed findings and show N/A when nothing was reviewed. A high accept rate is not proof of accuracy; it reflects reviewer opinion only.</p></div>}
   </Card>
 }
@@ -207,19 +206,23 @@ export default function AiTyreInspection() {
         needsMeasurement:measured.filter(v=>v.status==='measurement_required').length}
     }), [rows])
   const sites = useMemo(()=>[...new Set([...siteOptions,...(siteFilter!=='all'?[siteFilter]:[])])].sort(),[siteOptions,siteFilter])
-  const conditions = useMemo(()=>[...new Set(rows.flatMap(r=>Object.values(normalizePositionConditions(r)).map(v=>v?.condition).filter(Boolean)))].sort(),[rows])
+  const conditions = useMemo(()=>conditionOptions(rows),[rows])
   const statuses = ['Scheduled','In Progress','Done','Overdue','Cancelled']
-  const visibleRecords = records.filter(r=>{
-    if(filter==='photos' && !r.photosForReview)return false
-    if(filter==='measurements' && !r.measuredCount)return false
-    if(filter==='missing' && !r.needsMeasurement)return false
-    const jobs=aiJobsByInspection[r.id]||[]
-    if(aiStatusFilter==='none' && jobs.length)return false
-    if(aiStatusFilter!=='all' && aiStatusFilter!=='none' && !jobs.some(j=>j.status===aiStatusFilter))return false
-    if(reviewFilter!=='all' && !jobs.some(j=>(j.review_status||'unreviewed')===reviewFilter))return false
-    if(conditionFilter!=='all' && !Object.values(normalizePositionConditions(r)).some(v=>v?.condition===conditionFilter))return false
-    return true
-  })
+  const visibleRecords = useMemo(()=>applyRegisterFilters(records,aiJobsByInspection,{
+    quick:filter,site:siteFilter,status:statusFilter,condition:conditionFilter,
+    aiStatus:aiStatusFilter,review:reviewFilter,dateFrom,dateTo,
+  }),[records,aiJobsByInspection,filter,siteFilter,statusFilter,conditionFilter,aiStatusFilter,reviewFilter,dateFrom,dateTo])
+  // Related inspections for the selected vehicle: its own history and same-type peers on this page.
+  const related = useMemo(()=>{
+    if(!selected)return null
+    const assetByInspection={}
+    rows.forEach(r=>{assetByInspection[r.id]=r.asset_no||''})
+    const own=rows.filter(r=>r.asset_no&&r.asset_no===selected.asset_no).map(r=>r.id)
+    const type=String(selected.vehicle_type||'').trim().toUpperCase()
+    const peers=type?rows.filter(r=>r.asset_no!==selected.asset_no&&String(r.vehicle_type||'').trim().toUpperCase()===type).map(r=>r.id):[]
+    const ids=[...new Set([selected.id,...own,...peers])].slice(0,100)
+    return {ids,assetByInspection,peerCount:peers.length}
+  },[selected,rows])
   const [reporting,setReporting]=useState(false)
   const damageRows=useMemo(()=>buildDamageRows(visibleRecords,aiJobsByInspection,(i,p)=>displayPositionCode(inspectionTypeHint(i),p)),[visibleRecords,aiJobsByInspection])
   const runReport=async(kind)=>{
@@ -279,12 +282,12 @@ export default function AiTyreInspection() {
         <div className="flex gap-2"><button type="button" className="btn-secondary" disabled={loading||page===0} onClick={()=>setPage(p=>Math.max(0,p-1))}>Previous</button><button type="button" className="btn-secondary" disabled={loading||(page+1)*PAGE_SIZE>=total} onClick={()=>setPage(p=>p+1)}>Next</button></div>
       </div>
     </Card>
-    {selected && <InspectionDetail inspection={selected} role={role} activeTab={tab} onTab={setTab} onClose={()=>setSelected(null)} />}
+    {selected && <InspectionDetail inspection={selected} related={related} role={role} activeTab={tab} onTab={setTab} onClose={()=>setSelected(null)} />}
   </div>
 }
 
 
-function InspectionDetail({ inspection, role, activeTab, onTab, onClose }) {
+function InspectionDetail({ inspection, related, role, activeTab, onTab, onClose }) {
   const mayQueue = canQueueAiAnalysis(role)
   const mayReview = canReviewAiFinding(role)
   const positionLabel = (position) => displayPositionCode(inspectionTypeHint(inspection), position)
@@ -310,7 +313,8 @@ function InspectionDetail({ inspection, role, activeTab, onTab, onClose }) {
       measuredAt:data?.measured_at || '',
     }),
   })), [conditions,inspection.id])
-  const [storedMeasurements,setStoredMeasurements]=useState([])
+  const [vehicleMeasurements,setVehicleMeasurements]=useState([])
+  const storedMeasurements=useMemo(()=>vehicleMeasurements.filter(m=>m.inspection_id===inspection.id),[vehicleMeasurements,inspection.id])
   const [analysisJobs,setAnalysisJobs]=useState([])
   const [reviewNotes,setReviewNotes]=useState({})
   const [analysisError,setAnalysisError]=useState('')
@@ -333,26 +337,11 @@ function InspectionDetail({ inspection, role, activeTab, onTab, onClose }) {
   const [measurementError,setMeasurementError]=useState('')
   const [savingMeasurement,setSavingMeasurement]=useState(false)
   const [form,setForm]=useState({position:'',source:'manual_gauge',originalMm:'',minimumMm:'',innerMm:'',centerMm:'',outerMm:'',odometerKm:'',tyreSerial:''})
-  const refreshMeasurements=useCallback(async()=>{try{setStoredMeasurements(await readInspectionMeasurements([inspection.id]));setMeasurementError('')}catch(e){setMeasurementError(toUserMessage(e,'Could not load measured depths'))}},[inspection.id])
+  const relatedIds=related?.ids?.length?related.ids:[inspection.id]
+  const relatedKey=relatedIds.join(',')
+  const refreshMeasurements=useCallback(async()=>{try{setVehicleMeasurements(await readInspectionMeasurements(relatedKey.split(',')));setMeasurementError('')}catch(e){setMeasurementError(toUserMessage(e,'Could not load measured depths'))}},[relatedKey])
   useEffect(()=>{refreshMeasurements()},[refreshMeasurements])
   const saveMeasurement=async(e)=>{e.preventDefault();setSavingMeasurement(true);setMeasurementError('');try{await recordDepthMeasurement({...form,inspectionId:inspection.id});await refreshMeasurements();setForm(f=>({...f,innerMm:'',centerMm:'',outerMm:''}))}catch(err){setMeasurementError(toUserMessage(err,'Unable to save measurement'))}finally{setSavingMeasurement(false)}}
-  const [photoUrls,setPhotoUrls]=useState({})
-  const [photoErrors,setPhotoErrors]=useState({})
-  useEffect(() => {
-    let alive=true
-    setPhotoUrls({}); setPhotoErrors({})
-    Promise.all(evidence.allPhotos.map(async item => {
-      try {
-        const url=await resolveStorageUrl(item.ref)
-        if (!alive) return
-        if (url) setPhotoUrls(v=>({...v,[item.position+':'+item.ref]:url}))
-        else setPhotoErrors(v=>({...v,[item.position+':'+item.ref]:true}))
-      } catch {
-        if (alive) setPhotoErrors(v=>({...v,[item.position+':'+item.ref]:true}))
-      }
-    }))
-    return ()=>{alive=false}
-  },[evidence])
   const tabs=[
     ['evidence','Damage evidence',ImageIcon],
     ['measurements','Tread measurements',Ruler],
@@ -367,7 +356,7 @@ function InspectionDetail({ inspection, role, activeTab, onTab, onClose }) {
     }
     return result
   },[storedMeasurements])
-  const displayedReadings=readings.map(item=>{
+  const displayedReadings=useMemo(()=>readings.map(item=>{
     const saved=latestSavedByPosition.get(item.position)
     if(!saved)return item
     return {...item,calculation:measurementReading({
@@ -376,50 +365,33 @@ function InspectionDetail({ inspection, role, activeTab, onTab, onClose }) {
       innerMm:saved.inner_mm,centerMm:saved.center_mm,outerMm:saved.outer_mm,
       source:saved.source,measuredAt:saved.measured_at,
     })}
-  })
+  }),[readings,latestSavedByPosition,inspection.id])
   const missing=displayedReadings.filter(item=>!item.calculation.valid)
   const verified=displayedReadings.filter(item=>item.calculation.valid)
-  const appendix=buildInspectionAiAppendix({inspection,jobs:analysisJobs,measurements:storedMeasurements})
-  async function exportDetailedExcel() {
-    const { exportToExcel, reportFileName, reportDateLabel } = await import('../lib/exportUtils')
-    const columns = [
-      ['vehicle','Vehicle'],['site','Site / location'],['date','Inspection date'],
-      ['inspector','Inspector'],['inspection_id','Inspection ID'],
-      ['position','Tyre position (fleet map)'],['internal_position','Stored slot ID'],
-      ['condition','Inspector condition'],['photos','Linked photograph count'],
-      ['photo_references','Photo reference(s)'],['ai_status','AI status'],
-      ['review_status','Supervisor review'],['assessable','Image assessable'],
-      ['findings','AI visible findings'],['severity','Finding severity'],
-      ['recommendation','Recommended action'],['model','AI model'],
-      ['measured_mm','Verified minimum tread mm'],['remaining_mm','Remaining usable mm'],
-      ['remaining_percent','Remaining percent'],['measurement_status','Measurement verification'],
-    ]
-    const rows = displayedReadings.map(item => {
-      const findings=analysisJobs.filter(job=>job.tyre_position===item.position)
-      const photos=evidence.allPhotos.filter(photo=>photo.position===item.position)
-      const reading=item.calculation
-      return {
-        vehicle:inspection.asset_no || '',site:inspection.site || '',
-        date:inspection.inspection_date || '',inspector:inspection.inspector || '',
-        inspection_id:inspection.id,position:positionLabel(item.position),internal_position:item.position,
-        condition:item.condition,photos:photos.length,
-        photo_references:photos.map(photo=>photo.ref).join(' | '),
-        ai_status:findings.length?findings.map(job=>job.status).join('; '):'Not requested',
-        review_status:findings.map(job=>job.review_status||'unreviewed').join('; ')||'Not reviewed',
-        assessable:findings.map(job=>job.analysis?.assessable===true?'Yes':'No').join('; '),
-        findings:findings.flatMap(job=>(job.analysis?.defects||[]).map(defect=>[defect.type,defect.description,defect.visibleEvidence].filter(Boolean).join(': '))).join(' | '),
-        severity:findings.flatMap(job=>(job.analysis?.defects||[]).map(defect=>defect.severity)).join('; '),
-        recommendation:findings.map(job=>job.analysis?.recommendation||'').filter(Boolean).join(' | '),
-        model:findings.map(job=>job.model_version||'').filter(Boolean).join('; '),
-        measured_mm:reading.valid?reading.reading.worstMm:'Not measured',
-        remaining_mm:reading.valid?reading.reading.remainingMm:'',
-        remaining_percent:reading.valid?reading.reading.remainingPercent:'',
-        measurement_status:reading.valid?'Recorded physical measurement':'Measurement required',
-      }
-    })
-    exportToExcel(rows,columns.map(([key])=>key),columns.map(([,header])=>header),
-      reportFileName('AI Tyre Inspection '+(inspection.asset_no||'vehicle'),inspection.inspection_date||'inspection',reportDateLabel()))
-  }
+  const appendix=useMemo(()=>buildInspectionAiAppendix({inspection,jobs:analysisJobs,measurements:storedMeasurements}),[inspection,analysisJobs,storedMeasurements])
+  const assetOf=useCallback(id=>related?.assetByInspection?.[id]??(id===inspection.id?inspection.asset_no||'':''),[related,inspection])
+  const engine=useMemo(()=>analyzeMeasurements(vehicleMeasurements,{assetOf}),[vehicleMeasurements,assetOf])
+  const ownAsset=inspection.asset_no||''
+  const ownSeries=useMemo(()=>engine.series.filter(x=>x.assetKey===ownAsset),[engine,ownAsset])
+  const seriesByPosition=useMemo(()=>{
+    const map=new Map()
+    for(const x of ownSeries){
+      const cur=map.get(x.position)
+      if(!cur||String(x.latest?.measuredAt||'')>String(cur.latest?.measuredAt||''))map.set(x.position,x)
+    }
+    return map
+  },[ownSeries])
+  const ownReadingIds=useMemo(()=>new Set(vehicleMeasurements.filter(m=>assetOf(m.inspection_id)===ownAsset).map(m=>m.id)),[vehicleMeasurements,assetOf,ownAsset])
+  const ownIssues=useMemo(()=>engine.issues.filter(i=>ownReadingIds.has(i.readingId)),[engine,ownReadingIds])
+  const [seriesOpen,setSeriesOpen]=useState(null)
+  const analysisRows=useMemo(()=>{
+    const known=new Set()
+    const rowsOut=[]
+    for(const x of ownSeries){known.add(x.position);rowsOut.push({id:x.key,position:x.position,series:x})}
+    for(const r of displayedReadings)if(!known.has(r.position))rowsOut.push({id:'none|'+r.position,position:r.position,series:null})
+    return rowsOut
+  },[ownSeries,displayedReadings])
+  const exportDetailedExcel=()=>exportInspectionExcel({inspection,readings:displayedReadings,analysisJobs,evidence,positionLabel,seriesByPosition})
 
   const readingColumns = useMemo(() => [
     { id: 'position', header: 'Position', accessorFn: (i) => positionLabel(i.position), cell: ({ row }) => <span className="font-semibold">{positionLabel(row.original.position)}</span> },
@@ -429,6 +401,22 @@ function InspectionDetail({ inspection, role, activeTab, onTab, onClose }) {
     { id: 'pct', header: 'Remaining %', accessorFn: (i) => (i.calculation.valid ? i.calculation.reading.remainingPercent + '%' : '-') },
     { id: 'verification', header: 'Verification', accessorFn: (i) => (i.calculation.valid ? 'Recorded measurement' : 'Measurement required') },
   ], [inspection]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const wearColumns = useMemo(() => {
+    const flagCell = (x) => !x ? 'Not measured' : x.replace.flag === null ? 'Not measured' : x.replace.flag
+      ? <span className="font-semibold text-red-500" title={x.replace.reasons.join(' ')}>Replace soon</span> : 'No'
+    return [
+      { id: 'position', header: 'Position', accessorFn: (r) => positionLabel(r.position), cell: ({ row }) => <span className="font-semibold">{positionLabel(row.original.position)}</span> },
+      { id: 'serial', header: 'Serial', accessorFn: (r) => r.series?.serial || 'Not recorded' },
+      { id: 'readings', header: 'Readings', accessorFn: (r) => r.series ? r.series.segmentReadings : 0 },
+      { id: 'depth', header: 'Latest depth', accessorFn: (r) => describeSeries(r.series).depth },
+      { id: 'rate', header: 'Wear rate', accessorFn: (r) => describeSeries(r.series).rate },
+      { id: 'km', header: 'Est. km to limit', accessorFn: (r) => describeSeries(r.series).kmLeft },
+      { id: 'days', header: 'Est. days', accessorFn: (r) => describeSeries(r.series).daysLeft },
+      { id: 'fleet', header: 'Vs fleet', accessorFn: (r) => describeSeries(r.series).fleet },
+      { id: 'flag', header: 'Replacement', accessorFn: (r) => r.series ? (r.series.replace.flag === null ? 'Not measured' : r.series.replace.flag ? 'Replace soon' : 'No') : 'Not measured', cell: ({ row }) => flagCell(row.original.series) },
+    ]
+  }, [inspection]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return <SideDrawer open onClose={onClose} size="xl" title={inspection.asset_no || 'Unknown vehicle'} closeLabel="Close details" bodyClassName="p-0">
     <div className="text-[var(--text-primary)]">
@@ -458,8 +446,7 @@ function InspectionDetail({ inspection, role, activeTab, onTab, onClose }) {
               const key=photo.position+':'+photo.ref
               return <div key={key} className="rounded-xl border border-[var(--border-dim)] overflow-hidden">
                 <div className="p-3 flex justify-between items-center"><span className="font-semibold">{positionLabel(photo.position)}</span><span className="text-xs text-[var(--text-muted)]">{photo.condition}</span></div>
-                {photoUrls[key]?<a href={photoUrls[key]} target="_blank" rel="noopener noreferrer"><img src={photoUrls[key]} className="w-full h-56 object-contain bg-[var(--panel-2)]" alt={'Tyre evidence at '+photo.position}/></a>:
-                  <div className="h-56 flex items-center justify-center text-xs text-[var(--text-muted)] bg-[var(--panel-2)]">{photoErrors[key]?'Photo unavailable. Check storage permissions.':'Resolving secure photo…'}</div>}
+                <LazyTyrePhoto photoRef={photo.ref} alt={'Tyre evidence at '+photo.position} className="w-full h-56 object-contain bg-[var(--panel-2)]"/>
                 <div className="px-3 py-2 text-xs text-[var(--text-muted)]">Image evidence only. Exact tread depth requires a gauge reading.</div>
               </div>
             })}
@@ -482,6 +469,22 @@ function InspectionDetail({ inspection, role, activeTab, onTab, onClose }) {
             enableExport={false}
             emptyMessage="No tyre positions recorded"
           />
+          <Card>
+            <div className="flex flex-wrap justify-between gap-2 mb-2"><h3 className="font-semibold">Wear analysis from repeated gauge readings</h3><span className="text-xs text-[var(--text-muted)]">{related?.peerCount?`Compared with ${related.peerCount} same-type inspection(s) on this page`:'No same-type vehicles on this page to compare'}</span></div>
+            <p className="text-xs text-[var(--text-muted)] mb-3">Uses physical gauge readings of the same tyre over time. Estimates are trend aids, not serviceability decisions. Nothing is estimated from photographs; a missing figure reads Not measured.</p>
+            <EnterpriseTable
+              columns={wearColumns}
+              data={analysisRows}
+              getRowId={(row)=>row.id}
+              onRowClick={(row)=>row.series&&setSeriesOpen(row.series)}
+              enableGlobalFilter={false}
+              enableColumnFilters={false}
+              enableColumnVisibility={false}
+              enableExport={false}
+              emptyMessage="No tyre positions recorded"
+            />
+            {ownIssues.length>0&&<details className="mt-3 rounded-lg border border-[var(--border-dim)] px-3 py-2 text-sm"><summary className="cursor-pointer font-medium">Data checks ({ownIssues.length})</summary><ul className="mt-2 space-y-1 text-xs text-[var(--text-secondary)]">{ownIssues.map((i,n)=><li key={n}><strong>{i.severity==='error'?'Excluded':'Warning'}</strong> · {positionLabel(i.position)}{i.serial?' · '+i.serial:''}: {i.message}</li>)}</ul></details>}
+          </Card>
           <Card><h3 className="font-semibold mb-3">Record a verified gauge reading</h3><form onSubmit={saveMeasurement} className="space-y-3"><div className="grid grid-cols-2 sm:grid-cols-3 gap-3">{[["position","Tyre position"],["tyreSerial","Tyre serial"],["originalMm","Original tread mm"],["minimumMm","Minimum tread mm"],["innerMm","Inner mm"],["centerMm","Centre mm"],["outerMm","Outer mm"],["odometerKm","Odometer km"]].map(([key,label])=><label key={key} className="text-xs text-[var(--text-secondary)]">{label}<input className="input w-full mt-1" required={["position","originalMm","minimumMm"].includes(key)} type={["position","tyreSerial"].includes(key)?"text":"number"} step="0.01" min="0" value={form[key]} onChange={e=>setForm(f=>({...f,[key]:e.target.value}))}/></label>)}</div><label className="text-xs text-[var(--text-secondary)]">Measurement source<select className="input w-full mt-1" value={form.source} onChange={e=>setForm(f=>({...f,source:e.target.value}))}><option value="manual_gauge">Manual physical gauge</option><option value="digital_gauge">Digital physical gauge</option><option value="calibrated_device">Calibrated measurement device</option></select></label><p className="text-xs text-[var(--text-muted)]">Provide at least one groove reading. Source and original/minimum depths must be verified.</p><button className="btn-primary" type="submit" disabled={savingMeasurement}>{savingMeasurement?"Saving…":"Save physical reading"}</button></form></Card>
           {measurementError && <p role="alert" className="text-red-500">{measurementError}</p>}
           <Card><h3 className="font-semibold mb-2">Stored physical measurement history</h3><div className="space-y-2">{storedMeasurements.map(m=><div key={m.id} className="text-sm border-b border-[var(--border-dim)] pb-2">{positionLabel(m.tyre_position)} · {m.source} · Inner {m.inner_mm??"—"} / Centre {m.center_mm??"—"} / Outer {m.outer_mm??"—"} mm · {m.measured_at}</div>)}{!storedMeasurements.length && <p className="text-sm text-[var(--text-muted)]">No physical readings submitted through this module yet.</p>}</div></Card>
@@ -502,7 +505,7 @@ function InspectionDetail({ inspection, role, activeTab, onTab, onClose }) {
             <span>Awaiting review: {analysisJobs.filter(j=>j.status==='completed' && (!j.review_status||j.review_status==='unreviewed')).length}</span>
           </div><p className="text-xs text-[var(--text-muted)] mt-1">Your decisions and reasons are retained as structured feedback for future quality evaluation. No automatic model retraining or unsafe auto-approval is performed.</p></div>
           <div className="space-y-3">{analysisJobs.map(job=><Card key={job.id}>
-            <div className="flex justify-between items-center gap-3"><h4 className="font-semibold">{positionLabel(job.tyre_position)}</h4><span className="text-xs">{job.status} · {job.review_status||'unreviewed'}</span></div>{photoUrls[job.tyre_position+':'+job.photo_ref] && <div className="mt-3"><a href={photoUrls[job.tyre_position+':'+job.photo_ref]} rel="noopener noreferrer" target="_blank" aria-label={'Inspect original tyre photo for '+job.tyre_position}><img src={photoUrls[job.tyre_position+':'+job.photo_ref]} alt={'Original tyre photo for supervisor verification at '+job.tyre_position} className="h-48 max-w-full rounded-lg border border-[var(--border-dim)] object-contain" /></a><p className="text-xs text-[var(--text-muted)] mt-1">Original photograph — enlarge and compare before review</p></div>}
+            <div className="flex justify-between items-center gap-3"><h4 className="font-semibold">{positionLabel(job.tyre_position)}</h4><span className="text-xs">{job.status} · {job.review_status||'unreviewed'}</span></div>{job.photo_ref && <div className="mt-3"><LazyTyrePhoto photoRef={job.photo_ref} alt={'Original tyre photo for supervisor verification at '+job.tyre_position} className="h-48 max-w-full rounded-lg border border-[var(--border-dim)] object-contain"/><p className="text-xs text-[var(--text-muted)] mt-1">Original photograph — enlarge and compare before review</p></div>}
             {job.analysis?<div className="mt-3 space-y-2"><p className="text-sm">{job.analysis.assessable?'Visual assessment available':(job.analysis.reason||'Image unassessable')}</p>{(job.analysis.defects||[]).map((d,i)=><p key={i} className="text-sm border-l-2 border-amber-500 pl-3">{d.type}: {d.description} ({d.severity})</p>)}<p className="text-sm text-[var(--text-secondary)]">{job.analysis.recommendation}</p></div>:<p className="text-xs text-[var(--text-muted)] mt-2">No completed visual finding available.</p>}
             {mayReview && job.status==='completed' && (!job.review_status || job.review_status==='unreviewed')&&<div className="mt-3 space-y-2"><label className="block text-xs text-[var(--text-secondary)]">Review reason / improvement feedback<textarea className="input block w-full mt-1" rows={2} placeholder="Describe the confirmed damage, false positive, blur, or missing evidence" value={reviewNotes[job.id]||''} onChange={e=>setReviewNotes(v=>({...v,[job.id]:e.target.value}))}/></label><div className="flex gap-2 flex-wrap"><button className="btn-secondary" disabled={analysisLoading} onClick={()=>decide(job,'accepted')}>Accept observation</button><button className="btn-secondary" disabled={analysisLoading} onClick={()=>decide(job,'rejected')}>Reject observation</button></div></div>}
           </Card>)}</div>
@@ -517,6 +520,25 @@ function InspectionDetail({ inspection, role, activeTab, onTab, onClose }) {
           <div className="flex gap-2 items-start rounded-md bg-[var(--panel-2)] p-3 text-xs text-[var(--text-secondary)]"><ClipboardList size={15} className="shrink-0"/> Use Inspections → Download PDF for the existing vehicle inspection report. AI observations are advisory; verified depth readings are stored separately and must not be replaced by estimated photo measurements.</div>
         </>}
       </div>
+    </div>
+    {seriesOpen&&<SeriesDrawer series={seriesOpen} label={positionLabel(seriesOpen.position)} onClose={()=>setSeriesOpen(null)}/>}
+  </SideDrawer>
+}
+function SeriesDrawer({series,label,onClose}) {
+  const d=describeSeries(series)
+  const p=series.projection
+  return <SideDrawer open onClose={onClose} size="md" title={label+(series.serial?' · '+series.serial:'')} subtitle="Physical gauge trend" closeLabel="Close wear analysis">
+    <div className="p-5 space-y-3 text-sm">
+      <div className="grid grid-cols-2 gap-3">
+        <Metric label="Latest depth" value={d.depth}/><Metric label="Remaining usable" value={d.remaining}/>
+        <Metric label="Wear rate" value={d.rate}/><Metric label="Est. km to limit" value={d.kmLeft}/>
+        <Metric label="Est. days" value={d.daysLeft}/><Metric label="Vs fleet median" value={d.fleet}/>
+      </div>
+      {series.status!=='ok'&&<p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">{series.insufficientReason}</p>}
+      {series.wear&&<p className="text-xs text-[var(--text-muted)]">Based on {series.wear.readingsUsed} readings over {series.wear.spanKm!=null?series.wear.spanKm.toLocaleString('en-US')+' km / ':''}{series.wear.spanDays} days. Confidence: <strong>{series.wear.confidence}</strong>{series.wear.implausible?' (rate looks implausibly fast; check the readings)':''}. {series.wear.band}{p?.projectedDate?' Projected to reach the limit around '+p.projectedDate+'.':''}</p>}
+      {series.replace.flag!==null&&<div><h4 className="font-semibold mb-1">Replacement planning</h4>{series.replace.reasons.length?<ul className="list-disc ml-5 text-xs space-y-1">{series.replace.reasons.map((r,i)=><li key={i}>{r}</li>)}</ul>:<p className="text-xs text-[var(--text-muted)]">No replacement trigger at the latest reading.</p>}</div>}
+      <div><h4 className="font-semibold mb-1">Wear pattern (indicative)</h4>{series.hints.length?series.hints.map(h=><p key={h.code} className="text-xs border-l-2 border-amber-500 pl-3 mb-2"><strong>{h.label}{h.persistent?' (seen in consecutive readings)':''}</strong><br/>{h.detail}</p>):<p className="text-xs text-[var(--text-muted)]">{series.latest&&series.latest.innerMm!==null&&series.latest.outerMm!==null?'No uneven wear indicated at the latest reading.':'Inner, centre and outer depths are needed to judge the wear pattern. Not measured.'}</p>}</div>
+      {p&&<p className="text-xs text-[var(--text-muted)]">{p.disclaimer}</p>}
     </div>
   </SideDrawer>
 }

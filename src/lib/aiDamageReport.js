@@ -1,6 +1,6 @@
 // AI damage report: findings segregated by supervisor decision, with the original photo.
 // Pure row building (testable) + Excel / PDF writers. Reuses the shared export engine.
-import { resolveStorageUrl } from './storageRefs'
+import { resolveStorageUrlMap } from './storageRefs'
 
 export const DECISIONS = [
   { key: 'accepted', label: 'Accepted' },
@@ -56,17 +56,25 @@ export const DAMAGE_COLUMNS = [
   ['reviewed_at', 'Reviewed on'], ['photo_link', 'Photo link (expires)'],
 ]
 
-/** Resolve signed photo URLs once per distinct ref (bounded concurrency). */
-export async function attachPhotoLinks(rows, resolve = resolveStorageUrl, concurrency = 6) {
+/**
+ * Resolve signed photo URLs once per distinct ref.
+ * Default: batched createSignedUrls (one request per bucket per 100 photos, no N+1).
+ * A custom per-ref `resolve` is still honoured (bounded concurrency) for tests/other storage.
+ */
+export async function attachPhotoLinks(rows, resolve, concurrency = 6) {
   const refs = [...new Set(rows.map(r => r.photo_ref).filter(Boolean))]
-  const urls = {}
-  let i = 0
-  await Promise.all(Array.from({ length: Math.min(concurrency, refs.length) }, async () => {
-    while (i < refs.length) {
-      const ref = refs[i++]
-      try { urls[ref] = await resolve(ref) } catch { urls[ref] = null }
-    }
-  }))
+  let urls = {}
+  if (typeof resolve === 'function') {
+    let i = 0
+    await Promise.all(Array.from({ length: Math.min(concurrency, refs.length) }, async () => {
+      while (i < refs.length) {
+        const ref = refs[i++]
+        try { urls[ref] = await resolve(ref) } catch { urls[ref] = null }
+      }
+    }))
+  } else {
+    try { urls = await resolveStorageUrlMap(refs) } catch { urls = {} }
+  }
   return rows.map(r => ({ ...r, photo_url: urls[r.photo_ref] || '', photo_link: urls[r.photo_ref] || 'Not available' }))
 }
 

@@ -13,6 +13,12 @@ describe('workforce intelligence',()=>{
     expect(summarizeWorkday({shift_start:start,shift_end:end,activities:[a('08:00','10:00','productive'),a('09:00','11:00','reporting')]}).valid).toBe(false)
     expect(summarizeWorkday({shift_start:start,shift_end:end,activities:[a('09:00','10:00','blocked')]}).valid).toBe(false)
   })
+  it('does not subtract scheduled and recorded breaks twice',()=>{
+    const r=summarizeWorkday({shift_start:start,shift_end:end,excluded_break_minutes:60,activities:[a('08:00','12:00','productive'),a('12:00','13:00','break'),a('13:00','16:00','productive')]})
+    expect(r.valid).toBe(true)
+    expect(r.available_minutes).toBe(420)
+    expect(r.utilization_pct).toBe(100)
+  })
   it('does not treat verified external delays as worker inefficiency',()=>{
     const r=estimateWork({quantity:5,standard_minutes:30,verified_external_delay_minutes:30,actual_elapsed_minutes:180,standard_approved:true})
     expect(r.effort_minutes).toBe(150);expect(r.unexplained_variance_minutes).toBe(0)

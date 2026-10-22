@@ -21,3 +21,18 @@ export async function setWorkStatus(id,status){
  if(!['assigned','acknowledged','in_progress','blocked','submitted','verified','cancelled'].includes(status))throw new ServiceError('Invalid work status')
  return unwrap(await supabase.from('workforce_assignments').update({status}).eq('id',id).select(COLUMNS).single())
 }
+
+export async function listWorkDependencies() {
+ return unwrap(await supabase.from('workforce_dependencies').select('id,predecessor_id,successor_id,created_at').order('created_at',{ascending:false}).limit(500))
+}
+export async function addWorkDependency(predecessor_id,successor_id) {
+ if(!predecessor_id||!successor_id||predecessor_id===successor_id) throw new ServiceError('Choose two different assignments')
+ return unwrap(await supabase.from('workforce_dependencies').insert({predecessor_id,successor_id}).select('id,predecessor_id,successor_id').single())
+}
+export async function listWorkStandards() {
+ return unwrap(await supabase.from('workforce_work_standards').select('id,work_type,role_name,unit_name,minutes_per_unit,sample_count,confidence,approved_at').order('work_type').limit(500))
+}
+export async function addWorkStandard({work_type,role_name,minutes_per_unit,unit_name='unit'}) {
+ if(!work_type?.trim()||!(Number(minutes_per_unit)>0)) throw new ServiceError('Valid standard and time required')
+ return unwrap(await supabase.from('workforce_work_standards').insert({work_type:work_type.trim(),role_name:role_name||null,unit_name,minutes_per_unit:Number(minutes_per_unit),confidence:'provisional'}).select().single())
+}

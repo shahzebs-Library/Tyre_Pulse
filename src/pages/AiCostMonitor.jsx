@@ -202,9 +202,9 @@ export default function AiCostMonitor() {
       accessorFn: row => rowCost(row, pricing),
       size: 100,
       meta: { align: 'right' },
-      cell: ({ row, getValue }) => (isSuccessRow(row.original)
+      cell: ({ row, getValue }) => (isSuccessRow(row.original) || row.original.cost_usd != null
         ? <span className="text-[var(--text-primary)] font-medium tabular-nums">{formatUSD(getValue())}</span>
-        : <span className="text-[var(--text-muted)] text-xs">Not billed</span>),
+        : <span className="text-[var(--text-muted)] text-xs">Unknown cost</span>),
     },
     { id: 'site', header: 'Site', accessorFn: row => row.site ?? 'N/A', size: 110 },
     {
@@ -233,6 +233,11 @@ export default function AiCostMonitor() {
           </div>
         )}
       />
+
+      {report.failedChargedCost > 0 && <div role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+        <strong>Failed model calls also incurred estimated charges:</strong> {formatUSD(report.failedChargedCost)} and {formatTokens(report.failedChargedTokens)} tokens.
+        These are included in total spend; unknown-cost failures are not assumed free.
+      </div>}
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">

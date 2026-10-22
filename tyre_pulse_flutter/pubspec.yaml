@@ -55,6 +55,7 @@ dependencies:
   # signature is a real drawing surface exporting both a PNG and raw stroke
   # points - see `inspection_signature_pad.dart` for why both are kept.
   image_picker: ^1.1.2
+  file_picker: 13.1.0
   geolocator: ^13.0.1
   signature: ^5.5.0
   # Live QR/barcode camera scanning. Manual entry remains available and both

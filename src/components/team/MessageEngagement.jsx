@@ -13,7 +13,7 @@ export default function MessageEngagement({ history = [] }) {
   const [refresh, setRefresh] = useState(0)
   const selected = history.find((h) => h.id === messageId)
   useEffect(() => {
-    if (!messageId) { setReceipts([]); setReplies([]); setPushEvents([]); setPushEvents([]); return }
+    if (!messageId) { setReceipts([]); setReplies([]); setPushEvents([]); return }
     let active = true
     setLoading(true); setError('')
     Promise.all([
@@ -32,7 +32,7 @@ export default function MessageEngagement({ history = [] }) {
       setReceipts(r.data || [])
       setReplies(m.data || [])
       setPushEvents(p.data || [])
-    }).catch((e) => { if (active) { setError(toUserMessage(e, 'Could not load message engagement.')); setReceipts([]); setReplies([]) } })
+    }).catch((e) => { if (active) { setError(toUserMessage(e, 'Could not load message engagement.')); setReceipts([]); setReplies([]); setPushEvents([]) } })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [messageId, refresh])

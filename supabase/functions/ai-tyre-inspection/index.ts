@@ -84,7 +84,7 @@ function eligibleEvidence(inspection: Json) {
     const condition = str(data.condition || data.status, 120);
     if (!eligibleCondition(condition)) continue;
     const seen = new Set<string>();
-    for (const ref of [...photos(data.photo), ...photos(data.photos), ...photos(data.photo_refs)]) {
+    for (const ref of [...photos(data.photo_url), ...photos(data.photo), ...photos(data.photos), ...photos(data.photo_refs)]) {
       if (!parsedStorage(ref) || seen.has(ref)) continue;
       seen.add(ref);
       result.push({ position: position.slice(0,80), ref, condition });

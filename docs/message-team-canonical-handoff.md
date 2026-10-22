@@ -60,5 +60,10 @@ Branch `feature/message-team-audience-ux-20261022` from `main`; **do not merge u
 4. Review tests and keep the PR mergeable; use CI logs, not guessed results. Write exact failures and fixes here.
 5. Merge to `main` only once requested acceptance is met or explicitly approved despite clearly stated blockers. Update this document after each release.
 
+## Final integration checkpoint (2026-10-22)
+- PR #435 has web selector code and message-recipient safeguards; run web lint/tests/build and review failures before merge.
+- User explicitly authorizes merging after completion and asks for updates to this *same* repository handoff document. Preserve this document in any subsequent updates; do not create another independent status file.
+- Device/APNs work remains owner-managed and is not an acceptance criterion for the web-only PR #435.
+
 ## Merge overview at this checkpoint
 Earlier code PRs #426/#428/#431/#433: merged based on previous GitHub checks and discussion. **PR #435 is pending**, includes new audience UI work; no claim of passing CI or production acceptance at this checkpoint.

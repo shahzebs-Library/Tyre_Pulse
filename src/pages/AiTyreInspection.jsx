@@ -80,6 +80,15 @@ function HistoricInspectionBackfill() {
 }
 
 /** Reviewer decisions per model/prompt. EVALUATION DATA ONLY: nothing here trains or tunes a model. */
+const pctCell=(v)=>v==null?'N/A':v+'%'
+const FEEDBACK_COLUMNS=[
+  {accessorKey:'model',header:'Model'},{accessorKey:'prompt',header:'Prompt'},{accessorKey:'jobs',header:'Jobs'},
+  {accessorKey:'reviewed',header:'Reviewed'},{accessorKey:'accepted',header:'Accepted'},{accessorKey:'rejected',header:'Rejected'},
+  {accessorKey:'corrected',header:'Corrected'},{accessorKey:'unreviewed',header:'Awaiting'},
+  {accessorKey:'acceptRate',header:'Accept %',cell:({getValue})=>pctCell(getValue())},
+  {accessorKey:'rejectRate',header:'Reject %',cell:({getValue})=>pctCell(getValue())},
+]
+
 function ReviewFeedbackPanel() {
   const [rows,setRows]=useState(null)
   const [loading,setLoading]=useState(false)
@@ -105,9 +114,13 @@ function ReviewFeedbackPanel() {
     </div>
     {error&&<p role="alert" className="text-sm text-red-500 mt-3">{error}</p>}
     {rows&&!rows.length&&<p className="text-sm text-[var(--text-muted)] mt-3">No AI jobs in this range.</p>}
-    {rows&&rows.length>0&&<div className="overflow-x-auto mt-3"><table className="w-full text-sm"><thead><tr className="text-left text-xs text-[var(--text-muted)]">{['Model','Prompt','Jobs','Reviewed','Accepted','Rejected','Corrected','Awaiting','Accept %','Reject %'].map(h=><th key={h} className="p-2">{h}</th>)}</tr></thead>
-      <tbody>{rows.map(r=><tr key={r.model+'|'+r.prompt} className="border-t border-[var(--border-dim)]"><td className="p-2">{r.model}</td><td className="p-2">{r.prompt}</td><td className="p-2">{r.jobs}</td><td className="p-2">{r.reviewed}</td><td className="p-2">{r.accepted}</td><td className="p-2">{r.rejected}</td><td className="p-2">{r.corrected}</td><td className="p-2">{r.unreviewed}</td><td className="p-2">{r.acceptRate==null?'N/A':r.acceptRate+'%'}</td><td className="p-2">{r.rejectRate==null?'N/A':r.rejectRate+'%'}</td></tr>)}
-      <tr className="border-t-2 border-[var(--border-dim)] font-semibold"><td className="p-2" colSpan={2}>All</td><td className="p-2">{total.jobs}</td><td className="p-2">{total.reviewed}</td><td className="p-2">{total.accepted}</td><td className="p-2">{total.rejected}</td><td className="p-2">{total.corrected}</td><td className="p-2">{total.unreviewed}</td><td className="p-2">{total.acceptRate==null?'N/A':total.acceptRate+'%'}</td><td className="p-2">{total.rejectRate==null?'N/A':total.rejectRate+'%'}</td></tr></tbody></table>
+    {rows&&rows.length>0&&<div className="mt-3"><EnterpriseTable
+        columns={FEEDBACK_COLUMNS}
+        data={[...rows.map(r=>({...r,id:r.model+'|'+r.prompt})),{id:'__all',model:'All',prompt:'',jobs:total.jobs,reviewed:total.reviewed,accepted:total.accepted,rejected:total.rejected,corrected:total.corrected,unreviewed:total.unreviewed,acceptRate:total.acceptRate,rejectRate:total.rejectRate}]}
+        getRowId={(r)=>r.id}
+        enableGlobalFilter={false} enableColumnFilters={false} enableColumnVisibility={false} enableExport={false}
+        emptyMessage="No AI jobs in this range."
+      />
       <p className="text-xs text-[var(--text-muted)] mt-2">Percentages are of reviewed findings and show N/A when nothing was reviewed. A high accept rate is not proof of accuracy; it reflects reviewer opinion only.</p></div>}
   </Card>
 }

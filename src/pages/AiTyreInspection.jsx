@@ -41,13 +41,13 @@ export default function AiTyreInspection() {
         needsMeasurement:measured.filter(v=>v.status==='measurement_required').length}
     }), [rows,search])
   const columns = [
-    { key:'inspection_date', header:'Date', render:r=>r.inspection_date||'Not recorded' },
-    { key:'asset_no', header:'Vehicle', render:r=>r.asset_no||'Not recorded' },
-    { key:'site', header:'Site', render:r=>r.site||'Not recorded' },
-    { key:'photosForReview', header:'Defect photos', render:r=>r.photosForReview },
-    { key:'measuredCount', header:'Measured positions', render:r=>r.measuredCount },
-    { key:'needsMeasurement', header:'Measurements missing', render:r=>r.needsMeasurement },
-    { key:'status', header:'Inspection status', render:r=>r.status||'Unknown' },
+    { accessorKey:'inspection_date', header:'Date', cell:({row:{original:r}})=>r.inspection_date||'Not recorded' },
+    { accessorKey:'asset_no', header:'Vehicle', cell:({row:{original:r}})=>r.asset_no||'Not recorded' },
+    { accessorKey:'site', header:'Site', cell:({row:{original:r}})=>r.site||'Not recorded' },
+    { accessorKey:'photosForReview', header:'Defect photos', cell:({row:{original:r}})=>r.photosForReview },
+    { accessorKey:'measuredCount', header:'Measured positions', cell:({row:{original:r}})=>r.measuredCount },
+    { accessorKey:'needsMeasurement', header:'Measurements missing', cell:({row:{original:r}})=>r.needsMeasurement },
+    { accessorKey:'status', header:'Inspection status', cell:({row:{original:r}})=>r.status||'Unknown' },
   ]
   return <div className="space-y-4">
     <PageHeader title="AI Tyre Inspection" subtitle="Verified measurements and defect evidence. AI processing will appear only when the secure background service is configured." icon={ScanSearch} />

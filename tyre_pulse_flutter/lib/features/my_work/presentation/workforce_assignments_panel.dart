@@ -1,24 +1,20 @@
-/// Company assignments in the existing My Work screen.
-///
-/// Changes are sent online; failed writes never pretend to be queued.
+/// The new company-assignment lane in the existing My Work screen.
+/// Server-dependent status decisions are online-only and never silently queued.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
+import 'package:tyre_pulse/features/my_work/data/workforce_assignments_repository.dart';
+
+final workforceAssignmentsRepositoryProvider =
+    Provider<WorkforceAssignmentsRepository>((ref) {
+  return WorkforceAssignmentsRepository(ref.watch(supabaseClientProvider));
+});
 
 final workforceAssignmentsProvider =
-    FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
-  final client = ref.read(supabaseClientProvider);
-  final id = client.auth.currentUser?.id;
-  if (id == null) throw StateError('Not signed in');
-  final rows = await client
-      .from('workforce_assignments')
-      .select('id,title,instructions,site,status,priority,due_at')
-      .eq('assigned_to', id)
-      .order('created_at', ascending: false)
-      .limit(100);
-  return List<Map<String, dynamic>>.from(rows);
+    FutureProvider.autoDispose<List<WorkforceAssignment>>((ref) async {
+  return ref.read(workforceAssignmentsRepositoryProvider).listMine();
 });
 
 class WorkforceAssignmentsPanel extends ConsumerWidget {
@@ -55,22 +51,12 @@ class WorkforceAssignmentsPanel extends ConsumerWidget {
                   ? const Text('No company assignments recorded.')
                   : Column(
                       children: items.map((item) {
-                        final status =
-                            item['status']?.toString() ?? 'assigned';
-                        final next = switch (status) {
-                          'assigned' => 'acknowledged',
-                          'acknowledged' => 'in_progress',
-                          'in_progress' => 'submitted',
-                          'blocked' => 'in_progress',
-                          _ => null,
-                        };
+                        final next = item.nextAction;
                         return ListTile(
-                          title: Text(
-                            item['title']?.toString() ??
-                                'Untitled assignment',
-                          ),
+                          title: Text(item.title),
                           subtitle: Text(
-                            "${item['site'] ?? 'Site unspecified'} · $status · ${item['priority'] ?? 'normal'}",
+                            '${item.site ?? 'Site unspecified'} · '
+                            '${item.status} · ${item.priority}',
                           ),
                           trailing: next == null
                               ? null
@@ -78,23 +64,17 @@ class WorkforceAssignmentsPanel extends ConsumerWidget {
                                   onPressed: () async {
                                     try {
                                       await ref
-                                          .read(supabaseClientProvider)
-                                          .from('workforce_assignments')
-                                          .update({'status': next}).eq(
-                                        'id',
-                                        item['id'],
-                                      );
+                                          .read(workforceAssignmentsRepositoryProvider)
+                                          .advance(item);
                                       ref.invalidate(
                                         workforceAssignmentsProvider,
                                       );
                                     } catch (_) {
                                       if (context.mounted) {
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
+                                        ScaffoldMessenger.of(context).showSnackBar(
                                           const SnackBar(
                                             content: Text(
-                                              'Update was not sent. Reconnect and retry.',
+                                              'Update not confirmed. Reconnect and refresh.',
                                             ),
                                           ),
                                         );

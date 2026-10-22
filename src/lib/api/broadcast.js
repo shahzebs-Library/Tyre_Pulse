@@ -19,6 +19,8 @@
  */
 import { supabase, fetchAllPages, isNotProvisioned, ServiceError, toServiceError } from './_client'
 import { toUserMessage } from '../safeError'
+import { listSiteAliases } from './workshopStatus'
+import { listCustomRoles } from './customRoles'
 
 const COLS = 'id,title,body,title_ar,body_ar,target_roles,target_countries,target_sites,'
   + 'send_push,status,recipient_count,push_count,sent_at,created_at'
@@ -91,6 +93,41 @@ export async function sendBroadcast({
     recipients: Number(data?.recipients) || 0,
     pushes_queued: Number(data?.pushes_queued) || 0,
   }
+}
+
+const PROFILE_COLS = 'id,full_name,username,employee_id,role,site,sites,country,approved,locked,org_id,organisation_id'
+const SITE_COLS = 'id,name,country,active,organisation_id'
+
+/**
+ * Everything the audience pickers are built from, read once: eligible people,
+ * the organisation's custom roles, registered sites and the site alias table.
+ *
+ * Nothing here is a static list. Each part fails on its own and is reported in
+ * `errors` so the page can say which picker is incomplete instead of silently
+ * offering a short list. A truncated people read counts as a failure: a partial
+ * role list would hide roles that really exist.
+ *
+ * @returns {Promise<{profiles:object[],customRoles:object[],sites:object[],aliases:Map,errors:string[]}>}
+ */
+export async function loadAudienceDirectory() {
+  const errors = []
+  const paged = async (label, build) => {
+    try {
+      const res = await fetchAllPages(build, { max: 20000 })
+      if (res.error || res.truncated) { errors.push(label); return [] }
+      return res.data || []
+    } catch { errors.push(label); return [] }
+  }
+  const [profiles, sites, customRoles, aliases] = await Promise.all([
+    paged('people', (from, to) => supabase.from('profiles').select(PROFILE_COLS)
+      .eq('approved', true).eq('locked', false)
+      .order('id', { ascending: true }).range(from, to)),
+    paged('sites', (from, to) => supabase.from('sites').select(SITE_COLS)
+      .order('id', { ascending: true }).range(from, to)),
+    listCustomRoles().catch(() => { errors.push('custom roles'); return [] }),
+    listSiteAliases().catch(() => { errors.push('site aliases'); return new Map() }),
+  ])
+  return { profiles, sites, customRoles, aliases, errors: [...new Set(errors)] }
 }
 
 /** Hard ceiling for the sent-message history read. */

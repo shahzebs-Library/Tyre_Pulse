@@ -75,3 +75,87 @@ Commits `49d1412c`, `c0f8f013` on `main` added combinations of vehicle/site sear
 - Commit `099afcc5`: converted the long capture guide and manager-only historical backfill into collapsed optional sections; added human review quality summary (accepted/rejected/unreviewed), reviewer reason textarea, and persisted review note with the decision. These reasons are durable supervised feedback for *future evaluation*, not automatic online model weight updates.
 - Existing detailed **Download full AI inspection Excel** per vehicle remains available. No new separate reporting dashboard was created.
 - **Pending**: browser login as Sajid to confirm actual RLS read; role-specific UI hiding of actions the Edge Function refuses; test reviewer decisions and Excel export; live Vercel build checks; aggregate feedback outcomes for prompt evaluation and expert-confirmed training dataset. Do not claim continuous learning or autonomous model retraining until that controlled evaluation pipeline exists.
+
+## 2026-10-23 — Hardening pass (branch `feature/ai-inspection-hardening-20261022`): code-done vs still needs live validation
+
+**Nothing below has been applied to the live database, deployed as an edge function, or exercised in a browser or with real photos.** Distinguish *committed in the branch* from *deployed* from *validated*.
+
+### Code-done and covered by automated tests (committed in branch only)
+
+| Handover item | What changed | Evidence |
+|---|---|---|
+| P1-6 automated tests: malformed provider output, token/cost logging, unknown-vs-zero cost, spending ceiling, no second paid retry, failed-cost aggregation, tenant/role refusal | Worker job logic extracted to `supabase/functions/ai-tyre-inspection/logic.ts` (pure, no Deno globals) so it is testable; `index.ts` wires real Supabase/provider dependencies. | `src/test/aiTyreWorker.test.js` (28 tests, injected fakes), `src/test/aiCostMonitorAnalytics.test.js` (failed-cost aggregation, unknown-cost failures), `logic.ts` passes `tsc --strict` |
+| P1-7 account for ALL provider attempts incl. non-JSON errors and timeouts | Each attempt is recorded before the request (`provider_attempts`, `provider_called_at`). Timeout, HTTP error, non-JSON body and malformed output all become `failed` jobs with `failure_kind`, an `ai_token_logs` error row, and a budget settlement. When usage is not returned the cost stays **NULL (unknown), never 0**, and the budget is charged the reservation. | worker tests above |
+| P1-7 atomic concurrency-safe daily budget | Migration `20261023090000_ai_tyre_budget_reservation_and_feedback.sql` (NOT APPLIED): `ai_tyre_daily_budget`, `ai_tyre_reserve_budget` (conditional UPDATE under the day row lock; one reservation per job), `ai_tyre_settle_budget` (exactly once), `ai_tyre_fail_stale_processing` (stalled locks fail for manual review, never retry). Service-role only. The worker **fails closed**: no reservation, no paid call. | `supabase/tests/ai_tyre_budget_reservation.test.mjs` runs the real migration in PGlite (5 tests). PGlite is single-connection, so true multi-connection contention is **not** proven; see live checks. |
+| P1 UI matches backend role gates | `src/lib/aiTyreInspectionRoles.js` mirrors the edge-function role lists (parity test fails on drift). Queue/screen buttons are disabled, review controls and the historic-backfill section are hidden, and a notice explains read-only access. Tyre Data Collector (Sajid-style) can open the page and read results but cannot queue, review or backfill. | `aiTyreWorker.test.js` (role matrix, parity), `aiTyreReviewFeedback.test.js` (page wiring scan) |
+| Server-side date/site query + pagination for the register | `listInspectionsForAiRegister` (in `src/lib/api/inspections.js`): date range, site, status and vehicle/site text are applied in the database with an exact total and 50-row pages (stable `inspection_date desc, id` order). The fixed latest-200 window is gone. Site list comes from `reference_site_options`. | `aiTyreReviewFeedback.test.js` |
+| Reviewer-feedback aggregate | RPC `get_ai_tyre_review_feedback(from,to)` (SECURITY INVOKER, supervisor roles, tenant scoped by existing RLS) plus an "evaluation data" panel with Excel download. Counts accepted/rejected/corrected per model and prompt version (worker now stamps `prompt_version = tyre-photo-v1`). Rates are of reviewed findings and show N/A when nothing was reviewed. **Labelled evaluation data only; nothing is trained, tuned or fed back automatically.** | PGlite test + `aiTyreReviewFeedback.test.js` |
+
+### Behaviour changes to be aware of
+- The daily ceiling is now a **reservation** (`AI_RESERVE_USD_PER_CALL`, default $0.01 per call, `AI_DAILY_LIMIT_USD` default $1/day, UTC day, global not per tenant). A job that cannot reserve is returned to `pending` un-attempted and the run stops. An actual cost above the reservation is still booked, so the limit is "effectively hard for the worker", not a provider-side billing cap. Unknown-usage attempts are booked at the reservation amount.
+- Stalled `processing` jobs (>15 min) are failed for manual review at the start of each worker run because the provider may already have been billed.
+- Register filters for photos, measured positions, tyre condition, AI job status and review status still apply to the loaded 50-row page only (they depend on per-position JSON or job rows).
+- Role comparison in the edge function is now case-insensitive for every action (lists unchanged). `PMV Manager` may backfill but not queue or review, as before.
+- `Failed model calls with unknown cost` is a separate notice in AI Cost Monitor; those calls are not counted as free and not guessed.
+
+### Deploy order (when the owner approves)
+1. Review and apply the migration (`database-migration-safety`; pre-flight is in the file header, rollback included).
+2. Deploy the edge function (`index.ts` + `logic.ts`; `index.ts` could not be type-checked here because Deno is not installed, only syntax-checked with esbuild). Deploying the function before the migration makes the worker defer every job.
+3. Deploy the web build.
+
+### Still NOT done / needs live, browser or photo validation
+- **P0 real photograph validation** by an authorised supervisor, with expert adjudication. Untouched by this pass.
+- **P0 live failed-charge metering** after a real malformed response, comparing `ai_tyre_inspection_jobs`, `ai_token_logs`, `ai_tyre_daily_budget` and the provider invoice.
+- **P0 cron HTTP 200, stalled-lock reaping and queue drain** against the live project, and a multi-connection concurrency test of `ai_tyre_reserve_budget`.
+- **P0 tenant/role security test** as real users (including Sajid) through the deployed function and RLS; the new tests only prove the role lists and source-level tenant checks.
+- **P1 deployment and rendering** (Vercel build, console errors, dark/light UI, 390px layout of the new register footer and feedback panel). No browser run was possible here.
+- Continuous learning/model improvement is **not** implemented. The feedback aggregate is evaluation data for a future, expert-confirmed process only.
+
+## 2026-10-22 — Measurement engine, correctness tests and performance (branch `feature/ai-engine-advanced-20261023`)
+
+Code only. No migration, no edge function change (`supabase/functions/ai-tyre-inspection/index.ts` untouched), no live DB, no browser.
+
+### Code done vs needs live
+
+| Area | Code done and unit-tested here | Needs live / real data / browser |
+|---|---|---|
+| Measurement engine `src/lib/tyreMeasurementEngine.js` | Reading validation (impossible depth, future date, bad limits/odometer, duplicates, same-instant conflicts); per tyre series (asset + position + serial); wear rate mm/1000 km (mm/day when no odometer); remaining km/days with 90% band (3+ readings; 2 readings give a point estimate flagged low confidence); new series when depth rises (replaced/retreaded); odometer regression ignored; inner/centre/outer hints (alignment, under/over-inflation, marked indicative); replace-soon flag (uses the conservative end of the band); leave-one-out comparison with the median of other vehicles. Everything is `null`/"Not measured" when data is insufficient. 30 tests. | The thresholds in `ENGINE_LIMITS` (wear-rate ceiling 4 mm/1000 km, 2 mm shoulder gap, 1.5 mm centre gap, replace margin 1.5 mm / 10,000 km / 30 days) are engineering defaults, **not calibrated against this fleet**. A tyre/fleet engineer must confirm them against real gauge history before anyone acts on a flag. `ai_tyre_depth_measurements` currently holds few or no repeated readings, so most rows will read "Not measured" until gauge data is recorded. |
+| Measurements tab | "Wear analysis from repeated gauge readings" table (EnterpriseTable) plus a side drawer per tyre (SideDrawer) and a "Data checks" list of excluded/suspicious readings. Fetches the vehicle's own inspections and same-type peers on the loaded page in ONE batched query. Render-tested with mocked data. | Not seen in a real browser (390 px layout, dark/light). Fleet comparison only covers the loaded page (<=100 inspections), not the whole fleet. |
+| Position labels | Every layout key and every slot round-trips slot -> canonical code -> slot, codes are unique and have left/right mirrors, real vehicle types and asset prefixes map correctly. **Bug fixed:** the 4-wheel layouts (Pickup, Wheel loader, Skid loader) displayed the rear-right slot as `RR` instead of `RHR1` (`canonicalToSlotId` now matches an exact stored slot id first). | Checking labels against the physical tyre-position diagram on a real vehicle. |
+| Excel (per vehicle) | Row building moved to `src/lib/aiTyreInspectionExport.js`; columns, canonical + stored position, joins of several jobs, "Not measured"/"Not requested" states and file name are tested. New columns: wear rate, estimated km to limit, replace soon, uneven-wear hint. | Opening a real generated file in Excel. |
+| Damage report Excel/PDF | Row mapping, decision grouping (Accepted/Rejected/Corrected/Awaiting), one sheet per group, summary counts, PDF page and table per group, empty-group message, photo-limit note: all asserted through mocked writers. | Real PDF/Excel visual check with real signed photos; PDF thumbnails need a browser (canvas). |
+| Combined filters | `src/lib/aiTyreInspectionFilters.js` (site + date + condition + AI status + review status + chips) and the server query builder `listInspectionsForAiRegister` (country, date range, site, status, sanitized text, paging clamp) are tested, including filter-injection characters. | Running against the real database and RLS. Condition, photo, measured, AI-status and review filters still apply to the loaded page of 50, not the whole register. |
+| Performance | Heavy derivations memoized (visible rows, damage rows, readings, appendix, engine); photo URLs resolved lazily on scroll through a shared cache (dedupe, 40-minute TTL, 4 concurrent); damage report signs links with one `createSignedUrls` call per bucket per 100 photos; the reviewer-feedback table no longer pulls `exportUtils` into the page chunk; the page stays lazy-routed. | Measuring real load time and Supabase request counts in a browser. |
+| Design ratchet | Reviewer-feedback raw `<table>` (it was failing `designSystemRatchet` before this change) replaced with EnterpriseTable. Ratchet green. | |
+
+Verified here: eslint (0 errors on touched files), targeted vitest (345 tests across 19 files), `vite build`.
+
+### Rules for whoever continues
+- The engine only reads physical gauge rows. It must never be fed AI photo findings or invent a millimetre value.
+- Estimates are trend aids. Do not present a replace-soon flag as a safety certification.
+- Position display goes through `displayPositionCode(inspectionTypeHint(row), stored)`; the stored key is never rewritten.
+
+## 2026-10-23 — Spec completion pass (branch `feature/spec-completion-20261023`): FINAL honest status table
+
+Nothing here is applied to the live database, deployed as an edge function, or seen in a browser. "Code-done" means committed, covered by the named automated test, and lint/ratchet/build checked locally.
+
+| Item | Status | Where | Evidence |
+|---|---|---|---|
+| P0 queue draining | **Code-done** (was PARTIAL: one batch of 4 per 5-minute tick) | `drainQueue` in `supabase/functions/ai-tyre-inspection/logic.ts`, wired in `index.ts` `work()` (reaper first, claim-before-process, 4 per batch, max 10 batches, 90 s wall budget) | `src/test/aiTyreDrain.test.js` (9): 18-job backlog in one run, batch cap, budget deferral stops the run, time budget, failed/prior-attempt never reprocessed, lost claims never spin, queue error |
+| P0 failed-token billing | Code-done (earlier pass) | `processJob` in `logic.ts` | `aiTyreWorker.test.js`; `aiCostMonitorAnalytics.test.js` |
+| P0 supervisor review tests | Code-done (earlier pass) | role lists + parity in `aiTyreInspectionRoles.js` | `aiTyreWorker.test.js` role/tenant block |
+| PDF findings | Code-done (earlier pass) | `aiDamageReport.js`, `aiTyreInspectionReport.js` | `aiTyreInspectionReport.test.js`, damage report tests |
+| P1 position labels | Code-done (earlier pass) | `displayPositionCode` | `aiTyrePositionLabels.test.js` |
+| P1 Excel report | Code-done (earlier pass) | `aiTyreInspectionExport.js` | `aiTyreInspectionExport.test.js` |
+| P1 filters over the whole register | **Code-done** (was PARTIAL: condition, photo, AI-status, review filters only covered the loaded 50-row page) | Migration `20261023100000_ai_tyre_register_server_filters_and_labelled_findings.sql` (`ai_tyre_register_page`, SECURITY INVOKER, exact total, stable paging); client `listAiRegisterFiltered` in `src/lib/api/inspections.js`; page passes all filters | `supabase/tests/ai_tyre_register_filters.test.mjs` (PGlite, real SQL, 7 tests), `src/test/aiTyreRegisterDeepFilters.test.js` (5) |
+| P1 cost-monitor blank screen | **Code-done** (loading skeleton, error with Retry, empty message already existed; now locked by tests) | `src/pages/AiCostMonitor.jsx` | `src/test/aiCostMonitor.render.test.jsx` (5): loading, error + Retry with no raw DB text, zero rows, null cost/missing date/unknown status rows, payload without rows |
+| P1 E2E-style tests | Code-done | worker harness, drain harness, PGlite SQL tests, page render tests | listed above |
+| P2 learning pipeline | **Code-done as an evaluation pipeline** (was PARTIAL: aggregate only) | RPC `get_ai_tyre_labelled_findings` (supervisor roles, INVOKER); `shapeLabelledFindings`, `labelledJsonl`, `labelledExportRows` in `aiTyreReviewFeedback.js`; Excel and JSONL download in the reviewer-feedback panel | `src/test/aiTyreLabelledFindings.test.js` (6), PGlite test for the RPC and its role gate. **No model is retrained, tuned or re-prompted automatically.** |
+| Measured / missing-measurement chips beyond the loaded page | **Still page-level** | depends on gauge maths (`calculateTread`) on per-position JSON | stated in the page text; not a requested filter |
+
+### Needs live DB / deploy / device / owner (cannot be closed in code)
+1. Apply migrations `20261023090000_ai_tyre_budget_reservation_and_feedback.sql` then `20261023100000_ai_tyre_register_server_filters_and_labelled_findings.sql` (pre-flight and rollback are in each header). **The web register and the feedback panel call the new RPCs; apply the migration BEFORE shipping the web build, or condition/photo/AI/review filters and labelled export show an error.** Deploy the edge function after `20261023090000`.
+2. Edge function `index.ts` and `logic.ts` deploy; Deno type-check (Deno not installed here; esbuild syntax check only). Confirm cron HTTP 200 and that a real backlog drains (watch `stoppedBecause` in the response).
+3. P0 real photograph adjudication by an authorised supervisor; live failed-charge reconciliation against the provider invoice; multi-connection budget concurrency test.
+4. Real-user role/tenant test (including Sajid) through the deployed function; browser pass (console errors, dark/light, 390 px) of the register footer, feedback panel and cost monitor.
+5. Continuous learning is **not** implemented and must not be claimed; the labelled export is input for a future, expert-confirmed evaluation.

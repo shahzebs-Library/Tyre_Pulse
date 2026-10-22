@@ -51,3 +51,13 @@ The original release register is historical. **For current authoritative status 
 - The owner wants a single coherent completion, no duplicate Expo work, no extra sidebar, Flutter-only future mobile and complete details of what is done versus outstanding for the next coding agent.
 - Release gates for #435: preview/send behavior, tenant and site validity, custom role semantics, accessible dropdown testing, production web lint/test/build, and no regressions to follow-up tasks, sent history or engagement.
 - Device verification and APNs provisioning are explicitly owner-managed; do not represent those as verified.
+
+
+## 2026-10-22 hardening pass (branch `feature/message-team-hardening-20261022`)
+Details and the iOS/APNs checklist: `docs/message-team-canonical-handoff.md` (section "Hardening pass").
+Outstanding-item status after this pass:
+1. **Delivery reporting** — CODE DONE (web): explicit `queued / accepted_by_fcm / opened_in_app / failed` in the manager engagement panel; FCM acceptance is never labelled OS delivery. Live DB read access of the sender to `workflow_notifications` still to confirm.
+2. **Evidence negative tests** — DONE for DB metadata + storage policies + bucket config in PGlite (8 passing tests). Signed-URL expiry and Storage-API size/MIME enforcement need the live project. Receipts/replies RLS NOT tested (no repo migration; live-only tables).
+3. **Notification deep links** — missing/unknown-message fallback implemented in Flutter with unit tests; **Flutter SDK unavailable here, so unverified**; killed/background device behaviour is still an owner test.
+4. **iOS push provisioning** — build-time secure injection of `GoogleService-Info.plist` (+ push entitlement and background mode) added to the iOS release workflow; no secret in the repo. Needs the secret, APNs key in Firebase, a macOS run and a physical iPhone.
+5. **Build/regression** — web lint/tests/build run for touched files (see handoff). Flutter analyze/tests/Android/iOS builds NOT run here.

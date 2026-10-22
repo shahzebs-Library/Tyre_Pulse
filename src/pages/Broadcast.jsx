@@ -9,29 +9,32 @@
  * people of whom 2 carry the app is not a message to 35 phones. Presenting one
  * number would let someone believe the fleet had been reached.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Megaphone, Send, RefreshCcw, Users, Smartphone, AlertTriangle, Check,
-  Download, FileText, Search, Languages, Inbox, Clock, ChevronDown, X, CheckCheck,
+  Download, FileText, Search, Languages, Inbox, Clock,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Illustration from '../components/illustrations/Illustration'
 import MessageEngagement from '../components/team/MessageEngagement'
 import { ensureActionItem, listActionItems } from '../lib/api/actionCenter'
-import { supabase, fetchAllPages } from '../lib/api/_client'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import {
   BROADCAST_PERIODS, filterBroadcasts, broadcastKpis, targetBreakdown,
   monthlyVolume, broadcastExportRows, hasArabic, broadcastTime,
 } from '../lib/broadcastAnalytics'
-import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
+import { useSettings } from '../contexts/SettingsContext'
+import { useAuth } from '../contexts/AuthContext'
+import MultiCombobox from '../components/ui/MultiCombobox'
 import {
-  previewAudience, sendBroadcast, listBroadcasts,
+  previewAudience, sendBroadcast, listBroadcasts, loadAudienceDirectory,
   audienceLabel, validateBroadcast, reachNote,
 } from '../lib/api/broadcast'
-import { listAssignableRoles, ASSIGNABLE_BUILTIN_ROLES } from '../lib/api/customRoles'
-import { listSites } from '../lib/api/sites'
+import {
+  buildRoleOptions, buildCountryOptions, buildSiteDirectory, buildEmployeeOptions,
+  pruneSelection, isEveryone, audienceSummary,
+} from '../lib/broadcastAudience'
 import { toUserMessage } from '../lib/safeError'
 
 const inputCls = 'w-full rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--text-primary)]'
@@ -44,100 +47,10 @@ const fmtDate = (d) => {
     : dt.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
-/** Searchable, compact multi-select. Empty selection explicitly means the full audience. */
-function AudienceSelect({ label, options, value, onChange, allLabel, hint }) {
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
-  const root = useRef(null)
-  const searchRef = useRef(null)
-  const visible = useMemo(() => options.filter((item) =>
-    String(item).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())), [options, query])
-  const toggle = (item) => onChange(value.includes(item)
-    ? value.filter((selected) => selected !== item) : [...value, item])
-
-  useEffect(() => {
-    if (!open) return undefined
-    const outside = (event) => {
-      if (!root.current?.contains(event.target)) setOpen(false)
-    }
-    const escape = (event) => {
-      if (event.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('pointerdown', outside)
-    document.addEventListener('keydown', escape)
-    searchRef.current?.focus()
-    return () => {
-      document.removeEventListener('pointerdown', outside)
-      document.removeEventListener('keydown', escape)
-    }
-  }, [open])
-
-  return (
-    <div ref={root} className="relative min-w-0">
-      <label className={labelCls}>{label}</label>
-      <button type="button" aria-label={`Select ${label.toLowerCase()}`}
-        aria-expanded={open} aria-haspopup="true"
-        onClick={() => setOpen((current) => !current)}
-        className={`${inputCls} mt-1 flex min-h-10 items-center justify-between gap-2 text-left hover:border-[var(--accent)]`}>
-        <span className="min-w-0 truncate">{value.length === 0
-          ? allLabel : value.length === 1 ? value[0] : `${value.length} selected`}</span>
-        <ChevronDown size={16} className="shrink-0 text-[var(--text-muted)]" />
-      </button>
-      <p className="mt-1 text-[11px] text-[var(--text-muted)]">{hint}</p>
-      {value.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {value.slice(0, 3).map((item) => (
-            <button key={item} type="button" onClick={() => toggle(item)}
-              title={`Remove ${item}`}
-              className="inline-flex max-w-full items-center gap-1 rounded-md border border-[var(--border-subtle)] bg-[var(--input-bg)] px-2 py-1 text-[11px] text-[var(--text-secondary)]">
-              <span className="truncate">{item}</span><X size={12} />
-            </button>
-          ))}
-          {value.length > 3 && <span className="px-2 py-1 text-xs text-[var(--text-muted)]">+{value.length - 3} more</span>}
-        </div>
-      )}
-      {open && (
-        <div role="group" aria-label={`${label} options`}
-          className="absolute left-0 right-0 top-full z-40 mt-2 min-w-[240px] rounded-xl border border-[var(--border-subtle)] bg-[var(--card-bg)] p-3 shadow-xl">
-          <div className="relative">
-            <Search size={15} className="pointer-events-none absolute left-3 top-2.5 text-[var(--text-muted)]" />
-            <input ref={searchRef} value={query} onChange={(e) => setQuery(e.target.value)}
-              aria-label={`Search ${label.toLowerCase()}`} placeholder={`Search ${label.toLowerCase()}…`}
-              className={`${inputCls} pl-9`} />
-          </div>
-          <div className="my-2 flex items-center justify-between gap-2 border-b border-[var(--border-subtle)] pb-2">
-            <button type="button" onClick={() => onChange([])}
-              className="text-xs font-medium text-[var(--accent)]">{allLabel}</button>
-            <button type="button" disabled={visible.length === 0}
-              onClick={() => onChange([...new Set([...value, ...visible])])}
-              className="inline-flex items-center gap-1 text-xs text-[var(--text-secondary)] disabled:opacity-40">
-              <CheckCheck size={13} /> Select matches
-            </button>
-          </div>
-          <div className="max-h-56 overflow-y-auto" role="group" aria-label={label}>
-            {visible.length === 0 ? (
-              <p className="px-2 py-3 text-xs text-[var(--text-muted)]">No matching options.</p>
-            ) : visible.map((item) => (
-              <label key={item} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--hover-bg)]">
-                <input type="checkbox" checked={value.includes(item)}
-                  onChange={() => toggle(item)} className="accent-[var(--accent)]" />
-                <span className="break-words">{item}</span>
-              </label>
-            ))}
-          </div>
-          <div className="mt-2 flex items-center justify-between border-t border-[var(--border-subtle)] pt-2 text-xs text-[var(--text-muted)]">
-            <span>{value.length ? `${value.length} selected` : allLabel}</span>
-            <button type="button" onClick={() => { setOpen(false); setQuery('') }}
-              className="rounded-md bg-[var(--accent)] px-3 py-1.5 font-semibold text-white">Done</button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
 export default function Broadcast() {
   const { activeCountry } = useSettings()
+  const { profile } = useAuth()
+  const orgId = profile?.organisation_id || profile?.org_id || null
   const [form, setForm] = useState({
     title: '', body: '', titleAr: '', bodyAr: '', sendPush: true,
   })
@@ -146,9 +59,10 @@ export default function Broadcast() {
     activeCountry && activeCountry !== 'All' ? [activeCountry] : [])
   const [sites, setSites] = useState([])
 
-  const [roleOptions, setRoleOptions] = useState(ASSIGNABLE_BUILTIN_ROLES)
-  const [siteOptions, setSiteOptions] = useState([])
-  const [siteRecords, setSiteRecords] = useState([])
+  // The audience directory is read from the organisation's real people, custom
+  // roles and registered sites. Nothing selectable here is a static list.
+  const [directory, setDirectory] = useState(null)
+  const [directoryErrors, setDirectoryErrors] = useState([])
   const [audience, setAudience] = useState(null)
   const [audienceLoading, setAudienceLoading] = useState(true)
   const [audienceError, setAudienceError] = useState('')
@@ -162,12 +76,11 @@ export default function Broadcast() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
-  const [followUp, setFollowUp] = useState({ title: '', assigneeId: '', due: '', site: '' })
+  const [followUp, setFollowUp] = useState({ title: '', assigneeIds: [], due: '', site: '' })
   const [taskSaving, setTaskSaving] = useState(false)
-  const [taskResult, setTaskResult] = useState(null)
+  const [taskResults, setTaskResults] = useState([])
   const [taskError, setTaskError] = useState('')
-  const [assignees, setAssignees] = useState([])
-  const [assigneeError, setAssigneeError] = useState('')
+  const [everyoneConfirmed, setEveryoneConfirmed] = useState(false)
   const [followUps, setFollowUps] = useState([])
   const [followUpsError, setFollowUpsError] = useState('')
   const [followUpsLoading, setFollowUpsLoading] = useState(false)
@@ -177,18 +90,16 @@ export default function Broadcast() {
   const load = useCallback(async () => {
     setLoading(true); setError(''); setHistoryError('')
     try {
-      const [ro, si, hi] = await Promise.all([
-        listAssignableRoles().catch(() => ASSIGNABLE_BUILTIN_ROLES),
-        listSites().catch(() => []),
+      const [dir, hi] = await Promise.all([
+        loadAudienceDirectory(),
         // A failed history read must not render as "nothing sent yet".
         listBroadcasts().catch((e) => {
           setHistoryError(toUserMessage(e, 'Sent messages could not be loaded.'))
           return []
         }),
       ])
-      setRoleOptions(Array.isArray(ro) && ro.length ? ro : ASSIGNABLE_BUILTIN_ROLES)
-      setSiteRecords(si || [])
-      setSiteOptions([...new Set((si || []).map((s) => s.name || s.site_name).filter(Boolean))].sort())
+      setDirectory(dir)
+      setDirectoryErrors(dir.errors || [])
       setHistory(Array.isArray(hi) ? hi : [])
     } catch (e) {
       setError(toUserMessage(e, 'Could not load the message centre.'))
@@ -207,25 +118,35 @@ export default function Broadcast() {
   }, [activeCountry])
   useEffect(() => { loadFollowUps() }, [loadFollowUps])
 
+  const roleOptions = useMemo(() => (directory ? buildRoleOptions({ ...directory, orgId }) : []), [directory, orgId])
+  const countryOptions = useMemo(() => (directory ? buildCountryOptions({ ...directory, orgId }) : []), [directory, orgId])
+  const allSiteOptions = useMemo(() => (directory
+    ? buildSiteDirectory({ sites: directory.sites, aliases: directory.aliases, orgId }) : []), [directory, orgId])
+  // The country filter only narrows what is OFFERED. A site already chosen stays
+  // on offer (and as a chip) instead of being silently dropped.
+  const siteOptions = useMemo(() => (directory
+    ? buildSiteDirectory({ sites: directory.sites, aliases: directory.aliases, orgId, countries, keep: sites })
+    : []), [directory, orgId, countries, sites])
+  const employeeOptions = useMemo(() => (directory ? buildEmployeeOptions({ profiles: directory.profiles, orgId }) : []), [directory, orgId])
+
+  // Once the directory is known, a selection that is not in it (a country the
+  // organisation does not have, a role nobody holds) can only produce an empty
+  // or wrong audience, so it is removed.
   useEffect(() => {
-    let mounted = true
-    async function loadAssignees() {
-      const result = await fetchAllPages((from, to) => supabase.from('profiles')
-        .select('id,full_name,username,site,country,approved,locked')
-        .eq('approved', true).eq('locked', false)
-        .order('id', { ascending: true }).range(from, to), { max: 20000 })
-      if (!mounted) return
-      if (result.error || result.truncated) { setAssigneeError('Could not load a complete employee list.'); setAssignees([]) }
-      else { setAssignees(result.data || []); setAssigneeError('') }
-    }
-    loadAssignees().catch(() => { if (mounted) setAssigneeError('Could not load employee accounts.') })
-    return () => { mounted = false }
-  }, [])
+    if (!directory) return
+    setRoles((r) => pruneSelection(r, roleOptions))
+    setCountries((c) => pruneSelection(c, countryOptions))
+    setSites((x) => pruneSelection(x, allSiteOptions))
+  }, [directory, roleOptions, countryOptions, allSiteOptions])
 
   // A selection invalidates the previous audience immediately. A stale count
-  // must never authorize sending to a different set of recipients.
+  // must never authorize sending to a different set of recipients. Nothing is
+  // previewed until the directory has loaded and been reconciled.
+  const directoryReady = Boolean(directory)
   useEffect(() => {
+    if (!directoryReady) return undefined
     let alive = true
+    setEveryoneConfirmed(false)
     setAudience(null)
     setAudienceError('')
     setAudienceLoading(true)
@@ -241,19 +162,15 @@ export default function Broadcast() {
       })
       .finally(() => { if (alive) setAudienceLoading(false) })
     return () => { alive = false }
-  }, [roles, countries, sites])
-
-  const visibleSiteOptions = useMemo(() => {
-    if (!countries.length) return siteOptions
-    const available = siteRecords.filter((site) => !site.country || countries.includes(site.country))
-    return [...new Set([...available.map((site) => site.name || site.site_name).filter(Boolean), ...sites])].sort()
-  }, [siteOptions, siteRecords, countries, sites])
+  }, [roles, countries, sites, directoryReady])
 
   const problem = useMemo(() => validateBroadcast(form), [form])
-  const canSend = !problem && !sending && !audienceLoading && !audienceError && audience?.ok && (audience?.total ?? 0) > 0
+  const everyone = isEveryone({ roles, countries, sites })
+  const canSend = !problem && !sending && directoryReady && !audienceLoading && !audienceError
+    && audience?.ok && (audience?.total ?? 0) > 0 && (!everyone || everyoneConfirmed)
 
   async function send() {
-    setSending(true); setError(''); setResult(null); setTaskResult(null); setTaskError('')
+    setSending(true); setError(''); setResult(null); setTaskResults([]); setTaskError('')
     try {
       const r = await sendBroadcast({ ...form, roles, countries, sites })
       if (!r.ok) {
@@ -263,7 +180,8 @@ export default function Broadcast() {
         return
       }
       setResult(r)
-      setFollowUp({ title: form.title, assigneeId: '', due: '', site: sites.length === 1 ? sites[0] : '' })
+      setFollowUp({ title: form.title, assigneeIds: [], due: '', site: sites.length === 1 ? sites[0] : '' })
+      setEveryoneConfirmed(false)
       setForm({ title: '', body: '', titleAr: '', bodyAr: '', sendPush: true })
       setHistory(await listBroadcasts().catch(() => history))
     } catch (e) {
@@ -271,37 +189,52 @@ export default function Broadcast() {
     } finally { setSending(false) }
   }
 
-  // A task is deliberately a separate, explicit action after sending. A message
-  // can reach several people, whereas an Action Center item has one owner.
-  // Retrying this operation uses a stable source key to avoid duplicate actions.
+  // A task is deliberately a separate, explicit action after sending. An Action
+  // Center item has ONE owner, so choosing several people creates one task each.
+  // The source key carries the person, so a retry (or a partial failure followed
+  // by a retry) never duplicates a task that already exists.
+  const profileById = useMemo(
+    () => new Map((directory?.profiles || []).map((person) => [String(person.id), person])), [directory])
+
   async function createFollowUp() {
-    if (!result?.ok || !result.id || taskSaving || taskResult) return
-    if (!followUp.title.trim() || !followUp.assigneeId || !followUp.due) {
-      setTaskError('Enter a task title, responsible person and due date.')
+    if (!result?.ok || !result.id || taskSaving) return
+    if (!followUp.title.trim() || !followUp.assigneeIds.length || !followUp.due) {
+      setTaskError('Enter a task title, at least one responsible person and a due date.')
       return
     }
-    const employee = assignees.find((person) => person.id === followUp.assigneeId)
-    if (!employee) { setTaskError('Choose a valid active employee account.'); return }
+    const done = new Set(taskResults.filter((r) => r.ok).map((r) => r.userId))
+    const pending = followUp.assigneeIds.filter((id) => !done.has(id))
     setTaskSaving(true); setTaskError('')
-    try {
-      const { item } = await ensureActionItem({
-        title: followUp.title.trim(),
-        source: `broadcast:${result.id}`,
-        category: 'other',
-        severity: 'medium',
-        assigned_to: employee.full_name || employee.username || employee.id,
-        assigned_user_id: employee.id,
-        due_date: followUp.due,
-        site: followUp.site.trim() || null,
-        country: countries.length === 1 ? countries[0] : null,
-        recommended_action: 'Follow up on the team communication and record completion evidence.',
-        notes: `Follow-up to team message ${result.id}. Created by Message the Team.`,
-      })
-      if (!item?.id) throw new Error('Task was not confirmed by Action Center.')
-      setTaskResult(item)
-      await loadFollowUps()
-    } catch (e) { setTaskError(toUserMessage(e, 'Could not create the follow-up task.')) }
-    finally { setTaskSaving(false) }
+    const next = taskResults.filter((r) => r.ok)
+    for (const userId of pending) {
+      const employee = profileById.get(String(userId))
+      const name = employee ? (employee.full_name || employee.username || employee.id) : String(userId)
+      if (!employee) { next.push({ userId, name, ok: false, error: 'Not an active employee account.' }); continue }
+      try {
+        const { item } = await ensureActionItem({
+          title: followUp.title.trim(),
+          source: `broadcast:${result.id}:${employee.id}`,
+          category: 'other',
+          severity: 'medium',
+          assigned_to: name,
+          assigned_user_id: employee.id,
+          due_date: followUp.due,
+          site: followUp.site || null,
+          country: countries.length === 1 ? countries[0] : null,
+          recommended_action: 'Follow up on the team communication and record completion evidence.',
+          notes: `Follow-up to team message ${result.id}. Created by Message the Team.`,
+        })
+        if (!item?.id) throw new Error('Task was not confirmed by Action Center.')
+        next.push({ userId, name, ok: true, item })
+      } catch (e) {
+        next.push({ userId, name, ok: false, error: toUserMessage(e, 'Could not create the task.') })
+      }
+    }
+    setTaskResults(next)
+    const failed = next.filter((r) => !r.ok).length
+    if (failed) setTaskError(`${failed} task${failed === 1 ? '' : 's'} could not be created. Retry to create only the missing ones.`)
+    await loadFollowUps()
+    setTaskSaving(false)
   }
 
   return (
@@ -351,28 +284,43 @@ export default function Broadcast() {
               <p className="text-xs text-[var(--text-secondary)]">Optional: create a real Action Center task linked to this sent message. This does not send a second broadcast.</p></div>
             <span className="text-xs text-[var(--text-muted)]">Message ID: {result.id || 'Unavailable'}</span>
           </div>
-          {taskResult ? (
+          {taskResults.length > 0 && (
             <div role="status" className="rounded-lg border border-emerald-500/40 p-3 text-sm text-[var(--text-primary)]">
-              <Check size={15} className="inline mr-2 text-emerald-500" />Task created in Action Center: {taskResult.title}. Status: {taskResult.status || 'open'}.
+              <Check size={15} className="inline mr-2 text-emerald-500" />
+              {taskResults.filter((r) => r.ok).length} of {taskResults.length} task{taskResults.length === 1 ? '' : 's'} created in Action Center.
               <a href="/action-center" className="ml-2 underline text-[var(--accent)]">Open Action Center</a>
+              <ul className="mt-2 space-y-0.5 text-xs text-[var(--text-secondary)]">
+                {taskResults.map((r) => (
+                  <li key={r.userId}>{r.ok ? 'Created' : 'Failed'}: {r.name}{r.ok ? '' : ` (${r.error})`}</li>
+                ))}
+              </ul>
             </div>
-          ) : (
+          )}
+          {!(taskResults.length > 0 && taskResults.every((r) => r.ok)
+            && followUp.assigneeIds.every((id) => taskResults.some((r) => r.userId === id && r.ok))) && (
             <div className="grid gap-3 md:grid-cols-4">
               <label className="flex flex-col gap-1 md:col-span-2"><span className={labelCls}>Task title</span>
                 <input className={inputCls} maxLength={300} value={followUp.title} onChange={(e) => setFollowUp((f) => ({ ...f, title: e.target.value }))} /></label>
-              <label className="flex flex-col gap-1"><span className={labelCls}>Responsible person</span>
-                <select className={inputCls} value={followUp.assigneeId} onChange={(e) => setFollowUp((f) => ({ ...f, assigneeId: e.target.value }))}>
-                  <option value="">Select employee account</option>
-                  {assignees.map((person) => <option key={person.id} value={person.id}>{person.full_name || person.username || person.id}{person.site ? ` · ${person.site}` : ''}</option>)}
-                </select>
-                {assigneeError && <span className="text-xs text-red-400">{assigneeError}</span>}</label>
               <label className="flex flex-col gap-1"><span className={labelCls}>Due date</span>
                 <input className={inputCls} type="date" value={followUp.due} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setFollowUp((f) => ({ ...f, due: e.target.value }))} /></label>
               <label className="flex flex-col gap-1"><span className={labelCls}>Site (optional)</span>
-                <input className={inputCls} value={followUp.site} onChange={(e) => setFollowUp((f) => ({ ...f, site: e.target.value }))} /></label>
-              <div className="md:col-span-3 flex flex-wrap items-center gap-3 justify-end">
+                <select className={inputCls} value={followUp.site} onChange={(e) => setFollowUp((f) => ({ ...f, site: e.target.value }))}>
+                  <option value="">No specific site</option>
+                  {allSiteOptions.map((o) => <option key={o.value} value={o.value}>{o.value}{o.hint ? ` (${o.hint})` : ''}</option>)}
+                </select></label>
+              <div className="md:col-span-4">
+                <MultiCombobox label="Responsible people" pluralLabel="people" allLabel="Nobody chosen"
+                  hint="Search by name, username, employee ID, role, site or an Arabic name. One task is created per person."
+                  placeholder="Search employees"
+                  options={employeeOptions} value={followUp.assigneeIds}
+                  onChange={(ids) => setFollowUp((f) => ({ ...f, assigneeIds: ids }))} />
+                {directoryErrors.includes('people') && <p role="alert" className="mt-1 text-xs text-red-400">Could not load a complete employee list.</p>}
+              </div>
+              <div className="md:col-span-4 flex flex-wrap items-center gap-3 justify-end">
                 {taskError && <p role="alert" className="text-xs text-red-400">{taskError}</p>}
-                <button type="button" onClick={createFollowUp} disabled={taskSaving || !result.id} className="btn-primary disabled:opacity-40">{taskSaving ? 'Creating task…' : 'Create Action Center task'}</button>
+                <button type="button" onClick={createFollowUp} disabled={taskSaving || !result.id} className="btn-primary disabled:opacity-40">
+                  {taskSaving ? 'Creating tasks…' : `Create ${followUp.assigneeIds.length > 1 ? `${followUp.assigneeIds.length} Action Center tasks` : 'Action Center task'}`}
+                </button>
               </div>
             </div>
           )}
@@ -426,20 +374,33 @@ export default function Broadcast() {
             <button type="button" onClick={() => { setRoles([]); setCountries([]); setSites([]) }}
               className="text-xs text-[var(--accent)] underline underline-offset-2">Reset audience</button>
           </div>
-          <div className="grid gap-3 md:grid-cols-3">
-            <AudienceSelect label="Job role" allLabel="All job roles"
-              hint="Select specific employee roles or leave everyone."
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <MultiCombobox label="Job role" pluralLabel="job roles" allLabel="All job roles"
+              hint="Roles actually held by active people in your organisation, plus your custom roles. Leave empty for all."
               options={roleOptions} value={roles} onChange={setRoles} />
-            <AudienceSelect label="Country" allLabel="All countries"
-              hint="Restrict by operating country."
-              options={COUNTRIES} value={countries} onChange={setCountries} />
-            <AudienceSelect label="Site" allLabel="All sites"
-              hint="Find sites by name without scrolling through the entire register."
-              options={visibleSiteOptions} value={sites} onChange={setSites} />
+            <MultiCombobox label="Country" pluralLabel="countries" allLabel="All countries"
+              hint="Countries your organisation operates in."
+              options={countryOptions} value={countries} onChange={setCountries} />
+            <MultiCombobox label="Site" pluralLabel="sites" allLabel="All sites"
+              hint="Active registered sites. Choosing a country narrows this list; sites you already picked stay selected."
+              options={siteOptions} value={sites} onChange={setSites} />
           </div>
+          {directoryErrors.length > 0 && (
+            <p role="alert" className="text-xs text-amber-400">
+              Could not load the complete list of {directoryErrors.join(', ')}. Some choices may be missing; refresh to retry.
+            </p>
+          )}
           <p className="text-xs text-[var(--text-secondary)]">
-            Audience: {roles.length ? roles.join(', ') : 'All roles'} · {countries.length ? countries.join(', ') : 'All countries'} · {sites.length ? `${sites.length} selected site(s)` : 'All sites'}
+            Audience: {audienceSummary({ roles, countries, sites })}
           </p>
+          {everyone && (
+            <label className="flex items-start gap-2 rounded-lg border border-amber-500/40 p-3 text-sm text-amber-300">
+              <input type="checkbox" className="mt-0.5" checked={everyoneConfirmed}
+                onChange={(e) => setEveryoneConfirmed(e.target.checked)} />
+              <span>No filter is selected, so this message goes to everyone in your organisation
+                {audience?.ok ? ` (${audience.total} ${audience.total === 1 ? 'person' : 'people'})` : ''}. Tick to confirm.</span>
+            </label>
+          )}
         </section>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border-subtle)] pt-3">
@@ -483,23 +444,15 @@ export default function Broadcast() {
         {followUpsLoading && <p role="status" className="text-xs text-[var(--text-muted)]">Loading tasks…</p>}
         {!followUpsLoading && !followUpsError && !followUps.length && <p className="text-xs text-[var(--text-muted)]">No follow-up tasks found in the current country scope.</p>}
         {followUps.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] text-xs text-left">
-              <thead><tr className="border-b border-[var(--border-subtle)] text-[var(--text-muted)]">
-                <th className="px-2 py-2">Task</th><th className="px-2 py-2">Assigned to</th><th className="px-2 py-2">Due</th><th className="px-2 py-2">Status</th><th className="px-2 py-2">Action</th>
-              </tr></thead>
-              <tbody>{followUps.slice(0, 50).map((task) => (
-                <tr key={task.id} className="border-b border-[var(--border-subtle)]">
-                  <td className="px-2 py-3 font-medium text-[var(--text-primary)]">{task.title}</td>
-                  <td className="px-2 py-3 text-[var(--text-secondary)]">{task.assigned_to || 'Unassigned'}</td>
-                  <td className="px-2 py-3 text-[var(--text-secondary)]">{task.due_date || 'Not set'}</td>
-                  <td className="px-2 py-3 text-[var(--text-secondary)]">{String(task.status || 'open').replaceAll('_', ' ')}</td>
-                  <td className="px-2 py-3"><a className="text-[var(--accent)] underline" href="/action-center">Open</a></td>
-                </tr>
-              ))}</tbody>
-            </table>
-            {followUps.length > 50 && <p className="text-xs text-[var(--text-muted)] p-2">Showing the latest 50 tasks. Open Action Center for the complete register.</p>}
-          </div>
+          <EnterpriseTable
+            columns={followUpColumns}
+            data={followUps}
+            getRowId={(task) => String(task.id)}
+            enableGlobalFilter
+            enableExport={false}
+            initialPageSize={10}
+            emptyMessage="No follow-up tasks match"
+          />
         )}
       </section>
 
@@ -518,6 +471,16 @@ export default function Broadcast() {
     </div>
   )
 }
+
+const followUpColumns = [
+  { id: 'title', header: 'Task', accessorFn: (t) => t.title || '', size: 280,
+    cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.title}</span> },
+  { id: 'assigned', header: 'Assigned to', accessorFn: (t) => t.assigned_to || 'Unassigned', size: 160 },
+  { id: 'due', header: 'Due', accessorFn: (t) => t.due_date || 'Not set', size: 110 },
+  { id: 'status', header: 'Status', accessorFn: (t) => String(t.status || 'open').replaceAll('_', ' '), size: 110 },
+  { id: 'open', header: 'Action', enableSorting: false, accessorFn: () => '', size: 80,
+    cell: () => <a className="text-[var(--accent)] underline" href="/action-center">Open</a> },
+]
 
 const selectCls = 'rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-2 py-1.5 text-sm text-[var(--text-primary)]'
 const EXPORT_COLS = ['sent', 'title', 'body', 'audience', 'recipients', 'pushes', 'arabic', 'status']

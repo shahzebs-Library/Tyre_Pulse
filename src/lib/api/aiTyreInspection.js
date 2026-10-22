@@ -121,7 +121,11 @@ export async function backfillAiInspectionRange({from,to,page=0}) {
   const {data,error}=await supabase.functions.invoke('ai-tyre-inspection',{
     body:{action:'backfill',from,to,page},
   })
-  if(error)throw error
+  if(error){
+    // FunctionsFetchError = request never reached the function (CORS / not deployed).
+    if(error.name==='FunctionsFetchError')throw new Error('The AI service could not be reached. Reload the page; if it persists the function needs redeploying.')
+    throw error
+  }
   return data
 }
 
@@ -134,4 +138,30 @@ export async function screenInspectionPhotos(inspectionId) {
   })
   if(error)throw error
   return data
+}
+
+/** Per-finding labelled review rows (supervisor roles; INVOKER rpc, tenant scoped by RLS). Evaluation only. */
+export async function getAiLabelledFindings({ from = null, to = null, limit = 5000 } = {}) {
+  const ymd = /^\d{4}-\d{2}-\d{2}$/
+  const { data, error } = await supabase.rpc('get_ai_tyre_labelled_findings', {
+    p_from: from && ymd.test(from) ? from : null,
+    p_to: to && ymd.test(to) ? to : null,
+    p_limit: Math.min(Math.max(Number(limit) || 5000, 1), 20000),
+  })
+  if (error) throw error
+  return data || []
+}
+
+/** Evaluation-only aggregate of reviewer decisions per model / prompt version.
+ * SECURITY INVOKER RPC: scoped to the caller's organisation and supervisor roles by the database.
+ * Dates are YYYY-MM-DD or empty. Never used to train or tune a model.
+ */
+export async function getAiReviewFeedback({ from = null, to = null } = {}) {
+  const ymd = /^\d{4}-\d{2}-\d{2}$/
+  const { data, error } = await supabase.rpc('get_ai_tyre_review_feedback', {
+    p_from: from && ymd.test(from) ? from : null,
+    p_to: to && ymd.test(to) ? to : null,
+  })
+  if (error) throw error
+  return data || []
 }

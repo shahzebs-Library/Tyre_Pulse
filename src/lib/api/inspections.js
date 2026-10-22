@@ -117,6 +117,88 @@ export function listInspectionsForPage({ from, to, country, createdBy } = {}) {
   return q
 }
 
+/** YYYY-MM-DD plus one day (UTC arithmetic on a date-only value; no timezone drift). */
+function nextDay(ymd) {
+  const d = new Date(`${ymd}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + 1)
+  return d.toISOString().slice(0, 10)
+}
+const YMD = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Server-side paged register query for the AI Tyre Inspection page.
+ * Date, site, status and vehicle/site text are applied IN THE DATABASE (not to a fixed
+ * "latest 200" window), with an exact total so the page can say "51-100 of 1,380".
+ * Returns the raw `{ data, error, count }`. RLS still scopes rows to the caller.
+ *
+ * Deep filters (condition, defect photos, AI status, review status) are handled by
+ * listAiRegisterFiltered, which calls the ai_tyre_register_page RPC.
+ */
+export function listInspectionsForAiRegister({
+  page = 0, pageSize = 50, country, dateFrom, dateTo, site, status, search,
+} = {}) {
+  const size = Math.min(Math.max(Number(pageSize) || 50, 1), 200)
+  const from = Math.max(Number(page) || 0, 0) * size
+  let q = supabase
+    .from('inspections')
+    .select(LIST_COLS, { count: 'exact' })
+    .order('inspection_date', { ascending: false, nullsFirst: false })
+    .order('id', { ascending: true })
+    .range(from, from + size - 1)
+  if (country && country !== 'All') q = q.eq('country', country)
+  if (dateFrom && YMD.test(dateFrom)) q = q.gte('inspection_date', dateFrom)
+  if (dateTo && YMD.test(dateTo)) q = q.lt('inspection_date', nextDay(dateTo))
+  if (site && site !== 'all') q = q.eq('site', site)
+  if (status && status !== 'all') q = q.eq('status', status)
+  const term = String(search ?? '').replace(/[,()\\*%_]/g, '').trim()
+  if (term) q = q.or(`asset_no.ilike.%${term}%,site.ilike.%${term}%`)
+  return q
+}
+
+/** True when any filter that needs per-position JSON or AI job rows is active. */
+export function hasDeepRegisterFilters({ condition, photos, aiStatus, review } = {}) {
+  const on = (v) => v !== undefined && v !== null && v !== '' && v !== 'all'
+  return on(condition) || photos === true || on(aiStatus) || on(review)
+}
+
+/**
+ * Register page with EVERY filter applied in the database, including condition, defect
+ * photos, AI job status and reviewer status (`ai_tyre_register_page`, SECURITY INVOKER so RLS
+ * still scopes the rows). One RPC returns the ids of the requested page plus the exact total;
+ * the rows are then read by id and put back in the RPC's order. Without a deep filter this
+ * is the cheaper listInspectionsForAiRegister query.
+ * Returns the raw `{ data, error, count }` shape.
+ */
+export async function listAiRegisterFiltered({
+  page = 0, pageSize = 50, country, dateFrom, dateTo, site, status, search,
+  condition, photos, aiStatus, review,
+} = {}) {
+  if (!hasDeepRegisterFilters({ condition, photos, aiStatus, review })) {
+    return listInspectionsForAiRegister({ page, pageSize, country, dateFrom, dateTo, site, status, search })
+  }
+  const size = Math.min(Math.max(Number(pageSize) || 50, 1), 200)
+  const offset = Math.max(Number(page) || 0, 0) * size
+  const clean = (v) => (v && v !== 'all' ? String(v) : null)
+  const term = String(search ?? '').replace(/[,()\\*%_]/g, '').trim()
+  const { data: idRows, error } = await supabase.rpc('ai_tyre_register_page', {
+    p_country: country && country !== 'All' ? country : null,
+    p_from: dateFrom && YMD.test(dateFrom) ? dateFrom : null,
+    p_to: dateTo && YMD.test(dateTo) ? dateTo : null,
+    p_site: clean(site), p_status: clean(status), p_search: term || null,
+    p_condition: clean(condition), p_photos: photos === true ? true : null,
+    p_ai_status: clean(aiStatus), p_review: clean(review),
+    p_offset: offset, p_limit: size,
+  })
+  if (error) return { data: null, error, count: 0 }
+  const ids = (idRows || []).map((r) => r.id)
+  const count = idRows?.length ? Number(idRows[0].total) : 0
+  if (!ids.length) return { data: [], error: null, count }
+  const { data, error: readError } = await supabase.from('inspections').select(LIST_COLS).in('id', ids).limit(500)
+  if (readError) return { data: null, error: readError, count }
+  const rank = new Map(ids.map((id, i) => [id, i]))
+  return { data: (data || []).slice().sort((a, b) => rank.get(a.id) - rank.get(b.id)), error: null, count }
+}
+
 /** Get one inspection by id for the page (approval landing / detail). */
 export async function getInspectionForPage(id) {
   return unwrap(await supabase.from('inspections').select(PAGE_COLS).eq('id', id).single())

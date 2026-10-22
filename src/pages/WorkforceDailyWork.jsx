@@ -5,10 +5,14 @@ import {ClipboardCheck,Clock,Plus,RefreshCw,CheckCircle2,AlertTriangle,Send} fro
 import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import {useAuth} from '../contexts/AuthContext'
+import {useLanguage} from '../contexts/LanguageContext'
 import {estimateWork} from '../lib/workforceIntelligence'
 import {workforceBoardKpis,assignmentStatusSeries} from '../lib/workforceAnalytics'
 import {employeeLabel,findAssignableEmployees} from '../lib/workforceEmployeeDirectory'
-import {listWorkforceAssignments,assignWork,listAssignableEmployees,setWorkStatus,listWorkDependencies,addWorkDependency,listWorkStandards,addWorkStandard} from '../lib/api/workforceAssignments'
+import {filterAssignments,ASSIGNMENT_STATUSES,ASSIGNMENT_PRIORITIES} from '../lib/workforceAssignmentFilter'
+import {listWorkforceAssignments,assignWork,listAssignableEmployees,transitionAssignment,listWorkDependencies,addWorkDependency,listWorkStandards,addWorkStandard} from '../lib/api/workforceAssignments'
+import AssignmentActions from '../components/workforce/AssignmentActions'
+import EstimatePanel from '../components/workforce/EstimatePanel'
 import {listWorkEvidence,uploadWorkEvidence,openWorkEvidence} from '../lib/api/workforceEvidence'
 import {addDailyEntry,getMyDailyReport,getDailyReportForReview,ensureDailyReport,submitDailyReport,listReviewQueue,reviewDailyReport} from '../lib/api/workforceDaily'
 ChartJS.register(CategoryScale,LinearScale,BarElement,Tooltip,Legend)
@@ -19,6 +23,7 @@ const dtForLocal=v=>v?new Date(v).toLocaleString(): '—'
 function Tile({label,value,Icon}) {return <div className="card"><div className="flex items-center justify-between"><span className="text-xs text-[var(--text-muted)]">{label}</span><Icon size={17} className="text-[var(--accent)]"/></div><div className="text-3xl font-bold mt-2 tabular-nums">{value}</div></div>}
 export default function WorkforceDailyWork(){
  const {profile}=useAuth()
+ const {t}=useLanguage()
  const isManager=['Admin','Manager','Director','Super Admin'].includes(profile?.role)||profile?.is_super_admin
  const [date,setDate]=useState(dateNow)
  const [record,setRecord]=useState({report:null,entries:[]})
@@ -30,9 +35,11 @@ export default function WorkforceDailyWork(){
  const [dependencyForm,setDependencyForm]=useState({predecessor_id:'',successor_id:''})
  const [standardForm,setStandardForm]=useState({work_type:'',minutes_per_unit:'30',role_name:''})
  const [boardView,setBoardView]=useState('table')
+ const [boardSearch,setBoardSearch]=useState(''),[boardStatus,setBoardStatus]=useState('all'),[boardPriority,setBoardPriority]=useState('all')
  const [reviewDetail,setReviewDetail]=useState(null)
  const [reviewEvidence,setReviewEvidence]=useState([])
- const [newWork,setNewWork]=useState({title:'',assigned_to:'',site:'',priority:'normal',due_at:'',instructions:''})
+ const emptyWork={title:'',assigned_to:'',site:'',priority:'normal',due_at:'',instructions:'',task_type:'',vehicle_type:'',estimated_minutes:''}
+ const [newWork,setNewWork]=useState(emptyWork)
  const [tab,setTab]=useState('my-day')
  const [loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('')
  const [summary,setSummary]=useState(''),[nextActions,setNextActions]=useState('')
@@ -56,6 +63,9 @@ export default function WorkforceDailyWork(){
  const selectableEmployees=useMemo(()=>findAssignableEmployees(employees,{search:employeeSearch,role:designationFilter}),[employees,employeeSearch,designationFilter])
  const selectedEmployee=employees.find(p=>p.id===newWork.assigned_to)
  const employeeById=useMemo(()=>new Map(employees.map(p=>[p.id,p])),[employees])
+ const visibleWork=useMemo(()=>filterAssignments(work,{search:boardSearch,status:boardStatus,priority:boardPriority,employeeById}),[work,boardSearch,boardStatus,boardPriority,employeeById])
+ const boardFiltered=boardSearch.trim()!==''||boardStatus!=='all'||boardPriority!=='all'
+ const boardEmpty=boardFiltered?t('workforce.board.noMatch'):t('workforce.board.empty')
  const boardChart=useMemo(()=>({labels:assignmentStatusSeries(work).map(x=>x.status.replace('_',' ')),datasets:[{label:'Assignments',data:assignmentStatusSeries(work).map(x=>x.count),backgroundColor:'rgba(32,150,110,0.72)',borderRadius:5}]}),[work])
  const entries=record.entries
  const completed=entries.filter(e=>e.category==='productive').length
@@ -80,8 +90,8 @@ export default function WorkforceDailyWork(){
  {accessorKey:'priority',header:'Priority'},
  {accessorKey:'status',header:'Status'},
  {id:'due',header:'Deadline',accessorFn:r=>dtForLocal(r.due_at)},
- {id:'action',header:'Next step',enableSorting:false,cell:({row})=>{const item=row.original;const next={assigned:'acknowledged',acknowledged:'in_progress',in_progress:'submitted',blocked:'in_progress'}[item.status];return next?<button className="btn-secondary" type="button" disabled={saving} onClick={()=>run(()=>setWorkStatus(item.id,next))}>{({acknowledged:'Acknowledge',in_progress:'Start / resume',submitted:'Submit work'})[next]}</button>:<span className="text-xs text-[var(--text-muted)]">No employee action</span>}}
- ],[employeeById,saving])
+ {id:'action',header:'Next step',enableSorting:false,cell:({row})=><AssignmentActions item={row.original} currentUserId={profile?.id} isManager={isManager} disabled={saving} onAct={(it,action,note)=>run(()=>transitionAssignment(it.id,action,{note}))}/>},
+ ],[employeeById,saving,profile?.id,isManager])
  const openReview=async id=>{setError('');try{const detail=await getDailyReportForReview(id);setReviewDetail(detail);setReviewEvidence(await listWorkEvidence(id))}catch(e){setError(e.message||'Could not open report')}}
  const reviewColumns=useMemo(()=>[
   {accessorKey:'employee_id',header:'Employee ID',size:200},
@@ -102,10 +112,10 @@ export default function WorkforceDailyWork(){
   {isManager&&<button type="button" className={tab==='reviews'?'btn-primary':'btn-secondary'} onClick={()=>setTab('reviews')}>Manager Review ({queue.length})</button>}
   <div className="ml-auto flex gap-2 items-center"><label htmlFor="work-date" className="text-sm">Work date</label><input id="work-date" className="input" type="date" value={date} onChange={e=>setDate(cleanDate(e.target.value))}/><button type="button" className="btn-secondary" aria-label="Refresh" onClick={load}><RefreshCw size={16}/></button></div>
  </div>
- {error&&<div role="alert" className="card text-red-500 flex items-center gap-2"><AlertTriangle size={18}/>{error}</div>}
+ {error&&<div role="alert" className="card text-red-500 flex items-center gap-2"><AlertTriangle size={18}/>{error}<button type="button" className="btn-secondary ml-auto" onClick={load}>{t('workforce.board.retry')}</button></div>}
  {notice&&<div role="status" className="card text-green-600">{notice}</div>}
  {tab==='assignments'?<div className="card space-y-3"><h2 className="font-semibold">Company work assignments</h2><div className="grid grid-cols-2 md:grid-cols-4 gap-3"><Tile label="Assigned" value={board.assigned} Icon={ClipboardCheck}/><Tile label="In progress" value={board.active} Icon={Clock}/><Tile label="Blocked" value={board.blocked} Icon={AlertTriangle}/><Tile label="Awaiting review" value={board.pending_verification} Icon={Send}/></div><div className="h-56"><Bar data={boardChart} options={{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}}/></div><p className="text-xs text-[var(--text-muted)]">Observed status counts. These figures are not employee productivity scores.</p>
- {isManager&&<form className="grid grid-cols-1 md:grid-cols-2 gap-3" onSubmit={e=>{e.preventDefault();run(async()=>{await assignWork({...newWork,due_at:newWork.due_at?new Date(newWork.due_at).toISOString():null});setNewWork({title:'',assigned_to:'',site:'',priority:'normal',due_at:'',instructions:''});setEmployeeSearch('');setDesignationFilter('all')})}}>
+ {isManager&&<form className="grid grid-cols-1 md:grid-cols-2 gap-3" onSubmit={e=>{e.preventDefault();run(async()=>{await assignWork({...newWork,estimated_minutes:Number(newWork.estimated_minutes)>0?Number(newWork.estimated_minutes):null,due_at:newWork.due_at?new Date(newWork.due_at).toISOString():null});setNewWork(emptyWork);setEmployeeSearch('');setDesignationFilter('all')})}}>
  <label className="text-sm">Work title<input className="input w-full" required value={newWork.title} onChange={e=>setNewWork(w=>({...w,title:e.target.value}))}/></label>
  <fieldset className="md:col-span-2 rounded-lg border border-[var(--input-border)] p-3 space-y-3"><legend className="font-semibold px-1">Assign to employee</legend>
  <p className="text-xs text-[var(--text-muted)]">Search by exact employee ID, full name, username or account ID, then filter by recorded role/designation. Only approved, unlocked accounts are selectable.</p>
@@ -120,16 +130,26 @@ export default function WorkforceDailyWork(){
  <label className="text-sm">Priority<select className="input w-full" value={newWork.priority} onChange={e=>setNewWork(w=>({...w,priority:e.target.value}))}>{['low','normal','high','critical'].map(x=><option key={x}>{x}</option>)}</select></label>
  <label className="text-sm">Due time<input type="datetime-local" className="input w-full" value={newWork.due_at} onChange={e=>setNewWork(w=>({...w,due_at:e.target.value}))}/></label>
  <label className="text-sm">Instructions<input className="input w-full" value={newWork.instructions} onChange={e=>setNewWork(w=>({...w,instructions:e.target.value}))}/></label>
+ <label className="text-sm">Task type<input className="input w-full" list="workforce-task-types" maxLength={80} placeholder="e.g. tyre change" value={newWork.task_type} onChange={e=>setNewWork(w=>({...w,task_type:e.target.value}))}/><datalist id="workforce-task-types">{[...new Set(standards.map(x=>x.work_type).filter(Boolean))].map(t=><option key={t} value={t}/>)}</datalist></label>
+ <label className="text-sm">Vehicle type (optional)<input className="input w-full" maxLength={80} placeholder="e.g. TR-MIXER" value={newWork.vehicle_type} onChange={e=>setNewWork(w=>({...w,vehicle_type:e.target.value}))}/></label>
+ <label className="text-sm">Estimated minutes (optional)<input type="number" min="1" step="1" className="input w-full" value={newWork.estimated_minutes} onChange={e=>setNewWork(w=>({...w,estimated_minutes:e.target.value}))}/></label>
+ <EstimatePanel taskType={newWork.task_type} vehicleType={newWork.vehicle_type} role={selectedEmployee?.role||null} onUse={m=>setNewWork(w=>({...w,estimated_minutes:String(m)}))}/>
  <button className="btn-primary" disabled={saving}>Assign work</button></form>}
+ <div className="grid grid-cols-1 md:grid-cols-4 gap-3" role="search" aria-label={t('workforce.board.filterLabel')}>
+ <label className="text-sm md:col-span-2">{t('workforce.board.searchLabel')}<input className="input w-full" type="search" autoComplete="off" placeholder={t('workforce.board.searchPlaceholder')} value={boardSearch} onChange={e=>setBoardSearch(e.target.value)}/></label>
+ <label className="text-sm">{t('workforce.board.status')}<select className="input w-full" value={boardStatus} onChange={e=>setBoardStatus(e.target.value)}><option value="all">{t('workforce.board.allStatuses')}</option>{ASSIGNMENT_STATUSES.map(x=><option key={x} value={x}>{t(`workforce.status.${x}`)}</option>)}</select></label>
+ <label className="text-sm">{t('workforce.board.priority')}<select className="input w-full" value={boardPriority} onChange={e=>setBoardPriority(e.target.value)}><option value="all">{t('workforce.board.allPriorities')}</option>{ASSIGNMENT_PRIORITIES.map(x=><option key={x} value={x}>{t(`workforce.priority.${x}`)}</option>)}</select></label>
+ </div>
+ <p className="text-xs text-[var(--text-muted)]" aria-live="polite">{loading?t('workforce.board.loading'):t('workforce.board.showing',{shown:visibleWork.length,total:work.length})}{boardFiltered&&<button type="button" className="btn-secondary ml-2" onClick={()=>{setBoardSearch('');setBoardStatus('all');setBoardPriority('all')}}>{t('workforce.board.clearFilters')}</button>}</p>
  <div className="flex flex-wrap gap-2">
  {['table','board','calendar'].map(v=><button key={v} type="button" className={boardView===v?'btn-primary':'btn-secondary'} onClick={()=>setBoardView(v)}>{v==='board'?'Kanban':v==='calendar'?'Schedule': 'Table'}</button>)}
  </div>
- {boardView==='table'?<EnterpriseTable columns={assignmentColumns} data={work} loading={loading} emptyMessage="No assignments in this view."/>:boardView==='board'?
+ {boardView==='table'?<EnterpriseTable columns={assignmentColumns} data={visibleWork} loading={loading} emptyMessage={boardEmpty}/>:boardView==='board'?
  <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3">{['assigned','acknowledged','in_progress','blocked','submitted'].map(status=><section className="card space-y-2" key={status}>
- <h3 className="text-sm font-semibold capitalize">{status.replace('_',' ')} ({work.filter(w=>w.status===status).length})</h3>
- {work.filter(w=>w.status===status).map(w=><div key={w.id} className="rounded-lg border border-[var(--input-border)] p-3 space-y-1"><p className="text-sm font-semibold">{w.title}</p><p className="text-xs text-[var(--text-muted)]">{w.site||'No site'} · {w.priority}</p><p className="text-xs">{w.due_at?dtForLocal(w.due_at):'Unscheduled'}</p></div>)}
+ <h3 className="text-sm font-semibold capitalize">{status.replace('_',' ')} ({visibleWork.filter(w=>w.status===status).length})</h3>
+ {visibleWork.filter(w=>w.status===status).map(w=><div key={w.id} className="rounded-lg border border-[var(--input-border)] p-3 space-y-1"><p className="text-sm font-semibold">{w.title}</p><p className="text-xs text-[var(--text-muted)]">{w.site||'No site'} · {w.priority}</p><p className="text-xs">{w.due_at?dtForLocal(w.due_at):'Unscheduled'}</p></div>)}
  </section>)}</div>:
- <EnterpriseTable columns={assignmentColumns} data={[...work].sort((a,b)=>String(a.due_at||'9999').localeCompare(String(b.due_at||'9999')))} loading={loading} emptyMessage="No scheduled assignments."/>}
+ <EnterpriseTable columns={assignmentColumns} data={[...visibleWork].sort((a,b)=>String(a.due_at||'9999').localeCompare(String(b.due_at||'9999')))} loading={loading} emptyMessage={boardFiltered?boardEmpty:t('workforce.board.noSchedule')}/>}
  {isManager&&<div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
  <form className="rounded-xl border border-[var(--input-border)] p-3 space-y-2" onSubmit={e=>{e.preventDefault();run(async()=>{await addWorkDependency(dependencyForm.predecessor_id,dependencyForm.successor_id);setDependencyForm({predecessor_id:'',successor_id:''})})}}>
  <h3 className="font-semibold">Work dependencies</h3><p className="text-xs text-[var(--text-muted)]">Specify predecessor and dependent assignment.</p>

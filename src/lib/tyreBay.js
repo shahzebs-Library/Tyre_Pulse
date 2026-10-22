@@ -219,6 +219,12 @@ export function canonicalToSlotId(vehicleTypeKey, positionCode) {
   if (!positionCode) return null
   const layoutKey = resolveLayoutKey(vehicleTypeKey)
   const slots = BUILTIN_LAYOUT_SLOTS[layoutKey] || BUILTIN_LAYOUT_SLOTS.Pickup
+  // A stored slot id that is already one of this layout's slots wins outright. Without this,
+  // the 4-wheel layouts' 'RR' (rear right) was re-read as the canonical code 'RHR' (the parser
+  // takes R+R for side+axle), never matched 'RHR1', and was printed as 'RR' on reports.
+  const rawU = String(positionCode).trim().toUpperCase()
+  const exact = slots.find((slot) => slot.toUpperCase() === rawU)
+  if (exact) return exact
   const target = canonicalCode(String(positionCode).trim())
   if (!target) return null
   const targetU = String(target).toUpperCase()

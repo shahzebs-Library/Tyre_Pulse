@@ -98,6 +98,8 @@ export function buildAiCostReport(rows = [], { pricing = {}, days = 30, now = Da
   const failedBillable = rows.filter(r=>!isSuccessRow(r) && r.cost_usd != null)
   const failedChargedCost = failedBillable.reduce((sum,r)=>sum+rowCost(r,pricing),0)
   const failedChargedTokens = failedBillable.reduce((sum,r)=>sum+rowTokens(r),0)
+  // Failed calls with NO recorded cost: possibly billed by the provider, amount unknown (never assumed 0).
+  const failedUnknownCostCalls = rows.filter(r=>!isSuccessRow(r) && r.cost_usd == null).length
   const total = rows.length
 
   // Spend trend: second half of the window vs the first half.
@@ -121,6 +123,7 @@ export function buildAiCostReport(rows = [], { pricing = {}, days = 30, now = Da
   return {
     totalCost: total ? u.totalCost + failedChargedCost : null,
     failedChargedCost,
+    failedUnknownCostCalls,
     failedChargedTokens,
     totalTokens: u.totalTokens + failedChargedTokens,
     promptTokens: u.promptTokens + failedBillable.reduce((sum,r)=>sum+num(r.prompt_tokens),0),

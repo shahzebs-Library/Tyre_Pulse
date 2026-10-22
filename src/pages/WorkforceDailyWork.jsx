@@ -7,7 +7,7 @@ import EnterpriseTable from '../components/ui/EnterpriseTable'
 import {useAuth} from '../contexts/AuthContext'
 import {estimateWork} from '../lib/workforceIntelligence'
 import {workforceBoardKpis,assignmentStatusSeries} from '../lib/workforceAnalytics'
-import {listWorkforceAssignments,assignWork,listAssignableEmployees,setWorkStatus} from '../lib/api/workforceAssignments'
+import {listWorkforceAssignments,assignWork,listAssignableEmployees,setWorkStatus,listWorkDependencies,addWorkDependency,listWorkStandards,addWorkStandard} from '../lib/api/workforceAssignments'
 import {listWorkEvidence,uploadWorkEvidence,openWorkEvidence} from '../lib/api/workforceEvidence'
 import {addDailyEntry,getMyDailyReport,getDailyReportForReview,ensureDailyReport,submitDailyReport,listReviewQueue,reviewDailyReport} from '../lib/api/workforceDaily'
 ChartJS.register(CategoryScale,LinearScale,BarElement,Tooltip,Legend)
@@ -24,6 +24,10 @@ export default function WorkforceDailyWork(){
  const [queue,setQueue]=useState([])
  const [work,setWork]=useState([]),[employees,setEmployees]=useState([])
  const [evidence,setEvidence]=useState([])
+ const [dependencies,setDependencies]=useState([]),[standards,setStandards]=useState([])
+ const [dependencyForm,setDependencyForm]=useState({predecessor_id:'',successor_id:''})
+ const [standardForm,setStandardForm]=useState({work_type:'',minutes_per_unit:'30',role_name:''})
+ const [boardView,setBoardView]=useState('table')
  const [reviewDetail,setReviewDetail]=useState(null)
  const [reviewEvidence,setReviewEvidence]=useState([])
  const [newWork,setNewWork]=useState({title:'',assigned_to:'',site:'',priority:'normal',due_at:'',instructions:''})
@@ -40,7 +44,7 @@ export default function WorkforceDailyWork(){
    const own=await getMyDailyReport(date);setRecord(own)
    setEvidence(own.report?await listWorkEvidence(own.report.id):[])
    setSummary(own.report?.summary||'');setNextActions(own.report?.next_actions||'')
-   if(isManager){setQueue(await listReviewQueue());setWork(await listWorkforceAssignments());setEmployees(await listAssignableEmployees())}
+   if(isManager){setQueue(await listReviewQueue());setWork(await listWorkforceAssignments());setEmployees(await listAssignableEmployees());setDependencies(await listWorkDependencies());setStandards(await listWorkStandards())}
    else setWork(await listWorkforceAssignments({mine:true}))
   }catch(e){setError(e.message||'Unable to load daily work')}finally{setLoading(false)}
  },[date,isManager])
@@ -103,7 +107,29 @@ export default function WorkforceDailyWork(){
  <label className="text-sm">Due time<input type="datetime-local" className="input w-full" value={newWork.due_at} onChange={e=>setNewWork(w=>({...w,due_at:e.target.value}))}/></label>
  <label className="text-sm">Instructions<input className="input w-full" value={newWork.instructions} onChange={e=>setNewWork(w=>({...w,instructions:e.target.value}))}/></label>
  <button className="btn-primary" disabled={saving}>Assign work</button></form>}
- <EnterpriseTable columns={assignmentColumns} data={work} loading={loading} emptyMessage="No assignments in this view."/></div>:tab==='reviews'&&isManager?<div className="card"><h2 className="text-lg font-semibold mb-3">Awaiting manager verification</h2><EnterpriseTable columns={reviewColumns} data={queue} loading={loading} emptyMessage="No daily reports awaiting review."/>
+ <div className="flex flex-wrap gap-2">
+ {['table','board','calendar'].map(v=><button key={v} type="button" className={boardView===v?'btn-primary':'btn-secondary'} onClick={()=>setBoardView(v)}>{v==='board'?'Kanban':v==='calendar'?'Schedule': 'Table'}</button>)}
+ </div>
+ {boardView==='table'?<EnterpriseTable columns={assignmentColumns} data={work} loading={loading} emptyMessage="No assignments in this view."/>:boardView==='board'?
+ <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3">{['assigned','acknowledged','in_progress','blocked','submitted'].map(status=><section className="card space-y-2" key={status}>
+ <h3 className="text-sm font-semibold capitalize">{status.replace('_',' ')} ({work.filter(w=>w.status===status).length})</h3>
+ {work.filter(w=>w.status===status).map(w=><div key={w.id} className="rounded-lg border border-[var(--input-border)] p-3 space-y-1"><p className="text-sm font-semibold">{w.title}</p><p className="text-xs text-[var(--text-muted)]">{w.site||'No site'} · {w.priority}</p><p className="text-xs">{w.due_at?dtForLocal(w.due_at):'Unscheduled'}</p></div>)}
+ </section>)}</div>:
+ <EnterpriseTable columns={assignmentColumns} data={[...work].sort((a,b)=>String(a.due_at||'9999').localeCompare(String(b.due_at||'9999')))} loading={loading} emptyMessage="No scheduled assignments."/>}
+ {isManager&&<div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+ <form className="rounded-xl border border-[var(--input-border)] p-3 space-y-2" onSubmit={e=>{e.preventDefault();run(async()=>{await addWorkDependency(dependencyForm.predecessor_id,dependencyForm.successor_id);setDependencyForm({predecessor_id:'',successor_id:''})})}}>
+ <h3 className="font-semibold">Work dependencies</h3><p className="text-xs text-[var(--text-muted)]">Specify predecessor and dependent assignment.</p>
+ {(['predecessor_id','successor_id']).map(field=><label key={field} className="block text-xs">{field==='predecessor_id'?'Must finish first':'Dependent task'}<select required className="input w-full" value={dependencyForm[field]} onChange={e=>setDependencyForm(x=>({...x,[field]:e.target.value}))}><option value="">Choose task</option>{work.map(w=><option key={w.id} value={w.id}>{w.title}</option>)}</select></label>)}
+ <button type="submit" className="btn-primary" disabled={saving}>Add dependency</button>
+ <p className="text-xs text-[var(--text-muted)]">{dependencies.length} dependency links recorded</p></form>
+ <form className="rounded-xl border border-[var(--input-border)] p-3 space-y-2" onSubmit={e=>{e.preventDefault();run(async()=>{await addWorkStandard(standardForm);setStandardForm({work_type:'',role_name:'',minutes_per_unit:'30'})})}}>
+ <h3 className="font-semibold">Work standards catalog</h3>
+ <input className="input w-full" placeholder="Work type" required value={standardForm.work_type} onChange={e=>setStandardForm(x=>({...x,work_type:e.target.value}))}/>
+ <input className="input w-full" placeholder="Role (optional)" value={standardForm.role_name} onChange={e=>setStandardForm(x=>({...x,role_name:e.target.value}))}/>
+ <input className="input w-full" type="number" min="1" placeholder="Minutes per unit" required value={standardForm.minutes_per_unit} onChange={e=>setStandardForm(x=>({...x,minutes_per_unit:e.target.value}))}/>
+ <button type="submit" className="btn-primary" disabled={saving}>Add provisional standard</button>
+ <p className="text-xs text-[var(--text-muted)]">{standards.length} recorded standards. Provisional standards are not validated benchmarks.</p>
+ </form></div>}</div>:tab==='reviews'&&isManager?<div className="card"><h2 className="text-lg font-semibold mb-3">Awaiting manager verification</h2><EnterpriseTable columns={reviewColumns} data={queue} loading={loading} emptyMessage="No daily reports awaiting review."/>
  {reviewDetail&&<section className="mt-5 space-y-3 border-t border-[var(--input-border)] pt-4">
  <div className="flex items-center justify-between"><h3 className="font-semibold">Employee report details</h3><button type="button" className="btn-secondary" onClick={()=>setReviewDetail(null)}>Close</button></div>
  <p className="text-sm">Employee: {reviewDetail.report.employee_id} • Date: {reviewDetail.report.work_date} • Site: {reviewDetail.report.site||'Not specified'}</p>

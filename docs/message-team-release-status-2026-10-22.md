@@ -41,3 +41,13 @@ Updated: 2026-10-22. Source: GitHub `main` after merged PRs #426, #428 and #431.
 
 ## Release decision
 **Merged code: yes. End-to-end production acceptance: not yet.** Keep all next changes in one cohesive Flutter + Supabase release branch rather than multiple small PRs.
+
+
+## 2026-10-22 continuation — screenshot UX and complete module handoff
+The original release register is historical. **For current authoritative status and all developer-agent instructions, read `docs/message-team-canonical-handoff.md`** in the same repository.
+
+- #433 and its subsequent lockfile fix are now part of the completed implementation history; recheck actual CI results.
+- PR #435 (branch `feature/message-team-audience-ux-20261022`) contains the compact role/country/site searchable selectors, selectable recipients and safe non-stale audience preview; this web page change is **not yet merged** at this checkpoint.
+- The owner wants a single coherent completion, no duplicate Expo work, no extra sidebar, Flutter-only future mobile and complete details of what is done versus outstanding for the next coding agent.
+- Release gates for #435: preview/send behavior, tenant and site validity, custom role semantics, accessible dropdown testing, production web lint/test/build, and no regressions to follow-up tasks, sent history or engagement.
+- Device verification and APNs provisioning are explicitly owner-managed; do not represent those as verified.

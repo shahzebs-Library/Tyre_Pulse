@@ -33,6 +33,11 @@ void main() {
     );
   });
 
+  test('existing message and broadcast notification destinations stay intact', () {
+    expect(route(type: 'action.assigned'), const NotificationsRoute());
+    expect(route(type: 'broadcast.sent'), const NotificationsRoute());
+  });
+
   group('local device notifications win on exact type', () {
     test('an inspection reminder opens a NEW inspection', () {
       // The string contains "inspection" and would otherwise fall into the

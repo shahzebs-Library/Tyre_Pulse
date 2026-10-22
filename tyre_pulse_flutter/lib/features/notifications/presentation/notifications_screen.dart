@@ -34,6 +34,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   final Set<String> _optimisticallyRead = <String>{};
   bool _allOptimisticallyRead = false;
   bool _markingAll = false;
+  String? _handledDeepLink;
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +45,23 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       AsyncData<List<AppNotification>>(:final value) => value,
       _ => const <AppNotification>[],
     };
+    final params = GoRouterState.of(context).uri.queryParameters;
+    final targetId = params['target_id'];
+    final targetType = params['target_type'];
+    final key = '$targetType:$targetId';
+    if (targetId != null && key != _handledDeepLink && currentRows.isNotEmpty) {
+      _handledDeepLink = key;
+      final match = currentRows.where((row) => row.entityId == targetId &&
+        ((targetType == 'action_item' && row.type == 'action_assigned') ||
+         (targetType == 'broadcast' && row.type == 'broadcast') ||
+         (targetType == 'action.assigned' && row.type == 'action_assigned') ||
+         (targetType == 'broadcast.sent' && row.type == 'broadcast'))).toList();
+      if (match.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _open(match.first, copy);
+        });
+      }
+    }
     final int unread =
         currentRows.where((AppNotification row) => !_isRead(row)).length;
 

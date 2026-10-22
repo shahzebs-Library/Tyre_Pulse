@@ -2,8 +2,10 @@ library;
 
 import 'dart:async';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Action Center task assigned through Message the Team.
 /// Every mutation runs through the employee-scoped backend RPC.
@@ -23,6 +25,7 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
   bool _saving = false;
   bool _uploading = false;
   String? _evidenceMessage;
+  List<Map<String, dynamic>> _evidence = <Map<String, dynamic>>[];
   String? _error;
   SupabaseClient get _db => Supabase.instance.client;
 
@@ -49,7 +52,11 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
           .select('id,title,status,assigned_user_id,source,due_date,recommended_action,blocked_reason,resolution')
           .eq('id', widget.actionId).eq('assigned_user_id', uid).maybeSingle();
       if (row == null) throw StateError('This action is not assigned to your account.');
+      final List<Map<String, dynamic>> evidence = await _db.from('team_action_evidence')
+          .select('id,storage_path,mime_type,created_at')
+          .eq('action_id', widget.actionId).order('created_at', ascending: false).limit(100);
       if (mounted) setState(() {
+        _evidence = evidence;
         _action = row;
         _reason.text = row['blocked_reason']?.toString() ?? '';
         _resolution.text = row['resolution']?.toString() ?? '';
@@ -110,10 +117,73 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
         'storage_path': path, 'mime_type': 'image/jpeg',
       });
       if (mounted) setState(() => _evidenceMessage = 'Photo uploaded securely.');
+      await _load();
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     } finally {
       if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  Future<void> _attachDocument() async {
+    if (_uploading || _action == null) return;
+    setState(() { _uploading = true; _error = null; });
+    String? uploadedPath;
+    try {
+      final uid = _db.auth.currentUser?.id;
+      if (uid == null) throw StateError('Please sign in.');
+      final PlatformFile? file = await FilePicker.pickFile(
+        type: FileType.custom,
+        allowedExtensions: <String>['pdf', 'jpg', 'jpeg', 'png', 'webp'],
+      );
+      if (file == null) return;
+      final extension = (file.extension ?? '').toLowerCase();
+      final mime = switch (extension) {
+        'pdf' => 'application/pdf',
+        'png' => 'image/png',
+        'webp' => 'image/webp',
+        'jpg' || 'jpeg' => 'image/jpeg',
+        _ => throw StateError('Only PDF and JPG, PNG or WEBP files are allowed.'),
+      };
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty || bytes.length > 10485760) {
+        throw StateError('Evidence must be between 1 byte and 10 MB.');
+      }
+      final path = '$uid/${widget.actionId}/${DateTime.now().microsecondsSinceEpoch}.$extension';
+      await _db.storage.from('team-action-evidence').uploadBinary(path, bytes,
+        fileOptions: FileOptions(contentType: mime, upsert: false));
+      uploadedPath = path;
+      await _db.from('team_action_evidence').insert(<String, dynamic>{
+        'action_id': widget.actionId, 'uploaded_by': uid,
+        'storage_path': path, 'mime_type': mime,
+      });
+      uploadedPath = null;
+      if (mounted) setState(() => _evidenceMessage = 'Evidence securely uploaded.');
+      await _load();
+    } catch (error) {
+      // A failed metadata insert must not leave an accessible orphan in storage.
+      if (uploadedPath != null) {
+        try {
+          await _db.storage.from('team-action-evidence').remove(<String>[uploadedPath]);
+        } catch (_) { /* keep original error; server cleanup can reconcile */ }
+      }
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  Future<void> _openEvidence(Map<String, dynamic> item) async {
+    try {
+      final path = item['storage_path']?.toString() ?? '';
+      if (path.isEmpty) return;
+      final signed = await _db.storage.from('team-action-evidence').createSignedUrl(path, 60);
+      final uri = Uri.parse(signed);
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        throw StateError('Could not open the evidence attachment.');
+      }
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
     }
   }
 
@@ -154,6 +224,13 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
                     TextField(controller: _resolution, maxLength: 4000, maxLines: 3,
                       decoration: const InputDecoration(labelText: 'Completion details', border: OutlineInputBorder())),
                 ],
+                if (_evidence.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 12),
+                  Text('Evidence (${_evidence.length})'),
+                  for (final file in _evidence)
+                    TextButton(onPressed: () => _openEvidence(file),
+                      child: Text(file['storage_path']?.toString().split('/').last ?? 'Evidence')),
+                ],
                 if (status == 'resolved') Text('Resolution: ${row['resolution'] ?? ''}'),
               ],
             ],
@@ -165,6 +242,9 @@ class _TeamActionDialogState extends State<TeamActionDialog> {
         if (row != null && (open || accepted || working || blocked))
           TextButton(onPressed: _uploading ? null : _uploadPhoto,
             child: Text(_uploading ? 'Uploading…' : 'Select photo evidence')),
+        if (row != null && (open || accepted || working || blocked))
+          TextButton(onPressed: _uploading ? null : _attachDocument,
+            child: const Text('Attach PDF or file')),
         if (open) TextButton(onPressed: _saving ? null : () => _transition('acknowledged'),
             child: const Text('Accept')),
         if (open || accepted || blocked)

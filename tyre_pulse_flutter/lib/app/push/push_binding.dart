@@ -12,7 +12,11 @@
 /// to the boot and login redirects.
 library;
 
+import 'dart:async';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/app_router.dart';
@@ -37,6 +41,7 @@ class PushBinding extends ConsumerStatefulWidget {
 class _PushBindingState extends ConsumerState<PushBinding> {
   late final PushCoordinator _coordinator;
   String? _userId;
+  Future<void> _receiptWork = Future<void>.value();
 
   @override
   void initState() {
@@ -65,6 +70,7 @@ class _PushBindingState extends ConsumerState<PushBinding> {
       if (_userId != userId) {
         _userId = userId;
         _coordinator.onSignedIn(userId);
+        _queueReceiptWork(() => _flushDeviceEvents(userId));
       }
       return;
     }
@@ -75,13 +81,79 @@ class _PushBindingState extends ConsumerState<PushBinding> {
   }
 
   void _open(PushMessage message) {
+    unawaited(_logDeviceEvent(message, 'opened_by_user'));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ref.read(routerProvider).push(message.destination.location);
+      final type = message.target.entityType ?? message.target.type ?? '';
+      final id = message.target.id;
+      if (id != null && (type == 'broadcast' || type == 'action_item' || type == 'broadcast.sent' || type == 'action.assigned')) {
+        final uri = Uri(path: '/notifications', queryParameters: <String, String>{'target_type': type, 'target_id': id});
+        ref.read(routerProvider).push(uri.toString());
+      } else {
+        ref.read(routerProvider).push(message.destination.location);
+      }
     });
   }
 
+  /// Queue app-observed FCM events so a temporary network failure does not
+  /// silently discard them. Stored per signed-in user; bounded at 100 items.
+  void _queueReceiptWork(Future<void> Function() operation) {
+    _receiptWork = _receiptWork.then((_) => operation()).catchError((Object _) {});
+  }
+
+  Future<void> _logDeviceEvent(PushMessage message, String event) async {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    final fcmId = message.messageId;
+    if (uid == null || fcmId == null || fcmId.isEmpty) return;
+    final kind = message.target.entityType ?? message.target.type;
+    final id = message.target.id;
+    _queueReceiptWork(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'tp_team_push_pending_$uid';
+      final pending = prefs.getStringList(key) ?? <String>[];
+      final record = jsonEncode(<String, String?>{
+        'user_id': uid,
+        'fcm_message_id': fcmId,
+        'event_type': event,
+        'entity_type': kind,
+        'entity_id': id,
+      });
+      if (!pending.contains(record)) {
+        pending.add(record);
+        // Prevent unbounded accumulation on devices without connectivity.
+        await prefs.setStringList(key, pending.length > 100
+            ? pending.sublist(pending.length - 100)
+            : pending);
+      }
+      await _flushDeviceEvents(uid);
+    });
+  }
+
+  Future<void> _flushDeviceEvents(String userId) async {
+    if (Supabase.instance.client.auth.currentUser?.id != userId) return;
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'tp_team_push_pending_$userId';
+    final pending = prefs.getStringList(key) ?? <String>[];
+    if (pending.isEmpty) return;
+    final remaining = <String>[];
+    for (final serialized in pending) {
+      if (Supabase.instance.client.auth.currentUser?.id != userId) {
+        remaining.add(serialized);
+        continue;
+      }
+      try {
+        final record = jsonDecode(serialized) as Map<String, dynamic>;
+        await Supabase.instance.client.from('team_push_device_events')
+            .upsert(record, onConflict: 'user_id,fcm_message_id,event_type');
+      } catch (_) {
+        remaining.add(serialized);
+      }
+    }
+    await prefs.setStringList(key, remaining);
+  }
+
   void _showBanner(PushMessage message) {
+    unawaited(_logDeviceEvent(message, 'received_foreground'));
     if (!mounted) return;
     final ScaffoldMessengerState? messenger =
         ScaffoldMessenger.maybeOf(context);

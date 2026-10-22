@@ -15,6 +15,8 @@ import {
   Download, FileText, Search, Languages, Inbox, Clock,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import Illustration from '../components/illustrations/Illustration'
+import { ensureActionItem } from '../lib/api/actionCenter'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import {
@@ -91,6 +93,10 @@ export default function Broadcast() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
+  const [followUp, setFollowUp] = useState({ title: '', assignee: '', due: '', site: '' })
+  const [taskSaving, setTaskSaving] = useState(false)
+  const [taskResult, setTaskResult] = useState(null)
+  const [taskError, setTaskError] = useState('')
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }))
 
@@ -130,7 +136,7 @@ export default function Broadcast() {
   const canSend = !problem && !sending && (audience?.total ?? 0) > 0
 
   async function send() {
-    setSending(true); setError(''); setResult(null)
+    setSending(true); setError(''); setResult(null); setTaskResult(null); setTaskError('')
     try {
       const r = await sendBroadcast({ ...form, roles, countries, sites })
       if (!r.ok) {
@@ -140,11 +146,41 @@ export default function Broadcast() {
         return
       }
       setResult(r)
+      setFollowUp({ title: form.title, assignee: '', due: '', site: sites.length === 1 ? sites[0] : '' })
       setForm({ title: '', body: '', titleAr: '', bodyAr: '', sendPush: true })
       setHistory(await listBroadcasts().catch(() => history))
     } catch (e) {
       setError(toUserMessage(e, 'The message could not be sent.'))
     } finally { setSending(false) }
+  }
+
+  // A task is deliberately a separate, explicit action after sending. A message
+  // can reach several people, whereas an Action Center item has one owner.
+  // Retrying this operation uses a stable source key to avoid duplicate actions.
+  async function createFollowUp() {
+    if (!result?.ok || !result.id || taskSaving || taskResult) return
+    if (!followUp.title.trim() || !followUp.assignee.trim() || !followUp.due) {
+      setTaskError('Enter a task title, responsible person and due date.')
+      return
+    }
+    setTaskSaving(true); setTaskError('')
+    try {
+      const { item } = await ensureActionItem({
+        title: followUp.title.trim(),
+        source: `broadcast:${result.id}`,
+        category: 'other',
+        severity: 'medium',
+        assigned_to: followUp.assignee.trim(),
+        due_date: followUp.due,
+        site: followUp.site.trim() || null,
+        country: countries.length === 1 ? countries[0] : null,
+        recommended_action: 'Follow up on the team communication and record completion evidence.',
+        notes: `Follow-up to team message ${result.id}. Created by Message the Team.`,
+      })
+      if (!item?.id) throw new Error('Task was not confirmed by Action Center.')
+      setTaskResult(item)
+    } catch (e) { setTaskError(toUserMessage(e, 'Could not create the follow-up task.')) }
+    finally { setTaskSaving(false) }
   }
 
   return (
@@ -160,6 +196,17 @@ export default function Broadcast() {
         )}
       />
 
+      <section className="relative overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--card-bg)] px-5 py-4 sm:px-7" aria-label="Team communication">
+        <div className="flex items-center justify-between gap-5">
+          <div className="max-w-2xl space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">Connected communication</p>
+            <h2 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)]">Reach the right team. Follow through on every action.</h2>
+            <p className="text-sm text-[var(--text-secondary)]">Publish targeted instructions to the in-app inbox, queue optional phone alerts, then assign accountable follow-up work through Action Center.</p>
+          </div>
+          <div className="hidden sm:block shrink-0" aria-hidden="true"><Illustration name="module/notifications" size={166} animate={false} /></div>
+        </div>
+      </section>
+
       {error && (
         <div className="card border-amber-500/40 flex items-start gap-2 text-sm text-amber-300">
           <AlertTriangle size={16} className="mt-0.5 shrink-0" /> {error}
@@ -174,6 +221,38 @@ export default function Broadcast() {
             ? `, and ${result.pushes_queued} phone ${result.pushes_queued === 1 ? 'push was' : 'pushes were'} queued.`
             : '. Nobody in that audience has the phone app signed in yet, so no push was sent.'}
         </div>
+      )}
+
+      {result?.ok && (
+        <section className="card space-y-3" aria-label="Create a follow-up task">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div><h3 className="font-semibold text-[var(--text-primary)]">Assign follow-up work</h3>
+              <p className="text-xs text-[var(--text-secondary)]">Optional: create a real Action Center task linked to this sent message. This does not send a second broadcast.</p></div>
+            <span className="text-xs text-[var(--text-muted)]">Message ID: {result.id || 'Unavailable'}</span>
+          </div>
+          {taskResult ? (
+            <div role="status" className="rounded-lg border border-emerald-500/40 p-3 text-sm text-[var(--text-primary)]">
+              <Check size={15} className="inline mr-2 text-emerald-500" />Task created in Action Center: {taskResult.title}. Status: {taskResult.status || 'open'}.
+              <a href="/action-center" className="ml-2 underline text-[var(--accent)]">Open Action Center</a>
+            </div>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-4">
+              <label className="flex flex-col gap-1 md:col-span-2"><span className={labelCls}>Task title</span>
+                <input className={inputCls} maxLength={300} value={followUp.title} onChange={(e) => setFollowUp((f) => ({ ...f, title: e.target.value }))} /></label>
+              <label className="flex flex-col gap-1"><span className={labelCls}>Responsible person</span>
+                <input className={inputCls} maxLength={200} value={followUp.assignee} placeholder="Employee name" onChange={(e) => setFollowUp((f) => ({ ...f, assignee: e.target.value }))} /></label>
+              <label className="flex flex-col gap-1"><span className={labelCls}>Due date</span>
+                <input className={inputCls} type="date" value={followUp.due} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setFollowUp((f) => ({ ...f, due: e.target.value }))} /></label>
+              <label className="flex flex-col gap-1"><span className={labelCls}>Site (optional)</span>
+                <input className={inputCls} value={followUp.site} onChange={(e) => setFollowUp((f) => ({ ...f, site: e.target.value }))} /></label>
+              <div className="md:col-span-3 flex flex-wrap items-center gap-3 justify-end">
+                {taskError && <p role="alert" className="text-xs text-red-400">{taskError}</p>}
+                <button type="button" onClick={createFollowUp} disabled={taskSaving || !result.id} className="btn-primary disabled:opacity-40">{taskSaving ? 'Creating task…' : 'Create Action Center task'}</button>
+              </div>
+            </div>
+          )}
+          <p className="text-[11px] text-[var(--text-tertiary)]">Assignment is stored as an Action Center item. Automatic task-assignment phone push and recipient read receipts are not yet enabled by this change.</p>
+        </section>
       )}
 
       <div className="card space-y-4">

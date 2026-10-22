@@ -206,7 +206,7 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
   useEffect(() => {
     let alive=true
     setPhotoUrls({}); setPhotoErrors({})
-    Promise.all(evidence.photos.map(async item => {
+    Promise.all(evidence.allPhotos.map(async item => {
       try {
         const url=await resolveStorageUrl(item.ref)
         if (!alive) return
@@ -267,12 +267,12 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Metric label="Tyre positions" value={evidence.positions}/>
             <Metric label="Abnormal" value={evidence.abnormalPositions}/>
-            <Metric label="Defect photos" value={evidence.defectPhotos}/>
+            <Metric label="Photos available" value={evidence.allPhotoCount}/>
             <Metric label="No evidence" value={evidence.abnormalPositionsMissingPhotos.length}/>
           </div>
           {evidence.abnormalPositionsMissingPhotos.length>0 && <div className="rounded-lg p-3 border border-amber-500/30 bg-amber-500/10 flex items-start gap-2 text-sm"><AlertCircle size={17} className="text-amber-500 shrink-0"/><span>No photo is linked to abnormal positions: {evidence.abnormalPositionsMissingPhotos.join(', ')}. Request evidence from the inspector.</span></div>}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {evidence.photos.map(photo=>{
+            {evidence.allPhotos.map(photo=>{
               const key=photo.position+':'+photo.ref
               return <div key={key} className="rounded-xl border border-[var(--border-dim)] overflow-hidden">
                 <div className="p-3 flex justify-between items-center"><span className="font-semibold">{photo.position}</span><span className="text-xs text-[var(--text-muted)]">{photo.condition}</span></div>
@@ -282,7 +282,7 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
               </div>
             })}
           </div>
-          {!evidence.photos.length && <EmptyState icon={ImageIcon} title="No damage photographs" description="Photos will appear here when inspectors attach evidence to abnormal tyre positions."/>}
+          {!evidence.allPhotos.length && <EmptyState icon={ImageIcon} title="No tyre photographs" description="Photos will appear here when inspectors attach photos to tyre positions."/>}
         </>}
         {activeTab==='measurements' && <>
           <PhotoCaptureGuide/>
@@ -312,7 +312,7 @@ function InspectionDetail({ inspection, activeTab, onTab, onClose }) {
           <Card>
             <div className="flex justify-between items-start gap-4 flex-wrap">
               <div><h3 className="font-semibold">AI photo review</h3><p className="text-xs text-[var(--text-muted)] mt-1">The background worker can inspect visible damage or, on demand, screen all photographed tyres without a gauge. It identifies patterns, not exact tread-depth millimetres. Findings require qualified review.</p></div>
-              <div className="flex gap-2"><button className="btn-secondary" onClick={refreshAnalysis} disabled={analysisLoading}>Refresh</button><button className="btn-primary" onClick={enqueue} disabled={analysisLoading||!evidence.photos.length}>{analysisLoading?'Working…':'Queue defect photos'}</button><button className="btn-secondary" type="button" onClick={screenAll} disabled={analysisLoading||!allPhotosCount}>{analysisLoading?'Working…':'Screen all photographed tyres'}</button></div>
+              <div className="flex gap-2"><button className="btn-secondary" onClick={refreshAnalysis} disabled={analysisLoading}>Refresh</button><button className="btn-primary" onClick={enqueue} disabled={analysisLoading||!evidence.photos.length}>{analysisLoading?'Working…':'Queue defect photos'}</button><button className="btn-secondary" type="button" onClick={screenAll} disabled={analysisLoading||!evidence.allPhotoCount}>{analysisLoading?'Working…':'Screen all photographed tyres'}</button></div>
             </div>
             {analysisError && <p role="alert" className="text-red-500 text-sm mt-3">{analysisError}</p>}
           </Card>

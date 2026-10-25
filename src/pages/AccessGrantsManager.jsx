@@ -605,11 +605,11 @@ export default function AccessGrantsManager() {
                     >
                       {CAPABILITIES.filter((c) => c.key !== 'delete').map((c) => (
                         <option key={c.key} value={c.key}>
-                          {c.label}{c.enforced ? ' (enforced)' : ' (stored only)'}
+                          {c.label}{c.enforced ? (c.enforcement === 'app' ? ' (enforced in app + audit)' : ' (enforced)') : ' (stored only)'}
                         </option>
                       ))}
                     </select>
-                    <p className="text-[11px] text-[var(--text-muted)] mt-1">View is enforced; Delete is fixed to Admin/Super Admin and cannot be delegated.</p>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1">View, Create, Edit and Approve are enforced by the database; Export is enforced in the app and audit trail (a browser cannot be a hard boundary). Delete is fixed to Admin/Super Admin and cannot be delegated.</p>
                   </div>
 
                   {/* Expiry */}

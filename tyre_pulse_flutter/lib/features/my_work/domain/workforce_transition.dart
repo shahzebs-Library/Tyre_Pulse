@@ -1,7 +1,7 @@
 /// The employee-side vocabulary for a company work assignment.
 ///
 /// Mirrors the CASE block of `public.workforce_assignment_transition()` in
-/// `supabase/migrations/20261023090000_workforce_transitions_and_estimation.sql`
+/// `supabase/migrations/20261023091000_workforce_transitions_and_estimation.sql`
 /// and `src/lib/workforceTransitions.js`. `src/test/workforceTransitions.test.js`
 /// reads this file and fails when the three copies drift. The database is the
 /// authority: this table only decides which buttons to offer and whether a

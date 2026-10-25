@@ -32,11 +32,13 @@ describe('resolveCapability precedence', () => {
 })
 
 describe('CAPABILITIES enforcement honesty', () => {
-  it('marks view, create, edit (core tables) and admin-only delete as server-enforced; export and approve stay stored only', () => {
+  it('marks every capability as enforced and states HOW export differs (app + audit, not a hard boundary)', () => {
     const enforced = CAPABILITIES.filter((c) => c.enforced).map((c) => c.key)
-    expect(enforced).toEqual(['view', 'create', 'edit', 'delete'])
-    for (const c of CAPABILITIES) {
-      if (['export', 'approve'].includes(c.key)) expect(c.enforced).toBe(false)
-    }
+    expect(enforced).toEqual(['view', 'create', 'edit', 'delete', 'export', 'approve'])
+    const byKey = Object.fromEntries(CAPABILITIES.map((c) => [c.key, c]))
+    expect(byKey.export.enforcement).toBe('app')
+    expect(byKey.export.description).toMatch(/app and audit/i)
+    expect(byKey.export.description).toMatch(/RLS/)
+    expect(byKey.approve.enforcement).toBe('database')
   })
 })

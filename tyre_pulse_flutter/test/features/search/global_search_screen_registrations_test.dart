@@ -23,9 +23,9 @@ void main() {
     const GlobalSearchRoute route = GlobalSearchRoute(initialQuery: 'TM514');
     final Widget widget =
         globalSearchScreenRegistrations[TpRouteId.globalSearch]!(
-          context,
-          route,
-        );
+      context,
+      route,
+    );
     expect(widget, isA<GlobalSearchScreen>());
     expect((widget as GlobalSearchScreen).route, route);
   });
@@ -33,9 +33,9 @@ void main() {
   test('a mismatched route degrades to the placeholder, not a throw', () {
     final Widget widget =
         globalSearchScreenRegistrations[TpRouteId.globalSearch]!(
-          context,
-          const HomeRoute(),
-        );
+      context,
+      const HomeRoute(),
+    );
     expect(widget, isNot(isA<GlobalSearchScreen>()));
   });
 

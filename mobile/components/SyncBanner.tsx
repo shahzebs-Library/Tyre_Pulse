@@ -6,6 +6,7 @@ import {
   getPendingRecordCount, syncRecordQueue, retryFailedRecords,
 } from '../lib/recordQueue'
 import { useLanguage } from '../contexts/LanguageContext'
+import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { addNetworkStateListener } from 'expo-network'
 import { isNetworkUsable } from '../lib/networkReachable'
@@ -13,6 +14,8 @@ import { isNetworkUsable } from '../lib/networkReachable'
 export default function SyncBanner() {
   const { t } = useLanguage()
   const { theme } = useTheme()
+  // True when the profile on screen is the cached copy because the live read failed.
+  const { profileStale } = useAuth()
   const [pending, setPending] = useState(0)
   const [syncing, setSyncing] = useState(false)
   const [online, setOnline] = useState(true)
@@ -80,25 +83,26 @@ export default function SyncBanner() {
     }
   }, [pending, pulse])
 
-  if (pending === 0 && online) return null
+  if (pending === 0 && online && !profileStale) return null
 
   const pendingLabel = pending !== 1
     ? `${pending} ${t('sync.pendingPlural')}`
     : `${pending} ${t('sync.pendingSingle')}`
 
-  const tone = online ? theme.color.success : theme.color.warning
+  const showStale = profileStale && pending === 0 && online
+  const tone = online && !showStale ? theme.color.success : theme.color.warning
 
   return (
     <View style={[styles.banner, { backgroundColor: tone.soft, borderBottomColor: tone.base + '33' }]}>
       <Animated.View style={{ transform: [{ scale: pulse }] }}>
         <Ionicons
-          name={online ? 'cloud-upload-outline' : 'cloud-offline-outline'}
+          name={online && !showStale ? 'cloud-upload-outline' : 'cloud-offline-outline'}
           size={16}
           color={tone.base}
         />
       </Animated.View>
       <Text style={[styles.text, { color: tone.on }]}>
-        {!online ? t('sync.offline') : pendingLabel}
+        {!online ? t('sync.offline') : showStale ? t('sync.staleProfile') : pendingLabel}
       </Text>
       {online && pending > 0 && (
         <TouchableOpacity onPress={attemptSync} disabled={syncing}>

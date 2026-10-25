@@ -270,6 +270,7 @@
     "useLastPressure": "Use last pressure"
   },
   "sync": {
+    "staleProfile": "Working offline - showing your last saved account details",
     "offline": "Offline - inspections will sync when connected",
     "pendingSingle": "inspection pending sync",
     "pendingPlural": "inspections pending sync",
@@ -821,6 +822,9 @@
         },
         "workorders": {
           "label": "Work Orders"
+        },
+        "correctiveActions": {
+          "label": "Corrective Actions"
         },
         "rca": {
           "label": "Root Cause"

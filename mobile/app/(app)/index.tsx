@@ -163,7 +163,8 @@ const QUICK_ACTIONS: QuickAction[] = [
   // Maintenance ---------------------------------------------------------------
   { module: 'accidents',      section: 'Maintenance', icon: 'warning-outline',        label: 'Accidents',       route: '/(app)/accident/dashboard', tone: 'alert' },
   { module: 'reportAccident', section: 'Maintenance', icon: 'alert-circle-outline',   label: 'File Accident',   route: '/(app)/accident/report',    tone: 'alert' },
-  { module: 'workorders',     section: 'Maintenance', icon: 'construct-outline',      label: 'Work Orders',     route: '/(app)/workorders' },
+  { module: 'workorders',     section: 'Maintenance', icon: 'construct-outline',      label: 'Work Orders',     route: '/(app)/work-orders' },
+  { id: 'correctiveActions', module: 'workorders', section: 'Maintenance', icon: 'clipboard-outline', label: 'Corrective Actions', route: '/(app)/workorders' },
   { module: 'rca',            section: 'Maintenance', icon: 'git-branch-outline',     label: 'Root Cause',      route: '/(app)/rca' },
   { module: 'tasks',          section: 'Maintenance', icon: 'list-outline',           label: 'Tasks',           route: '/(app)/tasks' },
   { module: 'stock',          section: 'Maintenance', icon: 'cube-outline',           label: 'Stock Count',     route: '/(app)/stock' },

@@ -816,7 +816,7 @@ function MainApp() {
                       <Route path="/engine-hours"          element={<Safe><RoleRoute allowed={['Admin']}><EngineHours /></RoleRoute></Safe>} />
                       <Route path="/odometer-logs"         element={<Safe><ModuleRoute moduleKey="odometer_logs"><OdometerLogs /></ModuleRoute></Safe>} />
                       <Route path="/fleet-utilization"     element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><FleetUtilization /></RoleRoute></Safe>} />
-                      <Route path="/pm-programs"           element={<Safe><RoleRoute allowed={['Admin']}><ModuleRoute moduleKey="pm_programs"><PmPrograms /></ModuleRoute></RoleRoute></Safe>} />
+                      <Route path="/pm-programs"           element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><ModuleRoute moduleKey="pm_programs"><PmPrograms /></ModuleRoute></RoleRoute></Safe>} />
                       <Route path="/vehicle-washing"       element={<Safe><ModuleRoute moduleKey="vehicle_washing"><VehicleWashing /></ModuleRoute></Safe>} />
                       <Route path="/trips"                 element={<Safe><RoleRoute allowed={['Admin']}><Trips /></RoleRoute></Safe>} />
                       <Route path="/route-optimization"    element={<Safe><RoleRoute allowed={['Admin']}><RouteOptimization /></RoleRoute></Safe>} />

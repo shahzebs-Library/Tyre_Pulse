@@ -172,7 +172,7 @@ export const NAV_COMMANDS = [
   { id: 'heat-intelligence', label: 'Heat Intelligence', path: '/heat-intelligence', icon: 'Thermometer', roles: ANALYTICS_ROLES },
   { id: 'fleet-optimizer', label: 'Fleet Optimizer', path: '/fleet-optimizer', icon: 'SlidersHorizontal', adminOnly: true },
   { id: 'technician-scorecard', label: 'Technician Scorecard', path: '/technician-scorecard', icon: 'Award', adminOnly: true },
-  { id: 'pm-programs', label: 'Preventive Maintenance', path: '/pm-programs', icon: 'CalendarClock', adminOnly: true },
+  { id: 'pm-programs', label: 'Preventive Maintenance', path: '/pm-programs', icon: 'CalendarClock', roles: ANALYTICS_ROLES },
   { id: 'vehicle-washing', label: 'Vehicle Washing', path: '/vehicle-washing', icon: 'Droplet', moduleKey: 'vehicle_washing' },
   { id: 'dtc', label: 'DTC Diagnostics', path: '/dtc', icon: 'Cpu', adminOnly: true },
   { id: 'fuel-cards', label: 'Fuel Cards', path: '/fuel-cards', icon: 'CreditCard', adminOnly: true },

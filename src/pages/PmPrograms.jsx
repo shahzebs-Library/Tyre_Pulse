@@ -55,6 +55,7 @@ import {
 } from '../lib/pmPrograms'
 import { templatesFor, applyTemplate } from '../lib/pmTemplates'
 import PmVehicleLookup from '../components/PmVehicleLookup'
+import PmBulkFromTemplate from '../components/pm/PmBulkFromTemplate'
 import { pmVehicleProfile, pmNextDueFromService } from '../lib/pmVehicleSetup'
 import {
   costByAsset, costByCategory, monthlyServiceCost, outcomeBreakdown, pmSummary,
@@ -291,6 +292,7 @@ export default function PmPrograms() {
   // One country = one currency. On the All countries view, money that would
   // add SAR, AED and EGP together is withheld rather than mislabelled.
   const singleCountry = isSingleCountry(activeCountry)
+  const [bulkOpen, setBulkOpen] = useState(false)
   const moneyCurrency = pageCurrency(activeCountry, activeCurrency)
   const MIXED_REASON = 'Choose one country. Costs from several countries are in different currencies.'
 
@@ -786,11 +788,17 @@ export default function PmPrograms() {
           <button type="button" className="cc-btn-ghost" onClick={load} disabled={refreshing}>
             <RefreshCw size={14} className={refreshing ? 'pmp-spin' : ''} aria-hidden="true" /> Refresh
           </button>
+          <button type="button" className="cc-btn-ghost" onClick={() => setBulkOpen(true)} disabled={missing || !singleCountry}
+            title={singleCountry ? undefined : 'Choose one country first'}>
+            <Plus size={15} aria-hidden="true" /> From template
+          </button>
           <button type="button" className="cc-btn-primary" onClick={openCreate} disabled={missing}>
             <Plus size={15} aria-hidden="true" /> New plan
           </button>
         </div>
       </div>
+
+      {bulkOpen && <PmBulkFromTemplate country={activeCountry} plans={plans} onClose={() => setBulkOpen(false)} onDone={load} />}
 
       {missing && (
         <div className="cc-card pmp-banner warn" role="status">

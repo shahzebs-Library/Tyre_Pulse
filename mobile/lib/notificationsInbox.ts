@@ -127,6 +127,13 @@ export function notificationRoute(n: Pick<AppNotification, 'type' | 'entity_type
     return messageId ? `/(app)/team-message/${encodeURIComponent(messageId)}` : '/(app)/notifications'
   }
   if (k === 'driver_workspace' || t === 'driver_workspace') return '/(app)/driver-workspace'
+  // Due alerts (type due_<rule_key>, see src/lib/dueAlertLinks.js). Rules with no phone screen open the inbox.
+  if (t.startsWith('due_')) {
+    if (t === 'due_pm_due') return '/(app)/maintenance'
+    if (t === 'due_inspection_plan_overdue') return '/(app)/calendar'
+    if (t === 'due_stock_low') return '/(app)/stock'
+    return '/(app)/notifications'
+  }
 
   // Workshop Status: a daily upload or an assignment on the workshop sheet.
   // Checked BEFORE the generic workshop bucket below (which routes job cards to

@@ -62,8 +62,8 @@ export async function getPmProgram(id) {
   return unwrap(await supabase.from('pm_programs').select(COLS).eq('id', id).maybeSingle())
 }
 
-/** Create a PM program. `name` is required. */
-export async function createPmProgram(values = {}) {
+/** Validate and shape one PM program for insert. `name` is required. */
+function pmInsertPayload(values = {}) {
   const name = String(values.name || '').trim()
   if (!name) throw new Error('A program name is required.')
   const intervalType = PM_INTERVAL_VALUES.includes(values.interval_type) ? values.interval_type : 'months'
@@ -93,7 +93,28 @@ export async function createPmProgram(values = {}) {
     estimated_cost: numOrNull(values.estimated_cost),
     task_list: Array.isArray(values.task_list) ? values.task_list : [],
   }
+  return payload
+}
+
+/** Create a PM program. `name` is required. */
+export async function createPmProgram(values = {}) {
+  const payload = pmInsertPayload(values)
   return unwrap(await supabase.from('pm_programs').insert(payload).select(COLS).single())
+}
+
+/**
+ * Create many PM programs (chunks of 100). Every row is validated first, so one bad row fails the whole call
+ * before anything is written. Returns the number created.
+ */
+export async function bulkCreatePmPrograms(rows = []) {
+  const payloads = (rows || []).map(pmInsertPayload)
+  let created = 0
+  for (let i = 0; i < payloads.length; i += 100) {
+    const chunk = payloads.slice(i, i + 100)
+    unwrap(await supabase.from('pm_programs').insert(chunk).select('id'))
+    created += chunk.length
+  }
+  return created
 }
 
 /** Patch a PM program. Immutable columns are stripped before update. */

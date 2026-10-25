@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchLatestAlerts, markNotificationRead, countUnread } from '../lib/notifications'
 import { toUserMessage } from '../lib/safeError'
+import { isDueAlert, dueAlertSeverity } from '../lib/dueAlertLinks'
 
 const STORAGE_KEY = 'tp_realtime_notifications'
 const MAX_NOTIFICATIONS = 50
@@ -150,7 +151,7 @@ function buildDbNotification(row) {
     type:       row.type || 'info',
     title:      row.title || 'Notification',
     message:    row.body || '',
-    severity:   NOTIF_SEVERITY[row.type] || 'Medium',
+    severity:   isDueAlert(row.type) ? dueAlertSeverity(row.type) : (NOTIF_SEVERITY[row.type] || 'Medium'),
     assetNo:    null,
     entityType: row.entity_type || null,
     entityId:   row.entity_id || null,

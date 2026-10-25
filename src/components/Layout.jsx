@@ -188,7 +188,7 @@ const NAV_GROUPS = [
       { to: '/breakdowns',      label: 'Breakdown Callouts', parent: 'Jobs', icon: PhoneCall, adminOnly: A },
       { to: '/repair-requests',     label: 'Repair Requests (RFR)', parent: 'Jobs', icon: ClipboardList, roles: ANALYTICS_ROLES },
       { to: '/asset-breakdowns',    label: 'Breakdown Register', parent: 'Jobs', icon: Wrench, roles: ANALYTICS_ROLES },
-      { to: '/pm-programs',     label: 'Preventive Maintenance', parent: 'Maintenance', icon: CalendarClock, adminOnly: A },
+      { to: '/pm-programs',     label: 'Preventive Maintenance', parent: 'Maintenance', icon: CalendarClock, roles: ANALYTICS_ROLES },
       { to: '/maintenance-calendar', label: 'Maintenance Calendar', parent: 'Maintenance', icon: Calendar, adminOnly: A },
       { to: '/predictive-maintenance', label: 'Predictive Maintenance', parent: 'Maintenance', icon: ServiceCalendarIc, adminOnly: A },
       { to: '/downtime',        label: 'Downtime Tracker', parent: 'Maintenance',   icon: Clock, adminOnly: A },

@@ -11,6 +11,7 @@ import { useFeatureGate } from '../hooks/useFeatureFlags'
 import { groupByDay } from '../lib/notifications'
 import { filterInboxNotifications, groupInboxUpdates } from '../lib/notificationInbox'
 import { isWorkshopNotification, workshopNotificationLink } from '../lib/workshopStatus/notificationLinks'
+import { isDueAlert, dueAlertLink } from '../lib/dueAlertLinks'
 import './notificationCenter.css'
 
 const SEVERITY = {
@@ -24,6 +25,7 @@ const FILTERS = [['inbox', 'Inbox'], ['approvals', 'Approvals'], ['critical', 'C
 // Keep routing identical to the live panel; review decisions stay on guarded pages.
 function notificationLink(n) {
   if (isWorkshopNotification(n)) return workshopNotificationLink(n)
+  if (isDueAlert(n.type)) return dueAlertLink(n.type)
   if (n.type === 'driver_workspace') return '/driver-workspace'
   if (n.type === 'approval') return '/approvals'
   if (n.type === 'approval_decision') {

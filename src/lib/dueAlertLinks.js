@@ -13,6 +13,7 @@ const LINKS = Object.freeze({
   due_insurance_policy_expiry: '/insurance-policies',
   due_fleet_document_expiry: '/fleet-master',
   due_tyre_end_of_life: '/tyre-lifecycle',
+  due_fleet_document_missing: '/fleet-master',
 })
 
 const SEVERITY = Object.freeze({
@@ -23,6 +24,7 @@ const SEVERITY = Object.freeze({
   due_certification_expiry: 'High',
   due_fleet_document_expiry: 'High',
   due_tyre_end_of_life: 'High',
+  due_fleet_document_missing: 'Medium',
 })
 
 export const isDueAlert = (type) => typeof type === 'string' && type.startsWith(DUE_ALERT_PREFIX)

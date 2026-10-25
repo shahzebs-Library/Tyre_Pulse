@@ -6,15 +6,16 @@ import { isDueAlert, dueAlertLink, dueAlertSeverity } from '../lib/dueAlertLinks
 const read = (f) => readFileSync(resolve(process.cwd(), 'supabase/migrations/' + f), 'utf8').replace(/\r/g, '')
 const sql = read('20261025090000_due_alerts_engine.sql')
 const sql2 = read('20261025100000_due_alerts_tyre_end_of_life.sql')
+const sql3 = read('20261025130000_due_alerts_missing_documents.sql')
 
 describe('due alert links', () => {
   it('every seeded rule has a link and a severity', () => {
-    const keys = [...sql.matchAll(/^ \('(\w+)',/gm), ...sql2.matchAll(/^values \('(\w+)',/gm)].map(m => m[1])
-    expect(keys.length).toBe(7)
+    const keys = [...sql.matchAll(/^ \('(\w+)',/gm), ...sql2.matchAll(/^values \('(\w+)',/gm), ...sql3.matchAll(/^values \('(\w+)',/gm)].map(m => m[1])
+    expect(keys.length).toBe(8)
     for (const k of keys) {
       expect(isDueAlert('due_' + k)).toBe(true)
       expect(dueAlertLink('due_' + k)).toMatch(/^\//)
-      expect(['Critical', 'High']).toContain(dueAlertSeverity('due_' + k))
+      expect(['Critical', 'High', 'Medium']).toContain(dueAlertSeverity('due_' + k))
     }
   })
   it('ignores other notification types', () => {

@@ -15,6 +15,7 @@ import 'package:tyre_pulse/app/telemetry/telemetry_user_binding.dart';
 import 'package:tyre_pulse/app/theme/tp_display_settings.dart';
 import 'package:tyre_pulse/app/theme/tp_display_settings_prefs_store.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
+import 'package:tyre_pulse/app/workforce/workforce_sync_binding.dart';
 import 'package:tyre_pulse/core/auth/auth_dependency_providers.dart';
 import 'package:tyre_pulse/core/auth/auth_providers.dart';
 import 'package:tyre_pulse/core/database/app_database.dart';
@@ -427,7 +428,11 @@ class TyrePulseApp extends ConsumerWidget {
         onReport: (BuildContext stateContext) =>
             unawaited(openReportProblem(stateContext)),
         child: TelemetryUserBinding(
-          child: PushBinding(child: child ?? const SizedBox.shrink()),
+          child: PushBinding(
+            child: WorkforceSyncBinding(
+              child: child ?? const SizedBox.shrink(),
+            ),
+          ),
         ),
       ),
       theme: TpTheme.light,

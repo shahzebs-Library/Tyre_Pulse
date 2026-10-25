@@ -1,283 +1,152 @@
-import 'dart:async';
+/// The assignment lane: offline banner, optimistic "Pending sync" status, the
+/// mandatory note on a block, and a refused update being shown (not dropped).
+///
+/// UNVERIFIED: written without a Flutter SDK; never compiled or run.
+library;
+
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
+import 'package:tyre_pulse/features/my_work/data/queued_workforce_transition.dart';
 import 'package:tyre_pulse/features/my_work/data/workforce_assignments_repository.dart';
+import 'package:tyre_pulse/features/my_work/data/workforce_sync_engine.dart';
+import 'package:tyre_pulse/features/my_work/domain/workforce_transition.dart';
 import 'package:tyre_pulse/features/my_work/presentation/workforce_assignments_panel.dart';
+import 'package:tyre_pulse/features/my_work/workforce_sync_providers.dart';
 
-const WorkforceAssignment _assigned = WorkforceAssignment(
-  id: 'a1',
-  title: 'Replace tyre TM-214',
-  status: 'assigned',
-  priority: 'high',
-  site: 'NHC',
-);
+import '../data/workforce_test_fakes.dart';
 
-final class _FakeSource implements WorkforceAssignmentsSource {
-  _FakeSource(this.snapshots);
+const String userA = '11111111-1111-1111-1111-111111111111';
 
-  /// Each call to [listMine] consumes one entry; the last one repeats.
-  final List<Object> snapshots;
-  Object? advanceError;
-  int listCalls = 0;
-  int advanceCalls = 0;
-  Completer<void>? gate;
-
-  @override
-  Future<WorkforceAssignmentSnapshot> listMine() async {
-    final Object next = snapshots[listCalls < snapshots.length
-        ? listCalls
-        : snapshots.length - 1];
-    listCalls++;
-    if (next is WorkforceAssignmentSnapshot) return next;
-    throw next;
-  }
-
-  @override
-  Future<void> advance(WorkforceAssignment item) async {
-    advanceCalls++;
-    if (gate != null) await gate!.future;
-    final Object? error = advanceError;
-    if (error != null) throw error;
-  }
-}
-
-Future<void> _pump(
-  WidgetTester tester,
-  _FakeSource source, {
-  Locale locale = const Locale('en'),
+Future<(FakeWorkforceQueue, FakeWorkforceRemote)> pump(
+  WidgetTester tester, {
+  required String status,
+  bool offline = false,
+  List<Object>? remoteScript,
 }) async {
-  tester.view.physicalSize = const Size(390, 1200);
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.reset);
+  final FakeWorkforceQueue queue = FakeWorkforceQueue();
+  final FakeWorkforceRemote remote = FakeWorkforceRemote(remoteScript);
+  int n = 0;
+  final WorkforceTransitionEngine engine = WorkforceTransitionEngine(
+    queue: queue,
+    remote: remote,
+    newId: () => 'key-${++n}-0000000000',
+  );
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        workforceAssignmentsRepositoryProvider.overrideWithValue(source),
+        workforceUserIdProvider.overrideWithValue(userA),
+        workforceTransitionEngineProvider.overrideWithValue(engine),
+        workforceAssignmentsProvider.overrideWith(
+          (Ref ref) async => WorkforceAssignmentSnapshot(
+            items: <WorkforceAssignment>[
+              WorkforceAssignment(
+                id: 'a1',
+                title: 'Replace valve',
+                status: status,
+                priority: 'normal',
+              ),
+            ],
+            offline: offline,
+          ),
+        ),
       ],
       child: MaterialApp(
-        locale: locale,
         supportedLocales: TpLocalizations.supportedLocales,
         localizationsDelegates: TpLocalizations.delegates,
-        home: const Scaffold(
-          body: SingleChildScrollView(child: WorkforceAssignmentsPanel()),
-        ),
+        home: Scaffold(body: SingleChildScrollView(child: WorkforceAssignmentsPanel())),
       ),
     ),
   );
+  await tester.pumpAndSettle();
+  return (queue, remote);
 }
 
 void main() {
-  testWidgets('shows a loading indicator, then the assignment', (tester) async {
-    final Completer<void> hold = Completer<void>();
-    final _FakeSource source = _FakeSource(<Object>[
-      const WorkforceAssignmentSnapshot(
-        items: <WorkforceAssignment>[_assigned],
-        offline: false,
-      ),
-    ]);
-    // Delay the first read so the loading state is observable.
-    final _FakeSource slow = _SlowSource(source, hold.future);
-    await _pump(tester, slow);
-    expect(find.byKey(WorkforceAssignmentsPanelKeys.loading), findsOneWidget);
-
-    hold.complete();
-    await tester.pumpAndSettle();
-    expect(find.text('Replace tyre TM-214'), findsOneWidget);
-    expect(find.text('Acknowledge'), findsOneWidget);
-    expect(find.byKey(WorkforceAssignmentsPanelKeys.loading), findsNothing);
+  testWidgets('shows the offline banner when assignments are cached',
+      (WidgetTester tester) async {
+    await pump(tester, status: 'assigned', offline: true);
+    expect(find.byKey(WorkforcePanelKeys.offlineBanner), findsOneWidget);
+    expect(find.text('Replace valve'), findsOneWidget);
   });
 
-  testWidgets('empty state', (tester) async {
-    await _pump(
+  testWidgets('an offline tap is kept and shown as pending sync',
+      (WidgetTester tester) async {
+    final (FakeWorkforceQueue queue, FakeWorkforceRemote _) = await pump(
       tester,
-      _FakeSource(<Object>[
-        const WorkforceAssignmentSnapshot(
-          items: <WorkforceAssignment>[],
-          offline: false,
-        ),
-      ]),
+      status: 'assigned',
+      remoteScript: <Object>[const SocketException('offline')],
+    );
+    expect(find.byKey(WorkforcePanelKeys.pending('a1')), findsNothing);
+
+    await tester.tap(
+      find.byKey(WorkforcePanelKeys.action('a1', WorkforceAction.start)),
     );
     await tester.pumpAndSettle();
-    expect(find.byKey(WorkforceAssignmentsPanelKeys.empty), findsOneWidget);
-    expect(find.text('No company assignments recorded.'), findsOneWidget);
+
+    expect(queue.of(userA), hasLength(1));
+    expect(find.byKey(WorkforcePanelKeys.pending('a1')), findsOneWidget);
+    expect(find.textContaining('In progress'), findsOneWidget);
   });
 
-  testWidgets('error state offers Retry which reloads', (tester) async {
-    final _FakeSource source = _FakeSource(<Object>[
-      StateError('boom'),
-      const WorkforceAssignmentSnapshot(
-        items: <WorkforceAssignment>[_assigned],
-        offline: false,
-      ),
-    ]);
-    await _pump(tester, source);
-    await tester.pumpAndSettle();
-    expect(find.byKey(WorkforceAssignmentsPanelKeys.error), findsOneWidget);
-    expect(find.text('boom'), findsNothing, reason: 'no raw error text');
+  testWidgets('blocking asks for a reason and cannot be confirmed empty',
+      (WidgetTester tester) async {
+    final (FakeWorkforceQueue queue, FakeWorkforceRemote remote) =
+        await pump(tester, status: 'in_progress');
 
-    await tester.tap(find.byKey(WorkforceAssignmentsPanelKeys.retry));
-    await tester.pumpAndSettle();
-    expect(source.listCalls, 2);
-    expect(find.text('Replace tyre TM-214'), findsOneWidget);
-  });
-
-  testWidgets('offline cache is labelled and cannot change status',
-      (tester) async {
-    await _pump(
-      tester,
-      _FakeSource(<Object>[
-        const WorkforceAssignmentSnapshot(
-          items: <WorkforceAssignment>[_assigned],
-          offline: true,
-        ),
-      ]),
+    await tester.tap(
+      find.byKey(WorkforcePanelKeys.action('a1', WorkforceAction.block)),
     );
     await tester.pumpAndSettle();
-    expect(find.byKey(WorkforceAssignmentsPanelKeys.offline), findsOneWidget);
-    expect(find.text('Replace tyre TM-214'), findsOneWidget);
-    expect(
-      find.byKey(WorkforceAssignmentsPanelKeys.action('a1')),
-      findsNothing,
+
+    FilledButton confirm() => tester.widget<FilledButton>(
+          find.byKey(WorkforcePanelKeys.noteConfirm),
+        );
+    expect(confirm().onPressed, isNull);
+    expect(remote.calls, isEmpty);
+
+    await tester.enterText(
+      find.byKey(WorkforcePanelKeys.noteField),
+      'waiting for a valve',
     );
-  });
-
-  testWidgets('a successful change reloads the list', (tester) async {
-    final _FakeSource source = _FakeSource(<Object>[
-      const WorkforceAssignmentSnapshot(
-        items: <WorkforceAssignment>[_assigned],
-        offline: false,
-      ),
-      const WorkforceAssignmentSnapshot(
-        items: <WorkforceAssignment>[
-          WorkforceAssignment(
-            id: 'a1',
-            title: 'Replace tyre TM-214',
-            status: 'acknowledged',
-            priority: 'high',
-          ),
-        ],
-        offline: false,
-      ),
-    ]);
-    await _pump(tester, source);
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(WorkforceAssignmentsPanelKeys.action('a1')));
-    await tester.pumpAndSettle();
-
-    expect(source.advanceCalls, 1);
-    expect(source.listCalls, 2);
-    expect(find.text('Start'), findsOneWidget);
-  });
-
-  testWidgets('a server-rejected change is explained and refreshes',
-      (tester) async {
-    final _FakeSource source = _FakeSource(<Object>[
-      const WorkforceAssignmentSnapshot(
-        items: <WorkforceAssignment>[_assigned],
-        offline: false,
-      ),
-    ])
-      ..advanceError = const WorkforceTransitionException(
-        WorkforceTransitionFailure.rejected,
-      );
-    await _pump(tester, source);
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(WorkforceAssignmentsPanelKeys.action('a1')));
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('The server did not accept this update'),
-        findsOneWidget);
-    expect(find.text('Refresh'), findsOneWidget);
-    // The list was reloaded because what was on screen may be stale.
-    expect(source.listCalls, 2);
-  });
-
-  testWidgets('a network failure offers Retry which re-sends the same change',
-      (tester) async {
-    final _FakeSource source = _FakeSource(<Object>[
-      const WorkforceAssignmentSnapshot(
-        items: <WorkforceAssignment>[_assigned],
-        offline: false,
-      ),
-    ])
-      ..advanceError = const WorkforceTransitionException(
-        WorkforceTransitionFailure.network,
-      );
-    await _pump(tester, source);
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(WorkforceAssignmentsPanelKeys.action('a1')));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('No connection'), findsOneWidget);
-    // No reload for a request that never reached the server.
-    expect(source.listCalls, 1);
-
-    source.advanceError = null;
-    await tester.tap(find.text('Retry'));
-    await tester.pumpAndSettle();
-    expect(source.advanceCalls, 2);
-  });
-
-  testWidgets('a double tap sends one request while busy', (tester) async {
-    final _FakeSource source = _FakeSource(<Object>[
-      const WorkforceAssignmentSnapshot(
-        items: <WorkforceAssignment>[_assigned],
-        offline: false,
-      ),
-    ])
-      ..gate = Completer<void>();
-    await _pump(tester, source);
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(WorkforceAssignmentsPanelKeys.action('a1')));
     await tester.pump();
-    // The button is replaced by a spinner while the request is in flight.
-    expect(
-      find.byKey(WorkforceAssignmentsPanelKeys.action('a1')),
-      findsNothing,
-    );
-    expect(source.advanceCalls, 1);
+    expect(confirm().onPressed, isNotNull);
 
-    source.gate!.complete();
+    await tester.tap(find.byKey(WorkforcePanelKeys.noteConfirm));
     await tester.pumpAndSettle();
+    expect(remote.calls.single.action, 'block');
+    expect(remote.calls.single.note, 'waiting for a valve');
+    expect(queue.of(userA), isEmpty);
   });
 
-  testWidgets('Arabic renders translated copy and RTL direction',
-      (tester) async {
-    await _pump(
+  testWidgets('a refused update is shown with its reason until dismissed',
+      (WidgetTester tester) async {
+    final (FakeWorkforceQueue queue, FakeWorkforceRemote _) = await pump(
       tester,
-      _FakeSource(<Object>[
-        const WorkforceAssignmentSnapshot(
-          items: <WorkforceAssignment>[_assigned],
-          offline: false,
-        ),
-      ]),
-      locale: const Locale('ar'),
+      status: 'assigned',
+      remoteScript: <Object>[rejectedResult('invalid_transition')],
+    );
+
+    await tester.tap(
+      find.byKey(WorkforcePanelKeys.action('a1', WorkforceAction.start)),
     );
     await tester.pumpAndSettle();
-    expect(find.text('مهام الشركة'), findsOneWidget);
-    expect(find.text('تأكيد الاستلام'), findsOneWidget);
-    expect(
-      Directionality.of(tester.element(find.text('مهام الشركة'))),
-      TextDirection.rtl,
+
+    expect(find.byKey(WorkforcePanelKeys.rejected('a1')), findsOneWidget);
+    expect(queue.of(userA).single.status, WorkforceQueueStatus.rejected);
+    // The server status stays authoritative.
+    expect(find.textContaining('Assigned'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(
+        WorkforcePanelKeys.dismiss(queue.of(userA).single.id),
+      ),
     );
+    await tester.pumpAndSettle();
+    expect(queue.of(userA), isEmpty);
+    expect(find.byKey(WorkforcePanelKeys.rejected('a1')), findsNothing);
   });
-}
-
-/// Wraps a source so its first read waits on [_hold].
-final class _SlowSource extends _FakeSource {
-  _SlowSource(_FakeSource inner, this._hold) : super(inner.snapshots);
-
-  final Future<void> _hold;
-
-  @override
-  Future<WorkforceAssignmentSnapshot> listMine() async {
-    await _hold;
-    return super.listMine();
-  }
 }

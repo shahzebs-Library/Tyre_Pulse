@@ -6,7 +6,6 @@ library;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tyre_pulse/app/router/session.dart';
 import 'package:tyre_pulse/core/auth/auth_controller.dart';
 import 'package:tyre_pulse/core/auth/auth_dependency_providers.dart';
 import 'package:tyre_pulse/core/auth/auth_profile_repository.dart';
@@ -60,6 +59,8 @@ void main() {
   test('an explicit sign-out runs the clean-up hook once', () async {
     final _Rig rig = _Rig();
     addTearDown(rig.dispose);
+    // Build the controller first so it is listening to the session stream.
+    expect(rig.state.sessionPhase, isNotNull);
     rig.profiles.outcomeByUserId['user-1'] =
         ProfileFetchSucceeded(profileWith());
     rig.auth.emit(const AuthSessionSignal(userId: 'user-1'));
@@ -75,6 +76,8 @@ void main() {
   test('a session that ends by itself also runs the hook', () async {
     final _Rig rig = _Rig();
     addTearDown(rig.dispose);
+    // Build the controller first so it is listening to the session stream.
+    expect(rig.state.sessionPhase, isNotNull);
     rig.profiles.outcomeByUserId['user-1'] =
         ProfileFetchSucceeded(profileWith());
     rig.auth.emit(const AuthSessionSignal(userId: 'user-1'));

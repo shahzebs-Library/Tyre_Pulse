@@ -21,11 +21,11 @@ void main() {
 
   test('opens the exact matching broadcast or task', () {
     final NotificationDeepLinkResult b = resolveNotificationDeepLink(
-        targetType: 'broadcast', targetId: 'b1', rows: rows, loaded: true);
+        targetType: 'broadcast', targetId: 'b1', rows: rows, loaded: true,);
     expect(b.outcome, NotificationDeepLinkOutcome.open);
     expect(b.row?.entityId, 'b1');
     final NotificationDeepLinkResult a = resolveNotificationDeepLink(
-        targetType: 'action.assigned', targetId: 'a1', rows: rows, loaded: true);
+        targetType: 'action.assigned', targetId: 'a1', rows: rows, loaded: true,);
     expect(a.outcome, NotificationDeepLinkOutcome.open);
     expect(a.row?.type, 'action_assigned');
   });
@@ -33,12 +33,12 @@ void main() {
   test('missing message is reported unavailable once the inbox has loaded', () {
     expect(
       resolveNotificationDeepLink(
-          targetType: 'broadcast', targetId: 'gone', rows: rows, loaded: true).outcome,
+          targetType: 'broadcast', targetId: 'gone', rows: rows, loaded: true,).outcome,
       NotificationDeepLinkOutcome.unavailable,
     );
     expect(
       resolveNotificationDeepLink(
-          targetType: 'broadcast', targetId: 'gone', rows: const <AppNotification>[], loaded: true).outcome,
+          targetType: 'broadcast', targetId: 'gone', rows: const <AppNotification>[], loaded: true,).outcome,
       NotificationDeepLinkOutcome.unavailable,
     );
   });
@@ -46,7 +46,7 @@ void main() {
   test('right id but wrong kind does not open a different record', () {
     expect(
       resolveNotificationDeepLink(
-          targetType: 'action_item', targetId: 'b1', rows: rows, loaded: true).outcome,
+          targetType: 'action_item', targetId: 'b1', rows: rows, loaded: true,).outcome,
       NotificationDeepLinkOutcome.unavailable,
     );
   });
@@ -55,12 +55,12 @@ void main() {
     expect(inboxTypeForDeepLink('mystery'), isNull);
     expect(
       resolveNotificationDeepLink(
-          targetType: 'mystery', targetId: 'b1', rows: rows, loaded: true).outcome,
+          targetType: 'mystery', targetId: 'b1', rows: rows, loaded: true,).outcome,
       NotificationDeepLinkOutcome.unavailable,
     );
     expect(
       resolveNotificationDeepLink(
-          targetType: null, targetId: 'b1', rows: rows, loaded: true).outcome,
+          targetType: null, targetId: 'b1', rows: rows, loaded: true,).outcome,
       NotificationDeepLinkOutcome.unavailable,
     );
   });
@@ -68,17 +68,17 @@ void main() {
   test('waits while the inbox is loading and ignores links without an id', () {
     expect(
       resolveNotificationDeepLink(
-          targetType: 'broadcast', targetId: 'b1', rows: const <AppNotification>[], loaded: false).outcome,
+          targetType: 'broadcast', targetId: 'b1', rows: const <AppNotification>[], loaded: false,).outcome,
       NotificationDeepLinkOutcome.waiting,
     );
     expect(
       resolveNotificationDeepLink(
-          targetType: 'broadcast', targetId: '  ', rows: rows, loaded: true).outcome,
+          targetType: 'broadcast', targetId: '  ', rows: rows, loaded: true,).outcome,
       NotificationDeepLinkOutcome.none,
     );
     expect(
       resolveNotificationDeepLink(
-          targetType: 'broadcast', targetId: null, rows: rows, loaded: true).outcome,
+          targetType: 'broadcast', targetId: null, rows: rows, loaded: true,).outcome,
       NotificationDeepLinkOutcome.none,
     );
   });

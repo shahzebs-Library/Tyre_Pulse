@@ -8,6 +8,20 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tyre_pulse/features/my_work/data/workforce_assignment_cache.dart';
 
 class WorkforceAssignment {
+
+  factory WorkforceAssignment.fromJson(Map<String, dynamic> json) {
+    return WorkforceAssignment(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      status: json['status'] as String,
+      priority: json['priority'] as String? ?? 'normal',
+      site: json['site'] as String?,
+      instructions: json['instructions'] as String?,
+      dueAt: json['due_at'] == null
+          ? null
+          : DateTime.parse(json['due_at'] as String),
+    );
+  }
   const WorkforceAssignment({
     required this.id,
     required this.title,
@@ -25,20 +39,6 @@ class WorkforceAssignment {
   final String? site;
   final String? instructions;
   final DateTime? dueAt;
-
-  factory WorkforceAssignment.fromJson(Map<String, dynamic> json) {
-    return WorkforceAssignment(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      status: json['status'] as String,
-      priority: json['priority'] as String? ?? 'normal',
-      site: json['site'] as String?,
-      instructions: json['instructions'] as String?,
-      dueAt: json['due_at'] == null
-          ? null
-          : DateTime.parse(json['due_at'] as String),
-    );
-  }
 
   String? get nextAction => switch (status) {
         'assigned' => 'acknowledged',
@@ -125,7 +125,7 @@ class WorkforceAssignmentsRepository implements WorkforceAssignmentsSource {
   static List<WorkforceAssignment> _parse(List<dynamic> rows) => rows
       .map((row) => WorkforceAssignment.fromJson(
             Map<String, dynamic>.from(row as Map),
-          ))
+          ),)
       .toList(growable: false);
 
   @override

@@ -229,6 +229,16 @@ describe('spending ceiling', () => {
 })
 
 describe('pure helpers', () => {
+  it('parseModelOutput tolerates surrounding prose and truncated output', () => {
+    expect(parseModelOutput('Here is the result:\n' + GOOD + '\nHope this helps').assessable).toBe(true)
+    const cut = '{"assessable": true, "reason": "clear", "defects": [{"type": "tread_cut", "description": "cut near sho'
+    const a = parseModelOutput(cut)
+    expect(a.assessable).toBe(true)
+    expect(a.defects[0].type).toBe('tread_cut')
+    expect(parseModelOutput('{"assessable": false, "reason": "blurry", "recommendation":').assessable).toBe(false)
+    expect(() => parseModelOutput('I cannot help')).toThrow()
+  })
+
   it('parseModelOutput strips fences, forces human review and never certifies depth', () => {
     const a = parseModelOutput('```json\n' + GOOD + '\n```')
     expect(a).toMatchObject({ assessable: true, humanReviewRequired: true, exactTreadDepthMm: null, remainingTreadLifeKm: null })

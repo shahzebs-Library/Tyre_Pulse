@@ -271,6 +271,11 @@ List<RouteBase> _buildRoutes() => <RouteBase>[
                 SerialSearchRoute.parse,
               ),
               _route(
+                TpRoutePaths.globalSearch,
+                TpRouteId.globalSearch,
+                GlobalSearchRoute.parse,
+              ),
+              _route(
                 TpRoutePaths.tyreRecords,
                 TpRouteId.tyreRecords,
                 (TpRouteParameters _) => const TyreRecordsRoute(),

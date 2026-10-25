@@ -20,14 +20,10 @@
 /// because the state it reads never carries accident results; that is a
 /// scope boundary, not an oversight.
 ///
-/// # This screen is not reachable through the real router yet
+/// # Reachability
 ///
-/// `widget.route` is a [GlobalSearchRoute], which is presently a structurally
-/// complete but functionally INERT route class - see
-/// `domain/global_search_route.dart`'s own doc comment for exactly what a
-/// human needs to add to the forbidden router files to make it live, and
-/// `global_search_screen_registrations.dart` for the (also inert until then)
-/// screen-registry entry this screen ships under.
+/// Registered under [TpRouteId.globalSearch] (`/search`) and guarded like the
+/// serial search module; `?q=` opens it pre-filled.
 library;
 
 import 'package:flutter/material.dart';
@@ -42,7 +38,6 @@ import 'package:tyre_pulse/core/database/app_database.dart' show RecentSearch;
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 
-import 'package:tyre_pulse/features/search/domain/global_search_route.dart';
 import 'package:tyre_pulse/features/search/domain/global_search_state.dart';
 import 'package:tyre_pulse/features/search/domain/search_result.dart';
 import 'package:tyre_pulse/features/search/presentation/global_search_controller.dart';

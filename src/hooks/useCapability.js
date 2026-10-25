@@ -10,7 +10,7 @@ import { useAuth } from '../contexts/AuthContext'
  *   <button disabled={!hasCapability('tyre_records', 'create')}>Add tyre</button>
  *
  * IMPORTANT: hasCapability is a CLIENT-SIDE gate only for non-view capabilities.
- * Only `view` is server-enforced today. The authoritative boundary is the server
+ * `view` is enforced everywhere; `create`/`edit` are enforced by RLS on the core operational tables (see CAPABILITIES in permissionMatrix.js). The authoritative boundary is the server
  * (app_user_can / RLS); never rely on this result for security decisions.
  *
  * @returns {{

@@ -174,6 +174,8 @@ abstract final class TpRouteGuards {
     TpRouteId.myPlans: ModuleGuarded(RouteModule.inspect),
     TpRouteId.scanner: ModuleGuarded(RouteModule.scan),
     TpRouteId.serialSearch: ModuleGuarded(RouteModule.serial),
+    // Search resolves tyre serials, so it sits behind the same module.
+    TpRouteId.globalSearch: ModuleGuarded(RouteModule.serial),
     TpRouteId.tyreChange: ModuleGuarded(RouteModule.tyreChange),
     TpRouteId.meterLog: ModuleGuarded(RouteModule.meter),
     TpRouteId.washing: ModuleGuarded(RouteModule.washing),

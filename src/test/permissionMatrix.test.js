@@ -352,9 +352,9 @@ describe('registries', () => {
     ]))
   })
 
-  it('exposes the 6 capability dimensions with view and admin-only delete enforced', () => {
+  it('exposes the 6 capability dimensions with view, create, edit and admin-only delete enforced', () => {
     expect(CAPABILITY_KEYS).toEqual(['view', 'create', 'edit', 'delete', 'export', 'approve'])
-    expect(CAPABILITIES.filter((c) => c.enforced).map((c) => c.key)).toEqual(['view', 'delete'])
+    expect(CAPABILITIES.filter((c) => c.enforced).map((c) => c.key)).toEqual(['view', 'create', 'edit', 'delete'])
   })
 
   it('every default-referenced module key exists in the module catalog', () => {

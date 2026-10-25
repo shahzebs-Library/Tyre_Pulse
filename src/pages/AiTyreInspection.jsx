@@ -73,7 +73,7 @@ function HistoricInspectionBackfill() {
     <form onSubmit={run} className="flex flex-wrap gap-3 items-end">
       <div className="text-xs text-[var(--text-secondary)]"><span>From</span><DateField className="mt-1 w-44" ariaLabel="From" value={from} onChange={setFrom} placeholder="Select date"/></div>
       <div className="text-xs text-[var(--text-secondary)]"><span>Through</span><DateField className="mt-1 w-44" ariaLabel="Through" value={through} onChange={setThrough} placeholder="Select date"/></div>
-      <button className="btn-primary" type="submit" disabled={running}>{running?'Queuing inspections...':'Queue historical inspections'}</button>
+      <button className="btn-primary" type="submit" disabled={running}>{running?'Queuing inspections':'Queue historical inspections'}</button>
     </form>
     {error&&<p role="alert" className="text-sm text-red-500 mt-3">{error}</p>}
     {result&&<div role="status" className="mt-3 rounded-lg border border-[var(--border-dim)] p-3 text-sm">
@@ -135,7 +135,7 @@ function ReviewFeedbackPanel() {
     <div className="flex flex-wrap gap-3 items-end">
       <div className="text-xs text-[var(--text-secondary)]"><span>From</span><DateField className="mt-1 w-44" ariaLabel="From" value={from} onChange={setFrom} placeholder="Select date"/></div>
       <div className="text-xs text-[var(--text-secondary)]"><span>Through</span><DateField className="mt-1 w-44" ariaLabel="Through" value={to} onChange={setTo} min={from||""} placeholder="Select date"/></div>
-      <button type="button" className="btn-secondary" onClick={load} disabled={loading}>{loading?'Loading...':'Load summary'}</button>
+      <button type="button" className="btn-secondary" onClick={load} disabled={loading}>{loading?'Loading':'Load summary'}</button>
       <button type="button" className="btn-secondary" onClick={download} disabled={!rows?.length}><Download size={14}/> Download Excel</button>
     </div>
     <div className="flex flex-wrap gap-3 items-center mt-3">
@@ -153,6 +153,24 @@ function ReviewFeedbackPanel() {
   </Card>
 }
 
+const FAILURE_TEXT = {
+  invalid_model_output: 'The AI reply could not be read. Ask a manager to queue this photo again.',
+  provider_timeout: 'The AI service timed out. Ask a manager to queue this photo again.',
+  provider_http_error: 'The AI service returned an error. Ask a manager to queue this photo again.',
+  provider_non_json: 'The AI service returned an unreadable reply. Ask a manager to queue this photo again.',
+  photo_unavailable: 'The photograph could not be opened from storage.',
+  invalid_reference: 'The photograph link is not valid.',
+  prior_attempt: 'This photo was already analysed once. A manager must approve a new attempt.',
+  stalled: 'Processing stopped before it finished. Ask a manager to queue this photo again.',
+}
+const failureText = (job) => FAILURE_TEXT[job.failure_kind] || job.error_message || 'Analysis failed.'
+const STATUS_LABEL = { pending: 'Waiting', processing: 'Analysing', completed: 'Done', failed: 'Failed' }
+const REVIEW_LABEL = { unreviewed: 'Not reviewed', accepted: 'Accepted', rejected: 'Rejected', corrected: 'Corrected' }
+function queueNotice(res) {
+  const eligible = Number(res?.eligible || 0)
+  if (!eligible) return 'No eligible photographs were found for this inspection.'
+  return `${eligible} photograph${eligible === 1 ? '' : 's'} found. Photos already analysed or waiting are not charged again. Results appear here within a few minutes.`
+}
 function photoCount(row) {
   const conditions = row?.tyre_conditions || {}
   return Object.values(conditions).filter(p => p && typeof p === 'object' && (p.photo_url || p.photo || p.photos || p.photo_refs) && conditionRequiresAnalysis(p.condition)).length
@@ -302,14 +320,14 @@ export default function AiTyreInspection() {
         <label className="text-xs text-[var(--text-secondary)]">Inspection status<select className="input w-full mt-1" value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="all">All statuses</option>{statuses.map(s=><option key={s} value={s}>{s}</option>)}</select></label>
         <label className="text-xs text-[var(--text-secondary)]">AI analysis status<select className="input w-full mt-1" value={aiStatusFilter} onChange={e=>setAiStatusFilter(e.target.value)}>{[['all','All AI statuses'],['none','Not requested'],['pending','Pending'],['processing','Processing'],['completed','Completed'],['failed','Failed']].map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
         <label className="text-xs text-[var(--text-secondary)]">Supervisor review<select className="input w-full mt-1" value={reviewFilter} onChange={e=>setReviewFilter(e.target.value)}>{[['all','All review states'],['unreviewed','Not reviewed'],['accepted','Accepted'],['rejected','Rejected'],['corrected','Corrected']].map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
-        <div className="text-xs text-[var(--text-secondary)]"><span>From date</span><DateField className="mt-1 w-44" ariaLabel="From date" value={dateFrom} onChange={setDateFrom} placeholder="Select date"/></div>
-        <div className="text-xs text-[var(--text-secondary)]"><span>Through date</span><DateField className="mt-1 w-44" ariaLabel="Through date" value={dateTo} onChange={setDateTo} min={dateFrom||""} placeholder="Select date"/></div>
-        <div className="flex items-end gap-3"><button className="btn-secondary" type="button" onClick={resetFilters}>Clear all filters</button><span className="text-xs text-[var(--text-muted)]">{visibleRecords.length} matching</span></div>
+        <div className="text-xs text-[var(--text-secondary)]"><span>From date</span><DateField className="mt-1 w-full" ariaLabel="From date" value={dateFrom} onChange={setDateFrom} placeholder="Select date"/></div>
+        <div className="text-xs text-[var(--text-secondary)]"><span>Through date</span><DateField className="mt-1 w-full" ariaLabel="Through date" value={dateTo} onChange={setDateTo} min={dateFrom||""} placeholder="Select date"/></div>
       </div>
+      <div className="flex items-center gap-3 mb-3"><button className="btn-secondary" type="button" onClick={resetFilters}>Clear all filters</button><span className="text-xs text-[var(--text-muted)]">{visibleRecords.length} shown on this page</span></div>
       {error && <p role="alert" className="text-red-500 mb-3">{error}</p>}
-      {loading ? <p>Loading inspections...</p> : <EnterpriseTable columns={columns} data={visibleRecords} emptyMessage="No inspections found" />}
+      {loading ? <p role="status" className="text-sm text-[var(--text-muted)] py-6">Loading inspections</p> : <EnterpriseTable columns={columns} data={visibleRecords} emptyMessage="No inspections found" />}
       <div className="flex items-center justify-between gap-3 mt-3 text-sm">
-        <span className="text-xs text-[var(--text-muted)]">{total?`${page*PAGE_SIZE+1}-${Math.min((page+1)*PAGE_SIZE,total)} of ${total}`:'0 inspections'}</span>
+        <span className="text-xs text-[var(--text-muted)]">{total?`${page*PAGE_SIZE+1} to ${Math.min((page+1)*PAGE_SIZE,total)} of ${total}`:'0 inspections'}</span>
         <div className="flex gap-2"><button type="button" className="btn-secondary" disabled={loading||page===0} onClick={()=>setPage(p=>Math.max(0,p-1))}>Previous</button><button type="button" className="btn-secondary" disabled={loading||(page+1)*PAGE_SIZE>=total} onClick={()=>setPage(p=>p+1)}>Next</button></div>
       </div>
     </Card>
@@ -350,20 +368,22 @@ function InspectionDetail({ inspection, related, role, activeTab, onTab, onClose
   const [reviewNotes,setReviewNotes]=useState({})
   const [analysisError,setAnalysisError]=useState('')
   const [analysisLoading,setAnalysisLoading]=useState(false)
+  const [analysisNotice,setAnalysisNotice]=useState('')
   const refreshAnalysis=useCallback(async()=>{try{setAnalysisJobs(await readInspectionAnalysis([inspection.id]));setAnalysisError('')}catch(e){setAnalysisError(toUserMessage(e,'Could not load AI results'))}},[inspection.id])
   useEffect(()=>{refreshAnalysis()},[refreshAnalysis])
   const screenAll=async()=>{
     setAnalysisLoading(true)
-    setAnalysisError('')
+    setAnalysisError('');setAnalysisNotice('')
     try {
-      await screenInspectionPhotos(inspection.id)
+      const res=await screenInspectionPhotos(inspection.id)
+      setAnalysisNotice(queueNotice(res))
       await refreshAnalysis()
       onTab('analysis')
     } catch(e) {
       setAnalysisError(toUserMessage(e,'Could not start visual screening'))
     } finally { setAnalysisLoading(false) }
   }
-  const enqueue=async()=>{setAnalysisLoading(true);try{await enqueueInspectionPhotos(inspection.id);await refreshAnalysis()}catch(e){setAnalysisError(toUserMessage(e,'Could not queue photos'))}finally{setAnalysisLoading(false)}}
+  const enqueue=async()=>{setAnalysisLoading(true);setAnalysisError('');setAnalysisNotice('');try{setAnalysisNotice(queueNotice(await enqueueInspectionPhotos(inspection.id)));await refreshAnalysis()}catch(e){setAnalysisError(toUserMessage(e,'Could not queue photos'))}finally{setAnalysisLoading(false)}}
   const decide=async(job,decision)=>{setAnalysisLoading(true);try{await reviewAiFinding(job.id,decision,reviewNotes[job.id]?.trim() || (decision==='accepted'?'Reviewer confirmed visible evidence':'Reviewer rejected finding; reason not specified'));await refreshAnalysis()}catch(e){setAnalysisError(toUserMessage(e,'Could not save review'))}finally{setAnalysisLoading(false)}}
   const [measurementError,setMeasurementError]=useState('')
   const [savingMeasurement,setSavingMeasurement]=useState(false)
@@ -428,8 +448,8 @@ function InspectionDetail({ inspection, related, role, activeTab, onTab, onClose
     { id: 'position', header: 'Position', accessorFn: (i) => positionLabel(i.position), cell: ({ row }) => <span className="font-semibold">{positionLabel(row.original.position)}</span> },
     { id: 'condition', header: 'Condition', accessorFn: (i) => i.condition },
     { id: 'measured', header: 'Measured depth', accessorFn: (i) => (i.calculation.valid ? i.calculation.reading.worstMm + ' mm' : 'Not measured') },
-    { id: 'usable', header: 'Remaining usable', accessorFn: (i) => (i.calculation.valid ? i.calculation.reading.remainingMm + ' mm' : '-') },
-    { id: 'pct', header: 'Remaining %', accessorFn: (i) => (i.calculation.valid ? i.calculation.reading.remainingPercent + '%' : '-') },
+    { id: 'usable', header: 'Remaining usable', accessorFn: (i) => (i.calculation.valid ? i.calculation.reading.remainingMm + ' mm' : 'N/A') },
+    { id: 'pct', header: 'Remaining %', accessorFn: (i) => (i.calculation.valid ? i.calculation.reading.remainingPercent + '%' : 'N/A') },
     { id: 'verification', header: 'Verification', accessorFn: (i) => (i.calculation.valid ? 'Recorded measurement' : 'Measurement required') },
   ], [inspection]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -516,7 +536,58 @@ function InspectionDetail({ inspection, related, role, activeTab, onTab, onClose
             />
             {ownIssues.length>0&&<details className="mt-3 rounded-lg border border-[var(--border-dim)] px-3 py-2 text-sm"><summary className="cursor-pointer font-medium">Data checks ({ownIssues.length})</summary><ul className="mt-2 space-y-1 text-xs text-[var(--text-secondary)]">{ownIssues.map((i,n)=><li key={n}><strong>{i.severity==='error'?'Excluded':'Warning'}</strong> | {positionLabel(i.position)}{i.serial?' | '+i.serial:''}: {i.message}</li>)}</ul></details>}
           </Card>
-          <Card><h3 className="font-semibold mb-3">Record a verified gauge reading</h3><form onSubmit={saveMeasurement} className="space-y-3"><div className="grid grid-cols-2 sm:grid-cols-3 gap-3">{[["position","Tyre position"],["tyreSerial","Tyre serial"],["originalMm","Original tread mm"],["minimumMm","Minimum tread mm"],["innerMm","Inner mm"],["centerMm","Centre mm"],["outerMm","Outer mm"],["odometerKm","Odometer km"]].map(([key,label])=><label key={key} className="text-xs text-[var(--text-secondary)]">{label}<input className="input w-full mt-1" required={["position","originalMm","minimumMm"].includes(key)} type={["position","tyreSerial"].includes(key)?"text":"number"} step="0.01" min="0" value={form[key]} onChange={e=>setForm(f=>({...f,[key]:e.target.value}))}/></label>)}</div><label className="text-xs text-[var(--text-secondary)]">Measurement source<select className="input w-full mt-1" value={form.source} onChange={e=>setForm(f=>({...f,source:e.target.value}))}><option value="manual_gauge">Manual physical gauge</option><option value="digital_gauge">Digital physical gauge</option><option value="calibrated_device">Calibrated measurement device</option></select></label><p className="text-xs text-[var(--text-muted)]">Provide at least one groove reading. Source and original/minimum depths must be verified.</p><button className="btn-primary" type="submit" disabled={savingMeasurement}>{savingMeasurement?"Saving...":"Save physical reading"}</button></form></Card>
+          <Card>
+            <h3 className="font-semibold">Record a verified gauge reading</h3>
+            <p className="text-xs text-[var(--text-muted)] mt-1 mb-4">Use a physical or calibrated gauge. Fields marked required must be filled; add at least one groove reading.</p>
+            <form onSubmit={saveMeasurement} className="space-y-5">
+              <fieldset className="space-y-3">
+                <legend className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)] mb-2">Tyre</legend>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <label className="text-xs text-[var(--text-secondary)]">Tyre position (required)
+                    <select className="input w-full mt-1" required value={form.position} onChange={e=>setForm(f=>({...f,position:e.target.value}))}>
+                      <option value="">Select position</option>
+                      {Object.keys(conditions).map(pos=><option key={pos} value={pos}>{positionLabel(pos)}</option>)}
+                    </select>
+                  </label>
+                  <label className="text-xs text-[var(--text-secondary)]">Tyre serial
+                    <input className="input w-full mt-1" type="text" value={form.tyreSerial} onChange={e=>setForm(f=>({...f,tyreSerial:e.target.value}))}/>
+                  </label>
+                  <label className="text-xs text-[var(--text-secondary)]">Measurement source
+                    <select className="input w-full mt-1" value={form.source} onChange={e=>setForm(f=>({...f,source:e.target.value}))}>
+                      <option value="manual_gauge">Manual physical gauge</option>
+                      <option value="digital_gauge">Digital physical gauge</option>
+                      <option value="calibrated_device">Calibrated measurement device</option>
+                    </select>
+                  </label>
+                </div>
+              </fieldset>
+              <fieldset className="space-y-3">
+                <legend className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)] mb-2">Tread limits (mm)</legend>
+                <div className="grid grid-cols-2 gap-3 max-w-md">
+                  {[['originalMm','Original tread (required)',true],['minimumMm','Minimum tread (required)',true]].map(([key,label,req])=>
+                    <label key={key} className="text-xs text-[var(--text-secondary)]">{label}
+                      <input className="input w-full mt-1" required={req} type="number" step="0.01" min="0" value={form[key]} onChange={e=>setForm(f=>({...f,[key]:e.target.value}))}/>
+                    </label>)}
+                </div>
+              </fieldset>
+              <fieldset className="space-y-3">
+                <legend className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)] mb-2">Groove readings (mm, at least one)</legend>
+                <div className="grid grid-cols-3 gap-3 max-w-xl">
+                  {[['innerMm','Inner'],['centerMm','Centre'],['outerMm','Outer']].map(([key,label])=>
+                    <label key={key} className="text-xs text-[var(--text-secondary)]">{label}
+                      <input className="input w-full mt-1" type="number" step="0.01" min="0" value={form[key]} onChange={e=>setForm(f=>({...f,[key]:e.target.value}))}/>
+                    </label>)}
+                </div>
+                <label className="text-xs text-[var(--text-secondary)] block max-w-xs">Odometer km (optional)
+                  <input className="input w-full mt-1" type="number" step="1" min="0" value={form.odometerKm} onChange={e=>setForm(f=>({...f,odometerKm:e.target.value}))}/>
+                </label>
+              </fieldset>
+              <div className="flex items-center gap-3">
+                <button className="btn-primary" type="submit" disabled={savingMeasurement||!(form.innerMm!==''||form.centerMm!==''||form.outerMm!=='')}>{savingMeasurement?'Saving':'Save physical reading'}</button>
+                {!(form.innerMm!==''||form.centerMm!==''||form.outerMm!=='')&&<span className="text-xs text-[var(--text-muted)]">Enter at least one groove reading to save.</span>}
+              </div>
+            </form>
+          </Card>
           {measurementError && <p role="alert" className="text-red-500">{measurementError}</p>}
           <Card><h3 className="font-semibold mb-2">Stored physical measurement history</h3><div className="space-y-2">{storedMeasurements.map(m=><div key={m.id} className="text-sm border-b border-[var(--border-dim)] pb-2">{positionLabel(m.tyre_position)} | {m.source} | Inner {m.inner_mm??"N/A"} / Centre {m.center_mm??"N/A"} / Outer {m.outer_mm??"N/A"} mm | {m.measured_at}</div>)}{!storedMeasurements.length && <p className="text-sm text-[var(--text-muted)]">No physical readings submitted through this module yet.</p>}</div></Card>
           <p className="text-xs text-[var(--text-muted)]">Only physically sourced and validated measurements are eligible for authoritative remaining-tread figures. This screen does not infer millimetres from photographs.</p>
@@ -525,9 +596,10 @@ function InspectionDetail({ inspection, related, role, activeTab, onTab, onClose
           <Card>
             <div className="flex justify-between items-start gap-4 flex-wrap">
               <div><h3 className="font-semibold">AI photo review</h3><p className="text-xs text-[var(--text-muted)] mt-1">The background worker can inspect visible damage or, on demand, screen all photographed tyres without a gauge. It identifies patterns, not exact tread-depth millimetres. Findings require qualified review.</p></div>
-              <div className="flex gap-2"><button className="btn-secondary" onClick={refreshAnalysis} disabled={analysisLoading}>Refresh</button><button className="btn-primary" onClick={enqueue} disabled={!mayQueue||analysisLoading||!evidence.photos.length} title={mayQueue?undefined:'Your role cannot queue AI analysis'}>{analysisLoading?'Working...':'Queue defect photos'}</button><button className="btn-secondary" type="button" onClick={screenAll} disabled={!mayQueue||analysisLoading||!evidence.allPhotoCount} title={mayQueue?undefined:'Your role cannot queue AI analysis'}>{analysisLoading?'Working...':'Screen all photographed tyres'}</button></div>
+              <div className="flex gap-2"><button className="btn-secondary" onClick={refreshAnalysis} disabled={analysisLoading}>Refresh</button><button className="btn-primary" onClick={enqueue} disabled={!mayQueue||analysisLoading||!evidence.photos.length} title={mayQueue?undefined:'Your role cannot queue AI analysis'}>{analysisLoading?'Working':'Queue defect photos'}</button><button className="btn-secondary" type="button" onClick={screenAll} disabled={!mayQueue||analysisLoading||!evidence.allPhotoCount} title={mayQueue?undefined:'Your role cannot queue AI analysis'}>{analysisLoading?'Working':'Screen all photographed tyres'}</button></div>
             </div>
             {analysisError && <p role="alert" className="text-red-500 text-sm mt-3">{analysisError}</p>}
+            {analysisNotice && <p role="status" className="text-sm mt-3 text-[var(--text-secondary)]">{analysisNotice}</p>}
           </Card>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3"><Metric label="Queued" value={analysisJobs.length}/><Metric label="Completed" value={analysisJobs.filter(j=>j.status==='completed').length}/><Metric label="Pending" value={analysisJobs.filter(j=>['pending','processing'].includes(j.status)).length}/><Metric label="Failed" value={analysisJobs.filter(j=>j.status==='failed').length}/></div>
           <div className="rounded-xl border border-[var(--border-dim)] p-3 text-sm"><strong>Review quality summary</strong><div className="flex flex-wrap gap-4 mt-2">
@@ -536,8 +608,8 @@ function InspectionDetail({ inspection, related, role, activeTab, onTab, onClose
             <span>Awaiting review: {analysisJobs.filter(j=>j.status==='completed' && (!j.review_status||j.review_status==='unreviewed')).length}</span>
           </div><p className="text-xs text-[var(--text-muted)] mt-1">Your decisions and reasons are retained as structured feedback for future quality evaluation. No automatic model retraining or unsafe auto-approval is performed.</p></div>
           <div className="space-y-3">{analysisJobs.map(job=><Card key={job.id}>
-            <div className="flex justify-between items-center gap-3"><h4 className="font-semibold">{positionLabel(job.tyre_position)}</h4><span className="text-xs">{job.status} | {job.review_status||'unreviewed'}</span></div>{job.photo_ref && <div className="mt-3"><LazyTyrePhoto photoRef={job.photo_ref} alt={'Original tyre photo for supervisor verification at '+job.tyre_position} className="h-48 max-w-full rounded-lg border border-[var(--border-dim)] object-contain"/><p className="text-xs text-[var(--text-muted)] mt-1">Original photograph: enlarge and compare before review</p></div>}
-            {job.analysis?<div className="mt-3 space-y-2"><p className="text-sm">{job.analysis.assessable?'Visual assessment available':(job.analysis.reason||'Image unassessable')}</p>{(job.analysis.defects||[]).map((d,i)=><p key={i} className="text-sm border-l-2 border-amber-500 pl-3">{d.type}: {d.description} ({d.severity})</p>)}<p className="text-sm text-[var(--text-secondary)]">{job.analysis.recommendation}</p></div>:<p className="text-xs text-[var(--text-muted)] mt-2">No completed visual finding available.</p>}
+            <div className="flex justify-between items-center gap-3"><h4 className="font-semibold">{positionLabel(job.tyre_position)}</h4><span className="text-xs">{STATUS_LABEL[job.status]||job.status} | {REVIEW_LABEL[job.review_status||'unreviewed']||job.review_status}</span></div>{job.photo_ref && <div className="mt-3"><LazyTyrePhoto photoRef={job.photo_ref} alt={'Original tyre photo for supervisor verification at '+job.tyre_position} className="h-48 max-w-full rounded-lg border border-[var(--border-dim)] object-contain"/><p className="text-xs text-[var(--text-muted)] mt-1">Original photograph: enlarge and compare before review</p></div>}
+            {job.analysis?<div className="mt-3 space-y-2"><p className="text-sm">{job.analysis.assessable?'Visual assessment available':(job.analysis.reason||'Image unassessable')}</p>{(job.analysis.defects||[]).map((d,i)=><p key={i} className="text-sm border-l-2 border-amber-500 pl-3">{d.type}: {d.description} ({d.severity})</p>)}<p className="text-sm text-[var(--text-secondary)]">{job.analysis.recommendation}</p></div>:<p className={'text-xs mt-2 '+(job.status==='failed'?'text-red-500':'text-[var(--text-muted)]')}>{job.status==='failed'?failureText(job):job.status==='completed'?'No finding recorded.':'Waiting for the analysis service.'}</p>}
             {mayReview && job.status==='completed' && (!job.review_status || job.review_status==='unreviewed')&&<div className="mt-3 space-y-2"><label className="block text-xs text-[var(--text-secondary)]">Review reason / improvement feedback<textarea className="input block w-full mt-1" rows={2} placeholder="Describe the confirmed damage, false positive, blur, or missing evidence" value={reviewNotes[job.id]||''} onChange={e=>setReviewNotes(v=>({...v,[job.id]:e.target.value}))}/></label><div className="flex gap-2 flex-wrap"><button className="btn-secondary" disabled={analysisLoading} onClick={()=>decide(job,'accepted')}>Accept observation</button><button className="btn-secondary" disabled={analysisLoading} onClick={()=>decide(job,'rejected')}>Reject observation</button></div></div>}
           </Card>)}</div>
           {!analysisJobs.length && <EmptyState icon={SearchCheck} title="No queued image analysis" description="Request server-side analysis to create jobs for the linked abnormal-tyre photographs."/>}

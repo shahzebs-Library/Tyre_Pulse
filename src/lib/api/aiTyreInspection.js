@@ -11,7 +11,7 @@ const JOB_FIELDS = [
   'id','inspection_id','tyre_position','photo_ref','status','analysis',
   'cost_usd','input_tokens','output_tokens','total_tokens','provider',
   'model_version','created_at','updated_at','attempts','error_message',
-  'review_status','reviewer_note','reviewed_at',
+  'review_status','reviewer_note','reviewed_at','failure_kind',
 ].join(',')
 const MEASUREMENT_FIELDS = [
   'id','inspection_id','tyre_position','tyre_serial','original_mm',
@@ -23,6 +23,16 @@ function requireIds(ids) {
   if (!Array.isArray(ids)) throw new Error('Expected inspection IDs.')
   const valid = ids.filter(v => typeof v === 'string' && /^[a-f0-9-]{36}$/i.test(v))
   return Array.from(new Set(valid)).slice(0,100)
+}
+
+/** Call the AI function and surface the function's own message instead of a generic transport error. */
+async function invokeAi(body) {
+  const {data,error}=await supabase.functions.invoke('ai-tyre-inspection',{body})
+  if(!error)return data
+  if(error.name==='FunctionsFetchError')throw new Error('The AI service could not be reached. Reload the page and try again.')
+  let message=''
+  try{message=(await error.context?.json?.())?.error||''}catch{/* body not readable */}
+  throw new Error(message||'The AI service could not complete the request. Try again.')
 }
 
 function validateResponse(response) {
@@ -82,19 +92,11 @@ export async function recordDepthMeasurement(values) {
 
 /** Request server-side photo analysis; no model credentials are held in the browser. */
 export async function enqueueInspectionPhotos(inspectionId) {
-  const {data,error}=await supabase.functions.invoke('ai-tyre-inspection',{
-    body:{action:'enqueue',inspection_id:inspectionId},
-  })
-  if(error)throw error
-  return data
+  return invokeAi({action:'enqueue',inspection_id:inspectionId})
 }
 /** Role verification and audit transition happen in the Edge Function. */
 export async function reviewAiFinding(jobId,decision,note='') {
-  const {data,error}=await supabase.functions.invoke('ai-tyre-inspection',{
-    body:{action:'review',job_id:jobId,decision,note},
-  })
-  if(error)throw error
-  return data
+  return invokeAi({action:'review',job_id:jobId,decision,note})
 }
 
 /** Actual provider-token accounting from completed, tenant-scoped AI jobs. */
@@ -118,26 +120,14 @@ export function summarizeInspectionAiCosts(jobs) {
  * Date range is interpreted as absolute ISO timestamps.
  */
 export async function backfillAiInspectionRange({from,to,page=0}) {
-  const {data,error}=await supabase.functions.invoke('ai-tyre-inspection',{
-    body:{action:'backfill',from,to,page},
-  })
-  if(error){
-    // FunctionsFetchError = request never reached the function (CORS / not deployed).
-    if(error.name==='FunctionsFetchError')throw new Error('The AI service could not be reached. Reload the page; if it persists the function needs redeploying.')
-    throw error
-  }
-  return data
+  return invokeAi({action:'backfill',from,to,page})
 }
 
 /** On-demand gauge-free visual screening of all photographed tyre positions.
  * All depth/remaining-life figures remain unmeasured unless gauge data exists.
  */
 export async function screenInspectionPhotos(inspectionId) {
-  const {data,error}=await supabase.functions.invoke('ai-tyre-inspection',{
-    body:{action:'screen',inspection_id:inspectionId},
-  })
-  if(error)throw error
-  return data
+  return invokeAi({action:'screen',inspection_id:inspectionId})
 }
 
 /** Per-finding labelled review rows (supervisor roles; INVOKER rpc, tenant scoped by RLS). Evaluation only. */

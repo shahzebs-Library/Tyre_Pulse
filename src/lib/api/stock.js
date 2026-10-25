@@ -167,3 +167,23 @@ export async function listTyreIssuesInRange({ from, to, country } = {}) {
   if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data || []
 }
+
+/**
+ * Every movement posted in a date window (newest first), paged in full. Row-level security scopes it to
+ * the caller's organisation; the page narrows it to the countries it is showing.
+ * @param {{from:string, to:string}} args  ISO timestamps
+ */
+export async function listMovementsInRange({ from, to }) {
+  const { data, error } = await fetchAllPages((start, end) =>
+    supabase
+      .from('stock_movements')
+      .select(MOVEMENT_COLS)
+      .gte('created_at', from)
+      .lt('created_at', to)
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(start, end),
+  )
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
+  return data ?? []
+}

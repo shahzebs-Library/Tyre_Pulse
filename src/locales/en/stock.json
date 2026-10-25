@@ -19,7 +19,8 @@
     "stock": "Stock Levels",
     "bySite": "Tyres by Site & Size",
     "transfer": "Transfer",
-    "timeline": "Timeline"
+    "timeline": "Timeline",
+    "movements": "Movements"
   },
   "tyreBySite": {
     "title": "Tyre stock by site and size",

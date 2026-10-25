@@ -1,3 +1,6 @@
+import DateField from '../components/ui/DateField'
+import { classifyMovement } from '../lib/stockLedger'
+import StockMovementsPanel from '../components/stock/StockMovementsPanel'
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { stock } from '../lib/api'
 import { listSites } from '../lib/api/sites'
@@ -53,7 +56,6 @@ const EMPTY_FORM = {
 
 // Canonical ledger movement types (the server RPC derives +/- direction from these).
 const MOVEMENT_TYPES = ['receipt', 'return', 'transfer_in', 'adjustment_up', 'issue', 'transfer_out', 'scrap', 'adjustment_down']
-const ADD_TYPES = new Set(['receipt', 'return', 'transfer_in', 'adjustment_up', 'in', 'reorder', 'initial'])
 
 const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-bright,#22c55e)]'
 const CTRL = `min-h-[44px] bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-sm rounded-lg px-3 ${FOCUS}`
@@ -607,14 +609,14 @@ export default function StockManagement() {
 
   // Tabs: show Transfer only if >= 2 sites
   const tabs = useMemo(() => {
-    const base = [['stock', t('stock.tabs.stock')], ['by-site', t('stock.tabs.bySite')], ['timeline', t('stock.tabs.timeline')]]
-    if (sites.length >= 2) return [['stock', t('stock.tabs.stock')], ['by-site', t('stock.tabs.bySite')], ['transfer', t('stock.tabs.transfer')], ['timeline', t('stock.tabs.timeline')]]
+    const base = [['stock', t('stock.tabs.stock')], ['movements', t('stock.tabs.movements')], ['by-site', t('stock.tabs.bySite')], ['timeline', t('stock.tabs.timeline')]]
+    if (sites.length >= 2) return [['stock', t('stock.tabs.stock')], ['movements', t('stock.tabs.movements')], ['by-site', t('stock.tabs.bySite')], ['transfer', t('stock.tabs.transfer')], ['timeline', t('stock.tabs.timeline')]]
     return base
   }, [sites, t])
 
   const openMovement = useCallback((r) => {
     openHistory(r)
-    setAdjForm({ qty_change: 0, reason: '', movement_type: 'adjustment_up', reference_no: '' })
+    setAdjForm({ qty_change: 0, reason: '', movement_type: 'issue', reference_no: '' })
   }, [])
 
   const stockColumns = useMemo(() => [
@@ -697,10 +699,9 @@ export default function StockManagement() {
       cell: m => <span className="text-[var(--text-muted)]">{formatDate(m.created_at)}</span> },
     { id: 'movement_type', header: t('stock.historyModal.columns.type'), sort: m => m.movement_type, size: 120,
       cell: m => {
-        const t0 = String(m.movement_type).toLowerCase()
-        const add = ADD_TYPES.has(t0)
+        const group = classifyMovement(m.movement_type).group
         return (
-          <span className={`px-1.5 py-0.5 rounded text-xs border ${add ? 'border-green-500/40 text-green-500' : t0 !== 'adjustment' ? 'border-red-500/40 text-red-500' : 'border-[var(--input-border)] text-[var(--text-muted)]'}`}>
+          <span className={`px-1.5 py-0.5 rounded text-xs border ${group === 'received' ? 'border-green-500/40 text-green-500' : group === 'utilised' ? 'border-red-500/40 text-red-500' : 'border-[var(--input-border)] text-[var(--text-muted)]'}`}>
             {m.movement_type}
           </span>
         )
@@ -925,6 +926,8 @@ export default function StockManagement() {
       )}
 
       {/* ── TYRE STOCK BY SITE AND SIZE ──────────────────────────────────────── */}
+      {activeTab === 'movements' && <StockMovementsPanel records={records} country={activeCountry} site={siteFilter} />}
+
       {activeTab === 'by-site' && (
         <section className="space-y-4" aria-labelledby="tyre-stock-by-site-title">
           <div className="card p-4 sm:p-5 space-y-4">
@@ -1181,11 +1184,11 @@ export default function StockManagement() {
             <div className="flex flex-wrap items-end gap-3">
               <label className="block">
                 <span className="text-xs text-[var(--text-dim)] mb-1.5 block">{t('stock.timeline.from')}</span>
-                <input type="date" className={`w-44 ${CTRL}`} value={tlFrom} max={tlTo} onChange={e => setTlFrom(e.target.value)} />
+                <DateField className="w-44" ariaLabel={t('stock.timeline.from')} value={tlFrom} onChange={setTlFrom} placeholder="Select date" />
               </label>
               <label className="block">
                 <span className="text-xs text-[var(--text-dim)] mb-1.5 block">{t('stock.timeline.to')}</span>
-                <input type="date" className={`w-44 ${CTRL}`} value={tlTo} min={tlFrom} onChange={e => setTlTo(e.target.value)} />
+                <DateField className="w-44" ariaLabel={t('stock.timeline.to')} value={tlTo} onChange={setTlTo} min={tlFrom} placeholder="Select date" />
               </label>
               <button type="button" onClick={exportTimeline} disabled={tlLoading || tlDays.length === 0}
                 className={`btn-secondary min-h-[44px] text-sm flex items-center gap-1.5 disabled:opacity-50 ${FOCUS}`}>

@@ -15,7 +15,8 @@
     "screenshots": "node scripts/capture-screenshots.mjs",
     "generate-icons": "node scripts/generate-icons.js",
     "lint": "eslint src",
-    "test:database": "node --test --test-concurrency=1 supabase/tests/*.test.mjs"
+    "test:database": "node --test --test-concurrency=1 supabase/tests/*.test.mjs",
+    "ai:adjudicate": "node scripts/ai-adjudicate.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",

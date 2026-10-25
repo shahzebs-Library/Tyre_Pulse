@@ -1,0 +1,566 @@
+{
+  "version": 1,
+  "description": "Synthetic labelled set used to exercise the harness. NOT real fleet photographs: replace with expert-adjudicated real cases before using the gate for release decisions.",
+  "cases": [
+    {
+      "id": "c01",
+      "position": "RHF1",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "sidewall_cut",
+            "severity": "high"
+          }
+        ],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c02",
+      "position": "LHR1-O",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "sidewall_cut",
+            "severity": "high"
+          }
+        ],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c03",
+      "position": "LHR1-I",
+      "vehicleType": "PUMPS",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "sidewall_cut",
+            "severity": "moderate"
+          }
+        ],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c04",
+      "position": "RHR1-O",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "sidewall_cut",
+            "severity": "moderate"
+          }
+        ],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c05",
+      "position": "RHR1-I",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "sidewall_cut",
+            "severity": "moderate"
+          }
+        ],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c06",
+      "position": "LHR2-O",
+      "vehicleType": "PUMPS",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "sidewall_cut",
+            "severity": "moderate"
+          }
+        ],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c07",
+      "position": "RHR2-O",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "bulge",
+            "severity": "urgent"
+          }
+        ],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c08",
+      "position": "LHF1",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "bulge",
+            "severity": "urgent"
+          }
+        ],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c09",
+      "position": "RHF1",
+      "vehicleType": "PUMPS",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "bulge",
+            "severity": "urgent"
+          }
+        ],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c10",
+      "position": "LHR1-O",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "bulge",
+            "severity": "urgent"
+          }
+        ],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c11",
+      "position": "LHR1-I",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "bulge",
+            "severity": "urgent"
+          }
+        ],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c12",
+      "position": "RHR1-O",
+      "vehicleType": "PUMPS",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "tread_wear",
+            "severity": "low"
+          }
+        ],
+        "depthMm": 4.1
+      }
+    },
+    {
+      "id": "c13",
+      "position": "RHR1-I",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "tread_wear",
+            "severity": "low"
+          }
+        ],
+        "depthMm": 3.8
+      }
+    },
+    {
+      "id": "c14",
+      "position": "LHR2-O",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "tread_wear",
+            "severity": "low"
+          }
+        ],
+        "depthMm": 5.2
+      }
+    },
+    {
+      "id": "c15",
+      "position": "RHR2-O",
+      "vehicleType": "PUMPS",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "tread_wear",
+            "severity": "low"
+          }
+        ],
+        "depthMm": 2.9
+      }
+    },
+    {
+      "id": "c16",
+      "position": "LHF1",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "tread_wear",
+            "severity": "low"
+          }
+        ],
+        "depthMm": 6
+      }
+    },
+    {
+      "id": "c17",
+      "position": "RHF1",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "tread_wear",
+            "severity": "low"
+          }
+        ],
+        "depthMm": 3.3
+      }
+    },
+    {
+      "id": "c18",
+      "position": "LHR1-O",
+      "vehicleType": "PUMPS",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "uneven_wear",
+            "severity": "moderate"
+          }
+        ],
+        "depthMm": 4.7
+      }
+    },
+    {
+      "id": "c19",
+      "position": "LHR1-I",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "uneven_wear",
+            "severity": "moderate"
+          }
+        ],
+        "depthMm": 5.5
+      }
+    },
+    {
+      "id": "c20",
+      "position": "RHR1-O",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "uneven_wear",
+            "severity": "moderate"
+          }
+        ],
+        "depthMm": 2.2
+      }
+    },
+    {
+      "id": "c21",
+      "position": "RHR1-I",
+      "vehicleType": "PUMPS",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "uneven_wear",
+            "severity": "moderate"
+          }
+        ],
+        "depthMm": 3
+      }
+    },
+    {
+      "id": "c22",
+      "position": "LHR2-O",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "uneven_wear",
+            "severity": "moderate"
+          }
+        ],
+        "depthMm": 4.4
+      }
+    },
+    {
+      "id": "c23",
+      "position": "RHR2-O",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "uneven_wear",
+            "severity": "moderate"
+          }
+        ],
+        "depthMm": 5
+      }
+    },
+    {
+      "id": "c24",
+      "position": "LHF1",
+      "vehicleType": "PUMPS",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "exposed_cord",
+            "severity": "urgent"
+          }
+        ],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c25",
+      "position": "RHF1",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "exposed_cord",
+            "severity": "urgent"
+          }
+        ],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c26",
+      "position": "LHR1-O",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "exposed_cord",
+            "severity": "urgent"
+          }
+        ],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c27",
+      "position": "LHR1-I",
+      "vehicleType": "PUMPS",
+      "expert": {
+        "assessable": true,
+        "defects": [],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c28",
+      "position": "RHR1-O",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c29",
+      "position": "RHR1-I",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c30",
+      "position": "LHR2-O",
+      "vehicleType": "PUMPS",
+      "expert": {
+        "assessable": true,
+        "defects": [],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c31",
+      "position": "RHR2-O",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": false,
+        "defects": [],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c32",
+      "position": "LHF1",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": false,
+        "defects": [],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c33",
+      "position": "RHF1",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": false,
+        "defects": [],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c34",
+      "position": "LHR1-O",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": false,
+        "defects": [],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c35",
+      "position": "LHR1-I",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "shoulder_wear",
+            "severity": "low"
+          }
+        ],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c36",
+      "position": "RHR1-O",
+      "vehicleType": "PUMPS",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "shoulder_wear",
+            "severity": "low"
+          }
+        ],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c37",
+      "position": "RHR1-I",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "shoulder_wear",
+            "severity": "low"
+          }
+        ],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c38",
+      "position": "LHR2-O",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "shoulder_wear",
+            "severity": "low"
+          }
+        ],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c39",
+      "position": "RHR2-O",
+      "vehicleType": "PUMPS",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "embedded_object",
+            "severity": "moderate"
+          }
+        ],
+        "depthMm": null
+      }
+    },
+    {
+      "id": "c40",
+      "position": "LHF1",
+      "vehicleType": "TR-MIXER",
+      "expert": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "cracking",
+            "severity": "low"
+          }
+        ],
+        "depthMm": null
+      }
+    }
+  ]
+}

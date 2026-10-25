@@ -10,6 +10,8 @@
 //    (conservative) but the job/log cost stays NULL = unknown, never 0.
 //  * A job whose provider was already called is never called again.
 
+import type { MonthlyBudgetDecision } from "./budget.ts";
+
 export type Json = Record<string, unknown>;
 
 export const ENQUEUE_ROLES = ["admin", "manager", "director", "maintenance supervisor", "tyre man"] as const;
@@ -114,7 +116,7 @@ export function estimateCost(usage: Usage, rates: Rates | null): number | null {
 export type FailureKind =
   | "photo_unavailable" | "invalid_reference" | "budget_deferred"
   | "provider_timeout" | "provider_http_error" | "provider_non_json"
-  | "invalid_model_output" | "prior_attempt" | "stalled";
+  | "invalid_model_output" | "prior_attempt" | "stalled" | "monthly_budget_reached";
 
 export class ProviderCallError extends Error {
   constructor(public kind: "provider_timeout" | "provider_http_error" | "provider_non_json",
@@ -130,6 +132,12 @@ export interface Deps {
   /** Update a job only while it is in fromStatus. Returns whether a row changed. */
   updateJob: (id: string, patch: Json, fromStatus: string) => Promise<boolean>;
   insertTokenLog: (row: Json) => Promise<void>;
+  /**
+   * HARD monthly cap (system_config ai_monthly_budget_usd). Optional so existing callers/tests keep
+   * working; index.ts always wires it. Must resolve a decision; a throw is treated as "unavailable"
+   * (fail closed). Called before the photo is downloaded and before any reservation.
+   */
+  checkMonthlyBudget?: (reserveUsd: number) => Promise<MonthlyBudgetDecision>;
   reserveBudget: (orgId: string, jobId: string, estimateUsd: number, limitUsd: number) => Promise<{ ok: boolean; reason?: string }>;
   settleBudget: (jobId: string, actualUsd: number | null, providerCalled: boolean) => Promise<void>;
   loadPhoto: (ref: string) => Promise<Photo>;
@@ -156,6 +164,25 @@ export async function processJob(d: Deps, job: JobRow): Promise<Outcome> {
     if (job.attempts > 0) {
       await failJob(d, job, "prior_attempt", "Prior attempt requires manual review");
       return "skipped_prior_attempt";
+    }
+    // Hard monthly cap: nothing is downloaded, reserved or billed when the cap is reached/unreadable.
+    if (d.checkMonthlyBudget) {
+      let decision: MonthlyBudgetDecision;
+      try { decision = await d.checkMonthlyBudget(d.config.reserveUsd); }
+      catch {
+        decision = { allowed: false, state: "unavailable", reason: "AI budget control unavailable", limitUsd: null, spentUsd: null };
+      }
+      if (!decision.allowed) {
+        // Visible, auditable stop: a 'blocked' log row (like chat-ai) and the job returns un-attempted.
+        try {
+          await d.insertTokenLog({ organisation_id: job.organisation_id, model, feature: "ai_tyre_inspection",
+            prompt_tokens: 0, completion_tokens: 0, cost_usd: 0, status: "blocked",
+            error: str(`${decision.state}: ${decision.reason}`, 300) });
+        } catch { /* logging must never turn a safe stop into a crash */ }
+        await d.updateJob(job.id, { status: "pending", attempts: job.attempts, failure_kind: "monthly_budget_reached",
+          error_message: str(decision.reason, 160), updated_at: stamp(d) }, "processing");
+        return "deferred";
+      }
     }
     let photo: Photo;
     try { photo = await d.loadPhoto(job.photo_ref); }

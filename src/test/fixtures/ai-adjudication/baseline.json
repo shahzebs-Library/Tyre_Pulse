@@ -1,0 +1,7 @@
+{
+  "assessableAgreement": 0.975,
+  "microPrecision": 0.9355,
+  "microRecall": 0.9063,
+  "acceptRate": 0.8889,
+  "depthMae": 0.4833
+}

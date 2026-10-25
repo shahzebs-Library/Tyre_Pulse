@@ -159,3 +159,20 @@ Nothing here is applied to the live database, deployed as an edge function, or s
 3. P0 real photograph adjudication by an authorised supervisor; live failed-charge reconciliation against the provider invoice; multi-connection budget concurrency test.
 4. Real-user role/tenant test (including Sajid) through the deployed function; browser pass (console errors, dark/light, 390 px) of the register footer, feedback panel and cost monitor.
 5. Continuous learning is **not** implemented and must not be claimed; the labelled export is input for a future, expert-confirmed evaluation.
+
+## 2026-10-25 - Adjudication harness, worker integration tests, hard monthly budget (branch `claude/ai-adjudication-harness-20261025`)
+
+Code only. Nothing is deployed or applied; no migration was needed.
+
+### Adjudication harness
+- Engine `src/lib/aiTyreAdjudication.js` (pure, deterministic): scores AI findings against an expert golden set (per-type precision/recall, assessable agreement, dangerous misses), summarises human review decisions (accepted/rejected/corrected), measures depth correction magnitude (MAE, bias, p90) for engine-predicted depth vs gauge/human value, clusters disagreements, and gates a change (`pass` / `fail` / `insufficient`) on thresholds and on regression versus a stored baseline. Samples below the minimum give `null`, never 0; `insufficient` blocks by default.
+- Hard rule enforced by the gate: any AI result carrying an exact tread depth fails (a photo may not certify millimetres).
+- `fromJobRows(jobs)` maps live `ai_tyre_inspection_jobs` + reviewer decisions into the same engine.
+- CLI: `npm run ai:adjudicate` (`scripts/ai-adjudicate.mjs`); exit 0 pass, 1 fail, 2 insufficient, 3 bad input. Fixtures in `src/test/fixtures/ai-adjudication/` are SYNTHETIC. They exercise the harness and prove the gate trips; they are not evidence of real accuracy. P0 real-photo expert adjudication is still outstanding: replace `golden.v1.json` with expert-labelled real cases and regenerate `baseline.json` (`--write-baseline`).
+
+### Hard monthly budget
+- `supabase/functions/ai-tyre-inspection/budget.ts` (pure) + `checkMonthlyBudget` dependency in `logic.ts` + wiring in `index.ts`. Reads `system_config` `ai_monthly_budget_usd` (0/unset = uncapped, same as chat-ai) and `ai_enabled`. Refuses a call when spend + the per-call reservation would exceed the limit; fails closed if config or spend cannot be read, or the limit is non-numeric.
+- Spend = `ai_token_logs` for every other feature + `ai_tyre_inspection_jobs` (the worker writes a token-log row only for FAILED calls, so successful tyre calls are only in the jobs table). A called job with NULL cost is charged the reservation, never 0. Both reads are paged (PostgREST caps at 1000).
+- A stopped run leaves the job `pending`, un-attempted, with `failure_kind = monthly_budget_reached`, writes a `blocked` row in `ai_token_logs`, and the worker response carries `stoppedBecause: "monthly_budget"` and a `budget` object. The page shows the paused reason on the photo.
+- **Deploy needed:** redeploy edge function `ai-tyre-inspection` (`index.ts`, `logic.ts`, `budget.ts`). No migration. Deploying it before the 20261023090000 migration still makes the worker defer every job (existing behaviour).
+- Limits: read-then-act, so concurrent workers can overshoot by about (workers in flight x reservation); jobs called before `provider_called_at` existed are invisible to the month total; totals are global across tenants. `chat-ai` still reads `ai_token_logs` with a plain select (1000-row truncation) and does not include tyre-inspection successes; not changed here.

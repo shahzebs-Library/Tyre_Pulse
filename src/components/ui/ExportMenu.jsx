@@ -10,6 +10,8 @@ import {
   modeLabel,
 } from '../../lib/report/tableReport'
 import { isServerReportsEnabled, generateServerPdf } from '../../lib/report/serverReport'
+import { useAuth } from '../../contexts/AuthContext'
+import { currentExportModule, assertExportAllowed } from '../../lib/exportCapability'
 
 /**
  * ExportMenu — state-faithful export dropdown for EnterpriseTable.
@@ -32,6 +34,10 @@ export default function ExportMenu({
   const [mode, setMode] = useState(EXPORT_MODES.FILTERED)
   const [busy, setBusy] = useState(null) // format currently exporting
   const [errored, setErrored] = useState(false)
+  // 'export' capability: default allow, blocked only by an explicit revoke.
+  // App + audit level control (guardExport re-checks and audits on every path).
+  const auth = useAuth()
+  const exportAllowed = auth?.canExport ? auth.canExport(currentExportModule()) : true
   const menuRef = useRef(null)
   const popRef = useRef(null)
   // Portalled, so the popover is no longer a DOM child of the trigger and has
@@ -87,6 +93,7 @@ export default function ExportMenu({
       dateRange: meta.dateRange,
     }
     try {
+      assertExportAllowed() // also covers the server-PDF path, which skips guardExport
       // Prefer the server (Playwright) engine for print-grade PDFs when it is
       // configured — but never let it block the user: fall back to the client
       // renderer on any failure.
@@ -116,11 +123,11 @@ export default function ExportMenu({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
-        disabled={disabled}
+        disabled={disabled || !exportAllowed}
         className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5 disabled:opacity-40"
         aria-haspopup="true"
         aria-expanded={open}
-        title="Export current view"
+        title={exportAllowed ? 'Export current view' : 'Export is turned off for your account in this module'}
       >
         <Download size={13} /> Export
       </button>

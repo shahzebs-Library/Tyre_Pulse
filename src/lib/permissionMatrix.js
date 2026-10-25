@@ -24,9 +24,13 @@
  *     alerts, rca_records). Two limits are deliberate: `app_user_can` returns
  *     false for `delete` for every non-admin unconditionally, so delete can
  *     never be granted to a non-admin by any override or grant; and `export`
- *     is a client download, so it is a UI gate only. `approve` is enforced
- *     only as a revoke (V242 blocks a status change on accidents and
- *     work_orders for a user explicitly revoked `approve`). Tables outside the
+ *     is a client download, so it is enforced at APP + AUDIT level only
+ *     (src/lib/exportCapability.js, wired through guardExport; a refusal is
+ *     audited) - the read boundary is RLS. `approve` is enforced by the database
+ *     as a revoke on the approval writers (V242 status-change trigger on
+ *     accidents/work_orders, plus migration 20261025153000 on the inspection,
+ *     checklist, execution and accident-closure RPCs) and as an additive grant
+ *     into the first rung of inspections and checklists. Tables outside the
  *     list above still rely on their role-literal policies.
  *
  * `resolvePermissions(role, overrides, viewMap)` is the single function
@@ -62,8 +66,8 @@ export const CAPABILITIES = [
   { key: 'create',  label: 'Create',  enforced: true,  description: 'Add new records. Enforced by the database on the core operational tables (tyres, fleet, accidents, inspections, work orders, stock, alerts, budgets, gate passes, RCA, corrective actions, repair requests); other modules store it only.' },
   { key: 'edit',    label: 'Edit',    enforced: true,  description: 'Modify existing records. Enforced by the database on the same core operational tables as Create; other modules store it only.' },
   { key: 'delete',  label: 'Delete',  enforced: true,  description: 'Remove records. Reserved for Admin and Super Admin.' },
-  { key: 'export',  label: 'Export',  enforced: false, description: 'Download / export module data.' },
-  { key: 'approve', label: 'Approve', enforced: false, description: 'Approve workflow items (uploads, work orders…).' },
+  { key: 'export',  label: 'Export',  enforced: true,  enforcement: 'app', badge: 'app + audit', description: 'Download / export module data. Enforced at app and audit level only: a per-user revoke (or a role override that turns it off) blocks every export from that module and the refusal is audited. A browser cannot be a hard boundary; the data-read boundary is the database (RLS).' },
+  { key: 'approve', label: 'Approve', enforced: true,  enforcement: 'database', badge: 'revoke + grant', description: 'Approve workflow items. Enforced by the database on the approval writers (inspection, checklist, work-order and tyre-change execution, accident closure): an explicit revoke blocks the decision, and an explicit grant lets a user into the first approval rung of inspections and checklists. Existing role gates are unchanged.' },
 ]
 
 export const CAPABILITY_KEYS = CAPABILITIES.map((c) => c.key)
@@ -353,8 +357,9 @@ function isSafeRoleName(role) {
  *   4. explicit 'grant' override       -> true (adds on top of the role)
  *   5. otherwise                       -> false
  *
- * IMPORTANT: only the `view` capability is enforced by the server today (see
- * CAPABILITIES[].enforced). For create/edit/delete/export/approve this resolver
+ * IMPORTANT: this resolver is the client-side verdict. The server is authoritative
+ * for view/create/edit/delete/approve; `export` is enforced at app + audit level
+ * only (see CAPABILITIES[].enforcement). For anything else this resolver
  * is a CLIENT-SIDE UI gate only; the authoritative boundary is the server
  * (app_user_can / RLS). Do NOT treat a `true` here as a security guarantee for
  * non-view capabilities.

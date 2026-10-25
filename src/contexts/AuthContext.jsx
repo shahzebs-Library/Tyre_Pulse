@@ -4,7 +4,8 @@ import { queryClient } from '../lib/queryClient'
 import { setMonitoringUser, clearMonitoringUser } from '../lib/monitoring'
 import { identifyUser, resetAnalyticsUser } from '../lib/analytics'
 import { audit } from '../lib/auditLogger'
-import { getPermissionOverrides, resolveCapability, resolvePermissions, baseRoleAllows, NEW_FEATURES_ADMIN_ONLY_KEY } from '../lib/permissionMatrix'
+import { getPermissionOverrides, resolveCapability, resolvePermissions, baseRoleAllows, defaultViewAccess, NEW_FEATURES_ADMIN_ONLY_KEY } from '../lib/permissionMatrix'
+import { resolveExportAllowed, registerExportGate } from '../lib/exportCapability'
 import { resolveAccess, overrideToFlags } from '../lib/accessResolver'
 import { hasUnmetMfa } from '../lib/authAssurance'
 import { listModuleStatuses } from '../lib/api/modulesRegistry'
@@ -544,6 +545,27 @@ export function AuthProvider({ children }) {
     })
   }, [profile, hasPermission, capabilities, isSuperAdmin, roleCapabilities])
 
+  // Export capability (see src/lib/exportCapability.js). Enforced at app + audit
+  // level: guardExport() in exportUtils.js refuses and audits a revoked export.
+  // Default is ALLOW; only an explicit revoke (or a role override that turned
+  // export off) blocks. A browser is not a hard boundary - RLS is.
+  const canExport = useCallback((moduleKey) => {
+    if (!profile) return false
+    return resolveExportAllowed({
+      role: profile.role,
+      isSuperAdmin,
+      moduleKey,
+      capabilities,
+      roleCapabilities,
+      defaultView: defaultViewAccess(profile.role, moduleKey),
+    })
+  }, [profile, isSuperAdmin, capabilities, roleCapabilities])
+
+  useEffect(() => {
+    registerExportGate(profile ? canExport : null)
+    return () => registerExportGate(null)
+  }, [profile, canExport])
+
   const signIn = useCallback(async (identifier, password, captchaToken) => {
     let email = identifier.trim()
 
@@ -628,8 +650,8 @@ export function AuthProvider({ children }) {
   }, [])
 
   const value = useMemo(
-    () => ({ user, profile, loading, modulePerms, hasPermission, signIn, signOut, mfaEnabled, setMfaEnabled, isSuperAdmin, grantOverrides, grantedModules, refreshAccess, capabilities, hasCapability, moduleStatus, moduleMaintenance }),
-    [user, profile, loading, modulePerms, mfaEnabled, hasPermission, signIn, signOut, setMfaEnabled, isSuperAdmin, grantOverrides, grantedModules, refreshAccess, capabilities, hasCapability, moduleStatus, moduleMaintenance],
+    () => ({ user, profile, loading, modulePerms, hasPermission, signIn, signOut, mfaEnabled, setMfaEnabled, isSuperAdmin, grantOverrides, grantedModules, refreshAccess, capabilities, hasCapability, canExport, moduleStatus, moduleMaintenance }),
+    [user, profile, loading, modulePerms, mfaEnabled, hasPermission, signIn, signOut, setMfaEnabled, isSuperAdmin, grantOverrides, grantedModules, refreshAccess, capabilities, hasCapability, canExport, moduleStatus, moduleMaintenance],
   )
 
   return (

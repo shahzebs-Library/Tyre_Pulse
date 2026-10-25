@@ -1,5 +1,6 @@
 import { formatCurrencyCompact, formatDate } from './formatters.js'
 import { configBool, configNum } from './api/systemConfig.js'
+import { assertExportAllowed } from './exportCapability.js'
 import { loadAutoTable } from './pdfEngine'
 // One definition of "what the inspector recorded", shared with the on-screen
 // viewer. Keeping a private copy here is exactly how the report and the screen
@@ -32,6 +33,15 @@ function guardExport(rows, name) {
   if (!configBool('export_enabled', true)) {
     throw new Error('Exports are disabled by your administrator.')
   }
+  // Per-module 'export' capability (explicit per-user revoke / role turned off).
+  // Enforced at app + audit level: a browser is not a hard boundary for rows the
+  // user can already read (that boundary is RLS). A refusal is audited too.
+  try {
+    assertExportAllowed()
+  } catch (err) {
+    if (name) recordExport(`${String(name).slice(0, 100)} (denied)`, 0, { denied: true, module: err.moduleKey || null })
+    throw err
+  }
   const arr = Array.isArray(rows) ? rows : []
   const max = configNum('max_export_rows', 0)
   const out = max > 0 && arr.length > max ? arr.slice(0, max) : arr
@@ -44,10 +54,10 @@ function guardExport(rows, name) {
  * who downloaded what. Fire-and-forget: loaded lazily, never throws, never
  * delays the download. The server stamps IP and device on the row.
  */
-function recordExport(name, rowCount) {
+function recordExport(name, rowCount, extra = null) {
   try {
     import('./auditLogger')
-      .then((m) => m.audit.export(String(name).slice(0, 120), { rows: rowCount }))
+      .then((m) => m.audit.export(String(name).slice(0, 120), { rows: rowCount, ...(extra || {}) }))
       .catch(() => {})
   } catch { /* never block an export */ }
 }

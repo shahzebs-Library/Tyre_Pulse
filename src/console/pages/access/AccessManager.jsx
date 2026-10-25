@@ -1421,10 +1421,10 @@ function NodeRow({ node, draft, dirty, readOnly, mode, capEditable, advancedOpen
                   type="button"
                   onClick={() => onToggleCap(c.key)}
                   disabled={readOnly || c.key === 'delete'}
-                  title={c.key === 'delete' ? 'Delete is reserved for Admin and Super Admin' : `${c.description} (stored, progressively enforced)`}
+                  title={c.key === 'delete' ? 'Delete is reserved for Admin and Super Admin' : (c.enforced ? c.description : `${c.description} (stored, progressively enforced)`)}
                   className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium border transition-colors disabled:opacity-40 ${cOn ? 'text-green-300 bg-green-900/20 border-green-800/50' : 'text-[var(--text-muted)] bg-[var(--btn-2-bg)] border-[var(--btn-2-border)] hover:text-[var(--text-secondary)]'}`}
                 >
-                  {c.key === 'delete' ? <Lock size={10} /> : cOn ? <Check size={10} /> : <X size={10} />} {c.label}<span className="text-[8px] uppercase tracking-wide opacity-60">{c.key === 'delete' ? 'admin only' : 'stored'}</span>
+                  {c.key === 'delete' ? <Lock size={10} /> : cOn ? <Check size={10} /> : <X size={10} />} {c.label}<span className="text-[8px] uppercase tracking-wide opacity-60">{c.key === 'delete' ? 'admin only' : (c.enforced ? (c.badge || 'enforced') : 'stored')}</span>
                 </button>
               )
             })}

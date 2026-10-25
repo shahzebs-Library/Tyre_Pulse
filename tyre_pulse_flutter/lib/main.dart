@@ -54,6 +54,8 @@ import 'package:tyre_pulse/features/management/'
     'management_screen_registrations.dart';
 import 'package:tyre_pulse/features/meter_logs/'
     'meter_logs_screen_registrations.dart';
+import 'package:tyre_pulse/features/my_work/data/'
+    'workforce_assignment_cache.dart';
 import 'package:tyre_pulse/features/notifications/'
     'notifications_screen_registrations.dart';
 import 'package:tyre_pulse/features/preventive_maintenance/'
@@ -213,6 +215,11 @@ Future<void> main() async {
         // a signed-out phone stops receiving pushes (V321 revoke_user_device).
         beforeSignOutProvider.overrideWith(
           (Ref ref) => ref.read(pushCoordinatorProvider).onSigningOut,
+        ),
+        // Wipe the signed-out person's offline work-assignment cache.
+        afterSignOutProvider.overrideWith(
+          (Ref ref) =>
+              WorkforceAssignmentCache(ref.read(secureStoreProvider)).clear,
         ),
         // `accessStateProvider`'s own doc says it "must be overridden at the
         // composition root, once the repository that loads them exists" - it

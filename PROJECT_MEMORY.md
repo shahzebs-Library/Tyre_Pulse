@@ -32,6 +32,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - Phone push goes through `workflow_notifications` with a pre-rendered `push` (no edge redeploy). 0 push tokens exist, so UNTESTED end to end.
 - Links/severity in `src/lib/dueAlertLinks.js` (a test pins every seeded rule key); mobile inbox routes any `due_*` type. Add a rule = migration row + `_due_items` branch + link entry.
 - Vehicle expiry dates are EMPTY for all active vehicles: needs the owner's file. A DELETE in an MCP execute_sql waits for approval and times out; test with updates inside a rolled-back txn.
+- SESSION CLOSE 2026-10-25: PR #445 (fleet_document_missing rule + link + test) is DRAFT, CI all green, mergeable, NOT merged (owner says when). Nothing uncommitted. Open: owner's vehicle date file; push untested (0 tokens); after merge realign branch claude/wonderful-shannon-muxbw7 to origin/main.
 
 # ⚑ SESSION 2026-10-12 — STORE KEEPER STOCK ENTRY + EXPO OTA HOTFIX PATH RE-OPENED. PRs #401 #402 #403 #404 merged. No migration. SESSION CLOSED CLEAN.
 - **#401 speed pass merged** (migration 20261011110000 already live; see the 10-11 PART 2 entry). Prod READY on 210bbb9.

@@ -32,11 +32,11 @@ describe('resolveCapability precedence', () => {
 })
 
 describe('CAPABILITIES enforcement honesty', () => {
-  it('marks view and admin-only delete as server-enforced', () => {
+  it('marks view, create, edit (core tables) and admin-only delete as server-enforced; export and approve stay stored only', () => {
     const enforced = CAPABILITIES.filter((c) => c.enforced).map((c) => c.key)
-    expect(enforced).toEqual(['view', 'delete'])
+    expect(enforced).toEqual(['view', 'create', 'edit', 'delete'])
     for (const c of CAPABILITIES) {
-      if (!['view', 'delete'].includes(c.key)) expect(c.enforced).toBe(false)
+      if (['export', 'approve'].includes(c.key)) expect(c.enforced).toBe(false)
     }
   })
 })

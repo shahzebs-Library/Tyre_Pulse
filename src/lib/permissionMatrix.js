@@ -59,8 +59,8 @@ export const ROLES = ACCESS_ROLES
  */
 export const CAPABILITIES = [
   { key: 'view',    label: 'View',    enforced: true,  description: 'Open the module (routes + navigation). Enforced now via hasPermission.' },
-  { key: 'create',  label: 'Create',  enforced: false, description: 'Add new records in the module.' },
-  { key: 'edit',    label: 'Edit',    enforced: false, description: 'Modify existing records.' },
+  { key: 'create',  label: 'Create',  enforced: true,  description: 'Add new records. Enforced by the database on the core operational tables (tyres, fleet, accidents, inspections, work orders, stock, alerts, budgets, gate passes, RCA, corrective actions, repair requests); other modules store it only.' },
+  { key: 'edit',    label: 'Edit',    enforced: true,  description: 'Modify existing records. Enforced by the database on the same core operational tables as Create; other modules store it only.' },
   { key: 'delete',  label: 'Delete',  enforced: true,  description: 'Remove records. Reserved for Admin and Super Admin.' },
   { key: 'export',  label: 'Export',  enforced: false, description: 'Download / export module data.' },
   { key: 'approve', label: 'Approve', enforced: false, description: 'Approve workflow items (uploads, work orders…).' },

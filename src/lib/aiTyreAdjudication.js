@@ -307,7 +307,7 @@ export function buildReport({ golden = [], results = [], reviews = [] } = {}, th
   const g = normalizeGolden(golden), r = normalizeResults(results), rv = normalizeReviews(reviews)
   const issues = validateInputs(g, r, rv)
   const score = scoreAgainstGolden(g, r)
-  for (const [type, row] of Object.entries(score.types)) {
+  for (const row of Object.values(score.types)) {
     row.reliable = row.support >= t.minSupportPerType
     if (!row.reliable) { row.recall = null }       // too few expert positives: do not report a rate
   }

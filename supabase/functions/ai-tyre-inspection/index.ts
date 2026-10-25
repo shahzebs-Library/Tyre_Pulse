@@ -230,7 +230,7 @@ async function callProvider(cfg: { providerName: string; providerKey: string; mo
         ? await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST", signal: ctl.signal,
           headers: { "x-api-key": cfg.providerKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-          body: JSON.stringify({ model: cfg.model, max_tokens: 1100, messages: [{ role: "user", content: [
+          body: JSON.stringify({ model: cfg.model, max_tokens: 1800, messages: [{ role: "user", content: [
             { type: "text", text: prompt },
             { type: "image", source: { type: "base64", media_type: photo.mediaType, data: photo.base64 } },
           ] }] }),
@@ -239,7 +239,7 @@ async function callProvider(cfg: { providerName: string; providerKey: string; mo
           method: "POST", signal: ctl.signal,
           headers: { "x-goog-api-key": cfg.providerKey, "content-type": "application/json" },
           body: JSON.stringify({
-            generationConfig: { responseMimeType: "application/json", maxOutputTokens: 1100, temperature: 0.1 },
+            generationConfig: { responseMimeType: "application/json", maxOutputTokens: 1800, temperature: 0.1 },
             contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: photo.mediaType, data: photo.base64 } }] }],
           }),
         });

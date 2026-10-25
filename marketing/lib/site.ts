@@ -27,7 +27,7 @@ export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.tyrepu
  * www and the application moves to app.tyrepulse.app. On the day that happens,
  * set NEXT_PUBLIC_APP_URL=https://app.tyrepulse.app and nothing else changes.
  */
-export const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://www.tyrepulse.app").replace(/\/$/, "");
+export const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://app.tyrepulse.app").replace(/\/$/, "");
 
 /**
  * Sales WhatsApp number in international format, digits only. Supplied by the

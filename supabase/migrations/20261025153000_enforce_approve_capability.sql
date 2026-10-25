@@ -1,5 +1,6 @@
 -- Enforce the per-module 'approve' capability on the approval writers.
--- STATUS: AUTHORED, NOT APPLIED. Owner applies. Idempotent (re-run is a no-op).
+-- STATUS: APPLIED LIVE 2026-10-25. Idempotent (re-run is a no-op).
+-- NOTE: decide_inspection_approval's live body has CRLF line endings, so the BEGIN pattern allows an optional \r.
 --
 -- Semantics (additive / compatible, follows V242):
 --   * REVOKE: an active user_access_grants row (capability='approve', effect='revoke')
@@ -68,7 +69,7 @@ begin
       nd := replace(nd, r.anchor, r.repl);
     end if;
     -- first top-level BEGIN of the body: block a REVOKED approver before anything else runs
-    nd := regexp_replace(nd, E'(\\n[ \\t]*)(begin)([ \\t]*\\n)',
+    nd := regexp_replace(nd, E'(\\n[ \\t]*)(begin)([ \\t]*\\r?\\n)',
       E'\\1\\2\\3  -- ' || marker || E'\n  if public.app_cap_revoked(' || r.keyexpr
         || E',''approve'') then\n    raise exception ''You are not permitted to approve or decide this record.'' using errcode = ''42501'';\n  end if;\n',
       'i');

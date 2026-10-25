@@ -6,6 +6,10 @@ import {
   canBackfill, canEnqueue, canReview, resolveRates, processJob, drainQueue, ProviderCallError, str,
   type Deps, type Json, type JobRow, type Photo,
 } from "./logic.ts";
+import {
+  evaluateMonthlyBudget, monthStartUtc, parseAiControls, sumMonthSpend,
+  type MonthlyBudgetDecision,
+} from "./budget.ts";
 
 const ALLOWED_ORIGINS = [
   ...(Deno.env.get("AI_ALLOWED_ORIGIN") ?? "").split(",").map(x => x.trim()).filter(Boolean),
@@ -257,6 +261,44 @@ async function callProvider(cfg: { providerName: string; providerKey: string; mo
     return { provider, output };
   } finally { clearTimeout(timeout); }
 }
+/**
+ * HARD monthly cap. Reads system_config (ai_enabled, ai_monthly_budget_usd) and the month's spend from
+ * ai_token_logs (other features) plus ai_tyre_inspection_jobs (this path's own ledger; paged: PostgREST silently truncates a plain select at 1000 rows, which would under-count
+ * and let the cap be exceeded). Any read problem => state 'unavailable' => no paid call (fail closed).
+ */
+async function monthlyBudgetDecision(reserveUsd: number): Promise<MonthlyBudgetDecision> {
+  try {
+    const { data: cfg, error: cfgError } = await admin.from("system_config").select("key,value")
+      .in("key", ["ai_enabled", "ai_monthly_budget_usd"]);
+    if (cfgError) return evaluateMonthlyBudget({ controls: null, spentUsd: null, reserveUsd });
+    const controls = parseAiControls(cfg);
+    // No cap configured (or AI off / bad setting): nothing to sum.
+    if (!controls.enabled || controls.invalidLimit || controls.limitUsd <= 0) {
+      return evaluateMonthlyBudget({ controls, spentUsd: null, reserveUsd });
+    }
+    const since = monthStartUtc(new Date()).toISOString();
+    const PAGE = 1000, MAX_PAGES = 100;
+    // Pages through a ledger; returns null (=> fail closed) on any error or when the page ceiling is hit.
+    const pageAll = async (build: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: unknown }>) => {
+      const out: Json[] = [];
+      for (let page = 0; ; page++) {
+        if (page >= MAX_PAGES) return null;
+        const { data, error } = await build(page * PAGE, (page + 1) * PAGE - 1);
+        if (error) return null;
+        out.push(...((data || []) as Json[]));
+        if ((data || []).length < PAGE) return out;
+      }
+    };
+    const logs = await pageAll((f, t) => admin.from("ai_token_logs").select("id,cost_usd,feature,status")
+      .gte("created_at", since).order("id", { ascending: true }).range(f, t));
+    const jobs = await pageAll((f, t) => admin.from("ai_tyre_inspection_jobs").select("id,cost_usd,provider_called_at")
+      .not("provider_called_at", "is", null).gte("provider_called_at", since).order("id", { ascending: true }).range(f, t));
+    if (!logs || !jobs) return evaluateMonthlyBudget({ controls, spentUsd: null, reserveUsd });
+    return evaluateMonthlyBudget({ controls, spentUsd: sumMonthSpend(logs, jobs, reserveUsd), reserveUsd });
+  } catch {
+    return evaluateMonthlyBudget({ controls: null, spentUsd: null, reserveUsd });
+  }
+}
 const PROMPT = "Inspect this commercial vehicle tyre photograph. Return a short, valid JSON object with keys assessable (boolean), reason (string), defects (max 4 items each containing type, description, severity, visibleEvidence), recommendation (string). Keep each description under 80 characters. Output no markdown, no commentary. Never use em dashes or en dashes. Note whether the image is clear enough. Distinguish normal visible wear from defects; flag uncertain findings. Do NOT invent groove depth millimetres, remaining tread percentage, remaining kilometres, engine readings, tyre pressure or roadworthiness certification.";
 
 async function work(req:Request) {
@@ -275,6 +317,13 @@ async function work(req:Request) {
   const reserveUsd = Math.max(0.0001, Math.min(Number(env("AI_RESERVE_USD_PER_CALL") ?? "0.01"), 1));
   const rates = resolveRates(providerName, model, env);
 
+  // Pre-flight: if the monthly cap is already reached, claim nothing and report a visible state.
+  let lastBudget = await monthlyBudgetDecision(reserveUsd);
+  if (!lastBudget.allowed) {
+    return response({ processed: 0, failed: 0, deferred: 0, skipped: 0, claimed: 0, batches: 0,
+      stoppedBecause: "monthly_budget", budget: lastBudget, dailyLimit });
+  }
+
   // Stalled "processing" locks: the provider may have been called; fail for manual review, never retry.
   const { error: reapError } = await admin.rpc("ai_tyre_fail_stale_processing", { p_minutes: 15 });
   if (reapError) return fail("Unable to reconcile stalled AI jobs",503);
@@ -288,6 +337,7 @@ async function work(req:Request) {
       return !!data;
     },
     insertTokenLog: async (row) => { await admin.from("ai_token_logs").insert(row); },
+    checkMonthlyBudget: async (reserve) => { lastBudget = await monthlyBudgetDecision(reserve); return lastBudget; },
     reserveBudget: async (orgId, jobId, estimate, limit) => {
       const { data, error: rpcError } = await admin.rpc("ai_tyre_reserve_budget",
         { p_job: jobId, p_estimate: estimate, p_limit: limit });
@@ -331,7 +381,7 @@ async function work(req:Request) {
     nowMs: () => Date.now(),
   });
   if (drained.stoppedBecause === "queue_error" && drained.batches === 0) return fail("Queue unavailable",500);
-  return response({ ...drained, dailyLimit });
+  return response({ ...drained, dailyLimit, budget: lastBudget });
 }
 Deno.serve(async req => {
   { const o = req.headers.get("origin") ?? ""; currentOrigin = ALLOWED_ORIGINS.includes(o) ? o : (ALLOWED_ORIGINS[0] ?? "https://app.tyrepulse.app"); }

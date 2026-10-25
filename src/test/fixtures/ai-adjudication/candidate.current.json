@@ -1,0 +1,612 @@
+{
+  "label": "current engine (synthetic run)",
+  "results": [
+    {
+      "caseId": "c01",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "sidewall_cut",
+            "severity": "high"
+          }
+        ],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c02",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "sidewall_cut",
+            "severity": "high"
+          }
+        ],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c03",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "sidewall_cut",
+            "severity": "moderate"
+          }
+        ],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c04",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "sidewall_cut",
+            "severity": "moderate"
+          }
+        ],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c05",
+      "analysis": {
+        "assessable": true,
+        "defects": [],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c06",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "sidewall_cut",
+            "severity": "moderate"
+          }
+        ],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c07",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "bulge",
+            "severity": "urgent"
+          }
+        ],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c08",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "bulge",
+            "severity": "urgent"
+          }
+        ],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c09",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "bulge",
+            "severity": "urgent"
+          }
+        ],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c10",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "bulge",
+            "severity": "urgent"
+          }
+        ],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c11",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "bulge",
+            "severity": "urgent"
+          }
+        ],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c12",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "tread_wear",
+            "severity": "low"
+          }
+        ],
+        "exactTreadDepthMm": null
+      },
+      "predictedDepthMm": 4.3
+    },
+    {
+      "caseId": "c13",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "tread_wear",
+            "severity": "low"
+          }
+        ],
+        "exactTreadDepthMm": null
+      },
+      "predictedDepthMm": 3.5
+    },
+    {
+      "caseId": "c14",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "uneven_wear",
+            "severity": "low"
+          }
+        ],
+        "exactTreadDepthMm": null
+      },
+      "predictedDepthMm": 5.6
+    },
+    {
+      "caseId": "c15",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "tread_wear",
+            "severity": "low"
+          }
+        ],
+        "exactTreadDepthMm": null
+      },
+      "predictedDepthMm": 3
+    },
+    {
+      "caseId": "c16",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "tread_wear",
+            "severity": "low"
+          }
+        ],
+        "exactTreadDepthMm": null
+      },
+      "predictedDepthMm": 5.5
+    },
+    {
+      "caseId": "c17",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "tread_wear",
+            "severity": "low"
+          }
+        ],
+        "exactTreadDepthMm": null
+      },
+      "predictedDepthMm": 3.6
+    },
+    {
+      "caseId": "c18",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "uneven_wear",
+            "severity": "moderate"
+          }
+        ],
+        "exactTreadDepthMm": null
+      },
+      "predictedDepthMm": 4.5
+    },
+    {
+      "caseId": "c19",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "uneven_wear",
+            "severity": "moderate"
+          }
+        ],
+        "exactTreadDepthMm": null
+      },
+      "predictedDepthMm": 6.1
+    },
+    {
+      "caseId": "c20",
+      "analysis": {
+        "assessable": true,
+        "defects": [],
+        "exactTreadDepthMm": null
+      },
+      "predictedDepthMm": 1.8
+    },
+    {
+      "caseId": "c21",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "uneven_wear",
+            "severity": "moderate"
+          }
+        ],
+        "exactTreadDepthMm": null
+      },
+      "predictedDepthMm": 3.2
+    },
+    {
+      "caseId": "c22",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "uneven_wear",
+            "severity": "moderate"
+          }
+        ],
+        "exactTreadDepthMm": null
+      },
+      "predictedDepthMm": 4.7
+    },
+    {
+      "caseId": "c23",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "uneven_wear",
+            "severity": "moderate"
+          }
+        ],
+        "exactTreadDepthMm": null
+      },
+      "predictedDepthMm": 4.9
+    },
+    {
+      "caseId": "c24",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "exposed_cord",
+            "severity": "urgent"
+          }
+        ],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c25",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "exposed_cord",
+            "severity": "urgent"
+          }
+        ],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c26",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "exposed_cord",
+            "severity": "urgent"
+          }
+        ],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c27",
+      "analysis": {
+        "assessable": true,
+        "defects": [],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c28",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "tread_wear",
+            "severity": "low"
+          }
+        ],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c29",
+      "analysis": {
+        "assessable": true,
+        "defects": [],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c30",
+      "analysis": {
+        "assessable": true,
+        "defects": [],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c31",
+      "analysis": {
+        "assessable": false,
+        "defects": [],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c32",
+      "analysis": {
+        "assessable": false,
+        "defects": [],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c33",
+      "analysis": {
+        "assessable": true,
+        "defects": [],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c34",
+      "analysis": {
+        "assessable": false,
+        "defects": [],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c35",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "shoulder_wear",
+            "severity": "low"
+          }
+        ],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c36",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "shoulder_wear",
+            "severity": "low"
+          }
+        ],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c37",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "shoulder_wear",
+            "severity": "low"
+          }
+        ],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c38",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "shoulder_wear",
+            "severity": "low"
+          }
+        ],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c39",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "embedded_object",
+            "severity": "moderate"
+          }
+        ],
+        "exactTreadDepthMm": null
+      }
+    },
+    {
+      "caseId": "c40",
+      "analysis": {
+        "assessable": true,
+        "defects": [
+          {
+            "type": "cracking",
+            "severity": "low"
+          }
+        ],
+        "exactTreadDepthMm": null
+      }
+    }
+  ],
+  "reviews": [
+    {
+      "caseId": "c01",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c02",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c03",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c04",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c06",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c07",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c08",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c09",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c10",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c11",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c12",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c13",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c15",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c16",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c17",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c18",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c19",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c21",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c22",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c23",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c24",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c25",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c26",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c35",
+      "decision": "accepted"
+    },
+    {
+      "caseId": "c28",
+      "decision": "rejected",
+      "note": "Healthy tread, dust on the photo"
+    },
+    {
+      "caseId": "c14",
+      "decision": "corrected",
+      "correctedDefects": [
+        "tread_wear"
+      ],
+      "correctedDepthMm": 3,
+      "note": "Even wear across the crown"
+    },
+    {
+      "caseId": "c05",
+      "decision": "corrected",
+      "correctedDefects": [
+        "sidewall_cut"
+      ],
+      "note": "Cut visible at 3 oclock"
+    }
+  ]
+}

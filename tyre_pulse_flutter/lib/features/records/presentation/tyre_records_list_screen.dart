@@ -139,6 +139,12 @@ class _TyreRecordsListBody extends ConsumerWidget {
         backFallback: backFallback,
         actions: <Widget>[
           IconButton(
+            key: TyreRecordsListKeys.searchAction,
+            icon: const Icon(Icons.search_rounded),
+            tooltip: l10n.globalSearchTitle,
+            onPressed: () => context.push(const GlobalSearchRoute().location),
+          ),
+          IconButton(
             key: TyreRecordsListKeys.scanAction,
             icon: const Icon(Icons.qr_code_scanner_rounded),
             tooltip: l10n.tyreMockScanSerial,
@@ -407,6 +413,7 @@ class _PagingFooter extends StatelessWidget {
 /// Stable keys for the register's mock-parity controls.
 abstract final class TyreRecordsListKeys {
   static const Key scanAction = Key('records.scan_action');
+  static const Key searchAction = Key('records.search_action');
   static const Key scanBar = Key('records.scan_bar');
   static const Key exportAction = Key('records.export');
   static const Key statusTabs = Key('records.status_tabs');

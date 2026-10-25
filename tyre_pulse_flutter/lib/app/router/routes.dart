@@ -174,6 +174,7 @@ abstract final class TpRouteId {
   static const String notifications = 'notifications';
   static const String scanner = 'scanner';
   static const String serialSearch = 'serialSearch';
+  static const String globalSearch = 'globalSearch';
   static const String tyreRecords = 'tyreRecords';
   static const String vehicles = 'vehicles';
   static const String alerts = 'alerts';
@@ -248,6 +249,7 @@ abstract final class TpRoutePaths {
   static const String notifications = '/notifications';
   static const String scanner = '/scan';
   static const String serialSearch = '/serial-search';
+  static const String globalSearch = '/search';
   static const String tyreRecords = '/records';
   static const String vehicles = '/vehicles';
   static const String alerts = '/alerts';
@@ -307,6 +309,7 @@ abstract final class TpRoutePaths {
   static const String qAssetNo = 'assetNo';
   static const String qSiteName = 'siteName';
   static const String qTyreSerial = 'tyreSerial';
+  static const String qSearch = 'q';
   static const String qTyrePosition = 'tyrePosition';
   static const String qAssignmentId = 'assignmentId';
   static const String qDraftKey = 'draftKey';
@@ -523,6 +526,27 @@ final class SerialSearchRoute extends TpRoute {
   String get location => _location(
         TpRoutePaths.serialSearch,
         <String, String?>{TpRoutePaths.qTyreSerial: tyreSerial?.value},
+      );
+}
+
+/// The global cross-entity search screen (spec section 34).
+///
+/// [initialQuery] lets a caller deep-link into an already-populated search.
+final class GlobalSearchRoute extends TpRoute {
+  const GlobalSearchRoute({this.initialQuery});
+
+  static GlobalSearchRoute parse(TpRouteParameters p) =>
+      GlobalSearchRoute(initialQuery: p.optionalQuery(TpRoutePaths.qSearch));
+
+  final String? initialQuery;
+
+  @override
+  String get routeId => TpRouteId.globalSearch;
+
+  @override
+  String get location => _location(
+        TpRoutePaths.globalSearch,
+        <String, String?>{TpRoutePaths.qSearch: initialQuery},
       );
 }
 

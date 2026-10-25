@@ -33,8 +33,8 @@ final class _FakeSource implements WorkforceAssignmentsSource {
   @override
   Future<WorkforceAssignmentSnapshot> listMine() async {
     if (hold != null) await hold;
-    final Object next =
-        snapshots[listCalls < snapshots.length ? listCalls : snapshots.length - 1];
+    final Object next = snapshots[
+        listCalls < snapshots.length ? listCalls : snapshots.length - 1];
     listCalls++;
     if (next is WorkforceAssignmentSnapshot) return next;
     if (next is Error) throw next;

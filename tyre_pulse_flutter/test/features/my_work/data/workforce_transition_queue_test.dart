@@ -168,8 +168,10 @@ void main() {
           File('${dir.path}${Platform.pathSeparator}key-bbbbbbbb.json')
             ..writeAsStringSync('{not json');
       final WorkforceQueueRead read = await queue.list(userA);
-      expect(read.items.map((QueuedWorkforceTransition i) => i.id),
-          <String>['key-aaaaaaaa'],);
+      expect(
+        read.items.map((QueuedWorkforceTransition i) => i.id),
+        <String>['key-aaaaaaaa'],
+      );
       expect(corrupt.existsSync(), isTrue);
     });
 

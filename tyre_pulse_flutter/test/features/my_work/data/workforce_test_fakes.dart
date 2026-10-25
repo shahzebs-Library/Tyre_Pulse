@@ -18,9 +18,10 @@ class FakeWorkforceQueue implements WorkforceTransitionQueue {
 
   @override
   Future<void> put(QueuedWorkforceTransition item) async {
-    store
-        .putIfAbsent(item.userId, () => <String, QueuedWorkforceTransition>{})[
-      item.id] = item;
+    store.putIfAbsent(
+      item.userId,
+      () => <String, QueuedWorkforceTransition>{},
+    )[item.id] = item;
   }
 
   @override

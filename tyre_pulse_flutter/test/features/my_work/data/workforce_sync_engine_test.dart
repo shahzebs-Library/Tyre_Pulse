@@ -38,7 +38,8 @@ WorkforceTransitionEngine engineWith(
 
 void main() {
   group('submit', () {
-    test('writes to the queue first, then delivers; a delivered entry is removed',
+    test(
+        'writes to the queue first, then delivers; a delivered entry is removed',
         () async {
       final FakeWorkforceQueue queue = FakeWorkforceQueue();
       final FakeWorkforceRemote remote = FakeWorkforceRemote();
@@ -113,7 +114,8 @@ void main() {
     test('an action that does not apply is refused locally', () async {
       final FakeWorkforceQueue queue = FakeWorkforceQueue();
       final FakeWorkforceRemote remote = FakeWorkforceRemote();
-      final WorkforceSubmitResult result = await engineWith(queue, remote).submit(
+      final WorkforceSubmitResult result =
+          await engineWith(queue, remote).submit(
         userId: userA,
         assignmentId: job1,
         serverStatus: 'submitted',
@@ -124,7 +126,8 @@ void main() {
       expect(queue.of(userA), isEmpty);
     });
 
-    test('queued updates stack: the next action is judged on the optimistic status',
+    test(
+        'queued updates stack: the next action is judged on the optimistic status',
         () async {
       final FakeWorkforceQueue queue = FakeWorkforceQueue();
       final FakeWorkforceRemote remote = FakeWorkforceRemote(<Object>[
@@ -154,13 +157,16 @@ void main() {
         action: WorkforceAction.accept,
       );
       expect(again.outcome, WorkforceSubmitOutcome.refused);
-      expect(queue.of(userA).map((QueuedWorkforceTransition i) => i.seq),
-          <int>[1, 2],);
+      expect(
+        queue.of(userA).map((QueuedWorkforceTransition i) => i.seq),
+        <int>[1, 2],
+      );
     });
   });
 
   group('flush', () {
-    test('delivers in the order the user acted and reuses the same key on retry',
+    test(
+        'delivers in the order the user acted and reuses the same key on retry',
         () async {
       final FakeWorkforceQueue queue = FakeWorkforceQueue();
       final FakeWorkforceRemote remote = FakeWorkforceRemote(<Object>[
@@ -188,8 +194,10 @@ void main() {
       final WorkforceFlushSummary summary = await engine.flush(userA);
 
       expect(summary.delivered, 2);
-      expect(remote.calls.map((RemoteCall c) => c.action),
-          <String>['accept', 'start'],);
+      expect(
+        remote.calls.map((RemoteCall c) => c.action),
+        <String>['accept', 'start'],
+      );
       expect(remote.calls.map((RemoteCall c) => c.key), firstKeys);
       expect(queue.of(userA), isEmpty);
     });
@@ -222,7 +230,11 @@ void main() {
       final WorkforceFlushSummary summary = await engine.flush(userA);
 
       expect(summary.offline, isTrue);
-      expect(remote.calls, hasLength(1), reason: 'stopped after the first failure');
+      expect(
+        remote.calls,
+        hasLength(1),
+        reason: 'stopped after the first failure',
+      );
       expect(queue.of(userA), hasLength(2));
       expect(queue.of(userA).first.attempts, 3);
     });
@@ -232,7 +244,8 @@ void main() {
       final FakeWorkforceRemote remote = FakeWorkforceRemote(<Object>[
         const WorkforceRemoteResult(outcome: WorkforceRemoteOutcome.replayed),
       ]);
-      final WorkforceSubmitResult result = await engineWith(queue, remote).submit(
+      final WorkforceSubmitResult result =
+          await engineWith(queue, remote).submit(
         userId: userA,
         assignmentId: job1,
         serverStatus: 'assigned',
@@ -250,7 +263,8 @@ void main() {
           status: 'in_progress',
         ),
       ]);
-      final WorkforceSubmitResult result = await engineWith(queue, remote).submit(
+      final WorkforceSubmitResult result =
+          await engineWith(queue, remote).submit(
         userId: userA,
         assignmentId: job1,
         serverStatus: 'assigned',
@@ -323,14 +337,25 @@ void main() {
 
       final WorkforceFlushSummary summary = await engine.flush(userA);
 
-      expect(summary.rejected, 3, reason: 'the refused update and two held behind it');
+      expect(
+        summary.rejected,
+        3,
+        reason: 'the refused update and two held behind it',
+      );
       expect(summary.delivered, 1, reason: 'the other assignment still syncs');
-      expect(remote.calls.map((RemoteCall c) => '${c.assignmentId}:${c.action}'),
-          <String>['assignment-1:accept', 'assignment-2:accept'],);
+      expect(
+        remote.calls.map((RemoteCall c) => '${c.assignmentId}:${c.action}'),
+        <String>['assignment-1:accept', 'assignment-2:accept'],
+      );
       final List<QueuedWorkforceTransition> left = queue.of(userA);
       expect(left, hasLength(3));
-      expect(left.every((QueuedWorkforceTransition i) =>
-          i.status == WorkforceQueueStatus.rejected,), isTrue,);
+      expect(
+        left.every(
+          (QueuedWorkforceTransition i) =>
+              i.status == WorkforceQueueStatus.rejected,
+        ),
+        isTrue,
+      );
       expect(left[1].rejectionReason, 'depends_on_rejected');
     });
 
@@ -441,13 +466,15 @@ void main() {
       expect(summary.attempted, 0);
     });
 
-    test('an unclassifiable failure is surfaced as refused, not retried forever',
+    test(
+        'an unclassifiable failure is surfaced as refused, not retried forever',
         () async {
       final FakeWorkforceQueue queue = FakeWorkforceQueue();
       final FakeWorkforceRemote remote = FakeWorkforceRemote(<Object>[
         const FormatException('garbled response'),
       ]);
-      final WorkforceSubmitResult result = await engineWith(queue, remote).submit(
+      final WorkforceSubmitResult result =
+          await engineWith(queue, remote).submit(
         userId: userA,
         assignmentId: job1,
         serverStatus: 'assigned',
@@ -513,10 +540,14 @@ void main() {
       expect(queue.of(userA), hasLength(1));
     });
 
-    test('retry reopens the refused update and everything held behind it, in order',
+    test(
+        'retry reopens the refused update and everything held behind it, in order',
         () async {
-      final (FakeWorkforceQueue queue, FakeWorkforceRemote remote, WorkforceTransitionEngine engine) =
-          await refusedChain();
+      final (
+        FakeWorkforceQueue queue,
+        FakeWorkforceRemote remote,
+        WorkforceTransitionEngine engine
+      ) = await refusedChain();
       final String firstId = queue.of(userA).first.id;
       remote.calls.clear();
       remote.script.clear(); // server now accepts
@@ -524,29 +555,42 @@ void main() {
       final WorkforceFlushSummary summary = await engine.retry(userA, firstId);
 
       expect(summary.delivered, 2);
-      expect(remote.calls.map((RemoteCall c) => c.action),
-          <String>['accept', 'start'],);
+      expect(
+        remote.calls.map((RemoteCall c) => c.action),
+        <String>['accept', 'start'],
+      );
       expect(queue.of(userA), isEmpty);
     });
 
     test('only the earliest refused update of an assignment can be retried',
         () async {
-      final (FakeWorkforceQueue queue, FakeWorkforceRemote remote, WorkforceTransitionEngine engine) =
-          await refusedChain();
+      final (
+        FakeWorkforceQueue queue,
+        FakeWorkforceRemote remote,
+        WorkforceTransitionEngine engine
+      ) = await refusedChain();
       final String secondId = queue.of(userA)[1].id;
       remote.calls.clear();
 
       await engine.retry(userA, secondId);
 
       expect(remote.calls, isEmpty);
-      expect(queue.of(userA).every((QueuedWorkforceTransition i) =>
-          i.status == WorkforceQueueStatus.rejected,), isTrue,);
+      expect(
+        queue.of(userA).every(
+              (QueuedWorkforceTransition i) =>
+                  i.status == WorkforceQueueStatus.rejected,
+            ),
+        isTrue,
+      );
     });
   });
 
   group('effectiveWorkforceStatus', () {
-    QueuedWorkforceTransition entry(int seq, WorkforceAction a,
-        {WorkforceQueueStatus status = WorkforceQueueStatus.pending,}) {
+    QueuedWorkforceTransition entry(
+      int seq,
+      WorkforceAction a, {
+      WorkforceQueueStatus status = WorkforceQueueStatus.pending,
+    }) {
       return QueuedWorkforceTransition(
         id: 'id-$seq-0000000000',
         userId: userA,
@@ -564,8 +608,11 @@ void main() {
         effectiveWorkforceStatus('assigned', <QueuedWorkforceTransition>[
           entry(2, WorkforceAction.block),
           entry(1, WorkforceAction.start),
-          entry(3, WorkforceAction.complete,
-              status: WorkforceQueueStatus.rejected,),
+          entry(
+            3,
+            WorkforceAction.complete,
+            status: WorkforceQueueStatus.rejected,
+          ),
         ]),
         'blocked',
       );

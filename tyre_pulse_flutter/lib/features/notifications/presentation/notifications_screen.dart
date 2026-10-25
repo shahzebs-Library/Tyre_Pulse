@@ -127,7 +127,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           if (mounted) _open(result.row!, copy);
         });
       case NotificationDeepLinkOutcome.unavailable:
-        if (_deepLinkRefreshed != key && inboxTypeForDeepLink(targetType) != null) {
+        if (_deepLinkRefreshed != key &&
+            inboxTypeForDeepLink(targetType) != null) {
           _deepLinkRefreshed = key;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) ref.invalidate(notificationsInboxProvider);
@@ -536,7 +537,13 @@ class _TeamMessageDialogState extends State<_TeamMessageDialog> {
     } catch (error) {
       // A missing receipt (deleted message, other account/tenant) is shown as a
       // plain sentence, never as a raw exception string.
-      if (mounted) setState(() => _error = error is StateError ? error.message : 'Could not load this message. Please try again.');
+      if (mounted) {
+        setState(
+          () => _error = error is StateError
+              ? error.message
+              : 'Could not load this message. Please try again.',
+        );
+      }
     }
   }
 

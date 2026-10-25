@@ -169,20 +169,25 @@ final class WorkforceTransitionEngine {
       );
     }
 
-    final ({WorkforceSubmitResult? early, QueuedWorkforceTransition? created})
-        stored = await _serial(() async {
+    final ({
+      WorkforceSubmitResult? early,
+      QueuedWorkforceTransition? created
+    }) stored = await _serial(() async {
       final WorkforceQueueRead read = await _queue.list(userId);
       if (!read.isReadable) {
         return (
           early: const WorkforceSubmitResult(
             WorkforceSubmitOutcome.refused,
-            message: 'Offline updates are unavailable on this device right now.',
+            message:
+                'Offline updates are unavailable on this device right now.',
           ),
           created: null,
         );
       }
       final List<QueuedWorkforceTransition> mine = read.items
-          .where((QueuedWorkforceTransition i) => i.assignmentId == assignmentId)
+          .where(
+            (QueuedWorkforceTransition i) => i.assignmentId == assignmentId,
+          )
           .toList(growable: false);
       if (mine.any(
         (QueuedWorkforceTransition i) =>
@@ -396,14 +401,11 @@ final class WorkforceTransitionEngine {
   /// Every unresolved entry for [userId] (pending and rejected), in order.
   Future<List<QueuedWorkforceTransition>> list(String userId) async {
     final WorkforceQueueRead read = await _queue.list(userId);
-    return read.isReadable
-        ? read.items
-        : const <QueuedWorkforceTransition>[];
+    return read.isReadable ? read.items : const <QueuedWorkforceTransition>[];
   }
 
   /// Unresolved entries; under-reports (0) when the store is unreadable.
-  Future<int> pendingCount(String userId) async =>
-      (await list(userId)).length;
+  Future<int> pendingCount(String userId) async => (await list(userId)).length;
 
   /// The user has seen a refused update. Removes it (only if it is refused),
   /// along with later updates held behind it, so the screen shows server truth.

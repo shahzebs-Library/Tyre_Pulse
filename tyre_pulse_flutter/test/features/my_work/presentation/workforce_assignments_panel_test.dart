@@ -54,10 +54,12 @@ Future<(FakeWorkforceQueue, FakeWorkforceRemote)> pump(
           ),
         ),
       ],
-      child: MaterialApp(
+      child: const MaterialApp(
         supportedLocales: TpLocalizations.supportedLocales,
         localizationsDelegates: TpLocalizations.delegates,
-        home: Scaffold(body: SingleChildScrollView(child: WorkforceAssignmentsPanel())),
+        home: Scaffold(
+          body: SingleChildScrollView(child: WorkforceAssignmentsPanel()),
+        ),
       ),
     ),
   );

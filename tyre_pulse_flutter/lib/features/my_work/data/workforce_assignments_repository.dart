@@ -8,7 +8,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tyre_pulse/features/my_work/data/workforce_assignment_cache.dart';
 
 class WorkforceAssignment {
-
   factory WorkforceAssignment.fromJson(Map<String, dynamic> json) {
     return WorkforceAssignment(
       id: json['id'] as String,
@@ -123,9 +122,11 @@ class WorkforceAssignmentsRepository implements WorkforceAssignmentsSource {
   final WorkforceAssignmentCache _cache;
 
   static List<WorkforceAssignment> _parse(List<dynamic> rows) => rows
-      .map((row) => WorkforceAssignment.fromJson(
-            Map<String, dynamic>.from(row as Map),
-          ),)
+      .map(
+        (row) => WorkforceAssignment.fromJson(
+          Map<String, dynamic>.from(row as Map),
+        ),
+      )
       .toList(growable: false);
 
   @override

@@ -56,7 +56,9 @@ NotificationDeepLinkResult resolveNotificationDeepLink({
     return const NotificationDeepLinkResult(NotificationDeepLinkOutcome.none);
   }
   if (!loaded) {
-    return const NotificationDeepLinkResult(NotificationDeepLinkOutcome.waiting);
+    return const NotificationDeepLinkResult(
+      NotificationDeepLinkOutcome.waiting,
+    );
   }
   final String? wantedType = inboxTypeForDeepLink(targetType);
   if (wantedType == null) {

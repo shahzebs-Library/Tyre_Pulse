@@ -37,7 +37,8 @@ final class WorkforceRemoteResult {
     }
     final Object? ok = json['ok'];
     final Object? result = json['result'];
-    final String? status = (json['status'] ?? json['current_status']) as String?;
+    final String? status =
+        (json['status'] ?? json['current_status']) as String?;
     final String? reason = json['reason'] as String?;
     if (ok == true) {
       return WorkforceRemoteResult(

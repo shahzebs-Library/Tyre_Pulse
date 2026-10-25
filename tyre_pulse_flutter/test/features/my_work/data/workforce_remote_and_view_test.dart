@@ -80,7 +80,9 @@ void main() {
       expect(() => WorkforceRemoteResult.fromJson(null), throwsFormatException);
       expect(() => WorkforceRemoteResult.fromJson('ok'), throwsFormatException);
       expect(
-        () => WorkforceRemoteResult.fromJson(<String, Object?>{'result': 'applied'}),
+        () => WorkforceRemoteResult.fromJson(
+          <String, Object?>{'result': 'applied'},
+        ),
         throwsFormatException,
       );
       expect(
@@ -106,8 +108,10 @@ void main() {
       );
       expect(views[0].displayStatus, 'in_progress');
       expect(views[0].hasPending, isTrue);
-      expect(views[0].pending.map((QueuedWorkforceTransition q) => q.seq),
-          <int>[1, 2],);
+      expect(
+        views[0].pending.map((QueuedWorkforceTransition q) => q.seq),
+        <int>[1, 2],
+      );
       expect(views[1].displayStatus, 'in_progress');
       expect(views[1].hasPending, isFalse);
     });
@@ -127,8 +131,12 @@ void main() {
       final WorkforceAssignmentView view = buildWorkforceViews(
         <WorkforceAssignment>[assignment('a1', 'assigned')],
         <QueuedWorkforceTransition>[
-          queued('a1', 1, WorkforceAction.start,
-              status: WorkforceQueueStatus.rejected,),
+          queued(
+            'a1',
+            1,
+            WorkforceAction.start,
+            status: WorkforceQueueStatus.rejected,
+          ),
         ],
       ).single;
       expect(view.displayStatus, 'assigned');

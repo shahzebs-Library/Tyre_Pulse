@@ -32,12 +32,18 @@ void main() {
   });
 
   test('applying an action yields the target status or null', () {
-    expect(applyWorkforceAction('assigned', WorkforceAction.accept),
-        'acknowledged',);
-    expect(applyWorkforceAction('blocked', WorkforceAction.resume),
-        'in_progress',);
-    expect(applyWorkforceAction('in_progress', WorkforceAction.complete),
-        'submitted',);
+    expect(
+      applyWorkforceAction('assigned', WorkforceAction.accept),
+      'acknowledged',
+    );
+    expect(
+      applyWorkforceAction('blocked', WorkforceAction.resume),
+      'in_progress',
+    );
+    expect(
+      applyWorkforceAction('in_progress', WorkforceAction.complete),
+      'submitted',
+    );
     expect(applyWorkforceAction('submitted', WorkforceAction.start), isNull);
     expect(applyWorkforceAction('assigned', WorkforceAction.complete), isNull);
   });
@@ -50,7 +56,8 @@ void main() {
     expect(WorkforceAction.fromWire(null), isNull);
   });
 
-  test('every action leads somewhere the employee can keep going from or wait at',
+  test(
+      'every action leads somewhere the employee can keep going from or wait at',
       () {
     for (final WorkforceAction a in WorkforceAction.values) {
       final bool open = workforceEmployeeOpenStatuses.contains(a.to);

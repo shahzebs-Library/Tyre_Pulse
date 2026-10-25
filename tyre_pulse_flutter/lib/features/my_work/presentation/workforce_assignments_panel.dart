@@ -144,7 +144,12 @@ String workforceStatusLabel(String status) {
 
 /// Translated label for [value], falling back to [fallback] when the copy has
 /// no entry (TasksCopy returns the key itself for a missing one).
-String _localised(TasksCopy copy, String prefix, String value, String fallback) {
+String _localised(
+  TasksCopy copy,
+  String prefix,
+  String value,
+  String fallback,
+) {
   final String found = copy('$prefix$value');
   return found == '$prefix$value' ? fallback : found;
 }
@@ -176,7 +181,8 @@ class _AssignmentTile extends StatelessWidget {
             Padding(
               key: WorkforcePanelKeys.pending(id),
               padding: const EdgeInsets.only(top: 4),
-              child: const Text('Pending sync: will be sent when you are online.'),
+              child:
+                  const Text('Pending sync: will be sent when you are online.'),
             ),
           for (final QueuedWorkforceTransition entry in view.rejected)
             _RejectedNotice(entry: entry, assignmentId: id),

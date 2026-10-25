@@ -26,6 +26,14 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-10-25 — DUE ALERTS ENGINE (PR #444 merged b54e6a3b) + missing-document-dates alert. Migrations 20261025090000..130000 APPLIED LIVE.
+- `due_alert_rules` (editable by Admin) + `_due_items()` (the only place that knows each alert's data) + `scan_due_alerts()` hourly cron `due-alerts-scan` (:40). One digest per person, rule and stage; `due_alert_notices` dedupes. Recipients checked by role, org, country array, sites array.
+- Rules: pm_due (Admin, Manager, Director), inspection_plan_overdue, stock_low, certification_expiry, insurance_policy_expiry (Admin only on purpose), fleet_document_expiry, tyre_end_of_life, fleet_document_missing (monthly: active vehicles with no insurance/MVPI/operating card date).
+- Phone push goes through `workflow_notifications` with a pre-rendered `push` (no edge redeploy). 0 push tokens exist, so UNTESTED end to end.
+- Links/severity in `src/lib/dueAlertLinks.js` (a test pins every seeded rule key); mobile inbox routes any `due_*` type. Add a rule = migration row + `_due_items` branch + link entry.
+- Vehicle expiry dates are EMPTY for all active vehicles: needs the owner's file. A DELETE in an MCP execute_sql waits for approval and times out; test with updates inside a rolled-back txn.
+- SESSION CLOSE 2026-10-25: PR #445 (fleet_document_missing rule + link + test) is DRAFT, CI all green, mergeable, NOT merged (owner says when). Nothing uncommitted. Open: owner's vehicle date file; push untested (0 tokens); after merge realign branch claude/wonderful-shannon-muxbw7 to origin/main.
+
 # ⚑ SESSION 2026-10-12 — STORE KEEPER STOCK ENTRY + EXPO OTA HOTFIX PATH RE-OPENED. PRs #401 #402 #403 #404 merged. No migration. SESSION CLOSED CLEAN.
 - **#401 speed pass merged** (migration 20261011110000 already live; see the 10-11 PART 2 entry). Prod READY on 210bbb9.
 - **Store Keeper (7 users, all approved) can now ADD stock items and post quantities on mobile; min/critical levels stay

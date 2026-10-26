@@ -44,6 +44,7 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:tyre_pulse/core/database/app_database.dart';
 import 'package:tyre_pulse/core/database/dao/media_dao.dart';
 import 'package:tyre_pulse/core/database/dao/queue_dao.dart';
@@ -447,6 +448,24 @@ final class SyncEngine {
       setPayload['client_uuid'] = command.idempotencyKey;
     }
 
+    // Photos were captured as LOCAL file paths and have since been uploaded.
+    // The row must carry the storage references, never this device's paths:
+    // a path means nothing to the web app or to another phone, so the photo
+    // would exist in storage but be invisible on the record.
+    if (spec.requiresMediaReady) {
+      final Map<String, String> refs = <String, String>{
+        for (final PendingMediaUpload m
+            in await _mediaDao.mediaForCommand(command.id))
+          if (m.remoteRef != null && m.remoteRef!.isNotEmpty)
+            m.localPath: m.remoteRef!,
+      };
+      if (refs.isNotEmpty) {
+        for (final String key in setPayload.keys.toList()) {
+          setPayload[key] = rewriteMediaRefs(setPayload[key], refs);
+        }
+      }
+    }
+
     try {
       final List<Map<String, Object?>> rows = await _pusher.push(
         spec: spec,
@@ -542,4 +561,23 @@ final class SyncEngine {
       }
     }
   }
+}
+
+/// Replaces every string in [node] that equals a captured local file path with
+/// the `tp-storage://` reference it was uploaded as. Recurses through maps and
+/// lists so it covers both `Record<string, string[]>` photo bags and flat lists;
+/// anything that is not an exact path match is returned untouched.
+@visibleForTesting
+Object? rewriteMediaRefs(Object? node, Map<String, String> refs) {
+  if (node is String) return refs[node] ?? node;
+  if (node is List) {
+    return node.map((Object? e) => rewriteMediaRefs(e, refs)).toList();
+  }
+  if (node is Map) {
+    return <Object?, Object?>{
+      for (final MapEntry<Object?, Object?> e in node.entries)
+        e.key: rewriteMediaRefs(e.value, refs),
+    };
+  }
+  return node;
 }

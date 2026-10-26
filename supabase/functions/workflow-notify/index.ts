@@ -150,7 +150,11 @@ async function sendPush(recipients: Recipient[], msg: { title: string; body: str
     })
     await recordReceipts(receipts, recipients, payload)
     return tickets.length ? ok : tokens.length
-  } catch (err) { skipped.push(`push: ${errMsg(err)}`); return 0 }
+  } catch (err) {
+    skipped.push(`push: ${errMsg(err)}`)
+    await recordReceipts(tokens.map(token => ({ channel: 'expo' as const, token, status: 'failed' as const, error: errMsg(err) })), recipients, payload)
+    return 0
+  }
 }
 
 // ---------------------------------------------------------------------------

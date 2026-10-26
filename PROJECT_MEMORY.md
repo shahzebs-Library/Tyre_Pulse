@@ -26,6 +26,11 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-10-26 (push delivery receipts) — branch claude/tyrepulse-inspector-build-7rxp2t. Migration 20261026120000 NOT APPLIED.
+- `push_delivery_receipts` (one row per device attempt, expo|fcm, accepted|failed|invalid_token, super-admin read) + RPC `get_push_delivery_summary(days)`. `workflow-notify` writes rows best-effort after each Expo/FCM send (needs REDEPLOY + migration apply). Console Delivery has a "Device receipts (7d)" tile.
+- "accepted" = provider took it, NOT proof the phone showed it. Expo second-phase receipt polling (getReceipts) NOT built.
+- iOS TestFlight run dispatched this session failed (run 40407814631); owner said iOS is already submitted for review, so ignore.
+
 # ⚑ SESSION 2026-10-26 (plant checklists) — 5 PAPER PM SHEETS REBUILT AS DAILY CHECKLISTS. Migration 20261026090000.
 - Owner: these are DAILY checklists (one submission per asset per day), built like Workshop Daily / Fleet Transit Mixer, NOT the paper 1-30 day grid. The monthly grid (MonthlyGridPanel) stays REPORTING ONLY. Plant asset types already exist in the fleet (ICE PLANT 26, CHILLER 23, GENERATOR 132, BT-PLANT 58); roles same as Workshop Daily.
 - 6 new published templates (doc_prefix): Ice Plant Daily ICP (F-KSA-PPM-005 Rev 04), Chiller Daily CHL (F-KSA-PPM-007 Rev 05), Air Compressor Daily ACP, Batching Plant Daily BPD, Genset PM Service Report GSR (own legend adds "Cleaned" = paper work code Clean), Chiller Operational Log CLG (numeric readings, no approval). All labels ar/hi/ur. Monthly paper tasks sit behind a "Monthly tasks due today?" Yes/No, so the daily sheet stays short.

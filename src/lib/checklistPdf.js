@@ -314,7 +314,7 @@ export async function renderChecklistPdf({
   if (Number.isFinite(tplVersion) && tplVersion > 0) meta.unshift(['Checklist version', `v${tplVersion}`])
   if (docRef) meta.unshift(['Document no', docRef])
   meta.push(['Submitted', fmtDateTime(sub.submitted_at || sub.created_at)])
-  if (Number.isFinite(Number(sub.score_pct))) {
+  if (sub.score_pct != null && sub.score_pct !== '' && Number.isFinite(Number(sub.score_pct))) {
     meta.push(['Score', `${Math.round(Number(sub.score_pct))}%${typeof sub.score_passed === 'boolean' ? (sub.score_passed ? ' (passed)' : ' (failed)') : ''}`])
   }
   if (sub.approval_status && sub.approval_status !== 'not_required') {

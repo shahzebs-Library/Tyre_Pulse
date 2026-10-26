@@ -179,15 +179,37 @@ beforeEach(() => {
 
 afterEach(() => cleanup())
 
+describe('Bulk actions follow who may actually decide', () => {
+  it('does not offer bulk selection for inspections a Manager cannot sign', async () => {
+    authRole.current = 'Manager'
+    queue.listAccidentClosures.mockResolvedValue([])
+    queue.listChecklistApprovals.mockResolvedValue([])
+    queue.listInspectionApprovals.mockResolvedValue([INSPECTION])
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Tyre inspection')).toBeInTheDocument())
+    expect(screen.queryByText(/Approve selected/)).not.toBeInTheDocument()
+  })
+
+  it('offers bulk selection for inspections to a role that can sign them', async () => {
+    authRole.current = 'PMV Manager'
+    queue.listAccidentClosures.mockResolvedValue([])
+    queue.listChecklistApprovals.mockResolvedValue([])
+    queue.listInspectionApprovals.mockResolvedValue([INSPECTION])
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Tyre inspection')).toBeInTheDocument())
+    expect(await screen.findByText(/Approve selected/)).toBeInTheDocument()
+  })
+})
+
 describe('Unified approval dashboard', () => {
-  it('renders the unified metric strip across all sources', async () => {
+  it('shows the pending total and one type chip per source', async () => {
     renderPage()
     expect(screen.getByText('Approval Dashboard')).toBeInTheDocument()
 
-    // Source-specific metric cards exist.
-    await waitFor(() => expect(screen.getAllByText('Workflows').length).toBeGreaterThan(0))
-    expect(screen.getAllByText('Closures').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Checklists').length).toBeGreaterThan(0)
+    const types = await screen.findByRole('group', { name: /Filter by approval type/i })
+    expect(types).toHaveTextContent('Workflow')
+    expect(types).toHaveTextContent('Closure')
+    expect(types).toHaveTextContent('Checklist')
 
     // total_pending = 1 workflow + 1 closure + 1 checklist = 3.
     const pendingBadge = screen.getByText('3 pending')
@@ -229,9 +251,8 @@ describe('Unified approval dashboard', () => {
     renderPage()
     await waitFor(() => expect(screen.getByText('Daily Safety Check')).toBeInTheDocument())
 
-    fireEvent.change(screen.getByLabelText(/Filter by approval type/i), {
-      target: { value: 'accident_closure' },
-    })
+    const types = screen.getByRole('group', { name: /Filter by approval type/i })
+    fireEvent.click(within(types).getByRole('button', { name: /Closure/ }))
 
     await waitFor(() => expect(screen.queryByText('Vehicle ABC-123 · Tyre Replacement')).not.toBeInTheDocument())
     expect(screen.queryByText('Daily Safety Check')).not.toBeInTheDocument()
@@ -450,6 +471,7 @@ describe('Unified approval dashboard', () => {
   })
 
   it('does not submit an old-scope bulk decision after its signature lookup resolves', async () => {
+    authRole.current = 'Admin' // only an Admin can decide every source, so only an Admin is offered bulk on all of them
     let resolveSignature
     sigApi.getMySignature.mockImplementationOnce(() => new Promise(resolve => { resolveSignature = resolve }))
     queue.listChecklistApprovals.mockResolvedValue([])
@@ -466,6 +488,7 @@ describe('Unified approval dashboard', () => {
 
   // ── Bulk decisions ─────────────────────────────────────────────────────────
   it('offers bulk approve for the items that can be decided in bulk', async () => {
+    authRole.current = 'Admin' // only an Admin can decide every source, so only an Admin is offered bulk on all of them
     renderPage()
     await waitFor(() => expect(screen.getByText(/Select all/)).toBeInTheDocument())
     // The closure and the checklist are bulkable; the workflow instance is not.
@@ -485,6 +508,7 @@ describe('Unified approval dashboard', () => {
   })
 
   it('will not bulk-approve checklists, because a sign-off is a signature', async () => {
+    authRole.current = 'Admin' // only an Admin can decide every source, so only an Admin is offered bulk on all of them
     // A signature is given by a named person against ONE sheet, and whether a
     // sheet may be closed depends on answers the queue row does not carry.
     renderPage()
@@ -496,6 +520,7 @@ describe('Unified approval dashboard', () => {
   })
 
   it('reports a PARTIAL bulk result honestly rather than claiming success', async () => {
+    authRole.current = 'Admin' // only an Admin can decide every source, so only an Admin is offered bulk on all of them
     // Each approval is separately permissioned and separately stateful, so some
     // succeeding and some failing is the normal case, not an edge case.
     // Checklists are excluded from bulk approval, so this drives the two sources
@@ -519,6 +544,7 @@ describe('Unified approval dashboard', () => {
   })
 
   it('applies the approver saved signature when bulk-approving inspections', async () => {
+    authRole.current = 'Admin' // only an Admin can decide every source, so only an Admin is offered bulk on all of them
     // The reported bug: "saved without signature". Bulk approve passed none, so
     // the inspection was stored unsigned. Now the approver saved mark is loaded
     // and carried into each row.
@@ -537,6 +563,7 @@ describe('Unified approval dashboard', () => {
   })
 
   it('refuses a bulk inspection approve when no signature is saved', async () => {
+    authRole.current = 'Admin' // only an Admin can decide every source, so only an Admin is offered bulk on all of them
     // Rather than silently storing an unsigned approval (the defect), it points
     // the approver at where to save one and calls nothing.
     queue.listChecklistApprovals.mockResolvedValue([])
@@ -561,16 +588,14 @@ describe('Unified approval dashboard', () => {
       approval_status: 'not_required',
     }])
     renderPage()
-    await waitFor(() => expect(screen.getAllByText('Missed sign-off').length).toBeGreaterThan(1))
-    fireEvent.click(screen.getAllByText('Missed sign-off').at(-1))
+    fireEvent.click(await screen.findByRole('button', { name: /Missed sign-off/ }))
     await waitFor(() => expect(screen.getByText(/never appeared in the Pending queue/)).toBeInTheDocument())
     expect(screen.getByText('Never asked')).toBeInTheDocument()
   })
 
   it('says nothing slipped past when there are no sign-off gaps', async () => {
     renderPage()
-    await waitFor(() => expect(screen.getAllByText('Missed sign-off').length).toBeGreaterThan(1))
-    fireEvent.click(screen.getAllByText('Missed sign-off').at(-1))
+    fireEvent.click(await screen.findByRole('button', { name: /Missed sign-off/ }))
     await waitFor(() => expect(screen.getByText(/Nothing slipped past/)).toBeInTheDocument())
   })
 })

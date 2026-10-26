@@ -26,8 +26,8 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
-# ⚑ SESSION 2026-10-26 (push delivery receipts) — branch claude/tyrepulse-inspector-build-7rxp2t. Migration 20261026120000 NOT APPLIED.
-- `push_delivery_receipts` (one row per device attempt, expo|fcm, accepted|failed|invalid_token, super-admin read) + RPC `get_push_delivery_summary(days)`. `workflow-notify` writes rows best-effort after each Expo/FCM send (needs REDEPLOY + migration apply). Console Delivery has a "Device receipts (7d)" tile.
+# ⚑ SESSION 2026-10-26 (push delivery receipts) — branch claude/tyrepulse-inspector-build-7rxp2t. Migration 20261026120000 APPLIED LIVE; workflow-notify v17 DEPLOYED.
+- `push_delivery_receipts` (one row per device attempt, expo|fcm, accepted|failed|invalid_token, super-admin read) + RPC `get_push_delivery_summary(days)`. `workflow-notify` writes rows best-effort after each Expo/FCM send (deployed and live). Console Delivery has a "Device receipts (7d)" tile.
 - "accepted" = provider took it, NOT proof the phone showed it. Expo second-phase receipt polling (getReceipts) NOT built.
 - iOS TestFlight run dispatched this session failed (run 40407814631); owner said iOS is already submitted for review, so ignore.
 

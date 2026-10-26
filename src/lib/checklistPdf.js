@@ -288,6 +288,10 @@ export async function renderChecklistPdf({
   // filed sheet is known by. Absent when the template mints none, in which case
   // nothing is printed rather than a placeholder somebody would go on to quote.
   const docRef = documentNo(sub)
+  // Audit: the exact template revision this sheet was filled against. A later
+  // edit publishes a new version, so a filed sheet always names the form it used.
+  const tplVersion = Number(sub.template_version)
+  if (Number.isFinite(tplVersion) && tplVersion > 0) meta.unshift(['Checklist version', `v${tplVersion}`])
   if (docRef) meta.unshift(['Document no', docRef])
   meta.push(['Submitted', fmtDateTime(sub.submitted_at || sub.created_at)])
   // The row already carries the site, and the sheet nearly always asks for it as

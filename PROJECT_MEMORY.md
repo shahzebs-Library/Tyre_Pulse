@@ -26,6 +26,9 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-10-26 (later) — APPROVALS PAGE DECLUTTERED. No migration.
+- Owner: page showed too much before the table (orange banner, 8-tile KPI strip, 2 amber notices, intake card) and filters were weak. Removed banner + MetricStrip (tab counts are the KPIs); the two amber notices are ONE line with Retry; data-intake card is a compact chip; approval-type is now count chips (Pending tab only) instead of a select; site select + Assigned-to-me toggle stay in the toolbar. Tests updated (chips by role=group 'Filter by approval type').
+
 # ⚑ SESSION 2026-10-26 — APPROVAL DASHBOARD CORRECTNESS PASS (src/pages/Approvals.jsx). No migration.
 - Bulk bar/row selection now only covers rows the caller may actually decide (`canActOnItem`). Before, any Admin/Manager/Director saw bulk Approve on inspections and checklists the server refuses (Manager/Director cannot sign inspections or checklist rungs). Existing bulk tests ran as Manager and encoded that bug; they now run as Admin, plus 2 new role tests.
 - "Assigned to me" no longer makes other tabs read "No approvals match your filters". Inspection role message now names the real signer roles. Removed dead SLA helper + unused imports.

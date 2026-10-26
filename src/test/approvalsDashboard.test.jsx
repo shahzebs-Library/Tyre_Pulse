@@ -202,14 +202,14 @@ describe('Bulk actions follow who may actually decide', () => {
 })
 
 describe('Unified approval dashboard', () => {
-  it('renders the unified metric strip across all sources', async () => {
+  it('shows the pending total and one type chip per source', async () => {
     renderPage()
     expect(screen.getByText('Approval Dashboard')).toBeInTheDocument()
 
-    // Source-specific metric cards exist.
-    await waitFor(() => expect(screen.getAllByText('Workflows').length).toBeGreaterThan(0))
-    expect(screen.getAllByText('Closures').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Checklists').length).toBeGreaterThan(0)
+    const types = await screen.findByRole('group', { name: /Filter by approval type/i })
+    expect(types).toHaveTextContent('Workflow')
+    expect(types).toHaveTextContent('Closure')
+    expect(types).toHaveTextContent('Checklist')
 
     // total_pending = 1 workflow + 1 closure + 1 checklist = 3.
     const pendingBadge = screen.getByText('3 pending')
@@ -251,9 +251,8 @@ describe('Unified approval dashboard', () => {
     renderPage()
     await waitFor(() => expect(screen.getByText('Daily Safety Check')).toBeInTheDocument())
 
-    fireEvent.change(screen.getByLabelText(/Filter by approval type/i), {
-      target: { value: 'accident_closure' },
-    })
+    const types = screen.getByRole('group', { name: /Filter by approval type/i })
+    fireEvent.click(within(types).getByRole('button', { name: /Closure/ }))
 
     await waitFor(() => expect(screen.queryByText('Vehicle ABC-123 · Tyre Replacement')).not.toBeInTheDocument())
     expect(screen.queryByText('Daily Safety Check')).not.toBeInTheDocument()
@@ -589,16 +588,14 @@ describe('Unified approval dashboard', () => {
       approval_status: 'not_required',
     }])
     renderPage()
-    await waitFor(() => expect(screen.getAllByText('Missed sign-off').length).toBeGreaterThan(1))
-    fireEvent.click(screen.getAllByText('Missed sign-off').at(-1))
+    fireEvent.click(await screen.findByRole('button', { name: /Missed sign-off/ }))
     await waitFor(() => expect(screen.getByText(/never appeared in the Pending queue/)).toBeInTheDocument())
     expect(screen.getByText('Never asked')).toBeInTheDocument()
   })
 
   it('says nothing slipped past when there are no sign-off gaps', async () => {
     renderPage()
-    await waitFor(() => expect(screen.getAllByText('Missed sign-off').length).toBeGreaterThan(1))
-    fireEvent.click(screen.getAllByText('Missed sign-off').at(-1))
+    fireEvent.click(await screen.findByRole('button', { name: /Missed sign-off/ }))
     await waitFor(() => expect(screen.getByText(/Nothing slipped past/)).toBeInTheDocument())
   })
 })

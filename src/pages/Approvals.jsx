@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  CheckSquare, X, Clock, Inbox, Filter, AlertTriangle,
+  CheckSquare, Clock, AlertTriangle,
   ClipboardList, CheckCircle2, XCircle, Undo2, RefreshCw,
   ChevronRight, ServerCrash, Car, ClipboardCheck, Database, Loader2,
   ExternalLink, GitBranch, AlertOctagon, Square, Ban, PenLine,
@@ -126,22 +126,6 @@ function currentStepOf(instance) {
 function entityLabelOf(i) {
   return i?.entity_label
     || (i?.entity_type ? `${i.entity_type}${i.entity_id ? ` #${i.entity_id}` : ''}` : 'N/A')
-}
-
-/** SLA state for a pending-style instance from its current step's sla_hours. */
-function slaState(instance) {
-  const { step } = currentStepOf(instance)
-  const slaHours = Number(step?.sla_hours)
-  const started = instance?.step_started_at || instance?.started_at
-  const elapsed = ageMs(started)
-  if (!slaHours || elapsed == null) return { overdue: false, dueLabel: null }
-  const dueMs = slaHours * 3600 * 1000
-  return {
-    overdue: elapsed > dueMs,
-    dueLabel: elapsed > dueMs
-      ? `Overdue by ${formatDistanceToNow(new Date(Date.now() - (elapsed - dueMs)))}`
-      : `SLA in ${formatDistanceToNow(new Date(Date.now() + (dueMs - elapsed)))}`,
-  }
 }
 
 // ── Normalisers for the non-workflow sources into a shared row shape ──────────────
@@ -743,7 +727,9 @@ function LegacySimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
           <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
           {isChecklistish && stage
             ? `This sheet is waiting for ${stageLabel(stage).toLowerCase()}, which your role cannot give.`
-            : 'You need an Admin, Manager or Director role to action this item.'}
+            : item.source === SOURCE.inspection
+              ? 'Your role cannot sign off inspections. Only Admin, PMV Manager, Workshop Area Managers and Tyre Data Collectors can.'
+              : 'You need an Admin, Manager or Director role to action this item.'}
         </div>
       )}
     </DrawerShell>
@@ -1168,7 +1154,8 @@ export default function Approvals() {
     [actionableIds],
   )
 
-  const hasFilters = q || sourceFilter !== 'all' || siteFilter !== 'all' || assignedToMeOnly
+  const hasFilters = q || sourceFilter !== 'all' || siteFilter !== 'all'
+    || (assignedToMeOnly && activeBucket === 'pending')
 
   // Only accident closures and checklist sign-offs can be decided in bulk. A
   // workflow instance cannot: its next step may demand a signature, a cost or a
@@ -1177,8 +1164,9 @@ export default function Approvals() {
   // correct rather than a decision to make, so it is not bulk-decidable either.
   const bulkableList = useMemo(
     () => activeList.filter(i => BULKABLE.includes(i.source) && !i.governed
-      && (!workflowError || i.source === SOURCE.accident_closure)),
-    [activeList, workflowError],
+      && (!workflowError || i.source === SOURCE.accident_closure)
+      && canActOnItem(i)),
+    [activeList, workflowError, canActOnItem],
   )
   const keyOf = (i) => `${i.source}:${i.id}`
   const pickedItems = useMemo(
@@ -1428,7 +1416,7 @@ export default function Approvals() {
           )}
 
           {/* Batch actions remain above the register and operate only on eligible rows. */}
-          {canActNonWorkflow && bulkableList.length > 0 && (
+          {bulkableList.length > 0 && (
             <div className="sticky top-2 z-20 flex flex-wrap items-center gap-2 px-3 py-2 rounded-xl border border-[var(--border-dim)] bg-[var(--surface-2)] shadow-lg">
               <button
                 type="button"
@@ -1483,7 +1471,7 @@ export default function Approvals() {
             loading={loading}
             enableGlobalFilter={false}
             enableColumnFilters={false}
-            enableRowSelection={row => canActNonWorkflow && bulkableList.some(item => keyOf(item) === row.id)}
+            enableRowSelection={row => bulkableList.some(item => keyOf(item) === row.id)}
             rowSelection={rowSelection}
             onRowSelectionChange={updater => {
               const next = typeof updater === 'function' ? updater(rowSelection) : updater

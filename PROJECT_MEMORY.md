@@ -26,6 +26,11 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-10-26 — APPROVAL DASHBOARD CORRECTNESS PASS (src/pages/Approvals.jsx). No migration.
+- Bulk bar/row selection now only covers rows the caller may actually decide (`canActOnItem`). Before, any Admin/Manager/Director saw bulk Approve on inspections and checklists the server refuses (Manager/Director cannot sign inspections or checklist rungs). Existing bulk tests ran as Manager and encoded that bug; they now run as Admin, plus 2 new role tests.
+- "Assigned to me" no longer makes other tabs read "No approvals match your filters". Inspection role message now names the real signer roles. Removed dead SLA helper + unused imports.
+- Left as is on purpose: bulkDecide shows the server's plain refusal text (toUserMessage hides "already decided"; a test pins it).
+
 # ⚑ SESSION 2026-10-25 (security audit + open-module check). ONE PR. Migration 20261025170000 APPLIED LIVE.
 - DB audit (live): 0 tables with RLS off, 0 anon table grants, 0 TRUNCATE/TRIGGER grants, 0 unpinned definer fns, 0 views not security_invoker, 0 public buckets, 2 super admins, 0 plain Admins. Advisors: no ERROR-level lints. Remaining WARNs are the known intentional set (vector/pg_net in public; 4 fns left unpinned on purpose for inlining; deny-all internal tables).
 - FIXED: anon-executable definer fns 16 -> 14. `tp_notify_action_assignee` and `tp_record_broadcast_recipient` are TRIGGER fns that had inherited the PUBLIC/anon grant; revoked (PUBLIC first, then anon). Triggers still enabled. The reviewed anon allowlist is now: get_accident_portal_snapshot, get_display_snapshot, get_email_by_identifier, get_login_showcase, get_public_config, get_report_snapshot, get_report_tyre_maintenance, get_workshop_snapshot, log_client_error, login_attempt_status, qr_login_start, qr_login_status, record_login_failure, reset_login_attempts.

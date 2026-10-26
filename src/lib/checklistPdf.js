@@ -22,7 +22,7 @@
 
 import { loadPdf } from './pdfEngine'
 import {
-  resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme, PDF_COLORS,
+  resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme, PDF_COLORS, pdfInspectionKit,
 } from './exportUtils'
 import {
   submissionSections, submissionSignatures, templateTitle, documentNo,
@@ -228,19 +228,39 @@ export async function renderChecklistPdf({
   const titleEnglish = String(template?.name || sub.template_name || 'Checklist')
   const title = pick(titleTranslated, titleEnglish, state)
 
-  const header = () => pdfHeader(doc, title, sub.asset_no ? `Asset: ${sub.asset_no}` : '', company, brand, CHECKLIST_HEADER)
+  // Same page furniture as the tyre inspection report: logo left, large title,
+  // generated / document / date block on the right, accent rule beneath.
+  const K = pdfInspectionKit
+  const accent = brand.logoData ? brand.accent : K.P.green
+  const genDay = K.date(new Date().toISOString())
+  const header = () => {
+    doc.setFillColor(...K.P.white); doc.rect(0, 0, pw, 26, 'F')
+    let tx = MX
+    if (brand.logoData) {
+      const fmt = /image\/jpe?g/i.test(brand.logoData) ? 'JPEG' : 'PNG'
+      try { doc.addImage(brand.logoData, fmt, MX, 5, 15, 15, undefined, 'FAST'); tx = MX + 19 } catch { /* text only */ }
+    }
+    doc.setFontSize(15); doc.setFont('helvetica', 'bold'); doc.setTextColor(...K.P.ink)
+    doc.text(doc.splitTextToSize(title, pw - MX - tx - 52)[0] || '', tx, 13.5)
+    if (sub.asset_no) {
+      doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...K.P.ghost)
+      doc.text(`Asset: ${sub.asset_no}`, tx, 18.5)
+    }
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...K.P.ghost)
+    doc.text(`Generated: ${genDay}`, pw - MX, 9, { align: 'right' })
+    if (documentNo(sub)) doc.text(`Document No: ${documentNo(sub)}`, pw - MX, 13.2, { align: 'right' })
+    doc.text(`Submitted: ${K.date(sub.submitted_at || sub.created_at)}`, pw - MX, 17.4, { align: 'right' })
+    doc.setDrawColor(...accent); doc.setLineWidth(0.8)
+    doc.line(MX, 22.5, pw - MX, 22.5)
+  }
   header()
-  let y = 30
+  let y = 32
 
-  const need = (h, bottom = 18) => { if (y + h > ph - bottom) { doc.addPage(); header(); y = 30 } }
+  const need = (h, bottom = 18) => { if (y + h > ph - bottom) { doc.addPage(); header(); y = 32 } }
 
   const sectionBar = (label) => {
     need(12)
-    doc.setFillColor(...PAPER); doc.setDrawColor(...LINE); doc.setLineWidth(0.3)
-    doc.rect(MX, y, pw - MX * 2, 7, 'FD')
-    doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...INK)
-    doc.text(label, MX + 3, y + 4.8)
-    y += 9
+    y = K.section(doc, label, y + 3, MX, accent) + 1
   }
 
   // ── Identification block ──────────────────────────────────────────────────
@@ -288,8 +308,19 @@ export async function renderChecklistPdf({
   // filed sheet is known by. Absent when the template mints none, in which case
   // nothing is printed rather than a placeholder somebody would go on to quote.
   const docRef = documentNo(sub)
+  // Audit: the exact template revision this sheet was filled against. A later
+  // edit publishes a new version, so a filed sheet always names the form it used.
+  const tplVersion = Number(sub.template_version)
+  if (Number.isFinite(tplVersion) && tplVersion > 0) meta.unshift(['Checklist version', `v${tplVersion}`])
   if (docRef) meta.unshift(['Document no', docRef])
   meta.push(['Submitted', fmtDateTime(sub.submitted_at || sub.created_at)])
+  if (sub.score_pct != null && sub.score_pct !== '' && Number.isFinite(Number(sub.score_pct))) {
+    meta.push(['Score', `${Math.round(Number(sub.score_pct))}%${typeof sub.score_passed === 'boolean' ? (sub.score_passed ? ' (passed)' : ' (failed)') : ''}`])
+  }
+  if (sub.approval_status && sub.approval_status !== 'not_required') {
+    const ap = String(sub.approval_status).replace(/_/g, ' ')
+    meta.push(['Approval', ap.charAt(0).toUpperCase() + ap.slice(1)])
+  }
   // The row already carries the site, and the sheet nearly always asks for it as
   // a field too ("Location"). Printing both put DIRIYAH-G1 on the page twice
   // under two different labels, which reads as two facts rather than one.
@@ -300,23 +331,25 @@ export async function renderChecklistPdf({
   sectionBar('Identification')
   {
     const half = (pw - MX * 2) / 2
+    const rows = Math.ceil(meta.length / 2)
+    need(rows * 8 + 4)
+    doc.setFillColor(...K.P.offWhite); doc.setDrawColor(...K.P.silver); doc.setLineWidth(0.25)
+    doc.roundedRect(MX, y - 1.5, pw - MX * 2, rows * 8 + 2.5, 2, 2, 'FD')
     for (let i = 0; i < meta.length; i += 2) {
-      need(9)
       const pair = [meta[i], meta[i + 1]]
       pair.forEach((cell, col) => {
         if (!cell) return
-        const x = MX + col * half
-        doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...MUTED)
-        doc.text(doc.splitTextToSize(String(cell[0]), half - 6)[0] || '', x, y)
-        doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...INK)
-        doc.text(doc.splitTextToSize(String(cell[1]), half - 6)[0] || '', x, y + 4.4)
-        doc.setDrawColor(...LINE); doc.setLineWidth(0.2)
-        doc.line(x, y + 6.2, x + half - 5, y + 6.2)
+        const x = MX + 4 + col * half
+        doc.setFillColor(...accent); doc.circle(x - 1.6, y + 1.6, 0.8, 'F')
+        doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...K.P.ghost)
+        doc.text(doc.splitTextToSize(String(cell[0]), half - 10)[0] || '', x + 0.6, y)
+        doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...K.P.ink)
+        doc.text(doc.splitTextToSize(String(cell[1]), half - 10)[0] || '', x + 0.6, y + 3.9)
       })
-      y += 9
+      y += 8
     }
   }
-  y += 2
+  y += 4
 
   // ── The checks: only the lines that need reading ──────────────────────────
   //
@@ -350,6 +383,32 @@ export async function renderChecklistPdf({
   const naCount = allChecks.filter((r) => isNotApplicable(r.value)).length
   const blankCount = allChecks.filter((r) => !String(r.value ?? '').trim()).length
 
+  // Summary tiles, same look as the inspection report's Inspection Summary.
+  {
+    need(16)
+    const tiles = [
+      [okCount, 'OK', 'good'],
+      [attention.length, 'Attention', attention.some((r) => isNotOk(r.value)) ? 'critical' : 'warning'],
+      [naCount, 'Not applicable', 'none'],
+      [blankCount, 'Not recorded', blankCount ? 'warning' : 'none'],
+    ]
+    const tw = (pw - MX * 2 - 3 * 3) / 4; const th = 11
+    tiles.forEach(([val, label, tone], i) => {
+      const tx = MX + i * (tw + 3)
+      const t = K.tone[tone]
+      doc.setFillColor(...(tone === 'none' || tone === 'good' ? K.P.offWhite : t.fill))
+      doc.setDrawColor(...K.P.silver); doc.setLineWidth(0.2)
+      doc.roundedRect(tx, y, tw, th, 2, 2, 'FD')
+      K.glyph(doc, tx + 7, y + 5.5, 2.8, tone)
+      doc.setFontSize(15); doc.setFont('helvetica', 'bold')
+      doc.setTextColor(...(val > 0 && tone !== 'good' && tone !== 'none' ? t.ink : K.P.ink))
+      doc.text(String(val), tx + 13, y + 6.2)
+      doc.setFontSize(6.8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...K.P.iron)
+      doc.text(label, tx + tw / 2, y + 9.6, { align: 'center' })
+    })
+    y += th + 3
+  }
+
   const tally = () => {
     const parts = []
     if (okCount) parts.push(`${okCount} OK`)
@@ -382,7 +441,7 @@ export async function renderChecklistPdf({
       startY: y,
       head: [['#', 'Check', 'Status', 'Remarks']],
       body,
-      margin: { top: 30, bottom: 18, left: MX, right: MX },
+      margin: { top: 32, bottom: 20, left: MX, right: MX },
       styles: { ...theme.styles, fontSize: 7.5, cellPadding: 1.4, overflow: 'linebreak' },
       columnStyles: {
         0: { cellWidth: 8, halign: 'center' },
@@ -429,7 +488,7 @@ export async function renderChecklistPdf({
     }
   }
 
-  need(items.length ? 72 : 20)
+  need(items.length ? 60 : 20)
   sectionBar(`Photographs (${items.length})`)
   if (items.length) {
     doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...MUTED)
@@ -445,7 +504,7 @@ export async function renderChecklistPdf({
     const cols = 3
     const gap = 5
     const boxW = (pw - MX * 2 - gap * (cols - 1)) / cols
-    const imgH = boxW * 0.72
+    const imgH = boxW * 0.48
     const boxH = imgH + 9
     let col = 0
     let top = y
@@ -587,11 +646,31 @@ export async function renderChecklistPdf({
     doc.text(msg, MX, 26, { maxWidth: pw - MX * 2 })
   }
 
+  // Footer on every page: title, page count and a verification QR, as on the
+  // inspection report.
+  let qr = null
+  if (typeof window !== 'undefined' && window.location && sub.id) {
+    try {
+      const mod = await import('qrcode')
+      const QR = mod.default || mod
+      qr = await QR.toDataURL(`${window.location.origin}/checklists/submission/${encodeURIComponent(sub.id)}`,
+        { margin: 0, width: 220, errorCorrectionLevel: 'M' })
+    } catch { qr = null }
+  }
   const total = doc.internal.getNumberOfPages()
   for (let p = 1; p <= total; p += 1) {
     doc.setPage(p)
-    // No company name in text: the logo identifies the sheet (see checklistBrand).
-    pdfFooter(doc, p, total, '', { ...brand, footerText: brand.footerText || 'Confidential, for internal distribution only' })
+    doc.setDrawColor(...K.P.silver); doc.setLineWidth(0.25)
+    doc.line(MX, ph - 14, pw - MX - (qr ? 32 : 0), ph - 14)
+    doc.setFontSize(6.8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...K.P.ghost)
+    doc.text(brand.footerText || 'Confidential, for internal distribution only', MX, ph - 9.5)
+    doc.text(`Page ${p} of ${total}`, pw - MX - (qr ? 34 : 0), ph - 9.5, { align: 'right' })
+    if (qr) {
+      try { doc.addImage(qr, 'PNG', pw - MX - 30, ph - 17, 11, 11, undefined, 'FAST') } catch { /* text only */ }
+      doc.setFontSize(5.8)
+      doc.text('Scan to verify', pw - MX - 17.5, ph - 12.4)
+      doc.text('this report', pw - MX - 17.5, ph - 9.6)
+    }
   }
 
   // The document number identifies the sheet on its own, so the asset code is

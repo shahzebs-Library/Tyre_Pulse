@@ -2730,6 +2730,11 @@ export function pdfHeader(doc, title, subtitle = '', company = '', brand = {}, o
 export function pdfFooter(doc, page, total, company = '', brand = {}) {
   _pageFooter(doc, page, total, company, { footerText: brand.footerText })
 }
+// The inspection report's visual vocabulary (section bar, status pill, tone glyph),
+// exported so other documents (the checklist report) print in the SAME style.
+export const pdfInspectionKit = {
+  P, tone: _INS_TONE, pill: _insPill, section: _insSection, glyph: _insGlyph, date: _insDate,
+}
 export const PDF_COLORS = P
 export function pdfEmptyState(doc, message, sub) { _emptyStatePanel(doc, message, sub) }
 export function pdfTableTheme(accent, opts) { return _tableTheme(accent, opts) }

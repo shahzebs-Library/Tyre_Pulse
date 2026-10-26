@@ -26,6 +26,12 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-10-26 (plant checklists) — 5 PAPER PM SHEETS REBUILT AS DAILY CHECKLISTS. Migration 20261026090000.
+- Owner: these are DAILY checklists (one submission per asset per day), built like Workshop Daily / Fleet Transit Mixer, NOT the paper 1-30 day grid. The monthly grid (MonthlyGridPanel) stays REPORTING ONLY. Plant asset types already exist in the fleet (ICE PLANT 26, CHILLER 23, GENERATOR 132, BT-PLANT 58); roles same as Workshop Daily.
+- 6 new published templates (doc_prefix): Ice Plant Daily ICP (F-KSA-PPM-005 Rev 04), Chiller Daily CHL (F-KSA-PPM-007 Rev 05), Air Compressor Daily ACP, Batching Plant Daily BPD, Genset PM Service Report GSR (own legend adds "Cleaned" = paper work code Clean), Chiller Operational Log CLG (numeric readings, no approval). All labels ar/hi/ur. Monthly paper tasks sit behind a "Monthly tasks due today?" Yes/No, so the daily sheet stays short.
+- AUDIT: nothing new needed server-side. Publishing auto-captures an immutable revision (checklist_template_revisions), every submission keeps template_version + snapshot, document_no minted per (prefix, asset, year). Form control number/rev/date is stated in the template description (versioned with it). checklistPdf.js now prints "Checklist version vN" under Document no. A dedicated form_ref column is the follow-up if auditors want it as a field.
+- NOT DONE (owner said they will link): chiller log readings -> PM service + due notifications; compressor oil change by running hours -> PM plan (meter_interval engine_hours); genset parts cost/technician rate stay as text (no price source on a checklist). Asset picker has no per-type filter (shows all assets).
+
 # ⚑ SESSION 2026-10-26 (later) — APPROVALS PAGE DECLUTTERED. No migration.
 - Owner: page showed too much before the table (orange banner, 8-tile KPI strip, 2 amber notices, intake card) and filters were weak. Removed banner + MetricStrip (tab counts are the KPIs); the two amber notices are ONE line with Retry; data-intake card is a compact chip; approval-type is now count chips (Pending tab only) instead of a select; site select + Assigned-to-me toggle stay in the toolbar. Tests updated (chips by role=group 'Filter by approval type').
 

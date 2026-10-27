@@ -324,3 +324,32 @@ export function mergeTrend(email = {}, push = {}) {
 
 // Kept for callers that want a monthly rollup; not used by the page yet.
 export { monthKey }
+
+/**
+ * Per-device push receipts summary (get_push_delivery_summary, super admin only).
+ * "accepted" means the provider (Expo/FCM) took the message, not that the phone showed it.
+ * Throws on failure so the page shows N/A, never a fake zero.
+ */
+export async function getPushReceiptSummary(days = 7) {
+  const { data, error } = await supabase.rpc('get_push_delivery_summary', { p_days: days })
+  if (error) throw toServiceError(error)
+  return shapeReceiptSummary(data)
+}
+
+/** Pure: numbers from the RPC jsonb; a missing field is null, never 0. */
+export function shapeReceiptSummary(d) {
+  if (!d || typeof d !== 'object') return null
+  const n = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v))
+  const total = n(d.total)
+  const accepted = n(d.accepted)
+  return {
+    days: n(d.days),
+    total,
+    accepted,
+    failed: n(d.failed),
+    invalidToken: n(d.invalid_token),
+    acceptedRate: total ? accepted / total : null,
+    byChannel: d.by_channel && typeof d.by_channel === 'object' ? d.by_channel : {},
+    topErrors: Array.isArray(d.top_errors) ? d.top_errors : [],
+  }
+}

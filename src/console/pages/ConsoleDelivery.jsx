@@ -29,7 +29,7 @@ import { Send, ShieldAlert, Mail, Bell, Users, Info, XCircle, BarChart3, Externa
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
   listEmailLog, listPushLog, pushReach, emailStats, pushStats, DELIVERY_LOG_MAX,
-  getDeliveryReach, retryFailedPushes, retryImpact,
+  getDeliveryReach, getPushReceiptSummary, retryFailedPushes, retryImpact,
 } from '../../lib/api/deliveryHealth'
 import { sendScheduleNow } from '../../lib/api/automationHealth'
 import { toUserMessage } from '../../lib/safeError'
@@ -106,6 +106,7 @@ export default function ConsoleDelivery({ tabParam = 'tab' } = {}) {
   const [emailTruncated, setEmailTruncated] = useState(false)
   const [pushTruncated, setPushTruncated] = useState(false)
   const [reach, setReach] = useState(null)
+  const [receipts, setReceipts] = useState(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
@@ -128,12 +129,14 @@ export default function ConsoleDelivery({ tabParam = 'tab' } = {}) {
     setPushError(null)
     // End date is inclusive: extend "to" to end-of-day.
     const toEnd = to ? `${to}T23:59:59.999Z` : undefined
-    const [eRes, pRes, rRes, aRes] = await Promise.allSettled([
+    const [eRes, pRes, rRes, aRes, cRes] = await Promise.allSettled([
       listEmailLog({ from, to: toEnd }),
       listPushLog({ from, to: toEnd }),
       pushReach(),
       getDeliveryReach(),
+      getPushReceiptSummary(7),
     ])
+    setReceipts(cRes.status === 'fulfilled' ? cRes.value : null)
     if (aRes.status === 'fulfilled' && aRes.value) { setAppReach(aRes.value); setAppReachError('') }
     else { setAppReach(null); setAppReachError(aRes.status === 'rejected' ? toUserMessage(aRes.reason, 'Device reach could not be read.') : 'Device reach could not be read.') }
     if (eRes.status === 'fulfilled') {
@@ -309,6 +312,9 @@ export default function ConsoleDelivery({ tabParam = 'tab' } = {}) {
           onClick={() => openFailures('push')} active={tab === 'failures' && channel === 'push'} />
         <StatTile label="Flutter app reach" value={appReach?.flutterDevices == null ? 'N/A' : appReach.flutterDevices} tone="accent" icon={Smartphone}
           sub={appReachError ? 'Could not read devices' : appReach ? `FCM devices; retired app (read only): ${appReach.retiredDevices ?? 'N/A'}` : undefined} />
+        <StatTile label="Device receipts (7d)" value={receipts?.total == null ? 'N/A' : receipts.total} icon={Bell}
+          tone={receipts && receipts.invalidToken > 0 ? 'warning' : 'default'}
+          sub={receipts ? `${receipts.accepted ?? 0} accepted by Expo/FCM, ${receipts.failed ?? 0} failed, ${receipts.invalidToken ?? 0} dead tokens` : 'Not available yet'} />
       </div>
 
       <TabBar tabs={tabs} value={tab} onChange={setTab} label="Delivery sections" />

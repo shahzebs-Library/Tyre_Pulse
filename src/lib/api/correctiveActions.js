@@ -6,7 +6,9 @@
  */
 import { supabase, unwrap, fetchAllPages, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
-import { actionRowsForInspection } from '../inspectionTyreFlags'
+import { actionRowsForInspection, applyPlanToRow } from '../inspectionTyreFlags'
+import { sanitizeSearchTerm } from '../searchFilter'
+import { ensureActionItem } from './actionCenter'
 
 // Least-privilege column set covering the CorrectiveActions page (list + detail
 // + edit form). Omits organisation_id (RLS-managed) and the legacy `photos`
@@ -77,18 +79,23 @@ export async function listActionsForSource(sourceType, sourceId) {
  *
  * @returns {{created:Object[], skipped:number, failed:{key:string,error:string}[]}}
  */
-export async function raiseActionsForInspection(inspection, defects = []) {
+export async function raiseActionsForInspection(inspection, defects = [], { plans = {} } = {}) {
   if (!inspection?.id) throw new ServiceError('An inspection is required to raise an action.')
 
   const existing = await listActionsForSource('inspection', inspection.id)
-  const openKeys = existing.filter(a => !isActionClosed(a.status))
-    .map(a => a.source_detail).filter(Boolean)
+  // Any action already raised from THIS inspection for the defect counts, open or
+  // closed: a new finding is a new inspection, so re-raising here would only repeat
+  // work that already has a status.
+  const openKeys = existing.map(a => a.source_detail).filter(Boolean)
 
   const rows = actionRowsForInspection(inspection, defects, { existingKeys: openKeys })
+    .map((row) => applyPlanToRow(row, plans[row.source_detail] || {}))
   const skippedUpFront = (defects?.length || 0) - rows.length
 
   const created = []
   const failed = []
+  const notified = []
+  const notifyFailed = []
   let skipped = skippedUpFront
 
   // One at a time: a single duplicate must not roll back the rest of the batch.
@@ -101,8 +108,33 @@ export async function raiseActionsForInspection(inspection, defects = []) {
       continue
     }
     created.push(data)
+    // The Action Center is where the assignee is told and where the work is
+    // tracked. A failure here must not undo the action that was raised.
+    const plan = plans[row.source_detail]
+    if (plan?.assignee?.id) {
+      try {
+        await ensureActionItem({
+          title: row.title,
+          category: 'tyre',
+          source: `inspection:${inspection.id}:${row.source_detail}`,
+          asset_no: row.asset_no,
+          severity: row.priority === 'High' ? 'high' : 'medium',
+          assigned_to: plan.assignee.name,
+          assigned_user_id: plan.assignee.id,
+          site: row.site,
+          country: row.country,
+          due_date: row.due_date,
+          impact: row.description.split('\n')[0],
+          recommended_action: plan.instruction || null,
+          notes: plan.comment || null,
+        })
+        notified.push(plan.assignee.name)
+      } catch (e) {
+        notifyFailed.push({ key: row.source_detail, error: toUserMessage(e) })
+      }
+    }
   }
-  return { created, skipped, failed }
+  return { created, skipped, failed, notified, notifyFailed }
 }
 
 /**
@@ -143,4 +175,25 @@ export async function createWorkOrderForAction(action, overrides = {}) {
     )
   }
   return job
+}
+
+
+/**
+ * People an action can be handed to: approved, unlocked members of the caller's
+ * organisation. RLS decides who the caller may see; this only narrows by role
+ * and name so a fleet with hundreds of drivers stays searchable.
+ */
+export async function listAssignablePeople({ search = '', roles = [], limit = 40 } = {}) {
+  let q = supabase.from('profiles')
+    .select('id,full_name,username,role,site')
+    .eq('approved', true).eq('locked', false)
+    .order('full_name').order('id')
+    .limit(limit)
+  if (roles.length) q = q.in('role', roles)
+  const term = sanitizeSearchTerm(search)
+  if (term) q = q.or(`full_name.ilike.%${term}%,username.ilike.%${term}%`)
+  const rows = unwrap(await q) || []
+  return rows.map((r) => ({
+    id: r.id, name: r.full_name || r.username || 'Unnamed', role: r.role || '', site: r.site || '',
+  }))
 }

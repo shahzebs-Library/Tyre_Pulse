@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AlertTriangle, ClipboardList } from 'lucide-react'
 import { lifeDisplay } from '../../lib/tyreRunningLife'
 import { defectsForAction, isSevereCondition } from '../../lib/inspectionTyreFlags'
 import { displayPositionCode, inspectionTypeHint } from '../../lib/tyreBay'
-import { raiseActionsForInspection } from '../../lib/api/correctiveActions'
-import { toUserMessage } from '../../lib/safeError'
+import RaiseActionDialog from './RaiseActionDialog'
+import { listActionsForSource, isActionClosed } from '../../lib/api/correctiveActions'
 
 // Immediate flag banner: shown when the vehicle carries tyres at/near end of
 // life (judged by the ONE running-life calc via buildAssetFlagMap) or when
@@ -24,24 +24,35 @@ import { toUserMessage } from '../../lib/safeError'
  */
 export default function TyreDueBanner({ entry, damaged = [], inspection = null }) {
   const due = entry ? [...(entry.overdue || []), ...(entry.dueSoon || [])] : []
-  const [raising, setRaising] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
   const [raised, setRaised] = useState(null)   // { created, skipped, failed } | { error }
 
   const canRaise = Boolean(inspection?.id) && !String(inspection.id).startsWith('offline-')
-  const defects = canRaise
+  const allDefects = canRaise
     ? defectsForAction(inspection, inspection.asset_no ? { [inspection.asset_no]: entry } : {})
     : []
 
-  const raise = async () => {
-    setRaising(true); setRaised(null)
-    try {
-      setRaised(await raiseActionsForInspection(inspection, defects))
-    } catch (e) {
-      setRaised({ error: toUserMessage(e) })
-    } finally {
-      setRaising(false)
-    }
+  // What has already been raised from this inspection. A defect with an action
+  // shows that action's status instead of offering the button again.
+  const [existing, setExisting] = useState([])
+  const [reloadKey, setReloadKey] = useState(0)
+  useEffect(() => {
+    if (!canRaise) return undefined
+    let live = true
+    listActionsForSource('inspection', inspection.id).then((rows) => { if (live) setExisting(rows) })
+    return () => { live = false }
+  }, [canRaise, inspection?.id, reloadKey])
+  // One action speaks for each defect: an open one wins over a closed one, so
+  // the banner never says "Fixed" while work is still outstanding; among equals
+  // the newest (the list is newest first) is kept.
+  const byKey = new Map()
+  for (const a of existing) {
+    if (!a.source_detail) continue
+    const have = byKey.get(a.source_detail)
+    if (!have || (isActionClosed(have.status) && !isActionClosed(a.status))) byKey.set(a.source_detail, a)
   }
+  const defects = allDefects.filter(d => !byKey.has(d.key))
+  const tracked = allDefects.filter(d => byKey.has(d.key)).map(d => ({ defect: d, action: byKey.get(d.key) }))
 
   // The fault list covers everything an inspector can record, and wear is most
   // of it. Calling a worn tyre "damage" would misreport what was found, so the
@@ -84,29 +95,59 @@ export default function TyreDueBanner({ entry, damaged = [], inspection = null }
         </p>
       )}
 
+      {tracked.length > 0 && (
+        <ul aria-label="Actions already raised" className="mt-3 space-y-1">
+          {tracked.map(({ defect, action }) => {
+            const closed = isActionClosed(action.status)
+            const late = !closed && action.due_date && new Date(action.due_date) < new Date()
+            return (
+              <li key={defect.key} className="text-xs flex flex-wrap items-center gap-2 text-[var(--text-secondary)]">
+                <span className="font-semibold">{defect.positionLabel}</span>
+                <span className="px-2 py-0.5 rounded-full border border-[var(--border)]"
+                  style={closed ? { color: '#16a34a' } : late ? { color: '#ef4444' } : undefined}>
+                  {closed ? (String(action.status).toLowerCase() === 'cancelled' ? 'Cancelled' : 'Fixed') : late ? 'Overdue' : (action.status || 'Open')}
+                </span>
+                {action.assigned_to && <span>Assigned to {action.assigned_to}</span>}
+                {action.due_date && <span>Fix by {String(action.due_date).slice(0, 10)}</span>}
+                {closed && action.closed_at && <span>Closed {String(action.closed_at).slice(0, 10)}</span>}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
       {canRaise && defects.length > 0 && (
         <div className="mt-3 flex items-center gap-3 flex-wrap">
           <button
-            type="button" onClick={raise} disabled={raising}
-            className="btn-secondary text-xs flex items-center gap-2 min-h-[44px] disabled:opacity-60"
+            type="button" onClick={() => setDialogOpen(true)}
+            className="btn-secondary text-xs flex items-center gap-2 min-h-[44px]"
           >
             <ClipboardList size={13} />
-            {raising ? 'Raising...' : `Raise corrective action (${defects.length})`}
+            {`Raise corrective action (${defects.length})`}
           </button>
+          <RaiseActionDialog
+            open={dialogOpen} onClose={() => setDialogOpen(false)}
+            inspection={inspection} defects={defects} onDone={(res) => { setRaised(res); setReloadKey(k => k + 1) }}
+          />
+        </div>
+      )}
+
+      <div className="mt-2 flex flex-col gap-1">
           {raised?.error && (
             <span role="alert" className="text-xs" style={{ color: '#ef4444' }}>{raised.error}</span>
           )}
           {raised && !raised.error && (
             <span role="status" className="text-xs text-[var(--text-secondary)]">
               {raised.created.length > 0 && `${raised.created.length} action${raised.created.length === 1 ? '' : 's'} raised. `}
-              {raised.skipped > 0 && `${raised.skipped} already open. `}
+              {raised.skipped > 0 && `${raised.skipped} already raised. `}
+              {raised.notified?.length > 0 && `Sent to ${[...new Set(raised.notified)].join(', ')}. `}
+              {raised.notifyFailed?.length > 0 && `${raised.notifyFailed.length} could not be added to the Action Center. `}
               {raised.failed.length > 0 && `${raised.failed.length} could not be raised. `}
               {raised.created.length === 0 && raised.skipped > 0 && raised.failed.length === 0
                 && 'Nothing new to raise.'}
             </span>
           )}
-        </div>
-      )}
+      </div>
     </div>
   )
 }

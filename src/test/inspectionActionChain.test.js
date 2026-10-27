@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { defectsForAction, actionRowsForInspection, damagedPositions } from '../lib/inspectionTyreFlags'
+import { defectsForAction, actionRowsForInspection, damagedPositions, applyPlanToRow, defaultPlanFor } from '../lib/inspectionTyreFlags'
 
 /**
  * The failure-to-action chain.
@@ -122,5 +122,62 @@ describe('actionRowsForInspection', () => {
     })
     const [row] = actionRowsForInspection(long, defectsForAction(long))
     expect(row.title.length).toBeLessThanOrEqual(300)
+  })
+})
+
+describe('action case file', () => {
+  const insp = (over = {}) => ({
+    id: 'insp-9', asset_no: 'TM101', site: 'NHC', country: 'KSA',
+    inspector: 'A. Khan', inspection_date: '2026-10-20', odometer_km: 123456,
+    tyre_conditions: {
+      LHF1: { position: 'LHF1', condition: 'Puncture', serial: 'YMA1', brand: 'TRIANGLE', pressure_psi: 60, tread_depth_mm: 4, notes: 'nail in tread' },
+      LHR1: { position: 'LHR1', condition: 'Worn' },
+    },
+    ...over,
+  })
+  const now = new Date(2026, 9, 27)
+
+  it('carries the evidence the inspector recorded and a due date by urgency', () => {
+    const rows = actionRowsForInspection(insp(), defectsForAction(insp()), { now })
+    const severe = rows.find(r => r.source_detail === 'damage:LHF1')
+    const worn = rows.find(r => r.source_detail === 'damage:LHR1')
+    expect(severe.description).toContain('Tread depth: 4 mm')
+    expect(severe.description).toContain('Pressure: 60 psi')
+    expect(severe.description).toContain('Inspector: A. Khan')
+    expect(severe.description).toContain('Odometer: 123,456 km')
+    expect(severe.description).toContain('Do not release the vehicle')
+    expect(severe.tyre_serial).toBe('YMA1')
+    expect(severe.due_date).toBe('2026-10-28')
+    expect(worn.due_date).toBe('2026-11-10')
+  })
+
+  it('never prints a line for a reading that was not recorded', () => {
+    const rows = actionRowsForInspection(insp(), defectsForAction(insp()), { now })
+    const worn = rows.find(r => r.source_detail === 'damage:LHR1')
+    expect(worn.description).not.toContain('Tread depth')
+    expect(worn.description).not.toContain('Pressure')
+  })
+})
+
+describe('plan from the raise dialog', () => {
+  const base = { description: 'Found a nail.', due_date: '2026-10-28', assigned_to: null }
+  it('adds the instruction, comment, date and assignee', () => {
+    const row = applyPlanToRow(base, {
+      instruction: 'Replace with a 315/80 tyre', comment: 'Rim also bent', due_date: '2026-10-30',
+      assignee: { id: 'u1', name: 'Ali Tyreman' },
+    })
+    expect(row.description).toContain('INSTRUCTION FROM THE RAISER\nReplace with a 315/80 tyre')
+    expect(row.description).toContain('COMMENT OR CORRECTION\nRim also bent')
+    expect(row.due_date).toBe('2026-10-30')
+    expect(row.assigned_to).toBe('Ali Tyreman')
+  })
+  it('leaves the row alone when nothing was entered', () => {
+    expect(applyPlanToRow(base, {})).toEqual(base)
+  })
+  it('suggests an instruction and date by urgency', () => {
+    const d = defectsForAction({ id: 'i', asset_no: 'TM1', tyre_conditions: { LHF1: { position: 'LHF1', condition: 'Puncture' } } })[0]
+    const plan = defaultPlanFor(d, new Date(2026, 9, 27))
+    expect(plan.due_date).toBe('2026-10-28')
+    expect(plan.instruction).toContain('Do not release the vehicle')
   })
 })

@@ -34,6 +34,17 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - Vehicle 360 (src/pages/Vehicle360.jsx + vehicle360.css, components/vehicle360/, lib/vehicle360View.js) rebuilt on the Command Center kit to the owner's BH006 mockup. NOT rendered in a browser. Not matched (no data source): Next Inspection (shows Last), Duplicate, View in 3D, numbered wheel markers, Repairs/Services split; Edit links to /fleet-master?search=.
 - Live data: Genset PM Service Report template 56 -> 42 fields (14 red-marked checks removed; backup _bak.checklist_template_genset_20261027).
 
+# ⚑ SESSION 2026-10-26 (push delivery receipts) — branch claude/tyrepulse-inspector-build-7rxp2t. Migration 20261026120000 APPLIED LIVE; workflow-notify v17 DEPLOYED.
+- `push_delivery_receipts` (one row per device attempt, expo|fcm, accepted|failed|invalid_token, super-admin read) + RPC `get_push_delivery_summary(days)`. `workflow-notify` writes rows best-effort after each Expo/FCM send (deployed and live). Console Delivery has a "Device receipts (7d)" tile.
+- "accepted" = provider took it, NOT proof the phone showed it. Expo second-phase receipt polling (getReceipts) NOT built.
+- iOS TestFlight run dispatched this session failed (run 40407814631); owner said iOS is already submitted for review, so ignore.
+
+# ⚑ SESSION 2026-10-26 (plant checklists) — 5 PAPER PM SHEETS REBUILT AS DAILY CHECKLISTS. Migration 20261026090000.
+- Owner: these are DAILY checklists (one submission per asset per day), built like Workshop Daily / Fleet Transit Mixer, NOT the paper 1-30 day grid. The monthly grid (MonthlyGridPanel) stays REPORTING ONLY. Plant asset types already exist in the fleet (ICE PLANT 26, CHILLER 23, GENERATOR 132, BT-PLANT 58); roles same as Workshop Daily.
+- 6 new published templates (doc_prefix): Ice Plant Daily ICP (F-KSA-PPM-005 Rev 04), Chiller Daily CHL (F-KSA-PPM-007 Rev 05), Air Compressor Daily ACP, Batching Plant Daily BPD, Genset PM Service Report GSR (own legend adds "Cleaned" = paper work code Clean), Chiller Operational Log CLG (numeric readings, no approval). All labels ar/hi/ur. Monthly paper tasks sit behind a "Monthly tasks due today?" Yes/No, so the daily sheet stays short.
+- AUDIT: nothing new needed server-side. Publishing auto-captures an immutable revision (checklist_template_revisions), every submission keeps template_version + snapshot, document_no minted per (prefix, asset, year). Form control number/rev/date is stated in the template description (versioned with it). checklistPdf.js now prints "Checklist version vN" under Document no. A dedicated form_ref column is the follow-up if auditors want it as a field.
+- NOT DONE (owner said they will link): chiller log readings -> PM service + due notifications; compressor oil change by running hours -> PM plan (meter_interval engine_hours); genset parts cost/technician rate stay as text (no price source on a checklist). Asset picker has no per-type filter (shows all assets).
+
 # ⚑ SESSION 2026-10-26 (later) — APPROVALS PAGE DECLUTTERED. No migration.
 - Owner: page showed too much before the table (orange banner, 8-tile KPI strip, 2 amber notices, intake card) and filters were weak. Removed banner + MetricStrip (tab counts are the KPIs); the two amber notices are ONE line with Retry; data-intake card is a compact chip; approval-type is now count chips (Pending tab only) instead of a select; site select + Assigned-to-me toggle stay in the toolbar. Tests updated (chips by role=group 'Filter by approval type').
 

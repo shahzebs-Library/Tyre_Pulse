@@ -83,7 +83,6 @@ export function diagramPositions(vehicleType, tyres = []) {
   return out
 }
 
-const yearOf = (r) => isoDay(r?.event_date || r?.txn_date).slice(0, 4)
 const currencyOf = (r) => String(r?.currency || '').trim().toUpperCase() || 'Unknown'
 
 export const COST_PERIODS = Object.freeze([

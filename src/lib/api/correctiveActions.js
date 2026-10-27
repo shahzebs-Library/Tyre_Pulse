@@ -83,8 +83,10 @@ export async function raiseActionsForInspection(inspection, defects = [], { plan
   if (!inspection?.id) throw new ServiceError('An inspection is required to raise an action.')
 
   const existing = await listActionsForSource('inspection', inspection.id)
-  const openKeys = existing.filter(a => !isActionClosed(a.status))
-    .map(a => a.source_detail).filter(Boolean)
+  // Any action already raised from THIS inspection for the defect counts, open or
+  // closed: a new finding is a new inspection, so re-raising here would only repeat
+  // work that already has a status.
+  const openKeys = existing.map(a => a.source_detail).filter(Boolean)
 
   const rows = actionRowsForInspection(inspection, defects, { existingKeys: openKeys })
     .map((row) => applyPlanToRow(row, plans[row.source_detail] || {}))

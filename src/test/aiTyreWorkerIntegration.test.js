@@ -68,7 +68,7 @@ function world({ config = { ai_monthly_budget_usd: '0' }, script = {}, photoFail
     claim: async (job) => { const j = w.jobs.get(job.id); if (!j || j.status !== 'pending') return false; j.status = 'processing'; j.attempts = job.attempts + 1; w.current = job.id; return true },
     process: (job) => processJob(deps, job),
     nowMs: () => 0,
-  }, opts)
+  }, { concurrency: 1, ...opts }) // this harness shares w.current, so it is sequential; see aiTyreConcurrency.test.js
   return { w, add, drain, deps, budget: () => lastBudget }
 }
 
@@ -93,7 +93,7 @@ describe('worker path: queue -> measurement -> persist -> review -> export', () 
       expect(j).toMatchObject({ status: 'completed', attempts: 1, provider: 'anthropic', input_tokens: 1000, output_tokens: 200 })
       expect(j.cost_usd).toBeCloseTo(0.0002, 6)
       expect(j.analysis).toMatchObject({ assessable: true, humanReviewRequired: true, exactTreadDepthMm: null })
-      expect(j.prompt_version).toBe('tyre-photo-v2')
+      expect(j.prompt_version).toBe('tyre-photo-v3')
     }
     expect(w.providerCalls).toEqual(['a1', 'a2', 'a3'])
     expect(w.reservedBy.size).toBe(3)

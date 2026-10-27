@@ -8,10 +8,10 @@
 //  * an unreadable control, an unparsable limit or an unreadable spend total fails CLOSED;
 //  * a tyre-inspection call whose cost is unknown (NULL) is charged the reservation, never 0.
 //
-// Known limit: the check is read-then-act. Concurrent workers can overshoot by at most
-// (workers in flight x reserveUsd). The atomic per-day reservation in ai_tyre_reserve_budget
-// (migration 20261023090000) bounds this further. Month totals are GLOBAL (all tenants, all
-// AI features), matching chat-ai.
+// This pure check is only an early, cheap PRE-FLIGHT (read-then-act). The authoritative monthly
+// decision is atomic: ai_tyre_reserve_budget_atomic (migration 20261026090000) re-computes the month
+// ledger under an advisory lock and reserves in the same transaction, so concurrent workers cannot
+// overshoot. Month totals are GLOBAL (all tenants, all AI features), matching chat-ai.
 
 export type BudgetState = "uncapped" | "ok" | "reached" | "disabled" | "unavailable";
 
@@ -47,7 +47,7 @@ export function monthStartUtc(now: Date): Date {
 }
 
 export interface SpendRow { cost_usd?: unknown; feature?: unknown; status?: unknown }
-export interface JobSpendRow { cost_usd?: unknown; provider_called_at?: unknown }
+export interface JobSpendRow { cost_usd?: unknown; provider_called_at?: unknown; prior_billed_usd?: unknown }
 
 /**
  * Month spend across BOTH ledgers, without double counting:
@@ -72,6 +72,9 @@ export function sumMonthSpend(
     sum += n;
   }
   for (const j of jobs ?? []) {
+    // Spend carried over from a forced admin re-queue of a possibly-billed attempt.
+    const prior = Number(j?.prior_billed_usd);
+    if (Number.isFinite(prior) && prior > 0) sum += prior;
     if (!j?.provider_called_at) continue;
     if (j.cost_usd === null || j.cost_usd === undefined) { sum += unknownCallUsd; continue; }
     const n = Number(j.cost_usd);

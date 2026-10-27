@@ -150,7 +150,7 @@ describe('wiring in the edge function source', () => {
     expect(src).toMatch(/from\("system_config"\)\.select\("key,value"\)/)
     expect(src).toMatch(/"ai_enabled",\s*"ai_monthly_budget_usd"/)
     expect(src).toMatch(/from\("ai_token_logs"\)\.select\("id,cost_usd,feature,status"\)/)
-    expect(src).toMatch(/from\("ai_tyre_inspection_jobs"\)\.select\("id,cost_usd,provider_called_at"\)/)
+    expect(src).toMatch(/from\("ai_tyre_inspection_jobs"\)\.select\("id,cost_usd,provider_called_at,prior_billed_usd"\)/)
     expect(src).toMatch(/\.range\(f, t\)/)
   })
   it('runs a pre-flight check before claiming any job and passes the check into the job deps', () => {

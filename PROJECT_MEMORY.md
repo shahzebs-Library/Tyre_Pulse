@@ -26,6 +26,13 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-10-27 — AI TYRE INSPECTION ENTERPRISE + SPEED PASS (code only; 3 migrations WRITTEN, NOT APPLIED; edge fn NOT REDEPLOYED).
+- Apply IN ORDER: 20261026090000 (atomic month budget + retry RPCs), 20261027100000 (jobs table in realtime), 20261027110000 (photo_content_sha256 + reuse index + worker lock). THEN redeploy `ai-tyre-inspection` (index, logic, budget). Deployed before the migrations it fails closed (no paid calls).
+- Worker: atomic budget reservation (advisory lock), bounded auto-retry (photo_unavailable/provider_rate_limited, 3x backoff), admin `retry` action (admin/manager/director, max 100, include_billed opt-in), Gemini fallback (needs AI_PROVIDER_KEY), pre-spend photo quality gate + contradicts_previous flag (PROMPT_VERSION tyre-photo-v3), parallel pool (AI_WORKER_CONCURRENCY 1..6, default 4; untested under load), enqueue kicks the worker (debounced + DB lock; 5-min cron stays), same-org same-hash same-prompt analysis reuse (old rows have NULL hash; `photo_sha256` is a PATH hash, do not reuse it).
+- Phones: tyre photos resized to 1280px long edge q0.6 (Expo + Flutter; Flutter untested, no SDK). Web: live "AI analysing n of N" chip (realtime + 5s poll fallback), ops panel + failed-job Retry on /ai-tyre-inspection.
+- New pure modules: src/lib/aiTyreAccuracy.js (+scripts/ai-accuracy.mjs, gate thresholds are agent-chosen, owner to confirm), aiTyreFeedbackLoop.js (needs a per-finding corrections source that does not exist yet; get_ai_tyre_review_feedback returns per-model counts only).
+- Live data: Genset PM Service Report template 56 -> 42 fields (14 red-marked checks removed; backup _bak.checklist_template_genset_20261027).
+
 # ⚑ SESSION 2026-10-26 (later) — APPROVALS PAGE DECLUTTERED. No migration.
 - Owner: page showed too much before the table (orange banner, 8-tile KPI strip, 2 amber notices, intake card) and filters were weak. Removed banner + MetricStrip (tab counts are the KPIs); the two amber notices are ONE line with Retry; data-intake card is a compact chip; approval-type is now count chips (Pending tab only) instead of a select; site select + Assigned-to-me toggle stay in the toolbar. Tests updated (chips by role=group 'Filter by approval type').
 

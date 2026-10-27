@@ -102,19 +102,59 @@ const EXPO_TOKEN_RE = /^Expo(nent)?PushToken\[/
 // An FCM registration token: long, no whitespace, not an Expo token.
 function isFcmToken(t: string): boolean { return t.length >= 32 && !/\s/.test(t) && !EXPO_TOKEN_RE.test(t) }
 
-async function sendPush(recipients: Recipient[], msg: { title: string; body: string }, instanceId: string | undefined, skipped: string[]): Promise<number> {
+type Receipt = { channel: 'expo' | 'fcm'; token: string; status: 'accepted' | 'failed' | 'invalid_token'; provider_ref?: string | null; error?: string | null }
+
+// Best-effort delivery log (service role). Never blocks or fails a notification.
+async function recordReceipts(receipts: Receipt[], recipients: Recipient[], payload: NotifyPayload): Promise<void> {
+  if (!receipts.length) return
+  try {
+    const url = Deno.env.get('SUPABASE_URL'); const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    if (!url || !key) return
+    const userByToken = new Map<string, string | null>()
+    for (const r of recipients) { const t = (r.push_token || '').trim(); if (t) userByToken.set(t, r.user_id ?? null) }
+    const rows = receipts.map(r => ({
+      user_id: userByToken.get(r.token) ?? null,
+      channel: r.channel,
+      token_hint: r.token.length > 12 ? `${r.token.slice(0, 6)}...${r.token.slice(-4)}` : '***',
+      event_type: payload.event_type ?? null,
+      entity_id: payload.instance_id || payload.entity_id || null,
+      status: r.status,
+      provider_ref: r.provider_ref ?? null,
+      error: r.error ? String(r.error).slice(0, 300) : null,
+    }))
+    await createClient(url, key).from('push_delivery_receipts').insert(rows)
+  } catch { /* best effort */ }
+}
+
+async function sendPush(recipients: Recipient[], msg: { title: string; body: string }, instanceId: string | undefined, skipped: string[], payload: NotifyPayload = {}): Promise<number> {
   const tokens = Array.from(new Set(recipients.map(r => (r.push_token || '').trim()).filter(t => EXPO_TOKEN_RE.test(t))))
   if (!tokens.length) return 0
   const messages = tokens.map(to => ({ to, sound: 'default', title: msg.title, body: msg.body, data: { type: 'workflow', instance_id: instanceId || null } }))
   try {
     const res = await fetch('https://exp.host/--/api/v2/push/send', { method: 'POST', headers: { 'Accept': 'application/json', 'Accept-Encoding': 'gzip, deflate', 'Content-Type': 'application/json' }, body: JSON.stringify(messages) })
-    if (!res.ok) { const text = await res.text().catch(() => ''); skipped.push(`push: HTTP ${res.status}${text ? ` ${text.slice(0, 200)}` : ''}`); return 0 }
-    const json = await res.json().catch(() => null) as { data?: Array<{ status?: string; message?: string }> } | null
+    if (!res.ok) {
+      const text = await res.text().catch(() => ''); skipped.push(`push: HTTP ${res.status}${text ? ` ${text.slice(0, 200)}` : ''}`)
+      await recordReceipts(tokens.map(token => ({ channel: 'expo' as const, token, status: 'failed' as const, error: `HTTP ${res.status}` })), recipients, payload)
+      return 0
+    }
+    const json = await res.json().catch(() => null) as { data?: Array<{ status?: string; message?: string; id?: string; details?: { error?: string } }> } | null
     const tickets = json?.data ?? []
     let ok = 0
-    tickets.forEach((t, i) => { if (t?.status === 'ok') { ok++ } else if (t?.message) { skipped.push(`push(${tokens[i]}): ${t.message}`) } })
+    const receipts: Receipt[] = []
+    tickets.forEach((t, i) => {
+      if (t?.status === 'ok') { ok++; receipts.push({ channel: 'expo', token: tokens[i], status: 'accepted', provider_ref: t.id ?? null }) }
+      else {
+        if (t?.message) skipped.push(`push(${tokens[i]}): ${t.message}`)
+        receipts.push({ channel: 'expo', token: tokens[i], status: t?.details?.error === 'DeviceNotRegistered' ? 'invalid_token' : 'failed', error: t?.details?.error || t?.message || 'error' })
+      }
+    })
+    await recordReceipts(receipts, recipients, payload)
     return tickets.length ? ok : tokens.length
-  } catch (err) { skipped.push(`push: ${errMsg(err)}`); return 0 }
+  } catch (err) {
+    skipped.push(`push: ${errMsg(err)}`)
+    await recordReceipts(tokens.map(token => ({ channel: 'expo' as const, token, status: 'failed' as const, error: errMsg(err) })), recipients, payload)
+    return 0
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -202,6 +242,7 @@ async function sendFcm(recipients: Recipient[], msg: { title: string; body: stri
   const url = `https://fcm.googleapis.com/v1/projects/${encodeURIComponent(sa.project_id)}/messages:send`
   const data = fcmData(payload)
   let sent = 0
+  const receipts: Receipt[] = []
   const sendOne = async (token: string) => {
     try {
       const res = await fetch(url, {
@@ -214,17 +255,19 @@ async function sendFcm(recipients: Recipient[], msg: { title: string; body: stri
           android: { priority: 'HIGH', notification: { channel_id: 'alerts', sound: 'default' } },
         } }),
       })
-      if (res.ok) { sent++; return }
+      if (res.ok) { sent++; receipts.push({ channel: 'fcm', token, status: 'accepted' }); return }
       const err = await res.json().catch(() => ({})) as { error?: { status?: string; message?: string; details?: Array<{ errorCode?: string }> } }
       const code = err.error?.details?.find(d => d.errorCode)?.errorCode || err.error?.status || `HTTP ${res.status}`
       skipped.push(`push(fcm ${token.slice(0, 12)}...): ${code}`)
       if (code === 'UNREGISTERED' || (res.status === 404) || (code === 'INVALID_ARGUMENT' && /registration token/i.test(err.error?.message || ''))) {
         await revokeDeadFcmToken(token)
-      }
-    } catch (e) { skipped.push(`push(fcm ${token.slice(0, 12)}...): ${errMsg(e)}`) }
+        receipts.push({ channel: 'fcm', token, status: 'invalid_token', error: code })
+      } else { receipts.push({ channel: 'fcm', token, status: 'failed', error: code }) }
+    } catch (e) { skipped.push(`push(fcm ${token.slice(0, 12)}...): ${errMsg(e)}`); receipts.push({ channel: 'fcm', token, status: 'failed', error: errMsg(e) }) }
   }
   // Bounded concurrency: 10 requests in flight.
   for (let i = 0; i < tokens.length; i += 10) await Promise.all(tokens.slice(i, i + 10).map(sendOne))
+  await recordReceipts(receipts, recipients, payload)
   return sent
 }
 
@@ -335,7 +378,7 @@ serve(async (req) => {
   if (pushDisabled) skipped.push('push: push_notifications disabled')
   const [email, pushExpo, pushFcm, whatsapp] = await Promise.all([
     sendEmails(recipients, emailSubject, emailHtml, skipped).catch(err => { skipped.push(`email: ${errMsg(err)}`); return 0 }),
-    pushDisabled ? Promise.resolve(0) : sendPush(recipients, msg, payload.instance_id || payload.entity_id, skipped).catch(err => { skipped.push(`push: ${errMsg(err)}`); return 0 }),
+    pushDisabled ? Promise.resolve(0) : sendPush(recipients, msg, payload.instance_id || payload.entity_id, skipped, payload).catch(err => { skipped.push(`push: ${errMsg(err)}`); return 0 }),
     // FCM runs independently: a missing secret or an FCM outage never touches Expo.
     pushDisabled ? Promise.resolve(0) : sendFcm(recipients, msg, payload, skipped).catch(err => { skipped.push(`push(fcm): ${errMsg(err)}`); return 0 }),
     sendWhatsApp(recipients, msg, skipped).catch(err => { skipped.push(`whatsapp: ${errMsg(err)}`); return 0 }),

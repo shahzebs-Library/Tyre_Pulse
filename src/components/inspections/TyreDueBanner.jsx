@@ -3,8 +3,7 @@ import { AlertTriangle, ClipboardList } from 'lucide-react'
 import { lifeDisplay } from '../../lib/tyreRunningLife'
 import { defectsForAction, isSevereCondition } from '../../lib/inspectionTyreFlags'
 import { displayPositionCode, inspectionTypeHint } from '../../lib/tyreBay'
-import { raiseActionsForInspection } from '../../lib/api/correctiveActions'
-import { toUserMessage } from '../../lib/safeError'
+import RaiseActionDialog from './RaiseActionDialog'
 
 // Immediate flag banner: shown when the vehicle carries tyres at/near end of
 // life (judged by the ONE running-life calc via buildAssetFlagMap) or when
@@ -24,24 +23,13 @@ import { toUserMessage } from '../../lib/safeError'
  */
 export default function TyreDueBanner({ entry, damaged = [], inspection = null }) {
   const due = entry ? [...(entry.overdue || []), ...(entry.dueSoon || [])] : []
-  const [raising, setRaising] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
   const [raised, setRaised] = useState(null)   // { created, skipped, failed } | { error }
 
   const canRaise = Boolean(inspection?.id) && !String(inspection.id).startsWith('offline-')
   const defects = canRaise
     ? defectsForAction(inspection, inspection.asset_no ? { [inspection.asset_no]: entry } : {})
     : []
-
-  const raise = async () => {
-    setRaising(true); setRaised(null)
-    try {
-      setRaised(await raiseActionsForInspection(inspection, defects))
-    } catch (e) {
-      setRaised({ error: toUserMessage(e) })
-    } finally {
-      setRaising(false)
-    }
-  }
 
   // The fault list covers everything an inspector can record, and wear is most
   // of it. Calling a worn tyre "damage" would misreport what was found, so the
@@ -87,12 +75,16 @@ export default function TyreDueBanner({ entry, damaged = [], inspection = null }
       {canRaise && defects.length > 0 && (
         <div className="mt-3 flex items-center gap-3 flex-wrap">
           <button
-            type="button" onClick={raise} disabled={raising}
-            className="btn-secondary text-xs flex items-center gap-2 min-h-[44px] disabled:opacity-60"
+            type="button" onClick={() => setDialogOpen(true)}
+            className="btn-secondary text-xs flex items-center gap-2 min-h-[44px]"
           >
             <ClipboardList size={13} />
-            {raising ? 'Raising...' : `Raise corrective action (${defects.length})`}
+            {`Raise corrective action (${defects.length})`}
           </button>
+          <RaiseActionDialog
+            open={dialogOpen} onClose={() => setDialogOpen(false)}
+            inspection={inspection} defects={defects} onDone={setRaised}
+          />
           {raised?.error && (
             <span role="alert" className="text-xs" style={{ color: '#ef4444' }}>{raised.error}</span>
           )}
@@ -100,6 +92,8 @@ export default function TyreDueBanner({ entry, damaged = [], inspection = null }
             <span role="status" className="text-xs text-[var(--text-secondary)]">
               {raised.created.length > 0 && `${raised.created.length} action${raised.created.length === 1 ? '' : 's'} raised. `}
               {raised.skipped > 0 && `${raised.skipped} already open. `}
+              {raised.notified?.length > 0 && `Sent to ${[...new Set(raised.notified)].join(', ')}. `}
+              {raised.notifyFailed?.length > 0 && `${raised.notifyFailed.length} could not be added to the Action Center. `}
               {raised.failed.length > 0 && `${raised.failed.length} could not be raised. `}
               {raised.created.length === 0 && raised.skipped > 0 && raised.failed.length === 0
                 && 'Nothing new to raise.'}

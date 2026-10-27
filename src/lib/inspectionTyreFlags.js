@@ -627,6 +627,30 @@ export function actionCaseFile(inspection, defect, evidence = null) {
   ].join('\n')
 }
 
+/** Suggested instruction and due date for one defect, before the person edits them. */
+export function defaultPlanFor(defect, now = new Date()) {
+  const urgency = urgencyOf(defect)
+  return { instruction: CONTAINMENT[urgency], due_date: addDays(now, ACTION_SLA_DAYS[urgency]), urgency }
+}
+
+/**
+ * Fold what the person decided in the dialog into the action row: how it should
+ * be done, their own comment or correction, the due date and the assignee.
+ * Blank fields change nothing, so a one-click raise keeps the defaults.
+ */
+export function applyPlanToRow(row, plan = {}) {
+  const out = { ...row }
+  const extra = []
+  const instruction = String(plan.instruction || '').trim()
+  const comment = String(plan.comment || '').trim()
+  if (instruction) extra.push('', 'INSTRUCTION FROM THE RAISER', instruction)
+  if (comment) extra.push('', 'COMMENT OR CORRECTION', comment)
+  if (extra.length) out.description = `${row.description}\n${extra.join('\n')}`
+  if (plan.due_date) out.due_date = plan.due_date
+  if (plan.assignee?.name) out.assigned_to = String(plan.assignee.name).slice(0, 200)
+  return out
+}
+
 export function actionRowsForInspection(inspection, defects = [], { existingKeys = [], now = new Date() } = {}) {
   const skip = new Set(existingKeys)
   return (defects || [])

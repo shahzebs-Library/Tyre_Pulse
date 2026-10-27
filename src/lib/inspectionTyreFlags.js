@@ -533,23 +533,121 @@ export function scopeInspections(rows = [], filters = {}, opts = {}) {
  * `existingKeys` are the source_detail values already raised and still open;
  * they are skipped so pressing the button twice cannot duplicate an action.
  */
-export function actionRowsForInspection(inspection, defects = [], { existingKeys = [] } = {}) {
+/**
+ * Response time by urgency, in days from the day the action is raised.
+ * A stop-the-vehicle fault is due tomorrow; planned replacement gets two weeks.
+ * One table so the due date and the wording below can never disagree.
+ */
+export const ACTION_SLA_DAYS = { severe: 1, high: 3, medium: 14 }
+
+/** What the tyre needs, by urgency. Plain steps, no invented cause. */
+const CONTAINMENT = {
+  severe: 'Do not release the vehicle until the tyre is inspected, repaired or replaced.',
+  high: 'Schedule replacement at the next workshop slot and keep the vehicle under close watch.',
+  medium: 'Plan replacement and confirm the tyre is available before the due date.',
+}
+
+function readEntry(inspection, position) {
+  let tc = inspection ? inspection.tyre_conditions : null
+  if (typeof tc === 'string') { try { tc = JSON.parse(tc) } catch { return null } }
+  if (!tc || typeof tc !== 'object') return null
+  const hit = Array.isArray(tc)
+    ? tc.find((e) => e && String(e.position || e.label || '') === String(position))
+    : tc[position]
+  if (!hit || typeof hit !== 'object') return null
+  const num = (...v) => {
+    for (const x of v) {
+      if (x === undefined || x === null || x === '') continue
+      const n = Number(x)
+      if (Number.isFinite(n) && n > 0) return n
+    }
+    return null
+  }
+  const text = (...v) => v.map((x) => (x == null ? '' : String(x).trim())).find(Boolean) || ''
+  return {
+    serial: text(hit.serial, hit.serial_no),
+    brand: text(hit.brand),
+    size: text(hit.size, hit.tyre_size),
+    pressure: num(hit.pressure, hit.pressure_psi, hit.psi),
+    tread: num(hit.tread, hit.treadDepth, hit.tread_depth, hit.tread_depth_mm),
+    notes: text(hit.notes, hit.note),
+    hasPhoto: Boolean(hit.photo_url || hit.photo_uri || hit.photo),
+  }
+}
+
+function addDays(base, days) {
+  const d = new Date(base)
+  d.setDate(d.getDate() + days)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+function urgencyOf(defect) {
+  if (defect.kind === 'damage' && SEVERE_RE.test(defect.condition || '')) return 'severe'
+  return defect.priority === 'High' ? 'high' : 'medium'
+}
+
+/** Plain-text case file written into the action, so it reads without opening the inspection. */
+export function actionCaseFile(inspection, defect, evidence = null) {
+  const e = evidence || {}
+  const urgency = urgencyOf(defect)
+  const line = (k, v) => (v === null || v === undefined || v === '' ? null : `${k}: ${v}`)
+  const km = inspection?.odometer_km != null && inspection.odometer_km !== ''
+    ? `${Number(inspection.odometer_km).toLocaleString('en-US')} km` : ''
+  const hrs = inspection?.hour_meter != null && inspection.hour_meter !== ''
+    ? `${Number(inspection.hour_meter).toLocaleString('en-US')} hrs` : ''
+  const found = [
+    line('Asset', inspection?.asset_no),
+    line('Site', inspection?.site),
+    line('Position', defect.positionLabel),
+    line('Finding', defect.condition),
+    line('Tyre serial', defect.serial || e.serial),
+    line('Brand', e.brand),
+    line('Size', e.size),
+    line('Tread depth', e.tread ? `${e.tread} mm` : ''),
+    line('Pressure', e.pressure ? `${e.pressure} psi` : ''),
+    line('Odometer', km),
+    line('Hour meter', hrs),
+    line('Inspector', inspection?.inspector || inspection?.attendees),
+    line('Inspection date', String(inspection?.inspection_date || '').slice(0, 10)),
+    line('Inspector notes', e.notes),
+    line('Photo evidence', e.hasPhoto ? 'recorded on the inspection' : ''),
+  ].filter(Boolean)
+  const days = ACTION_SLA_DAYS[urgency]
+  return [
+    defect.description,
+    '',
+    'WHAT WAS FOUND',
+    ...found,
+    '',
+    'WHAT TO DO',
+    CONTAINMENT[urgency],
+    `Respond within ${days} day${days === 1 ? '' : 's'} of this action being raised.`,
+    'Record the cause on this action when the tyre is examined, then close it with the work order or tyre record that fixed it.',
+  ].join('\n')
+}
+
+export function actionRowsForInspection(inspection, defects = [], { existingKeys = [], now = new Date() } = {}) {
   const skip = new Set(existingKeys)
   return (defects || [])
     .filter((d) => d && !skip.has(d.key))
-    .map((d) => ({
-      title: d.title.slice(0, 300),
-      description: d.description,
-      priority: d.priority,
-      status: 'Open',
-      asset_no: inspection?.asset_no || null,
-      tyre_serial: d.serial || null,
-      site: inspection?.site || null,
-      country: inspection?.country || null,
-      source_type: 'inspection',
-      source_id: inspection?.id || null,
-      source_detail: d.key,
-    }))
+    .map((d) => {
+      const evidence = readEntry(inspection, d.position)
+      return {
+        title: d.title.slice(0, 300),
+        description: actionCaseFile(inspection, d, evidence),
+        priority: d.priority,
+        status: 'Open',
+        asset_no: inspection?.asset_no || null,
+        tyre_serial: d.serial || evidence?.serial || null,
+        site: inspection?.site || null,
+        country: inspection?.country || null,
+        due_date: addDays(now, ACTION_SLA_DAYS[urgencyOf(d)]),
+        source_type: 'inspection',
+        source_id: inspection?.id || null,
+        source_detail: d.key,
+      }
+    })
 }
 
 export function inspectionOverview(inspections = [], flagMap = {}, { from = '', to = '' } = {}) {

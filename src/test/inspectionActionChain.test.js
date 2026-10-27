@@ -124,3 +124,37 @@ describe('actionRowsForInspection', () => {
     expect(row.title.length).toBeLessThanOrEqual(300)
   })
 })
+
+describe('action case file', () => {
+  const insp = (over = {}) => ({
+    id: 'insp-9', asset_no: 'TM101', site: 'NHC', country: 'KSA',
+    inspector: 'A. Khan', inspection_date: '2026-10-20', odometer_km: 123456,
+    tyre_conditions: {
+      LHF1: { position: 'LHF1', condition: 'Puncture', serial: 'YMA1', brand: 'TRIANGLE', pressure_psi: 60, tread_depth_mm: 4, notes: 'nail in tread' },
+      LHR1: { position: 'LHR1', condition: 'Worn' },
+    },
+    ...over,
+  })
+  const now = new Date(2026, 9, 27)
+
+  it('carries the evidence the inspector recorded and a due date by urgency', () => {
+    const rows = actionRowsForInspection(insp(), defectsForAction(insp()), { now })
+    const severe = rows.find(r => r.source_detail === 'damage:LHF1')
+    const worn = rows.find(r => r.source_detail === 'damage:LHR1')
+    expect(severe.description).toContain('Tread depth: 4 mm')
+    expect(severe.description).toContain('Pressure: 60 psi')
+    expect(severe.description).toContain('Inspector: A. Khan')
+    expect(severe.description).toContain('Odometer: 123,456 km')
+    expect(severe.description).toContain('Do not release the vehicle')
+    expect(severe.tyre_serial).toBe('YMA1')
+    expect(severe.due_date).toBe('2026-10-28')
+    expect(worn.due_date).toBe('2026-11-10')
+  })
+
+  it('never prints a line for a reading that was not recorded', () => {
+    const rows = actionRowsForInspection(insp(), defectsForAction(insp()), { now })
+    const worn = rows.find(r => r.source_detail === 'damage:LHR1')
+    expect(worn.description).not.toContain('Tread depth')
+    expect(worn.description).not.toContain('Pressure')
+  })
+})

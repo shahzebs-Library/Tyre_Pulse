@@ -42,7 +42,15 @@ export default function TyreDueBanner({ entry, damaged = [], inspection = null }
     listActionsForSource('inspection', inspection.id).then((rows) => { if (live) setExisting(rows) })
     return () => { live = false }
   }, [canRaise, inspection?.id, reloadKey])
-  const byKey = new Map(existing.filter(a => a.source_detail).map(a => [a.source_detail, a]))
+  // One action speaks for each defect: an open one wins over a closed one, so
+  // the banner never says "Fixed" while work is still outstanding; among equals
+  // the newest (the list is newest first) is kept.
+  const byKey = new Map()
+  for (const a of existing) {
+    if (!a.source_detail) continue
+    const have = byKey.get(a.source_detail)
+    if (!have || (isActionClosed(have.status) && !isActionClosed(a.status))) byKey.set(a.source_detail, a)
+  }
   const defects = allDefects.filter(d => !byKey.has(d.key))
   const tracked = allDefects.filter(d => byKey.has(d.key)).map(d => ({ defect: d, action: byKey.get(d.key) }))
 
@@ -121,13 +129,17 @@ export default function TyreDueBanner({ entry, damaged = [], inspection = null }
             open={dialogOpen} onClose={() => setDialogOpen(false)}
             inspection={inspection} defects={defects} onDone={(res) => { setRaised(res); setReloadKey(k => k + 1) }}
           />
+        </div>
+      )}
+
+      <div className="mt-2 flex flex-col gap-1">
           {raised?.error && (
             <span role="alert" className="text-xs" style={{ color: '#ef4444' }}>{raised.error}</span>
           )}
           {raised && !raised.error && (
             <span role="status" className="text-xs text-[var(--text-secondary)]">
               {raised.created.length > 0 && `${raised.created.length} action${raised.created.length === 1 ? '' : 's'} raised. `}
-              {raised.skipped > 0 && `${raised.skipped} already open. `}
+              {raised.skipped > 0 && `${raised.skipped} already raised. `}
               {raised.notified?.length > 0 && `Sent to ${[...new Set(raised.notified)].join(', ')}. `}
               {raised.notifyFailed?.length > 0 && `${raised.notifyFailed.length} could not be added to the Action Center. `}
               {raised.failed.length > 0 && `${raised.failed.length} could not be raised. `}
@@ -135,8 +147,7 @@ export default function TyreDueBanner({ entry, damaged = [], inspection = null }
                 && 'Nothing new to raise.'}
             </span>
           )}
-        </div>
-      )}
+      </div>
     </div>
   )
 }

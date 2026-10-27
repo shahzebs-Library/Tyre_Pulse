@@ -34,4 +34,16 @@ describe('TyreDueBanner raised-action status', () => {
     render(<TyreDueBanner entry={null} damaged={damaged} inspection={inspection} />)
     await waitFor(() => expect(screen.getByText('Raise corrective action (1)')).toBeTruthy())
   })
+
+  it('says the defect is open when an older closed action sits beside a newer open one', async () => {
+    // listed newest first, as the service returns them
+    listActionsForSource.mockResolvedValue([
+      { source_detail: 'damage:LHF1', status: 'Open', assigned_to: 'Ali' },
+      { source_detail: 'damage:LHF1', status: 'Closed', closed_at: '2026-10-01T00:00:00Z' },
+      { source_detail: 'damage:LHR1', status: 'Open' },
+    ])
+    render(<TyreDueBanner entry={null} damaged={damaged} inspection={inspection} />)
+    await waitFor(() => expect(screen.getByText('Assigned to Ali')).toBeTruthy())
+    expect(screen.queryByText('Fixed')).toBeNull()
+  })
 })

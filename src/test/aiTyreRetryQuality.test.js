@@ -151,7 +151,7 @@ describe('failure classification for retry', () => {
 })
 
 describe('migration contract', () => {
-  const sql = readFileSync('supabase/migrations/20261026090000_ai_tyre_atomic_month_budget_and_retry.sql', 'utf8')
+  const sql = readFileSync('supabase/migrations/20261026095000_ai_tyre_atomic_month_budget_and_retry.sql', 'utf8')
   it('serialises the month decision, fails closed, and is service_role only', () => {
     expect(sql).toMatch(/pg_advisory_xact_lock/)
     expect(sql).toMatch(/revoke all on function public\.ai_tyre_requeue_jobs[^;]*from anon, authenticated/)

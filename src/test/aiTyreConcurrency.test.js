@@ -170,7 +170,7 @@ describe('shared provider rate-limit backoff', () => {
   })
 
   it('all workers wait out the cooldown before claiming, but never sleep past the time budget', async () => {
-    const { w, drain } = world({ n: 8 })
+    const { drain } = world({ n: 8 })
     let cool = 50, slept = 0
     const r = await drain({ concurrency: 4, budgetMs: 100_000 }, {
       cooldownMs: () => cool, sleep: async (ms) => { slept += ms; cool = 0 }, nowMs: () => 0,

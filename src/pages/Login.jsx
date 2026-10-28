@@ -329,7 +329,13 @@ export default function Login() {
       captchaRef.current?.reset()
       if (authErr) {
         const taken = /already registered|already been registered|duplicate|already exists|database error/i.test(authErr.message || '')
-        setError(taken ? 'That username or Employee ID is already taken. Please choose another.' : toUserMessage(authErr, t('auth.login.errUnexpected')))
+        // Supabase rejects passwords found in known data leaks (or too easy to guess) with code weak_password.
+        const weak = authErr.code === 'weak_password' || /weak|pwned|leaked|easy to guess|compromised/i.test(authErr.message || '')
+        const limited = authErr.status === 429 || authErr.code === 'over_request_rate_limit'
+        setError(taken ? 'That username or Employee ID is already taken. Please choose another.'
+          : weak ? 'This password is too common or has appeared in a data leak. Please choose a different, harder password.'
+          : limited ? 'Too many attempts. Please wait a few minutes and try again.'
+          : toUserMessage(authErr, t('auth.login.errUnexpected')))
         return
       }
       setSignupDone(true)

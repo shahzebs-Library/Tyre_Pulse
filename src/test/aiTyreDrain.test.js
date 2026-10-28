@@ -47,7 +47,7 @@ describe('queue draining', () => {
 
   it('stops when the daily budget defers a job, with no further provider work', async () => {
     const { deps, state } = queue(10, { outcomeFor: (j) => (j.id === 'j5' ? 'deferred' : 'completed') })
-    const r = await drainQueue(deps)
+    const r = await drainQueue(deps, { concurrency: 1 })
     expect(r).toMatchObject({ processed: 5, deferred: 1, stoppedBecause: 'deferred' })
     expect(state.processed).toEqual(['j0', 'j1', 'j2', 'j3', 'j4', 'j5'])
   })

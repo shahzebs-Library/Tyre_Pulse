@@ -20,6 +20,7 @@ import { calculateTread, conditionRequiresAnalysis } from '../lib/aiTyreInspecti
 import { analyzeMeasurements, describeSeries } from '../lib/tyreMeasurementEngine'
 import { exportInspectionExcel } from '../lib/aiTyreInspectionExport'
 import { applyRegisterFilters, conditionOptions } from '../lib/aiTyreInspectionFilters'
+import AiTyreOpsPanel from '../components/aiInspection/AiTyreOpsPanel'
 import LazyTyrePhoto from '../components/aiInspection/LazyTyrePhoto'
 import { readInspectionMeasurements, recordDepthMeasurement, readInspectionAnalysis, enqueueInspectionPhotos, reviewAiFinding, backfillAiInspectionRange, screenInspectionPhotos, getAiReviewFeedback, getAiLabelledFindings } from '../lib/api/aiTyreInspection'
 
@@ -304,6 +305,7 @@ export default function AiTyreInspection() {
     </div>
     {aiActionNotice(role)&&<p role="note" className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">{aiActionNotice(role)}</p>}
     {mayBackfill&&<details className="rounded-xl border border-[var(--border-dim)] px-4 py-3"><summary className="cursor-pointer font-medium">Historical AI backfill (managers only)</summary><div className="mt-3"><HistoricInspectionBackfill/></div></details>}
+    {mayViewFeedback&&<details className="rounded-xl border border-[var(--border-dim)] px-4 py-3"><summary className="cursor-pointer font-medium">Operations: queue, timing, spend (managers only)</summary><div className="mt-3"><AiTyreOpsPanel canRetry={canReviewAiFinding(role)}/></div></details>}
     {mayViewFeedback&&<details className="rounded-xl border border-[var(--border-dim)] px-4 py-3"><summary className="cursor-pointer font-medium">Reviewer feedback: evaluation data</summary><div className="mt-3"><ReviewFeedbackPanel/></div></details>}
     <Card>
       <div className="flex flex-wrap justify-between gap-3 mb-3">

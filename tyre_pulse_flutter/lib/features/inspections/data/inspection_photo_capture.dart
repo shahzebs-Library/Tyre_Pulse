@@ -61,13 +61,13 @@ class CapturedPhoto {
 }
 
 /// The resize ladder. Each rung is tried in order; the first one that
-/// produces a picked file wins. Mirrors `mobile/lib/photoUpload.ts`
-/// exactly - see the library comment.
+/// produces a picked file wins. Mirrors `mobile/lib/photoSizing.ts` LADDERS.tyre
+/// (1280px long edge, q60: these photos feed ai_tyre_inspection_jobs).
 const List<({int maxDimension, int quality})> _kResizeLadder =
     <({int maxDimension, int quality})>[
-  (maxDimension: 1600, quality: 50),
-  (maxDimension: 1024, quality: 45),
-  (maxDimension: 720, quality: 40),
+  (maxDimension: 1280, quality: 60),
+  (maxDimension: 1024, quality: 55),
+  (maxDimension: 720, quality: 45),
 ];
 
 /// Captures one photo and copies it into a durable, feature-owned folder.

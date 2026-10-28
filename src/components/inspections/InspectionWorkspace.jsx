@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { Card, Kpi, Tabs, Donut, Pager, VehicleThumb, fmtInt } from '../commandCenter/kit'
 import InspectionPhotos from '../inspection/InspectionPhotos'
+import AiTyreProgress from '../inspection/AiTyreProgress'
 import InspectionDiagram from '../inspection/InspectionDiagram'
 import {
   LIST_TABS, listTabCounts, matchesListTab, searchInspections, sortNewest, inspectionStage,
@@ -233,6 +234,7 @@ export default function InspectionWorkspace({
                     <Pill tone={stage.tone}>{stage.label}</Pill>
                   </div>
                   <p>{[selected.vehicle_type, selected.inspection_type].filter(Boolean).join(' | ') || 'Type not recorded'}</p>
+                  <AiTyreProgress inspectionId={selected.id} />
                 </div>
                 <div className="iw-dhead-actions">
                   <button type="button" className="cc-btn-ghost" onClick={() => onEdit(selected)}><Pencil size={14} aria-hidden="true" /> Edit</button>

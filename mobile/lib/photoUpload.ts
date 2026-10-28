@@ -10,12 +10,11 @@ import { File } from 'expo-file-system'
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator'
 import { supabase } from './supabase'
 import { storageRef } from './storageRefs'
+import { LADDERS, resizeTarget, type PhotoProfile } from './photoSizing'
 
 const ALLOWED_EXTS = new Set(['jpg', 'jpeg', 'png', 'heic', 'heif'])
 
 // Resize/compress every captured photo BEFORE reading it into JS memory.
-const MAX_UPLOAD_DIM = 1600 // px, resize target width (aspect preserved)
-const UPLOAD_COMPRESS = 0.5 // JPEG quality after resize
 const MAX_DECODE_BYTES = 12 * 1024 * 1024 // hard cap on the file we base64-decode
 
 /**
@@ -34,35 +33,32 @@ const MAX_DECODE_BYTES = 12 * 1024 * 1024 // hard cap on the file we base64-deco
  * @param localUri file:// URI from expo-camera / expo-image-picker
  * @returns a new (smaller) file:// URI, or the original on any failure
  */
-export async function prepareForUpload(localUri: string): Promise<string> {
+export async function prepareForUpload(
+  localUri: string,
+  profile: PhotoProfile = 'general',
+): Promise<string> {
   if (!localUri || !localUri.startsWith('file://')) return localUri
 
-  // Try progressively smaller targets before giving up.
+  // Try progressively smaller targets before giving up (see photoSizing.LADDERS).
   //
   // WHY A LADDER: a single failed resize used to fall straight back to the
-  // ORIGINAL multi-megapixel file. That file then almost always exceeded
-  // MAX_DECODE_BYTES in uploadInspectionPhoto, which returns null - so the
-  // photo was SILENTLY DROPPED. On an inspection carrying 13-15 photos that is
-  // real evidence lost with no message to the user, and it matches the reported
-  // "uploads fail or crash". Image manipulation on low-end devices fails mostly
-  // because of memory pressure, and a smaller target is exactly what succeeds on
-  // the retry - so retrying recovers the photo instead of discarding it.
-  const attempts: Array<{ width: number; compress: number }> = [
-    { width: MAX_UPLOAD_DIM, compress: UPLOAD_COMPRESS }, // 1600px, q0.5
-    { width: 1024, compress: 0.45 },                      // memory-pressure retry
-    { width: 720, compress: 0.4 },                        // last resort, still legible
-  ]
+  // ORIGINAL multi-megapixel file, which then exceeded MAX_DECODE_BYTES and was
+  // SILENTLY DROPPED. A smaller target is what succeeds under memory pressure.
+  // profile 'tyre' = photos that feed AI tyre inspection (1280px long edge, q0.6).
+  const dims = await readImageSize(localUri)
+  const attempts = LADDERS[profile] ?? LADDERS.general
 
   for (const attempt of attempts) {
     try {
       const context = ImageManipulator.manipulate(localUri)
-      context.resize({ width: attempt.width })
+      const target = resizeTarget(dims?.width, dims?.height, attempt.maxLongEdge)
+      if (target) context.resize(target)
       const image = await context.renderAsync()
       const result = await image.saveAsync({ compress: attempt.compress, format: SaveFormat.JPEG })
       if (result?.uri) return result.uri
     } catch (err: any) {
       if (__DEV__) {
-        console.warn(`[photoUpload] resize at ${attempt.width}px failed:`, err?.message)
+        console.warn(`[photoUpload] resize at ${attempt.maxLongEdge}px failed:`, err?.message)
       }
       // Fall through to the next, smaller attempt.
     }
@@ -73,6 +69,18 @@ export async function prepareForUpload(localUri: string): Promise<string> {
   // into memory - a refusal is recoverable, a native OOM crash is not.
   if (__DEV__) console.warn('[photoUpload] all resize attempts failed; using original')
   return localUri
+}
+
+/** Header-only size read (RN Image.getSize); null when unavailable. Never throws. */
+async function readImageSize(uri: string): Promise<{ width: number; height: number } | null> {
+  try {
+    const { Image } = require('react-native')
+    return await new Promise((resolve) => {
+      Image.getSize(uri, (width: number, height: number) => resolve({ width, height }), () => resolve(null))
+    })
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -92,7 +100,7 @@ export async function uploadInspectionPhoto(
 
   try {
     // Resize/compress first so the base64 decode below stays small (avoids OOM).
-    const uploadUri = await prepareForUpload(localUri)
+    const uploadUri = await prepareForUpload(localUri, 'tyre')
 
     const rawExt = uploadUri.split('.').pop()?.toLowerCase() ?? 'jpg'
     if (!ALLOWED_EXTS.has(rawExt)) return null

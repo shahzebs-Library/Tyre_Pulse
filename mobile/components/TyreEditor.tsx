@@ -95,7 +95,7 @@ export default function TyreEditor({ data, onChange }: Props) {
       // Resize/compress first (shared helper), matching every other upload path
       // in the app - a full-resolution camera image otherwise risks an OOM kill
       // on low-end devices.
-      const uploadUri = await prepareForUpload(localUri)
+      const uploadUri = await prepareForUpload(localUri, 'tyre')
 
       const rawExt = uploadUri.split('.').pop()?.toLowerCase() ?? 'jpg'
       const ext = rawExt === 'heic' || rawExt === 'heif' ? 'jpg' : rawExt

@@ -3,8 +3,9 @@
 // Request modes: enqueue (JWT), review (JWT), work (service secret).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import {
-  canBackfill, canEnqueue, canReview, resolveRates, processJob, drainQueue, ProviderCallError, str,
-  type Deps, type Json, type JobRow, type Photo,
+  canBackfill, canEnqueue, canReview, canRetry, resolveRates, processJob, drainQueue, ProviderCallError, str,
+  callWithFallback, imageDimensions, parseConcurrency, createRateLimitGate,
+  type Deps, type Json, type JobRow, type Photo, type ProviderAttempt,
 } from "./logic.ts";
 import {
   evaluateMonthlyBudget, monthStartUtc, parseAiControls, sumMonthSpend,
@@ -135,7 +136,37 @@ async function enqueue(req: Request, payload: Json) {
     if (error) return fail("Could not enqueue all evidence",500);
     created++;
   }
-  return response({ inspection_id: inspection.id, eligible: evidence.length, enqueued:created });
+  // Start the worker now instead of waiting for the 5-minute cron (cron stays as the safety net).
+  const triggered = created > 0 ? await triggerWorkerSoon() : false;
+  return response({ inspection_id: inspection.id, eligible: evidence.length, enqueued:created, worker_triggered: triggered });
+}
+// ---- Immediate worker kick -------------------------------------------------------------------------
+// In-isolate debounce + a DB lock (ai_tyre_try_acquire_worker_lock) so a burst of enqueues starts ONE
+// worker, not one per request. Auth is unchanged: the self-call carries the same x-worker-secret
+// (AI_WORKER_SECRET) the cron uses and the work path still rejects anything else. Every failure here is
+// swallowed: the cron picks the jobs up within 5 minutes.
+const KICK_DEBOUNCE_MS = 10_000;
+const KICK_LOCK_SECONDS = 45;
+let lastKickAt = 0;
+async function triggerWorkerSoon(): Promise<boolean> {
+  try {
+    const secret = Deno.env.get("AI_WORKER_SECRET");
+    if (!secret) return false;
+    const nowMs = Date.now();
+    if (nowMs - lastKickAt < KICK_DEBOUNCE_MS) return false;
+    lastKickAt = nowMs;
+    // Fail closed: if the lock cannot be taken (RPC missing or error) the cron handles it.
+    const { data, error } = await admin.rpc("ai_tyre_try_acquire_worker_lock", { p_ttl_seconds: KICK_LOCK_SECONDS });
+    if (error || data !== true) return false;
+    const call = fetch(`${apiUrl}/functions/v1/ai-tyre-inspection`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${serviceKey}`, "x-worker-secret": secret },
+      body: JSON.stringify({ action: "work" }),
+    }).then(r => r.body?.cancel(), () => {});
+    const rt = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+    if (rt?.waitUntil) rt.waitUntil(call);
+    return true;
+  } catch { return false; }
 }
 /** Organization-bound on-demand backfill. Range is capped and paged by created_at.
  * Requires a managerial role. Evidence lookup reuses exactly the regular enqueue
@@ -202,6 +233,22 @@ async function backfill(req: Request, payload: Json) {
   return response({scanned:list.length,eligible,skipped_existing:skippedExisting,
     pending:pending.length,created,dry_run:dryRun,
     page,next_page:list.length===PAGE_SIZE?page+1:null});
+}
+/**
+ * Admin re-queue of failed jobs (elevated roles, own organisation only). By default only failure kinds that
+ * cannot have been billed are re-queued; include_billed:true is the admin's explicit decision to pay again for
+ * a job that may already have been billed (its estimated prior spend stays in the month ledger).
+ */
+async function retry(req: Request, payload: Json) {
+  const { profile, user } = await authenticated(req);
+  if (!canRetry(profile.role)) return fail("Admin, manager or director role required", 403);
+  const ids = Array.isArray(payload.job_ids) ? payload.job_ids : [];
+  if (!ids.length || ids.length > 100 || !ids.every(isUUID)) return fail("Between 1 and 100 valid job IDs required");
+  const { data, error } = await admin.rpc("ai_tyre_requeue_jobs", {
+    p_org: profile.organisation_id, p_job_ids: ids, p_include_billed: payload.include_billed === true, p_actor: user.id,
+  });
+  if (error || !data || (data as Json).ok !== true) return fail("Could not re-queue jobs", 500);
+  return response({ requeued: (data as Json).requeued, skipped: (data as Json).skipped, include_billed: payload.include_billed === true });
 }
 async function review(req:Request, payload:Json) {
   const { profile, user, client } = await authenticated(req);
@@ -291,15 +338,15 @@ async function monthlyBudgetDecision(reserveUsd: number): Promise<MonthlyBudgetD
     };
     const logs = await pageAll((f, t) => admin.from("ai_token_logs").select("id,cost_usd,feature,status")
       .gte("created_at", since).order("id", { ascending: true }).range(f, t));
-    const jobs = await pageAll((f, t) => admin.from("ai_tyre_inspection_jobs").select("id,cost_usd,provider_called_at")
-      .not("provider_called_at", "is", null).gte("provider_called_at", since).order("id", { ascending: true }).range(f, t));
+    const jobs = await pageAll((f, t) => admin.from("ai_tyre_inspection_jobs").select("id,cost_usd,provider_called_at,prior_billed_usd")
+      .or(`provider_called_at.gte.${since},last_retry_at.gte.${since}`).order("id", { ascending: true }).range(f, t));
     if (!logs || !jobs) return evaluateMonthlyBudget({ controls, spentUsd: null, reserveUsd });
     return evaluateMonthlyBudget({ controls, spentUsd: sumMonthSpend(logs, jobs, reserveUsd), reserveUsd });
   } catch {
     return evaluateMonthlyBudget({ controls: null, spentUsd: null, reserveUsd });
   }
 }
-const PROMPT = "Inspect this commercial vehicle tyre photograph. Return a short, valid JSON object with keys assessable (boolean), reason (string), defects (max 4 items each containing type, description, severity, visibleEvidence), recommendation (string). Keep each description under 80 characters. Output no markdown, no commentary. Never use em dashes or en dashes. Note whether the image is clear enough. Distinguish normal visible wear from defects; flag uncertain findings. Do NOT invent groove depth millimetres, remaining tread percentage, remaining kilometres, engine readings, tyre pressure or roadworthiness certification.";
+const PROMPT = "Inspect this commercial vehicle tyre photograph. Return a short, valid JSON object with keys assessable (boolean), reason (string), defects (max 4 items each containing type, description, severity, visibleEvidence), recommendation (string). Keep each description under 80 characters. Output no markdown, no commentary. Never use em dashes or en dashes. Also include imageQuality with keys focus (good or blurry), lighting (good, dark or overexposed) and subject (tyre or not_tyre). Note whether the image is clear enough. Distinguish normal visible wear from defects; flag uncertain findings. Do NOT invent groove depth millimetres, remaining tread percentage, remaining kilometres, engine readings, tyre pressure or roadworthiness certification.";
 
 async function work(req:Request) {
   // Cron workers authenticate using the dedicated x-worker-secret header.
@@ -316,6 +363,15 @@ async function work(req:Request) {
   // Worst-case per-call reservation; settled to the real estimate (or kept when usage is unknown).
   const reserveUsd = Math.max(0.0001, Math.min(Number(env("AI_RESERVE_USD_PER_CALL") ?? "0.01"), 1));
   const rates = resolveRates(providerName, model, env);
+  // Secondary provider (used only on primary timeout / 429 / 5xx) when its key exists.
+  const attempts: ProviderAttempt[] = [{ providerName, model,
+    call: (photo: Photo) => callProvider({ providerName, providerKey, model }, PROMPT, photo) }];
+  const gKey = Deno.env.get("AI_PROVIDER_KEY");
+  if (providerName === "anthropic" && gKey) {
+    const gModel = Deno.env.get("AI_FALLBACK_MODEL") || "gemini-2.5-flash-lite";
+    attempts.push({ providerName: "google", model: gModel,
+      call: (photo: Photo) => callProvider({ providerName: "google", providerKey: gKey, model: gModel }, PROMPT, photo) });
+  }
 
   // Pre-flight: if the monthly cap is already reached, claim nothing and report a visible state.
   let lastBudget = await monthlyBudgetDecision(reserveUsd);
@@ -324,12 +380,32 @@ async function work(req:Request) {
       stoppedBecause: "monthly_budget", budget: lastBudget, dailyLimit });
   }
 
+  // Bounded automatic retry with exponential backoff, only for failures that cannot have been billed.
+  // Possibly-billed jobs (prior_attempt, stalled, timeout, invalid output) are never auto-retried.
+  await admin.rpc("ai_tyre_auto_requeue", { p_max_retries: 3, p_base_minutes: 10, p_limit: 50 }).then(() => {}, () => {});
+
   // Stalled "processing" locks: the provider may have been called; fail for manual review, never retry.
   const { error: reapError } = await admin.rpc("ai_tyre_fail_stale_processing", { p_minutes: 15 });
   if (reapError) return fail("Unable to reconcile stalled AI jobs",503);
 
+  const gate = createRateLimitGate(() => Date.now());
   const deps: Deps = {
-    config: { providerName, model, rates, reserveUsd, dailyLimitUsd: dailyLimit },
+    config: { providerName, model, rates, reserveUsd, dailyLimitUsd: dailyLimit, monthlyLimitUsd: lastBudget.limitUsd ?? 0 },
+    ratesFor: (name, m) => (name === providerName && m === model ? rates : resolveRates(name, m, () => undefined)),
+    loadPrevious: async (job) => {
+      if (!job.inspection_id || !job.tyre_position) return null;
+      const { data: cur } = await admin.from("inspections").select("asset_no,created_at").eq("id", job.inspection_id).maybeSingle();
+      if (!cur?.asset_no) return null;
+      const { data: older } = await admin.from("inspections").select("id,created_at")
+        .eq("organisation_id", job.organisation_id).eq("asset_no", cur.asset_no).neq("id", job.inspection_id)
+        .lt("created_at", cur.created_at).order("created_at", { ascending: false }).limit(10);
+      const ids = (older || []).map((i: Json) => i.id as string);
+      if (!ids.length) return null;
+      const { data: prev } = await admin.from("ai_tyre_inspection_jobs").select("id,analysis,inspection_id")
+        .eq("organisation_id", job.organisation_id).eq("tyre_position", job.tyre_position).eq("status", "completed")
+        .in("inspection_id", ids).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      return prev ? { analysis: prev.analysis as Json, jobId: prev.id as string } : null;
+    },
     now: () => new Date(),
     updateJob: async (id, patch, fromStatus) => {
       const { data } = await admin.from("ai_tyre_inspection_jobs").update(patch)
@@ -338,12 +414,14 @@ async function work(req:Request) {
     },
     insertTokenLog: async (row) => { await admin.from("ai_token_logs").insert(row); },
     checkMonthlyBudget: async (reserve) => { lastBudget = await monthlyBudgetDecision(reserve); return lastBudget; },
-    reserveBudget: async (orgId, jobId, estimate, limit) => {
-      const { data, error: rpcError } = await admin.rpc("ai_tyre_reserve_budget",
-        { p_job: jobId, p_estimate: estimate, p_limit: limit });
+    reserveBudget: async (_orgId, jobId, estimate, limit, monthlyLimit) => {
+      // Atomic daily + monthly reservation under one DB lock (migration 20261026095000).
+      const { data, error: rpcError } = await admin.rpc("ai_tyre_reserve_budget_atomic",
+        { p_job: jobId, p_estimate: estimate, p_daily_limit: limit, p_month_limit: monthlyLimit ?? 0 });
       // Fail closed: no reservation, no paid call.
       if (rpcError || !data) return { ok: false, reason: "Unable to reserve AI budget" };
-      return { ok: (data as Json).ok === true, reason: String((data as Json).reason ?? "") };
+      const d = data as Json;
+      return { ok: d.ok === true, reason: String(d.reason ?? ""), scope: d.scope === "monthly" ? "monthly" : "daily" };
     },
     settleBudget: async (jobId, actual, providerCalled) => {
       await admin.rpc("ai_tyre_settle_budget", { p_job: jobId, p_actual: actual, p_provider_called: providerCalled });
@@ -357,9 +435,23 @@ async function work(req:Request) {
       const bytes = new Uint8Array(await file.arrayBuffer());
       let binary = "";
       for (const byte of bytes) binary += String.fromCharCode(byte);
-      return { mediaType: file.type, base64: btoa(binary) };
+      const dims = imageDimensions(bytes);
+      const sha256 = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)))
+        .map(x => x.toString(16).padStart(2, "0")).join("");
+      return { mediaType: file.type, base64: btoa(binary), bytes: bytes.length, sha256, ...(dims ?? {}) };
     },
-    callProvider: (photo) => callProvider({ providerName, providerKey, model }, PROMPT, photo),
+    findReusable: async (job, sha256, promptVersion) => {
+      // Strictly the same organisation + same prompt version + identical bytes. Rejected readings are not reused.
+      const { data } = await admin.from("ai_tyre_inspection_jobs").select("id,analysis")
+        .eq("organisation_id", job.organisation_id).eq("photo_content_sha256", sha256)
+        .eq("prompt_version", promptVersion).eq("status", "completed").neq("review_status", "rejected")
+        .neq("id", job.id).not("analysis", "is", null)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      return data?.analysis ? { id: data.id as string, analysis: data.analysis as Json } : null;
+    },
+    onProviderRateLimited: (name) => gate.hit(name),
+    onProviderOk: (name) => gate.ok(name),
+    callProvider: (photo) => callWithFallback(attempts, photo),
   };
 
   // Drain the queue in bounded batches (time- and budget-limited) instead of one batch per tick.
@@ -379,7 +471,9 @@ async function work(req:Request) {
     },
     process: (job) => processJob(deps, job),
     nowMs: () => Date.now(),
-  });
+    cooldownMs: () => gate.waitMs(),
+    sleep: (ms) => new Promise(r => setTimeout(r, ms)),
+  }, { concurrency: parseConcurrency(env("AI_WORKER_CONCURRENCY")) });
   if (drained.stoppedBecause === "queue_error" && drained.batches === 0) return fail("Queue unavailable",500);
   return response({ ...drained, dailyLimit, budget: lastBudget });
 }
@@ -392,6 +486,7 @@ Deno.serve(async req => {
     if (!payload || typeof payload !== "object") return fail("Invalid request");
     if (payload.action === "enqueue" || payload.action === "screen") return await enqueue(req,payload);
     if (payload.action === "review") return await review(req,payload);
+    if (payload.action === "retry") return await retry(req,payload);
     if (payload.action === "backfill") return await backfill(req,payload);
     if (payload.action === "work") return await work(req);
     return fail("Unknown action");

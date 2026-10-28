@@ -116,6 +116,13 @@ export function summarizeInspectionAiCosts(jobs) {
   return [...byInspection.values()].map(x=>({...x,costUsd:Number(x.costUsd.toFixed(6))}))
 }
 
+/** Re-queue failed jobs. The edge function authorises the role and returns a plain message. */
+export async function retryJobs(jobIds) {
+  const ids=requireIds(jobIds)
+  if(!ids.length)throw new Error('Choose at least one failed job.')
+  return invokeAi({action:'retry',job_ids:ids})
+}
+
 /** Backfill one bounded page of historical inspections through server authorization.
  * Date range is interpreted as absolute ISO timestamps.
  */

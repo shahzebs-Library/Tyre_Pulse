@@ -9,7 +9,7 @@
 //  * a tyre-inspection call whose cost is unknown (NULL) is charged the reservation, never 0.
 //
 // This pure check is only an early, cheap PRE-FLIGHT (read-then-act). The authoritative monthly
-// decision is atomic: ai_tyre_reserve_budget_atomic (migration 20261026090000) re-computes the month
+// decision is atomic: ai_tyre_reserve_budget_atomic (migration 20261026095000) re-computes the month
 // ledger under an advisory lock and reserves in the same transaction, so concurrent workers cannot
 // overshoot. Month totals are GLOBAL (all tenants, all AI features), matching chat-ai.
 

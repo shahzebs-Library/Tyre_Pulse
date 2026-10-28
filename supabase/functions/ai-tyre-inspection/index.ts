@@ -415,7 +415,7 @@ async function work(req:Request) {
     insertTokenLog: async (row) => { await admin.from("ai_token_logs").insert(row); },
     checkMonthlyBudget: async (reserve) => { lastBudget = await monthlyBudgetDecision(reserve); return lastBudget; },
     reserveBudget: async (_orgId, jobId, estimate, limit, monthlyLimit) => {
-      // Atomic daily + monthly reservation under one DB lock (migration 20261026090000).
+      // Atomic daily + monthly reservation under one DB lock (migration 20261026095000).
       const { data, error: rpcError } = await admin.rpc("ai_tyre_reserve_budget_atomic",
         { p_job: jobId, p_estimate: estimate, p_daily_limit: limit, p_month_limit: monthlyLimit ?? 0 });
       // Fail closed: no reservation, no paid call.

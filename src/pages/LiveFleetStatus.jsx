@@ -1219,6 +1219,8 @@ export default function LiveFleetStatus() {
                     <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-lg p-2 flex items-center justify-center min-h-32">
                       <VehicleTyreDiagram
                         vehicleType={drawerVehicle.vehicle_type}
+                        assetNo={drawerVehicle.asset_no}
+                        country={drawerVehicle.country}
                         positions={drawerVehicle.tyres.map(t => ({
                           position:     t.position,
                           risk_level:   t.risk_level,

@@ -24,7 +24,7 @@
 .vh-close { width: 36px; height: 36px; display: inline-grid; place-items: center; border-radius: 9px; border: 1px solid var(--cc-inner-border); background: var(--cc-inner); color: var(--cc-ink-2); cursor: pointer; }
 
 /* Asset finder */
-.vh-opener .cc-search { max-width: 520px; }
+.vh-opener .cc-search { max-width: 520px; flex: none; }
 .vh-matches { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .vh-match {
   display: inline-flex; align-items: center; gap: 9px; text-align: left; cursor: pointer;

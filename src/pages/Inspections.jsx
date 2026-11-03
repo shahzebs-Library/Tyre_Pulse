@@ -27,7 +27,8 @@ import EnterpriseTable from '../components/ui/EnterpriseTable'
 // The shared dialog shell: focus trap, Escape, scroll lock, sized from the viewport.
 import SharedModal from '../components/ui/Modal'
 import { legacyPositionCode } from '../lib/tyrePositions'
-import { LAYOUT_SLOTS, layoutSlotsFor, resolveLayoutKey, isTyrelessEquipment } from '../lib/vehicleTyreLayout'
+import { LAYOUT_SLOTS, layoutSlotsFor, resolveLayoutKey, isTyrelessEquipment, layoutForAsset } from '../lib/vehicleTyreLayout'
+import { loadAxleCounts } from '../lib/api/vehicleAxles'
 import { useWakeLock, vibrate } from '../hooks/useWakeLock'
 import { enqueueInspection, syncPendingInspections, getPendingCount } from '../lib/offlineQueue'
 import { formatDate } from '../lib/formatters'
@@ -892,18 +893,22 @@ export default function Inspections() {
     setClLookingUp(true)
     // Country-scoped: the same asset code in another country is a different
     // machine (V376), so its type and site must not seed this inspection.
-    const data = await inspectionsApi.findVehicleByAsset(assetNo.trim(), activeCountry).catch(() => null)
+    const [data] = await Promise.all([
+      inspectionsApi.findVehicleByAsset(assetNo.trim(), activeCountry).catch(() => null),
+      // So a 4-axle pump is offered 12 wheels, not the type's default 14.
+      loadAxleCounts(),
+    ])
     // Use DB vehicle_type if available, otherwise infer from asset number prefix
     const vehicleType = data?.vehicle_type || inferVehicleTypeFromAsset(assetNo)
     const fleetInfo = data || (vehicleType ? { asset_no: assetNo.trim(), vehicle_type: vehicleType, site: null } : null)
     if (fleetInfo) {
-      const vtKey = resolveLayoutKey(vehicleType, assetNo.trim())
+      const vtKey = layoutForAsset(resolveLayoutKey(vehicleType, assetNo.trim()), assetNo.trim(), activeCountry)
       // Save the same resolved class used to collect the wheel readings, so
       // the inspection viewer and PDF cannot select a different layout later.
       setClFleetInfo({ ...fleetInfo, vehicle_type: isTyrelessEquipment(vehicleType) ? vehicleType : vtKey })
       // Tyreless equipment returns [], so the checklist offers no wheels at all
       // rather than inventing them.
-      const positions = layoutSlotsFor(vehicleType, assetNo.trim())
+      const positions = layoutSlotsFor(vehicleType, assetNo.trim(), activeCountry)
       setClPositions(positions.map(pos => ({ position: pos, label: legacyPositionCode(vtKey, pos), pressure: '', condition: 'Good', treadDepth: '' })))
       if (fleetInfo.site) setClSite(current => current || fleetInfo.site)
     } else {

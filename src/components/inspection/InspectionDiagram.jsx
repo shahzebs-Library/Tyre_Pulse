@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import VehicleTyreDiagram, { isTyrelessEquipment } from '../VehicleTyreDiagram'
 import { inspectionDiagramModel } from '../../lib/inspectionView'
+import { useAxleCounts } from '../../lib/api/vehicleAxles'
 
 const RISK_TONE = {
   good: '#15803d',
@@ -32,9 +33,11 @@ const RISK_TONE = {
 export default function InspectionDiagram({
   inspection, width = 300, showReadings = true, className = '', variant = 'map',
 }) {
+  // Re-resolve once the machines' axle counts arrive (4- vs 5-axle pumps).
+  const axles = useAxleCounts()
   const model = useMemo(
     () => inspectionDiagramModel(inspection, { isTyreless: isTyrelessEquipment }),
-    [inspection],
+    [inspection, axles], // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   // Nothing loaded is not a finding, so it says nothing at all.
@@ -57,6 +60,8 @@ export default function InspectionDiagram({
     <div className={className}>
       <VehicleTyreDiagram
         vehicleType={model.vehicleType}
+        assetNo={inspection.asset_no}
+        country={inspection.country}
         tyreData={model.tyreData}
         subLabels={model.subLabels}
         width={width}

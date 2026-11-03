@@ -20,6 +20,7 @@ import {
   inspectionTypeHint,
 } from './tyreBay'
 import { severePositions, isSevereCondition } from './inspectionTyreFlags'
+import { layoutForAsset } from './vehicleTyreLayout'
 
 /** Condition word -> risk band. The vocabulary the WEB form writes. */
 export const COND_TO_RISK = {
@@ -443,7 +444,8 @@ export function inspectionDiagramModel(row, { isTyreless } = {}) {
     }
   }
 
-  const layoutKey = resolveLayoutKey(typeHint)
+  // The machine's recorded build wins over the type's default (4- vs 5-axle pumps).
+  const layoutKey = layoutForAsset(resolveLayoutKey(typeHint), row?.asset_no, row?.country)
   const slots = BUILTIN_LAYOUT_SLOTS[layoutKey] || []
   const normTc = normalizeTyreConditions(row)
   const stats = inspectionStats(normTc)

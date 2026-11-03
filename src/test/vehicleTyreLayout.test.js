@@ -185,8 +185,11 @@ describe('layout integrity', () => {
     }
 
     // The scan must actually have found something, or this test passes vacuously.
-    expect(Object.keys(drawn).length).toBe(LAYOUT_KEYS.length)
-    for (const key of LAYOUT_KEYS) {
+    // Axle variants (e.g. 'Concrete pump 4-axle') are derived from a base layout after
+    // the literal map, so the scan cannot see them; pumpAxles.test.js covers them.
+    const literalKeys = LAYOUT_KEYS.filter((k) => !/ \d-axle$/.test(k))
+    expect(Object.keys(drawn).length).toBe(literalKeys.length)
+    for (const key of literalKeys) {
       expect(drawn[key], `diagram is missing the ${key} layout`).toEqual([...LAYOUT_SLOTS[key]])
     }
   })

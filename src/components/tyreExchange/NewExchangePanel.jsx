@@ -105,7 +105,7 @@ export default function NewExchangePanel({ assets, sites, records, technicians, 
             {form.asset
               ? (
                 <div className="tx-diagram">
-                  <VehicleTyreDiagram vehicleType={asset?.vehicleType} onPositionClick={({ position }) => pickPosition(position)} width={320} variant="board" selected={form.position || null} emptyLabel="Tap to choose" />
+                  <VehicleTyreDiagram vehicleType={asset?.vehicleType} assetNo={form.asset} country={country} onPositionClick={({ position }) => pickPosition(position)} width={320} variant="board" selected={form.position || null} emptyLabel="Tap to choose" />
                   <p className="tx-note">{form.position ? `Selected ${form.position}${onNow ? `, tyre on it now ${onNow.serial || 'N/A'}` : ''}.` : 'Tap a wheel to choose the position.'}</p>
                 </div>
               )

@@ -340,7 +340,7 @@ export default function DigitalTwin() {
                 <div className="card">
                   <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Wheel layout</h3>
                   {deep.layoutKnown ? (
-                    <div className="flex justify-center"><VehicleTyreDiagram vehicleType={deep.hint} positions={deep.diagram} width={360} variant="board" emptyLabel="No tyre" recordedLabel="fitted" /></div>
+                    <div className="flex justify-center"><VehicleTyreDiagram vehicleType={deep.hint} assetNo={assetNo} positions={deep.diagram} width={360} variant="board" emptyLabel="No tyre" recordedLabel="fitted" /></div>
                   ) : (
                     <p className="text-sm text-[var(--text-muted)]">The vehicle type is not recorded or not recognised, so the wheel layout cannot be drawn. The table below lists every fitted tyre.</p>
                   )}

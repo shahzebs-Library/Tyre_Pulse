@@ -311,7 +311,7 @@ export default function ChecklistTab({
                   }
                   return (
                     <p className="text-xs mt-1" style={{ color: '#16a34a' }}>
-                      {vt} · {layoutSlotsFor(vt).length} {t('inspections.form.tyres')}
+                      {vt} · {layoutSlotsFor(vt, clAsset, clFleetInfo?.country).length} {t('inspections.form.tyres')}
                     </p>
                   )
                 })()}
@@ -356,6 +356,8 @@ export default function ChecklistTab({
                     <p className="text-xs font-medium mb-3" style={{ color: '#4b5563' }}>{t('inspections.form.tapTyre')}</p>
                     <VehicleTyreDiagram
                       vehicleType={clFleetInfo?.vehicle_type || inferVehicleTypeFromAsset(clAsset) || 'Pickup'}
+                      assetNo={clAsset}
+                      country={clFleetInfo?.country}
                       positions={clPositions.map(p => ({
                         position: p.position,
                         risk_level: p.condition === 'Good' ? 'good'

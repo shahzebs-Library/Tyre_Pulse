@@ -37,7 +37,7 @@
 .tb-good .tb-dot, .tb-dot.tb-good { background: var(--tb-good); }
 .tb-warn .tb-dot, .tb-dot.tb-warn { background: var(--tb-warn); }
 .tb-bad .tb-dot, .tb-dot.tb-bad { background: var(--tb-bad); }
-.tb-vals { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.tb-vals { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.15; }
 .tb-vals b { font-size: 11px; font-weight: 700; white-space: nowrap; }
 .tb-vals b small { font-weight: 500; font-size: 9px; color: var(--text-secondary); }
 .tb-muted { font-size: 9.5px; color: var(--text-secondary); }
@@ -47,3 +47,20 @@
 .tb-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 8px;
   font-size: 10.5px; color: var(--text-secondary); }
 .tb-legend span { display: inline-flex; align-items: center; gap: 4px; }
+
+/* Fitted tyre identity (brand / serial) - one line, never wraps the card. */
+.tb-ident { font-size: 9px; color: var(--text-secondary); white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; max-width: 100%; }
+/* Tappable cards (data entry, tyre bay, exchange). */
+.tb-tap { all: unset; box-sizing: border-box; width: 70px; display: flex; flex-direction: column; gap: 2px;
+  cursor: pointer; border-radius: 8px; }
+.tb-tap:hover .tb-body { background: var(--surface-3, var(--surface-2)); }
+.tb-tap:focus-visible { outline: 2px solid var(--accent, #16a34a); outline-offset: 2px; }
+.tb-selected .tb-body { box-shadow: 0 0 0 2px var(--accent, #16a34a); }
+.tb-pending .tb-body { border-color: var(--tb-warn); border-style: dashed; border-left-style: solid; }
+.tb-pending .tb-dot { background: var(--tb-warn); }
+.tb-pending .tb-muted { color: var(--tb-warn); font-weight: 600; }
+/* Photo-only thumbnail (combinations). */
+.tb-thumb { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.tb-thumb img { display: block; object-fit: contain; }
+.tb-thumb small { font-size: 10px; color: var(--text-secondary); }

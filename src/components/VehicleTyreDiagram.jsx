@@ -7,6 +7,8 @@ import CustomBody from './VehicleDiagramCustomBody';
 import { getCustomLayoutMap, canonVehicleTypeKey } from '../lib/api/vehicleDiagrams';
 import { resolveLayoutKey, isTyrelessEquipment } from '../lib/vehicleTyreLayout';
 import { slotStateMap } from '../lib/tyreCompleteness';
+import { riskForCondition } from '../lib/inspectionView';
+import { canonicalToSlotId } from '../lib/tyreBay';
 
 // The vehicle-type -> layout-key mapping lives in src/lib/vehicleTyreLayout.js
 // (THE single resolver, mirrored from mobile). It used to be inlined here and
@@ -1523,6 +1525,45 @@ const LEVEL_TO_RISK = {
   Puncture: 'critical', puncture: 'critical',
 }
 
+// One shape for the card board, whichever way the caller hands its data in:
+// fitted tyres as `positions` (serial, brand, tread...) or readings as
+// `tyreData` (an inspection's own fields, or a form's pressure_psi / tread_depth_mm).
+const numOrNull = (v) => {
+  if (v == null || v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+function boardData(positions, tyreData) {
+  const out = {}
+  if (Array.isArray(positions)) {
+    for (const p of positions) {
+      if (!p?.position) continue
+      out[p.position] = {
+        condition: p.condition || null,
+        pressure: numOrNull(p.pressure ?? p.pressure_psi ?? p.pressure_reading),
+        tread: numOrNull(p.tread ?? p.tread_depth ?? p.tread_depth_mm),
+        serial: p.serial_no || p.serial_number || null,
+        brand: p.brand || null,
+      }
+    }
+    return out
+  }
+  if (tyreData && typeof tyreData === 'object') {
+    for (const [id, v] of Object.entries(tyreData)) {
+      if (typeof v === 'string') { out[id] = { condition: v }; continue }
+      if (!v || typeof v !== 'object') continue
+      out[id] = {
+        condition: v.condition || null,
+        pressure: numOrNull(v.pressure ?? v.pressure_psi),
+        tread: numOrNull(v.tread ?? v.tread_depth_mm ?? v.tread_depth),
+        serial: v.serial || v.serial_number || v.serial_no || null,
+        brand: v.brand || null,
+      }
+    }
+  }
+  return out
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function VehicleTyreDiagram({
@@ -1533,6 +1574,9 @@ export default function VehicleTyreDiagram({
   /** 'map' (default) draws the wheels; 'board' is the Flutter-style result:
    *  the real photo with one small card per wheel and a leader to its axle. */
   variant = 'map',
+  /** Board only: the wheel highlighted as chosen, and the empty-card wording
+   *  ("Not recorded" for an inspection, "No tyre" for a fitted-tyre view). */
+  selected = null, emptyLabel, recordedLabel,
 }) {
   const resolved = resolveLayoutKey(vehicleType)
 
@@ -1592,14 +1636,25 @@ export default function VehicleTyreDiagram({
   const displayName = customLayout ? (customLayout.label || vehicleType || resolved) : resolved;
   const scale = width / 200;
 
+  // Fitted tyres arrive keyed by the business code (LHF1, RHRO) as often as by
+  // the diagram's own slot id (F1L, R2Ro). Read both, so a tyre is never left
+  // off the picture just because of which name its record uses.
+  const slotIds = new Set(tyres.map((t) => t.id))
+  const toSlot = (key) => (slotIds.has(key) ? key : (canonicalToSlotId(vehicleType, key) || key))
+  const slotPositions = Array.isArray(positions)
+    ? positions.map((p) => (p && p.position ? { ...p, position: toSlot(p.position) } : p))
+    : positions
+
   // Build unified riskMap: { id -> 'good'|'warning'|'critical'|'none' }
   const riskMap = {}
-  if (positions && Array.isArray(positions)) {
-    positions.forEach(p => { riskMap[p.position] = LEVEL_TO_RISK[p.risk_level] || 'none' })
+  if (slotPositions && Array.isArray(slotPositions)) {
+    slotPositions.forEach(p => { if (p?.position) riskMap[p.position] = LEVEL_TO_RISK[p.risk_level] || riskForCondition(p.condition) })
   } else if (tyreData && typeof tyreData === 'object') {
     Object.entries(tyreData).forEach(([id, v]) => {
       const token = typeof v === 'string' ? v : (v?.risk || v?.risk_level || v?.condition)
-      riskMap[id] = LEVEL_TO_RISK[token] || 'none'
+      // The field app writes Worn / Flat / Damaged, which the short map above
+      // does not list; the shared condition reader bands every word the same way.
+      riskMap[id] = LEVEL_TO_RISK[token] || riskForCondition(typeof v === 'string' ? v : v?.condition)
     })
   }
 
@@ -1619,18 +1674,42 @@ export default function VehicleTyreDiagram({
     ? (id) => onPositionClick({ position: id })
     : onTyreClick
 
+  // The vehicle art the board and the thumbnail draw when there is no photo:
+  // the built-in body, or the body an admin designed in the Vehicle Designer.
+  // SharedDefs travels with it because both bodies reference its gradients.
+  const ArtBody = (Body || layout.bodySpec)
+    ? () => (<><SharedDefs />{Body ? <Body /> : <CustomBody spec={layout.bodySpec} />}</>)
+    : null
+
+  if (variant === 'photo') {
+    // Thumbnail: the vehicle photo alone, for lists too narrow for cards.
+    return (
+      <div className="tb-thumb" style={{ width }}>
+        {photo
+          ? <img src={photo.href} alt="" style={{ width, height: width * (viewH + 10) / 220 }} />
+          : ArtBody ? <svg viewBox={`-10 -5 220 ${viewH + 10}`} width={width} aria-hidden="true"><ArtBody /></svg> : null}
+        <small>{displayName} · {tyres.length} tyres</small>
+      </div>
+    )
+  }
+
   if (variant === 'board') {
     return (
       <TyreBoard
         tyres={tyres}
         viewH={viewH}
         photo={photo}
-        Body={Body}
-        tyreData={tyreData}
+        Body={ArtBody}
+        tyreData={boardData(slotPositions, tyreData)}
         riskOf={(id) => riskMap[id] ?? 'none'}
         codeOf={(id) => legacyPositionCode(resolved, id) || id}
         title={displayName}
         width={width}
+        onSelect={handleClick || undefined}
+        selectedId={selected ? toSlot(selected) : null}
+        isPending={(id) => pendingKeys.has(posKey(id))}
+        emptyLabel={emptyLabel}
+        recordedLabel={recordedLabel}
       />
     )
   }

@@ -15,6 +15,7 @@ import './tyreBoard.css'
 
 const TONE = { good: 'good', warning: 'warn', critical: 'bad', none: 'none' }
 const ICON = { good: '✓', warn: '!', bad: '!', none: '–' }
+const RISK_WORD = { good: 'Good', warning: 'Warning', critical: 'Critical' }
 const fmt = (v) => {
   if (v == null || v === '') return null
   const n = Number(v)
@@ -31,34 +32,51 @@ function axleGroups(wheels) {
   return groups
 }
 
-const CARD_H = 64 // card + its code label, px
-const CARD_W = 70
+const CARD_H_BASE = 64 // card + its code label, px
+const CARD_W_BASE = 70
+// Fitted-tyre cards also carry a serial and a brand line, so they need room.
+const CARD_H_RICH = 92
+const CARD_W_RICH = 84
 
-function Card({ w }) {
+function Card({ w, onSelect, selected, emptyLabel, cardW }) {
   const tone = TONE[w.risk] || 'none'
   const tread = fmt(w.tread)
   const pressure = fmt(w.pressure)
   const recorded = w.recorded
-  return (
-    <div className={`tb-card tb-${tone}`} title={`${w.code}: ${recorded ? (w.condition || 'Recorded') : 'Not recorded'}`}>
+  const ident = [w.brand, w.serial].filter(Boolean).join(' · ')
+  const showCond = recorded && w.condition && (!tread && !pressure ? true : tone !== 'good')
+  const body = (
+    <>
       <span className="tb-code">{w.code}</span>
       <span className="tb-body">
-        <i className="tb-dot" aria-hidden="true">{ICON[tone]}</i>
+        <i className="tb-dot" aria-hidden="true">{w.pending ? '!' : ICON[tone]}</i>
         <span className="tb-vals">
-          {!recorded && <small className="tb-muted">Not recorded</small>}
+          {!recorded && <small className="tb-muted">{w.pending ? 'Needs details' : emptyLabel}</small>}
           {recorded && tread && <b>{tread}<small> mm</small></b>}
           {recorded && pressure && <b>{pressure}<small> psi</small></b>}
-          {recorded && (!tread && !pressure ? true : tone !== 'good') && w.condition && (
-            <small className="tb-cond">{w.condition}</small>
-          )}
+          {showCond && <small className="tb-cond">{w.condition}</small>}
+          {w.serial && <small className="tb-ident" title={w.serial}>{w.serial}</small>}
+          {w.brand && <small className="tb-ident" title={w.brand}>{w.brand}</small>}
         </span>
       </span>
-    </div>
+    </>
   )
+  const cls = `tb-card tb-${tone}${w.pending ? ' tb-pending' : ''}${selected ? ' tb-selected' : ''}`
+  const title = `${w.code}: ${recorded ? (w.condition || ident || 'Recorded') : emptyLabel}`
+  if (onSelect) {
+    return (
+      <button type="button" className={`${cls} tb-tap`} title={title} aria-pressed={!!selected}
+        style={{ width: cardW }} onClick={() => onSelect(w.id)}>
+        {body}
+      </button>
+    )
+  }
+  return <div className={cls} title={title} style={{ width: cardW }}>{body}</div>
 }
 
 export default function TyreBoard({
   tyres, viewH, photo, Body, tyreData = {}, riskOf, codeOf, title, width = 340,
+  onSelect, selectedId = null, isPending, emptyLabel = 'Not recorded', recordedLabel = 'recorded',
 }) {
   // The board is laid out at its natural width, then shrunk as a whole to the
   // card it sits in. A twin-wheel truck needs ~380px and the side card is ~300,
@@ -79,7 +97,9 @@ export default function TyreBoard({
   const frameH = viewH + 10
   const wheels = tyres.map((t) => {
     const d = tyreData?.[t.id] || null
-    const recorded = !!(d && (d.condition || d.pressure != null || d.tread != null))
+    const risk = riskOf(t.id)
+    const recorded = !!(d && (d.condition || d.pressure != null || d.tread != null || d.serial || d.brand))
+      || (risk && risk !== 'none')
     return {
       id: t.id,
       code: codeOf(t.id),
@@ -87,11 +107,14 @@ export default function TyreBoard({
       w: t.w,
       cx: t.x + t.w / 2,
       cy: t.y + t.h / 2,
-      risk: riskOf(t.id),
+      risk,
       recorded,
-      condition: d?.condition || null,
+      pending: !!isPending?.(t.id),
+      condition: d?.condition || (risk && risk !== 'none' ? RISK_WORD[risk] : null),
       pressure: d?.pressure ?? null,
       tread: d?.tread ?? null,
+      serial: d?.serial || null,
+      brand: d?.brand || null,
     }
   })
   const left = axleGroups(wheels.filter((w) => w.cx < 100))
@@ -99,7 +122,9 @@ export default function TyreBoard({
   const maxPerSide = Math.max(1, ...left.map((g) => g.wheels.length), ...right.map((g) => g.wheels.length))
 
   // Space: cards either side of the photo, a short leader between.
-  const cardW = CARD_W
+  const rich = wheels.some((w) => w.serial || w.brand)
+  const CARD_H = rich ? CARD_H_RICH : CARD_H_BASE
+  const cardW = rich ? CARD_W_RICH : CARD_W_BASE
   const leader = 16
   // In a narrow card a twin wheel's inner and outer cards stack one above the
   // other instead of side by side, which halves the width the board needs so it
@@ -168,7 +193,7 @@ export default function TyreBoard({
         <div className="tb-group" style={{ left: cardsLeft, top: g.top, flexDirection: stacked ? 'column' : onLeft ? 'row-reverse' : 'row' }}>
           {/* Outer wheel first: furthest from the photo when side by side, on top when stacked. */}
           {[...g.wheels].sort((a, b) => (stacked ? (onLeft ? a.cx - b.cx : b.cx - a.cx) : (onLeft ? b.cx - a.cx : a.cx - b.cx)))
-            .map((w) => <Card key={w.id} w={w} />)}
+            .map((w) => <Card key={w.id} w={w} onSelect={onSelect} selected={selectedId === w.id} emptyLabel={emptyLabel} cardW={cardW} />)}
         </div>
       </div>
     )
@@ -176,7 +201,7 @@ export default function TyreBoard({
 
   return (
     <div className="tb-scroll" ref={boxRef}><div className="tb" style={{ width: total, zoom: fit(total) }}>
-      {title && <div className="tb-title"><b>{title}</b><span>{tyres.length} tyres, {recordedCount} recorded</span></div>}
+      {title && <div className="tb-title"><b>{title}</b><span>{tyres.length} tyres{onSelect && !recordedCount ? '' : `, ${recordedCount} ${recordedLabel}`}</span></div>}
       <div className="tb-front">▲ FRONT</div>
       <div className="tb-stage" style={{ width: total, height }}>
         <div className="tb-photo" style={{ left: sideW + leader, top: photoTop, width: photoW, height: photoH }}>
@@ -200,7 +225,7 @@ export default function TyreBoard({
         <span><i className="tb-dot tb-good">✓</i>Good</span>
         <span><i className="tb-dot tb-warn">!</i>Warning</span>
         <span><i className="tb-dot tb-bad">!</i>Critical</span>
-        <span><i className="tb-dot tb-none">–</i>Not recorded</span>
+        <span><i className="tb-dot tb-none">–</i>{emptyLabel}</span>
       </div>
     </div></div>
   )

@@ -1227,6 +1227,10 @@ export default function LiveFleetStatus() {
                           tread_depth:  t.tread_depth,
                           pressure:     t.pressure_reading,
                         }))}
+                        variant="board"
+                        width={300}
+                        emptyLabel="No tyre"
+                        recordedLabel="fitted"
                       />
                     </div>
 

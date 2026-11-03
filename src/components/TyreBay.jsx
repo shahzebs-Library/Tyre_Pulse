@@ -367,7 +367,13 @@ export default function TyreBay({ asset, tyres, currency, locked = false, onMove
     for (const [key, g] of Object.entries(groups)) {
       if (!g.current) continue
       const slot = canonicalToSlotId(vehicleType, key)
-      if (slot) out.push({ position: slot, risk_level: g.current.risk_level })
+      if (slot) {
+        out.push({
+          position: slot, risk_level: g.current.risk_level,
+          serial_no: g.current.serial_no || null, brand: g.current.brand || null,
+          tread_depth: g.current.tread_depth ?? null,
+        })
+      }
     }
     return out
   }, [groups, vehicleType])
@@ -403,7 +409,11 @@ export default function TyreBay({ asset, tyres, currency, locked = false, onMove
               vehicleType={vehicleType}
               positions={diagramPositions}
               onPositionClick={handleDiagramClick}
-              width={260}
+              width={340}
+              variant="board"
+              selected={selectedPos}
+              emptyLabel="No tyre"
+              recordedLabel="fitted"
             />
           </div>
         </div>

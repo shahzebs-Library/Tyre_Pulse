@@ -78,7 +78,13 @@ export function diagramPositions(vehicleType, tyres = []) {
   const out = []
   for (const t of fittedTyres(tyres)) {
     const slot = canonicalToSlotId(vehicleType, t.position)
-    if (slot) out.push({ position: slot, risk_level: t.risk_level })
+    if (slot) {
+      out.push({
+        position: slot, risk_level: t.risk_level,
+        serial_no: t.serial_no || t.serial_number || null, brand: t.brand || null,
+        tread_depth: t.tread_depth ?? null,
+      })
+    }
   }
   return out
 }

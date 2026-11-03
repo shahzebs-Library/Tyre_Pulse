@@ -179,7 +179,9 @@ export default function InspectionFormModal({
                   vehicleType={form.vehicle_type}
                   tyreData={form.tyre_conditions || {}}
                   onTyreClick={(id) => setSelectedTyre(id === selectedTyre ? null : id)}
-                  width={180}
+                  width={340}
+                  variant="board"
+                  selected={selectedTyre}
                 />
 
                 {selectedTyre && (

@@ -27,9 +27,10 @@ const RISK_TONE = {
  * @param {number}  [props.width]        diagram width in px (default 300)
  * @param {boolean} [props.showReadings] per-position caption (default true)
  * @param {string}  [props.className]    wrapper classes
+ * @param {string}  [props.variant]      'map' (drawn wheels) or 'board' (photo + wheel cards)
  */
 export default function InspectionDiagram({
-  inspection, width = 300, showReadings = true, className = '',
+  inspection, width = 300, showReadings = true, className = '', variant = 'map',
 }) {
   const model = useMemo(
     () => inspectionDiagramModel(inspection, { isTyreless: isTyrelessEquipment }),
@@ -59,11 +60,14 @@ export default function InspectionDiagram({
         tyreData={model.tyreData}
         subLabels={model.subLabels}
         width={width}
+        variant={variant}
       />
 
       <p className="text-xs mt-3 text-center" style={{ color: 'var(--text-secondary)' }}>
         {recorded} of {total} positions recorded.
-        {model.unrecorded.length > 0 && ' Grey wheels were not recorded on this inspection.'}
+        {model.unrecorded.length > 0 && (variant === 'board'
+          ? ' Cards marked Not recorded had no reading on this inspection.'
+          : ' Grey wheels were not recorded on this inspection.')}
       </p>
 
       {model.unmatched.length > 0 && (

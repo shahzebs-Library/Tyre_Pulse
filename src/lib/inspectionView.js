@@ -459,7 +459,7 @@ export function inspectionDiagramModel(row, { isTyreless } = {}) {
     if (!slot) { unmatched.push({ position, condition: d.condition || null }); continue }
 
     const risk = damagedSlots.has(slot) ? 'critical' : (d.risk || 'none')
-    tyreData[slot] = { risk, condition: d.condition || null }
+    tyreData[slot] = { risk, condition: d.condition || null, pressure: d.pressure ?? null, tread: d.tread ?? null }
     const sub = wheelSubLabel(d.pressure, d.tread)
     if (sub) subLabels[slot] = sub
     readings.push({

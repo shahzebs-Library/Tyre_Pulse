@@ -122,7 +122,7 @@ export default function ObservationDetail({ obs, onClose, onOpenInspection, onRa
         {obs.row && (
           <section className="iw-od-block">
             <h4>On the vehicle</h4>
-            <InspectionDiagram inspection={obs.row} width={260} showReadings={false} />
+            <InspectionDiagram inspection={obs.row} width={360} showReadings={false} variant="board" />
           </section>
         )}
       </div>

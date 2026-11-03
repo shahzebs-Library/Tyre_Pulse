@@ -391,7 +391,7 @@ export default function InspectionWorkspace({
 
         <div className="iw-side">
           <Card title="Vehicle Overview" sub="Tyre map as recorded on this inspection">
-            {selected ? <InspectionDiagram inspection={selected} width={210} showReadings={false} /> : <div className="cc-empty">No inspection selected.</div>}
+            {selected ? <InspectionDiagram inspection={selected} width={300} showReadings={false} variant="board" /> : <div className="cc-empty">No inspection selected.</div>}
           </Card>
           <Card title="Tyre Life Alerts" sub="From tyre running life today, not from photos">
             {!selected ? <div className="cc-empty">No inspection selected.</div>

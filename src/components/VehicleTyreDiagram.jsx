@@ -1,5 +1,6 @@
 import React from 'react';
 import { legacyPositionCode } from '../lib/tyrePositions';
+import TyreBoard from './inspection/TyreBoard';
 import { Illustration } from './illustrations';
 import { vehicleArt } from '../lib/brand/vehicleArt';
 import CustomBody from './VehicleDiagramCustomBody';
@@ -1529,6 +1530,9 @@ export default function VehicleTyreDiagram({
   /** Wheels that still need details. A tyreCompleteness() result, an array of
    *  position ids, or a Set. Purely additive: omit it and nothing changes. */
   pending,
+  /** 'map' (default) draws the wheels; 'board' is the Flutter-style result:
+   *  the real photo with one small card per wheel and a leader to its axle. */
+  variant = 'map',
 }) {
   const resolved = resolveLayoutKey(vehicleType)
 
@@ -1614,6 +1618,22 @@ export default function VehicleTyreDiagram({
   const handleClick = onPositionClick
     ? (id) => onPositionClick({ position: id })
     : onTyreClick
+
+  if (variant === 'board') {
+    return (
+      <TyreBoard
+        tyres={tyres}
+        viewH={viewH}
+        photo={photo}
+        Body={Body}
+        tyreData={tyreData}
+        riskOf={(id) => riskMap[id] ?? 'none'}
+        codeOf={(id) => legacyPositionCode(resolved, id) || id}
+        title={displayName}
+        width={width}
+      />
+    )
+  }
 
   return (
     <div className="flex flex-col items-center gap-4">

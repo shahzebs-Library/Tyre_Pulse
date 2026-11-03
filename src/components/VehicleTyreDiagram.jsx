@@ -1,5 +1,6 @@
 import React from 'react';
 import { legacyPositionCode } from '../lib/tyrePositions';
+import TyreBoard from './inspection/TyreBoard';
 import { Illustration } from './illustrations';
 import { vehicleArt } from '../lib/brand/vehicleArt';
 import CustomBody from './VehicleDiagramCustomBody';
@@ -1271,6 +1272,43 @@ function AshokLeylandBody() {
   );
 }
 
+// ── Real top-down photos (same set and rules as the Flutter app) ──────────────
+// Mirrors tyre_pulse_flutter/.../tyre_body_painter.dart tyreDiagramVehiclePhotoSpec.
+// Change both together. The photo fills the same -10 -5 220 viewH+10 frame the
+// body SVG used, so the wheels stay on the photographed tyres. 'meet' = contain,
+// 'slice' = cover; rotate180 puts a bucket-down / rear-up plate front-up.
+// Canter, Tata and Ashok Leyland keep their SVG body: no truthful top view of
+// those machines exists, and a plausible but wrong vehicle would mislead.
+const PHOTO = (name) => `/tyre-map-photos/${name}.webp`
+function bodyPhotoFor(layoutKey, Body) {
+  if (Body === PickupBody) return { href: PHOTO('pickup'), fit: 'meet' }
+  if (Body === WheelLoaderBody) {
+    return layoutKey === 'Skid loader'
+      ? { href: PHOTO('skid-loader'), fit: 'meet' }
+      : { href: PHOTO('wheel-loader'), fit: 'slice', rotate180: true }
+  }
+  if (Body === TriMixerBody) return { href: PHOTO('tri-mixer'), fit: 'meet' }
+  if (Body === ConcretePumpBody) {
+    return layoutKey === 'Line pump' ? { href: PHOTO('line-pump'), fit: 'meet' } : { href: PHOTO('concrete-pump'), fit: 'meet' }
+  }
+  if (Body === BusBody) return { href: PHOTO('bus'), fit: 'slice', rotate180: true }
+  return null
+}
+
+function PhotoBody({ photo, viewH, onError }) {
+  const h = viewH + 10
+  const cx = 100; const cy = -5 + h / 2
+  return (
+    <image
+      href={photo.href}
+      x={-10} y={-5} width={220} height={h}
+      preserveAspectRatio={`xMidYMid ${photo.fit}`}
+      transform={photo.rotate180 ? `rotate(180 ${cx} ${cy})` : undefined}
+      onError={onError}
+    />
+  )
+}
+
 // ── Layout definitions ─────────────────────────────────────────────────────────
 const LAYOUTS = {
   Pickup: {
@@ -1492,6 +1530,9 @@ export default function VehicleTyreDiagram({
   /** Wheels that still need details. A tyreCompleteness() result, an array of
    *  position ids, or a Set. Purely additive: omit it and nothing changes. */
   pending,
+  /** 'map' (default) draws the wheels; 'board' is the Flutter-style result:
+   *  the real photo with one small card per wheel and a leader to its axle. */
+  variant = 'map',
 }) {
   const resolved = resolveLayoutKey(vehicleType)
 
@@ -1499,6 +1540,9 @@ export default function VehicleTyreDiagram({
   // once per session (cached promise in the service); {} when none exist or
   // on any error, so built-in LAYOUTS always remain the fallback.
   const [customLayouts, setCustomLayouts] = React.useState(null)
+  // A real photo that failed to load falls back to the drawn body, per type.
+  const [photoFailed, setPhotoFailed] = React.useState(false)
+  React.useEffect(() => { setPhotoFailed(false) }, [resolved])
   React.useEffect(() => {
     let alive = true
     getCustomLayoutMap().then((map) => { if (alive) setCustomLayouts(map) })
@@ -1542,6 +1586,9 @@ export default function VehicleTyreDiagram({
   const layout = customLayout || LAYOUTS[resolved] || LAYOUTS['Pickup']
 
   const { emoji, viewH, tyres, Body } = layout;
+  // The real top-down photo, when one exists for this machine. Falls back to the
+  // drawn body if the image fails to load, so the map never shows bare wheels.
+  const photo = !customLayout && !photoFailed ? bodyPhotoFor(resolved, Body) : null
   const displayName = customLayout ? (customLayout.label || vehicleType || resolved) : resolved;
   const scale = width / 200;
 
@@ -1572,19 +1619,38 @@ export default function VehicleTyreDiagram({
     ? (id) => onPositionClick({ position: id })
     : onTyreClick
 
+  if (variant === 'board') {
+    return (
+      <TyreBoard
+        tyres={tyres}
+        viewH={viewH}
+        photo={photo}
+        Body={Body}
+        tyreData={tyreData}
+        riskOf={(id) => riskMap[id] ?? 'none'}
+        codeOf={(id) => legacyPositionCode(resolved, id) || id}
+        title={displayName}
+        width={width}
+      />
+    )
+  }
+
   return (
     <div className="flex flex-col items-center gap-4">
-      {/* Vehicle silhouette — brand illustration matched to the vehicle type */}
-      <Illustration
-        name={vehicleArt(vehicleType)}
-        size={120}
-        title={vehicleType || 'Vehicle'}
-        className="opacity-90"
-      />
+      {/* Vehicle silhouette - only when there is no real photo: the photo map
+          below already shows the machine, a cartoon above it only competes. */}
+      {!photo && (
+        <Illustration
+          name={vehicleArt(vehicleType)}
+          size={120}
+          title={vehicleType || 'Vehicle'}
+          className="opacity-90"
+        />
+      )}
 
       {/* Title */}
-      <div className="text-sm font-bold text-gray-100 flex items-center gap-2">
-        <span className="text-xl">{emoji}</span>
+      <div className="text-sm font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+        {!photo && <span className="text-xl">{emoji}</span>}
         <span>{displayName}</span>
         <span className="text-gray-500 font-normal text-xs">· {tyres.length} tyres</span>
       </div>
@@ -1617,7 +1683,9 @@ export default function VehicleTyreDiagram({
           fontWeight="600" letterSpacing="1">▲ FRONT</text>
 
         {/* Vehicle body illustration (built-in component or Vehicle Designer custom body) */}
-        {Body ? <Body /> : <CustomBody spec={layout.bodySpec} />}
+        {photo
+          ? <PhotoBody photo={photo} viewH={viewH} onError={() => setPhotoFailed(true)} />
+          : Body ? <Body /> : <CustomBody spec={layout.bodySpec} />}
 
         {/* Tyres rendered on top */}
         {tyres.map(t => (

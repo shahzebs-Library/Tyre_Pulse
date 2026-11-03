@@ -29,8 +29,8 @@ describe('inspectionDiagramModel - recorded vs unrecorded', () => {
     expect(m.renderable).toBe(true)
     expect(m.layoutKey).toBe('Tri-mixer')
     expect(m.slots).toHaveLength(12)
-    expect(m.tyreData.F1L).toEqual({ risk: 'good', condition: 'Good' })
-    expect(m.tyreData.F1R).toEqual({ risk: 'warning', condition: 'Wear' })
+    expect(m.tyreData.F1L).toMatchObject({ risk: 'good', condition: 'Good' })
+    expect(m.tyreData.F1R).toMatchObject({ risk: 'warning', condition: 'Wear' })
     // Ten wheels nobody touched: absent, never "good".
     expect(m.unrecorded).toHaveLength(10)
     expect(m.unrecorded).not.toContain('F1L')

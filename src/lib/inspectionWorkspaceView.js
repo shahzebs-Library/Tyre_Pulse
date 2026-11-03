@@ -121,8 +121,12 @@ export function inspectionProgress(row) {
 }
 
 // ── Workspace KPIs, list tabs, search ─────────────────────────────────────────
+// Only the risk band is needed here, so the readings are banded without the
+// label and pressure work affectedTyreReadings does: this runs over every row
+// on load and was the single slowest step of opening the page.
 const hasCritical = (r) => r?.severity === 'Critical' || r?.severity === 'High'
-  || affected(r).some((t) => t.risk === 'critical')
+  || Object.values(normalizeTyreConditions(withTc(r))).some((d) => d
+    && d.risk === 'critical' && (d.condition || d.pressure != null || d.tread != null || d.notes))
 
 /** Headline over a scoped set. Rates are null when there is nothing to divide by. */
 export function workspaceKpis(rows) {
@@ -335,11 +339,37 @@ export function observationRegister(rows) {
   return out
 }
 
-export function filterObservations(list, { q = '', kind = 'all', severity = 'all' } = {}) {
+/**
+ * What the observation says, as one filter value: the recorded tyre condition
+ * (Puncture, Worn, Damaged...) title-cased so "WORN" and "Worn" are one choice,
+ * "Inspector note" for notes and "Site observation" for site records.
+ */
+export function observationLabel(o) {
+  if (!o) return ''
+  if (o.kind === 'note') return 'Inspector note'
+  if (o.kind === 'observation') return 'Site observation'
+  return titleCase(String(o.text || 'Flagged').trim())
+}
+
+/** The distinct observation labels in a list, most frequent first. */
+export function observationOptions(list) {
+  const counts = new Map()
+  for (const o of list || []) {
+    const k = observationLabel(o)
+    if (k) counts.set(k, (counts.get(k) || 0) + 1)
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([label, count]) => ({ label, count }))
+}
+
+export function filterObservations(list, { q = '', kind = 'all', severity = 'all', observation = 'all' } = {}) {
   const s = String(q || '').trim().toLowerCase()
   return (list || []).filter((o) => (kind === 'all' || o.kind === kind)
     && (severity === 'all' || o.severity === severity)
-    && (!s || [o.asset_no, o.site, o.inspector, o.position, o.text, o.remarks]
+    && (observation === 'all' || observationLabel(o) === observation)
+    // Search also reaches the tyre serials and job cards from the change history.
+    && (!s || [o.asset_no, o.site, o.inspector, o.position, o.text, o.remarks,
+      o.tyreNow?.replacement?.serial, o.tyreNow?.replacement?.jobCard,
+      o.tyreNow?.previous?.serial, o.tyreNow?.previous?.jobCard]
       .some((v) => String(v || '').toLowerCase().includes(s))))
 }
 

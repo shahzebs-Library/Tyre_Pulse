@@ -18,6 +18,7 @@ import { shapeRunningLife, measureFor } from './tyreRunningLife'
 import { getCompanyLogo, getDiagramBg } from './api/brandLogo'
 import { formatDate } from './formatters'
 import { checklistReadingStats, pressureDeviationLabel, conditionBucket } from './inspectionsAnalytics'
+import { serializeSvgInlined } from './svgInline'
 
 /**
  * Report logo: tenant branding wins; otherwise fall back to the org-wide company
@@ -42,7 +43,7 @@ const MUTED = { Good: [22, 101, 52], Wear: [146, 64, 14], Damage: [153, 27, 27],
 async function embedDiagram(doc, svgEl, { x, y, width, background }) {
   if (!svgEl) return y
   try {
-    const svgStr = new XMLSerializer().serializeToString(svgEl)
+    const svgStr = await serializeSvgInlined(svgEl).catch(() => new XMLSerializer().serializeToString(svgEl))
     const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' })
     const url = URL.createObjectURL(svgBlob)
     return await new Promise((resolve) => {

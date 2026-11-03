@@ -128,7 +128,7 @@ export default function InspectionAnswers({
           position codes is work the picture does for them. It is the same
           diagram the PDF captures, and its summary lines carry the condition,
           pressure and tread for every position that was recorded. */}
-      {showMedia && <InspectionDiagram inspection={row} className="mb-5" />}
+      {showMedia && <InspectionDiagram inspection={row} className="mb-5" width={380} showReadings={false} variant="board" />}
 
       {row.findings && (
         <div className="mt-5 rounded-lg p-3" style={{ background: 'var(--panel-2)' }}>

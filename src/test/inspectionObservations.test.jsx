@@ -116,3 +116,25 @@ describe('has the observed tyre been replaced', () => {
     expect(withTyreNow(observationRegister([insp]), null).some((o) => o.tyreNow)).toBe(false)
   })
 })
+
+import { observationLabel, observationOptions } from '../lib/inspectionWorkspaceView'
+describe('observation filter values', () => {
+  it('folds conditions to one label and counts them, most frequent first', () => {
+    const list = [
+      { kind: 'tyre', text: 'WORN' }, { kind: 'tyre', text: 'Worn' }, { kind: 'tyre', text: 'Puncture' },
+      { kind: 'note', text: 'All tire good' },
+    ]
+    expect(observationLabel(list[0])).toBe('Worn')
+    expect(observationLabel(list[3])).toBe('Inspector note')
+    expect(observationOptions(list)).toEqual([
+      { label: 'Worn', count: 2 }, { label: 'Inspector note', count: 1 }, { label: 'Puncture', count: 1 },
+    ])
+  })
+
+  it('search reaches the replacement serial and job card', () => {
+    const o = { kind: 'tyre', text: 'Worn', tyreNow: { state: 'replaced', replacement: { serial: 'YMA55312', jobCard: 'GCKR/JC/1022/1026' }, previous: { serial: 'OLD9' } } }
+    expect(filterObservations([o], { q: 'jc/1022' })).toHaveLength(1)
+    expect(filterObservations([o], { q: 'old9' })).toHaveLength(1)
+    expect(filterObservations([o], { q: 'nothing' })).toHaveLength(0)
+  })
+})

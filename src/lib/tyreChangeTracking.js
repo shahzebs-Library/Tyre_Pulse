@@ -404,10 +404,16 @@ export function resolveFlag(flag, index, { now = new Date() } = {}) {
     if (flagged && serialKey(r.serial) === flagged) return false
     return true
   })
+  // The tyre that was on the wheel when it was flagged (serial, brand, the job
+  // card it went on with). Additive: callers that do not read it are unchanged.
+  const previous = own
+    ? { serial: own.serial || '', brand: own.brand || '', size: own.size || '', fittedOn: own.fittedOn || '', jobCard: own.jobCard || '' }
+    : null
   if (later.length) {
     const rep = later[0]
     return {
       state: 'replaced',
+      previous,
       reason: '',
       replacement: {
         serial: rep.serial || '', brand: rep.brand || '', size: rep.size || '', fittedOn: rep.fittedOn,
@@ -421,6 +427,7 @@ export function resolveFlag(flag, index, { now = new Date() } = {}) {
   if (own && (own.removed || own.removedOn)) {
     return {
       state: 'removed_not_replaced',
+      previous,
       reason: '',
       replacement: null,
       daysFlagged,
@@ -429,7 +436,7 @@ export function resolveFlag(flag, index, { now = new Date() } = {}) {
     }
   }
   if (own) {
-    return { state: 'on_vehicle', reason: '', replacement: null, daysFlagged, daysToReplace: null, removedOn: '' }
+    return { state: 'on_vehicle', previous, reason: '', replacement: null, daysFlagged, daysToReplace: null, removedOn: '' }
   }
   return {
     ...unknown('No fitment record covers the flag date at this position, so it is not clear which tyre was flagged.'),

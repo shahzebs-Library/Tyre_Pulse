@@ -72,15 +72,21 @@ export const LAYOUT_SLOTS = Object.freeze({
   'Line pump': ['F1L', 'F1R', 'F2L', 'F2R', ...DRIVE_2_AXLE],
   // MP concrete pump: 3 single-tyre steer axles + 2 dual-tyre drive axles.
   'Concrete pump': ['F1L', 'F1R', 'F2L', 'F2R', 'F3L', 'F3R', ...DRIVE_2_AXLE],
+  // 4-axle concrete pump: 2 single-tyre steer axles + 2 dual-tyre drive axles
+  // = 12 tyres. The type (PUMPS) cannot tell it from the 5-axle one; the
+  // machine's recorded axle_count does (see layoutForAsset).
+  'Concrete pump 4-axle': ['F1L', 'F1R', 'F2L', 'F2R', ...DRIVE_2_AXLE],
 })
 
 /** Every layout key this app knows how to draw. */
 export const LAYOUT_KEYS = Object.freeze(Object.keys(LAYOUT_SLOTS))
 
 /** Slot ids for a raw vehicle type. Empty array for tyreless equipment. */
-export function layoutSlotsFor(vehicleType, assetNo) {
+export function layoutSlotsFor(vehicleType, assetNo, country) {
   if (isTyrelessEquipment(vehicleType)) return []
-  return LAYOUT_SLOTS[resolveLayoutKey(vehicleType, assetNo)] || LAYOUT_SLOTS.Pickup
+  // The machine's recorded build (4- vs 5-axle pump) wins over the type default.
+  const key = layoutForAsset(resolveLayoutKey(vehicleType, assetNo), assetNo, country)
+  return LAYOUT_SLOTS[key] || LAYOUT_SLOTS.Pickup
 }
 
 // Case/spacing-insensitive index of the layout keys, so "TR-MIXER", "tri mixer"
@@ -181,6 +187,51 @@ function resolveOne(vt) {
  */
 export function resolveLayoutKey(vehicleType, assetNo) {
   return resolveOne(vehicleType) ?? resolveOne(assetNo) ?? 'Pickup'
+}
+
+// ── Per-machine axle counts ──────────────────────────────────────────────────
+// Some types come in more than one build (4- and 5-axle concrete pumps), so the
+// type alone cannot pick the layout. The fleet register records axle_count per
+// machine; the app loads it once (src/lib/api/vehicleAxles.js) and registers it
+// here so every diagram, live or in a report, resolves the same machine alike.
+// Keyed by country AND asset, because the same asset code in another country is
+// a different machine (V376). An asset-only key is kept only when exactly one
+// country records it, so a caller without a country still resolves.
+const AXLE_VARIANTS = { 'Concrete pump': { 4: 'Concrete pump 4-axle' } }
+const axleByCountryAsset = new Map()
+const axleByAsset = new Map()
+const normAsset = (a) => String(a || '').trim().toUpperCase().replace(/\s+/g, '')
+const normCountry = (c) => String(c || '').trim().toUpperCase()
+
+/** Register the machines' axle counts: rows of { asset_no, country, axle_count }. */
+export function setAxleCounts(rows = []) {
+  axleByCountryAsset.clear(); axleByAsset.clear()
+  const countries = new Map()
+  for (const r of rows || []) {
+    const a = normAsset(r?.asset_no); const n = Number(r?.axle_count)
+    if (!a || !Number.isFinite(n)) continue
+    axleByCountryAsset.set(`${normCountry(r.country)}|${a}`, n)
+    if (!countries.has(a)) countries.set(a, new Map())
+    countries.get(a).set(normCountry(r.country), n)
+  }
+  for (const [a, byC] of countries) if (byC.size === 1) axleByAsset.set(a, [...byC.values()][0])
+}
+
+/** The recorded axle count for one machine, or null. */
+export function axleCountFor(assetNo, country) {
+  const a = normAsset(assetNo)
+  if (!a) return null
+  if (country && country !== 'All') {
+    const hit = axleByCountryAsset.get(`${normCountry(country)}|${a}`)
+    return hit ?? null
+  }
+  return axleByAsset.get(a) ?? null
+}
+
+/** A type's layout key adjusted to this machine's recorded build, if any. */
+export function layoutForAsset(baseKey, assetNo, country) {
+  const n = axleCountFor(assetNo, country)
+  return (n != null && AXLE_VARIANTS[baseKey]?.[n]) || baseKey
 }
 
 export default resolveLayoutKey

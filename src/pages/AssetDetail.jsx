@@ -38,6 +38,7 @@ import EmptyState from '../components/EmptyState'
 import Modal from '../components/ui/Modal'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
 import TyreBay from '../components/TyreBay'
+import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
 import AssetInsurancePanel from '../components/insurance/AssetInsurancePanel'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { Illustration } from '../components/illustrations'
@@ -146,44 +147,6 @@ function ReadFailed({ what, onRetry }) {
   )
 }
 
-// ── Tyre Position SVG Diagram ─────────────────────────────────────────────────
-function TyrePositionDiagram({ tyres = [] }) {
-  const positions = [
-    { id: 'FL',  label: 'FL',  cx: 70,  cy: 90  },
-    { id: 'FR',  label: 'FR',  cx: 210, cy: 90  },
-    { id: 'RLO', label: 'RLO', cx: 52,  cy: 190 },
-    { id: 'RLI', label: 'RLI', cx: 78,  cy: 190 },
-    { id: 'RRI', label: 'RRI', cx: 202, cy: 190 },
-    { id: 'RRO', label: 'RRO', cx: 228, cy: 190 },
-  ]
-  const byPos = {}
-  tyres.forEach(t => { if (t.position) byPos[t.position] = t })
-
-  return (
-    <svg viewBox="0 0 280 260" className="w-full max-w-xs mx-auto" role="img"
-      aria-label={`Tyre position map: ${tyres.length} fitted tyre${tyres.length === 1 ? '' : 's'}${positions.filter(p => byPos[p.id]).map(p => `, ${p.label} ${byPos[p.id].risk_level || 'unrated'}`).join('')}`}>
-      <rect x={95} y={30} width={90} height={200} rx={8} strokeWidth="2" style={{ fill: 'var(--panel-2)', stroke: 'var(--border-bright)' }} />
-      <rect x={110} y={40} width={60} height={28} rx={5} strokeWidth="1.5" style={{ fill: 'var(--surface-3)', stroke: 'var(--border-bright)' }} />
-      {[90, 190].map((y, i) => (
-        <line key={i} x1={95} x2={185} y1={y} y2={y} strokeWidth="1" strokeDasharray="4 4" style={{ stroke: 'var(--border-bright)' }} />
-      ))}
-      {positions.map(p => {
-        const t = byPos[p.id]
-        const col = t ? (RISK_COLOR[t.risk_level]?.hex ?? '#9ca3af') : '#9ca3af'
-        const opacity = t ? 1 : 0.35
-        return (
-          <g key={p.id}>
-            <circle cx={p.cx} cy={p.cy} r={13} fill={col} opacity={opacity} stroke={col} strokeWidth="1.5" />
-            <text x={p.cx} y={p.cy + 4} textAnchor="middle" fill="#fff" fontSize="7" fontFamily="monospace" fontWeight="600">{p.label}</text>
-            {t && (
-              <text x={p.cx} y={p.cy + 26} textAnchor="middle" fontSize="6" style={{ fill: 'var(--text-muted)' }}>{t.brand ?? ''}</text>
-            )}
-          </g>
-        )
-      })}
-    </svg>
-  )
-}
 
 // ── Inline Edit Panel ───────────────────────────────────────────────────────────
 // Self-contained editor for the detail page. Gated by the disposal-approval lock
@@ -927,20 +890,20 @@ export default function AssetDetail() {
               {/* Tyre Position Diagram */}
               <div className="card">
                 <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-3 flex items-center gap-2"><Layers className="w-4 h-4 text-blue-400" /> {t('assetmgmt.drawer.tyrePositionMap')}</h3>
-                <div className="flex gap-4 items-start">
-                  <div className="flex-1"><TyrePositionDiagram tyres={activeTyres} /></div>
-                  <div className="flex flex-col gap-2 pt-4">
-                    {Object.entries(RISK_COLOR).map(([level, c]) => (
-                      <div key={level} className="flex items-center gap-2 text-xs">
-                        <span className="w-3 h-3 rounded-full" style={{ background: c.hex }} />
-                        <span className="text-[var(--text-secondary)]">{level}</span>
-                      </div>
-                    ))}
-                    <div className="flex items-center gap-2 text-xs mt-1">
-                      <span className="w-3 h-3 rounded-full bg-gray-600 opacity-40" />
-                      <span className="text-[var(--text-secondary)]">{t('assetmgmt.drawer.noDataLegend')}</span>
-                    </div>
-                  </div>
+                <div className="flex justify-center">
+                  <VehicleTyreDiagram
+                    vehicleType={asset?.vehicle_type}
+                    assetNo={asset?.asset_no}
+                    country={asset?.country}
+                    positions={activeTyres.map((t) => ({
+                      position: t.position, risk_level: t.risk_level,
+                      serial_no: t.serial_no, brand: t.brand, tread_depth: t.tread_depth,
+                    }))}
+                    variant="board"
+                    width={380}
+                    emptyLabel="No tyre"
+                    recordedLabel="fitted"
+                  />
                 </div>
               </div>
 

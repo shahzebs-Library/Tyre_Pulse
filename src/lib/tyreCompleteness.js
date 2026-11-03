@@ -66,7 +66,7 @@
  * Pure. No I/O, no clock, safe in render.
  */
 
-import { layoutSlotsFor, resolveLayoutKey, isTyrelessEquipment } from './vehicleTyreLayout'
+import { layoutSlotsFor, resolveLayoutKey, isTyrelessEquipment, layoutForAsset } from './vehicleTyreLayout'
 import { legacyPositionCode } from './tyrePositions'
 
 // #mirror: STATES
@@ -218,7 +218,7 @@ export function tyreCompleteness(vehicleType, assetNo, tyreConditions, opts = {}
   }
 
   const known = layoutIsKnown(vehicleType, assetNo)
-  const layoutKey = resolveLayoutKey(vehicleType, assetNo)
+  const layoutKey = layoutForAsset(resolveLayoutKey(vehicleType, assetNo), assetNo)
   const slotIds = known ? layoutSlotsFor(vehicleType, assetNo) : []
 
   if (!known) {

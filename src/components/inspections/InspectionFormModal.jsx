@@ -177,6 +177,8 @@ export default function InspectionFormModal({
                 <p className="text-xs text-[var(--text-secondary)] mb-3">{t('inspections.modal.clickTyre')}</p>
                 <VehicleTyreDiagram
                   vehicleType={form.vehicle_type}
+                  assetNo={form.asset_no}
+                  country={form.country}
                   tyreData={form.tyre_conditions || {}}
                   onTyreClick={(id) => setSelectedTyre(id === selectedTyre ? null : id)}
                   width={340}

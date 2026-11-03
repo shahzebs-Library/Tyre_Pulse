@@ -407,6 +407,8 @@ export default function TyreBay({ asset, tyres, currency, locked = false, onMove
           <div className="flex justify-center">
             <VehicleTyreDiagram
               vehicleType={vehicleType}
+              assetNo={asset?.asset_no}
+              country={asset?.country}
               positions={diagramPositions}
               onPositionClick={handleDiagramClick}
               width={340}

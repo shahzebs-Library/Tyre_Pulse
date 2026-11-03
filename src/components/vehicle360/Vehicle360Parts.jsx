@@ -191,6 +191,8 @@ export function LayoutCard({ vehicle, tyres, status, onExpand, wide = false }) {
           <div className="v360-diagram">
             <VehicleTyreDiagram
               vehicleType={vehicle.vehicle_type}
+              assetNo={vehicle.asset_no}
+              country={vehicle.country}
               positions={diagramPositions(vehicle.vehicle_type, tyres)}
               width={wide ? 380 : 300}
               variant="board"

@@ -5,7 +5,8 @@ import { Illustration } from './illustrations';
 import { vehicleArt } from '../lib/brand/vehicleArt';
 import CustomBody from './VehicleDiagramCustomBody';
 import { getCustomLayoutMap, canonVehicleTypeKey } from '../lib/api/vehicleDiagrams';
-import { resolveLayoutKey, isTyrelessEquipment } from '../lib/vehicleTyreLayout';
+import { resolveLayoutKey, isTyrelessEquipment, layoutForAsset } from '../lib/vehicleTyreLayout';
+import { useAxleCounts } from '../lib/api/vehicleAxles';
 import { slotStateMap } from '../lib/tyreCompleteness';
 import { riskForCondition } from '../lib/inspectionView';
 import { canonicalToSlotId } from '../lib/tyreBay';
@@ -1506,6 +1507,14 @@ const LAYOUTS = {
   },
 };
 
+// 4-axle concrete pump: the same body with the third steer axle removed
+// (2 single steer + 2 twin drive = 12 tyres). Picked per machine from its
+// recorded axle_count, never from the type, which is PUMPS for both builds.
+LAYOUTS['Concrete pump 4-axle'] = {
+  ...LAYOUTS['Concrete pump'],
+  tyres: LAYOUTS['Concrete pump'].tyres.filter((t) => !t.id.startsWith('F3')).map((t) => ({ ...t })),
+};
+
 // Relabel every tyre's display label to the canonical GCC position code
 // (LHF1, LHRO, RHCI ...) while keeping the internal `id` stable, so saved
 // inspections and diagram hit-testing continue to match.
@@ -1577,8 +1586,12 @@ export default function VehicleTyreDiagram({
   /** Board only: the wheel highlighted as chosen, and the empty-card wording
    *  ("Not recorded" for an inspection, "No tyre" for a fitted-tyre view). */
   selected = null, emptyLabel, recordedLabel,
+  /** The machine, so a type with more than one build (4- vs 5-axle pumps)
+   *  draws the one in the yard. Country disambiguates a code reused abroad. */
+  assetNo, country,
 }) {
-  const resolved = resolveLayoutKey(vehicleType)
+  useAxleCounts()
+  const resolved = layoutForAsset(resolveLayoutKey(vehicleType), assetNo, country)
 
   // Custom layouts designed in the console Vehicle Designer (V268). Loaded
   // once per session (cached promise in the service); {} when none exist or

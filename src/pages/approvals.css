@@ -1,0 +1,94 @@
+/*
+ * Approval Dashboard.
+ *
+ * Built on the Command Center tokens (--cc-*) so it reads like Fleet Master,
+ * Batteries and the other redesigned pages, in both themes:
+ *   - brand green marks the SELECTED / active state and the primary action;
+ *   - amber, red and orange mean status only (waiting, late, never asked);
+ *   - every pair of text and background clears 4.5:1 in light and dark.
+ * The page used orange for everything, which is why it clashed with the shell.
+ */
+
+.apv { max-width: 100%; }
+.apv .cc-hero { margin-bottom: 0; }
+
+/* ---- refresh row ---------------------------------------------------------- */
+.apv-meta { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin: -4px 0 0; }
+.apv-updated { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--cc-ink-2); }
+
+/* ---- buttons -------------------------------------------------------------- */
+.apv-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 34px; padding: 5px 14px; font-size: 12.5px; font-weight: 600; white-space: nowrap;
+  color: var(--cc-green-strong); background: transparent; border: 1px solid var(--cc-green); border-radius: 9px; cursor: pointer;
+}
+html:not(.light) .apv-btn { color: var(--cc-green); }
+.apv-btn:hover:not(:disabled) { background: var(--cc-green-tint); }
+.apv-btn:focus-visible, .apv-tab:focus-visible, .apv-chip:focus-visible, .apv-seg-btn:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 2px; }
+.apv-btn-primary { color: #fff !important; background: var(--cc-green-strong); border-color: var(--cc-green-strong); }
+.apv-btn-primary:hover:not(:disabled) { background: var(--cc-green); }
+.apv-btn-danger { color: var(--cc-red) !important; border-color: var(--cc-red); }
+.apv-btn-danger:hover:not(:disabled) { background: var(--cc-red-tint); }
+/* disabled: clearly unavailable, still readable */
+.apv-btn:disabled {
+  cursor: not-allowed; color: var(--cc-ink-2) !important; background: var(--cc-track) !important;
+  border-color: var(--cc-inner-border) !important; opacity: .85;
+}
+
+/* ---- notices -------------------------------------------------------------- */
+.apv-banner {
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 12.5px; line-height: 1.45;
+  color: var(--cc-ink); background: var(--cc-amber-tint); border: 1px solid var(--cc-amber); border-radius: 12px;
+}
+.apv-banner > svg { color: var(--cc-amber); flex-shrink: 0; }
+
+/* ---- toolbar: all pending / assigned to me -------------------------------- */
+.apv-seg { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--cc-inner-border); border-radius: 11px; background: var(--cc-inner); }
+.apv-seg-btn {
+  padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--cc-ink-2);
+  background: transparent; border: 1px solid transparent; border-radius: 8px; cursor: pointer;
+}
+.apv-seg-btn[aria-pressed="true"] { color: var(--cc-ink); background: var(--cc-green-tint); border-color: var(--cc-green); }
+
+/* ---- queue tabs and type chips -------------------------------------------- */
+.apv-tabs { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--cc-inner-border); }
+.apv-tab {
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; font-size: 12.5px; font-weight: 600;
+  color: var(--cc-ink-2); background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 10px; cursor: pointer;
+}
+.apv-tab:hover { color: var(--cc-ink); border-color: var(--cc-green); }
+.apv-tab[aria-pressed="true"] { color: var(--cc-ink); background: var(--cc-green-tint); border-color: var(--cc-green); }
+.apv-n {
+  min-width: 20px; padding: 0 6px; font-size: 10.5px; font-weight: 700; text-align: center; line-height: 18px;
+  color: var(--cc-ink-2); background: var(--cc-track); border-radius: 999px;
+}
+.apv-tab[aria-pressed="true"] .apv-n { color: #fff; background: var(--cc-green-strong); }
+
+.apv-chip {
+  padding: 5px 12px; font-size: 12px; font-weight: 600; color: var(--cc-ink-2);
+  background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 999px; cursor: pointer;
+}
+.apv-chip:hover { color: var(--cc-ink); border-color: var(--cc-green); }
+.apv-chip[aria-pressed="true"] { color: var(--cc-ink); background: var(--cc-green-tint); border-color: var(--cc-green); }
+
+/* ---- bulk bar ------------------------------------------------------------- */
+.apv-bulk {
+  position: sticky; top: 8px; z-index: 20; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 10px 14px; color: var(--cc-ink); background: var(--cc-card-flat); border: 1px solid var(--cc-border);
+  border-radius: 12px; box-shadow: var(--cc-shadow);
+}
+
+/* ---- status pills and ageing --------------------------------------------- */
+.apv-pill { display: inline-flex; align-items: center; padding: 3px 10px; font-size: 11.5px; font-weight: 600; border: 1px solid; border-radius: 999px; white-space: nowrap; }
+.apv-pill-amber { color: var(--cc-ink); background: var(--cc-amber-tint); border-color: var(--cc-amber); }
+.apv-pill-red { color: var(--cc-ink); background: var(--cc-red-tint); border-color: var(--cc-red); }
+.apv-late { font-weight: 700; color: var(--cc-red); }
+
+/* ---- table: select column on the left, even if a saved layout predates it - */
+.apv [data-column-id="__select"], .apv th:first-child input[type="checkbox"] { accent-color: var(--cc-green-strong); }
+.apv input[type="checkbox"] { accent-color: var(--cc-green-strong); width: 16px; height: 16px; }
+
+@media (max-width: 640px) {
+  .apv-meta { justify-content: space-between; }
+  .apv-tab { padding: 6px 10px; }
+}

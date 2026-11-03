@@ -26,6 +26,7 @@ import {
   inspectionSections, inspectionProgress, assetHistory, recentFindings, defectCategories,
   inspectionTrend, workspaceKpis, ITEM_STATUS, rowDay,
 } from '../../lib/inspectionWorkspaceView'
+import ObservationsBoard from './ObservationsBoard'
 import './inspectionWorkspace.css'
 
 const PAGE = 8
@@ -106,6 +107,14 @@ export default function InspectionWorkspace({
   const [selectedId, setSelectedId] = useState(null)
   const [detailTab, setDetailTab] = useState('details')
   const [section, setSection] = useState(null)
+  // Which module the strip has open. Observations is a view of the SAME rows,
+  // not a filter to the Site Observation record type (the live data has none,
+  // which is what made this screen go blank).
+  const [mode, setMode] = useState('inspections')
+  const openObservations = () => {
+    setMode('observations')
+    if (onObservations) onObservations()
+  }
 
   const sorted = useMemo(() => sortNewest(rows), [rows])
   const counts = useMemo(() => listTabCounts(sorted, today), [sorted]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -171,8 +180,16 @@ export default function InspectionWorkspace({
           const Icon = m.icon
           const body = (<><span className="iw-mod-icon"><Icon size={18} aria-hidden="true" /></span><span><b>{m.label}</b><small>{m.sub}</small></span></>)
           if (m.to) return <Link key={m.key} to={m.to} className="iw-mod">{body}</Link>
-          if (m.key === 'observations') return <button key={m.key} type="button" className="iw-mod" onClick={onObservations}>{body}</button>
-          return <span key={m.key} className="iw-mod is-active" aria-current="page">{body}</span>
+          if (m.key === 'observations' || m.key === 'inspections') {
+            const active = mode === m.key
+            return (
+              <button key={m.key} type="button" className={`iw-mod ${active ? 'is-active' : ''}`}
+                aria-pressed={active} onClick={() => (m.key === 'observations' ? openObservations() : setMode('inspections'))}>
+                {body}
+              </button>
+            )
+          }
+          return null
         })}
       </nav>
 
@@ -183,6 +200,17 @@ export default function InspectionWorkspace({
         </div>
       )}
 
+      {mode === 'observations' ? (
+        <ObservationsBoard
+          rows={rows}
+          loading={loading}
+          error={error}
+          onBack={() => setMode('inspections')}
+          onOpen={(r) => onView(r)}
+          onRaiseAction={onRaiseAction}
+          onAddObservation={onAddObservation}
+        />
+      ) : (<>
       <div className="iw-main">
         <Card className="iw-list" title={`Vehicle Inspections (${unreadable ? 'N/A' : fmtInt(sorted.length)})`}>
           <div className="cc-search iw-search">
@@ -387,7 +415,7 @@ export default function InspectionWorkspace({
         <Card title="Recent Observations" action={
           <span className="iw-actions">
             {onAddObservation && <button type="button" className="cc-btn iw-inline" onClick={onAddObservation}><Plus size={12} aria-hidden="true" /> Add Observation</button>}
-            <button type="button" className="cc-link cc-link-btn" onClick={onObservations}>View all <ArrowRight size={12} aria-hidden="true" /></button>
+            <button type="button" className="cc-link cc-link-btn" onClick={openObservations}>View all <ArrowRight size={12} aria-hidden="true" /></button>
           </span>
         }>
           {!findings.length ? <div className="cc-empty">{unreadable ? 'Could not read the inspections.' : 'No tyre in these inspections was recorded as anything other than Good.'}</div> : (
@@ -414,6 +442,7 @@ export default function InspectionWorkspace({
               : <TrendChart trend={trend} />}
         </Card>
       </div>
+      </>)}
     </div>
   )
 }

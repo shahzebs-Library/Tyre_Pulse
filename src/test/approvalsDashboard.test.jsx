@@ -212,8 +212,8 @@ describe('Unified approval dashboard', () => {
     expect(types).toHaveTextContent('Checklist')
 
     // total_pending = 1 workflow + 1 closure + 1 checklist = 3.
-    const pendingBadge = screen.getByText('3 pending')
-    expect(pendingBadge).toBeInTheDocument()
+    expect(screen.getByText('waiting')).toBeInTheDocument()
+    expect(screen.getAllByText('3').length).toBeGreaterThan(0)
   })
 
   it('merges workflow, accident-closure and checklist items into the pending queue', async () => {
@@ -387,6 +387,17 @@ describe('Unified approval dashboard', () => {
     expect(screen.getAllByText('—').length).toBeGreaterThan(0)
     expect(screen.getByText(/pending totals and empty states are incomplete/i)).toBeInTheDocument()
     expect(screen.queryByText('0 pending')).not.toBeInTheDocument()
+  })
+
+  it('shows the rows that did load as "n+" when another queue failed, not a bare dash', async () => {
+    workflows.getApprovalDashboard.mockRejectedValueOnce(new Error('network unavailable'))
+    queue.listInspectionApprovals.mockResolvedValueOnce([INSPECTION])
+    renderPage()
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Workflows')
+    // The tab agrees with the list under it: the approvals that loaded, marked as
+    // a floor, instead of "-" beside rows that are plainly on screen.
+    expect(screen.getByRole('button', { name: /^Pending/ })).toHaveTextContent(/\d+\+/)
   })
 
   it('marks lifecycle queues incomplete when the server count exceeds the rows returned', async () => {

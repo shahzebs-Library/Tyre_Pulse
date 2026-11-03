@@ -248,3 +248,112 @@ export function inspectionTrend(rows, now = new Date(), days = 30) {
   const any = completed.some(Boolean) || pending.some(Boolean) || overdue.some(Boolean)
   return { labels, completed, pending, overdue, any }
 }
+
+// ── Observations register ─────────────────────────────────────────────────────
+/**
+ * EVERY observation the loaded inspections carry, one row each, newest first.
+ *
+ * The Observations module used to switch the page to the "Site Observation"
+ * record type, and the live data holds none of those (every record is a
+ * Routine tyre inspection), so the whole screen went blank. What a field team
+ * actually observes lives ON the inspections: tyres marked other than Good,
+ * and the inspector's written findings and notes. All three are listed here,
+ * each labelled by where it came from.
+ *
+ *   kind 'tyre'        - one tyre recorded as anything other than Good
+ *   kind 'note'        - the inspector's free-text findings or notes
+ *   kind 'observation' - a Site Observation record, when there are any
+ *
+ * Meter lines the app writes into notes ("Odometer: 102118 km") are not an
+ * observation and are dropped; findings repeated word for word in notes are
+ * listed once.
+ */
+const OBS_SEVERITY = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' }
+const METER_LINE = /^\s*(odometer|hour\s*meter|engine\s*hours?)\s*:/i
+
+function remarkText(r) {
+  const parts = []
+  for (const v of [r?.findings, r?.notes]) {
+    const s = String(v || '')
+      .split(/\r?\n/)
+      .filter((line) => line.trim() && !METER_LINE.test(line))
+      .join(' ')
+      .trim()
+    if (s && !parts.some((p) => p.toLowerCase() === s.toLowerCase())) parts.push(s)
+  }
+  return parts.join(' | ')
+}
+
+const isObservationRecord = (r) => /observation/i.test(String(r?.inspection_type || ''))
+  || r?.custom_data?.record_kind === 'observation'
+
+export const OBSERVATION_KINDS = [
+  { key: 'tyre', label: 'Tyre finding' },
+  { key: 'note', label: 'Inspector note' },
+  { key: 'observation', label: 'Site observation' },
+]
+
+export function observationRegister(rows) {
+  const out = []
+  for (const r of sortNewest(rows)) {
+    if (!r || r.status === 'Cancelled') continue
+    const base = {
+      inspectionId: r.id, row: r,
+      asset_no: r.asset_no || null, site: r.site || null,
+      inspector: r.inspector || r.attendees || null,
+      day: rowDay(r) || null, actionRaised: !!r.linked_action_id,
+    }
+    if (isObservationRecord(r)) {
+      const sev = OBS_SEVERITY[String(r.severity || '').toLowerCase()] || null
+      out.push({
+        ...base, key: `${r.id}:obs`, kind: 'observation', position: null,
+        text: [r.title, remarkText(r)].filter(Boolean).join(': ') || 'No description recorded',
+        severity: sev || 'Not rated',
+        tone: sev === 'Critical' || sev === 'High' ? 'bad' : sev ? 'warn' : 'muted',
+      })
+      continue
+    }
+    for (const t of affected(r)) {
+      out.push({
+        ...base, key: `${r.id}:${t.position}`, kind: 'tyre', position: t.label || t.position,
+        text: t.condition || RISK_LABEL[t.risk] || 'Flagged',
+        remarks: t.notes || null,
+        severity: t.risk === 'critical' ? 'Critical' : 'Minor',
+        tone: t.risk === 'critical' ? 'bad' : 'warn',
+      })
+    }
+    const text = remarkText(r)
+    if (text) {
+      out.push({
+        ...base, key: `${r.id}:note`, kind: 'note', position: null, text,
+        severity: 'Note', tone: 'muted',
+      })
+    }
+  }
+  return out
+}
+
+export function filterObservations(list, { q = '', kind = 'all', severity = 'all' } = {}) {
+  const s = String(q || '').trim().toLowerCase()
+  return (list || []).filter((o) => (kind === 'all' || o.kind === kind)
+    && (severity === 'all' || o.severity === severity)
+    && (!s || [o.asset_no, o.site, o.inspector, o.position, o.text, o.remarks]
+      .some((v) => String(v || '').toLowerCase().includes(s))))
+}
+
+/** Headline counts. `critical` counts High and Critical together. */
+export function observationSummary(list) {
+  const items = list || []
+  const by = (k) => items.filter((o) => o.kind === k).length
+  return {
+    total: items.length,
+    tyre: by('tyre'),
+    note: by('note'),
+    observation: by('observation'),
+    critical: items.filter((o) => o.severity === 'Critical' || o.severity === 'High').length,
+    vehicles: new Set(items.map((o) => o.asset_no).filter(Boolean)).size,
+    withAction: new Set(items.filter((o) => o.actionRaised && o.kind !== 'note').map((o) => o.inspectionId)).size,
+    needingAction: new Set(items.filter((o) => !o.actionRaised && o.kind !== 'note'
+      && (o.tone === 'bad' || o.tone === 'warn')).map((o) => o.inspectionId)).size,
+  }
+}

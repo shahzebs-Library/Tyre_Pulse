@@ -584,6 +584,27 @@ export default function Inspections() {
       regionMap, filterFrom, filterTo, search, filterSignoff],
   )
 
+  /**
+   * THE WORKSPACE'S ROWS: every record type, with the same date / site / region /
+   * inspector / search filters as the register, but NOT the register's type tab.
+   * Picking the register's "Observations" or "Training" tab used to hand the
+   * workspace above it only those record types - none exist in the live data - so
+   * the whole workspace went blank. The workspace has its own Observations module.
+   */
+  const workspaceRows = useMemo(
+    () => scopeInspections(
+      rows,
+      {
+        site: toList(filterSite), region: toList(filterRegion),
+        inspector: toList(filterInspector), vehicleType: toList(filterVehicleType),
+        from: filterFrom, to: filterTo, search, signoff: filterSignoff,
+      },
+      { regionOf: (site) => regionForSite(regionMap, site) },
+    ),
+    [rows, filterSite, filterRegion, filterInspector, filterVehicleType,
+      regionMap, filterFrom, filterTo, search, filterSignoff],
+  )
+
   // Only the machine classes the loaded inspections actually cover. The fleet
   // register knows 23 types where inspections have only ever used 9, and offering
   // the other 14 would be 14 choices that return nothing.
@@ -1192,7 +1213,7 @@ export default function Inspections() {
       )}
       {showWorkspace ? (
         <InspectionWorkspace
-          rows={scoped}
+          rows={workspaceRows}
           allRows={rows}
           loading={loading}
           error={loadError}
@@ -1209,7 +1230,6 @@ export default function Inspections() {
           onRaiseAction={(r) => setRaisingAction(r)}
           onEdit={(r) => setForm({ ...r, tyre_conditions: r.tyre_conditions ?? {} })}
           onApprove={canApproveInspection ? openApproveFor : null}
-          onObservations={() => { setActiveTab('observations'); registerTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}
           onAddObservation={() => setForm({ ...EMPTY_FORM, inspection_type: 'Site Observation' })}
         />
       ) : (
@@ -2031,7 +2051,11 @@ export default function Inspections() {
           stickyFirstColumn
           emptyMessage={scopeActive || (filterFocus && filterFocus !== 'all')
             ? 'No records match these filters. Clear the filters to see every record.'
-            : t('inspections.states.noRecords')}
+            : activeTab === 'observations'
+              ? 'No site observation has been recorded yet. Findings recorded on inspections are listed in the Observations module above.'
+              : activeTab === 'training'
+                ? 'No training record has been added yet.'
+                : t('inspections.states.noRecords')}
         />
       </div>
       </>}

@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import './approvals.css'
+import { PageHero } from '../components/commandCenter/kit'
 import { useNavigate } from 'react-router-dom'
 import {
   CheckSquare, Clock, AlertTriangle,
@@ -16,7 +18,6 @@ import { toUserMessage } from '../lib/safeError'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatDistanceToNow } from 'date-fns'
-import PageHeader from '../components/ui/PageHeader'
 import FilterBar from '../components/ui/FilterBar'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import Modal from '../components/ui/Modal'
@@ -95,12 +96,6 @@ const TONE_BADGE = {
   amber: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
 }
 
-const TONE_TAB_ACTIVE = {
-  amber:  'bg-amber-500/15 text-amber-300 border-amber-500/40',
-  red:    'bg-red-500/15 text-red-300 border-red-500/40',
-  orange: 'bg-orange-500/15 text-orange-300 border-orange-500/40',
-  green:  'bg-green-500/15 text-green-300 border-green-500/40',
-}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -735,7 +730,7 @@ function DataIntakeCard({ count, onGo }) {
     <button
       type="button"
       onClick={onGo}
-      className="inline-flex items-center gap-2 self-start px-3 py-1.5 rounded-lg border border-purple-800/50 bg-purple-950/20 hover:border-purple-600 text-xs text-purple-200"
+      className="apv-btn self-start"
     >
       <Database className="w-3.5 h-3.5" />
       {count == null ? 'Data-intake approval count unavailable' : `${count} data-intake ${count === 1 ? 'batch' : 'batches'} awaiting approval`}
@@ -1057,7 +1052,7 @@ export default function Approvals() {
         : row.created_at,
       cell: ({ getValue }) => {
         const old = ['pending', 'overdue'].includes(activeBucket) && ageMs(getValue()) > 3 * 86400000
-        return <span className={`whitespace-nowrap text-sm ${old ? 'font-semibold text-red-400' : 'text-[var(--text-muted)]'}`} title={old ? 'Waiting more than 3 days' : undefined}>{relTime(getValue()) || '—'}</span>
+        return <span className={`whitespace-nowrap text-sm ${old ? 'apv-late' : 'text-[var(--text-muted)]'}`} title={old ? 'Waiting more than 3 days' : undefined}>{relTime(getValue()) || '—'}</span>
       },
       sortingFn: 'datetime',
     },
@@ -1070,8 +1065,8 @@ export default function Approvals() {
       cell: ({ row }) => row.original.source === SOURCE.workflow
         ? <ApprovalStatusBadge status={row.original.status} />
         : row.original.source === SOURCE.signoff_gap
-          ? <span className="inline-flex rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-1 text-xs font-medium text-orange-300">Never asked</span>
-          : <span className="inline-flex rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-300">{row.original.stageSummary?.text || 'Pending'}</span>,
+          ? <span className="apv-pill apv-pill-red">Never asked</span>
+          : <span className="apv-pill apv-pill-amber">{row.original.stageSummary?.text || 'Pending'}</span>,
     },
     {
       id: 'review',
@@ -1081,7 +1076,7 @@ export default function Approvals() {
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); openRow(row.original) }}
-          className="inline-flex items-center gap-1 rounded-lg border border-orange-500/40 bg-orange-500/10 px-3 py-1.5 text-xs font-semibold text-orange-200 hover:bg-orange-500/20"
+          className="apv-btn"
         >Review <ChevronRight className="w-3.5 h-3.5" /></button>
       ),
     },
@@ -1212,42 +1207,45 @@ export default function Approvals() {
   }
 
   return (
-    <div className="tp-approvals text-[var(--text-primary)] space-y-6">
-      <PageHeader
-        title="Approval Dashboard"
-        subtitle="Every pending approval across your organisation: workflows, accident closures, checklist and inspection sign-offs"
+    <div className="cc apv tp-approvals">
+      <PageHero
         icon={CheckSquare}
-        badge={loading || metrics.total_pending == null ? undefined : `${metrics.total_pending} pending`}
-        onRefresh={load}
-        refreshing={loading}
-        updatedAt={updatedAt}
+        title="Approval Dashboard"
+        lead="Every pending approval across your organisation: workflows, accident closures, checklist and inspection sign-offs"
+        stat={loading || metrics.total_pending == null ? undefined : { value: String(metrics.total_pending), lines: ['waiting', 'for a decision'] }}
       />
+      <div className="apv-meta">
+        {updatedAt && <span className="apv-updated"><Clock className="w-3.5 h-3.5" aria-hidden="true" /> Updated {relTime(updatedAt) || 'just now'}</span>}
+        <button type="button" className="apv-btn" onClick={load} disabled={loading}>
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" /> Refresh
+        </button>
+      </div>
 
       {fatalError ? (
         <EngineUnavailable message={fatalError} onRetry={load} retrying={loading} />
       ) : (
         <>
           {!loading && (sourceErrors.length > 0 || incompleteSources.length > 0) && (
-            <div role="status" className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200">
+            <div role="status" className="apv-banner">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
               <span className="flex-1">
                 {sourceErrors.length > 0 && <>Could not check: {sourceErrors.join(', ')}; pending totals and empty states are incomplete. </>}
                 {incompleteSources.length > 0 && <>Some approval queues are incomplete. This view has only loaded part of: {incompleteSources.join(', ')}.</>}
               </span>
-              <button onClick={load} className="shrink-0 px-2 py-0.5 text-xs font-semibold text-amber-100 bg-amber-500/15 hover:bg-amber-500/25 rounded-lg border border-amber-500/30">Retry</button>
+              <button onClick={load} className="apv-btn shrink-0">Retry</button>
             </div>
           )}
 
           {/* Workflow engine degraded notice (other sources still shown) */}
           {!loading && workflowError && (
-            <div className="flex items-center gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-sm text-amber-300">
+            <div className="apv-banner">
               <AlertTriangle className="w-4 h-4 shrink-0" />
               <span className="flex-1">
                 Workflow engine is unavailable. Available documents remain visible; open each checklist or inspection individually to verify its approval route.
               </span>
               <button
                 onClick={load}
-                className="shrink-0 px-2.5 py-1 text-xs font-semibold text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 rounded-lg border border-amber-500/30"
+                className="apv-btn shrink-0"
               >
                 Retry
               </button>
@@ -1277,25 +1275,25 @@ export default function Approvals() {
           >
             <span className="px-1 text-xs text-[var(--text-muted)]">{activeList.length} approvals</span>
             {activeBucket === 'pending' && (
-              <div className="flex items-center gap-1 rounded-xl border border-[var(--border-dim)] p-1">
+              <div className="apv-seg">
                 <button
                   type="button"
                   aria-pressed={!assignedToMeOnly}
                   onClick={() => setAssignedToMeOnly(false)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${!assignedToMeOnly ? 'bg-orange-500/15 text-orange-200' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                  className="apv-seg-btn"
                 >All pending · {metrics.total_pending == null ? '—' : metrics.total_pending}</button>
                 <button
                   type="button"
                   aria-pressed={assignedToMeOnly}
                   onClick={() => setAssignedToMeOnly(true)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${assignedToMeOnly ? 'bg-orange-500/15 text-orange-200' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                  className="apv-seg-btn"
                 >Assigned to me · {pendingQueueUnavailable ? '—' : myPendingCount}</button>
               </div>
             )}
           </FilterBar>
 
           {/* Bucket tabs */}
-          <div className="flex flex-wrap gap-2 border-b border-[var(--border-dim)] pb-3">
+          <div className="apv-tabs" role="group" aria-label="Approval queue">
             {BUCKETS.map(b => {
               const count = b.key === 'pending' ? counts.total_pending : metrics[b.key]
               const active = activeBucket === b.key
@@ -1304,15 +1302,12 @@ export default function Approvals() {
                 <button
                   key={b.key}
                   onClick={() => setActiveBucket(b.key)}
-                  className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                    active
-                      ? (TONE_TAB_ACTIVE[b.tone] || 'bg-orange-500/15 text-orange-300 border-orange-500/40')
-                      : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--input-border)] hover:text-[var(--text-primary)] hover:border-[var(--border-bright)]'
-                  }`}
+                  aria-pressed={active}
+                  className="apv-tab"
                 >
                   <Icon className="w-3.5 h-3.5" />
                   {b.label}
-                  <span className={`ml-0.5 px-1.5 rounded-full text-[10px] ${active ? 'bg-black/30' : 'bg-[var(--surface-3)]'}`}>
+                  <span className="apv-n">
                     {loading ? '·' : count == null ? '—' : count}
                   </span>
                 </button>
@@ -1331,21 +1326,21 @@ export default function Approvals() {
                   type="button"
                   aria-pressed={sourceFilter === value}
                   onClick={() => setSourceFilter(value)}
-                  className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${sourceFilter === value ? 'bg-orange-500/15 text-orange-200 border-orange-500/40' : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--input-border)] hover:text-[var(--text-primary)]'}`}
+                  className="apv-chip" aria-pressed={sourceFilter === value}
                 >{label} <span className="opacity-70">{loading ? '·' : n}</span></button>
               ))}
             </div>
           )}
 
           {activeBucket === 'signoff_gaps' && (
-            <div className="px-3 py-2 rounded-xl border border-orange-500/30 bg-orange-500/[0.06] text-xs text-orange-200">
+            <div className="apv-banner">
               These checklists came from a template that requires sign-off, but were recorded as not needing one, so they never appeared in the Pending queue. Open one to record the sign-off now. An empty Pending tab does not mean nothing needed signing.
             </div>
           )}
 
           {/* Batch actions remain above the register and operate only on eligible rows. */}
           {bulkableList.length > 0 && (
-            <div className="sticky top-2 z-20 flex flex-wrap items-center gap-2 px-3 py-2 rounded-xl border border-[var(--border-dim)] bg-[var(--surface-2)] shadow-lg">
+            <div className="apv-bulk">
               <button
                 type="button"
                 onClick={() => setPicked(allPicked ? new Set() : new Set(bulkableList.map(keyOf)))}
@@ -1370,7 +1365,7 @@ export default function Approvals() {
                   onClick={() => runBulk('approve')}
                   disabled={!pickedItems.length || bulk.busy || pickedChecklists.length > 0}
                   title={pickedChecklists.length > 0 ? 'Checklist approvals require an individual signature.' : undefined}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-500/15 text-green-300 border border-green-500/30 hover:bg-green-500/25 disabled:opacity-40"
+                  className="apv-btn apv-btn-primary"
                 >
                   {bulk.busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}Approve selected
                 </button>
@@ -1378,7 +1373,7 @@ export default function Approvals() {
                   type="button"
                   onClick={() => setReturnDialog({ open: true, reason: '' })}
                   disabled={!pickedItems.length || bulk.busy}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-500/15 text-red-300 border border-red-500/30 hover:bg-red-500/25 disabled:opacity-40"
+                  className="apv-btn apv-btn-danger"
                 ><Ban className="w-3.5 h-3.5" />Return selected</button>
               </div>
             </div>

@@ -232,7 +232,13 @@ export default function EnterpriseTable({
       columnVisibility: viewActive ? rv.tableState.columnVisibility : columnVisibility,
       ...(viewActive
         ? {
-            columnOrder: rv.tableState.columnOrder,
+            // The catalog is derived from the page's own columns, so the injected
+            // select column is never in a saved order, and TanStack puts any column
+            // missing from columnOrder at the END: the checkbox landed on the right.
+            // Pin it first whenever selection is on.
+            columnOrder: enableRowSelection
+              ? ['__select', ...(rv.tableState.columnOrder || []).filter((k) => k !== '__select')]
+              : rv.tableState.columnOrder,
             columnSizing: rv.tableState.columnSizing,
             ...(enableColumnPinning ? { columnPinning: rv.tableState.columnPinning } : {}),
           }

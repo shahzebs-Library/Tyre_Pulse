@@ -212,8 +212,8 @@ describe('Unified approval dashboard', () => {
     expect(types).toHaveTextContent('Checklist')
 
     // total_pending = 1 workflow + 1 closure + 1 checklist = 3.
-    const pendingBadge = screen.getByText('3 pending')
-    expect(pendingBadge).toBeInTheDocument()
+    expect(screen.getByText('waiting')).toBeInTheDocument()
+    expect(screen.getAllByText('3').length).toBeGreaterThan(0)
   })
 
   it('merges workflow, accident-closure and checklist items into the pending queue', async () => {

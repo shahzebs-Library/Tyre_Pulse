@@ -10,6 +10,7 @@
  * Positions come from the same layout the drawn map uses, so a card always
  * points at its own axle. Purely presentational: no fetching, no state.
  */
+import { useLayoutEffect, useRef, useState } from 'react'
 import './tyreBoard.css'
 
 const TONE = { good: 'good', warning: 'warn', critical: 'bad', none: 'none' }
@@ -59,6 +60,22 @@ function Card({ w }) {
 export default function TyreBoard({
   tyres, viewH, photo, Body, tyreData = {}, riskOf, codeOf, title, width = 340,
 }) {
+  // The board is laid out at its natural width, then shrunk as a whole to the
+  // card it sits in. A twin-wheel truck needs ~380px and the side card is ~300,
+  // which used to cut off every right-hand wheel.
+  const boxRef = useRef(null)
+  const [avail, setAvail] = useState(0)
+  useLayoutEffect(() => {
+    const el = boxRef.current
+    if (!el) return undefined
+    const read = () => setAvail(el.clientWidth || 0)
+    read()
+    if (typeof ResizeObserver === 'undefined') return undefined
+    const ro = new ResizeObserver(read)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  const fit = (natural) => (avail > 0 && natural > avail ? Math.max(0.55, avail / natural) : 1)
   const frameH = viewH + 10
   const wheels = tyres.map((t) => {
     const d = tyreData?.[t.id] || null
@@ -66,6 +83,8 @@ export default function TyreBoard({
     return {
       id: t.id,
       code: codeOf(t.id),
+      x: t.x,
+      w: t.w,
       cx: t.x + t.w / 2,
       cy: t.y + t.h / 2,
       risk: riskOf(t.id),
@@ -81,50 +100,74 @@ export default function TyreBoard({
 
   // Space: cards either side of the photo, a short leader between.
   const cardW = CARD_W
-  const sideW = maxPerSide * cardW + (maxPerSide - 1) * 4
   const leader = 16
+  // In a narrow card a twin wheel's inner and outer cards stack one above the
+  // other instead of side by side, which halves the width the board needs so it
+  // fits at full size rather than being shrunk until the text is unreadable.
+  const wideSide = maxPerSide * cardW + (maxPerSide - 1) * 4
+  const stacked = maxPerSide > 1 && 2 * (wideSide + leader) + 110 > width
+  const sideW = stacked ? cardW : wideSide
+  const groupH = (g) => (stacked ? g.wheels.length * (CARD_H + 4) - 4 : CARD_H)
   // The photo is sized so a side's stacked axle cards fit beside it: a long
   // mixer gets a tall photo, a pickup a squat one, never a thumbnail.
-  const maxGroups = Math.max(1, left.length, right.length)
-  const stackH = maxGroups * (CARD_H + 4) - 4
+  const sideH = (groups) => groups.reduce((h, g) => h + groupH(g) + 4, -4)
+  const stackH = Math.max(CARD_H, sideH(left), sideH(right))
   const fromWidth = Math.max(90, width - 2 * (sideW + leader)) * frameH / 220
-  const photoW = Math.max(80, Math.min(180, (Math.max(stackH, fromWidth) * 220) / frameH))
+  // Never wider than the space the cards leave, so the board fits its card.
+  const roomW = Math.max(80, width - 2 * (sideW + leader))
+  const photoW = Math.max(80, Math.min(180, roomW, (Math.max(stackH, fromWidth) * 220) / frameH))
   const photoH = photoW * frameH / 220
-  const yOf = (cy) => ((cy + 5) / frameH) * photoH
+  // When the card column is taller than the photo, the photo sits centred
+  // against it so the leaders fan out both ways instead of all running down.
+  const H = Math.max(photoH, stackH)
+  const photoTop = (H - photoH) / 2
+  const yOf = (cy) => photoTop + ((cy + 5) / frameH) * photoH
+  // Layout x (frame -10..210) to a pixel on the stage, so a leader ends ON the
+  // wheel rather than at the edge of the picture box.
+  const xOf = (fx) => sideW + leader + ((fx + 10) / 220) * photoW
 
   // Lay a side's axle groups out top to bottom without overlap.
+  // Each card as close to its own axle as the cards above and below allow.
   const place = (groups) => {
+    const hs = groups.map(groupH)
+    const below = hs.map((_, i) => hs.slice(i).reduce((t, h) => t + h + 4, -4))
     let floor = 0
-    return groups.map((g) => {
-      const want = yOf(g.cy) - CARD_H / 2
-      const top = Math.max(want, floor)
-      floor = top + CARD_H + 4
-      return { ...g, top, axleY: yOf(g.cy) }
+    return groups.map((g, i) => {
+      const h = hs[i]
+      const ceiling = H - below[i]
+      const top = Math.min(Math.max(yOf(g.cy) - h / 2, floor), Math.max(floor, ceiling))
+      floor = top + h + 4
+      return { ...g, top, h, axleY: yOf(g.cy) }
     })
   }
   const L = place(left)
   const R = place(right)
-  const height = Math.max(photoH, ...L.map((g) => g.top + CARD_H), ...R.map((g) => g.top + CARD_H))
+  const height = Math.max(H, ...L.map((g) => g.top + g.h), ...R.map((g) => g.top + g.h))
   const total = 2 * (sideW + leader) + photoW
   const recordedCount = wheels.filter((w) => w.recorded).length
 
   const side = (groups, onLeft) => groups.map((g) => {
-    const cardsLeft = onLeft ? sideW - (g.wheels.length * cardW + (g.wheels.length - 1) * 4) : sideW + leader * 2 + photoW
-    const cardMid = g.top + CARD_H / 2 + 6
+    const rowW = stacked ? cardW : g.wheels.length * cardW + (g.wheels.length - 1) * 4
+    const cardsLeft = onLeft ? sideW - rowW : sideW + leader * 2 + photoW
+    const cardMid = g.top + g.h / 2 + (stacked ? 0 : 6)
     const tone = TONE[g.wheels.reduce((worst, w) => (
       ({ critical: 3, warning: 2, good: 1, none: 0 })[w.risk] > ({ critical: 3, warning: 2, good: 1, none: 0 })[worst] ? w.risk : worst
     ), 'none')] || 'none'
     // The leader runs from the card edge to the photo edge at the axle line.
     const x1 = onLeft ? sideW : sideW + leader * 2 + photoW
-    const x2 = onLeft ? sideW + leader : sideW + leader + photoW
+    const x2 = onLeft
+      ? xOf(Math.min(...g.wheels.map((w) => w.x)))
+      : xOf(Math.max(...g.wheels.map((w) => w.x + w.w)))
+    const bend = onLeft ? sideW + leader : sideW + leader + photoW
     return (
       <div key={`${onLeft ? 'L' : 'R'}${g.cy}`}>
         <svg className="tb-leader" width={total} height={height} aria-hidden="true">
-          <path d={`M${x1} ${cardMid} L${(x1 + x2) / 2} ${cardMid} L${x2} ${g.axleY}`} className={`tb-line tb-${tone}`} />
+          <path d={`M${x1} ${cardMid} L${(x1 + bend) / 2} ${cardMid} L${bend} ${g.axleY} L${x2} ${g.axleY}`} className={`tb-line tb-${tone}`} />
           <circle cx={x2} cy={g.axleY} r="3.5" className={`tb-knob tb-${tone}`} />
         </svg>
-        <div className="tb-group" style={{ left: cardsLeft, top: g.top, flexDirection: onLeft ? 'row-reverse' : 'row' }}>
-          {(onLeft ? [...g.wheels].sort((a, b) => b.cx - a.cx) : [...g.wheels].sort((a, b) => a.cx - b.cx))
+        <div className="tb-group" style={{ left: cardsLeft, top: g.top, flexDirection: stacked ? 'column' : onLeft ? 'row-reverse' : 'row' }}>
+          {/* Outer wheel first: furthest from the photo when side by side, on top when stacked. */}
+          {[...g.wheels].sort((a, b) => (stacked ? (onLeft ? a.cx - b.cx : b.cx - a.cx) : (onLeft ? b.cx - a.cx : a.cx - b.cx)))
             .map((w) => <Card key={w.id} w={w} />)}
         </div>
       </div>
@@ -132,11 +175,11 @@ export default function TyreBoard({
   })
 
   return (
-    <div className="tb-scroll"><div className="tb" style={{ width: total }}>
+    <div className="tb-scroll" ref={boxRef}><div className="tb" style={{ width: total, zoom: fit(total) }}>
       {title && <div className="tb-title"><b>{title}</b><span>{tyres.length} tyres, {recordedCount} recorded</span></div>}
       <div className="tb-front">▲ FRONT</div>
       <div className="tb-stage" style={{ width: total, height }}>
-        <div className="tb-photo" style={{ left: sideW + leader, width: photoW, height: photoH }}>
+        <div className="tb-photo" style={{ left: sideW + leader, top: photoTop, width: photoW, height: photoH }}>
           {photo ? (
             <img
               src={photo.href}

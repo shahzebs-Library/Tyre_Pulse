@@ -24,14 +24,14 @@
 .tb-card { width: 70px; display: flex; flex-direction: column; gap: 2px; }
 .tb-code { font-size: 9.5px; font-weight: 700; letter-spacing: .02em; text-align: center;
   color: var(--text-secondary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.tb-body { display: flex; align-items: flex-start; gap: 4px; min-height: 36px; padding: 4px 5px;
+.tb-body { display: flex; align-items: flex-start; gap: 3px; min-height: 36px; padding: 4px 3px 4px 4px;
   border-radius: 8px; background: var(--surface-2, var(--surface-raised, #fff));
   border: 1px solid var(--border-subtle, rgba(148,163,184,.35)); border-left-width: 3px; }
 .tb-good .tb-body { border-left-color: var(--tb-good); }
 .tb-warn .tb-body { border-left-color: var(--tb-warn); }
 .tb-bad .tb-body { border-left-color: var(--tb-bad); }
 .tb-none .tb-body { border-left-color: var(--tb-none); border-style: dashed; border-left-style: solid; }
-.tb-dot { flex: 0 0 14px; width: 14px; height: 14px; border-radius: 50%; display: inline-flex;
+.tb-dot { flex: 0 0 13px; width: 13px; height: 13px; border-radius: 50%; display: inline-flex;
   align-items: center; justify-content: center; font-size: 9px; font-style: normal; font-weight: 800;
   color: #fff; background: var(--tb-none); line-height: 1; }
 .tb-good .tb-dot, .tb-dot.tb-good { background: var(--tb-good); }
@@ -41,7 +41,7 @@
 .tb-vals b { font-size: 11px; font-weight: 700; white-space: nowrap; }
 .tb-vals b small { font-weight: 500; font-size: 9px; color: var(--text-secondary); }
 .tb-muted { font-size: 9.5px; color: var(--text-secondary); }
-.tb-cond { font-size: 9.5px; color: var(--text-secondary); overflow-wrap: anywhere; }
+.tb-cond { font-size: 9px; letter-spacing: -0.2px; color: var(--text-secondary); overflow-wrap: break-word; }
 .tb-bad .tb-cond { color: var(--tb-bad); font-weight: 600; }
 .tb-warn .tb-cond { color: var(--tb-warn); font-weight: 600; }
 .tb-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 8px;
@@ -64,3 +64,8 @@
 .tb-thumb { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .tb-thumb img { display: block; object-fit: contain; }
 .tb-thumb small { font-size: 10px; color: var(--text-secondary); }
+
+/* A wheel with a tyre on it but no condition rating: solid, not the dashed
+   "nothing here" look, so a fitted tyre never reads as a missing one. */
+.tb-known .tb-body { border-style: solid; border-left-color: var(--text-secondary); }
+.tb-known .tb-dot { background: var(--text-secondary); }

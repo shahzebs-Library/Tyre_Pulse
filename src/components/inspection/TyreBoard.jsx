@@ -61,7 +61,7 @@ function Card({ w, onSelect, selected, emptyLabel, cardW }) {
       </span>
     </>
   )
-  const cls = `tb-card tb-${tone}${w.pending ? ' tb-pending' : ''}${selected ? ' tb-selected' : ''}`
+  const cls = `tb-card tb-${tone}${recorded && tone === 'none' ? ' tb-known' : ''}${w.pending ? ' tb-pending' : ''}${selected ? ' tb-selected' : ''}`
   const title = `${w.code}: ${recorded ? (w.condition || ident || 'Recorded') : emptyLabel}`
   if (onSelect) {
     return (

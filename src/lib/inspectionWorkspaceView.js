@@ -316,6 +316,8 @@ export function observationRegister(rows) {
     for (const t of affected(r)) {
       out.push({
         ...base, key: `${r.id}:${t.position}`, kind: 'tyre', position: t.label || t.position,
+        rawPosition: t.position, pressure: t.pressure ?? null, tread: t.tread ?? null, photo: t.photo || null,
+        country: r.country || null, vehicleType: r.vehicle_type || null,
         text: t.condition || RISK_LABEL[t.risk] || 'Flagged',
         remarks: t.notes || null,
         severity: t.risk === 'critical' ? 'Critical' : 'Minor',

@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 vi.mock('../components/inspection/AiTyreProgress', () => ({ default: () => null }))
 vi.mock('../components/inspection/InspectionPhotos', () => ({ default: () => null }))
 vi.mock('../components/inspection/InspectionDiagram', () => ({ default: () => null }))
+vi.mock('../lib/api/tyreChangeTracking', () => ({ listFitmentsForAssets: vi.fn(async () => ({ ok: true, rows: [] })) }))
 
 import {
   observationRegister, filterObservations, observationSummary,
@@ -53,7 +54,7 @@ describe('observationRegister', () => {
 })
 
 describe('Observations module', () => {
-  it('opens the observations board over the same rows instead of a blank screen', () => {
+  it('opens the observations board over the same rows instead of a blank screen', async () => {
     const onView = vi.fn()
     render(
       <MemoryRouter>
@@ -66,8 +67,48 @@ describe('Observations module', () => {
     expect(within(table).getByText('Puncture')).toBeInTheDocument()
     expect(within(table).getByText('1 tyre damage')).toBeInTheDocument()
     fireEvent.click(within(table).getAllByRole('button', { name: /Open/ })[0])
+    // Open shows that ONE finding first, with the way into the full sheet.
+    expect(await screen.findByText('Is it fixed?')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Open full inspection/ }))
     expect(onView).toHaveBeenCalledWith(ROUTINE)
     fireEvent.click(screen.getByRole('button', { name: /^Inspections\s*Conduct/i }))
     expect(screen.queryByRole('table', { name: 'Observations' })).toBeNull()
+  })
+})
+
+import { withTyreNow, tyreNowSummary, matchesTyreNow } from '../lib/observationTracking'
+
+describe('has the observed tyre been replaced', () => {
+  const insp = {
+    id: 'r1', inspection_type: 'Routine', status: 'Done', asset_no: 'MP119', site: 'NHC', country: 'KSA',
+    inspection_date: '2026-10-01', vehicle_type: 'PUMPS',
+    tyre_conditions: { LHF1: { condition: 'Puncture' }, RHF1: { condition: 'Worn' }, LHF2: { condition: 'Damaged' } },
+  }
+  const fit = (position, serial, issue_date, extra = {}) => ({ asset_no: 'MP119', country: 'KSA', position, serial_no: serial, issue_date, ...extra })
+  const fitments = [
+    fit('LHF1', 'OLD1', '2025-01-01'), fit('LHF1', 'NEW1', '2026-10-05'), // replaced after the inspection
+    fit('RHF1', 'OLD2', '2025-02-01'), // still fitted
+  ]
+  const list = withTyreNow(observationRegister([insp]), fitments, { now: new Date('2026-11-03') })
+  const by = (p) => list.find((o) => o.rawPosition === p)
+
+  it('marks a wheel with a newer tyre fitted after the inspection as replaced', () => {
+    expect(by('LHF1').tyreNow.state).toBe('replaced')
+    expect(by('LHF1').tyreNow.replacement).toMatchObject({ serial: 'NEW1', fittedOn: '2026-10-05' })
+    expect(by('LHF1').tyreNow.daysToReplace).toBe(4)
+  })
+
+  it('keeps the same tyre as still fitted, and a wheel with no record as not known', () => {
+    expect(by('RHF1').tyreNow.state).toBe('on_vehicle')
+    expect(by('LHF2').tyreNow.state).toBe('unknown')
+  })
+
+  it('counts open as still fitted plus not known, and filters by it', () => {
+    expect(tyreNowSummary(list)).toMatchObject({ replaced: 1, on_vehicle: 1, unknown: 1, open: 2 })
+    expect(list.filter((o) => matchesTyreNow(o, 'open'))).toHaveLength(2)
+  })
+
+  it('gives no status at all while the records are not loaded', () => {
+    expect(withTyreNow(observationRegister([insp]), null).some((o) => o.tyreNow)).toBe(false)
   })
 })

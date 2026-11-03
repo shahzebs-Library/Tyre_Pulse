@@ -165,7 +165,7 @@ export function indexFitments(records = []) {
  * its stored text: `positionStored` always holds it verbatim, so nothing about
  * what was recorded is lost by displaying it properly.
  */
-function baseFlag(f) {
+export function baseFlag(f) {
   const asset = txt(f.asset)
   const storedPosition = txt(f.position)
   return {

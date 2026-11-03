@@ -1232,6 +1232,7 @@ export default function Inspections() {
           onApprove={canApproveInspection ? openApproveFor : null}
           onAddObservation={() => setForm({ ...EMPTY_FORM, inspection_type: 'Site Observation' })}
           country={activeCountry}
+          regionOf={(s) => regionForSite(regionMap, s)}
         />
       ) : (
         <PageHeader

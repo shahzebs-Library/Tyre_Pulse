@@ -14,13 +14,15 @@ import { Link } from 'react-router-dom'
 import { MessageSquare, AlertTriangle, Truck, Wrench, Search, Download, Plus, Eye, ArrowLeft, CheckCircle2 } from 'lucide-react'
 import { Card, Kpi, Tabs, Pager, fmtInt } from '../commandCenter/kit'
 import {
-  observationRegister, filterObservations, observationSummary, OBSERVATION_KINDS,
+  observationRegister, filterObservations, observationSummary, OBSERVATION_KINDS, observationOptions, observationLabel,
 } from '../../lib/inspectionWorkspaceView'
 import { exportToExcel } from '../../lib/exportUtils'
 import { listFitmentsForAssets } from '../../lib/api/tyreChangeTracking'
 import { withTyreNow, tyreNowSummary, matchesTyreNow, TYRE_NOW_META } from '../../lib/observationTracking'
 import ObservationDetail from './ObservationDetail'
 import { toUserMessage } from '../../lib/safeError'
+import MultiSelectFilter from '../ui/MultiSelectFilter'
+import { selectionMatches, isSelectionActive } from '../../lib/filterSelection'
 
 const PAGE = 15
 const SEVERITIES = ['all', 'Critical', 'High', 'Medium', 'Minor', 'Low', 'Note', 'Not rated']
@@ -33,19 +35,22 @@ const fmtDay = (d) => {
 }
 
 export default function ObservationsBoard({
-  rows, loading, error, onBack, onOpen, onRaiseAction, onAddObservation, country,
+  rows, loading, error, onBack, onOpen, onRaiseAction, onAddObservation, country, regionOf,
 }) {
   const [kind, setKind] = useState('all')
-  const [severity, setSeverity] = useState('all')
+  // Multi-select filters hold an array; [] means no narrowing.
+  const [severity, setSeverity] = useState([])
   const [q, setQ] = useState('')
   const [page, setPage] = useState(0)
   const [exportError, setExportError] = useState('')
   // Default hides findings the tyre change history shows were already dealt with.
   const [tyreNow, setTyreNow] = useState('not_replaced')
-  const [site, setSite] = useState('all')
-  const [asset, setAsset] = useState('all')
-  const [inspector, setInspector] = useState('all')
+  const [region, setRegion] = useState([])
+  const [site, setSite] = useState([])
+  const [asset, setAsset] = useState([])
+  const [inspector, setInspector] = useState([])
   const [action, setAction] = useState('all')
+  const [observation, setObservation] = useState([])
   const [detail, setDetail] = useState(null)
   // Fitment records for the vehicles these observations name. null while loading
   // or unreadable, so no row is given a status it was not checked for.
@@ -72,6 +77,9 @@ export default function ObservationsBoard({
     return () => { alive = false }
   }, [assetKey, country])
   const all = useMemo(() => withTyreNow(base, fitments), [base, fitments])
+  // Region lives on the site register, so it is looked up from the site; a site
+  // the register does not place has no region and never matches a region pick.
+  const regionFor = (siteName) => (regionOf && siteName ? regionOf(siteName) || '' : '')
   const summary = useMemo(() => observationSummary(all), [all])
   const nowSummary = useMemo(() => tyreNowSummary(all), [all])
   const settled = useMemo(() => {
@@ -85,46 +93,66 @@ export default function ObservationsBoard({
     return new Set([...by].filter(([, done]) => done).map(([id]) => id))
   }, [all])
   const list = useMemo(
-    () => filterObservations(all, { q, kind, severity })
+    () => filterObservations(all, { q, kind })
       .filter((o) => matchesTyreNow(o, tyreNow))
       // A note on an inspection whose tyre findings were ALL replaced is about
       // work already done, so it leaves the default view with them.
       .filter((o) => !(tyreNow === 'not_replaced' && o.kind === 'note' && settled.has(o.inspectionId)))
-      .filter((o) => (site === 'all' || o.site === site)
-        && (asset === 'all' || o.asset_no === asset)
-        && (inspector === 'all' || o.inspector === inspector)
+      .filter((o) => selectionMatches(observation, observationLabel(o))
+        && selectionMatches(severity, o.severity)
+        && selectionMatches(region, regionFor(o.site))
+        && selectionMatches(site, o.site)
+        && selectionMatches(asset, o.asset_no)
+        && selectionMatches(inspector, o.inspector)
         && (action === 'all' || (o.kind !== 'note' && (action === 'raised' ? o.actionRaised : !o.actionRaised)))),
-    [all, settled, q, kind, severity, tyreNow, site, asset, inspector, action],
+    [all, settled, q, kind, severity, observation, tyreNow, region, site, asset, inspector, action], // eslint-disable-line react-hooks/exhaustive-deps
   )
-  useEffect(() => { setPage(0) }, [q, kind, severity, tyreNow, site, asset, inspector, action, rows])
+  useEffect(() => { setPage(0) }, [q, kind, severity, observation, tyreNow, region, site, asset, inspector, action, rows])
+  const regionOptions = useMemo(
+    () => [...new Set(all.map((o) => regionFor(o.site)).filter(Boolean))].sort(),
+    [all, regionOf], // eslint-disable-line react-hooks/exhaustive-deps
+  )
   const optionsOf = (key) => [...new Set(all.map((o) => o[key]).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)))
   const siteOptions = useMemo(() => optionsOf('site'), [all]) // eslint-disable-line react-hooks/exhaustive-deps
   const assetOptions = useMemo(() => optionsOf('asset_no'), [all]) // eslint-disable-line react-hooks/exhaustive-deps
   const inspectorOptions = useMemo(() => optionsOf('inspector'), [all]) // eslint-disable-line react-hooks/exhaustive-deps
-  const filtersOn = q || kind !== 'all' || severity !== 'all' || tyreNow !== 'not_replaced'
-    || site !== 'all' || asset !== 'all' || inspector !== 'all' || action !== 'all'
+  const observationList = useMemo(() => observationOptions(all), [all])
+  const filtersOn = q || kind !== 'all' || tyreNow !== 'not_replaced' || action !== 'all'
+    || [severity, observation, region, site, asset, inspector].some(isSelectionActive)
   const clearFilters = () => {
-    setQ(''); setKind('all'); setSeverity('all'); setTyreNow('not_replaced')
-    setSite('all'); setAsset('all'); setInspector('all'); setAction('all')
+    setQ(''); setKind('all'); setSeverity([]); setObservation([]); setTyreNow('not_replaced')
+    setRegion([]); setSite([]); setAsset([]); setInspector([]); setAction('all')
   }
 
   const unreadable = !!error
   const show = (v) => (unreadable ? 'N/A' : fmtInt(v))
   const pageRows = list.slice(page * PAGE, page * PAGE + PAGE)
-  const severities = SEVERITIES.filter((s) => s === 'all' || all.some((o) => o.severity === s))
+  const severities = SEVERITIES.filter((s) => s !== 'all' && all.some((o) => o.severity === s))
 
   async function exportExcel() {
     setExportError('')
     try {
+      const r = (o) => o.tyreNow?.replacement || {}
+      const p = (o) => o.tyreNow?.previous || {}
       await exportToExcel(
         list.map((o) => ({
           day: o.day, kind: KIND_LABEL[o.kind], asset_no: o.asset_no, site: o.site,
           position: o.position, text: o.text, remarks: o.remarks, severity: o.severity,
-          inspector: o.inspector, tyre_now: o.tyreNow ? TYRE_NOW_META[o.tyreNow.state].label : '',
-          replaced_on: o.tyreNow?.replacement?.fittedOn || '', job_card: o.tyreNow?.replacement?.jobCard || '', action: o.kind === 'note' ? '' : o.actionRaised ? 'Raised' : 'Not raised',
+          pressure: o.pressure ?? '', tread: o.tread ?? '', inspector: o.inspector,
+          tyre_now: o.tyreNow ? TYRE_NOW_META[o.tyreNow.state].label : '',
+          old_serial: p(o).serial || '', old_brand: p(o).brand || '', old_fitted: p(o).fittedOn || '', old_job_card: p(o).jobCard || '',
+          new_serial: r(o).serial || '', new_brand: r(o).brand || '', new_size: r(o).size || '',
+          replaced_on: r(o).fittedOn || '', job_card: r(o).jobCard || '',
+          days_to_replace: o.tyreNow?.daysToReplace ?? '', removed_on: o.tyreNow?.removedOn || '',
+          not_known_reason: o.tyreNow?.state === 'unknown' ? (o.tyreNow.reason || '') : '',
+          action: o.kind === 'note' ? '' : o.actionRaised ? 'Raised' : 'Not raised',
         })),
-        ['day', 'kind', 'asset_no', 'site', 'position', 'text', 'remarks', 'severity', 'inspector', 'tyre_now', 'replaced_on', 'job_card', 'action'],
-        ['Date', 'Type', 'Asset', 'Site', 'Position', 'Observation', 'Remarks', 'Severity', 'Inspector', 'Tyre now', 'Replaced on', 'Job card', 'Corrective action'],
+        ['day', 'kind', 'asset_no', 'site', 'position', 'text', 'remarks', 'severity', 'pressure', 'tread', 'inspector',
+          'tyre_now', 'old_serial', 'old_brand', 'old_fitted', 'old_job_card',
+          'new_serial', 'new_brand', 'new_size', 'replaced_on', 'job_card', 'days_to_replace', 'removed_on', 'not_known_reason', 'action'],
+        ['Inspection date', 'Type', 'Asset', 'Site', 'Position', 'Observation', 'Remarks', 'Severity', 'Pressure (PSI)', 'Tread (mm)', 'Inspector',
+          'Tyre now', 'Tyre at inspection: serial', 'Tyre at inspection: brand', 'Tyre at inspection: fitted on', 'Tyre at inspection: job card',
+          'New tyre: serial', 'New tyre: brand', 'New tyre: size', 'Replaced on', 'Replacement job card', 'Days to replace', 'Removed on', 'Why not known', 'Corrective action'],
         'TyrePulse Observations',
         'Observations',
       )
@@ -174,14 +202,13 @@ export default function ObservationsBoard({
           <div className="cc-search iw-search">
             <Search size={15} aria-hidden="true" />
             <input value={q} onChange={(e) => setQ(e.target.value)}
-              placeholder="Search vehicle, site, position, inspector, text..." aria-label="Search observations" />
+              placeholder="Search vehicle, site, inspector, text, tyre serial, job card..." aria-label="Search observations" />
           </div>
-          <label className="iw-obs-sev">
-            <span>Severity</span>
-            <select className="cc-select" value={severity} onChange={(e) => setSeverity(e.target.value)} aria-label="Filter by severity">
-              {severities.map((s) => <option key={s} value={s}>{s === 'all' ? 'All severities' : s}</option>)}
-            </select>
-          </label>
+          <MultiSelectFilter className="iw-ms" label="Observation" allLabel="All observations" pluralLabel="observations"
+            options={observationList.map((o) => ({ value: o.label, label: `${o.label} (${o.count})` }))}
+            value={observation} onChange={setObservation} />
+          <MultiSelectFilter className="iw-ms" label="Severity" allLabel="All severities" pluralLabel="severities"
+            options={severities} value={severity} onChange={setSeverity} />
           <label className="iw-obs-sev">
             <span>Tyre now</span>
             <select className="cc-select" value={tyreNow} onChange={(e) => setTyreNow(e.target.value)} aria-label="Filter by whether the tyre was replaced">
@@ -191,27 +218,16 @@ export default function ObservationsBoard({
               {Object.entries(TYRE_NOW_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
             </select>
           </label>
-          <label className="iw-obs-sev">
-            <span>Site</span>
-            <select className="cc-select" value={site} onChange={(e) => setSite(e.target.value)} aria-label="Filter by site">
-              <option value="all">All sites</option>
-              {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </label>
-          <label className="iw-obs-sev">
-            <span>Vehicle</span>
-            <select className="cc-select" value={asset} onChange={(e) => setAsset(e.target.value)} aria-label="Filter by vehicle">
-              <option value="all">All vehicles</option>
-              {assetOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </label>
-          <label className="iw-obs-sev">
-            <span>Inspector</span>
-            <select className="cc-select" value={inspector} onChange={(e) => setInspector(e.target.value)} aria-label="Filter by inspector">
-              <option value="all">All inspectors</option>
-              {inspectorOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </label>
+          {regionOptions.length > 0 && (
+            <MultiSelectFilter className="iw-ms" label="Region" allLabel="All regions" pluralLabel="regions"
+              options={regionOptions} value={region} onChange={setRegion} />
+          )}
+          <MultiSelectFilter className="iw-ms" label="Site" allLabel="All sites" pluralLabel="sites"
+            options={siteOptions} value={site} onChange={setSite} />
+          <MultiSelectFilter className="iw-ms" label="Vehicle" allLabel="All vehicles" pluralLabel="vehicles"
+            options={assetOptions} value={asset} onChange={setAsset} />
+          <MultiSelectFilter className="iw-ms" label="Inspector" allLabel="All inspectors" pluralLabel="inspectors"
+            options={inspectorOptions} value={inspector} onChange={setInspector} />
           <label className="iw-obs-sev">
             <span>Action</span>
             <select className="cc-select" value={action} onChange={(e) => setAction(e.target.value)} aria-label="Filter by corrective action">

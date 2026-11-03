@@ -123,6 +123,8 @@ export function shapeTyreRecord(r = {}) {
     // the same thing here as it does in the pool and lifecycle views.
     removed: isRemovedOrScrapped(r),
     status: txt(r.status),
+    // The job card the change was booked on, from the tyre consumption upload.
+    jobCard: txt(r.job_card),
   }
 }
 
@@ -165,7 +167,7 @@ export function indexFitments(records = []) {
  * its stored text: `positionStored` always holds it verbatim, so nothing about
  * what was recorded is lost by displaying it properly.
  */
-function baseFlag(f) {
+export function baseFlag(f) {
   const asset = txt(f.asset)
   const storedPosition = txt(f.position)
   return {
@@ -409,6 +411,7 @@ export function resolveFlag(flag, index, { now = new Date() } = {}) {
       reason: '',
       replacement: {
         serial: rep.serial || '', brand: rep.brand || '', size: rep.size || '', fittedOn: rep.fittedOn,
+        jobCard: rep.jobCard || '',
       },
       daysFlagged,
       daysToReplace: daysBetween(since, rep.fittedOn),

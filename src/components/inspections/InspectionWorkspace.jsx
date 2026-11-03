@@ -98,7 +98,7 @@ function TrendChart({ trend }) {
 export default function InspectionWorkspace({
   rows, allRows, loading, error, onRetry, flagMap, actions, sites = [],
   from, to, site, onFilter, onView, onPdf, onRaiseAction, onEdit, onApprove,
-  onObservations, onAddObservation, now,
+  onObservations, onAddObservation, now, country,
 }) {
   const today = now || new Date()
   const [listTab, setListTab] = useState('all')
@@ -209,6 +209,7 @@ export default function InspectionWorkspace({
           onOpen={(r) => onView(r)}
           onRaiseAction={onRaiseAction}
           onAddObservation={onAddObservation}
+          country={country}
         />
       ) : (<>
       <div className="iw-main">

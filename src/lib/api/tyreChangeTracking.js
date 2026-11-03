@@ -19,7 +19,7 @@ import { shapeRunningLife } from '../tyreRunningLife'
 
 /** Only the columns the matcher reads - a fitment row, not the whole record. */
 const FITMENT_COLS =
-  'id,asset_no,serial_no,position,tyre_position,brand,size,site,country,issue_date,fitment_date,removal_date,km_at_removal,status,category'
+  'id,asset_no,serial_no,position,tyre_position,brand,size,site,country,issue_date,fitment_date,removal_date,km_at_removal,status,category,job_card'
 
 /**
  * Inspections carry the tyre conditions the user-raised flags come from.

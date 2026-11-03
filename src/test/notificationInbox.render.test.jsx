@@ -13,7 +13,11 @@ function setup() {
   fireEvent.click(screen.getByRole('button', { name: /Notifications/ }))
   return screen.getByRole('dialog', { name: 'Notifications' })
 }
-const row = (id, extra = {}) => ({ id, title: 'Inspection awaiting approval', message: 'TM671 at QIDDIYA needs your sign-off.', type: 'approval', severity: 'Medium', entityType: 'inspection', entityId: 'record-1', timestamp: new Date().toISOString(), read: false, ...extra })
+// ONE timestamp for every row. Each row used to stamp its own new Date(), so on a
+// slow run the two landed in different milliseconds, the newest-first grouping
+// flipped them, and the markRead order below failed intermittently.
+const NOW = new Date().toISOString()
+const row = (id, extra = {}) => ({ id, title: 'Inspection awaiting approval', message: 'TM671 at QIDDIYA needs your sign-off.', type: 'approval', severity: 'Medium', entityType: 'inspection', entityId: 'record-1', timestamp: NOW, read: false, ...extra })
 
 beforeEach(() => { vi.clearAllMocks(); h.rows = [row('one'), row('two')]; h.error = null; h.loading = false; h.enabled = true })
 afterEach(cleanup)

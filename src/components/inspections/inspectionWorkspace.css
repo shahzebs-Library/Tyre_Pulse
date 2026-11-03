@@ -140,12 +140,12 @@
 
 /* ---- Observations module ------------------------------------------------- */
 .iw-obsboard { display: grid; gap: 14px; }
-.iw-kpis-obs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.iw-kpis-obs { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .iw-obs-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 10px; }
 .iw-obs-tools .iw-search { flex: 1 1 260px; margin: 0; }
 .iw-obs-sev { display: grid; gap: 3px; font-size: 11px; color: var(--cc-ink-3); }
 .iw-obs-table { display: grid; margin-top: 10px; }
-.iw-otr { display: grid; grid-template-columns: 110px minmax(110px, 1fr) minmax(0, 2.6fr) 100px minmax(100px, 1fr) 220px; gap: 12px; align-items: center; padding: 10px 6px; border-bottom: 1px solid var(--cc-inner-border); font-size: 12.5px; color: var(--cc-ink); }
+.iw-otr { display: grid; grid-template-columns: 105px minmax(100px, 1fr) minmax(0, 2.4fr) 90px 130px minmax(100px, 1fr) 210px; gap: 12px; align-items: center; padding: 10px 6px; border-bottom: 1px solid var(--cc-inner-border); font-size: 12.5px; color: var(--cc-ink); }
 .iw-otr > span { min-width: 0; }
 .iw-otr b, .iw-otr small { display: block; overflow: hidden; text-overflow: ellipsis; }
 .iw-otr small { font-size: 11px; color: var(--cc-ink-3); white-space: nowrap; }
@@ -161,3 +161,26 @@
   .iw-otr > .iw-o-text { grid-column: 1 / -1; order: -1; }
   .iw-otr > .iw-o-acts { grid-column: 1 / -1; justify-content: flex-start; flex-wrap: wrap; }
 }
+
+/* ---- one observation (drawer) -------------------------------------------- */
+.cc.iw-od { display: grid; gap: 16px; padding: 4px 0; }
+.iw-od-head { display: grid; gap: 6px; justify-items: start; }
+.iw-od-head h3 { margin: 0; font-size: 18px; font-weight: 700; color: var(--cc-ink); }
+.iw-od-head p { margin: 0; font-size: 13px; color: var(--cc-ink-2); }
+.iw-od-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.iw-od-facts div { padding: 10px; border: 1px solid var(--cc-inner-border); border-radius: 10px; background: var(--cc-inner); min-width: 0; }
+.iw-od-facts dt { font-size: 11px; color: var(--cc-ink-3); }
+.iw-od-facts dd { margin: 2px 0 0; font-size: 14px; font-weight: 600; color: var(--cc-ink); overflow-wrap: anywhere; }
+.iw-od-block h4 { margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--cc-ink-3); }
+.iw-od-now { display: grid; gap: 6px; justify-items: start; padding: 12px; border-radius: 12px; border: 1px solid var(--cc-inner-border); background: var(--cc-inner); }
+.iw-od-now.good { border-color: var(--cc-green); background: var(--cc-green-tint); }
+.iw-od-now.bad { border-color: var(--cc-red); background: var(--cc-red-tint); }
+.iw-od-now.warn { border-color: var(--cc-amber); background: var(--cc-amber-tint); }
+.iw-od-now p { margin: 0; font-size: 13px; color: var(--cc-ink); line-height: 1.5; }
+.iw-od-muted { font-size: 12.5px; color: var(--cc-ink-2); margin: 0 0 8px; }
+.iw-od-photo { display: block; max-width: 100%; max-height: 320px; border-radius: 12px; border: 1px solid var(--cc-inner-border); object-fit: contain; }
+.iw-od-nophoto { display: flex; align-items: center; gap: 8px; padding: 14px; border: 1px dashed var(--cc-inner-border); border-radius: 12px; font-size: 12.5px; color: var(--cc-ink-2); }
+.cc.iw-od-foot { display: flex; flex-direction: row; align-items: center; gap: 8px; justify-content: flex-end; flex-wrap: wrap; width: 100%; background: transparent; }
+.iw-od-foot .cc-btn, .iw-od-foot .cc-btn-primary { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; }
+@media (max-width: 640px) { .iw-od-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 961px) and (max-width: 1200px) { .iw-kpis-obs { grid-template-columns: repeat(3, minmax(0, 1fr)); } }

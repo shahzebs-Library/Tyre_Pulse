@@ -88,10 +88,10 @@ export default function ObservationsBoard({
           day: o.day, kind: KIND_LABEL[o.kind], asset_no: o.asset_no, site: o.site,
           position: o.position, text: o.text, remarks: o.remarks, severity: o.severity,
           inspector: o.inspector, tyre_now: o.tyreNow ? TYRE_NOW_META[o.tyreNow.state].label : '',
-          replaced_on: o.tyreNow?.replacement?.fittedOn || '', action: o.kind === 'note' ? '' : o.actionRaised ? 'Raised' : 'Not raised',
+          replaced_on: o.tyreNow?.replacement?.fittedOn || '', job_card: o.tyreNow?.replacement?.jobCard || '', action: o.kind === 'note' ? '' : o.actionRaised ? 'Raised' : 'Not raised',
         })),
-        ['day', 'kind', 'asset_no', 'site', 'position', 'text', 'remarks', 'severity', 'inspector', 'tyre_now', 'replaced_on', 'action'],
-        ['Date', 'Type', 'Asset', 'Site', 'Position', 'Observation', 'Remarks', 'Severity', 'Inspector', 'Tyre now', 'Replaced on', 'Corrective action'],
+        ['day', 'kind', 'asset_no', 'site', 'position', 'text', 'remarks', 'severity', 'inspector', 'tyre_now', 'replaced_on', 'job_card', 'action'],
+        ['Date', 'Type', 'Asset', 'Site', 'Position', 'Observation', 'Remarks', 'Severity', 'Inspector', 'Tyre now', 'Replaced on', 'Job card', 'Corrective action'],
         'TyrePulse Observations',
         'Observations',
       )
@@ -205,6 +205,7 @@ export default function ObservationsBoard({
                         <>
                           <span className={`cc-pill ${TYRE_NOW_META[o.tyreNow.state].tone}`}>{TYRE_NOW_META[o.tyreNow.state].label}</span>
                           {o.tyreNow.state === 'replaced' && <small>{fmtDay(o.tyreNow.replacement?.fittedOn)}</small>}
+                          {o.tyreNow.state === 'replaced' && o.tyreNow.replacement?.jobCard && <small>JC {o.tyreNow.replacement.jobCard}</small>}
                         </>
                       )}
                 </span>

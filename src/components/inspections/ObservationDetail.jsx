@@ -102,7 +102,7 @@ export default function ObservationDetail({ obs, onClose, onOpenInspection, onRa
                   <p>
                     {now.state === 'replaced' && (
                       <>A new tyre{now.replacement?.serial ? ` (${now.replacement.serial}${now.replacement.brand ? `, ${now.replacement.brand}` : ''})` : ''} was fitted on this wheel on {fmtDay(now.replacement?.fittedOn)}
-                        {now.daysToReplace != null ? `, ${now.daysToReplace} ${now.daysToReplace === 1 ? 'day' : 'days'} after this inspection` : ''}. No action is needed.</>
+                        {now.daysToReplace != null ? `, ${now.daysToReplace} ${now.daysToReplace === 1 ? 'day' : 'days'} after this inspection` : ''}{now.replacement?.jobCard ? `, on job card ${now.replacement.jobCard}` : ', no job card recorded'}. No action is needed.</>
                     )}
                     {now.state === 'removed_not_replaced' && <>This tyre was taken off{now.removedOn ? ` on ${fmtDay(now.removedOn)}` : ''}, but no new tyre has been recorded on this wheel.</>}
                     {now.state === 'on_vehicle' && <>The same tyre is still fitted on this wheel. It has not been changed since this inspection.</>}

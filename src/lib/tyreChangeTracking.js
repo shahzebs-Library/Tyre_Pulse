@@ -123,6 +123,8 @@ export function shapeTyreRecord(r = {}) {
     // the same thing here as it does in the pool and lifecycle views.
     removed: isRemovedOrScrapped(r),
     status: txt(r.status),
+    // The job card the change was booked on, from the tyre consumption upload.
+    jobCard: txt(r.job_card),
   }
 }
 
@@ -409,6 +411,7 @@ export function resolveFlag(flag, index, { now = new Date() } = {}) {
       reason: '',
       replacement: {
         serial: rep.serial || '', brand: rep.brand || '', size: rep.size || '', fittedOn: rep.fittedOn,
+        jobCard: rep.jobCard || '',
       },
       daysFlagged,
       daysToReplace: daysBetween(since, rep.fittedOn),

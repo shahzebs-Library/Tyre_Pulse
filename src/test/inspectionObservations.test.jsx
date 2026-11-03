@@ -86,7 +86,7 @@ describe('has the observed tyre been replaced', () => {
   }
   const fit = (position, serial, issue_date, extra = {}) => ({ asset_no: 'MP119', country: 'KSA', position, serial_no: serial, issue_date, ...extra })
   const fitments = [
-    fit('LHF1', 'OLD1', '2025-01-01'), fit('LHF1', 'NEW1', '2026-10-05'), // replaced after the inspection
+    fit('LHF1', 'OLD1', '2025-01-01'), fit('LHF1', 'NEW1', '2026-10-05', { job_card: 'GCKR/JC/1022/1026' }), // replaced after the inspection
     fit('RHF1', 'OLD2', '2025-02-01'), // still fitted
   ]
   const list = withTyreNow(observationRegister([insp]), fitments, { now: new Date('2026-11-03') })
@@ -96,6 +96,8 @@ describe('has the observed tyre been replaced', () => {
     expect(by('LHF1').tyreNow.state).toBe('replaced')
     expect(by('LHF1').tyreNow.replacement).toMatchObject({ serial: 'NEW1', fittedOn: '2026-10-05' })
     expect(by('LHF1').tyreNow.daysToReplace).toBe(4)
+    // The job card the change was booked on, from the tyre consumption upload.
+    expect(by('LHF1').tyreNow.replacement.jobCard).toBe('GCKR/JC/1022/1026')
   })
 
   it('keeps the same tyre as still fitted, and a wheel with no record as not known', () => {

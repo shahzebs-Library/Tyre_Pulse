@@ -7,6 +7,7 @@
  */
 import { useEffect, useState } from 'react'
 import { supabase } from './_client'
+import { fetchAllPages } from '../fetchAll'
 import { setAxleCounts } from '../vehicleTyreLayout'
 
 let loading = null
@@ -17,12 +18,12 @@ export function loadAxleCounts() {
   if (!loading) {
     loading = (async () => {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await fetchAllPages((from, to) => supabase
           .from('vehicle_fleet')
           .select('asset_no,country,axle_count')
           .not('axle_count', 'is', null)
-          .order('asset_no')
-          .limit(5000)
+          .order('id')
+          .range(from, to), { max: 20000 })
         if (error) throw error
         setAxleCounts(data || [])
         version += 1

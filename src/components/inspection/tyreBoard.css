@@ -1,5 +1,5 @@
 /* Wide boards (dual-wheel trucks) scroll inside narrow cards rather than overflow. */
-.tb-scroll { max-width: 100%; overflow-x: auto; }
+.tb-scroll { width: 100%; max-width: 100%; overflow-x: auto; }
 /* TyreBoard: Flutter-style inspection result. Theme tokens only, so it reads in
    light and dark; the four status hues carry meaning and stay fixed. */
 .tb { --tb-good: #16a34a; --tb-warn: #d97706; --tb-bad: #dc2626; --tb-none: #94a3b8;

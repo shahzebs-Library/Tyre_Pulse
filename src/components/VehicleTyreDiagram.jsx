@@ -1674,13 +1674,20 @@ export default function VehicleTyreDiagram({
     ? (id) => onPositionClick({ position: id })
     : onTyreClick
 
+  // The vehicle art the board and the thumbnail draw when there is no photo:
+  // the built-in body, or the body an admin designed in the Vehicle Designer.
+  // SharedDefs travels with it because both bodies reference its gradients.
+  const ArtBody = (Body || layout.bodySpec)
+    ? () => (<><SharedDefs />{Body ? <Body /> : <CustomBody spec={layout.bodySpec} />}</>)
+    : null
+
   if (variant === 'photo') {
     // Thumbnail: the vehicle photo alone, for lists too narrow for cards.
     return (
       <div className="tb-thumb" style={{ width }}>
         {photo
           ? <img src={photo.href} alt="" style={{ width, height: width * (viewH + 10) / 220 }} />
-          : Body ? <svg viewBox={`-10 -5 220 ${viewH + 10}`} width={width} aria-hidden="true"><Body /></svg> : null}
+          : ArtBody ? <svg viewBox={`-10 -5 220 ${viewH + 10}`} width={width} aria-hidden="true"><ArtBody /></svg> : null}
         <small>{displayName} · {tyres.length} tyres</small>
       </div>
     )
@@ -1692,7 +1699,7 @@ export default function VehicleTyreDiagram({
         tyres={tyres}
         viewH={viewH}
         photo={photo}
-        Body={Body}
+        Body={ArtBody}
         tyreData={boardData(slotPositions, tyreData)}
         riskOf={(id) => riskMap[id] ?? 'none'}
         codeOf={(id) => legacyPositionCode(resolved, id) || id}

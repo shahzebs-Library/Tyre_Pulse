@@ -21,6 +21,7 @@ import { bandFor, measureFor } from './tyreRunningLife'
 // disagree with the screen it came from.
 import { displayPositionCode, inspectionTypeHint, canonicalToSlotId, slotDisplayCode } from './tyreBay'
 import { resolveLayoutKey, isTyrelessEquipment } from './vehicleTyreLayout'
+import { serializeSvgInlined } from './svgInline'
 
 /**
  * Central export gate (System Configuration). When an admin turns CSV/Excel
@@ -340,9 +341,11 @@ const _TONE_RGB = { crit: P.crimson, warn: P.scarlet, good: P.emerald, info: P.i
 
 // Serialize a DOM SVG element to a PNG data URL at given scale
 async function svgToPngDataUrl(svgEl, scale = 2, bgColor = '#0A0F1E') {
+  let svgStr = null
+  try { svgStr = await serializeSvgInlined(svgEl) } catch { svgStr = null }
   return new Promise((resolve) => {
     try {
-      const svgStr  = new XMLSerializer().serializeToString(svgEl)
+      if (!svgStr) svgStr = new XMLSerializer().serializeToString(svgEl)
       const blob    = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' })
       const url     = URL.createObjectURL(blob)
       const img     = new Image()

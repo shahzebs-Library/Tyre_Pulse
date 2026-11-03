@@ -199,14 +199,26 @@ export function inspectionTypeHint(row) {
  *   invented one sends a fitter to the wrong tyre, which is worse than an
  *   unfamiliar one.
  */
+// Pure in (hint, position) over the built-in layouts, and the inspections
+// register asks it ~26,000 times per load for a few hundred distinct pairs, so
+// the answer is memoised. Bounded: cleared if it ever grows past DISPLAY_CAP.
+const displayMemo = new Map()
+const DISPLAY_CAP = 20000
 export function displayPositionCode(vehicleTypeHint, position) {
   const stored = position == null ? '' : String(position).trim()
   if (!stored) return ''
   const hint = String(vehicleTypeHint || '').trim()
-  if (!vehicleTypeIsKnown(hint)) return stored
-  const slot = canonicalToSlotId(hint, stored)
-  if (!slot) return stored
-  return slotDisplayCode(resolveLayoutKey(hint), slot)
+  const key = `${hint}\u0000${stored}`
+  const hit = displayMemo.get(key)
+  if (hit !== undefined) return hit
+  let out = stored
+  if (vehicleTypeIsKnown(hint)) {
+    const slot = canonicalToSlotId(hint, stored)
+    if (slot) out = slotDisplayCode(resolveLayoutKey(hint), slot)
+  }
+  if (displayMemo.size >= DISPLAY_CAP) displayMemo.clear()
+  displayMemo.set(key, out)
+  return out
 }
 
 /**

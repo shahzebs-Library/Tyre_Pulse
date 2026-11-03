@@ -232,7 +232,21 @@ export function tyreReadingRows(row) {
  * map and every other surface draws from - a wheel this leaves out is the
  * identical wheel the diagram would draw green.
  */
+// Banding a row's tyres resolves its axle layout and every position label, and
+// the Inspections workspace asks for the same row's affected tyres from several
+// places (KPIs, defect mix, observations, findings) on every filter change and
+// keystroke: measured at ~600 ms over 2,352 rows. A row object is never edited
+// in place, so the answer is cached per object and re-derived only if its
+// tyre_conditions value is swapped. Callers must treat the array as read-only.
+const affectedCache = new WeakMap()
 export function affectedTyreReadings(row) {
+  if (row && typeof row === 'object') {
+    const hit = affectedCache.get(row)
+    if (hit && hit.tc === row.tyre_conditions) return hit.out
+    const out = tyreReadingRows(row).rows.filter((r) => r.risk !== 'good')
+    affectedCache.set(row, { tc: row.tyre_conditions, out })
+    return out
+  }
   return tyreReadingRows(row).rows.filter((r) => r.risk !== 'good')
 }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback, useDeferredValue } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useFilterState } from '../hooks/useFilterState'
 import useInspectionRegister from '../hooks/useInspectionRegister'
@@ -220,6 +220,10 @@ export default function Inspections() {
   const [flagError, setFlagError]       = useState('')
   const [flagReload, setFlagReload]     = useState(0)
   const search = filters.search
+  // The register, the workspace and the observations all re-derive from the
+  // search term over every loaded inspection. Deferring it keeps the box
+  // responsive while typing; the lists catch up a frame later.
+  const deferredSearch = useDeferredValue(search)
   const [deleteId, setDeleteId]         = useState(null)
   const [activeTab, setActiveTab]       = useState('all')
   const registerTopRef = useRef(null)
@@ -574,14 +578,14 @@ export default function Inspections() {
         // nothing, with no error to show for it.
         site: toList(filterSite), region: toList(filterRegion),
         inspector: toList(filterInspector), vehicleType: toList(filterVehicleType),
-        from: filterFrom, to: filterTo, search, signoff: filterSignoff,
+        from: filterFrom, to: filterTo, search: deferredSearch, signoff: filterSignoff,
       },
       // Region lives on the site register, not on the inspection, so the resolver is
       // injected and the rule itself stays a pure, tested function.
       { regionOf: (site) => regionForSite(regionMap, site) },
     ),
     [tabFiltered, filterSite, filterRegion, filterInspector, filterVehicleType,
-      regionMap, filterFrom, filterTo, search, filterSignoff],
+      regionMap, filterFrom, filterTo, deferredSearch, filterSignoff],
   )
 
   /**
@@ -597,12 +601,12 @@ export default function Inspections() {
       {
         site: toList(filterSite), region: toList(filterRegion),
         inspector: toList(filterInspector), vehicleType: toList(filterVehicleType),
-        from: filterFrom, to: filterTo, search, signoff: filterSignoff,
+        from: filterFrom, to: filterTo, search: deferredSearch, signoff: filterSignoff,
       },
       { regionOf: (site) => regionForSite(regionMap, site) },
     ),
     [rows, filterSite, filterRegion, filterInspector, filterVehicleType,
-      regionMap, filterFrom, filterTo, search, filterSignoff],
+      regionMap, filterFrom, filterTo, deferredSearch, filterSignoff],
   )
 
   // Only the machine classes the loaded inspections actually cover. The fleet

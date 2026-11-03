@@ -121,8 +121,12 @@ export function inspectionProgress(row) {
 }
 
 // ── Workspace KPIs, list tabs, search ─────────────────────────────────────────
+// Only the risk band is needed here, so the readings are banded without the
+// label and pressure work affectedTyreReadings does: this runs over every row
+// on load and was the single slowest step of opening the page.
 const hasCritical = (r) => r?.severity === 'Critical' || r?.severity === 'High'
-  || affected(r).some((t) => t.risk === 'critical')
+  || Object.values(normalizeTyreConditions(withTc(r))).some((d) => d
+    && d.risk === 'critical' && (d.condition || d.pressure != null || d.tread != null || d.notes))
 
 /** Headline over a scoped set. Rates are null when there is nothing to divide by. */
 export function workspaceKpis(rows) {

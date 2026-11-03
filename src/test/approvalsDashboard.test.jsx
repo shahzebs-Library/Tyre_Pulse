@@ -389,6 +389,17 @@ describe('Unified approval dashboard', () => {
     expect(screen.queryByText('0 pending')).not.toBeInTheDocument()
   })
 
+  it('shows the rows that did load as "n+" when another queue failed, not a bare dash', async () => {
+    workflows.getApprovalDashboard.mockRejectedValueOnce(new Error('network unavailable'))
+    queue.listInspectionApprovals.mockResolvedValueOnce([INSPECTION])
+    renderPage()
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Workflows')
+    // The tab agrees with the list under it: the approvals that loaded, marked as
+    // a floor, instead of "-" beside rows that are plainly on screen.
+    expect(screen.getByRole('button', { name: /^Pending/ })).toHaveTextContent(/\d+\+/)
+  })
+
   it('marks lifecycle queues incomplete when the server count exceeds the rows returned', async () => {
     workflows.getApprovalDashboard.mockResolvedValueOnce({
       ...DASHBOARD,

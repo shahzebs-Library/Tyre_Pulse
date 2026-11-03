@@ -932,7 +932,9 @@ export default function Approvals() {
     closures_pending:  sourceErrors.includes('Accident closures') ? null : closures.length,
     checklist_pending: sourceErrors.includes('Checklist sign-offs') ? null : mergedPending.filter(i => i.source === SOURCE.checklist).length,
     inspection_pending: sourceErrors.includes('Inspection sign-offs') ? null : mergedPending.filter(i => i.source === SOURCE.inspection).length,
-    total_pending:     pendingQueueUnavailable ? null : mergedPending.length,
+    // A queue that only loaded in part still has the approvals it did load; show
+    // them as "n+" instead of "—" so the tab agrees with the list under it.
+    total_pending:     pendingQueueUnavailable ? (mergedPending.length > 0 ? `${mergedPending.length}+` : null) : mergedPending.length,
     overdue:           sourceErrors.includes('Workflows') ? null : (buckets.overdue || []).length,
     returned:          sourceErrors.includes('Workflows') ? null : (buckets.returned || []).length,
     rejected:          sourceErrors.includes('Workflows') ? null : (buckets.rejected || []).length,
@@ -1210,7 +1212,7 @@ export default function Approvals() {
   }
 
   return (
-    <div className="text-[var(--text-primary)] space-y-6">
+    <div className="tp-approvals text-[var(--text-primary)] space-y-6">
       <PageHeader
         title="Approval Dashboard"
         subtitle="Every pending approval across your organisation: workflows, accident closures, checklist and inspection sign-offs"

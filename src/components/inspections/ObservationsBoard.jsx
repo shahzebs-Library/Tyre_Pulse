@@ -40,7 +40,12 @@ export default function ObservationsBoard({
   const [q, setQ] = useState('')
   const [page, setPage] = useState(0)
   const [exportError, setExportError] = useState('')
-  const [tyreNow, setTyreNow] = useState('all')
+  // Default hides findings the tyre change history shows were already dealt with.
+  const [tyreNow, setTyreNow] = useState('not_replaced')
+  const [site, setSite] = useState('all')
+  const [asset, setAsset] = useState('all')
+  const [inspector, setInspector] = useState('all')
+  const [action, setAction] = useState('all')
   const [detail, setDetail] = useState(null)
   // Fitment records for the vehicles these observations name. null while loading
   // or unreadable, so no row is given a status it was not checked for.
@@ -69,11 +74,39 @@ export default function ObservationsBoard({
   const all = useMemo(() => withTyreNow(base, fitments), [base, fitments])
   const summary = useMemo(() => observationSummary(all), [all])
   const nowSummary = useMemo(() => tyreNowSummary(all), [all])
+  const settled = useMemo(() => {
+    const by = new Map()
+    for (const o of all) {
+      if (o.kind !== 'tyre') continue
+      const prev = by.get(o.inspectionId)
+      const done = o.tyreNow?.state === 'replaced'
+      by.set(o.inspectionId, prev === undefined ? done : prev && done)
+    }
+    return new Set([...by].filter(([, done]) => done).map(([id]) => id))
+  }, [all])
   const list = useMemo(
-    () => filterObservations(all, { q, kind, severity }).filter((o) => matchesTyreNow(o, tyreNow)),
-    [all, q, kind, severity, tyreNow],
+    () => filterObservations(all, { q, kind, severity })
+      .filter((o) => matchesTyreNow(o, tyreNow))
+      // A note on an inspection whose tyre findings were ALL replaced is about
+      // work already done, so it leaves the default view with them.
+      .filter((o) => !(tyreNow === 'not_replaced' && o.kind === 'note' && settled.has(o.inspectionId)))
+      .filter((o) => (site === 'all' || o.site === site)
+        && (asset === 'all' || o.asset_no === asset)
+        && (inspector === 'all' || o.inspector === inspector)
+        && (action === 'all' || (o.kind !== 'note' && (action === 'raised' ? o.actionRaised : !o.actionRaised)))),
+    [all, settled, q, kind, severity, tyreNow, site, asset, inspector, action],
   )
-  useEffect(() => { setPage(0) }, [q, kind, severity, tyreNow, rows])
+  useEffect(() => { setPage(0) }, [q, kind, severity, tyreNow, site, asset, inspector, action, rows])
+  const optionsOf = (key) => [...new Set(all.map((o) => o[key]).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)))
+  const siteOptions = useMemo(() => optionsOf('site'), [all]) // eslint-disable-line react-hooks/exhaustive-deps
+  const assetOptions = useMemo(() => optionsOf('asset_no'), [all]) // eslint-disable-line react-hooks/exhaustive-deps
+  const inspectorOptions = useMemo(() => optionsOf('inspector'), [all]) // eslint-disable-line react-hooks/exhaustive-deps
+  const filtersOn = q || kind !== 'all' || severity !== 'all' || tyreNow !== 'not_replaced'
+    || site !== 'all' || asset !== 'all' || inspector !== 'all' || action !== 'all'
+  const clearFilters = () => {
+    setQ(''); setKind('all'); setSeverity('all'); setTyreNow('not_replaced')
+    setSite('all'); setAsset('all'); setInspector('all'); setAction('all')
+  }
 
   const unreadable = !!error
   const show = (v) => (unreadable ? 'N/A' : fmtInt(v))
@@ -152,12 +185,51 @@ export default function ObservationsBoard({
           <label className="iw-obs-sev">
             <span>Tyre now</span>
             <select className="cc-select" value={tyreNow} onChange={(e) => setTyreNow(e.target.value)} aria-label="Filter by whether the tyre was replaced">
-              <option value="all">Any</option>
+              <option value="not_replaced">Not replaced yet</option>
+              <option value="all">Any, including replaced</option>
               <option value="open">Still open</option>
               {Object.entries(TYRE_NOW_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
             </select>
           </label>
+          <label className="iw-obs-sev">
+            <span>Site</span>
+            <select className="cc-select" value={site} onChange={(e) => setSite(e.target.value)} aria-label="Filter by site">
+              <option value="all">All sites</option>
+              {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          <label className="iw-obs-sev">
+            <span>Vehicle</span>
+            <select className="cc-select" value={asset} onChange={(e) => setAsset(e.target.value)} aria-label="Filter by vehicle">
+              <option value="all">All vehicles</option>
+              {assetOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          <label className="iw-obs-sev">
+            <span>Inspector</span>
+            <select className="cc-select" value={inspector} onChange={(e) => setInspector(e.target.value)} aria-label="Filter by inspector">
+              <option value="all">All inspectors</option>
+              {inspectorOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          <label className="iw-obs-sev">
+            <span>Action</span>
+            <select className="cc-select" value={action} onChange={(e) => setAction(e.target.value)} aria-label="Filter by corrective action">
+              <option value="all">Any</option>
+              <option value="raised">Action raised</option>
+              <option value="none">No action yet</option>
+            </select>
+          </label>
+          {filtersOn && (
+            <button type="button" className="cc-btn-ghost iw-inline" onClick={clearFilters}>Clear filters</button>
+          )}
         </div>
+        {tyreNow === 'not_replaced' && nowSummary.replaced > 0 && (
+          <p className="iw-od-muted" role="status">
+            {fmtInt(nowSummary.replaced)} {nowSummary.replaced === 1 ? 'finding is' : 'findings are'} hidden because the tyre change history shows the tyre was already replaced.{' '}
+            <button type="button" className="cc-link cc-link-btn" onClick={() => setTyreNow('replaced')}>Show them</button>
+          </p>
+        )}
         {fitError && <p className="iw-od-muted" role="status">Could not read the tyre change records, so no finding shows whether it was replaced. {fitError}</p>}
         <Tabs label="Observation type" value={kind} onChange={setKind} tabs={[
           { key: 'all', label: 'All', count: unreadable ? null : all.length },

@@ -108,6 +108,8 @@ describe('has the observed tyre been replaced', () => {
   it('counts open as still fitted plus not known, and filters by it', () => {
     expect(tyreNowSummary(list)).toMatchObject({ replaced: 1, on_vehicle: 1, unknown: 1, open: 2 })
     expect(list.filter((o) => matchesTyreNow(o, 'open'))).toHaveLength(2)
+    // The default view hides only what the history shows was already replaced.
+    expect(list.filter((o) => matchesTyreNow(o, 'not_replaced')).map((o) => o.rawPosition).sort()).toEqual(['LHF2', 'RHF1'])
   })
 
   it('gives no status at all while the records are not loaded', () => {

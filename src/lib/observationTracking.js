@@ -67,9 +67,14 @@ export function tyreNowSummary(list) {
   return out
 }
 
-/** Filter by tyre status: 'all', 'open' (still fitted or not known), or one state. */
+/**
+ * Filter by tyre status: 'all'; 'not_replaced' (the default view: everything except
+ * findings whose tyre the records show was already changed, notes included);
+ * 'open' (still fitted or not known); or one state.
+ */
 export function matchesTyreNow(o, filter) {
   if (!filter || filter === 'all') return true
+  if (filter === 'not_replaced') return o?.tyreNow?.state !== 'replaced'
   if (o.kind !== 'tyre') return false
   const st = o?.tyreNow?.state
   if (filter === 'open') return st === 'on_vehicle' || st === 'unknown'

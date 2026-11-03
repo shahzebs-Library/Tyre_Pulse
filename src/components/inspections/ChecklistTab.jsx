@@ -362,8 +362,14 @@ export default function ChecklistTab({
                           : p.condition === 'Wear' ? 'warning'
                           : (p.condition === 'Damage' || p.condition === 'Puncture') ? 'critical'
                           : 'none',
+                        condition: p.condition || null,
+                        pressure: p.pressure,
+                        tread: p.tread_depth ?? p.tread,
                       }))}
                       onPositionClick={({ position }) => setClSelectedPos(position)}
+                      variant="board"
+                      width={340}
+                      selected={clSelectedPos}
                     />
                   </div>
 

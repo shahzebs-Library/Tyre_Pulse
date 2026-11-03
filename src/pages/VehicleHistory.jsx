@@ -1216,7 +1216,7 @@ function TyreAnalysisCard({ row, currency, defaultCost, fleetRecord, tyrePositio
           <div>
             <p className="vh-h3">{t('vehiclehistory.detail.tyrePositionOverview')}</p>
             <div className="flex flex-wrap gap-8 items-start">
-              <VehicleTyreDiagram positions={tyrePositions} vehicleType={fleetRecord.vehicle_type} />
+              <VehicleTyreDiagram positions={tyrePositions} vehicleType={fleetRecord.vehicle_type} variant="board" width={360} emptyLabel="No tyre" recordedLabel="fitted" />
               <div className="flex-1 min-w-48">
                 <p className="text-xs text-muted mb-3">{t('vehiclehistory.detail.riskLevelByPosition')}</p>
                 <div className="flex flex-wrap gap-3">

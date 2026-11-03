@@ -67,7 +67,14 @@ export function enrichTwin({ twin, lifeRows = [], assetNo = '', vehicleType = ''
     bandCounts[band] = (bandCounts[band] || 0) + 1
     const slot = layoutKnown && p.position ? canonicalToSlotId(hint, p.position) : null
     const risk = riskFor(band === 'unknown' ? null : band, p.health)
-    if (slot) diagram.push({ position: slot, risk_level: risk || 'none' })
+    if (slot) {
+      diagram.push({
+        position: slot, risk_level: risk || 'none',
+        // What the wheel card prints: the tyre on it and its life band.
+        serial_no: p.serial || null, brand: p.brand || null,
+        condition: band === 'unknown' ? null : (BAND_META[band] || BAND_META.unknown).label,
+      })
+    }
     else unplaced++
     return {
       ...p,

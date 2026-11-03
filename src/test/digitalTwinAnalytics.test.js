@@ -29,7 +29,9 @@ describe('digitalTwinAnalytics', () => {
   it('joins running life, places tyres on the layout and counts the unplaced honestly', () => {
     const r = enrichTwin({ twin, lifeRows: life, assetNo: 'TM500' })
     expect(r.layoutKnown).toBe(true)
-    expect(r.diagram).toEqual([{ position: 'F1L', risk_level: 'Critical' }, { position: 'F1R', risk_level: 'Low' }])
+    expect(r.diagram).toMatchObject([{ position: 'F1L', risk_level: 'Critical' }, { position: 'F1R', risk_level: 'Low' }])
+    // The wheel card prints the tyre on it and its life band.
+    expect(r.diagram[0]).toMatchObject({ serial_no: 'S1', condition: 'Past expected life' })
     expect(r.unplaced).toBe(1)
     expect(r.bandCounts.overdue).toBe(1)
     expect(r.bandCounts.healthy).toBe(1)

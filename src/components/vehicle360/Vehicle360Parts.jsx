@@ -192,7 +192,10 @@ export function LayoutCard({ vehicle, tyres, status, onExpand, wide = false }) {
             <VehicleTyreDiagram
               vehicleType={vehicle.vehicle_type}
               positions={diagramPositions(vehicle.vehicle_type, tyres)}
-              width={wide ? 300 : 200}
+              width={wide ? 380 : 300}
+              variant="board"
+              emptyLabel="No tyre"
+              recordedLabel="fitted"
             />
           </div>
           <LayoutLegend status={status} />

@@ -34,7 +34,7 @@ export function AxleTyreLayoutCard({ rows, combo, value, onChange, fleetMap }) {
           <div className="cm-layout">
             <figure className="cm-layout-unit">
               {prime?.vehicle_type
-                ? <VehicleTyreDiagram vehicleType={prime.vehicle_type} width={150} />
+                ? <VehicleTyreDiagram vehicleType={prime.vehicle_type} width={150} variant="photo" />
                 : <div className="cm-visual-empty">Prime mover {combo.prime_mover_no} has no vehicle type in the fleet register.</div>}
               <figcaption>{combo.prime_mover_no}{prime?.vehicle_type ? `, ${prime.vehicle_type}` : ''}</figcaption>
             </figure>
@@ -43,7 +43,7 @@ export function AxleTyreLayoutCard({ rows, combo, value, onChange, fleetMap }) {
               return (
                 <figure key={t} className="cm-layout-unit">
                   {f?.vehicle_type
-                    ? <VehicleTyreDiagram vehicleType={f.vehicle_type} width={150} />
+                    ? <VehicleTyreDiagram vehicleType={f.vehicle_type} width={150} variant="photo" />
                     : <div className="cm-visual-empty">{t} is not in the fleet register.</div>}
                   <figcaption>{t}{f?.vehicle_type ? `, ${f.vehicle_type}` : ''}</figcaption>
                 </figure>

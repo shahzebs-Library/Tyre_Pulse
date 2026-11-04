@@ -88,3 +88,30 @@ void resetAxleRegistryForTest() {
   _byAsset.clear();
   _preferredCountry = null;
 }
+
+/// Everything the registry knows, as `'COUNTRY|ASSET' -> count` (null =
+/// known machine, no recorded count). Persisted so a phone that restarts with
+/// no signal still draws each machine's own build.
+Map<String, int?> exportAxleRegistry() =>
+    Map<String, int?>.unmodifiable(_byCountryAsset);
+
+/// The preferred country last set by a fleet load, for persistence.
+String? get preferredAxleCountry => _preferredCountry;
+
+/// Restores a saved snapshot. Entries learnt live this session win: a saved
+/// value never overwrites what the server has just said.
+void importAxleRegistry(Map<String, int?> saved, {String? preferredCountry}) {
+  saved.forEach((String key, int? n) {
+    final int bar = key.indexOf('|');
+    if (bar < 0) return;
+    final String asset = key.substring(bar + 1);
+    if (asset.isEmpty || _byCountryAsset.containsKey(key)) return;
+    _byCountryAsset[key] = n;
+    (_byAsset[asset] ??= <int?>{}).add(n);
+  });
+  if (_preferredCountry == null &&
+      preferredCountry != null &&
+      preferredCountry.trim().isNotEmpty) {
+    _preferredCountry = _norm(preferredCountry);
+  }
+}

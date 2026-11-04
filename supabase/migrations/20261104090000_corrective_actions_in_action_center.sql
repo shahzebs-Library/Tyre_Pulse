@@ -84,6 +84,12 @@ begin
       when 'resolved' then new.status in ('open','in_progress')
       when 'dismissed' then new.status = 'open'
       else false end;
+    -- The corrective-action sync may reopen an active item (Corrective Actions
+    -- has no acknowledged/blocked stages to walk back through).
+    if not v_allowed and new.status = 'open'
+       and current_setting('tp.action_sync', true) = 'on' then
+      v_allowed := true;
+    end if;
     if not v_allowed then
       raise exception 'Invalid action item transition: % -> %', old.status, new.status
         using errcode = '23514';
@@ -192,8 +198,10 @@ begin
        where id = v_item.id;
     elsif v_target = 'in_progress' and v_item.status in ('open', 'acknowledged', 'resolved') then
       update public.action_items set status = 'in_progress' where id = v_item.id;
-    elsif v_target = 'open' and v_item.status in ('resolved', 'dismissed') then
+    elsif v_target = 'open' and v_item.status <> 'open' then
+      perform set_config('tp.action_sync', 'on', true);
       update public.action_items set status = 'open' where id = v_item.id;
+      perform set_config('tp.action_sync', '', true);
     end if;
   exception when others then
     insert into public.system_logs (organisation_id, module_id, severity, source, message, detail)
@@ -270,7 +278,7 @@ select ca.organisation_id,
        left(ca.root_cause, 8000),
        case when ca.status = 'Closed' then 'Closed in Corrective Actions' end,
        ca.created_at,
-       case when ca.status = 'Closed' then coalesce(ca.closed_at, ca.resolved_at, ca.created_at) end
+       case when ca.status = 'Closed' then coalesce(ca.closed_at, ca.created_at) end
   from public.corrective_actions ca
  where ca.organisation_id is not null
    and not exists (select 1 from public.action_items ai

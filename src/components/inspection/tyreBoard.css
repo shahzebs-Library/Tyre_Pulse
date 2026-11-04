@@ -69,3 +69,8 @@
    "nothing here" look, so a fitted tyre never reads as a missing one. */
 .tb-known .tb-body { border-style: solid; border-left-color: var(--text-secondary); }
 .tb-known .tb-dot { background: var(--text-secondary); }
+
+/* Serial check: the same serial on two wheels, or a value that is not a serial. */
+.tb-flagged .tb-body { box-shadow: inset 0 0 0 2px var(--tb-bad); }
+.tb-flag { display: block; color: var(--tb-bad); font-weight: 600; font-size: 9px; line-height: 1.15; overflow-wrap: break-word; }
+.tb-serial-note { margin: 8px 6px 0; padding: 6px 8px; border-left: 3px solid var(--tb-bad); background: color-mix(in srgb, var(--tb-bad) 8%, transparent); font-size: 12px; line-height: 1.4; color: var(--text-primary, inherit); }

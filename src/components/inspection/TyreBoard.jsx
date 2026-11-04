@@ -11,6 +11,7 @@
  * points at its own axle. Purely presentational: no fetching, no state.
  */
 import { useLayoutEffect, useRef, useState } from 'react'
+import { serialFlags, serialFlagText } from '../../lib/tyreSerialCheck'
 import './tyreBoard.css'
 
 const TONE = { good: 'good', warning: 'warn', critical: 'bad', none: 'none' }
@@ -57,12 +58,13 @@ function Card({ w, onSelect, selected, emptyLabel, cardW }) {
           {showCond && <small className="tb-cond">{w.condition}</small>}
           {w.serial && <small className="tb-ident" title={w.serial}>{w.serial}</small>}
           {w.brand && <small className="tb-ident" title={w.brand}>{w.brand}</small>}
+          {w.serialFlag && <small className="tb-flag">{serialFlagText(w.serialFlag)}</small>}
         </span>
       </span>
     </>
   )
-  const cls = `tb-card tb-${tone}${recorded && tone === 'none' ? ' tb-known' : ''}${w.pending ? ' tb-pending' : ''}${selected ? ' tb-selected' : ''}`
-  const title = `${w.code}: ${recorded ? (w.condition || ident || 'Recorded') : emptyLabel}`
+  const cls = `tb-card tb-${tone}${recorded && tone === 'none' ? ' tb-known' : ''}${w.pending ? ' tb-pending' : ''}${w.serialFlag ? ' tb-flagged' : ''}${selected ? ' tb-selected' : ''}`
+  const title = `${w.code}: ${recorded ? (w.condition || ident || 'Recorded') : emptyLabel}${w.serialFlag ? ` (${serialFlagText(w.serialFlag)})` : ''}`
   if (onSelect) {
     return (
       <button type="button" className={`${cls} tb-tap`} title={title} aria-pressed={!!selected}
@@ -117,13 +119,17 @@ export default function TyreBoard({
       brand: d?.brand || null,
     }
   })
+  // One tyre can only be on one wheel: flag a serial shown on two wheels, and
+  // values that are not serials (a size, an Excel-damaged number).
+  const flags = serialFlags(wheels.map((w) => ({ position: w.code, serial: w.serial })))
+  for (const w of wheels) w.serialFlag = flags.byPosition[w.code] || null
   const left = axleGroups(wheels.filter((w) => w.cx < 100))
   const right = axleGroups(wheels.filter((w) => w.cx >= 100))
   const maxPerSide = Math.max(1, ...left.map((g) => g.wheels.length), ...right.map((g) => g.wheels.length))
 
   // Space: cards either side of the photo, a short leader between.
   const rich = wheels.some((w) => w.serial || w.brand)
-  const CARD_H = rich ? CARD_H_RICH : CARD_H_BASE
+  const CARD_H = (rich ? CARD_H_RICH : CARD_H_BASE) + (flags.count ? 14 : 0)
   const cardW = rich ? CARD_W_RICH : CARD_W_BASE
   const leader = 16
   // In a narrow card a twin wheel's inner and outer cards stack one above the
@@ -221,6 +227,15 @@ export default function TyreBoard({
         {side(L, true)}
         {side(R, false)}
       </div>
+      {flags.count > 0 && (
+        <div className="tb-serial-note" role="note">
+          <b>Check serials:</b>{' '}
+          {[
+            ...flags.duplicates.map((d) => `${d.serial} is on ${d.positions.join(' and ')}`),
+            ...flags.invalid.map((x) => `${x.position} "${x.serial}" ${serialFlagText({ kind: x.kind }).toLowerCase()}`),
+          ].join('; ')}.
+        </div>
+      )}
       <div className="tb-legend">
         <span><i className="tb-dot tb-good">✓</i>Good</span>
         <span><i className="tb-dot tb-warn">!</i>Warning</span>

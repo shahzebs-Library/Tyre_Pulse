@@ -20,6 +20,7 @@ const h = vi.hoisted(() => {
       eq(c, v) { calls.eq.push([c, v]); return b },
       or(e) { calls.or.push(e); return b },
       ilike(c, v) { calls.ilike.push([c, v]); return b },
+      not(c, op, v) { calls.not = [c, op, v]; return b },
       maybeSingle() { return Promise.resolve(state.result) },
       single() { return Promise.resolve(state.result) },
       then(onF, onR) { return Promise.resolve(state.result).then(onF, onR) },
@@ -50,12 +51,27 @@ describe('service layer - warranty', () => {
     expect(rows).toEqual([{ id: 'w1', claim_no: 'WAR-2026-00001' }])
   })
 
-  it('findTyreForClaim fuzzy-matches serial_number on tyre_records', async () => {
+  it('findTyreForClaim matches the LIVE serial_no column (serial_number is dead), escaped', async () => {
     h.state.result = { data: { serial_number: 'SN1' }, error: null }
-    const t = await warranty.findTyreForClaim('SN1')
+    const t = await warranty.findTyreForClaim('SN_1%')
     expect(h.state.last._table).toBe('tyre_records')
-    expect(h.state.last._calls.ilike).toContainEqual(['serial_number', '%SN1%'])
+    expect(h.state.last._calls.ilike).toContainEqual(['serial_no', '%SN\\_1\\%%'])
     expect(t).toEqual({ serial_number: 'SN1' })
+  })
+
+  it('listRemovedTyresForWarranty reads removed tyres, country-scoped null-safe', async () => {
+    h.state.result = { data: [{ id: 't1', removal_reason: 'BLAST/BURST' }], error: null }
+    const { rows, truncated } = await warranty.listRemovedTyresForWarranty({ country: 'KSA' })
+    expect(h.state.last._table).toBe('tyre_records')
+    expect(h.state.last._calls.not).toEqual(['removal_reason', 'is', null])
+    expect(h.state.last._calls.or).toContainEqual('country.eq.KSA,country.is.null')
+    expect(rows).toHaveLength(1)
+    expect(truncated).toBe(false)
+  })
+
+  it('listRemovedTyresForWarranty throws on a failed read (never an empty list)', async () => {
+    h.state.result = { data: null, error: { message: 'boom', code: '42501' } }
+    await expect(warranty.listRemovedTyresForWarranty()).rejects.toBeTruthy()
   })
 
   it('updates and deletes a warranty claim by id', async () => {

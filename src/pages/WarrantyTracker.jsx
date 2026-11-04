@@ -34,6 +34,7 @@ import {
   filterClaimsByDimension, claimKpis, brandPerformance, failureBreakdown,
   statusCounts as countStatuses, monthlyCredits as creditsByMonth, creditAnalysis as analyseCredits,
   roiModel, generateClaimNo, optionsOf, lifePct,
+  buildWarrantyCandidates, candidateSummary, CANDIDATE_DEFAULTS,
 } from '../lib/warrantyTrackerAnalytics'
 
 ChartJS.register(
@@ -155,8 +156,13 @@ export default function WarrantyTracker() {
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
 
   const [claims, setClaims]     = useState([])
-  const [tyreRecords, setTyreRecords] = useState([])
-  const [loading, setLoading]   = useState(true)
+  // Tyres removed with a stated reason - the source of warranty CANDIDATES
+  // (never claims). Loaded per country; a failed read is shown, not hidden.
+  const [removedTyres, setRemovedTyres] = useState([])
+  const [removedTruncated, setRemovedTruncated] = useState(false)
+  const [candLoading, setCandLoading] = useState(true)
+  const [candError, setCandError] = useState('')
+  const [candKind, setCandKind] = useState('All')
   const [activeTab, setActiveTab] = useState('Claims')
 
   const [search, setSearch]           = useState('')
@@ -239,16 +245,23 @@ export default function WarrantyTracker() {
     loadClaims()
   }, [loadClaims])
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true)
-      let data = []
-      try { data = await warranty.listTyreContext() } catch { data = [] }
-      setTyreRecords(data ?? [])
-      setLoading(false)
+  const loadCandidates = useCallback(async () => {
+    setCandLoading(true)
+    setCandError('')
+    try {
+      const { rows, truncated } = await warranty.listRemovedTyresForWarranty({ country: activeCountry })
+      setRemovedTyres(rows)
+      setRemovedTruncated(truncated)
+    } catch (e) {
+      setRemovedTyres([])
+      setRemovedTruncated(false)
+      setCandError(toUserMessage(e, 'Could not load removed tyres. Please retry.'))
+    } finally {
+      setCandLoading(false)
     }
-    load()
-  }, [])
+  }, [activeCountry])
+
+  useEffect(() => { loadCandidates() }, [loadCandidates])
 
   // Country scoping - mirror the app-wide null-safe convention (applyCountry):
   // "All" shows every country; a specific country shows its own rows plus any
@@ -321,6 +334,37 @@ export default function WarrantyTracker() {
       setForm(EMPTY_FORM)
       setEditClaim(null)
     }
+    setFormError('')
+    setShowAdd(true)
+  }, [])
+
+  // Warranty candidates: tyres the removal history says came off early for a
+  // reason a supplier could cover. Candidates only - nothing is a claim until
+  // someone raises it. Tyres already carrying a claim are excluded.
+  const candidates = useMemo(() => buildWarrantyCandidates(removedTyres, claims), [removedTyres, claims])
+  const candSummary = useMemo(() => candidateSummary(candidates), [candidates])
+  const shownCandidates = useMemo(
+    () => (candKind === 'All' ? candidates : candidates.filter(c => c.kind === candKind)),
+    [candidates, candKind],
+  )
+
+  const raiseFromCandidate = useCallback((c) => {
+    setForm({
+      ...EMPTY_FORM,
+      serial_number: c.serial_number || '',
+      brand: c.brand || '',
+      size: c.size || '',
+      asset_no: c.asset_no || '',
+      site: c.site || '',
+      country: c.country || '',
+      fitment_date: c.fitment_date ? String(c.fitment_date).slice(0, 10) : '',
+      removal_date: c.removal_date ? String(c.removal_date).slice(0, 10) : '',
+      km_at_fitment: c.km_at_fitment ?? '',
+      km_at_removal: c.km_at_removal ?? '',
+      failure_type: c.failure_type,
+      notes: `Raised from removal record. Removal reason: ${c.removal_reason}.`,
+    })
+    setEditClaim(null)
     setFormError('')
     setShowAdd(true)
   }, [])
@@ -727,7 +771,30 @@ export default function WarrantyTracker() {
     { accessorKey: 'avgKm', header: 'Avg km at Failure', meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? 'N/A' : `${Math.round(getValue()).toLocaleString()} km`) },
   ]
 
-  const tabs = ['Claims', 'Brand Analysis', 'Failure Analysis', 'Credit Recovery', 'ROI Calculator']
+  const tabs = ['Claims', 'Warranty Candidates', 'Brand Analysis', 'Failure Analysis', 'Credit Recovery', 'ROI Calculator']
+
+  const KIND_LABEL = { defect: 'Defect', burst: 'Burst / blowout', premature_wear: 'Premature wear' }
+  const candidateColumns = [
+    { accessorKey: 'serial_number', header: 'Serial', cell: ({ getValue }) => <span className="font-mono text-xs">{getValue() || 'N/A'}</span> },
+    { accessorKey: 'brand', header: 'Brand', cell: ({ getValue }) => getValue() || 'N/A' },
+    { accessorKey: 'size', header: 'Size', cell: ({ getValue }) => getValue() || 'N/A' },
+    { accessorKey: 'asset_no', header: 'Asset', cell: ({ getValue }) => getValue() || 'N/A' },
+    { accessorKey: 'position', header: 'Position', cell: ({ getValue }) => getValue() || 'N/A' },
+    { accessorKey: 'site', header: 'Site', cell: ({ getValue }) => getValue() || 'N/A' },
+    { accessorKey: 'removal_date', header: 'Removed', cell: ({ getValue }) => fmtDate(getValue()) },
+    { accessorKey: 'removal_reason', header: 'Removal reason' },
+    { accessorKey: 'kind', header: 'Why a candidate', cell: ({ getValue }) => KIND_LABEL[getValue()] || getValue() },
+    { accessorKey: 'km_run', header: 'km run', meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? 'Not recorded' : `${Math.round(getValue()).toLocaleString()} km`) },
+    {
+      id: 'raise', header: '', enableSorting: false,
+      cell: ({ row }) => (
+        <button type="button" onClick={(e) => { e.stopPropagation(); raiseFromCandidate(row.original) }}
+          className="min-h-[36px] inline-flex items-center gap-1 px-2.5 rounded-lg text-xs text-blue-400 border border-blue-800/50 hover:bg-blue-900/30">
+          <Plus size={12} aria-hidden="true" /> Raise claim
+        </button>
+      ),
+    },
+  ]
 
   return (
     <div className="space-y-6">
@@ -760,6 +827,19 @@ export default function WarrantyTracker() {
       />
       <NotInUseNotice count={claims.length} label="warranty claims"
         hint="Claims appear once one is raised against a tyre." />
+
+      {!claimsLoading && !claimsError && claims.length === 0 && candidates.length > 0 && (
+        <div className="flex items-start gap-2 text-xs text-blue-300 bg-blue-900/15 border border-blue-800/40 rounded-lg px-3 py-2">
+          <Info size={13} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
+          <span>
+            No warranty claims have been recorded yet, so the claim figures below are zero. The tyre removal history
+            shows {candSummary.total.toLocaleString()} tyres removed early for a reason a supplier may cover.{' '}
+            <button type="button" className="underline font-semibold" onClick={() => setActiveTab('Warranty Candidates')}>
+              Review warranty candidates
+            </button>
+          </span>
+        </div>
+      )}
 
       {activeCountry === 'All' && (
         <div className="flex items-start gap-2 text-xs text-amber-400/90 bg-amber-900/15 border border-amber-800/40 rounded-lg px-3 py-2">
@@ -901,6 +981,58 @@ export default function WarrantyTracker() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {activeTab === 'Warranty Candidates' && (
+        <div className="space-y-4">
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4 space-y-3">
+            <p className="text-xs text-[var(--text-muted)]">
+              These are <strong>candidates, not claims</strong>, built from tyre removal records. A tyre is listed when it was
+              removed for a possible defect (separation, bulge, bead, manufacturing defect) or a burst before{' '}
+              {CANDIDATE_DEFAULTS.expectedLifeKm.toLocaleString()} km, or worn out before{' '}
+              {(CANDIDATE_DEFAULTS.expectedLifeKm * CANDIDATE_DEFAULTS.prematureWearShare).toLocaleString()} km. Punctures,
+              cuts, damage, misuse and alignment are not listed (a supplier does not cover them). A burst is often
+              inflation related, so inspect the casing first. Tyres that already carry a claim are left out. Raise a claim to
+              start the warranty process.
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              {[
+                ['All', 'All candidates', candSummary.total],
+                ['defect', 'Defect', candSummary.defect],
+                ['burst', 'Burst / blowout', candSummary.burst],
+                ['premature_wear', 'Premature wear', candSummary.premature_wear],
+              ].map(([k, label, n]) => (
+                <button key={k} type="button" onClick={() => setCandKind(k)} aria-pressed={candKind === k}
+                  className={`text-left rounded-xl border p-3 transition-colors ${candKind === k ? 'border-blue-600 bg-blue-900/20' : 'border-[var(--input-border)] bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)]'}`}>
+                  <p className="text-xs text-[var(--text-muted)]">{label}</p>
+                  <p className="text-xl font-bold text-[var(--text-secondary)]">{candLoading ? '...' : n.toLocaleString()}</p>
+                </button>
+              ))}
+              <div className="rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] p-3">
+                <p className="text-xs text-[var(--text-muted)]">km not recorded</p>
+                <p className="text-xl font-bold text-[var(--text-secondary)]">{candLoading ? '...' : candSummary.kmUnknown.toLocaleString()}</p>
+              </div>
+            </div>
+            {removedTruncated && (
+              <p className="text-xs text-amber-400">
+                Only the first {warranty.CANDIDATE_MAX_ROWS.toLocaleString()} removal records were read. Select a single country to narrow the list.
+              </p>
+            )}
+          </div>
+          <EnterpriseTable
+            columns={candidateColumns}
+            data={shownCandidates}
+            getRowId={(c) => String(c.id)}
+            loading={candLoading}
+            error={candError || null}
+            onRetry={loadCandidates}
+            enableExport={false}
+            emptyMessage={removedTyres.length === 0
+              ? 'No tyre removal records with a reason are on file for this country yet.'
+              : 'No tyre was removed early for a reason a supplier may cover.'}
+            viewKey="warranty-candidates"
+          />
         </div>
       )}
 

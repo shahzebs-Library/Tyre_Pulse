@@ -75,3 +75,43 @@ describe('warrantyTrackerAnalytics', () => {
     expect(optionsOf(claims, 'site')).toEqual(['All', 'JED', 'NHC'])
   })
 })
+
+describe('warranty candidates', async () => {
+  const { classifyRemovalReason, buildWarrantyCandidates, candidateSummary, tyreKmRun } =
+    await import('../lib/warrantyTrackerAnalytics')
+
+  it('classifies defect, burst and premature wear; ignores road hazards and brands', () => {
+    expect(classifyRemovalReason('THREAD SEPRATION')).toEqual({ kind: 'defect', failure: 'Tread Separation' })
+    expect(classifyRemovalReason('Sidewall separation / bulge')).toEqual({ kind: 'defect', failure: 'Sidewall Failure' })
+    expect(classifyRemovalReason('BLAST/BURST').kind).toBe('burst')
+    expect(classifyRemovalReason('WORN OUT').kind).toBe('premature_wear')
+    expect(classifyRemovalReason('Normal tread wear')).toBeNull()
+    for (const r of ['PUNCTURE', 'DAMAGED', 'MISUSE', 'ALIGNMENT', 'ROADX', '', null]) {
+      expect(classifyRemovalReason(r)).toBeNull()
+    }
+  })
+
+  it('km run: total_km first, else odometer delta, else null (never 0)', () => {
+    expect(tyreKmRun({ total_km: 30000 })).toBe(30000)
+    expect(tyreKmRun({ total_km: 0, km_at_fitment: 1000, km_at_removal: 21000 })).toBe(20000)
+    expect(tyreKmRun({ total_km: null, km_at_fitment: null, km_at_removal: 5000 })).toBeNull()
+  })
+
+  it('keeps early defects and early wear, drops late ones and already-claimed serials', () => {
+    const tyres = [
+      { id: 1, serial_no: 'A1', removal_reason: 'THREAD SEPRATION', total_km: 30000, removal_date: '2026-01-01' },
+      { id: 2, serial_no: 'A2', removal_reason: 'THREAD SEPRATION', total_km: 150000 },
+      { id: 3, serial_no: 'A3', removal_reason: 'WORN OUT', total_km: 20000 },
+      { id: 4, serial_no: 'A4', removal_reason: 'WORN OUT', total_km: 80000 },
+      { id: 5, serial_no: 'A5', removal_reason: 'WORN OUT' },
+      { id: 6, serial_no: 'A6', removal_reason: 'BLAST/BURST' },
+      { id: 7, serial_no: 'a 7', removal_reason: 'BLAST/BURST', total_km: 10000 },
+      { id: 8, serial_no: 'A8', removal_reason: 'PUNCTURE', total_km: 100 },
+    ]
+    const out = buildWarrantyCandidates(tyres, [{ serial_number: 'A7' }])
+    expect(out.map(c => c.id).sort()).toEqual([1, 3, 6])
+    const s = candidateSummary(out)
+    expect(s).toMatchObject({ total: 3, defect: 1, burst: 1, premature_wear: 1, kmUnknown: 1 })
+    expect(out.find(c => c.id === 6).km_run).toBeNull()
+  })
+})

@@ -51,6 +51,7 @@ import {
 } from '../lib/fitmentValidationView'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { layoutPositionsFor, vehicleTypeIsKnown } from '../lib/tyreBay'
 import './FitmentValidation.css'
 
 const HISTORY_LIMIT = 100
@@ -200,6 +201,12 @@ export default function FitmentValidation() {
     if (!a) return null
     return (data?.vehicles || []).find((v) => up(v.asset_no) === a) || null
   }, [vForm.asset_no, data])
+  // The picked vehicle's own wheel positions (GCC codes) for the position field.
+  const vehiclePositionCodes = useMemo(() => {
+    const v = selectedVehicle
+    if (!v || !(vehicleTypeIsKnown(v.vehicle_type) || vehicleTypeIsKnown(v.asset_no))) return []
+    return [...new Set(layoutPositionsFor(v.vehicle_type, v.asset_no, v.country || countryParam).map((p) => p.code))]
+  }, [selectedVehicle, countryParam])
   const vehicleSpecs = useMemo(() => specsForVehicle(specs || [], selectedVehicle?.vehicle_type), [specs, selectedVehicle])
   const positionSpec = useMemo(() => specForPosition(vehicleSpecs.rows, vForm.axle_role), [vehicleSpecs, vForm.axle_role])
   const chosenCatalog = useMemo(() => (catalog || []).find((c) => c.id === vForm.catalog_id) || null, [catalog, vForm.catalog_id])
@@ -578,7 +585,8 @@ export default function FitmentValidation() {
                     </select>
                   </label>
                   <label className="cc-field"><span>Position code</span>
-                    <input className="fv-input" value={vForm.position_code} onChange={(e) => setV('position_code', e.target.value)} placeholder="e.g. LHRO" maxLength={60} />
+                    <input className="fv-input" list="fv-positions" value={vForm.position_code} onChange={(e) => setV('position_code', e.target.value)} placeholder="e.g. LHRO" maxLength={60} />
+                    <datalist id="fv-positions">{vehiclePositionCodes.map((p) => <option key={p} value={p} />)}</datalist>
                   </label>
                 </div>
                 <label className="cc-field"><span>Load / speed index</span>

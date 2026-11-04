@@ -18,7 +18,7 @@
  * vitest / Node.
  */
 import { legacyPositionCode, canonicalCode } from './tyrePositions'
-import { resolveLayoutKey, isTyrelessEquipment, LAYOUT_SLOTS } from './vehicleTyreLayout'
+import { resolveLayoutKey, isTyrelessEquipment, LAYOUT_SLOTS, layoutForAsset } from './vehicleTyreLayout'
 
 /** Serial across the three storage columns (mirrors tyrePassport.serialOfRecord). */
 export const serialOf = (r) =>
@@ -127,12 +127,15 @@ export const BUILTIN_LAYOUT_SLOTS = LAYOUT_SLOTS
 
 /**
  * The full set of wheel positions for a vehicle type, as canonical GCC codes
- * (for the Move/Swap target-position dropdown). Empty array when the type has no
- * built-in layout.
+ * (for the Move/Swap target-position dropdown and every position picker). The
+ * optional asset number lets an unhelpful type fall back to the asset-class prefix
+ * and picks the machine's recorded build (4- vs 5-axle pump); tyreless equipment
+ * returns an empty array rather than a pickup's four wheels.
  * @returns {{slot:string, code:string}[]}
  */
-export function layoutPositionsFor(vehicleTypeKey) {
-  const layoutKey = resolveLayoutKey(vehicleTypeKey)
+export function layoutPositionsFor(vehicleTypeKey, assetNo, country) {
+  if (isTyrelessEquipment(vehicleTypeKey)) return []
+  const layoutKey = layoutForAsset(resolveLayoutKey(vehicleTypeKey, assetNo), assetNo, country)
   const slots = BUILTIN_LAYOUT_SLOTS[layoutKey] || []
   return slots.map((slot) => ({ slot, code: slotDisplayCode(layoutKey, slot) }))
 }

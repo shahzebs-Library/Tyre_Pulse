@@ -43,6 +43,7 @@ import { compareValues, sortRows } from '../lib/consoleTable'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { isMissingRelation } from '../lib/api/_client'
+import useAssetPositionCodes from '../hooks/useAssetPositionCodes'
 
 ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
@@ -130,6 +131,7 @@ const EMPTY_FORM = {
 
 // ─── Create / edit modal ──────────────────────────────────────────────────────
 function EventModal({ open, initial, onClose, onSaved }) {
+  const { activeCountry } = useSettings()
   const [form, setForm] = useState(EMPTY_FORM)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -142,6 +144,7 @@ function EventModal({ open, initial, onClose, onSaved }) {
   }, [open, initial])
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+  const positionCodes = useAssetPositionCodes(open ? form.asset_no : '', activeCountry)
   const isRemoval = form.event_type === 'replacement' || form.event_type === 'repair'
 
   // ONE guarded close for every dismissal path. The hand-rolled overlay guarded
@@ -205,7 +208,9 @@ function EventModal({ open, initial, onClose, onSaved }) {
           </div>
           <div>
             <label className="label">Position</label>
-            <input className="input w-full" placeholder="e.g. Steer L, Drive R" value={form.position} onChange={(e) => set('position', e.target.value)} />
+            {/* Offered from this asset's own wheel map (GCC codes, as tyre_records stores them). */}
+            <input className="input w-full" list="tse-positions" placeholder={positionCodes.length ? `e.g. ${positionCodes[0]}` : 'e.g. LHF1, RHCO'} value={form.position} onChange={(e) => set('position', e.target.value)} />
+            <datalist id="tse-positions">{positionCodes.map((p) => <option key={p} value={p} />)}</datalist>
           </div>
           <div>
             <label className="label">Site</label>

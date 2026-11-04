@@ -35,7 +35,7 @@ const SAMPLE = {
   asset_no: ['TRK-2201', 'TRK-2201'],
   brand: ['Michelin', 'Bridgestone'],
   size: ['315/80R22.5', '315/80R22.5'],
-  position: ['Drive-L1', 'Steer-R1'],
+  position: ['LHR1-O', 'RHF1'],
   pressure_reading: ['120', '118'],
   tread_depth: ['14', '9'],
   site: ['Riyadh', 'Riyadh'],
@@ -104,7 +104,7 @@ const SAMPLE = {
   odometer_km: ['132000', '98000'],
   // work order
   work_order_no: ['WO-2021-3310', 'WO-2021-3311'],
-  tyre_position: ['Drive-L1', 'Steer-R1'],
+  tyre_position: ['LHR1-O', 'RHF1'],
   work_type: ['Tyre replacement', 'Puncture repair'],
   priority: ['High', 'Normal'],
   technician_name: ['Bilal R.', 'Omar S.'],

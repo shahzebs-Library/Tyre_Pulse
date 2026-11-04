@@ -45,6 +45,7 @@ import {
 import { formatCurrencyCompact } from '../lib/formatters'
 import { categorical, colorAt, withAlpha } from '../lib/reportColors'
 import { toUserMessage } from '../lib/safeError'
+import useAssetPositionCodes from '../hooks/useAssetPositionCodes'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
@@ -243,6 +244,8 @@ export default function TyrePool() {
       : { entry, mode, condition: 'good', notes: '' })
   }, [])
   const setActionField = (k, v) => setAction((a) => ({ ...a, [k]: v }))
+  // Wheel positions of the vehicle the spare is going onto, from its own tyre map.
+  const deployPositionCodes = useAssetPositionCodes(action?.mode === 'assign' ? action.assigned_to : '', activeCountry)
 
   const confirmAction = useCallback(async () => {
     if (!action) return
@@ -672,7 +675,8 @@ export default function TyrePool() {
             </div>
             <div>
               <label htmlFor="pd-pos" className="label">Position (optional)</label>
-              <input id="pd-pos" className={FIELD} placeholder="e.g. FL or Drive" value={action.position} onChange={(e) => setActionField('position', e.target.value)} />
+              <input id="pd-pos" className={FIELD} list="pd-pos-list" placeholder={deployPositionCodes.length ? `e.g. ${deployPositionCodes[0]}` : 'e.g. LHF1'} value={action.position} onChange={(e) => setActionField('position', e.target.value)} />
+              <datalist id="pd-pos-list">{deployPositionCodes.map((p) => <option key={p} value={p} />)}</datalist>
             </div>
             <div className="sm:col-span-2">
               <label htmlFor="pd-notes" className="label">Notes (optional)</label>

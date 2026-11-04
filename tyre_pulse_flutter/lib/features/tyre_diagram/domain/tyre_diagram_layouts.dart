@@ -1,4 +1,4 @@
-/// The tyre diagram resolver: 13 production layouts, the vehicle-type
+/// The tyre diagram resolver: 14 production layouts (13 + the 4-axle pump), the vehicle-type
 /// resolver that picks one, the tyreless-equipment gate, and the type-aware
 /// V1-to-V2 position relabeller.
 ///
@@ -14,6 +14,7 @@
 library;
 
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_slot.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/vehicle_axle_registry.dart';
 
 // The 13 production layouts (artifact section 2).
 //
@@ -231,6 +232,29 @@ const Map<String, DiagramLayout> kTyreDiagramLayouts = {
       TyreSlot(id: 'R2Ro', x: 168, y: 300, w: 19, h: 33),
     ],
   ),
+  // 4-axle concrete pump: the same machine body with two steer axles
+  // instead of three - 12 tyres. Never picked by the type alone: only a
+  // machine whose fleet register records axle_count = 4 resolves to it (see
+  // vehicle_axle_registry.dart). Mirrors the web 'Concrete pump 4-axle'.
+  'Concrete pump 4-axle': DiagramLayout(
+    key: 'Concrete pump 4-axle',
+    viewH: 375,
+    bodyKey: TyreDiagramBodyKey.concretePump,
+    tyres: <TyreSlot>[
+      TyreSlot(id: 'F1L', x: 29, y: 40, w: 22, h: 38),
+      TyreSlot(id: 'F1R', x: 149, y: 40, w: 22, h: 38),
+      TyreSlot(id: 'F2L', x: 29, y: 84, w: 22, h: 38),
+      TyreSlot(id: 'F2R', x: 149, y: 84, w: 22, h: 38),
+      TyreSlot(id: 'R1Lo', x: 13, y: 258, w: 19, h: 33),
+      TyreSlot(id: 'R1Li', x: 34, y: 258, w: 19, h: 33),
+      TyreSlot(id: 'R1Ri', x: 147, y: 258, w: 19, h: 33),
+      TyreSlot(id: 'R1Ro', x: 168, y: 258, w: 19, h: 33),
+      TyreSlot(id: 'R2Lo', x: 13, y: 300, w: 19, h: 33),
+      TyreSlot(id: 'R2Li', x: 34, y: 300, w: 19, h: 33),
+      TyreSlot(id: 'R2Ri', x: 147, y: 300, w: 19, h: 33),
+      TyreSlot(id: 'R2Ro', x: 168, y: 300, w: 19, h: 33),
+    ],
+  ),
 };
 
 /// Case/spacing-insensitive index of the layout keys, built once. Maps
@@ -385,7 +409,11 @@ String? _resolveOne(String? vt) {
 /// always wins whenever it resolves (R10): a real type is never overridden
 /// by a prefix guessed from the asset number.
 String resolveVehicleType(String? vehicleType, [String? assetNo]) {
-  return _resolveOne(vehicleType) ?? _resolveOne(assetNo) ?? 'Pickup';
+  final String key =
+      _resolveOne(vehicleType) ?? _resolveOne(assetNo) ?? 'Pickup';
+  // A type with more than one build (4- vs 5-axle concrete pumps) draws the
+  // one this machine actually is, when the fleet register says so.
+  return layoutForAsset(key, assetNo);
 }
 
 /// Field-based fleet resolution. Only identified pickup models override an

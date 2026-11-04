@@ -927,3 +927,12 @@ deleting the plan to port it, since spec section 22 names the file explicitly.
 the field in the model for the Vehicle Designer's 0-2 spares (7.5), but every
 seeded layout sets it empty, and `matchPositionsToLayout` must keep skipping a
 caller-supplied spare rather than inventing a slot for it.
+
+**10. `Concrete pump 4-axle` (added 2026-11-04).** A 14th layout: the concrete
+pump with the third steer axle removed (F1L F1R F2L F2R + the two dual drive
+axles, 12 slots, body `concretePump`). Never reached from a type string alone;
+`resolveVehicleType(type, assetNo)` returns it only when the fleet register
+records `axle_count = 4` for that machine (web mirror: `layoutForAsset` in
+`src/lib/vehicleTyreLayout.js`). Totals are now 14 layouts / 110 slots; cases
+67, 84, 85 and 90 were updated, and `vehicle_axle_registry_test.dart` covers the
+variant, the default, the same code in another country, and other types.

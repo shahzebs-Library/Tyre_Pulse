@@ -330,3 +330,9 @@ mock's fourth tile, has no source and is not shown; the tile is Overdue PM.
 The same migration creates `qr_login_start`, `qr_login_status` and the table
 `qr_login_requests` (RLS on, no policies, no client grants); the browser and
 the `qr-login` edge function use those, the phone never does.
+
+### 7.8 Per-machine axle count (added 2026-11-04)
+
+| Column | Created in | Flutter use |
+|---|---|---|
+| `vehicle_fleet.axle_count smallint` (1..10, nullable) | `supabase/migrations/20261103140000_vehicle_fleet_axle_count.sql` | Added to `vehicleFleetColumns`. `VehicleFleetRepository.loadAll`/`byAssetNo` feed every row into `registerFleetAxleRows` (`features/tyre_diagram/domain/vehicle_axle_registry.dart`), and `resolveVehicleType` then picks `Concrete pump 4-axle` (12 tyres) for a machine recorded as 4 axles. Read-only; RLS on `vehicle_fleet` unchanged. Not cached for offline cold starts: a phone that has not loaded the fleet since launch draws the default 14-tyre pump. |

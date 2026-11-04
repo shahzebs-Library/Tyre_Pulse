@@ -11,16 +11,16 @@ import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_position_struct.dar
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_slot.dart';
 
 void main() {
-  test('case 84: exactly 13 layouts', () {
-    expect(kTyreDiagramLayouts.length, 13);
+  test('case 84: exactly 14 layouts (13 + the 4-axle pump)', () {
+    expect(kTyreDiagramLayouts.length, 14);
   });
 
-  test('case 85: exactly 98 slots across the 13 layouts', () {
+  test('case 85: exactly 110 slots across the 14 layouts', () {
     int total = 0;
     for (final DiagramLayout layout in kTyreDiagramLayouts.values) {
       total += layout.tyres.length;
     }
-    expect(total, 98);
+    expect(total, 110);
   });
 
   final RegExp spareIdPattern = RegExp(r'^SP(ARE)?\d*$');
@@ -75,7 +75,7 @@ void main() {
   });
 
   test(
-      'case 90: diagramPositions agrees with kTyreDiagramLayouts for all 13 '
+      'case 90: diagramPositions agrees with kTyreDiagramLayouts for all 14 '
       'layouts', () {
     for (final String key in kTyreDiagramLayouts.keys) {
       final List<String> ids = <String>[

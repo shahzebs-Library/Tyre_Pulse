@@ -48,6 +48,7 @@ import 'package:tyre_pulse/core/network/supabase_tables.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/features/assets/domain/asset_classes.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/vehicle_axle_registry.dart';
 
 // ---------------------------------------------------------------------------
 // Paging - pure, no Supabase type in its signature
@@ -138,7 +139,7 @@ Future<PagedRows<T>> fetchAllPages<T>(
 const String vehicleFleetColumns = 'id, asset_no, fleet_number, make, '
     'model, vehicle_type, site, status, operator_name, tyre_size, '
     'current_km, country, department, region, registration_no, year, '
-    'serial_no, engine_no, capacity, ops_status';
+    'serial_no, engine_no, capacity, ops_status, axle_count';
 
 /// The narrow surface [VehicleFleetRepository] needs from the remote fleet
 /// register. See the library comment for why this exists as an interface
@@ -467,6 +468,8 @@ final class VehicleFleetRepository {
         pageSize: _pageSize,
         maxRows: _maxRows,
       );
+      // Each machine's axle count, so a 4-axle pump draws 12 tyres, not 14.
+      registerFleetAxleRows(paged.rows, country: country);
       final List<VehicleAsset> assets =
           paged.rows.map(VehicleAsset.fromRow).toList(growable: false);
       return VehicleFleetListLoaded(assets: assets, truncated: paged.truncated);
@@ -562,6 +565,7 @@ final class VehicleFleetRepository {
       if (row == null) {
         return const VehicleDetailNotFound();
       }
+      registerFleetAxleRows(<Map<String, dynamic>>[row]);
       return VehicleDetailLoaded(VehicleAsset.fromRow(row));
     } on AppError catch (error) {
       return await _fallbackOrFailDetail(

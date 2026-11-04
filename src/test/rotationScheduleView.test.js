@@ -154,3 +154,33 @@ describe('recommendation, calendar, history, tread', () => {
     expect(validatePlan({ asset: 'A', from: ['FL'], to: ['RL'], scheduledDate: '2026-09-20', site: 'S' })).toBe('')
   })
 })
+
+describe('rotation positions follow the vehicle tyre map', () => {
+  it('offers a mixer its own GCC wheel codes, not four car corners', async () => {
+    const { positionOptionsFor } = await import('../lib/rotationScheduleView')
+    const opts = positionOptionsFor('TR-MIXER', 'TM514', 'KSA')
+    expect(opts).toContain('LHF1')
+    expect(opts).toContain('RHCO')
+    expect(opts).toContain('LHRI')
+    expect(opts).not.toContain('FL')
+    expect(positionOptionsFor('', '')).toEqual([])
+    expect(positionOptionsFor('GENERATOR', 'GN103')).toEqual([])
+  })
+  it('patterns move mixer tyres between real positions on the same vehicle', async () => {
+    const { positionOptionsFor, newPositionsFor } = await import('../lib/rotationScheduleView')
+    const all = positionOptionsFor('TR-MIXER', 'TM514')
+    const side = newPositionsFor('Side to Side', ['LHF1', 'RHCI'], all)
+    expect(side).toEqual(['RHF1', 'LHCI'])
+    const f2r = newPositionsFor('Front to Rear', ['LHF1', 'RHF1'], all)
+    expect(f2r.every((p) => all.includes(p))).toBe(true)
+    expect(f2r[0].startsWith('LH')).toBe(true)
+    expect(f2r[1].startsWith('RH')).toBe(true)
+    const x = newPositionsFor('X Pattern', ['LHF1'], all)
+    expect(x[0].startsWith('RH')).toBe(true)
+  })
+  it('old four-corner plans still read', async () => {
+    const { positionLabel, newPositionsFor } = await import('../lib/rotationScheduleView')
+    expect(positionLabel('FL')).toBe('Front left')
+    expect(newPositionsFor('Front to Rear', ['FL'])).toEqual(['RL'])
+  })
+})

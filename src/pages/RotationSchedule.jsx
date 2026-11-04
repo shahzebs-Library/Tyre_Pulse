@@ -242,7 +242,7 @@ export default function RotationSchedule() {
 
   const assetOptions = useMemo(() => {
     const m = new Map()
-    for (const a of fleet.data || []) m.set(a.asset_no, { asset: a.asset_no, site: a.site, type: a.vehicle_type, currentKm: a.current_km ?? null })
+    for (const a of fleet.data || []) m.set(a.asset_no, { asset: a.asset_no, site: a.site, type: a.vehicle_type, country: a.country || null, currentKm: a.current_km ?? null })
     for (const v of analytics.vehicles) {
       const prev = m.get(v.asset)
       m.set(v.asset, { asset: v.asset, site: prev?.site || v.site, type: prev?.type || null, currentKm: v.currentKm ?? prev?.currentKm ?? null })
@@ -453,9 +453,9 @@ export default function RotationSchedule() {
             </dl>
             {selected.plan.recorded ? (
               <div className="rs-diagrams">
-                <PlanDiagram label="Current position" positions={selected.plan.from} tone="var(--cc-green)" />
+                <PlanDiagram label="Current position" positions={selected.plan.from} tone="var(--cc-green)" vehicleType={selected.vehicleType} assetNo={selected.asset} country={selFleet?.country} />
                 <ArrowRight size={20} aria-hidden="true" />
-                <PlanDiagram label="New position" positions={selected.plan.to} tone="var(--cc-blue)" />
+                <PlanDiagram label="New position" positions={selected.plan.to} tone="var(--cc-blue)" vehicleType={selected.vehicleType} assetNo={selected.asset} country={selFleet?.country} />
               </div>
             ) : <div className="cc-empty">No positions recorded for this schedule. Edit it to add the rotation plan.</div>}
             {selected.plan.freeNotes && <p className="rs-note">{selected.plan.freeNotes}</p>}
@@ -486,7 +486,7 @@ export default function RotationSchedule() {
         <Kpi icon={Clock3} tone="t-blue" value={kpis.dueThisMonth} label="Due this month" loading={schedLoading} onClick={() => { setTab('calendar'); setCalMonth(new Date(new Date().getFullYear(), new Date().getMonth(), 1)) }} />
         <Kpi icon={CheckCircle2} tone="t-green" value={kpis.completed} label="Completed" loading={schedLoading} onClick={() => { setTab('schedule'); setF({ status: 'Completed' }) }} />
         <Kpi icon={AlertOctagon} tone="t-red" value={kpis.overdue} label="Overdue" danger={kpis.overdue > 0} loading={schedLoading} onClick={() => { setTab('schedule'); setF({ status: 'Overdue' }) }} />
-        <Kpi icon={TrendingUp} tone="t-purple" display={kpis.lifeIncreasePct == null ? 'N/A' : `${kpis.lifeIncreasePct}%`} label="Avg. tyre life increase" loading={loading} title={kpis.lifeReason} />
+        <Kpi icon={TrendingUp} tone="t-purple" display={kpis.lifeIncreasePct == null ? 'N/A' : `${kpis.lifeIncreasePct}%`} label={kpis.lifeIncreasePct != null && kpis.lifeIncreasePct < 0 ? 'Avg. tyre life change (rotated vs not)' : 'Avg. tyre life increase'} loading={loading} title={kpis.lifeReason} />
         <Kpi icon={Coins} tone="t-amber" display={kpis.costSaving ? `${kpis.costSaving.currency || ''} ${fmtInt(Math.round(kpis.costSaving.value))}`.trim() : 'N/A'} label={`Cost saving${moneyOk ? ` (${activeCurrency})` : ''}, potential`} loading={loading} title={kpis.costReason} />
       </div>
 

@@ -8,7 +8,7 @@ import { supabase, unwrap, fetchAllPages, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 import { actionRowsForInspection, applyPlanToRow } from '../inspectionTyreFlags'
 import { sanitizeSearchTerm } from '../searchFilter'
-import { ensureActionItem } from './actionCenter'
+import { ensureActionItem, updateActionItem } from './actionCenter'
 
 // Least-privilege column set covering the CorrectiveActions page (list + detail
 // + edit form). Omits organisation_id (RLS-managed) and the legacy `photos`
@@ -66,6 +66,18 @@ export async function listActionsForSource(sourceType, sourceId) {
 }
 
 /**
+ * Assign the Action Center item that mirrors a corrective action. The mirror is
+ * created by the database trigger (V 20261104090000); ensureActionItem keys on
+ * the same source so a deployment without the trigger still gets exactly one.
+ */
+export async function assignLinkedActionItem(action, assignment = {}, fallback = {}) {
+  if (!action?.id) throw new ServiceError('A corrective action is required.')
+  const { item } = await ensureActionItem({ ...fallback, ...assignment, source: `corrective:${action.id}` })
+  if (!item?.id) return null
+  return updateActionItem(item.id, assignment)
+}
+
+/**
  * Raise corrective actions for an inspection's defects.
  *
  * The defect list and the row shape come from the pure engine
@@ -113,20 +125,23 @@ export async function raiseActionsForInspection(inspection, defects = [], { plan
     const plan = plans[row.source_detail]
     if (plan?.assignee?.id) {
       try {
-        await ensureActionItem({
-          title: row.title,
-          category: 'tyre',
-          source: `inspection:${inspection.id}:${row.source_detail}`,
-          asset_no: row.asset_no,
-          severity: row.priority === 'High' ? 'high' : 'medium',
+        // The database already mirrored this corrective action into the Action
+        // Center (source 'corrective:<id>'); give that item its assignee rather
+        // than creating a second copy of the same task.
+        await assignLinkedActionItem(data, {
           assigned_to: plan.assignee.name,
           assigned_user_id: plan.assignee.id,
+          recommended_action: plan.instruction || null,
+          notes: plan.comment || null,
+        }, {
+          title: row.title,
+          category: 'inspection',
+          asset_no: row.asset_no,
+          severity: row.priority === 'High' ? 'high' : 'medium',
           site: row.site,
           country: row.country,
           due_date: row.due_date,
           impact: row.description.split('\n')[0],
-          recommended_action: plan.instruction || null,
-          notes: plan.comment || null,
         })
         notified.push(plan.assignee.name)
       } catch (e) {

@@ -140,6 +140,23 @@ export function actionTableRows(rows = [], nowMs) {
   }))
 }
 
+/**
+ * A readable source. Machine keys ('corrective:<uuid>', 'inspection:<uuid>:...')
+ * are links between records, not words a person should read.
+ */
+export function sourceLabel(source) {
+  const s = source == null ? '' : String(source).trim()
+  if (!s) return ''
+  if (s.startsWith('corrective:')) return 'Corrective action'
+  if (s.startsWith('inspection:')) return 'Inspection'
+  if (s.startsWith('auto:')) return 'Automatic'
+  if (s.startsWith('broadcast:')) return 'Broadcast'
+  return s
+}
+
+/** True when the item mirrors a corrective action (its source is the link). */
+export const isLinkedSource = (source) => String(source || '').startsWith('corrective:')
+
 export const ACTION_EXPORT_COLUMNS = Object.freeze([
   ['title', 'Title'], ['category', 'Category'], ['severity', 'Severity'], ['status', 'Status'],
   ['asset_no', 'Asset'], ['assigned_to', 'Assigned to'], ['due_date', 'Due date'],
@@ -159,7 +176,7 @@ export function actionExportRows(rows = [], nowMs) {
     due_date: r.due_date || '',
     days_overdue: isOverdue(r, nowMs) ? daysOverdue(r, nowMs) : '',
     priority_score: r.priority_score ?? '',
-    source: r.source || '',
+    source: sourceLabel(r.source),
     recommended_action: r.recommended_action || '',
   }))
 }

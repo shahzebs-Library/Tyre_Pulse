@@ -77,3 +77,15 @@ describe('actionCenterAnalytics', () => {
     expect(statusLabel('weird')).toBe('weird')
   })
 })
+
+describe('sourceLabel', () => {
+  it('names the linked record instead of showing a raw key', async () => {
+    const { sourceLabel, isLinkedSource } = await import('../lib/actionCenterAnalytics')
+    expect(sourceLabel('corrective:3d433316-9f5c-4190-b92b-abcb7e086e49')).toBe('Corrective action')
+    expect(sourceLabel('inspection:abc:LHF1')).toBe('Inspection')
+    expect(sourceLabel('TPMS')).toBe('TPMS')
+    expect(sourceLabel(null)).toBe('')
+    expect(isLinkedSource('corrective:x')).toBe(true)
+    expect(isLinkedSource('inspection:x')).toBe(false)
+  })
+})

@@ -34,7 +34,7 @@ import { byCategory, bySeverity, isOpen } from '../lib/actionCenter'
 import {
   ACTION_CATEGORIES, ACTION_SEVERITIES, ACTION_STATUSES, EMPTY_ACTION_FILTERS,
   activeActionFilterCount, filterActions, actionKpis, categoryBars, severityShares,
-  actionTableRows, actionExportRows, ACTION_EXPORT_COLUMNS, categoryLabel,
+  actionTableRows, actionExportRows, ACTION_EXPORT_COLUMNS, categoryLabel, sourceLabel, isLinkedSource,
 } from '../lib/actionCenterAnalytics'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
@@ -586,7 +586,12 @@ export default function ActionCenter() {
             </label>
             <label className="block">
               <span className="label">Source (optional)</span>
-              <input className="input w-full" placeholder="e.g. TPMS / Inspection / Manual" value={form.source} maxLength={200} onChange={(e) => set('source', e.target.value)} />
+              {isLinkedSource(form.source) ? (
+                <input className="input w-full" value={sourceLabel(form.source)} readOnly aria-readonly="true"
+                  title="Linked to a corrective action. Status changes here update it too." />
+              ) : (
+                <input className="input w-full" placeholder="e.g. TPMS / Inspection / Manual" value={form.source} maxLength={200} onChange={(e) => set('source', e.target.value)} />
+              )}
             </label>
           </div>
           <label className="block">

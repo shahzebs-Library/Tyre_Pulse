@@ -9,6 +9,7 @@ import { ScanLine, Save, X, ImageOff } from 'lucide-react'
 import { Card, CardState } from '../commandCenter/kit'
 import VehicleTyreDiagram from '../VehicleTyreDiagram'
 import { legacyPositionCode } from '../../lib/tyrePositions'
+import { layoutPositionsFor } from '../../lib/tyreBay'
 import { buildExchangePayload, currentTyreAt, registerSerials, serialWarnings } from '../../lib/tyreExchangeView'
 import { toUserMessage } from '../../lib/safeError'
 
@@ -42,6 +43,12 @@ export default function NewExchangePanel({ assets, sites, records, technicians, 
     if (!s) return []
     return assets.filter((a) => a.asset.includes(s)).slice(0, 8)
   }, [assets, q])
+  // Target wheel names come from the TARGET vehicle's own tyre map (the other
+  // vehicle on a transfer, this one on an interchange), never a generic list.
+  const toAssetRow = useMemo(() => assets.find((a) => a.asset === (form.type === 'Transfer' ? form.toAsset : form.asset)) || null, [assets, form.type, form.toAsset, form.asset])
+  const toPositionCodes = useMemo(() => (toAssetRow
+    ? [...new Set(layoutPositionsFor(toAssetRow.vehicleType, toAssetRow.asset, country).map((p) => p.code))]
+    : []), [toAssetRow, country])
   const onNow = useMemo(() => currentTyreAt(records, form.asset, form.position), [records, form.asset, form.position])
 
   function pickAsset(a) {
@@ -120,12 +127,13 @@ export default function NewExchangePanel({ assets, sites, records, technicians, 
                   {assets.filter((a) => a.asset !== form.asset).map((a) => <option key={a.asset} value={a.asset}>{a.asset}</option>)}
                 </select>
               </label>
-              <label><span>To position</span><input value={form.toPosition} onChange={(e) => set('toPosition', e.target.value)} placeholder="e.g. LHF1" /></label>
+              <label><span>To position</span><input list="tx-to-positions" value={form.toPosition} onChange={(e) => set('toPosition', e.target.value)} placeholder="e.g. LHF1" /></label>
             </div>
           )}
           {form.type === 'Interchange' && (
-            <label><span>Move to position <em>*</em></span><input value={form.toPosition} onChange={(e) => set('toPosition', e.target.value)} placeholder="e.g. RHF1" /></label>
+            <label><span>Move to position <em>*</em></span><input list="tx-to-positions" value={form.toPosition} onChange={(e) => set('toPosition', e.target.value)} placeholder="e.g. RHF1" /></label>
           )}
+          <datalist id="tx-to-positions">{toPositionCodes.filter((p) => p !== form.position || form.type === 'Transfer').map((p) => <option key={p} value={p} />)}</datalist>
 
           <div className="tx-row2">
             <label><span>Removed tyre serial</span>

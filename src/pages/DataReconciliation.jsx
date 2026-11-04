@@ -17,6 +17,7 @@ import TyrePriceSection from '../components/reconciliation/TyrePriceSection'
 import JobcardDateSection from '../components/reconciliation/JobcardDateSection'
 import DupKeyTyresSection from '../components/reconciliation/DupKeyTyresSection'
 import SerialMultiAssetSection from '../components/reconciliation/SerialMultiAssetSection'
+import SerialCheckSection from '../components/reconciliation/SerialCheckSection'
 import FreetextTyreSection from '../components/reconciliation/FreetextTyreSection'
 import TyreLifeCapSection from '../components/reconciliation/TyreLifeCapSection'
 import DataQualityScorecard from '../components/reconciliation/DataQualityScorecard'
@@ -622,6 +623,7 @@ export default function DataReconciliation() {
 
         <JobcardDateSection />
         <DupKeyTyresSection />
+        <SerialCheckSection />
         <SerialMultiAssetSection />
         <FreetextTyreSection />
         <TyreLifeCapSection />

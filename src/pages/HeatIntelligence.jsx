@@ -52,6 +52,7 @@ import { toUserMessage } from '../lib/safeError'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { compareValues } from '../lib/consoleTable'
 import { isMissingRelation } from '../lib/api/_client'
+import useAssetPositionCodes from '../hooks/useAssetPositionCodes'
 import {
   RISK_LEVELS, scoreInstalledFleet, riskSites, filterRiskRows, riskExportRows,
   RISK_EXPORT_COLS, RISK_EXPORT_HEADERS, filterReadings, readingRows, readingExportRows,
@@ -527,6 +528,8 @@ export default function HeatIntelligence() {
   const closeModal = useCallback(() => { if (!saving) { setShowModal(false); setEditing(null) } }, [saving])
   const closeDelete = useCallback(() => { if (!deleting) setConfirmDelete(null) }, [deleting])
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+  // Wheel positions of the asset being read, from its own tyre map (GCC codes).
+  const readingPositionCodes = useAssetPositionCodes(showModal ? form.asset_no : '', activeCountry)
 
   const previewBand = useMemo(
     () => classifyTemp({ temperature_c: form.temperature_c, threshold_c: form.threshold_c }),
@@ -1193,7 +1196,8 @@ export default function HeatIntelligence() {
                 </div>
                 <div>
                   <label className="label" htmlFor="heat-f2">Tyre position (optional)</label>
-                  <input id="heat-f2" className="input w-full" placeholder="e.g. FL, RRo, Drive-2" value={form.tyre_position} maxLength={60} onChange={(e) => set('tyre_position', e.target.value)} />
+                  <input id="heat-f2" className="input w-full" list="heat-f2-list" placeholder={readingPositionCodes.length ? `e.g. ${readingPositionCodes[0]}` : 'e.g. LHF1, RHCO'} value={form.tyre_position} maxLength={60} onChange={(e) => set('tyre_position', e.target.value)} />
+                  <datalist id="heat-f2-list">{readingPositionCodes.map((p) => <option key={p} value={p} />)}</datalist>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

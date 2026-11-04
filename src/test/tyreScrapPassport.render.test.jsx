@@ -23,6 +23,7 @@ vi.mock('../lib/api/tyreScrap', () => ({
   listTyreDisposalsFull: () => disposalRead().then(({ data, error }) => { if (error) throw error; return { rows: data || [], governanceReady: false } }),
   saveTyreDisposal: () => Promise.resolve({}),
   listScrapTyreRecords: () => ({ order: () => ({}) }),
+  listScrapMarkSerials: () => ({ order: () => ({}) }),
   upsertTyreDisposal: () => Promise.resolve({ error: null }),
 }))
 const fetchMock = vi.fn(() => Promise.resolve({ data: TYRES, error: null, truncated: false }))
@@ -53,7 +54,7 @@ beforeEach(() => { cleanup(); fetchMock.mockClear() })
 describe('TyreScrapManagement', () => {
   it('renders every tab without crashing', async () => {
     render(<MemoryRouter><TyreScrapManagement /></MemoryRouter>)
-    await waitFor(() => expect(screen.getByText('Flagged as scrap')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Scrapped in period')).toBeTruthy())
     for (const tab of ['Scrapped Register', 'By Brand', 'By Site', 'Disposal Log', 'Overview']) {
       fireEvent.click(screen.getByRole('tab', { name: tab }))
       await waitFor(() => expect(screen.getByRole('tab', { name: tab }).getAttribute('aria-selected')).toBe('true'))
@@ -82,13 +83,13 @@ describe('TyreScrapManagement', () => {
     render(<MemoryRouter><TyreScrapManagement /></MemoryRouter>)
     await waitFor(() => expect(screen.getByText('The scrap analysis could not be loaded.')).toBeTruthy())
     expect(screen.queryByText('No tyres flagged as scrap')).toBeNull()
-    expect(screen.queryByText('Flagged as scrap')).toBeNull()
+    expect(screen.queryByText('Scrapped in period')).toBeNull()
   })
 
   it('a failed disposal-status read shows Unknown, not Pending', async () => {
     disposalRead.mockImplementationOnce(() => Promise.resolve({ data: null, error: new Error('denied') }))
     render(<MemoryRouter><TyreScrapManagement /></MemoryRouter>)
-    await waitFor(() => expect(screen.getByText('Flagged as scrap')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Scrapped in period')).toBeTruthy())
     fireEvent.click(screen.getByRole('tab', { name: 'Disposal Log' }))
     await waitFor(() => expect(screen.getByText('Statuses unavailable')).toBeTruthy())
     expect(screen.getByText(/Statuses show as Unknown and cannot be changed/)).toBeTruthy()

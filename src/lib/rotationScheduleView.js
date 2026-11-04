@@ -15,6 +15,9 @@
 
 // Industry-standard patterns. 'Front to Rear' is stored as token 'standard' and 'Forward Cross' as 'cross'
 // (their original tokens), so older rows keep their meaning. Legacy labels 'Standard'/'Cross' still map.
+import { layoutSlotsFor, layoutForAsset, resolveLayoutKey } from './vehicleTyreLayout'
+import { legacyPositionCode, describePosition } from './tyrePositions'
+
 export const ROTATION_TYPES = ['Front to Rear', 'Forward Cross', 'Rearward Cross', 'Side to Side', 'X Pattern', 'Custom']
 
 /** UI label to the tyre_rotations.rotation_type CHECK token, and back. */
@@ -42,22 +45,102 @@ export function tokenToType(token) {
   const low = String(token).trim().toLowerCase().replace(/[\s-]+/g, '_')
   return TOKEN_TYPE[low] || TOKEN_TYPE[LEGACY_LABEL[low]] || null
 }
-export const POSITION_OPTIONS = ['FL', 'FR', 'RL', 'RR', 'Spare']
-export const POSITION_LABEL = { FL: 'Front left', FR: 'Front right', RL: 'Rear left', RR: 'Rear right', Spare: 'Spare' }
+/**
+ * Old plans (before positions followed the vehicle map) stored a generic
+ * four-corner vocabulary. Still read and labelled; new plans use the
+ * vehicle's own GCC position codes (LHF1, RHCO, LHR1-O, ...).
+ */
+export const LEGACY_POSITIONS = ['FL', 'FR', 'RL', 'RR']
+const CORNER_LABEL = { FL: 'Front left', FR: 'Front right', RL: 'Rear left', RR: 'Rear right', Spare: 'Spare' }
+/** Back-compat name for the legacy four-corner vocabulary. */
+export const POSITION_OPTIONS = [...LEGACY_POSITIONS, 'Spare']
+export const POSITION_LABEL = CORNER_LABEL
+
+/**
+ * The wheel positions of one vehicle, in the GCC codes the tyre register and
+ * the tyre map use, from the same layout the diagram draws (4- vs 5-axle
+ * pumps included). Empty for tyreless equipment or when no vehicle is chosen.
+ */
+export function positionOptionsFor(vehicleType, assetNo, country) {
+  if (!vehicleType && !assetNo) return []
+  const key = layoutForAsset(resolveLayoutKey(vehicleType, assetNo), assetNo, country)
+  return layoutSlotsFor(vehicleType, assetNo, country).map((id) => legacyPositionCode(key, id))
+}
+
+/** A readable name for any stored position (GCC code or legacy corner). */
+export function positionLabel(code) {
+  if (!code) return ''
+  if (CORNER_LABEL[code]) return CORNER_LABEL[code]
+  return describePosition(code)
+}
+
+/** Side, front/rear and order of a position, for the rotation patterns. */
+function positionShape(code) {
+  const c = String(code || '').toUpperCase()
+  if (c === 'SPARE') return null
+  const legacy = c.match(/^([FR])([LR])$/)
+  if (legacy) return { side: legacy[2], front: legacy[1] === 'F', axle: 1, outer: 0 }
+  const m = c.match(/^(LH|RH)(F|C|R)(\d?)(?:-?([OI]))?$/)
+  if (!m) return null
+  const side = m[1] === 'LH' ? 'L' : 'R'
+  const front = m[2] === 'F'
+  // Rear order: centre drive axle before rear, then axle number, outer first.
+  const axle = (m[2] === 'C' ? 0 : m[2] === 'R' ? 10 : 0) + (m[3] ? Number(m[3]) : 1)
+  return { side, front, axle, outer: m[4] === 'I' ? 1 : 0 }
+}
+
+function mirrorCode(code) {
+  const c = String(code)
+  if (/^LH/i.test(c)) return `RH${c.slice(2)}`
+  if (/^RH/i.test(c)) return `LH${c.slice(2)}`
+  const legacy = c.match(/^([FR])([LR])$/i)
+  if (legacy) return `${legacy[1]}${legacy[2].toUpperCase() === 'L' ? 'R' : 'L'}`
+  return c
+}
+
+/**
+ * Where each tyre moves for a pattern, over all positions on the vehicle.
+ * Fronts pair with the rear positions in order on each side (outer before
+ * inner); a position with no partner stays where it is.
+ */
+export function patternMap(type, options = []) {
+  const t = TOKEN_TYPE[typeToToken(type)] || type
+  if (!['Front to Rear', 'Forward Cross', 'Rearward Cross', 'Side to Side', 'X Pattern'].includes(t)) return null
+  const shapes = options.map((code) => ({ code, s: positionShape(code) })).filter((x) => x.s)
+  const map = {}
+  if (t === 'Side to Side') {
+    for (const { code } of shapes) map[code] = options.includes(mirrorCode(code)) ? mirrorCode(code) : code
+    return map
+  }
+  const lists = (side, front) => shapes
+    .filter((x) => x.s.side === side && x.s.front === front)
+    .sort((a, b) => a.s.axle - b.s.axle || a.s.outer - b.s.outer)
+    .map((x) => x.code)
+  const F = { L: lists('L', true), R: lists('R', true) }
+  const R = { L: lists('L', false), R: lists('R', false) }
+  const other = (side) => (side === 'L' ? 'R' : 'L')
+  for (const side of ['L', 'R']) {
+    const n = Math.min(F[side].length, R[side].length, F[other(side)].length, R[other(side)].length)
+    for (let i = 0; i < n; i += 1) {
+      const f = F[side][i]
+      const r = R[side][i]
+      if (t === 'Front to Rear') { map[f] = r; map[r] = f }
+      if (t === 'Forward Cross') { map[f] = r; map[r] = F[other(side)][i] }
+      if (t === 'Rearward Cross') { map[r] = f; map[f] = R[other(side)][i] }
+      if (t === 'X Pattern') { map[f] = R[other(side)][i]; map[r] = F[other(side)][i] }
+    }
+  }
+  return map
+}
+
+/** Kept for callers that read the four-corner pattern table directly. */
+export const PATTERNS = Object.fromEntries(
+  ['Front to Rear', 'Forward Cross', 'Rearward Cross', 'Side to Side', 'X Pattern']
+    .map((t) => [t, patternMap(t, LEGACY_POSITIONS)]),
+)
+
 export const VIEW_STATUSES = ['Scheduled', 'In Progress', 'Completed', 'Overdue']
 
-/** Rotation patterns: where the tyre at each position moves to. */
-export const PATTERNS = {
-  // Front to rear: same side only (required for directional tyres).
-  'Front to Rear': { FL: 'RL', FR: 'RR', RL: 'FL', RR: 'FR' },
-  // Forward cross (front-wheel drive): fronts go straight back, rears cross to the front.
-  'Forward Cross': { FL: 'RL', FR: 'RR', RL: 'FR', RR: 'FL' },
-  // Rearward cross (rear-wheel drive / 4x4): rears go straight forward, fronts cross to the rear.
-  'Rearward Cross': { FL: 'RR', FR: 'RL', RL: 'FL', RR: 'FR' },
-  'Side to Side': { FL: 'FR', FR: 'FL', RL: 'RR', RR: 'RL' },
-  // X pattern: every tyre crosses to the opposite corner.
-  'X Pattern': { FL: 'RR', FR: 'RL', RL: 'FR', RR: 'FL' },
-}
 
 const NOTE_PREFIX = 'Rotation:'
 
@@ -76,8 +159,9 @@ export function parseDay(v) {
 const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
 
 /** New positions for a pattern; Custom (or unknown) returns null so the user picks. */
-export function newPositionsFor(type, current = []) {
-  const map = PATTERNS[type] || PATTERNS[tokenToType(type)]
+export function newPositionsFor(type, current = [], options = null) {
+  const all = options && options.length ? options : (current.every((p) => LEGACY_POSITIONS.includes(p) || p === 'Spare') ? LEGACY_POSITIONS : current)
+  const map = patternMap(type, all)
   if (!map) return null
   return current.map((p) => map[p] || p)
 }
@@ -174,7 +258,7 @@ export function positionsText(list = []) {
 
 export function movesText(from = [], to = []) {
   if (!from.length || !to.length) return null
-  if (from.length === to.length) return from.map((f, i) => `${POSITION_LABEL[f] || f} to ${POSITION_LABEL[to[i]] || to[i]}`).join(', ')
+  if (from.length === to.length) return from.map((f, i) => `${positionLabel(f)} to ${positionLabel(to[i])}`).join(', ')
   return `${from.join(', ')} to ${to.join(', ')}`
 }
 

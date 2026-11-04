@@ -28,6 +28,7 @@ import Modal from '../components/ui/Modal'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import SectionTabs, { FLEET_TABS } from '../components/ui/SectionTabs'
 import { useLanguage } from '../contexts/LanguageContext'
+import { parsePosition } from '../lib/tyrePositions'
 import {
   RISK_LEVELS, groupVehicles, enrichVehicle, matchesRiskFilter, matchesSearch, isVehicleHealthy,
   fleetHealthSummary, latestIssueDate, monthlyHealthTrend, criticalVehicles as buildCriticalList,
@@ -118,17 +119,34 @@ function TyrePositionDot({ tyre, position }) {
   )
 }
 
+// Front/rear and side of a stored position. tyre_records holds GCC codes (LHF1,
+// RHF2, LHCO, RHRI ...), which the shared parser reads; the old regex is kept
+// only for legacy free-text labels the parser cannot read. The regex alone sent
+// RHF1 to the front-LEFT dot (it matched "F1") and LHF2 to the front-RIGHT one.
+function wheelSide(pos) {
+  const p = parsePosition(pos)
+  if (p && p.side) return { front: p.axle === 'F', side: p.side, axleNo: p.axleNo ?? 1 }
+  const s = String(pos ?? '')
+  if (/FL|steer.*l|left.*front/i.test(s)) return { front: true, side: 'L', axleNo: 1 }
+  if (/FR|steer.*r|right.*front/i.test(s)) return { front: true, side: 'R', axleNo: 1 }
+  return { front: /steer/i.test(s), side: null, axleNo: 1 }
+}
+
 function MiniTyreDiagram({ tyres }) {
-  const frontLeft  = tyres.find(t => /FL|F1|steer.*l|left.*front/i.test(t.position ?? ''))
-  const frontRight = tyres.find(t => /FR|F2|steer.*r|right.*front/i.test(t.position ?? ''))
-  const rearSlots  = tyres.filter(t => !/FL|FR|F1|F2|steer/i.test(t.position ?? '')).slice(0, 4)
+  const tagged = tyres.map(t => ({ t, w: wheelSide(t.position) }))
+  const firstFront = (side) => tagged
+    .filter(x => x.w.front && x.w.side === side)
+    .sort((a, b) => a.w.axleNo - b.w.axleNo)[0]?.t
+  const frontLeft  = firstFront('L')
+  const frontRight = firstFront('R')
+  const rearSlots  = tagged.filter(x => !x.w.front).map(x => x.t).slice(0, 4)
   while (rearSlots.length < 4) rearSlots.push(null)
-  const posLabels = ['RL', 'RLO', 'RR', 'RRO']
+  const posLabels = ['LHRO', 'LHRI', 'RHRI', 'RHRO']
   return (
     <div className="flex flex-col items-center gap-1">
       <div className="flex gap-4">
-        <TyrePositionDot tyre={frontLeft} position={frontLeft?.position ?? 'FL'} />
-        <TyrePositionDot tyre={frontRight} position={frontRight?.position ?? 'FR'} />
+        <TyrePositionDot tyre={frontLeft} position={frontLeft?.position ?? 'LHF1'} />
+        <TyrePositionDot tyre={frontRight} position={frontRight?.position ?? 'RHF1'} />
       </div>
       <div className="flex gap-1.5">
         {rearSlots.map((t, i) => <TyrePositionDot key={i} tyre={t} position={t?.position ?? posLabels[i]} />)}

@@ -97,7 +97,7 @@ export default function ScrappedRegister({ country, currency, openMarkSignal = 0
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
-      const res = await listScrappedTyres({ search: query, country })
+      const res = await listScrappedTyres({ search: query, country, limit: 2000 })
       setRows(res.rows)
       setTotals({
         total: res.total || 0,

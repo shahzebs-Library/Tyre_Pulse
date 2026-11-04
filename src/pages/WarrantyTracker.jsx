@@ -34,7 +34,10 @@ import {
   filterClaimsByDimension, claimKpis, brandPerformance, failureBreakdown,
   statusCounts as countStatuses, monthlyCredits as creditsByMonth, creditAnalysis as analyseCredits,
   roiModel, generateClaimNo, optionsOf, lifePct,
+  buildWarrantyCandidates, candidateSummary, CANDIDATE_DEFAULTS,
+  KM_STATUS_LABEL, nextClaimStatuses, claimSaveProblem, overdueClaims, SUPPLIER_WAIT_LIMIT_DAYS,
 } from '../lib/warrantyTrackerAnalytics'
+import ClaimProcedure from '../components/warranty/ClaimProcedure'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -118,6 +121,9 @@ const EMPTY_FORM = {
   claim_status: 'Submitted',
   credit_amount: '',
   credit_date: '',
+  supplier_ref: '',
+  decision_date: '',
+  rejection_reason: '',
 }
 
 function StatusBadge({ status }) {
@@ -155,8 +161,13 @@ export default function WarrantyTracker() {
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
 
   const [claims, setClaims]     = useState([])
-  const [tyreRecords, setTyreRecords] = useState([])
-  const [loading, setLoading]   = useState(true)
+  // Tyres removed with a stated reason - the source of warranty CANDIDATES
+  // (never claims). Loaded per country; a failed read is shown, not hidden.
+  const [removedTyres, setRemovedTyres] = useState([])
+  const [removedTruncated, setRemovedTruncated] = useState(false)
+  const [candLoading, setCandLoading] = useState(true)
+  const [candError, setCandError] = useState('')
+  const [candKind, setCandKind] = useState('All')
   const [activeTab, setActiveTab] = useState('Claims')
 
   const [search, setSearch]           = useState('')
@@ -239,16 +250,23 @@ export default function WarrantyTracker() {
     loadClaims()
   }, [loadClaims])
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true)
-      let data = []
-      try { data = await warranty.listTyreContext() } catch { data = [] }
-      setTyreRecords(data ?? [])
-      setLoading(false)
+  const loadCandidates = useCallback(async () => {
+    setCandLoading(true)
+    setCandError('')
+    try {
+      const { rows, truncated } = await warranty.listRemovedTyresForWarranty({ country: activeCountry })
+      setRemovedTyres(rows)
+      setRemovedTruncated(truncated)
+    } catch (e) {
+      setRemovedTyres([])
+      setRemovedTruncated(false)
+      setCandError(toUserMessage(e, 'Could not load removed tyres. Please retry.'))
+    } finally {
+      setCandLoading(false)
     }
-    load()
-  }, [])
+  }, [activeCountry])
+
+  useEffect(() => { loadCandidates() }, [loadCandidates])
 
   // Country scoping - mirror the app-wide null-safe convention (applyCountry):
   // "All" shows every country; a specific country shows its own rows plus any
@@ -288,6 +306,7 @@ export default function WarrantyTracker() {
     [filteredBase, filterBrand, filterStatus, filterFailure],
   )
   const kpis = useMemo(() => claimKpis(filteredBase), [filteredBase])
+  const overdueCount = useMemo(() => overdueClaims(filteredBase).length, [filteredBase])
   const brandPerf = useMemo(() => brandPerformance(filteredBase), [filteredBase])
   const statusCounts = useMemo(() => countStatuses(filteredBase), [filteredBase])
   const failureCounts = useMemo(() => failureBreakdown(filteredBase), [filteredBase])
@@ -315,12 +334,50 @@ export default function WarrantyTracker() {
         claim_status: claim.claim_status || 'Submitted',
         credit_amount: claim.credit_amount ?? '',
         credit_date: claim.credit_date || '',
+        supplier_ref: claim.supplier_ref || '',
+        decision_date: claim.decision_date || '',
+        rejection_reason: claim.rejection_reason || '',
       })
       setEditClaim(claim)
     } else {
       setForm(EMPTY_FORM)
       setEditClaim(null)
     }
+    setFormError('')
+    setShowAdd(true)
+  }, [])
+
+  // Warranty candidates: tyres the removal history says came off early for a
+  // reason a supplier could cover. Candidates only - nothing is a claim until
+  // someone raises it. Tyres already carrying a claim are excluded.
+  const candidates = useMemo(() => buildWarrantyCandidates(removedTyres, claims), [removedTyres, claims])
+  const candSummary = useMemo(() => candidateSummary(candidates), [candidates])
+  const shownCandidates = useMemo(
+    () => (candKind === 'All' ? candidates : candidates.filter(c => c.kind === candKind)),
+    [candidates, candKind],
+  )
+
+  const raiseFromCandidate = useCallback((c) => {
+    setForm({
+      ...EMPTY_FORM,
+      serial_number: c.serial_number || '',
+      brand: c.brand || '',
+      size: c.size || '',
+      asset_no: c.asset_no || '',
+      site: c.site || '',
+      country: c.country || '',
+      fitment_date: c.fitment_date ? String(c.fitment_date).slice(0, 10) : '',
+      removal_date: c.removal_date ? String(c.removal_date).slice(0, 10) : '',
+      // A "1" fitment odometer is a placeholder, not a reading - leave it blank
+      // so the claim never states a tyre life nobody measured.
+      km_at_fitment: c.km_status === 'placeholder' ? '' : (c.km_at_fitment ?? ''),
+      km_at_removal: c.km_at_removal ?? '',
+      expected_life_km: c.expected_life_km ?? EMPTY_FORM.expected_life_km,
+      failure_type: c.failure_type,
+      notes: `Raised from removal record. Removal reason: ${c.removal_reason}.`
+        + (c.km_known ? '' : ` Tyre km: ${KM_STATUS_LABEL[c.km_status] || 'not recorded'}.`),
+    })
+    setEditClaim(null)
     setFormError('')
     setShowAdd(true)
   }, [])
@@ -353,6 +410,7 @@ export default function WarrantyTracker() {
   const kmRun = useMemo(() => {
     const fit = Number(form.km_at_fitment)
     const rem = Number(form.km_at_removal)
+    if (form.km_at_fitment === '' || form.km_at_removal === '') return 0
     if (fit >= 0 && rem > 0 && rem > fit) return rem - fit
     return 0
   }, [form.km_at_fitment, form.km_at_removal])
@@ -363,6 +421,8 @@ export default function WarrantyTracker() {
     if (!form.serial_number.trim()) { setFormError('Serial number is required.'); return }
     if (!form.brand.trim()) { setFormError('Brand is required.'); return }
     if (!form.failure_type) { setFormError('Failure type is required.'); return }
+    const procedureProblem = claimSaveProblem(form)
+    if (procedureProblem) { setFormError(procedureProblem); return }
     setSaving(true)
     setFormError('')
     try {
@@ -376,16 +436,19 @@ export default function WarrantyTracker() {
         country: form.country || profile?.country || null,
         fitment_date: form.fitment_date || null,
         removal_date: form.removal_date || null,
-        km_at_fitment: Number(form.km_at_fitment) || 0,
-        km_at_removal: Number(form.km_at_removal) || 0,
-        km_run: kmRun,
+        km_at_fitment: form.km_at_fitment === '' ? null : Number(form.km_at_fitment),
+        km_at_removal: form.km_at_removal === '' ? null : Number(form.km_at_removal),
+        km_run: kmRun || null,
         expected_life_km: Number(form.expected_life_km) || 100000,
         failure_type: form.failure_type,
         supplier: form.supplier || null,
         notes: form.notes || null,
         claim_status: form.claim_status || 'Submitted',
-        credit_amount: Number(form.credit_amount) || 0,
+        credit_amount: form.credit_amount === '' ? null : Number(form.credit_amount),
         credit_date: form.credit_date || null,
+        supplier_ref: form.supplier_ref.trim() || null,
+        decision_date: form.decision_date || null,
+        rejection_reason: form.claim_status === 'Rejected' ? (form.rejection_reason.trim() || null) : null,
       }
       if (editClaim) {
         await upsertClaim(base, editClaim.id)
@@ -727,7 +790,44 @@ export default function WarrantyTracker() {
     { accessorKey: 'avgKm', header: 'Avg km at Failure', meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? 'N/A' : `${Math.round(getValue()).toLocaleString()} km`) },
   ]
 
-  const tabs = ['Claims', 'Brand Analysis', 'Failure Analysis', 'Credit Recovery', 'ROI Calculator']
+  const tabs = ['Claims', 'Warranty Candidates', 'Brand Analysis', 'Failure Analysis', 'Credit Recovery', 'ROI Calculator']
+
+  const KIND_LABEL = { defect: 'Defect', burst: 'Burst / blowout', premature_wear: 'Premature wear' }
+  const candidateColumns = [
+    { accessorKey: 'serial_number', header: 'Serial', cell: ({ getValue }) => <span className="font-mono text-xs">{getValue() || 'N/A'}</span> },
+    { accessorKey: 'brand', header: 'Brand', cell: ({ getValue }) => getValue() || 'N/A' },
+    { accessorKey: 'size', header: 'Size', cell: ({ getValue }) => getValue() || 'N/A' },
+    { accessorKey: 'asset_no', header: 'Asset', cell: ({ getValue }) => getValue() || 'N/A' },
+    { accessorKey: 'position', header: 'Position', cell: ({ getValue }) => getValue() || 'N/A' },
+    { accessorKey: 'site', header: 'Site', cell: ({ getValue }) => getValue() || 'N/A' },
+    { accessorKey: 'removal_date', header: 'Removed', cell: ({ getValue }) => fmtDate(getValue()) },
+    { accessorKey: 'removal_reason', header: 'Removal reason' },
+    { accessorKey: 'kind', header: 'Why a candidate', cell: ({ getValue }) => KIND_LABEL[getValue()] || getValue() },
+    {
+      accessorKey: 'km_run', header: 'Tyre km', meta: { align: 'right' },
+      cell: ({ row }) => {
+        const c = row.original
+        if (c.km_run != null) return `${Math.round(c.km_run).toLocaleString()} km`
+        const label = KM_STATUS_LABEL[c.km_status] || 'Not recorded'
+        return (
+          <span className={c.km_status === 'over_cap' || c.km_status === 'placeholder' ? 'text-amber-400' : 'text-[var(--text-muted)]'}
+            title={c.km_reported != null ? `Recorded figure ${Math.round(c.km_reported).toLocaleString()} km is not the tyre's own life` : undefined}>
+            {label}
+          </span>
+        )
+      },
+    },
+    { accessorKey: 'expected_life_km', header: 'Expected life', meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? 'N/A' : `${Number(getValue()).toLocaleString()} km`) },
+    {
+      id: 'raise', header: '', enableSorting: false,
+      cell: ({ row }) => (
+        <button type="button" onClick={(e) => { e.stopPropagation(); raiseFromCandidate(row.original) }}
+          className="min-h-[36px] inline-flex items-center gap-1 px-2.5 rounded-lg text-xs text-blue-400 border border-blue-800/50 hover:bg-blue-900/30">
+          <Plus size={12} aria-hidden="true" /> Raise claim
+        </button>
+      ),
+    },
+  ]
 
   return (
     <div className="space-y-6">
@@ -761,6 +861,19 @@ export default function WarrantyTracker() {
       <NotInUseNotice count={claims.length} label="warranty claims"
         hint="Claims appear once one is raised against a tyre." />
 
+      {!claimsLoading && !claimsError && claims.length === 0 && candidates.length > 0 && (
+        <div className="flex items-start gap-2 text-xs text-blue-300 bg-blue-900/15 border border-blue-800/40 rounded-lg px-3 py-2">
+          <Info size={13} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
+          <span>
+            No warranty claims have been recorded yet, so the claim figures below are zero. The tyre removal history
+            shows {candSummary.total.toLocaleString()} tyres removed early for a reason a supplier may cover.{' '}
+            <button type="button" className="underline font-semibold" onClick={() => setActiveTab('Warranty Candidates')}>
+              Review warranty candidates
+            </button>
+          </span>
+        </div>
+      )}
+
       {activeCountry === 'All' && (
         <div className="flex items-start gap-2 text-xs text-amber-400/90 bg-amber-900/15 border border-amber-800/40 rounded-lg px-3 py-2">
           <Info size={13} className="mt-0.5 flex-shrink-0" />
@@ -777,11 +890,16 @@ export default function WarrantyTracker() {
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <KpiCard icon={ShieldCheck} label="Total Claims" value={kpis.total} color="text-blue-400" />
-        <KpiCard icon={Clock} label="Open Claims" value={kpis.open} color="text-yellow-400" warn={kpis.open > 10} />
+        <KpiCard icon={Clock} label="Open Claims" value={kpis.open} color="text-yellow-400" warn={kpis.open > 10 || overdueCount > 0} />
         <KpiCard icon={DollarSign} label="Total Credits" value={fmt(kpis.totalCredits)} color="text-emerald-400" sub="received" />
         <KpiCard icon={Percent} label="Approval Rate" value={pct(kpis.approvalRate)} color="text-green-400" />
         <KpiCard icon={CreditCard} label="Avg Credit/Claim" value={fmt(kpis.avgCredit)} color="text-purple-400" />
       </div>
+      {overdueCount > 0 && (
+        <p className="text-xs text-amber-400" role="status">
+          {overdueCount} claim{overdueCount === 1 ? ' has' : 's have'} waited on the supplier for more than {SUPPLIER_WAIT_LIMIT_DAYS} days. Chase the supplier and record their reference.
+        </p>
+      )}
 
       <div className="flex gap-1 flex-wrap bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1">
         {tabs.map(tab => (
@@ -863,13 +981,19 @@ export default function WarrantyTracker() {
                 <h3 className="text-sm font-semibold text-[var(--text-secondary)]">Claim {expandedClaim.claim_no}</h3>
                 <button type="button" onClick={() => setExpandedRow(null)} aria-label="Close claim details" className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:bg-[var(--input-bg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"><X size={16} /></button>
               </div>
+              <div className="mb-4 p-3 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)]">
+                <ClaimProcedure claim={expandedClaim} />
+              </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
                 {[
                   ['Country', expandedClaim.country || 'N/A'],
                   ['Fitment Date', fmtDate(expandedClaim.fitment_date)],
                   ['Removal Date', fmtDate(expandedClaim.removal_date)],
                   ['Supplier', expandedClaim.supplier || 'N/A'],
+                  ['Supplier Ref', expandedClaim.supplier_ref || 'N/A'],
+                  ['Decision Date', fmtDate(expandedClaim.decision_date)],
                   ['Credit Date', fmtDate(expandedClaim.credit_date)],
+                  ...(expandedClaim.claim_status === 'Rejected' ? [['Rejection Reason', expandedClaim.rejection_reason || 'N/A']] : []),
                 ].map(([k, v]) => (
                   <div key={k}>
                     <p className="text-[var(--text-muted)] mb-1">{k}</p>
@@ -901,6 +1025,63 @@ export default function WarrantyTracker() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {activeTab === 'Warranty Candidates' && (
+        <div className="space-y-4">
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4 space-y-3">
+            <p className="text-xs text-[var(--text-muted)]">
+              These are <strong>candidates, not claims</strong>, built from tyre removal records. A tyre is listed when it was
+              removed for a possible defect (separation, bulge, bead, manufacturing defect) or a burst before the
+              expected life of its vehicle class (mixer 80,000 km, pump 56,000 km, loader 15,000 km, other 100,000 km), or
+              worn out before {Math.round(CANDIDATE_DEFAULTS.prematureWearShare * 100)}% of that life. Tyre km is the
+              removal odometer minus the fitment odometer; when the fitment odometer was typed as 1, or the figure is
+              above the class limit, the km is shown as not trustworthy instead of being used. Punctures,
+              cuts, damage, misuse and alignment are not listed (a supplier does not cover them). A burst is often
+              inflation related, so inspect the casing first. Tyres that already carry a claim are left out. Raise a claim to
+              start the warranty process.
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              {[
+                ['All', 'All candidates', candSummary.total],
+                ['defect', 'Defect', candSummary.defect],
+                ['burst', 'Burst / blowout', candSummary.burst],
+                ['premature_wear', 'Premature wear', candSummary.premature_wear],
+              ].map(([k, label, n]) => (
+                <button key={k} type="button" onClick={() => setCandKind(k)} aria-pressed={candKind === k}
+                  className={`text-left rounded-xl border p-3 transition-colors ${candKind === k ? 'border-blue-600 bg-blue-900/20' : 'border-[var(--input-border)] bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)]'}`}>
+                  <p className="text-xs text-[var(--text-muted)]">{label}</p>
+                  <p className="text-xl font-bold text-[var(--text-secondary)]">{candLoading ? '...' : n.toLocaleString()}</p>
+                </button>
+              ))}
+              <div className="rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] p-3">
+                <p className="text-xs text-[var(--text-muted)]">Tyre km not trustworthy</p>
+                <p className="text-xl font-bold text-[var(--text-secondary)]">{candLoading ? '...' : candSummary.kmUnknown.toLocaleString()}</p>
+                {!candLoading && candSummary.kmSuspect > 0 && (
+                  <p className="text-[11px] text-amber-400">{candSummary.kmSuspect.toLocaleString()} with a placeholder or impossible reading</p>
+                )}
+              </div>
+            </div>
+            {removedTruncated && (
+              <p className="text-xs text-amber-400">
+                Only the first {warranty.CANDIDATE_MAX_ROWS.toLocaleString()} removal records were read. Select a single country to narrow the list.
+              </p>
+            )}
+          </div>
+          <EnterpriseTable
+            columns={candidateColumns}
+            data={shownCandidates}
+            getRowId={(c) => String(c.id)}
+            loading={candLoading}
+            error={candError || null}
+            onRetry={loadCandidates}
+            enableExport={false}
+            emptyMessage={removedTyres.length === 0
+              ? 'No tyre removal records with a reason are on file for this country yet.'
+              : 'No tyre was removed early for a reason a supplier may cover.'}
+            viewKey="warranty-candidates"
+          />
         </div>
       )}
 
@@ -1146,6 +1327,11 @@ export default function WarrantyTracker() {
                   every edit/save/status control below. Charts/exports are untouched.
                 */}
                 {editClaim && (
+                  <div className="p-3 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)]">
+                    <ClaimProcedure claim={editClaim} />
+                  </div>
+                )}
+                {editClaim && (
                   <>
                     <EntityApprovalPanel
                       entityType="warranty_claim"
@@ -1274,9 +1460,31 @@ export default function WarrantyTracker() {
                       <label htmlFor="wc-status" className="text-xs text-[var(--text-muted)]">Status</label>
                       <select id="wc-status" value={form.claim_status} onChange={e => setForm(p => ({ ...p, claim_status: e.target.value }))}
                         className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] focus:outline-none focus:border-blue-500">
-                        {CLAIM_STATUSES.map(s => <option key={s}>{s}</option>)}
+                        {nextClaimStatuses(editClaim.claim_status).map(s => <option key={s}>{s}</option>)}
                       </select>
+                      <p className="text-[11px] text-[var(--text-muted)]">Only the next steps of the procedure are offered.</p>
                     </div>
+                    <div className="space-y-1">
+                      <label htmlFor="wc-supplier-ref" className="text-xs text-[var(--text-muted)]">Supplier claim ref</label>
+                      <input id="wc-supplier-ref" value={form.supplier_ref} onChange={e => setForm(p => ({ ...p, supplier_ref: e.target.value }))}
+                        placeholder="The supplier's own reference"
+                        className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
+                    </div>
+                    {['Approved', 'Rejected', 'Credit Issued', 'Closed'].includes(form.claim_status) && (
+                      <div className="space-y-1">
+                        <label htmlFor="wc-decision-date" className="text-xs text-[var(--text-muted)]">Supplier decision date</label>
+                        <input id="wc-decision-date" type="date" value={form.decision_date} onChange={e => setForm(p => ({ ...p, decision_date: e.target.value }))}
+                          className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
+                        <p className="text-[11px] text-[var(--text-muted)]">Left blank, today is recorded.</p>
+                      </div>
+                    )}
+                    {form.claim_status === 'Rejected' && (
+                      <div className="space-y-1 col-span-2">
+                        <label htmlFor="wc-rejection" className="text-xs text-[var(--text-muted)]">Rejection reason (from the supplier) *</label>
+                        <textarea id="wc-rejection" rows={2} value={form.rejection_reason} onChange={e => setForm(p => ({ ...p, rejection_reason: e.target.value }))}
+                          className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500 resize-none" />
+                      </div>
+                    )}
                     {form.claim_status === 'Credit Issued' && (
                       <>
                         <div className="space-y-1">

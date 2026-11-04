@@ -25,6 +25,7 @@ import 'package:tyre_pulse/core/sync/sync_workspace_id.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/assets/data/fleet_signals_repository.dart';
+import 'package:tyre_pulse/features/assets/data/vehicle_axle_store.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_draft_repository.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
@@ -49,7 +50,14 @@ final Provider<VehicleFleetRepository> vehicleFleetRepositoryProvider =
   (ref) => VehicleFleetRepository(
     ref.watch(vehicleFleetSourceProvider),
     cacheDao: ref.watch(vehicleFleetCacheDaoProvider),
+    axleStore: ref.watch(vehicleAxleStoreProvider),
   ),
+);
+
+/// Device copy of each machine's axle count (4- vs 5-axle pumps offline).
+final Provider<VehicleAxleStore> vehicleAxleStoreProvider =
+    Provider<VehicleAxleStore>(
+  (ref) => VehicleAxleStore(SharedPreferencesAxleKeyValueStore()),
 );
 
 /// The whole fleet register, scoped to the active workspace's country.
@@ -130,8 +138,9 @@ final FutureProviderFamily<InspectionDraftSummary?, String>
   final String? activeCountry = _normalisedCountry(workspace.activeCountry);
 
   final AppDatabase db = ref.watch(appDatabaseProvider);
-  final InspectionDraftRepository drafts =
-      ref.watch(inspectionDraftRepositoryProvider);
+  final InspectionDraftRepository drafts = ref.watch(
+    inspectionDraftRepositoryProvider,
+  );
   final List<InspectionDraft> rows =
       await db.draftsDao.inspectionDraftsForUser(userId);
   for (final InspectionDraft row in rows) {
@@ -208,12 +217,11 @@ final FutureProvider<FleetSignalsOutcome> fleetSignalsProvider =
 /// the header's Synced label. The same Drift watch Profile reads
 /// ([QueueDao.watchPendingCount]); a read failure stays an [AsyncError] so
 /// the header shows nothing rather than a false "Synced".
-final StreamProvider<int> fleetPendingSyncCountProvider =
-    StreamProvider<int>((ref) {
+final StreamProvider<int> fleetPendingSyncCountProvider = StreamProvider<int>((
+  ref,
+) {
   final WorkspaceContext? workspace = ref.watch(workspaceContextProvider);
   if (workspace == null) return Stream<int>.value(0);
   final AppDatabase db = ref.watch(appDatabaseProvider);
-  return db.queueDao.watchPendingCount(
-    workspaceId: workspaceIdFor(workspace),
-  );
+  return db.queueDao.watchPendingCount(workspaceId: workspaceIdFor(workspace));
 });

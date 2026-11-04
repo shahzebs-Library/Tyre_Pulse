@@ -10,6 +10,8 @@
  * renders N/A), never 0. `now` is injectable wherever the calendar matters.
  */
 
+import { tyreKmAssessment } from './tyreKm'
+
 export const FAILURE_TYPES = [
   'Premature Wear', 'Sidewall Failure', 'Tread Separation',
   'Bead Failure', 'Manufacturing Defect', 'Other',
@@ -196,4 +198,180 @@ export function generateClaimNo(existing = [], now = new Date()) {
 /** Distinct option list with an 'All' sentinel first. */
 export function optionsOf(claims = [], key) {
   return ['All', ...[...new Set(claims.map(c => c[key]).filter(Boolean))].sort()]
+}
+
+// ---------------------------------------------------------------------------
+// Warranty CANDIDATES (not claims). warranty_claims is filled by hand, so a
+// page reading only that table shows nothing until someone raises a claim.
+// The tyre removal history already says which tyres came off early for a
+// reason a supplier could be asked to cover. These helpers list them, clearly
+// as candidates for review, never as claims.
+// ---------------------------------------------------------------------------
+
+/**
+ * Default early-life windows (km). `expectedLifeKm` null means "use the
+ * vehicle class's life ceiling" (tyreLifeCapKm); a number overrides it for
+ * every tyre. Defects count inside expected life; wear inside half of it.
+ */
+export const CANDIDATE_DEFAULTS = { expectedLifeKm: null, prematureWearShare: 0.5 }
+
+export { tyreLifeCapKm, tyreKmAssessment, KM_STATUS_LABEL } from './tyreKm'
+
+// Ordered: the first match decides. Road-hazard and operator causes (puncture,
+// cut, damage, misuse, alignment, valve) are deliberately absent - a supplier
+// does not cover them, so they are never offered as candidates.
+const DEFECT_RULES = [
+  { re: /sidewall\s*separat|side\s*wall\s*separat|bulge/i, failure: 'Sidewall Failure', kind: 'defect' },
+  { re: /tread\s*separat|thread\s*separat|thread\s*seprat|separat|seprat/i, failure: 'Tread Separation', kind: 'defect' },
+  { re: /\bbead\b/i, failure: 'Bead Failure', kind: 'defect' },
+  { re: /manufactur|defect/i, failure: 'Manufacturing Defect', kind: 'defect' },
+  { re: /blow\s*-?\s*out|burst|blast/i, failure: 'Other', kind: 'burst' },
+]
+
+/**
+ * Classify a free-text removal reason. Returns { kind, failure } or null.
+ * kind: 'defect' | 'burst' | 'premature_wear'. 'Normal tread wear' is not early.
+ */
+export function classifyRemovalReason(reason) {
+  const r = String(reason || '').trim()
+  if (!r) return null
+  for (const rule of DEFECT_RULES) if (rule.re.test(r)) return { kind: rule.kind, failure: rule.failure }
+  if (/normal/i.test(r)) return null
+  if (/worn|wear/i.test(r)) return { kind: 'premature_wear', failure: 'Premature Wear' }
+  return null
+}
+
+/** km a tyre ran; null when it cannot be trusted (see tyreKmAssessment). */
+export function tyreKmRun(t) {
+  return tyreKmAssessment(t).km
+}
+
+const serialKey = (s) => String(s || '').replace(/\s+/g, '').toUpperCase()
+
+/**
+ * Build the candidate list from tyre removal rows.
+ * - defect / burst: kept when km is unknown (flagged) or below expected life.
+ * - premature_wear: kept only with a measured km below expectedLife x share.
+ * - tyres whose serial already carries a warranty claim are dropped.
+ */
+export function buildWarrantyCandidates(tyres = [], claims = [], opts = {}) {
+  const { expectedLifeKm: fixedLife, prematureWearShare } = { ...CANDIDATE_DEFAULTS, ...opts }
+  const claimed = new Set(claims.map(c => serialKey(c.serial_number)).filter(Boolean))
+  const out = []
+  for (const t of tyres) {
+    const cls = classifyRemovalReason(t.removal_reason)
+    if (!cls) continue
+    const serial = t.serial_no ?? t.serial_number ?? ''
+    if (serial && claimed.has(serialKey(serial))) continue
+    const assess = tyreKmAssessment(t)
+    const km = assess.km
+    const expectedLifeKm = fixedLife ?? assess.cap
+    const wearLimit = expectedLifeKm * prematureWearShare
+    if (cls.kind === 'premature_wear') {
+      if (km == null || km >= wearLimit) continue
+    } else if (km != null && km >= expectedLifeKm) {
+      continue
+    }
+    out.push({
+      id: t.id,
+      serial_number: serial || null,
+      brand: t.brand || null,
+      size: t.size || null,
+      asset_no: t.asset_no || null,
+      position: t.tyre_position || null,
+      site: t.site || null,
+      country: t.country || null,
+      fitment_date: t.fitment_date || t.issue_date || null,
+      removal_date: t.removal_date || null,
+      km_at_fitment: num(t.km_at_fitment),
+      km_at_removal: num(t.km_at_removal),
+      km_run: km,
+      removal_reason: String(t.removal_reason).trim(),
+      kind: cls.kind,
+      failure_type: cls.failure,
+      vehicle_type: t.vehicle_type || null,
+      expected_life_km: expectedLifeKm,
+      km_status: assess.status,
+      km_reported: assess.reportedKm,
+      life_pct: km != null && expectedLifeKm > 0 ? (km / expectedLifeKm) * 100 : null,
+      km_known: km != null,
+    })
+  }
+  return out.sort((a, b) => String(b.removal_date || '').localeCompare(String(a.removal_date || '')))
+}
+
+/** Counts by kind for the candidate tiles. */
+export function candidateSummary(candidates = []) {
+  const s = { total: candidates.length, defect: 0, burst: 0, premature_wear: 0, kmUnknown: 0, kmSuspect: 0 }
+  for (const c of candidates) {
+    s[c.kind] = (s[c.kind] || 0) + 1
+    if (!c.km_known) s.kmUnknown += 1
+    if (c.km_status === 'placeholder' || c.km_status === 'over_cap') s.kmSuspect += 1
+  }
+  return s
+}
+
+// ---------------------------------------------------------------------------
+// Claim PROCEDURE. Mirrors SQL public.warranty_claim_guard (20261104110000) -
+// change both. Submitted -> Under Review -> Approved -> Credit Issued -> Closed,
+// with Rejected (-> Closed) as the other outcome.
+// ---------------------------------------------------------------------------
+
+export const CLAIM_FLOW = Object.freeze([
+  { status: 'Submitted', step: 'Claim raised', owner: 'Fleet / tyre team' },
+  { status: 'Under Review', step: 'Sent to supplier', owner: 'Supplier' },
+  { status: 'Approved', step: 'Supplier accepted', owner: 'Supplier' },
+  { status: 'Credit Issued', step: 'Credit received', owner: 'Finance' },
+  { status: 'Closed', step: 'Closed', owner: 'Fleet / tyre team' },
+])
+
+const NEXT = Object.freeze({
+  Submitted: ['Under Review', 'Rejected'],
+  'Under Review': ['Approved', 'Rejected'],
+  Approved: ['Credit Issued', 'Closed'],
+  Rejected: ['Closed'],
+  'Credit Issued': ['Closed'],
+  Closed: [],
+})
+
+/** The statuses a claim may move to next (its own status first, for a select). */
+export function nextClaimStatuses(status) {
+  const s = CLAIM_STATUSES.includes(status) ? status : 'Submitted'
+  return [s, ...(NEXT[s] || [])]
+}
+
+/** Index of the claim on CLAIM_FLOW; Rejected sits after Under Review. */
+export function claimStepIndex(status) {
+  if (status === 'Rejected') return 2
+  const i = CLAIM_FLOW.findIndex(f => f.status === status)
+  return i < 0 ? 0 : i
+}
+
+/** Plain sentence for what a save is missing, or '' when it can be saved. */
+export function claimSaveProblem(form = {}) {
+  const st = form.claim_status
+  if (st === 'Rejected' && !String(form.rejection_reason || '').trim()) {
+    return "Add the supplier's rejection reason before marking the claim Rejected."
+  }
+  if (st === 'Credit Issued' && (!(num(form.credit_amount) > 0) || !form.credit_date)) {
+    return 'Add the credit amount and the credit date before marking the claim Credit Issued.'
+  }
+  return ''
+}
+
+/** Days a claim has been waiting on the supplier; null once decided. */
+export const SUPPLIER_WAIT_LIMIT_DAYS = 30
+export function supplierWaitDays(claim = {}, { now = new Date() } = {}) {
+  if (!['Submitted', 'Under Review'].includes(claim.claim_status)) return null
+  const t = Date.parse(claim.created_at)
+  if (!Number.isFinite(t)) return null
+  return Math.max(0, Math.floor((now.getTime() - t) / 86400000))
+}
+
+/** Claims waiting longer than the supplier limit. */
+export function overdueClaims(claims = [], opts = {}) {
+  return claims.filter(c => {
+    const d = supplierWaitDays(c, opts)
+    return d != null && d > SUPPLIER_WAIT_LIMIT_DAYS
+  })
 }

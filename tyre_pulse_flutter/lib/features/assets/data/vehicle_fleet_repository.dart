@@ -36,6 +36,8 @@
 /// nothing to read.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tyre_pulse/core/database/app_database.dart';
@@ -46,8 +48,10 @@ import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
+import 'package:tyre_pulse/features/assets/data/vehicle_axle_store.dart';
 import 'package:tyre_pulse/features/assets/domain/asset_classes.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/vehicle_axle_registry.dart';
 
 // ---------------------------------------------------------------------------
 // Paging - pure, no Supabase type in its signature
@@ -138,7 +142,7 @@ Future<PagedRows<T>> fetchAllPages<T>(
 const String vehicleFleetColumns = 'id, asset_no, fleet_number, make, '
     'model, vehicle_type, site, status, operator_name, tyre_size, '
     'current_km, country, department, region, registration_no, year, '
-    'serial_no, engine_no, capacity, ops_status';
+    'serial_no, engine_no, capacity, ops_status, axle_count';
 
 /// The narrow surface [VehicleFleetRepository] needs from the remote fleet
 /// register. See the library comment for why this exists as an interface
@@ -423,10 +427,18 @@ WorkspaceScopeFilter? vehicleCacheScopeFor(WorkspaceContext? workspace) {
 /// outcome a caller switches over, matching `ProfileRepository`'s own
 /// contract.
 final class VehicleFleetRepository {
-  VehicleFleetRepository(this._source, {CacheDao? cacheDao})
-      : _cacheDao = cacheDao;
+  VehicleFleetRepository(
+    this._source, {
+    CacheDao? cacheDao,
+    VehicleAxleStore? axleStore,
+  })  : _cacheDao = cacheDao,
+        _axleStore = axleStore;
 
   final VehicleFleetSource _source;
+
+  /// Keeps each machine's axle count on the device for offline starts. Null
+  /// in tests and wherever no store is wired; the default build is drawn then.
+  final VehicleAxleStore? _axleStore;
 
   /// Read-only. See the library comment for why this repository never
   /// writes to it. Null until a caller wires a real [CacheDao] - see
@@ -467,6 +479,9 @@ final class VehicleFleetRepository {
         pageSize: _pageSize,
         maxRows: _maxRows,
       );
+      // Each machine's axle count, so a 4-axle pump draws 12 tyres, not 14.
+      registerFleetAxleRows(paged.rows, country: country);
+      unawaited(_axleStore?.save());
       final List<VehicleAsset> assets =
           paged.rows.map(VehicleAsset.fromRow).toList(growable: false);
       return VehicleFleetListLoaded(assets: assets, truncated: paged.truncated);
@@ -503,6 +518,7 @@ final class VehicleFleetRepository {
     // THIS read, not about being offline, and showing stale data over one
     // would mask a real problem rather than explain it.
     if (isConnectivity) {
+      await _axleStore?.restore();
       final VehicleFleetListFromCache? cached = await _readCachedList(scope);
       if (cached != null) {
         return cached;
@@ -562,6 +578,8 @@ final class VehicleFleetRepository {
       if (row == null) {
         return const VehicleDetailNotFound();
       }
+      registerFleetAxleRows(<Map<String, dynamic>>[row]);
+      unawaited(_axleStore?.save());
       return VehicleDetailLoaded(VehicleAsset.fromRow(row));
     } on AppError catch (error) {
       return await _fallbackOrFailDetail(
@@ -588,6 +606,7 @@ final class VehicleFleetRepository {
     required bool isConnectivity,
   }) async {
     if (isConnectivity) {
+      await _axleStore?.restore();
       final VehicleDetailFromCache? cached = await _readCachedDetail(
         scope,
         assetNo,

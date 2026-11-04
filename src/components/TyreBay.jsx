@@ -349,7 +349,9 @@ export default function TyreBay({ asset, tyres, currency, locked = false, onMove
   const changeLocked = locked || approvalScope?.id !== asset?.id || approvalScope?.mode !== 'legacy'
   const vehicleType = asset?.vehicle_type
   const groups = useMemo(() => groupTyresByPosition(tyres), [tyres])
-  const positions = useMemo(() => layoutPositionsFor(vehicleType), [vehicleType])
+  // Same machine the wheel bay draws (asset prefix + recorded axle build), so the
+  // Move/Swap and change-approval pickers offer exactly the wheels on the diagram.
+  const positions = useMemo(() => layoutPositionsFor(vehicleType, asset?.asset_no, asset?.country), [vehicleType, asset?.asset_no, asset?.country])
 
   // Map diagram slot ids <-> canonical position keys so a wheel click selects the
   // right group and a current tyre's risk lights the right wheel.

@@ -8,7 +8,7 @@ import { Upload, X, Paperclip } from 'lucide-react'
 import { Card } from '../commandCenter/kit'
 import { PRIORITIES } from '../../lib/rotationScheduleAnalytics'
 import {
-  ROTATION_TYPES, POSITION_OPTIONS, POSITION_LABEL, newPositionsFor, planOf, planColumns, attachmentsOf, validatePlan, isoDay,
+  ROTATION_TYPES, positionOptionsFor, positionLabel, newPositionsFor, planOf, planColumns, attachmentsOf, validatePlan, isoDay,
 } from '../../lib/rotationScheduleView'
 import { validateAttachment, ATTACHMENT_ACCEPT } from '../../lib/api/rotations'
 
@@ -37,13 +37,14 @@ function initialForm(seed) {
   }
 }
 
-function Chips({ value, onToggle, label, disabled }) {
+function Chips({ value, options, onToggle, label, disabled }) {
+  if (!options.length) return <small className="rs-note">Choose the vehicle first. Its wheel positions come from its tyre map.</small>
   return (
     <div className="rs-chips" role="group" aria-label={label}>
-      {POSITION_OPTIONS.map((p) => {
+      {options.map((p) => {
         const idx = value.indexOf(p)
         return (
-          <button key={p} type="button" aria-pressed={idx >= 0} disabled={disabled} title={POSITION_LABEL[p]} onClick={() => onToggle(p)}>
+          <button key={p} type="button" aria-pressed={idx >= 0} disabled={disabled} title={positionLabel(p)} onClick={() => onToggle(p)}>
             {p}{idx >= 0 && value.length > 1 ? <small>{idx + 1}</small> : null}
           </button>
         )
@@ -60,14 +61,34 @@ export default function RotationPlanForm({ seed, assets, sites, technicians, tec
   const assetByNo = useMemo(() => new Map(assets.map((a) => [a.asset, a])), [assets])
   const set = (patch) => setForm((f) => ({ ...f, ...patch }))
 
+  // The chosen vehicle's own wheel positions (GCC codes, from its tyre map),
+  // plus the spare. A position already on a saved plan stays selectable so
+  // an old plan can still be read and changed.
+  const selectedAsset = assetByNo.get(form.asset.trim()) || null
+  const wheels = useMemo(
+    () => (selectedAsset ? positionOptionsFor(selectedAsset.type, selectedAsset.asset, selectedAsset.country) : []),
+    [selectedAsset],
+  )
+  const options = useMemo(() => {
+    if (!wheels.length) return []
+    const extra = [...form.from, ...form.to].filter((p) => p && !wheels.includes(p) && p !== 'Spare')
+    return [...wheels, ...new Set(extra), 'Spare']
+  }, [wheels, form.from, form.to])
+
   const pickAsset = (asset) => {
     const a = assetByNo.get(asset.trim())
-    set({ asset, ...(a && !form.site && a.site && a.site !== 'Unassigned' ? { site: a.site } : {}) })
+    const changed = (a?.asset || '') !== (selectedAsset?.asset || '')
+    set({
+      asset,
+      ...(a && !form.site && a.site && a.site !== 'Unassigned' ? { site: a.site } : {}),
+      // A different vehicle has different wheels: start its plan afresh.
+      ...(changed ? { from: [], to: [] } : {}),
+    })
   }
-  const setType = (type) => set({ type, to: type === 'Custom' ? form.to : (newPositionsFor(type, form.from) || []) })
+  const setType = (type) => set({ type, to: type === 'Custom' ? form.to : (newPositionsFor(type, form.from, wheels) || []) })
   const toggleFrom = (p) => {
     const from = form.from.includes(p) ? form.from.filter((x) => x !== p) : [...form.from, p]
-    set({ from, to: form.type === 'Custom' ? form.to.filter((_, i) => i < from.length) : (newPositionsFor(form.type, from) || []) })
+    set({ from, to: form.type === 'Custom' ? form.to.filter((_, i) => i < from.length) : (newPositionsFor(form.type, from, wheels) || []) })
   }
   const toggleTo = (p) => set({ to: form.to.includes(p) ? form.to.filter((x) => x !== p) : [...form.to, p] })
 
@@ -116,11 +137,11 @@ export default function RotationPlanForm({ seed, assets, sites, technicians, tec
         </div>
         <div>
           <span className="rs-lbl">Current positions <em>*</em></span>
-          <Chips value={form.from} onToggle={toggleFrom} label="Current positions" />
+          <Chips value={form.from} options={options} onToggle={toggleFrom} label="Current positions" />
         </div>
         <div>
           <span className="rs-lbl">New positions <em>*</em> {form.type !== 'Custom' && <small>set by the {form.type.toLowerCase()} pattern</small>}</span>
-          <Chips value={form.to} onToggle={toggleTo} label="New positions" disabled={form.type !== 'Custom'} />
+          <Chips value={form.to} options={options} onToggle={toggleTo} label="New positions" disabled={form.type !== 'Custom'} />
         </div>
         <label><span>Scheduled date <em>*</em></span><input type="date" value={form.scheduledDate} onChange={(e) => set({ scheduledDate: e.target.value })} /></label>
         <label><span>Priority</span>

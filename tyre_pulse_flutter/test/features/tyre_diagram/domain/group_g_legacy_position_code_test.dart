@@ -49,8 +49,8 @@ void main() {
   });
 
   test(
-      "case 67: every one of the 13 layouts' labels match the section-2 "
-      'table, computed fresh for all 98 slots', () {
+      "case 67: every one of the 14 layouts' labels match the section-2 "
+      'table, computed fresh for all 110 slots', () {
     const Map<String, List<String>> expectedLabels = <String, List<String>>{
       'Pickup': <String>['LHF1', 'RHF1', 'LHR1', 'RHR1'],
       'Wheel loader': <String>['LHF1', 'RHF1', 'LHR1', 'RHR1'],
@@ -126,9 +126,24 @@ void main() {
         'RHR2-I',
         'RHR2-O',
       ],
+      // The 4-axle build of the same pump: the third steer axle is absent.
+      'Concrete pump 4-axle': <String>[
+        'LHF1',
+        'RHF1',
+        'LHF2',
+        'RHF2',
+        'LHR1-O',
+        'LHR1-I',
+        'RHR1-I',
+        'RHR1-O',
+        'LHR2-O',
+        'LHR2-I',
+        'RHR2-I',
+        'RHR2-O',
+      ],
     };
 
-    expect(expectedLabels.length, 13);
+    expect(expectedLabels.length, 14);
     int totalSlots = 0;
     for (final MapEntry<String, List<String>> entry in expectedLabels.entries) {
       final DiagramLayout layout = kTyreDiagramLayouts[entry.key]!;
@@ -139,6 +154,6 @@ void main() {
       expect(actual, entry.value, reason: entry.key);
       totalSlots += layout.tyres.length;
     }
-    expect(totalSlots, 98);
+    expect(totalSlots, 110);
   });
 }

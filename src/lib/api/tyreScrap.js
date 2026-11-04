@@ -24,10 +24,24 @@ export function listScrapTyreRecords({ from, to } = {}) {
       // the canonical serial_no under the name the disposal log reads.
       'id, asset_no, serial_number:serial_no, brand, size, position, site, country, ' +
       'risk_level, tread_depth, cost_per_tyre, km_at_fitment, km_at_removal, ' +
-      'issue_date, removal_date, qty, category, removal_reason'
+      'issue_date, removal_date, qty, category, removal_reason, status'
     )
     // Paged by fetchAllPages (concurrent windows): a unique order is required or
     // rows drop/repeat at page boundaries.
+    .order('id', { ascending: true })
+    .range(from, to)
+}
+
+/**
+ * Serials carrying a scrap mark (tyre_status_marks, mark_type 'scrap'), paged
+ * range for `fetchAllPages`. Together with status 'Scrapped' this is the same
+ * definition of "scrapped" the Scrapped Register uses (list_scrapped_tyres).
+ */
+export function listScrapMarkSerials({ from, to } = {}) {
+  return supabase
+    .from('tyre_status_marks')
+    .select('id, serial, country')
+    .eq('mark_type', 'scrap')
     .order('id', { ascending: true })
     .range(from, to)
 }

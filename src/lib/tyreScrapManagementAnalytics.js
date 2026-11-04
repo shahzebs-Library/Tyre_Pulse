@@ -25,7 +25,34 @@ export const DATE_RANGE_OPTS = Object.freeze([
   { label: 'All time', days: null },
 ])
 
-export const REMOVAL_REASONS = Object.freeze(['All', 'Flat', 'Wear', 'Damage', 'Cut', 'Burst', 'Sidewall', 'Other'])
+export const REMOVAL_REASONS = Object.freeze(['All', 'Wear', 'Puncture', 'Flat', 'Damage', 'Cut', 'Burst', 'Sidewall', 'Other'])
+
+/**
+ * How each reason filter reads the free-text removal_reason. The stored values
+ * are the ERP's own words ("WORN OUT", "BLAST/BURST", "SIDE WALL DAMAGE",
+ * "THREAD SEPRATION"), so a plain substring of the filter label matched nothing
+ * for Wear or Sidewall. "Other" = a recorded reason none of the named filters match.
+ */
+const REASON_PATTERNS = Object.freeze({
+  Wear: /wear|worn/i,
+  Puncture: /punct/i,
+  Flat: /flat/i,
+  Damage: /damag/i,
+  Cut: /\bcut/i,
+  Burst: /burst|blast|blow/i,
+  Sidewall: /side\s*wall/i,
+})
+
+/** Does a removal reason satisfy the reason filter? 'All' always passes. */
+export function reasonMatches(reason, filter) {
+  if (!filter || filter === 'All') return true
+  const r = cleanRemovalReason(reason) || ''
+  if (filter === 'Other') {
+    return !!r && !Object.values(REASON_PATTERNS).some((re) => re.test(r))
+  }
+  const re = REASON_PATTERNS[filter]
+  return re ? re.test(r) : r.toLowerCase().includes(String(filter).toLowerCase())
+}
 
 /** Share of scrapped tyres assumed retreadable, and the saving vs new. Estimates, labelled as such. */
 export const RETREAD_SHARE = 0.30
@@ -50,8 +77,67 @@ export const serialOf = (t) => trimOr(t?.serial_no ?? t?.serial_number, null)
 /** The business date a scrap is judged on: removal, else issue. */
 export const refDate = (t) => (t?.removal_date || t?.issue_date || null)
 
+/**
+ * A row counts as scrap when markScrapped() flagged it (the tyre was marked
+ * scrap or carries status Scrapped - the SAME definition as the Scrapped
+ * Register), or, for data that carries them, the legacy risk_level Critical /
+ * category Scrap signals. Live data populates neither legacy column, so without
+ * the flag every analysis tab on /scrap read zero.
+ */
 export function isScrap(t) {
-  return t?.risk_level === 'Critical' || t?.category === 'Scrap'
+  return t?._scrap === true || t?.risk_level === 'Critical' || t?.category === 'Scrap'
+}
+
+const SCRAPPED_STATUS_RE = /^\s*scrap/i
+
+/** Serial normalised the way the scrap marks are keyed (upper, trimmed). */
+export const normSerial = (s) => {
+  const v = s == null ? '' : String(s).trim().toUpperCase()
+  return v || null
+}
+
+/**
+ * Flag the scrapped tyres in a tyre_records read, ONE row per tyre.
+ *
+ * A serial is scrapped when it carries a scrap mark (tyre_status_marks) or any
+ * of its rows has status Scrapped. A tyre has several lifecycle rows, so only
+ * one row per serial is flagged (a Scrapped-status row first, then the latest
+ * removal/issue date, then the highest id) - otherwise a tyre with three fitment
+ * rows would be counted as three scrapped tyres. Rows without a serial count on
+ * their own status. Returns new row objects; the input is not mutated.
+ *
+ * @param {object[]} rows tyre_records rows (need id, serial_no|serial_number, status)
+ * @param {Iterable<string>} markedSerials serials with a scrap mark
+ */
+export function markScrapped(rows = [], markedSerials = []) {
+  const marked = new Set()
+  for (const s of markedSerials || []) { const k = normSerial(s); if (k) marked.add(k) }
+  const isStatusScrap = (t) => SCRAPPED_STATUS_RE.test(String(t?.status ?? ''))
+  const better = (a, b) => {
+    const sa = isStatusScrap(a); const sb = isStatusScrap(b)
+    if (sa !== sb) return sa
+    const ra = String(refDate(a) || ''); const rb = String(refDate(b) || '')
+    if (ra !== rb) return ra > rb
+    return String(a?.id ?? '') > String(b?.id ?? '')
+  }
+  const scrapSerials = new Set(marked)
+  for (const t of rows) {
+    const k = normSerial(serialOf(t))
+    if (k && isStatusScrap(t)) scrapSerials.add(k)
+  }
+  const chosen = new Map()
+  for (const t of rows) {
+    const k = normSerial(serialOf(t))
+    if (!k || !scrapSerials.has(k)) continue
+    const cur = chosen.get(k)
+    if (!cur || better(t, cur)) chosen.set(k, t)
+  }
+  const flagged = new Set(chosen.values())
+  return rows.map((t) => {
+    const k = normSerial(serialOf(t))
+    const scrap = k ? flagged.has(t) : isStatusScrap(t)
+    return scrap ? { ...t, _scrap: true, _marked: !!(k && marked.has(k)) } : t
+  })
 }
 
 /** Distance the tyre ran, or null when the odometer pair is missing or reversed. */

@@ -39,7 +39,7 @@ import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { categorical, colorAt, withAlpha } from '../lib/reportColors'
 import {
   DATE_RANGE_OPTS, REMOVAL_REASONS, RETREAD_SHARE, RETREAD_SAVING,
-  isScrap, kmLife, tyreCost, serialOf, refDate, dataAnchor as anchorOf, cutoffFor,
+  isScrap, markScrapped, reasonMatches, kmLife, tyreCost, serialOf, refDate, dataAnchor as anchorOf, cutoffFor,
   fleetAvgKmLife as fleetAvgOf, scrapKpis, monthlyScrapTrend, reasonBreakdown,
   positionBreakdown, earlyScrap as earlyScrapOf, retreadOpportunity, brandScrapAnalysis,
   siteScrapAnalysis, siteMonthlySeries, brandSiteMatrix, heatLevel,
@@ -57,10 +57,10 @@ ChartJS.register(
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 // "Scrapped Register" is first because it is the literal answer to "show me the
-// scrapped tyres". Every other tab on this page works off the isScrap heuristic
-// (risk_level Critical / category Scrap, see tyreScrapManagementAnalytics.js),
-// which is an ANALYSIS of tyres that look scrap-worthy - it is not the list of
-// tyres anybody actually scrapped, and it never was.
+// scrapped tyres". The analysis tabs use the SAME definition (marked scrap or
+// status Scrapped, one row per tyre - markScrapped in
+// tyreScrapManagementAnalytics.js). They used to rely only on risk_level
+// Critical / category Scrap, which no live row carries, so every tab read zero.
 const TABS = ['Scrapped Register', 'Overview', 'By Brand', 'By Site', 'Disposal Log']
 
 const NA = 'N/A'
@@ -235,6 +235,7 @@ export default function TyreScrapManagement() {
   const [loading,    setLoading]    = useState(true)
   const [error,      setError]      = useState(null)
   const [truncated,  setTruncated]  = useState(false)
+  const [marksWarning, setMarksWarning] = useState('')
   const [loaded,     setLoaded]     = useState(false)
   const [activeTab,  setActiveTab]  = useState('Scrapped Register')
 
@@ -300,13 +301,26 @@ export default function TyreScrapManagement() {
     try {
       // Bounded read: cap at 50,000 rows with a stable id tiebreak so paging
       // never drops/repeats a row at a boundary. Surface the cap honestly.
-      const { data, error: err, truncated: tr } = await fetchAllPages(
-        (from, to) => scrapApi.listScrapTyreRecords({ from, to }).order('id'),
-        { max: 50000 },
-      )
+      const [recRes, markRes] = await Promise.all([
+        fetchAllPages(
+          (from, to) => scrapApi.listScrapTyreRecords({ from, to }).order('id'),
+          { max: 50000 },
+        ),
+        fetchAllPages(
+          (from, to) => scrapApi.listScrapMarkSerials({ from, to }).order('id'),
+          { max: 50000 },
+        ).catch((e) => ({ data: null, error: e })),
+      ])
+      const { data, error: err, truncated: tr } = recRes
       if (err) throw err
-      setAllTyres(data ?? [])
-      setTruncated(!!tr)
+      // Scrap marks are half of the definition. If they cannot be read the
+      // tabs still count status-Scrapped tyres, and say so.
+      const marks = markRes?.error ? [] : (markRes?.data ?? [])
+      setMarksWarning(markRes?.error
+        ? 'Scrap marks could not be read, so only tyres with status Scrapped are counted below.'
+        : '')
+      setAllTyres(markScrapped(data ?? [], marks.map(m => m.serial)))
+      setTruncated(!!tr || !!markRes?.truncated)
       setLoaded(true)
     } catch (e) {
       setError(toUserMessage(e, 'Failed to load tyre data.'))
@@ -345,10 +359,7 @@ export default function TyreScrapManagement() {
     return countryFiltered.filter(t => {
       if (filterSite !== 'All' && t.site !== filterSite) return false
       if (filterBrand !== 'All' && t.brand !== filterBrand) return false
-      if (filterReason !== 'All') {
-        const reason = (t.removal_reason ?? '').toLowerCase()
-        if (!reason.includes(filterReason.toLowerCase())) return false
-      }
+      if (!reasonMatches(t.removal_reason, filterReason)) return false
       if (cutoffDate) {
         const ref = refDate(t)
         if (!ref || new Date(ref) < cutoffDate) return false
@@ -375,10 +386,7 @@ export default function TyreScrapManagement() {
       if (!isScrap(t)) return false
       if (filterSite !== 'All' && t.site !== filterSite) return false
       if (filterBrand !== 'All' && t.brand !== filterBrand) return false
-      if (filterReason !== 'All') {
-        const reason = (t.removal_reason ?? '').toLowerCase()
-        if (!reason.includes(filterReason.toLowerCase())) return false
-      }
+      if (!reasonMatches(t.removal_reason, filterReason)) return false
       return true
     })
   ), [countryFiltered, filterSite, filterBrand, filterReason])
@@ -755,7 +763,7 @@ export default function TyreScrapManagement() {
         name: 'Scrap Log', rows: logRows,
         columns: ['serial', 'brand', 'size', 'position', 'asset_no', 'site', 'country', 'removed', 'km_fit', 'km_rem', 'life', 'cost', 'reason', 'risk', 'category', 'status'],
         headers: ['Serial no', 'Brand', 'Size', 'Position', 'Asset no', 'Site', 'Country', 'Date removed', 'km at fitment', 'km at removal', 'km life', `Cost (${activeCurrency})`, 'Removal reason', 'Risk level', 'Category', 'Disposal status'],
-        note: 'Tyres the heuristic flags as scrap (risk Critical or category Scrap), with the disposal log filters applied.',
+        note: 'Scrapped tyres (marked scrap or status Scrapped, one row per tyre), with the disposal log filters applied.',
       },
       {
         name: 'Brand Analysis', rows: brandRows,
@@ -773,7 +781,7 @@ export default function TyreScrapManagement() {
       title: 'Tyre Scrap Management', company,
       dateRange: DATE_RANGE_OPTS[dateRangeIdx].label,
       notes: [
-        'Scrap here is the analysis heuristic, not the Scrapped Register of tyres somebody marked.',
+        'Scrap here uses the Scrapped Register definition: marked scrap or status Scrapped, one row per tyre.',
         `Retread figures are estimates: ${Math.round(RETREAD_SHARE * 100)}% of scrap assumed retreadable at ${Math.round(RETREAD_SAVING * 100)}% lower cost.`,
       ],
     })
@@ -959,12 +967,19 @@ export default function TyreScrapManagement() {
         </div>
       )}
 
+      {marksWarning && (
+        <div role="status" className="cc-card tsm-banner warn">
+          <Info size={16} aria-hidden="true" />
+          <p>{marksWarning}</p>
+        </div>
+      )}
+
       {analysisFailed ? (
         <LoadFailed message={error} onRetry={loadData} />
       ) : (
         <div className="tk-row" aria-label="Scrap indicators">
           <TyreKpiTile
-            icon={Trash2} tone="t-red" label="Flagged as scrap" loading={kpiLoading}
+            icon={Trash2} tone="t-red" label="Scrapped in period" loading={kpiLoading}
             display={fmt(kpis.scrapCount)} sub={periodLabel}
             trend={trends.count} goodWhenUp={false} trendTitle={trendTitle}
             title="Tyres rated Critical or categorised Scrap in the period"
@@ -1026,7 +1041,7 @@ export default function TyreScrapManagement() {
                 total={scrapped.length}
                 centerLabel="Scrapped"
                 onSelect={(s) => {
-                  const match = REMOVAL_REASONS.find(r => r !== 'All' && s.label.toLowerCase().includes(r.toLowerCase()))
+                  const match = REMOVAL_REASONS.find(r => r !== 'All' && r !== 'Other' && reasonMatches(s.label, r))
                   if (match) setFilterReason(match)
                 }}
               />
@@ -1073,7 +1088,7 @@ export default function TyreScrapManagement() {
             <button type="button" className="cc-btn-ghost" onClick={clearFilters}><X size={14} aria-hidden="true" /> Clear filters</button>
           )}
           <span className="tsm-count" aria-live="polite">
-            <Filter size={12} aria-hidden="true" /> {fmt(scrapped.length)} flagged as scrap of {fmt(filtered.length)} tyres
+            <Filter size={12} aria-hidden="true" /> {fmt(scrapped.length)} scrapped tyres of {fmt(filtered.length)} tyre records
           </span>
         </div>
         <p className="tsm-note">
@@ -1092,7 +1107,7 @@ export default function TyreScrapManagement() {
 
       {/* ══════════════════════════════════════════════════════════════════════
           Tab: Scrapped Register - the tyres someone actually marked scrap.
-          Independent of the heuristic read, so it works even if that failed.
+          Independent of the analysis read, so it works even if that failed.
       ════════════════════════════════════════════════════════════════════════ */}
       {activeTab === 'Scrapped Register' && (
         <ScrappedRegister

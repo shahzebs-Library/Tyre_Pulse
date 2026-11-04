@@ -4,15 +4,50 @@ import {
   scrapKpis, monthlyScrapTrend, reasonBreakdown, positionBreakdown, earlyScrap,
   retreadOpportunity, brandScrapAnalysis, siteScrapAnalysis, siteMonthlySeries,
   brandSiteMatrix, heatLevel, filterDisposalLog, disposalSummary, rateBand,
+  markScrapped, reasonMatches,
 } from '../lib/tyreScrapManagementAnalytics'
 
 const t = (o) => ({ id: Math.random().toString(36).slice(2), ...o })
 
 describe('tyreScrapManagementAnalytics', () => {
-  it('isScrap follows the heuristic, not a scrap mark', () => {
+  it('isScrap reads the markScrapped flag plus the legacy signals', () => {
     expect(isScrap({ risk_level: 'Critical' })).toBe(true)
     expect(isScrap({ category: 'Scrap' })).toBe(true)
+    expect(isScrap({ _scrap: true })).toBe(true)
+    // an unflagged row is not scrap on status alone: markScrapped decides which
+    // ONE row of a tyre's lifecycle carries the scrap
     expect(isScrap({ status: 'Scrapped' })).toBe(false)
+  })
+
+  it('markScrapped flags marked or status-Scrapped tyres, one row per serial', () => {
+    const rows = [
+      { id: '1', serial_no: 'ab1 ', status: 'Removed', removal_date: '2025-01-01' },
+      { id: '2', serial_no: 'AB1', status: 'Scrapped', removal_date: '2025-06-01' },
+      { id: '3', serial_no: 'AB1', status: 'Scrapped', removal_date: '2025-03-01' },
+      { id: '4', serial_no: 'CD2', status: 'Removed', removal_date: '2026-02-01' },
+      { id: '5', serial_no: 'cd2', status: 'Active', issue_date: '2025-01-01' },
+      { id: '6', serial_no: 'EF3', status: 'Active' },
+      { id: '7', serial_no: null, status: 'scrapped' },
+    ]
+    const out = markScrapped(rows, ['cd2'])
+    const flagged = out.filter(isScrap).map((r) => r.id).sort()
+    expect(flagged).toEqual(['2', '4', '7'])
+    expect(out.find((r) => r.id === '4')._marked).toBe(true)
+    expect(out.find((r) => r.id === '2')._marked).toBe(false)
+    expect(rows[1]._scrap).toBeUndefined() // input not mutated
+    expect(markScrapped([], null)).toEqual([])
+  })
+
+  it('reasonMatches reads the ERP wording', () => {
+    expect(reasonMatches('WORN OUT', 'Wear')).toBe(true)
+    expect(reasonMatches('BLAST/BURST', 'Burst')).toBe(true)
+    expect(reasonMatches('SIDE WALL DAMAGE', 'Sidewall')).toBe(true)
+    expect(reasonMatches('PUNCTURE', 'Puncture')).toBe(true)
+    expect(reasonMatches('PUNCTURE', 'Wear')).toBe(false)
+    expect(reasonMatches('MISUSE', 'Other')).toBe(true)
+    expect(reasonMatches('WORN OUT', 'Other')).toBe(false)
+    expect(reasonMatches(null, 'Other')).toBe(false)
+    expect(reasonMatches(null, 'All')).toBe(true)
   })
 
   it('kmLife and tyreCost are null, never 0, when unmeasurable', () => {

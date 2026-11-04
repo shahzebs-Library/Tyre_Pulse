@@ -23,7 +23,7 @@ export function listScrapTyreRecords({ from, to } = {}) {
       // serial_number is a dead legacy column (0 of 7,504 rows populated): serve
       // the canonical serial_no under the name the disposal log reads.
       'id, asset_no, serial_number:serial_no, brand, size, position, site, country, ' +
-      'risk_level, tread_depth, cost_per_tyre, km_at_fitment, km_at_removal, ' +
+      'risk_level, tread_depth, cost_per_tyre, km_at_fitment, km_at_removal, total_km, vehicle_type, ' +
       'issue_date, removal_date, qty, category, removal_reason, status'
     )
     // Paged by fetchAllPages (concurrent windows): a unique order is required or

@@ -14,13 +14,13 @@
  * Since no tyres.js function matches that shape and tyres.js is out of scope,
  * the two read helpers live here, colocated with their only consumer.
  */
-import { supabase, unwrap, fetchAllPages, toServiceError } from './_client'
+import { supabase, unwrap, fetchAllPages, toServiceError, isNotProvisioned } from './_client'
 import { escapeLike } from '../searchFilter'
 
 // Least-privilege column set covering the WarrantyTracker page (list + detail
 // + add/edit form + exports). Omits organisation_id (RLS-managed).
 const COLS =
-  'id,claim_no,serial_number,brand,size,asset_no,site,country,fitment_date,removal_date,km_at_fitment,km_at_removal,km_run,expected_life_km,failure_type,supplier,notes,claim_status,credit_amount,credit_date,created_by,created_at,updated_at'
+  'id,claim_no,serial_number,brand,size,asset_no,site,country,fitment_date,removal_date,km_at_fitment,km_at_removal,km_run,expected_life_km,failure_type,supplier,notes,claim_status,credit_amount,credit_date,supplier_ref,decision_date,rejection_reason,created_by,created_at,updated_at'
 
 // Tyre-record columns the page reads for warranty context. Matches the table's
 // warranty-facing shape (serial_number, fitment_date, km_*) - intentionally
@@ -35,7 +35,7 @@ const TYRE_CONTEXT_COLS =
 
 // Columns for warranty-candidate review (tyres removed with a stated reason).
 const CANDIDATE_COLS =
-  'id,serial_no,brand,size,asset_no,tyre_position,site,country,issue_date,fitment_date,removal_date,km_at_fitment,km_at_removal,total_km,removal_reason'
+  'id,serial_no,brand,size,asset_no,tyre_position,site,country,issue_date,fitment_date,removal_date,km_at_fitment,km_at_removal,total_km,removal_reason,vehicle_type'
 
 /** Upper bound on the candidate read; reported back as `truncated`. */
 export const CANDIDATE_MAX_ROWS = 20000
@@ -108,4 +108,24 @@ export async function findTyreForClaim(serial) {
       .limit(1)
       .maybeSingle(),
   )
+}
+
+/**
+ * Status history of one claim, oldest first. Written only by the server
+ * trigger (20261104110000), so it cannot be edited from the app. Resolves []
+ * before that migration exists.
+ */
+export async function listClaimEvents(claimId) {
+  if (!claimId) return []
+  const { data, error } = await supabase
+    .from('warranty_claim_events')
+    .select('id,from_status,to_status,note,changed_by_name,changed_at')
+    .eq('claim_id', claimId)
+    .order('changed_at', { ascending: true })
+    .order('id', { ascending: true })
+  if (error) {
+    if (isNotProvisioned(error)) return []
+    throw toServiceError(error, 'Could not load the claim history.')
+  }
+  return data ?? []
 }

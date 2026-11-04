@@ -3,6 +3,7 @@ import {
   scopeClaimsByCountry, filterClaimsBase, filterClaimsByDimension, claimKpis, brandPerformance,
   failureBreakdown, statusCounts, monthlyCredits, creditAnalysis, roiModel, generateClaimNo,
   optionsOf, lifePct,
+  buildWarrantyCandidates, tyreKmRun, tyreKmAssessment, tyreLifeCapKm, nextClaimStatuses, claimSaveProblem, supplierWaitDays, overdueClaims, claimStepIndex,
 } from '../lib/warrantyTrackerAnalytics'
 
 const claims = [
@@ -109,9 +110,70 @@ describe('warranty candidates', async () => {
       { id: 8, serial_no: 'A8', removal_reason: 'PUNCTURE', total_km: 100 },
     ]
     const out = buildWarrantyCandidates(tyres, [{ serial_number: 'A7' }])
-    expect(out.map(c => c.id).sort()).toEqual([1, 3, 6])
+    // A2's 150,000 km is above the 100,000 km class limit: a reading error, so
+    // it stays a defect candidate with its km withheld rather than being dropped.
+    expect(out.map(c => c.id).sort()).toEqual([1, 2, 3, 6])
     const s = candidateSummary(out)
-    expect(s).toMatchObject({ total: 3, defect: 1, burst: 1, premature_wear: 1, kmUnknown: 1 })
+    expect(s).toMatchObject({ total: 4, defect: 2, burst: 1, premature_wear: 1, kmUnknown: 2, kmSuspect: 1 })
     expect(out.find(c => c.id === 6).km_run).toBeNull()
+    expect(out.find(c => c.id === 2)).toMatchObject({ km_run: null, km_status: 'over_cap', km_reported: 150000 })
+  })
+})
+
+describe('tyre km is the tyre life, not the machine odometer', () => {
+  it('uses removal minus fitment when the fitment odometer is real', () => {
+    expect(tyreKmAssessment({ km_at_fitment: 120000, km_at_removal: 160000, total_km: 40000 }))
+      .toMatchObject({ km: 40000, status: 'measured' })
+  })
+  it('a fitment odometer of 1 is a placeholder: the total is the odometer, not a life', () => {
+    const a = tyreKmAssessment({ km_at_fitment: 1, km_at_removal: 230001, total_km: 230000, vehicle_type: 'TR-MIXER' })
+    expect(a.km).toBeNull()
+    expect(a.status).toBe('placeholder')
+    expect(tyreKmRun({ km_at_fitment: '1.00', total_km: 31646 })).toBeNull()
+  })
+  it('a factory fitment at 0 km is a real life', () => {
+    expect(tyreKmAssessment({ km_at_fitment: 0, km_at_removal: 61658, total_km: 61658, vehicle_type: 'TR-MIXER' }))
+      .toMatchObject({ km: 61658, status: 'factory' })
+  })
+  it('a life above the vehicle class limit is withheld', () => {
+    expect(tyreKmAssessment({ km_at_fitment: 0, total_km: 90000, vehicle_type: 'TR-MIXER' }).status).toBe('over_cap')
+    expect(tyreKmAssessment({ km_at_fitment: 0, total_km: 90000, vehicle_type: 'GENERATOR' }).status).toBe('factory')
+  })
+  it('class limits mirror SQL tyre_life_km_cap', () => {
+    expect(tyreLifeCapKm('TR-MIXER')).toBe(80000)
+    expect(tyreLifeCapKm('PUMPS')).toBe(56000)
+    expect(tyreLifeCapKm('WHEEL LOADER')).toBe(15000)
+    expect(tyreLifeCapKm(null)).toBe(100000)
+  })
+  it('expected life follows the vehicle class', () => {
+    const out = buildWarrantyCandidates([
+      { id: 1, serial_no: 'P1', removal_reason: 'WORN OUT', km_at_fitment: 1000, km_at_removal: 31000, vehicle_type: 'PUMPS' },
+    ])
+    // 30,000 km is past half a pump's 56,000 km life, so it is normal wear.
+    expect(out).toHaveLength(0)
+  })
+})
+
+describe('claim procedure', () => {
+  it('offers only the next steps', () => {
+    expect(nextClaimStatuses('Submitted')).toEqual(['Submitted', 'Under Review', 'Rejected'])
+    expect(nextClaimStatuses('Approved')).toEqual(['Approved', 'Credit Issued', 'Closed'])
+    expect(nextClaimStatuses('Closed')).toEqual(['Closed'])
+  })
+  it('a rejection needs a reason and a credit needs amount and date', () => {
+    expect(claimSaveProblem({ claim_status: 'Rejected', rejection_reason: ' ' })).toMatch(/rejection reason/)
+    expect(claimSaveProblem({ claim_status: 'Rejected', rejection_reason: 'Misuse' })).toBe('')
+    expect(claimSaveProblem({ claim_status: 'Credit Issued', credit_amount: 500 })).toMatch(/credit date/)
+    expect(claimSaveProblem({ claim_status: 'Credit Issued', credit_amount: 500, credit_date: '2026-11-01' })).toBe('')
+  })
+  it('counts days waiting on the supplier only while undecided', () => {
+    const now = new Date('2026-11-04T00:00:00Z')
+    expect(supplierWaitDays({ claim_status: 'Under Review', created_at: '2026-09-25T00:00:00Z' }, { now })).toBe(40)
+    expect(supplierWaitDays({ claim_status: 'Approved', created_at: '2026-01-01T00:00:00Z' }, { now })).toBeNull()
+    expect(overdueClaims([
+      { claim_status: 'Submitted', created_at: '2026-09-25T00:00:00Z' },
+      { claim_status: 'Submitted', created_at: '2026-10-30T00:00:00Z' },
+    ], { now })).toHaveLength(1)
+    expect(claimStepIndex('Rejected')).toBe(2)
   })
 })

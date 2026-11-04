@@ -1,3 +1,4 @@
+import { tyreKmAssessment } from './tyreKm'
 /**
  * Tyre Scrap Management analytics (pure, no I/O).
  *
@@ -140,12 +141,13 @@ export function markScrapped(rows = [], markedSerials = []) {
   })
 }
 
-/** Distance the tyre ran, or null when the odometer pair is missing or reversed. */
+/**
+ * Distance the tyre ran, or null when it cannot be trusted. Shares the rule in
+ * tyreKm.js: a fitment odometer typed as 1 or a life above the vehicle class
+ * limit is a meter reading, not a tyre life.
+ */
 export function kmLife(t) {
-  const f = num(t?.km_at_fitment)
-  const r = num(t?.km_at_removal)
-  if (f != null && r != null && r > f) return r - f
-  return null
+  return tyreKmAssessment(t).km
 }
 
 /** Cost of the row (unit price x quantity), or null when no price is recorded. */

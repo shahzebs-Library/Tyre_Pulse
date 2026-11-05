@@ -29,7 +29,7 @@ describe('buildReadings', () => {
     expect(r.filter((x) => x.status === 'unmeasured')).toHaveLength(2)
     expect(r.find((x) => x.status === 'under').deviationPct).toBe(-25)
     expect(r.find((x) => x.status === 'unmeasured').median).toBeNull()
-    expect(r.find((x) => x.position === 'F1L').group).toBe('Steer')
+    expect(r.find((x) => x.position === 'LHF1').group).toBe('Steer') // printed as the tyre-map code, not slot F1L
   })
 })
 

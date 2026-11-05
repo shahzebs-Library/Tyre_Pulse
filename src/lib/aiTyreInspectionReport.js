@@ -3,6 +3,7 @@
  * reviewed data, not a trigger for model inference.
  */
 import { inspectionReviewSummary,reportableFinding,reportableMeasurement } from './aiTyreInspectionDomain'
+import { displayPositionCode,inspectionTypeHint } from './tyreBay'
 const esc = value => String(value??'').replace(/[&<>"']/g,character=>({
   '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;',
 })[character])
@@ -22,12 +23,15 @@ export function buildInspectionAiAppendix({inspection,jobs=[],measurements=[],re
   const summary=inspectionReviewSummary(inspection,jobs,measurements)
   const findings=jobs.map(reportableFinding).filter(Boolean)
   const readings=measurements.map(reportableMeasurement).filter(Boolean)
+  // Same codes as the tyre map (R2Li on a mixer prints LHRI).
+  const hint=inspectionTypeHint(inspection)
+  const pos=p=>displayPositionCode(hint,p)||p
   const findingRows=findings.map(item=>row([
-    item.position,defectText(item.analysis),item.analysis.recommendation,
+    pos(item.position),defectText(item.analysis),item.analysis.recommendation,
     item.reviewStatus,item.reviewerNote,item.modelVersion,
   ]))
   const measurementRows=readings.map(item=>row([
-    item.position,item.tyreSerial,item.source,item.measuredAt,
+    pos(item.position),item.tyreSerial,item.source,item.measuredAt,
     item.innerMm,item.centerMm,item.outerMm,item.worstMm,
     item.remainingMm,item.remainingPercent+'%',
     item.unevenDepthWarning?'Check uneven wear':'',

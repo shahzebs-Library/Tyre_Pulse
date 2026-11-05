@@ -4,6 +4,10 @@ import { loadAiTyreOps, listFailedJobs } from '../../lib/api/aiTyreOps'
 import { retryJobs } from '../../lib/api/aiTyreInspection'
 import { shapeOps, fmtDuration } from '../../lib/aiTyreOps'
 import { toUserMessage } from '../../lib/safeError'
+import { displayPositionCode, inspectionTypeHint } from '../../lib/tyreBay'
+
+// Tyre-map code for a failed job (R2Li on a mixer reads LHRI).
+const posCode = (j) => displayPositionCode(inspectionTypeHint(j), j?.tyre_position) || j?.tyre_position || ''
 
 const usd = (n) => (n === null || n === undefined ? 'N/A' : '$' + Number(n).toFixed(2))
 const pct = (n) => (n === null || n === undefined ? 'N/A' : n + '%')
@@ -90,8 +94,8 @@ export default function AiTyreOpsPanel({ canRetry }) {
           <div className="max-h-72 overflow-auto"><table className="w-full text-sm">
             <thead><tr className="text-left text-xs text-[var(--text-muted)]"><th className="w-8"><input type="checkbox" aria-label="Select all failed jobs" checked={picked.size === failed.length} onChange={(e) => setPicked(e.target.checked ? new Set(failed.slice(0, 100).map((j) => j.id)) : new Set())}/></th><th>Position</th><th>Reason</th><th>Attempts</th><th/></tr></thead>
             <tbody>{failed.map((j) => <tr key={j.id} className="border-t border-[var(--border-dim)]">
-              <td><input type="checkbox" aria-label={`Select job ${j.tyre_position || ''}`} checked={picked.has(j.id)} onChange={() => toggle(j.id)}/></td>
-              <td>{j.tyre_position || 'Not recorded'}</td><td>{j.failure_kind || j.error_message || 'Unknown'}</td><td>{j.attempts ?? 'N/A'}</td>
+              <td><input type="checkbox" aria-label={`Select job ${posCode(j)}`} checked={picked.has(j.id)} onChange={() => toggle(j.id)}/></td>
+              <td>{posCode(j) || 'Not recorded'}</td><td>{j.failure_kind || j.error_message || 'Unknown'}</td><td>{j.attempts ?? 'N/A'}</td>
               <td className="text-right"><button type="button" className="btn-secondary" disabled={busy} onClick={() => retry([j.id])}>Retry</button></td></tr>)}</tbody>
           </table></div>}
         <p className="text-xs text-[var(--text-muted)] mt-2">Retrying re-queues a photo and may be charged again. Up to 100 jobs per request.</p>

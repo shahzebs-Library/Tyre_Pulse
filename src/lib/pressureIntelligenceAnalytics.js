@@ -27,6 +27,7 @@ import {
 import { computePressureCompliance } from './kpiEngine'
 import { positionGroup, AXLE_GROUPS } from './positionIntelligenceAnalytics'
 import { isSevereCondition } from './inspectionTyreFlags'
+import { displayPositionCode, inspectionTypeHint } from './tyreBay'
 
 export { PRESSURE_MIN_READINGS, PRESSURE_TOLERANCE }
 
@@ -88,11 +89,14 @@ export function buildReadings(inspections = []) {
     const tc = normalizeTyreConditions(ins)
     const stats = inspectionStats(tc)
     const serials = serialsOf(ins)
-    for (const [position, d] of Object.entries(tc)) {
+    const hint = inspectionTypeHint(ins)
+    for (const [slot, d] of Object.entries(tc)) {
       if (d?.pressure == null) continue
+      // Tyre-map code (R2Li on a mixer reads LHRI); the slot id stays for keys/serials.
+      const position = displayPositionCode(hint, slot) || slot
       const dev = pressureDeviation(d.pressure, stats)
       out.push({
-        key: `${ins.id ?? ins.asset_no ?? 'x'}:${position}`,
+        key: `${ins.id ?? ins.asset_no ?? 'x'}:${slot}`,
         inspectionId: ins.id ?? null,
         asset_no: txt(ins.asset_no) || null,
         vehicle_type: txt(ins.vehicle_type) || null,
@@ -107,7 +111,7 @@ export function buildReadings(inspections = []) {
         deviationPct: dev ? Math.round(dev.dev * 1000) / 10 : null,
         status: dev ? (dev.check ? dev.direction : 'ok') : 'unmeasured',
         condition: d.condition,
-        serial: serials[position] || null,
+        serial: serials[slot] || serials[position] || null,
         // A wheel recorded flat, burst or damaged: the app's single severe rule.
         critical: isSevereCondition(d.condition),
       })

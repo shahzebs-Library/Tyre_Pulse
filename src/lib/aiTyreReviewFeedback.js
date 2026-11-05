@@ -5,6 +5,8 @@
  * quality can be compared. It does not train, tune or update any model, and nothing here
  * feeds back into the worker automatically.
  */
+import { displayPositionCode } from './tyreBay'
+
 export const FEEDBACK_DISCLAIMER =
   'Evaluation data only. Counts of reviewer decisions per model and prompt version. No model is retrained or tuned automatically from these decisions.'
 
@@ -60,7 +62,10 @@ export function shapeLabelledFindings(rows) {
       const defects = Array.isArray(r.defects) ? r.defects : []
       return {
         jobId: r.job_id, inspectionId: r.inspection_id, asset: r.asset_no || '',
-        position: r.tyre_position || '', model: r.model_version || 'unknown', prompt: r.prompt_version || 'unversioned',
+        // Tyre-map code; the asset code resolves the layout (inspectionTypeHint
+        // falls back to it). The stored slot id is kept for evaluation tooling.
+        position: displayPositionCode(r.vehicle_type || r.asset_no, r.tyre_position) || r.tyre_position || '',
+        internalPosition: r.tyre_position || '', model: r.model_version || 'unknown', prompt: r.prompt_version || 'unversioned',
         label: r.review_status, reviewerNote: String(r.reviewer_note || '').trim(), reviewedAt: r.reviewed_at || '',
         assessable: r.assessable == null ? null : !!r.assessable,
         recommendation: r.recommendation || '',
@@ -98,7 +103,7 @@ export function labelledExportRows(shaped) {
 /** One JSON object per line; stable keys, no photo bytes, ready for offline evaluation tooling. */
 export function labelledJsonl(shaped) {
   return shaped.map((r) => JSON.stringify({
-    job_id: r.jobId, inspection_id: r.inspectionId, asset_no: r.asset, position: r.position,
+    job_id: r.jobId, inspection_id: r.inspectionId, asset_no: r.asset, position: r.position, internal_position: r.internalPosition || null,
     model: r.model, prompt_version: r.prompt, label: r.label, reviewer_note: r.reviewerNote || null,
     reviewed_at: r.reviewedAt || null, ai_assessable: r.assessable, ai_recommendation: r.recommendation || null,
     ai_defects: r.defects, photo_ref: r.photoRef || null,

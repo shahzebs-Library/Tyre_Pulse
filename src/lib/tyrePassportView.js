@@ -12,6 +12,7 @@
  *     records span two countries reports `mixed` instead of one blended total.
  */
 import { normalizeTyreConditions } from './inspectionView'
+import { displayPositionCode, inspectionTypeHint } from './tyreBay'
 import { EXPENSE_COUNTRY_CURRENCY } from './expenseReportAnalytics'
 
 const DAY_MS = 86400000
@@ -153,8 +154,13 @@ export function inspectionRowsForTyre({ inspections = [], journey = [], serial, 
         return Number.isFinite(from) && when >= from && (!Number.isFinite(to) || when <= to + DAY_MS)
       }) || null
     }
+    // Inspection keys are diagram slot ids (R2Li); the stint carries the
+    // tyre-map code (LHRI). Compare both spellings.
+    const hint = inspectionTypeHint(insp)
+    const code = (x) => displayPositionCode(hint, x) || x
     if (!key && stint) {
-      const k = Object.keys(norm).find((x) => normKey(x) === normKey(stint.position)) || null
+      const want2 = normKey(stint.position)
+      const k = Object.keys(norm).find((x) => normKey(x) === want2 || normKey(code(x)) === want2) || null
       if (k) { key = k; if (!basis) basis = 'position' }
     }
     if (!basis) continue
@@ -166,7 +172,7 @@ export function inspectionRowsForTyre({ inspections = [], journey = [], serial, 
       date,
       asset_no: insp.asset_no || null,
       site: insp.site || null,
-      position: key || stint?.position || null,
+      position: key ? code(key) : (stint?.position || null),
       tread: entry?.tread ?? null,
       pressure: entry?.pressure ?? num(insp.pressure_reading),
       condition: entry?.condition ?? null,

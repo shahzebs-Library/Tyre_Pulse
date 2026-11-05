@@ -7,7 +7,7 @@
  */
 import { supabase, applyCountry, fetchAllPages, unwrap } from './_client'
 
-const COLS = 'id,asset_no,site,inspection_date,completed_date,inspector,status,findings,tyre_serial,tyre_conditions,pressure_reading,created_at'
+const COLS = 'id,asset_no,vehicle_type,site,inspection_date,completed_date,inspector,status,findings,tyre_serial,tyre_conditions,pressure_reading,created_at'
 const MAX_ROWS = 2000
 
 export async function listTyreInspections(serial, assets = [], { country } = {}) {

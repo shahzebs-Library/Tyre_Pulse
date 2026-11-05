@@ -27,6 +27,7 @@ import EnterpriseTable from '../components/ui/EnterpriseTable'
 // The shared dialog shell: focus trap, Escape, scroll lock, sized from the viewport.
 import SharedModal from '../components/ui/Modal'
 import { legacyPositionCode } from '../lib/tyrePositions'
+import { displayPositionCode, inspectionTypeHint } from '../lib/tyreBay'
 import { LAYOUT_SLOTS, layoutSlotsFor, resolveLayoutKey, isTyrelessEquipment, layoutForAsset } from '../lib/vehicleTyreLayout'
 import { loadAxleCounts } from '../lib/api/vehicleAxles'
 import { useWakeLock, vibrate } from '../hooks/useWakeLock'
@@ -398,9 +399,14 @@ export default function Inspections() {
         // so the downloaded copy and the record on screen cannot name one wheel
         // two different ways.
         const pdfPosLabels = positionLabelMap(pdfRow)
-        for (const [pos, d] of Object.entries(pdfRow.tyre_conditions || {})) {
+        // Array-shaped tyre_conditions (web checklist) key by index; use the
+        // entry's own position so a photo is never captioned "0", "1"...
+        const tcEntries = Array.isArray(pdfRow.tyre_conditions)
+          ? pdfRow.tyre_conditions.map((d) => [d && (d.position || d.label) ? String(d.position || d.label) : '', d])
+          : Object.entries(pdfRow.tyre_conditions || {})
+        for (const [pos, d] of tcEntries) {
           const ref = d && typeof d === 'object' ? (d.photo_url || d.photo_uri) : null
-          if (ref) photoRefs.push({ label: pdfPosLabels[pos] || pos, ref })
+          if (ref) photoRefs.push({ label: pdfPosLabels[pos] || displayPositionCode(inspectionTypeHint(pdfRow), pos) || pos || 'Tyre photo', ref })
         }
         if (pdfRow.photo_data) photoRefs.push({ label: 'Inspection photo', ref: pdfRow.photo_data })
         const photos = (await Promise.all(photoRefs.map(async (p) => {

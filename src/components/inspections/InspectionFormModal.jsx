@@ -10,6 +10,7 @@ import {
 } from '../../lib/inspectionsAnalytics'
 import { useLanguage } from '../../contexts/LanguageContext'
 import TyreDueBanner from './TyreDueBanner'
+import { displayPositionCode } from '../../lib/tyreBay'
 
 // Every wheel layout the diagram can draw, so this picker can never drift from
 // the diagram (it used to omit Line pump / Truck 6x4 / Tanker / Trailer).
@@ -188,7 +189,7 @@ export default function InspectionFormModal({
 
                 {selectedTyre && (
                   <div className="mt-4 p-3 bg-[var(--surface-1)] rounded-lg border border-[var(--border-bright)]">
-                    <p className="text-xs font-semibold text-[var(--text-primary)] mb-2">{t('inspections.modal.tyreLabel', { id: selectedTyre })}</p>
+                    <p className="text-xs font-semibold text-[var(--text-primary)] mb-2">{t('inspections.modal.tyreLabel', { id: displayPositionCode(form?.vehicle_type, selectedTyre) || selectedTyre })}</p>
                     <div className="flex gap-2 flex-wrap mb-2">
                       {RISK_LEVELS.map(r => (
                         <button
@@ -217,7 +218,7 @@ export default function InspectionFormModal({
                     </div>
                     <input
                       type="number"
-                      aria-label={`Pressure for tyre ${selectedTyre}`}
+                      aria-label={`Pressure for tyre ${displayPositionCode(form?.vehicle_type, selectedTyre) || selectedTyre}`}
                       className="input text-xs py-1"
                       placeholder={t('inspections.modal.pressurePlaceholder')}
                       value={form.tyre_conditions?.[selectedTyre]?.pressure ?? ''}

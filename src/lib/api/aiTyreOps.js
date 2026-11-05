@@ -46,10 +46,10 @@ export async function listFailedJobs({ limit = 200 } = {}) {
   const rows = data || []
   // Each job carries only the internal slot id; resolve the vehicle so the
   // panel can print the tyre-map code. Best-effort: a failed lookup keeps rows.
-  const ids = [...new Set(rows.map((r) => r.inspection_id).filter(Boolean))]
+  const ids = [...new Set(rows.map((r) => r.inspection_id).filter(Boolean))].slice(0, 200)
   if (!ids.length) return rows
   try {
-    const { data: ins } = await supabase.from('inspections').select('id,vehicle_type,asset_no').in('id', ids).limit(ids.length)
+    const { data: ins } = await supabase.from('inspections').select('id,vehicle_type,asset_no').in('id', ids).limit(200)
     const byId = new Map((ins || []).map((i) => [i.id, i]))
     return rows.map((r) => ({ ...r, vehicle_type: byId.get(r.inspection_id)?.vehicle_type || null, asset_no: byId.get(r.inspection_id)?.asset_no || null }))
   } catch { return rows }

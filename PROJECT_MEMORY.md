@@ -26,6 +26,11 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-11-05 — INSPECTION PDF = THE APP'S VEHICLE OVERVIEW BOARD. No migration.
+- exportInspectionDetailPdf (src/lib/exportUtils.js) now draws the "Vehicle Overview" section from the rendered TyreBoard: Inspections.jsx mounts an offscreen `<InspectionDiagram variant="board" width={440}>` (pdfBoardRef) and passes `boardEl`; `captureTyreBoard()` reads cards/leaders/photo geometry from the DOM, `_drawTyreBoard()` redraws them as vector shapes + text (title, FRONT, legend, "N of M positions recorded"). Old dark svg map stays as the fallback when no board.
+- width 440 = narrowest that keeps twin wheels side by side (stacked when 2*(wideSide+leader)+110 > width); owner said the picture was too big, so the board picture is small and the scale is capped at 0.36 mm/px.
+- Transparent vehicle WebP printed as a BLACK box in jsPDF. `_rasterIntoBox()` flattens onto a solid colour (canvas -> JPEG); Vehicle Details photo panel is now ~36% of the row. Daily Tyre Inspection checklist report (inspectionChecklistReport.js) still uses the old map.
+
 # ⚑ SESSION 2026-11-04 — TYRE KM RULE + WARRANTY CLAIM PROCEDURE. Migrations 20261104110000 + 20261104113000 APPLIED LIVE.
 - ONE km rule: `src/lib/tyreKm.js` (tyreKmAssessment/tyreLifeCapKm) MIRRORS SQL `tyre_km_life(fit,rem,total,vehicle_type)` (+ tyre_life_km_cap) - change both. Fitment odometer "1" = placeholder (total_km is the MACHINE odometer, 545 tyres) -> km NULL; fitment 0 = factory, real; life above class cap (mixer 80k/pump 56k/loader 15k/else 100k) -> NULL. Live: removed-tyre avg 84,080 -> 36,448 km, max 260M -> 100k. Used by warranty candidates, scrap kmLife, list_scrapped_tyres km_run.
 - Warranty: candidates use per-class expected life. Procedure Submitted->Under Review->Approved->Credit Issued->Closed (Rejected branch) = JS CLAIM_FLOW/nextClaimStatuses/claimSaveProblem + DB trigger warranty_claim_guard (rejection needs reason, credit needs amount+date, stamps decision_date). History = warranty_claim_events (trigger-written, read-only) shown by components/warranty/ClaimProcedure.jsx. Supplier wait >30 days flagged.

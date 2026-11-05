@@ -15,7 +15,7 @@
 import * as Print from 'expo-print'
 import * as Sharing from 'expo-sharing'
 import { supabase } from './supabase'
-import { diagramPositions, LAYOUTS, resolveVehicleType } from './tyreDiagramLayouts'
+import { diagramPositions, LAYOUTS, resolveVehicleType, positionDisplayCode } from './tyreDiagramLayouts'
 
 // ── Condition colour system (semantic, fixed hex - shared with the detail view) ──
 const COND_GREEN = '#16a34a'
@@ -274,7 +274,7 @@ export function buildInspectionHtml(insp: InspectionForReport): string {
             c?.pressure_psi ? `${c.pressure_psi} psi` : (c?.pressure != null ? `${c.pressure} psi` : null),
           ].filter(Boolean).join(' | ')
           return `<div class="cell" style="background:${color}">
-            <div class="cell-pos">${esc(pos)}</div>
+            <div class="cell-pos">${esc(positionDisplayCode(pos, insp.vehicle_type, insp.asset_no))}</div>
             <div class="cell-cond">${c ? esc(conditionLabel(c)) : 'Not recorded'}</div>
             ${sub ? `<div class="cell-sub">${esc(sub)}</div>` : ''}
           </div>`
@@ -292,7 +292,7 @@ export function buildInspectionHtml(insp: InspectionForReport): string {
           const pressure = c?.pressure_psi ? `${c.pressure_psi} psi` : (c?.pressure != null ? `${c.pressure} psi` : '-')
           const serial = c?.serial_number ?? c?.serial ?? '-'
           return `<tr>
-            <td class="pos">${esc(pos)}</td>
+            <td class="pos">${esc(positionDisplayCode(pos, insp.vehicle_type, insp.asset_no))}</td>
             <td><span class="cbadge" style="background:${color}">${esc(conditionLabel(c))}</span></td>
             <td>${esc(tread)}</td>
             <td>${esc(pressure)}</td>

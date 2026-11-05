@@ -142,6 +142,7 @@ class _TyreDiagramBoardState extends State<TyreDiagramBoard> {
               tyreData: widget.tyreData,
               selectedPosition: widget.selectedPosition,
               onPositionTap: widget.onPositionTap,
+              vehicleType: widget.vehicleType,
             ),
         },
       ],

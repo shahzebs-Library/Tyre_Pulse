@@ -1182,6 +1182,8 @@ function NewInspectionScreen() {
               data={tyreData[pos] ?? emptyTyrePosition(pos)}
               onPress={() => openTyre(pos)}
               isHighlighted={activePosition === pos}
+              vehicleType={getEffectiveVehicle()?.vehicle_type ?? null}
+              assetNo={getEffectiveVehicle()?.asset_no ?? null}
             />
           ))}
 
@@ -1265,6 +1267,8 @@ function NewInspectionScreen() {
           data={activePosition ? (tyreData[activePosition] ?? emptyTyrePosition(activePosition)) : null}
           onChange={d => { if (activePosition) handleTyreUpdate(activePosition, d) }}
           onClose={closeTyre}
+          vehicleType={getEffectiveVehicle()?.vehicle_type ?? null}
+          assetNo={getEffectiveVehicle()?.asset_no ?? null}
         />
       </SafeAreaView>
     )

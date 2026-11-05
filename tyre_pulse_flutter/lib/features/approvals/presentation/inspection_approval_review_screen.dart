@@ -553,7 +553,14 @@ class _ReviewBody extends StatelessWidget {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: TpSpace.sm),
-          _SubmittedEvidenceGallery(evidence: item.photoEvidence),
+          _SubmittedEvidenceGallery(
+            evidence: item.photoEvidence,
+            displayCodes: _displayCodeBySubmittedPosition(
+              vehicleType: item.vehicleType ?? '',
+              assetNo: item.assetNo,
+              entries: entries,
+            ),
+          ),
         ],
         if ((item.findings ?? item.notes)?.trim().isNotEmpty ?? false) ...[
           const SizedBox(height: TpSpace.lg),
@@ -814,6 +821,27 @@ bool _isImmediateTyreFinding(TyreEntryPair pair) {
   return condition == TyreCondition.flat || condition == TyreCondition.puncture;
 }
 
+/// Submitted position key -> business tyre-map code (`LHF1`, `LHCI`, ...),
+/// matched across every submitted key at once so each lands on the same
+/// wheel the diagram draws it on. Shared by the immediate-findings chips and
+/// the evidence photo cards so both label a wheel identically.
+Map<String, String> _displayCodeBySubmittedPosition({
+  required String vehicleType,
+  required String? assetNo,
+  required List<TyreEntryPair> entries,
+}) {
+  final String resolvedKey = resolveVehicleType(vehicleType, assetNo);
+  final DiagramLayout layout =
+      kTyreDiagramLayouts[resolvedKey] ?? kTyreDiagramLayouts['Pickup']!;
+  return <String, String>{
+    for (final MatchedTyreSlot slot in matchPositionsToLayout(
+      layout,
+      <String>[for (final TyreEntryPair pair in entries) pair.key],
+    ))
+      slot.positionId: legacyPositionCode(layout.key, slot.id),
+  };
+}
+
 class _ImmediateTyreFindings extends StatelessWidget {
   const _ImmediateTyreFindings({
     required this.vehicleType,
@@ -828,16 +856,12 @@ class _ImmediateTyreFindings extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final String resolvedKey = resolveVehicleType(vehicleType, assetNo);
-    final DiagramLayout layout =
-        kTyreDiagramLayouts[resolvedKey] ?? kTyreDiagramLayouts['Pickup']!;
-    final Map<String, String> displayCodeBySubmittedPosition = <String, String>{
-      for (final MatchedTyreSlot slot in matchPositionsToLayout(
-        layout,
-        <String>[for (final TyreEntryPair pair in entries) pair.key],
-      ))
-        slot.positionId: legacyPositionCode(layout.key, slot.id),
-    };
+    final Map<String, String> displayCodeBySubmittedPosition =
+        _displayCodeBySubmittedPosition(
+      vehicleType: vehicleType,
+      assetNo: assetNo,
+      entries: entries,
+    );
 
     return Wrap(
       key: const Key('inspection-approval-immediate-tyre-findings'),
@@ -1068,9 +1092,16 @@ class _TyreConditionsSection extends StatelessWidget {
 /// approval evidence can never disappear merely because this device cannot
 /// open it.
 class _SubmittedEvidenceGallery extends StatelessWidget {
-  const _SubmittedEvidenceGallery({required this.evidence});
+  const _SubmittedEvidenceGallery({
+    required this.evidence,
+    required this.displayCodes,
+  });
 
   final List<InspectionApprovalPhotoEvidence> evidence;
+
+  /// Submitted position key -> tyre-map code; see
+  /// [_displayCodeBySubmittedPosition].
+  final Map<String, String> displayCodes;
 
   @override
   Widget build(BuildContext context) {
@@ -1091,6 +1122,7 @@ class _SubmittedEvidenceGallery extends StatelessWidget {
                 child: _SubmittedEvidenceCard(
                   evidence: evidence[index],
                   index: index,
+                  displayCodes: displayCodes,
                 ),
               ),
           ],
@@ -1104,10 +1136,12 @@ class _SubmittedEvidenceCard extends StatelessWidget {
   const _SubmittedEvidenceCard({
     required this.evidence,
     required this.index,
+    required this.displayCodes,
   });
 
   final InspectionApprovalPhotoEvidence evidence;
   final int index;
+  final Map<String, String> displayCodes;
 
   @override
   Widget build(BuildContext context) {
@@ -1120,7 +1154,7 @@ class _SubmittedEvidenceCard extends StatelessWidget {
     final String position = evidence.position?.trim() ?? '';
     final String label = position.isEmpty
         ? '${l10n.inspectionPhotoLabel} ${index + 1}'
-        : position;
+        : displayCodes[position] ?? position;
 
     return Semantics(
       container: true,

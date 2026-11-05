@@ -370,6 +370,17 @@ export function legacyPositionCode(vehicleTypeKey: string, id: string): string {
   return _LEGACY_BASE[id] || id
 }
 
+/**
+ * Display-only: the tyre-map code (LHF1, LHCO, RHR2-I ...) for a stored slot
+ * id, resolving the layout from the raw vehicle type (or asset number). A value
+ * that is already a code, or that no layout knows, is returned unchanged.
+ */
+export function positionDisplayCode(id: string, vehicleType?: string | null, assetNo?: string | null): string {
+  if (!id) return id
+  if (!vehicleType && !assetNo) return legacyPositionCode('', id)
+  return legacyPositionCode(resolveVehicleType(vehicleType, assetNo), id)
+}
+
 // Relabel every tyre's display label to the canonical GCC position code
 // (LHF1, LHRO, RHCI ...) while keeping the internal `id` stable, so saved
 // inspections and diagram hit-testing continue to match.

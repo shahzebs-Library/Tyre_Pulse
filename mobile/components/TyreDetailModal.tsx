@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { TyrePositionData } from '../lib/types'
+import { positionDisplayCode } from '../lib/tyreDiagramLayouts'
 import { CONDITION_META } from '../lib/tyreConditions'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTheme } from '../contexts/ThemeContext'
@@ -27,9 +28,12 @@ interface Props {
   data: TyrePositionData | null
   onChange: (updated: TyrePositionData) => void
   onClose: () => void
+  /** Vehicle type (or asset no) used to show the tyre-map code (LHF1, LHCO...) */
+  vehicleType?: string | null
+  assetNo?: string | null
 }
 
-export default function TyreDetailModal({ visible, position, data, onChange, onClose }: Props) {
+export default function TyreDetailModal({ visible, position, data, onChange, onClose, vehicleType, assetNo }: Props) {
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()
   const insets = useSafeAreaInsets()
@@ -41,7 +45,8 @@ export default function TyreDetailModal({ visible, position, data, onChange, onC
   }
 
   const meta = CONDITION_META[data.condition]
-  const posName = t(`positions.${position}`)
+  // Display only: the stored key stays the diagram slot id.
+  const posName = positionDisplayCode(position, vehicleType, assetNo)
   const textAlign = isRTL ? 'right' : 'left'
 
   return (
@@ -63,7 +68,7 @@ export default function TyreDetailModal({ visible, position, data, onChange, onC
           {/* Header */}
           <View style={[styles.header, isRTL && styles.headerRTL]}>
             <View style={[styles.positionBadge, { backgroundColor: meta.tint, borderColor: meta.borderColor }]}>
-              <Text style={[styles.positionCode, { color: meta.color }]}>{position}</Text>
+              <Text style={[styles.positionCode, { color: meta.color }]}>{posName}</Text>
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.posName, { textAlign }]} numberOfLines={1}>{posName}</Text>

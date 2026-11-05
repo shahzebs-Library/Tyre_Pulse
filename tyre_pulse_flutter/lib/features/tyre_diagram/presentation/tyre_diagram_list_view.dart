@@ -15,6 +15,9 @@ import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_condition.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_position_matcher.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_slot.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_labels.dart';
 
 class TyreDiagramListView extends StatelessWidget {
@@ -23,6 +26,7 @@ class TyreDiagramListView extends StatelessWidget {
     required this.tyreData,
     this.selectedPosition,
     this.onPositionTap,
+    this.vehicleType,
     super.key,
   });
 
@@ -38,6 +42,27 @@ class TyreDiagramListView extends StatelessWidget {
   final String? selectedPosition;
   final ValueChanged<String>? onPositionTap;
 
+  /// The vehicle type the positions belong to. Used only to LABEL each row
+  /// with its business tyre-map code (`LHF1`, `LHCI`, `LHR2-I`, ...); the
+  /// stored position key is never changed. Null shows the raw position.
+  final String? vehicleType;
+
+  /// Stored position -> tyre-map code, matched across the WHOLE list the
+  /// same way [VehicleTyreDiagram] places them, so both views agree.
+  Map<String, String> _displayCodes() {
+    final String? type = vehicleType?.trim();
+    if (type == null || type.isEmpty) return const <String, String>{};
+    final DiagramLayout? layout = kTyreDiagramLayouts[resolveVehicleType(type)];
+    if (layout == null) return const <String, String>{};
+    return <String, String>{
+      for (final MatchedTyreSlot slot in matchPositionsToLayout(
+        layout,
+        positions,
+      ))
+        slot.positionId: legacyPositionCode(layout.key, slot.id),
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
@@ -50,11 +75,13 @@ class TyreDiagramListView extends StatelessWidget {
       );
     }
 
+    final Map<String, String> displayCodes = _displayCodes();
+
     return Column(
       children: <Widget>[
         for (final String position in positions)
           _TyreDiagramListRow(
-            position: position,
+            displayCode: displayCodes[position] ?? position,
             entry: tyreData[position],
             isSelected: position == selectedPosition,
             onTap:
@@ -67,13 +94,14 @@ class TyreDiagramListView extends StatelessWidget {
 
 class _TyreDiagramListRow extends StatelessWidget {
   const _TyreDiagramListRow({
-    required this.position,
+    required this.displayCode,
     required this.entry,
     required this.isSelected,
     required this.onTap,
   });
 
-  final String position;
+  /// What the user sees for this row's stored position: its tyre-map code.
+  final String displayCode;
   final Map<String, Object?>? entry;
   final bool isSelected;
   final VoidCallback? onTap;
@@ -116,7 +144,7 @@ class _TyreDiagramListRow extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 TpIdentifierText(
-                  position,
+                  displayCode,
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 Text(

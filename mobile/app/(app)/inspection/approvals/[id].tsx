@@ -24,7 +24,7 @@ import { toUserMessage } from '../../../../lib/safeError'
 import SignatureField from '../../../../components/SignatureField'
 import SignatureView from '../../../../components/SignatureView'
 import VehicleTyreDiagram from '../../../../components/VehicleTyreDiagram'
-import { resolveVehicleType, LAYOUTS, matchPositionsToLayout } from '../../../../lib/tyreDiagramLayouts'
+import { resolveVehicleType, LAYOUTS, matchPositionsToLayout, positionDisplayCode } from '../../../../lib/tyreDiagramLayouts'
 import { conditionColor, conditionLabel } from '../../../../lib/inspectionReportPdf'
 import {
   getInspectionForApproval, decideInspection, InspectionApprovalItem,
@@ -283,7 +283,7 @@ function InspectionApprovalReviewScreen() {
                   ].filter(Boolean).join(' · ')
                   return (
                     <View key={pos} style={[styles.tyreCell, { backgroundColor: color }]}>
-                      <Text style={styles.tyrePos}>{pos}</Text>
+                      <Text style={styles.tyrePos}>{positionDisplayCode(pos, insp.vehicle_type, insp.asset_no)}</Text>
                       <Text style={styles.tyreCond}>{conditionLabel(d)}</Text>
                       {!!sub && <Text style={styles.tyreSub}>{sub}</Text>}
                     </View>

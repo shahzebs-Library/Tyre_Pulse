@@ -10,6 +10,7 @@ import { memo, useMemo } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { TyrePositionData } from '../lib/types'
+import { positionDisplayCode } from '../lib/tyreDiagramLayouts'
 import { CONDITION_META, SHOW_TREAD_DEPTH } from '../lib/tyreConditions'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTheme } from '../contexts/ThemeContext'
@@ -21,14 +22,18 @@ interface Props {
   onPress: () => void
   /** Highlighted when its tyre was just tapped on the diagram */
   isHighlighted?: boolean
+  /** Vehicle type (or asset no) used to show the tyre-map code (LHF1, LHCO...) */
+  vehicleType?: string | null
+  assetNo?: string | null
 }
 
-function TyrePositionCard({ data, onPress, isHighlighted = false }: Props) {
+function TyrePositionCard({ data, onPress, isHighlighted = false, vehicleType, assetNo }: Props) {
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()
   const styles = useMemo(() => makeStyles(theme), [theme])
   const meta = CONDITION_META[data.condition]
-  const posLabel = t(`positions.${data.position}`)
+  // Display only: the stored key stays the diagram slot id.
+  const posLabel = positionDisplayCode(data.position, vehicleType, assetNo)
 
   const recorded = !!(
     data.serial_number || data.pressure_psi || data.tread_depth_mm ||
@@ -47,7 +52,7 @@ function TyrePositionCard({ data, onPress, isHighlighted = false }: Props) {
     >
       {/* Position badge */}
       <View style={[styles.positionBadge, { backgroundColor: meta.tint, borderColor: meta.color }]}>
-        <Text style={[styles.positionCode, { color: meta.color }]}>{data.position}</Text>
+        <Text style={[styles.positionCode, { color: meta.color }]}>{posLabel}</Text>
       </View>
 
       {/* Summary */}

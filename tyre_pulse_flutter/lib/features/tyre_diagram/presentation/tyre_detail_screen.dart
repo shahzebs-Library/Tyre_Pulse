@@ -35,6 +35,7 @@ import 'package:tyre_pulse/app/theme/tp_typography.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_completeness.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_condition.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_position_display.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_labels.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_take_action_screen.dart';
 
@@ -138,6 +139,7 @@ class TyreDetailScreen extends StatelessWidget {
         onPressed: () => pushTyreTakeActionScreen(
           context,
           positionCode: positionCode,
+          vehicleType: vehicleType,
           assetNo: assetNo,
           siteName: siteName,
           onAdjustReading: onAdjustReading,
@@ -411,7 +413,7 @@ class _TyreIdentityHeader extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   TpIdentifierText(
-                    positionCode,
+                    tyrePositionDisplayCode(vehicleType, positionCode),
                     style: TpTypography.identifier(
                       palette,
                     ).copyWith(fontSize: 26, color: palette.text),

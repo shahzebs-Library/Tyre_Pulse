@@ -70,6 +70,7 @@ import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/tyre_diagram/data/tyre_defect_report_repository.dart';
 import 'package:tyre_pulse/features/tyre_diagram/data/tyre_service_event_repository.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_position_display.dart';
 import 'package:tyre_pulse/features/tyre_diagram/tyre_diagram_providers.dart';
 
 /// Pushes [TyreTakeActionScreen]. See [pushTyreDetailScreen]'s own doc
@@ -77,6 +78,7 @@ import 'package:tyre_pulse/features/tyre_diagram/tyre_diagram_providers.dart';
 Future<void> pushTyreTakeActionScreen(
   BuildContext context, {
   required String positionCode,
+  String? vehicleType,
   String? assetNo,
   String? siteName,
   String? tyreSerial,
@@ -86,6 +88,7 @@ Future<void> pushTyreTakeActionScreen(
     MaterialPageRoute<void>(
       builder: (BuildContext context) => TyreTakeActionScreen(
         positionCode: positionCode,
+        vehicleType: vehicleType,
         assetNo: assetNo,
         siteName: siteName,
         tyreSerial: tyreSerial,
@@ -98,6 +101,7 @@ Future<void> pushTyreTakeActionScreen(
 class TyreTakeActionScreen extends ConsumerWidget {
   const TyreTakeActionScreen({
     required this.positionCode,
+    this.vehicleType,
     this.assetNo,
     this.siteName,
     this.tyreSerial,
@@ -105,11 +109,21 @@ class TyreTakeActionScreen extends ConsumerWidget {
     super.key,
   });
 
+  /// The stored position (an internal slot id such as `R1Li`, or an older
+  /// vocabulary). Shown and written as [_displayCode], never raw.
   final String positionCode;
+
+  /// The vehicle type the position belongs to. When null the raw
+  /// [positionCode] is shown unchanged rather than a guessed label.
+  final String? vehicleType;
   final String? assetNo;
   final String? siteName;
   final String? tyreSerial;
   final VoidCallback? onAdjustReading;
+
+  /// The business tyre-map code (`LHF1`, `LHCI`, `LHR2-I`, ...) users see.
+  String get _displayCode =>
+      tyrePositionDisplayCode(vehicleType, positionCode);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -118,7 +132,7 @@ class TyreTakeActionScreen extends ConsumerWidget {
     return TpScaffold(
       appBar: TpAppBar(
         title: l10n.takeActionTitle,
-        subtitle: positionCode,
+        subtitle: _displayCode,
         onBack: () => Navigator.of(context).pop(),
       ),
       body: ListView(
@@ -166,9 +180,9 @@ class TyreTakeActionScreen extends ConsumerWidget {
       TyreChangeRoute(
         assetNo: _blankToNull(assetNo) == null ? null : AssetNo(assetNo!),
         siteName: _blankToNull(siteName) == null ? null : SiteName(siteName!),
-        tyrePosition: _blankToNull(positionCode) == null
+        tyrePosition: _blankToNull(_displayCode) == null
             ? null
-            : TyrePosition(positionCode),
+            : TyrePosition(_displayCode.trim()),
       ).location,
     );
   }
@@ -179,7 +193,7 @@ class TyreTakeActionScreen extends ConsumerWidget {
       context: context,
       title: l10n.reportDefectTitle,
       builder: (BuildContext sheetContext) => _ReportDefectForm(
-        positionCode: positionCode,
+        positionCode: _displayCode,
         assetNo: assetNo,
         siteName: siteName,
         tyreSerial: tyreSerial,
@@ -198,7 +212,7 @@ class TyreTakeActionScreen extends ConsumerWidget {
       context: context,
       title: l10n.takeActionRotateTyre,
       builder: (BuildContext sheetContext) => _RotateTyreForm(
-        positionCode: positionCode,
+        positionCode: _displayCode,
         assetNo: assetNo,
         siteName: siteName,
         tyreSerial: tyreSerial,

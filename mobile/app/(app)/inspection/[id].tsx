@@ -14,6 +14,7 @@ import { radius, spacing, typography, elevation, Theme } from '../../../lib/them
 import VehicleTyreDiagram from '../../../components/VehicleTyreDiagram'
 import { getPositionsForVehicle, TyrePositionData } from '../../../lib/types'
 import { shareInspectionPdf, conditionColor, conditionLabel } from '../../../lib/inspectionReportPdf'
+import { positionDisplayCode } from '../../../lib/tyreDiagramLayouts'
 
 interface Inspection {
   id: string
@@ -190,7 +191,7 @@ function InspectionDetailScreen() {
                 ].filter(Boolean).join(' · ') || '-'
                 return (
                   <View key={pos} style={[styles.condRow, isRTL && styles.rowR]}>
-                    <View style={[styles.posDot, { backgroundColor: rc }]}><Text style={styles.posText}>{pos}</Text></View>
+                    <View style={[styles.posDot, { backgroundColor: rc }]}><Text style={styles.posText}>{positionDisplayCode(pos, insp.vehicle_type, insp.asset_no)}</Text></View>
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.condTitle, { textAlign, color: rc }]}>
                         {conditionLabel(c)}

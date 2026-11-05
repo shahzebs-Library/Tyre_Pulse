@@ -49,7 +49,7 @@ export async function listFailedJobs({ limit = 200 } = {}) {
   const ids = [...new Set(rows.map((r) => r.inspection_id).filter(Boolean))]
   if (!ids.length) return rows
   try {
-    const { data: ins } = await supabase.from('inspections').select('id,vehicle_type,asset_no').in('id', ids)
+    const { data: ins } = await supabase.from('inspections').select('id,vehicle_type,asset_no').in('id', ids).limit(ids.length)
     const byId = new Map((ins || []).map((i) => [i.id, i]))
     return rows.map((r) => ({ ...r, vehicle_type: byId.get(r.inspection_id)?.vehicle_type || null, asset_no: byId.get(r.inspection_id)?.asset_no || null }))
   } catch { return rows }

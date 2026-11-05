@@ -2168,9 +2168,11 @@ export default function Inspections() {
         <div
           ref={pdfBoardRef}
           aria-hidden
-          style={{ position: 'fixed', left: -9999, top: 0, width: 680, opacity: 0, pointerEvents: 'none' }}
+          style={{ position: 'fixed', left: -9999, top: 0, width: 520, opacity: 0, pointerEvents: 'none' }}
         >
-          <InspectionDiagram inspection={pdfRow} showReadings={false} width={620} variant="board" />
+          {/* 440px: the narrowest width that keeps twin wheels side by side, so the
+              vehicle picture stays a supporting element, not the biggest thing. */}
+          <InspectionDiagram inspection={pdfRow} showReadings={false} width={440} variant="board" />
         </div>
       )}
 

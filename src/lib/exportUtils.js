@@ -1773,7 +1773,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   ]
   const vPhoto = opts.vehiclePhotoUrl ? await fetchImageDataUri(opts.vehiclePhotoUrl) : null
   const cardH = details.length * 7 + 4
-  const listW = vPhoto ? W * 0.5 : W
+  const listW = vPhoto ? W * 0.64 : W
   doc.setFillColor(...P.offWhite); doc.setDrawColor(...P.silver); doc.setLineWidth(0.25)
   doc.roundedRect(mx, y, listW, cardH, 2, 2, 'FD')
   details.forEach(([lbl, val], i) => {
@@ -1871,7 +1871,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   if (board) {
     const innerW = W - 8
     const roomH = (top) => BOTTOM - top - 5 - 12 - 22
-    const fitS = (h) => Math.min(innerW / board.w, Math.max(0, h) / board.h, 0.42)
+    const fitS = (h) => Math.min(innerW / board.w, Math.max(0, h) / board.h, 0.36)
     if (fitS(roomH(y)) * board.h < 70) y = newPage()
     const s = fitS(Math.min(130, roomH(y)))
     y = _insSection(doc, 'Vehicle Overview', y, mx, accent)

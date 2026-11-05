@@ -11,7 +11,6 @@ import {
   RISK_LABEL, riskForCondition,
   normalizeTyreConditions, inspectionDiagramModel, positionLabelMap, pressureDeviation,
 } from './inspectionView'
-import { positionGroup, SECTION_LABEL } from './inspectionWorkspaceView'
 // The band judgement is bandFor and nothing else. The register flags a tyre as
 // due with this function, so the report has to use it too or the two would
 // disagree about the same tyre on the same day.
@@ -2045,7 +2044,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   findings.push([photoItems.length ? 'good' : 'warning', photoItems.length
     ? `Photo evidence attached (${photoItems.length} photo${photoItems.length === 1 ? '' : 's'}).`
     : 'No photo evidence attached.'])
-  if (dueRows.length) findings.push(['critical', `${dueRows.length} tyre(s) due for change. See Tyres Due for Change.`])
+  if (dueRows.length) findings.push(['critical', `${dueRows.length} tyre(s) due for change: ${dueRows.map((r) => r.position).filter(Boolean).join(', ')}.`])
   findings.push(isApproved ? ['good', 'Inspection completed and approved.']
     : isRejected ? ['critical', 'Sign-off rejected; the inspection was returned for rework.']
       : isComplete ? ['warning', 'Inspection completed; approval pending.']
@@ -2080,15 +2079,24 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   // Optional AI review note. Keep the established inspection PDF and layout.
   // Advisory visual observations never replace the tyreman's recorded findings.
   if (Array.isArray(opts.aiFindings) && opts.aiFindings.length) {
+    // Positions are shown in the SAME codes as the tyre map and the readings
+    // table (e.g. R2Li on a mixer prints LHRI), never the internal slot id.
+    // 'uncertain' is the model abstaining, not a defect: it is dropped, and a
+    // finding that is only abstentions says so in plain words.
+    const typeHint = inspectionTypeHint(row)
     const notes = opts.aiFindings.slice(0, 8).map((job) => {
       const finding = job.analysis || {}
-      const types = Array.isArray(finding.defects)
-        ? finding.defects.slice(0, 3).map(d => String(d.type || 'uncertain').replace(/_/g, ' ')).join(', ')
-        : ''
-      const state = job.review_status === 'accepted' ? 'Supervisor reviewed' : 'AI suggestion pending review'
-      return String(job.tyre_position || 'Position') + ': ' +
-        (finding.assessable === false ? 'Photo unable to assess' : (types || 'Visual inspection observation')) +
-        ' (' + state + ')'
+      const defects = Array.isArray(finding.defects) ? finding.defects : []
+      const real = [...new Set(defects
+        .map((d) => String(d?.type || '').trim())
+        .filter((t) => t && t !== 'uncertain' && t !== 'none'))]
+      const words = real.slice(0, 3).map((t) => t.replace(/_/g, ' ')).join(', ')
+      const verdict = finding.assessable === false
+        ? 'Photo not clear enough to assess'
+        : words || (defects.length ? 'No clear defect identified from the photo' : 'No visible defect identified')
+      const state = job.review_status === 'accepted' ? 'Supervisor reviewed' : 'Awaiting supervisor review'
+      const code = displayPositionCode(typeHint, job.tyre_position) || 'Position not recorded'
+      return `${code}: ${verdict} (${state})`
     })
     const wrapped = notes.map(note => doc.splitTextToSize(note, W - 12))
     const height = wrapped.reduce((n, lines) => n + lines.length * 3.5 + 2, 5)
@@ -2128,44 +2136,6 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
         _insPill(doc, d.cell.x + (d.cell.width - 14) / 2, d.cell.y + d.cell.height / 2 - 2.1, 14, 4.2, _INS_WORD[r.risk], r.risk)
       },
       didDrawPage: (d) => { if (d.pageNumber > startPage) header() },
-    })
-    y = (doc.lastAutoTable?.finalY || y) + 8
-
-    // ── Axle Summary ─────────────────────────────────────────────────────────
-    const groups = new Map()
-    for (const r of posRows) {
-      const g = positionGroup(r.code)
-      if (!groups.has(g)) groups.set(g, [])
-      groups.get(g).push(r)
-    }
-    const order = ['steer', 'drive', 'rear', 'spare', 'other']
-    const axleBody = order.filter((g) => groups.has(g)).map((g) => {
-      const list = groups.get(g)
-      const s = inspectionReportStats(list)
-      return [SECTION_LABEL[g], s.total, s.counts.good, s.counts.warning, s.counts.critical, s.counts.none,
-        s.avgPressure != null ? one(s.avgPressure) : 'N/A']
-    })
-    axleBody.push(['Total', stats.total, stats.counts.good, stats.counts.warning, stats.counts.critical, stats.counts.none,
-      stats.avgPressure != null ? one(stats.avgPressure) : 'N/A'])
-    y = ensure(y, 14 + axleBody.length * 6)
-    y = _insSection(doc, 'Axle Summary', y, mx, accent) + 1
-    const axStart = doc.internal.getNumberOfPages()
-    const toneCol = { 2: 'good', 3: 'warning', 4: 'critical' }
-    autoTable(doc, {
-      startY: y,
-      margin: { top: 31, left: mx, right: mx, bottom: ph - BOTTOM },
-      head: [['Axle', 'Total Tyres', 'Good', 'Wear', 'Damage', 'No Data', 'Avg Pressure (PSI)']],
-      body: axleBody,
-      styles: { fontSize: 7.2, cellPadding: 1.9, textColor: P.ink, lineColor: P.silver, lineWidth: 0.12, halign: 'center' },
-      headStyles: { fillColor: [241, 245, 249], textColor: P.steel, fontSize: 6.8, fontStyle: 'bold' },
-      columnStyles: { 0: { halign: 'left' } },
-      didParseCell: (d) => {
-        if (d.section !== 'body') return
-        if (d.row.index === axleBody.length - 1) { d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = [248, 250, 252] }
-        const tone = toneCol[d.column.index]
-        if (tone && Number(d.cell.raw) > 0) { d.cell.styles.textColor = _INS_TONE[tone].ink; d.cell.styles.fontStyle = 'bold' }
-      },
-      didDrawPage: (d) => { if (d.pageNumber > axStart) header() },
     })
     y = (doc.lastAutoTable?.finalY || y) + 8
 
@@ -2214,52 +2184,6 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
         _insPill(doc, d.cell.x + (d.cell.width - 13) / 2, d.cell.y + d.cell.height / 2 - 2.1, 13, 4.2, res, _RESULT_TONE[res])
       },
       didDrawPage: (d) => { if (d.pageNumber > ckStart) header() },
-    })
-    y = (doc.lastAutoTable?.finalY || y) + 8
-  }
-
-  // ── Tyres Due for Change ───────────────────────────────────────────────────
-  if (dueRows.length) {
-    y = ensure(y, 24)
-    y = _insSection(doc, `Tyres Due for Change (${dueRows.length})`, y, mx, accent) + 1
-    const st = doc.internal.getNumberOfPages()
-    autoTable(doc, {
-      startY: y,
-      margin: { top: 31, left: mx, right: mx, bottom: ph - BOTTOM },
-      head: [['Position', 'Serial', 'Why it is due', 'Life used', 'Remaining km', 'Remaining days']],
-      body: dueRows.map((r) => [r.position, r.serial, r.reason, r.lifeUsed, n0(r.remainingKm), n0(r.remainingDays)]),
-      styles: { fontSize: 7, cellPadding: 1.7, textColor: P.ink, lineColor: P.silver, lineWidth: 0.12 },
-      headStyles: { fillColor: [241, 245, 249], textColor: P.steel, fontSize: 6.8, fontStyle: 'bold' },
-      columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
-      didDrawPage: (d) => { if (d.pageNumber > st) header() },
-    })
-    y = (doc.lastAutoTable?.finalY || y) + 8
-  }
-
-  // ── Expected Tyre Life ─────────────────────────────────────────────────────
-  const lifeRows = Array.isArray(opts.lifeRows) ? opts.lifeRows.slice(0, 16) : []
-  if (lifeRows.length) {
-    y = ensure(y, 28)
-    y = _insSection(doc, 'Expected Tyre Life', y, mx, accent) + 1
-    doc.setFontSize(6.8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
-    doc.text('Latest fleet estimates at export time; meters may differ from the inspection readings above.', mx, y + 1)
-    y += 4
-    const both = (km, hrs) => (km == null && hrs == null ? 'N/A'
-      : [km != null ? `${n0(km)} km` : null, hrs != null ? `${n0(hrs)} hrs` : null].filter(Boolean).join(' / '))
-    const st = doc.internal.getNumberOfPages()
-    autoTable(doc, {
-      startY: y,
-      margin: { top: 31, left: mx, right: mx, bottom: ph - BOTTOM },
-      head: [['Position', 'Serial', 'Brand', 'Km run', 'Hours run', 'Current km', 'Expected life', 'Remaining', 'Remaining days', 'Life used']],
-      body: lifeRows.map((lr) => [
-        lr.position || 'N/A', lr.serial || 'N/A', lr.brand || 'N/A', n0(lr.kmRun), n0(lr.hoursRun), n0(lr.currentKm),
-        both(lr.expectedLifeKm, lr.expectedLifeHours), both(lr.remainingKm, lr.remainingHours), n0(lr.remainingDays),
-        (measureFor(lr).used != null ? `${measureFor(lr).used}%` : 'N/A'),
-      ]),
-      styles: { fontSize: 6.6, cellPadding: 1.5, textColor: P.ink, lineColor: P.silver, lineWidth: 0.12 },
-      headStyles: { fillColor: [241, 245, 249], textColor: P.steel, fontSize: 6.4, fontStyle: 'bold' },
-      columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' }, 9: { halign: 'right' } },
-      didDrawPage: (d) => { if (d.pageNumber > st) header() },
     })
     y = (doc.lastAutoTable?.finalY || y) + 8
   }

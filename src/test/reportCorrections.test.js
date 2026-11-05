@@ -64,12 +64,15 @@ describe('attached report regressions', () => {
     expect(text).toContain('Some checks were not recorded')
     expect(text).not.toContain('Every check on this sheet was recorded OK')
   })
-  it('separates fleet estimates, unknown days and unmapped positions in the inspection PDF', async () => {
+  it('leaves out the removed life sections, unknown days and unmapped positions in the inspection PDF', async () => {
     const doc = await exportInspectionDetailPdf({ id: 'validation', title: 'Validation example', vehicle_type: 'WHEEL_LOADER', asset_no: 'TEST-ASSET',
       tyre_conditions: { invalid_slot: { condition: 'Good', pressure: 80 } }, approval_status: 'approved', approved_by: '11111111-2222-4333-8444-555555555555',
     }, { save: false, lifeRows: [shapeRow({ expected_life_km: 8883, remaining_km: 5865, life_used_pct: 34, remaining_days: 0 })] })
     const text = printed(doc)
-    expect(text).toContain('Latest fleet estimates at export time')
+    // Owner 2026-11-05: Expected Tyre Life, Tyres Due for Change and Axle Summary were removed.
+    expect(text).not.toContain('Expected Tyre Life')
+    expect(text).not.toContain('Tyres Due for Change')
+    expect(text).not.toContain('Axle Summary')
     expect(text).toContain('Position data requires review')
     expect(text).not.toContain('Approaching end of life')
     expect(text).not.toContain('11111111-2222-4333-8444-555555555555')

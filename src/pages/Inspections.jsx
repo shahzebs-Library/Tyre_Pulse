@@ -349,6 +349,7 @@ export default function Inspections() {
   // Row PDF export: render the live diagram offscreen, then capture its SVG.
   const [pdfRow, setPdfRow] = useState(null)
   const pdfDiagramRef = useRef(null)
+  const pdfBoardRef = useRef(null)
   // Read a record in place. Holds an id, not a row: the drawer loads the full
   // record (signatures included, which the register list no longer carries).
   const [viewId, setViewId] = useState(null)
@@ -426,10 +427,13 @@ export default function Inspections() {
         // offscreen below - captured so the report embeds the same SVG the
         // operator sees. Falls back to the programmatic map when absent.
         const svgEl = pdfDiagramRef.current?.querySelector('svg[data-tyre-map]') || null
+        // The Vehicle Overview board (photo + wheel cards), the same view the
+        // inspection workspace shows. The report redraws it natively.
+        const boardEl = pdfBoardRef.current?.querySelector('.tb') || null
         const diagramBg = (await getDiagramBg().catch(() => '')) || '#000000'
         const aiJobs = await readInspectionAnalysis([pdfRow.id]).catch(() => [])
         await exportInspectionDetailPdf(pdfRow, {
-          branding: await brandingForPdf(branding), company, photos, lifeRows, svgEl, diagramBg,
+          branding: await brandingForPdf(branding), company, photos, lifeRows, svgEl, boardEl, diagramBg,
           vehiclePhotoUrl: vehiclePhoto(pdfRow), aiFindings: aiJobs.filter(j => j.status === 'completed'),
         })
       } catch (err) { if (!cancelled) setPdfError(toUserMessage(err, 'Could not create the inspection PDF. Retry the download.')) }
@@ -2158,6 +2162,15 @@ export default function Inspections() {
             showReadings={false}
             width={340}
           />
+        </div>
+      )}
+      {pdfRow && (
+        <div
+          ref={pdfBoardRef}
+          aria-hidden
+          style={{ position: 'fixed', left: -9999, top: 0, width: 680, opacity: 0, pointerEvents: 'none' }}
+        >
+          <InspectionDiagram inspection={pdfRow} showReadings={false} width={620} variant="board" />
         </div>
       )}
 

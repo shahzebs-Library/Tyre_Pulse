@@ -1472,6 +1472,228 @@ export function inspectionReportStats(rows) {
   }
 }
 
+// ── Image + Vehicle Overview board helpers (inspection report) ─────────────────
+function _loadImgEl(src) {
+  return new Promise((resolve) => {
+    try {
+      const img = new Image()
+      img.onload = () => resolve(img)
+      img.onerror = () => resolve(null)
+      img.src = src
+    } catch { resolve(null) }
+  })
+}
+
+/**
+ * Draw a picture into a box on a SOLID background and return a JPEG data URL.
+ * Vehicle pictures are transparent WebP/PNG: handed to jsPDF as they are, the
+ * transparent area prints BLACK. Flattening onto the card colour fixes that,
+ * and also handles contain/cover fit and the 180-degree turn the board uses.
+ * Returns null where there is no canvas (tests) so callers keep their fallback.
+ */
+async function _rasterIntoBox(src, boxW, boxH, { fit = 'contain', rotate180 = false, bg = '#FFFFFF', pxPerUnit = 4 } = {}) {
+  if (!src || typeof document === 'undefined') return null
+  try {
+    const data = /^data:/i.test(src) ? src : await fetchImageDataUri(src)
+    if (!data) return null
+    const img = await _loadImgEl(data)
+    if (!img || !img.naturalWidth) return null
+    const c = document.createElement('canvas')
+    c.width = Math.max(1, Math.round(boxW * pxPerUnit))
+    c.height = Math.max(1, Math.round(boxH * pxPerUnit))
+    const ctx = c.getContext && c.getContext('2d')
+    if (!ctx) return null
+    ctx.fillStyle = bg
+    ctx.fillRect(0, 0, c.width, c.height)
+    const k = fit === 'cover'
+      ? Math.max(c.width / img.naturalWidth, c.height / img.naturalHeight)
+      : Math.min(c.width / img.naturalWidth, c.height / img.naturalHeight)
+    const dw = img.naturalWidth * k, dh = img.naturalHeight * k
+    ctx.save()
+    if (rotate180) { ctx.translate(c.width, c.height); ctx.rotate(Math.PI) }
+    ctx.drawImage(img, (c.width - dw) / 2, (c.height - dh) / 2, dw, dh)
+    ctx.restore()
+    return c.toDataURL('image/jpeg', 0.92)
+  } catch { return null }
+}
+
+const _BOARD_RGB = { good: [22, 163, 74], warning: [217, 119, 6], critical: [220, 38, 38], none: [148, 163, 184], known: [100, 116, 139] }
+
+/**
+ * Read the rendered Vehicle Overview board (TyreBoard) into plain geometry so the
+ * report can redraw it as vector shapes and text: the same cards, leaders and
+ * photo the app shows, sharp at any zoom. Coordinates are CSS px on the stage.
+ */
+async function captureTyreBoard(boardEl) {
+  try {
+    if (!boardEl || typeof getComputedStyle !== 'function') return null
+    const tb = boardEl.classList?.contains('tb') ? boardEl : boardEl.querySelector?.('.tb')
+    const stage = tb?.querySelector('.tb-stage')
+    if (!stage || !stage.offsetWidth) return null
+    const sr = stage.getBoundingClientRect()
+    const z = sr.width && stage.offsetWidth ? sr.width / stage.offsetWidth : 1
+    const rel = (el) => {
+      const r = el.getBoundingClientRect()
+      return { x: (r.left - sr.left) / z, y: (r.top - sr.top) / z, w: r.width / z, h: r.height / z }
+    }
+    const toneOf = (el) => {
+      const c = el.classList
+      if (c.contains('tb-bad')) return 'critical'
+      if (c.contains('tb-warn')) return 'warning'
+      if (c.contains('tb-good')) return 'good'
+      return 'none'
+    }
+    const fontPx = (el) => parseFloat(getComputedStyle(el).fontSize) || 10
+
+    let photo = null
+    const pbox = stage.querySelector('.tb-photo')
+    if (pbox) {
+      const box = rel(pbox)
+      const img = pbox.querySelector('img')
+      const svg = pbox.querySelector('svg')
+      let dataUrl = null
+      if (img && img.getAttribute('src')) {
+        dataUrl = await _rasterIntoBox(img.getAttribute('src'), box.w, box.h, {
+          fit: img.style.objectFit === 'cover' ? 'cover' : 'contain',
+          rotate180: /rotate\(180deg\)/.test(img.style.transform || ''),
+        })
+      } else if (svg) {
+        const cap = await svgToPngDataUrl(svg, 4, '#FFFFFF')
+        dataUrl = cap?.dataUrl || null
+      }
+      if (dataUrl) photo = { ...box, dataUrl, fmt: /^data:image\/jpe?g/i.test(dataUrl) ? 'JPEG' : 'PNG' }
+    }
+
+    const leaders = []
+    stage.querySelectorAll('svg.tb-leader').forEach((svg) => {
+      const path = svg.querySelector('path')
+      const nums = (path?.getAttribute('d') || '').match(/-?\d*\.?\d+(?:e-?\d+)?/gi)
+      if (!nums || nums.length < 4) return
+      const pts = []
+      for (let i = 0; i + 1 < nums.length; i += 2) pts.push([Number(nums[i]), Number(nums[i + 1])])
+      const knob = svg.querySelector('circle')
+      leaders.push({
+        tone: toneOf(path),
+        pts,
+        knob: knob ? [Number(knob.getAttribute('cx')), Number(knob.getAttribute('cy')), Number(knob.getAttribute('r')) || 3.5] : null,
+      })
+    })
+
+    const cards = []
+    stage.querySelectorAll('.tb-card').forEach((card) => {
+      const body = card.querySelector('.tb-body')
+      const codeEl = card.querySelector('.tb-code')
+      const dot = card.querySelector('.tb-dot')
+      if (!body) return
+      const lines = []
+      card.querySelectorAll('.tb-vals > *').forEach((el) => {
+        const r = rel(el)
+        if (el.tagName === 'B') {
+          const unitEl = el.querySelector('small')
+          const unit = unitEl ? unitEl.textContent : ''
+          const value = el.textContent.slice(0, el.textContent.length - unit.length)
+          lines.push({ kind: 'value', value, unit, unitPx: unitEl ? fontPx(unitEl) : fontPx(el) * 0.8, ...r, px: fontPx(el) })
+        } else {
+          const c = el.classList
+          const kind = c.contains('tb-cond') ? 'cond' : c.contains('tb-flag') ? 'flag' : c.contains('tb-muted') ? 'muted' : 'ident'
+          lines.push({ kind, value: el.textContent, ...r, px: fontPx(el) })
+        }
+      })
+      cards.push({
+        tone: toneOf(card),
+        known: card.classList.contains('tb-known'),
+        pending: card.classList.contains('tb-pending'),
+        body: rel(body),
+        code: codeEl ? { text: codeEl.textContent, ...rel(codeEl), px: fontPx(codeEl) } : null,
+        dot: dot ? { ...rel(dot), glyph: dot.textContent } : null,
+        lines,
+      })
+    })
+    if (!cards.length) return null
+    const titleB = tb.querySelector('.tb-title b')
+    const titleS = tb.querySelector('.tb-title span')
+    return {
+      w: stage.offsetWidth,
+      h: stage.offsetHeight,
+      photo, leaders, cards,
+      title: titleB ? titleB.textContent : '',
+      sub: titleS ? titleS.textContent : '',
+    }
+  } catch { return null }
+}
+
+/** Draw a captured board at (x, y), s = mm per CSS px. */
+function _drawTyreBoard(doc, cap, x, y, s) {
+  const pt = (px) => px * s * 72 / 25.4
+  const X = (v) => x + v * s
+  const Y = (v) => y + v * s
+  if (cap.photo) {
+    try { doc.addImage(cap.photo.dataUrl, cap.photo.fmt, X(cap.photo.x), Y(cap.photo.y), cap.photo.w * s, cap.photo.h * s, undefined, 'FAST') } catch { /* cards still print */ }
+  }
+  for (const l of cap.leaders) {
+    const rgb = _BOARD_RGB[l.tone] || _BOARD_RGB.none
+    doc.setDrawColor(...rgb); doc.setLineWidth(Math.max(0.2, 1.4 * s))
+    if (doc.setLineDashPattern) doc.setLineDashPattern([3 * s, 3 * s], 0)
+    for (let i = 1; i < l.pts.length; i++) doc.line(X(l.pts[i - 1][0]), Y(l.pts[i - 1][1]), X(l.pts[i][0]), Y(l.pts[i][1]))
+    if (doc.setLineDashPattern) doc.setLineDashPattern([], 0)
+    if (l.knob) {
+      doc.setFillColor(...rgb); doc.setDrawColor(255, 255, 255); doc.setLineWidth(Math.max(0.15, 1.2 * s))
+      doc.circle(X(l.knob[0]), Y(l.knob[1]), l.knob[2] * s, 'FD')
+    }
+  }
+  for (const c of cap.cards) {
+    const toneKey = c.pending ? 'warning' : c.known ? 'known' : c.tone
+    const rgb = _BOARD_RGB[toneKey] || _BOARD_RGB.none
+    const b = c.body, r = 8 * s
+    doc.setFillColor(...rgb)
+    doc.roundedRect(X(b.x), Y(b.y), b.w * s, b.h * s, r, r, 'F')
+    doc.setFillColor(255, 255, 255)
+    doc.roundedRect(X(b.x) + 3 * s, Y(b.y), (b.w - 3) * s, b.h * s, r * 0.7, r * 0.7, 'F')
+    doc.rect(X(b.x) + 3 * s, Y(b.y), r, b.h * s, 'F')
+    doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.18)
+    if (c.tone === 'none' && !c.known && doc.setLineDashPattern) doc.setLineDashPattern([0.8, 0.6], 0)
+    doc.roundedRect(X(b.x), Y(b.y), b.w * s, b.h * s, r, r, 'S')
+    if (doc.setLineDashPattern) doc.setLineDashPattern([], 0)
+    if (c.code) {
+      doc.setFont('courier', 'bold'); doc.setFontSize(pt(c.code.px)); doc.setTextColor(71, 85, 105)
+      doc.text(c.code.text, X(c.code.x + c.code.w / 2), Y(c.code.y + c.code.h * 0.78), { align: 'center' })
+    }
+    if (c.dot) {
+      const cx = X(c.dot.x + c.dot.w / 2), cy = Y(c.dot.y + c.dot.h / 2), rr = (c.dot.w / 2) * s
+      doc.setFillColor(...rgb); doc.circle(cx, cy, rr, 'F')
+      doc.setDrawColor(255, 255, 255); doc.setLineWidth(rr * 0.3)
+      if (c.tone === 'good' && !c.pending) {
+        doc.line(cx - rr * 0.45, cy, cx - rr * 0.1, cy + rr * 0.38)
+        doc.line(cx - rr * 0.1, cy + rr * 0.38, cx + rr * 0.5, cy - rr * 0.35)
+      } else if (c.tone === 'none' && !c.pending) {
+        doc.line(cx - rr * 0.45, cy, cx + rr * 0.45, cy)
+      } else {
+        doc.line(cx, cy - rr * 0.52, cx, cy + rr * 0.12)
+        doc.setFillColor(255, 255, 255); doc.circle(cx, cy + rr * 0.45, rr * 0.13, 'F')
+      }
+    }
+    for (const ln of c.lines) {
+      const by = Y(ln.y + ln.h * 0.8)
+      if (ln.kind === 'value') {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(pt(ln.px)); doc.setTextColor(15, 23, 42)
+        doc.text(ln.value, X(ln.x), by)
+        if (ln.unit) {
+          const vw = doc.getTextWidth(ln.value)
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(pt(ln.unitPx)); doc.setTextColor(71, 85, 105)
+          doc.text(ln.unit, X(ln.x) + vw, by)
+        }
+      } else {
+        const ink = ln.kind === 'cond' ? (c.tone === 'critical' ? _BOARD_RGB.critical : c.tone === 'warning' ? _BOARD_RGB.warning : [71, 85, 105])
+          : ln.kind === 'flag' ? _BOARD_RGB.critical
+            : ln.kind === 'muted' && c.pending ? _BOARD_RGB.warning : [100, 116, 139]
+        doc.setFont('helvetica', ln.kind === 'cond' || ln.kind === 'flag' ? 'bold' : 'normal')
+        doc.setFontSize(pt(ln.px)); doc.setTextColor(...ink)
+        doc.text(doc.splitTextToSize(ln.value, (b.x + b.w - ln.x) * s)[0] || '', X(ln.x), by)
+      }
+    }
+  }
+}
+
 /**
  * @param {Object}  row          - inspection record
  * @param {Object}  [opts]
@@ -1578,7 +1800,12 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   if (vPhoto) {
     const px = mx + listW + 4, pwid = W - listW - 4
     doc.setFillColor(...P.offWhite); doc.roundedRect(px, y, pwid, cardH, 2, 2, 'F')
-    try {
+    // Flatten the (transparent) vehicle picture onto the card colour first, or
+    // its transparent area prints as a black box.
+    const flat = await _rasterIntoBox(vPhoto, pwid - 4, cardH - 4, { bg: '#F8FAFC', pxPerUnit: 12 })
+    if (flat) {
+      try { doc.addImage(flat, 'JPEG', px + 2, y + 2, pwid - 4, cardH - 4, undefined, 'FAST') } catch { /* card stays blank */ }
+    } else try {
       const props = doc.getImageProperties(vPhoto)
       const ar = props.width / props.height
       let dw = pwid, dh = pwid / ar
@@ -1639,7 +1866,56 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     y += bh + 8
   }
 
-  // ── Vehicle Tyre Condition Map ─────────────────────────────────────────────
+  // ── Vehicle Overview (the app's board: photo + one card per wheel) ─────────
+  const board = opts.boardEl ? await captureTyreBoard(opts.boardEl) : null
+  if (board) {
+    const innerW = W - 8
+    const roomH = (top) => BOTTOM - top - 5 - 12 - 22
+    const fitS = (h) => Math.min(innerW / board.w, Math.max(0, h) / board.h, 0.42)
+    if (fitS(roomH(y)) * board.h < 70) y = newPage()
+    const s = fitS(Math.min(130, roomH(y)))
+    y = _insSection(doc, 'Vehicle Overview', y, mx, accent)
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
+    doc.text('Tyre map as recorded on this inspection', mx + 3.4, y + 0.6)
+    y += 4
+    const boardW = board.w * s, boardH = board.h * s
+    const cardTop = y
+    const cardHgt = boardH + 30
+    doc.setFillColor(255, 255, 255); doc.setDrawColor(...P.silver); doc.setLineWidth(0.25)
+    doc.roundedRect(mx, cardTop, W, cardHgt, 2.5, 2.5, 'FD')
+    const bx = mx + (W - boardW) / 2
+    let cy = cardTop + 6.5
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+    doc.text(board.title || String(row.vehicle_type || ''), bx, cy)
+    if (board.sub) {
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
+      doc.text(board.sub, bx + boardW, cy, { align: 'right' })
+    }
+    cy += 4.2
+    doc.setFillColor(...P.ghost)
+    doc.triangle(mx + W / 2 - 7, cy - 0.4, mx + W / 2 - 5.4, cy - 0.4, mx + W / 2 - 6.2, cy - 1.9, 'F')
+    doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
+    doc.text('FRONT', mx + W / 2 - 4.4, cy)
+    cy += 2.5
+    _drawTyreBoard(doc, board, bx, cy, s)
+    cy += boardH + 6
+    const legend = [['good', 'Good'], ['warning', 'Warning'], ['critical', 'Critical'], ['none', 'Not recorded']]
+    doc.setFontSize(7.2); doc.setFont('helvetica', 'normal')
+    const itemW = legend.map(([, l]) => 6 + doc.getTextWidth(l) + 5)
+    let lx = mx + (W - itemW.reduce((a, b) => a + b, 0)) / 2
+    legend.forEach(([tone, label], i) => {
+      doc.setFillColor(..._BOARD_RGB[tone]); doc.circle(lx + 1.8, cy - 1.1, 1.8, 'F')
+      doc.setTextColor(...P.iron); doc.text(label, lx + 5, cy)
+      lx += itemW[i]
+    })
+    cy += 6
+    doc.setFontSize(7.5); doc.setTextColor(...P.ghost)
+    doc.text(`${stats.recorded} of ${stats.total} positions recorded.`, mx + W / 2, cy, { align: 'center' })
+    y = cardTop + cardHgt + 6
+  }
+
+  // ── Vehicle Tyre Condition Map (fallback when the board is unavailable) ───
+  if (!board) {
   {
     let estH = null
     if (opts.svgEl) estH = 64
@@ -1714,6 +1990,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     }
   }
   y += diagramH + 6
+  }
 
   if (diagramCheck.renderable && diagramCheck.unmatched.length) {
     const warning = `Position data requires review. Unmapped recorded positions: ${diagramCheck.unmatched.map((p) => p.position).join(', ')}.`

@@ -26,6 +26,12 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-11-05 (later) — 2025/2026 JOB CARD DATES REPAIRED (owner: "correct dates must, 2025 and 2026 important").
+- 17,279 KSA work_orders whose opened/started/completed/production dates carried a dropped-century year (0025/0026) got +2000 years. Snapshot of ALL 29,001 affected rows: `_bak.wo_dates_fix_20261105` (undo = restore the 5 date columns by id).
+- HELD BACK on purpose (574 in the 2025/2026 range): rows that would become future-dated, completed before opened, >365 days open, or production-in before out = the day/month-swap class, needs review. Years 0022-0024 (~11,000 rows) left as is per owner ("avoid for now").
+- Vehicle History ignores any job card date before 1990 (`scrubImplausibleJobDates` in src/lib/assetHistory.js), so the remaining bad rows show as Undated instead of breaking downtime/years-active.
+- Same session: Vehicle History service tab shows Work done + QC remarks from the same job card (`jobCardWorkAndQc`), column chooser; /assets/<code> links fixed to /asset-management/<code> (+ vercel.json redirect for dot-free /assets/<code>; /assets/* is the static bundle folder, never route it in-app).
+
 # ⚑ SESSION 2026-11-05 — INSPECTION PDF = THE APP'S VEHICLE OVERVIEW BOARD. No migration.
 - exportInspectionDetailPdf (src/lib/exportUtils.js) now draws the "Vehicle Overview" section from the rendered TyreBoard: Inspections.jsx mounts an offscreen `<InspectionDiagram variant="board" width={440}>` (pdfBoardRef) and passes `boardEl`; `captureTyreBoard()` reads cards/leaders/photo geometry from the DOM, `_drawTyreBoard()` redraws them as vector shapes + text (title, FRONT, legend, "N of M positions recorded"). Old dark svg map stays as the fallback when no board.
 - width 440 = narrowest that keeps twin wheels side by side (stacked when 2*(wideSide+leader)+110 > width); owner said the picture was too big, so the board picture is small and the scale is capped at 0.36 mm/px.

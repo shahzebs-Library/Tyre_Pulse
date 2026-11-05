@@ -77,6 +77,9 @@
       "fflate": "^0.4.9"
     },
     "postcss-selector-parser": "^7.1.6",
-    "image-size": "^2.0.4"
+    "image-size": "^2.0.4",
+    "workbox-build": {
+      "glob": "^14.0.3"
+    }
   }
 }

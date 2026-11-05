@@ -143,9 +143,34 @@ button.vh-tl-row:hover { background: var(--cc-inner); }
   box-shadow: var(--shadow-float, 0 8px 24px rgba(0,0,0,.18)); font-size: 13px; }
 .vh-colpick-menu label { display: flex; gap: 8px; align-items: center; cursor: pointer; }
 .vh-colpick-menu .cc-link { justify-self: start; background: none; border: 0; padding: 0; cursor: pointer; }
-.vh-tablebar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
-.vh-tablebar-count { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
-.vh-tablebar-clear { background: none; border: 0; padding: 0; cursor: pointer; font-size: 12px; }
-@media (max-width: 640px) { .vh-tablebar > select { flex: 1 1 45%; } .vh-colpick { margin-left: 0; } }
-.vh-tablebar .cc-filters { flex: 1 1 100%; margin: 0; }
-.vh-tablebar .cc-search { flex: 1 1 340px; }
+
+/* ── Table filter panel (Service / Movement / Inspection) ─────────────── */
+.vh-tablebar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.vh-fp { display: grid; gap: 12px; padding: 14px; margin-bottom: 14px; background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 12px; }
+.vh-fp-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.vh-fp-search { flex: none; min-width: 0; width: 100%; }
+/* One control height across the panel so every field lines up. */
+.vh-fp .cc-select, .vh-fp .cc-search input, .vh-fp-field input { height: 38px; box-sizing: border-box; font-size: 13px; }
+.vh-fp .cc-select { padding-top: 0; padding-bottom: 0; }
+.vh-fp-meta .cc-btn { height: 38px; display: inline-flex; align-items: center; }
+.vh-fp-field { display: flex; flex-direction: column; gap: 4px; min-width: 150px; flex: 0 1 180px; }
+.vh-fp-field > span { font-size: 11px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--cc-ink-3); }
+.vh-fp-field .cc-select, .vh-fp-field input { width: 100%; }
+.vh-fp-date { width: 100%; }
+.vh-fp-meta { display: flex; align-items: center; gap: 12px; margin-left: auto; padding-bottom: 2px; }
+.vh-fp-count { font-size: 13px; color: var(--cc-ink-2); white-space: nowrap; }
+.vh-fp-count strong { color: var(--cc-ink); font-weight: 700; }
+.vh-fp .vh-colpick { margin-left: 0; }
+.vh-fp-active { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 10px; border-top: 1px dashed var(--cc-inner-border); }
+.vh-fp-active-label { font-size: 12px; color: var(--cc-ink-3); margin-right: 2px; }
+.vh-fp-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; padding: 4px 8px 4px 10px; border-radius: 999px;
+  border: 1px solid var(--cc-green); background: var(--cc-green-tint); color: var(--cc-ink); cursor: pointer; }
+.vh-fp-chip:hover { background: var(--cc-card); }
+.vh-fp-chip:focus-visible, .vh-fp-clear:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 2px; }
+.vh-fp-clear { font-size: 12px; font-weight: 600; color: var(--cc-green); background: none; border: 0; padding: 4px 6px; cursor: pointer; }
+.vh-fp-field.vh-fp-searchfield { flex: 1 1 360px; min-width: 240px; }
+@media (max-width: 720px) {
+  .vh-fp-field { flex: 1 1 calc(50% - 6px); min-width: 0; }
+  .vh-fp-field.vh-fp-searchfield { flex: 1 1 100%; min-width: 0; }
+  .vh-fp-meta { margin-left: 0; width: 100%; justify-content: space-between; }
+}

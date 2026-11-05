@@ -38,6 +38,10 @@ describe('tableFilterEvents', () => {
     expect(tableFilterEvents(rows, { work: 'none' }).map(r => r.id)).toEqual([2])
   })
   it('lists options from the rows', () => {
-    expect(tableFilterOptions(rows)).toEqual({ types: [{ value: 'repair', label: 'Repair' }, { value: 'wash', label: 'Wash' }], sites: ['JED', 'NHC'] })
+    expect(tableFilterOptions(rows)).toEqual({
+      types: [{ value: 'repair', label: 'Repair', count: 2 }, { value: 'wash', label: 'Wash', count: 1 }],
+      sites: [{ value: 'JED', count: 1 }, { value: 'NHC', count: 2 }],
+      jobs: { workHas: 1, workNone: 1, qcHas: 1, qcNone: 1 },
+    })
   })
 })

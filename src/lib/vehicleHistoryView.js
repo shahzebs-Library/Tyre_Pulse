@@ -371,17 +371,30 @@ export function tableFilterEvents(rows, { q = '', type = '', site = '', work = '
   })
 }
 
-/** Distinct option values for a table filter, sorted. */
+/**
+ * Option lists (with counts) for a history table's filters, read from the rows
+ * the table holds before its own filters apply, so every option shows how many
+ * rows it would give and an option that gives none is never offered.
+ */
 export function tableFilterOptions(rows) {
   const types = new Map()
-  const sites = new Set()
+  const sites = new Map()
+  const jobs = { workHas: 0, workNone: 0, qcHas: 0, qcNone: 0 }
   for (const e of Array.isArray(rows) ? rows : []) {
-    if (e.type) types.set(e.type, e.typeLabel || e.type)
-    if (e.site) sites.add(e.site)
+    if (e.type) {
+      const t = types.get(e.type) || { value: e.type, label: e.typeLabel || e.type, count: 0 }
+      t.count += 1; types.set(e.type, t)
+    }
+    if (e.site) sites.set(e.site, (sites.get(e.site) || 0) + 1)
+    if (e.source === 'job_card') {
+      if (e.workDone) jobs.workHas += 1; else jobs.workNone += 1
+      if (e.qcRemarks) jobs.qcHas += 1; else jobs.qcNone += 1
+    }
   }
   return {
-    types: [...types.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label)),
-    sites: [...sites].sort(),
+    types: [...types.values()].sort((a, b) => a.label.localeCompare(b.label)),
+    sites: [...sites.entries()].map(([value, count]) => ({ value, count })).sort((a, b) => a.value.localeCompare(b.value)),
+    jobs,
   }
 }
 

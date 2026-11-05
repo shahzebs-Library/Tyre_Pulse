@@ -16,3 +16,28 @@ describe('jobCardWorkAndQc', () => {
     expect(jobCardWorkAndQc({ work_order_no: 'Y' }, new Map())).toEqual({ workDone: null, qcRemarks: null })
   })
 })
+
+import { tableFilterEvents, tableFilterOptions } from '../lib/vehicleHistoryView'
+
+describe('tableFilterEvents', () => {
+  const rows = [
+    { id: 1, source: 'job_card', type: 'repair', typeLabel: 'Repair', day: '2026-07-01', title: 'Job card GCKR/JC/1', site: 'NHC', workDone: 'CHANGED PTO SHAFT', qcRemarks: 'WORN OUT', value: 500, currency: 'SAR' },
+    { id: 2, source: 'job_card', type: 'repair', typeLabel: 'Repair', day: '2026-06-01', title: 'Job card GCKR/JC/2', site: 'JED', workDone: null, qcRemarks: null },
+    { id: 3, source: 'wash', type: 'wash', typeLabel: 'Wash', day: '2026-05-01', title: 'Wash', site: 'NHC' },
+  ]
+  it('searches every column including work done and QC', () => {
+    expect(tableFilterEvents(rows, { q: 'pto' }).map(r => r.id)).toEqual([1])
+    expect(tableFilterEvents(rows, { q: 'worn out' }).map(r => r.id)).toEqual([1])
+    expect(tableFilterEvents(rows, { q: '2026-06' }).map(r => r.id)).toEqual([2])
+    expect(tableFilterEvents(rows, { q: 'sar' }).map(r => r.id)).toEqual([1])
+  })
+  it('filters by type, site and recorded / not recorded', () => {
+    expect(tableFilterEvents(rows, { type: 'wash' }).map(r => r.id)).toEqual([3])
+    expect(tableFilterEvents(rows, { site: 'NHC' }).map(r => r.id)).toEqual([1, 3])
+    expect(tableFilterEvents(rows, { qc: 'has' }).map(r => r.id)).toEqual([1])
+    expect(tableFilterEvents(rows, { work: 'none' }).map(r => r.id)).toEqual([2])
+  })
+  it('lists options from the rows', () => {
+    expect(tableFilterOptions(rows)).toEqual({ types: [{ value: 'repair', label: 'Repair' }, { value: 'wash', label: 'Wash' }], sites: ['JED', 'NHC'] })
+  })
+})

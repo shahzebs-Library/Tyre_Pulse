@@ -52,7 +52,7 @@ import { canonAssetNo, buildTimeline, meterHistory, downtimeEpisodes } from '../
 import {
   EVENT_TYPES, PERIODS, COST_CATEGORIES, buildViewTimeline, filterViewEvents, typeCounts,
   tabEvents, documentRows, chartMonths, costByMonth, costCurrencies, downtimeByMonth,
-  historyKpis, assetHeader, historyViewExportRows, HISTORY_VIEW_EXPORT_COLUMNS,
+  historyKpis, assetHeader, historyViewExportRows, HISTORY_VIEW_EXPORT_COLUMNS, tableFilterEvents, tableFilterOptions,
   extraSourceEvents, extraUnreadable, groupByMonth, spendByCurrency, eventDetailFields, currentHours,
 } from '../lib/vehicleHistoryView'
 import {
@@ -278,6 +278,9 @@ function timelineColumns(t, currency) {
 // ── Detail tabs ───────────────────────────────────────────────────────────────
 // The first six are the mockup's; the tyre tabs follow only when the asset has
 // tyre records, and the full source-by-source history is always last.
+// Tabs whose content is a table: their search box sits above the table itself.
+const TABLE_TABS = ['service', 'movement', 'inspection']
+
 const HISTORY_TABS = [
   { key: 'timeline', label: 'Timeline' },
   { key: 'service', label: 'Service history' },
@@ -739,6 +742,24 @@ function AssetHistoryView({
   const loadingAll = history.loading
   const spendEntries = Object.entries(model?.spend || {})
   const spendDisplay = !model ? undefined : !model.spendReadable ? 'N/A' : spendEntries.length ? spendEntries.map(([c, v]) => fmtMoney(v, c)).join(' + ') : 'None'
+  // The page's one search box (+ period and dates). On the table tabs it sits
+  // directly above the table, where it is easy to see; elsewhere in the tab bar.
+  const searchFilters = (
+            <div className="cc-filters vh-tab-filters">
+              <div className="cc-search">
+                <Search size={15} aria-hidden="true" />
+                <input aria-label="Search events" placeholder="Search every column: job card, work done, QC remarks, site, cost..." value={q} onChange={e => { setQ(e.target.value); setShown(60) }} />
+              </div>
+              <select className="cc-select" aria-label="Period" value={period} disabled={Boolean(from || to)}
+                title={from || to ? 'The date range below is in use' : undefined}
+                onChange={e => { setPeriod(e.target.value); setShown(60) }}>
+                {PERIODS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+              </select>
+              <DateField className="text-sm w-40" value={from} onChange={v => { setFrom(v); setShown(60) }} placeholder="From date" ariaLabel="From date" />
+              <DateField className="text-sm w-40" value={to} onChange={v => { setTo(v); setShown(60) }} placeholder="To date" ariaLabel="To date" min={from || undefined} />
+              {filtersOn && <button type="button" className="cc-btn-ghost" onClick={resetFilters}><X size={13} aria-hidden="true" /> Reset</button>}
+            </div>
+  )
 
   return (
     <>
@@ -824,20 +845,7 @@ function AssetHistoryView({
         <Tabs tabs={tabs} value={tab} onChange={(key) => { setTab(key); setShown(60) }} label="History views" variant="line" />
         {HISTORY_TABS.some(x => x.key === tab) && tab !== 'documents' && (
           <>
-            <div className="cc-filters vh-tab-filters">
-              <div className="cc-search">
-                <Search size={15} aria-hidden="true" />
-                <input aria-label="Search events" placeholder="Search events, notes, references..." value={q} onChange={e => { setQ(e.target.value); setShown(60) }} />
-              </div>
-              <select className="cc-select" aria-label="Period" value={period} disabled={Boolean(from || to)}
-                title={from || to ? 'The date range below is in use' : undefined}
-                onChange={e => { setPeriod(e.target.value); setShown(60) }}>
-                {PERIODS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
-              </select>
-              <DateField className="text-sm w-40" value={from} onChange={v => { setFrom(v); setShown(60) }} placeholder="From date" ariaLabel="From date" />
-              <DateField className="text-sm w-40" value={to} onChange={v => { setTo(v); setShown(60) }} placeholder="To date" ariaLabel="To date" min={from || undefined} />
-              {filtersOn && <button type="button" className="cc-btn-ghost" onClick={resetFilters}><X size={13} aria-hidden="true" /> Reset</button>}
-            </div>
+            {!TABLE_TABS.includes(tab) && searchFilters}
             <div className="vh-chips" role="group" aria-label="Event types">
               <button type="button" className="vh-chip" aria-pressed={!types.length && !showAllTypes} onClick={() => { setTypes([]); setShowAllTypes(false) }}>Key events</button>
               <button type="button" className="vh-chip" aria-pressed={!types.length && showAllTypes} onClick={() => { setTypes([]); setShowAllTypes(true) }}>Everything</button>
@@ -899,7 +907,7 @@ function AssetHistoryView({
         >
           <CardState state={history} lines={6}>
             <EventTable key={tab} rows={tabEvents(filtered, tab)} empty={`No ${tab} events match these filters.`} onOpen={setOpenEvent}
-              jobDetail={tab === 'service'} storageKey={`vehicleHistory.cols.${tab}.v1`} />
+              jobDetail={tab === 'service'} storageKey={`vehicleHistory.cols.${tab}.v1`} lead={searchFilters} />
           </CardState>
         </Card>
       )}
@@ -1090,7 +1098,7 @@ function ColumnPicker({ available, hidden, onChange }) {
   )
 }
 
-function EventTable({ rows, compact = false, empty = 'No events', onOpen, jobDetail = false, storageKey = null }) {
+function EventTable({ rows, compact = false, empty = 'No events', onOpen, jobDetail = false, storageKey = null, lead = null }) {
   const [hidden, setHidden] = useState(() => (storageKey ? readHiddenCols(storageKey, []) : []))
   const saveHidden = (next) => {
     setHidden(next)
@@ -1117,10 +1125,49 @@ function EventTable({ rows, compact = false, empty = 'No events', onOpen, jobDet
   ]
   const hideable = storageKey && !compact ? all.map(c => c.key).filter(k => k !== 'day') : []
   const columns = all.filter(c => !hidden.includes(c.key) || !hideable.includes(c.key))
+  const withToolbar = hideable.length > 0
+  const [tf, setTf] = useState({ type: '', site: '', work: '', qc: '' })
+  const opts = useMemo(() => tableFilterOptions(rows), [rows])
+  const shown = useMemo(() => (withToolbar ? tableFilterEvents(rows, tf) : rows), [rows, tf, withToolbar])
+  const active = Object.values(tf).some(Boolean)
+  const set = (k) => (e) => setTf(v => ({ ...v, [k]: e.target.value }))
   return (
     <>
-      {hideable.length > 0 && <ColumnPicker available={hideable} hidden={hidden} onChange={saveHidden} />}
-      <KitTable columns={columns} rows={rows} compact={compact} empty={empty} getRowId={r => r.id} onRowClick={onOpen} />
+      {withToolbar && (
+        <div className="vh-tablebar">
+          {lead}
+          {opts.types.length > 1 && (
+            <select className="cc-select" value={tf.type} onChange={set('type')} aria-label="Filter by event type">
+              <option value="">All types</option>
+              {opts.types.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          )}
+          {opts.sites.length > 1 && (
+            <select className="cc-select" value={tf.site} onChange={set('site')} aria-label="Filter by site">
+              <option value="">All sites</option>
+              {opts.sites.map(sv => <option key={sv} value={sv}>{sv}</option>)}
+            </select>
+          )}
+          {jobDetail && (
+            <>
+              <select className="cc-select" value={tf.work} onChange={set('work')} aria-label="Filter by work done">
+                <option value="">Work done: any</option>
+                <option value="has">Work done recorded</option>
+                <option value="none">Work done not recorded</option>
+              </select>
+              <select className="cc-select" value={tf.qc} onChange={set('qc')} aria-label="Filter by QC remarks">
+                <option value="">QC remarks: any</option>
+                <option value="has">QC remarks recorded</option>
+                <option value="none">QC remarks not recorded</option>
+              </select>
+            </>
+          )}
+          <span className="vh-tablebar-count">{shown.length === rows.length ? `${rows.length} rows` : `${shown.length} of ${rows.length} rows`}</span>
+          {active && <button type="button" className="cc-link vh-tablebar-clear" onClick={() => setTf({ type: '', site: '', work: '', qc: '' })}>Clear</button>}
+          <ColumnPicker available={hideable} hidden={hidden} onChange={saveHidden} />
+        </div>
+      )}
+      <KitTable columns={columns} rows={shown} compact={compact} empty={active ? 'No rows match this search or filter.' : empty} getRowId={r => r.id} onRowClick={onOpen} />
     </>
   )
 }

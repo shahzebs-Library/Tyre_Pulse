@@ -336,11 +336,53 @@ export function filterViewEvents(events, { type = 'key', types = null, months = 
       if (e.atMs < start) return false
     }
     if (q) {
-      const hay = [e.title, e.detail, e.typeLabel, e.ref, e.site].filter(Boolean).join(' ').toLowerCase()
+      // Every column a history table shows, so one box finds anything on screen.
+      const hay = [
+        e.undated ? 'undated' : e.day, e.title, e.detail, e.typeLabel, e.ref, e.site, e.workDone, e.qcRemarks,
+        e.km, e.hours, e.value, e.currency, e.downtimeDays,
+      ].filter((v) => v !== null && v !== undefined && v !== '').join(' ').toLowerCase()
       if (!hay.includes(q)) return false
     }
     return true
   })
+}
+
+/**
+ * Table-level filter for a history table: one search box over EVERY column the
+ * table shows (date, type, description, detail, work done, QC remarks, site,
+ * reference, odometer, hours, cost, downtime), plus event type, site and
+ * "recorded / not recorded" filters for work done and QC remarks.
+ * 'has' / 'none' only apply to job cards; other events never match 'has'.
+ */
+export function tableFilterEvents(rows, { q = '', type = '', site = '', work = '', qc = '' } = {}) {
+  const needle = String(q || '').trim().toLowerCase()
+  const want = (val, mode) => (mode === 'has' ? !!val : mode === 'none' ? !val : true)
+  return (Array.isArray(rows) ? rows : []).filter((e) => {
+    if (type && e.type !== type) return false
+    if (site && (e.site || '') !== site) return false
+    if (work && (e.source !== 'job_card' || !want(e.workDone, work))) return false
+    if (qc && (e.source !== 'job_card' || !want(e.qcRemarks, qc))) return false
+    if (!needle) return true
+    const hay = [
+      e.undated ? 'undated' : e.day, e.typeLabel, e.title, e.detail, e.workDone, e.qcRemarks,
+      e.site, e.ref, e.km, e.hours, e.value, e.currency, e.downtimeDays,
+    ].filter((v) => v !== null && v !== undefined && v !== '').join(' ').toLowerCase()
+    return hay.includes(needle)
+  })
+}
+
+/** Distinct option values for a table filter, sorted. */
+export function tableFilterOptions(rows) {
+  const types = new Map()
+  const sites = new Set()
+  for (const e of Array.isArray(rows) ? rows : []) {
+    if (e.type) types.set(e.type, e.typeLabel || e.type)
+    if (e.site) sites.add(e.site)
+  }
+  return {
+    types: [...types.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label)),
+    sites: [...sites].sort(),
+  }
 }
 
 /** Count of events per type, for the filter select. */

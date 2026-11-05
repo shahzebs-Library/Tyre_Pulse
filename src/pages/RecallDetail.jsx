@@ -158,7 +158,7 @@ export default function RecallDetail() {
       id: 'asset_no', header: 'Asset', accessorFn: (r) => r.asset_no ?? 'N/A', size: 110,
       cell: ({ row }) => row.original.asset_no ? (
         <button type="button" className="text-blue-400 hover:underline"
-          onClick={(e) => { e.stopPropagation(); navigate(`/assets/${encodeURIComponent(row.original.asset_no)}`) }}>
+          onClick={(e) => { e.stopPropagation(); navigate(`/asset-management/${encodeURIComponent(row.original.asset_no)}`) }}>
           {row.original.asset_no}
         </button>
       ) : <span className="text-[var(--text-muted)]">N/A</span>,

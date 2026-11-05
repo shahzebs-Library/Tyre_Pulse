@@ -175,7 +175,7 @@ export default function TyreLifecycle() {
       <span className="tlc-actions" onClick={(e) => e.stopPropagation()} role="presentation">
         <button type="button" className="cc-icon-btn" aria-label={`View tyre ${r.serial_number || r.id}`} title="View history" disabled={!r.serial_number} onClick={() => setSelected(r)}><Eye size={14} /></button>
         <Link className="cc-icon-btn" to={`/tyre-records${r.serial_number ? `?search=${encodeURIComponent(r.serial_number)}` : ''}`} aria-label="Edit in tyre records" title="Edit in Tyre Records"><Pencil size={14} /></Link>
-        {r.asset_no && <Link className="cc-icon-btn" to={`/assets/${encodeURIComponent(r.asset_no)}`} aria-label={`Open asset ${r.asset_no}`} title="Open asset"><ExternalLink size={14} /></Link>}
+        {r.asset_no && <Link className="cc-icon-btn" to={`/asset-management/${encodeURIComponent(r.asset_no)}`} aria-label={`Open asset ${r.asset_no}`} title="Open asset"><ExternalLink size={14} /></Link>}
       </span>
     ) },
   ]

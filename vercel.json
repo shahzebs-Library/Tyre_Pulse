@@ -111,6 +111,11 @@
       "source": "/assets",
       "destination": "/asset-management",
       "permanent": true
+    },
+    {
+      "source": "/assets/:assetNo([^./]+)",
+      "destination": "/asset-management/:assetNo",
+      "permanent": false
     }
   ],
   "rewrites": [

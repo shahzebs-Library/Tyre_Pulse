@@ -255,7 +255,7 @@ export default function TyreSizeAnalysis() {
       <span className="tsz-actions" onClick={(e) => e.stopPropagation()} role="presentation">
         <button type="button" className="cc-icon-btn" aria-label={`Compare sizes for ${r.asset_no}`} title="Compare" onClick={() => selectRow(r)}><Eye size={14} /></button>
         <button type="button" className="cc-icon-btn" aria-label={`Optimize ${r.asset_no}`} title="Open in optimizer" onClick={() => openOptimizer(r)}><Wand2 size={14} /></button>
-        <Link className="cc-icon-btn" to={`/assets/${encodeURIComponent(r.asset_no)}`} aria-label={`Open asset ${r.asset_no}`} title="Open asset"><ExternalLink size={14} /></Link>
+        <Link className="cc-icon-btn" to={`/asset-management/${encodeURIComponent(r.asset_no)}`} aria-label={`Open asset ${r.asset_no}`} title="Open asset"><ExternalLink size={14} /></Link>
       </span>
     ) },
   ]

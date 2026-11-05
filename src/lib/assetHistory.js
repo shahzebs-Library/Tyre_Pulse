@@ -198,6 +198,30 @@ function ts(v) {
   return Number.isFinite(n) ? n : null
 }
 
+/**
+ * A job card date before 1990 is not a real date: about 29,000 KSA job cards
+ * still carry a dropped-century year (0022-0026) from the original import.
+ * Read such a value as missing so it can never stretch "years active" back to
+ * year 22 or turn one repair into millions of days of downtime. The stored row
+ * is untouched; only this view ignores the bad value.
+ */
+const PLAUSIBLE_FROM_MS = Date.UTC(1990, 0, 1)
+const JOB_DATE_FIELDS = ['opened_at', 'started_at', 'completed_at', 'production_out_at', 'production_in_at', 'created_at']
+export function scrubImplausibleJobDates(row) {
+  if (!row || typeof row !== 'object') return row
+  let out = row
+  for (const k of JOB_DATE_FIELDS) {
+    const v = row[k]
+    if (!v) continue
+    const t = ts(v)
+    if (t !== null && t < PLAUSIBLE_FROM_MS) {
+      if (out === row) out = { ...row }
+      out[k] = null
+    }
+  }
+  return out
+}
+
 /** The ISO day prefix of a value, or null. String-safe (no timezone shift). */
 export function isoDay(v) {
   if (!v) return null
@@ -516,6 +540,10 @@ function evt(fields) {
     link: fields.link ?? null,
     ref: fields.ref ?? null,
     row: fields.row ?? null,
+    // Job cards only: what the workshop did and what QC said, read from the
+    // same card (null on every other source).
+    workDone: fields.workDone ?? null,
+    qcRemarks: fields.qcRemarks ?? null,
   }
 }
 
@@ -524,10 +552,59 @@ function rowCurrency(row, country) {
   return text(row?.currency) || currencyForCountry(row?.country) || currencyForCountry(country) || null
 }
 
-function jobCardEvents(rows, country) {
+/** custom_data value by header, tolerant of case and spacing ("QC Remarks"). */
+function customField(cd, ...names) {
+  if (!cd || typeof cd !== 'object') return null
+  const want = names.map((n) => n.toLowerCase().replace(/\s+/g, ' ').trim())
+  for (const [k, v] of Object.entries(cd)) {
+    if (want.includes(String(k).toLowerCase().replace(/\s+/g, ' ').trim())) return text(v)
+  }
+  return null
+}
+
+/** Distinct non-empty strings joined in order. */
+function joinDistinct(list) {
+  const seen = new Set()
   const out = []
-  for (const r of Array.isArray(rows) ? rows : []) {
+  for (const v of list) {
+    const t = text(v)
+    if (!t || seen.has(t.toUpperCase())) continue
+    seen.add(t.toUpperCase()); out.push(t)
+  }
+  return out.length ? out.join('; ') : null
+}
+
+/**
+ * Work done and QC remarks for one job card, from the SAME card.
+ * Work done: the card's "Job Done Description", else the actions on its task
+ * lines (work_order_line_items, then the lines kept inside custom_data).
+ * QC remarks: the card's "QC Remarks". Nothing is invented when absent.
+ */
+export function jobCardWorkAndQc(row, lineItemsByWo) {
+  const cd = row?.custom_data && typeof row.custom_data === 'object' ? row.custom_data : null
+  const no = text(row?.work_order_no)
+  const lines = (no && lineItemsByWo?.get(no.toUpperCase())) || []
+  const embedded = Array.isArray(cd?.line_items) ? cd.line_items : []
+  const workDone = customField(cd, 'Job Done Description', 'Work Done', 'Job Done')
+    || joinDistinct(lines.map((l) => l?.action))
+    || joinDistinct(embedded.map((l) => l?.action))
+  const qcRemarks = customField(cd, 'QC Remarks', 'QC Remark', 'QC Comments')
+  return { workDone: workDone || null, qcRemarks: qcRemarks || null }
+}
+
+function jobCardEvents(rows, country, lineItems) {
+  const byWo = new Map()
+  for (const l of Array.isArray(lineItems) ? lineItems : []) {
+    const k = text(l?.work_order_no)?.toUpperCase()
+    if (!k) continue
+    if (!byWo.has(k)) byWo.set(k, [])
+    byWo.get(k).push(l)
+  }
+  const out = []
+  for (const raw of Array.isArray(rows) ? rows : []) {
+    const r = scrubImplausibleJobDates(raw)
     const no = text(r?.work_order_no) || text(r?.id)
+    const { workDone, qcRemarks } = jobCardWorkAndQc(r, byWo)
     const type = text(r?.work_type)
     const status = text(r?.status)
     const parts = [type, status].filter(Boolean).join(' - ')
@@ -546,6 +623,8 @@ function jobCardEvents(rows, country) {
       ref: no,
       link: no ? `/work-orders?search=${encodeURIComponent(no)}` : null,
       row: r,
+      workDone,
+      qcRemarks,
     }))
   }
   return out
@@ -856,7 +935,7 @@ function disposalEvents(rows, country) {
 
 /** Source key -> the builder that turns its rows into events. */
 const BUILDERS = Object.freeze({
-  job_card: (rows, ctx) => jobCardEvents(rows, ctx.country),
+  job_card: (rows, ctx) => jobCardEvents(rows, ctx.country, ctx.lineItems),
   parts_line: (rows, ctx) => partsLineEvents(rows, ctx.country),
   tyre_fitment: (rows, ctx) => tyreEvents(rows, ctx.country),
   odometer: (rows, ctx) => meterEvents(rows, []),
@@ -896,7 +975,7 @@ const BUILDERS = Object.freeze({
  */
 export function buildTimeline(sources, { now, country } = {}) {
   const src = sources || {}
-  const ctx = { now, country }
+  const ctx = { now, country, lineItems: src.line_item?.rows || [] }
   const events = []
   const states = {}
   const counts = {}
@@ -1100,7 +1179,7 @@ function meterSeries(rows, valueColumn, unit) {
  * @param {{now?:number|string|Date}} [opts]
  */
 export function downtimeEpisodes(workOrders, breakdowns, { now } = {}) {
-  const cards = Array.isArray(workOrders) ? workOrders : []
+  const cards = (Array.isArray(workOrders) ? workOrders : []).map(scrubImplausibleJobDates)
   const episodes = []
   const totals = { scheduling: null, workshop: null, release: null, total: null }
   let measurable = 0

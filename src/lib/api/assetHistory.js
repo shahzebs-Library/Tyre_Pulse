@@ -119,7 +119,7 @@ const JOB_CARD_COLS =
   'technician_name,workshop_name,site,country,opened_at,started_at,completed_at,' +
   'production_out_at,production_in_at,waiting_parts_hours,waiting_manpower_hours,' +
   'labour_cost,parts_cost,lubricant_cost,outside_repair_cost,tyre_cost,total_cost,' +
-  'breakdown_hours,odometer,created_at'
+  'breakdown_hours,odometer,notes,custom_data,created_at'
 
 const PARTS_COLS =
   'id,event_date,txn_date,issue_number,work_order_no,asset_code,item_code,item_description,' +

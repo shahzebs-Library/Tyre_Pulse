@@ -15,7 +15,7 @@ const TABS = [
 ]
 
 const assetLink = (asset) => (
-  <Link to={`/assets/${encodeURIComponent(asset)}`} className="text-[var(--accent)] hover:underline">{asset}</Link>
+  <Link to={`/asset-management/${encodeURIComponent(asset)}`} className="text-[var(--accent)] hover:underline">{asset}</Link>
 )
 
 /**

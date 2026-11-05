@@ -134,3 +134,12 @@ button.vh-tl-row:hover { background: var(--cc-inner); }
 .vh-drawer { display: grid; gap: 14px; }
 .vh-drawer-h { font-size: 13px; font-weight: 600; color: var(--cc-ink-2); margin: 6px 0 0; }
 .vh-drawer-link { justify-self: start; }
+
+/* Service history: wider text cells + column chooser */
+.vh-desc-wide { max-width: 320px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.vh-colpick { position: relative; display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.vh-colpick-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 200px; display: grid; gap: 6px;
+  padding: 10px 12px; background: var(--cc-card, var(--surface-1)); border: 1px solid var(--cc-line, var(--border-dim)); border-radius: 10px;
+  box-shadow: var(--shadow-float, 0 8px 24px rgba(0,0,0,.18)); font-size: 13px; }
+.vh-colpick-menu label { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+.vh-colpick-menu .cc-link { justify-self: start; background: none; border: 0; padding: 0; cursor: pointer; }

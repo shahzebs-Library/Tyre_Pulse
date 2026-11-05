@@ -743,7 +743,7 @@ function AssetHistoryView({
   return (
     <>
       <div className="vh-actions">
-        <Link className="cc-btn-ghost" to={`/assets/${encodeURIComponent(assetNo)}`}><Eye size={14} aria-hidden="true" /> View Asset</Link>
+        <Link className="cc-btn-ghost" to={`/asset-management/${encodeURIComponent(assetNo)}`}><Eye size={14} aria-hidden="true" /> View Asset</Link>
         <Link className="cc-btn-ghost" to="/pm-programs"><CalendarPlus size={14} aria-hidden="true" /> Schedule Service</Link>
         <div className="vh-menu">
           <button type="button" className="cc-btn-primary" aria-haspopup="menu" aria-expanded={exportOpen}
@@ -898,7 +898,8 @@ function AssetHistoryView({
             : tab === 'service' ? 'Job cards, preventive maintenance services and washes.' : 'Inspections and checklist sheets.'}
         >
           <CardState state={history} lines={6}>
-            <EventTable rows={tabEvents(filtered, tab)} empty={`No ${tab} events match these filters.`} onOpen={setOpenEvent} />
+            <EventTable key={tab} rows={tabEvents(filtered, tab)} empty={`No ${tab} events match these filters.`} onOpen={setOpenEvent}
+              jobDetail={tab === 'service'} storageKey={`vehicleHistory.cols.${tab}.v1`} />
           </CardState>
         </Card>
       )}
@@ -985,6 +986,8 @@ function EventDrawer({ event, onClose }) {
             <div><dt>Date</dt><dd>{event.undated ? 'Undated' : event.day}</dd></div>
             <div><dt>Event type</dt><dd><TypePill event={event} /></dd></div>
             {event.detail && <div><dt>Detail</dt><dd>{event.detail}</dd></div>}
+            {event.workDone && <div><dt>Work done</dt><dd>{event.workDone}</dd></div>}
+            {event.qcRemarks && <div><dt>QC remarks</dt><dd>{event.qcRemarks}</dd></div>}
             <div><dt>Site</dt><dd>{event.site || <span className="cc-na">N/A</span>}</dd></div>
             <div><dt>Odometer</dt><dd>{event.km == null ? <span className="cc-na">N/A</span> : `${event.kmOwn ? '' : 'About '}${fmtKm(event.km)}`}</dd></div>
             <div><dt>Hour meter</dt><dd>{event.hours == null ? <span className="cc-na">N/A</span> : `${event.hoursOwn ? '' : 'About '}${fmtHrs(event.hours)}`}</dd></div>
@@ -1048,11 +1051,60 @@ function TimelineItem({ e, onOpen }) {
   )
 }
 
-function EventTable({ rows, compact = false, empty = 'No events', onOpen }) {
-  const columns = [
+// Columns a reader may hide on the full (non-compact) event tables. The chosen
+// set is remembered per table in this browser only; Date stays fixed so a row
+// can always be placed in time.
+const EVENT_COLUMN_LABELS = Object.freeze({
+  type: 'Event type', title: 'Description', workDone: 'Work done', qcRemarks: 'QC remarks',
+  site: 'Site', km: 'Odometer', hours: 'Hours', value: 'Cost', downtimeDays: 'Downtime', link: 'Actions',
+})
+
+function readHiddenCols(storageKey, fallback) {
+  try {
+    const raw = window.localStorage.getItem(storageKey)
+    const v = raw ? JSON.parse(raw) : null
+    return Array.isArray(v) ? v : fallback
+  } catch { return fallback }
+}
+
+function ColumnPicker({ available, hidden, onChange }) {
+  const [open, setOpen] = useState(false)
+  const toggle = (k) => onChange(hidden.includes(k) ? hidden.filter(x => x !== k) : [...hidden, k])
+  return (
+    <div className="vh-colpick">
+      <button type="button" className="cc-btn" aria-expanded={open} onClick={() => setOpen(o => !o)}>
+        Columns ({available.length - hidden.filter(k => available.includes(k)).length}/{available.length})
+      </button>
+      {open && (
+        <div className="vh-colpick-menu" role="group" aria-label="Show or hide columns">
+          {available.map(k => (
+            <label key={k}>
+              <input type="checkbox" checked={!hidden.includes(k)} onChange={() => toggle(k)} />
+              {EVENT_COLUMN_LABELS[k] || k}
+            </label>
+          ))}
+          <button type="button" className="cc-link" onClick={() => onChange([])}>Show all</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function EventTable({ rows, compact = false, empty = 'No events', onOpen, jobDetail = false, storageKey = null }) {
+  const [hidden, setHidden] = useState(() => (storageKey ? readHiddenCols(storageKey, []) : []))
+  const saveHidden = (next) => {
+    setHidden(next)
+    if (storageKey) { try { window.localStorage.setItem(storageKey, JSON.stringify(next)) } catch { /* private mode */ } }
+  }
+  const textCell = (v) => (v ? <span className="vh-desc vh-desc-wide" title={v}>{v}</span> : <span className="cc-na">Not recorded</span>)
+  const all = [
     { key: 'day', header: 'Date', sortValue: r => r.atMs ?? 0, cell: r => (r.undated ? 'Undated' : r.day) },
     { key: 'type', header: 'Event type', sortValue: r => r.typeLabel, cell: r => <TypePill event={r} /> },
     { key: 'title', header: 'Description', cell: r => <span className="vh-desc" title={r.detail || r.title}>{r.title}</span> },
+    ...(jobDetail ? [
+      { key: 'workDone', header: 'Work done', sortValue: r => r.workDone || '', cell: r => (r.source === 'job_card' ? textCell(r.workDone) : <span className="cc-na">N/A</span>) },
+      { key: 'qcRemarks', header: 'QC remarks', sortValue: r => r.qcRemarks || '', cell: r => (r.source === 'job_card' ? textCell(r.qcRemarks) : <span className="cc-na">N/A</span>) },
+    ] : []),
     ...(compact ? [] : [{ key: 'site', header: 'Site', cell: r => r.site || <span className="cc-na">N/A</span> }]),
     { key: 'km', header: 'Odometer', align: 'right', cell: r => (r.km == null ? <span className="cc-na">N/A</span> : fmtKm(r.km)) },
     { key: 'hours', header: 'Hours', align: 'right', cell: r => (r.hours == null ? <span className="cc-na">N/A</span> : fmtInt(Math.round(r.hours))) },
@@ -1063,7 +1115,14 @@ function EventTable({ rows, compact = false, empty = 'No events', onOpen }) {
     { key: 'link', header: 'Actions', sortable: false,
       cell: r => (r.link ? <Link className="cc-link" to={r.link} aria-label={`Open ${r.title}`}>Open <ArrowRight size={12} aria-hidden="true" /></Link> : <span className="cc-na">N/A</span>) },
   ]
-  return <KitTable columns={columns} rows={rows} compact={compact} empty={empty} getRowId={r => r.id} onRowClick={onOpen} />
+  const hideable = storageKey && !compact ? all.map(c => c.key).filter(k => k !== 'day') : []
+  const columns = all.filter(c => !hidden.includes(c.key) || !hideable.includes(c.key))
+  return (
+    <>
+      {hideable.length > 0 && <ColumnPicker available={hideable} hidden={hidden} onChange={saveHidden} />}
+      <KitTable columns={columns} rows={rows} compact={compact} empty={empty} getRowId={r => r.id} onRowClick={onOpen} />
+    </>
+  )
 }
 
 function DocumentTable({ rows }) {

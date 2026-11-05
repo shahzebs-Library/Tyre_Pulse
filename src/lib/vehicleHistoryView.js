@@ -558,7 +558,9 @@ export function historyKpis({ fleet, events, meters, downtime, now } = {}) {
 /** Header facts: last service, latest utilisation reading, status. */
 export function assetHeader(fleet, events) {
   const list = Array.isArray(events) ? events : []
-  const lastService = list.find((e) => e.type === 'service' && !e.undated && e.source !== 'wash') || null
+  // Any workshop visit counts: a repair job card is a service the vehicle had,
+  // and reading only preventive work left 'Last service' blank beside 167 job cards.
+  const lastService = list.find((e) => (e.type === 'service' || e.type === 'repair') && !e.undated && e.source !== 'wash') || null
   const util = list.find((e) => e.source === 'utilization' && num(e.row?.utilization_pct) !== null) || null
   return {
     status: text(fleet?.status),
@@ -585,6 +587,8 @@ export const HISTORY_VIEW_EXPORT_COLUMNS = Object.freeze([
   { key: 'type', header: 'Event type' },
   { key: 'title', header: 'Event' },
   { key: 'detail', header: 'Detail' },
+  { key: 'workDone', header: 'Work done' },
+  { key: 'qcRemarks', header: 'QC remarks' },
   { key: 'site', header: 'Site' },
   { key: 'odometer', header: 'Odometer (km)' },
   { key: 'hours', header: 'Hour meter (h)' },
@@ -599,6 +603,8 @@ export function historyViewExportRows(events) {
     type: e.typeLabel,
     title: e.title || '',
     detail: e.detail || '',
+    workDone: e.workDone || '',
+    qcRemarks: e.qcRemarks || '',
     site: e.site || '',
     odometer: e.km === null || e.km === undefined ? '' : e.km,
     hours: e.hours === null || e.hours === undefined ? '' : e.hours,

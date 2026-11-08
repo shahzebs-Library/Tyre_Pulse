@@ -315,10 +315,13 @@ class _ChecklistApprovalReviewScreenState
       return;
     }
 
+    final workspaceForRole = ref.read(workspaceContextProvider);
     final String targetStatus = nextStatusFor(
       _templateLike,
       item.asSubmissionLike,
       approved,
+      role: workspaceForRole?.role.rawValue,
+      isSuperAdmin: workspaceForRole?.isSuperAdmin ?? false,
     );
     final String priorStatus = item.approvalStatus ?? '';
     final String trimmedName = _nameController.text.trim();

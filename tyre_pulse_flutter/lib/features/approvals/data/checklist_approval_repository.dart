@@ -52,6 +52,7 @@ import 'package:tyre_pulse/core/network/supabase_tables.dart';
 import 'package:tyre_pulse/features/approvals/data/checklist_approval_item.dart';
 import 'package:tyre_pulse/features/approvals/data/checklist_approval_template_info.dart';
 import 'package:tyre_pulse/features/approvals/data/queued_checklist_approval_decision.dart';
+import 'package:tyre_pulse/features/approvals/domain/checklist_approval.dart';
 
 /// The `.or(...)` filter that scopes the pending queue to [country], or
 /// `null` when the whole queue should be read unfiltered.
@@ -335,20 +336,30 @@ final class SupabaseChecklistApprovalRepository
     final String? nameOrNull = _blankToNull(item.approverName);
     final String nowIso = item.decidedAt.toIso8601String();
 
+    final Map<String, Object?> supervisorFields = <String, Object?>{
+      'supervisor_name': nameOrNull,
+      'supervisor_signature': item.approverSignature,
+      'supervisor_by': item.approverId,
+      'supervisor_at': nowIso,
+    };
+    final Map<String, Object?> approverFields = <String, Object?>{
+      'approver_name': nameOrNull,
+      'approver_signature': item.approverSignature,
+      'approved_by': item.approverId,
+      'approved_at': nowIso,
+    };
+    // An area manager closing a sheet straight from the supervisor step signs
+    // both steps (same rule as decide_checklist_approval, 20261108100000): the
+    // database guard needs the supervisor signature present for that close.
+    final bool bothSteps = item.approved &&
+        item.stage == ApprovalStage.supervisor &&
+        item.targetStatus == 'approved';
     final Map<String, Object?> stageFields =
         item.targetStatus == 'pending_area_manager'
-            ? <String, Object?>{
-                'supervisor_name': nameOrNull,
-                'supervisor_signature': item.approverSignature,
-                'supervisor_by': item.approverId,
-                'supervisor_at': nowIso,
-              }
-            : <String, Object?>{
-                'approver_name': nameOrNull,
-                'approver_signature': item.approverSignature,
-                'approved_by': item.approverId,
-                'approved_at': nowIso,
-              };
+            ? supervisorFields
+            : bothSteps
+                ? <String, Object?>{...supervisorFields, ...approverFields}
+                : approverFields;
 
     return <String, Object?>{
       'approval_status': item.targetStatus,

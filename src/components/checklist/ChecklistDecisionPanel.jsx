@@ -6,7 +6,7 @@ import { decideChecklist } from '../../lib/api/approvalsQueue'
 import { canClose } from '../../lib/checklist/checklistMarks'
 import { templateFromSubmission, submissionAnswers } from '../../lib/checklistView'
 import {
-  canDecide, stageFor, isTwoStage, STAGE_SUPERVISOR,
+  canDecide, stageFor, isTwoStage, STAGE_SUPERVISOR, closesInOneSign,
 } from '../../lib/checklist/checklistApproval'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -54,7 +54,8 @@ export default function ChecklistDecisionPanel({ submission, onDecided }) {
 
   // Would approving CLOSE the sheet, or only pass it up? Only a close is barred
   // by an outstanding fault, and only a close is the final word.
-  const wouldClose = !(stage === STAGE_SUPERVISOR && isTwoStage(template))
+  const oneSign = !!submission && closesInOneSign(template, submission, profile?.role, { isSuperAdmin: !!profile?.is_super_admin })
+  const wouldClose = !(stage === STAGE_SUPERVISOR && isTwoStage(template)) || oneSign
 
   const closeCheck = useMemo(
     () => (submission ? canClose(template, submissionAnswers(submission)) : { ok: true, blocking: [] }),
@@ -158,6 +159,9 @@ export default function ChecklistDecisionPanel({ submission, onDecided }) {
             label={wouldClose ? 'Final approval signature' : 'Supervisor signature'}
             onChange={setSignature}
           />
+          {oneSign && (
+            <p className="text-xs text-[var(--text-secondary)]">Your signature completes both the supervisor and the area manager steps.</p>
+          )}
 
           {approveBlockedReason && (
             <p className="text-xs text-amber-400 flex items-start gap-1.5">

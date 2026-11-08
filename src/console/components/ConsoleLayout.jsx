@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, Suspense } from 'react'
+import useAppShellScrollLock from '../../hooks/useAppShellScrollLock'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import {
   Shield, LayoutDashboard, Building2, Users, Settings2,
@@ -151,6 +152,7 @@ function NavItem({ item, sidebarOpen, compact = false }) {
 }
 
 export default function ConsoleLayout() {
+  useAppShellScrollLock()
   const { admin, signOut, activeOrg, setActiveOrg, orgs } = useConsoleAuth()
   const navigate  = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(true)

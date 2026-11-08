@@ -5,9 +5,6 @@ type Channel = 'email' | 'sms'
 type Purpose = 'password_recovery' | 'contact_verification'
 
 const CODE_TTL_MS = 10 * 60_000
-const WINDOW_MS = 15 * 60_000
-const MAX_REQUESTS = 5
-const MAX_ATTEMPTS = 5
 const encoder = new TextEncoder()
 
 function noStore(response: Response): Response {
@@ -131,15 +128,6 @@ Deno.serve(async (req) => {
       // Opportunistic retention keeps codes and request metadata short-lived
       // even when no scheduled cleanup job is configured.
       await admin.from('password_recovery_challenges').delete().lt('created_at', new Date(Date.now() - 24 * 60 * 60_000).toISOString())
-      const windowStart = new Date(Date.now() - WINDOW_MS).toISOString()
-      const { count } = await admin.from('password_recovery_challenges')
-        .select('id', { count: 'exact', head: true })
-        .or(`requester_hash.eq.${requesterHash},destination_hash.eq.${destinationHash}`)
-        .gte('created_at', windowStart)
-      if ((count ?? 0) >= MAX_REQUESTS) {
-        return noStore(jsonResponse(req, { accepted: true, retryAfterSeconds: 900 }, 202))
-      }
-
       const column = channel === 'email' ? 'recovery_email' : 'recovery_phone'
       const verifiedColumn = channel === 'email' ? 'recovery_email_verified_at' : 'recovery_phone_verified_at'
       const { data: profile } = await admin.from('profiles')
@@ -148,7 +136,7 @@ Deno.serve(async (req) => {
       const challengeId = crypto.randomUUID()
       const code = randomCode()
       const codeHash = await hmac(`code:${challengeId}:${destinationHash}:${code}`)
-      const { error: insertError } = await admin.from('password_recovery_challenges').insert({
+      const { data: reserved, error: insertError } = await admin.rpc('reserve_recovery_challenge', { p_challenge: {
         id: challengeId,
         user_id: eligible ? profile.id : null,
         purpose: 'password_recovery' satisfies Purpose,
@@ -157,14 +145,15 @@ Deno.serve(async (req) => {
         code_hash: codeHash,
         requester_hash: requesterHash,
         expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString(),
-      })
+      } })
       if (insertError) throw insertError
+      if (!reserved) return noStore(jsonResponse(req, { accepted: true, retryAfterSeconds: 900 }, 202))
 
       if (eligible) {
         try { await deliver(channel, destination, code) }
         catch (deliveryError) {
           console.error('account-recovery delivery failed', deliveryError)
-          await admin.from('password_recovery_challenges').delete().eq('id', challengeId)
+          // Retain the reservation on delivery failure so retries cannot bypass limits.
         }
       }
       // Identical public response for known, unknown, unverified, locked and
@@ -180,11 +169,11 @@ Deno.serve(async (req) => {
       if (!destination || !/^[0-9]{6}$/.test(code) || !/^[0-9a-f-]{36}$/i.test(challengeId)) {
         return noStore(jsonResponse(req, { error: 'The code is invalid or expired' }, 400))
       }
-      const { data: challenge } = await admin.from('password_recovery_challenges').select('*').eq('id', challengeId).maybeSingle()
-      if (!challenge || challenge.purpose !== 'password_recovery' || challenge.channel !== channel || challenge.consumed_at || new Date(challenge.expires_at).getTime() <= Date.now() || challenge.attempts >= MAX_ATTEMPTS) {
-        return noStore(jsonResponse(req, { error: 'The code is invalid or expired' }, 400))
-      }
-      await admin.from('password_recovery_challenges').update({ attempts: challenge.attempts + 1 }).eq('id', challengeId).is('consumed_at', null)
+      const { data: challenge, error: attemptError } = await admin.rpc('claim_recovery_attempt', {
+        p_id: challengeId, p_purpose: 'password_recovery', p_channel: channel,
+      })
+      if (attemptError) throw attemptError
+      if (!challenge) return noStore(jsonResponse(req, { error: 'The code is invalid or expired' }, 400))
       const destinationHash = await hmac(`destination:${channel}:${destination}`)
       const expected = await hmac(`code:${challengeId}:${destinationHash}:${code}`)
       if (!challenge.user_id || !safeEqual(destinationHash, challenge.destination_hash) || !safeEqual(expected, challenge.code_hash)) {
@@ -237,23 +226,20 @@ Deno.serve(async (req) => {
 
       if (action === 'request_contact') {
         const requesterHash = await hmac(`user:${userId}`)
-        const windowStart = new Date(Date.now() - WINDOW_MS).toISOString()
-        const { count } = await admin.from('password_recovery_challenges')
-          .select('id', { count: 'exact', head: true }).eq('requester_hash', requesterHash).gte('created_at', windowStart)
-        if ((count ?? 0) >= MAX_REQUESTS) return noStore(jsonResponse(req, { error: 'Too many requests. Try again in 15 minutes.' }, 429))
         const challengeId = crypto.randomUUID()
         const code = randomCode()
         const destinationHash = await hmac(`destination:${channel}:${destination}`)
         const codeHash = await hmac(`code:${challengeId}:${destinationHash}:${code}`)
-        const { error: insertError } = await admin.from('password_recovery_challenges').insert({
+        const { data: reserved, error: insertError } = await admin.rpc('reserve_recovery_challenge', { p_challenge: {
           id: challengeId, user_id: userId, purpose: 'contact_verification' satisfies Purpose, channel,
           destination_hash: destinationHash, code_hash: codeHash, requester_hash: requesterHash,
           expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString(),
-        })
+        } })
         if (insertError) throw insertError
+        if (!reserved) return noStore(jsonResponse(req, { error: 'Too many requests. Try again in 15 minutes.' }, 429))
         try { await deliver(channel, destination, code) }
         catch (deliveryError) {
-          await admin.from('password_recovery_challenges').delete().eq('id', challengeId)
+          // Retain the reservation on delivery failure so retries cannot bypass limits.
           console.error('account-recovery contact delivery failed', deliveryError)
           return noStore(jsonResponse(req, { error: `${channel === 'email' ? 'Email' : 'SMS'} delivery is not configured or failed` }, 503))
         }
@@ -262,16 +248,23 @@ Deno.serve(async (req) => {
 
       const challengeId = String(body.challengeId ?? '')
       const code = String(body.code ?? '').trim()
-      const { data: challenge } = await admin.from('password_recovery_challenges').select('*').eq('id', challengeId).maybeSingle()
-      if (!challenge || challenge.user_id !== userId || challenge.purpose !== 'contact_verification' || challenge.channel !== channel || challenge.consumed_at || new Date(challenge.expires_at).getTime() <= Date.now() || challenge.attempts >= MAX_ATTEMPTS || !/^[0-9]{6}$/.test(code)) {
+      if (!/^[0-9]{6}$/.test(code) || !/^[0-9a-f-]{36}$/i.test(challengeId)) {
         return noStore(jsonResponse(req, { error: 'The code is invalid or expired' }, 400))
       }
-      await admin.from('password_recovery_challenges').update({ attempts: challenge.attempts + 1 }).eq('id', challengeId).is('consumed_at', null)
+      const { data: challenge, error: attemptError } = await admin.rpc('claim_recovery_attempt', {
+        p_id: challengeId, p_purpose: 'contact_verification', p_channel: channel, p_user_id: userId,
+      })
+      if (attemptError) throw attemptError
+      if (!challenge) return noStore(jsonResponse(req, { error: 'The code is invalid or expired' }, 400))
       const destinationHash = await hmac(`destination:${channel}:${destination}`)
       const expected = await hmac(`code:${challengeId}:${destinationHash}:${code}`)
       if (!safeEqual(destinationHash, challenge.destination_hash) || !safeEqual(expected, challenge.code_hash)) {
         return noStore(jsonResponse(req, { error: 'The code is invalid or expired' }, 400))
       }
+      const { data: consumed, error: consumeError } = await admin.from('password_recovery_challenges')
+        .update({ consumed_at: new Date().toISOString() }).eq('id', challengeId).is('consumed_at', null).select('id').maybeSingle()
+      if (consumeError) throw consumeError
+      if (!consumed) return noStore(jsonResponse(req, { error: 'The code is invalid or expired' }, 400))
       const field = channel === 'email' ? 'recovery_email' : 'recovery_phone'
       const verifiedField = channel === 'email' ? 'recovery_email_verified_at' : 'recovery_phone_verified_at'
       const { error: profileError } = await admin.from('profiles').update({ [field]: destination, [verifiedField]: new Date().toISOString() }).eq('id', userId)
@@ -279,7 +272,6 @@ Deno.serve(async (req) => {
         const conflict = profileError.code === '23505'
         return noStore(jsonResponse(req, { error: conflict ? 'That recovery contact is already used by another account' : 'Could not save the recovery contact' }, conflict ? 409 : 500))
       }
-      await admin.from('password_recovery_challenges').update({ consumed_at: new Date().toISOString() }).eq('id', challengeId).is('consumed_at', null)
       return noStore(jsonResponse(req, { verified: true }))
     }
 

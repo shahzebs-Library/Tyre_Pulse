@@ -204,6 +204,7 @@ export const NAV_COMMANDS = [
   { id: 'my-checklists', label: 'My Checklists', path: '/my-checklists', icon: 'ClipboardList' },
   { id: 'checklist-schedules', label: 'Checklist Schedules', path: '/checklist-schedules', icon: 'Calendar', adminOnly: true },
   { id: 'checklist-insights', label: 'Checklist Insights', path: '/checklist-insights', icon: 'ClipboardCheck', adminOnly: true },
+  { id: 'checklist-audit', label: 'Checklist Audit Pack', path: '/checklist-audit', icon: 'ClipboardCheck', adminOnly: true, keywords: ['iso', 'audit', 'internal audit', 'external audit', 'certification', 'evidence', 'form register'] },
   { id: 'alert-thresholds', label: 'Alert Thresholds', path: '/alert-thresholds', icon: 'BellRing', moduleKey: 'alerts', adminOnly: true },
   { id: 'driver-safety', label: 'Driver Safety', path: '/driver-safety', icon: 'ShieldAlert', adminOnly: true },
   { id: 'video-telematics', label: 'Video Telematics', path: '/video-telematics', icon: 'Video', adminOnly: true },

@@ -120,6 +120,7 @@ const ChecklistBuilder       = lazy(() => import('./pages/ChecklistBuilder'))
 const ChecklistRun           = lazy(() => import('./pages/ChecklistRun'))
 const ChecklistSubmission    = lazy(() => import('./pages/ChecklistSubmission'))
 const ChecklistInsights      = lazy(() => import('./pages/ChecklistInsights'))
+const ChecklistAuditPack     = lazy(() => import('./pages/ChecklistAuditPack'))
 const ChecklistSchedules     = lazy(() => import('./pages/ChecklistSchedules'))
 const MyChecklists           = lazy(() => import('./pages/MyChecklists'))
 const UploadApprovals        = lazy(() => import('./pages/UploadApprovals'))
@@ -755,6 +756,7 @@ function MainApp() {
                       <Route path="/checklists/:templateId/run" element={<Safe><ChecklistRun /></Safe>} />
                       <Route path="/checklists/submission/:id" element={<Safe><ChecklistSubmission /></Safe>} />
                       <Route path="/checklist-insights" element={<Safe><RoleRoute allowed={CHECKLIST_AUTHOR_ROLES}><ChecklistInsights /></RoleRoute></Safe>} />
+                      <Route path="/checklist-audit" element={<Safe><RoleRoute allowed={CHECKLIST_AUTHOR_ROLES}><ChecklistAuditPack /></RoleRoute></Safe>} />
                       <Route path="/my-checklists" element={<Safe><MyChecklists /></Safe>} />
                       <Route path="/checklist-schedules" element={<Safe><RoleRoute allowed={CHECKLIST_AUTHOR_ROLES}><ChecklistSchedules /></RoleRoute></Safe>} />
                       <Route path="/checklist-builder" element={<Safe><RoleRoute allowed={CHECKLIST_AUTHOR_ROLES}><ChecklistBuilder /></RoleRoute></Safe>} />

@@ -24,6 +24,7 @@ export const CHECKLIST_PATH_PREFIXES = [
   '/checklist-builder',
   '/checklist-schedules',
   '/checklist-insights',
+  '/checklist-audit',
   // A supervisor's whole job is the first rung of the approval ladder, so the
   // queue has to be reachable or the role can be assigned and still not work.
   // The page is not a boundary: every decision goes through

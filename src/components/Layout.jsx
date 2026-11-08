@@ -1,4 +1,5 @@
 import { WorkspaceNavigationContext } from '../contexts/WorkspaceNavigationContext'
+import useAppShellScrollLock from '../hooks/useAppShellScrollLock'
 import { moduleAvailable } from '../lib/workspaceAccess'
 import { Fragment, useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
@@ -216,6 +217,7 @@ const NAV_GROUPS = [
       { to: '/checklists',             label: 'Checklists', parent: 'Checklists',          icon: ListChecks },
       { to: '/checklist-schedules',    label: 'Checklist Schedules', parent: 'Checklists', icon: Calendar, adminOnly: A },
       { to: '/checklist-insights',     label: 'Checklist Insights', parent: 'Checklists',  icon: ClipboardCheck, adminOnly: A },
+      { to: '/checklist-audit',        label: 'Audit Pack',         parent: 'Checklists',  icon: ClipboardCheck, adminOnly: A },
       { to: '/actions',             label: 'Corrective Actions', parent: 'Findings', icon: ClipboardList },
       { to: '/rca',                 label: 'Root Cause', parent: 'Findings',         icon: Search },
       { to: '/root-cause',             label: 'Root Cause Engine', parent: 'Findings',      icon: Microscope, roles: ANALYTICS_ROLES },
@@ -798,6 +800,7 @@ const SIDEBAR_COLLAPSED = 0
 const MOBILE_DRAWER_MAX = 360
 
 export default function Layout({ children }) {
+  useAppShellScrollLock()
   // useRealtimeSync() REMOVED - it opened 12 postgres_changes subscriptions per open
   // tab and every one of them invalidated a TanStack Query key that NOTHING READS.
   // Measured: 231 pages, 0 call useQuery (only useBilling.js and the dead

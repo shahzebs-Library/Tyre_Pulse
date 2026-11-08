@@ -80,6 +80,9 @@ abstract final class SupabaseTables {
   static const String tyreRecords = 'tyre_records';
 
   static const String correctiveActions = 'corrective_actions';
+
+  /// Action Center items; a corrective action is mirrored here by trigger.
+  static const String actionItems = 'action_items';
   static const String sites = 'sites';
   static const String alerts = 'alerts';
   static const String notifications = 'notifications';
@@ -187,6 +190,7 @@ abstract final class SupabaseTables {
     profiles,
     tyreRecords,
     correctiveActions,
+    actionItems,
     sites,
     alerts,
     notifications,

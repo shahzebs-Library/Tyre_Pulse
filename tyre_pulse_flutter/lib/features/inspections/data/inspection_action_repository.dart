@@ -96,10 +96,16 @@ abstract interface class InspectionActionRepository {
 
   /// Inserts [rows] one at a time so a single duplicate cannot roll back the
   /// rest, then links the inspection to the first created action.
+  ///
+  /// When [assignee] is given, the Action Center item the database mirrors
+  /// for each new action (`action_items.source = 'corrective:<id>'`) gets the
+  /// person's id too, so it appears in their own task list - the same hand-off
+  /// as the web's `assignLinkedActionItem`.
   Future<RaiseActionsResult> raise({
     required String inspectionId,
     required List<Map<String, Object?>> rows,
     required int skippedUpFront,
+    AssignablePerson? assignee,
   });
 }
 
@@ -162,6 +168,7 @@ final class SupabaseInspectionActionRepository
     required String inspectionId,
     required List<Map<String, Object?>> rows,
     required int skippedUpFront,
+    AssignablePerson? assignee,
   }) async {
     final List<String> created = <String>[];
     final List<String> failed = <String>[];
@@ -176,7 +183,12 @@ final class SupabaseInspectionActionRepository
               .single(),
         );
         final String id = inserted['id']?.toString() ?? '';
-        if (id.isNotEmpty) created.add(id);
+        if (id.isNotEmpty) {
+          created.add(id);
+          if (assignee != null && assignee.id.isNotEmpty) {
+            await _assignActionItem(id, assignee);
+          }
+        }
       } on SupabaseFailure catch (f) {
         // 23505 = V496's uniqueness guard: already raised. A skip.
         if (f.isIdempotentReplay) {
@@ -205,5 +217,24 @@ final class SupabaseInspectionActionRepository
       skipped: skipped,
       failedMessages: failed,
     );
+  }
+
+  /// Best effort: the action already exists; a failure here must not undo it.
+  Future<void> _assignActionItem(
+    String actionId,
+    AssignablePerson person,
+  ) async {
+    try {
+      await guard<void>(
+        () async => await _client
+            .from(SupabaseTables.actionItems)
+            .update(<String, Object?>{
+          'assigned_user_id': person.id,
+          'assigned_to': person.name,
+        }).eq('source', 'corrective:$actionId'),
+      );
+    } on Object {
+      // RLS or a missing mirror row: the corrective action still names them.
+    }
   }
 }

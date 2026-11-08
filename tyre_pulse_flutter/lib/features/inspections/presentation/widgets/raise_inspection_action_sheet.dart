@@ -92,6 +92,17 @@ class _RaiseInspectionActionSheetState
       _instruction[d.key] = TextEditingController(text: base.instruction);
       _comment[d.key] = TextEditingController();
     }
+  }
+
+  bool _started = false;
+
+  // The first loads read AppLocalizations (an inherited widget), which is not
+  // allowed from initState, so they start here, once.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
     unawaited(_loadExisting());
     unawaited(_loadPeople());
   }
@@ -230,6 +241,7 @@ class _RaiseInspectionActionSheetState
                 inspectionId: widget.inspection.id,
                 rows: rows,
                 skippedUpFront: chosen.length - rows.length,
+                assignee: _assignee,
               );
       if (!mounted) return;
       if (result.created == 0 && result.failedMessages.isNotEmpty) {

@@ -37,6 +37,7 @@ import {
   BAND_LABEL, DEFAULT_TARGET_PRESSURE, DEFAULT_TOLERANCE_PCT,
 } from '../lib/tpmsPageAnalytics'
 import { toUserMessage } from '../lib/safeError'
+import TableNotInUse from '../components/ui/TableNotInUse'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement,
@@ -279,6 +280,7 @@ export default function Tpms() {
           </div>
         }
       />
+      <TableNotInUse table="tpms_readings" label="tyre pressure (TPMS) readings" hint="Readings arrive once TPMS sensors are connected through telematics." />
 
       {!unknown && (
         <Card tone={dataSource === 'sensor' ? 'info' : undefined} className="items-start gap-2" style={{ flexDirection: 'row' }}>

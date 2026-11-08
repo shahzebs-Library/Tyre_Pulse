@@ -15,10 +15,10 @@ import { Link } from 'react-router-dom'
 import {
   ClipboardCheck, CheckCircle2, Clock, AlertTriangle, ShieldAlert, Search, Eye, FileText,
   ClipboardList, ListChecks, CalendarDays, Wrench, BarChart3, MessageSquare, Plus,
-  MapPin, Gauge, Timer, User, Pencil, ArrowRight, Circle,
+  MapPin, Gauge, Timer, User, Pencil, ArrowRight, Circle, ImageOff, Loader2, ArrowLeft,
 } from 'lucide-react'
 import { Card, Kpi, Tabs, Donut, Pager, VehicleThumb, fmtInt } from '../commandCenter/kit'
-import InspectionPhotos from '../inspection/InspectionPhotos'
+import InspectionPhotos, { usePhotoItems, PhotoLightbox } from '../inspection/InspectionPhotos'
 import AiTyreProgress from '../inspection/AiTyreProgress'
 import InspectionDiagram from '../inspection/InspectionDiagram'
 import {
@@ -51,6 +51,24 @@ const MODULES = [
   { key: 'actions', label: 'Corrective Actions', sub: 'Action management', icon: Wrench, to: '/actions' },
   { key: 'reports', label: 'Reports', sub: 'Analysis and export', icon: BarChart3, to: '/inspection-intelligence' },
 ]
+
+/** One finding's own photo as a thumbnail; a click opens it large with Download. */
+function FindingThumb({ item, onOpen }) {
+  if (!item) {
+    return <span className="iw-fthumb iw-fthumb-none"><ImageOff size={14} aria-hidden="true" /><small>No photo taken</small></span>
+  }
+  if (item.status === 'loading') {
+    return <span className="iw-fthumb iw-fthumb-none"><Loader2 size={14} className="animate-spin" aria-hidden="true" /><small>Loading photo</small></span>
+  }
+  if (item.status !== 'ready') {
+    return <span className="iw-fthumb iw-fthumb-none"><ImageOff size={14} aria-hidden="true" /><small>Photo could not be opened</small></span>
+  }
+  return (
+    <button type="button" className="iw-fthumb" onClick={onOpen} aria-label={`Open photo of ${item.label}`}>
+      <img src={item.url} alt={`Photo of ${item.label}`} loading="lazy" />
+    </button>
+  )
+}
 
 function Pill({ tone, children }) {
   return <span className={`cc-pill ${tone}`}>{children}</span>
@@ -105,6 +123,12 @@ export default function InspectionWorkspace({
   const [q, setQ] = useState('')
   const [page, setPage] = useState(0)
   const [selectedId, setSelectedId] = useState(null)
+  // Pinned = opened on purpose from History, an observation or an action, so it
+  // stays open even when it is not in the queue list on the left. Without this
+  // the screen fell back to the first row, which was usually another vehicle.
+  const [pinned, setPinned] = useState(false)
+  const pick = (id, pin = false) => { setSelectedId(id); setPinned(pin) }
+  const [photoIndex, setPhotoIndex] = useState(null)
   const [detailTab, setDetailTab] = useState('details')
   const [section, setSection] = useState(null)
   // Which module the strip has open. Observations is a view of the SAME rows,
@@ -123,11 +147,34 @@ export default function InspectionWorkspace({
     [sorted, q, listTab], // eslint-disable-line react-hooks/exhaustive-deps
   )
   const kpis = useMemo(() => workspaceKpis(rows), [rows])
-  useEffect(() => { setPage(0) }, [q, listTab, rows])
+  useEffect(() => { setPage(0) }, [q, listTab])
+  // A reload (after saving) must not throw the reader back to page 1; only
+  // clamp when the list got shorter than the page being shown.
+  useEffect(() => {
+    const last = Math.max(0, Math.ceil(list.length / PAGE) - 1)
+    if (page > last) setPage(last)
+  }, [list.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // The selection follows the list: a filter that drops the selected row moves
   // the selection to the first visible row rather than showing a stale record.
-  const selected = useMemo(() => list.find((r) => r.id === selectedId) || list[0] || null, [list, selectedId])
+  const selected = useMemo(() => {
+    if (selectedId) {
+      const inList = list.find((r) => r.id === selectedId)
+      if (inList) return inList
+      if (pinned) {
+        const any = (allRows || rows || []).find((r) => r.id === selectedId)
+        if (any) return any
+      }
+    }
+    return list[0] || null
+  }, [list, selectedId, pinned, allRows, rows])
+  const outsideList = !!selected && !list.some((r) => r.id === selected.id)
+  // Raising an action pins the vehicle, so the reload after saving keeps it open.
+  const raise = (r) => { if (r?.id) pick(r.id, true); onRaiseAction(r) }
+  const { items: photoItems } = usePhotoItems(selected)
+  const photoFor = (positionKey) => photoItems.find((it) => it.key === `position:${positionKey}`) || null
+  const generalPhotos = photoItems.filter((it) => it.group === 'general')
+  useEffect(() => { setPhotoIndex(null) }, [selected?.id])
   const sections = useMemo(() => (selected ? inspectionSections(selected) : []), [selected])
   const progress = useMemo(() => inspectionProgress(selected), [selected])
   useEffect(() => { setSection(null); setDetailTab('details') }, [selected?.id])
@@ -207,7 +254,7 @@ export default function InspectionWorkspace({
           error={error}
           onBack={() => setMode('inspections')}
           onOpen={(r) => onView(r)}
-          onRaiseAction={onRaiseAction}
+          onRaiseAction={raise}
           onAddObservation={onAddObservation}
           country={country}
           regionOf={regionOf}
@@ -231,7 +278,7 @@ export default function InspectionWorkspace({
                 const st = inspectionStage(r)
                 return (
                   <li key={r.id}>
-                    <button type="button" className={`iw-row ${selected?.id === r.id ? 'is-sel' : ''}`} onClick={() => setSelectedId(r.id)} aria-pressed={selected?.id === r.id}>
+                    <button type="button" className={`iw-row ${selected?.id === r.id ? 'is-sel' : ''}`} onClick={() => pick(r.id)} aria-pressed={selected?.id === r.id}>
                       <VehicleThumb row={r} size="sm" />
                       <span className="iw-row-main">
                         <b>{r.asset_no || r.title || 'No asset'}</b>
@@ -256,6 +303,12 @@ export default function InspectionWorkspace({
             <div className="cc-empty">{loading ? 'Loading inspections...' : 'Select an inspection to see its details.'}</div>
           ) : (
             <>
+              {outsideList && (
+                <div className="iw-pinned" role="status">
+                  <span>Showing an older inspection of {selected.asset_no || 'this vehicle'} that is not in the list on the left.</span>
+                  <button type="button" className="cc-link cc-link-btn" onClick={() => pick(null)}><ArrowLeft size={12} aria-hidden="true" /> Back to list</button>
+                </div>
+              )}
               <div className="iw-dhead">
                 <VehicleThumb row={selected} size="lg" />
                 <div className="iw-dhead-id">
@@ -340,7 +393,7 @@ export default function InspectionWorkspace({
                               <span role="cell" className="iw-remark">{it.remarks || (it.recorded ? 'No remarks' : 'Not recorded')}</span>
                               <span role="cell">
                                 {(it.status === 'issue' || it.status === 'minor') && !selected.linked_action_id
-                                  ? <button type="button" className="cc-btn" onClick={() => onRaiseAction(selected)}>Create action</button>
+                                  ? <button type="button" className="cc-btn" onClick={() => raise(selected)}>Create action</button>
                                   : it.status === 'issue' || it.status === 'minor'
                                     ? <Link className="cc-link" to="/actions">Action raised</Link>
                                     : <span className="cc-na">-</span>}
@@ -357,13 +410,42 @@ export default function InspectionWorkspace({
               )}
 
               {detailTab === 'findings' && (
-                !selectedFindings.length ? <div className="cc-empty">No tyre on this inspection was recorded as anything other than Good.</div> : (
-                  <ul className="iw-finds">
-                    {selectedFindings.map((f) => (
-                      <li key={f.key}><Pill tone={f.tone}>{f.severity}</Pill><b>{f.position}</b><span>{f.condition}</span></li>
-                    ))}
-                  </ul>
-                )
+                <div className="iw-fbody">
+                  {!selectedFindings.length
+                    ? <div className="cc-empty">No tyre on this inspection was recorded as anything other than Good.</div>
+                    : (
+                      <ul className="iw-finds iw-finds-photo">
+                        {selectedFindings.map((f) => {
+                          const ph = photoFor(f.positionKey)
+                          return (
+                            <li key={f.key}>
+                              <FindingThumb item={ph} onOpen={() => setPhotoIndex(photoItems.indexOf(ph))} />
+                              <span className="iw-find-text">
+                                <span><Pill tone={f.tone}>{f.severity}</Pill> <b>{f.position}</b> {f.condition}</span>
+                                <small>{f.notes || 'No remarks'}</small>
+                              </span>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    )}
+                  {(selected.findings || selected.notes || generalPhotos.length > 0) && (
+                    <div className="iw-fnotes">
+                      {selected.findings && <p className="iw-note"><b>Findings:</b> {selected.findings}</p>}
+                      {selected.notes && <p className="iw-note"><b>Notes:</b> {selected.notes}</p>}
+                      {generalPhotos.length > 0 && (
+                        <div className="iw-fgallery" aria-label="Inspection photos">
+                          {generalPhotos.map((ph) => (
+                            <FindingThumb key={ph.key} item={ph} onOpen={() => setPhotoIndex(photoItems.indexOf(ph))} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {photoIndex != null && photoItems[photoIndex] && (
+                    <PhotoLightbox inspection={selected} items={photoItems} index={photoIndex} onIndex={setPhotoIndex} onClose={() => setPhotoIndex(null)} />
+                  )}
+                </div>
               )}
 
               {detailTab === 'photos' && <InspectionPhotos inspection={selected} showEvidence={false} title="Inspection photos" />}
@@ -378,7 +460,7 @@ export default function InspectionWorkspace({
                           <span className="iw-hist-day">{fmtDay(rowDay(h))}</span>
                           <span>{h.inspection_type || 'Inspection'}{h.inspector ? `, ${h.inspector}` : ''}</span>
                           <Pill tone={st.tone}>{st.label}</Pill>
-                          <button type="button" className="cc-link cc-link-btn" onClick={() => setSelectedId(h.id)}>View <ArrowRight size={12} aria-hidden="true" /></button>
+                          <button type="button" className="cc-link cc-link-btn" onClick={() => { pick(h.id, true); setDetailTab('details') }}>View <ArrowRight size={12} aria-hidden="true" /></button>
                         </li>
                       )
                     })}
@@ -424,7 +506,7 @@ export default function InspectionWorkspace({
             <ul className="iw-obs">
               {findings.map((f) => (
                 <li key={f.key}>
-                  <button type="button" onClick={() => setSelectedId(f.inspectionId)}>
+                  <button type="button" onClick={() => { pick(f.inspectionId, true); setDetailTab('findings') }}>
                     <span className={`iw-obs-dot ${f.tone}`} aria-hidden="true"><AlertTriangle size={15} /></span>
                     <span className="iw-obs-main"><b>{f.condition} at {f.position}</b><small>{f.asset_no || 'No asset'}{f.site ? `, ${f.site}` : ''}</small></span>
                     <span className="iw-obs-side"><Pill tone={f.tone}>{f.severity}</Pill><small>{fmtDay(f.day)}{f.inspector ? `, ${f.inspector}` : ''}</small></span>

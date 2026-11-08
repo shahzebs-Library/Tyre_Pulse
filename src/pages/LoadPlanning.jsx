@@ -39,6 +39,7 @@ import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation } from '../lib/api/_client'
 import './LoadPlanning.css'
+import TableNotInUse from '../components/ui/TableNotInUse'
 
 // Header art cropped from the owner's Load Planning mockup (its green terrain
 // texture, clear of the title text), with a lighter grade for the light theme.
@@ -364,6 +365,7 @@ export default function LoadPlanning() {
 
   return (
     <div className="cc lp-page">
+      <TableNotInUse table="load_plans" label="load plans" hint="Plans appear once the first load is planned." />
       <header className="lp-head">
         <div className="lp-head-img cc-hero-dark" style={{ backgroundImage: `url(${HERO_DARK})` }} aria-hidden="true" />
         <div className="lp-head-img cc-hero-light" style={{ backgroundImage: `url(${HERO_LIGHT})` }} aria-hidden="true" />

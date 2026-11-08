@@ -11,6 +11,7 @@ import { hasUnmetMfa } from '../lib/authAssurance'
 import { listModuleStatuses } from '../lib/api/modulesRegistry'
 import { configNum, configBool } from '../lib/api/systemConfig'
 import { checkSsoPasswordLogin } from '../lib/api/accessPolicies'
+import { signInWithIdentifier } from '../lib/api/loginGuard'
 
 // Exported so the isolated System Console can supply its own Provider value via
 // ConsoleAuthBridge, letting main-app admin pages render verbatim inside /console.
@@ -569,20 +570,46 @@ export function AuthProvider({ children }) {
   const signIn = useCallback(async (identifier, password, captchaToken) => {
     let email = identifier.trim()
 
+    // Field accounts carry a made-up @users.tyrepulse.app address, which reveals
+    // nothing, so get_email_by_identifier still returns it and the sign-in goes
+    // straight from this device (its own IP, its own auth rate limit). For a
+    // real-email account or an unknown name it returns null, and the sign-in
+    // goes through the `sign-in` edge function, which never discloses the
+    // address. Routing EVERY username through the function would put all
+    // field sign-ins behind one server IP and its shared rate limit.
     if (!email.includes('@')) {
-      const { data: resolved, error: rpcErr } = await supabase
+      const { data: resolved } = await supabase
         .rpc('get_email_by_identifier', { identifier: email })
-      if (rpcErr) return rpcErr
-      if (!resolved) return { message: 'No account found with that username or Employee ID.' }
-      email = resolved
+        .then((r) => r, () => ({ data: null }))
+      if (typeof resolved === 'string' && resolved.includes('@')) email = resolved
     }
 
     manualSignInRef.current = true
     try {
-      const { data: authData, error } = await supabase.auth.signInWithPassword({
-        email, password, ...(captchaToken ? { options: { captchaToken } } : {}),
-      })
-      if (error) return error
+      let authData
+      if (!email.includes('@')) {
+        // Username / employee id: the `sign-in` edge function resolves the
+        // email SERVER-SIDE and never returns it, so knowing a username no
+        // longer reveals the person's email. It also enforces and RECORDS the
+        // lockout itself, so a refusal here is marked `counted` and the login
+        // page must not record it a second time.
+        const outcome = await signInWithIdentifier(email, password, captchaToken)
+        if (outcome.error) return outcome.error
+        const { data: setData, error: setErr } = await supabase.auth.setSession({
+          access_token: outcome.session.access_token,
+          refresh_token: outcome.session.refresh_token,
+        })
+        // The password WAS correct; failing to store the session is not a
+        // wrong password and must not count toward the lockout.
+        if (setErr) return { code: 'auth_unavailable' }
+        authData = setData
+      } else {
+        const { data: pwData, error } = await supabase.auth.signInWithPassword({
+          email, password, ...(captchaToken ? { options: { captchaToken } } : {}),
+        })
+        if (error) return error
+        authData = pwData
+      }
 
       // The password was valid — but the account may be pending approval or
       // locked. Without this gate the app signs in then silently signs back

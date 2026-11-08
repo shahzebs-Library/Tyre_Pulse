@@ -274,6 +274,7 @@ export const EDGE_FUNCTIONS = Object.freeze([
   { name: 'send-scheduled-reports', what: 'Builds and mails scheduled reports', auth: 'In code or cron secret' },
   { name: 'sentry-crash-alert', what: 'Fatal crash alerts', auth: 'Cron secret' },
   { name: 'sentry-issues', what: 'Crash list for the Error Center', auth: 'In code' },
+  { name: 'sign-in', what: 'Username sign-in for real-email accounts; never returns the email', auth: 'In code' },
   { name: 'tenant-export', what: 'Exports one company\'s data', auth: 'In code or cron secret' },
   { name: 'workflow-notify', what: 'Push and email for approvals', auth: 'Shared secret' },
 ])

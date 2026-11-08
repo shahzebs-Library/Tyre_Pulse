@@ -63,11 +63,25 @@ export function stageFor(template, submission) {
   return null
 }
 
-/** The status a sign-off moves the submission to. */
-export function nextStatusFor(template, submission, approved) {
+/**
+ * An area manager signing a two-stage sheet that is still at the supervisor
+ * step closes it in ONE signature (recorded on both steps). Owner rule
+ * 2026-11-08: a manager was being asked to sign twice. MIRRORS the SQL
+ * decide_checklist_approval (20261108100000) - change both.
+ */
+export function closesInOneSign(template, submission, role, opts = {}) {
+  return stageFor(template, submission) === STAGE_SUPERVISOR
+    && isTwoStage(template)
+    && canActOnStage(STAGE_AREA_MANAGER, role, opts)
+}
+
+/** The status a sign-off moves the submission to. Pass `opts.role` so an area manager closes in one step. */
+export function nextStatusFor(template, submission, approved, opts = {}) {
   if (!approved) return 'rejected'
   const stage = stageFor(template, submission)
-  if (stage === STAGE_SUPERVISOR && isTwoStage(template)) return 'pending_area_manager'
+  if (stage === STAGE_SUPERVISOR && isTwoStage(template)) {
+    return opts.role != null && closesInOneSign(template, submission, opts.role, opts) ? 'approved' : 'pending_area_manager'
+  }
   if (stage) return 'approved'
   return String(submission?.approval_status ?? 'approved')
 }
@@ -83,7 +97,8 @@ export function canActOnStage(stage, role, opts = {}) {
 /** Can this person do anything at all with this submission right now? */
 export function canDecide(template, submission, role, opts = {}) {
   const stage = stageFor(template, submission)
-  return stage ? canActOnStage(stage, role, opts) : false
+  if (!stage) return false
+  return canActOnStage(stage, role, opts) || closesInOneSign(template, submission, role, opts)
 }
 
 export function stageLabel(stage) {

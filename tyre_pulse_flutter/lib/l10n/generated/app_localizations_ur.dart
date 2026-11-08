@@ -7703,4 +7703,147 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get workshopStatusVocabCatalog =>
       'newly_reported=نئی رپورٹ شدہ~waiting_for_diagnosis=تشخیص کا انتظار~diagnosis_in_progress=تشخیص جاری~repair_in_progress=مرمت جاری~waiting=انتظار~waiting_for_parts=پرزوں کا انتظار~waiting_for_approval=منظوری کا انتظار~waiting_for_manpower=افرادی قوت کا انتظار~waiting_for_external_vendor=بیرونی وینڈر کا انتظار~external_repair=بیرونی مرمت~testing=ٹیسٹنگ~road_test=روڈ ٹیسٹ~qc_inspection=کوالٹی کنٹرول / معائنہ~ready_for_release=ریلیز کے لیے تیار~operational_hold=آپریشنل ہولڈ~waiting_for_spare_parts=اسپیئر پارٹس کا انتظار~spare_parts_not_available=اسپیئر پارٹس دستیاب نہیں~mr_pending=MR زیر التوا~po_pending=PO زیر التوا~supplier_delivery_pending=سپلائر کی ترسیل زیر التوا~technician_not_available=ٹیکنیشن دستیاب نہیں~specialist_technician_required=ماہر ٹیکنیشن درکار~waiting_for_workshop_bay=ورکشاپ بے کا انتظار~waiting_for_tools_equipment=اوزار / آلات کا انتظار~sent_to_external_workshop=بیرونی ورکشاپ بھیجی گئی~waiting_for_budget_approval=بجٹ منظوری کا انتظار~waiting_for_vehicle_recovery_towing=گاڑی کی ریکوری / ٹوئنگ کا انتظار~waiting_for_site_to_release_vehicle=سائٹ کی طرف سے گاڑی چھوڑنے کا انتظار~waiting_for_testing=ٹیسٹنگ کا انتظار~waiting_for_road_test=روڈ ٹیسٹ کا انتظار~waiting_for_qc_inspection=کوالٹی کنٹرول / معائنہ کا انتظار~accident_repair=حادثے کی مرمت~warranty_claim=وارنٹی کلیم~major_engine_repair=انجن کی بڑی مرمت~major_gearbox_repair=گیئر باکس کی بڑی مرمت~electrical_issue=برقی مسئلہ~hydraulic_issue=ہائیڈرولک مسئلہ~tyre_related=ٹائر سے متعلق~body_repair=باڈی کی مرمت~no_operator_driver=کوئی آپریٹر / ڈرائیور نہیں~other=دیگر~not_required=درکار نہیں~required=درکار~checking_store=اسٹور چیک ہو رہا ہے~available_in_store=اسٹور میں دستیاب~mr_raised=MR جمع کرایا گیا~mr_approved=MR منظور~po_issued=PO جاری~supplier_confirmed=سپلائر نے تصدیق کی~in_transit=راستے میں~partially_received=جزوی طور پر موصول~received=موصول~not_available=دستیاب نہیں~alternative_part_under_review=متبادل پرزہ زیر جائزہ';
+
+  @override
+  String inspectionMeterBelowPreviousOdometer(String value) {
+    return 'آخری درج ریڈنگ ($value کلومیٹر) سے کم ہے۔ پھر بھی محفوظ ہوگی - درستی کی تصدیق کریں۔';
+  }
+
+  @override
+  String inspectionMeterBelowPreviousHours(String value) {
+    return 'آخری درج ریڈنگ ($value گھنٹے) سے کم ہے۔ پھر بھی محفوظ ہوگی - درستی کی تصدیق کریں۔';
+  }
+
+  @override
+  String get inspectionPhotoUnavailable => 'تصویر اس آلے پر دستیاب نہیں';
+
+  @override
+  String get inspectionPhotoOpenLabel => 'تصویر کھولیں';
+
+  @override
+  String get inspectionPhotoSaveAction => 'تصویر محفوظ کریں';
+
+  @override
+  String get inspectionPhotoShareAction => 'شیئر کریں';
+
+  @override
+  String get inspectionPhotoSaved => 'تصویر محفوظ ہو گئی';
+
+  @override
+  String get inspectionPhotoActionFailed =>
+      'تصویر حاصل نہیں ہو سکی۔ کنکشن چیک کریں اور دوبارہ کوشش کریں۔';
+
+  @override
+  String get inspectionRaiseActionButton => 'کارروائی شروع کریں';
+
+  @override
+  String get inspectionRaiseActionNeedsSync =>
+      'اس معائنے کے سنک ہونے کے بعد کارروائی شروع کی جا سکتی ہے۔';
+
+  @override
+  String inspectionRaiseActionTitle(String assetNo) {
+    return '$assetNo کے لیے کارروائی';
+  }
+
+  @override
+  String inspectionRaiseActionVehicle(String assetNo) {
+    return 'گاڑی $assetNo۔ کارروائیاں صرف اسی گاڑی کے لیے ہیں۔';
+  }
+
+  @override
+  String inspectionRaiseActionAlreadyRaised(int count) {
+    return '$count اس معائنے سے پہلے ہی شروع کی جا چکی ہیں۔';
+  }
+
+  @override
+  String get inspectionRaiseActionNothingTitle => 'شروع کرنے کو کچھ باقی نہیں';
+
+  @override
+  String get inspectionRaiseActionNothingMessage =>
+      'اس معائنے کی ہر بات پر کارروائی پہلے سے موجود ہے۔';
+
+  @override
+  String get inspectionActionInstructionLabel => 'یہ کیسے کیا جائے';
+
+  @override
+  String get inspectionActionCommentLabel => 'تبصرہ یا رائے';
+
+  @override
+  String get inspectionActionCommentHint =>
+      'کوئی بات جو اس شخص کو معلوم ہونی چاہیے';
+
+  @override
+  String inspectionActionDueDate(String date) {
+    return 'مقررہ تاریخ $date';
+  }
+
+  @override
+  String get inspectionAssignToLabel => 'تفویض کریں';
+
+  @override
+  String get inspectionAssigneeNone => 'ابھی تفویض نہیں';
+
+  @override
+  String get inspectionAssigneeTyreMen => 'ٹائر مین';
+
+  @override
+  String get inspectionAssigneeDrivers => 'ڈرائیور';
+
+  @override
+  String get inspectionAssigneeSupervisors => 'سپروائزر';
+
+  @override
+  String get inspectionAssigneeEveryone => 'سب';
+
+  @override
+  String get inspectionAssigneeSearchHint => 'نام سے تلاش کریں';
+
+  @override
+  String get inspectionAssigneeLoadFailed => 'لوگوں کی فہرست لوڈ نہیں ہو سکی۔';
+
+  @override
+  String get inspectionAssigneeNoMatch => 'کوئی میل نہیں کھاتا۔';
+
+  @override
+  String inspectionRaiseActionSubmit(int count) {
+    return '$count کارروائی شروع کریں';
+  }
+
+  @override
+  String get inspectionRaiseActionFailed =>
+      'کارروائی شروع نہیں ہو سکی۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get inspectionRaiseActionLoadFailed =>
+      'موجودہ کارروائیاں چیک نہیں ہو سکیں۔';
+
+  @override
+  String inspectionRaiseActionDone(int created, int skipped, int failed) {
+    return 'شروع $created، پہلے سے موجود $skipped، ناکام $failed۔';
+  }
+
+  @override
+  String get loginForgotTitle => 'اپنا پاس ورڈ دوبارہ ترتیب دیں';
+
+  @override
+  String get loginForgotPrompt =>
+      'اپنا یوزر نیم یا ملازم آئی ڈی درج کریں۔ آپ کی کمپنی کا ایڈمن آپ کے لیے نیا پاس ورڈ مقرر کرے گا۔';
+
+  @override
+  String get loginForgotIdentifierLabel => 'یوزر نیم یا ملازم آئی ڈی';
+
+  @override
+  String get loginForgotIdentifierRequired =>
+      'اپنا یوزر نیم یا ملازم آئی ڈی درج کریں۔';
+
+  @override
+  String get loginForgotSubmit => 'درخواست بھیجیں';
+
+  @override
+  String get loginForgotSent =>
+      'آپ کی درخواست آپ کی کمپنی کے ایڈمن کو بھیج دی گئی ہے۔ وہ آپ کے لیے نیا پاس ورڈ مقرر کریں گے۔';
+
+  @override
+  String get loginForgotFailed =>
+      'درخواست نہیں بھیجی جا سکی۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔';
 }

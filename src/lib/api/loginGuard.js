@@ -45,3 +45,46 @@ export function lockMinutes(status) {
   const s = Number(status?.retry_after_seconds) || 0
   return Math.max(1, Math.ceil(s / 60))
 }
+
+/**
+ * Username / employee-id sign-in through the `sign-in` edge function.
+ *
+ * The function resolves the account's email server-side (it is never sent to
+ * the browser), checks and RECORDS the V287 lockout itself, and returns a
+ * session only after a correct password. Every refusal comes back with
+ * `counted: true` so the login page does not record the same failure again.
+ *
+ * Resolves to `{ session }` or `{ error }` where error is one of:
+ *   { code: 'invalid_credentials', counted: true }  unknown user OR wrong password
+ *   { code: 'login_locked', counted: true, retry_after_seconds }
+ *   { code: 'captcha_failed' }
+ *   { code: 'auth_unavailable' }                     backend busy/down, not counted
+ */
+export async function signInWithIdentifier(identifier, password, captchaToken) {
+  let data
+  let error
+  try {
+    ({ data, error } = await supabase.functions.invoke('sign-in', {
+      body: {
+        identifier: String(identifier || ''),
+        password: String(password || ''),
+        ...(captchaToken ? { captcha_token: captchaToken } : {}),
+      },
+    }))
+  } catch {
+    return { error: { code: 'auth_unavailable' } }
+  }
+  if (!error && data?.access_token && data?.refresh_token) return { session: data }
+
+  let body = data && typeof data === 'object' ? data : null
+  if (error?.context && typeof error.context.json === 'function') {
+    body = await error.context.clone().json().catch(() => null)
+  }
+  const reason = body?.error
+  if (reason === 'invalid_credentials') return { error: { code: 'invalid_credentials', counted: true, message: 'Invalid login credentials' } }
+  if (reason === 'locked') {
+    return { error: { code: 'login_locked', counted: true, retry_after_seconds: Number(body?.retry_after_seconds) || 0 } }
+  }
+  if (reason === 'captcha_failed') return { error: { code: 'captcha_failed' } }
+  return { error: { code: 'auth_unavailable' } }
+}

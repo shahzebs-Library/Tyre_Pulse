@@ -39,6 +39,7 @@ import {
 } from '../lib/journeyLogAnalytics'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { isMissingRelation } from '../lib/api/_client'
+import TableNotInUse from '../components/ui/TableNotInUse'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Filler, Tooltip, Legend)
 
@@ -357,6 +358,7 @@ export default function JourneyLog() {
           </div>
         }
       />
+      <TableNotInUse table="journeys" label="journeys" hint="Journeys arrive from a GPS or telematics connection." />
 
       {missing && (
         <Card tone="warn" className="items-start gap-3" style={{ flexDirection: 'row' }}>

@@ -283,12 +283,18 @@ ApprovalStage? stageFor(
 String nextStatusFor(
   ApprovalTemplateLike? template,
   ApprovalSubmissionLike? submission,
-  bool approved,
-) {
+  bool approved, {
+  Object? role,
+  bool isSuperAdmin = false,
+}) {
   if (!approved) return 'rejected';
   final ApprovalStage? stage = stageFor(template, submission);
   if (stage == ApprovalStage.supervisor && isTwoStage(template)) {
-    return 'pending_area_manager';
+    // An area manager signing the supervisor step closes the sheet in one
+    // signature (owner rule 2026-11-08). #mirror: `nextStatusFor` opts.role.
+    final bool oneSign = (role != null || isSuperAdmin) &&
+        closesInOneSign(template, submission, role, isSuperAdmin: isSuperAdmin);
+    return oneSign ? 'approved' : 'pending_area_manager';
   }
   if (stage != null) return 'approved';
   return submission?.approvalStatus ?? 'approved';
@@ -330,10 +336,23 @@ bool canDecide(
   bool isSuperAdmin = false,
 }) {
   final ApprovalStage? stage = stageFor(template, submission);
-  return stage == null
-      ? false
-      : canActOnStage(stage, role, isSuperAdmin: isSuperAdmin);
+  if (stage == null) return false;
+  return canActOnStage(stage, role, isSuperAdmin: isSuperAdmin) ||
+      closesInOneSign(template, submission, role, isSuperAdmin: isSuperAdmin);
 }
+
+/// An area manager signing a two-stage sheet that is still at the supervisor
+/// step closes it in ONE signature, recorded on both steps. Mirrors the SQL
+/// `decide_checklist_approval` (20261108100000). #mirror: `closesInOneSign`.
+bool closesInOneSign(
+  ApprovalTemplateLike? template,
+  ApprovalSubmissionLike? submission,
+  Object? role, {
+  bool isSuperAdmin = false,
+}) =>
+    stageFor(template, submission) == ApprovalStage.supervisor &&
+    isTwoStage(template) &&
+    canActOnStage(ApprovalStage.areaManager, role, isSuperAdmin: isSuperAdmin);
 
 /// The English label for [stage], or `''` for `null`. See the library
 /// comment on English text in this file. #mirror: `stageLabel`.

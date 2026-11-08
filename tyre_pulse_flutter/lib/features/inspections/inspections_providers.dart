@@ -13,11 +13,13 @@ import 'package:tyre_pulse/core/database/app_database_provider.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/inspections/data/inspection_action_repository.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_draft_repository.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_gps_source.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_photo_capture.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_photo_uploader.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_plan_repository.dart';
+import 'package:tyre_pulse/features/inspections/data/inspection_previous_meters.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_remote_repository.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_submission_queue.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_sync_engine.dart';
@@ -108,3 +110,31 @@ final Provider<AsyncValue<int>> outstandingPlanCountProvider =
         (InspectionPlanPage page) => page.summary.outstanding,
       );
 });
+
+// --- Raise action / previous meters -----------------------------------------
+
+/// Online-only corrective-action raise from a recorded inspection. See
+/// `inspection_action_repository.dart` for why this is not queued.
+final Provider<InspectionActionRepository> inspectionActionRepositoryProvider =
+    Provider<InspectionActionRepository>(
+  (ref) =>
+      SupabaseInspectionActionRepository(ref.watch(supabaseClientProvider)),
+);
+
+final Provider<InspectionPreviousMetersRepository>
+    inspectionPreviousMetersRepositoryProvider =
+    Provider<InspectionPreviousMetersRepository>(
+  (ref) => SupabaseInspectionPreviousMetersRepository(
+    ref.watch(supabaseClientProvider),
+  ),
+);
+
+/// The asset's last odometer / engine-hours readings, for the header's
+/// lower-than-previous WARNING. Best-effort: never errors.
+final previousMetersProvider =
+    FutureProvider.autoDispose.family<PreviousMeters, String>(
+  (ref, assetNo) =>
+      ref.watch(inspectionPreviousMetersRepositoryProvider).forAsset(assetNo),
+  // A warning-only read must never schedule retry timers.
+  retry: (int retryCount, Object error) => null,
+);

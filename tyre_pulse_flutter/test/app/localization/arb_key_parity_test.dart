@@ -589,10 +589,23 @@ void main() {
     // catalog, the stage / delay / parts display-label catalog, and the
     // module label in the admin access editor (workshopStatusCopyCatalog,
     // workshopStatusVocabCatalog, adminModuleWorkshopStatus).
-    test('en, ar and ur each carry exactly 2217 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2217);
-      expect(_translatableKeys(ar).length, 2217);
-      expect(_translatableKeys(ur).length, 2217);
+    // 2217 + 32 = 2249. Inspection detail: raise a corrective action for the
+    // inspection's own vehicle (button, needs-sync line, sheet title and
+    // vehicle line, already-raised count, nothing-left state, instruction /
+    // comment / due-date fields, assignee label, none, four role chips,
+    // search, load-failed, no-match, submit, failed, load-failed, done
+    // summary), the per-finding photo (unavailable, open, save, share,
+    // saved, failed) and the header's lower-than-last-reading warnings
+    // (inspectionMeterBelowPreviousOdometer ... inspectionRaiseActionDone).
+    // 2249 + 7 = 2256. Forgot password on the login screen
+    // (request_password_reset): the dialog title, the instruction, the
+    // identifier field label and its required message, the submit button,
+    // the sent confirmation and the failure sentence
+    // (loginForgotTitle ... loginForgotFailed).
+    test('en, ar and ur each carry exactly 2256 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2256);
+      expect(_translatableKeys(ar).length, 2256);
+      expect(_translatableKeys(ur).length, 2256);
     });
   });
 

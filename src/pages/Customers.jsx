@@ -45,6 +45,7 @@ import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation, probeRelation } from '../lib/api/_client'
 import './customers.css'
+import TableNotInUse from '../components/ui/TableNotInUse'
 
 // The service reads the newest customers up to this many; say so when hit.
 const READ_LIMIT = 500
@@ -411,6 +412,7 @@ export default function Customers() {
           imgLight="/dashboard/hero-customers-light.webp"
           imgDark="/dashboard/hero-customers-dark.webp"
         />
+        <TableNotInUse table="customers" label="customers" hint="Customers appear once one is added here or imported." />
         <div className="cu-hero-actions">
           <button type="button" className="cc-btn-ghost" onClick={openCreate} disabled={missing}><Plus size={15} aria-hidden="true" /> Add Customer</button>
           <Link className="cc-btn-ghost" to="/contracts"><FileText size={15} aria-hidden="true" /> View Contracts</Link>

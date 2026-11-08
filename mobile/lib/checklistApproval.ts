@@ -85,11 +85,18 @@ export function stageFor(template: ApprovalTemplateLike | null | undefined, subm
   return null
 }
 
-/** The status a sign-off moves the submission to. */
-export function nextStatusFor(template: ApprovalTemplateLike | null | undefined, submission: ApprovalSubmissionLike | null | undefined, approved: boolean): string {
+/** An area manager signing a two-stage sheet at the supervisor step closes it in one signature. */
+export function closesInOneSign(template: ApprovalTemplateLike | null | undefined, submission: ApprovalSubmissionLike | null | undefined, role: unknown, opts: { isSuperAdmin?: boolean } = {}): boolean {
+  return stageFor(template, submission) === STAGE_SUPERVISOR && isTwoStage(template) && canActOnStage(STAGE_AREA_MANAGER, role, opts)
+}
+
+/** The status a sign-off moves the submission to. Pass `opts.role` so an area manager closes in one step. */
+export function nextStatusFor(template: ApprovalTemplateLike | null | undefined, submission: ApprovalSubmissionLike | null | undefined, approved: boolean, opts: { role?: unknown; isSuperAdmin?: boolean } = {}): string {
   if (!approved) return 'rejected'
   const stage = stageFor(template, submission)
-  if (stage === STAGE_SUPERVISOR && isTwoStage(template)) return 'pending_area_manager'
+  if (stage === STAGE_SUPERVISOR && isTwoStage(template)) {
+    return opts.role != null && closesInOneSign(template, submission, opts.role, opts) ? 'approved' : 'pending_area_manager'
+  }
   if (stage) return 'approved'
   return String(submission?.approval_status ?? 'approved')
 }
@@ -105,7 +112,8 @@ export function canActOnStage(stage: ApprovalStage | null, role: unknown, opts: 
 /** Can this person do anything at all with this submission right now? */
 export function canDecide(template: ApprovalTemplateLike | null | undefined, submission: ApprovalSubmissionLike | null | undefined, role: unknown, opts: { isSuperAdmin?: boolean } = {}): boolean {
   const stage = stageFor(template, submission)
-  return stage ? canActOnStage(stage, role, opts) : false
+  if (!stage) return false
+  return canActOnStage(stage, role, opts) || closesInOneSign(template, submission, role, opts)
 }
 
 export function stageLabel(stage: ApprovalStage | null): string {

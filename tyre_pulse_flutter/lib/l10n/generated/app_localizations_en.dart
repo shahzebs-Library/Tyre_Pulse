@@ -7685,4 +7685,146 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get workshopStatusVocabCatalog =>
       'newly_reported=Newly Reported~waiting_for_diagnosis=Waiting for Diagnosis~diagnosis_in_progress=Diagnosis in Progress~repair_in_progress=Repair in Progress~waiting=Waiting~waiting_for_parts=Waiting for Parts~waiting_for_approval=Waiting for Approval~waiting_for_manpower=Waiting for Manpower~waiting_for_external_vendor=Waiting for External Vendor~external_repair=External Repair~testing=Testing~road_test=Road Test~qc_inspection=QC / Inspection~ready_for_release=Ready for Release~operational_hold=Operational Hold~waiting_for_spare_parts=Waiting for Spare Parts~spare_parts_not_available=Spare Parts Not Available~mr_pending=MR Pending~po_pending=PO Pending~supplier_delivery_pending=Supplier Delivery Pending~technician_not_available=Technician Not Available~specialist_technician_required=Specialist Technician Required~waiting_for_workshop_bay=Waiting for Workshop Bay~waiting_for_tools_equipment=Waiting for Tools / Equipment~sent_to_external_workshop=Sent to External Workshop~waiting_for_budget_approval=Waiting for Budget Approval~waiting_for_vehicle_recovery_towing=Waiting for Vehicle Recovery / Towing~waiting_for_site_to_release_vehicle=Waiting for Site to Release Vehicle~waiting_for_testing=Waiting for Testing~waiting_for_road_test=Waiting for Road Test~waiting_for_qc_inspection=Waiting for QC / Inspection~accident_repair=Accident Repair~warranty_claim=Warranty Claim~major_engine_repair=Major Engine Repair~major_gearbox_repair=Major Gearbox Repair~electrical_issue=Electrical Issue~hydraulic_issue=Hydraulic Issue~tyre_related=Tyre Related~body_repair=Body Repair~no_operator_driver=No Operator / Driver~other=Other~not_required=Not Required~required=Required~checking_store=Checking Store~available_in_store=Available in Store~mr_raised=MR Raised~mr_approved=MR Approved~po_issued=PO Issued~supplier_confirmed=Supplier Confirmed~in_transit=In Transit~partially_received=Partially Received~received=Received~not_available=Not Available~alternative_part_under_review=Alternative Part Under Review';
+
+  @override
+  String inspectionMeterBelowPreviousOdometer(String value) {
+    return 'Lower than the last recorded reading ($value km). Saved anyway - check it is correct.';
+  }
+
+  @override
+  String inspectionMeterBelowPreviousHours(String value) {
+    return 'Lower than the last recorded reading ($value h). Saved anyway - check it is correct.';
+  }
+
+  @override
+  String get inspectionPhotoUnavailable => 'Photo not available on this device';
+
+  @override
+  String get inspectionPhotoOpenLabel => 'Open photo';
+
+  @override
+  String get inspectionPhotoSaveAction => 'Save photo';
+
+  @override
+  String get inspectionPhotoShareAction => 'Share';
+
+  @override
+  String get inspectionPhotoSaved => 'Photo saved';
+
+  @override
+  String get inspectionPhotoActionFailed =>
+      'Could not get the photo. Check your connection and try again.';
+
+  @override
+  String get inspectionRaiseActionButton => 'Raise action';
+
+  @override
+  String get inspectionRaiseActionNeedsSync =>
+      'An action can be raised once this inspection has synced.';
+
+  @override
+  String inspectionRaiseActionTitle(String assetNo) {
+    return 'Raise action for $assetNo';
+  }
+
+  @override
+  String inspectionRaiseActionVehicle(String assetNo) {
+    return 'Vehicle $assetNo. Actions are raised for this vehicle only.';
+  }
+
+  @override
+  String inspectionRaiseActionAlreadyRaised(int count) {
+    return '$count already raised from this inspection.';
+  }
+
+  @override
+  String get inspectionRaiseActionNothingTitle => 'Nothing left to raise';
+
+  @override
+  String get inspectionRaiseActionNothingMessage =>
+      'Every finding on this inspection already has an action.';
+
+  @override
+  String get inspectionActionInstructionLabel => 'How it should be done';
+
+  @override
+  String get inspectionActionCommentLabel => 'Remark or comment';
+
+  @override
+  String get inspectionActionCommentHint => 'Anything the person should know';
+
+  @override
+  String inspectionActionDueDate(String date) {
+    return 'Due $date';
+  }
+
+  @override
+  String get inspectionAssignToLabel => 'Assign to';
+
+  @override
+  String get inspectionAssigneeNone => 'Not assigned yet';
+
+  @override
+  String get inspectionAssigneeTyreMen => 'Tyre men';
+
+  @override
+  String get inspectionAssigneeDrivers => 'Drivers';
+
+  @override
+  String get inspectionAssigneeSupervisors => 'Supervisors';
+
+  @override
+  String get inspectionAssigneeEveryone => 'Everyone';
+
+  @override
+  String get inspectionAssigneeSearchHint => 'Search by name';
+
+  @override
+  String get inspectionAssigneeLoadFailed => 'Could not load people.';
+
+  @override
+  String get inspectionAssigneeNoMatch => 'No one matches.';
+
+  @override
+  String inspectionRaiseActionSubmit(int count) {
+    return 'Raise $count action(s)';
+  }
+
+  @override
+  String get inspectionRaiseActionFailed =>
+      'Could not raise the action. Try again.';
+
+  @override
+  String get inspectionRaiseActionLoadFailed =>
+      'Could not check which actions already exist.';
+
+  @override
+  String inspectionRaiseActionDone(int created, int skipped, int failed) {
+    return 'Raised $created, already raised $skipped, failed $failed.';
+  }
+
+  @override
+  String get loginForgotTitle => 'Reset your password';
+
+  @override
+  String get loginForgotPrompt =>
+      'Enter your username or employee ID. Your company\'s admin will set a new password for you.';
+
+  @override
+  String get loginForgotIdentifierLabel => 'Username or employee ID';
+
+  @override
+  String get loginForgotIdentifierRequired =>
+      'Enter your username or employee ID.';
+
+  @override
+  String get loginForgotSubmit => 'Send request';
+
+  @override
+  String get loginForgotSent =>
+      'Your request was sent to your company\'s admin. They will set a new password for you.';
+
+  @override
+  String get loginForgotFailed =>
+      'The request could not be sent. Check your connection and try again.';
 }

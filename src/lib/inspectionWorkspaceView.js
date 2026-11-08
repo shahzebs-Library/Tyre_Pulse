@@ -194,6 +194,8 @@ export function recentFindings(rows, limit = 6) {
         key: `${r.id}:${t.position}`, inspectionId: r.id, row: r,
         asset_no: r.asset_no || null, site: r.site || null, inspector: r.inspector || null,
         day: rowDay(r) || null, position: t.label || t.position,
+        // The stored key, so the finding can find its own photo; `position` is the display label.
+        positionKey: t.position || null, notes: t.notes || null,
         condition: t.condition || RISK_LABEL[t.risk] || 'Flagged',
         tone: t.risk === 'critical' ? 'bad' : 'warn',
         severity: t.risk === 'critical' ? 'Critical' : 'Minor',
@@ -388,4 +390,29 @@ export function observationSummary(list) {
     needingAction: new Set(items.filter((o) => !o.actionRaised && o.kind !== 'note'
       && (o.tone === 'bad' || o.tone === 'warn')).map((o) => o.inspectionId)).size,
   }
+}
+
+/**
+ * The newest odometer and engine-hours readings recorded on OTHER inspections of
+ * the same vehicle up to this one's day, so an edit can warn when a corrected
+ * reading goes backwards. Null fields mean no earlier reading exists. A lower
+ * reading is only a warning: meters do get replaced.
+ */
+export function previousMeterReadings(rows, row) {
+  const asset = String(row?.asset_no || '').trim().toUpperCase()
+  if (!asset) return null
+  const day = rowDay(row) || null
+  const num = (v) => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v))
+  let km = null
+  let hours = null
+  for (const r of sortNewest(rows || [])) {
+    if (r.id === row.id) continue
+    if (String(r.asset_no || '').trim().toUpperCase() !== asset) continue
+    const d = rowDay(r)
+    if (day && d && d > day) continue
+    if (km == null) km = num(r.odometer_km)
+    if (hours == null) hours = num(r.hour_meter)
+    if (km != null && hours != null) break
+  }
+  return km == null && hours == null ? null : { km, hours }
 }

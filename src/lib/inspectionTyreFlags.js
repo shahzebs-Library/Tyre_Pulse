@@ -363,6 +363,37 @@ export function defectsForAction(inspection, flagMap = {}) {
 }
 
 /**
+ * One whole-inspection item, for work that is not about a single wheel: an
+ * observation, a remark in the findings or notes, or anything the inspector
+ * wrote down. It lets an action be raised from an inspection that carries no
+ * tyre fault, which the tyre-only defect list cannot do.
+ *
+ * Priority follows the inspection's own recorded severity; a blank or unknown
+ * severity is Medium, never invented as High.
+ */
+export function generalDefectFor(inspection) {
+  if (!inspection) return null
+  const asset = inspection.asset_no || ''
+  const sev = String(inspection.severity || '').trim().toLowerCase()
+  const priority = sev === 'critical' || sev === 'high' ? 'High' : sev === 'low' ? 'Low' : 'Medium'
+  const text = String(inspection.findings || inspection.notes || '').trim()
+  const what = inspection.title || inspection.inspection_type || 'Inspection'
+  return {
+    key: 'general',
+    kind: 'finding',
+    position: null,
+    positionLabel: null,
+    condition: text ? text.slice(0, 200) : null,
+    serial: '',
+    title: `${what}${asset ? ` on ${asset}` : ''}`.slice(0, 300),
+    priority,
+    description: text
+      ? `Inspection remark: ${text}`
+      : `Follow up on the ${what.toLowerCase()} recorded for ${asset || 'this vehicle'}.`,
+  }
+}
+
+/**
  * The field selections that are actually narrowing a view, in a fixed order, as
  * [label, values] pairs.
  *

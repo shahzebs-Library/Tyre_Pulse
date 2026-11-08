@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Camera, Download, ImageOff, Loader2, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { normalizeTyreConditions, positionLabelMap } from '../../lib/inspectionView'
 import { resolveStorageUrl } from '../../lib/storageRefs'
+import { downloadPhoto, downloadPhotosZip, photoBaseName } from '../../lib/photoDownload'
 import { safeHref, safeImageSrc } from '../../lib/safeUrl'
 
 /**
@@ -235,7 +236,9 @@ const FOCUSABLE = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1
  * Focus is trapped and restored because this covers the whole screen: a
  * keyboard user who tabs out of it is left operating a page they cannot see.
  */
-function PhotoLightbox({ items, index, onIndex, onClose }) {
+export function PhotoLightbox({ items, index, onIndex, onClose, inspection = null }) {
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const dialogRef = useRef(null)
   const restoreRef = useRef(null)
   const item = items[index]
@@ -301,15 +304,30 @@ function PhotoLightbox({ items, index, onIndex, onClose }) {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {saveError && <span role="alert" className="text-xs text-red-300">{saveError}</span>}
+            {href && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={async () => {
+                  setSaving(true); setSaveError('')
+                  try { await downloadPhoto(item.url, photoBaseName(inspection, item, index)) } catch { setSaveError('Download failed. Try Open original.') } finally { setSaving(false) }
+                }}
+                className="text-xs inline-flex items-center gap-1 rounded px-2 py-1.5 text-white min-h-[36px] disabled:opacity-60"
+                style={{ background: 'rgba(255,255,255,0.25)' }}
+              >
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} {saving ? 'Saving...' : 'Download'}
+              </button>
+            )}
             {href && (
               <a
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs inline-flex items-center gap-1 rounded px-2 py-1.5 text-white"
+                className="text-xs inline-flex items-center gap-1 rounded px-2 py-1.5 text-white min-h-[36px]"
                 style={{ background: 'rgba(255,255,255,0.15)' }}
               >
-                <Download className="w-3.5 h-3.5" /> Open original
+                Open original
               </a>
             )}
             <button
@@ -500,10 +518,14 @@ function SignatureBox({ caption, view, emptyText }) {
  * @param {boolean} [props.showEvidence]    meters, signatures and approval (default true)
  * @param {string}  [props.title]           heading over the gallery
  */
-export default function InspectionPhotos({ inspection, showEvidence = true, title = 'Photos' }) {
+/**
+ * The inspection's photos, each signed independently. Shared by the gallery and
+ * by any screen that shows a finding next to its own photo, so a photo is
+ * resolved and captioned one way everywhere.
+ */
+export function usePhotoItems(inspection) {
   const refs = useMemo(() => collectPhotoRefs(inspection), [inspection])
   const [resolved, setResolved] = useState({})
-  const [openIndex, setOpenIndex] = useState(null)
 
   // Key the effect on the refs themselves, not on the array identity: the row
   // object is rebuilt on every parent render and would otherwise re-sign every
@@ -539,6 +561,14 @@ export default function InspectionPhotos({ inspection, showEvidence = true, titl
     [refs, resolved],
   )
 
+  return { refs, items }
+}
+
+export default function InspectionPhotos({ inspection, showEvidence = true, title = 'Photos' }) {
+  const [openIndex, setOpenIndex] = useState(null)
+  const { refs, items } = usePhotoItems(inspection)
+  const [zipping, setZipping] = useState(null) // null | { done, total }
+  const [zipNote, setZipNote] = useState('')
   const state = galleryState(inspection, refs)
   const summary = gallerySummary(items)
   const notice = galleryNotice(state, summary)
@@ -555,7 +585,31 @@ export default function InspectionPhotos({ inspection, showEvidence = true, titl
       <h3 className="text-xs font-semibold uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
         <Camera className="w-3.5 h-3.5" /> {title}
         {summary.total > 0 && <span style={{ color: 'var(--text-dim)' }}>({summary.total})</span>}
+        {summary.ready > 0 && (
+          <button
+            type="button"
+            disabled={!!zipping}
+            onClick={async () => {
+              const ready = items.filter((it) => it.status === 'ready' && it.url)
+              setZipNote(''); setZipping({ done: 0, total: ready.length })
+              try {
+                const res = await downloadPhotosZip(inspection, ready, (done, total) => setZipping({ done, total }))
+                setZipNote(res.failed ? `${res.saved} saved, ${res.failed} could not be downloaded.` : `${res.saved} photo${res.saved === 1 ? '' : 's'} saved.`)
+              } catch (e) {
+                setZipNote(e?.message || 'The photos could not be downloaded.')
+              } finally {
+                setZipping(null)
+              }
+            }}
+            className="ml-auto normal-case tracking-normal text-xs inline-flex items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 min-h-[32px] font-medium disabled:opacity-60"
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            {zipping ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+            {zipping ? `Preparing ${zipping.done} of ${zipping.total}...` : 'Download all'}
+          </button>
+        )}
       </h3>
+      {zipNote && <p role="status" className="text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>{zipNote}</p>}
 
       {notice && (
         <p className="text-sm mb-3" style={{ color: state === 'none' ? 'var(--text-secondary)' : '#b45309' }}>
@@ -584,6 +638,7 @@ export default function InspectionPhotos({ inspection, showEvidence = true, titl
 
       {openIndex != null && items[openIndex] && (
         <PhotoLightbox
+          inspection={inspection}
           items={items}
           index={openIndex}
           onIndex={setOpenIndex}

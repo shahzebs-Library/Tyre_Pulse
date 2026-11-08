@@ -102,6 +102,15 @@ final class FakeAuthRepository implements AuthRepository {
     // event follows it" test.
   }
 
+  /// What [requestPasswordReset] returns. Defaults to "sent".
+  bool passwordResetResult = true;
+
+  @override
+  Future<bool> requestPasswordReset(String identifier) async {
+    calls.add('requestPasswordReset:$identifier');
+    return passwordResetResult;
+  }
+
   @override
   Future<void> startAutoRefresh() async {
     calls.add('startAutoRefresh');

@@ -45,6 +45,7 @@ import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { isMissingRelation } from '../lib/api/_client'
 import './FuelTheftAlerts.css'
+import TableNotInUse from '../components/ui/TableNotInUse'
 
 const LIST_CAP = 500 // listFuelTheftAlerts returns the newest 500 alerts.
 
@@ -328,6 +329,7 @@ export default function FuelTheftAlerts() {
           imgLight="/dashboard/hero-fueltheft-light.webp"
           imgDark="/dashboard/hero-fueltheft-dark.webp"
         />
+        <TableNotInUse table="fuel_theft_alerts" label="fuel theft alerts" hint="Alerts need fuel card or fuel sensor data connected first." />
         <div className="fta-range fta-hero-range">
           <CalendarDays size={15} aria-hidden="true" />
           <label htmlFor="fta-from" className="sr-only">From date</label>

@@ -27,9 +27,22 @@ const VEHICLE_TYPES = LAYOUT_KEYS
 export default function InspectionFormModal({
   form, setForm, sites, flagMap, selectedTyre, setSelectedTyre,
   wfLocked, setWfLocked, saving, saveError, onSave, onClose, fileRef, onPhotoChange,
+  canEditMetersLocked = false, previousMeters = null,
 }) {
   const { t } = useLanguage()
-  const canSave = !(wfLocked || saving || !form.title?.trim() || !form.site?.trim() || !form.scheduled_date)
+  // A locked (approved) record can still have its meter readings corrected by an
+  // Admin, Manager or Director; everything else stays read-only.
+  const metersOnly = wfLocked && canEditMetersLocked && !!form.id
+  const missing = [
+    !form.title?.trim() && t('inspections.modal.titleField'),
+    !form.site?.trim() && t('inspections.modal.siteField'),
+    !form.scheduled_date && t('inspections.modal.dateField'),
+  ].filter(Boolean)
+  const canSave = !saving && (metersOnly || (!wfLocked && missing.length === 0))
+  const num = (v) => (v === '' || v == null ? null : Number(v))
+  const kmLow = previousMeters?.km != null && num(form.odometer_km) != null && num(form.odometer_km) < previousMeters.km
+  const hrsLow = previousMeters?.hours != null && num(form.hour_meter) != null && num(form.hour_meter) < previousMeters.hours
+  const meterDisabled = wfLocked && !metersOnly
   return (
     <Modal
       open
@@ -43,13 +56,19 @@ export default function InspectionFormModal({
               {saveError}
             </div>
           )}
+          {!saving && !wfLocked && missing.length > 0 && (
+            <p className="text-xs text-amber-500" role="status">Fill in before saving: {missing.join(', ')}</p>
+          )}
+          {metersOnly && (
+            <p className="text-xs text-[var(--text-secondary)]" role="status">This record is approved. Only the odometer and engine hours will be saved.</p>
+          )}
           <div className="flex gap-3">
             <button type="button" onClick={onClose} className="btn-secondary flex-1 min-h-[44px]">{t('common.cancel')}</button>
             <button type="button" onClick={onSave}
               disabled={!canSave}
-              title={wfLocked ? 'Locked, in approval' : undefined}
+              title={wfLocked && !metersOnly ? 'Locked, in approval' : undefined}
               className="btn-primary flex-1 min-h-[44px] disabled:opacity-50">
-              {saving ? t('common.saving') : form.id ? t('inspections.modal.saveChanges') : t('common.add')}
+              {saving ? t('common.saving') : metersOnly ? 'Save readings' : form.id ? t('inspections.modal.saveChanges') : t('common.add')}
             </button>
           </div>
         </div>
@@ -89,6 +108,37 @@ export default function InspectionFormModal({
               <AlertTriangle size={12} aria-hidden /> Locked, in approval
             </div>
           )}
+        </div>
+      )}
+
+      {!isTrainingType(form.inspection_type) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+          <div>
+            <label className="label" htmlFor="insp-odo">Odometer (km)</label>
+            <input id="insp-odo" type="number" inputMode="decimal" min="0" step="1" className="input"
+              disabled={meterDisabled}
+              value={form.odometer_km ?? ''}
+              onChange={e => setForm(f => ({ ...f, odometer_km: e.target.value === '' ? null : e.target.value }))} />
+            {previousMeters?.km != null && (
+              <p className={`text-xs mt-1 ${kmLow ? 'text-amber-500' : 'text-[var(--text-muted)]'}`}>
+                {kmLow ? 'Lower than the previous inspection' : 'Previous inspection'}: {Number(previousMeters.km).toLocaleString('en-US')} km
+                {kmLow ? '. Saved anyway if the meter was replaced.' : ''}
+              </p>
+            )}
+          </div>
+          <div>
+            <label className="label" htmlFor="insp-hrs">Engine hours</label>
+            <input id="insp-hrs" type="number" inputMode="decimal" min="0" step="0.1" className="input"
+              disabled={meterDisabled}
+              value={form.hour_meter ?? ''}
+              onChange={e => setForm(f => ({ ...f, hour_meter: e.target.value === '' ? null : e.target.value }))} />
+            {previousMeters?.hours != null && (
+              <p className={`text-xs mt-1 ${hrsLow ? 'text-amber-500' : 'text-[var(--text-muted)]'}`}>
+                {hrsLow ? 'Lower than the previous inspection' : 'Previous inspection'}: {Number(previousMeters.hours).toLocaleString('en-US')} hrs
+                {hrsLow ? '. Saved anyway if the meter was replaced.' : ''}
+              </p>
+            )}
+          </div>
         </div>
       )}
 

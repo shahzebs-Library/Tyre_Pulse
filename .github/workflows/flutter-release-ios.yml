@@ -104,15 +104,20 @@ jobs:
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://jhssdmeruxtrlqnwfksc.supabase.co' }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_PROD || 'sb_publishable_UDEH7EeHA9S5-NNu4T-9Ug_R60IinrW' }}
-          SENTRY_DSN: ${{ secrets.SENTRY_DSN_FLUTTER || 'https://530f25f43a3bbbff1679122847a0d3ec@o4511151917301760.ingest.de.sentry.io/4511237697568848' }}
+          # Flutter's own Sentry project only; no fallback to another project's
+          # DSN. Empty = telemetry off (AppConfig.hasTelemetry), with a warning.
+          SENTRY_DSN: ${{ secrets.FLUTTER_SENTRY_DSN || secrets.SENTRY_DSN_FLUTTER || '' }}
           VERSION_NAME: ${{ inputs.version_name }}
         run: |
+          if [ -z "$SENTRY_DSN" ]; then
+            echo "::warning::FLUTTER_SENTRY_DSN secret is not set - this release is built with crash reporting DISABLED."
+          fi
           flutter build ios --release --no-codesign \
             --build-name "$VERSION_NAME" \
             --build-number "${{ github.run_number }}" \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
-            --dart-define=APP_ENV=staging \
+            --dart-define=APP_ENV=production \
             --dart-define=APP_VERSION="$VERSION_NAME" \
             --dart-define=SENTRY_DSN="$SENTRY_DSN"
 

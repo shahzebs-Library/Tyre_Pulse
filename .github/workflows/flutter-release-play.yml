@@ -219,13 +219,15 @@ jobs:
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://jhssdmeruxtrlqnwfksc.supabase.co' }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_PROD || 'sb_publishable_UDEH7EeHA9S5-NNu4T-9Ug_R60IinrW' }}
-          # Crash reporting. Without a DSN the app runs with telemetry off and
-          # a crash on a tester's phone is never seen. A Sentry DSN is
-          # publishable (it only lets a client SEND events). Falls back to the
-          # mobile project's DSN (the same one mobile/eas.json ships); the
-          # Flutter build is told apart there by its environment tag and app
-          # version. Set the SENTRY_DSN_FLUTTER secret to give it its own project.
-          SENTRY_DSN: ${{ secrets.SENTRY_DSN_FLUTTER || 'https://530f25f43a3bbbff1679122847a0d3ec@o4511151917301760.ingest.de.sentry.io/4511237697568848' }}
+          # Crash reporting. ONLY the Flutter app's own Sentry project is used:
+          # the FLUTTER_SENTRY_DSN secret (the older SENTRY_DSN_FLUTTER name is
+          # still honoured so an existing secret keeps working). There is
+          # deliberately NO fallback to another project's DSN - mixing the
+          # retired Expo app's crashes with this app's makes both unreadable.
+          # When neither secret is set the build compiles with an empty DSN,
+          # which AppConfig.hasTelemetry reads as "telemetry off" (Sentry is
+          # never initialised), and the step below prints a warning.
+          SENTRY_DSN: ${{ secrets.FLUTTER_SENTRY_DSN || secrets.SENTRY_DSN_FLUTTER || '' }}
         run: |
           # APP_VERSION is the pubspec version name (before the +build). It is
           # what the forced-update gate compares against
@@ -234,10 +236,13 @@ jobs:
           APP_VERSION="$(grep -E '^version:' pubspec.yaml | sed -E 's/^version:[[:space:]]*([^+[:space:]]+).*/\1/')"
           if [ -z "$APP_VERSION" ]; then echo "::error::Could not read version from pubspec.yaml"; exit 1; fi
           echo "Building APP_VERSION=$APP_VERSION"
+          if [ -z "$SENTRY_DSN" ]; then
+            echo "::warning::FLUTTER_SENTRY_DSN secret is not set - this release is built with crash reporting DISABLED. Add the Flutter Sentry project's DSN as the FLUTTER_SENTRY_DSN repository secret."
+          fi
           flutter build appbundle --release \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
-            --dart-define=APP_ENV=staging \
+            --dart-define=APP_ENV=production \
             --dart-define=APP_VERSION="$APP_VERSION" \
             --dart-define=SENTRY_DSN="$SENTRY_DSN"
 

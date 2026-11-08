@@ -187,3 +187,23 @@ describe('the mobile mirror does not drift', () => {
     expect(sqlRoles('checklist_is_area_manager')).toEqual(area)
   })
 })
+
+describe('an area manager signs once (owner rule 2026-11-08)', () => {
+  const pending = { approval_status: 'pending' }
+  it('closes a two-stage sheet from the supervisor step in one signature', () => {
+    for (const role of ['PMV Manager', 'Workshop Maintenance Area Manager', 'Workshop Area Manager', 'Director', 'Admin']) {
+      expect(nextStatusFor(TWO, pending, true, { role })).toBe('approved')
+      expect(canDecide(TWO, pending, role)).toBe(true)
+    }
+  })
+  it('a supervisor still passes it to the area manager', () => {
+    expect(nextStatusFor(TWO, pending, true, { role: 'Workshop Supervisor' })).toBe('pending_area_manager')
+  })
+  it('without a role the old two-step answer stands (safe default)', () => {
+    expect(nextStatusFor(TWO, pending, true)).toBe('pending_area_manager')
+  })
+  it('a single-stage sheet and rejections are unchanged', () => {
+    expect(nextStatusFor(ONE, pending, true, { role: 'PMV Manager' })).toBe('approved')
+    expect(nextStatusFor(TWO, pending, false, { role: 'PMV Manager' })).toBe('rejected')
+  })
+})

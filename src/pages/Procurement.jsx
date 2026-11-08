@@ -36,6 +36,7 @@ import {
   procurementKpis, budgetPosition, vendorMonthlySpend, statusCounts, cumulativeSpend, optionsOf,
   orderExportRows, receiptProgress, daysBetween,
 } from '../lib/procurementAnalytics'
+import TableNotInUse from '../components/ui/TableNotInUse'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, PointElement, LineElement,
@@ -597,6 +598,7 @@ export default function Procurement() {
           </div>
         }
       />
+      <TableNotInUse table="purchase_orders" label="purchase orders" hint="Records appear once a purchase order is raised." />
 
       {/* ── Error ──────────────────────────────────────────────────────────── */}
       {error && (

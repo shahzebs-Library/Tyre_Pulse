@@ -30,7 +30,7 @@ import BlockingMarksNotice from '../components/checklist/BlockingMarksNotice'
 import ChecklistApprovalLadder from '../components/checklist/ChecklistApprovalLadder'
 import { stepRequirements } from '../lib/workflow/stepRequirements'
 import {
-  canDecide, stageFor, stageLabel, statusSummary, isTwoStage, STAGE_SUPERVISOR,
+  canDecide, stageFor, stageLabel, statusSummary, isTwoStage, STAGE_SUPERVISOR, closesInOneSign,
 } from '../lib/checklist/checklistApproval'
 import { canClose } from '../lib/checklist/checklistMarks'
 import { canSignInspection } from '../lib/inspectionApproval'
@@ -391,7 +391,8 @@ function LegacySimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
 
   // Would approving CLOSE the sheet, or only pass it up? Only a close is barred
   // by an outstanding fault, and only a close needs an area manager.
-  const wouldClose = isChecklistish && !(stage === STAGE_SUPERVISOR && isTwoStage(template))
+  const oneSign = isChecklistish && !!subject && closesInOneSign(template, subject, profile?.role, { isSuperAdmin: !!profile?.is_super_admin })
+  const wouldClose = isChecklistish && (!(stage === STAGE_SUPERVISOR && isTwoStage(template)) || oneSign)
 
   const closeCheck = useMemo(
     () => (loadedSub ? canClose(template, submissionAnswers(loadedSub)) : { ok: true, blocking: [] }),
@@ -641,6 +642,9 @@ function LegacySimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
                 }
                 onChange={setSignature}
               />
+              {oneSign && (
+                <p className="text-xs text-[var(--text-secondary)] mt-1">Your signature completes both the supervisor and the area manager steps.</p>
+              )}
             </div>
           )}
 

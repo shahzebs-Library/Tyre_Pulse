@@ -32,6 +32,7 @@ import {
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation } from '../lib/api/_client'
+import TableNotInUse from '../components/ui/TableNotInUse'
 
 const EMPTY_FORM = {
   asset_no: '', driver_name: '', latitude: '', longitude: '', speed_kmh: '',
@@ -301,6 +302,7 @@ export default function GpsTracking() {
           </div>
         }
       />
+      <TableNotInUse table="gps_positions" label="GPS positions" hint="Positions arrive once a GPS or telematics provider is connected." />
 
       {notProvisioned && (
         <div className="card border border-amber-800/50 flex items-start gap-3" role="status">

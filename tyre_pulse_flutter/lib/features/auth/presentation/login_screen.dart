@@ -36,6 +36,9 @@ abstract final class LoginActionKeys {
   static const Key forgotPassword = Key('login.forgot_password');
   static const Key accessHelp = Key('login.access_help');
   static const Key createAccount = Key('login.create_account');
+  static const Key forgotIdentifier = Key('login.forgot.identifier');
+  static const Key forgotSubmit = Key('login.forgot.submit');
+  static const Key forgotSent = Key('login.forgot.sent');
 }
 
 @immutable
@@ -198,6 +201,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           _errorMessage = copy.biometricFailed;
         });
     }
+  }
+
+  /// "Forgot password?": asks for the username / employee id and files a
+  /// reset request for the company's administrator (request_password_reset).
+  /// The server answers the same way whether or not the account exists.
+  Future<void> _showForgotPassword() {
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) => _ForgotPasswordDialog(
+        initialIdentifier: _identifierController.text.trim(),
+        onSubmit: (String identifier) =>
+            ref.read(authRepositoryProvider).requestPasswordReset(identifier),
+      ),
+    );
   }
 
   Future<void> _showLoginHelp(String message, {bool offerRegister = false}) {
@@ -368,9 +385,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   onChangeCountry: () =>
                       unawaited(_chooseCountry(selectedCountry)),
-                  onForgotPassword: () => unawaited(
-                    _showLoginHelp(LoginSecurityCopy.of(context).forgotHelp),
-                  ),
+                  onForgotPassword: () => unawaited(_showForgotPassword()),
                   onAccessHelp: () => unawaited(
                     _showLoginHelp(
                       LoginSecurityCopy.of(context).accessHelp,
@@ -448,9 +463,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     onChangeCountry: () =>
                         unawaited(_chooseCountry(selectedCountry)),
-                    onForgotPassword: () => unawaited(
-                      _showLoginHelp(LoginSecurityCopy.of(context).forgotHelp),
-                    ),
+                    onForgotPassword: () => unawaited(_showForgotPassword()),
                     onAccessHelp: () => unawaited(
                       _showLoginHelp(
                         LoginSecurityCopy.of(context).accessHelp,
@@ -1645,6 +1658,105 @@ class _LoginBanner extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The forgot-password request dialog. Stateless about the server: it only
+/// knows whether the request could be SENT, never whether the account exists.
+class _ForgotPasswordDialog extends StatefulWidget {
+  const _ForgotPasswordDialog({
+    required this.initialIdentifier,
+    required this.onSubmit,
+  });
+
+  final String initialIdentifier;
+  final Future<bool> Function(String identifier) onSubmit;
+
+  @override
+  State<_ForgotPasswordDialog> createState() => _ForgotPasswordDialogState();
+}
+
+class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initialIdentifier);
+  bool _busy = false;
+  bool _sent = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final String identifier = _controller.text.trim();
+    if (identifier.isEmpty) {
+      setState(() => _error = l10n.loginForgotIdentifierRequired);
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final bool ok = await widget.onSubmit(identifier);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _sent = ok;
+      _error = ok ? null : l10n.loginForgotFailed;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return AlertDialog(
+      title: Text(l10n.loginForgotTitle),
+      content: SingleChildScrollView(
+        child: _sent
+            ? Text(l10n.loginForgotSent, key: LoginActionKeys.forgotSent)
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Text(l10n.loginForgotPrompt),
+                  const SizedBox(height: 16),
+                  TextField(
+                    key: LoginActionKeys.forgotIdentifier,
+                    controller: _controller,
+                    enabled: !_busy,
+                    autofocus: widget.initialIdentifier.isEmpty,
+                    autocorrect: false,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => unawaited(_submit()),
+                    decoration: InputDecoration(
+                      labelText: l10n.loginForgotIdentifierLabel,
+                      errorText: _error,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.of(context).pop(),
+          child: Text(_sent ? l10n.actionClose : l10n.actionCancel),
+        ),
+        if (!_sent)
+          FilledButton(
+            key: LoginActionKeys.forgotSubmit,
+            onPressed: _busy ? null : () => unawaited(_submit()),
+            child: _busy
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(l10n.loginForgotSubmit),
+          ),
+      ],
     );
   }
 }

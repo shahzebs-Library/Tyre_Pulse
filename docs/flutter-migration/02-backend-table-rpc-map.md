@@ -336,3 +336,21 @@ the `qr-login` edge function use those, the phone never does.
 | Column | Created in | Flutter use |
 |---|---|---|
 | `vehicle_fleet.axle_count smallint` (1..10, nullable) | `supabase/migrations/20261103140000_vehicle_fleet_axle_count.sql` | Added to `vehicleFleetColumns`. `VehicleFleetRepository.loadAll`/`byAssetNo` feed every row into `registerFleetAxleRows` (`features/tyre_diagram/domain/vehicle_axle_registry.dart`), and `resolveVehicleType` then picks `Concrete pump 4-axle` (12 tyres) for a machine recorded as 4 axles. Read-only; RLS on `vehicle_fleet` unchanged. Kept on the device by `VehicleAxleStore` (shared_preferences key `tp.vehicle_axle_counts.v1`), saved after each live fleet read and restored before the offline cache is read, so an offline restart still draws the 12-tyre pump. |
+
+### 7.9 Raise action from an inspection + previous meter reading (added 2026-11-08)
+
+| Object | Flutter use |
+|---|---|
+| `corrective_actions` INSERT (title, description, priority, status 'Open', asset_no, tyre_serial, site, country, due_date, assigned_to, source_type 'inspection', source_id, source_detail) | `InspectionActionRepository` (`features/inspections/data/inspection_action_repository.dart`), one row per selected finding; rows built by `domain/inspection_action_plan.dart`, a port of web `src/lib/inspectionTyreFlags.js`. 23505 (the V496 one-open-action-per-defect guard) is reported as already raised. RLS unchanged. |
+| `corrective_actions` SELECT by `source_type='inspection'` + `source_id` | Filters out findings already raised before the sheet opens. |
+| `inspections.linked_action_id` UPDATE (only when null) | Best effort, after the first action is created, so the web register shows "Action raised". Allowed on a locked row by `lock_inspection_content`. |
+| `profiles` SELECT (id, full_name, username, role, site; approved, not locked) | Assignee picker in `raise_inspection_action_sheet.dart`, same role groups as web `RaiseActionDialog`. |
+| `inspections` SELECT newest odometer_km / hour_meter for the asset | `inspection_previous_meters.dart`: warning on the new-inspection meter fields when a reading is lower; never blocks. |
+
+### 7.10 Sign-in and password requests (added 2026-11-08)
+
+| Object | Flutter use |
+|---|---|
+| `get_email_by_identifier(identifier)` RPC (anon) | `auth_repository.dart` `_madeUpEmailFor`: since `20261108130000` it returns ONLY made-up `@users.tyrepulse.app` addresses, so field accounts sign in directly from the phone (own IP, own auth rate limit). |
+| `sign-in` edge function (verify_jwt false, self-validating) | Real-email accounts and unknown names: resolves the email server-side, enforces and records the lockout, returns only tokens; the app then calls `auth.setSession`. |
+| `request_password_reset(p_identifier)` RPC (anon, always `{"ok":true}`) | Login "Forgot password?" dialog; queues a request for the company's admin (`20261108120000`). |

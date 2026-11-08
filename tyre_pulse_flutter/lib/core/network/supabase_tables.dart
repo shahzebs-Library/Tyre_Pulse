@@ -80,6 +80,9 @@ abstract final class SupabaseTables {
   static const String tyreRecords = 'tyre_records';
 
   static const String correctiveActions = 'corrective_actions';
+
+  /// Action Center items; a corrective action is mirrored here by trigger.
+  static const String actionItems = 'action_items';
   static const String sites = 'sites';
   static const String alerts = 'alerts';
   static const String notifications = 'notifications';
@@ -187,6 +190,7 @@ abstract final class SupabaseTables {
     profiles,
     tyreRecords,
     correctiveActions,
+    actionItems,
     sites,
     alerts,
     notifications,
@@ -261,6 +265,12 @@ abstract final class SupabaseRpcs {
   /// Clears the caller's OWN counter. AUTHENTICATED only. That asymmetry is
   /// what makes the lockout real: someone who cannot sign in cannot reset it.
   static const String resetLoginAttempts = 'reset_login_attempts';
+
+  /// Anonymous "forgot password" request: queues a reset for the account's
+  /// administrator and ALWAYS answers {"ok":true}, so it reveals nothing about
+  /// whether the identifier exists. Created by
+  /// `supabase/migrations/20261108120000_password_reset_requests.sql`.
+  static const String requestPasswordReset = 'request_password_reset';
 
   /// Anon-safe public subset of `system_config` (never secrets). Read before
   /// sign-in for presentation such as the administrator-chosen login artwork
@@ -408,6 +418,7 @@ abstract final class SupabaseRpcs {
     loginAttemptStatus,
     recordLoginFailure,
     resetLoginAttempts,
+    requestPasswordReset,
     ssoPasswordLoginCheck,
     registerUserDevice,
     revokeUserDevice,

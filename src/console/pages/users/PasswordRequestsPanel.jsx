@@ -26,7 +26,7 @@ export default function PasswordRequestsPanel({ onSetPassword }) {
       let people = []
       if (ids.length) {
         const { data, error: e2 } = await supabase.from('profiles')
-          .select('id,full_name,username,email,role,site').in('id', ids)
+          .select('id,full_name,username,email,role,site').in('id', ids).limit(50)
         if (e2) throw e2
         people = data || []
       }

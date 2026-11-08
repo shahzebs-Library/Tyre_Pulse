@@ -9,6 +9,7 @@ import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_position_display.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_slot.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_body_painter.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_board.dart';
@@ -137,7 +138,9 @@ void main() {
 
     await tester.tap(find.text('List view'));
     await tester.pumpAndSettle();
-    await tester.tap(_identifierText('FL'));
+    // List rows show the tyre-map code, not the internal slot id.
+    final String code = tyrePositionDisplayCode('PICKUP', 'FL');
+    await tester.tap(_identifierText(code));
     await tester.pump();
     expect(tapped, 'FL');
   });

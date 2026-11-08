@@ -130,6 +130,23 @@ jobs:
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
 
+      - name: Prefetch sqlite3 native library (retries)
+        # The sqlite3 build hook downloads sqlite3.x64.windows.dll from the
+        # package's GitHub release and does not check the HTTP status, so an
+        # intermittent bad response fails the whole test run on a hash
+        # mismatch before any test executes. Run one small database test with
+        # retries first: once a download succeeds the hook caches the verified
+        # file and the full run below reuses it (it re-checks the hash).
+        run: |
+          for attempt in 1 2 3 4; do
+            if flutter test test/features/accidents/data/accident_report_repository_test.dart; then
+              exit 0
+            fi
+            echo "sqlite3 native asset attempt $attempt failed; retrying in $((attempt * 20))s"
+            sleep $((attempt * 20))
+          done
+          exit 1
+
       - name: Test
         run: flutter test --coverage
 

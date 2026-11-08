@@ -26,6 +26,33 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-11-08 — INSPECTIONS, ONE-SIGN CHECKLISTS, DUE ALERTS, SIGN-IN PRIVACY, PASSWORD REQUESTS. PR #467 MERGED (d8273853), prod READY.
+- Migrations APPLIED LIVE: 20261108090000 (lock_inspection_content Title Case roles - nobody could correct a locked inspection),
+  100000 (area manager/PMV/Admin/Director closes a two-stage checklist in ONE sign, both signature sets written; JS
+  closesInOneSign/nextStatusFor(template,sub,approved,{role,isSuperAdmin}) + Expo + Flutter mirrors - change ALL),
+  110000 (due-alerts push: workflow_notifications.event_id is BIGINT - mint a domain_events row; scan had failed since 25 Oct),
+  120000 (password_reset_requests + anon request_password_reset, same reply for any input, 1/hour; access_audit 'password_set'
+  closes requests; Console > Users PasswordRequestsPanel), 130000 (get_email_by_identifier returns ONLY @users.tyrepulse.app).
+- Sign-in: username -> rpc returns made-up email -> direct signInWithPassword (own IP, own rate limit). Real-email accounts
+  and unknown names -> edge fn `sign-in` (deployed v1, verify_jwt=false) which never returns the email. Web AuthContext +
+  Flutter auth_repository both follow this. Login "Forgot password?" -> "Ask my admin".
+- Inspections workspace: `pinned` selection (History/Raise action never fall back to list[0] = another vehicle);
+  InspectionActionRaiser (assignee/remark/due date, linked_action_id); photos inline per finding + Download / Download all
+  (src/lib/photoDownload.js); edit form Odometer/Engine hours (meters-only edit on locked rows for Admin/Manager/Director).
+  Inspection extra filters (owner point 8) NOT done - owner to decide.
+- TableNotInUse (src/components/ui/TableNotInUse.jsx) on 12 empty modules. Flutter release workflows APP_ENV production +
+  FLUTTER_SENTRY_DSN only (owner must add that secret). Root local.properties untracked.
+- FLUTTER CI was red on main since ~5 Nov for TWO stacked reasons. (1) The sqlite3 build hook downloads
+  sqlite3.x64.windows.dll from the package's GitHub release and hashes whatever comes back WITHOUT checking HTTP status;
+  for a few hours the Windows runner got identical bytes (bef140a1...) for 3.5.2 AND 3.9.0 = a GitHub-side error, so a
+  version bump does not help (tried, reverted). It is INTERMITTENT (a clean 200 / 1.7 MB in between, then another
+  wrong hash de78a2...), so flutter-ci.yml now has a "Prefetch sqlite3 native library (retries)" step: one small drift
+  test with up to 4 attempts; the hook caches the verified DLL and the full run reuses it. Do not bump sqlite3 for this. (2) Hidden behind it: two tests still expected internal slot ids (R1Li, FL) after the 5 Nov
+  "show tyre-map position codes" change; they now expect LHR1-I / tyrePositionDisplayCode(). CodeQL js failed once on
+  byte-identical code = flaky.
+- GOTCHA: run `dart format` from INSIDE the Flutter package dir (language version comes from its pubspec); run from
+  elsewhere it rewrites whole files differently from CI.
+
 # ⚑ SESSION 2026-11-05 (later) — 2025/2026 JOB CARD DATES REPAIRED (owner: "correct dates must, 2025 and 2026 important").
 - 17,279 KSA work_orders whose opened/started/completed/production dates carried a dropped-century year (0025/0026) got +2000 years. Snapshot of ALL 29,001 affected rows: `_bak.wo_dates_fix_20261105` (undo = restore the 5 date columns by id).
 - HELD BACK on purpose (574 in the 2025/2026 range): rows that would become future-dated, completed before opened, >365 days open, or production-in before out = the day/month-swap class, needs review. Years 0022-0024 (~11,000 rows) left as is per owner ("avoid for now").

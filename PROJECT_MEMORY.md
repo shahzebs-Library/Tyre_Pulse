@@ -42,10 +42,15 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   Inspection extra filters (owner point 8) NOT done - owner to decide.
 - TableNotInUse (src/components/ui/TableNotInUse.jsx) on 12 empty modules. Flutter release workflows APP_ENV production +
   FLUTTER_SENTRY_DSN only (owner must add that secret). Root local.properties untracked.
-- FLUTTER CI RED (main too, since ~5 Nov): sqlite3 build hook downloads sqlite3.x64.windows.dll from the package's GitHub
-  release and hashes whatever comes back WITHOUT checking HTTP status; Windows runner got identical bytes (bef140a1...) for
-  3.5.2 AND 3.9.0 = an error page, so a version bump does not help (tried, reverted). A diagnostic curl step was added to
-  flutter-ci.yml. CodeQL js failed once on byte-identical code = flaky.
+- FLUTTER CI was red on main since ~5 Nov for TWO stacked reasons. (1) The sqlite3 build hook downloads
+  sqlite3.x64.windows.dll from the package's GitHub release and hashes whatever comes back WITHOUT checking HTTP status;
+  for a few hours the Windows runner got identical bytes (bef140a1...) for 3.5.2 AND 3.9.0 = a GitHub-side error, so a
+  version bump does not help (tried, reverted). It cleared on its own (diagnostic curl: 200, 1.7 MB). If it recurs, re-run
+  later; do not bump sqlite3. (2) Hidden behind it: two tests still expected internal slot ids (R1Li, FL) after the 5 Nov
+  "show tyre-map position codes" change; they now expect LHR1-I / tyrePositionDisplayCode(). CodeQL js failed once on
+  byte-identical code = flaky.
+- GOTCHA: run `dart format` from INSIDE the Flutter package dir (language version comes from its pubspec); run from
+  elsewhere it rewrites whole files differently from CI.
 
 # ⚑ SESSION 2026-11-05 (later) — 2025/2026 JOB CARD DATES REPAIRED (owner: "correct dates must, 2025 and 2026 important").
 - 17,279 KSA work_orders whose opened/started/completed/production dates carried a dropped-century year (0025/0026) got +2000 years. Snapshot of ALL 29,001 affected rows: `_bak.wo_dates_fix_20261105` (undo = restore the 5 date columns by id).

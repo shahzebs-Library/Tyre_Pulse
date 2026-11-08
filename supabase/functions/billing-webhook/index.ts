@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
       const planCode = obj.metadata?.plan_code || null
       const interval = obj.metadata?.interval === 'annual' ? 'annual' : 'monthly'
       if (planCode) {
-        await admin.from('org_subscriptions').upsert({
+        const { error } = await admin.from('org_subscriptions').upsert({
           organisation_id: orgId,
           plan_code: planCode,
           status: 'active',
@@ -82,22 +82,25 @@ Deno.serve(async (req) => {
           external_customer_id: obj.customer ?? null,
           external_subscription_id: obj.subscription ?? null,
         }, { onConflict: 'organisation_id' })
+        if (error) throw error
       }
     } else if (event.type === 'customer.subscription.updated') {
-      const status = obj.cancel_at_period_end ? 'active'
-        : obj.status === 'past_due' ? 'past_due'
-        : obj.status === 'canceled' ? 'canceled'
-        : obj.status === 'active' ? 'active' : 'active'
+      // Cancellation scheduling does not make an unpaid subscription active.
+      // Map Stripe's non-entitled states to the existing database enum.
+      const status = ['active', 'trialing', 'past_due', 'canceled'].includes(obj.status)
+        ? obj.status : 'expired'
       const patch: Record<string, unknown> = {
         status,
         cancel_at_period_end: !!obj.cancel_at_period_end,
       }
       if (obj.current_period_end) patch.current_period_end = new Date(obj.current_period_end * 1000).toISOString()
-      await admin.from('org_subscriptions').update(patch).eq('external_subscription_id', obj.id)
+      const { error } = await admin.from('org_subscriptions').update(patch).eq('external_subscription_id', obj.id)
+      if (error) throw error
     } else if (event.type === 'customer.subscription.deleted') {
-      await admin.from('org_subscriptions')
+      const { error } = await admin.from('org_subscriptions')
         .update({ status: 'canceled', cancel_at_period_end: false })
         .eq('external_subscription_id', obj.id)
+      if (error) throw error
     }
   } catch (e) {
     // A failed reconciliation must NOT be ACKed as success — return 5xx so Stripe

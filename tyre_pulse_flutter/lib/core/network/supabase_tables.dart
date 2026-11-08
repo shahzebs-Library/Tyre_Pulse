@@ -262,6 +262,12 @@ abstract final class SupabaseRpcs {
   /// what makes the lockout real: someone who cannot sign in cannot reset it.
   static const String resetLoginAttempts = 'reset_login_attempts';
 
+  /// Anonymous "forgot password" request: queues a reset for the account's
+  /// administrator and ALWAYS answers {"ok":true}, so it reveals nothing about
+  /// whether the identifier exists. Created by
+  /// `supabase/migrations/20261108120000_password_reset_requests.sql`.
+  static const String requestPasswordReset = 'request_password_reset';
+
   /// Anon-safe public subset of `system_config` (never secrets). Read before
   /// sign-in for presentation such as the administrator-chosen login artwork
   /// (`mobile_login_hero`).
@@ -408,6 +414,7 @@ abstract final class SupabaseRpcs {
     loginAttemptStatus,
     recordLoginFailure,
     resetLoginAttempts,
+    requestPasswordReset,
     ssoPasswordLoginCheck,
     registerUserDevice,
     revokeUserDevice,

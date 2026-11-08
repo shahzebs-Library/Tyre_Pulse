@@ -597,10 +597,15 @@ void main() {
     // summary), the per-finding photo (unavailable, open, save, share,
     // saved, failed) and the header's lower-than-last-reading warnings
     // (inspectionMeterBelowPreviousOdometer ... inspectionRaiseActionDone).
-    test('en, ar and ur each carry exactly 2249 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2249);
-      expect(_translatableKeys(ar).length, 2249);
-      expect(_translatableKeys(ur).length, 2249);
+    // 2249 + 7 = 2256. Forgot password on the login screen
+    // (request_password_reset): the dialog title, the instruction, the
+    // identifier field label and its required message, the submit button,
+    // the sent confirmation and the failure sentence
+    // (loginForgotTitle ... loginForgotFailed).
+    test('en, ar and ur each carry exactly 2256 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2256);
+      expect(_translatableKeys(ar).length, 2256);
+      expect(_translatableKeys(ur).length, 2256);
     });
   });
 

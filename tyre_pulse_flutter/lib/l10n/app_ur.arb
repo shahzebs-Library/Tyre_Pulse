@@ -3250,5 +3250,12 @@
   "inspectionRaiseActionSubmit": "{count} کارروائی شروع کریں",
   "inspectionRaiseActionFailed": "کارروائی شروع نہیں ہو سکی۔ دوبارہ کوشش کریں۔",
   "inspectionRaiseActionLoadFailed": "موجودہ کارروائیاں چیک نہیں ہو سکیں۔",
-  "inspectionRaiseActionDone": "شروع {created}، پہلے سے موجود {skipped}، ناکام {failed}۔"
+  "inspectionRaiseActionDone": "شروع {created}، پہلے سے موجود {skipped}، ناکام {failed}۔",
+  "loginForgotTitle": "اپنا پاس ورڈ دوبارہ ترتیب دیں",
+  "loginForgotPrompt": "اپنا یوزر نیم یا ملازم آئی ڈی درج کریں۔ آپ کی کمپنی کا ایڈمن آپ کے لیے نیا پاس ورڈ مقرر کرے گا۔",
+  "loginForgotIdentifierLabel": "یوزر نیم یا ملازم آئی ڈی",
+  "loginForgotIdentifierRequired": "اپنا یوزر نیم یا ملازم آئی ڈی درج کریں۔",
+  "loginForgotSubmit": "درخواست بھیجیں",
+  "loginForgotSent": "آپ کی درخواست آپ کی کمپنی کے ایڈمن کو بھیج دی گئی ہے۔ وہ آپ کے لیے نیا پاس ورڈ مقرر کریں گے۔",
+  "loginForgotFailed": "درخواست نہیں بھیجی جا سکی۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔"
 }

@@ -7821,4 +7821,29 @@ class AppLocalizationsAr extends AppLocalizations {
   String inspectionRaiseActionDone(int created, int skipped, int failed) {
     return 'تم إنشاء $created، موجود مسبقاً $skipped، فشل $failed.';
   }
+
+  @override
+  String get loginForgotTitle => 'إعادة تعيين كلمة المرور';
+
+  @override
+  String get loginForgotPrompt =>
+      'أدخل اسم المستخدم أو الرقم الوظيفي. سيقوم مسؤول شركتك بتعيين كلمة مرور جديدة لك.';
+
+  @override
+  String get loginForgotIdentifierLabel => 'اسم المستخدم أو الرقم الوظيفي';
+
+  @override
+  String get loginForgotIdentifierRequired =>
+      'أدخل اسم المستخدم أو الرقم الوظيفي.';
+
+  @override
+  String get loginForgotSubmit => 'إرسال الطلب';
+
+  @override
+  String get loginForgotSent =>
+      'تم إرسال طلبك إلى مسؤول شركتك. سيقوم بتعيين كلمة مرور جديدة لك.';
+
+  @override
+  String get loginForgotFailed =>
+      'تعذر إرسال الطلب. تحقق من اتصالك وحاول مرة أخرى.';
 }

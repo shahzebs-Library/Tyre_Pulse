@@ -8528,5 +8528,12 @@
         "type": "int"
       }
     }
-  }
+  },
+  "loginForgotTitle": "Reset your password",
+  "loginForgotPrompt": "Enter your username or employee ID. Your company's admin will set a new password for you.",
+  "loginForgotIdentifierLabel": "Username or employee ID",
+  "loginForgotIdentifierRequired": "Enter your username or employee ID.",
+  "loginForgotSubmit": "Send request",
+  "loginForgotSent": "Your request was sent to your company's admin. They will set a new password for you.",
+  "loginForgotFailed": "The request could not be sent. Check your connection and try again."
 }

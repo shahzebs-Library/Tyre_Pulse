@@ -7821,4 +7821,29 @@ class AppLocalizationsUr extends AppLocalizations {
   String inspectionRaiseActionDone(int created, int skipped, int failed) {
     return 'شروع $created، پہلے سے موجود $skipped، ناکام $failed۔';
   }
+
+  @override
+  String get loginForgotTitle => 'اپنا پاس ورڈ دوبارہ ترتیب دیں';
+
+  @override
+  String get loginForgotPrompt =>
+      'اپنا یوزر نیم یا ملازم آئی ڈی درج کریں۔ آپ کی کمپنی کا ایڈمن آپ کے لیے نیا پاس ورڈ مقرر کرے گا۔';
+
+  @override
+  String get loginForgotIdentifierLabel => 'یوزر نیم یا ملازم آئی ڈی';
+
+  @override
+  String get loginForgotIdentifierRequired =>
+      'اپنا یوزر نیم یا ملازم آئی ڈی درج کریں۔';
+
+  @override
+  String get loginForgotSubmit => 'درخواست بھیجیں';
+
+  @override
+  String get loginForgotSent =>
+      'آپ کی درخواست آپ کی کمپنی کے ایڈمن کو بھیج دی گئی ہے۔ وہ آپ کے لیے نیا پاس ورڈ مقرر کریں گے۔';
+
+  @override
+  String get loginForgotFailed =>
+      'درخواست نہیں بھیجی جا سکی۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔';
 }

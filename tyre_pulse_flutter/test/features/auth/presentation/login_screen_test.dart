@@ -721,22 +721,74 @@ void main() {
   );
 
   testWidgets(
-    'forgot-password and access controls open truthful administrator help',
+    'forgot password files a reset request for the administrator',
     (WidgetTester tester) async {
-      await _pump(tester);
+      final _Pumped p = await _pump(tester);
 
       await tester.tap(find.byKey(LoginActionKeys.forgotPassword));
       await tester.pumpAndSettle();
-
-      expect(find.text('Sign-in help'), findsOneWidget);
-      expect(
-        find.textContaining('Password resets are managed'),
-        findsOneWidget,
-      );
+      expect(find.text('Reset your password'), findsOneWidget);
       // The password help offers no account creation.
       expect(find.byKey(LoginActionKeys.createAccount), findsNothing);
+
+      // Blank identifier is refused on the device, nothing is sent.
+      await tester.tap(find.byKey(LoginActionKeys.forgotSubmit));
+      await tester.pumpAndSettle();
+      expect(find.text('Enter your username or employee ID.'), findsOneWidget);
+      expect(
+        p.auth.calls.where((String c) => c.startsWith('requestPasswordReset')),
+        isEmpty,
+      );
+
+      await tester.enterText(
+        find.byKey(LoginActionKeys.forgotIdentifier),
+        '  jdoe  ',
+      );
+      await tester.tap(find.byKey(LoginActionKeys.forgotSubmit));
+      await tester.pumpAndSettle();
+      expect(p.auth.calls, contains('requestPasswordReset:jdoe'));
+      expect(find.byKey(LoginActionKeys.forgotSent), findsOneWidget);
+      expect(
+        find.text(
+          "Your request was sent to your company's admin. They will set a "
+          'new password for you.',
+        ),
+        findsOneWidget,
+      );
       await tester.tap(find.text('Close'));
       await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
+    'forgot password says so when the request could not be sent',
+    (WidgetTester tester) async {
+      final _Pumped p = await _pump(tester);
+      p.auth.passwordResetResult = false;
+
+      await tester.tap(find.byKey(LoginActionKeys.forgotPassword));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(LoginActionKeys.forgotIdentifier),
+        'jdoe',
+      );
+      await tester.tap(find.byKey(LoginActionKeys.forgotSubmit));
+      await tester.pumpAndSettle();
+      expect(find.byKey(LoginActionKeys.forgotSent), findsNothing);
+      expect(
+        find.text(
+          'The request could not be sent. Check your connection and try '
+          'again.',
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'access control opens truthful administrator help',
+    (WidgetTester tester) async {
+      await _pump(tester);
 
       await tester.tap(find.byKey(LoginActionKeys.accessHelp));
       await tester.pumpAndSettle();

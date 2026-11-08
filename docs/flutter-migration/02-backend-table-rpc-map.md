@@ -346,3 +346,11 @@ the `qr-login` edge function use those, the phone never does.
 | `inspections.linked_action_id` UPDATE (only when null) | Best effort, after the first action is created, so the web register shows "Action raised". Allowed on a locked row by `lock_inspection_content`. |
 | `profiles` SELECT (id, full_name, username, role, site; approved, not locked) | Assignee picker in `raise_inspection_action_sheet.dart`, same role groups as web `RaiseActionDialog`. |
 | `inspections` SELECT newest odometer_km / hour_meter for the asset | `inspection_previous_meters.dart`: warning on the new-inspection meter fields when a reading is lower; never blocks. |
+
+### 7.10 Sign-in and password requests (added 2026-11-08)
+
+| Object | Flutter use |
+|---|---|
+| `get_email_by_identifier(identifier)` RPC (anon) | `auth_repository.dart` `_madeUpEmailFor`: since `20261108130000` it returns ONLY made-up `@users.tyrepulse.app` addresses, so field accounts sign in directly from the phone (own IP, own auth rate limit). |
+| `sign-in` edge function (verify_jwt false, self-validating) | Real-email accounts and unknown names: resolves the email server-side, enforces and records the lockout, returns only tokens; the app then calls `auth.setSession`. |
+| `request_password_reset(p_identifier)` RPC (anon, always `{"ok":true}`) | Login "Forgot password?" dialog; queues a request for the company's admin (`20261108120000`). |

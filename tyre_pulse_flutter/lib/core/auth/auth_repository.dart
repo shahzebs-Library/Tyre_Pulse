@@ -33,17 +33,18 @@
 /// exact argument name - `p_identifier` - is confirmed against the live
 /// function bodies in `MIGRATIONS_V287_LOGIN_LOCKOUT.sql`.
 ///
-/// `get_email_by_identifier(identifier text) returns text` is verified the
-/// same way, against `MIGRATIONS_V69_LOGIN_IDENTIFIER.sql`, and against its
-/// live caller in `mobile/contexts/AuthContext.tsx`. IT IS NOT YET PRESENT IN
-/// `SupabaseRpcs` (`lib/core/network/supabase_tables.dart`), which is outside
-/// this lane's ownership for this task. [_getEmailByIdentifierRpc] below is a
-/// single, clearly-marked exception to "reference a constant in the shared
-/// registry" for exactly this reason - see this file's header for the
-/// reasoning, and the accompanying report for the flag to the network lane.
+/// A username / employee id is first looked up with `get_email_by_identifier`,
+/// which since migration 20261108130000 returns ONLY made-up
+/// `@users.tyrepulse.app` addresses (they reveal nothing). Those accounts -
+/// nearly all field staff - sign in directly from the phone. A real-email
+/// account or an unknown name gets null and is sent to the `sign-in` edge
+/// function (`supabase/functions/sign-in/index.ts`), which resolves the email
+/// with the service role, enforces and records the lockout, and returns only
+/// session tokens. An identifier containing '@' signs in directly.
 library;
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tyre_pulse/core/auth/login_lockout.dart';
@@ -52,9 +53,94 @@ import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
 
-/// See this file's header. Verified against
-/// `MIGRATIONS_V69_LOGIN_IDENTIFIER.sql`; not yet in `SupabaseRpcs`.
+/// The `sign-in` edge function (`supabase/functions/sign-in/index.ts`). It
+/// replaced the anonymous `get_email_by_identifier` lookup, which returned a
+/// real email for any username (migration 20261108130000 narrows that RPC to
+/// synthetic `@users.tyrepulse.app` addresses for the retired Expo app).
+const String _signInFunction = 'sign-in';
+
+/// Returns only made-up `@users.tyrepulse.app` addresses (see library doc).
 const String _getEmailByIdentifierRpc = 'get_email_by_identifier';
+
+/// What the `sign-in` edge function answered, decoded. Pure, so it is unit
+/// tested without a network.
+sealed class SignInFunctionResult {
+  const SignInFunctionResult();
+}
+
+/// A correct password: the session tokens to adopt.
+final class SignInFunctionSession extends SignInFunctionResult {
+  const SignInFunctionSession({
+    required this.accessToken,
+    required this.refreshToken,
+  });
+  final String accessToken;
+  final String refreshToken;
+}
+
+/// Unknown identifier OR wrong password - deliberately indistinguishable.
+/// Already counted towards the lockout by the function.
+final class SignInFunctionRejected extends SignInFunctionResult {
+  const SignInFunctionRejected();
+}
+
+/// Locked out (already recorded server-side).
+final class SignInFunctionLocked extends SignInFunctionResult {
+  const SignInFunctionLocked(this.lock);
+  final LoginLockStatus lock;
+}
+
+/// The auth backend could not be reached or was busy. Not counted, and never
+/// shown as "wrong password".
+final class SignInFunctionUnavailable extends SignInFunctionResult {
+  const SignInFunctionUnavailable(this.error);
+  final AppError error;
+}
+
+const AppError _signInUnavailableError = AppError(
+  kind: AppErrorKind.server,
+  message: 'Sign-in is unavailable right now. Try again shortly.',
+  technical: 'sign-in edge function returned an unexpected or 5xx response',
+);
+
+/// Decodes a `sign-in` edge-function response. [body] is a decoded JSON map
+/// normally, but may be a raw string or null; anything unrecognised is
+/// "unavailable", never "wrong password".
+SignInFunctionResult interpretSignInFunction(int status, Object? body) {
+  Object? decoded = body;
+  if (decoded is String) {
+    try {
+      decoded = jsonDecode(decoded);
+    } on FormatException {
+      decoded = null;
+    }
+  }
+  final Map<Object?, Object?> map =
+      decoded is Map ? decoded : const <Object?, Object?>{};
+  final Object? access = map['access_token'];
+  final Object? refresh = map['refresh_token'];
+  if (status >= 200 &&
+      status < 300 &&
+      access is String &&
+      access.isNotEmpty &&
+      refresh is String &&
+      refresh.isNotEmpty) {
+    return SignInFunctionSession(accessToken: access, refreshToken: refresh);
+  }
+  switch (map['error']) {
+    case 'invalid_credentials':
+      return const SignInFunctionRejected();
+    case 'locked':
+      return SignInFunctionLocked(
+        LoginLockStatus.fromRpcResult(<String, Object?>{
+          'enabled': true,
+          'locked': true,
+          'retry_after_seconds': map['retry_after_seconds'],
+        }),
+      );
+  }
+  return const SignInFunctionUnavailable(_signInUnavailableError);
+}
 
 /// Pure interpretation of a `sso_password_login_check` response, exposed for
 /// tests. Anything unclear (null, non-map, missing key) ALLOWS - identical to
@@ -120,6 +206,12 @@ abstract interface class AuthRepository {
   /// pressing "sign out" from a screen offering no other way forward must
   /// always be able to get somebody to the login screen.
   Future<void> signOut();
+
+  /// "Forgot password": asks the account's administrator for a new password
+  /// via `request_password_reset`. The server always answers ok (no
+  /// enumeration), so this only reports whether the request could be SENT.
+  /// Never throws.
+  Future<bool> requestPasswordReset(String identifier);
 
   /// Nudges the SDK to renew its access token now, rather than waiting for its
   /// own internal schedule. Intended to be called when the app returns to the
@@ -196,6 +288,21 @@ final class SupabaseAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<bool> requestPasswordReset(String identifier) async {
+    final String trimmed = identifier.trim();
+    if (trimmed.isEmpty) return false;
+    try {
+      await _client.rpc<Object?>(
+        SupabaseRpcs.requestPasswordReset,
+        params: <String, Object?>{'p_identifier': trimmed},
+      );
+      return true;
+    } on Object {
+      return false;
+    }
+  }
+
+  @override
   Future<SignInOutcome> signIn({
     required String identifier,
     required String password,
@@ -216,37 +323,27 @@ final class SupabaseAuthRepository implements AuthRepository {
       return SignInLocked(lockBefore.lockoutMinutes);
     }
 
-    final String email;
-    if (trimmedIdentifier.contains('@')) {
-      email = trimmedIdentifier;
-    } else {
-      // Not `final`: the try/catch below sets this on exactly one of two
-      // mutually-exclusive paths, but the analyzer's definite-assignment
-      // check for a `final` local does not treat that as a single
-      // assignment here - see AGENTS.md rule 12, verified against
-      // `flutter analyze --fatal-infos` rather than assumed.
-      Object? resolved;
+    // Field accounts carry a made-up @users.tyrepulse.app address that reveals
+    // nothing, so the lookup still returns it and the sign-in goes straight
+    // from this phone (its own IP and auth rate limit). A real-email account
+    // or an unknown name gets null and goes through the `sign-in` function,
+    // which never discloses the address. Sending every username through the
+    // function would put all field sign-ins behind one server IP.
+    final String loginEmail = trimmedIdentifier.contains('@')
+        ? trimmedIdentifier
+        : (await _madeUpEmailFor(trimmedIdentifier)) ?? trimmedIdentifier;
+
+    if (loginEmail.contains('@')) {
       try {
-        resolved = await _client.rpc(
-          _getEmailByIdentifierRpc,
-          params: <String, Object?>{'identifier': trimmedIdentifier},
+        await _client.auth.signInWithPassword(
+          email: loginEmail,
+          password: password,
         );
       } on Object catch (error) {
         final SupabaseFailure failure = classifySupabaseError(error);
         if (failure.isConnectivity) {
-          // Honest, and a deliberate improvement over the React Native
-          // reference: a spotty connection during identifier resolution must
-          // never be told to a field worker as "wrong password", and must
-          // never cost them one of their limited login attempts either.
           return SignInFailed(failure.error);
         }
-        resolved = null;
-      }
-      if (resolved is! String || resolved.isEmpty) {
-        // Matches `record_login_failure`'s own designed behaviour: it only
-        // counts against a REAL account (`_login_identifier_exists`), so
-        // calling it for an identifier that does not exist is safe and adds
-        // no enumeration signal - see MIGRATIONS_V287's header.
         final LoginLockStatus lockAfter = await _recordFailure(
           trimmedIdentifier,
         );
@@ -254,20 +351,35 @@ final class SupabaseAuthRepository implements AuthRepository {
             ? SignInLocked(lockAfter.lockoutMinutes)
             : const SignInRejected(_invalidCredentialsError);
       }
-      email = resolved;
-    }
-
-    try {
-      await _client.auth.signInWithPassword(email: email, password: password);
-    } on Object catch (error) {
-      final SupabaseFailure failure = classifySupabaseError(error);
-      if (failure.isConnectivity) {
-        return SignInFailed(failure.error);
+    } else {
+      // Username / employee id: the `sign-in` edge function resolves the email
+      // SERVER-SIDE and never returns it, so knowing a username no longer
+      // reveals the person's email. It checks AND records the V287 lockout
+      // itself, so a refusal here must NOT be recorded again (double count).
+      final SignInFunctionResult result = await _signInThroughFunction(
+        trimmedIdentifier,
+        password,
+      );
+      switch (result) {
+        case SignInFunctionSession(
+            :final String accessToken,
+            :final String refreshToken
+          ):
+          try {
+            await _client.auth.setSession(
+              refreshToken,
+              accessToken: accessToken,
+            );
+          } on Object catch (error) {
+            return SignInFailed(classifySupabaseError(error).error);
+          }
+        case SignInFunctionRejected():
+          return const SignInRejected(_invalidCredentialsError);
+        case SignInFunctionLocked(:final LoginLockStatus lock):
+          return SignInLocked(lock.lockoutMinutes);
+        case SignInFunctionUnavailable(:final AppError error):
+          return SignInFailed(error);
       }
-      final LoginLockStatus lockAfter = await _recordFailure(trimmedIdentifier);
-      return lockAfter.locked
-          ? SignInLocked(lockAfter.lockoutMinutes)
-          : const SignInRejected(_invalidCredentialsError);
     }
 
     // Access Policies: an organisation that requires SSO refuses PASSWORD
@@ -289,6 +401,42 @@ final class SupabaseAuthRepository implements AuthRepository {
     unawaited(_resetLockout());
 
     return const SignInSucceeded();
+  }
+
+  /// The account's made-up sign-in address, or null (real email, unknown
+  /// name, or the lookup failed). Never throws.
+  Future<String?> _madeUpEmailFor(String identifier) async {
+    try {
+      final Object? result = await _client.rpc<Object?>(
+        _getEmailByIdentifierRpc,
+        params: <String, Object?>{'identifier': identifier},
+      );
+      return result is String && result.contains('@') ? result : null;
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Calls the `sign-in` edge function. Never throws.
+  Future<SignInFunctionResult> _signInThroughFunction(
+    String identifier,
+    String password,
+  ) async {
+    try {
+      final FunctionResponse response = await _client.functions.invoke(
+        _signInFunction,
+        body: <String, Object?>{
+          'identifier': identifier,
+          'password': password,
+        },
+      );
+      return interpretSignInFunction(response.status, response.data);
+    } on FunctionException catch (error) {
+      return interpretSignInFunction(error.status, error.details);
+    } on Object catch (error) {
+      final SupabaseFailure failure = classifySupabaseError(error);
+      return SignInFunctionUnavailable(failure.error);
+    }
   }
 
   static const AppError _ssoRequiredError = AppError(

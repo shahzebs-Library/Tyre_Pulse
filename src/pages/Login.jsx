@@ -91,7 +91,9 @@ export default function Login() {
   const [forgotMode, setForgotMode]   = useState(() => {
     try { return new URLSearchParams(window.location.search).get('forgot') === '1' } catch { return false }
   })
-  const [forgotChannel, setForgotChannel] = useState('email')
+  // 'admin' first: 773 of 781 accounts have no mailbox or phone to receive a code.
+  const [forgotChannel, setForgotChannel] = useState('admin')
+  const [adminRequested, setAdminRequested] = useState(false)
   const [forgotDestination, setForgotDestination] = useState('')
   const [forgotChallengeId, setForgotChallengeId] = useState('')
   const [forgotCode, setForgotCode] = useState('')
@@ -230,6 +232,18 @@ export default function Login() {
       setLoading(false)
       return
     }
+    // Lockout enforced by the sign-in edge function (already recorded there).
+    if (result?.code === 'login_locked') {
+      setError(t('auth.login.errAccountLocked', { mins: lockMinutes(result) }))
+      setLoading(false)
+      return
+    }
+    // The auth backend was unreachable or busy: not a wrong password.
+    if (result?.code === 'auth_unavailable') {
+      setError(t('auth.login.errUnexpected'))
+      setLoading(false)
+      return
+    }
     if (result) {
       const next = loginAttempts + 1
       setLoginAttempts(next)
@@ -238,7 +252,8 @@ export default function Login() {
       else if (next >= 5) setCooldownUntil(Date.now() + 15_000)
       else if (next >= 3) setCooldownUntil(Date.now() +  5_000)
       // Record against the server-side lockout; if it just locked, say so clearly.
-      const locked = await recordLoginFailure(identifier)
+      // A username sign-in was already counted by the sign-in edge function.
+      const locked = result?.counted ? null : await recordLoginFailure(identifier)
       if (locked?.locked) {
         setError(t('auth.login.errAccountLocked', { mins: lockMinutes(locked) }))
       } else {
@@ -343,6 +358,15 @@ export default function Login() {
   async function handleForgot(e) {
     e.preventDefault(); setError(''); setForgotLoading(true)
     try {
+      if (forgotChannel === 'admin') {
+        const id = forgotDestination.trim()
+        if (!id) { setError('Enter your username or employee ID.'); return }
+        // Always answers ok, so it reveals nothing about whether the account exists.
+        const { error: rpcErr } = await supabase.rpc('request_password_reset', { p_identifier: id })
+        if (rpcErr) throw rpcErr
+        setAdminRequested(true)
+        return
+      }
       if (!recoveryDestinationIsValid(forgotChannel, forgotDestination)) {
         setError(forgotChannel === 'email'
           ? 'Enter a valid recovery email address.'
@@ -377,7 +401,7 @@ export default function Login() {
     }
   }
 
-  function switchTab(val) { setTab(val); setError(''); setSignupDone(false); setForgotMode(false); setForgotSent(false); setForgotCode(''); setForgotChallengeId(''); setPendingApproval(false); setFieldErr({ id: null, pw: null }) }
+  function switchTab(val) { setTab(val); setError(''); setSignupDone(false); setForgotMode(false); setForgotSent(false); setAdminRequested(false); setForgotCode(''); setForgotChallengeId(''); setPendingApproval(false); setFieldErr({ id: null, pw: null }) }
 
   const inputStyle = (field) => ({
     width: '100%',
@@ -595,8 +619,9 @@ export default function Login() {
                       onClick={() => {
                         const typed = identifier.trim()
                         const looksLikePhone = /^(?:\+|00)[\d\s().-]+$/.test(typed)
-                        setForgotChannel(looksLikePhone ? 'sms' : 'email')
-                        setForgotDestination(typed.includes('@') || looksLikePhone ? typed : '')
+                        // A username / employee id (no @, not a phone) has no mailbox: ask the admin.
+                        setForgotChannel(looksLikePhone ? 'sms' : typed.includes('@') ? 'email' : 'admin')
+                        setForgotDestination(typed)
                         setForgotMode(true); setError('')
                       }}
                     >
@@ -648,7 +673,21 @@ export default function Login() {
               )}
 
               {/* ── FORGOT PASSWORD ───────────────────────────────────────── */}
-              {forgotMode && !forgotSent && (
+              {forgotMode && adminRequested && (
+                <div role="status" style={{ textAlign:'center', padding:'8px 0', display:'flex', flexDirection:'column', gap:12 }}>
+                  <KeyRound size={30} style={{ color:'var(--brand-on-tint)', margin:'0 auto' }}/>
+                  <div style={{ fontSize:18, fontWeight:800, color:'var(--login-text)' }}>Request sent</div>
+                  <div style={{ fontSize:13, color:'var(--login-text-dim)', lineHeight:1.5 }}>
+                    Your request was sent to your company's admin. They will set a new password for you and tell you in person or by phone.
+                  </div>
+                  <button type="button" className="tp-login-link" onClick={() => { setForgotMode(false); setAdminRequested(false); setForgotDestination(''); setError('') }}
+                    style={{ fontSize:13, color:'var(--brand-on-tint)', background:'none', border:'none', cursor:'pointer', fontWeight:700 }}>
+                    {t('auth.login.backToSignIn')}
+                  </button>
+                </div>
+              )}
+
+              {forgotMode && !forgotSent && !adminRequested && (
                 <motion.form key="forgot"
                   initial={{ opacity:0, x:12 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:-12 }}
                   transition={{ duration:0.2 }}
@@ -662,13 +701,16 @@ export default function Login() {
                     </button>
                     <div style={{ fontSize:20, fontWeight:800, color:'var(--login-text)', marginBottom:5, letterSpacing:'-0.02em' }}>{t('auth.login.resetPasswordTitle')}</div>
                     <div style={{ fontSize:13, color:'var(--login-text-dim)', lineHeight:1.5 }}>
-                      {RECOVERY_SMS_ENABLED
-                        ? 'Use a recovery email or mobile number that you previously verified in Account Settings.'
-                        : 'Use the recovery email that you previously verified in Account Settings.'}
+                      {forgotChannel === 'admin'
+                        ? 'No email or phone set up? Ask your company admin to set a new password for you.'
+                        : RECOVERY_SMS_ENABLED
+                          ? 'Use a recovery email or mobile number that you previously verified in Account Settings.'
+                          : 'Use the recovery email that you previously verified in Account Settings.'}
                     </div>
                   </div>
-                  <div role="group" aria-label="Recovery method" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                  <div role="group" aria-label="Recovery method" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(110px, 1fr))', gap:8 }}>
                     {[
+                      ['admin', KeyRound, 'Ask my admin'],
                       ['email', Mail, 'Email'],
                       ...(RECOVERY_SMS_ENABLED ? [['sms', Phone, 'Mobile SMS']] : []),
                     ].map(([value, Icon, label]) => (
@@ -686,13 +728,13 @@ export default function Login() {
                     ))}
                   </div>
                   <div>
-                    <label htmlFor="recovery-destination" style={labelStyle}>{forgotChannel === 'email' ? 'Verified recovery email' : 'Verified mobile number'}</label>
-                    <input id="recovery-destination" type={forgotChannel === 'email' ? 'email' : 'tel'} style={inputStyle('forgot')}
+                    <label htmlFor="recovery-destination" style={labelStyle}>{forgotChannel === 'admin' ? 'Username or employee ID' : forgotChannel === 'email' ? 'Verified recovery email' : 'Verified mobile number'}</label>
+                    <input id="recovery-destination" type={forgotChannel === 'admin' ? 'text' : forgotChannel === 'email' ? 'email' : 'tel'} style={inputStyle('forgot')}
                       aria-invalid={error ? true : undefined}
                       aria-describedby={error ? 'login-error' : undefined}
-                      autoComplete={forgotChannel === 'email' ? 'email' : 'tel'}
-                      inputMode={forgotChannel === 'email' ? 'email' : 'tel'}
-                      placeholder={forgotChannel === 'email' ? 'you@company.com' : '+966501234567'}
+                      autoComplete={forgotChannel === 'admin' ? 'username' : forgotChannel === 'email' ? 'email' : 'tel'}
+                      inputMode={forgotChannel === 'admin' ? 'text' : forgotChannel === 'email' ? 'email' : 'tel'}
+                      placeholder={forgotChannel === 'admin' ? 'e.g. ali.k or 10234' : forgotChannel === 'email' ? 'you@company.com' : '+966501234567'}
                       value={forgotDestination} onChange={e => setForgotDestination(e.target.value)}
                       onFocus={() => setFocusedField('forgot')} onBlur={() => setFocusedField(null)}
                       required autoFocus/>
@@ -703,8 +745,8 @@ export default function Login() {
                     color:'var(--tpl-on-accent)', fontSize:14, fontWeight:700, cursor:forgotLoading?'not-allowed':'pointer',
                     display:'flex', alignItems:'center', justifyContent:'center', gap:8,
                   }}>
-                    {forgotLoading ? <Loader2 size={16} className="animate-spin"/> : forgotChannel === 'email' ? <Mail size={16}/> : <Phone size={16}/>}
-                    {forgotLoading ? t('auth.login.sending') : t('auth.login.sendVerificationCode')}
+                    {forgotLoading ? <Loader2 size={16} className="animate-spin"/> : forgotChannel === 'admin' ? <KeyRound size={16}/> : forgotChannel === 'email' ? <Mail size={16}/> : <Phone size={16}/>}
+                    {forgotLoading ? t('auth.login.sending') : forgotChannel === 'admin' ? 'Send request to my admin' : t('auth.login.sendVerificationCode')}
                   </button>
                   <p style={{ margin:0, fontSize:11, color:'var(--login-text-faint)', lineHeight:1.5 }}>
                     For security, TyrePulse gives the same response whether or not an account exists. Codes expire after 10 minutes.

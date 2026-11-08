@@ -7802,4 +7802,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String inspectionRaiseActionDone(int created, int skipped, int failed) {
     return 'Raised $created, already raised $skipped, failed $failed.';
   }
+
+  @override
+  String get loginForgotTitle => 'Reset your password';
+
+  @override
+  String get loginForgotPrompt =>
+      'Enter your username or employee ID. Your company\'s admin will set a new password for you.';
+
+  @override
+  String get loginForgotIdentifierLabel => 'Username or employee ID';
+
+  @override
+  String get loginForgotIdentifierRequired =>
+      'Enter your username or employee ID.';
+
+  @override
+  String get loginForgotSubmit => 'Send request';
+
+  @override
+  String get loginForgotSent =>
+      'Your request was sent to your company\'s admin. They will set a new password for you.';
+
+  @override
+  String get loginForgotFailed =>
+      'The request could not be sent. Check your connection and try again.';
 }

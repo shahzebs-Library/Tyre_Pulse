@@ -221,3 +221,9 @@ queued command was added. With no signal the sheet shows the error with Retry;
 an inspection still waiting to sync says the action can be raised once it has
 synced. Extending the registry command with the three link columns is the
 follow-up if offline raising is wanted.
+
+### 7.7 Forgot password request (added 2026-11-08)
+
+The login screen's "Forgot password?" calls `request_password_reset` ONLINE
+ONLY (there is no signed-in user to queue it for). With no signal the dialog
+says the request could not be sent; nothing is queued.

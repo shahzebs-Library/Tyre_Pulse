@@ -3250,5 +3250,12 @@
   "inspectionRaiseActionSubmit": "إنشاء {count} إجراء",
   "inspectionRaiseActionFailed": "تعذر إنشاء الإجراء. حاول مرة أخرى.",
   "inspectionRaiseActionLoadFailed": "تعذر التحقق من الإجراءات الموجودة.",
-  "inspectionRaiseActionDone": "تم إنشاء {created}، موجود مسبقاً {skipped}، فشل {failed}."
+  "inspectionRaiseActionDone": "تم إنشاء {created}، موجود مسبقاً {skipped}، فشل {failed}.",
+  "loginForgotTitle": "إعادة تعيين كلمة المرور",
+  "loginForgotPrompt": "أدخل اسم المستخدم أو الرقم الوظيفي. سيقوم مسؤول شركتك بتعيين كلمة مرور جديدة لك.",
+  "loginForgotIdentifierLabel": "اسم المستخدم أو الرقم الوظيفي",
+  "loginForgotIdentifierRequired": "أدخل اسم المستخدم أو الرقم الوظيفي.",
+  "loginForgotSubmit": "إرسال الطلب",
+  "loginForgotSent": "تم إرسال طلبك إلى مسؤول شركتك. سيقوم بتعيين كلمة مرور جديدة لك.",
+  "loginForgotFailed": "تعذر إرسال الطلب. تحقق من اتصالك وحاول مرة أخرى."
 }

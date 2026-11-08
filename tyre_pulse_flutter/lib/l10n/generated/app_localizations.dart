@@ -13594,6 +13594,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Raised {created}, already raised {skipped}, failed {failed}.'**
   String inspectionRaiseActionDone(int created, int skipped, int failed);
+
+  /// No description provided for @loginForgotTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset your password'**
+  String get loginForgotTitle;
+
+  /// No description provided for @loginForgotPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your username or employee ID. Your company\'s admin will set a new password for you.'**
+  String get loginForgotPrompt;
+
+  /// No description provided for @loginForgotIdentifierLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Username or employee ID'**
+  String get loginForgotIdentifierLabel;
+
+  /// No description provided for @loginForgotIdentifierRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your username or employee ID.'**
+  String get loginForgotIdentifierRequired;
+
+  /// No description provided for @loginForgotSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Send request'**
+  String get loginForgotSubmit;
+
+  /// No description provided for @loginForgotSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Your request was sent to your company\'s admin. They will set a new password for you.'**
+  String get loginForgotSent;
+
+  /// No description provided for @loginForgotFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The request could not be sent. Check your connection and try again.'**
+  String get loginForgotFailed;
 }
 
 class _AppLocalizationsDelegate

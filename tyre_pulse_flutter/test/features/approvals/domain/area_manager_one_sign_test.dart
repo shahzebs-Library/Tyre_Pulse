@@ -40,8 +40,12 @@ void main() {
       () {
     expect(nextStatusFor(kTwo, kPending, true), 'pending_area_manager');
     expect(
-        nextStatusFor(kOne, kPending, true, role: 'PMV Manager'), 'approved');
+      nextStatusFor(kOne, kPending, true, role: 'PMV Manager'),
+      'approved',
+    );
     expect(
-        nextStatusFor(kTwo, kPending, false, role: 'PMV Manager'), 'rejected');
+      nextStatusFor(kTwo, kPending, false, role: 'PMV Manager'),
+      'rejected',
+    );
   });
 }

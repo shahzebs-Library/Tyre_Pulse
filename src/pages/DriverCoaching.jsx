@@ -43,6 +43,7 @@ import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation } from '../lib/api/_client'
 import './DriverCoaching.css'
+import TableNotInUse from '../components/ui/TableNotInUse'
 
 const EMPTY_FORM = {
   driver_name: '', period: '', safety_score: '', fuel_score: '', harsh_events: '',
@@ -364,6 +365,7 @@ export default function DriverCoaching() {
         imgDark="/dashboard/hero-coaching-dark.webp"
         stat={{ value: '', lines: ['Safer drivers', 'Stronger business'] }}
       />
+      <TableNotInUse table="driver_coaching" label="coaching sessions" hint="Sessions appear once a coaching record is added." />
 
       <div className="cc-card dco-bar">
         <Tabs label="Driver coaching views" value={tab} onChange={setTab} tabs={[

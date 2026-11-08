@@ -71,3 +71,6 @@ supabase/.temp/
 # ux-skill local state (lint runs, decisions ledger)
 .ux/
 graphify-out/
+
+# Local machine settings (keys, SDK paths). Never commit.
+local.properties

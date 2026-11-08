@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#FFFFFF</color>
+    <!-- Mid tone of the approved icon gradient (store-assets/drafts/icon.py). -->
+    <color name="ic_launcher_background">#0E7239</color>
 </resources>

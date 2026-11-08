@@ -50,6 +50,7 @@ import { revokeUserSessions, ACCESS_TOKEN_NOTE } from '../../lib/api/sessionRevo
 // 'ALL' / '*' sentinel = org-wide. Admins/super always see everything.
 // Single source: src/lib/scopeSentinel.js (shared with the invariant tests).
 import { isOrgWideSites, withoutOrgWide } from '../../lib/scopeSentinel'
+import PasswordRequestsPanel from './users/PasswordRequestsPanel'
 
 // Site options are capped so a runaway fleet register can never flood the
 // editor; anything already stored on a user still renders as a chip.
@@ -780,6 +781,7 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
         refreshedAt={refreshedAt} onRefresh={refreshAll} refreshing={loading || statsLoading} />
 
       <ErrorState message={loadError} onRetry={refreshAll} />
+      <PasswordRequestsPanel onSetPassword={(u) => { setResetModal(u); setResetSent(false) }} />
       <ErrorState message={exportError} />
       {statsError && !loadError && <ErrorState message={statsError} onRetry={loadStats} />}
       {statsTruncated && (

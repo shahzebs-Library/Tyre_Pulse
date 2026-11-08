@@ -42,6 +42,7 @@ import {
 import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation } from '../lib/api/_client'
 import './TollTransactions.css'
+import TableNotInUse from '../components/ui/TableNotInUse'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, LineElement, PointElement, Filler, Tooltip, Legend)
 
@@ -411,6 +412,7 @@ export default function TollTransactions() {
 
   return (
     <div className="cc tt-page">
+      <TableNotInUse table="toll_transactions" label="toll transactions" hint="Toll records arrive from an import or a toll provider connection." />
       {/* Header */}
       <div className="tt-head">
         <div className="tt-hero-img cc-hero-dark" style={{ backgroundImage: 'url(/dashboard/hero-toll-dark.webp)' }} aria-hidden="true" />

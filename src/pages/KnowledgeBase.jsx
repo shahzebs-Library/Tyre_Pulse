@@ -44,6 +44,7 @@ import {
 } from '../lib/knowledgeBaseView'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import './KnowledgeBase.css'
+import TableNotInUse from '../components/ui/TableNotInUse'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -527,6 +528,7 @@ export default function KnowledgeBase() {
 
   return (
     <div className="cc kb-page">
+      <TableNotInUse table="knowledge_documents" label="documents" hint="Documents appear once the first one is uploaded." />
       <div className="kb-head">
         <div className="kb-head-copy">
           <nav className="kb-crumbs" aria-label="Breadcrumb">

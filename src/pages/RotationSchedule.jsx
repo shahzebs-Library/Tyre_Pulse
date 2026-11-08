@@ -39,6 +39,7 @@ import {
   calendarMonth, fleetHistory, treadByPosition, movesText, STATUS_TONE, VIEW_STATUSES, POSITION_OPTIONS, planOf, attachmentsOf,
 } from '../lib/rotationScheduleView'
 import './RotationSchedule.css'
+import TableNotInUse from '../components/ui/TableNotInUse'
 
 const NA = <span className="cc-na">N/A</span>
 const TABS = [
@@ -473,6 +474,7 @@ export default function RotationSchedule() {
         imgLight="/dashboard/hero-rotation-light.webp"
         imgDark="/dashboard/hero-rotation-dark.webp"
       />
+      <TableNotInUse table="tyre_rotations" label="tyre rotations" hint="Rotations appear once one is planned or recorded." />
 
       {schedError && (
         <div className="cc-card rs-banner" role="alert">

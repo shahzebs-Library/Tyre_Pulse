@@ -44,6 +44,7 @@ import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation } from '../lib/api/_client'
 import './PolicyManagement.css'
+import TableNotInUse from '../components/ui/TableNotInUse'
 
 const ROW_ICON = { view: Eye, edit: Pencil, publish: Send, review: RotateCcw, archive: Archive, export: FileText, delete: Trash2 }
 
@@ -477,6 +478,7 @@ export default function PolicyManagement() {
         imgDark="/dashboard/hero-policies-dark.webp"
         stat={rows ? { value: fmtInt(kpi.total), lines: ['Policies in', 'the register'] } : undefined}
       />
+      <TableNotInUse table="policies" label="policies" hint="Policies appear once one is uploaded or written here." />
 
       {missing && (
         <div className="cc-card pm-banner warn" role="status">

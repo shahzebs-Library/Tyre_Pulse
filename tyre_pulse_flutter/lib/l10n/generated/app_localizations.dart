@@ -13402,6 +13402,198 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'newly_reported=Newly Reported~waiting_for_diagnosis=Waiting for Diagnosis~diagnosis_in_progress=Diagnosis in Progress~repair_in_progress=Repair in Progress~waiting=Waiting~waiting_for_parts=Waiting for Parts~waiting_for_approval=Waiting for Approval~waiting_for_manpower=Waiting for Manpower~waiting_for_external_vendor=Waiting for External Vendor~external_repair=External Repair~testing=Testing~road_test=Road Test~qc_inspection=QC / Inspection~ready_for_release=Ready for Release~operational_hold=Operational Hold~waiting_for_spare_parts=Waiting for Spare Parts~spare_parts_not_available=Spare Parts Not Available~mr_pending=MR Pending~po_pending=PO Pending~supplier_delivery_pending=Supplier Delivery Pending~technician_not_available=Technician Not Available~specialist_technician_required=Specialist Technician Required~waiting_for_workshop_bay=Waiting for Workshop Bay~waiting_for_tools_equipment=Waiting for Tools / Equipment~sent_to_external_workshop=Sent to External Workshop~waiting_for_budget_approval=Waiting for Budget Approval~waiting_for_vehicle_recovery_towing=Waiting for Vehicle Recovery / Towing~waiting_for_site_to_release_vehicle=Waiting for Site to Release Vehicle~waiting_for_testing=Waiting for Testing~waiting_for_road_test=Waiting for Road Test~waiting_for_qc_inspection=Waiting for QC / Inspection~accident_repair=Accident Repair~warranty_claim=Warranty Claim~major_engine_repair=Major Engine Repair~major_gearbox_repair=Major Gearbox Repair~electrical_issue=Electrical Issue~hydraulic_issue=Hydraulic Issue~tyre_related=Tyre Related~body_repair=Body Repair~no_operator_driver=No Operator / Driver~other=Other~not_required=Not Required~required=Required~checking_store=Checking Store~available_in_store=Available in Store~mr_raised=MR Raised~mr_approved=MR Approved~po_issued=PO Issued~supplier_confirmed=Supplier Confirmed~in_transit=In Transit~partially_received=Partially Received~received=Received~not_available=Not Available~alternative_part_under_review=Alternative Part Under Review'**
   String get workshopStatusVocabCatalog;
+
+  /// No description provided for @inspectionMeterBelowPreviousOdometer.
+  ///
+  /// In en, this message translates to:
+  /// **'Lower than the last recorded reading ({value} km). Saved anyway - check it is correct.'**
+  String inspectionMeterBelowPreviousOdometer(String value);
+
+  /// No description provided for @inspectionMeterBelowPreviousHours.
+  ///
+  /// In en, this message translates to:
+  /// **'Lower than the last recorded reading ({value} h). Saved anyway - check it is correct.'**
+  String inspectionMeterBelowPreviousHours(String value);
+
+  /// No description provided for @inspectionPhotoUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo not available on this device'**
+  String get inspectionPhotoUnavailable;
+
+  /// No description provided for @inspectionPhotoOpenLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Open photo'**
+  String get inspectionPhotoOpenLabel;
+
+  /// No description provided for @inspectionPhotoSaveAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Save photo'**
+  String get inspectionPhotoSaveAction;
+
+  /// No description provided for @inspectionPhotoShareAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get inspectionPhotoShareAction;
+
+  /// No description provided for @inspectionPhotoSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo saved'**
+  String get inspectionPhotoSaved;
+
+  /// No description provided for @inspectionPhotoActionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not get the photo. Check your connection and try again.'**
+  String get inspectionPhotoActionFailed;
+
+  /// No description provided for @inspectionRaiseActionButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Raise action'**
+  String get inspectionRaiseActionButton;
+
+  /// No description provided for @inspectionRaiseActionNeedsSync.
+  ///
+  /// In en, this message translates to:
+  /// **'An action can be raised once this inspection has synced.'**
+  String get inspectionRaiseActionNeedsSync;
+
+  /// No description provided for @inspectionRaiseActionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Raise action for {assetNo}'**
+  String inspectionRaiseActionTitle(String assetNo);
+
+  /// No description provided for @inspectionRaiseActionVehicle.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle {assetNo}. Actions are raised for this vehicle only.'**
+  String inspectionRaiseActionVehicle(String assetNo);
+
+  /// No description provided for @inspectionRaiseActionAlreadyRaised.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} already raised from this inspection.'**
+  String inspectionRaiseActionAlreadyRaised(int count);
+
+  /// No description provided for @inspectionRaiseActionNothingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing left to raise'**
+  String get inspectionRaiseActionNothingTitle;
+
+  /// No description provided for @inspectionRaiseActionNothingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Every finding on this inspection already has an action.'**
+  String get inspectionRaiseActionNothingMessage;
+
+  /// No description provided for @inspectionActionInstructionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'How it should be done'**
+  String get inspectionActionInstructionLabel;
+
+  /// No description provided for @inspectionActionCommentLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Remark or comment'**
+  String get inspectionActionCommentLabel;
+
+  /// No description provided for @inspectionActionCommentHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Anything the person should know'**
+  String get inspectionActionCommentHint;
+
+  /// No description provided for @inspectionActionDueDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Due {date}'**
+  String inspectionActionDueDate(String date);
+
+  /// No description provided for @inspectionAssignToLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Assign to'**
+  String get inspectionAssignToLabel;
+
+  /// No description provided for @inspectionAssigneeNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Not assigned yet'**
+  String get inspectionAssigneeNone;
+
+  /// No description provided for @inspectionAssigneeTyreMen.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre men'**
+  String get inspectionAssigneeTyreMen;
+
+  /// No description provided for @inspectionAssigneeDrivers.
+  ///
+  /// In en, this message translates to:
+  /// **'Drivers'**
+  String get inspectionAssigneeDrivers;
+
+  /// No description provided for @inspectionAssigneeSupervisors.
+  ///
+  /// In en, this message translates to:
+  /// **'Supervisors'**
+  String get inspectionAssigneeSupervisors;
+
+  /// No description provided for @inspectionAssigneeEveryone.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone'**
+  String get inspectionAssigneeEveryone;
+
+  /// No description provided for @inspectionAssigneeSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search by name'**
+  String get inspectionAssigneeSearchHint;
+
+  /// No description provided for @inspectionAssigneeLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load people.'**
+  String get inspectionAssigneeLoadFailed;
+
+  /// No description provided for @inspectionAssigneeNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No one matches.'**
+  String get inspectionAssigneeNoMatch;
+
+  /// No description provided for @inspectionRaiseActionSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Raise {count} action(s)'**
+  String inspectionRaiseActionSubmit(int count);
+
+  /// No description provided for @inspectionRaiseActionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not raise the action. Try again.'**
+  String get inspectionRaiseActionFailed;
+
+  /// No description provided for @inspectionRaiseActionLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not check which actions already exist.'**
+  String get inspectionRaiseActionLoadFailed;
+
+  /// No description provided for @inspectionRaiseActionDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Raised {created}, already raised {skipped}, failed {failed}.'**
+  String inspectionRaiseActionDone(int created, int skipped, int failed);
 }
 
 class _AppLocalizationsDelegate

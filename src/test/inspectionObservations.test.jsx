@@ -3,7 +3,7 @@ import { render, screen, fireEvent, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
 vi.mock('../components/inspection/AiTyreProgress', () => ({ default: () => null }))
-vi.mock('../components/inspection/InspectionPhotos', () => ({ default: () => null }))
+vi.mock('../components/inspection/InspectionPhotos', () => ({ default: () => null, usePhotoItems: () => ({ refs: [], items: [] }), PhotoLightbox: () => null }))
 vi.mock('../components/inspection/InspectionDiagram', () => ({ default: () => null }))
 vi.mock('../lib/api/tyreChangeTracking', () => ({ listFitmentsForAssets: vi.fn(async () => ({ ok: true, rows: [] })) }))
 

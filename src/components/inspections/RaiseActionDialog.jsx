@@ -34,7 +34,7 @@ export default function RaiseActionDialog({ open, onClose, inspection, defects, 
     const next = {}
     for (const d of defects) {
       const base = defaultPlanFor(d)
-      next[d.key] = { include: true, instruction: base.instruction, comment: '', due_date: base.due_date, assignee: null }
+      next[d.key] = { include: d.defaultInclude !== false, instruction: base.instruction, comment: '', due_date: base.due_date, assignee: null }
     }
     setPlans(next); setError(''); setSearch('')
   }, [open, defects])

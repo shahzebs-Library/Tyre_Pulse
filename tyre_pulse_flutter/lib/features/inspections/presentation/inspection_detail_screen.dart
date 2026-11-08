@@ -22,13 +22,18 @@ import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
+import 'package:tyre_pulse/features/inspections/data/inspection_action_repository.dart';
+import 'package:tyre_pulse/features/inspections/domain/inspection_action_plan.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_payload.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_record.dart';
 import 'package:tyre_pulse/features/inspections/domain/queued_inspection.dart';
 import 'package:tyre_pulse/features/inspections/domain/tyre_position_reading.dart';
 import 'package:tyre_pulse/features/inspections/inspections_providers.dart';
+import 'package:tyre_pulse/features/inspections/presentation/widgets/inspection_photo_viewer.dart';
 import 'package:tyre_pulse/features/inspections/presentation/widgets/inspection_signature_pad.dart';
+import 'package:tyre_pulse/features/inspections/presentation/widgets/raise_inspection_action_sheet.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_position_display.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_detail_screen.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_board.dart';
 
@@ -57,6 +62,8 @@ class _InspectionView {
     this.isLocalOnly = false,
     this.queueStatus,
     this.queueError,
+    this.serverId,
+    this.country,
   });
 
   factory _InspectionView.fromQueued(QueuedInspection q) {
@@ -103,6 +110,8 @@ class _InspectionView {
       gpsLat: r.gpsLat,
       gpsLng: r.gpsLng,
       gpsAccuracy: r.gpsAccuracy,
+      serverId: r.id,
+      country: r.country,
     );
   }
 
@@ -129,7 +138,32 @@ class _InspectionView {
   final InspectionQueueStatus? queueStatus;
   final String? queueError;
 
+  /// The confirmed `inspections.id`; null while only in the device queue.
+  /// A corrective action can only point at a server row.
+  final String? serverId;
+  final String? country;
+
   bool get hasGps => gpsLat != null && gpsLng != null;
+
+  /// The engine's view of THIS inspection - its own vehicle, never another.
+  ActionInspectionFacts? get actionFacts {
+    final String? id = serverId;
+    if (id == null || id.isEmpty) return null;
+    return ActionInspectionFacts(
+      id: id,
+      assetNo: assetNo,
+      vehicleType: vehicleType,
+      site: site,
+      inspector: inspector,
+      inspectionDate: inspectionDate,
+      tyreConditions: tyreConditions,
+      country: country,
+      findings: findings,
+      notes: notes,
+      odometerKm: odometerKm,
+      hourMeter: hourMeter,
+    );
+  }
 }
 
 class InspectionDetailScreen extends ConsumerStatefulWidget {
@@ -150,6 +184,12 @@ class _InspectionDetailScreenState
   _InspectionView? _view;
   bool _isRetrying = false;
 
+  /// Bumped on every load so a slow read of a PREVIOUS inspection can never
+  /// paint over the one this screen now names.
+  int _loadGeneration = 0;
+
+  String get _inspectionId => widget.route.inspectionId.value;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -158,15 +198,37 @@ class _InspectionDetailScreenState
     unawaited(_load());
   }
 
+  @override
+  void didUpdateWidget(covariant InspectionDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // go_router keys this page by its route PATTERN, so a `go` to another
+    // inspection's detail (global search, a link) reuses this State and the
+    // initial load does not run again. Without this the screen kept showing
+    // the PREVIOUS inspection - another vehicle - under the new id. Same fix
+    // as `InspectionApprovalReviewScreen.didUpdateWidget`.
+    if (oldWidget.route.inspectionId.value == _inspectionId) return;
+    _loadGeneration++;
+    _view = null;
+    _error = null;
+    _loading = true;
+    Future<void>.microtask(() {
+      if (mounted) unawaited(_load());
+    });
+  }
+
   Future<void> _load() async {
+    final int generation = ++_loadGeneration;
+    final String id = _inspectionId;
+    bool stale() =>
+        !mounted || generation != _loadGeneration || id != _inspectionId;
     setState(() {
       _loading = true;
       _error = null;
     });
-    final String id = widget.route.inspectionId.value;
     try {
       final QueuedInspection? queued =
           await ref.read(inspectionSubmissionQueueProvider).byId(id);
+      if (stale()) return;
       if (queued != null) {
         setState(() {
           _view = _InspectionView.fromQueued(queued);
@@ -177,12 +239,13 @@ class _InspectionDetailScreenState
 
       final InspectionRecord? record =
           await ref.read(inspectionRemoteRepositoryProvider).byId(id);
+      if (stale()) return;
       setState(() {
         _view = record == null ? null : _InspectionView.fromRecord(record);
         _loading = false;
       });
     } on Object {
-      if (!mounted) return;
+      if (!mounted || stale()) return;
       final AppLocalizations l10n = AppLocalizations.of(context);
       setState(() {
         _error = AppError(
@@ -239,7 +302,32 @@ class _InspectionDetailScreenState
         message: l10n.inspectionNotFoundMessage,
       );
     }
-    return _DetailBody(view: view, isRetrying: _isRetrying, onRetry: _retry);
+    return _DetailBody(
+      view: view,
+      isRetrying: _isRetrying,
+      onRetry: _retry,
+      onRaiseAction: view.actionFacts == null ? null : _raiseAction,
+    );
+  }
+
+  Future<void> _raiseAction() async {
+    final ActionInspectionFacts? facts = _view?.actionFacts;
+    if (facts == null) return;
+    final RaiseActionsResult? result =
+        await showRaiseInspectionActionSheet(context, inspection: facts);
+    if (result == null || !mounted) return;
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text(
+          l10n.inspectionRaiseActionDone(
+            result.created,
+            result.skipped,
+            result.failedMessages.length,
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -248,11 +336,16 @@ class _DetailBody extends StatelessWidget {
     required this.view,
     required this.isRetrying,
     required this.onRetry,
+    this.onRaiseAction,
   });
 
   final _InspectionView view;
   final bool isRetrying;
   final VoidCallback onRetry;
+
+  /// Null while the inspection is only in the device queue: an action must
+  /// point at a confirmed server row.
+  final Future<void> Function()? onRaiseAction;
 
   @override
   Widget build(BuildContext context) {
@@ -364,15 +457,23 @@ class _DetailBody extends StatelessWidget {
           ),
           width: MediaQuery.sizeOf(context).width - (TpSpace.lg * 2),
         ),
-        if ((view.findings ?? view.notes ?? '').trim().isNotEmpty) ...<Widget>[
-          const SizedBox(height: TpSpace.lg),
+        ..._observations(context, l10n, palette),
+        const SizedBox(height: TpSpace.lg),
+        if (onRaiseAction != null)
+          TpButton.primary(
+            label: l10n.inspectionRaiseActionButton,
+            icon: Icons.assignment_late_outlined,
+            isFullWidth: true,
+            onPressed: () => unawaited(onRaiseAction!()),
+          )
+        else
           Text(
-            l10n.inspectionObservationsLabel,
-            style: Theme.of(context).textTheme.titleMedium,
+            l10n.inspectionRaiseActionNeedsSync,
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: palette.textMuted),
           ),
-          const SizedBox(height: TpSpace.sm),
-          TpCard(child: Text((view.findings ?? view.notes ?? '').trim())),
-        ],
         const SizedBox(height: TpSpace.lg),
         Text(
           l10n.inspectionInspectorSignatureLabel,
@@ -417,6 +518,46 @@ class _DetailBody extends StatelessWidget {
           ),
       ],
     );
+  }
+
+  /// The inspector's findings: the overall remark, then every tyre that
+  /// carries a fault, a note or a photo - each with its OWN photo inline.
+  List<Widget> _observations(
+    BuildContext context,
+    AppLocalizations l10n,
+    TpPalette palette,
+  ) {
+    final String remark = (view.findings ?? view.notes ?? '').trim();
+    final List<String> keys = view.tyreConditions.keys.toList()..sort();
+    final List<String> findingKeys = <String>[
+      for (final String k in keys)
+        if (isActionFaultCondition(view.tyreConditions[k]!.condition) ||
+            (view.tyreConditions[k]!.notes ?? '').trim().isNotEmpty ||
+            view.tyreConditions[k]!.hasPhoto)
+          k,
+    ];
+    if (remark.isEmpty && findingKeys.isEmpty) return const <Widget>[];
+    final TextTheme text = Theme.of(context).textTheme;
+    return <Widget>[
+      const SizedBox(height: TpSpace.lg),
+      Text(l10n.inspectionObservationsLabel, style: text.titleMedium),
+      const SizedBox(height: TpSpace.sm),
+      if (remark.isNotEmpty)
+        TpCard(
+          margin: const EdgeInsets.only(bottom: TpSpace.sm),
+          child: Text(remark),
+        ),
+      for (final String k in findingKeys)
+        _FindingRow(
+          assetNo: view.assetNo,
+          positionLabel: tyrePositionDisplayCode(
+            view.vehicleType,
+            k,
+            assetNo: view.assetNo,
+          ),
+          reading: view.tyreConditions[k]!,
+        ),
+    ];
   }
 
   static String _formatDate(DateTime d) {
@@ -562,3 +703,58 @@ class _MetricTile extends StatelessWidget {
 /// A whole reading without a trailing `.0`; a decimal one as stored.
 String _meterText(num value) =>
     value == value.roundToDouble() ? value.toInt().toString() : '$value';
+
+/// One tyre finding: position, condition, the inspector's remark, and that
+/// tyre's own photo beside it ("No photo taken" when none was).
+class _FindingRow extends StatelessWidget {
+  const _FindingRow({
+    required this.assetNo,
+    required this.positionLabel,
+    required this.reading,
+  });
+
+  final String assetNo;
+  final String positionLabel;
+  final TyrePositionReading reading;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextTheme text = Theme.of(context).textTheme;
+    final TpPalette palette = TpPalette.of(context);
+    final String note = (reading.notes ?? '').trim();
+    return TpCard(
+      margin: const EdgeInsets.only(bottom: TpSpace.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          InspectionFindingPhoto(
+            value: reading.photoUrl ?? reading.photoLocalPath,
+            fileNameStem: '${assetNo}_$positionLabel',
+          ),
+          const SizedBox(width: TpSpace.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  '$positionLabel - ${reading.condition}',
+                  style: text.titleSmall,
+                ),
+                if ((reading.serialNumber ?? '').trim().isNotEmpty)
+                  Text(
+                    reading.serialNumber!.trim(),
+                    style: text.bodySmall?.copyWith(color: palette.textMuted),
+                  ),
+                if (note.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: TpSpace.xs),
+                    child: Text(note, style: text.bodyMedium),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

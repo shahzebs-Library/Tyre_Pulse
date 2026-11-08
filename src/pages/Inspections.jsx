@@ -6,7 +6,6 @@ import { useScrollRestore } from '../hooks/useScrollRestore'
 import { supabase } from '../lib/supabase'
 import * as inspectionsApi from '../lib/api/inspections'
 import { readInspectionAnalysis } from '../lib/api/aiTyreInspection'
-import * as correctiveActions from '../lib/api/correctiveActions'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -53,13 +52,14 @@ import { buildApprovalEmailHtml } from '../lib/inspectionApprovalEmail'
 import { brandingForPdf, buildChecklistReportPdf, checklistReportFileName } from '../lib/inspectionChecklistReport'
 import {
   toList, fromList, deriveRegisterRows, tabCounts, rowsForTab, registerKpis,
-  dbInspectionType, inferVehicleTypeFromAsset, actionPriority,
+  dbInspectionType, inferVehicleTypeFromAsset,
 } from '../lib/inspectionsAnalytics'
 import OverviewSlide from '../components/inspections/OverviewSlide'
 import InspectionSummaryModal from '../components/inspections/InspectionSummaryModal'
 import ChecklistTab from '../components/inspections/ChecklistTab'
 import InspectionFormModal from '../components/inspections/InspectionFormModal'
-import RaiseActionModal from '../components/inspections/RaiseActionModal'
+import InspectionActionRaiser from '../components/inspections/InspectionActionRaiser'
+import { previousMeterReadings } from '../lib/inspectionWorkspaceView'
 import InspectionWorkspace from '../components/inspections/InspectionWorkspace'
 import { buildRegisterColumns } from '../components/inspections/inspectionRegisterColumns'
 
@@ -142,6 +142,8 @@ export default function Inspections() {
    * bare role test, so a grant could only ever produce a button that fails.
    */
   const canApproveInspection = canSignInspection(profile?.role, { isSuperAdmin })
+  // Mirrors the database lock (20261108090000): these roles may correct a locked record.
+  const canEditMetersLocked = isSuperAdmin || ['admin', 'manager', 'director'].includes((profile?.role || '').toLowerCase().trim())
   const { rows: inspectionRows, loading, error: loadError, reload: load } = useInspectionRegister({
     country: activeCountry,
     actorId: profile?.id,
@@ -254,6 +256,7 @@ export default function Inspections() {
     }, { replace: true })
   }, [setSearchParams])
   const [raisingAction, setRaisingAction] = useState(null)
+  const [actionNotice, setActionNotice] = useState(null) // { tone, text }
   const [selectedTyre, setSelectedTyre]   = useState(null)
   const fileRef = useRef(null)
 
@@ -649,6 +652,7 @@ export default function Inspections() {
   // the inspections on screen). Lets the card tell "nothing is due anywhere"
   // apart from "nothing is due on the vehicles you are looking at".
   const dueAssetCount = useMemo(() => (flagMap ? Object.keys(flagMap).length : 0), [flagMap])
+  const previousMeters = useMemo(() => (form ? previousMeterReadings(rows, form) : null), [rows, form?.id, form?.asset_no, form?.inspection_date, form?.scheduled_date]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * Is the register showing a NARROWED set? Drives the "these figures cover N of M"
@@ -763,10 +767,29 @@ export default function Inspections() {
   }, [approveTarget?.id])
 
   async function save() {
-    if (wfLocked) return
-    if (!form.title?.trim()) return
-    if (!form.site?.trim()) return
-    if (!form.scheduled_date) return
+    if (saving) return
+    const toNum = (v) => (v === '' || v == null ? null : Number(v))
+    const badMeter = [form.odometer_km, form.hour_meter].some((v) => v !== '' && v != null && (!Number.isFinite(Number(v)) || Number(v) < 0))
+    if (badMeter) { setSaveError('Odometer and engine hours must be zero or a positive number.'); return }
+    // Approved records: an Admin, Manager or Director may correct the meter
+    // readings only. The database lock allows exactly that for those roles.
+    if (wfLocked) {
+      if (!(canEditMetersLocked && form.id)) return
+      setSaving(true); setSaveError(null)
+      try {
+        await inspectionsApi.patchInspection(form.id, { odometer_km: toNum(form.odometer_km), hour_meter: toNum(form.hour_meter) })
+        setForm(null)
+        setActionNotice({ tone: 'ok', text: `Readings saved for ${form.asset_no || 'this inspection'}.` })
+        await load()
+      } catch (e) {
+        setSaveError(toUserMessage(e, 'The readings could not be saved.'))
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
+    const missing = [!form.title?.trim() && 'title', !form.site?.trim() && 'site', !form.scheduled_date && 'date'].filter(Boolean)
+    if (missing.length) { setSaveError(`Fill in the ${missing.join(', ')} before saving.`); return }
     setSaving(true)
     setSaveError(null)
     const displayType = form.inspection_type
@@ -781,6 +804,8 @@ export default function Inspections() {
     ]
     const base = {}
     for (const k of WRITABLE_COLS) if (form[k] !== undefined) base[k] = form[k]
+    if ('odometer_km' in base) base.odometer_km = toNum(base.odometer_km)
+    if ('hour_meter' in base) base.hour_meter = toNum(base.hour_meter)
     const payload = {
       ...base,
       created_by: profile?.id ?? null,
@@ -878,24 +903,21 @@ export default function Inspections() {
     }
   }
 
-  async function raiseAction(row, actionTitle) {
-    try {
-      const data = await correctiveActions.createCorrectiveAction({
-        title: actionTitle || `Action from: ${row.title}`,
-        description: row.findings || row.notes || '',
-        site: row.site,
-        asset_no: row.asset_no || null,
-        priority: actionPriority(row.severity),
-        status: 'Open',
-        // NOTE: corrective_actions has no `source` column — sending it 400s the insert.
-        created_by: profile?.id ?? null,
-      })
-      if (data?.id) {
-        await inspectionsApi.patchInspection(row.id, { linked_action_id: data.id })
-        await load()
-      }
-    } catch { /* mirror prior guard: on failure, no link + no reload */ }
+  // After the dialog: say what happened in words, then reload without losing
+  // the vehicle the person was working on (the workspace keeps its selection).
+  async function afterActionsRaised(res, row) {
     setRaisingAction(null)
+    const made = res?.created?.length || 0
+    const failed = res?.failed?.length || 0
+    const skipped = res?.skipped || 0
+    const who = [...new Set(res?.notified || [])]
+    const parts = []
+    if (made) parts.push(`${made} action${made === 1 ? '' : 's'} raised for ${row?.asset_no || 'this vehicle'}`)
+    if (who.length) parts.push(`assigned to ${who.join(', ')}`)
+    if (skipped) parts.push(`${skipped} already raised`)
+    if (failed) parts.push(`${failed} could not be saved`)
+    setActionNotice({ tone: failed && !made ? 'error' : failed ? 'warn' : 'ok', text: parts.join(', ') || 'Nothing was raised.' })
+    if (made) await load()
   }
 
   const loadFleetInfo = useCallback(async (assetNo) => {
@@ -1224,6 +1246,13 @@ export default function Inspections() {
   return (
     <div className="space-y-6">
       {pdfError && <p role="alert" className="card text-red-500">{pdfError}</p>}
+      {actionNotice && (
+        <div role={actionNotice.tone === 'error' ? 'alert' : 'status'} className="card flex items-center justify-between gap-3 text-sm"
+          style={{ color: actionNotice.tone === 'error' ? '#ef4444' : actionNotice.tone === 'warn' ? '#b45309' : 'var(--text-primary)' }}>
+          <span>{actionNotice.text}</span>
+          <button type="button" onClick={() => setActionNotice(null)} aria-label="Dismiss" className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center"><X size={14} /></button>
+        </div>
+      )}
       {exportError && (
         <div role="alert" className="card flex items-center justify-between gap-3 text-sm text-red-500">
           <span>{exportError}</span>
@@ -2095,6 +2124,8 @@ export default function Inspections() {
           saving={saving}
           saveError={saveError}
           onSave={save}
+          canEditMetersLocked={canEditMetersLocked}
+          previousMeters={previousMeters}
           onClose={() => { setForm(null); setSaveError(null) }}
           fileRef={fileRef}
           onPhotoChange={handlePhotoChange}
@@ -2103,10 +2134,11 @@ export default function Inspections() {
 
       {/* Raise Corrective Action modal */}
       {raisingAction && (
-        <RaiseActionModal
-          row={raisingAction}
-          onConfirm={(title) => raiseAction(raisingAction, title)}
+        <InspectionActionRaiser
+          inspection={raisingAction}
+          flagMap={flagMap || {}}
           onClose={() => setRaisingAction(null)}
+          onDone={afterActionsRaised}
         />
       )}
 

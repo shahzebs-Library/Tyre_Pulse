@@ -7704,4 +7704,121 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get workshopStatusVocabCatalog =>
       'newly_reported=مُبلغ عنها حديثًا~waiting_for_diagnosis=بانتظار التشخيص~diagnosis_in_progress=التشخيص جارٍ~repair_in_progress=الإصلاح جارٍ~waiting=قيد الانتظار~waiting_for_parts=بانتظار قطع الغيار~waiting_for_approval=بانتظار الموافقة~waiting_for_manpower=بانتظار العمالة~waiting_for_external_vendor=بانتظار مورد خارجي~external_repair=إصلاح خارجي~testing=الاختبار~road_test=اختبار الطريق~qc_inspection=مراقبة الجودة / الفحص~ready_for_release=جاهزة للإفراج~operational_hold=إيقاف تشغيلي~waiting_for_spare_parts=بانتظار قطع الغيار الاحتياطية~spare_parts_not_available=قطع الغيار غير متوفرة~mr_pending=طلب المواد معلّق~po_pending=أمر الشراء معلّق~supplier_delivery_pending=تسليم المورد معلّق~technician_not_available=الفني غير متوفر~specialist_technician_required=مطلوب فني متخصص~waiting_for_workshop_bay=بانتظار حجرة الورشة~waiting_for_tools_equipment=بانتظار الأدوات / المعدات~sent_to_external_workshop=أُرسلت إلى ورشة خارجية~waiting_for_budget_approval=بانتظار موافقة الميزانية~waiting_for_vehicle_recovery_towing=بانتظار سحب / استرجاع المركبة~waiting_for_site_to_release_vehicle=بانتظار إفراج الموقع عن المركبة~waiting_for_testing=بانتظار الاختبار~waiting_for_road_test=بانتظار اختبار الطريق~waiting_for_qc_inspection=بانتظار مراقبة الجودة / الفحص~accident_repair=إصلاح حادث~warranty_claim=مطالبة ضمان~major_engine_repair=إصلاح كبير للمحرك~major_gearbox_repair=إصلاح كبير لعلبة التروس~electrical_issue=مشكلة كهربائية~hydraulic_issue=مشكلة هيدروليكية~tyre_related=متعلق بالإطارات~body_repair=إصلاح الهيكل~no_operator_driver=لا يوجد مشغل / سائق~other=أخرى~not_required=غير مطلوب~required=مطلوب~checking_store=جارٍ التحقق من المخزن~available_in_store=متوفر في المخزن~mr_raised=تم رفع طلب المواد~mr_approved=تمت الموافقة على طلب المواد~po_issued=تم إصدار أمر الشراء~supplier_confirmed=أكد المورد~in_transit=قيد الشحن~partially_received=مستلمة جزئيًا~received=مستلمة~not_available=غير متوفرة~alternative_part_under_review=قطعة بديلة قيد المراجعة';
+
+  @override
+  String inspectionMeterBelowPreviousOdometer(String value) {
+    return 'أقل من آخر قراءة مسجلة ($value كم). سيتم الحفظ على أي حال - تأكد من صحتها.';
+  }
+
+  @override
+  String inspectionMeterBelowPreviousHours(String value) {
+    return 'أقل من آخر قراءة مسجلة ($value ساعة). سيتم الحفظ على أي حال - تأكد من صحتها.';
+  }
+
+  @override
+  String get inspectionPhotoUnavailable => 'الصورة غير متاحة على هذا الجهاز';
+
+  @override
+  String get inspectionPhotoOpenLabel => 'فتح الصورة';
+
+  @override
+  String get inspectionPhotoSaveAction => 'حفظ الصورة';
+
+  @override
+  String get inspectionPhotoShareAction => 'مشاركة';
+
+  @override
+  String get inspectionPhotoSaved => 'تم حفظ الصورة';
+
+  @override
+  String get inspectionPhotoActionFailed =>
+      'تعذر الحصول على الصورة. تحقق من الاتصال وحاول مرة أخرى.';
+
+  @override
+  String get inspectionRaiseActionButton => 'إنشاء إجراء';
+
+  @override
+  String get inspectionRaiseActionNeedsSync =>
+      'يمكن إنشاء إجراء بعد مزامنة هذا الفحص.';
+
+  @override
+  String inspectionRaiseActionTitle(String assetNo) {
+    return 'إنشاء إجراء لـ $assetNo';
+  }
+
+  @override
+  String inspectionRaiseActionVehicle(String assetNo) {
+    return 'المركبة $assetNo. يتم إنشاء الإجراءات لهذه المركبة فقط.';
+  }
+
+  @override
+  String inspectionRaiseActionAlreadyRaised(int count) {
+    return '$count تم إنشاؤها مسبقاً من هذا الفحص.';
+  }
+
+  @override
+  String get inspectionRaiseActionNothingTitle => 'لا يوجد ما يمكن إنشاؤه';
+
+  @override
+  String get inspectionRaiseActionNothingMessage =>
+      'كل ملاحظة في هذا الفحص لها إجراء بالفعل.';
+
+  @override
+  String get inspectionActionInstructionLabel => 'كيف يجب تنفيذه';
+
+  @override
+  String get inspectionActionCommentLabel => 'ملاحظة أو تعليق';
+
+  @override
+  String get inspectionActionCommentHint => 'أي شيء يجب أن يعرفه الشخص';
+
+  @override
+  String inspectionActionDueDate(String date) {
+    return 'الاستحقاق $date';
+  }
+
+  @override
+  String get inspectionAssignToLabel => 'إسناد إلى';
+
+  @override
+  String get inspectionAssigneeNone => 'لم يتم الإسناد بعد';
+
+  @override
+  String get inspectionAssigneeTyreMen => 'فنيو الإطارات';
+
+  @override
+  String get inspectionAssigneeDrivers => 'السائقون';
+
+  @override
+  String get inspectionAssigneeSupervisors => 'المشرفون';
+
+  @override
+  String get inspectionAssigneeEveryone => 'الجميع';
+
+  @override
+  String get inspectionAssigneeSearchHint => 'ابحث بالاسم';
+
+  @override
+  String get inspectionAssigneeLoadFailed => 'تعذر تحميل الأشخاص.';
+
+  @override
+  String get inspectionAssigneeNoMatch => 'لا يوجد تطابق.';
+
+  @override
+  String inspectionRaiseActionSubmit(int count) {
+    return 'إنشاء $count إجراء';
+  }
+
+  @override
+  String get inspectionRaiseActionFailed =>
+      'تعذر إنشاء الإجراء. حاول مرة أخرى.';
+
+  @override
+  String get inspectionRaiseActionLoadFailed =>
+      'تعذر التحقق من الإجراءات الموجودة.';
+
+  @override
+  String inspectionRaiseActionDone(int created, int skipped, int failed) {
+    return 'تم إنشاء $created، موجود مسبقاً $skipped، فشل $failed.';
+  }
 }

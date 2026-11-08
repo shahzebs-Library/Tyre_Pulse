@@ -26,6 +26,7 @@ import 'package:tyre_pulse/features/assets/domain/asset_classes.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
+import 'package:tyre_pulse/features/inspections/data/inspection_previous_meters.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_sync_engine.dart'
     show InspectionSubmitOutcome;
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
@@ -33,6 +34,7 @@ import 'package:tyre_pulse/features/inspections/domain/inspection_gps_fix.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_payload.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_vehicle_type.dart';
 import 'package:tyre_pulse/features/inspections/domain/tyre_position_reading.dart';
+import 'package:tyre_pulse/features/inspections/inspections_providers.dart';
 import 'package:tyre_pulse/features/inspections/presentation/controllers/inspection_wizard_controller.dart';
 import 'package:tyre_pulse/features/inspections/presentation/state/inspection_wizard_state.dart';
 import 'package:tyre_pulse/features/inspections/presentation/widgets/inspection_signature_pad.dart';
@@ -221,6 +223,27 @@ class _HeaderStep extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final controller = ref.read(inspectionWizardControllerProvider.notifier);
+    // Last recorded meters for this vehicle: a lower reading is WARNED about,
+    // never blocked (a meter can be replaced). Unreadable = no warning.
+    final PreviousMeters previous = state.hasVehicle
+        ? ref
+                .watch(previousMetersProvider(state.selectedAssetNo.trim()))
+                .asData
+                ?.value ??
+            PreviousMeters.none
+        : PreviousMeters.none;
+    final String? odometerWarning =
+        isBelowPrevious(state.odometerInput.value, previous.odometerKm)
+            ? l10n.inspectionMeterBelowPreviousOdometer(
+                _formatMeasurement(previous.odometerKm!),
+              )
+            : null;
+    final String? hoursWarning =
+        isBelowPrevious(state.hourMeterInput.value, previous.engineHours)
+            ? l10n.inspectionMeterBelowPreviousHours(
+                _formatMeasurement(previous.engineHours!),
+              )
+            : null;
 
     // Site and meter readings belong to the chosen asset, so they are only
     // asked for once an asset is selected - and they live inside the
@@ -244,6 +267,7 @@ class _HeaderStep extends ConsumerWidget {
                   errorText: state.odometerInput.isInvalid
                       ? l10n.meterLogInvalidReadingTitle
                       : null,
+                  helperText: odometerWarning,
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
@@ -259,6 +283,7 @@ class _HeaderStep extends ConsumerWidget {
                   errorText: state.hourMeterInput.isInvalid
                       ? l10n.meterLogInvalidReadingTitle
                       : null,
+                  helperText: hoursWarning,
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
@@ -3675,6 +3700,7 @@ class _StateSyncedInput extends StatefulWidget {
     required this.onChanged,
     this.hint,
     this.errorText,
+    this.helperText,
     this.keyboardType,
     this.maxLines = 1,
   });
@@ -3683,6 +3709,9 @@ class _StateSyncedInput extends StatefulWidget {
   final String label;
   final String? hint;
   final String? errorText;
+
+  /// A non-blocking note under the field (e.g. "lower than last reading").
+  final String? helperText;
   final TextInputType? keyboardType;
   final int maxLines;
   final ValueChanged<String> onChanged;
@@ -3718,6 +3747,7 @@ class _StateSyncedInputState extends State<_StateSyncedInput> {
       label: widget.label,
       hint: widget.hint,
       errorText: widget.errorText,
+      helperText: widget.helperText,
       controller: _controller,
       keyboardType: widget.keyboardType,
       maxLines: widget.maxLines,

@@ -211,3 +211,13 @@ row (and, when the row has no `template_snapshot`, one `checklist_templates`
 row). It writes nothing, so it adds no queued command and no online-only write.
 With no signal it shows the error state with Retry; it does not cache the sheet
 locally.
+
+### 7.6 Raise action from an inspection (added 2026-11-08)
+
+`raise_inspection_action_sheet.dart` writes `corrective_actions` ONLINE ONLY.
+The registry's corrective-action command cannot carry `source_type` /
+`source_id` / `source_detail`, and duplicate detection needs the server, so no
+queued command was added. With no signal the sheet shows the error with Retry;
+an inspection still waiting to sync says the action can be raised once it has
+synced. Extending the registry command with the three link columns is the
+follow-up if offline raising is wanted.

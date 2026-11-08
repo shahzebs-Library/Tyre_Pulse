@@ -589,10 +589,18 @@ void main() {
     // catalog, the stage / delay / parts display-label catalog, and the
     // module label in the admin access editor (workshopStatusCopyCatalog,
     // workshopStatusVocabCatalog, adminModuleWorkshopStatus).
-    test('en, ar and ur each carry exactly 2217 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2217);
-      expect(_translatableKeys(ar).length, 2217);
-      expect(_translatableKeys(ur).length, 2217);
+    // 2217 + 32 = 2249. Inspection detail: raise a corrective action for the
+    // inspection's own vehicle (button, needs-sync line, sheet title and
+    // vehicle line, already-raised count, nothing-left state, instruction /
+    // comment / due-date fields, assignee label, none, four role chips,
+    // search, load-failed, no-match, submit, failed, load-failed, done
+    // summary), the per-finding photo (unavailable, open, save, share,
+    // saved, failed) and the header's lower-than-last-reading warnings
+    // (inspectionMeterBelowPreviousOdometer ... inspectionRaiseActionDone).
+    test('en, ar and ur each carry exactly 2249 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2249);
+      expect(_translatableKeys(ar).length, 2249);
+      expect(_translatableKeys(ur).length, 2249);
     });
   });
 

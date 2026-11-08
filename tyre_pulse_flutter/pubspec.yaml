@@ -99,3 +99,9 @@ flutter:
     - assets/vehicle_photos/
     - assets/vehicle_multiview/
     - assets/vehicle_multiview_views/
+
+# sqlite3 3.5.2 ships a Windows native asset whose download no longer matches
+# its pinned hash, which fails flutter test on the Windows CI runner. 3.9.0 is
+# compatible with drift 2.34.
+dependency_overrides:
+  sqlite3: ^3.9.0

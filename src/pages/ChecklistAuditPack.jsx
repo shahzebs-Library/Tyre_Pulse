@@ -6,7 +6,7 @@
  * itself shows. Downloads as PDF or Excel. Figures come from the pure engine in
  * src/lib/checklistAuditPack.js.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ShieldCheck, FileText, FileSpreadsheet, RefreshCw, AlertTriangle, CheckCircle2,
@@ -87,7 +87,9 @@ export default function ChecklistAuditPack() {
   const [hideNames, setHideNames] = useState(auditType('internal').hideNames)
   const [tab, setTab] = useState('findings')
 
-  const [data, setData] = useState({ templates: [], submissions: [], actions: [], policy: {} })
+  const [data, setData] = useState({ templates: [], submissions: [], actions: [], policy: null })
+  const [policyError, setPolicyError] = useState('')
+  const generation = useRef(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState('')
@@ -95,22 +97,37 @@ export default function ChecklistAuditPack() {
   const [raise, setRaise] = useState(null) // { preview } while confirming
 
   const load = useCallback(async () => {
-    setLoading(true); setError('')
+    // Only the newest request may publish: switching country mid-load must not
+    // let the previous country's records land under the new selection.
+    const request = ++generation.current
+    const current = () => generation.current === request
+    setLoading(true); setError(''); setPolicyError('')
     try {
-      const [templates, submissions, actions, policy] = await Promise.all([
+      const policyRead = getChecklistGovernancePolicy()
+        .then((p) => ({ ok: true, p }))
+        .catch((e) => ({ ok: false, e }))
+      const [templates, submissions, actions, policyRes] = await Promise.all([
         listTemplates({ country: activeCountry, limit: 500 }),
         listSubmissions({ country: activeCountry, lean: true }),
         listChecklistCorrectiveActions(),
-        getChecklistGovernancePolicy().catch(() => ({})),
+        policyRead,
       ])
-      setData({ templates: templates || [], submissions: submissions || [], actions: actions || [], policy: policy || {} })
+      if (!current()) return
+      if (!policyRes.ok) setPolicyError(toUserMessage(policyRes.e, 'The checklist governance policy could not be read.'))
+      setData({
+        templates: templates || [], submissions: submissions || [], actions: actions || [],
+        policy: policyRes.ok ? (policyRes.p || {}) : null,
+      })
     } catch (e) {
-      setError(toUserMessage(e, 'Could not load the checklist records.'))
+      if (current()) setError(toUserMessage(e, 'Could not load the checklist records.'))
     } finally {
-      setLoading(false)
+      if (current()) setLoading(false)
     }
   }, [activeCountry])
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    load()
+    return () => { generation.current++ }
+  }, [load])
 
   const published = useMemo(() => data.templates.filter((t) => t.status === 'published'), [data.templates])
   const sites = useMemo(
@@ -290,6 +307,12 @@ export default function ChecklistAuditPack() {
         </label>
         <p className="lg:col-span-6 text-xs text-[var(--text-muted)]">{auditType(type).purpose}</p>
       </div>
+
+      {policyError && !error && (
+        <div role="alert" className="card p-3 text-sm flex items-center gap-2 text-amber-400">
+          <AlertTriangle className="w-4 h-4" /> {policyError} Approval-time findings and the retention period are left out of this pack until it can be read.
+        </div>
+      )}
 
       {notice && (
         <div role={notice.tone === 'error' ? 'alert' : 'status'}

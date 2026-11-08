@@ -67,8 +67,11 @@ export function reviewStatus(template, now = new Date()) {
 
 const REVIEW_LABEL = { ok: 'In date', due_soon: 'Due soon', overdue: 'Overdue', never: 'Never reviewed' }
 
-function blockingMarks(template) {
-  const b = template?.option_sets?.legend?.blocking
+function blockingMarks(template, submission) {
+  // The legend the record was filled against wins: a later edit to the form's
+  // legend must not rewrite which historical answers were faults.
+  const snap = submission?.template_snapshot?.option_sets?.legend?.blocking
+  const b = Array.isArray(snap) ? snap : template?.option_sets?.legend?.blocking
   return Array.isArray(b) ? b.map(String) : []
 }
 
@@ -79,7 +82,7 @@ function fieldLabel(fields, key) {
 
 /** Every blocking mark on a record: [{ key, label, mark }]. */
 export function recordFaults(submission, template) {
-  const marks = blockingMarks(template)
+  const marks = blockingMarks(template, submission)
   if (!marks.length) return []
   const fields = submission?.template_snapshot?.fields || template?.fields
   return Object.entries(submission?.answers || {})
@@ -124,7 +127,11 @@ export function buildAuditPack({
   const byId = new Map(templates.map((t) => [t.id, t]))
   const published = templates.filter((t) => t.status === 'published')
   const nowT = toTime(now)
-  const slaHours = Number(policy?.supervisor_approval_sla_hours) || 24
+  // policy === null means the governance policy could not be read: approval-time
+  // findings are then withheld rather than judged against invented defaults.
+  const policyKnown = policy != null
+  const supSla = Number(policy?.supervisor_approval_sla_hours) || 24
+  const amSla = Number(policy?.area_manager_approval_sla_hours) || 24
   const actionsBySource = new Map()
   for (const a of actions) {
     if (!a?.source_id) continue
@@ -167,9 +174,14 @@ export function buildAuditPack({
     const t = byId.get(s.template_id)
     const faults = recordFaults(s, t)
     const cas = actionsBySource.get(s.id) || []
-    const submittedT = toTime(s.submitted_at || s.created_at)
     const pending = isPending(s.approval_status)
-    const ageH = pending && submittedT != null ? Math.floor((nowT - submittedT) / 3600000) : null
+    // Each rung is timed from when it received the sheet, against its own limit.
+    const atAreaManager = s.approval_status === 'pending_area_manager'
+    const startT = atAreaManager
+      ? toTime(s.supervisor_at) ?? toTime(s.submitted_at || s.created_at)
+      : toTime(s.submitted_at || s.created_at)
+    const stageSla = atAreaManager ? amSla : supSla
+    const ageH = pending && startT != null ? Math.floor((nowT - startT) / 3600000) : null
     return {
       id: s.id,
       document_no: s.document_no || '',
@@ -187,7 +199,7 @@ export function buildAuditPack({
       approver: who(s.approver_name),
       approved_on: isoDay(s.approved_at),
       waiting_hours: ageH,
-      overdue_approval: ageH != null && ageH > slaHours,
+      overdue_approval: policyKnown && ageH != null && ageH > stageSla,
       faults_open: faults.length,
       corrective_actions: cas.length,
       locked: s.locked ? 'Yes' : 'No',
@@ -261,7 +273,7 @@ export function buildAuditPack({
     `${unverified.length} action(s) were closed without an effectiveness check.`, unverified.length)
   const late = records.filter((r) => r.overdue_approval)
   add('minor', '8.5.1', 'Approvals waiting longer than the agreed time',
-    `${late.length} record(s) have waited more than ${slaHours} hours for sign-off.`, late.length)
+    `${late.length} record(s) have waited longer than the agreed sign-off time (supervisor ${supSla} h, area manager ${amSla} h).`, late.length)
   const pendingAll = records.filter((r) => isPending(r.approval_status))
   add('observation', '8.5.1', 'Records still waiting for sign-off', `${pendingAll.length} record(s) are not yet signed off.`, pendingAll.length)
   const broad = forms.filter((f) => typeof f.assigned_roles === 'number' && f.assigned_roles > BROAD_ROLE_LIMIT)
@@ -296,7 +308,10 @@ export function buildAuditPack({
     majors: findings.filter((f) => f.severity === 'major').length,
     minors: findings.filter((f) => f.severity === 'minor').length,
     observations: findings.filter((f) => f.severity === 'observation').length,
-    retention: `${policy?.submission_retention_months ?? 84} months for records, ${policy?.evidence_retention_months ?? 84} months for photos (${String(policy?.retention_disposition || 'review_then_archive').replace(/_/g, ' ')})`,
+    retention: policyKnown
+      ? `${policy?.submission_retention_months ?? 84} months for records, ${policy?.evidence_retention_months ?? 84} months for photos (${String(policy?.retention_disposition || 'review_then_archive').replace(/_/g, ' ')})`
+      : 'Not available: the governance policy could not be read',
+    policy_known: policyKnown,
     names_hidden: !!anonymise,
   }
 

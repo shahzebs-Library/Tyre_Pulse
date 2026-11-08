@@ -112,3 +112,24 @@ describe('buildAuditPack', () => {
     expect(summaryRows(pack.summary).find(([k]) => k === 'Sign-off rate')[1]).toBe('N/A')
   })
 })
+
+describe('review fixes', () => {
+  it('uses the legend saved on the record, not the current form', () => {
+    const t = tpl({ option_sets: { legend: { blocking: ['FAIL'] } } })
+    const s = sub({ answers: { f1: 'Not OK' }, template_snapshot: { option_sets: { legend: { blocking: ['Not OK'] } }, fields: [{ id: 'f1', label: 'Brakes' }] } })
+    expect(recordFaults(s, t)).toEqual([{ key: 'f1', label: 'Brakes', mark: 'Not OK' }])
+  })
+  it('times the area-manager rung from the supervisor signature, against its own limit', () => {
+    const s = sub({ approval_status: 'pending_area_manager', submitted_at: '2026-11-01T00:00:00Z', supervisor_at: '2026-11-08T10:00:00Z' })
+    const pack = buildAuditPack({ templates: [tpl()], submissions: [s], policy: { supervisor_approval_sla_hours: 24, area_manager_approval_sla_hours: 48 }, now: NOW })
+    expect(pack.records[0].waiting_hours).toBe(2)
+    expect(pack.records[0].overdue_approval).toBe(false)
+  })
+  it('an unreadable policy withholds approval-time findings and the retention period', () => {
+    const s = sub({ approval_status: 'pending', submitted_at: '2026-10-01T00:00:00Z' })
+    const pack = buildAuditPack({ templates: [tpl()], submissions: [s], policy: null, now: NOW })
+    expect(pack.records[0].overdue_approval).toBe(false)
+    expect(pack.findings.some((f) => f.title.startsWith('Approvals waiting'))).toBe(false)
+    expect(pack.summary.retention).toMatch(/Not available/)
+  })
+})

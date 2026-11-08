@@ -130,22 +130,6 @@ jobs:
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
 
-      - name: Diagnose sqlite3 native download
-        # The sqlite3 build hook downloads sqlite3.x64.windows.dll from the
-        # package's GitHub release and fails on a hash mismatch; it does not
-        # check the HTTP status, so an error page is hashed as the DLL.
-        # Show what the runner actually receives.
-        continue-on-error: true
-        run: |
-          url="https://github.com/simolus3/sqlite3.dart/releases/download/sqlite3-3.5.2/sqlite3.x64.windows.dll"
-          curl -sSL -A "github.com/simolus3/sqlite3.dart artifact downloader, version sqlite3-3.5.2" \
-            -o "$RUNNER_TEMP/sqlite3.dll" -D "$RUNNER_TEMP/headers.txt" \
-            -w 'status=%{http_code} size=%{size_download} type=%{content_type} final=%{url_effective}\n' "$url"
-          grep -i '^HTTP\|^location\|^content-type\|^x-' "$RUNNER_TEMP/headers.txt" || true
-          sha256sum "$RUNNER_TEMP/sqlite3.dll"
-          head -c 300 "$RUNNER_TEMP/sqlite3.dll" | tr -c '[:print:]\n' '.'; echo
-          env | grep -i 'proxy' || echo "no proxy env"
-
       - name: Test
         run: flutter test --coverage
 

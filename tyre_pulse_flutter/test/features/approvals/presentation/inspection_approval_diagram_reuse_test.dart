@@ -253,7 +253,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
 
       expect(find.byType(TyreDetailScreen), findsOneWidget);
-      expect(find.textContaining('R1Li'), findsWidgets);
+      // The detail heading shows the tyre-map code, not the slot id.
+      expect(find.textContaining('LHR1-I'), findsWidgets);
       expect(find.textContaining('0'), findsWidgets);
 
       semantics.dispose();

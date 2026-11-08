@@ -122,8 +122,7 @@ class TyreTakeActionScreen extends ConsumerWidget {
   final VoidCallback? onAdjustReading;
 
   /// The business tyre-map code (`LHF1`, `LHCI`, `LHR2-I`, ...) users see.
-  String get _displayCode =>
-      tyrePositionDisplayCode(vehicleType, positionCode);
+  String get _displayCode => tyrePositionDisplayCode(vehicleType, positionCode);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

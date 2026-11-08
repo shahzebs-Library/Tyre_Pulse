@@ -26,6 +26,24 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-11-08 (evening) — OWNER ANSWERED THE 10 PENDING ITEMS; DONE LIVE (verified).
+- AI tyre inspection was ALREADY fully live: the 5 "AUTHORED, NOT APPLIED" migrations were applied 22/28 Oct and the edge fn
+  v23 == repo (one escape-sequence diff). Their file headers are stale. 800 jobs completed, 8 failed.
+- Security rollout DONE: recovery RPCs (20261108143000) + account-recovery v9 + billing-webhook v12 deployed and smoke-tested;
+  accident serialize was already live; fleet/chunk guards superseded (see supabase/security-rollout/README.md).
+- Production plant -> site APPLIED: production_station_map (27 plants) was filled but never applied. 206,868 KSA rows re-resolved
+  (backup _bak.production_site_station_20261108). KSA m3 with a region 0% -> 100% (Central 1,916,748 / Western 276,822; total
+  unchanged 2,193,570). Plants 40 and 83 are low-confidence on SITE but certain on REGION (Central).
+- Tyre "mileage conflicts": now 23 pairs, each an empty V511 master copy + a full ERP row. Brand copied to the full row, 23 empty
+  copies deleted (_bak.tyre_empty_dupe_20261108). 858 UAE rows had a BRAND in removal_reason (brand already set) -> cleared
+  (_bak.tyre_reason_brand_20261108), km verified unchanged.
+- V579 audit-log country: trg_audit_row_change now stamps country going forward. History NOT backfilled: audit_log_v2 is immutable
+  (prevent_audit_mutation) and ISO wants it untouched. Bulk-import auditing KEPT; audit_retention_days KEPT at 365.
+- iOS push: Runner.entitlements (aps-environment production) + UIBackgroundModes remote-notification + CODE_SIGN_ENTITLEMENTS.
+  OWNER still must: enable Push on the App ID, upload an APNs .p8 key to Firebase, add GOOGLE_SERVICE_INFO_PLIST secret.
+  The iOS workflow archives UNSIGNED and signs at export; confirm on the first TestFlight build that the entitlement survives.
+- Owner parked: vehicle expiry file (will send), marketing contact-form email env vars (later).
+
 # ⚑ SESSION 2026-11-08 (later) — CHECKLIST ISO DOCUMENT CONTROL + AUDIT PACK. Migrations 20261108140000 + 141000 APPLIED LIVE. Branch claude/tyrepulse-inspector-build-7rxp2t, NOT merged.
 - checklist_templates += form_ref/form_revision/form_effective_date/form_owner/review_interval_months(12)/form_approved_*/last_reviewed_*.
   Trigger trg_zz_stamp_checklist_form_approval stamps approver+review on every publish; RPC mark_checklist_form_reviewed (also fills a

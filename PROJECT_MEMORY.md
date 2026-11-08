@@ -45,8 +45,9 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - FLUTTER CI was red on main since ~5 Nov for TWO stacked reasons. (1) The sqlite3 build hook downloads
   sqlite3.x64.windows.dll from the package's GitHub release and hashes whatever comes back WITHOUT checking HTTP status;
   for a few hours the Windows runner got identical bytes (bef140a1...) for 3.5.2 AND 3.9.0 = a GitHub-side error, so a
-  version bump does not help (tried, reverted). It cleared on its own (diagnostic curl: 200, 1.7 MB). If it recurs, re-run
-  later; do not bump sqlite3. (2) Hidden behind it: two tests still expected internal slot ids (R1Li, FL) after the 5 Nov
+  version bump does not help (tried, reverted). It is INTERMITTENT (a clean 200 / 1.7 MB in between, then another
+  wrong hash de78a2...), so flutter-ci.yml now has a "Prefetch sqlite3 native library (retries)" step: one small drift
+  test with up to 4 attempts; the hook caches the verified DLL and the full run reuses it. Do not bump sqlite3 for this. (2) Hidden behind it: two tests still expected internal slot ids (R1Li, FL) after the 5 Nov
   "show tyre-map position codes" change; they now expect LHR1-I / tyrePositionDisplayCode(). CodeQL js failed once on
   byte-identical code = flaky.
 - GOTCHA: run `dart format` from INSIDE the Flutter package dir (language version comes from its pubspec); run from

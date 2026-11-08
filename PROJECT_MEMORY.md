@@ -26,6 +26,22 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-11-08 (later) — CHECKLIST ISO DOCUMENT CONTROL + AUDIT PACK. Migrations 20261108140000 + 141000 APPLIED LIVE. Branch claude/tyrepulse-inspector-build-7rxp2t, NOT merged.
+- checklist_templates += form_ref/form_revision/form_effective_date/form_owner/review_interval_months(12)/form_approved_*/last_reviewed_*.
+  Trigger trg_zz_stamp_checklist_form_approval stamps approver+review on every publish; RPC mark_checklist_form_reviewed (also fills a
+  missing approver). Paper refs F-KSA-PPM-005/007/008 parsed from descriptions; others = TP-<prefix> (owner choice). Predictive Maintenance
+  got prefix PMC + 3 document numbers. Drafts a/Maint/PMD ARCHIVED. Retention already existed (governance policy, 84 months).
+- DO NOT add keys to checklist_template_snapshot(): capture_checklist_template_revision compares it to the stored revision and refuses
+  any published template whose snapshot changes ("Published checklist version N is immutable"). First apply failed on exactly this.
+- Checklist "Not OK" (option_sets.legend.blocking) -> corrective_actions source_type 'checklist' (one per sheet+item label, never re-raised):
+  trigger trg_checklist_fault_corrective_actions (switch system_config checklist_auto_corrective_actions=false) + RPC
+  raise_checklist_corrective_actions(dry_run). 144 raised for 59 existing sheets (owner: "raise all now").
+- /checklist-audit = Audit Pack (src/pages/ChecklistAuditPack.jsx, engine src/lib/checklistAuditPack.js, PDF checklistAuditPackPdf.js):
+  internal / external / customer / regulatory, period/site/form scope, findings by ISO clause, form register, records, faults+actions,
+  PDF + Excel. Customer type hides names by default.
+- Inspections register refresh no longer blanks the page (useInspectionRegister quiet reload) - km edit stays on the same page/vehicle.
+- Open (owner): approver names on pre-existing form versions are blank until someone presses "Mark reviewed"; 89 WDC sheets await sign-off.
+
 # ⚑ SESSION 2026-11-08 — INSPECTIONS, ONE-SIGN CHECKLISTS, DUE ALERTS, SIGN-IN PRIVACY, PASSWORD REQUESTS. PR #467 MERGED (d8273853), prod READY.
 - Migrations APPLIED LIVE: 20261108090000 (lock_inspection_content Title Case roles - nobody could correct a locked inspection),
   100000 (area manager/PMV/Admin/Director closes a two-stage checklist in ONE sign, both signature sets written; JS

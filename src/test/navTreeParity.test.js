@@ -57,6 +57,7 @@ const ROUTES_BEFORE_REGROUP = [
   '/carbon-tracker',
   '/certifications',
   '/charging-sessions',
+  '/checklist-audit',
   '/checklist-insights',
   '/checklist-schedules',
   '/checklists',

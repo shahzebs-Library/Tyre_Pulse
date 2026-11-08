@@ -6,7 +6,7 @@ import {
   Type, AlignLeft, Hash, List, ListChecks, ToggleRight, Calendar, Star,
   Camera, PenLine, Heading, Eye, Copy, X, Info, Filter, Scale, Target,
   Truck, MapPin, User, Sparkles, Link2, Lock, FileSpreadsheet, Languages,
-  Users, Smile, CalendarClock, ImagePlus, Gauge,
+  Users, Smile, CalendarClock, ImagePlus, Gauge, FileCheck2,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
@@ -1705,6 +1705,12 @@ function blankDraft(country) {
     // the honest state: four of the six live templates carry neither.
     doc_prefix: '',
     min_interval_days: null,
+    // ISO document control (20261108140000). Approval and review dates are
+    // stamped by the server on publish; only these four are typed.
+    form_ref: '',
+    form_revision: '',
+    form_owner: '',
+    review_interval_months: 12,
     scored: false,
     pass_threshold: null,
     fields: [],
@@ -1736,6 +1742,10 @@ function toDraft(row, country) {
     require_approval: !!row.require_approval,
     require_area_manager: !!row.require_area_manager,
     doc_prefix: row.doc_prefix || '',
+    form_ref: row.form_ref || '',
+    form_revision: row.form_revision || '',
+    form_owner: row.form_owner || '',
+    review_interval_months: Number(row.review_interval_months) || 12,
     min_interval_days:
       row.min_interval_days == null || row.min_interval_days === ''
         ? null
@@ -2081,6 +2091,10 @@ export default function ChecklistBuilder() {
       // different statements and must not share a stored value.
       doc_prefix: draft.doc_prefix || null,
       min_interval_days: draft.min_interval_days ?? null,
+      form_ref: String(draft.form_ref || '').trim() || null,
+      form_revision: String(draft.form_revision || '').trim() || null,
+      form_owner: String(draft.form_owner || '').trim() || null,
+      review_interval_months: Math.min(60, Math.max(1, Math.trunc(Number(draft.review_interval_months) || 12))),
       scored,
       pass_threshold: scored ? passThreshold : null,
       // Translations are part of the template. This builder rebuilds every
@@ -2430,6 +2444,40 @@ export default function ChecklistBuilder() {
                     Warns when the same asset is checked again sooner than this. It only warns; an early
                     check after a breakdown must still be recordable.
                   </p>
+                </div>
+              </div>
+            </div>
+
+            {/* ISO document control: form number, revision, owner, review cycle. */}
+            <div className="p-3 rounded-lg bg-[var(--surface-2)] border border-[var(--border-dim)]">
+              <p className="text-sm font-medium text-[var(--text-primary)] flex items-center gap-1.5">
+                <FileCheck2 className="w-4 h-4" /> Document control
+              </p>
+              <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                What an auditor checks on the form itself. Who approved it and when are recorded
+                automatically each time it is published.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                <div>
+                  <label className={LABEL_CLS} htmlFor="cb-form-ref">Form number</label>
+                  <input id="cb-form-ref" type="text" maxLength={40} value={draft.form_ref || ''}
+                    onChange={(e) => set('form_ref', e.target.value)} placeholder="e.g. F-KSA-PPM-005" className={INPUT_CLS} />
+                </div>
+                <div>
+                  <label className={LABEL_CLS} htmlFor="cb-form-rev">Revision</label>
+                  <input id="cb-form-rev" type="text" maxLength={20} value={draft.form_revision || ''}
+                    onChange={(e) => set('form_revision', e.target.value)} placeholder="e.g. Rev 05" className={INPUT_CLS} />
+                </div>
+                <div>
+                  <label className={LABEL_CLS} htmlFor="cb-form-owner">Form owner</label>
+                  <input id="cb-form-owner" type="text" maxLength={80} value={draft.form_owner || ''}
+                    onChange={(e) => set('form_owner', e.target.value)} placeholder="e.g. Maintenance Department" className={INPUT_CLS} />
+                </div>
+                <div>
+                  <label className={LABEL_CLS} htmlFor="cb-form-review">Review every (months)</label>
+                  <input id="cb-form-review" type="number" min="1" max="60" step="1" value={draft.review_interval_months ?? 12}
+                    onChange={(e) => set('review_interval_months', e.target.value === '' ? 12 : Math.min(60, Math.max(1, Math.trunc(Number(e.target.value)))))}
+                    className={INPUT_CLS} />
                 </div>
               </div>
             </div>

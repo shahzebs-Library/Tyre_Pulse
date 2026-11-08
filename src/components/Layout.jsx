@@ -216,6 +216,7 @@ const NAV_GROUPS = [
       { to: '/checklists',             label: 'Checklists', parent: 'Checklists',          icon: ListChecks },
       { to: '/checklist-schedules',    label: 'Checklist Schedules', parent: 'Checklists', icon: Calendar, adminOnly: A },
       { to: '/checklist-insights',     label: 'Checklist Insights', parent: 'Checklists',  icon: ClipboardCheck, adminOnly: A },
+      { to: '/checklist-audit',        label: 'Audit Pack',         parent: 'Checklists',  icon: ClipboardCheck, adminOnly: A },
       { to: '/actions',             label: 'Corrective Actions', parent: 'Findings', icon: ClipboardList },
       { to: '/rca',                 label: 'Root Cause', parent: 'Findings',         icon: Search },
       { to: '/root-cause',             label: 'Root Cause Engine', parent: 'Findings',      icon: Microscope, roles: ANALYTICS_ROLES },

@@ -280,6 +280,7 @@ const NAV_GROUPS = [
       { to: '/my-checklists',          label: 'My Checklists',       icon: ClipboardList },
       { to: '/checklist-schedules',    label: 'Checklist Schedules', icon: Calendar, adminOnly: A },
       { to: '/checklist-insights',     label: 'Checklist Insights',  icon: ClipboardCheck, adminOnly: A },
+      { to: '/checklist-audit',        label: 'Audit Pack',          icon: ClipboardCheck, adminOnly: A },
       { to: '/inspection-planner',     label: 'Inspection Planner',  icon: CalendarClock },
       { to: '/inspection-intelligence', label: 'Inspection Intelligence', icon: Activity, adminOnly: A },
       { to: '/safety-compliance',      label: 'Safety & Compliance', icon: ShieldCheck, adminOnly: A },

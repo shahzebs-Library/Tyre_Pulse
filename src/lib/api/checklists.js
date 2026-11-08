@@ -25,6 +25,10 @@ const TEMPLATE_COLS =
   // the advisory recurrence rule. Omitting them made every template read as
   // single-stage and un-numbered, which is the opposite of what two of them are.
   + 'require_area_manager,doc_prefix,min_interval_days'
+  // ISO 9001 7.5 document control (20261108140000). The approval/review stamps
+  // are written by the server, never by this client.
+  + ',form_ref,form_revision,form_effective_date,form_owner,review_interval_months,'
+  + 'form_approved_by,form_approved_name,form_approved_at,last_reviewed_at,last_reviewed_by,last_reviewed_name'
 // Approval columns (V212) are part of the row a reader needs: a checklist that
 // was rejected, or is still waiting for a signature, reads very differently from
 // one that was accepted, and leaving them out made every submission look final.
@@ -192,6 +196,10 @@ export async function createTemplate(values) {
     name_i18n: values.name_i18n ?? {},
     description_i18n: values.description_i18n ?? {},
     option_sets: values.option_sets ?? {},
+    form_ref: values.form_ref ?? null,
+    form_revision: values.form_revision ?? null,
+    form_owner: values.form_owner ?? null,
+    review_interval_months: values.review_interval_months ?? 12,
   }
   return unwrap(await supabase.from('checklist_templates').insert(payload).select(TEMPLATE_COLS).single())
 }
@@ -200,6 +208,7 @@ export async function createTemplate(values) {
 export async function updateTemplate(id, patch) {
   const clean = { ...patch }
   delete clean.id; delete clean.created_at; delete clean.organisation_id
+  for (const k of SERVER_STAMPED_TEMPLATE_COLS) delete clean[k]
   // Only normalise when the caller actually sent the key: a patch that does not
   // mention targeting (publish, archive) must leave the stored value alone.
   if ('assignee_roles' in clean) clean.assignee_roles = normaliseAssigneeRoles(clean.assignee_roles)
@@ -210,6 +219,32 @@ export async function updateTemplate(id, patch) {
   if ('doc_prefix' in clean) clean.doc_prefix = normaliseDocPrefix(clean.doc_prefix)
   if ('min_interval_days' in clean) clean.min_interval_days = normaliseMinIntervalDays(clean.min_interval_days)
   return unwrap(await supabase.from('checklist_templates').update(clean).eq('id', id).select(TEMPLATE_COLS).single())
+}
+
+// Written only by the server (publish trigger / mark_checklist_form_reviewed).
+const SERVER_STAMPED_TEMPLATE_COLS = [
+  'form_effective_date', 'form_approved_by', 'form_approved_name', 'form_approved_at',
+  'last_reviewed_at', 'last_reviewed_by', 'last_reviewed_name',
+]
+
+/** Record a periodic review of a form that needed no change (ISO 7.5). */
+export async function markFormReviewed(templateId) {
+  return unwrap(await supabase.rpc('mark_checklist_form_reviewed', { p_template_id: templateId }))
+}
+
+/** Raise a corrective action for every checklist fault that has none. Dry run by default. */
+export async function raiseChecklistCorrectiveActions({ dryRun = true } = {}) {
+  return unwrap(await supabase.rpc('raise_checklist_corrective_actions', { p_dry_run: !!dryRun }))
+}
+
+/** Corrective actions raised from checklists (ISO 10.2 evidence). */
+export async function listChecklistCorrectiveActions() {
+  const result = await fetchAllPages((from, to) => supabase.from('corrective_actions')
+    .select('id,title,status,priority,asset_no,site,country,source_id,source_detail,created_at,closed_at,verified_at,effective,assigned_to,due_date')
+    .eq('source_type', 'checklist')
+    .order('created_at', { ascending: false }).order('id')
+    .range(from, to), { pageSize: 1000, max: 20000 })
+  return unwrap(result) || []
 }
 
 export async function publishTemplate(id) {

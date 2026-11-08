@@ -1,4 +1,5 @@
 import { WorkspaceNavigationContext } from '../contexts/WorkspaceNavigationContext'
+import useAppShellScrollLock from '../hooks/useAppShellScrollLock'
 import { moduleAvailable } from '../lib/workspaceAccess'
 import { Fragment, useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
@@ -799,6 +800,7 @@ const SIDEBAR_COLLAPSED = 0
 const MOBILE_DRAWER_MAX = 360
 
 export default function Layout({ children }) {
+  useAppShellScrollLock()
   // useRealtimeSync() REMOVED - it opened 12 postgres_changes subscriptions per open
   // tab and every one of them invalidated a TanStack Query key that NOTHING READS.
   // Measured: 231 pages, 0 call useQuery (only useBilling.js and the dead

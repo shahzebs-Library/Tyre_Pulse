@@ -329,6 +329,19 @@ html.reduce-motion *::after {
   min-height: 100vh;
 }
 
+/* Signed-in shells scroll inside their own <main>; the document never does.
+   Set by src/hooks/useAppShellScrollLock.js only while a shell is mounted. */
+html.tp-app-shell,
+html.tp-app-shell body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+html.tp-app-shell #root {
+  min-height: 0;
+  height: 100%;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    COMPONENT LAYER
 ══════════════════════════════════════════════════════════════════════════════ */

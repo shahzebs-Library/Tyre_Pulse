@@ -23,6 +23,7 @@
  * those screens claim to describe.
  */
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import useAppShellScrollLock from '../hooks/useAppShellScrollLock'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
@@ -705,6 +706,7 @@ const SIDEBAR_EXPANDED = 240
 const SIDEBAR_COLLAPSED = 54
 
 export default function LegacyLayout({ children }) {
+  useAppShellScrollLock()
   // useRealtimeSync() REMOVED - see the note in Layout.jsx. Twelve postgres_changes
   // subscriptions per tab, every one invalidating a query key no page reads, against a
   // WAL decoder that is this instance's single largest cost.

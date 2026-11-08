@@ -1319,6 +1319,11 @@ html.light .text-purple-400 { color: #9333ea !important; }
 html.light .text-teal-400   { color: #0d9488 !important; }
 html.light .text-cyan-400   { color: #0891b2 !important; }
 html.light .text-indigo-400 { color: #4f46e5 !important; }
+/* Amber and sky had no light-theme tint, so warning figures and badges stayed
+   at their dark-theme shade (about 2:1 on white, unreadable). Both now pass
+   WCAG AA on white. */
+html.light .text-amber-400  { color: #b45309 !important; }
+html.light .text-sky-400    { color: #0369a1 !important; }
 
 /* ─── Light theme: severity/status hues at deeper tints + the -300 text tier ──
    The badge rules above only remap the /20 backgrounds and the -400 text tier.

@@ -35,6 +35,15 @@ create policy tyre_price_provenance_read on public.tyre_price_provenance
 revoke all on public.tyre_price_provenance from anon;
 grant select on public.tyre_price_provenance to authenticated;
 
+-- Backfill only where the production repair backups exist (they were created by the
+-- live-only data fixes of 20261109120000/130000 and are absent on a fresh database).
+do $bf$
+begin
+  if to_regclass('_bak.ksa_old_tyre_fix_20261109') is null or to_regclass('_bak.ue_old_tyre_fix_20261109') is null then
+    raise notice 'tyre_price_provenance backfill skipped: repair backups not present';
+    return;
+  end if;
+  execute $sql$
 insert into public.tyre_price_provenance (tyre_id, organisation_id, country, source, amount, origin_tyre_id, reason)
 select distinct on (t.id) t.id, t.organisation_id, t.country, l.source, t.cost_per_tyre, b.old_row,
        'price moved to the real new tyre by 20261109120000/130000'
@@ -43,7 +52,9 @@ from (select old_row, new_row, old_cost_before from _bak.ksa_old_tyre_fix_202611
 join public.tyre_price_backfill_log l on l.tyre_id = b.old_row and l.new_cost = b.old_cost_before
 join public.tyre_records t on t.id = b.new_row and t.cost_per_tyre = l.new_cost
 order by t.id, l.created_at desc
-on conflict (tyre_id) do nothing;
+on conflict (tyre_id) do nothing
+  $sql$;
+end $bf$;
 
 -- v_tyre_lifetime: same columns; ESTIMATED also when the price's provenance says so.
 create or replace view public.v_tyre_lifetime with (security_invoker = on) as

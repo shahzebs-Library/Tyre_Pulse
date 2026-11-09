@@ -10,7 +10,7 @@ export async function fetchCostCenterRecords({ country, dateFrom, dateTo } = {})
       .select(
         'id, asset_number, asset_no, brand, site, country, cost_per_tyre, ' +
         'km_at_fitment, km_at_removal, risk_level, removal_reason, category, ' +
-        'created_at, tyre_position, position'
+        'created_at, tyre_position, position, serial_no, status, issue_date, removal_date, total_km, vehicle_type'
       )
 
     if (country && country !== 'All') {

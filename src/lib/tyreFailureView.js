@@ -14,6 +14,7 @@
  */
 import { buildTyreFailureBoard } from './tyreFailureBoard'
 import { filterBoardRecords, removedRegister } from './tyreFailureCpkBoardAnalytics'
+import { toLifetimeTyres, withOnePricePerTyre, fitmentKm } from './tyreLifetime'
 
 const DAY = 86400000
 
@@ -26,26 +27,36 @@ export const LIFE_BANDS = [
   { key: 'gt90', label: '90k km and over', min: 90000, max: Infinity },
 ]
 
-/** Life km of one record, or null when fitment and removal km are not both real. */
+/**
+ * Life km of ONE fitment by the shared km rule (tyreKm.js): placeholder
+ * fitment km 1 and readings above the vehicle class limit are unknown, a
+ * factory 0 is real. Null when not measurable.
+ */
 export function lifeKmOf(r) {
-  const fit = Number(r?.km_at_fitment)
-  const rem = Number(r?.km_at_removal)
-  if (!Number.isFinite(fit) || !Number.isFinite(rem) || rem <= fit) return null
-  return rem - fit
+  const v = fitmentKm(r)
+  return v != null && v > 0 ? v : null
 }
 
-/** Count of tyres per life band, plus how many tyres were measurable at all. */
+/**
+ * Count of PHYSICAL tyres per lifetime-km band (rows collapsed first, so a
+ * tyre refitted on three vehicles is one tyre with its km summed), plus how
+ * many tyres were measurable and how many tyres (`total`) and fitment rows
+ * (`fitments`) there were.
+ */
 export function lifeDistribution(rows = []) {
   const bands = LIFE_BANDS.map((b) => ({ ...b, count: 0 }))
   let measured = 0
-  for (const r of rows || []) {
-    const v = lifeKmOf(r)
-    if (v == null) continue
-    measured += 1
+  let total = 0
+  for (const t of toLifetimeTyres(rows || [])) {
+    const q = t._qty || 1
+    total += q
+    const v = t._life_km
+    if (v == null || !(v > 0)) continue
+    measured += q
     const b = bands.find((x) => v >= x.min && v < x.max)
-    if (b) b.count += 1
+    if (b) b.count += q
   }
-  return { bands, measured, total: (rows || []).length }
+  return { bands, measured, total, fitments: (rows || []).length, basis: 'tyre' }
 }
 
 /** Chart-data {labels, datasets[0].data} to donut segments; top n plus Other. */
@@ -68,7 +79,8 @@ export function cpkBars(chart, n = 6) {
 
 /** Removed register with purchase cost and risk, newest removal first. */
 export function removedRows(rows = []) {
-  const src = new Map((rows || []).map((r) => [r.id, r]))
+  // Purchase cost kept once per physical tyre: a refit's removal shows none.
+  const src = new Map(withOnePricePerTyre(rows || []).map((r) => [r.id, r]))
   return removedRegister(rows).map((r) => {
     const s = src.get(r.id) || {}
     const cost = Number(s.cost_per_tyre)
@@ -154,6 +166,7 @@ export function drillSummary(r, { money = true, currency = '' } = {}) {
   if (r.lifeKm != null) parts.push(`after ${fmtN(r.lifeKm)} km`)
   let s = parts.join(' ') + '.'
   if (r.cpk != null && money) s += ` Cost per km ${r.cpk.toFixed(3)} ${currency}/km.`.replace(' /km', '/km')
+  if (r.lifetimeKm != null && r.fitments > 1) s += ` Lifetime across ${r.fitments} fitments ${fmtN(r.lifetimeKm)} km${r.lifetimeCpk != null && money ? `, lifetime cost per km ${r.lifetimeCpk.toFixed(3)} ${currency}/km`.replace(' /km', '/km') : ''}.`
   else if (r.lifeKm == null) s += ' Life and cost per km cannot be measured without fitment and removal km.'
   return s
 }

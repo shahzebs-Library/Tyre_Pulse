@@ -37,6 +37,12 @@ Dry-run first (whole migration + tests in one aborted transaction), then applied
 - Grants: anon cannot execute `get_tyre_exceptions`, `tyre_close_rotations`, nor read `v_tyre_cost_status`.
 - Old definitions saved: `_bak.fn_defs_20261109d` (4 functions).
 
-**OPEN:** the post-apply rollback test of 20261109150000 (restore the 4 saved definitions, drop
-the 3 new objects, inside an aborted transaction) did not run: the database tool stopped to ask
-for approval of the DROP statements and timed out. Rollback SQL is in the migration header.
+**PASSED (2026-11-09, run by the owner in the SQL editor):** the post-apply rollback test of
+20261109150000. One DO block (one transaction) ending in a forced exception: restore the 4 saved
+definitions, drop the 2 new functions and the view, check, re-create the current versions, check,
+abort. Result `PASS: true`: after rollback the new objects were gone, the stale-upload guard and the
+full held list were gone, all 4 definitions matched `_bak.fn_defs_20261109d` byte for byte, data
+fingerprints unchanged (tyre_records 11,410 `7723a9af...`, replacement log 56, cost corrections 214,
+expense lines 220,425 = 140,080,965.39, K507B403860 2 rows `e3e4e356...`); after re-create the
+function fingerprint (`2b37a339...`), view (incl. grants and security_invoker) and data matched the
+start exactly. Live database re-checked afterwards: identical to the pre-test baseline.

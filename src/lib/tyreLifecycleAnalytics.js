@@ -5,7 +5,18 @@
  * (rendered N/A) when nothing can: a fleet with no removal km has no average
  * life, a register with no priced tyres has no cost per km. Nothing here reads
  * the clock or the network.
+ *
+ * Tyre LIFE, CPK, km bands and brand life are measured per PHYSICAL TYRE via the
+ * shared lifetime layer (tyreLifetime.js): rows are collapsed first, then the
+ * tyres are grouped, so one tyre refitted on three vehicles is one tyre with
+ * its km summed and its price counted once. Stage counts and the register rows
+ * stay per FITMENT on purpose (they describe fitment events); their money uses
+ * withOnePricePerTyre so a refit is never a second purchase.
  */
+import {
+  toLifetimeTyres, withOnePricePerTyre, fitmentKm, weightedCpk, lifetimeSummary,
+  CPK_KIND, CPK_KIND_LABEL,
+} from './tyreLifetime'
 
 export const KM_BANDS = [
   { label: '0-20k', min: 0, max: 20000 },
@@ -28,16 +39,37 @@ const num = (v) => {
 
 const mean = (arr) => (arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null)
 
-/** km a tyre ran (removal minus fitment), null when either reading is missing or not positive. */
+/**
+ * km ONE fitment ran, by the shared km rule (tyreKm.js): placeholder fitment
+ * km 1 and over-cap readings are unknown, a factory 0 fitment is real. Null
+ * when not measurable.
+ */
 export function kmRun(r) {
-  const f = num(r?.km_at_fitment)
-  const x = num(r?.km_at_removal)
-  if (f == null || x == null) return null
-  const v = x - f
-  return v > 0 ? v : null
+  const v = fitmentKm(r)
+  return v != null && v > 0 ? v : null
 }
 
-/** Cost per km for one tyre, null unless it has both a price and a measured run. */
+/** The page reads serial_no as serial_number; the lifetime layer keys on serial_no. */
+const asTyreRow = (r) => (r && r.serial_no == null && r.serial_number != null ? { ...r, serial_no: r.serial_number } : r)
+
+/** Physical tyres behind a set of fitment rows (shared lifetime layer). */
+export function lifecycleTyres(records = []) {
+  return toLifetimeTyres((records || []).map(asTyreRow))
+}
+
+const tyreQty = (t) => t._qty || 1
+/** Mean life over physical tyres with a measured life (total km / tyre count). */
+function meanLife(tyres) {
+  let km = 0; let n = 0
+  for (const t of tyres) {
+    if (t._life_km == null || !(t._life_km > 0)) continue
+    km += t._life_km * tyreQty(t); n += tyreQty(t)
+  }
+  return n ? km / n : null
+}
+const measuredCount = (tyres) => tyres.reduce((a, t) => a + (t._life_km != null && t._life_km > 0 ? tyreQty(t) : 0), 0)
+
+/** Per-FITMENT cost per km (one stint), null unless it has both a price and a measured run. */
 export function cpk(r) {
   const km = kmRun(r)
   const c = num(r?.cost_per_tyre)
@@ -90,24 +122,35 @@ export function distinct(records = [], field) {
     .sort((a, b) => String(a).localeCompare(String(b)))
 }
 
-/** Headline KPIs over the filtered rows. */
+/**
+ * Headline KPIs over the filtered rows. Life and CPK are per PHYSICAL TYRE:
+ * avgLifeKm = total lifetime km / measured tyres; avgCpk is the WEIGHTED fleet
+ * aggregate (total purchase cost / total km of the measurable tyres), never an
+ * average of per-tyre ratios. `records` and stage counts stay per fitment.
+ */
 export function lifecycleKpis(records = []) {
   const total = records.length
   const serials = new Set(records.map(r => r.serial_number).filter(Boolean))
-  const lives = records.map(kmRun).filter(v => v != null)
-  const cpks = records.map(cpk).filter(v => v != null)
+  const tyres = lifecycleTyres(records)
+  const summary = lifetimeSummary(tyres)
   const removed = records.filter(isRemoved).length
   const categorised = records.filter(r => r.category).length
   const retreads = records.filter(r => r.category === 'Retread').length
   const scrapped = records.filter(isScrapped).length
   return {
     records: total,
+    tyres: tyres.reduce((a, t) => a + tyreQty(t), 0),
     serials: serials.size,
     missingSerial: records.filter(r => !r.serial_number).length,
-    avgLifeKm: mean(lives),
-    measuredLife: lives.length,
-    avgCpk: mean(cpks),
-    measuredCpk: cpks.length,
+    avgLifeKm: meanLife(tyres),
+    measuredLife: measuredCount(tyres),
+    avgCpk: weightedCpk(tyres),
+    measuredCpk: summary.measurable,
+    cpkKind: CPK_KIND.FLEET_AGGREGATE,
+    cpkKindLabel: CPK_KIND_LABEL[CPK_KIND.FLEET_AGGREGATE],
+    kmCoverage: summary.coverage,
+    provisionalTyres: summary.provisional,
+    estimatedCostShare: summary.estimatedShare,
     inService: total - removed,
     removed,
     // Retread share is only meaningful among rows that carry a category.
@@ -121,8 +164,10 @@ export function lifecycleKpis(records = []) {
 /** Stage counts, share and average priced cost per stage. */
 export function stageFunnel(records = []) {
   const total = records.length
+  // Stages are fitment events; the price is the purchase kept once per tyre.
+  const priced = withOnePricePerTyre(records.map(asTyreRow))
   return STAGES.map(stage => {
-    const rows = records.filter(r => lifecycleStage(r) === stage)
+    const rows = priced.filter(r => lifecycleStage(r) === stage)
     const costs = rows.map(r => num(r.cost_per_tyre)).filter(v => v != null && v > 0)
     return {
       stage,
@@ -134,23 +179,26 @@ export function stageFunnel(records = []) {
   })
 }
 
-/** Average measured km per brand, split new vs retread. Top `limit` by overall average. */
+/**
+ * Average lifetime km per brand, split new vs retread, per PHYSICAL TYRE: the
+ * rows are collapsed into tyres first and each tyre is grouped by its latest
+ * fitment's brand/category. Top `limit` by overall average. `samples` = tyres.
+ */
 export function brandLife(records = [], limit = 12) {
   const map = new Map()
-  for (const r of records) {
-    if (!r.brand) continue
-    const km = kmRun(r)
-    if (km == null) continue
-    if (!map.has(r.brand)) map.set(r.brand, { newKm: [], retreadKm: [] })
-    ;(r.category === 'Retread' ? map.get(r.brand).retreadKm : map.get(r.brand).newKm).push(km)
+  for (const t of lifecycleTyres(records)) {
+    if (!t.brand) continue
+    if (t._life_km == null || !(t._life_km > 0)) continue
+    if (!map.has(t.brand)) map.set(t.brand, { newT: [], retreadT: [] })
+    ;(t.category === 'Retread' ? map.get(t.brand).retreadT : map.get(t.brand).newT).push(t)
   }
   return [...map.entries()]
     .map(([brand, d]) => ({
       brand,
-      newAvg: mean(d.newKm),
-      retreadAvg: mean(d.retreadKm),
-      totalAvg: mean([...d.newKm, ...d.retreadKm]),
-      samples: d.newKm.length + d.retreadKm.length,
+      newAvg: meanLife(d.newT),
+      retreadAvg: meanLife(d.retreadT),
+      totalAvg: meanLife([...d.newT, ...d.retreadT]),
+      samples: measuredCount([...d.newT, ...d.retreadT]),
     }))
     .sort((a, b) => b.totalAvg - a.totalAvg || a.brand.localeCompare(b.brand))
     .slice(0, limit)
@@ -164,32 +212,42 @@ export function costByCategory(records = []) {
     { key: 'repair', label: 'Repairs', test: r => r.category === 'Repaired' },
     { key: 'scrap', label: 'Scrapped', test: r => r.category === 'Scrap' },
   ]
+  // One tyre one price: a refit row of a real serial carries no purchase.
+  const oneprice = withOnePricePerTyre(records.map(asTyreRow))
   const out = buckets.map(b => {
-    const costs = records.filter(b.test).map(lineCost).filter(v => v != null)
+    const costs = oneprice.filter(b.test).map(lineCost).filter(v => v != null)
     return { key: b.key, label: b.label, total: costs.reduce((s, v) => s + v, 0), priced: costs.length }
   })
   const priced = out.reduce((s, b) => s + b.priced, 0)
   return { buckets: out, total: priced ? out.reduce((s, b) => s + b.total, 0) : null, priced }
 }
 
-/** Count of measured tyres per km band. */
+/** Count of measured PHYSICAL tyres per lifetime-km band. */
 export function kmBandCounts(records = []) {
   const counts = KM_BANDS.map(() => 0)
-  for (const r of records) {
-    const km = kmRun(r)
-    if (km == null) continue
+  for (const t of lifecycleTyres(records)) {
+    const km = t._life_km
+    if (km == null || !(km > 0)) continue
     const i = KM_BANDS.findIndex(b => km >= b.min && km < b.max)
-    if (i >= 0) counts[i] += 1
+    if (i >= 0) counts[i] += tyreQty(t)
   }
   return KM_BANDS.map((b, i) => ({ label: b.label, count: counts[i] }))
 }
 
-/** Table rows with the derived fields attached once. */
+/**
+ * Table rows (one per FITMENT) with the derived fields attached once. `_cpk`
+ * is a PER-FITMENT CPK (`_cpkKind`): the purchase sits on the tyre's first
+ * priced fitment only, so a refit row has no CPK.
+ */
 export function lifecycleRows(records = []) {
-  return records.map(r => ({
+  const priced = withOnePricePerTyre(records.map(asTyreRow))
+  return records.map((r, i) => ({
     ...r,
     _km: kmRun(r),
-    _cpk: cpk(r),
+    _cpk: cpk(priced[i]),
+    // Purchase on this fitment row: null on a refit of a real serial (bought once).
+    _cost: num(priced[i]?.cost_per_tyre) != null && num(priced[i].cost_per_tyre) > 0 ? num(priced[i].cost_per_tyre) : null,
+    _cpkKind: CPK_KIND.PER_FITMENT,
     _stage: lifecycleStage(r),
     _category: r.category || 'New',
   }))
@@ -201,7 +259,7 @@ export const EXPORT_COLS = [
 ]
 export const EXPORT_HEADERS = [
   'Serial', 'Brand', 'Size', 'Position', 'Asset', 'Site', 'Fitment date',
-  'Removal date', 'km run', 'Category', 'Cost per tyre', 'Cost per km', 'Stage',
+  'Removal date', 'km run', 'Category', 'Cost per tyre', 'Cost per km (per fitment)', 'Stage',
 ]
 
 export function lifecycleExportRows(records = []) {
@@ -216,7 +274,7 @@ export function lifecycleExportRows(records = []) {
     removal_date: r.removal_date || (isRemoved(r) ? 'Not recorded' : 'In service'),
     km_run: r._km ?? 'N/A',
     category: r._category,
-    cost: num(r.cost_per_tyre) ?? 'N/A',
+    cost: r._cost ?? 'N/A',
     cpk: r._cpk != null ? Number(r._cpk.toFixed(4)) : 'N/A',
     stage: r._stage,
   }))

@@ -10,6 +10,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { toUserMessage } from '../lib/safeError'
 import { computeSupplierScorecard } from '../lib/analytics/supplierScorecard'
+import { CPK_KIND_LABEL } from '../lib/tyreLifetime'
 import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
 import Modal from '../components/ui/Modal'
@@ -679,7 +680,7 @@ export default function SupplierManagement() {
   const yoyPager = usePagedRows(spendAnalysis.yoy)
 
   const compareRows = useMemo(() => [
-    { label: t('suppliers.performance.rows.avgCpk'), key: 'avgCpk', fmt: v => fmtCpk(v, activeCurrency), lowerBetter: true },
+    { label: `${t('suppliers.performance.rows.avgCpk')} (${CPK_KIND_LABEL.fleet_aggregate})`, key: 'avgCpk', fmt: v => fmtCpk(v, activeCurrency), lowerBetter: true },
     { label: t('suppliers.performance.rows.avgLifeKm'), key: 'avgLife', fmt: v => fmtKm(v), lowerBetter: false },
     { label: t('suppliers.performance.rows.failureRate'), key: 'failureRate', fmt: v => fmtPct(v), lowerBetter: true },
     { label: t('suppliers.performance.rows.tyreCount'), key: 'count', fmt: v => v, lowerBetter: false },
@@ -796,7 +797,7 @@ export default function SupplierManagement() {
     { id: 'brand', header: t('suppliers.recommendations.columns.supplier'), cell: ({ row }) => <span className="text-[var(--text-primary)] font-medium">{row.original.brand}</span> },
     { id: 'rating', header: t('suppliers.recommendations.columns.rating'), cell: ({ row }) => <RatingBadge rating={row.original.rating} /> },
     { id: 'count', header: t('suppliers.recommendations.columns.tyres'), cell: ({ row }) => <span className="text-[var(--text-secondary)]">{row.original.count}</span> },
-    { id: 'cpk', header: t('suppliers.recommendations.columns.avgCpk'), cell: ({ row }) => <CpkBadge cpk={row.original.avgCpk} currency={activeCurrency} /> },
+    { id: 'cpk', header: `${t('suppliers.recommendations.columns.avgCpk')} (weighted)`, cell: ({ row }) => <CpkBadge cpk={row.original.avgCpk} currency={activeCurrency} /> },
     { id: 'life', header: t('suppliers.recommendations.columns.avgLife'), cell: ({ row }) => <span className="text-[var(--text-secondary)]">{fmtKm(row.original.avgLife)}</span> },
     {
       id: 'failure', header: t('suppliers.recommendations.columns.failurePct'),
@@ -838,7 +839,7 @@ export default function SupplierManagement() {
     },
     { id: 'tyres', header: t('suppliers.scorecard.columns.tyres'), cell: ({ row }) => <span className="text-[var(--text-muted)]">{row.original.tyreCount}</span> },
     { id: 'spend', header: t('suppliers.scorecard.columns.spend'), cell: ({ row }) => <span className="text-[var(--text-secondary)]">{fmtCurrency(row.original.totalSpend, activeCurrency)}</span> },
-    { id: 'cpk', header: t('suppliers.scorecard.columns.avgCpk'), cell: ({ row }) => <span className="text-[var(--text-secondary)]">{row.original.avgCpk == null ? 'N/A' : row.original.avgCpk.toFixed(3)}</span> },
+    { id: 'cpk', header: `${t('suppliers.scorecard.columns.avgCpk')} (weighted)`, cell: ({ row }) => <span className="text-[var(--text-secondary)]">{row.original.avgCpk == null ? 'N/A' : row.original.avgCpk.toFixed(3)}</span> },
     { id: 'failure', header: t('suppliers.scorecard.columns.failurePct'), cell: ({ row }) => <span className="text-[var(--text-secondary)]">{row.original.failureRate == null ? 'N/A' : `${(row.original.failureRate * 100).toFixed(1)}%`}</span> },
     {
       id: 'acceptance', header: 'Acceptance',

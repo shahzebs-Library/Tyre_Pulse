@@ -25,6 +25,7 @@ import TyreExceptionsSection from '../components/reconciliation/TyreExceptionsSe
 import DataQualityScorecard from '../components/reconciliation/DataQualityScorecard'
 import AssetMasterSection from '../components/reconciliation/AssetMasterSection'
 import DataTrustSection from '../components/reconciliation/DataTrustSection'
+import ExpenseCostStatusPanel from '../components/expense/ExpenseCostStatusPanel'
 import {
   normalizeOrphan, normalizeDupe, normalizeMovement,
   filterOrphans, filterDupes, filterMovements, countriesOf, reconSummary,
@@ -625,6 +626,9 @@ export default function DataReconciliation() {
 
         <TyreImportReviewSection />
         <TyreExceptionsSection />
+        {/* Expense lines: repeated uploads, revised values, estimates, missing amounts
+            (read only - a person decides; nothing is removed here). */}
+        <ExpenseCostStatusPanel compact autoLoad={false} title="Expense lines: cost status and repeated uploads" />
         <JobcardDateSection />
         <DupKeyTyresSection />
         <SerialCheckSection />

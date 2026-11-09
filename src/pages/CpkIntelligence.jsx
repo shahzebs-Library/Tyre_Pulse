@@ -54,12 +54,14 @@ const KmSourcePanel = lazy(() => import('../components/cpk/KmSourcePanel'))
 const CpkUnitAuditPanel = lazy(() => import('../components/cpk/CpkUnitAuditPanel'))
 const CpkKmIntelligencePanel = lazy(() => import('../components/cpk/CpkKmIntelligencePanel'))
 const CpkReportPanel = lazy(() => import('../components/cpk/CpkReportPanel'))
+const LifetimeCpkPanel = lazy(() => import('../components/cpk/LifetimeCpkPanel'))
 
 const MOBILITIES = ['movable', 'non_movable']
 
 const TABS = [
   { key: 'fleet', label: 'Fleet CPK', icon: Gauge },
   { key: 'vehicles', label: 'Per vehicle', icon: Table2 },
+  { key: 'lifetime', label: 'Tyre lifetime', icon: Layers },
   { key: 'km_source', label: 'KM source', icon: Milestone },
   { key: 'units', label: 'Units & why different', icon: Layers },
   { key: 'km_intel', label: 'KM intelligence', icon: Gauge },
@@ -585,6 +587,12 @@ export default function CpkIntelligence() {
       {tab === 'units' && (
         <Suspense fallback={<Loading />}>
           <CpkUnitAuditPanel country={country} from={bounds.from} to={bounds.to} site={siteArg} currency={currency} />
+        </Suspense>
+      )}
+
+      {tab === 'lifetime' && (
+        <Suspense fallback={<Loading />}>
+          <LifetimeCpkPanel country={country} from={bounds.from} to={bounds.to} site={siteArg} />
         </Suspense>
       )}
 

@@ -12,6 +12,20 @@
  */
 import { cleanRemovalReason } from './removalReason'
 import { tyreAgeBand, tyreAgeYears } from './tyreAge'
+import { toLifetimeTyres, tyreKey, lifetimeCpk, weightedCpk, withOnePricePerTyre, lifetimeSummary, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
+
+/**
+ * Map each fitment row (by its index in `rows`) to its PHYSICAL tyre: price once,
+ * km summed over every fitment (src/lib/tyreLifetime.js). A row is looked up by
+ * the same key toLifetimeTyres() groups on, so all rows of one tyre share it.
+ * Rows carrying the serial under a legacy column are normalised to serial_no.
+ */
+function lifetimeIndex(rows = []) {
+  const norm = rows.map((r) => (r && !r.serial_no && serialOf(r) ? { ...r, serial_no: serialOf(r) } : r))
+  const tyres = toLifetimeTyres(norm)
+  const byKey = new Map(tyres.map((t) => [t._key, t]))
+  return { tyres, of: (i) => byKey.get(tyreKey(norm[i], i)) || null }
+}
 
 // ── Category / severity vocabularies ───────────────────────────────────────────
 export const SEVERITIES = ['high', 'medium', 'low']
@@ -65,7 +79,7 @@ const round = (n, dp = 2) => {
   return Math.round(n * f) / f
 }
 
-/** Cost-per-kilometre for a tyre, or null when it cannot be computed. */
+/** PER-FITMENT cost-per-km for one row (cost / total_km), or null. Not a lifetime CPK. */
 export function tyreCpk(rec) {
   const cost = num(rec?.cost_per_tyre)
   const km = num(rec?.total_km)
@@ -111,12 +125,25 @@ export function buildExceptions({ tyres = [], workOrders = [] } = {}, opts = {})
   const tyreList = Array.isArray(tyres) ? tyres : []
   const inService = tyreList.filter(isInService)
 
-  // Fleet CPK 90th percentile — computed once from in-service tyres with usable
-  // mileage, so the "high CPK" flag is relative to this fleet, not a magic number.
-  const cpkValues = inService
-    .map((r) => tyreCpk(r))
-    .filter((v) => v != null)
+  // Lifetime CPK per PHYSICAL tyre (purchase once, km summed across fitments).
+  // The p90 cut-off is taken over the in-service tyres' lifetime CPKs, each
+  // physical tyre counted once, so the flag is relative to this fleet.
+  const life = lifetimeIndex(tyreList)
+  const lifeCpkOfRow = new Map()
+  tyreList.forEach((r, i) => {
+    const tyre = life.of(i)
+    lifeCpkOfRow.set(r, { tyre, cpk: tyre ? lifetimeCpk(tyre) : null })
+  })
+  const seen = new Set()
+  const cpkValues = []
+  for (const r of inService) {
+    const { tyre, cpk } = lifeCpkOfRow.get(r) || {}
+    if (!tyre || cpk == null || seen.has(tyre._key)) continue
+    seen.add(tyre._key)
+    cpkValues.push(cpk)
+  }
   const cpkCut = percentile(cpkValues, t.cpkPercentile)
+  const flaggedCpk = new Set()
 
   for (const r of inService) {
     const serial = serialOf(r)
@@ -167,9 +194,11 @@ export function buildExceptions({ tyres = [], workOrders = [] } = {}, opts = {})
       })
     }
 
-    // 3. High CPK — above the fleet 90th percentile.
-    const cpk = tyreCpk(r)
-    if (cpk != null && cpkCut != null && cpk > cpkCut) {
+    // 3. High CPK — physical tyre lifetime CPK above the fleet 90th percentile.
+    //    A still-fitted tyre's figure is provisional (partial life) and says so.
+    const { tyre: lt, cpk } = lifeCpkOfRow.get(r) || {}
+    if (cpk != null && cpkCut != null && cpk > cpkCut && !flaggedCpk.has(lt._key)) {
+      flaggedCpk.add(lt._key)
       out.push({
         id: `cpk:${serial || asset || r.id}`,
         category: 'high_cpk',
@@ -180,10 +209,12 @@ export function buildExceptions({ tyres = [], workOrders = [] } = {}, opts = {})
         serial,
         ageYears: null,
         cpk: round(cpk, 4),
-        detail: `Cost-per-km ${round(cpk, 3)} is above the fleet 90th percentile (${round(
+        cpkKind: CPK_KIND.TYRE_LIFETIME,
+        provisional: Boolean(lt._provisional),
+        detail: `Lifetime cost-per-km ${round(cpk, 3)} is above the fleet 90th percentile (${round(
           cpkCut,
           3,
-        )}).`,
+        )})${lt._provisional ? '. Provisional: the tyre is still fitted or its km is incomplete' : ''}.`,
         link: tyreLink(serial),
       })
     }
@@ -313,7 +344,7 @@ export const isInStock = (r) => {
 }
 
 /**
- * Net cost-per-km for a tyre using the distance it actually earned:
+ * PER-FITMENT cost-per-km (one stint) for a row using the distance it earned:
  * (km_at_removal − km_at_fitment) when both are present, else total_km.
  * Returns null when cost or a positive distance is unavailable.
  */
@@ -326,13 +357,13 @@ export function tyreNetCpk(rec) {
   return cost / km
 }
 
-/** Mean net CPK across a fleet (positive values only), or null. */
+/**
+ * Fleet CPK (name kept for callers): the WEIGHTED fleet aggregate over physical
+ * tyres (rule T8) = total purchase cost / total tyre-km, each tyre priced once
+ * and its km summed over every fitment. Null when nothing is measurable.
+ */
 export function fleetMeanNetCpk(tyres = []) {
-  const xs = (Array.isArray(tyres) ? tyres : [])
-    .map(tyreNetCpk)
-    .filter((v) => v != null && v > 0)
-  if (!xs.length) return null
-  return xs.reduce((a, b) => a + b, 0) / xs.length
+  return weightedCpk(lifetimeIndex(Array.isArray(tyres) ? tyres : []).tyres)
 }
 
 /** cpkm status band (shared with the Financial panel + Executive strip). */
@@ -440,12 +471,18 @@ export function pressureImbalanceAnomalies(tyres = [], opts = {}) {
 export function costOutlierAnomalies(tyres = [], opts = {}) {
   const t = { ...DEFAULT_PULSE_THRESHOLDS, ...(opts.thresholds || {}) }
   const list = Array.isArray(tyres) ? tyres : []
-  const mean = fleetMeanNetCpk(list)
+  const life = lifetimeIndex(list)
+  const mean = weightedCpk(life.tyres)
   if (mean == null) return []
   const out = []
-  for (const r of list) {
-    const cpk = tyreNetCpk(r)
-    if (cpk == null || cpk <= 0 || cpk <= mean * t.costOutlierMultiple) continue
+  const flagged = new Set()
+  for (let i = 0; i < list.length; i += 1) {
+    const r = list[i]
+    // Physical tyre lifetime CPK; a tyre with several fitment rows is checked once.
+    const tyre = life.of(i)
+    const cpk = tyre ? lifetimeCpk(tyre) : null
+    if (cpk == null || cpk <= 0 || cpk <= mean * t.costOutlierMultiple || flagged.has(tyre._key)) continue
+    flagged.add(tyre._key)
     const mult = round(cpk / mean, 1)
     const label = serialOf(r) || r.asset_no || 'unknown tyre'
     out.push({
@@ -456,7 +493,8 @@ export function costOutlierAnomalies(tyres = [], opts = {}) {
       serial: serialOf(r),
       cpk: round(cpk, 4),
       multiple: mult,
-      detail: `Net CPK ${round(cpk, 4)}, ${mult}× the fleet mean (${round(mean, 4)}).`,
+      cpkKind: CPK_KIND.TYRE_LIFETIME,
+      detail: `Lifetime CPK ${round(cpk, 4)}, ${mult}× the fleet aggregate (${round(mean, 4)}).`,
       action: 'Review usage pattern. Consider early replacement.',
     })
   }
@@ -665,7 +703,8 @@ export function buildFinancials({ budgets = [], tyres = [] } = {}, opts = {}) {
     if (b?.year != null && Number(b.year) !== year) return acc
     return acc + (num(b?.monthly_budget) || 0)
   }, 0)
-  const ytdSpend = tyreList.reduce((acc, r) => {
+  // A refit of the same physical tyre is not a second purchase (rule T1).
+  const ytdSpend = withOnePricePerTyre(tyreList).reduce((acc, r) => {
     const d = r?.issue_date || r?.fitment_date
     return inYear(d, year) ? acc + (num(r?.cost_per_tyre) || 0) : acc
   }, 0)
@@ -680,10 +719,9 @@ export function buildFinancials({ budgets = [], tyres = [] } = {}, opts = {}) {
           ? 'warning'
           : 'on_track'
 
-  const cpkValues = tyreList.map(tyreNetCpk).filter((v) => v != null && v > 0)
-  const avgCpk = cpkValues.length
-    ? round(cpkValues.reduce((a, b) => a + b, 0) / cpkValues.length, 4)
-    : null
+  // Fleet aggregate CPK, WEIGHTED over physical tyres (rule T8).
+  const lifeSummary = lifetimeSummary(lifetimeIndex(tyreList).tyres)
+  const avgCpk = lifeSummary.cpkPurchase != null ? round(lifeSummary.cpkPurchase, 4) : null
 
   return {
     year,
@@ -694,7 +732,11 @@ export function buildFinancials({ budgets = [], tyres = [] } = {}, opts = {}) {
     budgetStatus,
     avgCpk,
     cpkmStatus: cpkmStatus(avgCpk),
-    cpkDataPoints: cpkValues.length,
+    cpkKind: CPK_KIND.FLEET_AGGREGATE,
+    cpkKindLabel: CPK_KIND_LABEL[CPK_KIND.FLEET_AGGREGATE],
+    cpkDataPoints: lifeSummary.measurable,
+    cpkProvisionalTyres: lifeSummary.provisional,
+    cpkEstimatedShare: lifeSummary.estimatedShare,
     // No source column in the current schema — surfaced honestly, never faked.
     notCaptured: ['retread_savings', 'claim_recoveries', 'emergency_premium'],
   }
@@ -722,7 +764,7 @@ export function buildExecutiveSummary({ pulse, anomalies = [], financials } = {}
     : 'Financial data unavailable'
   const cpk =
     financials?.avgCpk != null
-      ? `${financials.avgCpk} ${currency}/km fleet average`
+      ? `${financials.avgCpk} ${currency}/km fleet aggregate tyre CPK (weighted, per tyre-km)`
       : 'CPK data insufficient'
 
   return {

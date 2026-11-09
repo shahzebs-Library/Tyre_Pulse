@@ -18,9 +18,25 @@
  *    currency; a group that spans more than one currency reports its money as
  *    `null` (rendered N/A) and `mixedCurrency: true`, never a SAR+AED+EGP sum.
  *
+ * 3. PHYSICAL TYRES (src/lib/tyreLifetime.js). normaliseRecords first drops a
+ *    refit's repeat price (withOnePricePerTyre: one tyre one price, rule T1) and
+ *    collapses rows into physical tyres. Group CPK (site / brand / vehicle /
+ *    month and the fleet figure) is WEIGHTED lifetime CPK (total purchase cost /
+ *    total tyre-km, rule T8) over the physical tyres whose LATEST fitment falls
+ *    in the group. Group `count` stays the number of FITMENT rows (`tyres` is the
+ *    physical tyre count); failures / high-risk are EVENT counts per fitment.
+ *    A row's own `cpk` is a PER-FITMENT figure (one stint).
+ *
  * No I/O. Anything time-dependent takes an injectable `now`.
  */
 import { currencyForCountry, MIXED_CURRENCY } from './governedCost'
+import {
+  withOnePricePerTyre, toLifetimeTyres, tyreKey, fitmentKm, weightedCpk, lifetimeSummary,
+  CPK_KIND, CPK_KIND_LABEL,
+} from './tyreLifetime'
+
+export const COST_CENTER_CPK_KIND = CPK_KIND.FLEET_AGGREGATE
+export const COST_CENTER_CPK_KIND_LABEL = CPK_KIND_LABEL[CPK_KIND.FLEET_AGGREGATE]
 
 export const INDUSTRY_BENCHMARK_CPK = 1.5
 export const SAVINGS_OPPORTUNITY_PCT = 0.15
@@ -37,8 +53,6 @@ const toNum = (v) => {
   const n = typeof v === 'number' ? v : parseFloat(v)
   return Number.isFinite(n) ? n : null
 }
-
-const mean = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null)
 
 /** Cost per km for one tyre, or null when either side is not measurable. */
 export function calcCpk(cost, kmFit, kmRem) {
@@ -92,8 +106,43 @@ export function normaliseRecord(r = {}) {
   }
 }
 
+const dateOf = (r) => String(r?.issue_date ?? r?.fitment_date ?? '').slice(0, 10)
+
+/**
+ * Normalise rows with one price per physical tyre, and tag the row that is each
+ * physical tyre's LATEST fitment with `_tyre` (the lifetime tyre). Groupings read
+ * `_tyre` so a tyre is counted once, in the group of its latest fitment.
+ */
 export function normaliseRecords(records = []) {
-  return (records || []).map(normaliseRecord)
+  const src = withOnePricePerTyre((records || []).filter(Boolean))
+  const rows = src.map((r) => {
+    const n = normaliseRecord(r)
+    // Per-fitment CPK by the shared km rule (T7) on the one-price row.
+    const km = fitmentKm(r)
+    n.cpk = n.priced && km != null && km > 0 ? n.cost / km : null
+    n.cpkKind = CPK_KIND.PER_FITMENT
+    return n
+  })
+  const tyres = toLifetimeTyres(src)
+  const byKey = new Map()
+  src.forEach((r, i) => {
+    const k = tyreKey(r, i)
+    rows[i]._tyreKey = k
+    if (!byKey.has(k)) byKey.set(k, [])
+    byKey.get(k).push(i)
+  })
+  for (const t of tyres) {
+    const idxs = byKey.get(t._key) || []
+    let pick = t.id != null ? idxs.find((i) => src[i].id === t.id) : undefined
+    if (pick == null) pick = idxs.reduce((best, i) => (best == null || dateOf(src[i]) >= dateOf(src[best]) ? i : best), null)
+    if (pick != null) rows[pick]._tyre = t
+  }
+  return rows
+}
+
+/** Physical tyres represented in a set of normalised rows (one per latest fitment). */
+export function tyresOf(rows = []) {
+  return (rows || []).filter((r) => r._tyre).map((r) => r._tyre)
 }
 
 /**
@@ -138,8 +187,11 @@ function finishGroup(g, fallbackCurrency) {
     mixedCurrency: mixed,
     totalCost,
     avgCost: totalCost == null ? null : totalCost / g.priced,
-    avgCpk: mixed ? null : mean(g.cpks),
-    cpkCount: g.cpks.length,
+    // Weighted lifetime CPK of the physical tyres whose latest fitment is in the group.
+    avgCpk: mixed ? null : weightedCpk(g.tyres),
+    cpkCount: g.tyres.filter((t) => (t._cost ?? 0) > 0 && (t._life_km ?? 0) > 0).length,
+    cpkKind: COST_CENTER_CPK_KIND,
+    tyres: g.tyres.reduce((s, t) => s + (t._qty || 1), 0),
   }
 }
 
@@ -149,12 +201,12 @@ function groupBy(rows, keyFn, extra, fallbackCurrency) {
     const key = keyFn(r)
     let g = map.get(key)
     if (!g) {
-      g = { key, count: 0, priced: 0, cost: 0, cpks: [], currencies: new Set(), failures: 0, risks: 0, positions: {} }
+      g = { key, count: 0, priced: 0, cost: 0, tyres: [], currencies: new Set(), failures: 0, risks: 0, positions: {} }
       map.set(key, g)
     }
     g.count += 1
     if (r.priced) { g.priced += 1; g.cost += r.cost }
-    if (r.cpk != null) g.cpks.push(r.cpk)
+    if (r._tyre) g.tyres.push(r._tyre)
     if (r.currency && r.priced) g.currencies.add(r.currency)
     if (r.failed) g.failures += 1
     if (r.highRisk) g.risks += 1
@@ -228,16 +280,26 @@ export function periodMonths({ from, to, now = new Date(), firstMonth } = {}) {
 export function buildRecordKpis(rows, { fallbackCurrency = null } = {}) {
   const list = rows || []
   const currency = scopeCurrency(list.filter((r) => r.priced), fallbackCurrency)
-  const cpks = list.filter((r) => r.cpk != null).map((r) => r.cpk)
+  const tyres = tyresOf(list)
+  const summary = lifetimeSummary(tyres)
   const priced = list.filter((r) => r.priced).length
+  const pricedTyres = tyres.filter((t) => (t._cost ?? 0) > 0).length
   return {
     records: list.length,
     priced,
     pricedPct: list.length ? (priced / list.length) * 100 : null,
-    cpkCount: cpks.length,
+    tyres: tyres.length,
+    pricedTyres,
+    pricedTyresPct: tyres.length ? (pricedTyres / tyres.length) * 100 : null,
+    cpkCount: summary.measurable,
     currency,
     mixedCurrency: currency === MIXED_CURRENCY,
-    fleetAvgCpk: currency === MIXED_CURRENCY ? null : mean(cpks),
+    fleetAvgCpk: currency === MIXED_CURRENCY ? null : summary.cpkPurchase,
+    cpkKind: COST_CENTER_CPK_KIND,
+    cpkKindLabel: COST_CENTER_CPK_KIND_LABEL,
+    kmCoverage: summary.coverage,
+    estimatedShare: summary.estimatedShare,
+    // High-risk is an event rating per fitment row.
     highRisk: list.filter((r) => r.highRisk).length,
   }
 }

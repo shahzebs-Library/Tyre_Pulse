@@ -248,7 +248,7 @@ export default function SupplierDetail() {
     { id: 'site', header: t('suppliers.drawer.columns.site'), accessorFn: (r) => r.site || undefined, sortUndefined: 'last', size: 110 },
     { id: 'km', header: 'Km run', accessorFn: (r) => r.kmRun ?? undefined, sortUndefined: 'last', meta: { align: 'right' }, size: 100,
       cell: ({ row }) => fmtKm(row.original.kmRun) },
-    { id: 'cpk', header: t('suppliers.drawer.columns.cpk'), accessorFn: (r) => r.cpk ?? undefined, sortUndefined: 'last', meta: { align: 'right' }, size: 140,
+    { id: 'cpk', header: `${t('suppliers.drawer.columns.cpk')} (per fitment)`, accessorFn: (r) => r.cpk ?? undefined, sortUndefined: 'last', meta: { align: 'right' }, size: 140,
       cell: ({ row }) => {
         const c = row.original.cpk
         if (c == null) return <span className="text-[var(--text-muted)] text-xs">N/A</span>
@@ -389,8 +389,8 @@ export default function SupplierDetail() {
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <StatTile label={t('suppliers.drawer.stats.avgCpk')} value={fmtCpk(supplier.avgCpk, activeCurrency)} icon={Gauge}
           tone={supplier.avgCpk == null ? 'neutral' : supplier.avgCpk <= CPK_BENCHMARK ? 'accent' : 'warn'}
-          sub={detail.vsBenchmarkPct == null ? `${detail.costedRecords} costed records` : `${detail.vsBenchmarkPct > 0 ? '+' : ''}${detail.vsBenchmarkPct.toFixed(0)}% vs ${CPK_BENCHMARK} benchmark`} />
-        <StatTile label={t('suppliers.drawer.stats.avgTyreLife')} value={fmtKm(supplier.avgLife)} icon={Ruler} sub={`${detail.costedRecords} records with a km run`} />
+          sub={`${detail.cpkKindLabel || 'Fleet aggregate tyre CPK'}. ${detail.vsBenchmarkPct == null ? `${detail.costedRecords} costed tyres` : `${detail.vsBenchmarkPct > 0 ? '+' : ''}${detail.vsBenchmarkPct.toFixed(0)}% vs ${CPK_BENCHMARK} benchmark`}${detail.kmCoverage && (detail.kmCoverage.partial || detail.kmCoverage.none) ? `. Km coverage: ${detail.kmCoverage.complete || 0} complete, ${detail.kmCoverage.partial || 0} partial, ${detail.kmCoverage.none || 0} none` : ''}`} />
+        <StatTile label={t('suppliers.drawer.stats.avgTyreLife')} value={fmtKm(supplier.avgLife)} icon={Ruler} sub={`Physical tyre lifetime km. ${detail.costedRecords} costed tyres`} />
         <StatTile label={t('suppliers.drawer.stats.failureRate')} value={fmtPct(detail.failureRate)} icon={ShieldCheck}
           tone={detail.failureRate == null ? 'neutral' : detail.failureRate < FAILURE_THRESHOLD ? 'accent' : 'crit'} sub={failSub} />
         <StatTile label={t('suppliers.drawer.stats.spendThisYear')} value={fmtCurrency(supplier.spendThisYear, activeCurrency)} icon={Wallet} sub="Latest data year" />

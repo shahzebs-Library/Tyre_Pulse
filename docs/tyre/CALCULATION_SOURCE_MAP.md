@@ -1,6 +1,43 @@
 # Tyre calculations - source of truth map
 
-Audit date 2026-11-09 (after PR #470 + migration 20261109150000). For each KPI:
+## Phase 1 (2026-11-09): lifetime CPK is end to end in the web layer and has a database definition
+| Measurement (rule T19) | Canonical | Where shown |
+|---|---|---|
+| Physical tyre (key, km over non-overlapping fitments, price once, cost status, coverage) | SQL `v_tyre_lifetime_fitments` / `v_tyre_lifetime`; JS `toLifetimeTyres` (MIRROR, Egypt parity 12/12 aggregates) | everywhere below |
+| Physical tyre lifetime CPK (purchase-only and full) | SQL `get_tyre_lifetime_cpk(country, from, to, site)`; JS `lifetimeCpk` / `fullLifetimeCpk` | CPK Intelligence "Tyre lifetime" tab, Tyre Passport, Serial Tracker, Tyre Records detail, Tyre Bay |
+| Fleet aggregate tyre CPK (weighted, per tyre-km) | JS `weightedCpk` / `lifetimeSummary`; SQL inside `get_tyre_lifetime_cpk` | kpiEngine and every group CPK (brand, site, asset, driver, supplier, size, vendor, workshop) |
+| Per-fitment tyre CPK (one stint) | JS `recordCpk` with the price from `withOnePricePerTyre` | Tyre Bay stints, Tyre Records row, Driver Detail table, Passport journey - each labelled per fitment |
+| Fleet expense per vehicle-km / CPH | SQL `get_fleet_cpk` (unchanged, production) | CPK Intelligence "Fleet CPK" tab, report snapshot `cost.tyre_cpk` (Flutter management screen) |
+| Tyre lifecycle events (fit, refit, rotation, transfer, removal, store, retread, warranty, scrap, disposal, ambiguous) | SQL `v_tyre_lifecycle_events` / `get_tyre_lifecycle_events`; JS `buildLifecycleEvents` (MIRROR) - Phase 3, docs/tyre/LIFECYCLE_EVENTS.md | Tyre Passport, Fitment & Movement History |
+| Site at a past date (operational attribution only, opt-in, no report uses it yet) | SQL `v_asset_site_history` / `asset_site_at`; JS `buildSiteHistory` / `siteAtDate` (MIRROR) - Phase 3, docs/tyre/SITE_ATTRIBUTION.md | none yet |
+
+Phase 2: expense cost status (`get_expense_cost_status_summary`, Expense Report + Data Reconciliation) and Budget Planner
+actual spend from the expense grid - see docs/tyre/FINANCIAL_SOURCE_OF_TRUTH.md.
+
+Helpers moved onto the lifetime layer in Phase 1 (each with refit tests):
+- Group A: analyticsEngine (`lifetimeGroups`, `lifetimeMetrics`), brandPerformanceAnalytics, comparisonAnalytics,
+  siteComparisonAnalytics, advancedAnalyticsAnalytics, continuousImprovementAnalytics; pages Analytics, SiteComparison,
+  CountryComparison load the columns needed.
+- Group C: tyrePassport (first price once, DISPUTED flag), serialTrackerAnalytics (was latest price), tyreLifecycleAnalytics,
+  vehicle360Analytics, tyreBay, tyreRecordsView (+ api listRecordedLifeKm), tyreScrapManagementAnalytics,
+  tyreFailureCpkBoardAnalytics, tyreFailureView, engineeringKpiAnalytics.
+- Group D: kpiEngine (group `avgCpk` = weighted, old mean kept as `meanOfRatios`; vendor/workshop collapse first),
+  fleetIntelligence, rootCause, driverSafety / Management / Detail, opsIntelligence, fleetRisk, digitalTwin,
+  predictiveMaintenance, alertEngine (alerts only on finished tyres with complete km), ragService + agents.
+- Group B: supplier, retread, size, cost centre, budget, TCO, combinations (see the Phase 1 PR).
+- Mobile: Expo AI context + Overview (`mobile/lib/tyrePurchase.ts`, serial vectors pinned web + mobile).
+
+Deliberately still per fitment (events, not tyres): removals, failures, replacements, fitment counts, downtime,
+availability, risk ratings.
+
+STILL per fitment row on the server (kept unchanged on purpose until the new figures are verified - repointing them
+changes production numbers): `get_fleet_cpk`, `get_cpk_drivers`, `get_brand_size_cpk`, `get_tyre_running_life`,
+`report_tyre_summary`, `report_asset_metrics`, `report_country_metrics`, `get_report_snapshot(_authed)`,
+`get_mobile_analytics`. The before/after numbers are in docs/tyre/PHASE1_LIFETIME_CPK.md.
+
+
+Audit date 2026-11-09 (after PR #470 + migration 20261109150000). **Updated by Phase 1 (migrations
+20261109160000 + 170000, branch claude/tyre-lifetime-cpk-phase1)** - see the Phase 1 section first. For each KPI:
 the ONE canonical implementation, its mirror, and every place that still computes
 it another way. "Per row" = treats each fitment row as a tyre (a refit is bought
 again and its km is one stint).

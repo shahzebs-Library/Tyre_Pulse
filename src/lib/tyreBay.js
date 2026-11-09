@@ -19,6 +19,7 @@
  */
 import { legacyPositionCode, canonicalCode } from './tyrePositions'
 import { resolveLayoutKey, isTyrelessEquipment, LAYOUT_SLOTS, layoutForAsset } from './vehicleTyreLayout'
+import { toLifetimeTyres, withOnePricePerTyre, tyreKey, lifetimeCpk, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
 
 /** Serial across the three storage columns (mirrors tyrePassport.serialOfRecord). */
 export const serialOf = (r) =>
@@ -96,12 +97,62 @@ export function tyreLifeKm(r) {
   return total != null && total > 0 ? total : null
 }
 
-/** Cost per km for a record (cost_per_tyre / life km) or null when not derivable. */
+/**
+ * PER-FITMENT cost per km for one stint (cost_per_tyre / that stint's km), or
+ * null when not derivable. This is legitimately per fitment (the Tyre Bay shows
+ * stints), so feed it rows from bayPricedRows(): a refit of a real serial then
+ * carries no purchase and has no stint CPK. The tyre's lifetime figure sits
+ * beside it via bayLifetimeIndex().
+ */
+export const STINT_CPK_KIND = CPK_KIND.PER_FITMENT
+export const STINT_CPK_LABEL = CPK_KIND_LABEL[CPK_KIND.PER_FITMENT]
 export function cpk(r) {
   const cost = num(r?.cost_per_tyre)
   const km = tyreLifeKm(r)
   if (cost == null || cost <= 0 || km == null || km <= 0) return null
   return Math.round((cost / km) * 10000) / 10000
+}
+
+/**
+ * The vehicle's rows with each physical tyre's purchase kept ONCE (rule T1):
+ * the first priced fitment keeps its price, a refit of the same real serial
+ * is returned with cost_per_tyre null.
+ */
+export function bayPricedRows(rows) {
+  return withOnePricePerTyre(Array.isArray(rows) ? rows.filter(Boolean) : [])
+}
+
+/**
+ * Cumulative lifetime per physical tyre over the rows given (shared lifetime
+ * layer): km summed over its non-overlapping fitments, price once, lifetime
+ * CPK, coverage and provisional flag. Keyed by tyreKey(row).
+ * @returns {Map<string,{lifetimeKm:number|null, purchaseCost:number|null, lifetimeCpk:number|null,
+ *   kmCoverage:string, provisional:boolean, fitments:number, vehicles:number, kind:string, kindLabel:string}>}
+ */
+export function bayLifetimeIndex(rows) {
+  const list = Array.isArray(rows) ? rows.filter(Boolean) : []
+  const out = new Map()
+  for (const t of toLifetimeTyres(list)) {
+    out.set(t._key, {
+      lifetimeKm: t._life_km,
+      purchaseCost: t._cost,
+      lifetimeCpk: lifetimeCpk(t),
+      kmCoverage: t._km_coverage,
+      provisional: t._provisional,
+      fitments: t._fitments,
+      vehicles: t._vehicles,
+      kind: CPK_KIND.TYRE_LIFETIME,
+      kindLabel: CPK_KIND_LABEL[CPK_KIND.TYRE_LIFETIME],
+    })
+  }
+  return out
+}
+
+/** Lifetime entry for one row from bayLifetimeIndex (null when absent). */
+export function bayLifetimeFor(index, row, rows = []) {
+  if (!index || !row) return null
+  const i = Array.isArray(rows) ? rows.indexOf(row) : -1
+  return index.get(tyreKey(row, i)) || index.get(tyreKey(row, 0)) || null
 }
 
 /** Whole days a record has been fitted (fitment/issue -> removal or `now`). */

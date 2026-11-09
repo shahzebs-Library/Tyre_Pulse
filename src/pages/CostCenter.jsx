@@ -408,7 +408,7 @@ export default function CostCenter() {
     { id: 'count', header: 'Tyres', accessorFn: m => m.count, size: 90, meta: { align: 'right' } },
     { id: 'totalCost', header: 'Priced value', accessorFn: m => m.totalCost ?? -1, size: 140, meta: { align: 'right', exportValue: m => m.totalCost ?? 'N/A' },
       cell: ({ row }) => <span className="tabular-nums">{money(row.original.totalCost, row.original.currency)}</span> },
-    { id: 'avgCpk', header: 'Avg CPK', accessorFn: m => m.avgCpk ?? -1, size: 140, meta: { align: 'right', exportValue: m => m.avgCpk ?? 'N/A' },
+    { id: 'avgCpk', header: 'CPK (weighted)', accessorFn: m => m.avgCpk ?? -1, size: 140, meta: { align: 'right', exportValue: m => m.avgCpk ?? 'N/A' },
       cell: ({ row }) => <span className="tabular-nums">{fmtCpk(row.original.avgCpk, row.original.currency || activeCurrency)}</span> },
   ], [money, activeCurrency])
 
@@ -424,7 +424,7 @@ export default function CostCenter() {
           totalCost: na(s.totalCost), avgCost: na(s.avgCost), avgCpk: na(s.avgCpk, 4),
         })),
         columns: ['site', 'count', 'priced', 'currency', 'totalCost', 'avgCost', 'avgCpk'],
-        headers: ['Site', 'Tyres', 'Priced tyres', 'Currency', 'Priced value', 'Avg cost per priced tyre', 'Avg CPK'],
+        headers: ['Site', 'Fitments', 'Priced fitments', 'Currency', 'Priced value', 'Avg cost per priced fitment', 'CPK (weighted, per tyre-km)'],
       },
       {
         name: 'By Brand',
@@ -433,7 +433,7 @@ export default function CostCenter() {
           totalCost: na(b.totalCost), avgCpk: na(b.avgCpk, 4), failureRate: na(b.failureRate, 1), bestPosition: b.bestPosition,
         })),
         columns: ['rank', 'brand', 'count', 'currency', 'totalCost', 'avgCpk', 'failureRate', 'bestPosition'],
-        headers: ['Rank', 'Brand', 'Tyres', 'Currency', 'Priced value', 'Avg CPK', 'Failure rate %', 'Most used position'],
+        headers: ['Rank', 'Brand', 'Fitments', 'Currency', 'Priced value', 'CPK (weighted, per tyre-km)', 'Failure rate % (per fitment)', 'Most used position'],
       },
       {
         name: 'By Vehicle',
@@ -442,7 +442,7 @@ export default function CostCenter() {
           totalCost: na(v.totalCost), avgCpk: na(v.avgCpk, 4), riskScore: v.riskScore, trend: v.trend,
         })),
         columns: ['asset', 'count', 'currency', 'totalCost', 'avgCpk', 'riskScore', 'trend'],
-        headers: ['Asset', 'Tyres', 'Currency', 'Priced value', 'Avg CPK', 'High-risk tyres', 'CPK vs fleet'],
+        headers: ['Asset', 'Fitments', 'Currency', 'Priced value', 'CPK (weighted, per tyre-km)', 'High-risk fitments', 'CPK vs fleet'],
       },
       {
         name: 'By Month',
@@ -627,7 +627,7 @@ export default function CostCenter() {
               value={fmtCpk(fleetAvgCpk, cpkCurrency)}
               sub={fleetAvgCpk == null
                 ? (recordKpis.mixedCurrency ? 'Mixed currencies' : 'No measurable CPK')
-                : `${recordKpis.cpkCount.toLocaleString()} tyres measured. Benchmark ${INDUSTRY_BENCHMARK_CPK}/km`}
+                : `${recordKpis.cpkKindLabel}. ${recordKpis.cpkCount.toLocaleString()} physical tyres measured. Benchmark ${INDUSTRY_BENCHMARK_CPK}/km`}
               tone={fleetAvgCpk != null && fleetAvgCpk > INDUSTRY_BENCHMARK_CPK ? 'crit' : 'neutral'}
             />
             <StatTile

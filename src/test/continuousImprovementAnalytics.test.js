@@ -33,7 +33,9 @@ describe('continuousImprovementAnalytics basics', () => {
       [{ status: 'Completed' }, { status: 'Scheduled' }],
       [{ status: 'Closed' }, { status: 'Open' }],
     )
-    expect(m.avgCpk).toBeCloseTo((0.02 + 0.04) / 2)
+    // WEIGHTED lifetime CPK: total cost / total km = 2000 / 75000. Was the mean of
+    // per-row ratios (0.02 + 0.04) / 2 = 0.03, which lets a short stint swing it.
+    expect(m.avgCpk).toBeCloseTo(2000 / 75000, 8)
     expect(m.avgCostPerTyre).toBe(1000)
     expect(m.inspectionCompliance).toBe(50)
     expect(m.closeRate).toBe(50)

@@ -12,6 +12,17 @@
  *     the dependent result is null instead of a fabricated number.
  *   - CPK needs BOTH a positive km life and a positive cost.
  *
+ * PHYSICAL TYRES (src/lib/tyreLifetime.js). A retread is one CASING in one
+ * retread cycle: the casing serial plus the cycle number is the key, so cycle 2
+ * of a casing is its own purchase (a real second retread cost) while a refit of
+ * the same casing in the same cycle is not bought again. Aggregate CPK and life
+ * (fleet retread CPK, new-tyre baseline CPK, per-brand CPK/life, best size, the
+ * monthly CPK trend, savings) work on those collapsed casings and CPK is
+ * WEIGHTED (total cost / total km, rule T8). Row figures (`km_life`, `cpk` on an
+ * enriched row) are PER FITMENT and carry `cpk_kind`; the casing's lifetime
+ * figures ride along as `casing_km_life` / `casing_cpk`. Failure / success
+ * rates and the monthly fitment count are EVENT measures, kept per fitment.
+ *
  * Retread / scrap classification is kept identical to kpiEngine
  * (computeRetreadPerformance) so a casing tagged "Retread", "Retreaded" or
  * "Retread x2" is treated the same everywhere in the app.
@@ -23,6 +34,11 @@ export const RISK_HIGH = new Set(['High', 'Critical'])
 export const RISK_OPTIONS = ['Low', 'Medium', 'High', 'Critical']
 /** Default annual distance a tyre position runs, used only by the ROI projection. */
 export const DEFAULT_ANNUAL_KM = 100000
+
+import {
+  toLifetimeTyres, tyreKey, isStrongSerial, fitmentKm, withOnePricePerTyre, weightedCpk,
+  lifetimeCpk, lifetimeSummary, CPK_KIND, CPK_KIND_LABEL,
+} from './tyreLifetime'
 
 const num = (v) => {
   if (v === null || v === undefined || v === '') return null
@@ -37,13 +53,14 @@ const mean = (vals) => {
 export const isRetread = (r) => RETREAD_RE.test(String(r?.category ?? ''))
 export const isScrap = (r) => SCRAP_RE.test(String(r?.category ?? ''))
 
-/** Distance the tyre ran between fitment and removal; null when not measurable. */
+/**
+ * Distance ONE fitment ran, by the shared km rule (rule T7: a placeholder
+ * fitment km of 1 or a life over the class cap is unknown, a factory 0 is real);
+ * null when not measurable.
+ */
 export function kmLife(t) {
-  const fit = num(t?.km_at_fitment)
-  const rem = num(t?.km_at_removal)
-  if (fit == null || rem == null) return null
-  const km = rem - fit
-  return km > 0 ? km : null
+  const km = fitmentKm(t)
+  return km != null && km > 0 ? km : null
 }
 
 /** Cost per km; null unless both a positive life and a positive cost exist. */
@@ -91,12 +108,45 @@ export function last12Months(now = new Date()) {
   return out
 }
 
+// ── Physical casings ─────────────────────────────────────────────────────────
+
+const serialOf = (t) => t?.serial_no ?? t?.serial_number ?? null
+
+/** Serial used to collapse retread rows: casing serial + retread cycle. */
+export function casingSerial(t) {
+  if (t?._casing_serial !== undefined) return t._casing_serial
+  const s = serialOf(t)
+  if (!isStrongSerial(s)) return s
+  const cycle = retreadCycle(t)
+  return cycle == null ? String(s).trim().toUpperCase() : `${String(s).trim().toUpperCase()}#R${cycle}`
+}
+
+/** Rows ready for the lifetime layer: serial_no = the casing(+cycle) key. */
+function keyed(rows = []) {
+  return rows.filter(Boolean).map((r) => ({ ...r, _row_serial_no: r.serial_no, serial_no: casingSerial(r) }))
+}
+
+/**
+ * Collapse retread (or new-tyre) fitment rows into physical casings. Each result
+ * is a lifetime tyre (see toLifetimeTyres) with `km_life` = lifetime km and
+ * `cpk` = lifetime purchase CPK, and serial_no restored to the row's own value.
+ */
+export function casingLifetimes(rows = []) {
+  return toLifetimeTyres(keyed(rows)).map((t) => ({
+    ...t,
+    serial_no: t._row_serial_no,
+    km_life: t._life_km,
+    cpk: lifetimeCpk(t),
+  }))
+}
+
 export function enrichRetread(t, now = new Date()) {
   const removed = num(t?.km_at_removal) != null && num(t?.km_at_removal) > 0
   return {
     ...t,
     km_life: kmLife(t),
     cpk: cpk(t),
+    cpk_kind: CPK_KIND.PER_FITMENT,
     status: removed ? 'Removed' : 'Active',
     days_in_service: daysInService(t, now),
     retread_cycle: retreadCycle(t),
@@ -105,12 +155,28 @@ export function enrichRetread(t, now = new Date()) {
 
 /** Split raw tyre rows into enriched retreads and the new-tyre CPK baseline set. */
 export function splitRecords(records = [], now = new Date()) {
-  const retreads = []
+  const retreadRows = []
   const newTyres = []
   for (const r of records) {
-    if (isRetread(r)) retreads.push(enrichRetread(r, now))
+    if (isRetread(r)) retreadRows.push(r)
     else if (!isScrap(r)) newTyres.push(r)
   }
+  // One price per casing-cycle: a refit of the same casing in the same cycle
+  // carries no new cost, so its per-fitment CPK is null rather than re-bought.
+  const k = keyed(retreadRows)
+  const priced = withOnePricePerTyre(k)
+  const lifeByKey = new Map(toLifetimeTyres(k).map((t) => [t._key, t]))
+  const retreads = priced.map((r, i) => {
+    const life = lifeByKey.get(tyreKey(k[i], i))
+    const { _row_serial_no, ...row } = r
+    return {
+      ...enrichRetread({ ...row, serial_no: _row_serial_no }, now),
+      _casing_serial: k[i].serial_no,
+      casing_km_life: life?._life_km ?? null,
+      casing_cpk: life ? lifetimeCpk(life) : null,
+      casing_km_coverage: life?._km_coverage ?? 'none',
+    }
+  })
   return { retreads, newTyres }
 }
 
@@ -128,25 +194,36 @@ export function failureRate(success) {
 }
 
 export function retreadKpis(retreads = [], newTyres = []) {
-  const retreadCpk = mean(retreads.map((t) => t.cpk))
-  const newCpk = mean(newTyres.map(cpk))
+  const casings = casingLifetimes(retreads)
+  const newLife = toLifetimeTyres(newTyres.filter(Boolean).map((r) => ({ ...r, serial_no: serialOf(r) })))
+  const retreadCpk = weightedCpk(casings)
+  const newCpk = weightedCpk(newLife)
 
-  // Realised saving per retread = newCpk x km_life - what the retread cost.
+  // Realised saving per casing = newCpk x lifetime km - what the retread cost (once).
   let savings = null
   if (newCpk != null) {
-    const measurable = retreads.filter((t) => t.km_life && (num(t.cost_per_tyre) ?? 0) > 0)
+    const measurable = casings.filter((t) => (t._life_km ?? 0) > 0 && (t._cost ?? 0) > 0)
     if (measurable.length) {
-      savings = measurable.reduce((s, t) => s + (newCpk * t.km_life - num(t.cost_per_tyre)), 0)
+      savings = measurable.reduce((s, t) => s + (newCpk * t._life_km - t._cost) * (t._qty || 1), 0)
     }
   }
 
-  const cycles = retreads.map((t) => t.retread_cycle).filter((v) => v != null)
-  const removedCount = retreads.filter((t) => t.status === 'Removed').length
+  const cycles = casings.map((t) => retreadCycle(t)).filter((v) => v != null)
+  const casingCount = casings.reduce((s, t) => s + (t._qty || 1), 0)
+  const newCount = newLife.reduce((s, t) => s + (t._qty || 1), 0)
+  const removedCount = casings.filter((t) => !t._active && (t.removal_date || (num(t.km_at_removal) ?? 0) > 0)).length
   const success = successRate(retreads)
+  const summary = lifetimeSummary(casings)
   return {
-    totalRetreads: retreads.length,
-    activeCount: retreads.length - removedCount,
+    // Physical retread casings (casing + cycle); fitments = retread fitment rows.
+    totalRetreads: casingCount,
+    retreadFitments: retreads.length,
+    activeCount: casingCount - removedCount,
     removedCount,
+    cpkKind: CPK_KIND.FLEET_AGGREGATE,
+    cpkKindLabel: CPK_KIND_LABEL[CPK_KIND.FLEET_AGGREGATE],
+    kmCoverage: summary.coverage,
+    provisional: summary.provisional,
     retreadCpk,
     newCpk,
     cpkDeltaPct: retreadCpk != null && newCpk != null && newCpk > 0
@@ -157,8 +234,8 @@ export function retreadKpis(retreads = [], newTyres = []) {
     failureRate: failureRate(success),
     avgCycle: mean(cycles),
     maxCycle: cycles.length ? Math.max(...cycles) : null,
-    retreadShare: retreads.length + newTyres.length > 0
-      ? (retreads.length / (retreads.length + newTyres.length)) * 100
+    retreadShare: casingCount + newCount > 0
+      ? (casingCount / (casingCount + newCount)) * 100
       : null,
   }
 }
@@ -180,20 +257,26 @@ export function optionsFor(rows = [], key) {
   return [...new Set(rows.map((r) => r[key]).filter(Boolean))].sort()
 }
 
+const brandOf = (t) => String(t?.brand ?? '').trim() || 'Unknown'
+
 export function brandSummary(retreads = []) {
+  // Group COLLAPSED casings by their latest brand (never collapse after grouping).
   const map = new Map()
-  for (const t of retreads) {
-    const b = String(t.brand ?? '').trim() || 'Unknown'
+  for (const t of casingLifetimes(retreads)) {
+    const b = brandOf(t)
     if (!map.has(b)) map.set(b, [])
     map.get(b).push(t)
   }
   return [...map.entries()].map(([brand, tyres]) => {
-    const life = mean(tyres.map((t) => t.km_life))
-    const sr = successRate(tyres)
+    const life = mean(tyres.map((t) => t._life_km))
+    // Success rate is an EVENT measure: over this brand's fitment rows.
+    const sr = successRate(retreads.filter((r) => brandOf(r) === brand))
     return {
       brand,
-      count: tyres.length,
-      avgCpk: mean(tyres.map((t) => t.cpk)),
+      count: tyres.reduce((s, t) => s + (t._qty || 1), 0),
+      fitments: tyres.reduce((s, t) => s + (t._fitments || 1), 0),
+      avgCpk: weightedCpk(tyres),
+      cpkKind: CPK_KIND.FLEET_AGGREGATE,
       avgLife: life != null ? Math.round(life) : null,
       successRate: sr != null ? Math.round(sr) : null,
     }
@@ -251,13 +334,14 @@ export function monthlyFitments(retreads = [], now = new Date()) {
 /** Monthly average CPK per brand (null where the month has no measurable casing). */
 export function vendorCpkTrend(retreads = [], brands = [], now = new Date()) {
   const months = last12Months(now)
+  const casings = casingLifetimes(retreads)
   return {
     months,
     series: brands.map((brand) => ({
       brand,
-      data: months.map((m) => mean(retreads
-        .filter((t) => t.brand === brand && String(t.issue_date ?? '').startsWith(m))
-        .map((t) => t.cpk))),
+      // Weighted lifetime CPK of the casings whose latest fitment falls in the month.
+      data: months.map((m) => weightedCpk(casings
+        .filter((t) => t.brand === brand && String(t.issue_date ?? '').startsWith(m)))),
     })),
   }
 }
@@ -265,10 +349,10 @@ export function vendorCpkTrend(retreads = [], brands = [], now = new Date()) {
 /** Size with the longest average km life; null when no size has a measured life. */
 export function bestSize(retreads = []) {
   const map = new Map()
-  for (const t of retreads) {
-    if (!t.km_life || !t.size) continue
+  for (const t of casingLifetimes(retreads)) {
+    if (!t._life_km || !t.size) continue
     if (!map.has(t.size)) map.set(t.size, [])
-    map.get(t.size).push(t.km_life)
+    map.get(t.size).push(t._life_km)
   }
   let best = null
   let bestAvg = -Infinity
@@ -282,10 +366,11 @@ export function bestSize(retreads = []) {
 /** Distribution of casings by retread cycle depth. */
 export function cycleDistribution(retreads = []) {
   const map = new Map()
-  for (const t of retreads) {
-    if (t.retread_cycle == null) continue
-    const key = t.retread_cycle >= 4 ? '4+' : String(t.retread_cycle)
-    map.set(key, (map.get(key) ?? 0) + 1)
+  for (const t of casingLifetimes(retreads)) {
+    const cycle = retreadCycle(t)
+    if (cycle == null) continue
+    const key = cycle >= 4 ? '4+' : String(cycle)
+    map.set(key, (map.get(key) ?? 0) + (t._qty || 1))
   }
   return ['1', '2', '3', '4+'].filter((k) => map.has(k)).map((k) => ({ cycle: k, count: map.get(k) }))
 }

@@ -6,6 +6,7 @@
 
 import { detectRiskSpike } from './analyticsEngine'
 import { fetchAllPages } from './fetchAll'
+import { toLifetimeTyres, tyreKey, hasLifetimeCpk, weightedCpk, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
 
 export const ALERT_TYPES = {
   STOCK_CRITICAL:     'STOCK_CRITICAL',
@@ -54,8 +55,10 @@ const SPIKE_COLS = 'risk_level,created_at'
 // The inactivity / CPK / data-quality rules run over this sample. `id` is unused
 // (their alert ids are built from the asset number) and `site` only appears in the
 // inactivity MESSAGE, so the badge drops both.
-const TYRE_COLS       = 'asset_no,site,issue_date,cost_per_tyre,km_at_fitment,km_at_removal,category'
-const TYRE_BADGE_COLS = 'asset_no,issue_date,cost_per_tyre,km_at_fitment,km_at_removal,category'
+// serial_no / country / status / removal_date / total_km / vehicle_type / qty let
+// the CPK rule collapse fitment rows into PHYSICAL tyres (src/lib/tyreLifetime.js).
+const TYRE_COLS       = 'asset_no,site,issue_date,cost_per_tyre,km_at_fitment,km_at_removal,category,serial_no,country,status,removal_date,total_km,vehicle_type,qty'
+const TYRE_BADGE_COLS = 'asset_no,issue_date,cost_per_tyre,km_at_fitment,km_at_removal,category,serial_no,country,status,removal_date,total_km,vehicle_type,qty'
 
 // A corrective action / inspection only reaches HIGH once it is more than this
 // many days overdue; below it the rule emits MEDIUM, which the badge never counts.
@@ -96,31 +99,49 @@ function detectVehicleInactivity(tyreRecords = [], thresholds = {}) {
     .slice(0, 20)
 }
 
+/**
+ * High CPK per asset on PHYSICAL TYRE LIFETIME CPK (price counted once, km summed
+ * over every fitment). Only FINAL tyres are judged: a tyre that is still fitted
+ * (or whose km coverage is incomplete) has run only part of its life, so its CPK
+ * is provisional and would raise a false alarm on any young tyre. Fleet and
+ * asset figures are WEIGHTED (total cost / total tyre-km), never a mean of ratios.
+ * Each tyre is attributed to the asset of its latest fitment.
+ */
 function detectHighCpk(tyreRecords = [], thresholds = {}) {
   const multiplier = thresholds.cpkAlertMultiplier || 2.5
-  const withCpk = tyreRecords.filter(r =>
-    (r.cost_per_tyre||0) > 0 && (r.km_at_fitment||0) >= 0 && (r.km_at_removal||0) > (r.km_at_fitment||0)
-  ).map(r => ({ ...r, cpk: r.cost_per_tyre / (r.km_at_removal - r.km_at_fitment) }))
-  if (withCpk.length < 5) return []
-  const avgCpk = withCpk.reduce((s,r) => s+r.cpk, 0) / withCpk.length
-  const threshold = avgCpk * multiplier
+  const rows = (tyreRecords || []).filter(Boolean)
+  const openKeys = new Set()
+  rows.forEach((r, i) => {
+    if (!r.removal_date && (r.km_at_removal == null || r.km_at_removal === '')) openKeys.add(tyreKey(r, i))
+  })
+  const final = toLifetimeTyres(rows)
+    .filter(t => hasLifetimeCpk(t) && !t._provisional && !openKeys.has(t._key))
+  if (final.length < 5) return []
+  const fleetCpk = weightedCpk(final)
+  if (fleetCpk == null || fleetCpk <= 0) return []
+  const threshold = fleetCpk * multiplier
   const byAsset = {}
-  withCpk.forEach(r => {
-    if (!r.asset_no) return
-    if (!byAsset[r.asset_no]) byAsset[r.asset_no] = []
-    byAsset[r.asset_no].push(r.cpk)
+  final.forEach(t => {
+    if (!t.asset_no) return
+    if (!byAsset[t.asset_no]) byAsset[t.asset_no] = []
+    byAsset[t.asset_no].push(t)
   })
   return Object.entries(byAsset)
-    .filter(([,cpks]) => cpks.length >= 2)
-    .map(([assetNo, cpks]) => {
-      const assetAvg = cpks.reduce((s,v)=>s+v,0)/cpks.length
-      if (assetAvg <= threshold) return null
+    .filter(([, tyres]) => tyres.length >= 2)
+    .map(([assetNo, tyres]) => {
+      const assetCpk = weightedCpk(tyres)
+      if (assetCpk == null || assetCpk <= threshold) return null
       return {
         type: ALERT_TYPES.HIGH_CPK,
-        severity: assetAvg > threshold*1.5 ? 'high' : 'medium',
+        severity: assetCpk > threshold * 1.5 ? 'high' : 'medium',
         title: `High CPK - ${assetNo}`,
-        message: `Avg CPK ${assetAvg.toFixed(4)} SAR/km is ${(assetAvg/avgCpk).toFixed(1)}x fleet average (${avgCpk.toFixed(4)})`,
-        meta: { assetNo, assetAvg, fleetAvg: avgCpk, ratio: assetAvg/avgCpk },
+        message: `Lifetime tyre CPK ${assetCpk.toFixed(4)} SAR/km over ${tyres.length} completed tyres is ${(assetCpk / fleetCpk).toFixed(1)}x fleet average (${fleetCpk.toFixed(4)}, weighted per tyre-km)`,
+        meta: {
+          assetNo, assetAvg: assetCpk, fleetAvg: fleetCpk, ratio: assetCpk / fleetCpk,
+          tyres: tyres.length,
+          cpkKind: CPK_KIND.TYRE_LIFETIME,
+          cpkKindLabel: CPK_KIND_LABEL[CPK_KIND.TYRE_LIFETIME],
+        },
       }
     })
     .filter(Boolean)

@@ -795,8 +795,9 @@ describe('computeMonthlyKpiActuals', () => {
 
   it('computes avgCostPerTyre', () => {
     const result = computeMonthlyKpiActuals(records, [], '2024-03')
-    // totalCost=2600, count=2 → 1300
-    expect(result.avgCostPerTyre).toBeCloseTo(1300)
+    // Per physical tyre: totalCost=2600 over 3 priced tyres (1 + qty 2) -> 866.67.
+    // Was 2600 / 2 rows = 1300, which treated a qty-2 row as one tyre.
+    expect(result.avgCostPerTyre).toBeCloseTo(2600 / 3)
   })
 
   it('returns 0 values for a month with no records', () => {
@@ -804,7 +805,8 @@ describe('computeMonthlyKpiActuals', () => {
     expect(result.count).toBe(0)
     expect(result.totalCost).toBe(0)
     expect(result.highRiskPct).toBe(0)
-    expect(result.avgCostPerTyre).toBe(0)
+    // No priced tyre in the month: the average is not measurable (null, shown N/A), not 0.
+    expect(result.avgCostPerTyre).toBeNull()
   })
 })
 

@@ -50,7 +50,7 @@ function scopeCountry(query, country, countries) {
 export function listKpiTyreRecords({ country, countries, dateFrom, dateTo, from, to } = {}) {
   let q = supabase
     .from('tyre_records')
-    .select('id,issue_date,asset_no,brand,site,country,cost_per_tyre,qty,risk_level,km_at_fitment,km_at_removal,position,category,remarks')
+    .select('id,issue_date,asset_no,brand,site,country,cost_per_tyre,qty,risk_level,km_at_fitment,km_at_removal,position,category,remarks,serial_no,status,removal_date,total_km,vehicle_type,tyre_position')
   if (dateFrom) q = q.gte('issue_date', dateFrom)
   if (dateTo) q = q.lte('issue_date', dateTo)
   q = scopeCountry(q, country, countries)

@@ -11,7 +11,27 @@
  *
  * HONEST NULLS: a percentage of a zero budget, or a CPK with no measured
  * distance, is null (N/A) - never a 0% that reads as "nothing spent".
+ *
+ * PHYSICAL TYRES (src/lib/tyreLifetime.js): normaliseRecords drops a refit's
+ * repeat price (one tyre one price, rule T1) so spend buckets never buy the same
+ * tyre twice, and tags each physical tyre's LATEST fitment row with `_tyre`.
+ * averageCpk is the WEIGHTED lifetime CPK (total purchase cost / total tyre-km,
+ * rule T8) of the tyres whose latest fitment is in the given rows; a tyre's km
+ * spans all its fitments, not only the ones inside the year slice.
+ *
+ * SPEND SOURCE (Phase 2, rule T9): the fleet spend figures (monthly actuals, YTD,
+ * projection, quarters, historical trend, derived budget) come from the EXPENSE
+ * GRID tyre bucket via gridTyreSpend() over loadCostSplit's monthly series, ONE
+ * country at a time (rule T10). The tyre-record price is used only for the site
+ * and brand split and for CPK, and is labelled as such on the page. When the grid
+ * has no data for the scope the spend is null (N/A), never a tyre-record sum.
  */
+import {
+  withOnePricePerTyre, toLifetimeTyres, tyreKey, weightedCpk, CPK_KIND, CPK_KIND_LABEL,
+} from './tyreLifetime'
+
+export const BUDGET_CPK_KIND = CPK_KIND.FLEET_AGGREGATE
+export const BUDGET_CPK_KIND_LABEL = CPK_KIND_LABEL[CPK_KIND.FLEET_AGGREGATE]
 
 export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 export const GROWTH_ASSUMPTION = 1.05
@@ -23,8 +43,11 @@ const n = (v) => {
 }
 
 /** Parse each row once: cost, year, month (local calendar), km pair. */
+const dateOf = (r) => String(r?.issue_date ?? r?.fitment_date ?? '').slice(0, 10)
+
 export function normaliseRecords(records = []) {
-  return records.map((r) => {
+  const src = withOnePricePerTyre((records || []).filter(Boolean))
+  const rows = src.map((r) => {
     let year = null
     let month = null
     if (r.issue_date) {
@@ -35,8 +58,22 @@ export function normaliseRecords(records = []) {
         if (!Number.isNaN(d.getTime())) { year = d.getFullYear(); month = d.getMonth() }
       }
     }
-    return { ...r, cost: n(r.cost_per_tyre), year, month, kmFit: n(r.km_at_fitment), kmRem: n(r.km_at_removal) }
+    return { ...r, cost: n(r.cost_per_tyre), year, month, kmFit: n(r.km_at_fitment), kmRem: n(r.km_at_removal), _tyre: null }
   })
+  // Tag the latest fitment row of each physical tyre with its lifetime figures.
+  const byKey = new Map()
+  src.forEach((r, i) => {
+    const k = tyreKey(r, i)
+    if (!byKey.has(k)) byKey.set(k, [])
+    byKey.get(k).push(i)
+  })
+  for (const t of toLifetimeTyres(src)) {
+    const idxs = byKey.get(t._key) || []
+    let pick = t.id != null ? idxs.find((i) => src[i].id === t.id) : undefined
+    if (pick == null) pick = idxs.reduce((best, i) => (best == null || dateOf(src[i]) >= dateOf(src[best]) ? i : best), null)
+    if (pick != null) rows[pick]._tyre = t
+  }
+  return rows
 }
 
 export const recordsForYear = (rows, year) => rows.filter((r) => r.year === year)
@@ -48,11 +85,15 @@ export function monthlyActuals(rows = []) {
   return arr
 }
 
-/** Average cost per km over rows with a measured distance; null when none. */
+/**
+ * Weighted lifetime CPK of the physical tyres represented by `rows`; null when
+ * none has both a price and a measured km. Rows from normaliseRecords carry
+ * `_tyre`; raw rows are collapsed here.
+ */
 export function averageCpk(rows = []) {
-  const valid = rows.filter((r) => r.kmRem > r.kmFit && r.cost > 0)
-  if (!valid.length) return null
-  return valid.reduce((s, r) => s + r.cost / (r.kmRem - r.kmFit), 0) / valid.length
+  const tagged = rows.some((r) => r && '_tyre' in r)
+  const tyres = tagged ? rows.filter((r) => r._tyre).map((r) => r._tyre) : toLifetimeTyres(rows)
+  return weightedCpk(tyres)
 }
 
 /** Spend per calendar year. */
@@ -62,13 +103,50 @@ export function spendByYear(rows = []) {
   return map
 }
 
-/** Suggested annual budget: average of up to the last 3 prior years x growth. Null when no history. */
-export function derivedAnnualBudget(rows = [], selectedYear) {
-  const years = spendByYear(rows)
-  const prev = Object.keys(years).map(Number).filter((y) => y < selectedYear).sort((a, b) => a - b).slice(-3)
+/**
+ * Tyre spend from the expense grid's monthly series ([{ month:'YYYY-MM', tyre }],
+ * the shape loadCostSplit returns). A year is present only when at least one of its
+ * months carries spend: a zero-filled month before the data starts is "no data",
+ * not "spent nothing", and must not drag a history average down.
+ * @returns {{ byYear: Record<number, number>, byYearMonth: Record<number, number[]> }}
+ */
+export function gridTyreSpend(byMonth = []) {
+  const byYearMonth = {}
+  const seen = new Set()
+  for (const m of byMonth || []) {
+    const k = /^(\d{4})-(\d{2})/.exec(String(m?.month ?? ''))
+    if (!k) continue
+    const y = Number(k[1]); const mi = Number(k[2]) - 1
+    const v = Number(m.tyre)
+    if (!Number.isFinite(v) || mi < 0 || mi > 11) continue
+    if (!byYearMonth[y]) byYearMonth[y] = Array(12).fill(0)
+    byYearMonth[y][mi] += v
+    if (v !== 0) seen.add(y)
+  }
+  const byYear = {}
+  for (const y of seen) byYear[y] = byYearMonth[y].reduce((s, v) => s + v, 0)
+  return { byYear, byYearMonth }
+}
+
+/** Twelve monthly grid buckets for one year; null when the grid has nothing for that year. */
+export function gridMonthlyActuals(grid, year) {
+  if (!grid || !grid.byYearMonth) return null
+  const arr = grid.byYearMonth[year]
+  if (!arr || !(year in (grid.byYear || {}))) return null
+  return arr.slice()
+}
+
+/** Suggested annual budget from a { year: spend } map (up to 3 prior years x growth). */
+export function derivedAnnualBudgetFromYears(years = {}, selectedYear) {
+  const prev = Object.keys(years || {}).map(Number).filter((y) => y < selectedYear).sort((a, b) => a - b).slice(-3)
   if (!prev.length) return null
   const avg = prev.reduce((s, y) => s + years[y], 0) / prev.length
   return Math.round(avg * GROWTH_ASSUMPTION)
+}
+
+/** Suggested annual budget: average of up to the last 3 prior years x growth. Null when no history. */
+export function derivedAnnualBudget(rows = [], selectedYear) {
+  return derivedAnnualBudgetFromYears(spendByYear(rows), selectedYear)
 }
 
 /** Month index the YTD runs through: the live month for the current year, else December. */
@@ -81,6 +159,15 @@ export function ytdThroughMonth(selectedYear, currentYear, currentMonth) {
 /** Headline budget position. pctUsed / projection null when not measurable. */
 export function budgetPosition({ actuals = [], annualBudget = null, throughMonth = 11 }) {
   const monthsElapsed = throughMonth + 1
+  if (!Array.isArray(actuals)) {
+    // Spend unknown (no grid data for this scope): every spend-derived figure is N/A.
+    const hasB = Number.isFinite(annualBudget) && annualBudget > 0
+    const mb = hasB ? annualBudget / 12 : 0
+    return {
+      ytdActual: null, monthlyBudget: mb, ytdBudget: mb * Math.max(0, monthsElapsed),
+      monthsElapsed: Math.max(0, monthsElapsed), variance: null, pctUsed: null, projectedYearEnd: null,
+    }
+  }
   const ytdActual = monthsElapsed > 0 ? actuals.slice(0, monthsElapsed).reduce((s, v) => s + v, 0) : 0
   const hasBudget = Number.isFinite(annualBudget) && annualBudget > 0
   const monthlyBudget = hasBudget ? annualBudget / 12 : 0
@@ -112,10 +199,12 @@ export function siteAllocation({ yearRows = [], prevYearRows = [], siteBudgets =
   const map = new Map()
   for (const r of yearRows) {
     if (!r.site) continue
-    if (!map.has(r.site)) map.set(r.site, { site: r.site, actual: 0, count: 0 })
+    if (!map.has(r.site)) map.set(r.site, { site: r.site, actual: 0, count: 0, fitments: 0 })
     const s = map.get(r.site)
     s.actual += r.cost
+    // count = fitment rows (kept for existing readers); fitments says so explicitly.
     s.count += 1
+    s.fitments += 1
   }
   const prevMap = {}
   for (const r of prevYearRows) if (r.site) prevMap[r.site] = (prevMap[r.site] || 0) + r.cost
@@ -182,7 +271,12 @@ export function linearRegression(values = []) {
 
 /** Last up-to-4 years of spend + a projection for the next one (null under 2 points). */
 export function historicalTrend(rows = []) {
-  const years = spendByYear(rows)
+  return historicalTrendFromYears(spendByYear(rows))
+}
+
+/** Same as historicalTrend over a { year: spend } map (e.g. gridTyreSpend().byYear). */
+export function historicalTrendFromYears(years = {}) {
+  years = years || {}
   const trendYears = Object.keys(years).map(Number).sort((a, b) => a - b).slice(-4)
   const trendValues = trendYears.map((y) => years[y] || 0)
   const nextYearProjection = trendValues.length < 2 ? null : Math.max(0, linearRegression(trendValues).predict(trendValues.length))
@@ -204,16 +298,17 @@ export function scenarioProjection({ projectedYearEnd, currentAvgCpk, cpkTarget,
 export function quarterSummary({ actuals = [], monthlyBudget = 0, selectedYear, currentYear, currentMonth }) {
   return [0, 1, 2, 3].map((q) => {
     const months = [q * 3, q * 3 + 1, q * 3 + 2]
-    const actual = months.reduce((s, m) => s + (actuals[m] || 0), 0)
+    const known = Array.isArray(actuals)
+    const actual = known ? months.reduce((s, m) => s + (actuals[m] || 0), 0) : null
     const budget = monthlyBudget * 3
-    const pct = budget > 0 ? (actual / budget) * 100 : null
+    const pct = budget > 0 && known ? (actual / budget) * 100 : null
     const isComplete = selectedYear < currentYear || (selectedYear === currentYear && months[2] <= currentMonth)
     const inProgress = selectedYear === currentYear && months.includes(currentMonth)
     let status
     if (pct !== null && pct > 100) status = 'Over'
     else if (pct !== null && pct >= WARNING_PCT) status = 'Warning'
     else status = isComplete ? 'Complete' : inProgress ? 'Active' : 'Pending'
-    return { label: `Q${q + 1}`, months, actual, budget, variance: budget > 0 ? budget - actual : null, pct, status, isComplete }
+    return { label: `Q${q + 1}`, months, actual, budget, variance: budget > 0 && known ? budget - actual : null, pct, status, isComplete }
   })
 }
 
@@ -227,12 +322,13 @@ export function cpkImprovementSaving(site, improvement = 0.15) {
 
 /** Monthly rows for the export workbook. */
 export function monthlyExportRows(actuals = [], monthlyBudget = 0) {
+  const known = Array.isArray(actuals)
   return MONTHS.map((m, i) => ({
     month: m,
     budget: Math.round(monthlyBudget),
-    actual: Math.round(actuals[i] || 0),
-    variance: monthlyBudget > 0 ? Math.round(monthlyBudget - (actuals[i] || 0)) : 'N/A',
-    used: monthlyBudget > 0 ? `${(((actuals[i] || 0) / monthlyBudget) * 100).toFixed(1)}%` : 'N/A',
+    actual: known ? Math.round(actuals[i] || 0) : 'N/A',
+    variance: monthlyBudget > 0 && known ? Math.round(monthlyBudget - (actuals[i] || 0)) : 'N/A',
+    used: monthlyBudget > 0 && known ? `${(((actuals[i] || 0) / monthlyBudget) * 100).toFixed(1)}%` : 'N/A',
   }))
 }
 

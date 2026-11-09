@@ -4,6 +4,7 @@ import {
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
+import { onePricePerTyre, singleCurrency } from '../../lib/tyrePurchase'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -37,6 +38,7 @@ interface TyreRow {
   risk_level: string | null
   cost_per_tyre: number | null
   country: string | null
+  serial_no: string | null
 }
 
 interface Summary {
@@ -107,7 +109,7 @@ function OverviewScreen() {
       for (let p = 0; ; p++) {
         const { data, error: qErr } = await supabase
           .from('tyre_records')
-          .select('asset_no,site,issue_date,risk_level,cost_per_tyre,country')
+          .select('asset_no,site,issue_date,risk_level,cost_per_tyre,country,serial_no')
           .order('issue_date', { ascending: false })
           .range(p * FETCH_PAGE, (p + 1) * FETCH_PAGE - 1)
         if (qErr) throw qErr
@@ -157,9 +159,11 @@ function OverviewScreen() {
     const siteMap = new Map<string, { count: number; cost: number }>()
     const monthMap = new Map<string, { count: number; cost: number }>()
 
-    for (const r of filtered) {
+    // One purchase per physical tyre (rule T1): a refit row adds no new price.
+    const prices = onePricePerTyre(filtered)
+    filtered.forEach((r, idx) => {
       if (r.asset_no) assets.add(r.asset_no)
-      const cost = Number(r.cost_per_tyre) || 0
+      const cost = prices[idx]
       totalCost += cost
 
       const level = r.risk_level || 'Unknown'
@@ -177,7 +181,7 @@ function OverviewScreen() {
         const me = monthMap.get(mk) ?? { count: 0, cost: 0 }
         me.count++; me.cost += cost; monthMap.set(mk, me)
       }
-    }
+    })
 
     const known = RISK_ORDER.filter(l => riskMap.has(l)).map(l => ({ level: l, count: riskMap.get(l)! }))
     const extra = [...riskMap.keys()].filter(k => !RISK_ORDER.includes(k)).map(k => ({ level: k, count: riskMap.get(k)! }))
@@ -235,7 +239,7 @@ function OverviewScreen() {
     { key: 'tyres',      label: t('modules.overview.tyres'),      value: compact(summ.total_records),   icon: 'ellipse-outline',       tint: 'blue' },
     { key: 'vehicles',   label: t('modules.overview.vehicles'),   value: compact(summ.distinct_assets), icon: 'bus-outline',           tint: 'teal' },
     { key: 'highRisk',   label: t('modules.overview.highRisk'),   value: compact(summ.high_risk),       icon: 'alert-circle-outline',  tint: 'red' },
-    { key: 'periodCost', label: t('modules.overview.periodCost'), value: compact(summ.total_cost),      icon: 'cash-outline',          tint: 'violet' },
+    { key: 'periodCost', label: t('modules.overview.periodCost'), value: singleCurrency(filtered) ? `${singleCurrency(filtered)} ${compact(summ.total_cost)}` : 'N/A',      icon: 'cash-outline',          tint: 'violet' },
   ]
 
   const rangePresets: { key: string; label: string; days: number | null }[] = [

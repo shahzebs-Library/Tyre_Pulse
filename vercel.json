@@ -128,6 +128,7 @@
     "deploymentEnabled": {
       "claude/tyrepulse-inspector-build-7rxp2t": false,
       "claude/tyre-lifecycle-hardening-20261109": false,
+      "claude/tyre-lifetime-cpk-phase1": false,
       "claude/relaxed-planck-ur3ji5": false,
       "claude/accident-builder-report-ui-2bkwb5": false,
       "claude/ksa-asset-mobile-visibility-xlnp7m": false,

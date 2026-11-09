@@ -8,6 +8,8 @@
  * nothing is estimated or defaulted.
  */
 
+import { fitmentKm, toLifetimeTyres, withOnePricePerTyre, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
+
 const num = (v) => {
   if (v === '' || v == null) return null
   const n = Number(v)
@@ -56,16 +58,13 @@ export function positionOf(r) {
 }
 
 /**
- * Life earned by one record, in km: the stored total when positive, else the
- * removal odometer minus the fitment odometer when both exist and run forward.
+ * Life earned by ONE fitment record, in km, by the shared km rule (tyreKm.js):
+ * the odometer difference or the stored total, a placeholder fitment km of 1
+ * or a reading above the vehicle class limit is unknown, a factory 0 is real.
  */
 export function recordLifeKm(r) {
-  const total = num(r?.total_km)
-  if (total != null && total > 0) return total
-  const fit = num(r?.km_at_fitment)
-  const rem = num(r?.km_at_removal)
-  if (fit != null && rem != null && rem > fit) return rem - fit
-  return null
+  const v = fitmentKm(r)
+  return v != null && v > 0 ? v : null
 }
 
 /** Vehicle master row for a record, matched on asset AND country when known. */
@@ -117,19 +116,51 @@ export function lifeKmFor(r, fleet) {
   return recorded
 }
 
-/** Cost per km of a finished tyre, or null when either side is missing. */
-export function cpkOf(r) {
-  const cost = num(r?.cost_per_tyre)
-  const life = recordLifeKm(r)
-  if (cost == null || life == null || life <= 0) return null
+export const RECORD_CPK_KIND = CPK_KIND.PER_FITMENT
+export const RECORD_CPK_LABEL = CPK_KIND_LABEL[CPK_KIND.PER_FITMENT]
+
+/**
+ * PER-FITMENT cost per km of one finished record (one stint), or null when
+ * either side is missing. Pass the serial's other records as `siblings` so the
+ * purchase is kept once per physical tyre (rule T1): a refit record then has no
+ * purchase and no stint CPK. The tyre's lifetime CPK is the passport's.
+ */
+export function cpkOf(r, siblings = null) {
+  let row = r
+  if (Array.isArray(siblings) && siblings.length && r) {
+    const list = siblings.some((x) => x === r || (x?.id != null && x.id === r.id)) ? siblings : [...siblings, r]
+    const priced = withOnePricePerTyre(list)
+    const i = list.findIndex((x) => x === r || (x?.id != null && x.id === r.id))
+    if (i >= 0) row = priced[i]
+  }
+  const cost = num(row?.cost_per_tyre)
+  const life = recordLifeKm(row)
+  if (cost == null || cost <= 0 || life == null || life <= 0) return null
   return cost / life
 }
 
-/** Average of the positive life values, with the sample it rests on. */
+/**
+ * Average life with the sample it rests on.
+ * - Numbers (legacy): one value per FITMENT row; `n` counts fitments and
+ *   `basis` is 'fitment'.
+ * - Row objects (tyre_records rows with serial_no/country/km fields): collapsed
+ *   into PHYSICAL tyres first (tyreLifetime.js); avg = total lifetime km / tyres
+ *   with a measured life, `n` counts tyres and `basis` is 'tyre'.
+ */
 export function averageLife(values = []) {
-  const good = (values || []).map(num).filter((v) => v != null && v > 0)
-  if (!good.length) return { avg: null, n: 0 }
-  return { avg: good.reduce((a, b) => a + b, 0) / good.length, n: good.length }
+  const list = values || []
+  if (list.some((v) => v && typeof v === 'object')) {
+    let km = 0; let n = 0
+    for (const t of toLifetimeTyres(list.filter((v) => v && typeof v === 'object'))) {
+      if (t._life_km == null || !(t._life_km > 0)) continue
+      const q = t._qty || 1
+      km += t._life_km * q; n += q
+    }
+    return n ? { avg: km / n, n, basis: 'tyre' } : { avg: null, n: 0, basis: 'tyre' }
+  }
+  const good = list.map(num).filter((v) => v != null && v > 0)
+  if (!good.length) return { avg: null, n: 0, basis: 'fitment' }
+  return { avg: good.reduce((a, b) => a + b, 0) / good.length, n: good.length, basis: 'fitment' }
 }
 
 /**

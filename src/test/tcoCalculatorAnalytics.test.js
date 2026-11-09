@@ -60,7 +60,10 @@ describe('assets', () => {
   })
   it('record km coverage is null with no records', () => {
     expect(recordKmCoverage([])).toBeNull()
-    expect(recordKmCoverage([{ km_at_fitment: 1, km_at_removal: 5 }, {}])).toBe(50)
+    // Fitment km 1 is the placeholder (km unknown, shared km rule T7), so the
+    // measured fixture uses a real fitment reading.
+    expect(recordKmCoverage([{ km_at_fitment: 10, km_at_removal: 5000 }, {}])).toBe(50)
+    expect(recordKmCoverage([{ km_at_fitment: 1, km_at_removal: 5 }, {}])).toBe(0)
   })
   it('exports use N/A for unmeasured', () => {
     const ex = assetExportRows(assets)

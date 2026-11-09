@@ -227,7 +227,7 @@ export default function TyreRecords() {
   const counts = useCard(() => tyreRecordsApi.getRecordStatusCounts(kpiFilters, activeCountry), [kpiFilters, activeCountry, kpiNonce])
   const life = useCard(async () => {
     const res = await tyreRecordsApi.listRecordedLifeKm(kpiFilters, activeCountry)
-    return { ...averageLife(res.values), truncated: res.truncated }
+    return { ...averageLife(res.rows || res.values), truncated: res.truncated }
   }, [kpiFilters, activeCountry, kpiNonce])
 
   // Vehicle master and last inspection for the assets on THIS page only.
@@ -606,7 +606,7 @@ export default function TyreRecords() {
         <Kpi icon={Trash2} tone="t-red" loading={counts.loading} display={countNa} value={c?.scrapped} label="Scrapped"
           onClick={() => setFilter(setStatusFilter)('Scrapped')} title="Tyre records with status Scrapped. Click to filter." />
         <Kpi icon={Gauge} tone="t-green" loading={life.loading} display={lifeDisplay} label="Average life"
-          title={life.data?.n ? `Average recorded life across ${fmtInt(life.data.n)} tyres with a life on record${life.data.truncated ? ' (partial read)' : ''}. Status filter not applied.` : 'No tyre under these filters has a recorded life.'} />
+          title={life.data?.n ? `Average recorded life across ${fmtInt(life.data.n)} ${life.data.basis === 'tyre' ? 'physical tyres' : 'fitments'} with a life on record${life.data.truncated ? ' (partial read)' : ''}. Status filter not applied.` : 'No tyre under these filters has a recorded life.'} />
       </div>
 
       <section className="cc-card tr-filters" aria-label="Filters">
@@ -1002,7 +1002,8 @@ function TyreDetail({ record, fleetRow, vehicleInspection, country, activeCurren
   const lastInsp = inspRows[0] || null
   const pressure = passport ? latestPressure(passport, inspRows) : { value: null }
   const recCurrency = currencyOf(record.country) || (country && country !== 'All' ? activeCurrency : null)
-  const cpk = cpkOf(record)
+  // Per-fitment CPK with the purchase kept once across this serial's fitments.
+  const cpk = cpkOf(record, pass.data?.records || null)
   const photos = photoUrls(record)
 
   // Condition waits on the passport (its inspection match needs the journey).
@@ -1051,7 +1052,8 @@ function TyreDetail({ record, fleetRow, vehicleInspection, country, activeCurren
                 <KV k="Category" v={record.category} />
                 <KV k="Purchase date" v={record.issue_date ? fmtDate(record.issue_date) : null} />
                 <KV k="Purchase price" v={record.cost_per_tyre != null ? (recCurrency ? formatCurrencyCompact(record.cost_per_tyre, recCurrency) : fmtInt(record.cost_per_tyre)) : null} />
-                <KV k="Cost per km" v={cpk != null ? cpk.toFixed(3) : null} />
+                <KV k="Cost per km (per fitment)" v={cpk != null ? cpk.toFixed(3) : null} />
+                <KV k="Lifetime CPK (physical tyre)" v={passport?.lifetime?.purchaseCpk != null ? `${passport.lifetime.purchaseCpk.toFixed(3)}${passport.lifetime.provisional ? ' (provisional)' : ''}` : null} />
                 <KV k="MIS number" v={record.mis_number} />
                 <KV k="Job card" v={record.job_card} />
                 <KV k="Quantity" v={record.qty} />

@@ -5,17 +5,23 @@
  * already loaded and, where time matters, an explicit `now`. The page used to
  * compute all of this inline; it now renders what this module returns.
  *
- * CPK maths is NOT re-implemented. `kpiEngine.computeCpkFleet` is the single
- * CPK source; per-supplier CPK is that function over the supplier's rows, so a
- * supplier's figure here always matches Engineering KPI for the same rows.
+ * CPK maths is NOT re-implemented. Rows are first collapsed into PHYSICAL tyres
+ * (src/lib/tyreLifetime.js: one tyre one price, km summed across refits), then
+ * grouped by the tyre's latest brand. Supplier CPK = weightedCpk over those tyres
+ * (total purchase cost / total tyre-km, rule T8), the same definition
+ * kpiEngine.computeCpkFleet uses. Spend stays per fitment row but a refit of the
+ * same serial is never bought twice (withOnePricePerTyre). Failure rate stays a
+ * per-fitment EVENT rate on purpose.
  *
  * HONEST NULLS: a value that cannot be measured is null (rendered N/A), never
  * a flattering 0. In particular the old in-page savings estimate assumed
  * 80,000 km for any tyre with no recorded distance; that fabrication is gone,
  * only measured km contribute.
  */
-import { computeCpkFleet } from './kpiEngine'
 import { recordCost } from './analyticsEngine'
+import {
+  toLifetimeTyres, tyreKey, weightedCpk, lifetimeSummary, withOnePricePerTyre, CPK_KIND, CPK_KIND_LABEL,
+} from './tyreLifetime'
 
 export const CPK_BENCHMARK = 1.2
 export const FAILURE_THRESHOLD = 0.15
@@ -140,24 +146,24 @@ export function summarizeContracts(contracts = [], now = new Date()) {
 
 // ── Supplier metrics ─────────────────────────────────────────────────────────
 
-function kmRun(r) {
-  const fit = num(r?.km_at_fitment)
-  const rem = num(r?.km_at_removal)
-  if (fit == null || rem == null || fit <= 0 || rem <= fit) return null
-  return rem - fit
+/** Fitment rows with one price per physical tyre and the physical-tyre key on each row. */
+function prepare(records = []) {
+  const rows = withOnePricePerTyre((records || []).filter(Boolean))
+  const tyres = toLifetimeTyres(rows)
+  const keys = rows.map((r, i) => tyreKey(r, i))
+  return { rows, tyres, keys }
 }
 
-function isCostValid(r) {
-  const cost = num(r?.cost_per_tyre)
-  return kmRun(r) != null && cost != null && cost > 0
-}
-
-export function supplierMetrics(records = [], brand, anchorYear = new Date().getFullYear()) {
-  const recs = (records || []).filter((r) => r?.brand === brand)
-  const validRecs = recs.filter(isCostValid)
-  const avgCpk = computeCpkFleet(recs).fleetAvgCpk
-  const kms = validRecs.map(kmRun)
-  const avgLife = kms.length ? kms.reduce((s, v) => s + v, 0) / kms.length : null
+function metricsFor(prep, brand, anchorYear) {
+  const tyres = prep.tyres.filter((t) => t.brand === brand)
+  const keySet = new Set(tyres.map((t) => t._key))
+  const recs = prep.rows.filter((r, i) => keySet.has(prep.keys[i]))
+  const summary = lifetimeSummary(tyres)
+  const validTyres = tyres.filter((t) => (t._cost ?? 0) > 0 && (t._life_km ?? 0) > 0)
+  const lives = tyres.map((t) => t._life_km).filter((v) => v != null && v > 0)
+  // Average life = mean of physical-tyre lifetime km over tyres with a measured life.
+  const avgLife = lives.length ? lives.reduce((s, v) => s + v, 0) / lives.length : null
+  // Failures are an EVENT measure: per fitment row, on purpose.
   const failures = recs.filter((r) => r.risk_level === 'High' || r.risk_level === 'Critical')
   const failureRate = recs.length > 0 ? failures.length / recs.length : null
   const totalSpend = recs.reduce((s, r) => s + recordCost(r), 0)
@@ -168,8 +174,16 @@ export function supplierMetrics(records = [], brand, anchorYear = new Date().get
   return {
     brand,
     recs,
-    validRecs,
-    avgCpk,
+    tyres,
+    // Measurable PHYSICAL tyres (priced and with a measured lifetime km).
+    validRecs: validTyres,
+    validTyres,
+    avgCpk: weightedCpk(tyres),
+    cpkKind: CPK_KIND.FLEET_AGGREGATE,
+    cpkKindLabel: CPK_KIND_LABEL[CPK_KIND.FLEET_AGGREGATE],
+    kmCoverage: summary.coverage,
+    cpkProvisional: summary.provisional,
+    cpkEstimatedShare: summary.estimatedShare,
     avgLife,
     failureRate,
     totalSpend,
@@ -177,8 +191,14 @@ export function supplierMetrics(records = [], brand, anchorYear = new Date().get
     sites: uniq('site'),
     sizes: uniq('size'),
     countries: uniq('country'),
-    count: recs.length,
+    // count = physical tyres (a weak serial row stands for its qty); fitments = rows.
+    count: tyres.reduce((s, t) => s + (t._qty || 1), 0),
+    fitments: recs.length,
   }
+}
+
+export function supplierMetrics(records = [], brand, anchorYear = new Date().getFullYear()) {
+  return metricsFor(prepare(records), brand, anchorYear)
 }
 
 export function autoRate(m) {
@@ -202,10 +222,11 @@ export function filterRecords(records = [], { country = 'All', site = 'All' } = 
  * stored rating wins over the automatic one.
  */
 export function buildSupplierMetrics(records = [], ratings = {}, now = new Date()) {
-  const brands = [...new Set((records || []).map((r) => r?.brand).filter(Boolean))]
+  const prep = prepare(records)
+  const brands = [...new Set(prep.tyres.map((t) => t?.brand).filter(Boolean))]
   const anchorYear = dataAnchorDate(records, now).getFullYear()
   return brands.map((brand) => {
-    const m = supplierMetrics(records, brand, anchorYear)
+    const m = metricsFor(prep, brand, anchorYear)
     const entry = ratings?.[brand]
     return { ...m, rating: entry?.label || autoRate(m), ratingSource: entry?.label ? 'manual' : 'auto', notes: entry?.notes || '' }
   })
@@ -305,8 +326,9 @@ export function recommendationFacts(metrics = []) {
     out.push({ type: 'review', brand: m.brand, impact: 'Critical', rate: m.failureRate })
   })
   if (worst && best && worst.brand !== best.brand) {
-    // Only MEASURED distance counts; a tyre with no recorded km contributes nothing.
-    const km = worst.recs.reduce((s, r) => s + (kmRun(r) || 0), 0)
+    // Only MEASURED distance counts: physical-tyre lifetime km (non-overlapping
+    // fitments), a tyre with no measured km contributes nothing.
+    const km = (worst.tyres || []).reduce((s, t) => s + (t._life_km || 0) * (t._qty || 1), 0)
     const saving = (worst.avgCpk - best.avgCpk) * km
     if (km > 0 && saving > 1000) {
       out.push({ type: 'saving', brand: worst.brand, impact: 'High', bestBrand: best.brand, amount: saving })
@@ -315,7 +337,7 @@ export function recommendationFacts(metrics = []) {
   const sizeMap = {}
   list.forEach((m) => {
     m.sizes.forEach((sz) => {
-      const cpk = computeCpkFleet(m.recs.filter((r) => r.size === sz)).fleetAvgCpk
+      const cpk = weightedCpk((m.tyres || []).filter((t) => t.size === sz))
       if (!sizeMap[sz] || (cpk != null && cpk < (sizeMap[sz].cpk ?? Infinity))) sizeMap[sz] = { brand: m.brand, cpk }
     })
   })
@@ -333,7 +355,8 @@ export const SUPPLIER_EXPORT_COLUMNS = [
   { key: 'brand', header: 'Supplier' },
   { key: 'rating', header: 'Rating' },
   { key: 'count', header: 'Tyres' },
-  { key: 'avg_cpk', header: 'Avg CPK' },
+  { key: 'fitments', header: 'Fitments' },
+  { key: 'avg_cpk', header: 'CPK (fleet aggregate, weighted)' },
   { key: 'vs_benchmark', header: 'vs Benchmark %' },
   { key: 'avg_life_km', header: 'Avg Life (km)' },
   { key: 'failure_rate', header: 'Failure Rate %' },
@@ -348,6 +371,7 @@ export function supplierExportRows(metrics = []) {
     brand: m.brand,
     rating: m.rating,
     count: m.count,
+    fitments: m.fitments ?? 'N/A',
     avg_cpk: naNum(m.avgCpk, 4),
     vs_benchmark: naNum(vsBenchmark(m.avgCpk), 1),
     avg_life_km: m.avgLife == null ? 'N/A' : Math.round(m.avgLife),

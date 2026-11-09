@@ -19,10 +19,10 @@ describe('buildPassport', () => {
 
   it('collapses multiple records into one lifecycle with totals + CPK', () => {
     const p = buildPassport([
-      { id: 2, serial_no: 'AA1', brand: 'Bridgestone', size: '11R22.5', asset_no: 'TM517', position: 'Drive', fitment_date: '2024-06-01', removal_date: '2025-01-01', total_km: 40000, cost_per_tyre: 1600, reason_for_removal: 'Worn', status: 'removed' },
-      { id: 1, serial_no: 'AA1', brand: 'Bridgestone', asset_no: 'MP078', position: 'Steer', fitment_date: '2023-01-01', total_km: 60000, cost_per_tyre: 0 },
+      { id: 2, serial_no: 'AA100001', brand: 'Bridgestone', size: '11R22.5', asset_no: 'TM517', position: 'Drive', fitment_date: '2024-06-01', removal_date: '2025-01-01', total_km: 40000, cost_per_tyre: 1600, reason_for_removal: 'Worn', status: 'removed' },
+      { id: 1, serial_no: 'AA100001', brand: 'Bridgestone', asset_no: 'MP078', position: 'Steer', fitment_date: '2023-01-01', total_km: 60000, cost_per_tyre: 0 },
     ])
-    expect(p.serial).toBe('AA1')
+    expect(p.serial).toBe('AA100001')
     expect(p.brand).toBe('Bridgestone')
     // events are chronological (2023 fitment first)
     expect(p.events[0].asset_no).toBe('MP078')
@@ -235,7 +235,9 @@ describe('tyrePassport - normalizers and buildJourney', () => {
 })
 
 describe('buildPassport purchase and scrap marks', () => {
-  const rec = (o) => ({ serial_no: 'SN1', ...o })
+  // A real serial (6+ chars with a digit): only a real serial ties rows into one
+  // physical tyre (tyreLifetime.isStrongSerial). 'SN1' is a placeholder code.
+  const rec = (o) => ({ serial_no: 'SN100001', ...o })
   it('counts a copied purchase price once across moves', () => {
     const p = buildPassport([
       rec({ id: 1, asset_no: 'TM1', fitment_date: '2025-01-01', removal_date: '2025-03-01', cost_per_tyre: 900, km_at_fitment: 0, km_at_removal: 1000 }),
@@ -244,12 +246,19 @@ describe('buildPassport purchase and scrap marks', () => {
     expect(p.costBreakdown.purchase).toBe(900)
     expect(p.journey[1].cost).toBeNull()
   })
-  it('keeps a genuinely different later price', () => {
+  // Changed 2026-11-09 (rule T1 one tyre one price): a different later price on
+  // the same real serial used to be ADDED (1200). A refit is never a second
+  // purchase, so the first priced fitment stands (900) and the second price is
+  // flagged for review instead of picked or summed.
+  it('counts the first price once and flags a different later price for review', () => {
     const p = buildPassport([
       rec({ id: 1, fitment_date: '2025-01-01', cost_per_tyre: 900 }),
       rec({ id: 2, fitment_date: '2025-06-01', cost_per_tyre: 300 }),
     ])
-    expect(p.costBreakdown.purchase).toBe(1200)
+    expect(p.costBreakdown.purchase).toBe(900)
+    expect(p.priceReview.pricedFitments).toBe(2)
+    expect(p.priceReview.message).toBe('Priced on 2 fitments - needs review')
+    expect(p.lifetime.costStatus).toBe('DISPUTED')
   })
   it('treats a scrap mark as out of service', () => {
     const p = buildPassport([rec({ id: 1, asset_no: 'TM1', fitment_date: '2025-01-01', status: 'Active' })], { statusMarks: [{ mark_type: 'scrap' }] })

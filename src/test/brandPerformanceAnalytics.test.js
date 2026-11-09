@@ -37,11 +37,14 @@ describe('brandPerformanceAnalytics', () => {
     expect(c.avgCost).toBeNull()
   })
 
-  it('averages cost over priced rows only (qty-weighted line)', () => {
+  it('averages cost over priced PHYSICAL tyres only (qty honoured)', () => {
     const a = buildBrandMetrics(rows).find(x => x.brand === 'A')
-    expect(a.pricedCount).toBe(2)
+    // Was pricedCount 2 rows / avgCost 2000 / 2 = 1000: a qty-2 row is two tyres,
+    // so it is now 3 priced physical tyres and 2000 / 3 per tyre.
+    expect(a.pricedCount).toBe(3)
+    expect(a.pricedFitments).toBe(2)
     expect(a.totalCost).toBe(2000)
-    expect(a.avgCost).toBe(1000)
+    expect(a.avgCost).toBeCloseTo(2000 / 3)
   })
 
   it('summary prefers the grid cost and picks best/worst among measured brands', () => {

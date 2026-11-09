@@ -23,7 +23,9 @@ describe('fleetIntelligenceAnalytics', () => {
 
   it('builds per-vehicle metrics with honest nulls', () => {
     expect(by.A1).toMatchObject({ total_tyre_changes: 2, total_tyre_cost: 2000, availability_status: 'Critical', vehicle_type: 'MIXER' })
-    expect(by.A1.avg_cpk).toBeCloseTo(0.1) // only the fitment-km > 0 life is measurable
+    // Shared km rule (T7): fitment km 0 is a real factory fitment, so both lives count.
+    // Weighted (T8): (1000 + 1000) / (10000 + 5000).
+    expect(by.A1.avg_cpk).toBeCloseTo(2000 / 15000)
     expect(by.A3.avg_cpk).toBeNull()
     expect(by.A3.vehicle_type).toBeNull()
     expect(by.A3.availability_status).toBe('Available') // High but older than 30 days
@@ -34,7 +36,8 @@ describe('fleetIntelligenceAnalytics', () => {
     expect(a.fleet_size).toBe(3)
     expect(a.critical_count).toBe(1)
     expect(a.availability_pct).toBeCloseTo(66.67, 1)
-    expect(a.fleetAvgCpk).toBeCloseTo(0.075)
+    // Weighted over physical tyres: 2500 / 25000 (was a mean of per-vehicle ratios).
+    expect(a.fleetAvgCpk).toBeCloseTo(0.1)
     const empty = fleetAggregates([], [])
     expect(empty.availability_pct).toBeNull()
     expect(empty.avg_cost_per_vehicle).toBeNull()

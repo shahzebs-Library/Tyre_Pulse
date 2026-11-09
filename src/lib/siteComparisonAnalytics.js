@@ -18,9 +18,18 @@
  *
  * NOTE: this page prices tyres from `cost_per_tyre`. The authoritative tyre
  * SPEND total lives in the expense grid (Expenses & CPK); the page says so.
+ *
+ * One tyre one price (rule T1): rows go through withOnePricePerTyre before any
+ * money is summed, so a refitted tyre is not bought twice. A refit row still
+ * counts toward the priced share (the tyre WAS priced, once) but adds no money.
+ * avgCost = priced cost per priced PHYSICAL tyre (qty honoured). The register
+ * also carries the per-site physical-tyre lifetime keys from computeSiteMetrics
+ * (tyres, lifetimeCpk, avgLifeKm, kmCoverage, cpkKind, cpkKindLabel). Record
+ * counts and risk ratings stay per fitment row (events).
  * No I/O; `now` is not needed (no clock-relative figures).
  */
 import { computeSiteMetrics } from './analyticsEngine'
+import { withOnePricePerTyre } from './tyreLifetime'
 
 export const GRANULARITIES = ['Monthly', 'Quarterly', 'Yearly']
 
@@ -43,15 +52,20 @@ function lineCost(r) {
   return c * (Number.isFinite(q) && q > 0 ? q : 1)
 }
 
+function qtyOf(r) {
+  const q = Number(r?.qty)
+  return Number.isFinite(q) && q > 0 ? q : 1
+}
+
 /** Sum priced cost per period; unpriced records count but add no money. */
 export function buildPeriodBuckets(records = [], granularity = 'Monthly') {
   const map = new Map()
-  for (const r of records) {
+  for (const r of withOnePricePerTyre(records)) {
     const key = periodKey(r.issue_date, granularity)
     if (!key) continue
     const b = map.get(key) || { period: key, total: 0, count: 0, priced: 0 }
     const c = lineCost(r)
-    if (c != null) { b.total += c; b.priced += 1 }
+    if (c != null) { b.total += c; b.priced += 1 } else if (r._refit_price_dropped) b.priced += 1
     b.count += 1
     map.set(key, b)
   }
@@ -66,8 +80,11 @@ export function slicePeriods(buckets = [], granularity = 'Monthly') {
 
 /** Trend series for the chosen sites over a shared period axis. */
 export function trendSeries(records = [], sites = [], granularity = 'Monthly') {
+  // One price per tyre across ALL sites first: a tyre bought at one site and
+  // refitted at another must not be bought again at the second.
+  const once = withOnePricePerTyre(records)
   const series = sites.map((site) => {
-    const buckets = slicePeriods(buildPeriodBuckets(records.filter((r) => r.site === site), granularity), granularity)
+    const buckets = slicePeriods(buildPeriodBuckets(once.filter((r) => r.site === site), granularity), granularity)
     return { site, buckets }
   })
   const periods = [...new Set(series.flatMap((s) => s.buckets.map((b) => b.period)))].sort()
@@ -100,11 +117,12 @@ export const RISK_BANDS = ['High', 'Elevated', 'Normal', 'Unrated']
 export function siteRegister(records = [], { selected = [] } = {}) {
   const base = computeSiteMetrics(records)
   const cover = new Map()
-  for (const r of records) {
+  for (const r of withOnePricePerTyre(records)) {
     const site = r.site || 'Unknown'
-    const c = cover.get(site) || { priced: 0, rated: 0, high: 0, pricedCost: 0 }
+    const c = cover.get(site) || { priced: 0, pricedTyres: 0, rated: 0, high: 0, pricedCost: 0 }
     const lc = lineCost(r)
-    if (lc != null) { c.priced += 1; c.pricedCost += lc }
+    if (lc != null) { c.priced += 1; c.pricedTyres += qtyOf(r); c.pricedCost += lc }
+    else if (r._refit_price_dropped) c.priced += 1
     if (r.risk_level) {
       c.rated += 1
       if (HIGH_RISK.has(r.risk_level)) c.high += 1
@@ -112,23 +130,31 @@ export function siteRegister(records = [], { selected = [] } = {}) {
     cover.set(site, c)
   }
   const pricedTotal = [...cover.values()].reduce((s, c) => s + c.pricedCost, 0)
-  const pricedSites = base.filter((s) => (cover.get(s.site)?.priced || 0) > 0)
+  const pricedSites = base.filter((s) => (cover.get(s.site)?.pricedTyres || 0) > 0)
   const avgSiteCost = pricedSites.length
     ? pricedSites.reduce((s, x) => s + (cover.get(x.site)?.pricedCost || 0), 0) / pricedSites.length
     : null
   const selectedSet = new Set(selected)
 
   return base.map((s, i) => {
-    const c = cover.get(s.site) || { priced: 0, rated: 0, high: 0, pricedCost: 0 }
-    const hasCost = c.priced > 0
+    const c = cover.get(s.site) || { priced: 0, pricedTyres: 0, rated: 0, high: 0, pricedCost: 0 }
+    const hasCost = c.pricedTyres > 0
     const highRiskPct = c.rated > 0 ? (c.high / c.rated) * 100 : null
     return {
       rank: i + 1,
       site: s.site,
       count: s.count,
       totalCost: hasCost ? c.pricedCost : null,
-      avgCost: hasCost ? c.pricedCost / c.priced : null,
+      avgCost: hasCost ? c.pricedCost / c.pricedTyres : null,
       pricedCount: c.priced,
+      pricedTyres: c.pricedTyres,
+      tyres: s.tyres ?? null,
+      lifetimeCpk: s.lifetimeCpk ?? null,
+      avgLifeKm: s.avgLifeKm ?? null,
+      kmCoverage: s.kmCoverage ?? null,
+      provisionalTyres: s.provisionalTyres ?? null,
+      cpkKind: s.cpkKind ?? null,
+      cpkKindLabel: s.cpkKindLabel ?? null,
       pricedPct: s.count ? Math.round((c.priced / s.count) * 100) : null,
       ratedCount: c.rated,
       ratedPct: s.count ? Math.round((c.rated / s.count) * 100) : null,
@@ -149,6 +175,7 @@ export function summarizeSites(rows = []) {
   const list = Array.isArray(rows) ? rows : []
   const records = list.reduce((s, r) => s + (r.count || 0), 0)
   const priced = list.reduce((s, r) => s + (r.pricedCount || 0), 0)
+  const pricedTyres = list.reduce((s, r) => s + (r.pricedTyres ?? r.pricedCount ?? 0), 0)
   const rated = list.reduce((s, r) => s + (r.ratedCount || 0), 0)
   const high = list.reduce((s, r) => s + (r.highRiskCount || 0), 0)
   const costed = list.filter((r) => r.totalCost != null)
@@ -160,7 +187,7 @@ export function summarizeSites(rows = []) {
     sites: list.length,
     records,
     totalCost,
-    avgCostPerPriced: priced > 0 && totalCost != null ? totalCost / priced : null,
+    avgCostPerPriced: pricedTyres > 0 && totalCost != null ? totalCost / pricedTyres : null,
     pricedPct: records > 0 ? Math.round((priced / records) * 100) : null,
     ratedPct: records > 0 ? Math.round((rated / records) * 100) : null,
     highRiskPct: rated > 0 ? (high / rated) * 100 : null,

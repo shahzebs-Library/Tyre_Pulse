@@ -68,8 +68,8 @@ export async function runAnalystAgent(query, {
 
   // Build a concise KPI summary for the AI prompt (not a full dump)
   const kpiSummary = [
-    `Fleet CPK: ${kpis.cpk.fleetAvgCpk?.toFixed(3) ?? 'N/A'} (median: ${kpis.cpk.medianCpk?.toFixed(3) ?? 'N/A'})`,
-    `Data Coverage: ${kpis.cpk.coveragePct?.toFixed(1) ?? 0}% (${kpis.cpk.validCount ?? 0} / ${kpis.cpk.totalCount ?? 0} records valid)`,
+    `Fleet CPK (${kpis.cpk.cpkKindLabel ?? 'fleet aggregate, weighted per tyre-km'}): ${kpis.cpk.fleetAvgCpk?.toFixed(3) ?? 'N/A'} (median physical tyre: ${kpis.cpk.medianCpk?.toFixed(3) ?? 'N/A'})`,
+    `CPK Coverage: ${kpis.cpk.coveragePct?.toFixed(1) ?? 0}% (${kpis.cpk.validCount ?? 0} / ${kpis.cpk.totalCount ?? 0} physical tyres measurable, ${kpis.cpk.provisionalCount ?? 0} provisional, from ${kpis.cpk.fitmentRows ?? 'N/A'} fitment rows)`,
     `Avg Tyre Life: ${tyreLife.avgKm?.toFixed(0) ?? 'N/A'} km (median: ${tyreLife.medianKm?.toFixed(0) ?? 'N/A'} km)`,
     `Failure Rate: ${failureRate.failureRate == null ? 'not measured' : ((failureRate.failureRate * 100).toFixed(1) + '%')} | Critical: ${failureRate.criticalRate == null ? 'not measured' : ((failureRate.criticalRate * 100).toFixed(1) + '%')}`,
     `Inspection Compliance: ${kpis.inspectionCompliance?.compliancePct?.toFixed(1) ?? 'N/A'}%`,
@@ -78,10 +78,10 @@ export async function runAnalystAgent(query, {
     `Scrap Rate: ${((kpis.scrapRate?.scrapRate ?? 0) * 100).toFixed(1)}% (est. cost: ${kpis.scrapRate?.estimatedScrapCost?.toFixed(0) ?? 'N/A'})`,
     `Fleet Availability: ${kpis.fleetAvailability?.availabilityPct?.toFixed(1) ?? 'N/A'}%`,
     vendorRank.length
-      ? `Top Brands (CPK, best first): ${vendorRank.map(b => `${b.brand} (${b.avgCpk?.toFixed(3)})`).join(', ')}`
+      ? `Top Brands (lifetime CPK weighted, best first): ${vendorRank.map(b => `${b.brand} (${b.avgCpk?.toFixed(3)})`).join(', ')}`
       : '',
     siteCpk.length
-      ? `Worst Sites by CPK: ${siteCpk.map(s => `${s.site} (${s.avgCpk?.toFixed(3)})`).join(', ')}`
+      ? `Worst Sites by lifetime CPK (weighted): ${siteCpk.map(s => `${s.site} (${s.avgCpk?.toFixed(3)})`).join(', ')}`
       : '',
   ].filter(Boolean).join('\n')
 

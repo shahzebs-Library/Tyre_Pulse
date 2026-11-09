@@ -138,13 +138,17 @@ export async function getRecordStatusCounts(filters = {}, country) {
  */
 export async function listRecordedLifeKm(filters = {}, country) {
   const res = await fetchAllPages((from, to) => {
-    let q = supabase.from('tyre_records').select('id,total_km').gt('total_km', 0)
+    // Lifetime rule (T8): the page averages PHYSICAL tyres, so it needs the serial,
+    // country and meters of every fitment, not one total_km per row.
+    let q = supabase.from('tyre_records')
+      .select('id,serial_no,country,qty,status,vehicle_type,issue_date,fitment_date,removal_date,km_at_fitment,km_at_removal,total_km')
       .order('id', { ascending: true })
     q = applyRecordFilters(q, filters)
     return applyCountry(q, country).range(from, to)
   }, { max: 20000 })
   if (res.error) throw new ServiceError(toUserMessage(res.error), res.error.code, res.error)
-  return { values: (res.data || []).map((r) => r.total_km), truncated: !!res.truncated }
+  // `rows` feeds averageLife() per physical tyre; `values` kept for older callers.
+  return { rows: res.data || [], values: (res.data || []).map((r) => r.total_km), truncated: !!res.truncated }
 }
 
 /**

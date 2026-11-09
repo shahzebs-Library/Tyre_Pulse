@@ -8,15 +8,28 @@
  *
  * Honesty rules:
  *   - a metric with no measurable basis is null (N/A), never 0 or 100,
- *   - savings use MEASURED tyre life (removal km - fitment km) and the observed
- *     replacement rate; when either is unmeasurable the saving is null, never
- *     an assumed mileage,
+ *   - savings use MEASURED tyre life and the observed replacement rate; when
+ *     either is unmeasurable the saving is null, never an assumed mileage,
+ *   - tyre life, purchase cost per tyre and CPK are per PHYSICAL tyre (shared
+ *     lifetime layer, src/lib/tyreLifetime.js): rows are collapsed once, a refit
+ *     is never a second purchase, lifetime km sums the tyre's non-overlapping
+ *     fitments, and every CPK is WEIGHTED (total cost / total tyre-km, kind
+ *     'fleet_aggregate'); tyres are grouped by their latest fitment's
+ *     brand / site / asset / month,
+ *   - failure rates, replacements per year and record counts stay per fitment
+ *     row (events),
  *   - a score component with no data is null and the total is rescaled over the
  *     measured components,
  *   - every time-dependent function takes an explicit `now`.
  */
 
 import { isCompletedInspection } from './inspectionCoverage'
+import { lifetimeGroups, lifetimeMetrics } from './analyticsEngine'
+import { toLifetimeTyres, withOnePricePerTyre, weightedCpk, lifetimeSummary, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
+
+/** KPI kind of every CPK on the improvement page (weighted fleet aggregate). */
+export const CI_CPK_KIND = CPK_KIND.FLEET_AGGREGATE
+export const CI_CPK_KIND_LABEL = CPK_KIND_LABEL[CPK_KIND.FLEET_AGGREGATE]
 
 // An inspection's status CHECK allows Scheduled|In Progress|Done|Overdue|Cancelled
 // - 'Completed' is not a value the database can hold, so testing only for it
@@ -86,21 +99,19 @@ export function monthLabel(key) {
 const isFailure = (r) => r?.risk_level === 'High' || r?.risk_level === 'Critical' || r?.category === 'Scrap'
 const isInspectionDone = (i) => inspectionDone(i)
 
-/** Measured tyre life in km, or null. */
+/** km of ONE fitment (removal - fitment), or null. Per fitment; tyre life is meanLifeKm. */
 export function lifeKmOf(r) {
   if (r?.km_at_fitment == null || r?.km_at_removal == null) return null
   const km = Number(r.km_at_removal) - Number(r.km_at_fitment)
   return Number.isFinite(km) && km > 0 ? km : null
 }
 
-/** Mean cost per km over tyres with a measured life and a price; null when none. */
+/**
+ * WEIGHTED lifetime CPK of the physical tyres in `records` (total purchase cost /
+ * total tyre-km over tyres with a price and a measured life); null when none.
+ */
 export function avgCpkOf(records = []) {
-  const cpks = records.map((r) => {
-    const km = lifeKmOf(r)
-    const cost = Number(r?.cost_per_tyre)
-    return km && cost > 0 ? cost / km : null
-  }).filter((v) => v != null)
-  return cpks.length ? cpks.reduce((a, b) => a + b, 0) / cpks.length : null
+  return weightedCpk(toLifetimeTyres(records))
 }
 
 /** High-risk-or-scrap share in %, null with no records. */
@@ -109,10 +120,9 @@ export function failureRateOf(records = []) {
   return (records.filter(isFailure).length / records.length) * 100
 }
 
-/** Mean measured tyre life (km), null when none is measurable. */
+/** Mean lifetime km per PHYSICAL tyre (qty-weighted), null when none is measurable. */
 export function meanLifeKm(records = []) {
-  const lives = records.map(lifeKmOf).filter((v) => v != null)
-  return lives.length ? lives.reduce((a, b) => a + b, 0) / lives.length : null
+  return lifetimeMetrics(toLifetimeTyres(records)).avgLifeKm
 }
 
 /** Observed replacements per year from the issue_date span; null with fewer than 2 dated rows. */
@@ -138,11 +148,17 @@ export function filterByPeriod(records = [], period, now = new Date()) {
 
 /** Headline improvement KPIs. */
 export function computeMetrics(records = [], inspections = [], actions = []) {
-  const totalCost = records.reduce((s, r) => s + (Number(r.cost_per_tyre) || 0) * (Number(r.qty) > 0 ? Number(r.qty) : 1), 0)
-  const priced = records.filter((r) => Number(r.cost_per_tyre) > 0)
+  const totalCost = withOnePricePerTyre(records).reduce((s, r) => s + (Number(r.cost_per_tyre) || 0) * (Number(r.qty) > 0 ? Number(r.qty) : 1), 0)
+  const life = lifetimeMetrics(toLifetimeTyres(records))
   return {
-    avgCpk: avgCpkOf(records),
-    avgCostPerTyre: priced.length ? priced.reduce((s, r) => s + Number(r.cost_per_tyre), 0) / priced.length : null,
+    avgCpk: life.lifetimeCpk,
+    avgCostPerTyre: life.avgCostPerTyre,
+    tyres: life.tyres,
+    avgLifeKm: life.avgLifeKm,
+    kmCoverage: life.kmCoverage,
+    provisionalTyres: life.provisionalTyres,
+    cpkKind: life.cpkKind,
+    cpkKindLabel: life.cpkKindLabel,
     totalCost,
     failureRate: failureRateOf(records),
     inspectionCompliance: (() => {
@@ -169,7 +185,12 @@ export function improvementScore(records = [], metrics = {}, now = new Date()) {
   const mid = keys[5]
   const recent = records.filter((r) => { const k = monthKey(r.issue_date); return k && k > mid && k <= keys[11] })
   const older = records.filter((r) => { const k = monthKey(r.issue_date); return k && k <= mid && k >= keys[0] })
-  const costPts = trendPoints(avgCpkOf(older), avgCpkOf(recent))
+  // CPK halves over PHYSICAL tyres, placed by the month of their latest fitment
+  // (collapsing each half separately would split one tyre across both).
+  const tyres = toLifetimeTyres(records)
+  const recentT = tyres.filter((t) => { const k = monthKey(t.issue_date); return k && k > mid && k <= keys[11] })
+  const olderT = tyres.filter((t) => { const k = monthKey(t.issue_date); return k && k <= mid && k >= keys[0] })
+  const costPts = trendPoints(weightedCpk(olderT), weightedCpk(recentT))
   const relPts = trendPoints(failureRateOf(older), failureRateOf(recent))
   const inspPts = metrics.inspectionCompliance == null ? null : (metrics.inspectionCompliance / 100) * 25
   const closePts = metrics.closeRate == null ? null : (metrics.closeRate / 100) * 25
@@ -194,20 +215,12 @@ export function buildOpportunities({ records = [], actions = [], inspections = [
     const result = { cost: [], reliability: [], process: [], inspection: [], maintenance: [], procurement: [] }
 
     // ── A. Cost Reduction ──────────────────────────────────────────────────────
-    const brandMap = {}
-    records.forEach(r => {
-      if (!r.brand || !r.km_at_fitment || !r.km_at_removal || !r.cost_per_tyre) return
-      const km = r.km_at_removal - r.km_at_fitment
-      if (km <= 0) return
-      const cpk = r.cost_per_tyre / km
-      if (!brandMap[r.brand]) brandMap[r.brand] = { cpks: [], costs: [] }
-      brandMap[r.brand].cpks.push(cpk)
-      brandMap[r.brand].costs.push(r.cost_per_tyre)
-    })
-
-    const brandCpks = Object.entries(brandMap)
-      .map(([brand, v]) => ({ brand, avgCpk: v.cpks.reduce((a, b) => a + b, 0) / v.cpks.length, count: v.cpks.length }))
-      .filter(b => b.count >= 3)
+    // Brand CPK over PHYSICAL tyres (grouped by the brand of the latest fitment),
+    // weighted; count = measurable physical tyres.
+    const brandCpks = [...lifetimeGroups(records, t => t.brand || '').entries()]
+      .filter(([brand]) => brand)
+      .map(([brand, ts]) => { const s = lifetimeSummary(ts); return { brand, avgCpk: s.cpkPurchase, count: s.measurable } })
+      .filter(b => b.avgCpk != null && b.count >= 3)
       .sort((a, b) => a.avgCpk - b.avgCpk)
 
     if (brandCpks.length >= 2) {
@@ -233,16 +246,11 @@ export function buildOpportunities({ records = [], actions = [], inspections = [
       })
     }
 
-    // Site with highest avg cost
-    const siteMap = {}
-    records.forEach(r => {
-      if (!r.site || !r.cost_per_tyre) return
-      if (!siteMap[r.site]) siteMap[r.site] = []
-      siteMap[r.site].push(r.cost_per_tyre)
-    })
-    const siteCosts = Object.entries(siteMap)
-      .map(([site, costs]) => ({ site, avg: costs.reduce((a, b) => a + b, 0) / costs.length, count: costs.length }))
-      .filter(s => s.count >= 5)
+    // Site with highest avg purchase cost per PHYSICAL tyre (latest fitment's site)
+    const siteCosts = [...lifetimeGroups(records, t => t.site || '').entries()]
+      .filter(([site]) => site)
+      .map(([site, ts]) => { const m = lifetimeMetrics(ts); return { site, avg: m.avgCostPerTyre, count: m.pricedTyres } })
+      .filter(s => s.avg != null && s.count >= 5)
       .sort((a, b) => b.avg - a.avg)
 
     const fleetAvgCost = metrics.avgCostPerTyre
@@ -250,7 +258,7 @@ export function buildOpportunities({ records = [], actions = [], inspections = [
       result.cost.push({
         key: 'site-cost-audit',
         title: `Audit ${siteCosts[0].site} cost controls - ${fmt(((siteCosts[0].avg / fleetAvgCost) - 1) * 100, 0)}% above fleet average`,
-        description: `Site ${siteCosts[0].site} averages ${fmtCur(siteCosts[0].avg, cur)} per tyre replacement vs fleet average ${fmtCur(fleetAvgCost, cur)}. A procurement and workshop audit may identify overspend drivers.`,
+        description: `Site ${siteCosts[0].site} averages ${fmtCur(siteCosts[0].avg, cur)} per tyre vs fleet average ${fmtCur(fleetAvgCost, cur)}. A procurement and workshop audit may identify overspend drivers.`,
         priority: 'Medium',
         saving: Math.round((siteCosts[0].avg - fleetAvgCost) * siteCosts[0].count),
         currency: cur,
@@ -260,18 +268,12 @@ export function buildOpportunities({ records = [], actions = [], inspections = [
     }
 
     // High CPK vehicles
-    const vehicleMap = {}
-    records.forEach(r => {
-      if (!r.asset_no || !r.km_at_fitment || !r.km_at_removal || !r.cost_per_tyre) return
-      const km = r.km_at_removal - r.km_at_fitment
-      if (km <= 0) return
-      if (!vehicleMap[r.asset_no]) vehicleMap[r.asset_no] = []
-      vehicleMap[r.asset_no].push(r.cost_per_tyre / km)
-    })
+    // Vehicle CPK over PHYSICAL tyres whose latest fitment is on the vehicle (weighted).
     const fleetAvgCpk = metrics.avgCpk
-    const highCpkVehicles = Object.entries(vehicleMap)
-      .map(([asset, cpks]) => ({ asset, avg: cpks.reduce((a, b) => a + b, 0) / cpks.length, count: cpks.length }))
-      .filter(v => fleetAvgCpk != null && v.count >= 2 && v.avg > fleetAvgCpk * 2)
+    const highCpkVehicles = [...lifetimeGroups(records, t => t.asset_no || '').entries()]
+      .filter(([asset]) => asset)
+      .map(([asset, ts]) => { const s = lifetimeSummary(ts); return { asset, avg: s.cpkPurchase, count: s.measurable } })
+      .filter(v => fleetAvgCpk != null && v.avg != null && v.count >= 2 && v.avg > fleetAvgCpk * 2)
       .sort((a, b) => b.avg - a.avg)
       .slice(0, 8)
 
@@ -531,17 +533,11 @@ export function buildOpportunities({ records = [], actions = [], inspections = [
     const retreads = records.filter(r => r.category === 'Retread')
     const newTyres = records.filter(r => r.category !== 'Retread')
 
-    function avgCpkFromSet(set) {
-      const wk = set.filter(r => r.km_at_fitment != null && r.km_at_removal != null && r.cost_per_tyre > 0)
-      const cpks = wk.map(r => {
-        const km = r.km_at_removal - r.km_at_fitment
-        return km > 0 ? r.cost_per_tyre / km : null
-      }).filter(Boolean)
-      return cpks.length ? cpks.reduce((a, b) => a + b, 0) / cpks.length : null
-    }
-
-    const retreadCpk = avgCpkFromSet(retreads)
-    const newTyreCpk = avgCpkFromSet(newTyres)
+    // CPK by tyre type over PHYSICAL tyres (latest fitment's category), weighted.
+    // The retread SHARE below stays a share of replacements (fitment events).
+    const byType = lifetimeGroups(records, t => (t.category === 'Retread' ? 'retread' : 'new'))
+    const retreadCpk = weightedCpk(byType.get('retread') || [])
+    const newTyreCpk = weightedCpk(byType.get('new') || [])
 
     if (retreadCpk != null && newTyreCpk != null && retreadCpk < newTyreCpk * 0.8 && retreads.length > 10) {
       const share = retreads.length / records.length
@@ -574,10 +570,19 @@ export function buildOpportunities({ records = [], actions = [], inspections = [
     return result
 }
 
-/** 12-month average CPK series (null months have no measurable tyre). */
+/**
+ * 12-month weighted lifetime CPK series: physical tyres placed in the month of
+ * their latest fitment (null months have no measurable tyre).
+ */
 export function cpkTrend(records = [], now = new Date()) {
   const keys = last12MonthKeys(now)
-  return { keys, values: keys.map((k) => avgCpkOf(records.filter((r) => monthKey(r.issue_date) === k))) }
+  const byMonth = lifetimeGroups(records, (t) => monthKey(t.issue_date))
+  return {
+    keys,
+    values: keys.map((k) => weightedCpk(byMonth.get(k) || [])),
+    cpkKind: CI_CPK_KIND,
+    cpkKindLabel: CI_CPK_KIND_LABEL,
+  }
 }
 
 /** 12-month failure rate series. */

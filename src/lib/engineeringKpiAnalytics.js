@@ -18,6 +18,7 @@
  * No I/O, no clock reads: every date-dependent helper takes an injectable
  * `now`.
  */
+import { toLifetimeTyres } from './tyreLifetime'
 
 /** A finite number, not null/undefined/NaN. */
 export function isMeasured(v) {
@@ -132,15 +133,18 @@ export function ratedFailurePct(rows) {
   return (rated.filter(isFailure).length / rated.length) * 100
 }
 
-function avgLifeOf(rows) {
-  const lives = (rows || [])
-    .map(r => Number(r.km_at_removal) - Number(r.km_at_fitment))
-    .filter((v, i) => {
-      const r = rows[i]
-      const fit = Number(r.km_at_fitment), rem = Number(r.km_at_removal)
-      return Number.isFinite(fit) && Number.isFinite(rem) && rem > fit && Number.isFinite(v)
-    })
-  return lives.length ? lives.reduce((s, v) => s + v, 0) / lives.length : null
+/**
+ * Average LIFETIME km per physical tyre (total km / measured tyres) over a set
+ * of physical tyres from toLifetimeTyres(); null when none is measured.
+ */
+function avgLifeOf(tyres) {
+  let km = 0; let n = 0
+  for (const t of tyres || []) {
+    if (t._life_km == null || !(t._life_km > 0)) continue
+    const q = t._qty || 1
+    km += t._life_km * q; n += q
+  }
+  return n ? km / n : null
 }
 
 function assetKey(v) {
@@ -155,14 +159,20 @@ function assetKey(v) {
 export function assetCpkRows(kpis, records, gridMap = null) {
   if (!kpis?.cpkByAsset?.length) return []
   const byAsset = groupBy(records, r => r.asset_no ?? 'Unknown')
+  // Life is per PHYSICAL tyre: collapse every row first, then group the tyres
+  // by their latest fitment's asset (collapsing inside an asset group would
+  // split a tyre that moved between vehicles).
+  const tyresByAsset = groupBy(toLifetimeTyres(records || []), t => t.asset_no ?? 'Unknown')
   return kpis.cpkByAsset.map((a, i) => {
     const rows = byAsset.get(a.asset_no) || []
+    const tyres = tyresByAsset.get(a.asset_no) || []
     const grid = gridMap && typeof gridMap.get === 'function' ? gridMap.get(assetKey(a.asset_no)) : undefined
     return {
       rank: i + 1,
       assetNo: a.asset_no,
       cpk: isMeasured(a.avgCpk) ? a.avgCpk : null,
-      avgLifeKm: avgLifeOf(rows),
+      avgLifeKm: avgLifeOf(tyres),
+      tyres: tyres.reduce((n, t) => n + (t._qty || 1), 0),
       totalCost: isMeasured(grid) ? Number(grid) : null,
       failurePct: ratedFailurePct(rows),
       records: rows.length,

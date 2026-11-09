@@ -19,6 +19,11 @@
  * second argument carries the auxiliary sources and only adds fields.
  */
 
+import {
+  toLifetimeTyres, withOnePricePerTyre, fitmentKm, isStrongSerial,
+  lifetimeCpk as purchaseCpkOf, fullLifetimeCpk, weightedCpk, CPK_KIND, CPK_KIND_LABEL,
+} from './tyreLifetime'
+
 /** Engineering constants (tyre_saas defaults). */
 export const INITIAL_TREAD_MM = 16.0
 export const SCRAP_TREAD_MM = 3.0
@@ -224,7 +229,10 @@ export function normalizeRetreadClaim(r = {}) {
 
 /**
  * Build the ordered cross-vehicle journey from the chronological events.
- * Each stint carries per-stint km / cost / CPK and its removal reason.
+ * Each stint carries per-stint km / cost / CPK and its removal reason. The
+ * stint CPK is a PER-FITMENT figure (one stint's cost over that stint's km):
+ * the purchase sits on the first priced fitment only, so a refit stint has no
+ * cost and no CPK. The tyre's lifetime CPK is passport.lifetime.purchaseCpk.
  */
 export function buildJourney(events = []) {
   return (Array.isArray(events) ? events : []).map((e) => {
@@ -241,6 +249,7 @@ export function buildJourney(events = []) {
       km_run: km,
       cost,
       cpk,
+      cpkKind: CPK_KIND.PER_FITMENT,
       reason: e.reason || null,
       status: e.status || null,
     }
@@ -322,22 +331,21 @@ export function buildPassport(records, aux = {}) {
 
   const serial = serialOfRecord(sorted.find((r) => serialOfRecord(r)) || sorted[0])
 
-  // One physical tyre is bought once. When a moved tyre gets a new record per
-  // fitment, the import copies the same purchase price onto every row; summing
-  // those copies counted the purchase two or three times. A price is counted
-  // on the first priced record, and again only when a later record carries a
-  // DIFFERENT price (a retread or a replacement booked under the same serial).
-  let lastPrice = null
-  const events = sorted.map((r) => {
+  // One physical tyre is bought once (rule T1). A real serial keeps the price
+  // of its FIRST priced fitment; every later fitment is the same tyre refitted
+  // and carries no purchase, even when the import typed a different price on
+  // it (that is flagged for review below, never added). km per fitment uses
+  // the shared rule (tyreKm.js): each fitment is measured on that vehicle's own
+  // odometer, a placeholder or over-cap reading is unknown, a factory 0 is real.
+  const priced = withOnePricePerTyre(sorted)
+  const pricedFitments = sorted.filter((r) => (num(r.cost_per_tyre) ?? 0) > 0)
+  const events = sorted.map((r, i) => {
     const rawPrice = num(r.cost_per_tyre)
-    let price = null
-    if (rawPrice != null) {
-      price = lastPrice != null && rawPrice === lastPrice ? null : rawPrice
-      lastPrice = rawPrice
-    }
+    const keptPrice = num(priced[i]?.cost_per_tyre)
+    const price = keptPrice != null && keptPrice > 0 ? keptPrice : null
     const kmFit = num(r.km_at_fitment)
     const kmRem = num(r.km_at_removal)
-    const kmStint = kmRem != null && kmFit != null ? Math.max(0, kmRem - kmFit) : null
+    const kmStint = fitmentKm(r)
     return {
       id: r.id,
       date: eventDate(r),
@@ -346,13 +354,13 @@ export function buildPassport(records, aux = {}) {
       asset_no: r.asset_no || r.asset_number || null,
       site: r.site || null,
       position: r.position || r.tyre_position || null,
-      km: num(r.total_km) ?? kmStint,
-      kmEarned: kmStint ?? num(r.total_km),
+      km: kmStint,
+      kmEarned: kmStint,
       km_at_fitment: kmFit,
       km_at_removal: kmRem,
       hrs: num(r.total_hrs),
       cost: price,
-      priceCopied: rawPrice != null && price == null,
+      priceCopied: rawPrice != null && rawPrice > 0 && price == null,
       pressure: num(r.pressure_reading),
       reason: r.reason_for_removal || r.removal_reason || null,
       status: r.status || null,
@@ -360,12 +368,28 @@ export function buildPassport(records, aux = {}) {
     }
   })
 
-  const sum = (key) => events.reduce((acc, e) => acc + (num(e[key]) || 0), 0)
-  const totalKm = sum('km')
-  const totalHrs = sum('hrs')
-  const totalCost = sum('cost')
-  // Lifetime CPK across the tyre (cost / km), the core tyre-economics metric.
-  const cpk = totalKm > 0 ? Math.round((totalCost / totalKm) * 1000) / 1000 : null
+  // Physical tyre(s) behind these rows, from the shared lifetime layer. A real
+  // serial collapses to ONE tyre: price once, km summed over non-overlapping
+  // fitments. A shared code (DOT batch, size, placeholder) cannot be tied
+  // across rows, so each row stays its own tyre and the passport says so.
+  const physical = toLifetimeTyres(sorted)
+  const sharedSerial = physical.length > 1
+  const lifeKmRaw = physical.reduce((a, t) => (t._life_km != null ? (a ?? 0) + t._life_km * (t._qty || 1) : a), null)
+  const purchaseRaw = physical.reduce((a, t) => ((t._cost ?? 0) > 0 ? (a ?? 0) + t._cost * (t._qty || 1) : a), null)
+  const totalKm = lifeKmRaw
+  const totalHrs = events.reduce((acc, e) => acc + (num(e.hrs) || 0), 0)
+  const totalCost = purchaseRaw ?? 0
+  // Purchase-only lifetime CPK of the physical tyre (cost once / lifetime km).
+  const cpkRaw = sharedSerial ? weightedCpk(physical) : purchaseCpkOf(physical[0])
+  const cpk = cpkRaw != null ? Math.round(cpkRaw * 1000) / 1000 : null
+  const strong = isStrongSerial(serial)
+  const priceReview = strong && pricedFitments.length > 1
+    ? {
+      pricedFitments: pricedFitments.length,
+      prices: pricedFitments.map((r) => num(r.cost_per_tyre)),
+      message: `Priced on ${pricedFitments.length} fitments - needs review`,
+    }
+    : null
 
   // Removed/scrapped reflects the LATEST stint: a mid-life removal that was
   // followed by a re-fitment to another vehicle is a move, not an end of life.
@@ -403,7 +427,7 @@ export function buildPassport(records, aux = {}) {
   const wearCurve = events
     .filter((e) => e.tread_depth != null && e.date)
     .map((e) => ({ date: e.date, tread: e.tread_depth }))
-  const wear = computeWear(treadSeries.map((p) => ({ date: p.date, tread: p.tread })), totalKm)
+  const wear = computeWear(treadSeries.map((p) => ({ date: p.date, tread: p.tread })), totalKm ?? 0)
 
   // Repair-history count from record findings + service repair events.
   const recordRepairs = sorted.reduce((acc, r) => {
@@ -455,8 +479,10 @@ export function buildPassport(records, aux = {}) {
     + retreadClaims.reduce((a, c) => a + (c.amount_recovered || 0), 0), 2) || 0
   const lifetimeCost = round(purchaseCost + serviceCost, 2)
   const netLifetimeCost = round(lifetimeCost - recovered, 2)
-  const lifetimeCpk = totalKm > 0 ? round(lifetimeCost / totalKm, 3) : null
-  const netCpk = totalKm > 0 ? round(netLifetimeCost / totalKm, 3) : null
+  // A CPK needs a priced tyre AND a measured life; an unpriced tyre is not free.
+  const cpkReady = purchaseCost > 0 && totalKm != null && totalKm > 0
+  const lifetimeCpk = cpkReady ? round(lifetimeCost / totalKm, 3) : null
+  const netCpk = cpkReady ? round(netLifetimeCost / totalKm, 3) : null
 
   const costBreakdown = {
     purchase: purchaseCost,
@@ -468,6 +494,36 @@ export function buildPassport(records, aux = {}) {
     netLifetime: netLifetimeCost,
     cpk: lifetimeCpk,
     netCpk,
+  }
+
+  // Full lifetime of the physical tyre, stated the same way every other page
+  // states it (tyreLifetime.js): cumulative km, coverage, cost status, purchase
+  // and full CPK, provisional while still fitted.
+  const one = !sharedSerial ? toLifetimeTyres(sorted, {
+    extras: { [physical[0]?._key]: { repair: serviceCost - retreadCost, retread: retreadCost, recovery: recovered } },
+  })[0] : null
+  const fullCpkRaw = one ? fullLifetimeCpk(one) : weightedCpk(physical, { basis: 'full' })
+  const lifetime = {
+    kind: CPK_KIND.TYRE_LIFETIME,
+    kindLabel: CPK_KIND_LABEL[CPK_KIND.TYRE_LIFETIME],
+    physicalTyres: physical.length,
+    sharedSerial,
+    strongSerial: strong,
+    fitments: rows.length,
+    vehicles: one ? one._vehicles : new Set(events.map((e) => e.asset_no).filter(Boolean)).size,
+    km: totalKm,
+    kmPerFitment: events.map((e) => ({ id: e.id, asset_no: e.asset_no, fitted: e.fitment_date || e.date, removed: e.removal_date, km: e.km })),
+    kmCoverage: one ? one._km_coverage : (physical.every((t) => t._km_coverage === 'complete') ? 'complete' : physical.some((t) => t._km_coverage !== 'none') ? 'partial' : 'none'),
+    kmUnknownFitments: physical.reduce((a, t) => a + (t._km_unknown_fitments || 0), 0),
+    overlappingFitments: physical.reduce((a, t) => a + (t._overlapping_fitments || 0), 0),
+    purchaseCost: purchaseRaw,
+    costStatus: one ? one._cost_status : null,
+    fullCost: one ? one._full_cost : null,
+    purchaseCpk: cpk,
+    fullCpk: fullCpkRaw != null ? round(fullCpkRaw, 3) : null,
+    active: physical.some((t) => t._active),
+    provisional: physical.some((t) => t._provisional),
+    priceReview,
   }
 
   // Predictions (honest, null when not computable).
@@ -528,6 +584,8 @@ export function buildPassport(records, aux = {}) {
     distinctVehicles: new Set(events.map((e) => e.asset_no).filter(Boolean)).size,
     journey,
     costBreakdown,
+    lifetime,
+    priceReview,
     treadSeries,
     predictions,
     dataQuality,
@@ -551,6 +609,13 @@ export function passportKpiValues(p) {
     lifetimeKm: pos(p.totals?.km),
     lifetimeCost: p.costBreakdown?.lifetime ?? null,
     cpk: p.totals?.cpk ?? null,
+    cpkKind: p.lifetime?.kind ?? CPK_KIND.TYRE_LIFETIME,
+    cpkKindLabel: p.lifetime?.kindLabel ?? CPK_KIND_LABEL[CPK_KIND.TYRE_LIFETIME],
+    fullCpk: p.lifetime?.fullCpk ?? null,
+    kmCoverage: p.lifetime?.kmCoverage ?? null,
+    provisional: p.lifetime?.provisional ?? null,
+    costStatus: p.lifetime?.costStatus ?? null,
+    priceReview: p.lifetime?.priceReview?.message ?? null,
     vehicles: pos(p.distinctVehicles),
     retreads: p.retreadCount ?? 0,
     records: p.recordCount ?? 0,

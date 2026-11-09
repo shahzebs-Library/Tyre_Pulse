@@ -346,7 +346,7 @@ export default function DriverManagement() {
 
   const kpiCards = [
     { icon: Users, label: 'Drivers identified', value: unknown ? 'N/A' : kpis.totalDrivers.toLocaleString(), sub: `from ${kpis.recordCount.toLocaleString()} tyre records`, tone: 'text-sky-400' },
-    { icon: BarChart2, label: 'Fleet average CPK', value: unknown ? 'N/A' : fmtCpk(kpis.fleetAvgCpk, activeCurrency), sub: `${kpis.cpkCoverage} drivers with measurable CPK`, tone: 'text-emerald-400' },
+    { icon: BarChart2, label: 'Fleet average CPK', value: unknown ? 'N/A' : fmtCpk(kpis.fleetAvgCpk, activeCurrency), sub: `${kpis.cpkKindLabel ?? 'Fleet aggregate tyre CPK'}. ${kpis.cpkCoverage} drivers with measurable CPK`, tone: 'text-emerald-400' },
     { icon: TrendingDown, label: 'Highest cost driver', value: unknown || !kpis.highestCost ? 'N/A' : fmtCpk(kpis.highestCost.avgCpk, activeCurrency), sub: kpis.highestCost?.name ?? 'No CPK data', tone: 'text-red-400' },
     { icon: Award, label: 'Best performing driver', value: unknown || !kpis.bestPerformer ? 'N/A' : fmtCpk(kpis.bestPerformer.avgCpk, activeCurrency), sub: kpis.bestPerformer?.name ?? 'No CPK data', tone: 'text-amber-400' },
     { icon: Percent, label: 'Fleet failure rate', value: unknown ? 'N/A' : fmtPct(kpis.fleetFailureRate), sub: `${kpis.ratedTyres.toLocaleString()} tyres with a risk level`, tone: 'text-orange-400' },

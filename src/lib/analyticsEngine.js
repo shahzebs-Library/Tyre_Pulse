@@ -1,7 +1,21 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // analyticsEngine.js - Pure stats + aggregation engine (no AI tokens)
 // All functions are stateless; pass data in, get results out.
+//
+// TYRE LIFE / PURCHASE COST / CPK are measured per PHYSICAL TYRE through the
+// shared lifetime layer (src/lib/tyreLifetime.js): rows are collapsed with
+// toLifetimeTyres() FIRST and the tyres are then grouped by the attribute of
+// their latest fitment (brand / site / asset / country). Group CPK is WEIGHTED
+// (total purchase cost / total tyre-km), never an average of per-row ratios.
+// Money per row (cost trends, totals by row date) goes through
+// withOnePricePerTyre() so a refit is never bought twice.
+// EVENTS (records/fitments, removals, high-risk counts and rates, replacement
+// intervals) stay per fitment row on purpose.
 // ─────────────────────────────────────────────────────────────────────────────
+import {
+  toLifetimeTyres, withOnePricePerTyre, lifetimeSummary, lifetimeCpk,
+  CPK_KIND, CPK_KIND_LABEL,
+} from './tyreLifetime'
 
 // ── Basic Statistics ──────────────────────────────────────────────────────────
 
@@ -182,10 +196,85 @@ export function forecastMonthly(monthlyData, futureMonths = 3, field = 'count') 
 
 /**
  * Cost for a single record using the record's own cost_per_tyre field.
- * Falls back to 0 if cost_per_tyre is absent.
+ * Falls back to 0 if cost_per_tyre is absent. Per ROW: when summing rows, pass
+ * them through withOnePricePerTyre() first so a refit is not bought twice
+ * (rule T1). Fleet spend TOTALS come from the expense grid, not from this.
  */
 export function recordCost(r) {
   return (r.cost_per_tyre || 0) * (r.qty || 1)
+}
+
+const numOrNull = (v) => {
+  if (v === null || v === undefined || v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+/**
+ * Collapse fitment rows into physical tyres ONCE, then group the tyres by
+ * keyFn(tyre) (the tyre's LATEST fitment row). Returns Map<key, tyre[]>.
+ * Never group rows first and collapse inside each group: one tyre refitted on
+ * two sites would then be split across both.
+ */
+export function lifetimeGroups(records = [], keyFn = () => 'All') {
+  const groups = new Map()
+  for (const t of toLifetimeTyres(records || [])) {
+    const k = keyFn(t) ?? 'Unknown'
+    if (!groups.has(k)) groups.set(k, [])
+    groups.get(k).push(t)
+  }
+  return groups
+}
+
+/**
+ * Physical-tyre figures for a set of lifetime tyres (from toLifetimeTyres).
+ *   tyres            physical tyres (sum of _qty)
+ *   pricedTyres      physical tyres with a purchase price
+ *   purchaseCost     purchase cost, each tyre ONCE (null when none priced)
+ *   avgCostPerTyre   purchaseCost / pricedTyres (null when none priced)
+ *   lifetimeCpk      WEIGHTED purchase CPK = total cost / total tyre-km (null when not measurable)
+ *   avgLifeKm        mean lifetime km over physical tyres that have a measured life
+ *                    (qty-weighted; null when none)
+ *   lifeKmTyres      physical tyres behind avgLifeKm
+ *   kmCoverage       { complete, partial, none } tyre counts
+ *   provisionalTyres tyres still fitted or with incomplete km (figure not final)
+ *   estimatedShare   share of the CPK cost that is an ESTIMATED price (null when none)
+ *   cpkKind / cpkKindLabel  the KPI kind (fleet aggregate, weighted per tyre-km)
+ */
+export function lifetimeMetrics(tyres = []) {
+  const s = lifetimeSummary(tyres)
+  let count = 0; let pricedTyres = 0; let purchaseCost = 0; let lifeSum = 0; let lifeTyres = 0
+  for (const t of tyres) {
+    const q = t._qty || 1
+    count += q
+    const c = numOrNull(t._cost)
+    if (c != null && c > 0) { pricedTyres += q; purchaseCost += c * q }
+    const life = numOrNull(t._life_km)
+    if (life != null && life > 0) { lifeSum += life * q; lifeTyres += q }
+  }
+  return {
+    tyres: count,
+    pricedTyres,
+    purchaseCost: pricedTyres ? purchaseCost : null,
+    avgCostPerTyre: pricedTyres ? purchaseCost / pricedTyres : null,
+    lifetimeCpk: s.cpkPurchase,
+    lifetimeCpkFull: s.cpkFull,
+    avgLifeKm: lifeTyres ? lifeSum / lifeTyres : null,
+    lifeKmTyres: lifeTyres,
+    measurableTyres: s.measurable,
+    kmCoverage: s.coverage,
+    provisionalTyres: s.provisional,
+    estimatedShare: s.estimatedShare,
+    cpkKind: CPK_KIND.FLEET_AGGREGATE,
+    cpkKindLabel: CPK_KIND_LABEL[CPK_KIND.FLEET_AGGREGATE],
+  }
+}
+
+const EMPTY_LIFETIME = Object.freeze(lifetimeMetrics([]))
+
+/** Row money with a refit never priced twice (rule T1). */
+function oneCost(r) {
+  return (numOrNull(r.cost_per_tyre) || 0) * (r.qty || 1)
 }
 
 // 'Critical' is a real persisted risk_level - tyreClassifier assigns it to the
@@ -207,16 +296,24 @@ const isHighRisk = (r) => r?.risk_level === 'High' || r?.risk_level === 'Critica
 
 /**
  * Compute per-brand metrics from tyre_records
- * @returns {{ brand, count, totalCost, avgCost, highRiskCount, failureRate,
- *             topCategory, avgLifeDays, riskScore, rankScore }[]}
+ * `count` = fitment rows (records) - an EVENT count, kept per row.
+ * Money (totalCost) is per row with each physical tyre priced ONCE.
+ * Lifetime keys (tyres, avgCostPerTyre, lifetimeCpk, avgLifeKm, kmCoverage,
+ * cpkKind, cpkKindLabel ...) are per PHYSICAL tyre, grouped by the brand of the
+ * tyre's latest fitment. `avgCost` = purchase cost per physical tyre (null when
+ * no tyre of the brand is priced).
+ * @returns {{ brand, count, fitments, totalCost, avgCost, highRiskCount, failureRate,
+ *             topCategory, avgLifeDays, riskScore, rankScore, tyres, lifetimeCpk, avgLifeKm }[]}
  */
 export function computeBrandMetrics(records, _defaultCost) {
-  const byBrand = groupBy(records, r => r.brand || 'Unknown')
+  const byBrand = groupBy(withOnePricePerTyre(records || []), r => r.brand || 'Unknown')
+  const tyreGroups = lifetimeGroups(records, t => t.brand || 'Unknown')
 
   return Object.entries(byBrand).map(([brand, recs]) => {
     const count      = recs.length
-    const totalCost  = sum(recs.map(r => (r.cost_per_tyre || 0) * (r.qty || 1)))
-    const avgCost    = count ? totalCost / count : 0
+    const totalCost  = sum(recs.map(oneCost))
+    const life       = tyreGroups.has(brand) ? lifetimeMetrics(tyreGroups.get(brand)) : EMPTY_LIFETIME
+    const avgCost    = life.avgCostPerTyre
     const highRisk   = recs.filter(isHighRisk).length
     const failureRate = count ? (highRisk / count) * 100 : 0
 
@@ -224,7 +321,8 @@ export function computeBrandMetrics(records, _defaultCost) {
     const catCounts = countBy(recs.filter(r => r.category), r => r.category)
     const topCategory = catCounts[0]?.key || 'Unknown'
 
-    // Average life: days from issue_date range per brand (proxy for lifespan data)
+    // Average days between fitments of the brand (a replacement-interval proxy,
+    // per fitment EVENT; tyre life in km is avgLifeKm below).
     const dates = recs
       .map(r => r.issue_date ? new Date(r.issue_date) : null)
       .filter(Boolean)
@@ -241,37 +339,43 @@ export function computeBrandMetrics(records, _defaultCost) {
     // rankScore: lower failure rate + lower risk + higher count = better
     const rankScore = (100 - failureRate) - riskScore * 10 + Math.log1p(count)
 
-    return { brand, count, totalCost, avgCost, highRiskCount: highRisk,
+    return { ...life, brand, count, fitments: count, totalCost, avgCost, highRiskCount: highRisk,
              failureRate, topCategory, avgLifeDays, riskScore, rankScore }
   }).sort((a, b) => b.count - a.count)
 }
 
 /**
  * Compute per-site metrics
+ * `count` = fitment rows (events). totalCost / monthlyTrend are per row with each
+ * physical tyre priced once. Lifetime keys are per physical tyre grouped by the
+ * site of the tyre's latest fitment; `avgCost` = purchase cost per physical tyre.
  * @returns {{ site, count, totalCost, avgCost, highRiskCount, riskScore,
- *             highRiskPct, topCategory, topBrand, monthlyTrend }[]}
+ *             highRiskPct, topCategory, topBrand, monthlyTrend, tyres, lifetimeCpk }[]}
  */
 export function computeSiteMetrics(records, _defaultCost) {
-  const bySite = groupBy(records, r => r.site || 'Unknown')
+  const bySite = groupBy(withOnePricePerTyre(records || []), r => r.site || 'Unknown')
+  const tyreGroups = lifetimeGroups(records, t => t.site || 'Unknown')
 
   return Object.entries(bySite).map(([site, recs]) => {
     const count     = recs.length
-    const totalCost = sum(recs.map(r => (r.cost_per_tyre || 0) * (r.qty || 1)))
-    const avgCost   = count ? totalCost / count : 0
+    const totalCost = sum(recs.map(oneCost))
+    const life      = tyreGroups.has(site) ? lifetimeMetrics(tyreGroups.get(site)) : EMPTY_LIFETIME
+    const avgCost   = life.avgCostPerTyre
     const highRisk  = recs.filter(isHighRisk).length
     const highRiskPct = count ? (highRisk / count) * 100 : 0
 
     const catCounts  = countBy(recs.filter(r => r.category), r => r.category)
     const brandCounts = countBy(recs.filter(r => r.brand), r => r.brand)
 
-    const monthly = bucketByMonth(recs, r => r.issue_date, r => (r.cost_per_tyre || 0) * (r.qty || 1))
+    const monthly = bucketByMonth(recs, r => r.issue_date, oneCost)
 
     const riskScore = count
       ? recs.reduce((s, r) => s + (RISK_WEIGHT[r.risk_level] || 1), 0) / count
       : 0
 
     return {
-      site, count, totalCost, avgCost,
+      ...life,
+      site, count, fitments: count, totalCost, avgCost,
       highRiskCount: highRisk, highRiskPct,
       topCategory: catCounts[0]?.key || 'Unknown',
       topBrand: brandCounts[0]?.key || 'Unknown',
@@ -283,16 +387,22 @@ export function computeSiteMetrics(records, _defaultCost) {
 
 /**
  * Compute per-asset metrics
+ * `count` / failureFreqPerMonth = fitment EVENTS on the asset. totalCost is per
+ * row with each physical tyre priced once (the purchase sits on the vehicle it
+ * was first fitted to). Lifetime keys are per physical tyre whose LATEST fitment
+ * is on this asset.
  * @returns {{ assetNo, count, totalCost, highRiskCount, lastSeen,
- *             brands, sites, categories, failureFreqPerMonth }[]}
+ *             brands, sites, categories, failureFreqPerMonth, tyres, lifetimeCpk }[]}
  */
 export function computeAssetMetrics(records, _defaultCost) {
-  const byAsset = groupBy(records, r => r.asset_no || 'Unknown')
+  const byAsset = groupBy(withOnePricePerTyre(records || []), r => r.asset_no || 'Unknown')
+  const tyreGroups = lifetimeGroups(records, t => t.asset_no || 'Unknown')
 
   return Object.entries(byAsset).map(([assetNo, recs]) => {
     const count     = recs.length
-    const totalCost = sum(recs.map(r => (r.cost_per_tyre || 0) * (r.qty || 1)))
+    const totalCost = sum(recs.map(oneCost))
     const highRisk  = recs.filter(isHighRisk).length
+    const life      = tyreGroups.has(assetNo) ? lifetimeMetrics(tyreGroups.get(assetNo)) : EMPTY_LIFETIME
 
     const dates = recs
       .map(r => r.issue_date ? new Date(r.issue_date) : null)
@@ -308,7 +418,8 @@ export function computeAssetMetrics(records, _defaultCost) {
     const failureFreqPerMonth = spanMonths > 0 ? count / spanMonths : count
 
     return {
-      assetNo, count, totalCost,
+      ...life,
+      assetNo, count, fitments: count, totalCost,
       highRiskCount: highRisk,
       lastSeen, firstSeen,
       brands:     [...new Set(recs.map(r => r.brand).filter(Boolean))],
@@ -322,15 +433,16 @@ export function computeAssetMetrics(records, _defaultCost) {
 }
 
 /**
- * Monthly cost + count with forecasts
+ * Monthly cost + count with forecasts. Count = fitment events; cost per row with
+ * each physical tyre priced once (a refit adds no purchase).
  * @param {Array}  records
  * @param {number} forecastMonths
  */
 export function monthlyTrendWithForecast(records, forecastMonths = 3, _defaultCost) {
   const buckets = bucketByMonth(
-    records,
+    withOnePricePerTyre(records || []),
     r => r.issue_date,
-    r => (r.cost_per_tyre || 0) * (r.qty || 1)
+    oneCost
   )
   if (buckets.length < 2) return buckets.map(b => ({ ...b, isForecast: false }))
   return forecastMonthly(buckets, forecastMonths, 'total')
@@ -338,19 +450,24 @@ export function monthlyTrendWithForecast(records, forecastMonths = 3, _defaultCo
 
 /**
  * KPI actuals: compute real values from records for a given month (YYYY-MM)
+ * count / highRisk = fitment events in the month. totalCost = purchases in the
+ * month with each physical tyre priced once (a refit is not a purchase).
+ * avgCostPerTyre = totalCost / priced tyres in the month (qty honoured; null
+ * when nothing in the month is priced).
  */
 export function computeMonthlyKpiActuals(records, actions, month, _defaultCost) {
-  const monthRecs = records.filter(r => {
+  const monthRecs = withOnePricePerTyre(records || []).filter(r => {
     if (!r.issue_date) return false
     const d = new Date(r.issue_date)
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === month
   })
 
-  const totalCost    = sum(monthRecs.map(r => (r.cost_per_tyre || 0) * (r.qty || 1)))
+  const totalCost    = sum(monthRecs.map(oneCost))
   const highRiskCount = monthRecs.filter(isHighRisk).length
   const count        = monthRecs.length
+  const pricedTyres  = sum(monthRecs.filter(r => (numOrNull(r.cost_per_tyre) || 0) > 0).map(r => r.qty || 1))
 
-  const overdueActions = actions.filter(a => {
+  const overdueActions = (actions || []).filter(a => {
     if (!a.due_date || a.status === 'Closed') return false
     return new Date(a.due_date) < new Date()
   }).length
@@ -362,7 +479,8 @@ export function computeMonthlyKpiActuals(records, actions, month, _defaultCost) 
     highRiskCount,
     highRiskPct: count ? (highRiskCount / count) * 100 : 0,
     overdueActions,
-    avgCostPerTyre: count ? totalCost / count : 0,
+    avgCostPerTyre: pricedTyres ? totalCost / pricedTyres : null,
+    pricedTyres,
   }
 }
 
@@ -437,8 +555,11 @@ export function buildSiteRadar(siteMetrics) {
 }
 
 /**
- * Compute CPK (Cost Per Kilometre) for a single record.
- * Returns null if km data is missing or invalid.
+ * PER-FITMENT CPK (CPK_KIND.PER_FITMENT): one stint's cost / that stint's km.
+ * Returns null if km data is missing or invalid. Legitimate ONLY where a screen
+ * is explicitly about one fitment, and then the row should come from
+ * withOnePricePerTyre() so a refit is not priced again. For tyre or fleet CPK use
+ * the lifetime layer (lifetimeMetrics / weightedCpk), never an average of this.
  */
 export function recordCpk(record) {
   const kmRun = (record.km_at_removal ?? 0) - (record.km_at_fitment ?? 0)
@@ -448,20 +569,25 @@ export function recordCpk(record) {
 
 /**
  * Compute per-country summary metrics.
+ * `count` = fitment rows (events); totalCost = per row with each physical tyre
+ * priced once. avgCpk is the WEIGHTED physical-tyre lifetime CPK of the country
+ * (fleet aggregate, total purchase cost / total tyre-km; null when not
+ * measurable); avgCostPerTyre = purchase cost per priced physical tyre. Each
+ * country is its own currency, so nothing here is summed across countries.
  * Returns array sorted by totalCost desc.
  */
 export function computeCountryMetrics(records, actions = [], _defaultCost) {
-  const countries = [...new Set(records.map(r => r.country || 'KSA'))]
+  const priced    = withOnePricePerTyre(records || [])
+  const countries = [...new Set(priced.map(r => r.country || 'KSA'))]
+  const tyreGroups = lifetimeGroups(records, t => t.country || 'KSA')
 
   return countries.map(country => {
-    const recs      = records.filter(r => (r.country || 'KSA') === country)
+    const recs      = priced.filter(r => (r.country || 'KSA') === country)
     const count     = recs.length
-    const totalCost = sum(recs.map(r => (r.cost_per_tyre || 0) * (r.qty || 1)))
+    const totalCost = sum(recs.map(oneCost))
     const highRisk  = recs.filter(isHighRisk).length
     const highRiskPct = count ? (highRisk / count) * 100 : 0
-
-    const cpkValues = recs.map(r => recordCpk(r)).filter(v => v !== null)
-    const avgCpk    = cpkValues.length ? mean(cpkValues) : null
+    const life      = tyreGroups.has(country) ? lifetimeMetrics(tyreGroups.get(country)) : EMPTY_LIFETIME
 
     const openActions = actions.filter(a =>
       (a.country || 'KSA') === country && a.status !== 'Closed'
@@ -477,33 +603,43 @@ export function computeCountryMetrics(records, actions = [], _defaultCost) {
     const sites  = [...new Set(recs.map(r => r.site).filter(Boolean))]
 
     return {
-      country, count, totalCost, highRiskPct,
-      avgCpk, openActions, overdueActions,
+      ...life,
+      country, count, fitments: count, totalCost, highRiskPct,
+      avgCpk: life.lifetimeCpk, openActions, overdueActions,
       brandCount: brands.length, siteCount: sites.length,
-      avgCostPerTyre: count ? totalCost / count : 0,
+      avgCostPerTyre: life.avgCostPerTyre,
     }
   }).sort((a, b) => b.totalCost - a.totalCost)
 }
 
 // ── Intelligence Functions ────────────────────────────────────────────────────
 
+/**
+ * Fleet and per-brand CPK over PHYSICAL tyres (rows collapsed first, tyres
+ * grouped by the brand of their latest fitment). avgCpk / byBrand[].avgCpk are
+ * WEIGHTED (total cost / total tyre-km); medianCpk is the median of per-tyre
+ * lifetime CPK. validCount / count = measurable physical tyres. null when fewer
+ * than 3 tyres are measurable.
+ */
 export function computeCpkAnalysis(records) {
-  const valid = records.filter(r =>
-    (r.cost_per_tyre||0) > 0 && (r.km_at_fitment||0) >= 0 && (r.km_at_removal||0) > (r.km_at_fitment||0)
-  )
-  if (valid.length < 3) return null
-  const cpks = valid.map(r => r.cost_per_tyre / (r.km_at_removal - r.km_at_fitment))
-  const avgCpk = mean(cpks)
-  const byBrand = {}
-  valid.forEach(r => {
-    if (!r.brand) return
-    if (!byBrand[r.brand]) byBrand[r.brand] = []
-    byBrand[r.brand].push(r.cost_per_tyre / (r.km_at_removal - r.km_at_fitment))
+  const tyres = toLifetimeTyres(records || []).filter(t => lifetimeCpk(t) != null)
+  if (tyres.length < 3) return null
+  const s = lifetimeSummary(tyres)
+  const byBrand = new Map()
+  tyres.forEach(t => {
+    if (!t.brand) return
+    if (!byBrand.has(t.brand)) byBrand.set(t.brand, [])
+    byBrand.get(t.brand).push(t)
   })
   return {
-    avgCpk, medianCpk: median(cpks), validCount: valid.length,
-    byBrand: Object.entries(byBrand)
-      .map(([brand, vals]) => ({ brand, avgCpk: mean(vals), count: vals.length }))
+    avgCpk: s.cpkPurchase,
+    medianCpk: median(tyres.map(lifetimeCpk)),
+    validCount: s.measurable,
+    cpkKind: CPK_KIND.FLEET_AGGREGATE,
+    cpkKindLabel: CPK_KIND_LABEL[CPK_KIND.FLEET_AGGREGATE],
+    kmCoverage: s.coverage,
+    byBrand: [...byBrand.entries()]
+      .map(([brand, ts]) => ({ brand, avgCpk: lifetimeSummary(ts).cpkPurchase, count: ts.length }))
       .sort((a, b) => a.avgCpk - b.avgCpk),
   }
 }
@@ -515,10 +651,14 @@ export function computeFleetHealthScore(records) {
   return Math.max(0, Math.min(100, Math.round(100 - highRiskRate*40 - blowoutRate*30)))
 }
 
+/**
+ * Per calendar month: count / highRisk / blowouts are fitment EVENTS; cost is
+ * per row with each physical tyre priced once (a refit is not a purchase).
+ */
 export function computeSeasonalTrends(records) {
   const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
   const byMonth = {}
-  records.forEach(r => {
+  withOnePricePerTyre(records || []).forEach(r => {
     if (!r.issue_date) return
     const m = r.issue_date.substring(5,7)
     if (!byMonth[m]) byMonth[m] = { count:0, cost:0, highRisk:0, blowouts:0 }
@@ -534,6 +674,15 @@ export function computeSeasonalTrends(records) {
   })
 }
 
+/**
+ * Tyre life.
+ *   avgLifeKm / medianLifeKm: PHYSICAL tyre lifetime km (sum of the tyre's
+ *     non-overlapping fitments by the shared km rule), mean / median over tyres
+ *     with a measured life, qty-weighted. null when none is measurable.
+ *   avgLifeDays / medianLifeDays / shortLifeCount / totalSamples: days between
+ *     successive fitments on the same asset - a replacement INTERVAL per fitment
+ *     event, kept per row on purpose.
+ */
 export function computeTyreLifeAnalysis(records) {
   const byAsset = {}
   records.forEach(r => {
@@ -549,13 +698,23 @@ export function computeTyreLifeAnalysis(records) {
       if (d>0&&d<3650) lifeDays.push(d)
     }
   })
-  const kmLives = records
-    .filter(r=>(r.km_at_fitment||0)>=0&&(r.km_at_removal||0)>(r.km_at_fitment||0))
-    .map(r=>r.km_at_removal-r.km_at_fitment)
+  const tyres = toLifetimeTyres(records)
+  const kmLives = []
+  tyres.forEach(t => {
+    const life = numOrNull(t._life_km)
+    if (life == null || life <= 0) return
+    for (let q = 0; q < (t._qty || 1); q++) kmLives.push(life)
+  })
+  const s = lifetimeSummary(tyres)
   return {
     avgLifeDays: lifeDays.length ? Math.round(mean(lifeDays)) : null,
     medianLifeDays: lifeDays.length ? Math.round(median(lifeDays)) : null,
     avgLifeKm: kmLives.length ? Math.round(mean(kmLives)) : null,
+    medianLifeKm: kmLives.length ? Math.round(median(kmLives)) : null,
+    lifeKmTyres: kmLives.length,
+    lifeKmBasis: 'physical_tyre',
+    kmCoverage: s.coverage,
+    provisionalTyres: s.provisional,
     shortLifeCount: lifeDays.filter(d=>d<30).length,
     totalSamples: lifeDays.length,
   }

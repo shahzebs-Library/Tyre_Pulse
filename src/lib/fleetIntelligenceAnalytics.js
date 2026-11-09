@@ -13,6 +13,8 @@
  *   - the savings estimate uses measured tyre km only, never an assumed mileage.
  */
 
+import { toLifetimeTyres, hasLifetimeCpk, weightedCpk, withOnePricePerTyre, lifetimeSummary, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
+
 export const HOURS_PER_CHANGE = 2
 export const ATTENTION_WINDOW_DAYS = 30
 export const DAYS_PER_MONTH = 30.44
@@ -69,13 +71,19 @@ export function dataAnchorDate(records = [], now = new Date()) {
   return Number.isNaN(d.getTime()) ? now : d
 }
 
-/** A tyre life is measurable when removal km > fitment km > 0 and it has a price. */
-function measuredLife(r) {
-  const fit = Number(r?.km_at_fitment)
-  const rem = Number(r?.km_at_removal)
-  const cost = Number(r?.cost_per_tyre)
-  if (!(Number.isFinite(fit) && fit > 0 && Number.isFinite(rem) && rem > fit && Number.isFinite(cost) && cost > 0)) return null
-  return { km: rem - fit, cpk: cost / (rem - fit) }
+/**
+ * Physical tyres (rule T1/T8, src/lib/tyreLifetime.js) grouped by the asset of
+ * their LATEST fitment. A tyre that ran on three vehicles is ONE tyre, priced
+ * once, with its km summed; it is attributed to where it is now / last ran.
+ */
+function lifetimeTyresByAsset(records = []) {
+  const m = new Map()
+  for (const t of toLifetimeTyres(records)) {
+    if (!t.asset_no) continue
+    if (!m.has(t.asset_no)) m.set(t.asset_no, [])
+    m.get(t.asset_no).push(t)
+  }
+  return m
 }
 
 /** asset_no -> master row. */
@@ -94,14 +102,19 @@ export function indexFleetMaster(fleetMaster = []) {
 export function buildVehicleMetrics(records = [], masterMap = {}, { now = new Date() } = {}) {
   const cutoff = new Date(now.getTime() - ATTENTION_WINDOW_DAYS * DAY_MS)
   const byAsset = new Map()
-  for (const r of records || []) {
+  // Money per fitment row, but a refit of the same physical tyre is not a second purchase.
+  const priced = withOnePricePerTyre(records || [])
+  const tyresByAsset = lifetimeTyresByAsset(records || [])
+  for (const r of priced) {
     if (!r?.asset_no) continue
     if (!byAsset.has(r.asset_no)) byAsset.set(r.asset_no, [])
     byAsset.get(r.asset_no).push(r)
   }
   return [...byAsset.entries()].map(([asset_no, recs]) => {
     const master = masterMap[asset_no] || null
-    const lives = recs.map(measuredLife).filter(Boolean)
+    const tyres = tyresByAsset.get(asset_no) || []
+    const measurable = tyres.filter(hasLifetimeCpk)
+    const lifeTyres = tyres.filter((t) => Number(t._life_km) > 0)
     const dates = recs.map((r) => r.issue_date).filter(Boolean).map((d) => String(d).slice(0, 10)).sort()
     const first = dates[0] || null
     const last = dates[dates.length - 1] || null
@@ -116,12 +129,17 @@ export function buildVehicleMetrics(records = [], masterMap = {}, { now = new Da
       asset_no,
       site: master?.site || recs.find((r) => r.site)?.site || null,
       vehicle_type: master?.vehicle_type || null,
+      // EVENT: fitment rows (a change), deliberately per row.
       total_tyre_changes: recs.length,
       total_tyre_cost: totalCost,
-      avg_cpk: mean(lives.map((l) => l.cpk)),
-      avg_km_per_tyre: mean(lives.map((l) => l.km)),
-      measured_km: lives.reduce((s, l) => s + l.km, 0),
-      measured_lives: lives.length,
+      // Physical tyre lifetime CPK, weighted (cost / tyre-km) over this asset's tyres.
+      avg_cpk: measurable.length ? weightedCpk(measurable) : null,
+      cpk_kind: CPK_KIND.TYRE_LIFETIME,
+      avg_km_per_tyre: mean(lifeTyres.map((t) => Number(t._life_km))),
+      measured_km: measurable.reduce((s, t) => s + Number(t._life_km) * (t._qty || 1), 0),
+      measured_lives: measurable.length,
+      physical_tyres: tyres.reduce((s, t) => s + (t._qty || 1), 0),
+      provisional_tyres: tyres.filter((t) => t._provisional).length,
       high_risk_count: recs.filter(isHighRisk).length,
       downtime_hours: recs.length * HOURS_PER_CHANGE,
       last_change_date: last,
@@ -155,8 +173,28 @@ export function fleetAggregates(metrics = [], records = []) {
     avg_cost_per_vehicle: size ? totalCost / size : null,
     worst_vehicle_cpk: worst,
     best_vehicle_cpk: best,
-    fleetAvgCpk: mean(withCpk.map((v) => v.avg_cpk)),
+    // Fleet CPK is WEIGHTED over physical tyres (rule T8), never a mean of per-vehicle ratios.
+    ...fleetCpkBlock(records, withCpk),
     cpk_measured: withCpk.length,
+  }
+}
+
+function fleetCpkBlock(records = [], withCpk = []) {
+  const tyres = toLifetimeTyres(records || [])
+  const summary = lifetimeSummary(tyres)
+  // No records passed (older callers): fall back to the vehicles' own figures, weighted by km.
+  let cpk = summary.cpkPurchase
+  if (!(records || []).length && withCpk.length) {
+    const km = withCpk.reduce((s, v) => s + (v.measured_km || 0), 0)
+    cpk = km > 0 ? withCpk.reduce((s, v) => s + v.avg_cpk * (v.measured_km || 0), 0) / km : mean(withCpk.map((v) => v.avg_cpk))
+  }
+  return {
+    fleetAvgCpk: cpk ?? null,
+    cpk_kind: CPK_KIND.FLEET_AGGREGATE,
+    cpk_kind_label: CPK_KIND_LABEL[CPK_KIND.FLEET_AGGREGATE],
+    cpk_coverage: summary.coverage,
+    cpk_provisional_tyres: summary.provisional,
+    cpk_estimated_share: summary.estimatedShare,
   }
 }
 

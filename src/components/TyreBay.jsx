@@ -18,6 +18,7 @@ import {
 import VehicleTyreDiagram from './VehicleTyreDiagram'
 import {
   groupTyresByPosition, canonicalToSlotId, serialOf, tyreLifeKm, cpk, daysFitted,
+  bayPricedRows, bayLifetimeIndex, bayLifetimeFor,
   layoutPositionsFor,
 } from '../lib/tyreBay'
 import { moveTyre, removeTyre } from '../lib/api/tyreRecords'
@@ -226,7 +227,7 @@ function Field({ label, children }) {
 }
 
 // ── Selected-position detail ────────────────────────────────────────────────────
-function PositionDetail({ posKey, group, currency, locked, onMove, onRemove }) {
+function PositionDetail({ posKey, group, lifetime, currency, locked, onMove, onRemove }) {
   const [showHistory, setShowHistory] = useState(true)
   if (!posKey) {
     return (
@@ -285,8 +286,10 @@ function PositionDetail({ posKey, group, currency, locked, onMove, onRemove }) {
             <Meta label="Tread" value={current.tread_depth != null ? `${current.tread_depth} mm` : null} />
             <Meta label="Pressure" value={current.pressure_reading != null ? `${current.pressure_reading} psi` : null} />
             <Meta label="Days fitted" value={days != null ? `${days} d` : null} />
-            <Meta label="KM run" value={km != null ? `${fmtKm(km)} km` : null} />
-            <Meta label="CPK" value={cpkVal != null ? formatCurrencyCompact(cpkVal, currency) : null} />
+            <Meta label="KM run (this fitment)" value={km != null ? `${fmtKm(km)} km` : null} />
+            <Meta label="CPK (per fitment)" value={cpkVal != null ? formatCurrencyCompact(cpkVal, currency) : null} />
+            <Meta label="Lifetime km (this vehicle)" value={lifetime?.lifetimeKm != null ? `${fmtKm(lifetime.lifetimeKm)} km${lifetime.provisional ? ', provisional' : ''}` : null} />
+            <Meta label="Lifetime CPK" value={lifetime?.lifetimeCpk != null ? formatCurrencyCompact(lifetime.lifetimeCpk, currency) : null} />
             <Meta label="Fitted" value={current.fitment_date || current.issue_date ? formatDate(current.fitment_date || current.issue_date) : null} />
           </div>
         </div>
@@ -348,7 +351,10 @@ export default function TyreBay({ asset, tyres, currency, locked = false, onMove
   const [approvalScope, setApprovalScope] = useState(null)
   const changeLocked = locked || approvalScope?.id !== asset?.id || approvalScope?.mode !== 'legacy'
   const vehicleType = asset?.vehicle_type
-  const groups = useMemo(() => groupTyresByPosition(tyres), [tyres])
+  // Stints are shown per fitment; the purchase is kept once per physical tyre.
+  const pricedTyres = useMemo(() => bayPricedRows(tyres), [tyres])
+  const groups = useMemo(() => groupTyresByPosition(pricedTyres), [pricedTyres])
+  const lifeIndex = useMemo(() => bayLifetimeIndex(pricedTyres), [pricedTyres])
   // Same machine the wheel bay draws (asset prefix + recorded axle build), so the
   // Move/Swap and change-approval pickers offer exactly the wheels on the diagram.
   const positions = useMemo(() => layoutPositionsFor(vehicleType, asset?.asset_no, asset?.country), [vehicleType, asset?.asset_no, asset?.country])
@@ -426,6 +432,7 @@ export default function TyreBay({ asset, tyres, currency, locked = false, onMove
         <PositionDetail
           posKey={selectedPos}
           group={selectedPos ? groups[selectedPos] : null}
+          lifetime={selectedPos && groups[selectedPos]?.current ? bayLifetimeFor(lifeIndex, groups[selectedPos].current, pricedTyres) : null}
           currency={currency}
           locked={changeLocked}
           onMove={setMoveTarget}
@@ -445,7 +452,7 @@ export default function TyreBay({ asset, tyres, currency, locked = false, onMove
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-[var(--border-bright)]">
-                  {['Position', 'Current serial', 'Brand', 'Size', 'Tread', 'Risk', 'Days', 'CPK', 'History'].map((h) => (
+                  {['Position', 'Current serial', 'Brand', 'Size', 'Tread', 'Risk', 'Days', 'CPK (per fitment)', 'History'].map((h) => (
                     <th key={h} className="px-3 py-2 text-left text-[var(--text-muted)] font-medium whitespace-nowrap">{h}</th>
                   ))}
                 </tr>

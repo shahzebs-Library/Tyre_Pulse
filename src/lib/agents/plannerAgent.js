@@ -112,7 +112,7 @@ export async function runPlannerAgent(query, {
     ``,
     `## Site Priorities (Highest CPK - Act First)`,
     highPrioritySites.length
-      ? highPrioritySites.map(s => `- ${s.site}: CPK ${s.avgCpk?.toFixed(3)}, ${s.count} records`).join('\n')
+      ? highPrioritySites.map(s => `- ${s.site}: lifetime CPK ${s.avgCpk?.toFixed(3)}, ${s.count} physical tyres`).join('\n')
       : '- No site data available',
     ``,
     `## Procurement Recommendation (Best Value Brands)`,

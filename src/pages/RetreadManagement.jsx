@@ -482,7 +482,7 @@ export default function RetreadManagement() {
     { id: 'brand', header: 'Brand', accessorFn: (r) => r.brand, size: 180 },
     { id: 'count', header: 'Casings', accessorFn: (r) => r.count, meta: { align: 'right' }, cell: ({ getValue }) => <span className="tabular-nums">{fmtNum(getValue())}</span> },
     {
-      id: 'avgCpk', header: 'Avg CPK', accessorFn: (r) => r.avgCpk ?? Infinity, meta: { align: 'right', exportValue: (r) => fmtCpk(r.avgCpk, activeCurrency) },
+      id: 'avgCpk', header: 'CPK (weighted)', accessorFn: (r) => r.avgCpk ?? Infinity, meta: { align: 'right', exportValue: (r) => fmtCpk(r.avgCpk, activeCurrency) },
       cell: ({ row }) => <span className="tabular-nums font-mono text-xs">{fmtCpk(row.original.avgCpk, activeCurrency)}</span>,
     },
     { id: 'avgLife', header: 'Avg life (km)', accessorFn: (r) => r.avgLife ?? -1, meta: { align: 'right', exportValue: (r) => fmtNum(r.avgLife) }, cell: ({ row }) => <span className="tabular-nums">{fmtNum(row.original.avgLife)}</span> },
@@ -552,7 +552,7 @@ export default function RetreadManagement() {
       },
     },
     { id: 'km_life', header: 'km life', accessorFn: (r) => r.km_life ?? -1, meta: { align: 'right', exportValue: (r) => fmtNum(r.km_life) }, cell: ({ row }) => <span className="tabular-nums">{fmtNum(row.original.km_life)}</span> },
-    { id: 'cpk', header: 'CPK', accessorFn: (r) => r.cpk ?? Infinity, meta: { align: 'right', exportValue: (r) => fmtCpk(r.cpk, activeCurrency) }, cell: ({ row }) => <span className="tabular-nums font-mono text-xs">{fmtCpk(row.original.cpk, activeCurrency)}</span> },
+    { id: 'cpk', header: 'CPK (per fitment)', accessorFn: (r) => r.cpk ?? Infinity, meta: { align: 'right', exportValue: (r) => fmtCpk(r.cpk, activeCurrency) }, cell: ({ row }) => <span className="tabular-nums font-mono text-xs">{fmtCpk(row.original.cpk, activeCurrency)}</span> },
     { id: 'risk', header: 'Risk', accessorFn: (r) => r.risk_level ?? '', cell: ({ row }) => riskBadge(row.original.risk_level) },
     { id: 'status', header: 'Status', accessorFn: (r) => r.status, cell: ({ row }) => statusBadge(row.original.status) },
     { id: 'days', header: 'Days', accessorFn: (r) => r.days_in_service ?? -1, meta: { align: 'right', exportValue: (r) => r.days_in_service ?? 'N/A' }, cell: ({ row }) => <span className="tabular-nums">{row.original.days_in_service != null ? `${row.original.days_in_service}d` : 'N/A'}</span> },
@@ -642,7 +642,7 @@ export default function RetreadManagement() {
           icon={TrendingDown} tone="t-green" label="Retread CPK" loading={kpiLoading}
           display={moneyOk ? fmtCpk(kv(kpis.retreadCpk), money.currency) : 'N/A'} title={moneyTitle}
           sub={moneyOk
-            ? (kpis.newCpk != null ? `vs ${fmtCpk(kpis.newCpk, money.currency)} new` : 'No new-tyre baseline')
+            ? `${kpis.newCpk != null ? `vs ${fmtCpk(kpis.newCpk, money.currency)} new` : 'No new-tyre baseline'}. ${kpis.cpkKindLabel || 'Fleet aggregate tyre CPK (weighted, per tyre-km)'}`
             : 'Pick one country'}
         />
         <TyreKpiTile
@@ -1015,10 +1015,12 @@ export default function RetreadManagement() {
                       ['Removal date', drawer.removal_date ?? (drawer.status === 'Removed' ? 'Not recorded' : 'Still fitted')],
                       ['km at fitment', drawer.km_at_fitment != null ? Number(drawer.km_at_fitment).toLocaleString() : null],
                       ['km at removal', drawer.km_at_removal != null ? Number(drawer.km_at_removal).toLocaleString() : null],
-                      ['km life', drawer.km_life != null ? `${drawer.km_life.toLocaleString()} km` : null],
+                      ['km life (this fitment)', drawer.km_life != null ? `${drawer.km_life.toLocaleString()} km` : null],
+                      ['Casing lifetime km', drawer.casing_km_life != null ? `${drawer.casing_km_life.toLocaleString()} km${drawer.casing_km_coverage === 'partial' ? ' (partial)' : ''}` : null],
                       ['Days in service', drawer.days_in_service != null ? `${drawer.days_in_service} days` : null],
                       ['Cost per tyre', drawer.cost_per_tyre != null ? fmtCurrency(Number(drawer.cost_per_tyre), activeCurrency) : null],
-                      ['CPK', fmtCpk(drawer.cpk, activeCurrency)],
+                      ['CPK (per fitment)', fmtCpk(drawer.cpk, activeCurrency)],
+                      ['Casing lifetime CPK', fmtCpk(drawer.casing_cpk, activeCurrency)],
                     ].map(([label, value]) => (
                       <div key={label}>
                         <dt className="text-[var(--text-muted)] text-xs">{label}</dt>
@@ -1032,7 +1034,7 @@ export default function RetreadManagement() {
                   <div className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl p-4">
                     <p className="text-xs text-[var(--text-muted)] mb-3 font-semibold uppercase tracking-wider">Against the fleet new-tyre average</p>
                     <dl className="space-y-2 text-sm">
-                      <div className="flex justify-between"><dt className="text-[var(--text-muted)]">This retread CPK</dt><dd className="font-bold tabular-nums">{fmtCpk(drawer.cpk, activeCurrency)}</dd></div>
+                      <div className="flex justify-between"><dt className="text-[var(--text-muted)]">This fitment CPK (per fitment)</dt><dd className="font-bold tabular-nums">{fmtCpk(drawer.cpk, activeCurrency)}</dd></div>
                       <div className="flex justify-between"><dt className="text-[var(--text-muted)]">Fleet new-tyre CPK</dt><dd className="font-bold tabular-nums">{fmtCpk(kpis.newCpk, activeCurrency)}</dd></div>
                       <div className="flex justify-between">
                         <dt className="text-[var(--text-muted)]">Difference</dt>

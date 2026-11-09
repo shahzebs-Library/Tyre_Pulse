@@ -7,11 +7,19 @@
  *   - A tyre's price is the per-tyre purchase price recorded on its tyre records
  *     (`cost_per_tyre`). Every fitment row of one serial repeats that same
  *     purchase, so the rows are NOT summed (summing counts one tyre once per
- *     move). The latest priced row wins; no priced row = null, never 0.
+ *     move). The FIRST priced row (oldest by fitment) is the purchase (rule T1
+ *     one tyre one price); a later priced row is the same tyre refitted. When a
+ *     real serial carries a price on more than one fitment it is flagged for
+ *     review, never picked silently. No priced row = null, never 0.
+ *   - Lifetime km and CPK come from the shared lifetime layer (tyreLifetime.js).
  *   - Days in service is null when it cannot be measured (a single dated row
  *     with nothing after it), never a fabricated 0.
  *   - A serial that is not found carries a null price, not a zero.
  */
+
+import {
+  toLifetimeTyres, isStrongSerial, lifetimeCpk, fullLifetimeCpk, weightedCpk, CPK_KIND, CPK_KIND_LABEL,
+} from './tyreLifetime'
 
 export const ACTIVE_WINDOW_MONTHS = 12
 
@@ -36,14 +44,46 @@ export function recordPrice(r) {
   return n != null && n > 0 ? n : null
 }
 
-/** The tyre's purchase price: the latest priced record's per-tyre price. */
+const dateKey = (r) => String(r?.issue_date ?? r?.fitment_date ?? '').slice(0, 10)
+
+/**
+ * The tyre's purchase price: the FIRST priced record (oldest fitment) - rule T1.
+ * A refit is never another purchase, so a later price is not used.
+ */
 export function serialPrice(records) {
-  const list = Array.isArray(records) ? records : []
-  for (let i = list.length - 1; i >= 0; i--) {
-    const p = recordPrice(list[i])
-    if (p != null) return p
+  const list = (Array.isArray(records) ? records : []).filter((r) => recordPrice(r) != null)
+  if (!list.length) return null
+  const first = list.reduce((a, r) => (dateKey(r) && (!dateKey(a) || dateKey(r) < dateKey(a)) ? r : a), list[0])
+  return recordPrice(first)
+}
+
+/**
+ * Lifetime of the serial from the shared lifetime layer. A real serial is ONE
+ * physical tyre (price once, km summed over its fitments); a shared code
+ * cannot be tied across rows, so each row stays its own tyre.
+ */
+export function serialLifetime(records) {
+  const list = (Array.isArray(records) ? records : []).map((r) => (
+    r && r.cost_per_tyre == null && r.cost != null ? { ...r, cost_per_tyre: r.cost } : r))
+  if (!list.length) return null
+  const tyres = toLifetimeTyres(list)
+  const one = tyres.length === 1 ? tyres[0] : null
+  const priced = list.filter((r) => recordPrice(r) != null).length
+  const strong = isStrongSerial(list[0]?.serial_no)
+  const km = tyres.reduce((a, t) => (t._life_km != null ? (a ?? 0) + t._life_km * (t._qty || 1) : a), null)
+  return {
+    kind: CPK_KIND.TYRE_LIFETIME,
+    kindLabel: CPK_KIND_LABEL[CPK_KIND.TYRE_LIFETIME],
+    physicalTyres: tyres.length,
+    km,
+    kmCoverage: one ? one._km_coverage : null,
+    costStatus: one ? one._cost_status : null,
+    purchaseCpk: one ? lifetimeCpk(one) : weightedCpk(tyres),
+    fullCpk: one ? fullLifetimeCpk(one) : weightedCpk(tyres, { basis: 'full' }),
+    active: tyres.some((t) => t._active),
+    provisional: tyres.some((t) => t._provisional),
+    priceReview: strong && priced > 1 ? `Priced on ${priced} fitments - needs review` : null,
   }
-  return null
 }
 
 /** Cut-off date (ms) for "active": a record issued within the window. */
@@ -92,6 +132,7 @@ export function serialStats(records, { now = new Date() } = {}) {
     scrapped,
     price: serialPrice(list),
     pricedRecords: list.filter((r) => recordPrice(r) != null).length,
+    lifetime: serialLifetime(list),
     brand: first.brand || last.brand || null,
     description: first.description || last.description || null,
     country: last.country || first.country || null,

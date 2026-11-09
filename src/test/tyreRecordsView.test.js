@@ -38,8 +38,9 @@ describe('tyreRecordsView', () => {
   })
 
   it('averages positive lives only and reports its sample', () => {
-    expect(averageLife([10, 20, 0, null, 'x'])).toEqual({ avg: 15, n: 2 })
-    expect(averageLife([])).toEqual({ avg: null, n: 0 })
+    // toMatchObject: averageLife now also states its basis (fitment vs physical tyre).
+    expect(averageLife([10, 20, 0, null, 'x'])).toMatchObject({ avg: 15, n: 2, basis: 'fitment' })
+    expect(averageLife([])).toMatchObject({ avg: null, n: 0 })
   })
 
   it('keeps option values raw (padded values still match) and drops blanks', () => {

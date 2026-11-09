@@ -135,10 +135,15 @@ describe('computeCombinationRollup', () => {
     // fitted (qty-aware) = 2 (steer) + 1 (trailer) = 3 ; scrap = 1
     expect(r.fittedTyres).toBe(3)
     expect(r.scrapTyres).toBe(1)
-    expect(r.tyreCount).toBe(3) // member records only
-    // km = 40000 + 30000 + 20000 = 90000 ; cost 4300 → cpk 4300/90000 = 0.0478
+    // Physical tyres: the qty-2 steer row (no real serial) stands for 2 tyres.
+    expect(r.tyreCount).toBe(4)
+    expect(r.fitments).toBe(3)
+    // km run on the unit (per fitment row) = 40000 + 30000 + 20000 = 90000
     expect(r.totalKm).toBe(90000)
-    expect(r.blendedCpk).toBeCloseTo(0.048, 3)
+    // Weighted lifetime CPK per tyre-km: each of the 2 steer tyres ran 40000 km,
+    // so cost 4300 over 80000 + 30000 + 20000 = 130000 tyre-km (was 4300/90000,
+    // which divided two tyres' cost by one tyre's distance).
+    expect(r.blendedCpk).toBeCloseTo(4300 / 130000, 3)
     // canonical CPK is the shared engine's object (per-record mean over valid rows)
     expect(r.canonicalCpk).toHaveProperty('fleetAvgCpk')
   })
@@ -163,7 +168,8 @@ describe('computeCombinationRollup', () => {
     const byClass = Object.fromEntries(r.positionBreakdown.map((p) => [p.positionClass, p]))
     expect(byClass.steer.count).toBe(2)
     expect(byClass.steer.spend).toBe(2000)
-    expect(byClass.steer.cpk).toBeCloseTo(0.05, 3) // 2000 / 40000
+    // 2 tyres x 40000 km = 80000 tyre-km: 2000 / 80000 (was 2000 / 40000)
+    expect(byClass.steer.cpk).toBeCloseTo(0.025, 3)
     expect(byClass.other.count).toBe(1)
     expect(byClass.other.spend).toBe(300)
     // classes are emitted in canonical order

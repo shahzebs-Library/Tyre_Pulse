@@ -27,6 +27,8 @@
  */
 
 // ── Scoring weights (sum = 100) — verbatim from risk_score.py ────────────────
+import { toLifetimeTyres, tyreKey, lifetimeCpk, CPK_KIND } from './tyreLifetime'
+
 export const W_TREAD = 30 // tread depth vs minimum legal limit
 export const W_PRESSURE = 25 // deviation from optimal PSI
 export const W_AGE = 20 // tyre age vs 5-year GCC guideline
@@ -109,7 +111,10 @@ export function tyreKm(rec) {
   return null
 }
 
-/** Per-tyre cost-per-km (cost_per_tyre / km) or null when not derivable. */
+/**
+ * PER-FITMENT cost-per-km for one row (cost_per_tyre / that row's km), or null.
+ * scoreTyres() reports the physical tyre LIFETIME CPK instead when it can.
+ */
 export function tyreCpk(rec) {
   const cost = num(rec?.cost_per_tyre)
   const km = tyreKm(rec)
@@ -237,7 +242,12 @@ export function scoreTyre(rec, opts = {}) {
   const treadMm = num(rec?.tread_depth)
   const actualPsi = num(rec?.pressure_reading)
   const ageYears = inServiceYears(rec, now)
-  const km = tyreKm(rec)
+  // opts.lifetime = the PHYSICAL tyre this fitment belongs to (scoreTyres passes
+  // it): its km is summed over every fitment (a refitted tyre has worn across all
+  // of them) and its CPK prices it once. Standalone calls fall back to the row.
+  const lt = opts.lifetime || null
+  const ltKm = lt && Number(lt._life_km) > 0 ? Number(lt._life_km) : null
+  const km = ltKm ?? tyreKm(rec)
   const inspDays = null // no per-tyre inspection-date source in tyre_records
 
   const sTread = treadScore(treadMm)
@@ -276,7 +286,10 @@ export function scoreTyre(rec, opts = {}) {
     pressure_reading: actualPsi,
     age_years: ageYears != null ? round1(ageYears) : null,
     km,
-    cpk: (() => { const c = tyreCpk(rec); return c == null ? null : Math.round(c * 1000) / 1000 })(),
+    cpk: (() => { const c = lt ? lifetimeCpk(lt) : tyreCpk(rec); return c == null ? null : Math.round(c * 1000) / 1000 })(),
+    cpk_kind: lt ? CPK_KIND.TYRE_LIFETIME : CPK_KIND.PER_FITMENT,
+    cpk_provisional: lt ? Boolean(lt._provisional) : true,
+    fitments: lt ? lt._fitments : 1,
   }
 }
 
@@ -289,9 +302,15 @@ export function scoreTyre(rec, opts = {}) {
  */
 export function scoreTyres({ tyres = [] } = {}, opts = {}) {
   const now = resolveNow(opts.now)
-  const rows = (Array.isArray(tyres) ? tyres : [])
-    .filter((r) => r && isInService(r) && !isScrapped(r))
-    .map((r) => scoreTyre(r, { ...opts, now }))
+  const all = (Array.isArray(tyres) ? tyres : []).filter(Boolean)
+  // Collapse to physical tyres over ALL rows (removed fitments included) so a
+  // live tyre's km and cost carry its whole history.
+  const norm = all.map((r) => (!r.serial_no && serialOf(r) ? { ...r, serial_no: serialOf(r) } : r))
+  const byKey = new Map(toLifetimeTyres(norm).map((t) => [t._key, t]))
+  const rows = all
+    .map((r, i) => ({ r, lifetime: byKey.get(tyreKey(norm[i], i)) || null }))
+    .filter(({ r }) => isInService(r) && !isScrapped(r))
+    .map(({ r, lifetime }) => scoreTyre(r, { ...opts, now, lifetime }))
   rows.sort((a, b) => a.risk_score - b.risk_score
     || String(a.serial || a.asset_no || '').localeCompare(String(b.serial || b.asset_no || '')))
   return rows

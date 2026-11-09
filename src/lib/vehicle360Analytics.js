@@ -15,6 +15,7 @@
  */
 import { isOpenWoStatus, isClosedWoStatus } from './workOrderStatus'
 import { isIncidentClosed, canonSeverity } from './accidentVocab'
+import { toLifetimeTyres, fitmentKm, weightedCpk, lifetimeSummary, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
 
 const DAY_MS = 86400000
 
@@ -272,19 +273,17 @@ export const isHighRiskTyre = (t) => t?.risk_level === 'High' || t?.risk_level =
 export const MAX_TYRE_LIFE_KM = 400000
 
 /**
- * Distance a tyre ran (removal minus fitment odometer), or null when either
- * reading is missing or the run is implausible. A fitted tyre with no removal
- * reading has no measured life yet - that is not 0 km.
+ * Distance ONE fitment ran on this vehicle, by the shared km rule
+ * (tyreKm.js: placeholder fitment km 1 and readings above the vehicle class
+ * limit are unknown, a factory 0 fitment is real), or null. A fitted tyre with
+ * no removal reading has no measured life yet - that is not 0 km.
  */
 export function tyreKmRun(t) {
-  const a = num(t?.km_at_fitment)
-  const b = num(t?.km_at_removal)
-  if (a == null || b == null) return null
-  const km = b - a
-  return km > 0 && km < MAX_TYRE_LIFE_KM ? km : null
+  const km = fitmentKm(t)
+  return km != null && km > 0 && km < MAX_TYRE_LIFE_KM ? km : null
 }
 
-/** Price x qty for one tyre, or null when it carries no price (unpriced is not free). */
+/** Price x qty for one fitment row, or null when it carries no price (unpriced is not free). */
 export function tyreCost(t) {
   const p = num(t?.cost_per_tyre)
   if (p == null || p <= 0) return null
@@ -293,11 +292,15 @@ export function tyreCost(t) {
 }
 
 /**
- * Tyre register roll-up. Every ratio is null when its denominator is empty:
- *  - highRate / health: no tyres -> null (a vehicle with no tyres is not 100% healthy)
- *  - avgLifeKm: no tyre with a measured run -> null
- *  - cpk: mean cost-per-km over tyres that have BOTH a price and a measured run.
- *    An unpriced tyre is left out rather than read as costing nothing.
+ * Tyre register roll-up. The rows are this vehicle's FITMENTS; life and CPK are
+ * measured per PHYSICAL TYRE (tyreLifetime.js): a tyre refitted on this vehicle
+ * is one tyre, bought once, its km summed. Every ratio is null when its
+ * denominator is empty:
+ *  - highRate / health: risk is rated per fitment row -> no rows -> null
+ *  - avgLifeKm: total km / measured tyres on this vehicle -> null when none
+ *  - cpk: WEIGHTED (total purchase cost / total km of the tyres that have both a
+ *    price and a measured life). An unpriced tyre is left out, never free.
+ *    The km is the km run ON THIS VEHICLE (rows from other vehicles are not here).
  *  - lifeVsTargetPct: needs a stated expected_km_per_tyre; no default is invented.
  */
 export function tyreMetrics(tyres = [], { targetKm = null } = {}) {
@@ -306,20 +309,34 @@ export function tyreMetrics(tyres = [], { targetKm = null } = {}) {
   const critical = list.filter(isHighRiskTyre).length
   const highRate = total ? (critical / total) * 100 : null
   const health = highRate == null ? null : Math.max(0, Math.min(100, Math.round(100 - highRate * 0.4)))
-  const lives = list.map(tyreKmRun).filter((k) => k != null)
-  const avgLifeKm = lives.length ? Math.round(lives.reduce((a, b) => a + b, 0) / lives.length) : null
-  const cpks = []
+  const physical = toLifetimeTyres(list)
+  let kmSum = 0
+  let kmN = 0
   let priced = 0
-  for (const t of list) {
-    const c = tyreCost(t)
-    if (c != null) priced += 1
-    const km = tyreKmRun(t)
-    if (c != null && km != null) cpks.push(c / km)
+  for (const t of physical) {
+    const q = t._qty || 1
+    if ((t._cost ?? 0) > 0) priced += q
+    if (t._life_km != null && t._life_km > 0) { kmSum += t._life_km * q; kmN += q }
   }
-  const cpk = cpks.length ? cpks.reduce((a, b) => a + b, 0) / cpks.length : null
+  const avgLifeKm = kmN ? Math.round(kmSum / kmN) : null
+  const summary = lifetimeSummary(physical)
+  const cpk = weightedCpk(physical)
   const target = num(targetKm)
   const lifeVsTargetPct = avgLifeKm != null && target != null && target > 0
     ? Math.min(100, (avgLifeKm / target) * 100)
     : null
-  return { total, critical, highRate, health, avgLifeKm, cpk, cpkSample: cpks.length, priced, lifeVsTargetPct }
+  return {
+    total,
+    fitments: total,
+    physicalTyres: physical.reduce((a, t) => a + (t._qty || 1), 0),
+    critical, highRate, health, avgLifeKm,
+    cpk,
+    cpkSample: summary.measurable,
+    cpkKind: CPK_KIND.FLEET_AGGREGATE,
+    cpkKindLabel: CPK_KIND_LABEL[CPK_KIND.FLEET_AGGREGATE],
+    kmCoverage: summary.coverage,
+    provisionalTyres: summary.provisional,
+    priced,
+    lifeVsTargetPct,
+  }
 }

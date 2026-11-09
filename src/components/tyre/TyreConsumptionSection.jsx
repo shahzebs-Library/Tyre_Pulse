@@ -30,6 +30,7 @@ import { exportToExcel } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
 import { colorAt, withAlpha } from '../../lib/reportColors'
 import DateField from '../ui/DateField'
+import TyreConsumptionPeriodsPanel from './TyreConsumptionPeriodsPanel'
 import EnterpriseTable from '../ui/EnterpriseTable'
 import { compareValues, isBlank } from '../../lib/consoleTable'
 
@@ -442,6 +443,10 @@ export default function TyreConsumptionSection() {
               />
             </div>
           ) : null}
+
+          {/* Quarter / year to date and the same period last year, with physical
+              tyres kept apart from installation events (get_tyre_consumption_v2). */}
+          <TyreConsumptionPeriodsPanel country={activeCountry} from={fromDate} to={toDate} />
 
           {/* Breakdowns, read through the asset */}
           <div className="grid lg:grid-cols-2 gap-6 mb-4">

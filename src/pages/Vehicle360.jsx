@@ -478,9 +478,9 @@ export default function Vehicle360() {
                 value={pressure ? `${Math.round(pressure.value)} psi` : 'N/A'}
                 sub={pressure ? `From ${pressure.sample} tyre${pressure.sample === 1 ? '' : 's'}` : 'No pressure recorded'} />
               <Tile icon={DollarSign} tone="t-amber" label="Tyre Spend (YTD)" value={spendTile.value} sub={spendTile.sub} loading={historyLoading} />
-              <Tile icon={GaugeIcon} tone="t-green" label="Avg CPK"
+              <Tile icon={GaugeIcon} tone="t-green" label="Tyre CPK (weighted)"
                 value={m.cpk == null ? 'N/A' : `${m.cpk.toFixed(2)}${tyreCurrency ? ` ${tyreCurrency}/km` : ''}`}
-                sub={m.cpk == null ? 'Needs a priced tyre with a measured run' : `From ${m.cpkSample} tyre${m.cpkSample === 1 ? '' : 's'}`} />
+                sub={m.cpk == null ? 'Needs a priced tyre with a measured run' : `${m.cpkKindLabel}, from ${m.cpkSample} physical tyre${m.cpkSample === 1 ? '' : 's'} (km on this vehicle${m.provisionalTyres ? `, ${m.provisionalTyres} provisional` : ''})`} />
               <Tile icon={ClipboardCheck} tone="t-blue" label="Last Inspection" loading={historyLoading}
                 value={lastInsp ? (a360.inspections.daysSince === 0 ? 'Today' : `${fmtN(a360.inspections.daysSince)} d ago`) : 'Never'}
                 sub={lastInsp ? lastInsp.day : 'None recorded. Next-inspection dates are not read here.'} />

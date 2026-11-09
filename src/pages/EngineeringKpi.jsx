@@ -693,13 +693,13 @@ export default function EngineeringKpi() {
       cell: ({ row }) => <span className="font-mono text-[var(--text-primary)]">{row.original.assetNo}</span> },
     { id: 'cpk', header: `CPK (${activeCurrency}/km)`, accessorFn: r => r.cpk ?? undefined, sortUndefined: 'last', size: 130, meta: { align: 'right', exportValue: r => r.cpk == null ? 'N/A' : r.cpk.toFixed(4) },
       cell: ({ row }) => <BandText value={row.original.cpk} band={row.original.cpkBand}>{row.original.cpk?.toFixed(4)}</BandText> },
-    { id: 'avgLifeKm', header: 'Avg Life', accessorFn: r => r.avgLifeKm ?? undefined, sortUndefined: 'last', size: 120, meta: { align: 'right', exportValue: r => fmtKm(r.avgLifeKm) },
+    { id: 'avgLifeKm', header: 'Avg tyre lifetime', accessorFn: r => r.avgLifeKm ?? undefined, sortUndefined: 'last', size: 120, meta: { align: 'right', exportValue: r => fmtKm(r.avgLifeKm) },
       cell: ({ row }) => <span className="tabular-nums text-[var(--text-secondary)]">{fmtKm(row.original.avgLifeKm)}</span> },
     { id: 'totalCost', header: `Tyre spend (grid, ${activeCurrency})`, accessorFn: r => r.totalCost ?? undefined, sortUndefined: 'last', size: 170, meta: { align: 'right', exportValue: r => r.totalCost == null ? 'N/A' : Math.round(r.totalCost) },
       cell: ({ row }) => <span className="tabular-nums text-[var(--text-secondary)]">{row.original.totalCost == null ? 'Not in grid' : Math.round(row.original.totalCost).toLocaleString()}</span> },
     { id: 'failurePct', header: 'Fail % (rated)', accessorFn: r => r.failurePct ?? undefined, sortUndefined: 'last', size: 120, meta: { align: 'right', exportValue: r => fmtPct(r.failurePct) },
       cell: ({ row }) => <BandText value={row.original.failurePct} band={lowerIsBetterPctStatus(row.original.failurePct, 15, 30)}>{fmtPct(row.original.failurePct)}</BandText> },
-    { id: 'records', header: 'Records', accessorFn: r => r.records, size: 90, meta: { align: 'right' } },
+    { id: 'records', header: 'Fitments', accessorFn: r => r.records, size: 90, meta: { align: 'right' } },
   ], [activeCurrency])
 
   const brandColumns = useMemo(() => [

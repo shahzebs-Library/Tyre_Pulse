@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getDurationEstimate } from '../../lib/api/workforceAssignments'
-import { formatMinutes } from '../../lib/workforceEstimate'
+import { formatMinutes, MIN_SAMPLES } from '../../lib/workforceEstimate'
 import { useLanguage } from '../../contexts/LanguageContext'
 
 const CONFIDENCE_KEY = { high: 'workforce.estimatePanel.confidenceHigh', medium: 'workforce.estimatePanel.confidenceMedium', low: 'workforce.estimatePanel.confidenceLow' }
@@ -46,9 +46,12 @@ export default function EstimatePanel({ taskType, vehicleType, role, onUse }) {
           <span className="text-xs rounded-full border border-[var(--input-border)] px-2 py-0.5">{CONFIDENCE_KEY[e.confidence] ? t(CONFIDENCE_KEY[e.confidence]) : e.confidence}</span>
           {onUse && <button type="button" className="btn-secondary" onClick={() => onUse(Math.round(e.medianMinutes))}>{t('workforce.estimatePanel.use', { minutes: Math.round(e.medianMinutes) })}</button>}
         </div>
-        <p className="text-xs text-[var(--text-muted)] mt-1">{e.message} {t('workforce.estimatePanel.activeOnly')}</p>
+        <p className="text-xs text-[var(--text-muted)] mt-1">{t('workforce.estimatePanel.detail', { median: formatMinutes(e.medianMinutes), low: formatMinutes(e.lowMinutes), high: formatMinutes(e.highMinutes), n: e.sampleSize, basis: e.tier ? t(`workforce.estimatePanel.tier.${e.tier}`) : e.basis })}{e.confidence === 'low' ? ` ${t('workforce.estimatePanel.lowNote')}` : ''} {t('workforce.estimatePanel.activeOnly')}</p>
       </div>
     )
   }
-  return <p className={`${box} text-[var(--text-muted)]`} role="status">{e.message}</p>
+  const text = e.status === 'insufficient' ? t('workforce.estimatePanel.insufficient', { n: e.sampleSize ?? 0, min: MIN_SAMPLES })
+    : e.status === 'no_task_type' ? t('workforce.estimatePanel.noTaskType')
+      : e.status === 'unavailable' ? t('workforce.estimatePanel.unavailable') : e.message
+  return <p className={`${box} text-[var(--text-muted)]`} role="status">{text}</p>
 }

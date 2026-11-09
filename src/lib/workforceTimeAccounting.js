@@ -107,7 +107,7 @@ export function accountDay ({ entries = [], shiftStart = null, shiftEnd = null, 
     if (v.to > start) kept.push({ ...v, start, end: v.to })
     if (v.to > claimedUntil) { claimedUntil = v.to; owner = v }
   }
-  for (const o of overlaps) warnings.push({ type: 'overlap', index: o.index, id: o.id, message: `Overlaps another activity by ${o.minutes} min; counted once` })
+  for (const o of overlaps) warnings.push({ type: 'overlap', index: o.index, id: o.id, minutes: o.minutes, message: `Overlaps another activity by ${o.minutes} min; counted once` })
 
   const minutes = emptyMinutes()
   let recordedMs = 0; let inShiftMs = 0; let linkedMs = 0; let linkedActiveMs = 0
@@ -128,14 +128,14 @@ export function accountDay ({ entries = [], shiftStart = null, shiftEnd = null, 
     if (minutes[k] === null) { groups[meta.group] = null; continue }
     if (groups[meta.group] !== null) groups[meta.group] = round(groups[meta.group] + minutes[k])
   }
-  if (notRecordedMs > 0) warnings.push({ type: 'not_recorded', message: `${round(mins(notRecordedMs))} min of the shift has no recorded activity (unknown, not idle)` })
+  if (notRecordedMs > 0) warnings.push({ type: 'not_recorded', minutes: round(mins(notRecordedMs)), message: `${round(mins(notRecordedMs))} min of the shift has no recorded activity (unknown, not idle)` })
 
   let assignmentVariance = null
   if (assignmentsActiveMinutes !== null && assignmentsActiveMinutes !== undefined) {
     if (typeof assignmentsActiveMinutes === 'number' && Number.isFinite(assignmentsActiveMinutes) && assignmentsActiveMinutes >= 0) {
       assignmentVariance = round(mins(linkedActiveMs) - assignmentsActiveMinutes)
       if (Math.abs(assignmentVariance) > ASSIGNMENT_VARIANCE_TOLERANCE_MINUTES) {
-        warnings.push({ type: 'assignment_time_mismatch', message: `Recorded work on assignments differs from assignment progress by ${assignmentVariance} min` })
+        warnings.push({ type: 'assignment_time_mismatch', minutes: assignmentVariance, message: `Recorded work on assignments differs from assignment progress by ${assignmentVariance} min` })
       }
     } else warnings.push({ type: 'invalid_assignment_minutes', message: 'Assignment minutes must be a non-negative number' })
   }

@@ -1,5 +1,5 @@
 import {supabase,unwrap,ServiceError,fetchAllPages,isMissingColumn,isNotProvisioned,toServiceError} from './_client'
-import {TRANSITIONS,reasonMessage,BLOCK_REASONS} from '../workforceTransitions'
+import {TRANSITIONS,reasonMessage,BLOCK_REASONS,NOT_INSTALLED} from '../workforceTransitions'
 import {pickEstimate} from '../workforceEstimate'
 export const BASE_COLUMNS='id,organisation_id,assigned_to,assigned_by,title,instructions,site,priority,status,due_at,estimated_minutes,source_module,source_record_id,created_at,updated_at'
 export const CLASSIFIED_COLUMNS=BASE_COLUMNS+',task_type,vehicle_type,assignee_role'
@@ -29,7 +29,7 @@ export async function listWorkforceAssignments({mine=false,status=null,limit=300
  rows.total=total
  return rows
 }
-export const NOT_INSTALLED='Team work tracking needs the latest database update before it can record work. Ask an administrator to apply it.'
+export {NOT_INSTALLED}
 /** Whole-dataset counts from the server (never a client tally of one page). */
 export async function getBoardSummary({from=null,to=null,site=null}={}){
  try{return unwrap(await supabase.rpc('workforce_board_summary',{p_from:from||null,p_to:to||null,p_site:site||null}))}

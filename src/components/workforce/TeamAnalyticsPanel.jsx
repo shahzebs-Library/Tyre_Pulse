@@ -6,7 +6,7 @@ import EnterpriseTable from '../ui/EnterpriseTable'
 import { getTeamAnalytics } from '../../lib/api/workforceAnalyticsServer'
 import { NOT_INSTALLED } from '../../lib/api/workforceAssignments'
 import { exportSheetsToExcel, reportFileName } from '../../lib/exportUtils'
-import { toUserMessage } from '../../lib/safeError'
+import { workforceErrorText } from '../../lib/workforceErrorText'
 import { useLanguage } from '../../contexts/LanguageContext'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
@@ -71,7 +71,7 @@ export default function TeamAnalyticsPanel ({ employeeById }) {
       setData(await getTeamAnalytics({ from: applied.from || null, to: applied.to || null, site: applied.site || null }))
     } catch (e) {
       setData(null)
-      setError(e?.message === NOT_INSTALLED ? { notInstalled: true, message: NOT_INSTALLED } : { message: toUserMessage(e, t('workforce.analytics.loadFailed')) })
+      setError(e?.message === NOT_INSTALLED ? { notInstalled: true, message: t('workforce.errors.notInstalled') } : { message: workforceErrorText(e, t, t('workforce.analytics.loadFailed')) })
     } finally { setLoading(false) }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- t only labels the fallback message
   }, [applied])
@@ -165,7 +165,7 @@ export default function TeamAnalyticsPanel ({ employeeById }) {
         meta: applied.site ? { [t('workforce.analytics.metaSite')]: applied.site } : undefined,
       })
     } catch (e) {
-      setError({ message: toUserMessage(e, t('workforce.analytics.exportFailed')) })
+      setError({ message: workforceErrorText(e, t, t('workforce.analytics.exportFailed')) })
     } finally { setExporting(false) }
   }
 

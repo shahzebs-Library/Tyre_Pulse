@@ -7,11 +7,12 @@ import EnterpriseTable from '../components/ui/EnterpriseTable'
 import {useAuth} from '../contexts/AuthContext'
 import {useLanguage} from '../contexts/LanguageContext'
 import {useSettings} from '../contexts/SettingsContext'
+import {workforceErrorText,dayWarningText,qualificationReason} from '../lib/workforceErrorText'
 import {estimateWork} from '../lib/workforceIntelligence'
 import {workforceBoardKpis,assignmentStatusSeries} from '../lib/workforceAnalytics'
 import {employeeLabel,findAssignableEmployees} from '../lib/workforceEmployeeDirectory'
 import {filterAssignments,ASSIGNMENT_STATUSES,ASSIGNMENT_PRIORITIES} from '../lib/workforceAssignmentFilter'
-import {listWorkforceAssignments,listWorkforceAssignmentsPage,getBoardSummary,assignWork,listAssignableEmployees,transitionAssignment,listWorkDependencies,addWorkDependency,listWorkStandards,addWorkStandard,qualificationReasonText} from '../lib/api/workforceAssignments'
+import {listWorkforceAssignments,listWorkforceAssignmentsPage,getBoardSummary,assignWork,listAssignableEmployees,transitionAssignment,listWorkDependencies,addWorkDependency,listWorkStandards,addWorkStandard} from '../lib/api/workforceAssignments'
 import AssigneeRecommendations from '../components/workforce/AssigneeRecommendations'
 import StockReadiness from '../components/workforce/StockReadiness'
 import AssignmentDetailDrawer from '../components/workforce/AssignmentDetailDrawer'
@@ -83,8 +84,8 @@ export default function WorkforceDailyWork(){
    setWork(rows);setWorkTotal(Number.isFinite(rows.total)?rows.total:rows.length);setWorkPage(0)
    if(isManager){setQueue(await listReviewQueue());setEmployees(await listAssignableEmployees());setDependencies(await listWorkDependencies());setStandards(await listWorkStandards())}
    // Tiles count the whole visible dataset on the server; a failure is shown, never replaced by a page tally.
-   try{setSummaryKpi(await getBoardSummary());setSummaryError('')}catch(e){setSummaryKpi(null);setSummaryError(e.message||t('workforce.board.totalsUnavailableFallback'))}
-  }catch(e){setError(e.message||t('workforce.page.loadFailed'))}finally{setLoading(false)}
+   try{setSummaryKpi(await getBoardSummary());setSummaryError('')}catch(e){setSummaryKpi(null);setSummaryError(workforceErrorText(e,t,t('workforce.board.totalsUnavailableFallback')))}
+  }catch(e){setError(workforceErrorText(e,t,t('workforce.page.loadFailed')))}finally{setLoading(false)}
  // eslint-disable-next-line react-hooks/exhaustive-deps -- t only labels fallback messages
  },[date,isManager])
  useEffect(()=>{load()},[load])
@@ -93,7 +94,7 @@ export default function WorkforceDailyWork(){
   const b=summaryKpi.by_status||{}
   return {assigned:b.assigned||0,active:b.in_progress||0,blocked:b.blocked||0,pending_verification:b.submitted||0,verified:b.verified||0,overdue:summaryKpi.overdue||0}
  },[summaryKpi,work,queue])
- const loadMore=async()=>{setLoadingMore(true);try{const next=workPage+1;const {rows,total}=await listWorkforceAssignmentsPage({mine:!isManager,page:next,pageSize:200});setWork(w=>{const seen=new Set(w.map(x=>x.id));return [...w,...rows.filter(r=>!seen.has(r.id))]});setWorkTotal(total);setWorkPage(next)}catch(e){setError(e.message||t('workforce.board.loadMoreFailed'))}finally{setLoadingMore(false)}}
+ const loadMore=async()=>{setLoadingMore(true);try{const next=workPage+1;const {rows,total}=await listWorkforceAssignmentsPage({mine:!isManager,page:next,pageSize:200});setWork(w=>{const seen=new Set(w.map(x=>x.id));return [...w,...rows.filter(r=>!seen.has(r.id))]});setWorkTotal(total);setWorkPage(next)}catch(e){setError(workforceErrorText(e,t,t('workforce.board.loadMoreFailed')))}finally{setLoadingMore(false)}}
  const detailItem=useMemo(()=>work.find(w=>w.id===detailId)||null,[work,detailId])
  const designationOptions=useMemo(()=>[...new Set(employees.map(p=>p.role).filter(Boolean))].sort(),[employees])
  const selectableEmployees=useMemo(()=>findAssignableEmployees(employees,{search:employeeSearch,role:designationFilter}),[employees,employeeSearch,designationFilter])
@@ -113,7 +114,7 @@ export default function WorkforceDailyWork(){
  const editable=!record.report||['draft','returned'].includes(record.report.status)
  const durationByCategory=useMemo(()=>categories.map(c=>Math.round(day?.minutes?.[c]??entries.filter(e=>e.category===c).reduce((n,e)=>n+Math.max(0,(Date.parse(e.ended_at)-Date.parse(e.started_at))/60000),0))),[entries,day])
  const durationChart=useMemo(()=>({labels:categories.map(catLabel),datasets:[{label:t('workforce.myDay.chartRecordedMinutes'),data:durationByCategory,backgroundColor:'rgba(32,150,110,0.72)',borderRadius:5}]}),[durationByCategory,t])// eslint-disable-line react-hooks/exhaustive-deps
- async function run(fn){setSaving(true);setError('');setNotice('');try{await fn();await load();setNotice(t('workforce.page.saved'))}catch(e){setError(e.message||t('workforce.page.operationFailed'))}finally{setSaving(false)}}
+ async function run(fn){setSaving(true);setError('');setNotice('');try{await fn();await load();setNotice(t('workforce.page.saved'))}catch(e){setError(workforceErrorText(e,t,t('workforce.page.operationFailed')))}finally{setSaving(false)}}
  const columns=useMemo(()=>[
   {accessorKey:'title',header:t('workforce.columns.activity'),size:240},
   {id:'category',header:t('workforce.columns.type'),accessorFn:e=>e.correction_count?t('workforce.columns.corrected',{label:catLabel(e.category),count:e.correction_count}):catLabel(e.category),size:150},
@@ -134,7 +135,7 @@ export default function WorkforceDailyWork(){
  {id:'action',header:t('workforce.columns.nextStep'),enableSorting:false,cell:({row})=><div className="flex flex-wrap gap-2 items-center"><AssignmentActions item={row.original} currentUserId={profile?.id} isManager={isManager} disabled={saving} onAct={(it,action,note,reasonCode)=>run(()=>transitionAssignment(it.id,action,{note,reasonCode}))}/><button type="button" className="btn-secondary" onClick={()=>setDetailId(row.original.id)}>{t('workforce.page.details')}</button></div>},
  // eslint-disable-next-line react-hooks/exhaustive-deps
  ],[employeeById,saving,profile?.id,isManager,t])
- const openReview=async id=>{setError('');try{const detail=await getDailyReportForReview(id);setReviewDetail(detail);setReviewEvidence(await listWorkEvidence(id))}catch(e){setError(e.message||t('workforce.page.openReportFailed'))}}
+ const openReview=async id=>{setError('');try{const detail=await getDailyReportForReview(id);setReviewDetail(detail);setReviewEvidence(await listWorkEvidence(id))}catch(e){setError(workforceErrorText(e,t,t('workforce.page.openReportFailed')))}}
  const reviewColumns=useMemo(()=>[
   {accessorKey:'employee_id',header:t('workforce.columns.employeeId'),size:200},
   {accessorKey:'work_date',header:t('workforce.columns.date'),size:120},
@@ -173,7 +174,7 @@ export default function WorkforceDailyWork(){
  <AssigneeRecommendations taskType={newWork.task_type} site={newWork.site} dueAt={newWork.due_at?new Date(newWork.due_at).toISOString():null} selectedId={newWork.assigned_to} onPick={r=>{setPicked(r);setNewWork(w=>({...w,assigned_to:r.profile_id,override_reason:''}))}}/>
  <label className="block text-sm">{t('workforce.assign.assignedEmployee')}<select className="input w-full" aria-label={t('workforce.assign.assignedEmployee')} required value={newWork.assigned_to} onChange={e=>{setPicked(null);setNewWork(w=>({...w,assigned_to:e.target.value}))}}><option value="">{t('workforce.assign.chooseEmployee',{count:selectableEmployees.length})}</option>{selectableEmployees.map(p=><option key={p.id} value={p.id}>{employeeLabel(p)}</option>)}{selectedEmployee&&!selectableEmployees.some(p=>p.id===selectedEmployee.id)&&<option value={selectedEmployee.id}>{t('workforce.assign.outsideFilter',{name:employeeLabel(selectedEmployee)})}</option>}</select></label>
  {selectedEmployee?<div className="rounded-lg bg-[var(--panel)] border border-[var(--input-border)] px-3 py-2 text-sm"><strong>{t('workforce.assign.selected')}</strong> {employeeLabel(selectedEmployee)}</div>:<p className="text-xs text-[var(--text-muted)]">{selectableEmployees.length===0?t('workforce.assign.noMatchingEmployee'):t('workforce.assign.selectOne')}</p>}
- {picked&&!picked.qualified&&!picked.safety_blocked?<label className="block text-sm">{t('workforce.assign.overrideWithGaps',{gaps:picked.reasons.map(qualificationReasonText).join(', ')})}<input className="input w-full" required minLength={5} value={newWork.override_reason} onChange={e=>setNewWork(w=>({...w,override_reason:e.target.value}))}/></label>
+ {picked&&!picked.qualified&&!picked.safety_blocked?<label className="block text-sm">{t('workforce.assign.overrideWithGaps',{gaps:picked.reasons.map(c=>qualificationReason(c,t)).join(', ')})}<input className="input w-full" required minLength={5} value={newWork.override_reason} onChange={e=>setNewWork(w=>({...w,override_reason:e.target.value}))}/></label>
  :!picked&&<label className="block text-sm">{t('workforce.assign.overrideOptional')}<input className="input w-full" placeholder={t('workforce.assign.overridePlaceholder')} value={newWork.override_reason} onChange={e=>setNewWork(w=>({...w,override_reason:e.target.value}))}/></label>}
  <label className="block text-sm">{t('workforce.assign.supporting')}<select multiple className="input w-full h-24" aria-label={t('workforce.assign.supporting')} value={newWork.supporting_employee_ids} onChange={e=>setNewWork(w=>({...w,supporting_employee_ids:[...e.target.selectedOptions].map(o=>o.value).filter(v=>v!==w.assigned_to)}))}>{employees.filter(p=>p.id!==newWork.assigned_to).map(p=><option key={p.id} value={p.id}>{employeeLabel(p)}</option>)}</select></label>
  </fieldset>
@@ -235,7 +236,7 @@ export default function WorkforceDailyWork(){
  <label className="text-xs">{t('workforce.reviews.finish')}<input type="datetime-local" className="input w-full" required value={fix.ended_at} onChange={e=>setFix(f=>({...f,ended_at:e.target.value}))}/></label>
  <label className="text-xs">{t('workforce.reviews.reason')}<input className="input w-full" required minLength={5} value={fix.reason} onChange={e=>setFix(f=>({...f,reason:e.target.value}))}/></label>
  <div className="md:col-span-4 flex gap-2"><button className="btn-primary" disabled={saving}>{t('workforce.reviews.saveCorrection')}</button><button type="button" className="btn-secondary" onClick={()=>setFix(null)}>{t('workforce.reviews.cancel')}</button></div></form>}
- <div className="space-y-2">{reviewEvidence.map(file=><div key={file.id} className="flex items-center justify-between gap-2"><span className="text-sm">{file.file_name}</span><button type="button" className="btn-secondary" onClick={async()=>{try{window.open(await openWorkEvidence(file.object_path),'_blank','noopener,noreferrer')}catch(e){setError(e.message)}}}>{t('workforce.reviews.openEvidence')}</button></div>)}</div>
+ <div className="space-y-2">{reviewEvidence.map(file=><div key={file.id} className="flex items-center justify-between gap-2"><span className="text-sm">{file.file_name}</span><button type="button" className="btn-secondary" onClick={async()=>{try{window.open(await openWorkEvidence(file.object_path),'_blank','noopener,noreferrer')}catch(e){setError(workforceErrorText(e,t))}}}>{t('workforce.reviews.openEvidence')}</button></div>)}</div>
  <p className="text-xs text-[var(--text-muted)]">{t('workforce.reviews.checkNote')}</p>
  <div className="flex gap-2"><button type="button" className="btn-primary" disabled={saving} onClick={()=>run(async()=>{await reviewDailyReport(reviewDetail.report.id,'verified','Evidence and work activity reviewed');setReviewDetail(null)})}>{t('workforce.reviews.verify')}</button><button type="button" className="btn-secondary" disabled={saving} onClick={()=>{const reason=window.prompt(t('workforce.reviews.returnCorrectionPrompt'));if(reason?.trim())run(async()=>{await reviewDailyReport(reviewDetail.report.id,'returned',reason);setReviewDetail(null)})}}>{t('workforce.reviews.returnForCorrection')}</button></div>
  </section>}
@@ -248,7 +249,7 @@ export default function WorkforceDailyWork(){
   <Tile label={t('workforce.myDay.tileWaiting')} value={Math.round(blocked)} Icon={AlertTriangle}/>
  </div>
  <div className="card space-y-3"><h2 className="font-semibold">{t('workforce.myDay.distribution')}</h2><div className="h-56"><Bar data={durationChart} options={{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,title:{display:true,text:t('workforce.myDay.chartMinutes')}}}}}/></div><p className="text-xs text-[var(--text-muted)]">{t('workforce.myDay.distributionNote')}{day?.overlap_minutes?` ${t('workforce.myDay.overlap',{minutes:Math.round(day.overlap_minutes)})}`:''}</p>
- {day?.warnings?.length>0&&<ul role="status" className="text-xs text-amber-600 list-disc pl-5">{day.warnings.slice(0,6).map((w,i)=><li key={i}>{w.message}</li>)}</ul>}</div>
+ {day?.warnings?.length>0&&<ul role="status" className="text-xs text-amber-600 list-disc pl-5">{day.warnings.slice(0,6).map((w,i)=><li key={i}>{dayWarningText(w,t)}</li>)}</ul>}</div>
  <div className="card space-y-3">
   <div className="flex justify-between items-center gap-2"><div><h2 className="font-semibold">{t('workforce.myDay.timeline')}</h2><p className="text-sm text-[var(--text-muted)]">{t('workforce.myDay.timelineNote')}</p></div>
   {editable&&<button className="btn-primary flex items-center gap-2" type="button" onClick={()=>setShowForm(v=>!v)}><Plus size={16}/>{t('workforce.myDay.addActivity')}</button>}</div>
@@ -282,7 +283,7 @@ export default function WorkforceDailyWork(){
  </label>}
  {evidence.length?<div className="space-y-2">{evidence.map(file=><div key={file.id} className="flex items-center justify-between gap-2 border-b border-[var(--input-border)] py-2">
  <div className="min-w-0"><p className="text-sm truncate">{file.file_name}</p><p className="text-xs text-[var(--text-muted)]">{t('workforce.evidence.size',{size:(file.byte_size/1024).toFixed(1)})}</p></div>
- <button type="button" className="btn-secondary" onClick={async()=>{try{const url=await openWorkEvidence(file.object_path);window.open(url,'_blank','noopener,noreferrer')}catch(err){setError(err.message||t('workforce.page.openEvidenceFailed'))}}}>{t('workforce.evidence.view')}</button>
+ <button type="button" className="btn-secondary" onClick={async()=>{try{const url=await openWorkEvidence(file.object_path);window.open(url,'_blank','noopener,noreferrer')}catch(err){setError(workforceErrorText(err,t,t('workforce.page.openEvidenceFailed')))}}}>{t('workforce.evidence.view')}</button>
  </div>)}</div>:<p className="text-sm text-[var(--text-muted)]">{t('workforce.evidence.none')}</p>}
  </div>
  <div className="card space-y-3">

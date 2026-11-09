@@ -19,10 +19,14 @@ import {BLOCK_REASON_LABELS} from '../lib/workforceTransitions'
 import AssignmentActions from '../components/workforce/AssignmentActions'
 import EstimatePanel from '../components/workforce/EstimatePanel'
 import {listWorkEvidence,uploadWorkEvidence,openWorkEvidence} from '../lib/api/workforceEvidence'
-import {addDailyEntry,getMyDailyReport,getDailyReportForReview,ensureDailyReport,submitDailyReport,listReviewQueue,reviewDailyReport} from '../lib/api/workforceDaily'
+import {addDailyEntry,getMyDailyReport,getDailyReportForReview,ensureDailyReport,submitDailyReport,listReviewQueue,reviewDailyReport,correctDailyEntry,DAILY_ENTRY_CATEGORIES,DAILY_REASON_CATEGORIES} from '../lib/api/workforceDaily'
+import {accountDay,categoryLabel} from '../lib/workforceTimeAccounting'
 ChartJS.register(CategoryScale,LinearScale,BarElement,Tooltip,Legend)
 const dateNow=()=>new Date().toLocaleDateString('en-CA')
-const categories=['productive','coordination','reporting','training','break','blocked','unassigned']
+const categories=DAILY_ENTRY_CATEGORIES||['productive','coordination','reporting','training','break','blocked','unassigned']
+const reasonCats=DAILY_REASON_CATEGORIES||['blocked']
+const catLabel=c=>(typeof categoryLabel==='function'?categoryLabel(c):String(c).replace('_',' '))
+const newKey=()=>globalThis.crypto?.randomUUID?globalThis.crypto.randomUUID():`fix-${Date.now()}-${Math.random().toString(36).slice(2,10)}`
 const cleanDate=s=>String(s||'').slice(0,10)
 const dtForLocal=v=>v?new Date(v).toLocaleString(): 'N/A'
 function Tile({label,value,Icon}) {return <div className="card"><div className="flex items-center justify-between"><span className="text-xs text-[var(--text-muted)]">{label}</span><Icon size={17} className="text-[var(--accent)]"/></div><div className="text-3xl font-bold mt-2 tabular-nums">{value}</div></div>}
@@ -52,7 +56,8 @@ export default function WorkforceDailyWork(){
  const [tab,setTab]=useState('my-day')
  const [loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('')
  const [summary,setSummary]=useState(''),[nextActions,setNextActions]=useState('')
- const [form,setForm]=useState({title:'',details:'',deliverable:'',category:'productive',started_at:'',ended_at:'',blocked_reason:''})
+ const [form,setForm]=useState({title:'',details:'',deliverable:'',category:'productive',started_at:'',ended_at:'',blocked_reason:'',assignment_id:''})
+ const [fix,setFix]=useState(null)
  const [showForm,setShowForm]=useState(false)
  const [est,setEst]=useState({qty:'1',standard:'30',complexity:'1',delay:'0',actual:'45'})
  const estimate=useMemo(()=>{try{return estimateWork({quantity:Number(est.qty),standard_minutes:Number(est.standard),complexity_factor:Number(est.complexity),verified_external_delay_minutes:Number(est.delay),actual_elapsed_minutes:Number(est.actual),standard_approved:false})}catch{return null}},[est])
@@ -87,15 +92,18 @@ export default function WorkforceDailyWork(){
  const boardChart=useMemo(()=>({labels:assignmentStatusSeries(work).map(x=>x.status.replace('_',' ')),datasets:[{label:'Assignments',data:assignmentStatusSeries(work).map(x=>x.count),backgroundColor:'rgba(32,150,110,0.72)',borderRadius:5}]}),[work])
  const entries=record.entries
  const completed=entries.filter(e=>e.category==='productive').length
- const total=entries.reduce((n,e)=>n+Math.max(0,(Date.parse(e.ended_at)-Date.parse(e.started_at))/60000),0)
- const blocked=entries.filter(e=>e.category==='blocked').reduce((n,e)=>n+(Date.parse(e.ended_at)-Date.parse(e.started_at))/60000,0)
+ // One accounting engine: overlaps are counted once, invalid entries are excluded and listed.
+ const day=useMemo(()=>{try{return accountDay({entries})}catch{return null}},[entries])
+ const total=day?day.recorded_minutes:entries.reduce((n,e)=>n+Math.max(0,(Date.parse(e.ended_at)-Date.parse(e.started_at))/60000),0)
+ const blocked=day?(day.groups?.waiting??0):entries.filter(e=>e.category==='blocked').reduce((n,e)=>n+(Date.parse(e.ended_at)-Date.parse(e.started_at))/60000,0)
+ const openMine=useMemo(()=>work.filter(w=>w.assigned_to===profile?.id&&!['verified','cancelled'].includes(w.status)),[work,profile?.id])
  const editable=!record.report||['draft','returned'].includes(record.report.status)
- const durationByCategory=useMemo(()=>categories.map(c=>Math.round(entries.filter(e=>e.category===c).reduce((n,e)=>n+Math.max(0,(Date.parse(e.ended_at)-Date.parse(e.started_at))/60000),0))),[entries])
- const durationChart=useMemo(()=>({labels:categories.map(c=>c.replace('_',' ')),datasets:[{label:'Recorded minutes',data:durationByCategory,backgroundColor:'rgba(32,150,110,0.72)',borderRadius:5}]}),[durationByCategory])
+ const durationByCategory=useMemo(()=>categories.map(c=>Math.round(day?.minutes?.[c]??entries.filter(e=>e.category===c).reduce((n,e)=>n+Math.max(0,(Date.parse(e.ended_at)-Date.parse(e.started_at))/60000),0))),[entries,day])
+ const durationChart=useMemo(()=>({labels:categories.map(catLabel),datasets:[{label:'Recorded minutes',data:durationByCategory,backgroundColor:'rgba(32,150,110,0.72)',borderRadius:5}]}),[durationByCategory])
  async function run(fn){setSaving(true);setError('');setNotice('');try{await fn();await load();setNotice('Saved successfully')}catch(e){setError(e.message||'Operation failed')}finally{setSaving(false)}}
  const columns=useMemo(()=>[
   {accessorKey:'title',header:'Activity',size:240},
-  {accessorKey:'category',header:'Type',size:130},
+  {id:'category',header:'Type',accessorFn:e=>catLabel(e.category)+(e.correction_count?` (corrected x${e.correction_count})`:''),size:150},
   {id:'time',header:'Start / End',accessorFn:e=>`${dtForLocal(e.started_at)} to ${dtForLocal(e.ended_at)}`,size:230},
   {id:'minutes',header:'Minutes',accessorFn:e=>Math.round((Date.parse(e.ended_at)-Date.parse(e.started_at))/60000),size:90},
   {accessorKey:'deliverable',header:'Result / evidence',size:200},
@@ -202,7 +210,14 @@ export default function WorkforceDailyWork(){
  <p className="text-sm">Employee: {reviewDetail.report.employee_id} • Date: {reviewDetail.report.work_date} • Site: {reviewDetail.report.site||'Not specified'}</p>
  <p className="text-sm whitespace-pre-wrap">{reviewDetail.report.summary}</p>
  <h4 className="font-semibold">Verified activity evidence</h4>
- <EnterpriseTable columns={columns} data={reviewDetail.entries} emptyMessage="No report activity found."/>
+ <EnterpriseTable columns={[...columns,{id:'fix',header:'Correction',enableSorting:false,cell:({row})=>reviewDetail.report.employee_id!==profile?.id&&['submitted','returned'].includes(reviewDetail.report.status)?<button type="button" className="btn-secondary" onClick={()=>setFix({entry:row.original,key:newKey(),category:row.original.category,started_at:String(row.original.started_at||'').slice(0,16),ended_at:String(row.original.ended_at||'').slice(0,16),reason:''})}>Correct</button>:null}]} data={reviewDetail.entries} emptyMessage="No report activity found."/>
+ {fix&&<form className="grid grid-cols-1 md:grid-cols-4 gap-2 rounded-lg border border-[var(--input-border)] p-3" onSubmit={e=>{e.preventDefault();const patch={};if(fix.category!==fix.entry.category)patch.category=fix.category;const st=new Date(fix.started_at).toISOString(),en=new Date(fix.ended_at).toISOString();if(st!==new Date(fix.entry.started_at).toISOString())patch.started_at=st;if(en!==new Date(fix.entry.ended_at).toISOString())patch.ended_at=en;run(async()=>{await correctDailyEntry(fix.entry.id,patch,fix.reason,fix.key);setFix(null);setReviewDetail(await getDailyReportForReview(reviewDetail.report.id))})}}>
+ <p className="md:col-span-4 text-xs text-[var(--text-muted)]">Correcting "{fix.entry.title}". The original stays in the correction history with your name and reason.</p>
+ <label className="text-xs">Type<select className="input w-full" value={fix.category} onChange={e=>setFix(f=>({...f,category:e.target.value}))}>{categories.map(c=><option key={c} value={c}>{catLabel(c)}</option>)}</select></label>
+ <label className="text-xs">Start<input type="datetime-local" className="input w-full" required value={fix.started_at} onChange={e=>setFix(f=>({...f,started_at:e.target.value}))}/></label>
+ <label className="text-xs">Finish<input type="datetime-local" className="input w-full" required value={fix.ended_at} onChange={e=>setFix(f=>({...f,ended_at:e.target.value}))}/></label>
+ <label className="text-xs">Reason<input className="input w-full" required minLength={5} value={fix.reason} onChange={e=>setFix(f=>({...f,reason:e.target.value}))}/></label>
+ <div className="md:col-span-4 flex gap-2"><button className="btn-primary" disabled={saving}>Save correction</button><button type="button" className="btn-secondary" onClick={()=>setFix(null)}>Cancel</button></div></form>}
  <div className="space-y-2">{reviewEvidence.map(file=><div key={file.id} className="flex items-center justify-between gap-2"><span className="text-sm">{file.file_name}</span><button type="button" className="btn-secondary" onClick={async()=>{try{window.open(await openWorkEvidence(file.object_path),'_blank','noopener,noreferrer')}catch(e){setError(e.message)}}}>Open evidence</button></div>)}</div>
  <p className="text-xs text-[var(--text-muted)]">Check original tasks, actual duration, external blockers and documentation before verification.</p>
  <div className="flex gap-2"><button type="button" className="btn-primary" disabled={saving} onClick={()=>run(async()=>{await reviewDailyReport(reviewDetail.report.id,'verified','Evidence and work activity reviewed');setReviewDetail(null)})}>Verify report</button><button type="button" className="btn-secondary" disabled={saving} onClick={()=>{const reason=window.prompt('Explain why this report needs correction');if(reason?.trim())run(async()=>{await reviewDailyReport(reviewDetail.report.id,'returned',reason);setReviewDetail(null)})}}>Return for correction</button></div>
@@ -213,20 +228,22 @@ export default function WorkforceDailyWork(){
   <Tile label="Activities recorded" value={entries.length} Icon={ClipboardCheck}/>
   <Tile label="Direct work entries" value={completed} Icon={CheckCircle2}/>
   <Tile label="Recorded minutes" value={Math.round(total)} Icon={Clock}/>
-  <Tile label="Blocked minutes" value={Math.round(blocked)} Icon={AlertTriangle}/>
+  <Tile label="Waiting / blocked minutes" value={Math.round(blocked)} Icon={AlertTriangle}/>
  </div>
- <div className="card space-y-3"><h2 className="font-semibold">Recorded work distribution</h2><div className="h-56"><Bar data={durationChart} options={{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,title:{display:true,text:"Minutes"}}}}}/></div><p className="text-xs text-[var(--text-muted)]">Recorded activity only. No inferred productivity or unrecorded time included.</p></div>
+ <div className="card space-y-3"><h2 className="font-semibold">Recorded work distribution</h2><div className="h-56"><Bar data={durationChart} options={{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,title:{display:true,text:"Minutes"}}}}}/></div><p className="text-xs text-[var(--text-muted)]">Recorded activity only. Time nobody recorded is shown as not recorded, never as idle.{day?.overlap_minutes?` ${Math.round(day.overlap_minutes)} overlapping minutes were counted once.`:''}</p>
+ {day?.warnings?.length>0&&<ul role="status" className="text-xs text-amber-600 list-disc pl-5">{day.warnings.slice(0,6).map((w,i)=><li key={i}>{w.message}</li>)}</ul>}</div>
  <div className="card space-y-3">
   <div className="flex justify-between items-center gap-2"><div><h2 className="font-semibold">Activity timeline</h2><p className="text-sm text-[var(--text-muted)]">Actual timestamps and deliverables. Unrecorded time is not treated as idle.</p></div>
   {editable&&<button className="btn-primary flex items-center gap-2" type="button" onClick={()=>setShowForm(v=>!v)}><Plus size={16}/>Add activity</button>}</div>
-  {showForm&&editable&&<form className="grid grid-cols-1 md:grid-cols-2 gap-3 border rounded-xl p-3 border-[var(--input-border)]" onSubmit={e=>{e.preventDefault();run(async()=>{await addDailyEntry(date,{...form,started_at:new Date(form.started_at).toISOString(),ended_at:new Date(form.ended_at).toISOString(),site:profile?.site});setShowForm(false);setForm({title:'',details:'',deliverable:'',category:'productive',started_at:'',ended_at:'',blocked_reason:''})})}}>
+  {showForm&&editable&&<form className="grid grid-cols-1 md:grid-cols-2 gap-3 border rounded-xl p-3 border-[var(--input-border)]" onSubmit={e=>{e.preventDefault();run(async()=>{await addDailyEntry(date,{...form,assignment_id:form.assignment_id||null,started_at:new Date(form.started_at).toISOString(),ended_at:new Date(form.ended_at).toISOString(),site:profile?.site});setShowForm(false);setForm({title:'',details:'',deliverable:'',category:'productive',started_at:'',ended_at:'',blocked_reason:'',assignment_id:''})})}}>
   <label className="space-y-1 text-sm">Activity title<input required className="input w-full" value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))}/></label>
-  <label className="space-y-1 text-sm">Type<select className="input w-full" value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}>{categories.map(x=><option key={x} value={x}>{x}</option>)}</select></label>
+  <label className="space-y-1 text-sm">Type<select className="input w-full" value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}>{categories.map(x=><option key={x} value={x}>{catLabel(x)}</option>)}</select></label>
+  <label className="space-y-1 text-sm">Linked assignment (optional)<select className="input w-full" value={form.assignment_id} onChange={e=>setForm(f=>({...f,assignment_id:e.target.value}))}><option value="">Not linked</option>{openMine.map(w=><option key={w.id} value={w.id}>{w.title}{w.asset_no?` (${w.asset_no})`:''}</option>)}</select></label>
   <label className="space-y-1 text-sm">Start<input required type="datetime-local" className="input w-full" value={form.started_at} onChange={e=>setForm(f=>({...f,started_at:e.target.value}))}/></label>
   <label className="space-y-1 text-sm">Finish<input required type="datetime-local" className="input w-full" value={form.ended_at} onChange={e=>setForm(f=>({...f,ended_at:e.target.value}))}/></label>
   <label className="space-y-1 text-sm md:col-span-2">Details<textarea className="input w-full" value={form.details} onChange={e=>setForm(f=>({...f,details:e.target.value}))}/></label>
   <label className="space-y-1 text-sm">Deliverable or result<input className="input w-full" value={form.deliverable} onChange={e=>setForm(f=>({...f,deliverable:e.target.value}))}/></label>
-  {form.category==='blocked'&&<label className="space-y-1 text-sm">Blocker reason<input required className="input w-full" value={form.blocked_reason} onChange={e=>setForm(f=>({...f,blocked_reason:e.target.value}))}/></label>}
+  {reasonCats.includes(form.category)&&<label className="space-y-1 text-sm">{form.category==='blocked'?'Blocker reason':'What were you waiting for? (optional)'}<input required={form.category==='blocked'} className="input w-full" value={form.blocked_reason} onChange={e=>setForm(f=>({...f,blocked_reason:e.target.value}))}/></label>}
   <div className="md:col-span-2 flex gap-2"><button disabled={saving} className="btn-primary" type="submit">Save activity</button><button className="btn-secondary" type="button" onClick={()=>setShowForm(false)}>Cancel</button></div>
   </form>}
   <EnterpriseTable columns={columns} data={entries} loading={loading} emptyMessage="No activities recorded for this workday."/>

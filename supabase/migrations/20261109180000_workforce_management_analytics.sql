@@ -1,5 +1,5 @@
 -- Workforce management analytics (Phase 8): server-side team analytics over the COMPLETE visible dataset.
--- STATUS: AUTHORED, NOT APPLIED. Review with database-migration-safety before applying.
+-- STATUS: APPLIED LIVE 2026-11-09 (migration workforce_management_analytics).
 --
 -- Additive only: two read functions. No table, column, policy or data change.
 -- Both are SECURITY INVOKER, so RLS decides what each caller can see:

@@ -1,13 +1,13 @@
 -- Workforce operations core: employee records, task requirements, qualification-gated assignment,
 -- audited reassignment, operational-record linking, assignment evidence and a server-side board summary.
--- STATUS: AUTHORED. Additive; every workforce table this touches held 0 rows on 2026-11-09 (measured).
+-- STATUS: APPLIED LIVE 2026-11-09 (migration workforce_operations_core). Additive; every workforce table this touches held 0 rows on 2026-11-09 (measured).
 --
 -- What changes for existing behaviour (deliberately):
 --  * A status change on workforce_assignments is now accepted ONLY from the audited transition
 --    function. Direct UPDATE of status (the web "legacy" fallback, the Flutter advance() path) is refused,
 --    because it changed work state without an event row (untraceable work).
 --  * workforce_assignment_transition gains optional p_reason_code (blocker cause; NULL = not recorded). The old 5-arg signature is
---    dropped first so PostgREST never sees two overloads (42725). Named-argument callers are unaffected.
+--    renamed to workforce_assignment_transition_v1_retired (revoked) so PostgREST never sees two overloads (42725). Named-argument callers are unaffected.
 --  * 'complete' needs evidence when the task type requires it; 'verify' needs the linked operational
 --    record when the task type requires one, and a review note when technical review is required.
 --
@@ -379,7 +379,9 @@ CREATE POLICY workforce_assignment_files_insert ON storage.objects FOR INSERT TO
    AND a.id::text=(storage.foldername(name))[3] AND a.assigned_to=auth.uid() AND a.status IN ('acknowledged','in_progress','blocked')));
 
 -- 9. Transition: same contract as 20261023091000 plus reason codes and evidence/record/review gates.
-DROP FUNCTION IF EXISTS public.workforce_assignment_transition(uuid,text,text,text,timestamptz);
+-- The old 5-arg signature is retired by RENAME (not drop) so PostgREST sees exactly one function.
+ALTER FUNCTION public.workforce_assignment_transition(uuid,text,text,text,timestamptz) RENAME TO workforce_assignment_transition_v1_retired;
+REVOKE ALL ON FUNCTION public.workforce_assignment_transition_v1_retired(uuid,text,text,text,timestamptz) FROM PUBLIC,anon,authenticated;
 CREATE OR REPLACE FUNCTION public.workforce_assignment_transition(
  p_assignment_id uuid, p_action text, p_idempotency_key text,
  p_note text DEFAULT NULL, p_client_at timestamptz DEFAULT NULL, p_reason_code text DEFAULT NULL)

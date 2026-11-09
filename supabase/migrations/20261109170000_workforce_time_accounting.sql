@@ -1,7 +1,7 @@
 -- Workforce time & activity accounting: explainable daily time categories, server-side interval
 -- integrity across reports, assignment-linked activity, and authorised corrections that never
 -- overwrite the original record.
--- STATUS: AUTHORED, NOT YET APPLIED. Additive. workforce_daily_reports / workforce_daily_entries held
+-- STATUS: APPLIED LIVE 2026-11-09 (migration workforce_time_accounting). Additive. workforce_daily_reports / workforce_daily_entries held
 -- 0 rows on 2026-11-09 (measured), so the stricter guard cannot invalidate a stored row.
 --
 -- TIMEZONE RULE (load-bearing): every interval is a timestamptz instant. A report's work_date is a
@@ -177,8 +177,7 @@ BEGIN
  RETURN NEW;
 END $$;
 REVOKE ALL ON FUNCTION public.workforce_guard_daily_entry() FROM PUBLIC, anon, authenticated;
-DROP TRIGGER IF EXISTS workforce_entry_guard ON public.workforce_daily_entries;
-CREATE TRIGGER workforce_entry_guard BEFORE INSERT OR UPDATE ON public.workforce_daily_entries
+CREATE OR REPLACE TRIGGER workforce_entry_guard BEFORE INSERT OR UPDATE ON public.workforce_daily_entries
 FOR EACH ROW EXECUTE FUNCTION public.workforce_guard_daily_entry();
 
 -- 6. Authorised correction. Manager/Director/Admin only, never their own entries, report must be

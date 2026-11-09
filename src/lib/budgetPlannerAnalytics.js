@@ -18,6 +18,13 @@
  * averageCpk is the WEIGHTED lifetime CPK (total purchase cost / total tyre-km,
  * rule T8) of the tyres whose latest fitment is in the given rows; a tyre's km
  * spans all its fitments, not only the ones inside the year slice.
+ *
+ * SPEND SOURCE (Phase 2, rule T9): the fleet spend figures (monthly actuals, YTD,
+ * projection, quarters, historical trend, derived budget) come from the EXPENSE
+ * GRID tyre bucket via gridTyreSpend() over loadCostSplit's monthly series, ONE
+ * country at a time (rule T10). The tyre-record price is used only for the site
+ * and brand split and for CPK, and is labelled as such on the page. When the grid
+ * has no data for the scope the spend is null (N/A), never a tyre-record sum.
  */
 import {
   withOnePricePerTyre, toLifetimeTyres, tyreKey, weightedCpk, CPK_KIND, CPK_KIND_LABEL,
@@ -96,13 +103,50 @@ export function spendByYear(rows = []) {
   return map
 }
 
-/** Suggested annual budget: average of up to the last 3 prior years x growth. Null when no history. */
-export function derivedAnnualBudget(rows = [], selectedYear) {
-  const years = spendByYear(rows)
-  const prev = Object.keys(years).map(Number).filter((y) => y < selectedYear).sort((a, b) => a - b).slice(-3)
+/**
+ * Tyre spend from the expense grid's monthly series ([{ month:'YYYY-MM', tyre }],
+ * the shape loadCostSplit returns). A year is present only when at least one of its
+ * months carries spend: a zero-filled month before the data starts is "no data",
+ * not "spent nothing", and must not drag a history average down.
+ * @returns {{ byYear: Record<number, number>, byYearMonth: Record<number, number[]> }}
+ */
+export function gridTyreSpend(byMonth = []) {
+  const byYearMonth = {}
+  const seen = new Set()
+  for (const m of byMonth || []) {
+    const k = /^(\d{4})-(\d{2})/.exec(String(m?.month ?? ''))
+    if (!k) continue
+    const y = Number(k[1]); const mi = Number(k[2]) - 1
+    const v = Number(m.tyre)
+    if (!Number.isFinite(v) || mi < 0 || mi > 11) continue
+    if (!byYearMonth[y]) byYearMonth[y] = Array(12).fill(0)
+    byYearMonth[y][mi] += v
+    if (v !== 0) seen.add(y)
+  }
+  const byYear = {}
+  for (const y of seen) byYear[y] = byYearMonth[y].reduce((s, v) => s + v, 0)
+  return { byYear, byYearMonth }
+}
+
+/** Twelve monthly grid buckets for one year; null when the grid has nothing for that year. */
+export function gridMonthlyActuals(grid, year) {
+  if (!grid || !grid.byYearMonth) return null
+  const arr = grid.byYearMonth[year]
+  if (!arr || !(year in (grid.byYear || {}))) return null
+  return arr.slice()
+}
+
+/** Suggested annual budget from a { year: spend } map (up to 3 prior years x growth). */
+export function derivedAnnualBudgetFromYears(years = {}, selectedYear) {
+  const prev = Object.keys(years || {}).map(Number).filter((y) => y < selectedYear).sort((a, b) => a - b).slice(-3)
   if (!prev.length) return null
   const avg = prev.reduce((s, y) => s + years[y], 0) / prev.length
   return Math.round(avg * GROWTH_ASSUMPTION)
+}
+
+/** Suggested annual budget: average of up to the last 3 prior years x growth. Null when no history. */
+export function derivedAnnualBudget(rows = [], selectedYear) {
+  return derivedAnnualBudgetFromYears(spendByYear(rows), selectedYear)
 }
 
 /** Month index the YTD runs through: the live month for the current year, else December. */
@@ -115,6 +159,15 @@ export function ytdThroughMonth(selectedYear, currentYear, currentMonth) {
 /** Headline budget position. pctUsed / projection null when not measurable. */
 export function budgetPosition({ actuals = [], annualBudget = null, throughMonth = 11 }) {
   const monthsElapsed = throughMonth + 1
+  if (!Array.isArray(actuals)) {
+    // Spend unknown (no grid data for this scope): every spend-derived figure is N/A.
+    const hasB = Number.isFinite(annualBudget) && annualBudget > 0
+    const mb = hasB ? annualBudget / 12 : 0
+    return {
+      ytdActual: null, monthlyBudget: mb, ytdBudget: mb * Math.max(0, monthsElapsed),
+      monthsElapsed: Math.max(0, monthsElapsed), variance: null, pctUsed: null, projectedYearEnd: null,
+    }
+  }
   const ytdActual = monthsElapsed > 0 ? actuals.slice(0, monthsElapsed).reduce((s, v) => s + v, 0) : 0
   const hasBudget = Number.isFinite(annualBudget) && annualBudget > 0
   const monthlyBudget = hasBudget ? annualBudget / 12 : 0
@@ -218,7 +271,12 @@ export function linearRegression(values = []) {
 
 /** Last up-to-4 years of spend + a projection for the next one (null under 2 points). */
 export function historicalTrend(rows = []) {
-  const years = spendByYear(rows)
+  return historicalTrendFromYears(spendByYear(rows))
+}
+
+/** Same as historicalTrend over a { year: spend } map (e.g. gridTyreSpend().byYear). */
+export function historicalTrendFromYears(years = {}) {
+  years = years || {}
   const trendYears = Object.keys(years).map(Number).sort((a, b) => a - b).slice(-4)
   const trendValues = trendYears.map((y) => years[y] || 0)
   const nextYearProjection = trendValues.length < 2 ? null : Math.max(0, linearRegression(trendValues).predict(trendValues.length))
@@ -240,16 +298,17 @@ export function scenarioProjection({ projectedYearEnd, currentAvgCpk, cpkTarget,
 export function quarterSummary({ actuals = [], monthlyBudget = 0, selectedYear, currentYear, currentMonth }) {
   return [0, 1, 2, 3].map((q) => {
     const months = [q * 3, q * 3 + 1, q * 3 + 2]
-    const actual = months.reduce((s, m) => s + (actuals[m] || 0), 0)
+    const known = Array.isArray(actuals)
+    const actual = known ? months.reduce((s, m) => s + (actuals[m] || 0), 0) : null
     const budget = monthlyBudget * 3
-    const pct = budget > 0 ? (actual / budget) * 100 : null
+    const pct = budget > 0 && known ? (actual / budget) * 100 : null
     const isComplete = selectedYear < currentYear || (selectedYear === currentYear && months[2] <= currentMonth)
     const inProgress = selectedYear === currentYear && months.includes(currentMonth)
     let status
     if (pct !== null && pct > 100) status = 'Over'
     else if (pct !== null && pct >= WARNING_PCT) status = 'Warning'
     else status = isComplete ? 'Complete' : inProgress ? 'Active' : 'Pending'
-    return { label: `Q${q + 1}`, months, actual, budget, variance: budget > 0 ? budget - actual : null, pct, status, isComplete }
+    return { label: `Q${q + 1}`, months, actual, budget, variance: budget > 0 && known ? budget - actual : null, pct, status, isComplete }
   })
 }
 
@@ -263,12 +322,13 @@ export function cpkImprovementSaving(site, improvement = 0.15) {
 
 /** Monthly rows for the export workbook. */
 export function monthlyExportRows(actuals = [], monthlyBudget = 0) {
+  const known = Array.isArray(actuals)
   return MONTHS.map((m, i) => ({
     month: m,
     budget: Math.round(monthlyBudget),
-    actual: Math.round(actuals[i] || 0),
-    variance: monthlyBudget > 0 ? Math.round(monthlyBudget - (actuals[i] || 0)) : 'N/A',
-    used: monthlyBudget > 0 ? `${(((actuals[i] || 0) / monthlyBudget) * 100).toFixed(1)}%` : 'N/A',
+    actual: known ? Math.round(actuals[i] || 0) : 'N/A',
+    variance: monthlyBudget > 0 && known ? Math.round(monthlyBudget - (actuals[i] || 0)) : 'N/A',
+    used: monthlyBudget > 0 && known ? `${(((actuals[i] || 0) / monthlyBudget) * 100).toFixed(1)}%` : 'N/A',
   }))
 }
 

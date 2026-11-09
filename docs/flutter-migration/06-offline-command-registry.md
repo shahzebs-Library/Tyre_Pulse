@@ -227,3 +227,48 @@ follow-up if offline raising is wanted.
 The login screen's "Forgot password?" calls `request_password_reset` ONLINE
 ONLY (there is no signed-in user to queue it for). With no signal the dialog
 says the request could not be sent; nothing is queued.
+
+### 7.8 Company work assignments, My Work lane (added 2026-11-09)
+
+The workforce lane on the Tasks screen (artifact 01 section 2.15; server
+objects in artifact 02 section 7.11) has two write paths, and neither goes
+through `CommandRegistry`.
+
+| Module | Writes | Verdict | Why |
+|---|---|---|---|
+| Assignment status updates (accept, start, block, resume, complete) | RPC `workforce_assignment_transition(p_assignment_id, p_action, p_idempotency_key, p_note, p_client_at, p_reason_code)` | **QUEUED, in the feature's own durable per-user queue** (`data/workforce_transition_queue.dart` + `data/workforce_sync_engine.dart`), not a Drift command | A handful of taps per shift does not justify a new command in the closed registry enum, so the lane uses the same one-JSON-file-per-entry technique as the checklist approval decision queue (write to `.tmp`, rename = commit), partitioned by user id so a shared phone never sends one person's update under another session. The entry id is the idempotency key, generated once per tap and reused on every retry; a replayed key is success on the server. Updates for one assignment are sent strictly in tap order. Flush triggers: sign-in, app resume, connectivity regained, and the tap itself (single-flight per user) |
+| Assignment evidence (photo or PDF) | Upload to bucket `workforce-evidence` at `<organisation_id>/assignments/<assignment_id>/<stamp>.<ext>`, then INSERT into `workforce_assignment_evidence` | **ONLINE ONLY, never queued** | Queuing evidence needs a durable photo store with upload confirmation and edits to the shared sync wiring (`core/sync/command_registry.dart`, `sync_engine.dart`), which this feature may not touch. The Add evidence button is disabled while the lane is showing offline data and the panel says evidence needs a connection. Success is announced only after both the object and the row are stored |
+
+What the queued entry carries (`QueuedWorkforceTransition.toJson`): `id`,
+`userId`, `assignmentId`, `action`, `seq`, `createdAt`, `clientAt`,
+`baseStatus`, `note`, `status` (pending / rejected), `attempts`, `error`,
+`serverStatus`, `rejectionReason`, and, since 2026-11-09, `reasonCode` (the
+blocker cause, block updates only). Backward compatibility:
+
+1. **An entry written by an older build has no `reasonCode` key.** It parses as
+   "no cause" and replays WITHOUT `p_reason_code` (the parameter is omitted,
+   not sent as null), so it resolves against the argument set it was written
+   for; the server records the cause as NULL and reports it as "not recorded".
+   An unknown cause value is also read as "no cause" rather than making the
+   entry unreadable.
+2. **A new block always carries a cause.** The block dialog requires one of
+   `waiting_stock`, `waiting_equipment`, `vehicle_unavailable`, `safety_hold`,
+   `waiting_approval`, `waiting_manpower`, `other` AND a details note before it
+   enqueues anything.
+
+Refusals: the server's `reason` is stored on the entry, which becomes
+`rejected`, stays on screen in en/ar/ur and is never retried automatically;
+every later queued update for the same assignment is held as rejected
+("depends on a refused update") instead of being sent blind. The user retries
+or dismisses it. Mapped codes: `invalid_transition`, `not_found`,
+`forbidden`, `note_required`, `key_reuse`, `self_review`, `evidence_required`,
+`record_required`, `review_note_required`, `record_not_found`,
+`asset_mismatch`, `record_already_linked`, `record_type_mismatch`. Only
+`invalid_transition`, `not_found`, `forbidden`, `self_review` and `key_reuse`
+are terminal; `evidence_required` deliberately is not, because attaching
+evidence and retrying is the fix.
+
+**The direct status write is gone.** The repository's old online-only
+`advance()` (a plain `update({'status': ...})` on `workforce_assignments`) was
+removed, and since `20261109160000` the database refuses a direct status
+UPDATE for everyone (42501). The queue above is the only status write path.

@@ -67,7 +67,7 @@ export function createServer() {
     try {
       def = parseReportDefinition(req.body)
     } catch (err) {
-      return res.status(400).json({ error: 'invalid report definition', details: err.errors || String(err) })
+      return res.status(400).json({ error: 'invalid report definition', details: err.issues || String(err) })
     }
     try {
       const pdf = await renderPdf(def)

@@ -317,9 +317,10 @@ export function computeRemovalRate(records = [], fleetKmTotal) {
   const derived          = fleetKmTotal == null
   const totalRemovals    = derived ? valid.length : records.length
   const estimatedFleetKm = fleetKmTotal ?? valid.reduce((s, r) => s + _kmRun(r), 0)
+  // No measured distance means no rate: null, never 0 (0 reads as a perfect fleet).
   const removalPer1000Km = estimatedFleetKm > 0
     ? (totalRemovals / estimatedFleetKm) * 1000
-    : 0
+    : null
 
   return { removalPer1000Km, totalRemovals, estimatedFleetKm }
 }
@@ -613,7 +614,6 @@ export function computeRetreadPerformance(records = []) {
  * @returns {{ scrapRate, scrapCount, totalCount, estimatedScrapCost, bySite }}
  */
 export function computeScrapRate(records = [], scrapKmPct = 20, defaultCost = 0) {
-  const total  = records.length
   const valid  = records.filter(r => {
     const fit = Number(r.km_at_fitment)
     const rem = Number(r.km_at_removal)
@@ -622,15 +622,29 @@ export function computeScrapRate(records = [], scrapKmPct = 20, defaultCost = 0)
   const avgKm = _mean(valid.map(_kmRun))
   const kmThreshold = avgKm * (scrapKmPct / 100)
 
-  const scrapped = records.filter(r => {
+  // A tyre is scrapped when it is TAGGED Scrap (category), when the scrap action
+  // stamped it (status 'Scrapped' - scrap_tyre_by_serial and the bulk scrap both
+  // write status, never category), or a Critical premature removal. Reading
+  // category alone missed every live scrap: 0 rows carry category Scrap while 835
+  // rows carry status Scrapped (2026-11-09), so the rate read 0%.
+  const isScrap = (r) => {
     if (/scrap/i.test(String(r.category ?? ''))) return true
+    if (/^\s*scrap/i.test(String(r.status ?? ''))) return true
     if (r.risk_level === 'Critical') {
       const fit = Number(r.km_at_fitment)
       const rem = Number(r.km_at_removal)
       if (isFinite(fit) && isFinite(rem) && rem > fit && _kmRun(r) < kmThreshold) return true
     }
     return false
-  })
+  }
+  // Counted per PHYSICAL tyre: the scrap action stamps every row of a serial, so a
+  // refitted tyre would otherwise be counted once per fitment.
+  const physKey = (r, i) => (isStrongSerial(r.serial_no) ? _tyreKey(r) : `row:${r.id ?? i}`)
+  const keyed = records.map((r, i) => ({ r, k: physKey(r, i) }))
+  const allKeys = new Set(keyed.map(x => x.k))
+  const scrapKeys = new Set(keyed.filter(x => isScrap(x.r)).map(x => x.k))
+  const scrapped = records.filter(isScrap)
+  const total = allKeys.size
 
   // A scrapped physical tyre costs its purchase price once, wherever that price
   // sits in its fitment history (the scrapped row may be a refit with no price).
@@ -649,30 +663,25 @@ export function computeScrapRate(records = [], scrapKmPct = 20, defaultCost = 0)
     return s + (Number(r.cost_per_tyre) > 0 ? Number(r.cost_per_tyre) : defaultCost) * (Number(r.qty) || 1)
   }, 0)
 
-  const bySite = Object.entries(_groupBy(records, r => r.site ?? 'Unknown'))
+  const bySite = Object.entries(_groupBy(keyed, x => x.r.site ?? 'Unknown'))
     .map(([site, rows]) => {
-      const siteScrap = rows.filter(r => {
-        if (/scrap/i.test(String(r.category ?? ''))) return true
-        if (r.risk_level === 'Critical') {
-          const fit = Number(r.km_at_fitment)
-          const rem = Number(r.km_at_removal)
-          if (isFinite(fit) && isFinite(rem) && rem > fit && _kmRun(r) < kmThreshold) return true
-        }
-        return false
-      })
+      const siteAll = new Set(rows.map(x => x.k))
+      const siteScrap = new Set(rows.filter(x => isScrap(x.r)).map(x => x.k))
       return {
         site,
-        scrapRate:  rows.length > 0 ? siteScrap.length / rows.length : 0,
-        scrapCount: siteScrap.length,
-        count:      rows.length,
+        scrapRate:  siteAll.size > 0 ? siteScrap.size / siteAll.size : 0,
+        scrapCount: siteScrap.size,
+        count:      siteAll.size,
       }
     })
     .sort((a, b) => b.scrapRate - a.scrapRate)
 
   return {
-    scrapRate:          total > 0 ? scrapped.length / total : 0,
-    scrapCount:         scrapped.length,
+    scrapRate:          total > 0 ? scrapKeys.size / total : 0,
+    scrapCount:         scrapKeys.size,
     totalCount:         total,
+    scrapRows:          scrapped.length,
+    fitmentRows:        records.length,
     estimatedScrapCost,
     bySite,
   }
@@ -727,11 +736,15 @@ export function computeFleetAvailability(records = [], fleetSize = 0) {
     new Set(records.map(r => r.asset_no).filter(Boolean)).size,
     unavailableCount
   )
-  const availabilityPct = resolvedFleetSize > 0
+  // Availability is read off Critical risk ratings. When no tyre carries a rating
+  // (0 of 11,410 live rows on 2026-11-09) the old 100% was a claim the data cannot
+  // support: it is null (not measured) now, like computeFailureRate.
+  const ratedCount = records.filter(r => r.risk_level != null && String(r.risk_level).trim() !== '').length
+  const availabilityPct = ratedCount > 0 && resolvedFleetSize > 0
     ? ((resolvedFleetSize - unavailableCount) / resolvedFleetSize) * 100
-    : 100
+    : null
 
-  return { availabilityPct, unavailableCount, criticalVehicles, fleetSize: resolvedFleetSize }
+  return { availabilityPct, unavailableCount, criticalVehicles, fleetSize: resolvedFleetSize, ratedCount, measured: availabilityPct != null }
 }
 
 /**

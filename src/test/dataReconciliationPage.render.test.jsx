@@ -37,6 +37,7 @@ vi.mock('../components/reconciliation/TyreLifeCapSection', () => ({ default: () 
 vi.mock('../components/reconciliation/DataQualityScorecard', () => ({ default: () => null }))
 vi.mock('../components/reconciliation/AssetMasterSection', () => ({ default: () => null }))
 vi.mock('../components/reconciliation/DataTrustSection', () => ({ default: () => null }))
+vi.mock('../components/reconciliation/TyreEvidenceAuditSection', () => ({ default: () => null }))
 
 import DataReconciliation from '../pages/DataReconciliation'
 

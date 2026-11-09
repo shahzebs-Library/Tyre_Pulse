@@ -26,6 +26,13 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-11-09 — TYRE REPLACEMENT RECONCILE + REFIT PRICE FIX. Migration 20261109090000 APPLIED LIVE (owner ran it in the SQL editor; MCP apply_migration times out on its approval prompt). Branch claude/tyrepulse-inspector-build-7rxp2t, NOT merged.
+- ERP monthly tyre rows carry the NEW serial only. process_stg_monthly_tyres now calls `_tyre_close_replaced()` (DEFINER, not client-callable) before inserting a current fitment: closes the single active tyre on that wheel ONLY if different serial + earlier dated + no later wheel history; else row is NOT inserted and kept in stg_monthly_tyres_audit as `replacement_needs_review:<status>`. Removal km = new fitment km if real (>1, >= old fit km); total_km via tyre_km_life (placeholder/cap rules). Never marks scrap. Log + undo: tyre_replacement_log / tyre_replacement_undo(batch). In-app RPC tyre_import_reconcile(rows, country, dry_run) exists but erpIntake.js is NOT wired to it yet (next step; also order in-file chains per wheel).
+- WHY: guard_tyre_active_fitment skips when auth.uid() is null (all staging loads) -> latent double-active; in-app intake was refused 23505 and counted failed.
+- tyre_records_master_process: a stored km_at_fitment/removal 0 now survives UPDATE (INSERT still nulls 0). 141 rows carry 0.
+- tyre_price_backfill: 'comparable' rung skips a serial already priced on another row. 90 KSA refit estimates reverted (SAR 79,950), batch 69f4fdce-1af4-4596-a25c-80c84e3ab28f, undo = tyre_cost_correction_undo(batch). Old fn defs in _bak.fn_defs_20261109.
+- OPEN (owner decision): 135 KSA serials still priced on >1 row from ERP/own_jobcard evidence (could be real charged re-issues); 56 serials active on 2 assets; expense import_uid missing UAE 99.6% / Egypt 96% / KSA 10%. CPK/CPH + consumption audit not started.
+
 # ⚑ SESSION 2026-11-08 (evening) — OWNER ANSWERED THE 10 PENDING ITEMS; DONE LIVE (verified).
 - AI tyre inspection was ALREADY fully live: the 5 "AUTHORED, NOT APPLIED" migrations were applied 22/28 Oct and the edge fn
   v23 == repo (one escape-sequence diff). Their file headers are stale. 800 jobs completed, 8 failed.

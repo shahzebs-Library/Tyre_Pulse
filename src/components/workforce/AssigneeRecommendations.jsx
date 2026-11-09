@@ -15,7 +15,7 @@ export default function AssigneeRecommendations ({ taskType, site, dueAt, select
   const [error, setError] = useState('')
   useEffect(() => {
     let live = true
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       setState('loading'); setError('')
       try {
         const r = await recommendAssignees({ task_type: taskType || null, site: site || null, due_at: dueAt || null, limit: 8 })
@@ -23,7 +23,7 @@ export default function AssigneeRecommendations ({ taskType, site, dueAt, select
         setRows(r); setState(r === null ? 'unavailable' : 'ready')
       } catch (e) { if (live) { setError(toUserMessage(e, t('workforce.recommend.failed'))); setState('error') } }
     }, 350)
-    return () => { live = false; clearTimeout(t) }
+    return () => { live = false; clearTimeout(timer) }
   }, [taskType, site, dueAt])
 
   if (state === 'unavailable') return <p className="text-xs text-[var(--text-muted)]">{t('workforce.recommend.unavailable')}</p>

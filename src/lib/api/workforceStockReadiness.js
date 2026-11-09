@@ -12,9 +12,16 @@ export async function loadStockReadiness ({ assetNo, site, country } = {}) {
   const asset = String(assetNo ?? '').trim().toUpperCase()
   if (!asset) return { ok: true, result: null }
   try {
-    const tyres = await supabase.from('tyre_records').select('size,status,removal_date')
-      .eq('asset_no', asset).order('id', { ascending: true }).limit(200)
+    // Currently fitted tyres first, scoped to the selected country (an asset number can exist in
+    // more than one country). History is read only when nothing is fitted, newest first.
+    const tyreQuery = () => applyCountry(supabase.from('tyre_records').select('size,status,removal_date')
+      .eq('asset_no', asset), country)
+    let tyres = await tyreQuery().is('removal_date', null).order('id', { ascending: true }).limit(200)
     if (tyres.error) throw toServiceError(tyres.error, 'Could not read the asset tyres')
+    if (!assetSizeKeys(tyres.data || []).length) {
+      tyres = await tyreQuery().order('removal_date', { ascending: false, nullsFirst: false }).order('id', { ascending: false }).limit(200)
+      if (tyres.error) throw toServiceError(tyres.error, 'Could not read the asset tyres')
+    }
     const stock = await fetchAllPages((from, to) => applyCountry(
       supabase.from('stock_records').select(STOCK_COLS), country).order('id', { ascending: true }).range(from, to), { max: 5000 })
     if (stock.error) throw toServiceError(stock.error, 'Could not read stock')

@@ -441,8 +441,10 @@ export default function Inspections() {
         const boardEl = pdfBoardRef.current?.querySelector('.tb') || null
         const diagramBg = (await getDiagramBg().catch(() => '')) || '#000000'
         const aiJobs = await readInspectionAnalysis([pdfRow.id]).catch(() => [])
+        // Counted on inspection_date only; a row without one gets no ordinal
+        // (a fallback date would not line up with how history is counted).
         const inspectionNo = await inspectionsApi.countAssetInspections(pdfRow.asset_no, {
-          country: pdfRow.country, upTo: pdfRow.inspection_date || pdfRow.completed_date || pdfRow.scheduled_date,
+          country: pdfRow.country, upTo: pdfRow.inspection_date,
         })
         await exportInspectionDetailPdf(pdfRow, {
           branding: await brandingForPdf(branding), company, photos, lifeRows, svgEl, boardEl, diagramBg, inspectionNo,
@@ -1695,7 +1697,7 @@ export default function Inspections() {
             <div className="flex gap-2">
               <a
                 href={pdfBlobUrl}
-                download={`TyrePulse_Checklist_${clSaved?.asset_no || 'report'}.pdf`}
+                download={checklistReportFileName(clAsset || clSaved?.asset_no, clSite || clSaved?.site, clSaved?.inspection_date || clDate)}
                 className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
               >
                 <Download size={13} /> {t('inspections.pdfPreview.download')}

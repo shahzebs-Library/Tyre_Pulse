@@ -334,9 +334,10 @@ export async function countAssetInspections(assetNo, { country, upTo } = {}) {
   try {
     let q = supabase.from('inspections').select('id', { count: 'exact', head: true }).eq('asset_no', asset)
     if (country) q = q.eq('country', country)
+    // Without the inspection's own date its place in history is unknown.
     const day = String(upTo || '').slice(0, 10)
-    if (/^\d{4}-\d{2}-\d{2}$/.test(day)) q = q.lte('inspection_date', day)
-    const { count, error } = await q
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null
+    const { count, error } = await q.lte('inspection_date', day)
     if (error || !count) return null
     return count
   } catch {

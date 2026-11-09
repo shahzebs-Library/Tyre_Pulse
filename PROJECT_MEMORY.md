@@ -39,6 +39,16 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   computeCostTrend, computeScrapRate now one price per tyre / lifetime km (withOnePricePerTyre).
 - Business rules: docs/tyre/BUSINESS_RULES.md. Calc map: docs/tyre/CALCULATION_SOURCE_MAP.md - lifetime CPK is NOT end-to-end:
   all server CPK RPCs and ~40 web helpers are still per fitment row (listed there).
+- PR #472 OPEN, NOT merged. Codex review: 3 findings fixed live + resolved. tyre_close_rotations (DEFINER) now scopes each
+  candidate with app_can_see_country + app_can_see_site (KSA-only Manager sees 6 KSA, super admin 14); snapshots
+  hrs_at_removal/total_hrs for the undo; skips a serial whose latest position has two same-day rows (was paired twice).
+  Round trip tested: close 10 -> tyre_replacement_undo restored 10, register md5 identical. 0 rotation_close logs live.
+  computeScrapRate takes the purchase price from full history, once per tyre.
+- GOTCHA: a test DO block that ends in `raise exception` ROLLS BACK every statement sent in the same execute_sql call,
+  including a CREATE OR REPLACE before it. Apply in one call, test in another.
+- OPEN (owner): rerun migration rollback test (needs approval for its DROPs); run tyre_close_rotations for real (10);
+  merge #471 (report engine, green) and #472; lifetime CPK in server RPCs + ~40 helpers; branch attribution;
+  retreads/stock returns; fold tyreSerialCheck.js onto isStrongSerial.
 
 # ⚑ SESSION 2026-11-09 (later) — ONE TYRE ONE PRICE ONE WHEEL, ALL 3 COUNTRIES; EXPENSE KEYS; KSA COPIES REMOVED. Migrations 20261109100000..140000 APPLIED LIVE. PR #470.
 - 100000 (owner ran it): tyre_serial_is_strong, 12-arg _tyre_close_replaced (same-day = latest upload wins, older/backdated HELD),

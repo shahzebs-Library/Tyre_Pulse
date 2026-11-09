@@ -14,6 +14,12 @@
  */
 import { computeFailureRate } from './kpiEngine'
 import { searchRows, sortRows, buildExport } from './consoleTable'
+import { toLifetimeTyres, hasLifetimeCpk, weightedCpk, withOnePricePerTyre, fitmentKm, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
+
+/** The headline driver CPK is the physical tyre lifetime CPK (weighted). */
+export const DRIVER_CPK_KIND_LABEL = CPK_KIND_LABEL[CPK_KIND.TYRE_LIFETIME]
+/** The record table's CPK is ONE fitment's stint. */
+export const RECORD_CPK_KIND_LABEL = CPK_KIND_LABEL[CPK_KIND.PER_FITMENT]
 
 const RISK_CANON = { low: 'Low', medium: 'Medium', high: 'High', critical: 'Critical' }
 const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v))
@@ -42,31 +48,62 @@ export function tyreLife(r) {
   return d > 0 ? d : null
 }
 
+/** km of one fitment by the shared km rule; null when not measurable. */
+function fitmentLife(r) {
+  const k = fitmentKm(r)
+  return k != null && k > 0 ? k : null
+}
+
+/** Per-fitment CPK: this row's price / this stint's km. */
+function fitmentCpk(r) {
+  const c = num(r?.cost_per_tyre); const k = fitmentLife(r)
+  return c != null && c > 0 && k != null ? c / k : null
+}
+
 export function driverKey(r) {
   return (r?.driver_name ?? '').trim() || 'Unassigned'
 }
 
-/** Single-driver roll-up with honest nulls. */
-export function aggregateDriver(name, records = []) {
-  const cpks = []; const lives = []
-  let pricedCost = 0; let priced = 0; let highRisk = 0
-  for (const r of records) {
-    const c = num(r.cost_per_tyre)
-    if (c != null) { pricedCost += c * (num(r.qty) || 1); priced += 1 }
-    if (isHighRisk(r)) highRisk += 1
-    const cpk = calcCpk(r.cost_per_tyre, r.km_at_fitment, r.km_at_removal)
-    if (cpk != null && cpk > 0) cpks.push(cpk)
-    const life = tyreLife(r)
-    if (life != null) lives.push(life)
+/** Physical tyres grouped by the driver of their LATEST fitment (collapse first). */
+function tyresByDriver(records = []) {
+  const m = new Map()
+  for (const t of toLifetimeTyres(records)) {
+    const k = driverKey(t)
+    if (!m.has(k)) m.set(k, [])
+    m.get(k).push(t)
   }
+  return m
+}
+
+/**
+ * Single-driver roll-up with honest nulls.
+ * Money / life / CPK are per PHYSICAL tyre (rules T1/T8): price once, km summed
+ * over all fitments, weighted CPK. Pass `tyres` (the driver's lifetime tyres from
+ * the whole fleet read) so a tyre is attributed once to its latest driver; when
+ * omitted the given records are collapsed on their own.
+ * Risk / failure stay per fitment row (events).
+ */
+export function aggregateDriver(name, records = [], tyres = null) {
+  const own = tyres ?? toLifetimeTyres(records)
+  let pricedCost = 0; let priced = 0
+  for (const t of own) {
+    if ((num(t._cost) ?? 0) > 0) { pricedCost += t._cost * (t._qty || 1); priced += t._qty || 1 }
+  }
+  const measurable = own.filter(hasLifetimeCpk)
+  const lives = own.map((t) => num(t._life_km)).filter((v) => v != null && v > 0)
+  let highRisk = 0
+  for (const r of records) if (isHighRisk(r)) highRisk += 1
   const fr = computeFailureRate(records.map((r) => ({ ...r, risk_level: canonRisk(r.risk_level) })))
   return {
     name,
-    totalTyres: records.length,
+    totalTyres: own.reduce((s, t) => s + (t._qty || 1), 0),  // physical tyres
+    fitments: records.length,                                 // fitment rows (events)
     totalCost: priced ? pricedCost : null,
     pricedTyres: priced,
-    avgCpk: cpks.length ? cpks.reduce((s, v) => s + v, 0) / cpks.length : null,
-    cpkTyres: cpks.length,
+    avgCpk: measurable.length ? weightedCpk(measurable) : null,
+    cpkKind: CPK_KIND.TYRE_LIFETIME,
+    cpkTyres: measurable.length,
+    provisionalTyres: own.filter((t) => t._provisional).length,
     avgTyreLife: lives.length ? lives.reduce((s, v) => s + v, 0) / lives.length : null,
     lifeTyres: lives.length,
     failureRate: fr.failureRate == null ? null : fr.failureRate * 100,
@@ -80,7 +117,7 @@ export function aggregateDriver(name, records = []) {
  * Fleet-relative composite risk score + rank - the SAME formula as
  * DriverManagement (40% CPK percentile, 60% failure-rate percentile; drivers
  * with no CPK take the worst CPK percentile; failure ordering uses high-risk
- * tyres over all tyres, as DriverManagement does). Returns { riskScore, rank, driverCount } for the target.
+ * fitments over all fitments, as DriverManagement does). Returns { riskScore, rank, driverCount } for the target.
  */
 export function computeFleetRank(targetName, fleetRecords = []) {
   const map = new Map()
@@ -89,13 +126,15 @@ export function computeFleetRank(targetName, fleetRecords = []) {
     if (!map.has(nm)) map.set(nm, [])
     map.get(nm).push(r)
   }
-  const drivers = [...map.entries()].map(([nm, recs]) => aggregateDriver(nm, recs))
+  const tyreMap = tyresByDriver(fleetRecords)
+  for (const nm of tyreMap.keys()) if (!map.has(nm)) map.set(nm, [])
+  const drivers = [...map.entries()].map(([nm, recs]) => aggregateDriver(nm, recs, tyreMap.get(nm) || []))
   const withCpk = drivers.filter((d) => d.avgCpk != null).sort((a, b) => a.avgCpk - b.avgCpk)
   const noCpk = drivers.filter((d) => d.avgCpk == null)
   const cpkRanked = withCpk.map((d, i) => ({ ...d, cpkRank: (i / Math.max(withCpk.length - 1, 1)) * 100 }))
   const all = [...cpkRanked, ...noCpk.map((d) => ({ ...d, cpkRank: 100 }))]
-  // Ordering key mirrors DriverManagement exactly (high-risk / all tyres).
-  const orderRate = (d) => (d.totalTyres ? (d.highRiskCount / d.totalTyres) * 100 : 0)
+  // Ordering key mirrors DriverManagement exactly (high-risk / all fitments).
+  const orderRate = (d) => (d.fitments ? (d.highRiskCount / d.fitments) * 100 : 0)
   const byFailure = [...all].sort((a, b) => orderRate(a) - orderRate(b))
   const failRank = new Map(byFailure.map((d, i) => [d.name, (i / Math.max(byFailure.length - 1, 1)) * 100]))
   const scored = all.map((d) => ({ ...d, riskScore: Math.min(100, Math.round(d.cpkRank * 0.4 + (failRank.get(d.name) ?? 100) * 0.6)) }))
@@ -109,7 +148,7 @@ export function computeFleetRank(targetName, fleetRecords = []) {
 export function buildDriverView(driverName, fleetRecords = []) {
   const mine = fleetRecords.filter((r) => driverKey(r) === driverName)
   if (!mine.length) return null
-  const base = aggregateDriver(driverName, mine)
+  const base = aggregateDriver(driverName, mine, tyresByDriver(fleetRecords).get(driverName) || [])
   const ranked = computeFleetRank(driverName, fleetRecords)
   const hasEvidence = base.cpkTyres > 0 || base.ratedTyres > 0
   return {
@@ -130,12 +169,18 @@ export function performanceBadge(score) {
   return { label: 'Critical', tone: 'red' }
 }
 
+/**
+ * Record table rows. Each row IS one fitment, so its CPK is the PER-FITMENT CPK
+ * (one stint's cost / that stint's km by the shared km rule). A refit of the
+ * same physical tyre is not a second purchase (withOnePricePerTyre), so a refit
+ * row shows no cost and no per-fitment CPK.
+ */
 export function enrichRecords(records = []) {
-  return records.map((r) => ({
+  return withOnePricePerTyre(records).map((r) => ({
     ...r,
     _asset: r.asset_no ?? r.asset_number ?? null,
-    _cpk: calcCpk(r.cost_per_tyre, r.km_at_fitment, r.km_at_removal),
-    _life: tyreLife(r),
+    _cpk: fitmentCpk(r),
+    _life: fitmentLife(r),
     _risk: canonRisk(r.risk_level),
     _date: r.issue_date ? String(r.issue_date).slice(0, 10) : null,
   }))
@@ -179,8 +224,8 @@ export const RECORD_EXPORT_COLUMNS = [
   { key: 'site', header: 'Site' },
   { key: 'issue_date', header: 'Issue Date', value: (r) => r._date },
   { key: 'cost_per_tyre', header: 'Cost', value: (r) => num(r.cost_per_tyre) ?? 'N/A' },
-  { key: 'cpk', header: 'CPK', value: (r) => (r._cpk == null ? 'N/A' : Number(r._cpk.toFixed(4))) },
-  { key: 'life', header: 'Life (km)', value: (r) => r._life ?? 'N/A' },
+  { key: 'cpk', header: 'CPK (per fitment)', value: (r) => (r._cpk == null ? 'N/A' : Number(r._cpk.toFixed(4))) },
+  { key: 'life', header: 'Fitment km', value: (r) => r._life ?? 'N/A' },
   { key: 'risk', header: 'Risk Level', value: (r) => r._risk ?? 'Not rated' },
   { key: 'removal_reason', header: 'Removal Reason' },
 ]

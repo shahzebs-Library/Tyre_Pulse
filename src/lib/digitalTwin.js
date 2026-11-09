@@ -9,6 +9,7 @@
  */
 import { tyreAgeBand, tyreAgeYears } from './tyreAge'
 import { classifyPressure } from './tpms'
+import { toLifetimeTyres, tyreKey, lifetimeCpk, CPK_KIND } from './tyreLifetime'
 
 // Tread model (mm): a new commercial tyre starts ~20mm; ~1.6mm is the legal floor.
 export const NEW_TREAD_MM = 20
@@ -87,25 +88,43 @@ function blendHealth({ tread, age, pressure }) {
   return Math.round(score)
 }
 
-/** CPK for a record: lifetime cost / km. Null when km is absent/zero. */
-function cpkOf(r) {
-  const cost = num(r.cost_per_tyre)
-  const km = num(r.total_km)
-  if (cost == null || km == null || km <= 0) return null
-  return Math.round((cost / km) * 1000) / 1000
+/**
+ * Physical tyre lifetime CPK per fitment row: purchase price counted once and km
+ * summed over every fitment of the same tyre (src/lib/tyreLifetime.js; km by the
+ * shared rule). `history` = all fitment rows of these tyres (any asset); when it
+ * is not supplied the given rows are collapsed on their own.
+ */
+function lifetimeLookup(rows, history) {
+  const base = Array.isArray(history) && history.length ? history : rows
+  const norm = (r) => (r && !r.serial_no && serialOfRecord(r) ? { ...r, serial_no: serialOfRecord(r) } : r)
+  const byKey = new Map(toLifetimeTyres(base.map(norm)).map((t) => [t._key, t]))
+  return (r, i) => {
+    const key = tyreKey(norm(r), i)
+    const t = byKey.get(key)
+      // weak-serial rows are keyed by id: fall back to collapsing the row itself
+      || toLifetimeTyres([norm(r)])[0]
+    return t || null
+  }
+}
+
+function roundCpk(v) {
+  return v == null ? null : Math.round(v * 1000) / 1000
 }
 
 /**
  * @param {object[]} tyresOnAsset  in-service tyre_records rows for ONE asset
- * @param {{ now?: number|Date }} [opts]  injected clock for deterministic ages
+ * @param {{ now?: number|Date, history?: object[] }} [opts]  injected clock for deterministic ages;
+ *   history = every fitment row of these tyres so the CPK is the lifetime figure
  * @returns {object} twin: { asset_no, tyreCount, positions[], healthScore, worstPosition }
  */
-export function buildTwin(tyresOnAsset, { now } = {}) {
+export function buildTwin(tyresOnAsset, { now, history } = {}) {
   const rows = (Array.isArray(tyresOnAsset) ? tyresOnAsset : []).filter(Boolean)
+  const lifeOf = lifetimeLookup(rows, history)
   const asOf = now == null ? Date.now() : now
   const asset_no = assetOfRecord(rows.find((r) => assetOfRecord(r)) || rows[0] || {}) || null
 
-  const positions = rows.map((r) => {
+  const positions = rows.map((r, i) => {
+    const lt = lifeOf(r, i)
     const ageYears = tyreAgeYears(r, asOf)
     const ageBand = tyreAgeBand(r, asOf)
     const tread = num(r.tread_depth)
@@ -126,7 +145,9 @@ export function buildTwin(tyresOnAsset, { now } = {}) {
       pressure,
       ageBand,
       ageYears,
-      cpk: cpkOf(r),
+      cpk: roundCpk(lt ? lifetimeCpk(lt) : null),
+      cpkKind: CPK_KIND.TYRE_LIFETIME,
+      cpkProvisional: lt ? Boolean(lt._provisional) : true,
       health,
       signals,
     }

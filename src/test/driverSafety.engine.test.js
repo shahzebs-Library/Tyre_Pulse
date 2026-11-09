@@ -135,7 +135,9 @@ describe('driverSafety — driverTyreCorrelation', () => {
     expect(c.removals).toBe(0)
     expect(c.driverCausedRemovalRate).toBeNull()
     expect(c.prematureRemovalRate).toBeNull()
-    expect(c.driverCpk).toBeNull()
+    // Shared km rule (T7): total_km with no fitment km is a measured life, so the
+    // tyre has a lifetime CPK (1500 / 5000) even though it has no removal yet.
+    expect(c.driverCpk).toBeCloseTo(0.3, 3)
   })
   it('empty input → null median, empty drivers', () => {
     const r = driverTyreCorrelation([])

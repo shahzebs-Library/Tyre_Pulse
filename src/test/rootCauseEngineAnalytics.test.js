@@ -71,7 +71,9 @@ describe('aggregates', () => {
     expect(stats['Under Inflation'].totalCost).toBe(1000)
   })
   it('computes CPK only over priced records with a km life', () => {
-    expect(cpkOf([REC[0], REC[1]])).toBeCloseTo(2600 / 70000)
+    // Weighted per tyre-km: row 2 stands for 2 tyres (qty 2, no real serial), each
+    // running 20,000 km, so its km counts twice: (1000 + 1600) / (50000 + 2 x 20000).
+    expect(cpkOf([REC[0], REC[1]])).toBeCloseTo(2600 / 90000)
     expect(cpkOf([REC[2], REC[3]])).toBeNull()
   })
   it('summarises coverage and returns N/A on empty input', () => {

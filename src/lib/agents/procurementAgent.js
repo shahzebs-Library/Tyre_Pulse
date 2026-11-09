@@ -42,7 +42,7 @@ export async function runProcurementAgent(query, { records = [], site = null } =
   const failure = computeFailureRate(data)
 
   const brandLines = vendorRank.length
-    ? vendorRank.map((b) => `- ${b.brand}: CPK ${b.avgCpk?.toFixed?.(3) ?? 'N/A'}, records ${b.count ?? b.records ?? 'N/A'}`).join('\n')
+    ? vendorRank.map((b) => `- ${b.brand}: lifetime CPK ${b.avgCpk?.toFixed?.(3) ?? 'N/A'}, physical tyres ${b.count ?? b.records ?? 'N/A'}`).join('\n')
     : 'No brand-level records available (brand is blank on the loaded records).'
 
   const digest = [

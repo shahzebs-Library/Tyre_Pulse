@@ -91,10 +91,10 @@ export async function runTyreEngineerAgent(query, {
       ? `Worst site by failure rate: ${failureStats.bySite[0]?.site} (${(failureStats.bySite[0]?.rate * 100).toFixed(1)}%)`
       : '',
     worstAssets.length
-      ? `Worst vehicles by CPK: ${worstAssets.slice(0, 5).map(a => `${a.asset_no} (${a.avgCpk?.toFixed(3)})`).join(', ')}`
+      ? `Worst vehicles by lifetime tyre CPK (weighted): ${worstAssets.slice(0, 5).map(a => `${a.asset_no} (${a.avgCpk?.toFixed(3)})`).join(', ')}`
       : '',
     failureByBrand.length
-      ? `Brand CPK ranking: ${failureByBrand.map(b => `${b.brand} (${b.avgCpk?.toFixed(3)})`).join(', ')}`
+      ? `Brand lifetime CPK ranking (weighted): ${failureByBrand.map(b => `${b.brand} (${b.avgCpk?.toFixed(3)})`).join(', ')}`
       : '',
   ].filter(Boolean).join('\n')
 

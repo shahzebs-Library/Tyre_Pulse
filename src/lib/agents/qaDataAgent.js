@@ -5,6 +5,7 @@
 
 import { getCached, setCache } from '../ragService'
 import { callAiEdgeFunction } from './index'
+import { toLifetimeTyres } from '../tyreLifetime'
 
 const SYSTEM_PROMPT = `You are TyrePulse QA Data Agent - a senior data quality engineer specialising in fleet management data integrity.
 Your role: identify data quality issues, validate records, detect anomalies, and recommend corrections to improve data reliability.
@@ -19,9 +20,9 @@ For every data quality finding provide exactly this structure:
 
 Data quality rules for fleet tyre data:
 - Odometer at removal must be greater than odometer at fitment
-- Tyre life should be between 5,000 km and 350,000 km (flag outside this range)
+- One fitment's km should be between 5,000 km and 350,000 km (flag outside this range); tyre LIFE is the sum over all fitments of the physical tyre
 - Cost per tyre must be a positive number above 100 (flag zero or negative)
-- Duplicate serial numbers indicate fitment recording errors
+- A serial on several fitment rows is normally a REFIT of the same physical tyre (one tyre, one price, km summed); it is an error only when two fitments overlap in time
 - Missing removal dates with valid fitment dates suggest incomplete records
 - Same tyre serial appearing on two different vehicles simultaneously is a critical error
 - Risk levels must be one of: Low, Medium, High, Critical
@@ -64,11 +65,14 @@ export async function runQaDataAgent(query, { records = [] } = {}) {
     return !r.cost_per_tyre || !isFinite(cost) || cost <= 0
   })
 
-  // 4. Duplicate serial numbers
+  // 4. Serials on more than one fitment row. A repeated serial is usually a REFIT
+  //    (the same physical tyre fitted again) and only sometimes a double entry,
+  //    so it is reported as "repeated", not as a duplicate to delete.
   const serialCounts = {}
   records.forEach(r => {
-    if (r.tyre_serial && String(r.tyre_serial).trim()) {
-      const serial = String(r.tyre_serial).trim()
+    const raw = r.serial_no ?? r.tyre_serial
+    if (raw && String(raw).trim()) {
+      const serial = String(raw).trim()
       serialCounts[serial] = (serialCounts[serial] || 0) + 1
     }
   })
@@ -96,16 +100,15 @@ export async function runQaDataAgent(query, { records = [] } = {}) {
     return isFinite(cost) && cost > 0 && cost < 100
   })
 
-  // 10. Very short tyre life (< 5,000 km and NOT scrap category) - probable bad data
+  // 10. Fleet average tyre life per PHYSICAL tyre: km summed over every fitment
+  //     of the tyre by the shared km rule, mean over tyres with a measured life.
+  const lifetimeTyres = toLifetimeTyres(records.map(r => (r && !r.serial_no && r.tyre_serial ? { ...r, serial_no: r.tyre_serial } : r)))
   const avgLife = (() => {
-    const valid = records.filter(r => {
-      const fit = Number(r.km_at_fitment)
-      const rem = Number(r.km_at_removal)
-      return isFinite(fit) && isFinite(rem) && rem > fit
-    })
-    if (!valid.length) return 0
-    return valid.reduce((s, r) => s + (Number(r.km_at_removal) - Number(r.km_at_fitment)), 0) / valid.length
+    const lives = lifetimeTyres.map(t => Number(t._life_km)).filter(v => Number.isFinite(v) && v > 0)
+    if (!lives.length) return 0
+    return lives.reduce((s, v) => s + v, 0) / lives.length
   })()
+  const physicalTyres = lifetimeTyres.reduce((s, t) => s + (t._qty || 1), 0)
 
   const checks = {
     totalRecords:       records.length,
@@ -119,6 +122,7 @@ export async function runQaDataAgent(query, { records = [] } = {}) {
     invalidRiskLevel:   { count: invalidRiskLevel.length,   records: invalidRiskLevel.slice(0, 5) },
     suspiciouslyLowCost:{ count: suspiciouslyLowCost.length },
     avgTyreLifeKm:      avgLife,
+    physicalTyres,
   }
 
   const totalIssues =
@@ -136,7 +140,7 @@ export async function runQaDataAgent(query, { records = [] } = {}) {
 
   const summary = [
     `## Data Quality Report`,
-    `Total records analysed: ${records.length}`,
+    `Total fitment records analysed: ${records.length} (${physicalTyres} physical tyres)`,
     `Data quality score: ${dataQualityScore}%`,
     `Total issues found: ${totalIssues}`,
     ``,
@@ -144,16 +148,16 @@ export async function runQaDataAgent(query, { records = [] } = {}) {
     `- Invalid odometer readings (removal < fitment): ${checks.invalidOdometer.count}`,
     `- Unrealistic tyre life (< 5,000 km or > 350,000 km): ${checks.unrealisticLife.count}`,
     `- Missing or zero cost records: ${checks.missingCost.count}`,
-    `- Duplicate serial numbers: ${checks.duplicateSerials.count} serials (${duplicateSerials.reduce((s, d) => s + d.count - 1, 0)} extra records)`,
+    `- Serials on more than one fitment row (refits or double entries): ${checks.duplicateSerials.count} serials (${duplicateSerials.reduce((s, d) => s + d.count - 1, 0)} extra rows)`,
     `- Missing fitment date: ${checks.missingFitmentDate.count}`,
     `- Missing asset number: ${checks.missingAsset.count}`,
     `- Missing brand: ${checks.missingBrand.count}`,
     `- Invalid risk level values: ${checks.invalidRiskLevel.count}`,
     `- Suspiciously low cost (< 100): ${checks.suspiciouslyLowCost.count}`,
     ``,
-    `Fleet average tyre life: ${avgLife > 0 ? `${avgLife.toFixed(0)} km` : 'Cannot compute (insufficient valid data)'}`,
+    `Fleet average tyre life (per physical tyre, km summed over its fitments): ${avgLife > 0 ? `${avgLife.toFixed(0)} km` : 'Cannot compute (insufficient valid data)'}`,
     duplicateSerials.length > 0
-      ? `Top duplicate serials: ${duplicateSerials.slice(0, 5).map(d => `${d.serial} (${d.count}x)`).join(', ')}`
+      ? `Top repeated serials: ${duplicateSerials.slice(0, 5).map(d => `${d.serial} (${d.count}x)`).join(', ')}`
       : '',
   ].filter(s => s !== null).join('\n')
 

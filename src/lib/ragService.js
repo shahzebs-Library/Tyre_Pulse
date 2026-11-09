@@ -5,6 +5,50 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { supabase } from './supabase'
+import { toLifetimeTyres, weightedCpk, lifetimeSummary, withOnePricePerTyre, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
+
+/** tyre_changes carries the serial as tyre_serial; the lifetime layer reads serial_no. */
+const withSerial = (r) => (r && !r.serial_no && r.tyre_serial ? { ...r, serial_no: r.tyre_serial } : r)
+
+/**
+ * Tyre KPIs for the AI context, per PHYSICAL tyre (src/lib/tyreLifetime.js):
+ * purchase price counted once, km summed over every fitment by the shared km
+ * rule, CPK WEIGHTED (total cost / total tyre-km). Replacements / failures stay
+ * per fitment row (events). Coverage travels with the figure so the AI never
+ * states a CPK more confidently than the data supports.
+ * @param {Object[]} rows tyre change (fitment) rows
+ */
+export function summarizeTyreKpis(rows = []) {
+  const list = (rows || []).filter(Boolean).map(withSerial)
+  const tyres = toLifetimeTyres(list)
+  const sum = lifetimeSummary(tyres)
+  const lives = tyres.map(t => Number(t._life_km)).filter(v => Number.isFinite(v) && v > 0)
+  const priced = tyres.filter(t => (Number(t._cost) || 0) > 0)
+  const failureCount = list.filter(r => r.risk_level === 'High' || r.risk_level === 'Critical').length
+  return {
+    avgCpk: sum.measurable ? weightedCpk(tyres) : null,
+    cpkKind: CPK_KIND.TYRE_LIFETIME,
+    cpkKindLabel: CPK_KIND_LABEL[CPK_KIND.TYRE_LIFETIME],
+    avgLifeKm: lives.length ? lives.reduce((s, v) => s + v, 0) / lives.length : null,
+    totalTyreCost: priced.length ? priced.reduce((s, t) => s + t._cost * (t._qty || 1), 0) : null,
+    physicalTyres: tyres.reduce((s, t) => s + (t._qty || 1), 0),
+    measurableTyres: sum.measurable,
+    provisionalTyres: sum.provisional,
+    kmCoverage: sum.coverage,
+    estimatedShare: sum.estimatedShare,
+    totalReplacements: list.length,      // fitment rows (events)
+    failureCount,                        // per fitment row (events)
+    failureRate: list.length > 0 ? failureCount / list.length : 0,
+  }
+}
+
+/** One plain sentence stating which CPK this is and what it rests on. */
+export function describeCpkBasis(k) {
+  if (!k || k.avgCpk == null) return 'CPK: N/A (no physical tyre with both a price and a measured life)'
+  return `CPK is the ${k.cpkKindLabel ?? 'physical tyre lifetime CPK'}, weighted per tyre-km (each tyre priced once, km summed over its fitments): ` +
+    `${k.measurableTyres} of ${k.physicalTyres} tyres measurable, ${k.provisionalTyres} provisional (still fitted or km incomplete)` +
+    (k.estimatedShare != null && k.estimatedShare > 0 ? `, ${(k.estimatedShare * 100).toFixed(0)}% of the cost is an estimated price` : '')
+}
 
 // ── In-memory LRU-style cache ─────────────────────────────────────────────────
 
@@ -82,29 +126,9 @@ export async function retrieveVehicleContext(assetNo) {
   const actions = actionResult.data ?? []
   const fleetInfo = fleetResult.data ?? null
 
-  const validRecords = tyreHistory.filter(r => {
-    const fit = Number(r.km_at_fitment)
-    const rem = Number(r.km_at_removal)
-    const cost = Number(r.cost_per_tyre)
-    return isFinite(fit) && fit > 0 && isFinite(rem) && rem > fit && isFinite(cost) && cost > 0
-  })
-
-  const cpks = validRecords.map(r => Number(r.cost_per_tyre) / (Number(r.km_at_removal) - Number(r.km_at_fitment)))
-  const avgCpk = cpks.length ? cpks.reduce((s, v) => s + v, 0) / cpks.length : null
-  const avgLife = validRecords.length
-    ? validRecords.reduce((s, r) => s + (Number(r.km_at_removal) - Number(r.km_at_fitment)), 0) / validRecords.length
-    : null
-  const totalCost = validRecords.reduce((s, r) => s + Number(r.cost_per_tyre || 0) * (Number(r.qty) || 1), 0)
-  const failureCount = tyreHistory.filter(r => r.risk_level === 'High' || r.risk_level === 'Critical').length
-
-  const vehicleKpis = {
-    avgCpk,
-    avgLifeKm: avgLife,
-    totalTyreCost: totalCost,
-    totalReplacements: tyreHistory.length,
-    failureCount,
-    failureRate: tyreHistory.length > 0 ? failureCount / tyreHistory.length : 0,
-  }
+  // Per physical tyre (price once, km summed, weighted CPK). This history holds
+  // only fitments on THIS vehicle, so km a tyre ran elsewhere is not included.
+  const vehicleKpis = summarizeTyreKpis(tyreHistory)
 
   const result = {
     assetNo,
@@ -311,8 +335,9 @@ export function assembleContext({
       : ''
     sections.push(
       `VEHICLE: ${assetNo}${vehicleDesc ? ` | ${vehicleDesc}` : ''}\n` +
-      `KPIs: CPK=${vehicleKpis.avgCpk?.toFixed(3) ?? 'N/A'} | Life=${vehicleKpis.avgLifeKm?.toFixed(0) ?? 'N/A'} km | ` +
-      `TotalCost=${vehicleKpis.totalTyreCost?.toFixed(0) ?? 'N/A'} | Replacements=${vehicleKpis.totalReplacements} | Failures=${vehicleKpis.failureCount}`
+      `KPIs: CPK=${vehicleKpis.avgCpk?.toFixed(3) ?? 'N/A'} | Life=${vehicleKpis.avgLifeKm?.toFixed(0) ?? 'N/A'} km per physical tyre | ` +
+      `TyrePurchaseCost=${vehicleKpis.totalTyreCost?.toFixed(0) ?? 'N/A'} | Fitments=${vehicleKpis.totalReplacements} | Failures=${vehicleKpis.failureCount}\n` +
+      `${describeCpkBasis(vehicleKpis)} (fitments on this vehicle only)`
     )
 
     const recentChanges = (tyreHistory ?? []).slice(0, 5).map(r =>
@@ -335,7 +360,10 @@ export function assembleContext({
     const sites = [...new Set(kpiData.map(r => r.site).filter(Boolean))]
     const brands = [...new Set(kpiData.map(r => r.brand).filter(Boolean))]
     const assets = [...new Set(kpiData.map(r => r.asset_no).filter(Boolean))]
-    const totalCost = kpiData.reduce((s, r) => s + (Number(r.cost_per_tyre) || 0) * (Number(r.qty) || 1), 0)
+    // A refit of the same physical tyre is not a second purchase (rule T1).
+    const totalCost = withOnePricePerTyre(kpiData.map(withSerial))
+      .reduce((s, r) => s + (Number(r.cost_per_tyre) || 0) * (Number(r.qty) || 1), 0)
+    const fleetKpis = summarizeTyreKpis(kpiData)
     const highRisk = kpiData.filter(r => r.risk_level === 'Critical' || r.risk_level === 'High').length
     const dateRange = kpiData.reduce((acc, r) => {
       if (r.issue_date) {
@@ -346,9 +374,10 @@ export function assembleContext({
     }, { min: null, max: null })
 
     sections.push(
-      `FLEET DATA SCOPE: ${kpiData.length} records | ${assets.length} vehicles | ${sites.length} sites | ` +
+      `FLEET DATA SCOPE: ${kpiData.length} fitment records | ${fleetKpis.physicalTyres} physical tyres | ${assets.length} vehicles | ${sites.length} sites | ` +
       `Period: ${dateRange.min ?? 'N/A'} to ${dateRange.max ?? 'N/A'}\n` +
-      `Total Cost: ${totalCost.toFixed(0)} | High/Critical Risk: ${highRisk} (${kpiData.length > 0 ? ((highRisk / kpiData.length) * 100).toFixed(1) : 0}%)\n` +
+      `Fleet CPK=${fleetKpis.avgCpk?.toFixed(4) ?? 'N/A'}. ${describeCpkBasis(fleetKpis)}. Sample only, not the expense-grid total.\n` +
+      `Tyre purchase cost in sample: ${totalCost.toFixed(0)} | High/Critical Risk: ${highRisk} (${kpiData.length > 0 ? ((highRisk / kpiData.length) * 100).toFixed(1) : 0}%)\n` +
       `Sites: ${sites.slice(0, 10).join(', ')}\n` +
       `Brands: ${brands.slice(0, 10).join(', ')}`
     )

@@ -62,6 +62,12 @@ export const DATE_PRESETS = Object.freeze([
 
 export const RISK_LEVELS = Object.freeze(['Critical', 'High', 'Medium', 'Low'])
 
+import { toLifetimeTyres, weightedCpk, withOnePricePerTyre, fitmentKm, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
+
+/** Which CPK the cause / vehicle panels show (rule: every CPK states its kind). */
+export const RCA_CPK_KIND = CPK_KIND.TYRE_LIFETIME
+export const RCA_CPK_KIND_LABEL = CPK_KIND_LABEL[CPK_KIND.TYRE_LIFETIME]
+
 const num = (v) => {
   if (v === null || v === undefined || v === '') return null
   const n = typeof v === 'number' ? v : parseFloat(v)
@@ -73,11 +79,14 @@ export function findingsText(r) {
   return String(r?.findings || r?.description || r?.remarks || '').trim()
 }
 
-/** km life of one tyre, null unless removal is measurably after fitment. */
+/**
+ * km of ONE fitment (one stint) by the shared km rule (src/lib/tyreKm.js):
+ * placeholder fitment km 1 and over-class-cap readings are unknown (null), a
+ * factory 0 fitment is real. Null when not measurable.
+ */
 export function kmLife(r) {
-  const fit = num(r?.km_at_fitment)
-  const rem = num(r?.km_at_removal)
-  return fit !== null && rem !== null && rem > fit ? rem - fit : null
+  const k = fitmentKm(r)
+  return k != null && k > 0 ? k : null
 }
 
 /** Money for one record line (price x qty), null when unpriced. */
@@ -194,8 +203,20 @@ export function filterRecords(records = [], { cutoff = null, site = 'all', risk 
   })
 }
 
+/**
+ * Classify every fitment row. Money is per row (a removal event), but a refit
+ * of the same physical tyre is NOT a second purchase (rule T1): the refit row's
+ * cost_per_tyre is cleared via withOnePricePerTyre. The original price is kept
+ * as _purchase_price so a lifetime CPK can still price the physical tyre.
+ */
 export function classifyAll(records = []) {
-  return (records || []).map(r => ({ ...r, rootCauses: classifyRootCauses(r) }))
+  const list = records || []
+  const priced = withOnePricePerTyre(list)
+  return priced.map((r, i) => ({
+    ...r,
+    _purchase_price: list[i]?.cost_per_tyre ?? null,
+    rootCauses: classifyRootCauses(list[i]),
+  }))
 }
 
 // ─── Aggregates ──────────────────────────────────────────────────────────────
@@ -205,14 +226,17 @@ function sumOrNull(values) {
   return v.length ? v.reduce((a, b) => a + b, 0) : null
 }
 
-/** CPK over records carrying BOTH a price and a km life: sum cost / sum km. */
+/**
+ * Physical tyre lifetime CPK over a set of fitment rows, WEIGHTED (rule T8):
+ * the rows are collapsed to physical tyres FIRST (one tyre fitted on three
+ * vehicles is one tyre, priced once, km summed), then total cost / total km.
+ * Null when no tyre carries both a price and a measured life.
+ */
 export function cpkOf(records = []) {
-  let cost = 0; let km = 0; let n = 0
-  for (const r of records) {
-    const c = lineCost(r); const k = kmLife(r)
-    if (c !== null && k !== null) { cost += c; km += k; n++ }
-  }
-  return n > 0 && km > 0 ? cost / km : null
+  const rows = (records || []).map(r => (
+    r && r._purchase_price !== undefined ? { ...r, cost_per_tyre: r._purchase_price } : r
+  ))
+  return weightedCpk(toLifetimeTyres(rows))
 }
 
 /** Per-cause stats: count, cost (null when none priced), priced count, records. */

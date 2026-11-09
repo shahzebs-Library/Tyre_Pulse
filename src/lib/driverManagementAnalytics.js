@@ -15,6 +15,12 @@
  * No I/O. `now` is injectable for the date presets.
  */
 
+import { toLifetimeTyres, hasLifetimeCpk, weightedCpk, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
+
+/** Every driver CPK on this page is the physical tyre lifetime CPK, weighted. */
+export const DRIVER_CPK_KIND = CPK_KIND.TYRE_LIFETIME
+export const DRIVER_CPK_KIND_LABEL = CPK_KIND_LABEL[CPK_KIND.TYRE_LIFETIME]
+
 export const DATE_PRESETS = [
   { label: '3mo', days: 90 },
   { label: '6mo', days: 180 },
@@ -88,43 +94,57 @@ const pctRank = (i, n) => (n <= 1 ? 0 : (i / (n - 1)) * 100)
  * @returns {Array<object>} drivers sorted by risk score (best first, unrated last)
  */
 export function aggregateDrivers(records = []) {
+  const list = Array.isArray(records) ? records : []
+  const nameOf = (r) => String(r?.driver_name ?? '').trim() || 'Unassigned'
   const map = new Map()
-  for (const r of Array.isArray(records) ? records : []) {
-    const name = String(r?.driver_name ?? '').trim() || 'Unassigned'
+  const get = (name) => {
     let d = map.get(name)
     if (!d) {
-      d = { name, total: 0, rated: 0, high: 0, cost: 0, priced: 0, cpks: [], lives: [] }
+      d = { name, fitments: 0, rated: 0, high: 0, tyres: 0, cost: 0, priced: 0, lifeTyres: [] }
       map.set(name, d)
     }
-    d.total += 1
+    return d
+  }
+  // EVENTS per fitment row (on purpose): fitments, risk ratings.
+  for (const r of list) {
+    const d = get(nameOf(r))
+    d.fitments += 1
     if (isRated(r)) {
       d.rated += 1
       if (isHighRisk(r)) d.high += 1
     }
-    const price = finite(r?.cost_per_tyre)
-    if (price != null) {
-      const qty = finite(r?.qty)
-      d.cost += price * (qty && qty > 0 ? qty : 1)
-      d.priced += 1
-    }
-    const cpk = calcCpk(r?.cost_per_tyre, r?.km_at_fitment, r?.km_at_removal)
-    if (cpk != null && cpk > 0) d.cpks.push(cpk)
-    const a = finite(r?.km_at_fitment)
-    const b = finite(r?.km_at_removal)
-    if (a != null && b != null && b - a > 0) d.lives.push(b - a)
+  }
+  // MONEY / LIFE / CPK per PHYSICAL tyre (rules T1/T8): collapse first, then
+  // attribute each tyre to the driver of its LATEST fitment. Price counted once.
+  for (const t of toLifetimeTyres(list)) {
+    const d = get(nameOf(t))
+    const q = t._qty || 1
+    d.tyres += q
+    if ((Number(t._cost) || 0) > 0) { d.cost += t._cost * q; d.priced += q }
+    d.lifeTyres.push(t)
   }
 
-  const drivers = [...map.values()].map((d) => ({
-    name: d.name,
-    totalTyres: d.total,
-    ratedTyres: d.rated,
-    highRiskCount: d.high,
-    pricedTyres: d.priced,
-    totalCost: d.priced > 0 ? d.cost : null,
-    avgCpk: mean(d.cpks),
-    avgTyreLife: mean(d.lives),
-    failureRate: d.rated > 0 ? (d.high / d.rated) * 100 : null,
-  }))
+  const drivers = [...map.values()].map((d) => {
+    const measurable = d.lifeTyres.filter(hasLifetimeCpk)
+    const withLife = d.lifeTyres.filter((t) => (Number(t._life_km) || 0) > 0)
+    return {
+      name: d.name,
+      totalTyres: d.tyres,              // physical tyres attributed to the driver
+      fitments: d.fitments,             // fitment rows (events)
+      ratedTyres: d.rated,              // rated fitment rows (event basis of failureRate)
+      highRiskCount: d.high,
+      pricedTyres: d.priced,
+      totalCost: d.priced > 0 ? d.cost : null,
+      avgCpk: measurable.length ? weightedCpk(measurable) : null,
+      cpkKind: DRIVER_CPK_KIND,
+      cpkCost: measurable.reduce((s, t) => s + t._cost * (t._qty || 1), 0),
+      cpkKm: measurable.reduce((s, t) => s + t._life_km * (t._qty || 1), 0),
+      // Average life = mean of _life_km over physical tyres with a measured life.
+      avgTyreLife: mean(withLife.map((t) => Number(t._life_km))),
+      provisionalTyres: d.lifeTyres.filter((t) => t._provisional).length,
+      failureRate: d.rated > 0 ? (d.high / d.rated) * 100 : null,
+    }
+  })
 
   const byCpk = drivers.filter((d) => d.avgCpk != null).sort((a, b) => a.avgCpk - b.avgCpk)
   const cpkRank = new Map(byCpk.map((d, i) => [d.name, pctRank(i, byCpk.length)]))
@@ -166,6 +186,13 @@ export function orderDrivers(drivers = [], { search = '', sort = 'riskScore', di
   })
 }
 
+function fleetWeighted(withCpk) {
+  if (!withCpk.length) return null
+  const km = withCpk.reduce((s, d) => s + (Number(d.cpkKm) || 0), 0)
+  if (km > 0) return withCpk.reduce((s, d) => s + (Number(d.cpkCost) || 0), 0) / km
+  return mean(withCpk.map((d) => d.avgCpk)) // drivers built without cost/km (legacy input)
+}
+
 /** Headline figures for the KPI strip. */
 export function driverKpis(drivers = [], recordCount = 0) {
   const withCpk = drivers.filter((d) => d.avgCpk != null)
@@ -176,7 +203,11 @@ export function driverKpis(drivers = [], recordCount = 0) {
   return {
     totalDrivers: drivers.length,
     recordCount,
-    fleetAvgCpk: mean(withCpk.map((d) => d.avgCpk)),
+    // WEIGHTED fleet CPK (rule T8): total cost / total tyre-km over the drivers'
+    // measurable tyres, never a mean of per-driver ratios.
+    fleetAvgCpk: fleetWeighted(withCpk),
+    cpkKind: CPK_KIND.FLEET_AGGREGATE,
+    cpkKindLabel: CPK_KIND_LABEL[CPK_KIND.FLEET_AGGREGATE],
     cpkCoverage: drivers.length ? withCpk.length : 0,
     highestCost: withCpk.length ? withCpk.reduce((p, c) => (c.avgCpk > p.avgCpk ? c : p)) : null,
     bestPerformer: withCpk.length ? withCpk.reduce((p, c) => (c.avgCpk < p.avgCpk ? c : p)) : null,

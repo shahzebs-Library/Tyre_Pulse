@@ -25,6 +25,45 @@
  * orchestrators `buildPredictions`, `buildFailureRiskRows`, `buildCohortModels`.
  */
 
+import { toLifetimeTyres, isStrongSerial, tyreKey } from './tyreLifetime'
+
+// ── Physical tyre lifetime (src/lib/tyreLifetime.js) ─────────────────────────
+// tyre_records holds one row per FITMENT. A tyre's LIFE is the km summed over
+// every fitment of that physical tyre (shared km rule), and its PRICE is counted
+// once. Rows here may carry the serial as tyre_serial / serial_number.
+const withSerial = (r) => {
+  if (!r || r.serial_no) return r
+  const s = r.tyre_serial ?? r.serial_number ?? null
+  return s ? { ...r, serial_no: s } : r
+}
+const isOpenRow = (r) => num(r?.km_at_removal) == null && !r?.removal_date
+
+/**
+ * Index fitment rows by physical tyre.
+ *  tyres      every physical tyre (latest fitment row + _life_km/_cost...)
+ *  completed  tyres with NO open fitment left (removed for good) and a measured life
+ *  byKey      _key -> physical tyre
+ *  priorKm    _key -> km of the tyre's COMPLETED fitments (a refitted tyre's earlier stints)
+ */
+function lifetimeIndex(records = []) {
+  const rows = (records || []).filter(Boolean).map(withSerial)
+  const tyres = toLifetimeTyres(rows)
+  const openKeys = new Set()
+  rows.forEach((r, i) => { if (isOpenRow(r)) openKeys.add(tyreKey(r, i)) })
+  const byKey = new Map(tyres.map((t) => [t._key, t]))
+  const completed = tyres.filter((t) => !openKeys.has(t._key) && !t._active && num(t._life_km) > 0)
+  const closedStrong = rows.filter((r) => !isOpenRow(r) && isStrongSerial(r.serial_no))
+  const priorKm = new Map(toLifetimeTyres(closedStrong).map((t) => [t._key, num(t._life_km) ?? 0]))
+  return { rows, tyres, completed, byKey, priorKm }
+}
+
+/** km a refitted tyre already ran in earlier (completed) fitments; 0 when none. */
+function priorKmOf(idx, row) {
+  const r = withSerial(row)
+  if (!isStrongSerial(r?.serial_no)) return 0
+  return idx.priorKm.get(tyreKey(r)) ?? 0
+}
+
 // ── Engineering constants ────────────────────────────────────────────────────
 
 /** UAE / GCC legal minimum tread — replacement is mandatory at/below this. */
@@ -405,21 +444,18 @@ export function cohortPosition(fit, currentKm) {
 }
 
 /**
- * Fit a Weibull to the COMPLETED lives (km_at_removal − km_at_fitment, both
- * present, positive) of every (brand, size) cohort with ≥ COHORT_MIN_SIZE
- * samples. Returns a Map keyed `brand||size`.
+ * Fit a Weibull to the COMPLETED lives of every (brand, size) cohort with
+ * ≥ COHORT_MIN_SIZE samples. One sample = one PHYSICAL tyre that is no longer
+ * fitted: its km summed over every fitment by the shared km rule (a refitted
+ * tyre is one life, never two short ones). Grouped by the tyre's latest
+ * brand/size. Returns a Map keyed `brand||size`.
  */
 export function buildCohortModels(records = []) {
   const groups = new Map()
-  for (const r of records) {
-    const fit = num(r.km_at_fitment)
-    const rem = num(r.km_at_removal)
-    if (fit == null || rem == null) continue
-    const life = rem - fit
-    if (life <= 0) continue
-    const key = `${(r.brand || 'Unknown').toString().trim()}||${(r.size || 'Unknown').toString().trim()}`
+  for (const t of lifetimeIndex(records).completed) {
+    const key = cohortKey(t.brand, t.size)
     if (!groups.has(key)) groups.set(key, [])
-    groups.get(key).push(life)
+    groups.get(key).push(num(t._life_km))
   }
   const models = new Map()
   for (const [key, lives] of groups) {
@@ -470,9 +506,11 @@ const mkMasterIndex = (fleetMaster = []) => {
  * Fleet-level statistics used as fallbacks by the per-asset engine.
  */
 export function computeFleetStats(records = []) {
-  const completed = records.filter((r) => num(r.km_at_removal) != null && num(r.km_at_fitment) != null)
-  const lives = completed.map((r) => num(r.km_at_removal) - num(r.km_at_fitment)).filter((v) => v > 0)
-  const costs = records.map((r) => num(r.cost_per_tyre)).filter((v) => v != null && v > 0)
+  // Life and price per PHYSICAL tyre: avg life = mean of completed tyres'
+  // lifetime km; avg cost = mean purchase price, each tyre priced once.
+  const idx = lifetimeIndex(records)
+  const lives = idx.completed.map((t) => num(t._life_km))
+  const costs = idx.tyres.map((t) => num(t._cost)).filter((v) => v != null && v > 0)
   return {
     avgKmLife: lives.length ? mean(lives) : DEFAULT_AVG_KM_LIFE,
     avgCost: costs.length ? mean(costs) : 0,
@@ -498,6 +536,12 @@ export function buildPredictions(records, fleetMaster = [], opts = {}) {
   const fleetAvgKmLife = opts.fleetAvgKmLife ?? DEFAULT_AVG_KM_LIFE
   const fleetAvgDailyKm = opts.fleetAvgDailyKm ?? DEFAULT_DAILY_KM
   const cohortModels = opts.cohortModels ?? buildCohortModels(records)
+  const idx = lifetimeIndex(records)
+  // Completed physical tyres attributed to the asset of their LATEST fitment.
+  const completedTyresByAsset = {}
+  for (const t of idx.completed) if (t.asset_no) (completedTyresByAsset[t.asset_no] ||= []).push(t)
+  const tyresByAsset = {}
+  for (const t of idx.tyres) if (t.asset_no) (tyresByAsset[t.asset_no] ||= []).push(t)
 
   const byAsset = {}
   for (const r of records) {
@@ -511,8 +555,10 @@ export function buildPredictions(records, fleetMaster = [], opts = {}) {
   for (const [assetNo, recs] of Object.entries(byAsset)) {
     const master = masterByAsset[assetNo] || null
 
+    // Odometer span (vehicle km per day) is read from completed fitment ROWS.
     const completed = recs.filter((r) => num(r.km_at_removal) != null && num(r.km_at_fitment) != null)
-    const completedLifeKms = completed.map((r) => num(r.km_at_removal) - num(r.km_at_fitment)).filter((v) => v > 0)
+    // Tyre LIFE is per physical tyre (km over all its fitments).
+    const completedLifeKms = (completedTyresByAsset[assetNo] || []).map((t) => num(t._life_km))
     const avgKmLife = completedLifeKms.length
       ? mean(completedLifeKms)
       : num(master?.expected_km_per_tyre) ?? fleetAvgKmLife ?? DEFAULT_AVG_KM_LIFE
@@ -547,14 +593,16 @@ export function buildPredictions(records, fleetMaster = [], opts = {}) {
     const active = recs.filter((r) => num(r.km_at_removal) == null)
     if (active.length === 0) continue
 
-    const assetCosts = recs.map((r) => num(r.cost_per_tyre)).filter((v) => v != null && v > 0)
+    // Purchase price per physical tyre, counted once (a refit is not a purchase).
+    const assetCosts = (tyresByAsset[assetNo] || []).map((t) => num(t._cost)).filter((v) => v != null && v > 0)
     const assetAvgCost = assetCosts.length ? mean(assetCosts) : fleetAvgCost || 0
     const confidence = assetConfidence(completedLifeKms.length)
 
     for (const tyre of active) {
       const fitmentKm = num(tyre.km_at_fitment) ?? currentKm ?? 0
       const runFromOdometer = currentKm != null ? Math.max(0, currentKm - fitmentKm) : null
-      const tyreRunKm = num(tyre.total_km) ?? runFromOdometer ?? 0
+      // Lifetime run: earlier completed fitments of this physical tyre + this stint.
+      const tyreRunKm = priorKmOf(idx, tyre) + (num(tyre.total_km) ?? runFromOdometer ?? 0)
 
       // G1 — tread wear rate + tread-limited days.
       const newTread = nominalNewTread(tyre.brand, tyre.size)
@@ -592,7 +640,10 @@ export function buildPredictions(records, fleetMaster = [], opts = {}) {
       const cohort = cModel ? { ...cohortPosition(cModel, tyreRunKm), size: cModel.size, brand: cModel.brand, beta: round(cModel.beta, 3), etaKm: Math.round(cModel.eta), n: cModel.n, ciSpread: round(cModel.ciSpread, 1) } : null
 
       const remainingKm = Math.max(0, (avgKmLife ?? DEFAULT_AVG_KM_LIFE) - tyreRunKm)
-      const estimatedCost = num(tyre.cost_per_tyre) > 0 ? num(tyre.cost_per_tyre) : assetAvgCost
+      const ownPrice = isStrongSerial(withSerial(tyre)?.serial_no)
+        ? num(idx.byKey.get(tyreKey(withSerial(tyre)))?._cost)
+        : num(tyre.cost_per_tyre)
+      const estimatedCost = ownPrice > 0 ? ownPrice : assetAvgCost
 
       predictions.push({
         id: tyre.id,
@@ -654,19 +705,19 @@ export function buildFailureRiskRows(records = [], opts = {}) {
   const nowMs = opts.nowMs ?? Date.now()
   const cohortModels = opts.cohortModels ?? buildCohortModels(records)
 
-  // Completed sample counts per asset drive confidence.
+  // Completed PHYSICAL tyres per asset (latest fitment) drive confidence.
+  const idx = lifetimeIndex(records)
   const completedByAsset = {}
-  for (const r of records) {
-    if (!r.asset_no) continue
-    if (num(r.km_at_removal) != null && num(r.km_at_fitment) != null && num(r.km_at_removal) - num(r.km_at_fitment) > 0) {
-      completedByAsset[r.asset_no] = (completedByAsset[r.asset_no] || 0) + 1
-    }
+  for (const t of idx.completed) {
+    if (!t.asset_no) continue
+    completedByAsset[t.asset_no] = (completedByAsset[t.asset_no] || 0) + 1
   }
 
   const rows = []
   for (const r of records) {
     if (num(r.km_at_removal) != null) continue // active only
-    const totalKm = num(r.total_km) ?? 0
+    // Lifetime km: earlier completed fitments of this physical tyre + this stint.
+    const totalKm = priorKmOf(idx, r) + (num(r.total_km) ?? 0)
     const risk = compositeRisk({
       totalKm,
       treadDepth: r.tread_depth,

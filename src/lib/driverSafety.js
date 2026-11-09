@@ -1,3 +1,4 @@
+import { toLifetimeTyres, weightedCpk, fitmentKm, CPK_KIND } from './tyreLifetime'
 /**
  * Driver Safety — pure, dependency-free domain logic for the Driver Safety
  * Events module (/driver-safety). Reduces a set of telematics driver-behaviour
@@ -307,13 +308,13 @@ function isRemoval(r) {
   )
 }
 
-/** Life (km) of a removed tyre: km_at_removal − km_at_fitment, guarded > 0. */
+/**
+ * km of ONE fitment (the stint this driver's vehicle ran) by the shared km rule
+ * (src/lib/tyreKm.js): placeholder fitment km 1 / over-cap = unknown, factory 0 real.
+ */
 function tyreLifeKm(r) {
-  const fit = toFiniteNumber(r?.km_at_fitment)
-  const rem = toFiniteNumber(r?.km_at_removal)
-  if (fit == null || rem == null) return null
-  const life = rem - fit
-  return life > 0 ? life : null
+  const k = fitmentKm(r)
+  return k != null && k > 0 ? k : null
 }
 
 /** Median of a numeric array (sorted copy); null when empty. */
@@ -329,14 +330,16 @@ export function median(values = []) {
  * Tyre-Pulse-unique intelligence the original only gestured at:
  *   • driverCausedRemovalRate — share of a driver's removals whose reason matches
  *     driver-attributable damage (impact / cut / kerb / underinflation / run-flat / overload)
- *   • driverCpk               — Σ cost_per_tyre / Σ tyre-life-km (cost per km)
+ *   • driverCpk               — WEIGHTED physical tyre lifetime CPK (purchase once,
+ *     km summed over fitments) of the tyres whose LATEST fitment was this driver's
+ *   • tyres = physical tyres attributed to the driver; fitments = fitment rows (events)
  *   • prematureRemovalRate    — share of the driver's removed tyres whose life is
  *     below the FLEET MEDIAN removed-tyre life
  * Drivers with no tyre rows get nulls (honest '—'), never a fabricated rate.
  *
  * @param {Array<object>} records  tyre_records rows
  * @returns {{ fleetMedianLifeKm:number|null,
- *   drivers:Array<{ driver_name:string, tyres:number, removals:number,
+ *   drivers:Array<{ driver_name:string, tyres:number, fitments:number, removals:number,
  *     driverCausedRemovals:number, driverCausedRemovalRate:number|null,
  *     totalCost:number, lifeKm:number, driverCpk:number|null,
  *     prematureRemovals:number, prematureRemovalRate:number|null }> }}
@@ -353,20 +356,20 @@ export function driverTyreCorrelation(records = []) {
   }
   const fleetMedianLifeKm = median(fleetLives)
 
+  const blank = (driver) => ({
+    driver_name: driver, tyres: 0, fitments: 0, removals: 0, driverCausedRemovals: 0,
+    totalCost: 0, lifeKm: 0, prematureRemovals: 0, _tyres: [],
+  })
   const byDriver = new Map()
+  // EVENTS (per fitment row on purpose): fitments, removals, driver-caused and
+  // premature removals - each row is one stint / one removal.
   for (const r of list) {
     const driver = driverKey(r)
     if (!driver) continue
-    const d = byDriver.get(driver) || {
-      driver_name: driver, tyres: 0, removals: 0, driverCausedRemovals: 0,
-      totalCost: 0, lifeKm: 0, prematureRemovals: 0,
-    }
-    d.tyres += 1
-    const cost = toFiniteNumber(r?.cost_per_tyre)
-    const life = tyreLifeKm(r)
-    if (cost != null) d.totalCost += cost
-    if (life != null) d.lifeKm += life
+    const d = byDriver.get(driver) || blank(driver)
+    d.fitments += 1
     if (isRemoval(r)) {
+      const life = tyreLifeKm(r)
       d.removals += 1
       if (DRIVER_CAUSED_REMOVAL_RE.test(removalReasonText(r))) d.driverCausedRemovals += 1
       if (life != null && fleetMedianLifeKm != null && life < fleetMedianLifeKm) {
@@ -375,20 +378,38 @@ export function driverTyreCorrelation(records = []) {
     }
     byDriver.set(driver, d)
   }
+  // MONEY / LIFE / CPK per PHYSICAL tyre (rules T1/T8): collapse first, then
+  // attribute each tyre to the driver of its LATEST fitment. A tyre refitted is
+  // priced once and its km summed; it is never charged to two drivers.
+  for (const t of toLifetimeTyres(list)) {
+    const driver = driverKey(t)
+    if (!driver) continue
+    const d = byDriver.get(driver) || blank(driver)
+    const q = t._qty || 1
+    d.tyres += q
+    if ((Number(t._cost) || 0) > 0) d.totalCost += t._cost * q
+    if ((Number(t._life_km) || 0) > 0) d.lifeKm += t._life_km * q
+    d._tyres.push(t)
+    byDriver.set(driver, d)
+  }
 
-  const drivers = [...byDriver.values()].map((d) => ({
-    ...d,
-    totalCost: Math.round(d.totalCost * 100) / 100,
-    driverCausedRemovalRate: d.removals > 0
-      ? Math.round((d.driverCausedRemovals / d.removals) * 1000) / 1000
-      : null,
-    driverCpk: d.lifeKm > 0
-      ? Math.round((d.totalCost / d.lifeKm) * 1000) / 1000
-      : null,
-    prematureRemovalRate: d.removals > 0
-      ? Math.round((d.prematureRemovals / d.removals) * 1000) / 1000
-      : null,
-  })).sort((a, b) =>
+  const drivers = [...byDriver.values()].map(({ _tyres, ...d }) => {
+    const cpk = weightedCpk(_tyres)
+    return {
+      ...d,
+      totalCost: Math.round(d.totalCost * 100) / 100,
+      driverCausedRemovalRate: d.removals > 0
+        ? Math.round((d.driverCausedRemovals / d.removals) * 1000) / 1000
+        : null,
+      // Weighted lifetime CPK of the physical tyres attributed to this driver.
+      driverCpk: cpk != null ? Math.round(cpk * 1000) / 1000 : null,
+      cpkKind: CPK_KIND.TYRE_LIFETIME,
+      provisionalTyres: _tyres.filter((t) => t._provisional).length,
+      prematureRemovalRate: d.removals > 0
+        ? Math.round((d.prematureRemovals / d.removals) * 1000) / 1000
+        : null,
+    }
+  }).sort((a, b) =>
     (b.driverCausedRemovalRate ?? -1) - (a.driverCausedRemovalRate ?? -1) ||
     (b.driverCpk ?? -1) - (a.driverCpk ?? -1) ||
     a.driver_name.localeCompare(b.driver_name),

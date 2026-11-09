@@ -42,6 +42,7 @@ function pageTyres<T = any>(cols: string, since: string): Promise<T[]> {
 import { useAuth } from '../../../contexts/AuthContext'
 import { canUseAI } from '../../../lib/permissions'
 import { BackButton } from '../../../components/ui'
+import { onePricePerTyre, singleCurrency, moneyText } from '../../../lib/tyrePurchase'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -110,15 +111,20 @@ async function fetchFleetContext(intent: Intent): Promise<FleetContext> {
   switch (intent) {
     case 'fleet_overview': {
       const [recs, vehs, acts, accs] = await Promise.all([
-        pageTyres<{ cost_per_tyre: number | null; risk_level: string | null }>(
-          'cost_per_tyre,risk_level', s90,
+        pageTyres<{ cost_per_tyre: number | null; risk_level: string | null; serial_no: string | null; country: string | null; issue_date: string | null }>(
+          'cost_per_tyre,risk_level,serial_no,country,issue_date', s90,
         ),
         supabase.from('vehicle_fleet').select('id', { count: 'exact', head: true }),
         supabase.from('corrective_actions').select('status', { count: 'exact' }).eq('status', 'Open'),
         supabase.from('accidents').select('id', { count: 'exact', head: true }).gte('incident_date', s30),
       ])
       const records = recs
-      const totalCost = records.reduce((s, r) => s + (Number(r.cost_per_tyre) || 0), 0)
+      // Purchase value recorded on tyre records (one price per physical tyre, rule T1);
+      // NOT the ERP tyre expense, and never added across currencies.
+      const prices = onePricePerTyre(records)
+      const totalCost = prices.reduce((s, v) => s + v, 0)
+      const pricedTyres = prices.filter((v) => v > 0).length
+      const cur = singleCurrency(records)
       const riskCounts: Record<string, number> = {}
       records.forEach(r => { const k = r.risk_level ?? 'Unknown'; riskCounts[k] = (riskCounts[k] ?? 0) + 1 })
       return {
@@ -126,8 +132,9 @@ async function fetchFleetContext(intent: Intent): Promise<FleetContext> {
         data: {
           period: 'Last 90 days',
           totalTyreRecords: records.length,
-          totalCost: `SAR ${totalCost.toLocaleString()}`,
-          avgCostPerTyre: records.length ? `SAR ${Math.round(totalCost / records.length).toLocaleString()}` : 'N/A',
+          tyrePurchaseValueOnRecords: moneyText(totalCost, cur),
+          avgPurchasePricePerPricedTyre: pricedTyres ? moneyText(totalCost / pricedTyres, cur) : 'N/A',
+          costNote: 'Purchase prices on tyre records, each physical tyre counted once. ERP tyre expense is reported separately.',
           fleetSize: vehs.count ?? 0,
           openWorkOrders: acts.count ?? 0,
           accidentsLast30Days: accs.count ?? 0,
@@ -165,29 +172,32 @@ async function fetchFleetContext(intent: Intent): Promise<FleetContext> {
     }
 
     case 'cost_analysis': {
-      const records = await pageTyres<{ site: string | null; brand: string | null; cost_per_tyre: number | null; risk_level: string | null }>(
-        'id,site,brand,cost_per_tyre,issue_date,risk_level', s90,
+      const records = await pageTyres<{ site: string | null; brand: string | null; cost_per_tyre: number | null; risk_level: string | null; serial_no: string | null; country: string | null; issue_date: string | null }>(
+        'id,site,brand,cost_per_tyre,issue_date,risk_level,serial_no,country', s90,
       )
+      const prices = onePricePerTyre(records)
+      const cur = singleCurrency(records)
       const bySite: Record<string, { cost: number; count: number }> = {}
       const byBrand: Record<string, { cost: number; count: number }> = {}
-      records.forEach(r => {
+      records.forEach((r, i) => {
         const s = r.site ?? 'Unknown'; const b = r.brand ?? 'Unknown'
         if (!bySite[s]) bySite[s] = { cost: 0, count: 0 }
         if (!byBrand[b]) byBrand[b] = { cost: 0, count: 0 }
-        bySite[s].cost += Number(r.cost_per_tyre) || 0; bySite[s].count++
-        byBrand[b].cost += Number(r.cost_per_tyre) || 0; byBrand[b].count++
+        bySite[s].cost += prices[i]; if (prices[i] > 0) bySite[s].count++
+        byBrand[b].cost += prices[i]; if (prices[i] > 0) byBrand[b].count++
       })
       const topSites = Object.entries(bySite).sort((a, b) => b[1].cost - a[1].cost).slice(0, 5)
-        .map(([site, v]) => ({ site, totalCost: `SAR ${Math.round(v.cost).toLocaleString()}`, count: v.count }))
+        .map(([site, v]) => ({ site, purchaseValue: moneyText(v.cost, cur), pricedTyres: v.count }))
       const topBrands = Object.entries(byBrand).sort((a, b) => b[1].cost - a[1].cost).slice(0, 5)
-        .map(([brand, v]) => ({ brand, totalCost: `SAR ${Math.round(v.cost).toLocaleString()}`, avgCost: `SAR ${Math.round(v.cost / v.count).toLocaleString()}` }))
-      const total = records.reduce((s, r) => s + (Number(r.cost_per_tyre) || 0), 0)
+        .map(([brand, v]) => ({ brand, purchaseValue: moneyText(v.cost, cur), avgPurchasePrice: v.count ? moneyText(v.cost / v.count, cur) : 'N/A' }))
+      const total = prices.reduce((s, v) => s + v, 0)
       return {
         label: `Cost data for ${records.length} records (last 90 days)`,
         data: {
           period: 'Last 90 days',
-          totalCost: `SAR ${Math.round(total).toLocaleString()}`,
+          tyrePurchaseValueOnRecords: moneyText(total, cur),
           recordCount: records.length,
+          costNote: 'Purchase prices on tyre records, each physical tyre counted once. ERP tyre expense is reported separately.',
           topSitesByCost: topSites,
           topBrandsByCost: topBrands,
         },
@@ -221,21 +231,23 @@ async function fetchFleetContext(intent: Intent): Promise<FleetContext> {
     }
 
     case 'tyre_analysis': {
-      const records = await pageTyres<{ brand: string | null; condition: string | null; cost_per_tyre: number | null; risk_level: string | null }>(
-        'id,brand,condition,cost_per_tyre,risk_level', s90,
+      const records = await pageTyres<{ brand: string | null; condition: string | null; cost_per_tyre: number | null; risk_level: string | null; serial_no: string | null; country: string | null; issue_date: string | null }>(
+        'id,brand,condition,cost_per_tyre,risk_level,serial_no,country,issue_date', s90,
       )
-      const byBrand: Record<string, { count: number; cost: number; critical: number }> = {}
+      const tPrices = onePricePerTyre(records)
+      const tCur = singleCurrency(records)
+      const byBrand: Record<string, { count: number; cost: number; priced: number; critical: number }> = {}
       const byCondition: Record<string, number> = {}
-      records.forEach(r => {
+      records.forEach((r, i) => {
         const b = r.brand ?? 'Unknown'; const c = r.condition ?? 'Unknown'
-        if (!byBrand[b]) byBrand[b] = { count: 0, cost: 0, critical: 0 }
-        byBrand[b].count++; byBrand[b].cost += Number(r.cost_per_tyre) || 0
+        if (!byBrand[b]) byBrand[b] = { count: 0, cost: 0, priced: 0, critical: 0 }
+        byBrand[b].count++; byBrand[b].cost += tPrices[i]; if (tPrices[i] > 0) byBrand[b].priced++
         if (r.risk_level === 'Critical') byBrand[b].critical++
         byCondition[c] = (byCondition[c] ?? 0) + 1
       })
       const brands = Object.entries(byBrand).sort((a, b) => b[1].count - a[1].count).slice(0, 8)
         .map(([brand, v]) => ({
-          brand, count: v.count, avgCost: `SAR ${Math.round(v.cost / v.count).toLocaleString()}`,
+          brand, fitmentRecords: v.count, avgPurchasePrice: v.priced ? moneyText(v.cost / v.priced, tCur) : 'N/A',
           criticalRate: `${v.count > 0 ? Math.round((v.critical / v.count) * 100) : 0}%`,
         }))
       return {
@@ -245,19 +257,21 @@ async function fetchFleetContext(intent: Intent): Promise<FleetContext> {
     }
 
     case 'site_analysis': {
-      const records = await pageTyres<{ site: string | null; risk_level: string | null; cost_per_tyre: number | null }>(
-        'id,site,risk_level,cost_per_tyre', s90,
+      const records = await pageTyres<{ site: string | null; risk_level: string | null; cost_per_tyre: number | null; serial_no: string | null; country: string | null; issue_date: string | null }>(
+        'id,site,risk_level,cost_per_tyre,serial_no,country,issue_date', s90,
       )
+      const sPrices = onePricePerTyre(records)
+      const sCur = singleCurrency(records)
       const bySite: Record<string, { count: number; cost: number; critical: number; high: number }> = {}
-      records.forEach(r => {
+      records.forEach((r, i) => {
         const s = r.site ?? 'Unknown'
         if (!bySite[s]) bySite[s] = { count: 0, cost: 0, critical: 0, high: 0 }
-        bySite[s].count++; bySite[s].cost += Number(r.cost_per_tyre) || 0
+        bySite[s].count++; bySite[s].cost += sPrices[i]
         if (r.risk_level === 'Critical') bySite[s].critical++
         if (r.risk_level === 'High') bySite[s].high++
       })
       const sites = Object.entries(bySite).sort((a, b) => b[1].critical - a[1].critical).map(([site, v]) => ({
-        site, count: v.count, totalCost: `SAR ${Math.round(v.cost).toLocaleString()}`,
+        site, fitmentRecords: v.count, tyrePurchaseValueOnRecords: moneyText(v.cost, sCur),
         critical: v.critical, high: v.high,
         riskScore: v.count > 0 ? Math.round(((v.critical * 3 + v.high * 2) / v.count) * 100) : 0,
       }))

@@ -1,8 +1,8 @@
 /**
  * One short name for every downloaded tyre inspection report:
- *   "Tyre Insp TM514 NHC 09Nov26 No5.pdf"
- * Asset, site, the INSPECTION date (not the download date) and, when known,
- * which inspection of that vehicle this is. Missing parts are left out.
+ *   "Tyre Insp TM514 NHC 09Nov26.pdf"
+ * Asset, site and the INSPECTION date (not the download date). Missing parts
+ * are left out. (The inspection count is shown inside the report, not here.)
  * No dashes or underscores (report output rule).
  */
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -34,14 +34,13 @@ export function ordinal(n) {
 
 const clean = (v) => String(v ?? '').replace(/[^A-Za-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase()
 
-export function inspectionReportFileName({ asset, site, date, number } = {}) {
-  const no = Number(number) >= 1 ? `No${Math.trunc(Number(number))}` : ''
-  return `${['Tyre Insp', clean(asset), clean(site), inspectionDateShort(date), no].filter(Boolean).join(' ')}.pdf`
+export function inspectionReportFileName({ asset, site, date } = {}) {
+  return `${['Tyre Insp', clean(asset), clean(site), inspectionDateShort(date)].filter(Boolean).join(' ')}.pdf`
 }
 
 export const inspectionRowDate = (row = {}) =>
   row.inspection_date || row.completed_date || row.scheduled_date || row.created_at
 
-export function inspectionReportFileNameForRow(row = {}, number) {
-  return inspectionReportFileName({ asset: row.asset_no, site: row.site, date: inspectionRowDate(row), number })
+export function inspectionReportFileNameForRow(row = {}) {
+  return inspectionReportFileName({ asset: row.asset_no, site: row.site, date: inspectionRowDate(row) })
 }

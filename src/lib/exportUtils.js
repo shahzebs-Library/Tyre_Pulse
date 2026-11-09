@@ -1705,7 +1705,7 @@ function _drawTyreBoard(doc, cap, x, y, s) {
  * @param {string}  [opts.verifyUrl] - encoded in the footer QR code
  */
 export async function exportInspectionDetailPdf(row, opts = {}) {
-  guardExport([], opts.filename || inspectionReportFileNameForRow(row || {}, opts.inspectionNo).replace(/\.pdf$/, ''))
+  guardExport([], opts.filename || inspectionReportFileNameForRow(row || {}).replace(/\.pdf$/, ''))
   await ensurePdf()
   const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pw      = doc.internal.pageSize.width
@@ -2351,7 +2351,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     }
   }
 
-  if (opts.save !== false) doc.save(inspectionReportFileNameForRow(row, opts.inspectionNo))
+  if (opts.save !== false) doc.save(inspectionReportFileNameForRow(row))
   return doc
 }
 

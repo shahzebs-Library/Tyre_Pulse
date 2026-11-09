@@ -34,8 +34,8 @@ export async function brandingForPdf(branding) {
 }
 
 /** File name used for both the direct download and the preview's download link. */
-export function checklistReportFileName(assetNo, site, date, number) {
-  return inspectionReportFileName({ asset: assetNo, site, date, number })
+export function checklistReportFileName(assetNo, site, date) {
+  return inspectionReportFileName({ asset: assetNo, site, date })
 }
 
 // Muted corporate tones: small dots + dark text, never large coloured fills.

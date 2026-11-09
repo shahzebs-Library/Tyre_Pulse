@@ -1094,8 +1094,7 @@ export default function Inspections() {
       } else {
         const asset = clAsset || clSaved.asset_no
         const day = clSaved.inspection_date || clDate
-        const inspectionNo = await inspectionsApi.countAssetInspections(asset, { country: clSaved.country || activeCountry, upTo: day })
-        doc.save(checklistReportFileName(asset, clSite || clSaved.site, day, inspectionNo))
+        doc.save(checklistReportFileName(asset, clSite || clSaved.site, day))
       }
     } catch (err) {
       setClError(toUserMessage(err, 'Could not create the checklist report. Try again.'))

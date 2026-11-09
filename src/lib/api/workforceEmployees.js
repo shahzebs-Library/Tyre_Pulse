@@ -29,7 +29,7 @@ export function employeePayload (form) {
   if (form.supervisor_id && form.supervisor_id === form.profile_id) throw new ServiceError('An employee cannot supervise themselves')
   const status = EMPLOYMENT_STATUSES.includes(form.employment_status) ? form.employment_status : 'active'
   const sites = (Array.isArray(form.sites) ? form.sites : String(form.sites || '').split(','))
-    .map(s => String(s).trim().toUpperCase()).filter(Boolean)
+    .map(s => String(s ?? '').trim().toUpperCase()).filter(Boolean)
   if (clean(form.shift_start) && clean(form.shift_end) && form.shift_start === form.shift_end) throw new ServiceError('Shift start and end cannot be the same time')
   return {
     profile_id: form.profile_id, designation, employee_code: clean(form.employee_code), department: clean(form.department), team: clean(form.team),
@@ -61,16 +61,25 @@ export async function listEmployeeHistory (profileId) {
 
 /** Pure: which tracked fields changed between two history snapshots. */
 export function historyDiff (oldValues, newValues) {
-  const keys = ['designation', 'department', 'team', 'supervisor_id', 'sites', 'employment_status', 'unavailable_until', 'shift_start', 'shift_end', 'responsibilities']
+  const keys = ['employee_code', 'designation', 'department', 'team', 'supervisor_id', 'sites', 'employment_status', 'unavailable_until', 'shift_start', 'shift_end', 'responsibilities', 'escalation_contact']
   return keys.filter(k => JSON.stringify(oldValues?.[k] ?? null) !== JSON.stringify(newValues?.[k] ?? null))
     .map(k => ({ field: k, from: oldValues?.[k] ?? null, to: newValues?.[k] ?? null }))
 }
 
+const CERT_COLS = 'id,profile_id,cert_type,cert_number,issued_on,expires_on,verified_by,created_at'
 export async function listCertifications (profileId = null) {
-  let q = supabase.from('workforce_employee_certifications').select('id,profile_id,cert_type,cert_number,issued_on,expires_on,verified_by,created_at')
-    .order('expires_on', { ascending: true, nullsFirst: false }).limit(1000)
-  if (profileId) q = q.eq('profile_id', profileId)
-  try { return unwrap(await q) } catch (e) { throw wrap(e, 'Unable to load certifications') }
+  if (profileId) {
+    try {
+      return unwrap(await supabase.from('workforce_employee_certifications').select(CERT_COLS).eq('profile_id', profileId)
+        .order('expires_on', { ascending: true, nullsFirst: false }).order('id', { ascending: true }).limit(1000))
+    } catch (e) { throw wrap(e, 'Unable to load certifications') }
+  }
+  // Directory-wide: page past the server row cap; a silently short list would hide expired certificates.
+  const r = await fetchAllPages((from, to) => supabase.from('workforce_employee_certifications').select(CERT_COLS)
+    .order('id', { ascending: true }).range(from, to), { max: 50000 })
+  if (r.error) throw wrap(r.error, 'Unable to load certifications')
+  if (r.truncated) throw new ServiceError('There are more certificates than can be shown here.')
+  return r.data || []
 }
 
 export async function addCertification ({ profile_id, cert_type, cert_number, issued_on, expires_on }) {

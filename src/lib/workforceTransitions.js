@@ -39,7 +39,10 @@ export function availableActions(status, { isAssignee = false, isManager = false
   })
 }
 
-const MESSAGES = {
+/** Shown when the workforce database objects are not installed yet. */
+export const NOT_INSTALLED = 'Team work tracking needs the latest database update before it can record work. Ask an administrator to apply it.'
+
+export const MESSAGES = {
   not_found: 'This assignment is no longer available to you.',
   forbidden: 'Only the assigned employee can do this.',
   self_review: 'You cannot review work that is assigned to you.',

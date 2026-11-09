@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import SideDrawer from '../ui/SideDrawer'
-import { listAssignmentEvents, linkOperationalRecord, reassignAssignment, recommendAssignees, OPERATIONAL_TABLES, qualificationReasonText } from '../../lib/api/workforceAssignments'
+import { listAssignmentEvents, linkOperationalRecord, reassignAssignment, recommendAssignees, OPERATIONAL_TABLES } from '../../lib/api/workforceAssignments'
+import { workforceErrorText, qualificationReason } from '../../lib/workforceErrorText'
 import { listAssignmentEvidence, uploadAssignmentEvidence } from '../../lib/api/workforceEmployees'
 import { openWorkEvidence } from '../../lib/api/workforceEvidence'
 import { blockReasonLabel } from '../../lib/workforceTransitions'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { employeeLabel } from '../../lib/workforceEmployeeDirectory'
-import { toUserMessage } from '../../lib/safeError'
 
 const when = v => (v ? new Date(v).toLocaleString() : 'N/A')
 const EVENT_ACTIONS = new Set(['accept', 'start', 'block', 'resume', 'complete', 'verify', 'return', 'cancel', 'reassign', 'link_record'])
@@ -37,7 +37,7 @@ export default function AssignmentDetailDrawer ({ item, open, onClose, employeeB
     try {
       const [ev, files] = await Promise.all([listAssignmentEvents(item.id), listAssignmentEvidence(item.id).catch(() => [])])
       setEvents(ev || []); setEvidence(files || [])
-    } catch (e) { setError(toUserMessage(e, t('workforce.drawer.loadFailed'))) }
+    } catch (e) { setError(workforceErrorText(e, t, t('workforce.drawer.loadFailed'))) }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- t only labels the fallback message
   }, [item])
   useEffect(() => { if (open) load() }, [open, load])
@@ -45,10 +45,10 @@ export default function AssignmentDetailDrawer ({ item, open, onClose, employeeB
 
   async function act (fn) {
     setBusy(true); setError('')
-    try { await fn(); await load(); onChanged?.() } catch (e) { setError(toUserMessage(e, t('workforce.drawer.updateRejected'))) } finally { setBusy(false) }
+    try { await fn(); await load(); onChanged?.() } catch (e) { setError(workforceErrorText(e, t, t('workforce.drawer.updateRejected'))) } finally { setBusy(false) }
   }
   async function loadCandidates () {
-    try { setCandidates(await recommendAssignees({ task_type: item.task_type, site: item.site, due_at: item.due_at, limit: 15 })) } catch (e) { setError(toUserMessage(e)) }
+    try { setCandidates(await recommendAssignees({ task_type: item.task_type, site: item.site, due_at: item.due_at, limit: 15 })) } catch (e) { setError(workforceErrorText(e, t)) }
   }
   const chosen = candidates?.find(c => c.profile_id === handover.to)
   const needsOverride = chosen && !chosen.qualified && !chosen.safety_blocked
@@ -70,7 +70,7 @@ export default function AssignmentDetailDrawer ({ item, open, onClose, employeeB
         </section>
         {item.supporting_employee_ids?.length > 0 && <p><strong>{t('workforce.drawer.supporting')}</strong> {item.supporting_employee_ids.map(name).join('; ')}</p>}
         {item.instructions && <p className="whitespace-pre-wrap"><strong>{t('workforce.drawer.instructions')}</strong> {item.instructions}</p>}
-        {item.override_reason && <p className="rounded-lg border border-amber-500/40 p-2"><strong>{t('workforce.drawer.managerOverride')}</strong> {t('workforce.drawer.overrideDetail', { name: name(item.overridden_by), reason: item.override_reason, gaps: (item.qualification?.soft || []).map(qualificationReasonText).join(', ') })}</p>}
+        {item.override_reason && <p className="rounded-lg border border-amber-500/40 p-2"><strong>{t('workforce.drawer.managerOverride')}</strong> {t('workforce.drawer.overrideDetail', { name: name(item.overridden_by), reason: item.override_reason, gaps: (item.qualification?.soft || []).map(c => qualificationReason(c, t)).join(', ') })}</p>}
 
         <section>
           <h3 className="font-semibold mb-1">{t('workforce.drawer.operationalRecord')}</h3>
@@ -95,7 +95,7 @@ export default function AssignmentDetailDrawer ({ item, open, onClose, employeeB
           {evidence.map(f => (
             <div key={f.id} className="flex justify-between items-center border-b border-[var(--input-border)] py-1">
               <span className="truncate">{f.file_name} <span className="text-xs text-[var(--text-muted)]">{when(f.created_at)}</span></span>
-              <button type="button" className="btn-secondary" onClick={async () => { try { window.open(await openWorkEvidence(f.object_path), '_blank', 'noopener,noreferrer') } catch (e) { setError(toUserMessage(e)) } }}>{t('workforce.drawer.open')}</button>
+              <button type="button" className="btn-secondary" onClick={async () => { try { window.open(await openWorkEvidence(f.object_path), '_blank', 'noopener,noreferrer') } catch (e) { setError(workforceErrorText(e, t)) } }}>{t('workforce.drawer.open')}</button>
             </div>
           ))}
           {isAssignee && ['acknowledged', 'in_progress', 'blocked'].includes(item.status) && (
@@ -121,7 +121,7 @@ export default function AssignmentDetailDrawer ({ item, open, onClose, employeeB
                       </option>
                     ))}
                   </select>
-                  {chosen && !chosen.qualified && <p className="text-xs">{chosen.reasons.map(qualificationReasonText).join(', ')}</p>}
+                  {chosen && !chosen.qualified && <p className="text-xs">{chosen.reasons.map(c => qualificationReason(c, t)).join(', ')}</p>}
                   <input className="input w-full" required placeholder={t('workforce.drawer.handoverNote')} value={handover.note} onChange={e => setHandover(h => ({ ...h, note: e.target.value }))} />
                   {needsOverride && <input className="input w-full" required minLength={5} placeholder={t('workforce.drawer.overridePlaceholder')} value={handover.override} onChange={e => setHandover(h => ({ ...h, override: e.target.value }))} />}
                   <button className="btn-primary" disabled={busy}>{t('workforce.drawer.reassign')}</button>

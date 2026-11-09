@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import EnterpriseTable from '../ui/EnterpriseTable'
 import SideDrawer from '../ui/SideDrawer'
-import { toUserMessage } from '../../lib/safeError'
+import { workforceErrorText } from '../../lib/workforceErrorText'
 import { exportToExcel } from '../../lib/exportUtils'
 import { SKILL_CATALOGUE } from '../../lib/technicianScorecard'
 import { listSkills } from '../../lib/api/technicianScorecard'
@@ -49,7 +49,6 @@ export function localDay (d = new Date()) {
 }
 
 const accountName = p => p?.full_name || p?.username || null
-const msg = (e, fallback) => toUserMessage(e, fallback)
 const timeShort = t => (t ? String(t).slice(0, 5) : null)
 
 /** Pure: certificate counts per state for one person. */
@@ -245,12 +244,12 @@ export default function EmployeeDirectoryPanel ({ profiles = [], isManager = fal
       // Certificates and skills are supporting facts; a failed read is stated, not shown as "none".
       const [c, s] = await Promise.allSettled([listCertifications(), listSkills()])
       if (c.status === 'fulfilled') setCerts(c.value || [])
-      else { setCerts([]); setCertError(msg(c.reason, t('workforce.directory.certsReadFailed'))) }
+      else { setCerts([]); setCertError(workforceErrorText(c.reason, t, t('workforce.directory.certsReadFailed'))) }
       if (s.status === 'fulfilled') setSkills(s.value || [])
-      else { setSkills(null); setSkillsError(msg(s.reason, t('workforce.directory.skillsReadFailed'))) }
+      else { setSkills(null); setSkillsError(workforceErrorText(s.reason, t, t('workforce.directory.skillsReadFailed'))) }
     } catch (e) {
       if (e?.message === NOT_INSTALLED) setNotInstalled(true)
-      else setError(msg(e, t('workforce.directory.loadFailed')))
+      else setError(workforceErrorText(e, t, t('workforce.directory.loadFailed')))
     } finally { setLoading(false) }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- t only labels fallback messages
   }, [])
@@ -302,7 +301,7 @@ export default function EmployeeDirectoryPanel ({ profiles = [], isManager = fal
         ['name', 'employee_id', 'designation', 'department', 'team', 'supervisor', 'sites', 'status', 'unavailable_until', 'shift', 'certs_valid', 'certs_expiring', 'certs_expired', 'skills', 'account_role'],
         ['hName', 'hEmployeeId', 'hDesignation', 'hDepartment', 'hTeam', 'hSupervisor', 'hSites', 'hEmploymentStatus', 'hUnavailableUntil', 'hShift', 'hCertsValid', 'hCertsExpiring', 'hCertsExpired', 'hSkills', 'hAccountRole'].map(k => t(`workforce.directory.${k}`)),
         t('workforce.directory.exportTitle'), t('workforce.directory.exportSheet'), { title: t('workforce.directory.exportTitle') })
-    } catch (e) { setError(msg(e, t('workforce.directory.exportFailed'))) }
+    } catch (e) { setError(workforceErrorText(e, t, t('workforce.directory.exportFailed'))) }
   }
 
   const columns = useMemo(() => [
@@ -542,7 +541,7 @@ function EmployeeDrawer ({ row, open, onClose, isManager, profiles, nameOf, cert
   useEffect(() => {
     if (tab !== 'history' || !rowId || history) return
     let live = true
-    listEmployeeHistory(rowId).then(h => { if (live) setHistory(h || []) }).catch(e => { if (live) setHistoryError(msg(e, t('workforce.directory.historyFailed'))) })
+    listEmployeeHistory(rowId).then(h => { if (live) setHistory(h || []) }).catch(e => { if (live) setHistoryError(workforceErrorText(e, t, t('workforce.directory.historyFailed'))) })
     return () => { live = false }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- t only labels the fallback message
   }, [tab, rowId, history])
@@ -562,7 +561,7 @@ function EmployeeDrawer ({ row, open, onClose, isManager, profiles, nameOf, cert
       await saveEmployeeRecord(form, { exists: row.has_record })
       await onSaved(row.has_record ? t('workforce.directory.recordUpdated') : t('workforce.directory.recordCreated'))
       onClose()
-    } catch (err) { setFormError(msg(err, t('workforce.directory.saveFailed'))) } finally { setBusy(false) }
+    } catch (err) { setFormError(workforceErrorText(err, t, t('workforce.directory.saveFailed'))) } finally { setBusy(false) }
   }
 
   const saveCert = async e => {
@@ -572,7 +571,7 @@ function EmployeeDrawer ({ row, open, onClose, isManager, profiles, nameOf, cert
       await addCertification({ profile_id: row.id, ...certForm })
       setCertForm({ cert_type: '', cert_number: '', issued_on: '', expires_on: '' })
       await onSaved(t('workforce.directory.certRecorded'))
-    } catch (err) { setCertFormError(msg(err, t('workforce.directory.certFailed'))) } finally { setBusy(false) }
+    } catch (err) { setCertFormError(workforceErrorText(err, t, t('workforce.directory.certFailed'))) } finally { setBusy(false) }
   }
 
   const fmtValue = (field, v) => {
@@ -744,7 +743,7 @@ function TaskRequirements ({ taskTypes, onSaved }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const submit = async e => {
     e.preventDefault(); setErr(null); setBusy(true)
-    try { await saveTaskType(form); setForm(BLANK_TASK); await onSaved() } catch (x) { setErr(msg(x, t('workforce.directory.taskFailed'))) } finally { setBusy(false) }
+    try { await saveTaskType(form); setForm(BLANK_TASK); await onSaved() } catch (x) { setErr(workforceErrorText(x, t, t('workforce.directory.taskFailed'))) } finally { setBusy(false) }
   }
   const missingGate = form.safety_critical && !String(form.required_skill_id).trim() && !String(form.required_cert_type).trim()
   return (

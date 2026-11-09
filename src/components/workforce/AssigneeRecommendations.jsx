@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { recommendAssignees, qualificationReasonText } from '../../lib/api/workforceAssignments'
-import { toUserMessage } from '../../lib/safeError'
+import { recommendAssignees } from '../../lib/api/workforceAssignments'
+import { workforceErrorText, qualificationReason } from '../../lib/workforceErrorText'
 import { useLanguage } from '../../contexts/LanguageContext'
 
 /**
@@ -21,7 +21,7 @@ export default function AssigneeRecommendations ({ taskType, site, dueAt, select
         const r = await recommendAssignees({ task_type: taskType || null, site: site || null, due_at: dueAt || null, limit: 8 })
         if (!live) return
         setRows(r); setState(r === null ? 'unavailable' : 'ready')
-      } catch (e) { if (live) { setError(toUserMessage(e, t('workforce.recommend.failed'))); setState('error') } }
+      } catch (e) { if (live) { setError(workforceErrorText(e, t, t('workforce.recommend.failed'))); setState('error') } }
     }, 350)
     return () => { live = false; clearTimeout(timer) }
   }, [taskType, site, dueAt])
@@ -45,7 +45,7 @@ export default function AssigneeRecommendations ({ taskType, site, dueAt, select
                   <p className="text-sm font-medium">{r.full_name || t('workforce.recommend.unnamed')}{r.employee_id ? ` | ${t('workforce.recommend.id', { id: r.employee_id })}` : ''}{r.designation ? ` | ${r.designation}` : ''}</p>
                   <p className="text-xs text-[var(--text-muted)]">
                     <span className={tone}>{status}</span>
-                    {r.reasons?.length ? `: ${r.reasons.map(qualificationReasonText).join(', ')}` : ''}
+                    {r.reasons?.length ? `: ${r.reasons.map(c => qualificationReason(c, t)).join(', ')}` : ''}
                     {` | ${r.open_assignments === 1 ? t('workforce.recommend.openTaskOne', { count: r.open_assignments }) : t('workforce.recommend.openTaskOther', { count: r.open_assignments })}`}
                     {dueAt && r.due_same_day ? ` | ${t('workforce.recommend.dueSameDay', { count: r.due_same_day })}` : ''}
                   </p>

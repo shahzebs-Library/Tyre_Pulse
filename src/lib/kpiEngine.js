@@ -1,4 +1,6 @@
-import { toLifetimeTyres, hasLifetimeCpk, lifetimeCpk, weightedCpk, withOnePricePerTyre } from './tyreLifetime'
+import { toLifetimeTyres, hasLifetimeCpk, lifetimeCpk, weightedCpk, withOnePricePerTyre, isStrongSerial } from './tyreLifetime'
+
+const _tyreKey = (r) => `${String(r.country ?? '').trim().toUpperCase()}|${String(r.serial_no ?? '').trim().toUpperCase()}`
 // ─────────────────────────────────────────────────────────────────────────────
 // kpiEngine.js - Pure KPI computation library for TyrePulse
 // No Supabase calls. No React. No side effects.
@@ -589,13 +591,22 @@ export function computeScrapRate(records = [], scrapKmPct = 20, defaultCost = 0)
     return false
   })
 
-  // A refit of a tyre already bought is not a second purchase.
-  const adjusted = withOnePricePerTyre(records)
-  const onePrice = new Map(records.map((r, i) => [r, adjusted[i]]))
-  const estimatedScrapCost = scrapped.map(r => onePrice.get(r)).reduce(
-    (s, r) => s + (Number(r.cost_per_tyre) > 0 ? Number(r.cost_per_tyre) : defaultCost) * (Number(r.qty) || 1),
-    0
-  )
+  // A scrapped physical tyre costs its purchase price once, wherever that price
+  // sits in its fitment history (the scrapped row may be a refit with no price).
+  const purchase = new Map()
+  for (const r of withOnePricePerTyre(records)) {
+    if (isStrongSerial(r.serial_no) && Number(r.cost_per_tyre) > 0) purchase.set(_tyreKey(r), Number(r.cost_per_tyre))
+  }
+  const countedTyres = new Set()
+  const estimatedScrapCost = scrapped.reduce((s, r) => {
+    if (isStrongSerial(r.serial_no)) {
+      const k = _tyreKey(r)
+      if (countedTyres.has(k)) return s
+      countedTyres.add(k)
+      return s + (purchase.get(k) ?? defaultCost)
+    }
+    return s + (Number(r.cost_per_tyre) > 0 ? Number(r.cost_per_tyre) : defaultCost) * (Number(r.qty) || 1)
+  }, 0)
 
   const bySite = Object.entries(_groupBy(records, r => r.site ?? 'Unknown'))
     .map(([site, rows]) => {

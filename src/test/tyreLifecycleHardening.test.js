@@ -65,6 +65,12 @@ describe('kpiEngine functions that were still per fitment row', () => {
     const t = computeCostTrend(refit)
     expect(t.byMonth.reduce((s, m) => s + m.totalCost, 0)).toBe(1200)
   })
+  it('scrap cost takes the purchase price even when only a later refit is scrapped', () => {
+    const rows = [{ ...refit[0], category: 'Rotation' }, { ...refit[1], category: 'Scrap' }]
+    const k = computeScrapRate(rows)
+    expect(k.scrapCount).toBe(1)
+    expect(k.estimatedScrapCost).toBe(1200)
+  })
   it('scrap cost counts the purchase once', () => {
     const scrapped = refit.map((r) => ({ ...r, category: 'Scrap' }))
     expect(computeScrapRate(scrapped).estimatedScrapCost).toBe(1200)

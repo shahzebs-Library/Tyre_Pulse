@@ -241,7 +241,7 @@ begin
   end if;
   for r in
     select e.id old_id, e.country, e.asset_no, upper(btrim(coalesce(e.tyre_position, e.position, ''))) old_pos,
-           e.serial_no, e.removal_date, e.km_at_removal, e.total_km, e.status, e.extra_fields,
+           e.serial_no, e.removal_date, e.km_at_removal, e.total_km, e.hrs_at_removal, e.total_hrs, e.status, e.extra_fields,
            l.id new_id, upper(btrim(coalesce(l.tyre_position, l.position, ''))) new_pos,
            coalesce(l.issue_date, l.fitment_date) new_date, e.organisation_id
     from public.tyre_records e
@@ -265,7 +265,9 @@ begin
           and upper(btrim(z.serial_no)) = upper(btrim(e.serial_no))
           and upper(regexp_replace(coalesce(z.asset_no, ''), '\s+', '', 'g')) = upper(regexp_replace(coalesce(e.asset_no, ''), '\s+', '', 'g'))
           and public.tyre_status_is_active(z.status)
-          and coalesce(z.issue_date, z.fitment_date) > coalesce(l.issue_date, l.fitment_date))
+          and (coalesce(z.issue_date, z.fitment_date) > coalesce(l.issue_date, l.fitment_date)
+               -- two latest rows on the same day = ambiguous, left for a person
+               or (coalesce(z.issue_date, z.fitment_date) = coalesce(l.issue_date, l.fitment_date) and z.id <> l.id)))
   loop
     v_n := v_n + 1;
     v_list := v_list || jsonb_build_array(jsonb_build_object('country', r.country, 'asset', r.asset_no, 'serial', r.serial_no,
@@ -275,7 +277,7 @@ begin
         replaced_on, old_values, new_values, source)
       values (r.organisation_id, v_batch, r.old_id, r.country, r.asset_no, r.old_pos, r.serial_no, r.serial_no, r.new_date,
         jsonb_build_object('removal_date', r.removal_date, 'km_at_removal', r.km_at_removal, 'total_km', r.total_km,
-          'status', r.status, 'extra_fields', r.extra_fields),
+          'hrs_at_removal', r.hrs_at_removal, 'total_hrs', r.total_hrs, 'status', r.status, 'extra_fields', r.extra_fields),
         jsonb_build_object('removal_date', r.new_date, 'status', 'Removed', 'rotated_to', r.new_pos), 'rotation_close');
       update public.tyre_records t set removal_date = r.new_date, status = 'Removed',
         extra_fields = coalesce(t.extra_fields, '{}'::jsonb) || jsonb_build_object('rotated_to', r.new_pos, 'rotated_on', r.new_date, 'rotation_batch', v_batch)

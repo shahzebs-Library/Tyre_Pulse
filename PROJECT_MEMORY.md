@@ -33,7 +33,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   that wheel / the log says the current tyre replaced it / its meter is below the current fitment's. tyre_import_reconcile
   returns uncapped `held` (review stays capped 200). tyre_serial_is_strong + JS isStrongSerial: month codes, "195 R 15",
   two serials in a cell, repeated digits, sequences = weak (MIRROR, test pins live answers). cost undo marks only restored rows.
-  New: get_tyre_exceptions(country), v_tyre_cost_status, tyre_close_rotations(dry_run default true; 14 would close, NOT run).
+  New: get_tyre_exceptions(country), v_tyre_cost_status, tyre_close_rotations(dry_run default true; 10 would close, NOT run).
   Old defs in _bak.fn_defs_20261109d. Post-apply rollback test NOT run (DROP hit the MCP approval prompt).
 - ERP intake refuses current fitments without a country (the reconcile was silently skipped). kpiEngine computeFleetTyreLife,
   computeCostTrend, computeScrapRate now one price per tyre / lifetime km (withOnePricePerTyre).

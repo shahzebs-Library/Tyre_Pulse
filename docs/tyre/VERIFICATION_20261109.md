@@ -31,7 +31,7 @@ Dry-run first (whole migration + tests in one aborted transaction), then applied
   28 KSA rows (18 values, SAR 3,625) stop being treated as one physical tyre; no data changed.
 - Exceptions (all countries): rotation not closed 11, same-day double entry 6, priced twice 1,
   weak serial on active fitments 77, serial with remark 47, open import reviews 0.
-- Rotation closer DRY RUN: 14 earlier fitments would close. **Not applied** (owner decision).
+- Rotation closer: 10 earlier fitments would close (14 before review fixes: 4 were tyres whose latest position has two same-day rows - now left for a person). Round trip tested in an aborted transaction: closed 10, undo restored 10, register byte-identical afterwards. Scope verified: KSA-only Manager sees only KSA candidates. **Not applied** (owner decision).
 - Cost status: purchase_price 4,169 / unpriced 4,030 / estimated_comparable 1,885 /
   from_job_card 579 / refit_no_new_purchase 538 / cleared (repeat) 119 / cleared (estimate) 90.
 - Grants: anon cannot execute `get_tyre_exceptions`, `tyre_close_rotations`, nor read `v_tyre_cost_status`.

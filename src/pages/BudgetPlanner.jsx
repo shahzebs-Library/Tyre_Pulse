@@ -588,7 +588,7 @@ export default function BudgetPlanner() {
         'This Year': Math.round(b.thisYear),
         'Last Year': Math.round(b.lastYear),
         'Change %': b.change != null ? fmtPct(b.change) : 'N/A',
-        'CPK (curr)': b.cpk != null ? b.cpk.toFixed(4) : 'N/A',
+        'CPK weighted (curr)': b.cpk != null ? b.cpk.toFixed(4) : 'N/A',
         'CPK Change %': b.cpkChange != null ? fmtPct(b.cpkChange) : 'N/A',
       }))
       const ws3 = XLSX.utils.json_to_sheet(brandRows)
@@ -660,7 +660,7 @@ export default function BudgetPlanner() {
           : <span className="text-[var(--text-muted)]">{t('budgetplanner.na')}</span>
       },
     },
-    { id: 'cpk', header: t('budgetplanner.brand.columns.cpk'), accessorFn: r => r.cpk, size: 120, meta: { align: 'right' },
+    { id: 'cpk', header: `${t('budgetplanner.brand.columns.cpk')} (weighted)`, accessorFn: r => r.cpk, size: 120, meta: { align: 'right' },
       cell: ({ getValue }) => <span className="text-[var(--text-secondary)]">{fmtCpk(getValue(), activeCurrency)}</span>,
     },
     { id: 'cpkChange', header: t('budgetplanner.brand.columns.cpkDelta'), accessorFn: r => r.cpkChange, size: 100, meta: { align: 'right' },
@@ -735,7 +735,7 @@ export default function BudgetPlanner() {
           const over = s.budget != null && s.projection != null && s.projection > s.budget
           return <span className={`font-medium tabular-nums ${over ? 'text-red-400' : 'text-[var(--text-secondary)]'}`}>{fmt(s.projection, activeCurrency)}</span>
         } },
-      { id: 'cpk', header: t('budgetplanner.site.columns.cpk'), accessorFn: r => r.cpk, size: 140, meta: { align: 'right', exportValue: r => (r.cpk == null ? 'N/A' : r.cpk.toFixed(4)) },
+      { id: 'cpk', header: `${t('budgetplanner.site.columns.cpk')} (weighted)`, accessorFn: r => r.cpk, size: 140, meta: { align: 'right', exportValue: r => (r.cpk == null ? 'N/A' : r.cpk.toFixed(4)) },
         cell: ({ getValue }) => <span className="text-[var(--text-secondary)] tabular-nums">{fmtCpk(getValue(), activeCurrency)}</span> },
       { id: 'status', header: t('budgetplanner.site.columns.status'), accessorFn: r => r.status, size: 120, meta: { filterVariant: 'select' },
         cell: ({ getValue }) => statusBadge(getValue()) },

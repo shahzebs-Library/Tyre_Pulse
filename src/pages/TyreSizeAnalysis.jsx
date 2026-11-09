@@ -274,7 +274,7 @@ export default function TyreSizeAnalysis() {
     { key: 'size', header: 'Size', cell: (r) => <span><b>{r.size}</b>{r.best && <span className="cc-pill good tsz-inline">Lowest CPK</span>}</span> },
     { key: 'count', header: 'Tyres', numeric: true, cell: (r) => fmtInt(r.count) },
     { key: 'assets', header: 'Assets', numeric: true, cell: (r) => fmtInt(r.assets) },
-    { key: 'avgCpk', header: 'Avg CPK', numeric: true, sortValue: (r) => r.avgCpk ?? 9e9, cell: (r) => (r.avgCpk == null ? <span className="cc-na" title={`${r.cpkSample} measured tyres, needs more`}>N/A</span> : `${r.avgCpk.toFixed(4)}/km`) },
+    { key: 'avgCpk', header: 'CPK (weighted, per tyre-km)', numeric: true, sortValue: (r) => r.avgCpk ?? 9e9, cell: (r) => (r.avgCpk == null ? <span className="cc-na" title={`${r.cpkSample} measured physical tyres, needs more`}>N/A</span> : `${r.avgCpk.toFixed(4)}/km`) },
     { key: 'avgLife', header: 'Avg life', numeric: true, sortValue: (r) => r.avgLife ?? -1, cell: (r) => fmtKm(r.avgLife) },
   ]
   const costRows = rows.filter((r) => r.saving != null)

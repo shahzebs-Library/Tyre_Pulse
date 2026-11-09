@@ -38,7 +38,9 @@ describe('sizeOptimizerView', () => {
   })
 
   it('never compares sizes across countries and keeps money per currency', () => {
-    const mixed = [...recs, ...[11, 12, 13, 14, 15].map((i) => t(i, 'U1', '385/65R22.5', 10, 100000, 'UAE'))]
+    // 70,000 km: a 100,000 km life on a mixer is above the class cap (80,000) and is
+    // unknown under the shared km rule T7, so the fixture stays inside the cap.
+    const mixed = [...recs, ...[11, 12, 13, 14, 15].map((i) => t(i, 'U1', '385/65R22.5', 10, 70000, 'UAE'))]
     const rows = assetRecommendations(mixed, makeSizeLabeller(mixed), [])
     const u1 = rows.find((r) => r.asset_no === 'U1')
     expect(u1.status).toBe('Current is best')

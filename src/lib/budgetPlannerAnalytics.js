@@ -11,7 +11,20 @@
  *
  * HONEST NULLS: a percentage of a zero budget, or a CPK with no measured
  * distance, is null (N/A) - never a 0% that reads as "nothing spent".
+ *
+ * PHYSICAL TYRES (src/lib/tyreLifetime.js): normaliseRecords drops a refit's
+ * repeat price (one tyre one price, rule T1) so spend buckets never buy the same
+ * tyre twice, and tags each physical tyre's LATEST fitment row with `_tyre`.
+ * averageCpk is the WEIGHTED lifetime CPK (total purchase cost / total tyre-km,
+ * rule T8) of the tyres whose latest fitment is in the given rows; a tyre's km
+ * spans all its fitments, not only the ones inside the year slice.
  */
+import {
+  withOnePricePerTyre, toLifetimeTyres, tyreKey, weightedCpk, CPK_KIND, CPK_KIND_LABEL,
+} from './tyreLifetime'
+
+export const BUDGET_CPK_KIND = CPK_KIND.FLEET_AGGREGATE
+export const BUDGET_CPK_KIND_LABEL = CPK_KIND_LABEL[CPK_KIND.FLEET_AGGREGATE]
 
 export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 export const GROWTH_ASSUMPTION = 1.05
@@ -23,8 +36,11 @@ const n = (v) => {
 }
 
 /** Parse each row once: cost, year, month (local calendar), km pair. */
+const dateOf = (r) => String(r?.issue_date ?? r?.fitment_date ?? '').slice(0, 10)
+
 export function normaliseRecords(records = []) {
-  return records.map((r) => {
+  const src = withOnePricePerTyre((records || []).filter(Boolean))
+  const rows = src.map((r) => {
     let year = null
     let month = null
     if (r.issue_date) {
@@ -35,8 +51,22 @@ export function normaliseRecords(records = []) {
         if (!Number.isNaN(d.getTime())) { year = d.getFullYear(); month = d.getMonth() }
       }
     }
-    return { ...r, cost: n(r.cost_per_tyre), year, month, kmFit: n(r.km_at_fitment), kmRem: n(r.km_at_removal) }
+    return { ...r, cost: n(r.cost_per_tyre), year, month, kmFit: n(r.km_at_fitment), kmRem: n(r.km_at_removal), _tyre: null }
   })
+  // Tag the latest fitment row of each physical tyre with its lifetime figures.
+  const byKey = new Map()
+  src.forEach((r, i) => {
+    const k = tyreKey(r, i)
+    if (!byKey.has(k)) byKey.set(k, [])
+    byKey.get(k).push(i)
+  })
+  for (const t of toLifetimeTyres(src)) {
+    const idxs = byKey.get(t._key) || []
+    let pick = t.id != null ? idxs.find((i) => src[i].id === t.id) : undefined
+    if (pick == null) pick = idxs.reduce((best, i) => (best == null || dateOf(src[i]) >= dateOf(src[best]) ? i : best), null)
+    if (pick != null) rows[pick]._tyre = t
+  }
+  return rows
 }
 
 export const recordsForYear = (rows, year) => rows.filter((r) => r.year === year)
@@ -48,11 +78,15 @@ export function monthlyActuals(rows = []) {
   return arr
 }
 
-/** Average cost per km over rows with a measured distance; null when none. */
+/**
+ * Weighted lifetime CPK of the physical tyres represented by `rows`; null when
+ * none has both a price and a measured km. Rows from normaliseRecords carry
+ * `_tyre`; raw rows are collapsed here.
+ */
 export function averageCpk(rows = []) {
-  const valid = rows.filter((r) => r.kmRem > r.kmFit && r.cost > 0)
-  if (!valid.length) return null
-  return valid.reduce((s, r) => s + r.cost / (r.kmRem - r.kmFit), 0) / valid.length
+  const tagged = rows.some((r) => r && '_tyre' in r)
+  const tyres = tagged ? rows.filter((r) => r._tyre).map((r) => r._tyre) : toLifetimeTyres(rows)
+  return weightedCpk(tyres)
 }
 
 /** Spend per calendar year. */
@@ -112,10 +146,12 @@ export function siteAllocation({ yearRows = [], prevYearRows = [], siteBudgets =
   const map = new Map()
   for (const r of yearRows) {
     if (!r.site) continue
-    if (!map.has(r.site)) map.set(r.site, { site: r.site, actual: 0, count: 0 })
+    if (!map.has(r.site)) map.set(r.site, { site: r.site, actual: 0, count: 0, fitments: 0 })
     const s = map.get(r.site)
     s.actual += r.cost
+    // count = fitment rows (kept for existing readers); fitments says so explicitly.
     s.count += 1
+    s.fitments += 1
   }
   const prevMap = {}
   for (const r of prevYearRows) if (r.site) prevMap[r.site] = (prevMap[r.site] || 0) + r.cost

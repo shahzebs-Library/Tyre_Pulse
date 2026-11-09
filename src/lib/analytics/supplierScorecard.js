@@ -24,6 +24,17 @@
 //   • returns-days      — needs a returns table (not in schema/read path)
 // ─────────────────────────────────────────────────────────────────────────────
 
+import {
+  toLifetimeTyres, weightedCpk, withOnePricePerTyre, CPK_KIND, CPK_KIND_LABEL,
+} from '../tyreLifetime'
+
+// Physical-tyre rule (src/lib/tyreLifetime.js): rows are collapsed into physical
+// tyres FIRST, then grouped by the tyre's latest supplier. tyreCount = physical
+// tyres, avgCpk = weighted lifetime CPK (total purchase cost / total tyre-km),
+// supplierAvgCost = mean purchase price per physical tyre (price once). Spend
+// stays per fitment row with a refit's price dropped (withOnePricePerTyre).
+// The trend buckets count FITMENTS in each period (an event measure).
+
 const num = (v) => {
   const n = Number(v)
   return Number.isFinite(n) ? n : 0
@@ -35,17 +46,6 @@ const round1 = (v) => (v == null ? null : Math.round(v * 10) / 10)
 /** Actual cost of one tyre_records row: cost_per_tyre × qty (qty defaults to 1). */
 function tyreSpend(r) {
   return num(r?.cost_per_tyre) * (r?.qty == null ? 1 : num(r.qty))
-}
-
-/** CPK for one tyre_records row, or null when km data is missing/invalid. */
-function recordCpk(r) {
-  if (!r) return null
-  const fit = r.km_at_fitment
-  const rem = r.km_at_removal
-  if (fit == null || rem == null) return null
-  const kmRun = num(rem) - num(fit)
-  if (kmRun <= 0) return null
-  return num(r.cost_per_tyre) / kmRun
 }
 
 /** Normalise a raw supplier label; empty/nullish → 'Unknown'. */
@@ -197,7 +197,8 @@ function classifyTrend(cur, prior) {
  * @returns {{ suppliers: Array, totals: object }}
  */
 export function computeSupplierScorecard({ tyres = [], warranty = [], purchaseOrders = [] } = {}) {
-  const tyreRows = Array.isArray(tyres) ? tyres : []
+  const tyreRows = withOnePricePerTyre((Array.isArray(tyres) ? tyres : []).filter(Boolean))
+  const physical = toLifetimeTyres(tyreRows)
   const warrantyRows = Array.isArray(warranty) ? warranty : []
   const poRows = Array.isArray(purchaseOrders) ? purchaseOrders : []
 
@@ -226,7 +227,7 @@ export function computeSupplierScorecard({ tyres = [], warranty = [], purchaseOr
     const key = supKey(name)
     if (!map.has(key)) {
       map.set(key, {
-        supplier: key, tyreCount: 0, totalSpend: 0, cpkSum: 0, cpkN: 0,
+        supplier: key, tyreCount: 0, fitments: 0, totalSpend: 0, lifeTyres: [],
         warrantyClaims: 0, warrantyCredit: 0, warrantyAccepted: 0,
         costSum: 0, costN: 0, poTotal: 0, poOnTime: 0,
         cur: emptyBucket(), prior: emptyBucket(),
@@ -239,14 +240,19 @@ export function computeSupplierScorecard({ tyres = [], warranty = [], purchaseOr
   let marketSum = 0
   let marketN = 0
 
+  // Physical tyres: count, lifetime CPK, purchase price once.
+  for (const t of physical) {
+    const a = acc(t?.supplier)
+    a.tyreCount += t._qty || 1
+    a.lifeTyres.push(t)
+    const unit = t._cost
+    if (unit != null && unit > 0) { a.costSum += unit; a.costN += 1; marketSum += unit; marketN += 1 }
+  }
+  // Fitment rows: spend (one price per tyre) and period buckets (events).
   for (const r of tyreRows) {
     const a = acc(r?.supplier)
-    a.tyreCount += 1
+    a.fitments += 1
     a.totalSpend += tyreSpend(r)
-    const cpk = recordCpk(r)
-    if (cpk != null) { a.cpkSum += cpk; a.cpkN += 1 }
-    const unit = num(r?.cost_per_tyre)
-    if (unit > 0) { a.costSum += unit; a.costN += 1; marketSum += unit; marketN += 1 }
     const bkt = bucketOf(tyreMs(r))
     if (bkt) a[bkt].tyres += 1
   }
@@ -273,7 +279,7 @@ export function computeSupplierScorecard({ tyres = [], warranty = [], purchaseOr
   const marketAvgCost = marketN ? marketSum / marketN : null
 
   const rows = Array.from(map.values()).map((a) => {
-    const avgCpk = a.cpkN ? a.cpkSum / a.cpkN : null
+    const avgCpk = weightedCpk(a.lifeTyres)
     const failureRate = a.tyreCount ? a.warrantyClaims / a.tyreCount : null
     const warrantyRecoveryRate = a.warrantyClaims ? a.warrantyCredit / a.warrantyClaims : null
     const onTimeRate = a.poTotal ? a.poOnTime / a.poTotal : null
@@ -283,7 +289,8 @@ export function computeSupplierScorecard({ tyres = [], warranty = [], purchaseOr
     const priceCompetitiveness = priceCompetitivenessScore(supplierAvgCost, marketAvgCost)
     const { trend, trendDelta } = classifyTrend(periodQuality(a.cur), periodQuality(a.prior))
     return {
-      supplier: a.supplier, tyreCount: a.tyreCount, totalSpend: a.totalSpend, avgCpk,
+      supplier: a.supplier, tyreCount: a.tyreCount, fitments: a.fitments, totalSpend: a.totalSpend, avgCpk,
+      cpkKind: CPK_KIND.FLEET_AGGREGATE, cpkKindLabel: CPK_KIND_LABEL[CPK_KIND.FLEET_AGGREGATE],
       failureRate, warrantyClaims: a.warrantyClaims, warrantyCredit: a.warrantyCredit,
       warrantyRecoveryRate, poTotal: a.poTotal, onTimeRate,
       // ── additive dimensions ──

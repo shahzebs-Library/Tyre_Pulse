@@ -14,6 +14,10 @@
  * depreciation and residual recovery.)
  */
 
+import {
+  withOnePricePerTyre, toLifetimeTyres, fitmentKm, lifetimeSummary, CPK_KIND, CPK_KIND_LABEL,
+} from './tyreLifetime'
+
 export const TCO_DEFAULTS = {
   // Fleet scope
   vehicle_count: 25,
@@ -165,6 +169,14 @@ export function computeTco(rawInputs = {}) {
  * the what-if calculator. Savings-potential uses the same GCC assumption
  * constants as the original engine, applied to REAL fleet/tyre counts.
  *
+ * PHYSICAL TYRES (src/lib/tyreLifetime.js): every money sum here first drops a
+ * refit's repeat price (withOnePricePerTyre, one tyre one price, rule T1), so a
+ * tyre moved to a second asset is not bought again on it. Per-asset and monthly
+ * km are PER FITMENT by the shared km rule (fitmentKm, rule T7): that is the
+ * distance run ON that asset / in that month. The fleet lifetime CPK
+ * (rollup.fleet_lifetime_cpk) is the weighted physical-tyre figure (rule T8).
+ * Savings inputs count physical tyres and average one price per physical tyre.
+ *
  * CPK note: the canonical fleet CPK number is computed by the Engineering-KPI
  * engine (src/lib/kpiEngine.js `computeCpkFleet`, mean of per-record cpk). The
  * per-asset cost_per_km here is an ASSET-level drill-down (Σ tyre cost ÷ Σ km),
@@ -225,20 +237,23 @@ export function recordTyreCost(r) {
   return qty != null && qty > 0 ? cost * qty : cost
 }
 
-/** Full km for one record: the fitment→removal stint when valid, else total_km. */
+/**
+ * km ONE fitment ran, by the shared km rule (fitmentKm, rule T7: the
+ * fitment->removal stint, else total_km; a placeholder fitment km of 1 or a life
+ * over the class cap is unknown). 0 when not measurable (a sum contribution).
+ */
 export function recordKm(r) {
-  const fit = nn(r?.km_at_fitment)
-  const rem = nn(r?.km_at_removal)
-  if (fit != null && rem != null && rem > fit) return rem - fit
-  const tk = nn(r?.total_km)
-  return tk != null && tk > 0 ? tk : 0
+  const km = fitmentKm(r)
+  return km != null && km > 0 ? km : 0
 }
 
-/** Stint-only km (used for monthly CPK, where total_km can't be attributed to a month). */
+/**
+ * Stint-only km (monthly CPK): needs both meter readings, because a bare total_km
+ * cannot be attributed to a month. Still measured by the shared km rule.
+ */
 function recordStintKm(r) {
-  const fit = nn(r?.km_at_fitment)
-  const rem = nn(r?.km_at_removal)
-  return fit != null && rem != null && rem > fit ? rem - fit : 0
+  if (nn(r?.km_at_fitment) == null || nn(r?.km_at_removal) == null) return 0
+  return recordKm(r)
 }
 
 const isScrapped = (r) =>
@@ -259,7 +274,7 @@ const isActiveVehicle = (v) => {
  * @param {{vehicleTypeByAsset?:Record<string,string>}} [opts]
  */
 export function computeAssetsActualTco(records = [], { vehicleTypeByAsset = {} } = {}) {
-  const groups = groupBy((records || []).filter(Boolean), (r) => r.asset_no ?? 'Unknown')
+  const groups = groupBy(withOnePricePerTyre((records || []).filter(Boolean)), (r) => r.asset_no ?? 'Unknown')
   return Object.entries(groups)
     .map(([asset_no, rows]) => {
       const tyre_procurement = rows.reduce((s, r) => s + recordTyreCost(r), 0)
@@ -271,7 +286,9 @@ export function computeAssetsActualTco(records = [], { vehicleTypeByAsset = {} }
         tyre_procurement: Math.round(tyre_procurement),
         km: Math.round(km),
         cost_per_km,
+        // Fitment rows on this asset (the page labels the column "Records").
         tyre_count: rows.length,
+        fitments: rows.length,
       }
     })
     .sort((a, b) => b.tyre_procurement - a.tyre_procurement)
@@ -320,7 +337,7 @@ export function cpkBand(cpk, ref) {
  */
 export function computeMonthlyActualCpk(records = []) {
   const buckets = {}
-  for (const r of (records || []).filter(Boolean)) {
+  for (const r of withOnePricePerTyre((records || []).filter(Boolean))) {
     const key = monthKey(r.removal_date || r.issue_date)
     if (!key) continue
     ;(buckets[key] ||= { month: key, cost: 0, km: 0 })
@@ -342,7 +359,7 @@ export function computeMonthlyActualCpk(records = []) {
  * the actuals side). Drives the cost-breakdown doughnut.
  */
 export function computeSpendByPosition(records = []) {
-  const groups = groupBy((records || []).filter(Boolean), (r) => {
+  const groups = groupBy(withOnePricePerTyre((records || []).filter(Boolean)), (r) => {
     const p = String(r.position ?? '').trim()
     return p || 'Unspecified'
   })
@@ -361,8 +378,10 @@ export function deriveSavingsInputs(records = [], activeAssets = null) {
   const rows = (records || []).filter(Boolean)
   const distinctAssets = new Set(rows.map((r) => r.asset_no).filter(Boolean)).size
   const vehicleCount = activeAssets && activeAssets.size > 0 ? activeAssets.size : distinctAssets
-  const tyreCount = rows.filter((r) => !isScrapped(r)).length
-  const costs = rows.map((r) => nn(r.cost_per_tyre)).filter((c) => c != null && c > 0)
+  // Physical tyres (latest fitment not scrapped), one purchase price per tyre.
+  const tyres = toLifetimeTyres(rows)
+  const tyreCount = tyres.filter((t) => !isScrapped(t)).reduce((s, t) => s + (t._qty || 1), 0)
+  const costs = tyres.map((t) => t._cost).filter((c) => c != null && c > 0)
   const avgTyreCost = costs.length ? Math.round(mean(costs)) : TCO_ASSUMPTIONS.avg_tyre_cost
   return { vehicleCount, tyreCount, avgTyreCost }
 }
@@ -436,7 +455,17 @@ export function computeFleetActuals(records = [], { fleet = [] } = {}) {
   }
 
   const baseAssets = computeAssetsActualTco(rows, { vehicleTypeByAsset })
-  const rollup = computeFleetActualRollup(baseAssets)
+  const lifetime = lifetimeSummary(toLifetimeTyres(rows))
+  const rollup = {
+    ...computeFleetActualRollup(baseAssets),
+    // Weighted physical-tyre lifetime CPK (total purchase cost / total tyre-km).
+    fleet_lifetime_cpk: round3(lifetime.cpkPurchase),
+    fleet_lifetime_cpk_kind: CPK_KIND.FLEET_AGGREGATE,
+    fleet_lifetime_cpk_label: CPK_KIND_LABEL[CPK_KIND.FLEET_AGGREGATE],
+    fleet_lifetime_km_coverage: lifetime.coverage,
+    fleet_lifetime_tyres: lifetime.tyres,
+    fleet_lifetime_measurable: lifetime.measurable,
+  }
   const assets = baseAssets.map((a) => ({
     ...a,
     percentile: cpkPercentile(a.cost_per_km, rollup.fleet_avg_cpkm),

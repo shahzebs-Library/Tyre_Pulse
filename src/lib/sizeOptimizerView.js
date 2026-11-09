@@ -14,7 +14,15 @@
  *  - Estimated saving = (current CPK - recommended CPK) x the tyre-km actually
  *    recorded on this asset at its current size. No default km is invented.
  */
-import { calcCpk, calcLife, avg, MIN_RECORDS_CPK, UNKNOWN_SIZE } from './tyreSizeAnalytics'
+import { calcLife, avg, MIN_RECORDS_CPK, UNKNOWN_SIZE, physicalTyres } from './tyreSizeAnalytics'
+import { tyreKey, weightedCpk, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
+
+// Size CPK and life are PHYSICAL-TYRE figures (src/lib/tyreLifetime.js): rows are
+// collapsed into tyres first, then grouped by the tyre's latest type|country|size.
+// CPK is weighted (total cost / total tyre-km); life = mean lifetime km. The
+// per-asset tyre-km behind a saving stays the km run ON that asset (per fitment).
+export const OPTIMIZER_CPK_KIND = CPK_KIND.FLEET_AGGREGATE
+export const OPTIMIZER_CPK_KIND_LABEL = CPK_KIND_LABEL[CPK_KIND.FLEET_AGGREGATE]
 
 export const COUNTRY_CURRENCY = { KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' }
 export const currencyFor = (country) => COUNTRY_CURRENCY[country] || null
@@ -84,28 +92,33 @@ export function recordType(r, idx) {
  */
 export function typeSizeStats(records = [], label = (s) => s, idx = new Map(), { appFilter } = {}) {
   const groups = new Map()
-  for (const r of records || []) {
-    const type = recordType(r, idx)
+  const { tyres, rowsByKey } = physicalTyres(records || [])
+  for (const t of tyres) {
+    const type = recordType(t, idx)
     if (!type) continue
     if (appFilter && deriveApplication(type) !== appFilter) continue
-    const size = label(r.size)
+    const size = label(t.size)
     if (!size || size === UNKNOWN_SIZE) continue
-    const k = key(type, r.country, size)
-    if (!groups.has(k)) groups.set(k, { type, country: r.country || null, size, count: 0, cpks: [], lives: [], assets: new Set() })
+    const k = key(type, t.country, size)
+    if (!groups.has(k)) groups.set(k, { type, country: t.country || null, size, tyres: [], assets: new Set() })
     const g = groups.get(k)
-    g.count += 1
-    const c = calcCpk(r); if (c != null) g.cpks.push(c)
-    const l = calcLife(r); if (l != null) g.lives.push(l)
-    if (r.asset_no) g.assets.add(String(r.asset_no).trim().toUpperCase())
+    g.tyres.push(t)
+    for (const r of rowsByKey.get(t._key) || [t]) {
+      if (r.asset_no) g.assets.add(String(r.asset_no).trim().toUpperCase())
+    }
   }
   const out = new Map()
   for (const [k, g] of groups) {
+    const sample = g.tyres.filter((t) => (t._cost ?? 0) > 0 && (t._life_km ?? 0) > 0).length
+    const lives = g.tyres.map((t) => t._life_km).filter((v) => v != null && v > 0)
     out.set(k, {
-      type: g.type, country: g.country, size: g.size, count: g.count,
-      cpkSample: g.cpks.length,
-      avgCpk: g.cpks.length >= MIN_RECORDS_CPK ? avg(g.cpks) : null,
-      lifeSample: g.lives.length,
-      avgLife: g.lives.length >= 2 ? avg(g.lives) : null,
+      type: g.type, country: g.country, size: g.size,
+      count: g.tyres.reduce((s, t) => s + (t._qty || 1), 0),
+      cpkSample: sample,
+      avgCpk: sample >= MIN_RECORDS_CPK ? weightedCpk(g.tyres) : null,
+      cpkKind: OPTIMIZER_CPK_KIND,
+      lifeSample: lives.length,
+      avgLife: lives.length >= 2 ? avg(lives) : null,
       assets: g.assets.size,
     })
   }
@@ -127,6 +140,7 @@ const pctDelta = (from, to) => (from != null && to != null && from > 0 ? ((to - 
 export function assetRecommendations(records = [], label = (s) => s, fleet = [], { minImprovement = MIN_IMPROVEMENT_PCT } = {}) {
   const idx = fleetIndex(fleet)
   const stats = typeSizeStats(records, label, idx)
+  const rowKey = new Map((records || []).map((r, i) => [r, tyreKey(r, i)]))
   const assets = new Map()
   for (const r of records || []) {
     if (!r?.asset_no) continue
@@ -174,7 +188,10 @@ export function assetRecommendations(records = [], label = (s) => s, fleet = [],
       tyreKm: tyreKm > 0 ? tyreKm : null,
       saving,
       status,
-      tyres: a.recs.length,
+      // Distinct physical tyres seen on the asset; fitments = rows.
+      tyres: new Set(a.recs.map((r) => rowKey.get(r))).size,
+      fitments: a.recs.length,
+      cpkKind: OPTIMIZER_CPK_KIND,
     })
   }
   return rows.sort((x, y) => (y.saving ?? -1) - (x.saving ?? -1) || x.asset_no.localeCompare(y.asset_no))

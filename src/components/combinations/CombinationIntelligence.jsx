@@ -43,8 +43,8 @@ export default function CombinationIntelligence({
       ) : (
         <>
           <div className="cc-kpis cm-kpis-4">
-            <Kpi icon={CircleDot} tone="t-blue" value={rollup.fittedTyres} label="Fitted tyres" title={`${rollup.tyreCount} tyre records across the unit`} />
-            <Kpi icon={Gauge} tone="t-green" display={rollup.blendedCpk != null ? `${currency} ${fmt(rollup.blendedCpk, 3)}` : 'N/A'} label="Unit cost per km (blended)" />
+            <Kpi icon={CircleDot} tone="t-blue" value={rollup.fittedTyres} label="Fitted tyres" title={`${rollup.tyreCount} physical tyres, ${rollup.fitments ?? 0} fitment records across the unit`} />
+            <Kpi icon={Gauge} tone="t-green" display={rollup.blendedCpk != null ? `${currency} ${fmt(rollup.blendedCpk, 3)}` : 'N/A'} label="Unit tyre CPK (weighted)" title={rollup.cpkKindLabel || 'Fleet aggregate tyre CPK (weighted, per tyre-km)'} />
             <Kpi icon={DollarSign} tone="t-amber" display={formatCurrency(rollup.totalSpend, currency, 0)} label="Unit tyre spend"
               title={rollup.avgTyreLifeKm != null ? `Average life ${fmtInt(rollup.avgTyreLifeKm)} km` : 'No km data'} />
             <Kpi icon={Recycle} tone="t-red" value={rollup.scrapTyres} label={scrapPct == null ? 'Scrapped tyres' : `Scrapped tyres (${scrapPct}%)`} danger={rollup.scrapTyres > 0} />
@@ -82,7 +82,7 @@ export default function CombinationIntelligence({
                 { key: 'count', header: 'Tyres', numeric: true },
                 { key: 'spend', header: 'Spend', numeric: true, cell: (p) => formatCurrency(p.spend, currency, 0) },
                 { key: 'share', header: 'Share of spend', numeric: true, sortValue: (p) => p.spendSharePct, cell: (p) => (p.spendSharePct == null ? NA : `${p.spendSharePct}%`) },
-                { key: 'cpk', header: 'Cost per km', numeric: true, cell: (p) => (p.cpk != null ? `${currency} ${fmt(p.cpk, 3)}` : NA) },
+                { key: 'cpk', header: 'CPK (weighted, per tyre-km)', numeric: true, cell: (p) => (p.cpk != null ? `${currency} ${fmt(p.cpk, 3)}` : NA) },
               ]}
             />
           </Card>

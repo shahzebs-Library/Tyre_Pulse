@@ -18,8 +18,16 @@
  *  - Per-tyre CPK uses tyre_records.cost_per_tyre because that is the per-km
  *    measure. It is never summed into a fleet spend total; that total comes
  *    from the expense grid (loadGovernedCostSplit) on the page.
+ *  - PHYSICAL TYRES (src/lib/tyreLifetime.js): rows are collapsed into physical
+ *    tyres BEFORE grouping by size/brand (one tyre one price, km summed across
+ *    refits, rule T1/T8). Size/brand CPK is WEIGHTED (total cost / total
+ *    tyre-km), average life is the mean lifetime km of tyres with a measured
+ *    life, counts are physical tyres. Failure rate and position compliance stay
+ *    EVENT measures over fitment rows on purpose. calcLife / calcCpk are the
+ *    PER-FITMENT primitives (one stint, shared km rule T7).
  */
 import { buildSizeCanonicalizer } from './tyreDemandForecast'
+import { toLifetimeTyres, tyreKey, fitmentKm, weightedCpk, lifetimeSummary, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
 
 export const BENCHMARK_GOOD = 1.20
 export const BENCHMARK_AVG = 1.80
@@ -28,14 +36,13 @@ export const UNKNOWN_SIZE = 'Unknown'
 
 const RATED = new Set(['low', 'medium', 'high', 'critical'])
 
+/** km ONE fitment ran by the shared km rule (T7); null when not measurable. */
 export function calcLife(r) {
-  const fit = Number(r?.km_at_fitment)
-  const rem = Number(r?.km_at_removal)
-  if (r?.km_at_removal == null || !Number.isFinite(rem)) return null
-  const km = rem - (Number.isFinite(fit) ? fit : 0)
-  return km > 0 ? km : null
+  const km = fitmentKm(r)
+  return km != null && km > 0 ? km : null
 }
 
+/** PER-FITMENT CPK (one stint). Aggregates use the physical-tyre helpers below. */
 export function calcCpk(r) {
   const km = calcLife(r)
   const cost = Number(r?.cost_per_tyre)
@@ -116,6 +123,32 @@ export function datePresetRange(days, now = new Date()) {
   return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) }
 }
 
+export const SIZE_CPK_KIND = CPK_KIND.FLEET_AGGREGATE
+export const SIZE_CPK_KIND_LABEL = CPK_KIND_LABEL[CPK_KIND.FLEET_AGGREGATE]
+
+const lifeCache = new WeakMap()
+/**
+ * Physical tyres for a record set, plus the fitment rows of each tyre (by key).
+ * Cached per array so the many per-size calls collapse the records once.
+ */
+export function physicalTyres(records = []) {
+  if (lifeCache.has(records)) return lifeCache.get(records)
+  const tyres = toLifetimeTyres(records)
+  const rowsByKey = new Map()
+  records.forEach((r, i) => {
+    const k = tyreKey(r, i)
+    if (!rowsByKey.has(k)) rowsByKey.set(k, [])
+    rowsByKey.get(k).push(r)
+  })
+  const out = { tyres, rowsByKey }
+  if (records && typeof records === 'object') lifeCache.set(records, out)
+  return out
+}
+
+const measurable = (t) => (t._cost ?? 0) > 0 && (t._life_km ?? 0) > 0
+const tyreCount = (tyres) => tyres.reduce((s, t) => s + (t._qty || 1), 0)
+const lifeAvg = (tyres) => avg(tyres.map((t) => t._life_km).filter((v) => v != null && v > 0))
+
 function isRated(r) {
   return RATED.has(String(r?.risk_level || '').trim().toLowerCase())
 }
@@ -124,38 +157,47 @@ function isFailed(r) {
   return v === 'high' || v === 'critical'
 }
 
-/** Per-size metrics over already-filtered records. */
+/** Per-size metrics over already-filtered records (physical tyres grouped by latest size). */
 export function sizeMetrics(records = [], label = (s) => s || UNKNOWN_SIZE) {
-  const total = records.length
+  const { tyres, rowsByKey } = physicalTyres(records)
+  const total = tyreCount(tyres)
   const bySize = new Map()
-  for (const r of records) {
-    const sz = label(r.size)
-    if (!bySize.has(sz)) bySize.set(sz, { count: 0, cpks: [], lives: [], brands: new Set(), sites: new Set(), vehicles: new Set(), rated: 0, failed: 0 })
+  for (const t of tyres) {
+    const sz = label(t.size)
+    if (!bySize.has(sz)) bySize.set(sz, { tyres: [], fitments: 0, brands: new Set(), sites: new Set(), vehicles: new Set(), rated: 0, failed: 0 })
     const g = bySize.get(sz)
-    g.count += 1
-    const cpk = calcCpk(r)
-    const life = calcLife(r)
-    if (cpk != null) g.cpks.push(cpk)
-    if (life != null) g.lives.push(life)
-    if (r.brand) g.brands.add(r.brand)
-    if (r.site) g.sites.add(r.site)
-    if (r.asset_no) g.vehicles.add(r.asset_no)
-    if (isRated(r)) { g.rated += 1; if (isFailed(r)) g.failed += 1 }
+    g.tyres.push(t)
+    if (t.brand) g.brands.add(t.brand)
+    if (t.site) g.sites.add(t.site)
+    // Failures are EVENTS: counted over the tyre's fitment rows.
+    for (const r of rowsByKey.get(t._key) || [t]) {
+      g.fitments += 1
+      if (r.asset_no) g.vehicles.add(r.asset_no)
+      if (isRated(r)) { g.rated += 1; if (isFailed(r)) g.failed += 1 }
+    }
   }
-  return [...bySize.entries()].map(([size, g]) => ({
-    size,
-    count: g.count,
-    pct: total > 0 ? (g.count / total) * 100 : 0,
-    cpkSample: g.cpks.length,
-    avgCpk: g.cpks.length >= MIN_RECORDS_CPK ? avg(g.cpks) : null,
-    avgLife: avg(g.lives),
-    brands: [...g.brands].sort(),
-    sites: [...g.sites].sort(),
-    vehicles: [...g.vehicles],
-    ratedCount: g.rated,
-    failRate: g.rated > 0 ? (g.failed / g.rated) * 100 : null,
-    flag: stdFlag(g.count),
-  }))
+  return [...bySize.entries()].map(([size, g]) => {
+    const count = tyreCount(g.tyres)
+    const sample = g.tyres.filter(measurable).length
+    const summary = lifetimeSummary(g.tyres)
+    return {
+      size,
+      count,
+      fitments: g.fitments,
+      pct: total > 0 ? (count / total) * 100 : 0,
+      cpkSample: sample,
+      avgCpk: sample >= MIN_RECORDS_CPK ? weightedCpk(g.tyres) : null,
+      cpkKind: SIZE_CPK_KIND,
+      kmCoverage: summary.coverage,
+      avgLife: lifeAvg(g.tyres),
+      brands: [...g.brands].sort(),
+      sites: [...g.sites].sort(),
+      vehicles: [...g.vehicles],
+      ratedCount: g.rated,
+      failRate: g.rated > 0 ? (g.failed / g.rated) * 100 : null,
+      flag: stdFlag(count),
+    }
+  })
 }
 
 /** Sort by count desc (the page's default order). */
@@ -164,29 +206,35 @@ export function bySizeCount(metrics = []) {
 }
 
 export function sizeKpis(records = [], metrics = []) {
-  const total = records.length
+  const { tyres } = physicalTyres(records)
+  const total = tyreCount(tyres)
   const uniqueSz = metrics.length
   const mostCommon = metrics.reduce((best, m) => (!best || m.count > best.count ? m : best), null)
   const qualified = metrics.filter((m) => m.avgCpk != null)
   const bestPerf = qualified.reduce((best, m) => (!best || m.avgCpk < best.avgCpk ? m : best), null)
   const stdScore = total > 0 ? Math.max(0, (1 - uniqueSz / total) * 100) : null
+  // Rated FITMENTS (risk is an event rating on each fitment row).
   const rated = records.filter(isRated).length
-  const fleetAvgCpk = avg(records.map(calcCpk))
-  return { uniqueSz, total, mostCommon, bestPerf, stdScore, rated, fleetAvgCpk }
+  const fleetAvgCpk = weightedCpk(tyres)
+  return {
+    uniqueSz, total, fitments: records.length, mostCommon, bestPerf, stdScore, rated, fleetAvgCpk,
+    cpkKind: SIZE_CPK_KIND, cpkKindLabel: SIZE_CPK_KIND_LABEL, lifetime: lifetimeSummary(tyres),
+  }
 }
 
 /** Size x brand CPK matrix for the top-5 sizes and brands. Needs 2+ CPK samples per cell. */
 export function sizeBrandMatrix(records = [], metrics = [], label = (s) => s) {
   const sizes = bySizeCount(metrics).slice(0, 5).map((m) => m.size)
+  const { tyres } = physicalTyres(records)
   const brandCount = new Map()
-  for (const r of records) if (r.brand) brandCount.set(r.brand, (brandCount.get(r.brand) || 0) + 1)
+  for (const t of tyres) if (t.brand) brandCount.set(t.brand, (brandCount.get(t.brand) || 0) + (t._qty || 1))
   const brands = [...brandCount.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 5).map(([b]) => b)
   const matrix = {}
   for (const sz of sizes) {
     matrix[sz] = {}
     for (const br of brands) {
-      const cpks = records.filter((r) => label(r.size) === sz && r.brand === br).map(calcCpk).filter((v) => v != null)
-      matrix[sz][br] = cpks.length >= 2 ? avg(cpks) : null
+      const cell = tyres.filter((t) => label(t.size) === sz && t.brand === br)
+      matrix[sz][br] = cell.filter(measurable).length >= 2 ? weightedCpk(cell) : null
     }
   }
   return { sizes, brands, matrix }
@@ -195,24 +243,22 @@ export function sizeBrandMatrix(records = [], metrics = [], label = (s) => s) {
 /** Per-brand breakdown for a single size. */
 export function brandBreakdown(records = [], size, label = (s) => s) {
   const byBrand = new Map()
-  for (const r of records) {
-    if (label(r.size) !== size) continue
-    const br = r.brand || 'Unknown'
-    if (!byBrand.has(br)) byBrand.set(br, { count: 0, cpks: [], lives: [] })
-    const g = byBrand.get(br)
-    g.count += 1
-    const cpk = calcCpk(r)
-    const life = calcLife(r)
-    if (cpk != null) g.cpks.push(cpk)
-    if (life != null) g.lives.push(life)
+  for (const t of physicalTyres(records).tyres) {
+    if (label(t.size) !== size) continue
+    const br = t.brand || 'Unknown'
+    if (!byBrand.has(br)) byBrand.set(br, [])
+    byBrand.get(br).push(t)
   }
   return [...byBrand.entries()]
-    .map(([brand, g]) => ({
-      brand,
-      count: g.count,
-      avgCpk: g.cpks.length >= 2 ? avg(g.cpks) : null,
-      avgLife: g.lives.length >= 2 ? avg(g.lives) : null,
-    }))
+    .map(([brand, tyres]) => {
+      const lives = tyres.map((t) => t._life_km).filter((v) => v != null && v > 0)
+      return {
+        brand,
+        count: tyreCount(tyres),
+        avgCpk: tyres.filter(measurable).length >= 2 ? weightedCpk(tyres) : null,
+        avgLife: lives.length >= 2 ? avg(lives) : null,
+      }
+    })
     .sort((a, b) => b.count - a.count)
 }
 
@@ -267,27 +313,28 @@ export function lastNMonths(n = 12, now = new Date()) {
  */
 export function comboTrend(records = [], label = (s) => s, now = new Date()) {
   const months = lastNMonths(12, now)
+  const { tyres } = physicalTyres(records)
   const comboCount = new Map()
-  for (const r of records) {
-    const sz = label(r.size)
-    if (!sz || sz === UNKNOWN_SIZE || !r.brand) continue
-    const k = `${sz} / ${r.brand}`
-    comboCount.set(k, (comboCount.get(k) || 0) + 1)
+  for (const t of tyres) {
+    const sz = label(t.size)
+    if (!sz || sz === UNKNOWN_SIZE || !t.brand) continue
+    const k = `${sz} / ${t.brand}`
+    comboCount.set(k, (comboCount.get(k) || 0) + (t._qty || 1))
   }
   const top3 = [...comboCount.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 3).map(([k]) => k)
   const series = top3.map((combo) => {
     const idx = combo.lastIndexOf(' / ')
     const sz = combo.slice(0, idx)
     const br = combo.slice(idx + 3)
+    // Physical tyres bucketed by their latest fitment month; weighted CPK per month.
     const buckets = Object.fromEntries(months.map((m) => [m, []]))
-    for (const r of records) {
-      if (label(r.size) !== sz || r.brand !== br) continue
-      const mk = monthKey(r.issue_date)
+    for (const t of tyres) {
+      if (label(t.size) !== sz || t.brand !== br) continue
+      const mk = monthKey(t.issue_date)
       if (!mk || !buckets[mk]) continue
-      const cpk = calcCpk(r)
-      if (cpk != null) buckets[mk].push(cpk)
+      buckets[mk].push(t)
     }
-    return { label: combo, data: months.map((m) => (buckets[m].length ? avg(buckets[m]) : null)) }
+    return { label: combo, data: months.map((m) => weightedCpk(buckets[m])) }
   }).filter((s) => s.data.some((v) => v != null))
   return { months, labels: months.map(monthLabel), series }
 }

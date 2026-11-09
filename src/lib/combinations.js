@@ -16,6 +16,17 @@
  */
 import { recordTyreCost, recordKm } from './tco'
 import { computeCpkFleet } from './kpiEngine'
+import { withOnePricePerTyre, toLifetimeTyres, tyreKey, weightedCpk, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
+
+// PHYSICAL TYRES (src/lib/tyreLifetime.js): the unit's tyres are the physical
+// tyres whose LATEST fitment is on a member asset (all records are collapsed
+// first, then grouped). tyreCount / fitted / scrap / position counts are physical
+// tyres; blendedCpk and the per-class cpk are WEIGHTED lifetime CPK (total
+// purchase cost / total tyre-km, rule T8); avgTyreLifeKm = mean lifetime km.
+// totalSpend and totalKm stay per FITMENT on member assets (money with one
+// price per tyre, km run ON the unit by the shared km rule).
+export const COMBINATION_CPK_KIND = CPK_KIND.FLEET_AGGREGATE
+export const COMBINATION_CPK_KIND_LABEL = CPK_KIND_LABEL[CPK_KIND.FLEET_AGGREGATE]
 
 /**
  * Normalise a free-text trailer list into a clean array of trailer numbers.
@@ -158,15 +169,10 @@ export function memberTyres(assetNos = [], tyreRows = []) {
   return (Array.isArray(tyreRows) ? tyreRows : []).filter((r) => set.has(_norm(r?.asset_no)))
 }
 
-/** Blended cost/km for a set of tyre records: Σcost / Σkm, or null when Σkm≤0. */
-function _blendedCpk(rows) {
-  let cost = 0
-  let km = 0
-  for (const r of rows) {
-    cost += recordTyreCost(r)
-    km += recordKm(r)
-  }
-  return km > 0 ? Math.round((cost / km) * 1000) / 1000 : null
+/** Weighted lifetime CPK of physical tyres (3dp), null when none is measurable. */
+function _blendedCpk(tyres) {
+  const v = weightedCpk(tyres)
+  return v == null ? null : Math.round(v * 1000) / 1000
 }
 
 /**
@@ -183,57 +189,69 @@ function _blendedCpk(rows) {
  */
 export function computeCombinationRollup(combo, tyreRows = [], vehicleRows = []) {
   const resolution = resolveCombinationMembers(combo, vehicleRows)
-  const tyres = memberTyres(resolution.assetNos, tyreRows)
+  const all = withOnePricePerTyre((Array.isArray(tyreRows) ? tyreRows : []).filter(Boolean))
+  const memberSet = new Set(resolution.assetNos.map(_norm).filter(Boolean))
+  const isMember = (r) => memberSet.has(_norm(r?.asset_no))
+  // Fitment rows ON the unit (money and km run on the unit).
+  const rows = memberSet.size ? all.filter(isMember) : []
+  // Physical tyres whose latest fitment is on the unit, and all their rows.
+  const unitTyres = memberSet.size ? toLifetimeTyres(all).filter(isMember) : []
+  const unitKeys = new Set(unitTyres.map((t) => t._key))
+  const unitTyreRows = all.filter((r, i) => unitKeys.has(tyreKey(r, i)))
 
   let totalSpend = 0
   let totalKm = 0
+  for (const r of rows) {
+    totalSpend += recordTyreCost(r)
+    totalKm += recordKm(r)
+  }
   let fittedTyres = 0
   let scrapTyres = 0
-  const kmSamples = []
-  for (const r of tyres) {
-    const q = _qty(r)
-    totalSpend += recordTyreCost(r)
-    const km = recordKm(r)
-    totalKm += km
-    if (km > 0) kmSamples.push(km)
-    if (_isFitted(r)) fittedTyres += q
-    if (_isScrap(r)) scrapTyres += q
+  const lives = []
+  for (const t of unitTyres) {
+    const q = t._qty || 1
+    if (t._life_km != null && t._life_km > 0) lives.push(t._life_km)
+    if (_isFitted(t)) fittedTyres += q
+    if (_isScrap(t)) scrapTyres += q
   }
 
-  // Position-class breakdown: count (qty-aware) + spend + blended CPK per class.
+  // Position-class breakdown by the tyre's latest position: physical count,
+  // spend of its fitment rows on the unit, weighted lifetime CPK.
   const groups = {}
-  for (const r of tyres) {
-    const cls = normalizePositionClass(r?.position ?? r?.tyre_position)
-    ;(groups[cls] ||= []).push(r)
+  for (const t of unitTyres) {
+    const cls = normalizePositionClass(t?.position ?? t?.tyre_position)
+    ;(groups[cls] ||= []).push(t)
   }
   const positionBreakdown = POSITION_CLASSES
     .filter((cls) => groups[cls]?.length)
     .map((cls) => {
-      const rows = groups[cls]
+      const tyres = groups[cls]
+      const keys = new Set(tyres.map((t) => t._key))
+      const spend = all.reduce((s, r, i) => (isMember(r) && keys.has(tyreKey(r, i)) ? s + recordTyreCost(r) : s), 0)
       return {
         positionClass: cls,
-        count: rows.reduce((s, r) => s + _qty(r), 0),
-        spend: Math.round(rows.reduce((s, r) => s + recordTyreCost(r), 0) * 100) / 100,
-        cpk: _blendedCpk(rows),
+        count: tyres.reduce((s, t) => s + (t._qty || 1), 0),
+        spend: Math.round(spend * 100) / 100,
+        cpk: _blendedCpk(tyres),
       }
     })
 
   return {
     members: resolution.members,
     resolution,
-    tyreCount: tyres.length,
+    tyreCount: unitTyres.reduce((s, t) => s + (t._qty || 1), 0),
+    fitments: rows.length,
     fittedTyres,
     scrapTyres,
     totalSpend: Math.round(totalSpend * 100) / 100,
-    avgTyreLifeKm: kmSamples.length
-      ? Math.round(kmSamples.reduce((s, v) => s + v, 0) / kmSamples.length)
-      : null,
+    avgTyreLifeKm: lives.length ? Math.round(lives.reduce((s, v) => s + v, 0) / lives.length) : null,
     totalKm: Math.round(totalKm),
-    // Labelled drill-down: blended Σcost/Σkm across the whole combined unit.
-    blendedCpk: _blendedCpk(tyres),
-    // Canonical fleet-CPK number (per-record mean) from the shared KPI engine —
-    // NOT a second CPK implementation.
-    canonicalCpk: computeCpkFleet(tyres),
+    // Weighted physical-tyre lifetime CPK of the unit's tyres (fleet aggregate kind).
+    blendedCpk: _blendedCpk(unitTyres),
+    cpkKind: COMBINATION_CPK_KIND,
+    cpkKindLabel: COMBINATION_CPK_KIND_LABEL,
+    // Canonical fleet-CPK object from the shared KPI engine over the same tyres.
+    canonicalCpk: computeCpkFleet(unitTyreRows),
     positionBreakdown,
   }
 }

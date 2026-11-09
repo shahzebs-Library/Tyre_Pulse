@@ -31,11 +31,13 @@ describe('computeSupplierScorecard', () => {
       ],
     })
     const b = suppliers.find((s) => s.supplier === 'Bridgestone')
-    expect(b.tyreCount).toBe(3)
+    // Physical tyres: a row without a real serial stands for its qty (2 + 1 + 1).
+    expect(b.tyreCount).toBe(4)
+    expect(b.fitments).toBe(3)
     expect(b.totalSpend).toBe(250)
   })
 
-  it('averages CPK only over rows with a valid km run', () => {
+  it('weights CPK over physical tyres with a valid km run (total cost / total km)', () => {
     const { suppliers } = computeSupplierScorecard({
       tyres: [
         { supplier: 'X', cost_per_tyre: 1000, km_at_fitment: 0, km_at_removal: 10000 }, // 0.1
@@ -44,7 +46,8 @@ describe('computeSupplierScorecard', () => {
         { supplier: 'X', cost_per_tyre: 500, km_at_removal: 8000 }, // fitment null skip
       ],
     })
-    expect(suppliers.find((s) => s.supplier === 'X').avgCpk).toBeCloseTo((0.1 + 0.03) / 2, 6)
+    // Weighted (rule T8): (1000 + 600) / (10000 + 20000), not the mean of 0.1 and 0.03.
+    expect(suppliers.find((s) => s.supplier === 'X').avgCpk).toBeCloseTo(1600 / 30000, 6)
   })
 
   it('computes failure rate, approved warranty recovery, and on-time delivery', () => {

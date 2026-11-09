@@ -66,8 +66,10 @@ describe('currency safety', () => {
 
 describe('groupings', () => {
   const rows = normaliseRecords([
-    ksa({ asset_no: 'A', site: 'N', brand: 'X', cost_per_tyre: 300, km_at_removal: 10000, created_at: '2026-01-05' }),
-    ksa({ asset_no: 'A', site: 'N', brand: 'X', cost_per_tyre: 100, km_at_removal: 10000, created_at: '2026-02-05', removal_reason: 'damage' }),
+    // km_at_fitment 0 (factory) is a real reading; a missing fitment km is unknown
+    // under the shared km rule T7, so the fixture now records it.
+    ksa({ asset_no: 'A', site: 'N', brand: 'X', cost_per_tyre: 300, km_at_fitment: 0, km_at_removal: 10000, created_at: '2026-01-05' }),
+    ksa({ asset_no: 'A', site: 'N', brand: 'X', cost_per_tyre: 100, km_at_fitment: 0, km_at_removal: 10000, created_at: '2026-02-05', removal_reason: 'damage' }),
     ksa({ asset_no: 'B', site: 'J', brand: 'Y', cost_per_tyre: null, created_at: '2026-02-09' }),
   ])
   it('averages cost over PRICED tyres only', () => {

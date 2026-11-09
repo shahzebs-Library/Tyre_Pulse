@@ -18,6 +18,7 @@ import {
   contractStatus, daysToExpiry, contractValue, CPK_BENCHMARK, FAILURE_THRESHOLD,
 } from './supplierManagementAnalytics'
 import { sortRows } from './consoleTable'
+import { fitmentKm, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
 
 const RATINGS = ['Preferred', 'Approved', 'Under Review', 'Probation']
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -49,15 +50,24 @@ const finite = (v) => {
   return Number.isFinite(n) ? n : null
 }
 
-/** km run of a record, or null when fitment/removal do not form a valid stint. */
+/**
+ * km run of ONE fitment by the shared km rule (rule T7: placeholder fitment km 1
+ * and over-class-cap readings are unknown, a factory 0 fitment is real); null
+ * when not measurable.
+ */
 export function recordKmRun(r) {
-  const fit = finite(r?.km_at_fitment)
-  const rem = finite(r?.km_at_removal)
-  if (fit == null || rem == null || fit <= 0 || rem <= fit) return null
-  return rem - fit
+  const km = fitmentKm(r)
+  return km != null && km > 0 ? km : null
 }
 
-/** Per-record cost per km, null when cost or km is not measurable. */
+/**
+ * Per-FITMENT cost per km (one stint). Only valid on rows that went through
+ * withOnePricePerTyre (supplier.recs do): a refit of the same serial carries no
+ * price, so its CPK is null instead of buying the tyre again.
+ */
+export const RECORD_CPK_KIND = CPK_KIND.PER_FITMENT
+export const RECORD_CPK_LABEL = CPK_KIND_LABEL[CPK_KIND.PER_FITMENT]
+
 export function recordCpk(r) {
   const km = recordKmRun(r)
   const cost = finite(r?.cost_per_tyre)
@@ -125,7 +135,13 @@ export function buildSupplierDetail(records = [], ratings = {}, brand = '', now 
     sites: breakdownBy(supplier.recs, 'site'),
     ratedCoverage: coverage,
     failureRate: honestFailureRate(supplier.recs),
+    // Physical tyres with both a price and a measured lifetime km.
     costedRecords: supplier.validRecs.length,
+    costedTyres: supplier.validRecs.length,
+    cpkKind: supplier.cpkKind,
+    cpkKindLabel: supplier.cpkKindLabel,
+    kmCoverage: supplier.kmCoverage,
+    cpkEstimatedShare: supplier.cpkEstimatedShare,
     cpkRank: rankIdx >= 0 ? { rank: rankIdx + 1, of: ranked.length } : null,
     vsBenchmarkPct: supplier.avgCpk != null ? ((supplier.avgCpk - CPK_BENCHMARK) / CPK_BENCHMARK) * 100 : null,
   }
@@ -171,7 +187,7 @@ export const RECORD_EXPORT_COLUMNS = [
   { key: 'asset_no', header: 'Asset' },
   { key: 'site', header: 'Site' },
   { key: 'kmRun', header: 'Km run' },
-  { key: 'cpk', header: 'Cost/km' },
+  { key: 'cpk', header: 'Cost/km (per fitment)' },
   { key: 'risk_level', header: 'Risk' },
   { key: 'issue_date', header: 'Issue date' },
 ]

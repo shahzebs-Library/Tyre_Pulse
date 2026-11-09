@@ -215,7 +215,7 @@ export default function SizeAnalysesTab({ filtered, label, currency: activeCurre
       cell: ({ row }) => row.original.count.toLocaleString() },
     { id: 'pct', header: '% Fleet', accessorFn: (m) => m.pct, meta: { align: 'right', exportValue: (m) => fmtPct(m.pct) },
       cell: ({ row }) => fmtPct(row.original.pct) },
-    { id: 'avgCpk', header: `Avg CPK (${activeCurrency}/km)`, accessorFn: (m) => m.avgCpk ?? -1, meta: { align: 'right', exportValue: (m) => (m.avgCpk != null ? m.avgCpk.toFixed(4) : '') },
+    { id: 'avgCpk', header: `CPK weighted (${activeCurrency}/tyre-km)`, accessorFn: (m) => m.avgCpk ?? -1, meta: { align: 'right', exportValue: (m) => (m.avgCpk != null ? m.avgCpk.toFixed(4) : '') },
       cell: ({ row }) => <CpkCell value={row.original.avgCpk} /> },
     { id: 'avgLife', header: 'Avg Life', accessorFn: (m) => m.avgLife ?? -1, meta: { align: 'right', exportValue: (m) => (m.avgLife != null ? Math.round(m.avgLife) : '') },
       cell: ({ row }) => fmtKm(row.original.avgLife) },
@@ -242,7 +242,7 @@ export default function SizeAnalysesTab({ filtered, label, currency: activeCurre
   const breakdownColumns = useMemo(() => [
     { id: 'brand', header: 'Brand', accessorFn: (b) => b.brand, cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.brand}</span> },
     { id: 'count', header: 'Count', accessorFn: (b) => b.count, meta: { align: 'right' } },
-    { id: 'avgCpk', header: `Avg CPK (${activeCurrency}/km)`, accessorFn: (b) => b.avgCpk ?? -1, meta: { align: 'right' }, cell: ({ row }) => <CpkCell value={row.original.avgCpk} /> },
+    { id: 'avgCpk', header: `CPK weighted (${activeCurrency}/tyre-km)`, accessorFn: (b) => b.avgCpk ?? -1, meta: { align: 'right' }, cell: ({ row }) => <CpkCell value={row.original.avgCpk} /> },
     { id: 'avgLife', header: 'Avg Life', accessorFn: (b) => b.avgLife ?? -1, meta: { align: 'right' }, cell: ({ row }) => fmtKm(row.original.avgLife) },
   ], [activeCurrency])
 

@@ -36,6 +36,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import * as tyreApi from '../lib/api/tyreRecords'
 import { computeCpkFleet } from '../lib/kpiEngine'
 import { computeTco, TCO_DEFAULTS, computeFleetActuals } from '../lib/tco'
+import { CPK_KIND_LABEL } from '../lib/tyreLifetime'
 import {
   honestWhatIf, savingsView, hasMeasuredTyreCost, filterAssets, vehicleTypeOptions, assetKpis,
   recordKmCoverage, assetExportRows, ASSET_EXPORT_COLUMNS, benchmarkExportRows, BENCHMARK_EXPORT_COLUMNS,
@@ -413,8 +414,8 @@ export default function TcoCalculator() {
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
                 <StatTile label="Total tyre TCO" value={measuredCost ? money(rollup.total_tco) : 'N/A'} icon={Wallet} tone="accent" sub={`${meta.recordCount.toLocaleString()} records`} />
                 <StatTile label="Fleet CPK (canonical)" value={canonicalCpk.validCount ? cpkStr(canonicalCpk.fleetAvgCpk) : 'N/A'} icon={Gauge} tone="info"
-                  sub={canonicalCpk.validCount ? `${canonicalCpk.validCount}/${canonicalCpk.totalCount} records with km` : 'No km data'} />
-                <StatTile label="Blended cost / km" value={cpkStr(rollup.fleet_cost_per_km)} icon={Activity} sub={`${meta.assetCount} assets`} />
+                  sub={canonicalCpk.validCount ? `${CPK_KIND_LABEL.fleet_aggregate}. ${canonicalCpk.validCount}/${canonicalCpk.totalCount} physical tyres with cost and km` : 'No km data'} />
+                <StatTile label="Blended cost / km" value={cpkStr(rollup.fleet_cost_per_km)} icon={Activity} sub={`Tyre cost on assets / km run on assets (one price per tyre). ${meta.assetCount} assets`} />
                 <StatTile label="Km coverage" value={kmCoverage == null ? 'N/A' : `${kmCoverage}%`} icon={Ruler} tone={kmCoverage != null && kmCoverage < 50 ? 'warn' : 'neutral'} sub="Records with a measurable km run" />
                 <StatTile label="Assets poor or critical" value={aKpis.atRisk} icon={AlertTriangle} tone={aKpis.atRisk > 0 ? 'crit' : 'neutral'} sub={`of ${Object.values(aKpis.bands).reduce((s, v) => s + v, 0)} banded assets`} />
                 <StatTile label="Savings potential / yr" value={money(savings.total)} icon={PiggyBank} tone="accent" sub={savings.perVehicle == null ? 'No active vehicles' : `${money(savings.perVehicle)} / vehicle`} />

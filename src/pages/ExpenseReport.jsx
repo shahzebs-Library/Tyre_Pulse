@@ -60,6 +60,7 @@ import { reportFileName, reportDateLabel, exportToExcel } from '../lib/exportUti
 import { toUserMessage } from '../lib/safeError'
 import { defaultWindow } from '../lib/defaultPeriod'
 import SiteOperatingCostPanel from '../components/expense/SiteOperatingCostPanel'
+import ExpenseCostStatusPanel from '../components/expense/ExpenseCostStatusPanel'
 import { defaultPeriodFor } from '../lib/api/latestActivity'
 import PeriodNotice from '../components/ui/PeriodNotice'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
@@ -91,10 +92,11 @@ const SECTIONS = [
   ['builder', 'Chart Builder', BarChart3],
   ['fleetcpk', 'Fleet CPK', Gauge],
   ['evidence', 'Certainty', ShieldCheck],
+  ['status', 'Cost Status', ShieldCheck],
 ]
 const SECTION_DEFAULTS = {
   kpis: true, compare: true, cpk: true, why: true, movers: true, categories: true, sites: true,
-  bysite: true, assets: true, items: true, trend: true, forecast: true, builder: true, fleetcpk: true, evidence: true,
+  bysite: true, assets: true, items: true, trend: true, forecast: true, builder: true, fleetcpk: true, evidence: true, status: true,
 }
 
 const num = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : Number(v).toLocaleString('en-US'))
@@ -1779,6 +1781,17 @@ export default function ExpenseReport() {
           {/* How much of the split is a decision rather than a guess */}
           {sections.evidence && overview && !isAll && (
             <EvidencePanel snap={overview} money={money} />
+          )}
+
+          {/* Actual / estimated / confirmed zero / missing / disputed, per country in
+              its own currency, beside the totals above (which it never changes). */}
+          {sections.status && hasScope && (
+            <ExpenseCostStatusPanel
+              country={isAll ? null : activeCountry}
+              countries={isAll ? scopeCountryList : null}
+              from={from}
+              to={to}
+            />
           )}
         </>
       )}

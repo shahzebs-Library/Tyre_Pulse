@@ -14,6 +14,7 @@ import { RefreshCcw, FileSpreadsheet, Info, AlertTriangle } from 'lucide-react'
 import { getTyreLifetimeCpk, estimatedShare } from '../../lib/api/tyreLifetimeCpk'
 import { COUNTRY_CURRENCY } from '../../lib/api/assetMaster'
 import { CPK_KIND_LABEL } from '../../lib/tyreLifetime'
+import { COST_STATUS_ORDER, COST_STATUS_LABEL } from '../../lib/expenseCostStatus'
 import { exportSheetsToExcel, reportFileName, reportDateLabel } from '../../lib/exportUtils'
 import CpkDataTable from './CpkDataTable'
 
@@ -64,8 +65,7 @@ function Block({ title, block, currency, provisional }) {
       </div>
       <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
         km coverage: complete {fmtInt(block.coverage.complete)}, partial {fmtInt(block.coverage.partial)}, none {fmtInt(block.coverage.none)}.
-        Cost status: actual {fmtInt(block.costStatus.ACTUAL)}, estimated {fmtInt(block.costStatus.ESTIMATED)},
-        confirmed zero {fmtInt(block.costStatus.CONFIRMED_ZERO)}, disputed {fmtInt(block.costStatus.DISPUTED)}, missing {fmtInt(block.costStatus.MISSING)}.
+        Cost status: {COST_STATUS_ORDER.map((s) => `${COST_STATUS_LABEL[s]} ${fmtInt(block.costStatus[s])}`).join(', ')}.
         Linked repairs {fmtMoney(currency, block.repairCost)}, retreads {fmtMoney(currency, block.retreadCost)}, recoveries {fmtMoney(currency, block.recovery)}.
       </div>
     </div>
@@ -95,7 +95,7 @@ export default function LifetimeCpkPanel({ country, from, to, site }) {
         sheets.push({ country: c.country, kind: label, currency: cur, tyres: b.tyres, measurable: b.measurable, km: b.km,
           purchase_cost: b.purchaseCost, full_cost: b.fullCost, cpk_purchase: b.cpkPurchase, cpk_full: b.cpkFull,
           estimated_share: estimatedShare(b), km_complete: b.coverage.complete, km_partial: b.coverage.partial, km_none: b.coverage.none,
-          actual: b.costStatus.ACTUAL, estimated: b.costStatus.ESTIMATED, disputed: b.costStatus.DISPUTED, missing: b.costStatus.MISSING })
+          actual: b.costStatus.ACTUAL, estimated: b.costStatus.ESTIMATED, confirmed_zero: b.costStatus.CONFIRMED_ZERO, disputed: b.costStatus.DISPUTED, missing: b.costStatus.MISSING })
       }
     }
     const groups = countries.flatMap((c) => DIMS.flatMap((d) => c[d.key].map((g) => ({ country: c.country, dimension: d.label, ...g }))))

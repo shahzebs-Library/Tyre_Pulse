@@ -81,8 +81,9 @@ describe('computeRemovalRate - numerator matches denominator', () => {
     expect(r.removalPer1000Km).toBeCloseTo(0.03, 9)
   })
 
-  it('returns 0 rather than dividing by zero distance', () => {
-    expect(computeRemovalRate([unusable()]).removalPer1000Km).toBe(0)
+  it('returns null (not measured) rather than dividing by zero distance', () => {
+    // Phase 4a: 0 per 1,000 km read as a perfect fleet; no distance = no rate.
+    expect(computeRemovalRate([unusable()]).removalPer1000Km).toBeNull()
   })
 })
 

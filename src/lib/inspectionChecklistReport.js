@@ -20,6 +20,7 @@ import { formatDate } from './formatters'
 import { checklistReadingStats, pressureDeviationLabel, conditionBucket } from './inspectionsAnalytics'
 import { serializeSvgInlined } from './svgInline'
 import { inspectionReportFileName } from './inspectionFileName'
+import { shrinkImageForPdf } from './pdfImage'
 
 /**
  * Report logo: tenant branding wins; otherwise fall back to the org-wide company
@@ -105,7 +106,7 @@ export async function buildChecklistReportPdf(p) {
   const tyreData = report.rows
   const assetNo = asset || saved.asset_no
 
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true })
   const pw = doc.internal.pageSize.width
   const ph = doc.internal.pageSize.height
   const mx = 14
@@ -319,7 +320,8 @@ export async function buildChecklistReportPdf(p) {
       const px = mx + (pi % photoCols) * (photoW + 4)
       const py = finalY + Math.floor(pi / photoCols) * (photoH + 4)
       try {
-        doc.addImage(photos[pi], 'JPEG', px, py, photoW, photoH)
+        const small = await shrinkImageForPdf(photos[pi], 'JPEG', { maxPx: 600 })
+        doc.addImage(small.dataUrl, small.fmt, px, py, photoW, photoH, undefined, 'FAST')
         doc.setDrawColor(209, 213, 219)
         doc.setLineWidth(0.3)
         doc.rect(px, py, photoW, photoH)

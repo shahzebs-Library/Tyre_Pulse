@@ -1,4 +1,6 @@
-import { toLifetimeTyres, hasLifetimeCpk, lifetimeCpk, weightedCpk } from './tyreLifetime'
+import { toLifetimeTyres, hasLifetimeCpk, lifetimeCpk, weightedCpk, withOnePricePerTyre, isStrongSerial } from './tyreLifetime'
+
+const _tyreKey = (r) => `${String(r.country ?? '').trim().toUpperCase()}|${String(r.serial_no ?? '').trim().toUpperCase()}`
 // ─────────────────────────────────────────────────────────────────────────────
 // kpiEngine.js - Pure KPI computation library for TyrePulse
 // No Supabase calls. No React. No side effects.
@@ -242,18 +244,15 @@ export function computeAvgTyreLife(records = []) {
  * @returns {{ avgKm, trend: [{month, avgKm}] }}
  */
 export function computeFleetTyreLife(records = []) {
-  const valid = records.filter(r => {
-    const fit = Number(r.km_at_fitment)
-    const rem = Number(r.km_at_removal)
-    return isFinite(fit) && isFinite(rem) && rem > fit
-  })
+  // Per PHYSICAL tyre: km summed across every fitment by the shared km rule.
+  const valid = toLifetimeTyres(records).filter(t => Number(t._life_km) > 0)
 
-  const avgKm = _mean(valid.map(_kmRun))
+  const avgKm = _mean(valid.map(_lifeKm))
 
   const byMonth = _groupBy(valid, r => _toMonthKey(r.issue_date) ?? 'Unknown')
   const trend = Object.entries(byMonth)
     .filter(([month]) => month !== 'Unknown')
-    .map(([month, rows]) => ({ month, avgKm: _mean(rows.map(_kmRun)) }))
+    .map(([month, rows]) => ({ month, avgKm: _mean(rows.map(_lifeKm)) }))
     .sort((a, b) => a.month.localeCompare(b.month))
 
   return { avgKm, trend }
@@ -592,10 +591,22 @@ export function computeScrapRate(records = [], scrapKmPct = 20, defaultCost = 0)
     return false
   })
 
-  const estimatedScrapCost = scrapped.reduce(
-    (s, r) => s + (Number(r.cost_per_tyre) > 0 ? Number(r.cost_per_tyre) : defaultCost) * (Number(r.qty) || 1),
-    0
-  )
+  // A scrapped physical tyre costs its purchase price once, wherever that price
+  // sits in its fitment history (the scrapped row may be a refit with no price).
+  const purchase = new Map()
+  for (const r of withOnePricePerTyre(records)) {
+    if (isStrongSerial(r.serial_no) && Number(r.cost_per_tyre) > 0) purchase.set(_tyreKey(r), Number(r.cost_per_tyre))
+  }
+  const countedTyres = new Set()
+  const estimatedScrapCost = scrapped.reduce((s, r) => {
+    if (isStrongSerial(r.serial_no)) {
+      const k = _tyreKey(r)
+      if (countedTyres.has(k)) return s
+      countedTyres.add(k)
+      return s + (purchase.get(k) ?? defaultCost)
+    }
+    return s + (Number(r.cost_per_tyre) > 0 ? Number(r.cost_per_tyre) : defaultCost) * (Number(r.qty) || 1)
+  }, 0)
 
   const bySite = Object.entries(_groupBy(records, r => r.site ?? 'Unknown'))
     .map(([site, rows]) => {
@@ -693,7 +704,8 @@ export function computeCostTrend(records = [], defaultCost = 0) {
   const now   = new Date()
   const start = new Date(now.getFullYear(), now.getMonth() - 12, 1)
 
-  const recent = records.filter(r => {
+  // Purchase spend: a refitted tyre's price is counted once, on its first fitment.
+  const recent = withOnePricePerTyre(records).filter(r => {
     const d = r.issue_date ? new Date(r.issue_date) : null
     return d && d >= start
   })

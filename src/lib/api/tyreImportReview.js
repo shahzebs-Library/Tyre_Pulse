@@ -18,6 +18,7 @@ export function reviewReason(reason) {
   return {
     ambiguous_not_later: 'Uploaded tyre is dated before the one already on the wheel',
     ambiguous_backdated: 'A later tyre is already recorded on this wheel',
+    ambiguous_same_day_stale: 'Same-day upload looks older than the tyre on the wheel (stale file)',
     ambiguous_previous_undated: 'The tyre on the wheel has no fitting date',
     ambiguous_multiple_active: 'The wheel already shows two tyres',
     same_tyre: 'Same tyre already on the wheel with a different date',

@@ -341,7 +341,13 @@ export async function insertTyreRecords(rows = [], { onProgress, country } = {})
   const { rows: chainedRows, chained, latest } = chainFitmentsPerWheel(newKeys.map((k) => collapsed.get(k)))
   newKeys.forEach((k, i) => collapsed.set(k, chainedRows[i]))
   let replacement = { chained, total: 0, closed: 0, emptyWheel: 0, review: 0, moved: 0, reviewRows: [] }
-  if (latest.length && country) {
+  // Without a country the database check cannot run, and a current fitment
+  // must never reach tyre_records without it: that is how a replacement
+  // bypassed reconciliation. Refuse instead of loading unchecked.
+  if (latest.length && !country) {
+    throw new Error('Choose a country before importing tyre fitments: the replacement check needs it.')
+  }
+  if (latest.length) {
     const payload = latest.map((r) => ({
       asset_no: r.asset_no, position: r.tyre_position ?? r.position, serial_no: r.serial_no,
       issue_date: r.issue_date ? String(r.issue_date).slice(0, 10) : null,
@@ -353,11 +359,12 @@ export async function insertTyreRecords(rows = [], { onProgress, country } = {})
     })
     if (error) throw toServiceError(error)
     if (data && data.ok === false) throw new Error(`Tyre replacement check refused: ${data.reason}`)
-    replacement = { chained, ...summariseReconcile(data), reviewRows: data?.review || [] }
+    replacement = { chained, ...summariseReconcile(data), reviewRows: data?.review || [], reviewTotal: data?.review_total ?? (data?.held || data?.review || []).length }
     // A row held for review would be refused by the one-tyre-per-wheel guard and
     // abort its whole chunk, so it is not inserted here; it is listed instead.
     if (replacement.review) {
-      const held = new Set((data.review || []).map((r) => `${String(r.asset_no ?? '').trim().toUpperCase().replace(/\s+/g, '')}|${String(r.position ?? '').trim().toUpperCase()}|${String(r.serial_no ?? '').trim().toUpperCase()}`))
+      // `held` is the full list; `review` is capped at 200 for display only.
+      const held = new Set((data.held || data.review || []).map((r) => `${String(r.asset_no ?? '').trim().toUpperCase().replace(/\s+/g, '')}|${String(r.position ?? '').trim().toUpperCase()}|${String(r.serial_no ?? '').trim().toUpperCase()}`))
       for (const k of newKeys) {
         const r = collapsed.get(k)
         const hk = `${String(r.asset_no ?? '').trim().toUpperCase().replace(/\s+/g, '')}|${String(r.tyre_position ?? r.position ?? '').trim().toUpperCase()}|${String(r.serial_no ?? '').trim().toUpperCase()}`

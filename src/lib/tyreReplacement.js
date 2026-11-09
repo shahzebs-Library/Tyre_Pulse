@@ -90,6 +90,7 @@ export const REPLACEMENT_STATUS_LABEL = Object.freeze({
   ambiguous_previous_undated: 'Current tyre has no fitting date - needs review',
   ambiguous_not_later: 'Uploaded tyre is older than the one on the wheel - needs review',
   ambiguous_backdated: 'A later tyre is already recorded on this wheel - needs review',
+  ambiguous_same_day_stale: 'Same-day upload looks older than the tyre on the wheel - needs review',
   error: 'Could not check - needs review',
 })
 

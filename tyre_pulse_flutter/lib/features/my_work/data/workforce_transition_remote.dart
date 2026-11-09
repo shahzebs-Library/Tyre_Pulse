@@ -68,6 +68,30 @@ final class WorkforceRemoteResult {
   bool get isDelivered => outcome != WorkforceRemoteOutcome.rejected;
 }
 
+/// The RPC arguments. `p_reason_code` (20261109160000) is sent ONLY when there
+/// is a cause: an update queued by an older build replays with exactly the
+/// argument set it was written for, and the server's default records the
+/// cause as not recorded. Leaving the key out (rather than sending null) also
+/// keeps a no-cause call resolvable against a server that predates the
+/// argument.
+Map<String, Object?> workforceTransitionParams({
+  required String assignmentId,
+  required String action,
+  required String idempotencyKey,
+  required DateTime clientAt,
+  String? note,
+  String? reasonCode,
+}) {
+  return <String, Object?>{
+    'p_assignment_id': assignmentId,
+    'p_action': action,
+    'p_idempotency_key': idempotencyKey,
+    'p_note': note,
+    'p_client_at': clientAt.toUtc().toIso8601String(),
+    if (reasonCode != null) 'p_reason_code': reasonCode,
+  };
+}
+
 abstract interface class WorkforceTransitionRemote {
   /// Sends one update. Throws on transport failure or an unexpected response;
   /// returns normally (including `rejected`) when the server answered.
@@ -77,6 +101,7 @@ abstract interface class WorkforceTransitionRemote {
     required String idempotencyKey,
     required DateTime clientAt,
     String? note,
+    String? reasonCode,
   });
 }
 
@@ -93,16 +118,18 @@ final class SupabaseWorkforceTransitionRemote
     required String idempotencyKey,
     required DateTime clientAt,
     String? note,
+    String? reasonCode,
   }) async {
     final Object? response = await _client.rpc<Object?>(
       'workforce_assignment_transition',
-      params: <String, Object?>{
-        'p_assignment_id': assignmentId,
-        'p_action': action,
-        'p_idempotency_key': idempotencyKey,
-        'p_note': note,
-        'p_client_at': clientAt.toUtc().toIso8601String(),
-      },
+      params: workforceTransitionParams(
+        assignmentId: assignmentId,
+        action: action,
+        idempotencyKey: idempotencyKey,
+        clientAt: clientAt,
+        note: note,
+        reasonCode: reasonCode,
+      ),
     );
     return WorkforceRemoteResult.fromJson(response);
   }

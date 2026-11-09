@@ -13636,6 +13636,306 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The request could not be sent. Check your connection and try again.'**
   String get loginForgotFailed;
+
+  /// No description provided for @wfBlockCauseTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Why is this work blocked?'**
+  String get wfBlockCauseTitle;
+
+  /// No description provided for @wfBlockCauseWaitingStock.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for stock or parts'**
+  String get wfBlockCauseWaitingStock;
+
+  /// No description provided for @wfBlockCauseWaitingEquipment.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for tools or equipment'**
+  String get wfBlockCauseWaitingEquipment;
+
+  /// No description provided for @wfBlockCauseVehicleUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle not available'**
+  String get wfBlockCauseVehicleUnavailable;
+
+  /// No description provided for @wfBlockCauseSafetyHold.
+  ///
+  /// In en, this message translates to:
+  /// **'Safety hold'**
+  String get wfBlockCauseSafetyHold;
+
+  /// No description provided for @wfBlockCauseWaitingApproval.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for approval'**
+  String get wfBlockCauseWaitingApproval;
+
+  /// No description provided for @wfBlockCauseWaitingManpower.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for more people'**
+  String get wfBlockCauseWaitingManpower;
+
+  /// No description provided for @wfBlockCauseOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get wfBlockCauseOther;
+
+  /// No description provided for @wfBlockCauseNotRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Cause not recorded'**
+  String get wfBlockCauseNotRecorded;
+
+  /// No description provided for @wfBlockCauseRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose why the work is blocked.'**
+  String get wfBlockCauseRequired;
+
+  /// No description provided for @wfBlockNoteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Details (required)'**
+  String get wfBlockNoteLabel;
+
+  /// No description provided for @wfDialogCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get wfDialogCancel;
+
+  /// No description provided for @wfRefusedInvalidTransition.
+  ///
+  /// In en, this message translates to:
+  /// **'The assignment had already moved on when this update arrived.'**
+  String get wfRefusedInvalidTransition;
+
+  /// No description provided for @wfRefusedNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'This assignment is no longer available to you.'**
+  String get wfRefusedNotFound;
+
+  /// No description provided for @wfRefusedForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the assigned employee can do this.'**
+  String get wfRefusedForbidden;
+
+  /// No description provided for @wfRefusedNoteRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'A note is required for this update.'**
+  String get wfRefusedNoteRequired;
+
+  /// No description provided for @wfRefusedKeyReuse.
+  ///
+  /// In en, this message translates to:
+  /// **'This update conflicted with an earlier one. Refresh and try again.'**
+  String get wfRefusedKeyReuse;
+
+  /// No description provided for @wfRefusedSelfReview.
+  ///
+  /// In en, this message translates to:
+  /// **'You cannot review work you were assigned to.'**
+  String get wfRefusedSelfReview;
+
+  /// No description provided for @wfRefusedEvidenceRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'This work needs evidence before it can be completed. Attach a photo or document, then try again.'**
+  String get wfRefusedEvidenceRequired;
+
+  /// No description provided for @wfRefusedRecordRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'This work must be linked to its record before it can be verified.'**
+  String get wfRefusedRecordRequired;
+
+  /// No description provided for @wfRefusedReviewNoteRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'A review note is required to verify this work.'**
+  String get wfRefusedReviewNoteRequired;
+
+  /// No description provided for @wfRefusedRecordNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'The linked record could not be found.'**
+  String get wfRefusedRecordNotFound;
+
+  /// No description provided for @wfRefusedAssetMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'The record belongs to a different asset.'**
+  String get wfRefusedAssetMismatch;
+
+  /// No description provided for @wfRefusedRecordAlreadyLinked.
+  ///
+  /// In en, this message translates to:
+  /// **'That record is already linked to another assignment.'**
+  String get wfRefusedRecordAlreadyLinked;
+
+  /// No description provided for @wfRefusedRecordTypeMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'That record is not the type this work needs.'**
+  String get wfRefusedRecordTypeMismatch;
+
+  /// No description provided for @wfRefusedUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'The server did not accept this update.'**
+  String get wfRefusedUnknown;
+
+  /// No description provided for @wfRefusedCurrentStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Current status: {status}.'**
+  String wfRefusedCurrentStatus(String status);
+
+  /// No description provided for @wfAssetLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Asset {asset}'**
+  String wfAssetLine(String asset);
+
+  /// No description provided for @wfTyreLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre {serial}'**
+  String wfTyreLine(String serial);
+
+  /// No description provided for @wfTyrePositionLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Position {position}'**
+  String wfTyrePositionLine(String position);
+
+  /// No description provided for @wfRecordNeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs a linked {record} before review'**
+  String wfRecordNeeded(String record);
+
+  /// No description provided for @wfRecordLinked.
+  ///
+  /// In en, this message translates to:
+  /// **'Linked {record}'**
+  String wfRecordLinked(String record);
+
+  /// No description provided for @wfRecordTyreRecord.
+  ///
+  /// In en, this message translates to:
+  /// **'tyre record'**
+  String get wfRecordTyreRecord;
+
+  /// No description provided for @wfRecordTyreServiceEvent.
+  ///
+  /// In en, this message translates to:
+  /// **'tyre service event'**
+  String get wfRecordTyreServiceEvent;
+
+  /// No description provided for @wfRecordWorkOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'work order'**
+  String get wfRecordWorkOrder;
+
+  /// No description provided for @wfRecordInspection.
+  ///
+  /// In en, this message translates to:
+  /// **'inspection'**
+  String get wfRecordInspection;
+
+  /// No description provided for @wfEvidenceCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No evidence yet} =1{1 evidence file} other{{count} evidence files}}'**
+  String wfEvidenceCount(int count);
+
+  /// No description provided for @wfEvidenceCountUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence count unavailable'**
+  String get wfEvidenceCountUnavailable;
+
+  /// No description provided for @wfEvidenceAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add evidence'**
+  String get wfEvidenceAdd;
+
+  /// No description provided for @wfEvidenceTakePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Take a photo'**
+  String get wfEvidenceTakePhoto;
+
+  /// No description provided for @wfEvidenceChoosePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a photo'**
+  String get wfEvidenceChoosePhoto;
+
+  /// No description provided for @wfEvidenceChoosePdf.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a PDF'**
+  String get wfEvidenceChoosePdf;
+
+  /// No description provided for @wfEvidenceUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading evidence...'**
+  String get wfEvidenceUploading;
+
+  /// No description provided for @wfEvidenceUploaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence uploaded.'**
+  String get wfEvidenceUploaded;
+
+  /// No description provided for @wfEvidenceFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The evidence could not be uploaded. Check your connection and try again.'**
+  String get wfEvidenceFailed;
+
+  /// No description provided for @wfEvidenceTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence must be between 1 byte and 10 MB.'**
+  String get wfEvidenceTooLarge;
+
+  /// No description provided for @wfEvidenceUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Only JPG, PNG or PDF files can be attached.'**
+  String get wfEvidenceUnsupported;
+
+  /// No description provided for @wfEvidenceOnlineOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence is uploaded straight away and needs a connection. It is not saved for later.'**
+  String get wfEvidenceOnlineOnly;
+
+  /// No description provided for @wfEvidenceNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence can be added only while the work is accepted, in progress or blocked.'**
+  String get wfEvidenceNotAllowed;
+
+  /// No description provided for @wfEvidenceUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence cannot be added from saved data. Refresh while online and try again.'**
+  String get wfEvidenceUnavailable;
 }
 
 class _AppLocalizationsDelegate

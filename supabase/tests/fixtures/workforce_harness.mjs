@@ -24,6 +24,7 @@ const MIGRATIONS = [
   '20261022112500_workforce_manager_permissions.sql',
   '20261022113000_workforce_transition_guard.sql',
   '20261023091000_workforce_transitions_and_estimation.sql',
+  '20261109160000_workforce_operations_core.sql',
 ]
 export const migrationSql = Object.fromEntries(MIGRATIONS.map(f =>
   [f, readFileSync(new URL(`../../migrations/${f}`, import.meta.url), 'utf8')]))
@@ -44,6 +45,10 @@ export async function createWorkforceDb () {
       select role from public.profiles where id = auth.uid() $$;
     create function public.app_is_org_admin() returns boolean language sql stable security definer set search_path=public as $$
       select public.is_super_admin() or lower(coalesce(public.get_my_role(), '')) = 'admin' $$;
+    create table public.technician_skills(id uuid primary key default gen_random_uuid(), organisation_id uuid,
+      user_id uuid, skill_id text, level int check (level between 1 and 3));
+    create table public.tyre_records(id uuid primary key default gen_random_uuid(), organisation_id uuid, asset_no text, serial_no text);
+    grant select on public.technician_skills, public.tyre_records to authenticated;
     create schema storage;
     create table storage.buckets(id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
     create table storage.objects(id uuid primary key default gen_random_uuid(), bucket_id text, name text);
@@ -91,8 +96,8 @@ export async function createAssignment (db, uid, over = {}) {
 let keySeq = 0
 export const newKey = () => `test-key-${String(++keySeq).padStart(8, '0')}`
 
-export async function transition (db, uid, assignmentId, action, { key = newKey(), note = null, clientAt = null } = {}) {
+export async function transition (db, uid, assignmentId, action, { key = newKey(), note = null, clientAt = null, reasonCode = action === 'block' ? 'other' : null } = {}) {
   return asClient(db, uid, async () => (await db.query(
-    'select public.workforce_assignment_transition($1, $2, $3, $4, $5) r',
-    [assignmentId, action, key, note, clientAt])).rows[0].r)
+    'select public.workforce_assignment_transition($1, $2, $3, $4, $5, $6) r',
+    [assignmentId, action, key, note, clientAt, reasonCode])).rows[0].r)
 }

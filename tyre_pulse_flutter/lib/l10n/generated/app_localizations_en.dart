@@ -7827,4 +7827,190 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get loginForgotFailed =>
       'The request could not be sent. Check your connection and try again.';
+
+  @override
+  String get wfBlockCauseTitle => 'Why is this work blocked?';
+
+  @override
+  String get wfBlockCauseWaitingStock => 'Waiting for stock or parts';
+
+  @override
+  String get wfBlockCauseWaitingEquipment => 'Waiting for tools or equipment';
+
+  @override
+  String get wfBlockCauseVehicleUnavailable => 'Vehicle not available';
+
+  @override
+  String get wfBlockCauseSafetyHold => 'Safety hold';
+
+  @override
+  String get wfBlockCauseWaitingApproval => 'Waiting for approval';
+
+  @override
+  String get wfBlockCauseWaitingManpower => 'Waiting for more people';
+
+  @override
+  String get wfBlockCauseOther => 'Other';
+
+  @override
+  String get wfBlockCauseNotRecorded => 'Cause not recorded';
+
+  @override
+  String get wfBlockCauseRequired => 'Choose why the work is blocked.';
+
+  @override
+  String get wfBlockNoteLabel => 'Details (required)';
+
+  @override
+  String get wfDialogCancel => 'Cancel';
+
+  @override
+  String get wfRefusedInvalidTransition =>
+      'The assignment had already moved on when this update arrived.';
+
+  @override
+  String get wfRefusedNotFound =>
+      'This assignment is no longer available to you.';
+
+  @override
+  String get wfRefusedForbidden => 'Only the assigned employee can do this.';
+
+  @override
+  String get wfRefusedNoteRequired => 'A note is required for this update.';
+
+  @override
+  String get wfRefusedKeyReuse =>
+      'This update conflicted with an earlier one. Refresh and try again.';
+
+  @override
+  String get wfRefusedSelfReview =>
+      'You cannot review work you were assigned to.';
+
+  @override
+  String get wfRefusedEvidenceRequired =>
+      'This work needs evidence before it can be completed. Attach a photo or document, then try again.';
+
+  @override
+  String get wfRefusedRecordRequired =>
+      'This work must be linked to its record before it can be verified.';
+
+  @override
+  String get wfRefusedReviewNoteRequired =>
+      'A review note is required to verify this work.';
+
+  @override
+  String get wfRefusedRecordNotFound => 'The linked record could not be found.';
+
+  @override
+  String get wfRefusedAssetMismatch =>
+      'The record belongs to a different asset.';
+
+  @override
+  String get wfRefusedRecordAlreadyLinked =>
+      'That record is already linked to another assignment.';
+
+  @override
+  String get wfRefusedRecordTypeMismatch =>
+      'That record is not the type this work needs.';
+
+  @override
+  String get wfRefusedUnknown => 'The server did not accept this update.';
+
+  @override
+  String wfRefusedCurrentStatus(String status) {
+    return 'Current status: $status.';
+  }
+
+  @override
+  String wfAssetLine(String asset) {
+    return 'Asset $asset';
+  }
+
+  @override
+  String wfTyreLine(String serial) {
+    return 'Tyre $serial';
+  }
+
+  @override
+  String wfTyrePositionLine(String position) {
+    return 'Position $position';
+  }
+
+  @override
+  String wfRecordNeeded(String record) {
+    return 'Needs a linked $record before review';
+  }
+
+  @override
+  String wfRecordLinked(String record) {
+    return 'Linked $record';
+  }
+
+  @override
+  String get wfRecordTyreRecord => 'tyre record';
+
+  @override
+  String get wfRecordTyreServiceEvent => 'tyre service event';
+
+  @override
+  String get wfRecordWorkOrder => 'work order';
+
+  @override
+  String get wfRecordInspection => 'inspection';
+
+  @override
+  String wfEvidenceCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count evidence files',
+      one: '1 evidence file',
+      zero: 'No evidence yet',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get wfEvidenceCountUnavailable => 'Evidence count unavailable';
+
+  @override
+  String get wfEvidenceAdd => 'Add evidence';
+
+  @override
+  String get wfEvidenceTakePhoto => 'Take a photo';
+
+  @override
+  String get wfEvidenceChoosePhoto => 'Choose a photo';
+
+  @override
+  String get wfEvidenceChoosePdf => 'Choose a PDF';
+
+  @override
+  String get wfEvidenceUploading => 'Uploading evidence...';
+
+  @override
+  String get wfEvidenceUploaded => 'Evidence uploaded.';
+
+  @override
+  String get wfEvidenceFailed =>
+      'The evidence could not be uploaded. Check your connection and try again.';
+
+  @override
+  String get wfEvidenceTooLarge => 'Evidence must be between 1 byte and 10 MB.';
+
+  @override
+  String get wfEvidenceUnsupported =>
+      'Only JPG, PNG or PDF files can be attached.';
+
+  @override
+  String get wfEvidenceOnlineOnly =>
+      'Evidence is uploaded straight away and needs a connection. It is not saved for later.';
+
+  @override
+  String get wfEvidenceNotAllowed =>
+      'Evidence can be added only while the work is accepted, in progress or blocked.';
+
+  @override
+  String get wfEvidenceUnavailable =>
+      'Evidence cannot be added from saved data. Refresh while online and try again.';
 }

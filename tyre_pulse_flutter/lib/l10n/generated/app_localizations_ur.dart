@@ -7846,4 +7846,189 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get loginForgotFailed =>
       'درخواست نہیں بھیجی جا سکی۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔';
+
+  @override
+  String get wfBlockCauseTitle => 'یہ کام کیوں رکا ہوا ہے؟';
+
+  @override
+  String get wfBlockCauseWaitingStock => 'اسٹاک یا پرزوں کا انتظار';
+
+  @override
+  String get wfBlockCauseWaitingEquipment => 'اوزار یا آلات کا انتظار';
+
+  @override
+  String get wfBlockCauseVehicleUnavailable => 'گاڑی دستیاب نہیں';
+
+  @override
+  String get wfBlockCauseSafetyHold => 'حفاظتی وجوہات سے روکا گیا';
+
+  @override
+  String get wfBlockCauseWaitingApproval => 'منظوری کا انتظار';
+
+  @override
+  String get wfBlockCauseWaitingManpower => 'مزید افراد کا انتظار';
+
+  @override
+  String get wfBlockCauseOther => 'دیگر';
+
+  @override
+  String get wfBlockCauseNotRecorded => 'وجہ درج نہیں';
+
+  @override
+  String get wfBlockCauseRequired => 'منتخب کریں کہ کام کیوں رکا ہے۔';
+
+  @override
+  String get wfBlockNoteLabel => 'تفصیل (لازمی)';
+
+  @override
+  String get wfDialogCancel => 'منسوخ کریں';
+
+  @override
+  String get wfRefusedInvalidTransition =>
+      'یہ اپ ڈیٹ پہنچنے تک کام آگے بڑھ چکا تھا۔';
+
+  @override
+  String get wfRefusedNotFound => 'یہ کام اب آپ کے لیے دستیاب نہیں۔';
+
+  @override
+  String get wfRefusedForbidden => 'یہ صرف تفویض کردہ ملازم کر سکتا ہے۔';
+
+  @override
+  String get wfRefusedNoteRequired => 'اس اپ ڈیٹ کے لیے نوٹ لازمی ہے۔';
+
+  @override
+  String get wfRefusedKeyReuse =>
+      'یہ اپ ڈیٹ پچھلی اپ ڈیٹ سے ٹکرا گئی۔ ریفریش کر کے دوبارہ کوشش کریں۔';
+
+  @override
+  String get wfRefusedSelfReview =>
+      'آپ اپنے تفویض کردہ کام کا جائزہ نہیں لے سکتے۔';
+
+  @override
+  String get wfRefusedEvidenceRequired =>
+      'مکمل کرنے سے پہلے اس کام کا ثبوت درکار ہے۔ تصویر یا دستاویز لگائیں، پھر دوبارہ کوشش کریں۔';
+
+  @override
+  String get wfRefusedRecordRequired =>
+      'تصدیق سے پہلے اس کام کو اس کے ریکارڈ سے منسلک کرنا ضروری ہے۔';
+
+  @override
+  String get wfRefusedReviewNoteRequired =>
+      'اس کام کی تصدیق کے لیے جائزہ نوٹ لازمی ہے۔';
+
+  @override
+  String get wfRefusedRecordNotFound => 'منسلک ریکارڈ نہیں ملا۔';
+
+  @override
+  String get wfRefusedAssetMismatch => 'یہ ریکارڈ کسی دوسرے اثاثے کا ہے۔';
+
+  @override
+  String get wfRefusedRecordAlreadyLinked =>
+      'یہ ریکارڈ پہلے ہی کسی اور کام سے منسلک ہے۔';
+
+  @override
+  String get wfRefusedRecordTypeMismatch =>
+      'یہ ریکارڈ اس کام کی مطلوبہ قسم کا نہیں۔';
+
+  @override
+  String get wfRefusedUnknown => 'سرور نے یہ اپ ڈیٹ قبول نہیں کی۔';
+
+  @override
+  String wfRefusedCurrentStatus(String status) {
+    return 'موجودہ حیثیت: $status۔';
+  }
+
+  @override
+  String wfAssetLine(String asset) {
+    return 'اثاثہ $asset';
+  }
+
+  @override
+  String wfTyreLine(String serial) {
+    return 'ٹائر $serial';
+  }
+
+  @override
+  String wfTyrePositionLine(String position) {
+    return 'پوزیشن $position';
+  }
+
+  @override
+  String wfRecordNeeded(String record) {
+    return 'جائزے سے پہلے منسلک $record درکار ہے';
+  }
+
+  @override
+  String wfRecordLinked(String record) {
+    return 'منسلک $record';
+  }
+
+  @override
+  String get wfRecordTyreRecord => 'ٹائر ریکارڈ';
+
+  @override
+  String get wfRecordTyreServiceEvent => 'ٹائر سروس واقعہ';
+
+  @override
+  String get wfRecordWorkOrder => 'ورک آرڈر';
+
+  @override
+  String get wfRecordInspection => 'معائنہ';
+
+  @override
+  String wfEvidenceCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'ثبوت کی $count فائلیں',
+      one: 'ثبوت کی 1 فائل',
+      zero: 'ابھی کوئی ثبوت نہیں',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get wfEvidenceCountUnavailable => 'ثبوت کی تعداد دستیاب نہیں';
+
+  @override
+  String get wfEvidenceAdd => 'ثبوت شامل کریں';
+
+  @override
+  String get wfEvidenceTakePhoto => 'تصویر لیں';
+
+  @override
+  String get wfEvidenceChoosePhoto => 'تصویر منتخب کریں';
+
+  @override
+  String get wfEvidenceChoosePdf => 'PDF منتخب کریں';
+
+  @override
+  String get wfEvidenceUploading => 'ثبوت اپ لوڈ ہو رہا ہے...';
+
+  @override
+  String get wfEvidenceUploaded => 'ثبوت اپ لوڈ ہو گیا۔';
+
+  @override
+  String get wfEvidenceFailed =>
+      'ثبوت اپ لوڈ نہیں ہو سکا۔ کنکشن چیک کر کے دوبارہ کوشش کریں۔';
+
+  @override
+  String get wfEvidenceTooLarge =>
+      'ثبوت کا سائز 1 بائٹ سے 10 MB کے درمیان ہونا چاہیے۔';
+
+  @override
+  String get wfEvidenceUnsupported =>
+      'صرف JPG، PNG یا PDF فائلیں لگائی جا سکتی ہیں۔';
+
+  @override
+  String get wfEvidenceOnlineOnly =>
+      'ثبوت فوراً اپ لوڈ ہوتا ہے اور کنکشن درکار ہے۔ یہ بعد کے لیے محفوظ نہیں ہوتا۔';
+
+  @override
+  String get wfEvidenceNotAllowed =>
+      'ثبوت صرف اس وقت شامل کیا جا سکتا ہے جب کام قبول، جاری یا رکا ہوا ہو۔';
+
+  @override
+  String get wfEvidenceUnavailable =>
+      'محفوظ ڈیٹا سے ثبوت شامل نہیں ہو سکتا۔ آن لائن ریفریش کر کے دوبارہ کوشش کریں۔';
 }

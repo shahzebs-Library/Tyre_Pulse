@@ -8535,5 +8535,104 @@
   "loginForgotIdentifierRequired": "Enter your username or employee ID.",
   "loginForgotSubmit": "Send request",
   "loginForgotSent": "Your request was sent to your company's admin. They will set a new password for you.",
-  "loginForgotFailed": "The request could not be sent. Check your connection and try again."
+  "loginForgotFailed": "The request could not be sent. Check your connection and try again.",
+  "wfBlockCauseTitle": "Why is this work blocked?",
+  "wfBlockCauseWaitingStock": "Waiting for stock or parts",
+  "wfBlockCauseWaitingEquipment": "Waiting for tools or equipment",
+  "wfBlockCauseVehicleUnavailable": "Vehicle not available",
+  "wfBlockCauseSafetyHold": "Safety hold",
+  "wfBlockCauseWaitingApproval": "Waiting for approval",
+  "wfBlockCauseWaitingManpower": "Waiting for more people",
+  "wfBlockCauseOther": "Other",
+  "wfBlockCauseNotRecorded": "Cause not recorded",
+  "wfBlockCauseRequired": "Choose why the work is blocked.",
+  "wfBlockNoteLabel": "Details (required)",
+  "wfDialogCancel": "Cancel",
+  "wfRefusedInvalidTransition": "The assignment had already moved on when this update arrived.",
+  "wfRefusedNotFound": "This assignment is no longer available to you.",
+  "wfRefusedForbidden": "Only the assigned employee can do this.",
+  "wfRefusedNoteRequired": "A note is required for this update.",
+  "wfRefusedKeyReuse": "This update conflicted with an earlier one. Refresh and try again.",
+  "wfRefusedSelfReview": "You cannot review work you were assigned to.",
+  "wfRefusedEvidenceRequired": "This work needs evidence before it can be completed. Attach a photo or document, then try again.",
+  "wfRefusedRecordRequired": "This work must be linked to its record before it can be verified.",
+  "wfRefusedReviewNoteRequired": "A review note is required to verify this work.",
+  "wfRefusedRecordNotFound": "The linked record could not be found.",
+  "wfRefusedAssetMismatch": "The record belongs to a different asset.",
+  "wfRefusedRecordAlreadyLinked": "That record is already linked to another assignment.",
+  "wfRefusedRecordTypeMismatch": "That record is not the type this work needs.",
+  "wfRefusedUnknown": "The server did not accept this update.",
+  "wfRefusedCurrentStatus": "Current status: {status}.",
+  "@wfRefusedCurrentStatus": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "wfAssetLine": "Asset {asset}",
+  "@wfAssetLine": {
+    "placeholders": {
+      "asset": {
+        "type": "String"
+      }
+    }
+  },
+  "wfTyreLine": "Tyre {serial}",
+  "@wfTyreLine": {
+    "placeholders": {
+      "serial": {
+        "type": "String"
+      }
+    }
+  },
+  "wfTyrePositionLine": "Position {position}",
+  "@wfTyrePositionLine": {
+    "placeholders": {
+      "position": {
+        "type": "String"
+      }
+    }
+  },
+  "wfRecordNeeded": "Needs a linked {record} before review",
+  "@wfRecordNeeded": {
+    "placeholders": {
+      "record": {
+        "type": "String"
+      }
+    }
+  },
+  "wfRecordLinked": "Linked {record}",
+  "@wfRecordLinked": {
+    "placeholders": {
+      "record": {
+        "type": "String"
+      }
+    }
+  },
+  "wfRecordTyreRecord": "tyre record",
+  "wfRecordTyreServiceEvent": "tyre service event",
+  "wfRecordWorkOrder": "work order",
+  "wfRecordInspection": "inspection",
+  "wfEvidenceCount": "{count, plural, =0{No evidence yet} =1{1 evidence file} other{{count} evidence files}}",
+  "@wfEvidenceCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wfEvidenceCountUnavailable": "Evidence count unavailable",
+  "wfEvidenceAdd": "Add evidence",
+  "wfEvidenceTakePhoto": "Take a photo",
+  "wfEvidenceChoosePhoto": "Choose a photo",
+  "wfEvidenceChoosePdf": "Choose a PDF",
+  "wfEvidenceUploading": "Uploading evidence...",
+  "wfEvidenceUploaded": "Evidence uploaded.",
+  "wfEvidenceFailed": "The evidence could not be uploaded. Check your connection and try again.",
+  "wfEvidenceTooLarge": "Evidence must be between 1 byte and 10 MB.",
+  "wfEvidenceUnsupported": "Only JPG, PNG or PDF files can be attached.",
+  "wfEvidenceOnlineOnly": "Evidence is uploaded straight away and needs a connection. It is not saved for later.",
+  "wfEvidenceNotAllowed": "Evidence can be added only while the work is accepted, in progress or blocked.",
+  "wfEvidenceUnavailable": "Evidence cannot be added from saved data. Refresh while online and try again."
 }

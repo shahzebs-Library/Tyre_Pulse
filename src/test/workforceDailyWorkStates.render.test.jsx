@@ -15,6 +15,7 @@ const api = vi.hoisted(() => ({
   listWorkStandards: vi.fn(),
 }))
 vi.mock('../lib/api/workforceDaily', () => ({
+  DAILY_ENTRY_CATEGORIES: ['productive','coordination','reporting','training','break','blocked','unassigned'], DAILY_REASON_CATEGORIES: ['blocked'], correctDailyEntry: vi.fn(),
   getMyDailyReport: api.getMyDailyReport, listReviewQueue: api.listReviewQueue,
   addDailyEntry: vi.fn(), getDailyReportForReview: vi.fn(), ensureDailyReport: vi.fn(),
   submitDailyReport: vi.fn(), reviewDailyReport: vi.fn(),
@@ -25,6 +26,8 @@ vi.mock('../lib/api/workforceEvidence', () => ({
 vi.mock('../lib/api/workforceAssignments', () => ({
   listWorkforceAssignments: api.listWorkforceAssignments, listAssignableEmployees: api.listAssignableEmployees,
   listWorkDependencies: api.listWorkDependencies, listWorkStandards: api.listWorkStandards,
+  getBoardSummary: vi.fn(() => Promise.resolve(null)), listWorkforceAssignmentsPage: vi.fn(), recommendAssignees: vi.fn(() => Promise.resolve([])),
+  qualificationReasonText: x => x, reassignAssignment: vi.fn(), linkOperationalRecord: vi.fn(), listAssignmentEvents: vi.fn(() => Promise.resolve([])), OPERATIONAL_TABLES: {},
   assignWork: vi.fn(), setWorkStatus: vi.fn(), transitionAssignment: vi.fn(), addWorkDependency: vi.fn(), addWorkStandard: vi.fn(),
 }))
 

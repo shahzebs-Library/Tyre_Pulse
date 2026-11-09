@@ -9,6 +9,7 @@ import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
 import 'package:tyre_pulse/core/storage/storage_providers.dart';
 import 'package:tyre_pulse/features/my_work/data/queued_workforce_transition.dart';
 import 'package:tyre_pulse/features/my_work/data/workforce_assignment_cache.dart';
+import 'package:tyre_pulse/features/my_work/data/workforce_assignment_evidence.dart';
 import 'package:tyre_pulse/features/my_work/data/workforce_assignment_view.dart';
 import 'package:tyre_pulse/features/my_work/data/workforce_assignments_repository.dart';
 import 'package:tyre_pulse/features/my_work/data/workforce_sync_engine.dart';
@@ -40,6 +41,35 @@ final workforceAssignmentsProvider =
   // of silently re-querying in the background.
   retry: (int retryCount, Object error) => null,
 );
+
+/// Online-only evidence upload and per-assignment counts.
+final Provider<WorkforceEvidenceSource> workforceEvidenceSourceProvider =
+    Provider<WorkforceEvidenceSource>((Ref ref) {
+  return SupabaseWorkforceEvidenceSource(ref.watch(supabaseClientProvider));
+});
+
+final Provider<WorkforceEvidencePicker> workforceEvidencePickerProvider =
+    Provider<WorkforceEvidencePicker>(
+  (Ref ref) => PlatformWorkforceEvidencePicker(),
+);
+
+/// Evidence files per assignment id, or `null` when the count could not be
+/// read (offline, older server, no client). Never an error state: the card
+/// shows "unavailable" instead of a misleading zero.
+final workforceEvidenceCountsProvider =
+    FutureProvider.autoDispose<Map<String, int>?>((Ref ref) async {
+  final WorkforceAssignmentSnapshot snapshot =
+      await ref.watch(workforceAssignmentsProvider.future);
+  if (snapshot.offline) return null;
+  final List<String> ids = <String>[
+    for (final WorkforceAssignment a in snapshot.items) a.id,
+  ];
+  try {
+    return await ref.read(workforceEvidenceSourceProvider).counts(ids);
+  } on Object {
+    return null;
+  }
+});
 
 final Provider<WorkforceTransitionQueue> workforceTransitionQueueProvider =
     Provider<WorkforceTransitionQueue>((Ref ref) {

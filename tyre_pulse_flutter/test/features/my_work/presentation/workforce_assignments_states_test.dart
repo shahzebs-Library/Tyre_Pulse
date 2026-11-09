@@ -40,9 +40,6 @@ final class _FakeSource implements WorkforceAssignmentsSource {
     if (next is Error) throw next;
     throw next as Exception;
   }
-
-  @override
-  Future<void> advance(WorkforceAssignment item) async {}
 }
 
 Future<void> _pump(

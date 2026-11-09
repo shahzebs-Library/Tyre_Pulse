@@ -7846,4 +7846,190 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get loginForgotFailed =>
       'تعذر إرسال الطلب. تحقق من اتصالك وحاول مرة أخرى.';
+
+  @override
+  String get wfBlockCauseTitle => 'لماذا توقف هذا العمل؟';
+
+  @override
+  String get wfBlockCauseWaitingStock => 'بانتظار المخزون أو القطع';
+
+  @override
+  String get wfBlockCauseWaitingEquipment => 'بانتظار الأدوات أو المعدات';
+
+  @override
+  String get wfBlockCauseVehicleUnavailable => 'المركبة غير متاحة';
+
+  @override
+  String get wfBlockCauseSafetyHold => 'إيقاف لأسباب السلامة';
+
+  @override
+  String get wfBlockCauseWaitingApproval => 'بانتظار الموافقة';
+
+  @override
+  String get wfBlockCauseWaitingManpower => 'بانتظار عمالة إضافية';
+
+  @override
+  String get wfBlockCauseOther => 'سبب آخر';
+
+  @override
+  String get wfBlockCauseNotRecorded => 'السبب غير مسجل';
+
+  @override
+  String get wfBlockCauseRequired => 'اختر سبب توقف العمل.';
+
+  @override
+  String get wfBlockNoteLabel => 'التفاصيل (مطلوبة)';
+
+  @override
+  String get wfDialogCancel => 'إلغاء';
+
+  @override
+  String get wfRefusedInvalidTransition =>
+      'كانت المهمة قد تغيرت عند وصول هذا التحديث.';
+
+  @override
+  String get wfRefusedNotFound => 'لم تعد هذه المهمة متاحة لك.';
+
+  @override
+  String get wfRefusedForbidden => 'لا يستطيع ذلك إلا الموظف المكلّف.';
+
+  @override
+  String get wfRefusedNoteRequired => 'يلزم إدخال ملاحظة لهذا التحديث.';
+
+  @override
+  String get wfRefusedKeyReuse =>
+      'تعارض هذا التحديث مع تحديث سابق. حدّث الصفحة وحاول مرة أخرى.';
+
+  @override
+  String get wfRefusedSelfReview => 'لا يمكنك مراجعة عمل كُلّفت به.';
+
+  @override
+  String get wfRefusedEvidenceRequired =>
+      'يتطلب هذا العمل دليلًا قبل إكماله. أرفق صورة أو مستندًا ثم حاول مرة أخرى.';
+
+  @override
+  String get wfRefusedRecordRequired =>
+      'يجب ربط هذا العمل بسجله قبل التحقق منه.';
+
+  @override
+  String get wfRefusedReviewNoteRequired =>
+      'يلزم إدخال ملاحظة مراجعة للتحقق من هذا العمل.';
+
+  @override
+  String get wfRefusedRecordNotFound => 'تعذر العثور على السجل المرتبط.';
+
+  @override
+  String get wfRefusedAssetMismatch => 'السجل يخص أصلًا مختلفًا.';
+
+  @override
+  String get wfRefusedRecordAlreadyLinked =>
+      'هذا السجل مرتبط بالفعل بمهمة أخرى.';
+
+  @override
+  String get wfRefusedRecordTypeMismatch =>
+      'هذا السجل ليس من النوع الذي يحتاجه هذا العمل.';
+
+  @override
+  String get wfRefusedUnknown => 'لم يقبل الخادم هذا التحديث.';
+
+  @override
+  String wfRefusedCurrentStatus(String status) {
+    return 'الحالة الحالية: $status.';
+  }
+
+  @override
+  String wfAssetLine(String asset) {
+    return 'الأصل $asset';
+  }
+
+  @override
+  String wfTyreLine(String serial) {
+    return 'الإطار $serial';
+  }
+
+  @override
+  String wfTyrePositionLine(String position) {
+    return 'الموضع $position';
+  }
+
+  @override
+  String wfRecordNeeded(String record) {
+    return 'يحتاج إلى $record مرتبط قبل المراجعة';
+  }
+
+  @override
+  String wfRecordLinked(String record) {
+    return '$record مرتبط';
+  }
+
+  @override
+  String get wfRecordTyreRecord => 'سجل إطار';
+
+  @override
+  String get wfRecordTyreServiceEvent => 'حدث خدمة إطار';
+
+  @override
+  String get wfRecordWorkOrder => 'أمر عمل';
+
+  @override
+  String get wfRecordInspection => 'فحص';
+
+  @override
+  String wfEvidenceCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ملف دليل',
+      many: '$count ملف دليل',
+      few: '$count ملفات دليل',
+      two: 'ملفا دليل',
+      one: 'ملف دليل واحد',
+      zero: 'لا يوجد دليل بعد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get wfEvidenceCountUnavailable => 'عدد الأدلة غير متاح';
+
+  @override
+  String get wfEvidenceAdd => 'إضافة دليل';
+
+  @override
+  String get wfEvidenceTakePhoto => 'التقاط صورة';
+
+  @override
+  String get wfEvidenceChoosePhoto => 'اختيار صورة';
+
+  @override
+  String get wfEvidenceChoosePdf => 'اختيار ملف PDF';
+
+  @override
+  String get wfEvidenceUploading => 'جارٍ رفع الدليل...';
+
+  @override
+  String get wfEvidenceUploaded => 'تم رفع الدليل.';
+
+  @override
+  String get wfEvidenceFailed =>
+      'تعذر رفع الدليل. تحقق من الاتصال وحاول مرة أخرى.';
+
+  @override
+  String get wfEvidenceTooLarge =>
+      'يجب أن يكون حجم الدليل بين 1 بايت و10 ميغابايت.';
+
+  @override
+  String get wfEvidenceUnsupported => 'يمكن إرفاق ملفات JPG أو PNG أو PDF فقط.';
+
+  @override
+  String get wfEvidenceOnlineOnly =>
+      'يُرفع الدليل فورًا ويحتاج إلى اتصال، ولا يُحفظ لوقت لاحق.';
+
+  @override
+  String get wfEvidenceNotAllowed =>
+      'لا يمكن إضافة دليل إلا عندما يكون العمل مقبولًا أو قيد التنفيذ أو متوقفًا.';
+
+  @override
+  String get wfEvidenceUnavailable =>
+      'لا يمكن إضافة دليل من البيانات المحفوظة. حدّث الصفحة أثناء الاتصال وحاول مرة أخرى.';
 }

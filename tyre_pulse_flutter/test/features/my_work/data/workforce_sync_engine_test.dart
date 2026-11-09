@@ -92,6 +92,7 @@ void main() {
         serverStatus: 'in_progress',
         action: WorkforceAction.block,
         note: '   ',
+        reason: WorkforceBlockReason.other,
       );
 
       expect(result.outcome, WorkforceSubmitOutcome.refused);
@@ -107,8 +108,10 @@ void main() {
         serverStatus: 'in_progress',
         action: WorkforceAction.block,
         note: '  waiting for valve  ',
+        reason: WorkforceBlockReason.waitingStock,
       );
       expect(remote.calls.single.note, 'waiting for valve');
+      expect(remote.calls.single.reasonCode, 'waiting_stock');
     });
 
     test('an action that does not apply is refused locally', () async {

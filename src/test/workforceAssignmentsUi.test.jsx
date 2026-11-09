@@ -49,8 +49,22 @@ describe('AssignmentActions', () => {
     const submit = screen.getByRole('button', { name: 'Block' })
     expect(submit).toBeDisabled()
     fireEvent.change(screen.getByPlaceholderText('Block: reason'), { target: { value: 'no valve' } })
+    expect(screen.getByRole('button', { name: 'Block' })).toBeDisabled() // cause still missing
+    fireEvent.change(screen.getByLabelText('Blocker cause'), { target: { value: 'waiting_stock' } })
     fireEvent.click(screen.getByRole('button', { name: 'Block' }))
-    expect(onAct).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1' }), 'block', 'no valve')
+    expect(onAct).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1' }), 'block', 'no valve', 'waiting_stock')
+  })
+
+  it('verify offers an optional review note and sends it', () => {
+    const onAct = vi.fn()
+    render(<AssignmentActions item={item('submitted', 'tech')} currentUserId="m1" isManager onAct={onAct} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Verify' }))
+    expect(onAct).not.toHaveBeenCalled()
+    const field = screen.getByPlaceholderText(/review note/)
+    expect(screen.getByRole('button', { name: 'Verify' })).not.toBeDisabled() // note optional
+    fireEvent.change(field, { target: { value: 'Torque checked' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Verify' }))
+    expect(onAct).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1' }), 'verify', 'Torque checked', null)
   })
 
   it('shows no action to someone who is not the assignee or a manager', () => {
@@ -74,15 +88,18 @@ describe('transitionAssignment', () => {
     await expect(transitionAssignment('a1', 'start')).rejects.toThrow(/moved on/)
   })
 
-  it('falls back to a guarded update when the function is not installed', async () => {
+  it('refuses with an actionable message when the audited function is not installed, and never writes status directly', async () => {
     h.rpc.mockResolvedValueOnce({ data: null, error: { code: 'PGRST202', message: 'Could not find the function' } })
-    h.update.mockReturnValueOnce({ data: [{ id: 'a1' }], error: null })
-    await expect(transitionAssignment('a1', 'start')).resolves.toMatchObject({ legacy: true, status: 'in_progress' })
+    await expect(transitionAssignment('a1', 'start')).rejects.toThrow(/latest database update/)
+    expect(h.update).not.toHaveBeenCalled()
   })
 
-  it('cannot record a note on the legacy path, so it refuses instead of dropping it', async () => {
-    h.rpc.mockResolvedValueOnce({ data: null, error: { code: 'PGRST202', message: 'Could not find the function' } })
-    await expect(transitionAssignment('a1', 'block', { note: 'x' })).rejects.toThrow(/latest database update/)
+  it('needs a blocker cause before calling the database', async () => {
+    await expect(transitionAssignment('a1', 'block', { note: 'x' })).rejects.toThrow(/why the work is blocked/)
+    expect(h.rpc).not.toHaveBeenCalled()
+    h.rpc.mockResolvedValueOnce({ data: { ok: true, result: 'applied', status: 'blocked' }, error: null })
+    await transitionAssignment('a1', 'block', { note: 'x', reasonCode: 'waiting_stock' })
+    expect(h.rpc.mock.calls.at(-1)[1]).toMatchObject({ p_action: 'block', p_reason_code: 'waiting_stock' })
   })
 })
 

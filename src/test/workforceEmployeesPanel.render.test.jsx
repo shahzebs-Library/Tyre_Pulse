@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+vi.mock('../contexts/LanguageContext', async importOriginal => (await import('./workforceLanguageMock.js')).mockWorkforceLanguage(importOriginal))
 import { render, cleanup, screen, waitFor, fireEvent, within } from '@testing-library/react'
 
 const NOT_INSTALLED_TEXT = 'Team work tracking needs the latest database update before it can record work. Ask an administrator to apply it.'

@@ -57,7 +57,32 @@ const MESSAGES = {
   record_already_linked: 'That record is already linked to another task.',
   record_type_mismatch: 'This task needs a different kind of operational record.',
 }
-export function reasonMessage(reason, currentStatus) {
+const STATUS_KEYS = new Set(['assigned', 'acknowledged', 'in_progress', 'blocked', 'submitted', 'verified', 'cancelled'])
+
+/**
+ * Plain-sentence refusal. Without `t` it returns the English text (service-layer callers and tests);
+ * with the LanguageContext `t` it returns the same sentence from the workforce namespace.
+ */
+export function reasonMessage(reason, currentStatus, t) {
+  if (typeof t === 'function') {
+    const base = t(MESSAGES[reason] ? `workforce.refusal.${reason}` : 'workforce.refusal.default')
+    if (reason !== 'invalid_transition' || !currentStatus) return base
+    const s = String(currentStatus)
+    return t('workforce.refusal.withStatus', { message: base, status: STATUS_KEYS.has(s) ? t(`workforce.status.${s}`) : s.replace('_', ' ') })
+  }
   const base = MESSAGES[reason] || 'The update was not accepted.'
   return reason === 'invalid_transition' && currentStatus ? `${base} Current status: ${String(currentStatus).replace('_', ' ')}.` : base
+}
+
+/** Button label for a transition; English without `t`, translated with it. */
+export function transitionLabel(key, t) {
+  const en = TRANSITIONS[key]?.label
+  return en && typeof t === 'function' ? t(`workforce.actions.${key}`) : (en || key)
+}
+
+/** Blocker cause label; English without `t`, translated with it. Unknown codes are shown as given. */
+export function blockReasonLabel(code, t) {
+  const en = BLOCK_REASON_LABELS[code]
+  if (!en) return code
+  return typeof t === 'function' ? t(`workforce.blockReason.${code}`) : en
 }

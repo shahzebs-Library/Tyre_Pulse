@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { getDurationEstimate } from '../../lib/api/workforceAssignments'
 import { formatMinutes } from '../../lib/workforceEstimate'
+import { useLanguage } from '../../contexts/LanguageContext'
 
-const CONFIDENCE = { high: 'High confidence', medium: 'Medium confidence', low: 'Low confidence' }
+const CONFIDENCE_KEY = { high: 'workforce.estimatePanel.confidenceHigh', medium: 'workforce.estimatePanel.confidenceMedium', low: 'workforce.estimatePanel.confidenceLow' }
 
 /**
  * Shows what completed work of the same kind has historically taken (median of ACTIVE minutes).
@@ -10,6 +11,7 @@ const CONFIDENCE = { high: 'High confidence', medium: 'Medium confidence', low: 
  * and says when it cannot answer.
  */
 export default function EstimatePanel({ taskType, vehicleType, role, onUse }) {
+  const { t } = useLanguage()
   const [state, setState] = useState({ phase: 'idle' })
   const task = String(taskType || '').trim()
 
@@ -30,21 +32,21 @@ export default function EstimatePanel({ taskType, vehicleType, role, onUse }) {
 
   const box = 'md:col-span-2 rounded-lg border border-[var(--input-border)] bg-[var(--panel)] px-3 py-2 text-sm'
   if (state.phase === 'idle') {
-    return <p className={`${box} text-[var(--text-muted)]`}>Enter a task type to see how long similar completed work has taken.</p>
+    return <p className={`${box} text-[var(--text-muted)]`}>{t('workforce.estimatePanel.idle')}</p>
   }
-  if (state.phase === 'loading') return <p className={`${box} text-[var(--text-muted)]`} role="status">Checking completed work history...</p>
-  if (state.phase === 'error') return <p className={`${box} text-[var(--text-muted)]`} role="status">Estimate could not be loaded. You can still set minutes manually.</p>
+  if (state.phase === 'loading') return <p className={`${box} text-[var(--text-muted)]`} role="status">{t('workforce.estimatePanel.loading')}</p>
+  if (state.phase === 'error') return <p className={`${box} text-[var(--text-muted)]`} role="status">{t('workforce.estimatePanel.error')}</p>
 
   const e = state.estimate
   if (e.status === 'estimated') {
     return (
       <div className={box} role="status">
         <div className="flex flex-wrap items-center gap-2">
-          <strong>Estimated effort: {formatMinutes(e.medianMinutes)}</strong>
-          <span className="text-xs rounded-full border border-[var(--input-border)] px-2 py-0.5">{CONFIDENCE[e.confidence]}</span>
-          {onUse && <button type="button" className="btn-secondary" onClick={() => onUse(Math.round(e.medianMinutes))}>Use {Math.round(e.medianMinutes)} min</button>}
+          <strong>{t('workforce.estimatePanel.estimated', { value: formatMinutes(e.medianMinutes) })}</strong>
+          <span className="text-xs rounded-full border border-[var(--input-border)] px-2 py-0.5">{CONFIDENCE_KEY[e.confidence] ? t(CONFIDENCE_KEY[e.confidence]) : e.confidence}</span>
+          {onUse && <button type="button" className="btn-secondary" onClick={() => onUse(Math.round(e.medianMinutes))}>{t('workforce.estimatePanel.use', { minutes: Math.round(e.medianMinutes) })}</button>}
         </div>
-        <p className="text-xs text-[var(--text-muted)] mt-1">{e.message} Active work time only; blocked time and review waiting are excluded.</p>
+        <p className="text-xs text-[var(--text-muted)] mt-1">{e.message} {t('workforce.estimatePanel.activeOnly')}</p>
       </div>
     )
   }

@@ -126,7 +126,7 @@ export default function Analytics() {
       const { data, error: e, truncated: tr } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
-          .select('id,issue_date,brand,site,category,risk_level,cost_per_tyre,qty')
+          .select('id,issue_date,brand,site,category,risk_level,cost_per_tyre,qty,serial_no,country,status,removal_date,km_at_fitment,km_at_removal,total_km,vehicle_type')
           .order('issue_date')
         if (activeCountry !== 'All') q = q.eq('country', activeCountry)
         if (fromDate) q = q.gte('issue_date', fromDate)

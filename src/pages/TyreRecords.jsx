@@ -227,7 +227,7 @@ export default function TyreRecords() {
   const counts = useCard(() => tyreRecordsApi.getRecordStatusCounts(kpiFilters, activeCountry), [kpiFilters, activeCountry, kpiNonce])
   const life = useCard(async () => {
     const res = await tyreRecordsApi.listRecordedLifeKm(kpiFilters, activeCountry)
-    return { ...averageLife(res.values), truncated: res.truncated }
+    return { ...averageLife(res.rows || res.values), truncated: res.truncated }
   }, [kpiFilters, activeCountry, kpiNonce])
 
   // Vehicle master and last inspection for the assets on THIS page only.

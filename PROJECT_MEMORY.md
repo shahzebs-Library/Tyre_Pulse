@@ -43,6 +43,9 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   update, totals verified identical). 843 KSA exact copies removed (SAR 132,686.09), archive _bak.ksa_expense_copies_20261109.
   UAE 51,546 / Egypt 38,451 lines have NO source_row -> cannot be keyed; only the file fingerprint guards their re-import.
 - Fleet CPK is now WEIGHTED (total cost / total km) via src/lib/tyreLifetime.js; tests asserting an average of ratios are stale.
+- Owner rule 2026-11-09: a serial priced twice -> the LATEST UPLOADED row (created_at) keeps the price. Applied to 3 KSA serials
+  (11019981, HNA4922, K601B501563), backup _bak.ksa_two_price_latest_wins_20261109. K507B403860 left: both rows uploaded in the
+  same batch, same day, so 'latest' cannot decide. Report engine security fix (zod 4, express 4.22.3) = PR #471.
 - Open: 4 KSA serials priced twice on different vehicles/job cards (likely mistyped serials, left); 6 KSA + 14 UAE ambiguous
   old/new pairs untouched; held tyre uploads await a decision on /data-reconciliation.
 

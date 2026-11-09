@@ -18,15 +18,16 @@ const COLS =
   'id,serial_no,serial_number,tyre_serial,brand,size,supplier,asset_no,asset_number,site,' +
   'country,position,tyre_position,status,cost_per_tyre,total_km,total_hrs,km_at_fitment,' +
   'km_at_removal,tread_depth,pressure_reading,fitment_date,issue_date,removal_date,' +
-  'reason_for_removal,removal_reason,findings,remarks,created_at'
+  'reason_for_removal,removal_reason,findings,remarks,created_at,vehicle_type,qty'
 
 const SERVICE_EVENT_COLS =
   'id,tyre_serial,asset_no,position,event_type,event_date,tread_depth,pressure,cost,' +
-  'technician,site,notes,created_at'
+  'technician,site,notes,created_at,country,odometer_km'
 
 const WARRANTY_COLS =
   'id,claim_no,serial_number,brand,size,asset_no,site,country,fitment_date,removal_date,' +
-  'km_run,expected_life_km,failure_type,supplier,claim_status,credit_amount,credit_date,notes,created_at'
+  'km_run,expected_life_km,failure_type,supplier,claim_status,credit_amount,credit_date,notes,created_at,' +
+  'km_at_removal,decision_date,rejection_reason'
 
 const RETREAD_COLS =
   'id,claim_no,tyre_serial,asset_no,vendor,reason,claim_date,cost,amount_recovered,status,notes,country,created_at'
@@ -70,7 +71,8 @@ export function getWarrantyClaims(serial, { country } = {}) {
   return serialHistory('warranty_claims', WARRANTY_COLS, 'serial_number', serial, country)
 }
 export function getStatusMarks(serial) {
-  return serialHistory('tyre_status_marks', 'serial,mark_type', 'serial', serial)
+  // id / country / created_at / reason feed the lifecycle event history (SCRAP date and source).
+  return serialHistory('tyre_status_marks', 'id,serial,mark_type,country,created_at,reason', 'serial', serial)
 }
 export function getRetreadClaims(serial, { country } = {}) {
   return serialHistory('retread_claims', RETREAD_COLS, 'tyre_serial', serial, country)

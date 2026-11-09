@@ -354,3 +354,34 @@ the `qr-login` edge function use those, the phone never does.
 | `get_email_by_identifier(identifier)` RPC (anon) | `auth_repository.dart` `_madeUpEmailFor`: since `20261108130000` it returns ONLY made-up `@users.tyrepulse.app` addresses, so field accounts sign in directly from the phone (own IP, own auth rate limit). |
 | `sign-in` edge function (verify_jwt false, self-validating) | Real-email accounts and unknown names: resolves the email server-side, enforces and records the lockout, returns only tokens; the app then calls `auth.setSession`. |
 | `request_password_reset(p_identifier)` RPC (anon, always `{"ok":true}`) | Login "Forgot password?" dialog; queues a request for the company's admin (`20261108120000`). |
+
+### 7.11 Company work assignments, My Work lane (added 2026-11-09)
+
+The Tasks screen's workforce lane (artifact 01 section 2.15) reads and writes
+the workforce operations core. Migrations `20261109160000_workforce_operations_core.sql`,
+`20261109170000_workforce_time_accounting.sql`,
+`20261109180000_workforce_management_analytics.sql` and
+`20261109190000_workforce_reassign_notify.sql` are all APPLIED LIVE. Every
+object below was checked against the migration that creates it. **None is in
+`SupabaseTables` / `SupabaseRpcs`**: `features/my_work/` uses string literals,
+the same drift as 7.5.
+
+| Object | Created or last redefined in | Security | Flutter use |
+|---|---|---|---|
+| `workforce_assignments` SELECT | Table from `20261022095000`; `asset_no`, `tyre_serial`, `tyre_position`, `operational_record_table`, `operational_record_id` added by `20261109160000` | RLS; the phone filters `assigned_to = auth.uid()`, newest 100 | `WorkforceAssignmentsRepository.listMine`. Reads the extended columns and falls back to `id, organisation_id, title, instructions, site, status, priority, due_at` on 42703 / PGRST204 (a server that predates `20261109160000`). Rows are cached per user for offline display |
+| `workforce_assignments` direct UPDATE of `status` | Refused by `20261109160000` for everyone: trigger `workforce_assignment_guard` accepts a status change only while the transaction GUC `workforce.via` is `transition` (set inside `workforce_assignment_transition`), else 42501 | n/a | **Not used.** The old repository `advance()` that did `update({'status': ...})` was removed from the app |
+| `workforce_assignment_transition(p_assignment_id uuid, p_action text, p_idempotency_key text, p_note text default null, p_client_at timestamptz default null, p_reason_code text default null)` | `20261109160000`. The old 5-argument version is renamed `workforce_assignment_transition_v1_retired` and revoked, so PostgREST sees one function | DEFINER, `search_path ''`; EXECUTE `authenticated` only (anon and PUBLIC revoked) | Every status update (accept, start, block, resume, complete), sent from the feature's own offline queue (artifact 06 section 7.8). `p_reason_code` is one of `waiting_stock`, `waiting_equipment`, `vehicle_unavailable`, `safety_hold`, `waiting_approval`, `waiting_manpower`, `other`; the phone sends the key ONLY when there is a cause, so a block queued by an older build replays with the original argument set and the server records the cause as NULL ("not recorded"). Returns `{ok, result: applied / replayed / already_applied, status}` or `{ok: false, reason, current_status}` |
+| Refusal reasons the phone maps to en/ar/ur | `20261109160000` (plus the earlier contract) | n/a | `invalid_transition`, `not_found`, `forbidden`, `note_required`, `key_reuse`, `self_review`, `evidence_required`, `record_required`, `review_note_required`, `record_not_found`, `asset_mismatch`, `record_already_linked`, `record_type_mismatch` (`workforceServerRefusalReasons` in `workforce_sync_engine.dart`). `evidence_required` is NOT terminal: attaching evidence and retrying is the fix |
+| `workforce_assignment_evidence` SELECT, INSERT | `20261109160000` | RESTRICTIVE org isolation; read by the assignee or a workforce manager; insert only by the assignee (`uploaded_by = auth.uid()`), path under `<organisation_id>/assignments/<assignment_id>/`, assignment `acknowledged` / `in_progress` / `blocked`. SELECT + INSERT granted to `authenticated` only; append-only trigger refuses UPDATE and DELETE | Evidence count per card (`assignment_id in (...)`; a failed read is "unavailable", never 0) and one row per upload: `organisation_id, assignment_id, kind (photo / document), object_path, file_name (1-240), mime_type (image/jpeg, image/png, application/pdf), byte_size (1 B to 10 MB)`; `uploaded_by` left to its `auth.uid()` default |
+| Bucket `workforce-evidence` | Created by `20261022104000_workforce_evidence.sql`; storage policies `workforce_assignment_files_select` / `_insert` redefined by `20261109160000` | Private. Insert needs folder 2 = `assignments` and an assignment the caller owns in an evidence status; read needs a matching evidence row | Upload before the row insert at `<organisation_id>/assignments/<assignment_id>/<microsecond stamp>.<jpg / png / pdf>`. If the row insert fails, the object delete is attempted best effort (no delete policy exists, so it may stay, unreadable) |
+
+Server-side, not called by the phone: `workforce_reassign(p_assignment_id,
+p_new_assignee, p_note, p_idempotency_key, p_override_reason)` (requalifies the
+new assignee; `20261109190000` adds an AFTER UPDATE OF `assigned_to` trigger,
+so a reassignment now notifies the new assignee by push, and the previous one
+in-app), `workforce_link_operational_record(p_assignment_id, p_table,
+p_record_id, p_idempotency_key)` (same org, same asset, one record per task;
+the phone only displays the result as needed / linked), the qualification gate
+(trigger `zz_workforce_assignment_qualify`, `workforce_qualification`,
+`workforce_recommend_assignees`) and the board RPCs `workforce_board_summary`,
+`workforce_team_analytics`, `workforce_employee_timeline`.

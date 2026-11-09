@@ -26,6 +26,26 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-11-09 (later) — ONE TYRE ONE PRICE ONE WHEEL, ALL 3 COUNTRIES; EXPENSE KEYS; KSA COPIES REMOVED. Migrations 20261109100000..140000 APPLIED LIVE. PR #470.
+- 100000 (owner ran it): tyre_serial_is_strong, 12-arg _tyre_close_replaced (same-day = latest upload wins, older/backdated HELD),
+  _tyre_close_serial_elsewhere wired into the staging pipe, trigger trg_zz_one_price_per_tyre (INSERT only), held-row review RPCs
+  (list/resolve_tyre_import_reviews, list_tyre_replacement_batches) + TyreImportReviewSection on /data-reconciliation.
+  KSA: 124 repeat prices cleared (SAR 135,583, reason refit_repeat_purchase_price_cleared), 28 serials-on-two-vehicles closed.
+- 110000: get_tyre_consumption += kind (new/refit_same/transferred/unidentified), tyres, by_kind, by_week (Sun-Sat), by_month_kind.
+- **120000/130000 THE BIG ONE: the v432 (KSA) / v433 (UAE) / v434 (Egypt) tyre loads stamped the NEW serial on the REMOVED tyre's
+  row** (ERP "remove_date/remove_KM" = old tyre's fitment). Signature: same serial/asset/position, old.removal_date = new.issue_date AND
+  old.km_at_removal = new.km_at_fitment. Fixed KSA 1,599 / UAE 453 / Egypt 89: old row serial := ERP old_serialno when named
+  (18/416/85) else NULL, price + job card moved to the new row (totals unchanged), km untouched. Backups _bak.ksa_old_tyre_fix_20261109,
+  _bak.ue_old_tyre_fix_20261109. KSA refit_same 1,573 -> 88. UAE/Egypt serials on two vehicles closed (18/10, source
+  serial_two_vehicles_cleanup_uae_egypt). Now 0 strong serials active on two vehicles anywhere.
+- tyre_serial_is_strong + JS isStrongSerial now REQUIRE A DIGIT ("NO SERIAL", "NOT CLEAR", "#NAME?" are placeholders). Change both.
+- 140000: expense import_uid backfilled where source_row exists (UAE 8,248 / Egypt 649 / KSA 10,554; classify trigger disabled per
+  update, totals verified identical). 843 KSA exact copies removed (SAR 132,686.09), archive _bak.ksa_expense_copies_20261109.
+  UAE 51,546 / Egypt 38,451 lines have NO source_row -> cannot be keyed; only the file fingerprint guards their re-import.
+- Fleet CPK is now WEIGHTED (total cost / total km) via src/lib/tyreLifetime.js; tests asserting an average of ratios are stale.
+- Open: 4 KSA serials priced twice on different vehicles/job cards (likely mistyped serials, left); 6 KSA + 14 UAE ambiguous
+  old/new pairs untouched; held tyre uploads await a decision on /data-reconciliation.
+
 # ⚑ SESSION 2026-11-09 — TYRE REPLACEMENT RECONCILE + REFIT PRICE FIX. Migration 20261109090000 APPLIED LIVE (owner ran it in the SQL editor; MCP apply_migration times out on its approval prompt). Branch claude/tyrepulse-inspector-build-7rxp2t, NOT merged.
 - ERP monthly tyre rows carry the NEW serial only. process_stg_monthly_tyres now calls `_tyre_close_replaced()` (DEFINER, not client-callable) before inserting a current fitment: closes the single active tyre on that wheel ONLY if different serial + earlier dated + no later wheel history; else row is NOT inserted and kept in stg_monthly_tyres_audit as `replacement_needs_review:<status>`. Removal km = new fitment km if real (>1, >= old fit km); total_km via tyre_km_life (placeholder/cap rules). Never marks scrap. Log + undo: tyre_replacement_log / tyre_replacement_undo(batch). In-app RPC tyre_import_reconcile(rows, country, dry_run) exists but erpIntake.js is NOT wired to it yet (next step; also order in-file chains per wheel).
 - WHY: guard_tyre_active_fitment skips when auth.uid() is null (all staging loads) -> latent double-active; in-app intake was refused 23505 and counted failed.

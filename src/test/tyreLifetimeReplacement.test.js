@@ -12,6 +12,9 @@ describe('isStrongSerial', () => {
     expect(isStrongSerial('1.25121E+11')).toBe(false)
     expect(isStrongSerial('NULL')).toBe(false)
     expect(isStrongSerial('AB12')).toBe(false)
+    expect(isStrongSerial('NO SERIAL')).toBe(false)
+    expect(isStrongSerial('NOT CLEAR')).toBe(false)
+    expect(isStrongSerial('#NAME?')).toBe(false)
   })
 })
 

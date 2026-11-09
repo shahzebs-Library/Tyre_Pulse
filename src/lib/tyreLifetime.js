@@ -27,6 +27,9 @@ const num = (v) => {
 export function isStrongSerial(serial) {
   const s = String(serial ?? '').trim().toUpperCase()
   if (s.length < 6) return false
+  // A real serial always carries a digit; letter-only values are placeholders
+  // ("NO SERIAL", "NOT CLEAR", "#NAME?", "NEW TYRE").
+  if (!/[0-9]/.test(s)) return false
   if (/^(DOT|NULL|N\/?A|-)/.test(s)) return false
   if (/^[0-9]{3}\//.test(s)) return false
   if (/[0-9]{2,3}\/[0-9]{2}\s*R/.test(s)) return false

@@ -19,6 +19,7 @@ import { getCompanyLogo, getDiagramBg } from './api/brandLogo'
 import { formatDate } from './formatters'
 import { checklistReadingStats, pressureDeviationLabel, conditionBucket } from './inspectionsAnalytics'
 import { serializeSvgInlined } from './svgInline'
+import { inspectionReportFileName } from './inspectionFileName'
 
 /**
  * Report logo: tenant branding wins; otherwise fall back to the org-wide company
@@ -33,8 +34,8 @@ export async function brandingForPdf(branding) {
 }
 
 /** File name used for both the direct download and the preview's download link. */
-export function checklistReportFileName(assetNo) {
-  return `TyrePulse_Checklist_${assetNo || 'report'}.pdf`
+export function checklistReportFileName(assetNo, site, date) {
+  return inspectionReportFileName({ asset: assetNo, site, date })
 }
 
 // Muted corporate tones: small dots + dark text, never large coloured fills.

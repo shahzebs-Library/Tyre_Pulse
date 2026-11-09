@@ -372,9 +372,15 @@ export function buildInspectionHtml(insp: InspectionForReport): string {
   </body></html>`
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const cleanPart = (v: unknown) => String(v ?? '').replace(/[^A-Za-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()
+
+/** Same name as the web report: "Tyre Inspection Report TM514 NHC 09 Nov 2026". */
 function safeFileName(insp: InspectionForReport): string {
-  const raw = `Inspection ${insp.asset_no ?? ''} ${insp.inspection_date ?? ''}`.trim()
-  return raw.replace(/[^A-Za-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Inspection'
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(insp.inspection_date ?? ''))
+  const date = m && MONTHS[Number(m[2]) - 1] ? `${m[3]} ${MONTHS[Number(m[2]) - 1]} ${m[1]}` : ''
+  return ['Tyre Inspection Report', cleanPart(insp.asset_no).toUpperCase(), cleanPart(insp.site).toUpperCase(), date]
+    .filter(Boolean).join(' ')
 }
 
 /** Build the PDF for an already-loaded inspection and open the share sheet. Throws on failure. */

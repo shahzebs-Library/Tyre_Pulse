@@ -21,6 +21,7 @@ import { bandFor, measureFor } from './tyreRunningLife'
 import { displayPositionCode, inspectionTypeHint, canonicalToSlotId, slotDisplayCode } from './tyreBay'
 import { resolveLayoutKey, isTyrelessEquipment } from './vehicleTyreLayout'
 import { serializeSvgInlined } from './svgInline'
+import { inspectionReportFileNameForRow } from './inspectionFileName'
 
 /**
  * Central export gate (System Configuration). When an admin turns CSV/Excel
@@ -1704,7 +1705,7 @@ function _drawTyreBoard(doc, cap, x, y, s) {
  * @param {string}  [opts.verifyUrl] - encoded in the footer QR code
  */
 export async function exportInspectionDetailPdf(row, opts = {}) {
-  guardExport([], opts.filename || `Inspection report ${row?.asset_no || ''}`.trim())
+  guardExport([], opts.filename || inspectionReportFileNameForRow(row || {}).replace(/\.pdf$/, ''))
   await ensurePdf()
   const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pw      = doc.internal.pageSize.width
@@ -2350,8 +2351,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     }
   }
 
-  const safe = (row.title || row.asset_no || 'inspection').replace(/[^a-z0-9]/gi, ' ').slice(0, 40)
-  if (opts.save !== false) doc.save(`${reportFileName('Inspection', safe)}.pdf`)
+  if (opts.save !== false) doc.save(inspectionReportFileNameForRow(row))
   return doc
 }
 

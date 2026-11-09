@@ -1089,7 +1089,7 @@ export default function Inspections() {
         setPdfBlobUrl(url)
         setShowPdfPreview(true)
       } else {
-        doc.save(checklistReportFileName(clAsset || clSaved.asset_no))
+        doc.save(checklistReportFileName(clAsset || clSaved.asset_no, clSite || clSaved.site, clSaved.inspection_date || clDate))
       }
     } catch (err) {
       setClError(toUserMessage(err, 'Could not create the checklist report. Try again.'))

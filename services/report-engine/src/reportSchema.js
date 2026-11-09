@@ -46,9 +46,9 @@ export const reportDefinitionSchema = z.object({
   dateRange: z.string().optional(),
   exportMode: z.enum(['current', 'filtered', 'selected']).default('filtered'),
   // Human-readable snapshot of the active filters/search/sort ({label: value}).
-  filtersSummary: z.record(z.string()).optional(),
+  filtersSummary: z.record(z.string(), z.string()).optional(),
   columns: z.array(reportColumn).min(1),
-  rows: z.array(z.record(cellValue)).default([]),
+  rows: z.array(z.record(z.string(), cellValue)).default([]),
   kpis: z.array(reportKpi).optional(),
   charts: z.array(reportChart).optional(),
   branding: reportBranding.optional(),

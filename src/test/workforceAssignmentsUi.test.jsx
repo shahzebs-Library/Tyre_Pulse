@@ -55,6 +55,18 @@ describe('AssignmentActions', () => {
     expect(onAct).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1' }), 'block', 'no valve', 'waiting_stock')
   })
 
+  it('verify offers an optional review note and sends it', () => {
+    const onAct = vi.fn()
+    render(<AssignmentActions item={item('submitted', 'tech')} currentUserId="m1" isManager onAct={onAct} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Verify' }))
+    expect(onAct).not.toHaveBeenCalled()
+    const field = screen.getByPlaceholderText(/review note/)
+    expect(screen.getByRole('button', { name: 'Verify' })).not.toBeDisabled() // note optional
+    fireEvent.change(field, { target: { value: 'Torque checked' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Verify' }))
+    expect(onAct).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1' }), 'verify', 'Torque checked', null)
+  })
+
   it('shows no action to someone who is not the assignee or a manager', () => {
     render(<AssignmentActions item={item('assigned', 'other')} currentUserId="u1" isManager={false} onAct={vi.fn()} />)
     expect(screen.getByText('No action available')).toBeInTheDocument()

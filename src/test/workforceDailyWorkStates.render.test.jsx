@@ -15,6 +15,7 @@ const api = vi.hoisted(() => ({
   listWorkStandards: vi.fn(),
 }))
 vi.mock('../lib/api/workforceDaily', () => ({
+  DAILY_ENTRY_CATEGORIES: ['productive','coordination','reporting','training','break','blocked','unassigned'], DAILY_REASON_CATEGORIES: ['blocked'], correctDailyEntry: vi.fn(),
   getMyDailyReport: api.getMyDailyReport, listReviewQueue: api.listReviewQueue,
   addDailyEntry: vi.fn(), getDailyReportForReview: vi.fn(), ensureDailyReport: vi.fn(),
   submitDailyReport: vi.fn(), reviewDailyReport: vi.fn(),

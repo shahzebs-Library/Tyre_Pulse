@@ -9,6 +9,7 @@ const api = vi.hoisted(() => ({
   recommendAssignees: vi.fn(), listAssignmentEvents: vi.fn(), assignWork: vi.fn(),
 }))
 vi.mock('../lib/api/workforceDaily', () => ({
+  DAILY_ENTRY_CATEGORIES: ['productive','coordination','reporting','training','break','blocked','unassigned'], DAILY_REASON_CATEGORIES: ['blocked'], correctDailyEntry: vi.fn(),
   getMyDailyReport: vi.fn(() => Promise.resolve({ report: null, entries: [] })), listReviewQueue: vi.fn(() => Promise.resolve([])),
   addDailyEntry: vi.fn(), getDailyReportForReview: vi.fn(), ensureDailyReport: vi.fn(), submitDailyReport: vi.fn(), reviewDailyReport: vi.fn(),
 }))

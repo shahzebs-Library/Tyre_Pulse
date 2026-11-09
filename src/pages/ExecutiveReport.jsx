@@ -634,11 +634,11 @@ export default function ExecutiveReport() {
       })
     }
 
-    if (kpis.cpk.fleetAvgCpk > 0 && savingsOpportunity != null && savingsOpportunity > 5000) {
+    if ((kpis.cpk.weightedCpk ?? kpis.cpk.fleetAvgCpk) > 0 && savingsOpportunity != null && savingsOpportunity > 5000) {
       recs.push({
         priority: 'Medium',
         title: t('execreport.recommendations.cpkOptimisation.title'),
-        description: t('execreport.recommendations.cpkOptimisation.description', { fleetCpk: fmtCpk(kpis.cpk.fleetAvgCpk, currency), bestCpk: fmtCpk(kpis.cpk.p10Cpk, currency) }),
+        description: t('execreport.recommendations.cpkOptimisation.description', { fleetCpk: fmtCpk(kpis.cpk.weightedCpk ?? kpis.cpk.fleetAvgCpk, currency), bestCpk: fmtCpk(kpis.cpk.p10Cpk, currency) }),
         impact: t('execreport.recommendations.cpkOptimisation.impact', { amount: fmtCurrency(savingsOpportunity, currency) }),
         owner: t('execreport.owners.management'),
       })

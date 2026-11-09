@@ -20,6 +20,7 @@ import SerialMultiAssetSection from '../components/reconciliation/SerialMultiAss
 import SerialCheckSection from '../components/reconciliation/SerialCheckSection'
 import FreetextTyreSection from '../components/reconciliation/FreetextTyreSection'
 import TyreLifeCapSection from '../components/reconciliation/TyreLifeCapSection'
+import TyreImportReviewSection from '../components/reconciliation/TyreImportReviewSection'
 import DataQualityScorecard from '../components/reconciliation/DataQualityScorecard'
 import AssetMasterSection from '../components/reconciliation/AssetMasterSection'
 import DataTrustSection from '../components/reconciliation/DataTrustSection'
@@ -621,6 +622,7 @@ export default function DataReconciliation() {
           )}
         </Section>
 
+        <TyreImportReviewSection />
         <JobcardDateSection />
         <DupKeyTyresSection />
         <SerialCheckSection />

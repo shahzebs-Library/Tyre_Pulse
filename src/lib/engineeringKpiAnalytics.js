@@ -94,7 +94,7 @@ export function headlineMetrics(kpis, { inspectionsLoaded = 0 } = {}) {
   const life = kpis.avgTyreLife || {}
   const scrap = kpis.scrapRate || {}
   return {
-    cpk: cpk.validCount > 0 ? cpk.fleetAvgCpk : null,
+    cpk: cpk.validCount > 0 ? (cpk.weightedCpk ?? cpk.fleetAvgCpk) : null,
     cpkCoveragePct: cpk.totalCount > 0 ? cpk.coveragePct : null,
     cpkValidCount: cpk.validCount ?? 0,
     cpkTotalCount: cpk.totalCount ?? 0,

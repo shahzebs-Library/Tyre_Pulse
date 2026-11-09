@@ -305,6 +305,42 @@ export function fmtCount(v) {
  * Shape the whole server payload into what the screen renders.
  * `now` is injected so tests are deterministic.
  */
+/**
+ * What the fitments in the period actually were (20261109110000). A tyre that
+ * was removed and fitted again is a FITMENT, not a tyre consumed: only "new" is
+ * consumption. Returns null when the server predates the split, so the screen
+ * can say so instead of showing a fabricated breakdown.
+ */
+export function consumptionMix(payload, calendarDays) {
+  const k = payload?.by_kind
+  if (!k || typeof k !== 'object') return null
+  const tyres = (key) => num(k[key]?.tyres) ?? 0
+  const mix = {
+    newTyres: tyres('new'),
+    refitSame: tyres('refit_same'),
+    transferred: tyres('transferred'),
+    unidentified: tyres('unidentified'),
+  }
+  mix.reused = mix.refitSame + mix.transferred
+  mix.total = mix.newTyres + mix.reused + mix.unidentified
+  mix.newPerCalendarDay = isNum(calendarDays) && calendarDays > 0 ? mix.newTyres / calendarDays : null
+  mix.reusedPct = mix.total > 0 ? Math.round((mix.reused / mix.total) * 1000) / 10 : null
+  return mix
+}
+
+/** Sunday-to-Saturday weeks from the server, newest last. */
+export function weekRows(byWeek) {
+  if (!Array.isArray(byWeek)) return []
+  return byWeek.map((w) => ({
+    weekStart: String(w.week_start ?? '').slice(0, 10),
+    weekEnd: String(w.week_end ?? '').slice(0, 10),
+    fitments: num(w.fitments) ?? 0,
+    newTyres: num(w.new_tyres) ?? 0,
+    reused: num(w.reused) ?? 0,
+    unidentified: num(w.unidentified) ?? 0,
+  }))
+}
+
 export function shapeConsumption(payload, { now = new Date() } = {}) {
   if (!payload || payload.ok === false) {
     return { ok: false, reason: payload?.reason || 'unavailable' }
@@ -345,5 +381,7 @@ export function shapeConsumption(payload, { now = new Date() } = {}) {
     lastRecorded,
     staleDays: isNum(staleDays) ? staleDays - 1 : null,
     basisNote: basisNote(rates),
+    mix: consumptionMix(payload, calendarDays),
+    weeks: weekRows(payload.by_week),
   }
 }

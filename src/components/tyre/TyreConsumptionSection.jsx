@@ -114,6 +114,19 @@ function breakdownColumns(label) {
   ]
 }
 
+const numCell = (key) => ({
+  id: key, accessorFn: (r) => r[key], ...sortable, meta: { align: 'right' },
+  cell: ({ row: { original: r } }) => <span className="tabular-nums">{Number(r[key]).toLocaleString()}</span>,
+})
+const WEEK_COLUMNS = [
+  { id: 'weekStart', header: 'Week', accessorFn: (r) => r.weekStart, ...sortable,
+    cell: ({ row: { original: r } }) => <span>{r.weekStart} to {r.weekEnd}</span> },
+  { ...numCell('newTyres'), header: 'New tyres' },
+  { ...numCell('reused'), header: 'Refitted / moved' },
+  { ...numCell('unidentified'), header: 'Serial not readable' },
+  { ...numCell('fitments'), header: 'All fitments' },
+]
+
 function BreakdownTable({ title, bd, note, label }) {
   if (!bd || !bd.rows.length) {
     return (
@@ -307,6 +320,38 @@ export default function TyreConsumptionSection() {
             <div className="mb-4"><Note tone="warn">{d.batch.note}</Note></div>
           ) : null}
 
+          {/* What the fitments were. Only a new tyre is consumption; a tyre
+              removed and fitted again (same or another vehicle) is not. */}
+          {d.mix ? (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+              <Tile
+                label="New tyres consumed"
+                value={fmtCount(d.mix.newTyres)}
+                sub={d.mix.newPerCalendarDay != null ? `${fmtRate(d.mix.newPerCalendarDay)} new tyres per calendar day` : null}
+              />
+              <Tile
+                label="Moved from another vehicle"
+                value={fmtCount(d.mix.transferred)}
+                sub="Same tyre, fitted again - not a new purchase"
+                tone="muted"
+              />
+              <Tile
+                label="Refitted on the same vehicle"
+                value={fmtCount(d.mix.refitSame)}
+                sub="Same tyre back on - not a new purchase"
+                tone="muted"
+              />
+              <Tile
+                label="Serial not readable"
+                value={fmtCount(d.mix.unidentified)}
+                sub="Batch code or size in the serial, so new vs reused cannot be told"
+                tone="muted"
+              />
+            </div>
+          ) : (
+            <div className="mb-4"><Note>New vs reused tyres is not available yet; the figures below count every fitment.</Note></div>
+          )}
+
           {/* Headline */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
             <Tile
@@ -381,6 +426,22 @@ export default function TyreConsumptionSection() {
               </p>
             </div>
           </div>
+
+          {/* Weekly (Sunday to Saturday) */}
+          {d.weeks?.length ? (
+            <div className="mb-6">
+              <h4 className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>By week (Sunday to Saturday)</h4>
+              <EnterpriseTable
+                columns={WEEK_COLUMNS}
+                data={d.weeks}
+                getRowId={(r) => r.weekStart}
+                enableColumnFilters={false}
+                initialPageSize={10}
+                exportFileName="Tyre consumption by week"
+                emptyMessage="No fitments recorded."
+              />
+            </div>
+          ) : null}
 
           {/* Breakdowns, read through the asset */}
           <div className="grid lg:grid-cols-2 gap-6 mb-4">

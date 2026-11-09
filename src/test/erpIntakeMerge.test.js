@@ -48,7 +48,9 @@ const h = vi.hoisted(() => {
     }
     return b
   }
-  return { state, supabase: { from } }
+  // The replacement check (tyre_import_reconcile) reports every wheel as empty here.
+  const rpc = async (_name, args) => ({ data: { ok: true, counts: { no_previous: (args?.p_rows || []).length }, review: [] }, error: null })
+  return { state, supabase: { from, rpc } }
 })
 
 vi.mock('../lib/supabase', () => ({ supabase: h.supabase }))
@@ -147,5 +149,41 @@ describe('insertTyreRecords - merge on the full fitment key', () => {
 
     expect(res.inserted).toBe(0)
     expect(res.skipped).toBe(1)
+  })
+})
+
+describe('insertTyreRecords - replacement on the wheel', () => {
+  it('chains same-wheel fitments in one file and only sends the latest to the check', async () => {
+    const calls = []
+    const orig = h.supabase.rpc
+    h.supabase.rpc = async (name, args) => { calls.push({ name, args }); return orig(name, args) }
+    try {
+      const res = await intake.insertTyreRecords([
+        row({ serial_no: 'OLD11111', issue_date: '2026-01-01', km_at_fitment: 1000 }),
+        row({ serial_no: 'NEW22222', issue_date: '2026-03-01', km_at_fitment: 5000 }),
+      ], { country: 'KSA' })
+      expect(calls).toHaveLength(1)
+      expect(calls[0].name).toBe('tyre_import_reconcile')
+      expect(calls[0].args.p_rows.map((r) => r.serial_no)).toEqual(['NEW22222'])
+      const old = h.state.inserted.find((r) => r.serial_no === 'OLD11111')
+      expect(old.removal_date).toBe('2026-03-01')
+      expect(old.km_at_removal).toBe(5000)
+      expect(res.replacement.chained).toBe(1)
+    } finally {
+      h.supabase.rpc = orig
+    }
+  })
+
+  it('does not insert a row the check held for review (it would double-fit the wheel)', async () => {
+    const orig = h.supabase.rpc
+    h.supabase.rpc = async () => ({ data: { ok: true, counts: { ambiguous_backdated: 1 },
+      review: [{ asset_no: 'TM556', position: 'RHF1', serial_no: 'HELD3333', status: 'ambiguous_backdated' }] }, error: null })
+    try {
+      const res = await intake.insertTyreRecords([row({ serial_no: 'HELD3333' })], { country: 'KSA' })
+      expect(h.state.inserted).toHaveLength(0)
+      expect(res.replacement.review).toBe(1)
+    } finally {
+      h.supabase.rpc = orig
+    }
   })
 })

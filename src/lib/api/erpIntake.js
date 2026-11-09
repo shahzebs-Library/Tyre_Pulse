@@ -21,6 +21,7 @@
  * @module api/erpIntake
  */
 import { supabase, toServiceError } from './_client'
+import { chainFitmentsPerWheel, summariseReconcile } from '../tyreReplacement'
 
 const CHUNK = 200
 // Chunks in flight at once. This path is latency-bound - a 50,000 row load was
@@ -329,6 +330,41 @@ export async function insertTyreRecords(rows = [], { onProgress, country } = {})
   const usable = rows.filter((r) => String(r.serial_no ?? '').trim() || String(r.asset_no ?? '').trim())
   const seen = await existingTyreKeys(country).catch(() => new Set())
   const { collapsed } = collapseByKey(usable, tyreLifecycleKey)
+
+  // Replacement: a new fitment replaces the tyre already on that wheel. Earlier
+  // same-wheel fitments in this file end when the next one went on; the latest
+  // one per wheel goes to the database check, which closes the old tyre when the
+  // evidence is clear (one active tyre, earlier or same day, no later history)
+  // and reports anything else for review. Without this the guard refuses the
+  // new tyre (23505) and the old one stays on the wheel forever.
+  const newKeys = [...collapsed.keys()].filter((k) => !seen.has(k))
+  const { rows: chainedRows, chained, latest } = chainFitmentsPerWheel(newKeys.map((k) => collapsed.get(k)))
+  newKeys.forEach((k, i) => collapsed.set(k, chainedRows[i]))
+  let replacement = { chained, total: 0, closed: 0, emptyWheel: 0, review: 0, moved: 0, reviewRows: [] }
+  if (latest.length && country) {
+    const payload = latest.map((r) => ({
+      asset_no: r.asset_no, position: r.tyre_position ?? r.position, serial_no: r.serial_no,
+      issue_date: r.issue_date ? String(r.issue_date).slice(0, 10) : null,
+      km_at_fitment: r.km_at_fitment ?? null, hrs_at_fitment: r.hrs_at_fitment ?? null,
+      job_card: r.job_card ?? null, vehicle_type: r.vehicle_type ?? null, size: r.size ?? null, brand: r.brand ?? null,
+    }))
+    const { data, error } = await supabase.rpc('tyre_import_reconcile', {
+      p_rows: payload, p_country: country, p_dry_run: false,
+    })
+    if (error) throw toServiceError(error)
+    if (data && data.ok === false) throw new Error(`Tyre replacement check refused: ${data.reason}`)
+    replacement = { chained, ...summariseReconcile(data), reviewRows: data?.review || [] }
+    // A row held for review would be refused by the one-tyre-per-wheel guard and
+    // abort its whole chunk, so it is not inserted here; it is listed instead.
+    if (replacement.review) {
+      const held = new Set((data.review || []).map((r) => `${String(r.asset_no ?? '').trim().toUpperCase().replace(/\s+/g, '')}|${String(r.position ?? '').trim().toUpperCase()}|${String(r.serial_no ?? '').trim().toUpperCase()}`))
+      for (const k of newKeys) {
+        const r = collapsed.get(k)
+        const hk = `${String(r.asset_no ?? '').trim().toUpperCase().replace(/\s+/g, '')}|${String(r.tyre_position ?? r.position ?? '').trim().toUpperCase()}|${String(r.serial_no ?? '').trim().toUpperCase()}`
+        if (!r.removal_date && held.has(hk)) collapsed.delete(k)
+      }
+    }
+  }
   const loadExisting = async (overlapRows) => {
     const serials = overlapRows.map((r) => r.serial_no)
     const assets = overlapRows.map((r) => r.asset_no)
@@ -348,6 +384,7 @@ export async function insertTyreRecords(rows = [], { onProgress, country } = {})
     ...res,
     noKey: rows.length - usable.length,
     skipped: rows.length - res.inserted - res.updated,
+    replacement,
   }
 }
 

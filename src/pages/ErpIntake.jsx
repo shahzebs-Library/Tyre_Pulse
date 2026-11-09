@@ -305,6 +305,7 @@ export default function ErpIntake() {
           skipped: res?.skipped ?? 0,
           failed: res?.failed ?? 0,
           notAdded: Math.max(0, d.rows.length - (res?.inserted ?? d.rows.length) - (res?.updated ?? 0) - (res?.failed ?? 0)),
+          replacement: res?.replacement || tyreRes?.replacement || null,
           tyresSourceRows: Array.isArray(d.tyreRows) ? d.tyreRows.length : 0,
           tyresInserted: tyreRes?.inserted ?? 0,
           tyresUpdated: tyreRes?.updated ?? 0,
@@ -585,6 +586,26 @@ export default function ErpIntake() {
                             : ''}
                         </span>
                       </div>
+                      {done.replacement && (done.replacement.total > 0 || done.replacement.chained > 0) ? (
+                        <div className="flex items-start gap-2 text-sm text-[var(--text-secondary)]">
+                          <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0 text-[var(--accent,#22c55e)]" />
+                          <span>
+                            Tyre replacements: {num(done.replacement.closed)} old tyre(s) closed on their wheel
+                            {done.replacement.moved ? `, ${num(done.replacement.moved)} moved off another vehicle` : ''}
+                            {done.replacement.chained ? `, ${num(done.replacement.chained)} earlier fitment(s) in this file closed by the next one` : ''}
+                            {done.replacement.emptyWheel ? `, ${num(done.replacement.emptyWheel)} fitted on an empty wheel` : ''}.
+                          </span>
+                        </div>
+                      ) : null}
+                      {done.replacement?.review > 0 && (
+                        <div className="flex items-start gap-2 text-sm text-[var(--warning,#f59e0b)]">
+                          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                          <span>
+                            {num(done.replacement.review)} tyre(s) could not be placed automatically (dates conflict with the wheel history)
+                            and are waiting in Data Reconciliation, Integrity, "Tyre uploads waiting for a decision". They were not added yet.
+                          </span>
+                        </div>
+                      )}
                       {done.failed > 0 && (
                         <div className="flex items-start gap-2 text-sm text-[var(--warning,#f59e0b)]">
                           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />

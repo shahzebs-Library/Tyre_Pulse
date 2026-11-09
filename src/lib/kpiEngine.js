@@ -1,3 +1,4 @@
+import { toLifetimeTyres, hasLifetimeCpk, lifetimeCpk, weightedCpk } from './tyreLifetime'
 // ─────────────────────────────────────────────────────────────────────────────
 // kpiEngine.js - Pure KPI computation library for TyrePulse
 // No Supabase calls. No React. No side effects.
@@ -51,19 +52,26 @@ function _toMonthKey(dateStr) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-function _isValidRecord(r) {
-  const fitKm = Number(r.km_at_fitment)
-  const remKm = Number(r.km_at_removal)
-  const cost  = Number(r.cost_per_tyre)
-  return (
-    isFinite(fitKm) && fitKm > 0 &&
-    isFinite(remKm) && remKm > fitKm &&
-    isFinite(cost)  && cost > 0
-  )
+// CPK is measured per PHYSICAL TYRE (src/lib/tyreLifetime.js): purchase price
+// counted once, km summed across every fitment of that tyre. A refitted tyre is
+// several fitment rows; costing each row separately charged it again and divided
+// by one stint's km. These helpers take the lifetime objects toLifetimeTyres()
+// returns, never raw fitment rows.
+function _isValidRecord(t) {
+  return hasLifetimeCpk(t)
 }
 
-function _cpkOf(r) {
-  return Number(r.cost_per_tyre) / (Number(r.km_at_removal) - Number(r.km_at_fitment))
+function _cpkOf(t) {
+  return lifetimeCpk(t)
+}
+
+function _lifeKm(t) {
+  return Number(t._life_km)
+}
+
+/** Fitment rows -> physical tyres with a measurable price and life. */
+function _validTyres(records) {
+  return toLifetimeTyres(records).filter(_isValidRecord)
 }
 
 function _kmRun(r) {
@@ -93,8 +101,9 @@ function _linearRegression(points) {
  * @returns {{ fleetAvgCpk, medianCpk, validCount, totalCount, coveragePct, p10Cpk, p90Cpk }}
  */
 export function computeCpkFleet(records = []) {
-  const total = records.length
-  const valid = records.filter(_isValidRecord)
+  const tyres = toLifetimeTyres(records)
+  const total = tyres.length
+  const valid = tyres.filter(_isValidRecord)
   const cpks  = valid.map(_cpkOf)
 
   // HONEST NULLS: _mean/_median/_percentile return 0 for an empty array, which
@@ -106,10 +115,17 @@ export function computeCpkFleet(records = []) {
   const has = cpks.length > 0
 
   return {
-    fleetAvgCpk:  has ? _mean(cpks) : null,
+    // Fleet CPK = total purchase cost / total km of the measurable tyres
+    // (weighted). Every page reads fleetAvgCpk, so the correction lands
+    // everywhere at once. The plain average of per-tyre ratios stays available
+    // as meanCpk for distribution views only.
+    fleetAvgCpk:  has ? weightedCpk(valid) : null,
+    weightedCpk:  has ? weightedCpk(valid) : null,
+    meanCpk:      has ? _mean(cpks) : null,
     medianCpk:    has ? _median(cpks) : null,
     validCount:   valid.length,
     totalCount:   total,
+    fitmentRows:  records.length,
     coveragePct:  total > 0 ? (valid.length / total) * 100 : 0,
     p10Cpk:       has ? _percentile(cpks, 10) : null,
     p90Cpk:       has ? _percentile(cpks, 90) : null,
@@ -122,7 +138,7 @@ export function computeCpkFleet(records = []) {
  * @returns {Array<{ brand, avgCpk, medianCpk, count, validCount, minCpk, maxCpk }>} sorted ascending (best CPK first)
  */
 export function computeCpkByBrand(records = []) {
-  const valid  = records.filter(_isValidRecord)
+  const valid  = _validTyres(records)
   const groups = _groupBy(valid, r => r.brand ?? 'Unknown')
 
   return Object.entries(groups)
@@ -147,13 +163,13 @@ export function computeCpkByBrand(records = []) {
  * @returns {Array<{ asset_no, avgCpk, totalCost, count, validCount }>} sorted descending (worst first)
  */
 export function computeCpkByAsset(records = []) {
-  const valid  = records.filter(_isValidRecord)
+  const valid  = _validTyres(records)
   const groups = _groupBy(valid, r => r.asset_no ?? 'Unknown')
 
   return Object.entries(groups)
     .map(([asset_no, rows]) => {
       const cpks      = rows.map(_cpkOf)
-      const totalCost = rows.reduce((s, r) => s + Number(r.cost_per_tyre || 0) * (Number(r.qty) || 1), 0)
+      const totalCost = rows.reduce((s, t) => s + t._cost * (t._qty || 1), 0)
       return {
         asset_no,
         avgCpk:    _mean(cpks),
@@ -171,7 +187,7 @@ export function computeCpkByAsset(records = []) {
  * @returns {Array<{ site, avgCpk, medianCpk, count, validCount, minCpk, maxCpk }>} sorted descending (worst site first)
  */
 export function computeCpkBySite(records = []) {
-  const valid  = records.filter(_isValidRecord)
+  const valid  = _validTyres(records)
   const groups = _groupBy(valid, r => r.site ?? 'Unknown')
 
   return Object.entries(groups)
@@ -196,20 +212,17 @@ export function computeCpkBySite(records = []) {
  * @returns {{ avgKm, medianKm, maxKm, minKm, validCount, byBrand, bySite }}
  */
 export function computeAvgTyreLife(records = []) {
-  const valid = records.filter(r => {
-    const fit = Number(r.km_at_fitment)
-    const rem = Number(r.km_at_removal)
-    return isFinite(fit) && isFinite(rem) && rem > fit
-  })
+  // Life of a PHYSICAL tyre: km across all its fitments, not one stint.
+  const valid = toLifetimeTyres(records).filter(t => Number(t._life_km) > 0)
 
-  const kms = valid.map(_kmRun)
+  const kms = valid.map(_lifeKm)
 
   const byBrand = Object.entries(_groupBy(valid, r => r.brand ?? 'Unknown'))
-    .map(([brand, rows]) => ({ brand, avgKm: _mean(rows.map(_kmRun)), count: rows.length }))
+    .map(([brand, rows]) => ({ brand, avgKm: _mean(rows.map(_lifeKm)), count: rows.length }))
     .sort((a, b) => b.avgKm - a.avgKm)
 
   const bySite = Object.entries(_groupBy(valid, r => r.site ?? 'Unknown'))
-    .map(([site, rows]) => ({ site, avgKm: _mean(rows.map(_kmRun)), count: rows.length }))
+    .map(([site, rows]) => ({ site, avgKm: _mean(rows.map(_lifeKm)), count: rows.length }))
     .sort((a, b) => b.avgKm - a.avgKm)
 
   return {
@@ -529,7 +542,7 @@ export function computeInspectionCompliance(inspections = []) {
  * @returns {{ retreadCpk, newCpk, retreadCount, newCount, savingsPct, retreadAvgLife, newAvgLife } | null}
  */
 export function computeRetreadPerformance(records = []) {
-  const valid    = records.filter(_isValidRecord)
+  const valid    = _validTyres(records)
   const retreads = valid.filter(r => /retread/i.test(String(r.category ?? '')))
   const newTyres = valid.filter(r => !/retread/i.test(String(r.category ?? '')) && !/scrap/i.test(String(r.category ?? '')))
 
@@ -538,8 +551,8 @@ export function computeRetreadPerformance(records = []) {
   const retreadCpk  = _mean(retreads.map(_cpkOf))
   const newCpk      = _mean(newTyres.map(_cpkOf))
   const savingsPct  = newCpk > 0 ? ((newCpk - retreadCpk) / newCpk) * 100 : 0
-  const retreadAvgLife = _mean(retreads.map(_kmRun))
-  const newAvgLife     = _mean(newTyres.map(_kmRun))
+  const retreadAvgLife = _mean(retreads.map(_lifeKm))
+  const newAvgLife     = _mean(newTyres.map(_lifeKm))
 
   return {
     retreadCpk,
@@ -724,19 +737,18 @@ export function computeCostTrend(records = [], defaultCost = 0) {
  * @returns {Array<{ brand, avgCpk, failureRate, avgLife, scrapRate, totalCost, count, score, rank }>}
  */
 export function computeVendorPerformance(records = []) {
-  const valid  = records.filter(_isValidRecord)
   const groups = _groupBy(records, r => r.brand ?? 'Unknown')
 
   const brandStats = Object.entries(groups).map(([brand, rows]) => {
-    const validRows   = rows.filter(_isValidRecord)
+    const validRows   = _validTyres(rows)
     const cpks        = validRows.map(_cpkOf)
     const avgCpk      = _mean(cpks)
-    const avgLife     = validRows.length > 0 ? _mean(validRows.map(_kmRun)) : 0
+    const avgLife     = validRows.length > 0 ? _mean(validRows.map(_lifeKm)) : 0
     const failureCount = rows.filter(r => r.risk_level === 'High' || r.risk_level === 'Critical').length
     const failureRate  = rows.length > 0 ? failureCount / rows.length : 0
     const scrapCount   = rows.filter(r => /scrap/i.test(String(r.category ?? ''))).length
     const scrapRate    = rows.length > 0 ? scrapCount / rows.length : 0
-    const totalCost    = validRows.reduce((s, r) => s + Number(r.cost_per_tyre || 0) * (Number(r.qty) || 1), 0)
+    const totalCost    = validRows.reduce((s, t) => s + t._cost * (t._qty || 1), 0)
 
     // Composite score: lower CPK is better, lower failureRate is better, longer life is better
     const cpkScore     = avgCpk > 0 ? 1 / avgCpk : 0
@@ -763,11 +775,12 @@ export function computeWorkshopPerformance(records = [], actions = []) {
   const actionBySite = _groupBy(actions, a => a.site ?? 'Unknown')
 
   const bySite = Object.entries(siteGroups).map(([site, rows]) => {
-    const valid       = rows.filter(_isValidRecord)
+    const valid       = _validTyres(rows)
     const cpks        = valid.map(_cpkOf)
     const highRisk    = rows.filter(r => r.risk_level === 'High' || r.risk_level === 'Critical')
-    const totalCost   = valid.reduce((s, r) => s + Number(r.cost_per_tyre || 0) * (Number(r.qty) || 1), 0)
-    const avgCost     = valid.reduce((s, r) => s + (Number(r.qty) || 1), 0) > 0 ? totalCost / valid.reduce((s, r) => s + (Number(r.qty) || 1), 0) : 0
+    const totalCost   = valid.reduce((s, t) => s + t._cost * (t._qty || 1), 0)
+    const qtySum      = valid.reduce((s, t) => s + (t._qty || 1), 0)
+    const avgCost     = qtySum > 0 ? totalCost / qtySum : 0
     const avgCpk      = _mean(cpks)
     const highRiskPct = rows.length > 0 ? (highRisk.length / rows.length) * 100 : 0
 

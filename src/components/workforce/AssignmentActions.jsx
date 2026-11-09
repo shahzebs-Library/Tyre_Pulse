@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { availableActions, TRANSITIONS } from '../../lib/workforceTransitions'
+import { availableActions, TRANSITIONS, BLOCK_REASONS, BLOCK_REASON_LABELS } from '../../lib/workforceTransitions'
 
 /**
  * Status actions for one workforce assignment. Buttons come from the shared transition table;
@@ -9,6 +9,7 @@ import { availableActions, TRANSITIONS } from '../../lib/workforceTransitions'
 export default function AssignmentActions({ item, currentUserId, isManager, disabled = false, onAct }) {
   const [pending, setPending] = useState(null)
   const [note, setNote] = useState('')
+  const [reason, setReason] = useState('')
   const actions = availableActions(item.status, { isAssignee: item.assigned_to === currentUserId, isManager })
   if (!actions.length) return <span className="text-xs text-[var(--text-muted)]">No action available</span>
 
@@ -19,12 +20,19 @@ export default function AssignmentActions({ item, currentUserId, isManager, disa
         className="flex flex-wrap items-center gap-2"
         onSubmit={e => {
           e.preventDefault()
-          if (!note.trim()) return
-          onAct(item, pending, note.trim())
+          if (!note.trim() || (pending === 'block' && !reason)) return
+          onAct(item, pending, note.trim(), pending === 'block' ? reason : null)
           setPending(null)
           setNote('')
+          setReason('')
         }}
       >
+        {pending === 'block' && (
+          <select aria-label="Blocker cause" className="input" required value={reason} onChange={e => setReason(e.target.value)}>
+            <option value="">Cause</option>
+            {BLOCK_REASONS.map(r => <option key={r} value={r}>{BLOCK_REASON_LABELS[r]}</option>)}
+          </select>
+        )}
         <label className="sr-only" htmlFor={`note-${item.id}`}>{label} reason</label>
         <input
           id={`note-${item.id}`}
@@ -36,8 +44,8 @@ export default function AssignmentActions({ item, currentUserId, isManager, disa
           value={note}
           onChange={e => setNote(e.target.value)}
         />
-        <button className="btn-primary" type="submit" disabled={disabled || !note.trim()}>{label}</button>
-        <button className="btn-secondary" type="button" onClick={() => { setPending(null); setNote('') }}>Back</button>
+        <button className="btn-primary" type="submit" disabled={disabled || !note.trim() || (pending === 'block' && !reason)}>{label}</button>
+        <button className="btn-secondary" type="button" onClick={() => { setPending(null); setNote(''); setReason('') }}>Back</button>
       </form>
     )
   }

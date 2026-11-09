@@ -140,10 +140,11 @@ test('estimation: view and function aggregate completed work only, and agree wit
   await transition(db, U.manager, cancelled, 'cancel', { note: 'Duplicate order' })
   await completedJob({ task: 'valve replacement', vehicle: 'TR-MIXER', minutes: 0.2 }) // an accidental tap
   const legacy = await createAssignment(db, U.manager, { task_type: 'valve replacement', vehicle_type: 'TR-MIXER' })
-  await asClient(db, U.employee, async () => {
-    await db.query(`update public.workforce_assignments set status = 'in_progress' where id = $1`, [legacy])
-    await db.query(`update public.workforce_assignments set status = 'submitted' where id = $1`, [legacy])
-  }) // direct update: no events, so no trustworthy duration
+  // A row moved before the audited transition existed (simulated: direct writes are now refused).
+  await db.exec(`set workforce.via = 'transition'`)
+  await db.query(`update public.workforce_assignments set status = 'in_progress' where id = $1`, [legacy])
+  await db.query(`update public.workforce_assignments set status = 'submitted' where id = $1`, [legacy])
+  await db.exec(`reset workforce.via`) // no events, so no trustworthy duration
 
   const query = { task_type: 'Valve Replacement', vehicle_type: 'tr-mixer', role: 'Tyre Man' }
   const result = await asClient(db, U.manager, async () => (await db.query(

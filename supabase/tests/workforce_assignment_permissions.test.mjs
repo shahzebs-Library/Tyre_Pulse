@@ -9,7 +9,7 @@ import { createWorkforceDb, asClient, asUser, createAssignment, transition, U, O
 const db = await createWorkforceDb()
 after(() => db.close())
 
-const denied = async (fn) => assert.rejects(fn, e => { assert.match(String(e.message), /permission denied|row-level security|violates|Invalid|immutable|may change|append-only|Managers only/i); return true })
+const denied = async (fn) => assert.rejects(fn, e => { assert.match(String(e.message), /permission denied|row-level security|violates|Invalid|immutable|may change|append-only|Managers only|not in this organisation|not active|audited transition/i); return true })
 const count = async (uid, sql, params = []) => asClient(db, uid, async () => (await db.query(sql, params)).rows.length)
 
 let assignment // belongs to employee, org A

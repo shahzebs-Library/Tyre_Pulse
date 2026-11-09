@@ -3,7 +3,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { TRANSITIONS, availableActions, reasonMessage } from '../lib/workforceTransitions.js'
 
 const read = p => readFileSync(new URL(p, import.meta.url), 'utf8').replace(/\r/g, '')
-const sql = read('../../supabase/migrations/20261023091000_workforce_transitions_and_estimation.sql')
+const sql = read('../../supabase/migrations/20261109160000_workforce_operations_core.sql')
 const DART_PATH = '../../tyre_pulse_flutter/lib/features/my_work/domain/workforce_transition.dart'
 const hasDart = existsSync(new URL(DART_PATH, import.meta.url))
 const dart = hasDart ? read(DART_PATH) : ''

@@ -375,11 +375,11 @@ export function buildInspectionHtml(insp: InspectionForReport): string {
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const cleanPart = (v: unknown) => String(v ?? '').replace(/[^A-Za-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()
 
-/** Same name as the web report: "Tyre Inspection Report TM514 NHC 09 Nov 2026". */
+/** Same short name as the web report: "Tyre Insp TM514 NHC 09Nov26". */
 function safeFileName(insp: InspectionForReport): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(insp.inspection_date ?? ''))
-  const date = m && MONTHS[Number(m[2]) - 1] ? `${m[3]} ${MONTHS[Number(m[2]) - 1]} ${m[1]}` : ''
-  return ['Tyre Inspection Report', cleanPart(insp.asset_no).toUpperCase(), cleanPart(insp.site).toUpperCase(), date]
+  const date = m && MONTHS[Number(m[2]) - 1] ? `${m[3]}${MONTHS[Number(m[2]) - 1]}${m[1].slice(2)}` : ''
+  return ['Tyre Insp', cleanPart(insp.asset_no).toUpperCase(), cleanPart(insp.site).toUpperCase(), date]
     .filter(Boolean).join(' ')
 }
 

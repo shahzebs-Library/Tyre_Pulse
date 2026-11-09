@@ -21,7 +21,7 @@ import { bandFor, measureFor } from './tyreRunningLife'
 import { displayPositionCode, inspectionTypeHint, canonicalToSlotId, slotDisplayCode } from './tyreBay'
 import { resolveLayoutKey, isTyrelessEquipment } from './vehicleTyreLayout'
 import { serializeSvgInlined } from './svgInline'
-import { inspectionReportFileNameForRow } from './inspectionFileName'
+import { inspectionReportFileNameForRow, ordinal } from './inspectionFileName'
 
 /**
  * Central export gate (System Configuration). When an admin turns CSV/Excel
@@ -1705,7 +1705,7 @@ function _drawTyreBoard(doc, cap, x, y, s) {
  * @param {string}  [opts.verifyUrl] - encoded in the footer QR code
  */
 export async function exportInspectionDetailPdf(row, opts = {}) {
-  guardExport([], opts.filename || inspectionReportFileNameForRow(row || {}).replace(/\.pdf$/, ''))
+  guardExport([], opts.filename || inspectionReportFileNameForRow(row || {}, opts.inspectionNo).replace(/\.pdf$/, ''))
   await ensurePdf()
   const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pw      = doc.internal.pageSize.width
@@ -1769,7 +1769,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     ['Vehicle Type', row.vehicle_type || 'N/A'],
     ['Tyreman', row.inspector || row.attendees || 'N/A'],
     ['Status / Meters', null],
-    ['Inspection Date', inspDay],
+    ['Inspection Date', ordinal(opts.inspectionNo) ? `${inspDay}  |  ${ordinal(opts.inspectionNo)} inspection of this vehicle` : inspDay],
   ]
   const vPhoto = opts.vehiclePhotoUrl ? await fetchImageDataUri(opts.vehiclePhotoUrl) : null
   const cardH = details.length * 7 + 4
@@ -2351,7 +2351,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     }
   }
 
-  if (opts.save !== false) doc.save(inspectionReportFileNameForRow(row))
+  if (opts.save !== false) doc.save(inspectionReportFileNameForRow(row, opts.inspectionNo))
   return doc
 }
 

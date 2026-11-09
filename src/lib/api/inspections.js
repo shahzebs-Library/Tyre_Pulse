@@ -322,3 +322,24 @@ export async function findVehicleByAsset(assetNo, country) {
   const rows = unwrap(await q.order('country', { ascending: true }).limit(1))
   return Array.isArray(rows) ? rows[0] || null : rows || null
 }
+
+/**
+ * How many inspections this vehicle has had up to and including the given date
+ * (its place in the vehicle's inspection history). Returns null when it cannot
+ * be counted, never 0, so a report never claims "inspection 0".
+ */
+export async function countAssetInspections(assetNo, { country, upTo } = {}) {
+  const asset = String(assetNo || '').trim()
+  if (!asset) return null
+  try {
+    let q = supabase.from('inspections').select('id', { count: 'exact', head: true }).eq('asset_no', asset)
+    if (country) q = q.eq('country', country)
+    const day = String(upTo || '').slice(0, 10)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(day)) q = q.lte('inspection_date', day)
+    const { count, error } = await q
+    if (error || !count) return null
+    return count
+  } catch {
+    return null
+  }
+}

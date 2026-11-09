@@ -441,8 +441,13 @@ export default function Inspections() {
         const boardEl = pdfBoardRef.current?.querySelector('.tb') || null
         const diagramBg = (await getDiagramBg().catch(() => '')) || '#000000'
         const aiJobs = await readInspectionAnalysis([pdfRow.id]).catch(() => [])
+        // Counted on inspection_date only; a row without one gets no ordinal
+        // (a fallback date would not line up with how history is counted).
+        const inspectionNo = await inspectionsApi.countAssetInspections(pdfRow.asset_no, {
+          country: pdfRow.country, upTo: pdfRow.inspection_date,
+        })
         await exportInspectionDetailPdf(pdfRow, {
-          branding: await brandingForPdf(branding), company, photos, lifeRows, svgEl, boardEl, diagramBg,
+          branding: await brandingForPdf(branding), company, photos, lifeRows, svgEl, boardEl, diagramBg, inspectionNo,
           vehiclePhotoUrl: vehiclePhoto(pdfRow), aiFindings: aiJobs.filter(j => j.status === 'completed'),
         })
       } catch (err) { if (!cancelled) setPdfError(toUserMessage(err, 'Could not create the inspection PDF. Retry the download.')) }
@@ -1089,7 +1094,9 @@ export default function Inspections() {
         setPdfBlobUrl(url)
         setShowPdfPreview(true)
       } else {
-        doc.save(checklistReportFileName(clAsset || clSaved.asset_no))
+        const asset = clAsset || clSaved.asset_no
+        const day = clSaved.inspection_date || clDate
+        doc.save(checklistReportFileName(asset, clSite || clSaved.site, day))
       }
     } catch (err) {
       setClError(toUserMessage(err, 'Could not create the checklist report. Try again.'))
@@ -1690,7 +1697,7 @@ export default function Inspections() {
             <div className="flex gap-2">
               <a
                 href={pdfBlobUrl}
-                download={`TyrePulse_Checklist_${clSaved?.asset_no || 'report'}.pdf`}
+                download={checklistReportFileName(clAsset || clSaved?.asset_no, clSite || clSaved?.site, clSaved?.inspection_date || clDate)}
                 className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
               >
                 <Download size={13} /> {t('inspections.pdfPreview.download')}

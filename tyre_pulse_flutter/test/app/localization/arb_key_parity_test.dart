@@ -602,10 +602,21 @@ void main() {
     // identifier field label and its required message, the submit button,
     // the sent confirmation and the failure sentence
     // (loginForgotTitle ... loginForgotFailed).
-    test('en, ar and ur each carry exactly 2256 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2256);
-      expect(_translatableKeys(ar).length, 2256);
-      expect(_translatableKeys(ur).length, 2256);
+    // 2256 + 50 = 2306. Workforce operations core (20261109160000) on the My
+    // work assignment lane: the blocker-cause picker (title, seven causes,
+    // not-recorded label, required message, details label, cancel), the
+    // localised refusal sentences incl. evidence_required / record_required /
+    // review_note_required / record_not_found / asset_mismatch /
+    // record_already_linked / record_type_mismatch and the current-status
+    // suffix, the asset / tyre / position / linked-record card lines with the
+    // four record kinds, and assignment evidence upload (count, unavailable,
+    // add, three pick options, uploading / uploaded / failed, size and type
+    // rules, online-only note, status rule, cached-row rule)
+    // (wfBlockCauseTitle ... wfEvidenceUnavailable).
+    test('en, ar and ur each carry exactly 2306 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2306);
+      expect(_translatableKeys(ar).length, 2306);
+      expect(_translatableKeys(ur).length, 2306);
     });
   });
 

@@ -56,6 +56,7 @@ class RemoteCall {
     required this.key,
     required this.note,
     required this.clientAt,
+    this.reasonCode,
   });
 
   final String assignmentId;
@@ -63,6 +64,7 @@ class RemoteCall {
   final String key;
   final String? note;
   final DateTime clientAt;
+  final String? reasonCode;
 }
 
 /// Answers from a script, one entry per call: a [WorkforceRemoteResult] to
@@ -85,6 +87,7 @@ class FakeWorkforceRemote implements WorkforceTransitionRemote {
     required String idempotencyKey,
     required DateTime clientAt,
     String? note,
+    String? reasonCode,
   }) async {
     calls.add(
       RemoteCall(
@@ -93,6 +96,7 @@ class FakeWorkforceRemote implements WorkforceTransitionRemote {
         key: idempotencyKey,
         note: note,
         clientAt: clientAt,
+        reasonCode: reasonCode,
       ),
     );
     final Completer<void>? wait = gate;

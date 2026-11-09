@@ -43,6 +43,7 @@ final class QueuedWorkforceTransition {
     this.error,
     this.serverStatus,
     this.rejectionReason,
+    this.reasonCode,
   });
 
   factory QueuedWorkforceTransition.fromJson(Map<String, Object?> json) {
@@ -68,6 +69,13 @@ final class QueuedWorkforceTransition {
       error: json['error'] as String?,
       serverStatus: json['serverStatus'] as String?,
       rejectionReason: json['rejectionReason'] as String?,
+      // Entries written by builds before blocker causes existed carry no
+      // `reasonCode` key; they replay with no cause (the server records it as
+      // not recorded). An unknown value is also read as "no cause" rather than
+      // making the whole entry unreadable.
+      reasonCode: WorkforceBlockReason.fromWire(
+        json['reasonCode'] is String ? json['reasonCode']! as String : null,
+      ),
     );
   }
 
@@ -112,6 +120,10 @@ final class QueuedWorkforceTransition {
   /// Machine reason from the server (`invalid_transition`, `not_found`...).
   final String? rejectionReason;
 
+  /// Blocker cause sent as `p_reason_code` (block updates only). `null` for
+  /// every other action and for block updates queued by older builds.
+  final WorkforceBlockReason? reasonCode;
+
   QueuedWorkforceTransition copyWith({
     WorkforceQueueStatus? status,
     int? attempts,
@@ -136,6 +148,7 @@ final class QueuedWorkforceTransition {
       serverStatus: clearError ? null : (serverStatus ?? this.serverStatus),
       rejectionReason:
           clearError ? null : (rejectionReason ?? this.rejectionReason),
+      reasonCode: reasonCode,
     );
   }
 
@@ -154,6 +167,7 @@ final class QueuedWorkforceTransition {
         'error': error,
         'serverStatus': serverStatus,
         'rejectionReason': rejectionReason,
+        'reasonCode': reasonCode?.wire,
       };
 
   String toJsonString() => jsonEncode(toJson());

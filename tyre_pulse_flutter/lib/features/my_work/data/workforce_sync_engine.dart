@@ -86,7 +86,40 @@ final class WorkforceFlushSummary {
   }
 }
 
-/// Sentence shown to the user for a refusal code from the server.
+/// Refusal codes the server returns from `workforce_assignment_transition`
+/// (20261023091000 plus 20261109160000) and from
+/// `workforce_link_operational_record`. The screen localises these at render
+/// time; anything else (a client-side classification) shows the stored
+/// [QueuedWorkforceTransition.error] sentence.
+const Set<String> workforceServerRefusalReasons = <String>{
+  'invalid_transition',
+  'not_found',
+  'forbidden',
+  'note_required',
+  'key_reuse',
+  'self_review',
+  'evidence_required',
+  'record_required',
+  'review_note_required',
+  'record_not_found',
+  'asset_mismatch',
+  'record_already_linked',
+  'record_type_mismatch',
+};
+
+/// Refusals that cannot succeed by simply sending the same update again.
+/// `evidence_required` is deliberately absent: attaching evidence and then
+/// trying again is exactly the fix.
+const Set<String> workforceTerminalRefusals = <String>{
+  'invalid_transition',
+  'not_found',
+  'forbidden',
+  'self_review',
+  'key_reuse',
+};
+
+/// English sentence stored with a refused entry (no BuildContext exists while
+/// syncing). The panel prefers the localised text for [workforceServerRefusalReasons].
 String workforceRejectionMessage(String? reason, String? currentStatus) {
   final String suffix = currentStatus == null
       ? ''
@@ -102,6 +135,23 @@ String workforceRejectionMessage(String? reason, String? currentStatus) {
       return 'A note is required for this update.';
     case 'key_reuse':
       return 'This update conflicted with an earlier one. Refresh and try again.';
+    case 'self_review':
+      return 'You cannot review work you were assigned to.';
+    case 'evidence_required':
+      return 'This work needs evidence before it can be completed. '
+          'Attach a photo or document, then try again.';
+    case 'record_required':
+      return 'This work must be linked to its record before it can be verified.';
+    case 'review_note_required':
+      return 'A review note is required to verify this work.';
+    case 'record_not_found':
+      return 'The linked record could not be found.';
+    case 'asset_mismatch':
+      return 'The record belongs to a different asset.';
+    case 'record_already_linked':
+      return 'That record is already linked to another assignment.';
+    case 'record_type_mismatch':
+      return 'That record is not the type this work needs.';
     default:
       return 'The server did not accept this update.$suffix';
   }
@@ -158,6 +208,7 @@ final class WorkforceTransitionEngine {
     required String serverStatus,
     required WorkforceAction action,
     String? note,
+    WorkforceBlockReason? reason,
   }) async {
     final String? trimmed = note?.trim();
     final String? cleanNote =
@@ -168,6 +219,16 @@ final class WorkforceTransitionEngine {
         message: 'A note is required for this update.',
       );
     }
+    // A NEW block always names its cause. (The server tolerates a missing one
+    // only for updates queued by older builds; those replay unchanged.)
+    if (action == WorkforceAction.block && reason == null) {
+      return const WorkforceSubmitResult(
+        WorkforceSubmitOutcome.refused,
+        message: 'Choose why the work is blocked.',
+      );
+    }
+    final WorkforceBlockReason? cleanReason =
+        action == WorkforceAction.block ? reason : null;
 
     final ({
       WorkforceSubmitResult? early,
@@ -229,6 +290,7 @@ final class WorkforceTransitionEngine {
         clientAt: now.toUtc(),
         baseStatus: effective,
         note: cleanNote,
+        reasonCode: cleanReason,
       );
       await _queue.put(item);
       return (early: null, created: item);
@@ -334,6 +396,7 @@ final class WorkforceTransitionEngine {
           idempotencyKey: item.id,
           clientAt: item.clientAt,
           note: item.note,
+          reasonCode: item.reasonCode?.wire,
         );
         if (result.isDelivered) {
           await _queue.remove(userId, item.id);

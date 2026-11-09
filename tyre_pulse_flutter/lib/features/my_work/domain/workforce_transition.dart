@@ -104,3 +104,35 @@ List<WorkforceAction> availableWorkforceActions(String status) {
 String? applyWorkforceAction(String status, WorkforceAction action) {
   return action.canApplyFrom(status) ? action.to : null;
 }
+
+/// Why an employee blocked an assignment. Mirrors the CHECK
+/// `workforce_assignment_events_reason_code` and the validation inside
+/// `public.workforce_assignment_transition` in
+/// `supabase/migrations/20261109160000_workforce_operations_core.sql`.
+///
+/// The server still accepts a block with NO cause (it is recorded as NULL and
+/// reported as "not recorded"); that path exists only so updates queued by
+/// older app builds can replay. A new block from this build always carries one.
+enum WorkforceBlockReason {
+  waitingStock('waiting_stock'),
+  waitingEquipment('waiting_equipment'),
+  vehicleUnavailable('vehicle_unavailable'),
+  safetyHold('safety_hold'),
+  waitingApproval('waiting_approval'),
+  waitingManpower('waiting_manpower'),
+  other('other');
+
+  const WorkforceBlockReason(this.wire);
+
+  /// The value sent as `p_reason_code`.
+  final String wire;
+
+  /// Parses a stored or server value; `null` for absent or unknown values.
+  /// Unknown never throws: a queued entry must not be lost over a label.
+  static WorkforceBlockReason? fromWire(String? value) {
+    for (final WorkforceBlockReason reason in WorkforceBlockReason.values) {
+      if (reason.wire == value) return reason;
+    }
+    return null;
+  }
+}

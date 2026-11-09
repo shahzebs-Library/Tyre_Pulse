@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { availableActions, TRANSITIONS, BLOCK_REASONS, BLOCK_REASON_LABELS } from '../../lib/workforceTransitions'
+import { availableActions, TRANSITIONS, BLOCK_REASONS, blockReasonLabel, transitionLabel } from '../../lib/workforceTransitions'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 /**
  * Status actions for one workforce assignment. Buttons come from the shared transition table;
@@ -9,14 +10,15 @@ import { availableActions, TRANSITIONS, BLOCK_REASONS, BLOCK_REASON_LABELS } fro
  */
 const OPTIONAL_NOTE = new Set(['verify'])
 export default function AssignmentActions({ item, currentUserId, isManager, disabled = false, onAct }) {
+  const { t } = useLanguage()
   const [pending, setPending] = useState(null)
   const [note, setNote] = useState('')
   const [reason, setReason] = useState('')
   const actions = availableActions(item.status, { isAssignee: item.assigned_to === currentUserId, isManager })
-  if (!actions.length) return <span className="text-xs text-[var(--text-muted)]">No action available</span>
+  if (!actions.length) return <span className="text-xs text-[var(--text-muted)]">{t('workforce.actions.noAction')}</span>
 
   if (pending) {
-    const label = TRANSITIONS[pending].label
+    const label = transitionLabel(pending, t)
     const optional = OPTIONAL_NOTE.has(pending)
     const blocked = (!optional && !note.trim()) || (pending === 'block' && !reason)
     return (
@@ -32,24 +34,24 @@ export default function AssignmentActions({ item, currentUserId, isManager, disa
         }}
       >
         {pending === 'block' && (
-          <select aria-label="Blocker cause" className="input" required value={reason} onChange={e => setReason(e.target.value)}>
-            <option value="">Cause</option>
-            {BLOCK_REASONS.map(r => <option key={r} value={r}>{BLOCK_REASON_LABELS[r]}</option>)}
+          <select aria-label={t('workforce.actions.causeLabel')} className="input" required value={reason} onChange={e => setReason(e.target.value)}>
+            <option value="">{t('workforce.actions.cause')}</option>
+            {BLOCK_REASONS.map(r => <option key={r} value={r}>{blockReasonLabel(r, t)}</option>)}
           </select>
         )}
-        <label className="sr-only" htmlFor={`note-${item.id}`}>{label} reason</label>
+        <label className="sr-only" htmlFor={`note-${item.id}`}>{t('workforce.actions.noteLabel', { action: label })}</label>
         <input
           id={`note-${item.id}`}
           className="input"
           autoFocus
           required={!optional}
           maxLength={2000}
-          placeholder={optional ? `${label}: review note (required when the task needs technical review)` : `${label}: reason`}
+          placeholder={optional ? t('workforce.actions.reviewPlaceholder', { action: label }) : t('workforce.actions.reasonPlaceholder', { action: label })}
           value={note}
           onChange={e => setNote(e.target.value)}
         />
         <button className="btn-primary" type="submit" disabled={disabled || blocked}>{label}</button>
-        <button className="btn-secondary" type="button" onClick={() => { setPending(null); setNote(''); setReason('') }}>Back</button>
+        <button className="btn-secondary" type="button" onClick={() => { setPending(null); setNote(''); setReason('') }}>{t('workforce.actions.back')}</button>
       </form>
     )
   }
@@ -64,7 +66,7 @@ export default function AssignmentActions({ item, currentUserId, isManager, disa
           disabled={disabled}
           onClick={() => (TRANSITIONS[key].noteRequired || OPTIONAL_NOTE.has(key) ? setPending(key) : onAct(item, key, null))}
         >
-          {TRANSITIONS[key].label}
+          {transitionLabel(key, t)}
         </button>
       ))}
     </div>

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+vi.mock('../contexts/LanguageContext', async importOriginal => (await import('./workforceLanguageMock.js')).mockWorkforceLanguage(importOriginal))
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 
 vi.mock('react-chartjs-2', () => ({ Bar: () => <div data-testid="bar-chart" /> }))

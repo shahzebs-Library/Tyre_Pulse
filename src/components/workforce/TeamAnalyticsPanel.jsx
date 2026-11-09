@@ -7,15 +7,12 @@ import { getTeamAnalytics } from '../../lib/api/workforceAnalyticsServer'
 import { NOT_INSTALLED } from '../../lib/api/workforceAssignments'
 import { exportSheetsToExcel, reportFileName } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
-const REASON_LABEL = {
-  waiting_stock: 'Waiting for stock', waiting_equipment: 'Waiting for equipment', vehicle_unavailable: 'Vehicle unavailable',
-  safety_hold: 'Safety hold', waiting_approval: 'Waiting for approval', waiting_manpower: 'Waiting for manpower',
-  other: 'Other', not_recorded: 'Cause not recorded',
-}
-const reasonLabel = r => REASON_LABEL[r] || String(r || '').replace(/_/g, ' ')
+const REASON_CODES = new Set(['waiting_stock', 'waiting_equipment', 'vehicle_unavailable', 'safety_hold', 'waiting_approval', 'waiting_manpower', 'other', 'not_recorded'])
+const reasonLabelOf = (t, r) => (REASON_CODES.has(r) ? t(`workforce.analytics.reason.${r}`) : String(r || '').replace(/_/g, ' '))
 
 const isoDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 function defaultRange () {
@@ -49,22 +46,17 @@ function Section ({ title, children, note }) {
   )
 }
 
-const DEFINITIONS = [
-  ['Window', 'Assignments created between the two dates, inclusive. Every figure covers every assignment you are allowed to see, not one page.'],
-  ['Assigned', 'All assignments in the window currently held by the person (any status). Reassigned work counts for whoever holds it now.'],
-  ['Active minutes', 'Time spent in progress, from the transition history. Blocked time and time waiting for review are excluded.'],
-  ['Timed', 'Verified assignments with a transition history. Verified work closed without a history has no trustworthy times and is shown as untimed, never guessed.'],
-  ['Rework rate', 'Returns from review divided by (verified + returns). N/A when nothing was verified or returned.'],
-  ['Estimate vs actual', 'Sum of active minutes against sum of estimates, only for verified work that has both. The sample size is shown beside it.'],
-  ['Blocked time', 'From each block to the event that ended it (resume, complete or cancel). Blocks still open are counted up to now, separately.'],
-  ['Verification queue', 'Work submitted and waiting for review right now, for the chosen site, regardless of the window.'],
-]
+const DEFINITION_KEYS = ['window', 'assigned', 'activeMinutes', 'timed', 'rework', 'estimate', 'blocked', 'queue']
+const definitionsOf = t => DEFINITION_KEYS.map(k => [t(`workforce.analytics.def.${k}`), t(`workforce.analytics.def.${k}Text`)])
 
 /**
  * Management analytics for team operations. Workflow facts from the server, not productivity scores.
  * @param {{ employeeById?: Map<string, {full_name?:string, employee_id?:string, role?:string, site?:string}> }} props
  */
 export default function TeamAnalyticsPanel ({ employeeById }) {
+  const { t } = useLanguage()
+  const reasonLabel = r => reasonLabelOf(t, r)
+  const DEFINITIONS = definitionsOf(t)
   const [range, setRange] = useState(defaultRange)
   const [site, setSite] = useState('')
   const [applied, setApplied] = useState(() => ({ ...defaultRange(), site: '' }))
@@ -79,8 +71,9 @@ export default function TeamAnalyticsPanel ({ employeeById }) {
       setData(await getTeamAnalytics({ from: applied.from || null, to: applied.to || null, site: applied.site || null }))
     } catch (e) {
       setData(null)
-      setError(e?.message === NOT_INSTALLED ? { notInstalled: true, message: NOT_INSTALLED } : { message: toUserMessage(e, 'Team analytics could not be loaded') })
+      setError(e?.message === NOT_INSTALLED ? { notInstalled: true, message: NOT_INSTALLED } : { message: toUserMessage(e, t('workforce.analytics.loadFailed')) })
     } finally { setLoading(false) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- t only labels the fallback message
   }, [applied])
   useEffect(() => { load() }, [load])
 
@@ -89,14 +82,14 @@ export default function TeamAnalyticsPanel ({ employeeById }) {
 
   const nameOf = useCallback(id => {
     const p = employeeById?.get?.(id)
-    return p?.full_name || p?.employee_id || 'Unknown employee'
-  }, [employeeById])
+    return p?.full_name || p?.employee_id || t('workforce.analytics.unknownEmployee')
+  }, [employeeById, t])
 
   const employees = useMemo(() => (data?.per_employee || []).map(r => ({
     ...r, name: nameOf(r.profile_id), employee_code: employeeById?.get?.(r.profile_id)?.employee_id || '',
     est_n: r.estimate_vs_actual?.n ?? 0, est_ratio: num(r.estimate_vs_actual?.actual_to_estimate),
   })), [data, nameOf, employeeById])
-  const sites = useMemo(() => (data?.per_site || []).map(r => ({ ...r, site_label: r.site || 'No site recorded', est_n: r.estimate_vs_actual?.n ?? 0, est_ratio: num(r.estimate_vs_actual?.actual_to_estimate) })), [data])
+  const sites = useMemo(() => (data?.per_site || []).map(r => ({ ...r, site_label: r.site || t('workforce.analytics.noSiteRecorded'), est_n: r.estimate_vs_actual?.n ?? 0, est_ratio: num(r.estimate_vs_actual?.actual_to_estimate) })), [data, t])
   const blockers = useMemo(() => data?.blocker_minutes_by_reason || [], [data])
   const totals = data?.totals || {}
   const evA = totals.estimate_vs_actual || {}
@@ -106,72 +99,73 @@ export default function TeamAnalyticsPanel ({ employeeById }) {
     return {
       labels: top.map(r => r.name),
       datasets: [
-        { label: 'Verified', data: top.map(r => r.verified || 0), backgroundColor: '#16a34a', stack: 'w' },
-        { label: 'Submitted', data: top.map(r => r.submitted || 0), backgroundColor: '#38bdf8', stack: 'w' },
-        { label: 'In progress', data: top.map(r => r.active || 0), backgroundColor: '#6366f1', stack: 'w' },
-        { label: 'Not started', data: top.map(r => r.awaiting_start || 0), backgroundColor: '#94a3b8', stack: 'w' },
-        { label: 'Blocked', data: top.map(r => r.blocked || 0), backgroundColor: '#f5a524', stack: 'w' },
-        { label: 'Cancelled', data: top.map(r => r.cancelled || 0), backgroundColor: '#64748b', stack: 'w' },
+        { label: t('workforce.analytics.dsVerified'), data: top.map(r => r.verified || 0), backgroundColor: '#16a34a', stack: 'w' },
+        { label: t('workforce.analytics.dsSubmitted'), data: top.map(r => r.submitted || 0), backgroundColor: '#38bdf8', stack: 'w' },
+        { label: t('workforce.analytics.dsInProgress'), data: top.map(r => r.active || 0), backgroundColor: '#6366f1', stack: 'w' },
+        { label: t('workforce.analytics.dsNotStarted'), data: top.map(r => r.awaiting_start || 0), backgroundColor: '#94a3b8', stack: 'w' },
+        { label: t('workforce.analytics.dsBlocked'), data: top.map(r => r.blocked || 0), backgroundColor: '#f5a524', stack: 'w' },
+        { label: t('workforce.analytics.dsCancelled'), data: top.map(r => r.cancelled || 0), backgroundColor: '#64748b', stack: 'w' },
       ],
     }
-  }, [employees])
+  }, [employees, t])
   const blockerChart = useMemo(() => ({
-    labels: blockers.map(b => reasonLabel(b.reason)),
+    labels: blockers.map(b => reasonLabelOf(t, b.reason)),
     datasets: [
-      { label: 'Closed blocks (minutes)', data: blockers.map(b => num(b.closed_minutes) ?? 0), backgroundColor: '#f5a524', stack: 'b' },
-      { label: 'Still blocked (minutes so far)', data: blockers.map(b => num(b.open_minutes) ?? 0), backgroundColor: '#f26161', stack: 'b' },
+      { label: t('workforce.analytics.dsClosedBlocks'), data: blockers.map(b => num(b.closed_minutes) ?? 0), backgroundColor: '#f5a524', stack: 'b' },
+      { label: t('workforce.analytics.dsStillBlocked'), data: blockers.map(b => num(b.open_minutes) ?? 0), backgroundColor: '#f26161', stack: 'b' },
     ],
-  }), [blockers])
+  }), [blockers, t])
   const barOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } }
 
   const empColumns = useMemo(() => [
-    { accessorKey: 'name', header: 'Employee', cell: ({ row }) => <span>{row.original.name}{row.original.employee_code ? <span style={{ color: 'var(--text-dim)' }}> ({row.original.employee_code})</span> : null}</span> },
-    { accessorKey: 'assigned', header: 'Assigned', meta: { align: 'right' } },
-    { accessorKey: 'active', header: 'In progress', meta: { align: 'right' } },
-    { accessorKey: 'blocked', header: 'Blocked', meta: { align: 'right' } },
-    { accessorKey: 'submitted', header: 'Submitted', meta: { align: 'right' } },
-    { accessorKey: 'verified', header: 'Verified', meta: { align: 'right' } },
-    { accessorKey: 'overdue_open', header: 'Overdue open', meta: { align: 'right' } },
-    { accessorKey: 'rework_returns', header: 'Returns', meta: { align: 'right' } },
-    { accessorKey: 'rework_rate', header: 'Rework rate', cell: i => pct(i.getValue()), meta: { align: 'right', exportValue: r => num(r.rework_rate) } },
-    { accessorKey: 'avg_active_minutes', header: 'Avg active min', cell: i => fmt(i.getValue(), 1), meta: { align: 'right' } },
-    { accessorKey: 'median_active_minutes', header: 'Median active min', cell: i => fmt(i.getValue(), 1), meta: { align: 'right' } },
-    { accessorKey: 'timed_verified', header: 'Timed n', meta: { align: 'right' } },
-    { accessorKey: 'est_ratio', header: 'Actual / estimate', cell: ({ row }) => `${fmt(row.original.est_ratio, 2)} (n=${row.original.est_n})`, meta: { align: 'right' } },
-    { accessorKey: 'verified_with_record', header: 'Verified with record', meta: { align: 'right' } },
-  ], [])
+    { accessorKey: 'name', header: t('workforce.analytics.colEmployee'), cell: ({ row }) => <span>{row.original.name}{row.original.employee_code ? <span style={{ color: 'var(--text-dim)' }}> ({row.original.employee_code})</span> : null}</span> },
+    { accessorKey: 'assigned', header: t('workforce.analytics.colAssigned'), meta: { align: 'right' } },
+    { accessorKey: 'active', header: t('workforce.analytics.colInProgress'), meta: { align: 'right' } },
+    { accessorKey: 'blocked', header: t('workforce.analytics.colBlocked'), meta: { align: 'right' } },
+    { accessorKey: 'submitted', header: t('workforce.analytics.colSubmitted'), meta: { align: 'right' } },
+    { accessorKey: 'verified', header: t('workforce.analytics.colVerified'), meta: { align: 'right' } },
+    { accessorKey: 'overdue_open', header: t('workforce.analytics.colOverdueOpen'), meta: { align: 'right' } },
+    { accessorKey: 'rework_returns', header: t('workforce.analytics.colReturns'), meta: { align: 'right' } },
+    { accessorKey: 'rework_rate', header: t('workforce.analytics.colReworkRate'), cell: i => pct(i.getValue()), meta: { align: 'right', exportValue: r => num(r.rework_rate) } },
+    { accessorKey: 'avg_active_minutes', header: t('workforce.analytics.colAvgActive'), cell: i => fmt(i.getValue(), 1), meta: { align: 'right' } },
+    { accessorKey: 'median_active_minutes', header: t('workforce.analytics.colMedianActive'), cell: i => fmt(i.getValue(), 1), meta: { align: 'right' } },
+    { accessorKey: 'timed_verified', header: t('workforce.analytics.colTimedN'), meta: { align: 'right' } },
+    { accessorKey: 'est_ratio', header: t('workforce.analytics.colActualEstimate'), cell: ({ row }) => t('workforce.analytics.ratioN', { ratio: fmt(row.original.est_ratio, 2), n: row.original.est_n }), meta: { align: 'right' } },
+    { accessorKey: 'verified_with_record', header: t('workforce.analytics.colVerifiedWithRecord'), meta: { align: 'right' } },
+  ], [t])
   const siteColumns = useMemo(() => [
-    { accessorKey: 'site_label', header: 'Site' },
-    { accessorKey: 'assigned', header: 'Assigned', meta: { align: 'right' } },
-    { accessorKey: 'verified', header: 'Verified', meta: { align: 'right' } },
-    { accessorKey: 'blocked', header: 'Blocked', meta: { align: 'right' } },
-    { accessorKey: 'overdue_open', header: 'Overdue open', meta: { align: 'right' } },
-    { accessorKey: 'rework_rate', header: 'Rework rate', cell: i => pct(i.getValue()), meta: { align: 'right' } },
-    { accessorKey: 'median_active_minutes', header: 'Median active min', cell: i => fmt(i.getValue(), 1), meta: { align: 'right' } },
-    { accessorKey: 'blocked_minutes_closed', header: 'Blocked min (closed)', cell: i => fmt(i.getValue(), 1), meta: { align: 'right' } },
-    { accessorKey: 'est_ratio', header: 'Actual / estimate', cell: ({ row }) => `${fmt(row.original.est_ratio, 2)} (n=${row.original.est_n})`, meta: { align: 'right' } },
-  ], [])
+    { accessorKey: 'site_label', header: t('workforce.analytics.colSite') },
+    { accessorKey: 'assigned', header: t('workforce.analytics.colAssigned'), meta: { align: 'right' } },
+    { accessorKey: 'verified', header: t('workforce.analytics.colVerified'), meta: { align: 'right' } },
+    { accessorKey: 'blocked', header: t('workforce.analytics.colBlocked'), meta: { align: 'right' } },
+    { accessorKey: 'overdue_open', header: t('workforce.analytics.colOverdueOpen'), meta: { align: 'right' } },
+    { accessorKey: 'rework_rate', header: t('workforce.analytics.colReworkRate'), cell: i => pct(i.getValue()), meta: { align: 'right' } },
+    { accessorKey: 'median_active_minutes', header: t('workforce.analytics.colMedianActive'), cell: i => fmt(i.getValue(), 1), meta: { align: 'right' } },
+    { accessorKey: 'blocked_minutes_closed', header: t('workforce.analytics.colBlockedClosed'), cell: i => fmt(i.getValue(), 1), meta: { align: 'right' } },
+    { accessorKey: 'est_ratio', header: t('workforce.analytics.colActualEstimate'), cell: ({ row }) => t('workforce.analytics.ratioN', { ratio: fmt(row.original.est_ratio, 2), n: row.original.est_n }), meta: { align: 'right' } },
+  ], [t])
 
   async function exportExcel () {
     if (!data) return
     setExporting(true)
+    const windowRange = t('workforce.analytics.windowRange', { from: applied.from || t('workforce.analytics.start'), to: applied.to || t('workforce.analytics.today') })
     try {
       const empKeys = ['name', 'employee_code', 'assigned', 'awaiting_start', 'active', 'blocked', 'submitted', 'verified', 'cancelled', 'overdue_open', 'rework_returns', 'rework_rate', 'avg_active_minutes', 'median_active_minutes', 'timed_verified', 'verified_untimed', 'est_n', 'est_ratio', 'verified_with_record', 'verified_missing_record', 'blocked_minutes_closed']
       const siteKeys = ['site_label', 'assigned', 'verified', 'blocked', 'overdue_open', 'rework_returns', 'rework_rate', 'median_active_minutes', 'blocked_minutes_closed', 'est_n', 'est_ratio']
       const blockRows = blockers.map(b => ({ cause: reasonLabel(b.reason), episodes: b.episodes, closed_episodes: b.closed_episodes, closed_minutes: num(b.closed_minutes), open_episodes: b.open_episodes, open_minutes: num(b.open_minutes), unmeasured_episodes: b.unmeasured_episodes }))
       const sheet = (name, rows, keys) => ({ name, rows: rows.map(r => Object.fromEntries(keys.map(k => [k, r[k] ?? null]))), columns: keys, headers: keys.map(k => k.replace(/_/g, ' ')) })
       await exportSheetsToExcel([
-        sheet('Employees', employees, empKeys),
-        sheet('Sites', sites, siteKeys),
-        sheet('Blocked time', blockRows, Object.keys(blockRows[0] || { cause: null })),
-        sheet('Definitions', DEFINITIONS.map(([metric, definition]) => ({ metric, definition })).concat([{ metric: 'Generated at', definition: when(data.data_freshness?.generated_at) }, { metric: 'Window', definition: `${applied.from || 'start'} to ${applied.to || 'today'}${applied.site ? `, site ${applied.site}` : ''}` }]), ['metric', 'definition']),
-      ], reportFileName('Team Analytics', applied.from || '', applied.to || ''), {
-        title: 'Team analytics (workflow facts, not productivity scores)',
-        dateRange: `${applied.from || 'start'} to ${applied.to || 'today'}`,
-        meta: applied.site ? { Site: applied.site } : undefined,
+        sheet(t('workforce.analytics.sheetEmployees'), employees, empKeys),
+        sheet(t('workforce.analytics.sheetSites'), sites, siteKeys),
+        sheet(t('workforce.analytics.sheetBlocked'), blockRows, Object.keys(blockRows[0] || { cause: null })),
+        sheet(t('workforce.analytics.sheetDefinitions'), DEFINITIONS.map(([metric, definition]) => ({ metric, definition })).concat([{ metric: t('workforce.analytics.generatedAt'), definition: when(data.data_freshness?.generated_at) }, { metric: t('workforce.analytics.def.window'), definition: applied.site ? t('workforce.analytics.windowSite', { range: windowRange, site: applied.site }) : windowRange }]), ['metric', 'definition']),
+      ], reportFileName(t('workforce.analytics.fileName'), applied.from || '', applied.to || ''), {
+        title: t('workforce.analytics.exportTitle'),
+        dateRange: windowRange,
+        meta: applied.site ? { [t('workforce.analytics.metaSite')]: applied.site } : undefined,
       })
     } catch (e) {
-      setError({ message: toUserMessage(e, 'The export could not be created') })
+      setError({ message: toUserMessage(e, t('workforce.analytics.exportFailed')) })
     } finally { setExporting(false) }
   }
 
@@ -181,94 +175,94 @@ export default function TeamAnalyticsPanel ({ employeeById }) {
   return (
     <div className="space-y-4" data-testid="team-analytics-panel">
       <div className="card p-3 flex flex-wrap items-end gap-3">
-        <label className="text-xs" style={{ color: 'var(--text-muted)' }}>From
-          <input type="date" aria-label="From date" value={range.from} onChange={e => setRange(r => ({ ...r, from: e.target.value }))} className="block mt-1 rounded px-2 py-1 text-sm" style={inputStyle} />
+        <label className="text-xs" style={{ color: 'var(--text-muted)' }}>{t('workforce.analytics.from')}
+          <input type="date" aria-label={t('workforce.analytics.fromDate')} value={range.from} onChange={e => setRange(r => ({ ...r, from: e.target.value }))} className="block mt-1 rounded px-2 py-1 text-sm" style={inputStyle} />
         </label>
-        <label className="text-xs" style={{ color: 'var(--text-muted)' }}>To
-          <input type="date" aria-label="To date" value={range.to} onChange={e => setRange(r => ({ ...r, to: e.target.value }))} className="block mt-1 rounded px-2 py-1 text-sm" style={inputStyle} />
+        <label className="text-xs" style={{ color: 'var(--text-muted)' }}>{t('workforce.analytics.to')}
+          <input type="date" aria-label={t('workforce.analytics.toDate')} value={range.to} onChange={e => setRange(r => ({ ...r, to: e.target.value }))} className="block mt-1 rounded px-2 py-1 text-sm" style={inputStyle} />
         </label>
-        <label className="text-xs" style={{ color: 'var(--text-muted)' }}>Site
-          <input type="text" aria-label="Site" placeholder="All sites" value={site} onChange={e => setSite(e.target.value)} className="block mt-1 rounded px-2 py-1 text-sm" style={inputStyle} />
+        <label className="text-xs" style={{ color: 'var(--text-muted)' }}>{t('workforce.analytics.site')}
+          <input type="text" aria-label={t('workforce.analytics.site')} placeholder={t('workforce.analytics.allSites')} value={site} onChange={e => setSite(e.target.value)} className="block mt-1 rounded px-2 py-1 text-sm" style={inputStyle} />
         </label>
-        <button type="button" onClick={apply} disabled={invalidRange || loading} className="btn btn-primary text-sm">Apply</button>
-        <button type="button" onClick={load} disabled={loading} className="btn btn-secondary text-sm inline-flex items-center gap-1" aria-label="Refresh analytics"><RefreshCw size={14} /> Refresh</button>
-        <button type="button" onClick={exportExcel} disabled={!data || empty || exporting} className="btn btn-secondary text-sm inline-flex items-center gap-1"><Download size={14} /> {exporting ? 'Exporting...' : 'Excel'}</button>
-        {invalidRange && <span className="text-xs" style={{ color: '#f26161' }}>The start date must be on or before the end date.</span>}
+        <button type="button" onClick={apply} disabled={invalidRange || loading} className="btn btn-primary text-sm">{t('workforce.analytics.apply')}</button>
+        <button type="button" onClick={load} disabled={loading} className="btn btn-secondary text-sm inline-flex items-center gap-1" aria-label={t('workforce.analytics.refreshLabel')}><RefreshCw size={14} /> {t('workforce.analytics.refresh')}</button>
+        <button type="button" onClick={exportExcel} disabled={!data || empty || exporting} className="btn btn-secondary text-sm inline-flex items-center gap-1"><Download size={14} /> {exporting ? t('workforce.analytics.exporting') : t('workforce.analytics.excel')}</button>
+        {invalidRange && <span className="text-xs" style={{ color: '#f26161' }}>{t('workforce.analytics.invalidRange')}</span>}
       </div>
 
       <p className="text-xs flex items-start gap-1.5" style={{ color: 'var(--text-muted)' }}>
         <Info size={14} className="mt-0.5 shrink-0" />
-        These are workflow facts recorded by the system (what was assigned, how long it was worked and blocked, what was returned). They are not productivity scores and do not rank people.
+        {t('workforce.analytics.disclaimer')}
       </p>
 
-      {loading && <div className="card p-6 text-sm" style={{ color: 'var(--text-muted)' }} role="status">Loading team analytics...</div>}
+      {loading && <div className="card p-6 text-sm" style={{ color: 'var(--text-muted)' }} role="status">{t('workforce.analytics.loading')}</div>}
 
       {!loading && error && (
         <div className="card p-4 flex items-start gap-2" role="alert">
           <AlertTriangle size={16} className="mt-0.5 shrink-0" style={{ color: error.notInstalled ? '#f5a524' : '#f26161' }} />
           <div className="text-sm" style={{ color: 'var(--text-primary)' }}>
             {error.message}
-            {!error.notInstalled && <div><button type="button" className="btn btn-secondary text-xs mt-2" onClick={load}>Retry</button></div>}
+            {!error.notInstalled && <div><button type="button" className="btn btn-secondary text-xs mt-2" onClick={load}>{t('workforce.analytics.retry')}</button></div>}
           </div>
         </div>
       )}
 
       {!loading && !error && empty && (
-        <div className="card p-6 text-sm" style={{ color: 'var(--text-muted)' }}>No assignments were created in this window{applied.site ? ` for site ${applied.site}` : ''}. Widen the dates or clear the site filter.</div>
+        <div className="card p-6 text-sm" style={{ color: 'var(--text-muted)' }}>{applied.site ? t('workforce.analytics.emptySite', { site: applied.site }) : t('workforce.analytics.empty')}</div>
       )}
 
       {!loading && !error && data && !empty && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
-            <Tile label="Assigned" value={fmt(totals.assigned)} />
-            <Tile label="Verified" value={fmt(totals.verified)} />
-            <Tile label="Blocked now" value={fmt(totals.blocked)} />
-            <Tile label="Overdue open" value={fmt(totals.overdue_open)} />
-            <Tile label="Rework rate" value={pct(data.rework_rate)} hint={`${fmt(totals.rework_returns)} returns`} />
-            <Tile label="Median active min" value={fmt(totals.median_active_minutes, 1)} hint={`n=${fmt(totals.timed_verified)} timed`} />
-            <Tile label="Actual / estimate" value={fmt(evA.actual_to_estimate, 2)} hint={`n=${fmt(evA.n)}`} />
-            <Tile label="Awaiting review" value={fmt(data.verification_queue?.count)} hint={data.verification_queue?.oldest_age_hours != null ? `oldest ${fmt(data.verification_queue.oldest_age_hours, 1)} h` : 'none waiting'} />
+            <Tile label={t('workforce.analytics.tileAssigned')} value={fmt(totals.assigned)} />
+            <Tile label={t('workforce.analytics.tileVerified')} value={fmt(totals.verified)} />
+            <Tile label={t('workforce.analytics.tileBlockedNow')} value={fmt(totals.blocked)} />
+            <Tile label={t('workforce.analytics.tileOverdueOpen')} value={fmt(totals.overdue_open)} />
+            <Tile label={t('workforce.analytics.tileReworkRate')} value={pct(data.rework_rate)} hint={t('workforce.analytics.tileReturns', { count: fmt(totals.rework_returns) })} />
+            <Tile label={t('workforce.analytics.tileMedianActive')} value={fmt(totals.median_active_minutes, 1)} hint={t('workforce.analytics.tileTimed', { count: fmt(totals.timed_verified) })} />
+            <Tile label={t('workforce.analytics.tileActualEstimate')} value={fmt(evA.actual_to_estimate, 2)} hint={t('workforce.analytics.tileN', { count: fmt(evA.n) })} />
+            <Tile label={t('workforce.analytics.tileAwaitingReview')} value={fmt(data.verification_queue?.count)} hint={data.verification_queue?.oldest_age_hours != null ? t('workforce.analytics.tileOldest', { hours: fmt(data.verification_queue.oldest_age_hours, 1) }) : t('workforce.analytics.tileNoneWaiting')} />
           </div>
 
-          <Section title="Workload distribution" note="Assignments in the window by current holder and status (first 15 by volume).">
-            <div style={{ height: 280 }}><Bar data={workloadChart} options={barOpts} aria-label="Workload distribution chart" /></div>
+          <Section title={t('workforce.analytics.workload')} note={t('workforce.analytics.workloadNote')}>
+            <div style={{ height: 280 }}><Bar data={workloadChart} options={barOpts} aria-label={t('workforce.analytics.workloadChart')} /></div>
           </Section>
 
-          <Section title="By employee" note="Sort any column. Averages and ratios show N/A when nothing could be measured.">
-            <EnterpriseTable columns={empColumns} data={employees} getRowId={r => r.profile_id} emptyMessage="No employees in this window" initialPageSize={25} />
+          <Section title={t('workforce.analytics.byEmployee')} note={t('workforce.analytics.byEmployeeNote')}>
+            <EnterpriseTable columns={empColumns} data={employees} getRowId={r => r.profile_id} emptyMessage={t('workforce.analytics.noEmployees')} initialPageSize={25} />
           </Section>
 
-          <Section title="By site">
-            <EnterpriseTable columns={siteColumns} data={sites} getRowId={r => r.site || '__none__'} emptyMessage="No sites in this window" enableColumnFilters={false} />
+          <Section title={t('workforce.analytics.bySite')}>
+            <EnterpriseTable columns={siteColumns} data={sites} getRowId={r => r.site || '__none__'} emptyMessage={t('workforce.analytics.noSites')} enableColumnFilters={false} />
           </Section>
 
-          <Section title="Blocked time by cause" note="Closed blocks are measured start to end. Blocks still open are counted up to now and shown separately.">
+          <Section title={t('workforce.analytics.blockedByCause')} note={t('workforce.analytics.blockedByCauseNote')}>
             {blockers.length === 0
-              ? <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No work was blocked in this window.</p>
+              ? <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{t('workforce.analytics.noBlocked')}</p>
               : <>
-                  <div style={{ height: 240 }}><Bar data={blockerChart} options={barOpts} aria-label="Blocked time by cause chart" /></div>
+                  <div style={{ height: 240 }}><Bar data={blockerChart} options={barOpts} aria-label={t('workforce.analytics.blockedChart')} /></div>
                   <ul className="text-xs space-y-0.5" style={{ color: 'var(--text-muted)' }}>
                     {blockers.map(b => (
-                      <li key={b.reason}>{reasonLabel(b.reason)}: {b.episodes} block{b.episodes === 1 ? '' : 's'}, {fmt(b.closed_minutes, 1)} min closed{b.open_episodes ? `, ${b.open_episodes} still open (${fmt(b.open_minutes, 1)} min so far)` : ''}{b.unmeasured_episodes ? `, ${b.unmeasured_episodes} without a recorded end` : ''}</li>
+                      <li key={b.reason}>{t(b.episodes === 1 ? 'workforce.analytics.blockLineOne' : 'workforce.analytics.blockLineOther', { cause: reasonLabel(b.reason), count: b.episodes, minutes: fmt(b.closed_minutes, 1) })}{b.open_episodes ? t('workforce.analytics.blockLineOpen', { count: b.open_episodes, minutes: fmt(b.open_minutes, 1) }) : ''}{b.unmeasured_episodes ? t('workforce.analytics.blockLineUnmeasured', { count: b.unmeasured_episodes }) : ''}</li>
                     ))}
                   </ul>
                 </>}
           </Section>
 
           <div className="grid md:grid-cols-2 gap-4">
-            <Section title="Rework and estimates">
+            <Section title={t('workforce.analytics.reworkEstimates')}>
               <ul className="text-sm space-y-1" style={{ color: 'var(--text-primary)' }}>
-                <li>Rework rate: {pct(data.rework_rate)} ({fmt(totals.rework_returns)} returns, {fmt(totals.verified)} verified)</li>
-                <li>Estimate vs actual: {fmt(evA.actual_minutes, 1)} active min against {fmt(evA.estimated_minutes, 1)} estimated min, based on {fmt(evA.n)} verified assignment{evA.n === 1 ? '' : 's'} with both</li>
-                <li>Verified with an operational record: {fmt(totals.verified_with_record)}; missing a required record: {fmt(totals.verified_missing_record)}</li>
-                <li>Reassignments: {fmt(data.reassignments)}; manager overrides: {fmt(data.override_count)}</li>
+                <li>{t('workforce.analytics.reworkLine', { rate: pct(data.rework_rate), returns: fmt(totals.rework_returns), verified: fmt(totals.verified) })}</li>
+                <li>{t(evA.n === 1 ? 'workforce.analytics.estimateLineOne' : 'workforce.analytics.estimateLineOther', { actual: fmt(evA.actual_minutes, 1), estimated: fmt(evA.estimated_minutes, 1), n: fmt(evA.n) })}</li>
+                <li>{t('workforce.analytics.recordLine', { with: fmt(totals.verified_with_record), missing: fmt(totals.verified_missing_record) })}</li>
+                <li>{t('workforce.analytics.reassignLine', { reassignments: fmt(data.reassignments), overrides: fmt(data.override_count) })}</li>
               </ul>
             </Section>
-            <Section title="Verification queue" note="Current queue for the chosen site, all dates.">
+            <Section title={t('workforce.analytics.queueHeading')} note={t('workforce.analytics.queueNote')}>
               <ul className="text-sm space-y-1" style={{ color: 'var(--text-primary)' }}>
-                <li>Waiting for review: {fmt(data.verification_queue?.count)}</li>
-                <li>Oldest waiting: {data.verification_queue?.oldest_age_hours != null ? `${fmt(data.verification_queue.oldest_age_hours, 1)} hours` : 'N/A'}</li>
-                {data.verification_queue?.aged_from_last_update > 0 && <li style={{ color: 'var(--text-muted)' }}>{data.verification_queue.aged_from_last_update} aged from the last update (no submission event recorded)</li>}
+                <li>{t('workforce.analytics.queueWaiting', { count: fmt(data.verification_queue?.count) })}</li>
+                <li>{t('workforce.analytics.queueOldest', { value: data.verification_queue?.oldest_age_hours != null ? t('workforce.analytics.queueHours', { hours: fmt(data.verification_queue.oldest_age_hours, 1) }) : 'N/A' })}</li>
+                {data.verification_queue?.aged_from_last_update > 0 && <li style={{ color: 'var(--text-muted)' }}>{t('workforce.analytics.queueAged', { count: data.verification_queue.aged_from_last_update })}</li>}
               </ul>
             </Section>
           </div>
@@ -277,10 +271,10 @@ export default function TeamAnalyticsPanel ({ employeeById }) {
 
       {data && !error && (
         <details className="card p-3 text-xs" style={{ color: 'var(--text-muted)' }}>
-          <summary className="cursor-pointer font-medium" style={{ color: 'var(--text-primary)' }}>Source and freshness</summary>
+          <summary className="cursor-pointer font-medium" style={{ color: 'var(--text-primary)' }}>{t('workforce.analytics.sourceFreshness')}</summary>
           <div className="mt-2 space-y-1">
-            <p>Calculated on the server from workforce assignments and their transition history. Generated {when(data.data_freshness?.generated_at)}; latest change {when(data.data_freshness?.latest_change)}; latest event {when(data.data_freshness?.latest_event)}.</p>
-            <p>Coverage: {fmt(data.coverage?.assignments)} assignments, {fmt(data.coverage?.verified)} verified, of which {fmt(data.coverage?.verified_timed)} timed and {fmt(data.coverage?.verified_untimed)} without a transition history (durations unknown).</p>
+            <p>{t('workforce.analytics.sourceText', { generated: when(data.data_freshness?.generated_at), change: when(data.data_freshness?.latest_change), event: when(data.data_freshness?.latest_event) })}</p>
+            <p>{t('workforce.analytics.coverageText', { assignments: fmt(data.coverage?.assignments), verified: fmt(data.coverage?.verified), timed: fmt(data.coverage?.verified_timed), untimed: fmt(data.coverage?.verified_untimed) })}</p>
             <dl className="grid md:grid-cols-2 gap-x-4 gap-y-1 mt-2">
               {DEFINITIONS.map(([k, v]) => <div key={k}><dt className="font-medium" style={{ color: 'var(--text-primary)' }}>{k}</dt><dd>{v}</dd></div>)}
             </dl>

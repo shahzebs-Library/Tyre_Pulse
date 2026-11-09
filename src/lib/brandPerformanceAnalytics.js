@@ -9,12 +9,21 @@
  *     that carry a risk_level). computeBrandMetrics divides by every record and
  *     scores an unrated row as "Low", so a brand with no ratings read 0% failure
  *     and a clean risk score. Here an unrated brand reads null (N/A).
- *   - avgCost is divided by the PRICED rows only (cost_per_tyre > 0). Dividing
- *     by every record understated the average by counting unpriced tyres as free.
+ *   - avgCost is the purchase cost per PRICED PHYSICAL TYRE (rows collapsed with
+ *     the shared lifetime layer, each tyre priced ONCE, qty honoured). Dividing
+ *     by every record understated the average by counting unpriced tyres as
+ *     free, and dividing by priced ROWS counted a refitted tyre twice.
+ *   - totalCost sums rows with each physical tyre priced once
+ *     (withOnePricePerTyre), so a refit is not a second purchase.
+ *   - lifetimeCpk / avgLifeKm are per physical tyre, grouped by the brand of the
+ *     tyre's latest fitment; lifetimeCpk is WEIGHTED (fleet aggregate kind).
+ *   - count / ratedCount / highRiskCount / failureRate stay per fitment ROW:
+ *     they are events (records and risk ratings), not tyres.
  *
  * No I/O, no clock reads. Everything that needs "now" takes it as an argument.
  */
-import { computeBrandMetrics } from './analyticsEngine'
+import { computeBrandMetrics, lifetimeGroups, lifetimeMetrics } from './analyticsEngine'
+import { withOnePricePerTyre } from './tyreLifetime'
 
 export const RISK_LEVELS = ['Low', 'Medium', 'High', 'Critical']
 
@@ -68,13 +77,15 @@ export function filterBrandRecords(records = [], { sites = [], riskLevels = [] }
 export function buildBrandMetrics(records = []) {
   const base = computeBrandMetrics(records)
   const byBrand = new Map()
-  for (const r of records) {
+  for (const r of withOnePricePerTyre(records)) {
     const k = r?.brand || 'Unknown'
     if (!byBrand.has(k)) byBrand.set(k, [])
     byBrand.get(k).push(r)
   }
+  const tyreGroups = lifetimeGroups(records, t => t?.brand || 'Unknown')
   return base.map((m, i) => {
     const recs = byBrand.get(m.brand) || []
+    const life = lifetimeMetrics(tyreGroups.get(m.brand) || [])
     const rated = recs.filter(isRated)
     const high = rated.filter(isHighRisk).length
     const costs = recs.map(lineCost).filter(v => v != null)
@@ -87,13 +98,23 @@ export function buildBrandMetrics(records = []) {
       rank: i + 1,
       brand: m.brand,
       count: m.count,
+      fitments: m.count,
+      tyres: life.tyres,
       ratedCount: rated.length,
-      pricedCount: costs.length,
+      pricedCount: life.pricedTyres,
+      pricedFitments: costs.length,
       highRiskCount: high,
       failureRate: rated.length ? (high / rated.length) * 100 : null,
       riskScore,
       totalCost: costs.length ? totalCost : null,
-      avgCost: costs.length ? totalCost / costs.length : null,
+      avgCost: life.avgCostPerTyre,
+      lifetimeCpk: life.lifetimeCpk,
+      avgLifeKm: life.avgLifeKm,
+      lifeKmTyres: life.lifeKmTyres,
+      kmCoverage: life.kmCoverage,
+      provisionalTyres: life.provisionalTyres,
+      cpkKind: life.cpkKind,
+      cpkKindLabel: life.cpkKindLabel,
       topCategory: cats ? m.topCategory : null,
     }
   })
@@ -119,6 +140,9 @@ export function summarizeBrands(metrics = [], { fleetTyreCost = null, minRated =
   const records = metrics.reduce((s, m) => s + (m.count || 0), 0)
   const rated = metrics.reduce((s, m) => s + (m.ratedCount || 0), 0)
   const priced = metrics.reduce((s, m) => s + (m.pricedCount || 0), 0)
+  // Priced share is over PHYSICAL tyres (pricedCount is physical tyres); fall
+  // back to records for metrics built before the lifetime layer.
+  const tyres = metrics.reduce((s, m) => s + (m.tyres ?? m.count ?? 0), 0)
   const recordCost = metrics.some(m => m.totalCost != null)
     ? metrics.reduce((s, m) => s + (m.totalCost || 0), 0)
     : null
@@ -136,7 +160,8 @@ export function summarizeBrands(metrics = [], { fleetTyreCost = null, minRated =
     ratedCount: rated,
     pricedCount: priced,
     ratedPct: records ? (rated / records) * 100 : null,
-    pricedPct: records ? (priced / records) * 100 : null,
+    tyres,
+    pricedPct: tyres ? (priced / tyres) * 100 : null,
     totalCost: hasGrid ? Number(fleetTyreCost) : recordCost,
     costBasis: hasGrid ? 'grid' : (recordCost != null ? 'records' : null),
     fleetFailureRate,
@@ -166,17 +191,20 @@ export function brandExportRows(metrics = []) {
     brand: m.brand,
     count: m.count,
     rated: m.ratedCount,
+    tyres: m.tyres ?? 'N/A',
     priced: m.pricedCount,
     total_cost: f(m.totalCost),
     avg_cost: f(m.avgCost),
+    lifetime_cpk: m.lifetimeCpk == null ? 'N/A' : Number(m.lifetimeCpk.toFixed(5)),
+    avg_life_km: m.avgLifeKm == null ? 'N/A' : Math.round(m.avgLifeKm),
     failure_rate: f(m.failureRate, 1),
     risk_score: f(m.riskScore),
     top_category: m.topCategory || 'N/A',
   }))
 }
 
-export const BRAND_EXPORT_COLS = ['rank', 'brand', 'count', 'rated', 'priced', 'total_cost', 'avg_cost', 'failure_rate', 'risk_score', 'top_category']
-export const BRAND_EXPORT_HEADERS = ['Rank', 'Brand', 'Records', 'Rated', 'Priced', 'Total cost', 'Avg per tyre', 'Failure rate %', 'Risk score', 'Top category']
+export const BRAND_EXPORT_COLS = ['rank', 'brand', 'count', 'tyres', 'rated', 'priced', 'total_cost', 'avg_cost', 'lifetime_cpk', 'avg_life_km', 'failure_rate', 'risk_score', 'top_category']
+export const BRAND_EXPORT_HEADERS = ['Rank', 'Brand', 'Fitments', 'Physical tyres', 'Rated fitments', 'Priced tyres', 'Total cost', 'Avg per tyre', 'Fleet aggregate tyre CPK (weighted, per tyre-km)', 'Avg life km (physical tyre)', 'Failure rate %', 'Risk score', 'Top category']
 
 /**
  * Flatten groupBySize() output into one row per (size, brand) so a single

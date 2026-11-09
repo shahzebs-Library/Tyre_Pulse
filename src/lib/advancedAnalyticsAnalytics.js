@@ -10,12 +10,28 @@
  *   - a rate over zero records is null (N/A), never 0
  *   - an average over zero measurable values is null, never 0
  *   - the per-month cost/failure shapes keep null for months with no records
+ *
+ * Tyre life and CPK are per PHYSICAL tyre (shared lifetime layer): the filtered
+ * rows are collapsed ONCE with toLifetimeTyres and the tyres are grouped by the
+ * attribute of their latest fitment (site, region, asset, brand, month of the
+ * latest fitment). Every avgCpk here is the WEIGHTED fleet-aggregate CPK of the
+ * group (total purchase cost / total tyre-km), cpkKind 'fleet_aggregate';
+ * avgLife is the mean lifetime km per physical tyre. Money sums go through
+ * withOnePricePerTyre so a refit is not bought twice. Record counts, failure
+ * counts/rates and km-at-removal buckets stay per fitment ROW (events). The
+ * scope is the filtered window: a tyre's fitments outside it are not seen.
  */
 import {
   mean, stdDev, sum, groupBy, bucketByMonth, rollingAverage,
   linearRegression, computeSiteMetrics, computeBrandMetrics,
-  computeAssetMetrics, computeSeasonalTrends, recordCost, recordCpk,
+  computeAssetMetrics, computeSeasonalTrends, recordCost,
+  lifetimeGroups, lifetimeMetrics,
 } from './analyticsEngine'
+import { withOnePricePerTyre, toLifetimeTyres, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
+
+/** KPI kind of every CPK this engine returns (group, weighted). */
+export const ADVANCED_CPK_KIND = CPK_KIND.FLEET_AGGREGATE
+export const ADVANCED_CPK_KIND_LABEL = CPK_KIND_LABEL[CPK_KIND.FLEET_AGGREGATE]
 
 export const DATE_PRESETS = [
   { id: '3mo', label: 'Last 3 Mo' },
@@ -48,29 +64,26 @@ export function cutoffDate(preset, now = new Date()) {
   return isoDay(d)
 }
 
-/** Distance run by one tyre (removal minus fitment), null when not measurable. */
+/**
+ * Distance run in ONE fitment (removal minus fitment), null when not measurable.
+ * Per fitment on purpose (failure km buckets); tyre life uses the lifetime layer.
+ */
 export function kmLife(r) {
   const fit = r?.km_at_fitment || 0
   const rem = r?.km_at_removal || 0
   return fit >= 0 && rem > fit ? rem - fit : null
 }
 
-function avgOrNull(values) {
-  const v = values.filter(x => x != null && Number.isFinite(x))
-  return v.length ? mean(v) : null
-}
-
 function rateOrNull(part, whole) {
   return whole ? (part / whole) * 100 : null
 }
 
-function avgCpkOf(recs) {
-  return avgOrNull(recs.map(r => recordCpk(r)))
+/** Weighted lifetime CPK of a set of physical tyres; null when not measurable. */
+function cpkOfTyres(tyres) {
+  return tyres && tyres.length ? lifetimeMetrics(tyres).lifetimeCpk : null
 }
 
-function avgLifeOf(recs) {
-  return avgOrNull(recs.map(kmLife))
-}
+const monthOf = (d) => (d ? String(d).substring(0, 7) : null)
 
 function matchesPosition(r, positionFilter) {
   if (!positionFilter || positionFilter === 'all') return true
@@ -107,11 +120,17 @@ export function summarizeKpis(filtered) {
   const recs = filtered || []
   const count = recs.length
   const high = recs.filter(isHighRisk).length
+  const life = lifetimeMetrics(toLifetimeTyres(recs))
   return {
     records: count,
-    totalCost: count ? sum(recs.map(r => recordCost(r))) : null,
-    avgCpk: avgCpkOf(recs),
-    avgLife: avgLifeOf(recs),
+    totalCost: count ? sum(withOnePricePerTyre(recs).map(r => recordCost(r))) : null,
+    avgCpk: life.lifetimeCpk,
+    avgLife: life.avgLifeKm,
+    tyres: life.tyres,
+    kmCoverage: life.kmCoverage,
+    provisionalTyres: life.provisionalTyres,
+    cpkKind: life.cpkKind,
+    cpkKindLabel: life.cpkKindLabel,
     failureRate: rateOrNull(high, count),
     highRisk: high,
     sites: new Set(recs.map(r => r.site).filter(Boolean)).size,
@@ -150,12 +169,14 @@ export function addForecastMonthLabels(existing, count) {
 
 export function buildTrend(filtered, forecastMonths = 3) {
   if (!filtered?.length) return null
-  const last24 = bucketByMonth(filtered, r => r.issue_date, r => recordCost(r)).slice(-24)
+  const last24 = bucketByMonth(withOnePricePerTyre(filtered), r => r.issue_date, r => recordCost(r)).slice(-24)
   if (!last24.length) return null
   const labels = last24.map(b => b.month)
   const costVals = last24.map(b => b.total)
   const countVals = last24.map(b => b.count)
-  const cpkVals = last24.map(b => avgCpkOf(b.items))
+  // Tyres placed in the month of their LATEST fitment.
+  const tyresByMonth = lifetimeGroups(filtered, t => monthOf(t.issue_date))
+  const cpkVals = last24.map(b => cpkOfTyres(tyresByMonth.get(b.month)))
   const failRateVals = last24.map(b => rateOrNull(b.items.filter(isHighRisk).length, b.count) ?? 0)
   const movAvgCpk = rollingAverage(cpkVals.map(v => v ?? 0), 3)
   const cpkForecast = applyLR(cpkVals, forecastMonths)
@@ -181,9 +202,10 @@ export function buildSeasonal(filtered) {
     failPct: s.count ? s.highRiskRate * 100 : null,
     avgCost: s.count ? s.cost / s.count : null,
   }))
+  const tyresByCalMonth = lifetimeGroups(filtered, t => (t.issue_date ? String(t.issue_date).substring(5, 7) : null))
   const cpkByMonth = Array.from({ length: 12 }, (_, i) => {
     const mo = String(i + 1).padStart(2, '0')
-    return avgCpkOf(filtered.filter(r => r.issue_date && r.issue_date.substring(5, 7) === mo))
+    return cpkOfTyres(tyresByCalMonth.get(mo))
   })
   const maxCost = Math.max(...seasons.map(s => s.cost), 1)
   const countMax = Math.max(...seasons.map(s => s.count), 1)
@@ -213,19 +235,22 @@ export function buildGeo(filtered) {
 
 export function buildCountry(filtered) {
   if (!filtered?.length) return null
+  const regionOf = (site) => site.split(/[\s\-_]/)[0] || site
   const byRegion = {}
-  Object.entries(groupBy(filtered, r => r.site || 'Unknown')).forEach(([site, recs]) => {
-    const region = site.split(/[\s\-_]/)[0] || site
+  Object.entries(groupBy(withOnePricePerTyre(filtered), r => r.site || 'Unknown')).forEach(([site, recs]) => {
+    const region = regionOf(site)
     if (!byRegion[region]) byRegion[region] = []
     byRegion[region].push(...recs)
   })
+  const tyresByRegion = lifetimeGroups(filtered, t => regionOf(t.site || 'Unknown'))
   const regions = Object.entries(byRegion).map(([region, recs]) => {
     const sites = [...new Set(recs.map(r => r.site).filter(Boolean))]
     return {
       region,
       count: recs.length,
       totalCost: sum(recs.map(r => recordCost(r))),
-      avgCpk: avgCpkOf(recs),
+      avgCpk: cpkOfTyres(tyresByRegion.get(region)),
+      tyres: lifetimeMetrics(tyresByRegion.get(region) || []).tyres,
       failRate: rateOrNull(recs.filter(isHighRisk).length, recs.length),
       siteCount: sites.length,
       sites: sites.join(', '),
@@ -236,10 +261,9 @@ export function buildCountry(filtered) {
 
 export function buildBranch(filtered) {
   if (!filtered?.length) return null
-  const branches = computeSiteMetrics(filtered).map(s => {
-    const recs = filtered.filter(r => r.site === s.site)
-    return { ...s, avgCpk: avgCpkOf(recs), avgLife: avgLifeOf(recs), failRate: rateOrNull(s.highRiskCount, s.count) }
-  })
+  const branches = computeSiteMetrics(filtered).map(s => (
+    { ...s, avgCpk: s.lifetimeCpk ?? null, avgLife: s.avgLifeKm ?? null, failRate: rateOrNull(s.highRiskCount, s.count) }
+  ))
   const maxCpk = Math.max(...branches.map(b => b.avgCpk ?? 0), 1)
   const maxFail = Math.max(...branches.map(b => b.failRate ?? 0), 1)
   const maxLife = Math.max(...branches.map(b => b.avgLife ?? 0), 1)
@@ -258,7 +282,7 @@ export function buildVehicle(filtered) {
   if (!filtered?.length) return null
   const enhanced = computeAssetMetrics(filtered).map(a => {
     const recs = filtered.filter(r => r.asset_no === a.assetNo)
-    return { ...a, avgCpk: avgCpkOf(recs), avgLife: avgLifeOf(recs), failCount: recs.filter(isHighRisk).length }
+    return { ...a, avgCpk: a.lifetimeCpk ?? null, avgLife: a.avgLifeKm ?? null, failCount: recs.filter(isHighRisk).length }
   })
   const allCpk = enhanced.map(v => v.avgCpk).filter(v => v !== null)
   const cpkMean = allCpk.length ? mean(allCpk) : null
@@ -287,8 +311,8 @@ export function buildBrand(filtered) {
   if (!filtered?.length) return null
   const enhanced = computeBrandMetrics(filtered).map(b => {
     const recs = filtered.filter(r => (r.brand || 'Unknown') === b.brand)
-    const avgCpk = avgCpkOf(recs)
-    const avgLife = avgLifeOf(recs)
+    const avgCpk = b.lifetimeCpk ?? null
+    const avgLife = b.avgLifeKm ?? null
     const scrapCount = recs.filter(r => {
       const c = (r.category || '').toLowerCase()
       return c.includes('scrap') || c.includes('discard')
@@ -301,8 +325,9 @@ export function buildBrand(filtered) {
   })
   const brands = [...enhanced].sort((a, b) => b.score - a.score).map((b, i) => ({ ...b, rank: i + 1 }))
   const allMonths = bucketByMonth(filtered, r => r.issue_date).slice(-12).map(b => b.month)
+  const pricedOnce = withOnePricePerTyre(filtered)
   const brandMonthly = enhanced.slice(0, 6).map(b => {
-    const recs = filtered.filter(r => (r.brand || 'Unknown') === b.brand)
+    const recs = pricedOnce.filter(r => (r.brand || 'Unknown') === b.brand)
     return {
       brand: b.brand,
       monthly: allMonths.map(mo => sum(recs.filter(r => r.issue_date && r.issue_date.startsWith(mo)).map(r => recordCost(r)))),

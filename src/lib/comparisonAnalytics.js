@@ -15,9 +15,15 @@
  *    "Not recorded" bucket.
  *  - On the cost metric an unpriced tyre adds 0; the report states the priced
  *    share of each period so a low figure is not mistaken for low spend.
+ *  - Cost is a PURCHASE per physical tyre: rows go through withOnePricePerTyre
+ *    (over the whole record set, before the period split) so a refit of a tyre
+ *    already bought is not counted as a second purchase. avgCostA/B divide by
+ *    priced physical tyres (qty honoured).
+ *  - The count metric is replacements = fitment EVENTS, per row on purpose.
  * No I/O.
  */
 import { recordCost } from './analyticsEngine'
+import { withOnePricePerTyre } from './tyreLifetime'
 
 export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 export const UNRECORDED = 'Not recorded'
@@ -59,8 +65,8 @@ function priced(r) {
 export function buildComparison(records = [], { periodA, periodB, metric = 'count', dimension = 'overall' } = {}) {
   const buckets = new Map()
   const stats = {
-    a: { records: 0, priced: 0, cost: 0 },
-    b: { records: 0, priced: 0, cost: 0 },
+    a: { records: 0, priced: 0, pricedTyres: 0, cost: 0 },
+    b: { records: 0, priced: 0, pricedTyres: 0, cost: 0 },
   }
   const ensure = (key, order) => {
     if (!buckets.has(key)) buckets.set(key, { label: key, order, a: { count: 0, cost: 0 }, b: { count: 0, cost: 0 } })
@@ -72,7 +78,7 @@ export function buildComparison(records = [], { periodA, periodB, metric = 'coun
     for (const m of months) ensure(MONTHS[m], m)
   }
 
-  for (const r of records) {
+  for (const r of withOnePricePerTyre(records || [])) {
     for (const [side, period] of [['a', periodA], ['b', periodB]]) {
       if (!period) continue
       const mo = inPeriod(r.issue_date, period)
@@ -86,7 +92,14 @@ export function buildComparison(records = [], { periodA, periodB, metric = 'coun
       b[side].cost += c
       stats[side].records += 1
       stats[side].cost += c
-      if (priced(r)) stats[side].priced += 1
+      // A refit whose price was dropped is not "unpriced": the tyre was bought
+      // once, earlier. It counts toward the priced share but adds no money.
+      if (r._refit_price_dropped) stats[side].priced += 1
+      if (priced(r)) {
+        stats[side].priced += 1
+        const q = Number(r?.qty)
+        stats[side].pricedTyres += Number.isFinite(q) && q > 0 ? q : 1
+      }
     }
   }
 
@@ -128,8 +141,8 @@ export function buildComparison(records = [], { periodA, periodB, metric = 'coun
     biggestFaller: faller ? { label: faller.label, diff: faller.diff } : null,
     pricedPctA: stats.a.records > 0 ? Math.round((stats.a.priced / stats.a.records) * 100) : null,
     pricedPctB: stats.b.records > 0 ? Math.round((stats.b.priced / stats.b.records) * 100) : null,
-    avgCostA: stats.a.priced > 0 ? stats.a.cost / stats.a.priced : null,
-    avgCostB: stats.b.priced > 0 ? stats.b.cost / stats.b.priced : null,
+    avgCostA: stats.a.pricedTyres > 0 ? stats.a.cost / stats.a.pricedTyres : null,
+    avgCostB: stats.b.pricedTyres > 0 ? stats.b.cost / stats.b.pricedTyres : null,
     recordsA: stats.a.records,
     recordsB: stats.b.records,
   }

@@ -105,7 +105,7 @@ export default function CountryComparison() {
       const { data, error: e, truncated: tr } = await fetchAllPages((from, to) => {
         return supabase
           .from('tyre_records')
-          .select('id, country, brand, site, category, risk_level, cost_per_tyre, qty, km_at_fitment, km_at_removal')
+          .select('id, country, brand, site, category, risk_level, cost_per_tyre, qty, km_at_fitment, km_at_removal, serial_no, issue_date, removal_date, status, vehicle_type')
           .not('country', 'is', null)
           .order('country')
           .order('id')
@@ -341,6 +341,11 @@ export default function CountryComparison() {
               {selectedCountries.length > 1 && (
                 <p className="text-[11px] text-gray-500 -mt-2">
                   Money totals are not combined across countries (currencies may differ). See each country's own value in the table below.
+                </p>
+              )}
+              {metrics.length > 0 && (
+                <p className="text-[11px] text-gray-500">
+                  Avg CPK: {metrics[0].cpkKindLabel || 'Fleet aggregate tyre CPK (weighted, per tyre-km)'}. Each physical tyre's purchase cost counts once (a refit is not a new purchase) over its lifetime km. Measured on {metrics.map(m => `${m.country} ${m.measurableTyres ?? 0} of ${m.tyres ?? 0} tyres`).join(', ')}{metrics.some(m => (m.provisionalTyres || 0) > 0) ? '; tyres still fitted or with incomplete km are provisional' : ''}.
                 </p>
               )}
               {metrics.some(m => m.pricedPct != null && m.pricedPct < 50) && (

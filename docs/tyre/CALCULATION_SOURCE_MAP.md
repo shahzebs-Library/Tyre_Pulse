@@ -9,6 +9,9 @@
 | Per-fitment tyre CPK (one stint) | JS `recordCpk` with the price from `withOnePricePerTyre` | Tyre Bay stints, Tyre Records row, Driver Detail table, Passport journey - each labelled per fitment |
 | Fleet expense per vehicle-km / CPH | SQL `get_fleet_cpk` (unchanged, production) | CPK Intelligence "Fleet CPK" tab, report snapshot `cost.tyre_cpk` (Flutter management screen) |
 
+Phase 2: expense cost status (`get_expense_cost_status_summary`, Expense Report + Data Reconciliation) and Budget Planner
+actual spend from the expense grid - see docs/tyre/FINANCIAL_SOURCE_OF_TRUTH.md.
+
 Helpers moved onto the lifetime layer in Phase 1 (each with refit tests):
 - Group A: analyticsEngine (`lifetimeGroups`, `lifetimeMetrics`), brandPerformanceAnalytics, comparisonAnalytics,
   siteComparisonAnalytics, advancedAnalyticsAnalytics, continuousImprovementAnalytics; pages Analytics, SiteComparison,

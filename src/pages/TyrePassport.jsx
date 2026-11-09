@@ -42,6 +42,7 @@ import {
 } from '../lib/tyrePassportView'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import { toUserMessage } from '../lib/safeError'
+import { COST_STATUS_LABEL } from '../lib/expenseCostStatus'
 import './tyrePassport.css'
 
 // exportUtils pulls the PDF/Excel report engines that most sessions never
@@ -691,7 +692,7 @@ export default function TyrePassport() {
             </Metric>
             <Metric icon={Coins} tone="blue" label={passport.lifetime?.kindLabel || 'Physical tyre lifetime CPK'} value={cur.mixed || passport.costBreakdown.cpk == null ? NA : `${cur.currency || ''} ${passport.costBreakdown.cpk}`.trim()}
               title={cur.mixed ? 'Records span more than one country, so costs are in different currencies and are not combined.'
-                : `Lifetime cost (purchase counted once plus service) divided by lifetime km. Purchase-only CPK ${passport.lifetime?.purchaseCpk ?? NA}, full CPK ${passport.lifetime?.fullCpk ?? NA}. Cost status ${passport.lifetime?.costStatus || NA}.${passport.lifetime?.provisional ? ' Provisional: the tyre is still fitted or its km is not fully known.' : ''}`}
+                : `Lifetime cost (purchase counted once plus service) divided by lifetime km. Purchase-only CPK ${passport.lifetime?.purchaseCpk ?? NA}, full CPK ${passport.lifetime?.fullCpk ?? NA}. Cost status ${COST_STATUS_LABEL[passport.lifetime?.costStatus] || NA}.${passport.lifetime?.provisional ? ' Provisional: the tyre is still fitted or its km is not fully known.' : ''}`}
               foot={cur.mixed ? 'Costs in more than one currency'
                 : passport.lifetime?.priceReview ? passport.lifetime.priceReview.message
                   : `Total cost ${moneyFull(passport.costBreakdown.lifetime || null)}${passport.lifetime?.provisional ? ', provisional' : ''}`}

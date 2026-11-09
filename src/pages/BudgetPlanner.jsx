@@ -10,8 +10,8 @@ import { toUserMessage } from '../lib/safeError'
 import useLatestRequest from '../lib/useLatestRequest'
 import { categorical } from '../lib/reportColors'
 import {
-  MONTHS, normaliseRecords, recordsForYear, monthlyActuals as monthlyActualsOf, derivedAnnualBudget,
-  ytdThroughMonth, budgetPosition, siteAllocation, brandAnalysis, historicalTrend, averageCpk,
+  MONTHS, normaliseRecords, recordsForYear, gridTyreSpend, gridMonthlyActuals, derivedAnnualBudgetFromYears,
+  ytdThroughMonth, budgetPosition, siteAllocation, brandAnalysis, historicalTrendFromYears, averageCpk,
   scenarioProjection as scenarioProjectionOf, quarterSummary, cpkImprovementSaving, monthlyExportRows, filterSites,
 } from '../lib/budgetPlannerAnalytics'
 import {
@@ -25,12 +25,13 @@ import BudgetTabs from '../components/budgets/BudgetTabs'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useReportMeta } from '../hooks/useReportMeta'
 import { fetchAllPages } from '../lib/fetchAll'
+import { loadCostSplit } from '../lib/api/costSummary'
 import { loadAutoTable } from '../lib/pdfEngine'
 import {
   DollarSign, TrendingUp, TrendingDown, AlertTriangle, CheckCircle,
   ChevronDown, ChevronUp, Download, RefreshCw, Loader2, FileSpreadsheet,
   FileText, Edit2, Save, X, Sliders, BarChart2, PieChart as PieIcon,
-  Calendar, Target, Zap, ArrowUpRight, ArrowDownRight, Minus,
+  Calendar, Target, Zap, ArrowUpRight, ArrowDownRight, Minus, Info,
 } from 'lucide-react'
 
 ChartJS.register(
@@ -160,6 +161,27 @@ export default function BudgetPlanner() {
 
   useEffect(() => { fetchRecords() }, [fetchRecords])
 
+  // ── Actual spend: the EXPENSE GRID tyre bucket (rule T9), one country only (T10).
+  // The selected year plus four years of history, so the derived budget and the
+  // trend read the same source as the actuals. A tyre-record price sum is NEVER used
+  // as spend: when the grid has nothing for the scope, spend is N/A.
+  const [gridSpend, setGridSpend] = useState({ loading: true, byMonth: null, error: null })
+  const latestGrid = useLatestRequest()
+  useEffect(() => {
+    const stale = latestGrid.begin()
+    if (!budgetCountry) { setGridSpend({ loading: false, byMonth: null, error: null }); return }
+    setGridSpend((g) => ({ ...g, loading: true, error: null }))
+    loadCostSplit({ country: budgetCountry, from: `${selectedYear - 4}-01-01`, to: `${selectedYear}-12-31` })
+      .then((res) => {
+        if (stale()) return
+        setGridSpend({ loading: false, byMonth: res?.source === 'parts_consumption' ? res.byMonth : null, error: null })
+      })
+      .catch((e) => {
+        if (stale()) return
+        setGridSpend({ loading: false, byMonth: null, error: toUserMessage(e, 'Failed to load tyre spend') })
+      })
+  }, [budgetCountry, selectedYear, latestGrid])
+
   // ── Load persisted budgets from Supabase ───────────────────────────────────
   // Stepping the year twice quickly leaves two reads in flight. If the earlier
   // one lands last the planner shows the PREVIOUS year's budgets against the new
@@ -210,12 +232,16 @@ export default function BudgetPlanner() {
   const normalised = useMemo(() => normaliseRecords(records), [records])
   const yearRecords = useMemo(() => recordsForYear(normalised, selectedYear), [normalised, selectedYear])
   const prevYearRecords = useMemo(() => recordsForYear(normalised, selectedYear - 1), [normalised, selectedYear])
-  const monthlyActuals = useMemo(() => monthlyActualsOf(yearRecords), [yearRecords])
+  const grid = useMemo(() => gridTyreSpend(gridSpend.byMonth || []), [gridSpend.byMonth])
+  // null = spend unknown for this scope/year (N/A everywhere), never a fake 0.
+  const monthlyActuals = useMemo(() => gridMonthlyActuals(grid, selectedYear), [grid, selectedYear])
+  const spendKnown = Array.isArray(monthlyActuals)
+  const chartActuals = useMemo(() => monthlyActuals || Array(12).fill(null), [monthlyActuals])
 
   // ── Translated month labels (chart display only; exports keep English MONTHS) ──
   const monthLabels = useMemo(() => MONTHS.map((_, i) => t(`budgetplanner.months.${i}`)), [t])
 
-  const derivedAnnualFromHistorical = useMemo(() => derivedAnnualBudget(normalised, selectedYear), [normalised, selectedYear])
+  const derivedAnnualFromHistorical = useMemo(() => derivedAnnualBudgetFromYears(grid.byYear, selectedYear), [grid, selectedYear])
   // storedAnnual comes from the `budgets` ANNUAL sentinel row (state, loaded above).
   // With neither a stored nor a derivable budget the figure is null (N/A), never 0.
   const annualBudget = storedAnnual ?? derivedAnnualFromHistorical
@@ -239,7 +265,7 @@ export default function BudgetPlanner() {
   const overBudgetSites = useMemo(() => siteData.filter(s => s.status === 'Over Budget'), [siteData])
   const brandData = useMemo(() => brandAnalysis(yearRecords, prevYearRecords), [yearRecords, prevYearRecords])
 
-  const { trendYears, trendValues, nextYearProjection } = useMemo(() => historicalTrend(normalised), [normalised])
+  const { trendYears, trendValues, nextYearProjection } = useMemo(() => historicalTrendFromYears(grid.byYear), [grid])
 
   const currentAvgCpk = useMemo(() => averageCpk(yearRecords), [yearRecords])
   const scenarioProjection = useMemo(() => scenarioProjectionOf({
@@ -254,15 +280,14 @@ export default function BudgetPlanner() {
 
   // ── Chart: Budget vs Actual monthly ───────────────────────────────────────
   const monthlyChartData = useMemo(() => {
-    const cumActual = monthlyActuals.reduce((acc, v, i) => {
-      acc.push((acc[i - 1] || 0) + v)
-      return acc
-    }, [])
+    const cumActual = spendKnown
+      ? chartActuals.reduce((acc, v, i) => { acc.push((acc[i - 1] || 0) + v); return acc }, [])
+      : chartActuals
     const cumBudget = monthlyBudgets.reduce((acc, v, i) => {
       acc.push((acc[i - 1] || 0) + v)
       return acc
     }, [])
-    const barBgActual = monthlyActuals.map((v, i) => v > monthlyBudgets[i] ? 'rgba(239,68,68,0.75)' : 'rgba(16,185,129,0.75)')
+    const barBgActual = chartActuals.map((v, i) => v > monthlyBudgets[i] ? 'rgba(239,68,68,0.75)' : 'rgba(16,185,129,0.75)')
     return {
       labels: monthLabels,
       datasets: [
@@ -278,7 +303,7 @@ export default function BudgetPlanner() {
         {
           type: 'bar',
           label: t('budgetplanner.chart.actual'),
-          data: monthlyActuals,
+          data: chartActuals,
           backgroundColor: barBgActual,
           borderColor: barBgActual.map(c => c.replace('0.75', '1')),
           borderWidth: 1,
@@ -309,7 +334,7 @@ export default function BudgetPlanner() {
         },
       ],
     }
-  }, [monthlyActuals, monthlyBudgets, monthLabels, t])
+  }, [chartActuals, spendKnown, monthlyBudgets, monthLabels, t])
 
   const monthlyChartOptions = useMemo(() => ({
     ...CHART_BASE,
@@ -847,7 +872,21 @@ export default function BudgetPlanner() {
         <div className="bg-amber-900/30 border border-amber-800 rounded-xl px-4 py-3 flex items-start gap-2 text-sm">
           <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
           <span className="text-amber-300">
-            Mixed currencies: budgets and spend across countries are shown under one currency label. Pick a country for a single-currency total.
+            Pick one country. Tyre spend comes from the expense grid in that country's own currency, so an all-country total is not shown (SAR, AED and EGP are never added together).
+          </span>
+        </div>
+      )}
+      {budgetCountry && (
+        <div className="rounded-xl px-4 py-3 flex items-start gap-2 text-sm" style={{ border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
+          <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          <span>
+            {gridSpend.loading
+              ? 'Loading tyre spend from the expense grid...'
+              : gridSpend.error
+                ? gridSpend.error
+                : spendKnown
+                  ? `Actual, year to date, projection, quarters and trend are the tyre spend booked in the expense grid (${budgetCountry}, ${activeCurrency}). The site and brand split below uses the purchase price on the tyre records (one price per tyre), so it can differ from the grid total. Cost per km is the physical-tyre lifetime CPK.`
+                  : `The expense grid has no tyre spend for ${budgetCountry} in ${selectedYear}, so actual spend shows N/A.`}
           </span>
         </div>
       )}

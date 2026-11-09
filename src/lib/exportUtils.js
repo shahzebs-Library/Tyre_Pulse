@@ -22,6 +22,7 @@ import { displayPositionCode, inspectionTypeHint, canonicalToSlotId, slotDisplay
 import { resolveLayoutKey, isTyrelessEquipment } from './vehicleTyreLayout'
 import { serializeSvgInlined } from './svgInline'
 import { inspectionReportFileNameForRow, ordinal } from './inspectionFileName'
+import { shrinkImageForPdf } from './pdfImage'
 
 /**
  * Central export gate (System Configuration). When an admin turns CSV/Excel
@@ -1707,7 +1708,7 @@ function _drawTyreBoard(doc, cap, x, y, s) {
 export async function exportInspectionDetailPdf(row, opts = {}) {
   guardExport([], opts.filename || inspectionReportFileNameForRow(row || {}).replace(/\.pdf$/, ''))
   await ensurePdf()
-  const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true })
   const pw      = doc.internal.pageSize.width
   const ph      = doc.internal.pageSize.height
   const company = opts.company || ''
@@ -2211,7 +2212,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
           fr.onerror = () => resolve(null)
           fr.readAsDataURL(blob)
         })
-        return dataUrl ? { dataUrl, fmt } : null
+        return dataUrl ? await shrinkImageForPdf(dataUrl, fmt) : null
       } catch { return null }
     }
     const statusByCode = new Map(posRows.map((r) => [String(r.code).toUpperCase(), r.risk]))
@@ -2369,7 +2370,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
 export async function exportAccidentCasePdf(acc = {}, opts = {}) {
   guardExport([], opts.filename || `Accident case ${acc?.reference_no || acc?.asset_no || ''}`.trim())
   await ensurePdf()
-  const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true })
   const pw      = doc.internal.pageSize.width
   const ph      = doc.internal.pageSize.height
   const mx      = 14
@@ -2576,7 +2577,7 @@ export async function exportAccidentCasePdf(acc = {}, opts = {}) {
 export async function exportChecklistSubmissionPdf(submission = {}, opts = {}) {
   guardExport([], opts.filename || `Checklist ${submission?.document_no || ''}`.trim())
   await ensurePdf()
-  const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true })
   const pw      = doc.internal.pageSize.width
   const ph      = doc.internal.pageSize.height
   const mx      = 14
@@ -2796,7 +2797,7 @@ export async function exportChecklistSubmissionPdf(submission = {}, opts = {}) {
           fr.onerror = () => resolve(null)
           fr.readAsDataURL(blob)
         })
-        return dataUrl ? { dataUrl, fmt } : null
+        return dataUrl ? await shrinkImageForPdf(dataUrl, fmt) : null
       } catch { return null }
     }
 

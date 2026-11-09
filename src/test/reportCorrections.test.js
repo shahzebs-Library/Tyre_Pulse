@@ -5,7 +5,17 @@ import { detectAnomalies, computeVisitStats } from '../lib/anomalyEngine'
 import { renderChecklistPdf } from '../lib/checklistPdf'
 import { exportInspectionDetailPdf } from '../lib/exportUtils'
 import fs from 'node:fs'
-const printed = doc => Array.from(doc.output().matchAll(/\((.*?)\)\s*Tj/g)).map(m => m[1]).join('\n')
+import { inflateSync } from 'node:zlib'
+// Reports are written with stream compression on, so inflate each content
+// stream before reading the text operators out of it.
+const pageText = (raw) => {
+  const parts = [raw]
+  for (const m of raw.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)) {
+    try { parts.push(inflateSync(Buffer.from(m[1], 'binary')).toString('latin1')) } catch { /* not a deflated stream */ }
+  }
+  return parts.join('\n')
+}
+const printed = doc => Array.from(pageText(doc.output()).matchAll(/\((.*?)\)\s*Tj/g)).map(m => m[1]).join('\n')
 const fields = [
   { id: 'ident', type: 'section', label: 'Identification' },
   { id: 'hours', type: 'number', label: 'Hour meter reading' },

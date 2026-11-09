@@ -1,0 +1,28 @@
+-- =====================================================================
+-- 20261109140000  Expense import keys backfilled + KSA exact copies removed
+-- STATUS: APPLIED LIVE 2026-11-09 (data-only).
+-- =====================================================================
+-- 1. import_uid backfilled where the ERP line number (source_row) exists, using
+--    parts_import_uid(country, source_row, issue_number, work_order_no, item_code,
+--    item_description, qty, value_amount::text, txn_date, asset_code, store_code,
+--    cost_center) - the same formula the staging trigger uses (it reproduces
+--    99.99% of the keys already stored). Only keys that are unique and do not
+--    clash with an existing key were written:
+--      UAE 8,248 · Egypt 649 · KSA 10,554.
+--    trg_classify_parts_consumption was disabled for each UPDATE (it re-buckets
+--    on any update) and re-enabled; row counts and line/tyre/spare/oil totals per
+--    country verified byte-identical before and after.
+--    Candidate list: _bak.expense_uid_backfill_20261109.
+--
+-- 2. KSA exact copies removed: 843 rows, SAR 132,686.09 (839 groups). Each copy
+--    has the same ERP line number, content, store and cost centre as the row it
+--    duplicates (a resent upload chunk). One group whose rows differ was kept.
+--    Full rows archived in _bak.ksa_expense_copies_20261109 (_rn > 1 = removed);
+--    restore = insert those rows back (drop the _uid/_rn columns).
+--    KSA total after: SAR 43,279,081.37.
+--
+-- NOT FIXABLE: UAE 51,546 and Egypt 38,451 lines carry no ERP line number in
+-- the source, so no safe per-line key exists. Re-imports of those files are
+-- guarded by the file fingerprint check; future uploads must map the "#" column.
+-- =====================================================================
+select 1;

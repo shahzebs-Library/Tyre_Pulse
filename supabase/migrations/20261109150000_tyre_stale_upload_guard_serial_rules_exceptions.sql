@@ -255,6 +255,9 @@ begin
     where public.tyre_status_is_active(e.status) and public.tyre_status_is_active(l.status)
       and public.tyre_serial_is_strong(e.serial_no)
       and (public.is_super_admin() or e.organisation_id = v_org)
+      -- DEFINER bypasses RLS: scope every candidate to the caller's countries and sites,
+      -- not only when a country filter is passed.
+      and (public.is_super_admin() or (public.app_can_see_country(e.country) and public.app_can_see_site(e.site)))
       and (p_country is null or e.country = p_country)
       and not exists (  -- the later row must be the latest fitment of that serial on this vehicle
         select 1 from public.tyre_records z

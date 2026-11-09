@@ -35,7 +35,9 @@ const h = vi.hoisted(() => {
     }
     return b
   }
-  return { state, supabase: { from } }
+  // The replacement check (tyre_import_reconcile) reports every wheel as empty here.
+  const rpc = async (_name, args) => ({ data: { ok: true, counts: { no_previous: (args?.p_rows || []).length }, review: [] }, error: null })
+  return { state, supabase: { from, rpc } }
 })
 
 vi.mock('../lib/supabase', () => ({ supabase: h.supabase }))

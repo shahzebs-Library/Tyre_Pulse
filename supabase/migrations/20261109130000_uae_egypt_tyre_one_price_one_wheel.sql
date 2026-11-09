@@ -1,0 +1,26 @@
+-- =====================================================================
+-- 20261109130000  UAE + Egypt: removed-tyre serial fix + one tyre one wheel
+-- STATUS: APPLIED LIVE 2026-11-09 (data-only; same rules the owner approved
+-- for KSA in 20261109100000 and 20261109120000).
+-- =====================================================================
+-- 1. Removed-tyre serial fix. The uae_tyre_load_v433 / egypt_tyre_load_v434
+--    imports had the same defect as KSA v432: the removed tyre's row carried the
+--    NEW serial, the job card and the purchase price. Verified on the UAE source
+--    (e.g. MP133 RHR1-I 29-01-26: srno FB00826J on, old_serialno FA37432J off).
+--      UAE   453 pairs: 416 real removed serials from the ERP file, 37 left blank;
+--            328 prices moved to the new tyre (AED 254,411.62, total unchanged).
+--      Egypt  89 pairs: 85 real removed serials, 4 left blank;
+--             89 prices moved (EGP 1,317,834.08, total unchanged).
+--    14 ambiguous/chained UAE pairs untouched. km readings verified unchanged.
+--    Backup + undo: _bak.ue_old_tyre_fix_20261109 (same undo SQL as 20261109120000).
+--
+-- 2. Same serial active on two vehicles: the latest fitment is kept, older
+--    active fitments closed at the later fitting date (UAE 18, Egypt 10).
+--    Logged in tyre_replacement_log source 'serial_two_vehicles_cleanup_uae_egypt';
+--    undo with public.tyre_replacement_undo(<batch>).
+--
+-- After: 0 strong serials active on two vehicles in any country; 0 UAE/Egypt
+-- serials priced more than once.
+-- Not replayed here: both steps depend on the pre-fix state of tyre_records.
+-- =====================================================================
+select 1;

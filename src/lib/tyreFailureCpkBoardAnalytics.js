@@ -86,7 +86,7 @@ export function removedRegister(rows = []) {
         reason: cleanRemovalReason(r.removal_reason) || null,
         removed_on: r.removal_date || null,
         lifeKm: life.validCount > 0 ? Math.round(life.avgKm) : null,
-        cpk: cpk.validCount > 0 ? cpk.fleetAvgCpk : null,
+        cpk: cpk.validCount > 0 ? (cpk.weightedCpk ?? cpk.fleetAvgCpk) : null,
       }
     })
 }

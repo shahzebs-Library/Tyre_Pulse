@@ -127,7 +127,7 @@ export function measureFleet(records, inspections) {
   const inspected = new Set(insp.map((i) => i?.asset_no).filter((a) => !blank(a) && assets.has(a)))
 
   const values = {
-    cpk: mixedCurrency ? null : num(cpk.fleetAvgCpk),
+    cpk: mixedCurrency ? null : num(cpk.weightedCpk ?? cpk.fleetAvgCpk),
     tyre_life: life.validCount > 0 ? num(life.avgKm) : null,
     failure_rate: failure.failureRate == null ? null : failure.failureRate * 100,
     pressure_compliance: num(pressure.compliancePct),

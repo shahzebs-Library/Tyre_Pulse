@@ -148,7 +148,7 @@ export function extractKpiValues(records = [], inspections = []) {
   const press = computePressureCompliance(inspections)
   const insp = computeInspectionCompliance(inspections)
   return {
-    cpk: cpk.validCount > 0 ? cpk.fleetAvgCpk : null,
+    cpk: cpk.validCount > 0 ? (cpk.weightedCpk ?? cpk.fleetAvgCpk) : null,
     tyre_life: life.validCount > 0 ? life.avgKm : null,
     failure_rate: fail.failureRate == null ? null : fail.failureRate * 100,
     scrap_rate: scrap.totalCount > 0 ? scrap.scrapRate * 100 : null,

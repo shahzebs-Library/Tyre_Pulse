@@ -22,12 +22,18 @@ describe('password recovery security contracts', () => {
 
   it('uses bounded expiry, attempts, requester limits and one-use consumption', () => {
     expect(edge).toContain('const CODE_TTL_MS = 10 * 60_000')
-    expect(edge).toContain('const MAX_REQUESTS = 5')
-    expect(edge).toContain('const MAX_ATTEMPTS = 5')
+    // Request and attempt limits are enforced atomically in the database
+    // (20261108143000), so racing requests cannot slip past them.
+    const limits = read('supabase/migrations/20261108143000_atomic_recovery_limits.sql')
+    expect(edge).toContain("admin.rpc('reserve_recovery_challenge'")
+    expect(edge).toContain("admin.rpc('claim_recovery_attempt'")
+    expect(limits).toContain("interval '15 minutes'")
+    expect(limits).toContain('if v_count >= 5 then return false; end if;')
+    expect(limits).toContain('attempts < 5')
+    expect(limits).toContain('or destination_hash = v_destination')
     expect(edge).toContain(".is('consumed_at', null)")
     expect(edge).toContain("'Cache-Control', 'no-store, max-age=0'")
     expect(edge).toContain("'Referrer-Policy', 'no-referrer'")
-    expect(edge).toContain('destination_hash.eq.${destinationHash}')
   })
 
   it('does not reveal whether a public recovery destination exists', () => {

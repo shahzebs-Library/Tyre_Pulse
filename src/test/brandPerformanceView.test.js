@@ -38,7 +38,10 @@ describe('brandPerformanceView', () => {
     const b = brandScoreboard(rows, { claims })
     const alpha = b.find((r) => r.brand === 'Alpha')
     expect(alpha.tyres).toBe(2)
-    expect(alpha.avgLifeKm).toBe(90000)
+    // The 100,000 km life is above the owner-approved transit mixer limit
+    // (80,000 km, src/lib/tyreKm.js), so it is a reading error and is not
+    // averaged; only the 80,000 km tyre counts.
+    expect(alpha.avgLifeKm).toBe(80000)
     expect(alpha.failurePct).toBe(50)
     expect(alpha.retreadPct).toBe(50)
     expect(alpha.purchaseCost).toBe(2000)
@@ -67,7 +70,7 @@ describe('brandPerformanceView', () => {
     expect(alpha.avgCpk).toBeNull()
     expect(alpha.purchaseCost).toBeNull()
     expect(alpha.warrantyRecovery).toBeNull()
-    expect(alpha.avgLifeKm).toBe(90000)
+    expect(alpha.avgLifeKm).toBe(80000)
   })
 
   it('picks headlines and writes insights only from measured figures', () => {

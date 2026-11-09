@@ -136,7 +136,7 @@ function summarize(recs) {
     failureRatePct: pct(failures, withReason),
     wearRatePct: pct(wear, withReason),
     reasonCoveragePct: pct(withReason, removed),
-    avgCpk: cpk.fleetAvgCpk,
+    avgCpk: cpk.weightedCpk ?? cpk.fleetAvgCpk,
     cpkSample: cpk.validCount,
     avgLifeKm: life.validCount > 0 ? life.avgKm : null,
     medianLifeKm: life.validCount > 0 ? life.medianKm : null,

@@ -22,6 +22,7 @@ import FreetextTyreSection from '../components/reconciliation/FreetextTyreSectio
 import TyreLifeCapSection from '../components/reconciliation/TyreLifeCapSection'
 import TyreImportReviewSection from '../components/reconciliation/TyreImportReviewSection'
 import TyreExceptionsSection from '../components/reconciliation/TyreExceptionsSection'
+import TyreEvidenceAuditSection from '../components/reconciliation/TyreEvidenceAuditSection'
 import DataQualityScorecard from '../components/reconciliation/DataQualityScorecard'
 import AssetMasterSection from '../components/reconciliation/AssetMasterSection'
 import DataTrustSection from '../components/reconciliation/DataTrustSection'
@@ -624,6 +625,7 @@ export default function DataReconciliation() {
           )}
         </Section>
 
+        <TyreEvidenceAuditSection />
         <TyreImportReviewSection />
         <TyreExceptionsSection />
         {/* Expense lines: repeated uploads, revised values, estimates, missing amounts

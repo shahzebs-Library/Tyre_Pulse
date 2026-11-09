@@ -26,6 +26,13 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-11-09 (accuracy audit) — JAN 2025 ONWARD EVIDENCE CLASSIFICATION, READ ONLY. Migration 20261111090000 APPLIED (view + function only). Branch claude/tyre-2025-evidence-audit.
+- Boundary corrected to 2025-01-01 (rule T20). `v_tyre_fitment_evidence` (security_invoker) classifies every fitment; `get_tyre_evidence_audit(country,from,to)` returns baseline, classes, reasons, legacy-active review, monthly installs vs ERP issued qty. JS mirror `src/lib/tyreEvidenceAudit.js`; screen = /data-reconciliation Integrity "Tyre data accuracy from 2025-01-01". Report: docs/tyre/AUDIT_2025_ONWARD.md.
+- Live: 11,127 modern fitments -> KSA verified 3,061 / UAE 552 / Egypt 336. Only 21 of 1,619 blank serials lack a job card too. 211 identical duplicate copies (57 carry the only price). 52 legacy active: 1 (YMN50625, c89bfaaf) refitted on TM635 2025-10-01 = propose close; 51 no later evidence = keep, unverified.
+- **KSA Aug-Nov 2025 fitments are an OPENING-BASELINE load** (1,895 fitments vs 208 tyres issued in Sep 2025; 3,352 wheels first seen in those 4 months). KSA Jan-Jul 2025 under-recorded; Jan-Jul 2026 reconciles within ~5%; Aug-Oct 2026 tyre file not loaded. Never read 2025 consumption from fitment rows without the coverage status.
+- Verified purchase-only CPK KSA 0.0291 SAR/km vs reported 0.0254 (estimated prices pull it down 15%).
+- NOTHING applied to business data. Proposals P1-P6 await owner approval (backup + tested undo first).
+
 # ⚑ SESSION 2026-11-09 (verification) — PR #470 RE-VERIFIED LIVE + STALE-UPLOAD GUARD. Migration 20261109150000 APPLIED LIVE. Branch claude/tyre-lifecycle-hardening-20261109.
 - Every PR #470 correction re-checked against live rows + undo ROLLBACK-TESTED (aborted txn): see docs/tyre/VERIFICATION_20261109.md.
   5 rows of cost batch 0ad0b895 now hold the price the old-tyre fix moved onto the real new tyre - correct; the undo skips them.

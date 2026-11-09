@@ -7,7 +7,7 @@
  * the lines behind it (first 200). Used on the Expense Report and, compact, on Data
  * Reconciliation.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCcw, FileSpreadsheet, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react'
 import Card, { CardHeader } from '../ui/Card'
 import { getExpenseCostStatusSummary, listExpenseCostStatusLines } from '../../lib/api/expenseCostStatus'
@@ -166,13 +166,22 @@ function CountryCard({ c, from, to, compact }) {
 export default function ExpenseCostStatusPanel({ country = null, countries = null, from = null, to = null, compact = false, autoLoad = true, title = 'Cost status of the expense lines' }) {
   const [state, setState] = useState({ loading: autoLoad, data: null, error: '' })
   const [started, setStarted] = useState(autoLoad)
+  // Only the latest request may update the panel, and never after it unmounts
+  // (a slow answer for an old filter, or for a page already left, is dropped).
+  const reqRef = useRef(0)
+  useEffect(() => {
+    if (reqRef.current < 0) reqRef.current = 0 // remount (StrictMode) re-arms it
+    return () => { reqRef.current = -1 }
+  }, [])
   const load = useCallback(async () => {
+    if (reqRef.current < 0) return
+    const id = ++reqRef.current
     setState((s) => ({ ...s, loading: true, error: '' }))
     try {
       const data = await getExpenseCostStatusSummary({ country, from, to })
-      setState({ loading: false, data, error: '' })
+      if (reqRef.current === id) setState({ loading: false, data, error: '' })
     } catch (e) {
-      setState({ loading: false, data: null, error: toUserMessage(e, 'Could not load the cost status.') })
+      if (reqRef.current === id) setState({ loading: false, data: null, error: toUserMessage(e, 'Could not load the cost status.') })
     }
   }, [country, from, to])
   useEffect(() => { if (started) load() }, [load, started])

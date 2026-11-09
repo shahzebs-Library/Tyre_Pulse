@@ -94,7 +94,8 @@ describe('supplier metrics', () => {
   it('CPK comes from kpiEngine, not a second implementation', () => {
     const m = supplierMetrics(RECORDS, 'A', 2026)
     expect(m.avgCpk).toBe(computeCpkFleet(RECORDS.filter((r) => r.brand === 'A')).fleetAvgCpk)
-    expect(m.avgCpk).toBeCloseTo((0.01 + 0.015) / 2, 6)
+    // Weighted fleet CPK = total cost / total km (2,200 / 180,000), not an average of ratios.
+    expect(m.avgCpk).toBeCloseTo(2200 / 180000, 6)
   })
   it('life and CPK are null (N/A) when no tyre has measured km', () => {
     const m = supplierMetrics(RECORDS, 'C', 2026)

@@ -1,4 +1,5 @@
 import { tyreKmAssessment } from './tyreKm'
+import { toLifetimeTyres, tyreKey, weightedCpk, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
 /**
  * Tyre Scrap Management analytics (pure, no I/O).
  *
@@ -13,6 +14,10 @@ import { tyreKmAssessment } from './tyreKm'
  * Honesty rules:
  *   - an unmeasurable figure is null (rendered N/A), never a fabricated 0;
  *   - cost only sums rows that carry a price, and says how many did;
+ *   - tyre life, purchase cost, scrap rate and CPK are per PHYSICAL TYRE
+ *     (tyreLifetime.js): a scrapped tyre carries its whole lifetime km (every
+ *     fitment, every vehicle) and its purchase counted once, and groups are
+ *     built AFTER collapsing so one tyre is never split across brands or sites;
  *   - "now" is injectable, and every window is anchored to the data's own
  *     latest activity so a historic import still fills the charts.
  */
@@ -134,11 +139,37 @@ export function markScrapped(rows = [], markedSerials = []) {
     if (!cur || better(t, cur)) chosen.set(k, t)
   }
   const flagged = new Set(chosen.values())
-  return rows.map((t) => {
+  // Lifetime of each physical tyre over EVERY row given (all fitments), so the
+  // flagged scrap row reports the tyre's whole life and its price once.
+  const asRows = rows.map(asTyreRow)
+  const life = new Map(toLifetimeTyres(asRows).map((x) => [x._key, x]))
+  return rows.map((t, i) => {
     const k = normSerial(serialOf(t))
     const scrap = k ? flagged.has(t) : isStatusScrap(t)
-    return scrap ? { ...t, _scrap: true, _marked: !!(k && marked.has(k)) } : t
+    if (!scrap) return t
+    const lt = life.get(tyreKey(asRows[i], i))
+    return {
+      ...t, _scrap: true, _marked: !!(k && marked.has(k)),
+      ...(lt ? {
+        _tyre_life_km: lt._life_km, _tyre_cost: lt._cost, _tyre_qty: lt._qty,
+        _tyre_fitments: lt._fitments, _tyre_km_coverage: lt._km_coverage,
+      } : {}),
+    }
   })
+}
+
+/** The lifetime layer keys on serial_no; this page may read serial_number. */
+const asTyreRow = (r) => (r && r.serial_no == null && r.serial_number != null ? { ...r, serial_no: r.serial_number } : r)
+
+/**
+ * Physical tyres of a population, each with `_scrap` true when ANY of its rows
+ * is scrap. Collapsed FIRST, so a group (brand/site) is built from whole tyres.
+ */
+export function scrapPhysicalTyres(rows = []) {
+  const asRows = (rows || []).map(asTyreRow)
+  const scrapKeys = new Set()
+  asRows.forEach((r, i) => { if (isScrap(rows[i])) scrapKeys.add(tyreKey(r, i)) })
+  return toLifetimeTyres(asRows).map((t) => ({ ...t, _scrap: scrapKeys.has(t._key) }))
 }
 
 /**
@@ -147,11 +178,26 @@ export function markScrapped(rows = [], markedSerials = []) {
  * limit is a meter reading, not a tyre life.
  */
 export function kmLife(t) {
+  // A scrap row annotated by markScrapped carries the tyre's lifetime km.
+  if (t && t._tyre_life_km !== undefined) return t._tyre_life_km
+  if (t && t._life_km !== undefined && t._key !== undefined) return t._life_km
   return tyreKmAssessment(t).km
 }
 
-/** Cost of the row (unit price x quantity), or null when no price is recorded. */
+/**
+ * Cost of the tyre (unit price x quantity), or null when no price is recorded.
+ * A scrap row annotated by markScrapped carries the tyre's purchase counted
+ * ONCE (first priced fitment), not the price typed on that fitment row.
+ */
 export function tyreCost(t) {
+  if (t && t._tyre_cost !== undefined) {
+    const c = num(t._tyre_cost)
+    return c != null && c > 0 ? c * (t._tyre_qty || 1) : null
+  }
+  if (t && t._cost !== undefined && t._key !== undefined) {
+    const c = num(t._cost)
+    return c != null && c > 0 ? c * (t._qty || 1) : null
+  }
   const c = num(t?.cost_per_tyre)
   if (c == null) return null
   const q = num(t?.qty)
@@ -178,11 +224,18 @@ export function cutoffFor(days, anchor) {
   return d
 }
 
-/** Mean km life across every tyre that has a measurable one, or null. */
+/**
+ * Mean LIFETIME km per physical tyre (total km / measured tyres) across every
+ * tyre that has a measurable life, or null. Rows are collapsed first.
+ */
 export function fleetAvgKmLife(tyres = []) {
-  const lives = tyres.map(kmLife).filter((v) => v != null && v > 0)
-  if (!lives.length) return null
-  return lives.reduce((s, v) => s + v, 0) / lives.length
+  let km = 0; let n = 0
+  for (const t of scrapPhysicalTyres(tyres)) {
+    if (t._life_km == null || !(t._life_km > 0)) continue
+    const q = t._qty || 1
+    km += t._life_km * q; n += q
+  }
+  return n ? km / n : null
 }
 
 const sumCosts = (rows) => {
@@ -200,17 +253,20 @@ const sumCosts = (rows) => {
  * scrapRate is null (not 0) when there are no tyres to rate.
  */
 export function scrapKpis(filtered = [], scrapped = []) {
+  // totalCount = fitment rows in scope; the rate divides scrapped TYRES (one
+  // row per tyre, see markScrapped) by PHYSICAL tyres in scope.
   const totalCount = filtered.length
+  const tyreCount = scrapPhysicalTyres(filtered).reduce((a, t) => a + (t._qty || 1), 0)
   const scrapCount = scrapped.length
   const { total: totalCost, costed } = sumCosts(scrapped)
   const lives = scrapped.map(kmLife).filter((v) => v != null && v > 0)
   const avgKmLife = lives.length ? lives.reduce((a, b) => a + b, 0) / lives.length : null
-  const scrapRate = totalCount > 0 ? (scrapCount / totalCount) * 100 : null
+  const scrapRate = tyreCount > 0 ? Math.min(100, (scrapCount / tyreCount) * 100) : null
   const retreadCandidates = Math.round(scrapCount * RETREAD_SHARE)
   const avgCost = totalCost != null && costed > 0 ? totalCost / costed : null
   const retreadSavings = avgCost != null ? retreadCandidates * avgCost * RETREAD_SAVING : null
   return {
-    totalCount, scrapCount, totalCost, costedCount: costed,
+    totalCount, tyreCount, scrapCount, totalCost, costedCount: costed,
     avgKmLife, livesMeasured: lives.length, scrapRate,
     retreadCandidates, retreadSavings,
   }
@@ -288,55 +344,68 @@ export function rateBand(rate) {
   return 'normal'
 }
 
-/** Per-brand scrap performance over the filtered population. */
+/**
+ * Per-brand scrap performance over the filtered population, per PHYSICAL TYRE:
+ * rows are collapsed first and each tyre is grouped by its latest fitment's
+ * brand. avgCPK is the WEIGHTED lifetime CPK of the scrapped tyres (total
+ * purchase cost / total lifetime km), never an average of ratios.
+ */
 export function brandScrapAnalysis(filtered = [], fleetAvg = null) {
   const map = new Map()
-  for (const t of filtered) {
+  for (const t of scrapPhysicalTyres(filtered)) {
     const b = trimOr(t.brand, 'Unknown')
-    if (!map.has(b)) map.set(b, { brand: b, total: 0, scrap: 0, lives: [], cost: 0, costed: 0, earlyCount: 0 })
+    if (!map.has(b)) map.set(b, { brand: b, total: 0, scrap: 0, lives: [], cost: 0, costed: 0, earlyCount: 0, scrapTyres: [] })
     const e = map.get(b)
-    e.total++
-    if (!isScrap(t)) continue
-    e.scrap++
-    const life = kmLife(t)
+    const q = t._qty || 1
+    e.total += q
+    if (!t._scrap) continue
+    e.scrap += q
+    e.scrapTyres.push(t)
+    const life = t._life_km
     if (life != null && life > 0) e.lives.push(life)
     const c = tyreCost(t)
     if (c != null) { e.cost += c; e.costed++ }
-    if (fleetAvg != null && life != null && life < fleetAvg * EARLY_SCRAP_SHARE) e.earlyCount++
+    if (fleetAvg != null && life != null && life < fleetAvg * EARLY_SCRAP_SHARE) e.earlyCount += q
   }
   return [...map.values()].map((e) => {
     const scrapRate = e.total > 0 ? (e.scrap / e.total) * 100 : null
     const avgKm = e.lives.length ? e.lives.reduce((a, v) => a + v, 0) / e.lives.length : null
     const totalCost = e.costed ? e.cost : null
-    const avgCPK = avgKm && totalCost != null && totalCost > 0 && e.scrap > 0 ? totalCost / (avgKm * e.scrap) : null
+    const avgCPK = weightedCpk(e.scrapTyres)
     const earlyPct = e.scrap > 0 && fleetAvg != null ? (e.earlyCount / e.scrap) * 100 : null
     const band = rateBand(scrapRate)
     const rec = band === 'review' ? 'High scrap, review' : band === 'unknown' ? 'Not measurable' : 'Normal performance'
     return {
       brand: e.brand, total: e.total, scrap: e.scrap, earlyCount: e.earlyCount,
       scrapRate, avgKm, totalCost, avgCPK, earlyPct, band, rec,
+      cpkKind: CPK_KIND.FLEET_AGGREGATE, cpkKindLabel: CPK_KIND_LABEL[CPK_KIND.FLEET_AGGREGATE],
     }
   }).sort((a, b) => (b.scrapRate ?? -1) - (a.scrapRate ?? -1))
 }
 
-/** Per-site scrap analysis with a last-two-months direction. */
+/**
+ * Per-site scrap analysis with a last-two-months direction, per PHYSICAL TYRE
+ * (collapsed first, grouped by the tyre's latest fitment's site); the cost is
+ * each scrapped tyre's purchase counted once.
+ */
 export function siteScrapAnalysis(filtered = []) {
   const map = new Map()
-  for (const t of filtered) {
+  for (const t of scrapPhysicalTyres(filtered)) {
     const s = trimOr(t.site, 'Unknown')
     if (!map.has(s)) map.set(s, { site: s, total: 0, scrap: 0, cost: 0, costed: 0, brands: {}, monthly: {} })
     const e = map.get(s)
-    e.total++
-    if (!isScrap(t)) continue
-    e.scrap++
+    const q = t._qty || 1
+    e.total += q
+    if (!t._scrap) continue
+    e.scrap += q
     const c = tyreCost(t)
     if (c != null) { e.cost += c; e.costed++ }
     const b = trimOr(t.brand, 'Unknown')
-    e.brands[b] = (e.brands[b] || 0) + 1
+    e.brands[b] = (e.brands[b] || 0) + q
     const ref = refDate(t)
     if (ref) {
       const mk = String(ref).slice(0, 7)
-      e.monthly[mk] = (e.monthly[mk] || 0) + 1
+      e.monthly[mk] = (e.monthly[mk] || 0) + q
     }
   }
   return [...map.values()].map((e) => {

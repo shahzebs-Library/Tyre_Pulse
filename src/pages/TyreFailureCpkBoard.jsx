@@ -293,11 +293,15 @@ export default function TyreFailureCpkBoard() {
     { key: 'position', header: 'Position', cell: (r) => r.position || <NA why="No position recorded" /> },
     { key: 'reason', header: 'Removal reason', sortValue: (r) => r.reason || '',
       cell: (r) => r.reason || <span className="cc-na" title="A brand typed into the reason field is not a reason">Not recorded</span> },
-    { key: 'lifeKm', header: 'Life km', numeric: true, cell: (r) => (r.lifeKm == null ? <NA why="Needs fitment and removal km" /> : num(r.lifeKm)) },
+    { key: 'lifeKm', header: 'Fitment km', numeric: true, cell: (r) => (r.lifeKm == null ? <NA why="Needs fitment and removal km" /> : num(r.lifeKm)) },
     { key: 'purchaseCost', header: 'Purchase cost', numeric: true, sortValue: (r) => (money ? r.purchaseCost : null),
       cell: (r) => (money && r.purchaseCost != null ? fmtMoney(r.purchaseCost) : <NA why={money ? 'No price recorded' : moneyWhy} />) },
-    { key: 'cpk', header: 'CPK', numeric: true, sortValue: (r) => (money ? r.cpk : null),
-      cell: (r) => (money && r.cpk != null ? <span className="tf-num">{r.cpk.toFixed(3)}</span> : <NA why={moneyWhy} />) },
+    { key: 'cpk', header: 'CPK (per fitment)', numeric: true, sortValue: (r) => (money ? r.cpk : null),
+      cell: (r) => (money && r.cpk != null ? <span className="tf-num">{r.cpk.toFixed(3)}</span> : <NA why={money ? 'No purchase on this fitment or km not measured' : moneyWhy} />) },
+    { key: 'lifetimeKm', header: 'Lifetime km', numeric: true,
+      cell: (r) => (r.lifetimeKm == null ? <NA why="No measured km across this tyre's fitments" /> : `${num(r.lifetimeKm)}${r.lifetimeProvisional ? ' (provisional)' : ''}`) },
+    { key: 'lifetimeCpk', header: 'Lifetime CPK', numeric: true, sortValue: (r) => (money ? r.lifetimeCpk : null),
+      cell: (r) => (money && r.lifetimeCpk != null ? <span className="tf-num">{r.lifetimeCpk.toFixed(3)}</span> : <NA why={moneyWhy} />) },
     { key: 'removed_on', header: 'Removed', sortValue: (r) => r.removed_on || '',
       cell: (r) => (r.removed_on ? String(r.removed_on).slice(0, 10) : <NA why="No removal date" />) },
     { key: 'risk', header: 'Risk', sortValue: (r) => r.risk || '',
@@ -447,7 +451,7 @@ export default function TyreFailureCpkBoard() {
                     </div>
                   </CardState>
                 </Card>
-                <Card title="Tyre life distribution" sub={`${num(life.measured)} of ${num(life.total)} tyres have fitment and removal km`}>
+                <Card title="Tyre life distribution" sub={`${num(life.measured)} of ${num(life.total)} physical tyres have a measured lifetime km (${num(life.fitments)} fitments)`}>
                   <CardState state={loadingState} empty={loaded && !life.measured ? 'No tyre has both fitment and removal km yet.' : null}>
                     <ul className="tf-bands">
                       {life.bands.map((b) => (

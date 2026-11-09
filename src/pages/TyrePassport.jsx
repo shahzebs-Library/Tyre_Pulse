@@ -403,7 +403,7 @@ export default function TyrePassport() {
       cpk: s.cpk == null || cur.mixed ? NA : String(s.cpk),
       reason: s.reason || NA,
     }))
-    const headers = ['Asset', 'Position', 'Fitted', 'Removed', 'Km run', 'Cost', 'CPK', 'Reason']
+    const headers = ['Asset', 'Position', 'Fitted', 'Removed', 'Km run', 'Cost', 'CPK (per fitment)', 'Reason']
     const keys = ['asset_no', 'position', 'fitted', 'removed', 'km_run', 'cost', 'cpk', 'reason']
     await exportToPdf(
       rows,
@@ -428,7 +428,7 @@ export default function TyrePassport() {
       reason: s.reason || '',
     }))
     const keys = ['asset_no', 'position', 'fitted', 'removed', 'km_run', 'cost', 'cpk', 'reason']
-    const headers = ['Asset', 'Position', 'Fitted', 'Removed', 'Km run', 'Cost', 'CPK', 'Reason']
+    const headers = ['Asset', 'Position', 'Fitted', 'Removed', 'Km run', 'Cost', 'CPK (per fitment)', 'Reason']
     await exportToExcel(rows, keys, headers, reportFileName('Tyre Passport', passport.serial), 'Journey', {
       title: `Tyre Passport ${passport.serial}`, currency: cur.currency || '',
     })
@@ -450,7 +450,7 @@ export default function TyrePassport() {
       cell: ({ getValue }) => (getValue() == null ? NA : Number(getValue()).toLocaleString()) },
     { accessorKey: 'cost', header: 'Cost', meta: { align: 'right' },
       cell: ({ getValue }) => moneyFull(getValue()) },
-    { accessorKey: 'cpk', header: 'CPK', meta: { align: 'right' },
+    { accessorKey: 'cpk', header: 'CPK (per fitment)', meta: { align: 'right' },
       cell: ({ getValue }) => (getValue() == null || cur.mixed ? NA : getValue()) },
     { accessorKey: 'reason', header: 'Removal reason', cell: ({ getValue }) => getValue() || NA },
   ], [moneyFull, cur.mixed])
@@ -683,15 +683,18 @@ export default function TyrePassport() {
               title="Measured from the first fitment date. The manufacture (DOT) date is not recorded."
               foot={passport.firstFittedDate ? `Since first fitted ${dateTxt(passport.firstFittedDate)}` : 'No fitment date recorded'}
               onClick={() => setTab('timeline')} />
-            <Metric icon={Milestone} tone="green" label="Kilometers run" value={km.km == null ? NA : km.km.toLocaleString('en-US')} unit="km"
-              title={km.estLife ? 'Expected life is estimated from the observed wear rate.' : 'An expected life needs two tread readings over distance.'}
-              foot={km.estLife ? `Est. life ${km.estLife.toLocaleString('en-US')} km, ${km.pct}% used` : (km.km == null ? 'No distance recorded' : 'Expected life not computable')}
+            <Metric icon={Milestone} tone="green" label="Lifetime km (all fitments)" value={km.km == null ? NA : km.km.toLocaleString('en-US')} unit="km"
+              title={`Kilometres this physical tyre ran, summed over ${passport.lifetime?.fitments ?? 0} fitment(s) on ${passport.lifetime?.vehicles ?? 0} vehicle(s), each measured on that vehicle's own odometer. km coverage: ${passport.lifetime?.kmCoverage || 'none'}.${km.estLife ? ' Expected life is estimated from the observed wear rate.' : ''}`}
+              foot={km.estLife ? `Est. life ${km.estLife.toLocaleString('en-US')} km, ${km.pct}% used` : (km.km == null ? 'No distance recorded' : `Coverage ${passport.lifetime?.kmCoverage || 'none'}${passport.lifetime?.provisional ? ', provisional' : ''}`)}
               onClick={() => setTab('movement')}>
               <Bar pct={km.pct} />
             </Metric>
-            <Metric icon={Coins} tone="blue" label="Cost per km" value={cur.mixed || passport.costBreakdown.cpk == null ? NA : `${cur.currency || ''} ${passport.costBreakdown.cpk}`.trim()}
-              title={cur.mixed ? 'Records span more than one country, so costs are in different currencies and are not combined.' : 'Lifetime cost (purchase plus service) divided by kilometers run.'}
-              foot={cur.mixed ? 'Costs in more than one currency' : `Total cost ${moneyFull(passport.costBreakdown.lifetime || null)}`}
+            <Metric icon={Coins} tone="blue" label={passport.lifetime?.kindLabel || 'Physical tyre lifetime CPK'} value={cur.mixed || passport.costBreakdown.cpk == null ? NA : `${cur.currency || ''} ${passport.costBreakdown.cpk}`.trim()}
+              title={cur.mixed ? 'Records span more than one country, so costs are in different currencies and are not combined.'
+                : `Lifetime cost (purchase counted once plus service) divided by lifetime km. Purchase-only CPK ${passport.lifetime?.purchaseCpk ?? NA}, full CPK ${passport.lifetime?.fullCpk ?? NA}. Cost status ${passport.lifetime?.costStatus || NA}.${passport.lifetime?.provisional ? ' Provisional: the tyre is still fitted or its km is not fully known.' : ''}`}
+              foot={cur.mixed ? 'Costs in more than one currency'
+                : passport.lifetime?.priceReview ? passport.lifetime.priceReview.message
+                  : `Total cost ${moneyFull(passport.costBreakdown.lifetime || null)}${passport.lifetime?.provisional ? ', provisional' : ''}`}
               onClick={() => setTab('service')}>
               <Spark values={cur.mixed ? [] : spark} />
             </Metric>

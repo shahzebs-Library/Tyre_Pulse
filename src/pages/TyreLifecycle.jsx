@@ -88,7 +88,7 @@ export default function TyreLifecycle() {
     fetchAllPages((from, to) => {
       let q = supabase
         .from('tyre_records')
-        .select('id,asset_no,serial_number:serial_no,position,brand,size,tread_depth,cost_per_tyre,qty,issue_date,removal_date,km_at_fitment,km_at_removal,risk_level,site,country,category,vehicle_type,removal_reason')
+        .select('id,asset_no,serial_number:serial_no,position,brand,size,tread_depth,cost_per_tyre,qty,issue_date,removal_date,km_at_fitment,km_at_removal,risk_level,site,country,category,vehicle_type,removal_reason,status,total_km')
         .order('issue_date', { ascending: false })
         .order('id', { ascending: false })
       if (activeCountry !== 'All') q = q.eq('country', activeCountry)
@@ -194,7 +194,7 @@ export default function TyreLifecycle() {
         lead="Track complete tyre lifecycle from fitment to removal with real usage, performance, cost and condition."
         imgLight="/dashboard/hero-lifecycle-light.webp"
         imgDark="/dashboard/hero-lifecycle-dark.webp"
-        stat={{ value: loading || error || life.avgLifeKm == null ? 'N/A' : `${fmtInt(Math.round(life.avgLifeKm))} km`, lines: ['Average tyre life', `${fmtInt(life.measuredLife)} tyres measured`] }}
+        stat={{ value: loading || error || life.avgLifeKm == null ? 'N/A' : `${fmtInt(Math.round(life.avgLifeKm))} km`, lines: ['Average lifetime per physical tyre (all fitments)', `${fmtInt(life.measuredLife)} tyres measured`] }}
       />
 
       {error && <div className="cc-card tlc-banner" role="alert"><AlertTriangle size={16} aria-hidden="true" /><div>{error}</div><button type="button" className="cc-btn" onClick={reload}>Retry</button></div>}

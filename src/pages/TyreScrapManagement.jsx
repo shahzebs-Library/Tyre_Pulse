@@ -581,9 +581,9 @@ export default function TyreScrapManagement() {
           </span>
         )
       } },
-    { accessorKey: 'avgKm', header: 'Avg km life', meta: { align: 'right' },
+    { accessorKey: 'avgKm', header: 'Avg lifetime km', meta: { align: 'right' },
       cell: ({ getValue }) => (getValue() != null ? `${fmt(getValue())} km` : NA) },
-    { accessorKey: 'avgCPK', header: 'Avg CPK', meta: { align: 'right' },
+    { accessorKey: 'avgCPK', header: 'Lifetime CPK (weighted)', meta: { align: 'right' },
       cell: ({ getValue }) => (getValue() != null ? getValue().toFixed(4) : NA) },
     { accessorKey: 'earlyPct', header: 'Early scrap %', meta: { align: 'right' },
       cell: ({ getValue }) => {
@@ -768,7 +768,7 @@ export default function TyreScrapManagement() {
       {
         name: 'Brand Analysis', rows: brandRows,
         columns: ['brand', 'total', 'scrap', 'rate', 'avgKm', 'cpk', 'early', 'rec'],
-        headers: ['Brand', 'Total tyres', 'Total scrapped', 'Scrap rate %', 'Avg km life', 'Avg CPK', 'Early scrap %', 'Recommendation'],
+        headers: ['Brand', 'Total tyres', 'Total scrapped', 'Scrap rate %', 'Avg lifetime km', 'Lifetime CPK (weighted)', 'Early scrap %', 'Recommendation'],
         note: 'Over the page filters. Blank = not measurable.',
       },
       {

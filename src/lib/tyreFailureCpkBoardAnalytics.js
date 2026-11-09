@@ -15,7 +15,8 @@
  *
  * No I/O, no React.
  */
-import { computeCpkByAsset, computeCpkFleet, computeAvgTyreLife } from './kpiEngine'
+import { computeCpkByAsset } from './kpiEngine'
+import { toLifetimeTyres, withOnePricePerTyre, fitmentKm, tyreKey, lifetimeCpk, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
 import { cleanRemovalReason } from './removalReason'
 
 const lc = (v) => String(v ?? '').trim().toLowerCase()
@@ -68,28 +69,54 @@ export function assetRanking(rows = [], gridMap = null) {
   })
 }
 
-/** Removed tyres with life km and CPK per tyre (null when unmeasurable). */
+/**
+ * Removed register: one row per REMOVAL (a removal is an event, so the list is
+ * per fitment on purpose). Each row carries:
+ *   - lifeKm / cpk: this FITMENT (one stint) by the shared km rule, with the
+ *     purchase kept once per physical tyre (withOnePricePerTyre) - a refit's
+ *     removal has no purchase and no stint CPK. cpkKind = per_fitment.
+ *   - lifetimeKm / lifetimeCpk: the PHYSICAL tyre's cumulative km over every
+ *     fitment in `rows` and its lifetime CPK (price once), provisional while the
+ *     tyre is still fitted somewhere or its km coverage is incomplete.
+ * Null when unmeasurable, never 0.
+ */
 export function removedRegister(rows = []) {
-  return (Array.isArray(rows) ? rows : [])
-    .filter((r) => lc(r.status) === 'removed')
-    .map((r) => {
-      const life = computeAvgTyreLife([r])
-      const cpk = computeCpkFleet([r])
-      return {
-        id: r.id,
-        serial_no: r.serial_no || null,
-        asset_no: r.asset_no || null,
-        brand: r.brand || null,
-        size: r.size || null,
-        site: r.site || null,
-        position: r.position || r.tyre_position || null,
-        reason: cleanRemovalReason(r.removal_reason) || null,
-        removed_on: r.removal_date || null,
-        lifeKm: life.validCount > 0 ? Math.round(life.avgKm) : null,
-        cpk: cpk.validCount > 0 ? (cpk.weightedCpk ?? cpk.fleetAvgCpk) : null,
-      }
+  const list = Array.isArray(rows) ? rows : []
+  const priced = withOnePricePerTyre(list)
+  const life = new Map(toLifetimeTyres(list).map((t) => [t._key, t]))
+  const out = []
+  list.forEach((r, i) => {
+    if (lc(r.status) !== 'removed') return
+    const p = priced[i]
+    const km = fitmentKm(r)
+    const stintKm = km != null && km > 0 ? km : null
+    const cost = Number(p?.cost_per_tyre)
+    const lt = life.get(tyreKey(r, i)) || null
+    out.push({
+      id: r.id,
+      serial_no: r.serial_no || null,
+      asset_no: r.asset_no || null,
+      brand: r.brand || null,
+      size: r.size || null,
+      site: r.site || null,
+      position: r.position || r.tyre_position || null,
+      reason: cleanRemovalReason(r.removal_reason) || null,
+      removed_on: r.removal_date || null,
+      lifeKm: stintKm != null ? Math.round(stintKm) : null,
+      cpk: stintKm != null && Number.isFinite(cost) && cost > 0 ? cost / stintKm : null,
+      cpkKind: CPK_KIND.PER_FITMENT,
+      lifetimeKm: lt && lt._life_km != null ? Math.round(lt._life_km) : null,
+      lifetimeCpk: lt ? lifetimeCpk(lt) : null,
+      lifetimeKind: CPK_KIND.TYRE_LIFETIME,
+      fitments: lt ? lt._fitments : 1,
+      lifetimeProvisional: lt ? Boolean(lt._provisional) : null,
     })
+  })
+  return out
 }
+
+export const REMOVED_CPK_LABEL = CPK_KIND_LABEL[CPK_KIND.PER_FITMENT]
+export const REMOVED_LIFETIME_LABEL = CPK_KIND_LABEL[CPK_KIND.TYRE_LIFETIME]
 
 /** Distinct option lists for the filter bar. */
 export function filterOptions(rows = []) {
@@ -98,9 +125,9 @@ export function filterOptions(rows = []) {
 }
 
 export const ASSET_EXPORT_COLS = ['asset_no', 'avgCpk', 'totalCost', 'costSource', 'count']
-export const ASSET_EXPORT_HEADERS = ['Asset', 'Avg CPK', 'Total cost', 'Cost source', 'Tyres']
-export const REMOVED_EXPORT_COLS = ['serial_no', 'asset_no', 'brand', 'size', 'site', 'position', 'reason', 'removed_on', 'lifeKm', 'cpk']
-export const REMOVED_EXPORT_HEADERS = ['Serial', 'Asset', 'Brand', 'Size', 'Site', 'Position', 'Removal reason', 'Removed on', 'Life (km)', 'CPK']
+export const ASSET_EXPORT_HEADERS = ['Asset', 'Avg CPK', 'Total cost', 'Cost source', 'Fitments']
+export const REMOVED_EXPORT_COLS = ['serial_no', 'asset_no', 'brand', 'size', 'site', 'position', 'reason', 'removed_on', 'lifeKm', 'cpk', 'lifetimeKm', 'lifetimeCpk']
+export const REMOVED_EXPORT_HEADERS = ['Serial', 'Asset', 'Brand', 'Size', 'Site', 'Position', 'Removal reason', 'Removed on', 'Fitment km', 'CPK (per fitment)', 'Lifetime km (all fitments)', 'Lifetime CPK']
 
 const na = (v) => (v == null || v === '' ? 'N/A' : v)
 
@@ -121,5 +148,7 @@ export function removedExportRows(list = [], { money = true } = {}) {
     site: na(r.site), position: na(r.position), reason: na(r.reason), removed_on: na(r.removed_on),
     lifeKm: na(r.lifeKm),
     cpk: money ? na(r.cpk == null ? null : Math.round(r.cpk * 1000) / 1000) : 'N/A',
+    lifetimeKm: na(r.lifetimeKm),
+    lifetimeCpk: money ? na(r.lifetimeCpk == null ? null : Math.round(r.lifetimeCpk * 1000) / 1000) : 'N/A',
   }))
 }

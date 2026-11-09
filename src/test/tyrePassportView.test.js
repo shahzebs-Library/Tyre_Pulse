@@ -5,7 +5,8 @@ describe('tyrePassport view helpers', () => {
   it('passportKpiValues returns null for unmeasured figures, never 0', () => {
     expect(passportKpiValues(null)).toBeNull()
     const k = passportKpiValues({ totals: { km: 0, cpk: null }, costBreakdown: { lifetime: null }, distinctVehicles: 0, retreadCount: 1, recordCount: 3 })
-    expect(k).toEqual({ lifetimeKm: null, lifetimeCost: null, cpk: null, vehicles: null, retreads: 1, records: 3 })
+    // toMatchObject: the KPI now also carries the CPK kind label and coverage keys.
+    expect(k).toMatchObject({ lifetimeKm: null, lifetimeCost: null, cpk: null, vehicles: null, retreads: 1, records: 3 })
     expect(passportKpiValues({ totals: { km: 5000, cpk: 0.12 }, costBreakdown: { lifetime: 600 }, distinctVehicles: 2 }).lifetimeKm).toBe(5000)
   })
 

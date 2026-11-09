@@ -1134,7 +1134,9 @@ export default function SerialTracker() {
                   {' '}DOT and manufacturing date are not recorded on tyre records.
                   {' '}{stats.price == null
                     ? 'No purchase price is recorded on any record of this tyre.'
-                    : `Price taken from the latest priced record (${stats.pricedRecords} of ${stats.records} records carry a price).`}
+                    : `Price taken once, from the first priced fitment (${stats.pricedRecords} of ${stats.records} records carry a price).`}
+                  {stats.lifetime?.priceReview ? ` ${stats.lifetime.priceReview}.` : ''}
+                  {stats.lifetime ? ` ${stats.lifetime.kindLabel}: ${stats.lifetime.purchaseCpk == null ? 'N/A' : stats.lifetime.purchaseCpk.toFixed(3)} per km over ${stats.lifetime.km == null ? 'N/A' : fmtKm(stats.lifetime.km)} (km coverage ${stats.lifetime.kmCoverage || 'N/A'}${stats.lifetime.provisional ? ', provisional' : ''}).` : ''}
                 </p>
                 <div className="st-scrap-actions">
                   {scrapMark ? (canUndo && (

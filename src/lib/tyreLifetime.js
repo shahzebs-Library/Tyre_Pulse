@@ -34,7 +34,38 @@ export function isStrongSerial(serial) {
   if (/^[0-9]{3}\//.test(s)) return false
   if (/[0-9]{2,3}\/[0-9]{2}\s*R/.test(s)) return false
   if (/E\+[0-9]+$/.test(s)) return false
+  // 20261109150000: a month code (FEB-62), a size typed with spaces (195 R 15),
+  // two serials in one cell, repeated digits and keyboard sequences.
+  if (/^(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[- /]?[0-9]{2,4}$/.test(s)) return false
+  if (/^[0-9]{2,3}(\.[0-9]+)?\s*R\s*[0-9]{2}(\.[0-9])?($|[^0-9])/.test(s)) return false
+  if (/[,;&]/.test(s)) return false
+  if (/^([0-9])\1+$/.test(s)) return false
+  if (SEQUENCES.has(s)) return false
   return true
+}
+
+const SEQUENCES = new Set(['123456', '1234567', '12345678', '123456789', '1234567890'])
+
+/**
+ * Fitment rows with each physical tyre's purchase price kept ONCE: the first
+ * priced fitment keeps its price, a later fitment of the same real serial is
+ * returned with cost_per_tyre null (it is the same tyre, refitted). Rows whose
+ * serial is not a real serial are returned unchanged. Use this wherever money is
+ * summed per fitment row (cost trends, scrap cost) so a refit is not bought twice.
+ */
+export function withOnePricePerTyre(records = []) {
+  const firstPriced = new Map()
+  records.forEach((r, i) => {
+    if (!isStrongSerial(r?.serial_no) || !((num(r.cost_per_tyre) ?? 0) > 0)) return
+    const key = `${String(r.country ?? '').trim().toUpperCase()}|${String(r.serial_no).trim().toUpperCase()}`
+    const cur = firstPriced.get(key)
+    if (cur == null || dateOf(r) < dateOf(records[cur])) firstPriced.set(key, i)
+  })
+  const keep = new Set(firstPriced.values())
+  return records.map((r, i) => {
+    if (!isStrongSerial(r?.serial_no) || !((num(r?.cost_per_tyre) ?? 0) > 0) || keep.has(i)) return r
+    return { ...r, cost_per_tyre: null, _refit_price_dropped: true }
+  })
 }
 
 /** km one completed fitment ran, by the shared rule; null when not measurable. */

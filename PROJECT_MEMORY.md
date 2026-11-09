@@ -26,6 +26,20 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-11-09 (verification) — PR #470 RE-VERIFIED LIVE + STALE-UPLOAD GUARD. Migration 20261109150000 APPLIED LIVE. Branch claude/tyre-lifecycle-hardening-20261109.
+- Every PR #470 correction re-checked against live rows + undo ROLLBACK-TESTED (aborted txn): see docs/tyre/VERIFICATION_20261109.md.
+  5 rows of cost batch 0ad0b895 now hold the price the old-tyre fix moved onto the real new tyre - correct; the undo skips them.
+- 20261109150000: same-day replacement HELD as ambiguous_same_day_stale when the incoming serial was already removed from
+  that wheel / the log says the current tyre replaced it / its meter is below the current fitment's. tyre_import_reconcile
+  returns uncapped `held` (review stays capped 200). tyre_serial_is_strong + JS isStrongSerial: month codes, "195 R 15",
+  two serials in a cell, repeated digits, sequences = weak (MIRROR, test pins live answers). cost undo marks only restored rows.
+  New: get_tyre_exceptions(country), v_tyre_cost_status, tyre_close_rotations(dry_run default true; 14 would close, NOT run).
+  Old defs in _bak.fn_defs_20261109d. Post-apply rollback test NOT run (DROP hit the MCP approval prompt).
+- ERP intake refuses current fitments without a country (the reconcile was silently skipped). kpiEngine computeFleetTyreLife,
+  computeCostTrend, computeScrapRate now one price per tyre / lifetime km (withOnePricePerTyre).
+- Business rules: docs/tyre/BUSINESS_RULES.md. Calc map: docs/tyre/CALCULATION_SOURCE_MAP.md - lifetime CPK is NOT end-to-end:
+  all server CPK RPCs and ~40 web helpers are still per fitment row (listed there).
+
 # ⚑ SESSION 2026-11-09 (later) — ONE TYRE ONE PRICE ONE WHEEL, ALL 3 COUNTRIES; EXPENSE KEYS; KSA COPIES REMOVED. Migrations 20261109100000..140000 APPLIED LIVE. PR #470.
 - 100000 (owner ran it): tyre_serial_is_strong, 12-arg _tyre_close_replaced (same-day = latest upload wins, older/backdated HELD),
   _tyre_close_serial_elsewhere wired into the staging pipe, trigger trg_zz_one_price_per_tyre (INSERT only), held-row review RPCs

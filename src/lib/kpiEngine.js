@@ -1,4 +1,4 @@
-import { toLifetimeTyres, hasLifetimeCpk, lifetimeCpk, weightedCpk } from './tyreLifetime'
+import { toLifetimeTyres, hasLifetimeCpk, lifetimeCpk, weightedCpk, withOnePricePerTyre } from './tyreLifetime'
 // ─────────────────────────────────────────────────────────────────────────────
 // kpiEngine.js - Pure KPI computation library for TyrePulse
 // No Supabase calls. No React. No side effects.
@@ -242,18 +242,15 @@ export function computeAvgTyreLife(records = []) {
  * @returns {{ avgKm, trend: [{month, avgKm}] }}
  */
 export function computeFleetTyreLife(records = []) {
-  const valid = records.filter(r => {
-    const fit = Number(r.km_at_fitment)
-    const rem = Number(r.km_at_removal)
-    return isFinite(fit) && isFinite(rem) && rem > fit
-  })
+  // Per PHYSICAL tyre: km summed across every fitment by the shared km rule.
+  const valid = toLifetimeTyres(records).filter(t => Number(t._life_km) > 0)
 
-  const avgKm = _mean(valid.map(_kmRun))
+  const avgKm = _mean(valid.map(_lifeKm))
 
   const byMonth = _groupBy(valid, r => _toMonthKey(r.issue_date) ?? 'Unknown')
   const trend = Object.entries(byMonth)
     .filter(([month]) => month !== 'Unknown')
-    .map(([month, rows]) => ({ month, avgKm: _mean(rows.map(_kmRun)) }))
+    .map(([month, rows]) => ({ month, avgKm: _mean(rows.map(_lifeKm)) }))
     .sort((a, b) => a.month.localeCompare(b.month))
 
   return { avgKm, trend }
@@ -592,7 +589,10 @@ export function computeScrapRate(records = [], scrapKmPct = 20, defaultCost = 0)
     return false
   })
 
-  const estimatedScrapCost = scrapped.reduce(
+  // A refit of a tyre already bought is not a second purchase.
+  const adjusted = withOnePricePerTyre(records)
+  const onePrice = new Map(records.map((r, i) => [r, adjusted[i]]))
+  const estimatedScrapCost = scrapped.map(r => onePrice.get(r)).reduce(
     (s, r) => s + (Number(r.cost_per_tyre) > 0 ? Number(r.cost_per_tyre) : defaultCost) * (Number(r.qty) || 1),
     0
   )
@@ -693,7 +693,8 @@ export function computeCostTrend(records = [], defaultCost = 0) {
   const now   = new Date()
   const start = new Date(now.getFullYear(), now.getMonth() - 12, 1)
 
-  const recent = records.filter(r => {
+  // Purchase spend: a refitted tyre's price is counted once, on its first fitment.
+  const recent = withOnePricePerTyre(records).filter(r => {
     const d = r.issue_date ? new Date(r.issue_date) : null
     return d && d >= start
   })

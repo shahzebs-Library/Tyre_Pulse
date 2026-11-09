@@ -12,8 +12,8 @@ const LOWER = 'lower_is_better'
 export const KPI_REGISTRY = Object.freeze([
   {
     key: 'tyre_cost_per_km', name: 'Tyre Cost per Km (CPK)',
-    definition: 'Fleet average cost per kilometre for removed tyres with valid cost + km run.',
-    formula: 'sum(cost_per_tyre) / sum(km_at_removal - km_at_fitment) over valid records; fleet avg = mean(per-record CPK)',
+    definition: 'Fleet cost per kilometre per PHYSICAL tyre: purchase price counted once, km summed across every fitment (src/lib/tyreLifetime.js).',
+    formula: 'sum(first purchase price per tyre) / sum(lifetime km per tyre) over tyres with both; weighted, not a mean of ratios',
     unit: 'currency_per_km', sourceTables: ['tyre_records'],
     filters: { country: 'scoped', validity: 'km_at_removal > km_at_fitment AND cost_per_tyre > 0' },
     target: null, owner: 'Fleet Engineering', direction: LOWER,

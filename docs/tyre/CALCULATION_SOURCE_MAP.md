@@ -8,6 +8,8 @@
 | Fleet aggregate tyre CPK (weighted, per tyre-km) | JS `weightedCpk` / `lifetimeSummary`; SQL inside `get_tyre_lifetime_cpk` | kpiEngine and every group CPK (brand, site, asset, driver, supplier, size, vendor, workshop) |
 | Per-fitment tyre CPK (one stint) | JS `recordCpk` with the price from `withOnePricePerTyre` | Tyre Bay stints, Tyre Records row, Driver Detail table, Passport journey - each labelled per fitment |
 | Fleet expense per vehicle-km / CPH | SQL `get_fleet_cpk` (unchanged, production) | CPK Intelligence "Fleet CPK" tab, report snapshot `cost.tyre_cpk` (Flutter management screen) |
+| Tyre lifecycle events (fit, refit, rotation, transfer, removal, store, retread, warranty, scrap, disposal, ambiguous) | SQL `v_tyre_lifecycle_events` / `get_tyre_lifecycle_events`; JS `buildLifecycleEvents` (MIRROR) - Phase 3, docs/tyre/LIFECYCLE_EVENTS.md | Tyre Passport, Fitment & Movement History |
+| Site at a past date (operational attribution only, opt-in, no report uses it yet) | SQL `v_asset_site_history` / `asset_site_at`; JS `buildSiteHistory` / `siteAtDate` (MIRROR) - Phase 3, docs/tyre/SITE_ATTRIBUTION.md | none yet |
 
 Helpers moved onto the lifetime layer in Phase 1 (each with refit tests):
 - Group A: analyticsEngine (`lifetimeGroups`, `lifetimeMetrics`), brandPerformanceAnalytics, comparisonAnalytics,

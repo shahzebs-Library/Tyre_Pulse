@@ -40,6 +40,9 @@ import {
   inspectionRowsForTyre, latestPressure, movementRows, lifecycleSteps, warrantySummary,
   timelineEvents, statusTone, statusText,
 } from '../lib/tyrePassportView'
+import {
+  buildLifecycleEvents, countLifecycleEvents, EVENT_TYPE_LABEL, AMBIGUOUS_REASON_LABEL,
+} from '../lib/tyreLifecycleEvents'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import { toUserMessage } from '../lib/safeError'
 import './tyrePassport.css'
@@ -71,6 +74,14 @@ const EVENT_TONE = (t) => {
   if (v === 'retread') return 'orange'
   if (v === 'inflation' || v === 'fitment') return 'good'
   return 'muted'
+}
+const LIFE_TONE = {
+  FIT: 'good', REFIT_SAME_VEHICLE: 'info', ROTATION: 'info', TRANSFER: 'info', REMOVAL: 'muted',
+  RETURN_TO_STORE: 'muted', RETREAD: 'orange', WARRANTY_REPLACEMENT: 'warn', SCRAP: 'bad', DISPOSAL: 'bad', AMBIGUOUS: 'warn',
+}
+const SOURCE_LABEL = {
+  tyre_records: 'Tyre record', tyre_status_marks: 'Scrap mark', tyre_service_events: 'Service event',
+  warranty_claims: 'Warranty claim', retread_jobs: 'Retread job', tyre_disposals: 'Disposal',
 }
 const ACTION_TONE = { Fitted: 'good', Moved: 'info', Rotated: 'info', Refitted: 'info', Removed: 'muted' }
 const CONDITION_TONE = (c) => {
@@ -352,6 +363,15 @@ export default function TyrePassport() {
     [insp.rows, passport],
   )
   const movement = useMemo(() => movementRows(passport?.events || []), [passport])
+  // Canonical lifecycle events (src/lib/tyreLifecycleEvents.js, mirror of SQL
+  // v_tyre_lifecycle_events). Read-only; changes no figure on this page.
+  const lifecycle = useMemo(() => (bundle ? buildLifecycleEvents({
+    fitments: bundle.records || [],
+    marks: bundle.statusMarks || [],
+    serviceEvents: bundle.serviceEvents || [],
+    warrantyClaims: bundle.warrantyClaims || [],
+  }) : []), [bundle])
+  const lifecycleCounts = useMemo(() => countLifecycleEvents(lifecycle), [lifecycle])
   const steps = useMemo(() => lifecycleSteps(passport), [passport])
   const timeline = useMemo(() => timelineEvents(passport, inspectionRows), [passport, inspectionRows])
   const cur = useMemo(() => passportCurrency(bundle?.records || [], activeCurrency), [bundle, activeCurrency])
@@ -454,6 +474,26 @@ export default function TyrePassport() {
       cell: ({ getValue }) => (getValue() == null || cur.mixed ? NA : getValue()) },
     { accessorKey: 'reason', header: 'Removal reason', cell: ({ getValue }) => getValue() || NA },
   ], [moneyFull, cur.mixed])
+
+  const lifecycleColumns = useMemo(() => [
+    { accessorKey: 'event_seq', header: '#', meta: { align: 'right' } },
+    { accessorKey: 'event_date', header: 'Date', meta: { exportValue: (r) => r.event_date || 'Not recorded' },
+      cell: ({ getValue }) => dateTxt(getValue()) },
+    { accessorKey: 'event_type', header: 'Event', meta: { exportValue: (r) => EVENT_TYPE_LABEL[r.event_type] || r.event_type },
+      cell: ({ row }) => pill(LIFE_TONE[row.original.event_type] || 'muted', EVENT_TYPE_LABEL[row.original.event_type] || row.original.event_type) },
+    { accessorKey: 'asset_no', header: 'Vehicle', cell: ({ getValue }) => assetLink(getValue()) },
+    { accessorKey: 'position', header: 'Position', cell: ({ getValue }) => getValue() || NA },
+    { id: 'from', header: 'From', accessorFn: (r) => [r.from_asset_no, r.from_position].filter(Boolean).join(' / '),
+      cell: ({ getValue }) => getValue() || NA },
+    { accessorKey: 'odometer_km', header: 'Odometer', meta: { align: 'right' }, cell: ({ getValue }) => kmTxt(getValue()) },
+    { accessorKey: 'km', header: 'Km in stint', meta: { align: 'right' }, cell: ({ getValue }) => kmTxt(getValue()) },
+    { id: 'purchase', header: 'Purchase', accessorFn: (r) => (r.is_purchase ? 'Yes' : 'No'),
+      cell: ({ row }) => (row.original.is_purchase ? pill('good', 'Purchase') : <span className="cc-na">No</span>) },
+    { id: 'source', header: 'Source record', accessorFn: (r) => `${SOURCE_LABEL[r.source_table] || r.source_table} ${r.source_id || ''}`.trim(),
+      cell: ({ row }) => <span className="tp-mono tp-small" title={row.original.source_id || ''}>{SOURCE_LABEL[row.original.source_table] || row.original.source_table} {String(row.original.source_id || '').slice(0, 8)}</span> },
+    { id: 'note', header: 'Note', accessorFn: (r) => [r.ambiguous_reason ? AMBIGUOUS_REASON_LABEL[r.ambiguous_reason] : null, r.detail].filter(Boolean).join('. '),
+      cell: ({ getValue }) => <span className="tp-trunc" title={getValue() || ''}>{getValue() || NA}</span> },
+  ], [])
 
   const serviceColumns = useMemo(() => [
     { accessorKey: 'date', header: 'Date', cell: ({ getValue }) => dateTxt(getValue()) },
@@ -895,6 +935,14 @@ export default function TyrePassport() {
           )}
 
           {tab === 'movement' && (
+            <div className="tp-stack">
+            <section className="cc-card" aria-label="Lifecycle events">
+              <div className="cc-card-head"><div><h2 className="cc-card-title">Lifecycle events</h2>
+                <p className="cc-card-sub">Every fitment, rotation, transfer, removal and scrap of this physical tyre in date order, each with the record it comes from. A rotation, transfer or refit is never a second purchase. {lifecycleCounts.byType.AMBIGUOUS ? `${lifecycleCounts.byType.AMBIGUOUS} movement(s) cannot be told apart from the records and are shown as unclear, not guessed.` : ''}</p></div></div>
+              <EnterpriseTable columns={lifecycleColumns} data={lifecycle} getRowId={(r) => `${r.tyre_key}-${r.event_seq}`}
+                enableColumnFilters={false} enableGlobalFilter={lifecycle.length > 10} searchPlaceholder="Search vehicle, position or event"
+                exportFileName={`Tyre Passport ${passport.serial} lifecycle events`} emptyMessage="No lifecycle events on record." />
+            </section>
             <section className="cc-card" aria-label="Fitment and movement history">
               <div className="cc-card-head"><div><h2 className="cc-card-title">Fitment and movement history</h2>
                 <p className="cc-card-sub">{journeyStats.stints} stint(s) across {passport.distinctVehicles} vehicle(s). Average {journeyStats.avgKmPerStint == null ? NA : `${journeyStats.avgKmPerStint.toLocaleString()} km`} per measured stint ({journeyStats.measuredStints} of {journeyStats.stints} have distance).</p></div></div>
@@ -903,6 +951,7 @@ export default function TyrePassport() {
                 exportFileName={`Tyre Passport ${passport.serial} journey`} emptyMessage="No stint history on record."
                 onRowClick={(r) => { if (r?.asset_no) navigate(assetHref(r.asset_no)) }} />
             </section>
+            </div>
           )}
 
           {tab === 'warranty' && (

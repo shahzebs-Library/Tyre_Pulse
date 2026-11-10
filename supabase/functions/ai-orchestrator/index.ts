@@ -12,14 +12,14 @@
 // at 5 rounds. Falls back to a plain completion when tools fail.
 //
 // Input:  { message: string, conversation_id?: uuid, agent?: string }
-// Output: { content, conversation_id, tool_calls: [{name, ok}], cached: false }
+// Output: { content, conversation_id, assistant_message_id, prompt_version, tool_calls: [{name, ok}], ... }
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, jsonResponse, requireApprovedRole } from '../_shared/auth.ts'
 import { authorizeTool, sourceForTool } from './policy.ts'
 import { runTool, toolDefsFor, coverageFrom } from './tools.ts'
-import { agentsForRole, resolveAgents, toolsForAgents, buildSystemPrompt, AGENT_PROFILES } from '../_shared/aiAgents.ts'
+import { agentsForRole, resolveAgents, toolsForAgents, buildSystemPrompt, AGENT_PROFILES, PROMPT_VERSION } from '../_shared/aiAgents.ts'
 
 const MODEL = 'claude-haiku-4-5-20251001'
 const MODEL_BASE = 'claude-haiku-4-5'
@@ -325,14 +325,20 @@ serve(async (req) => {
     if (!finalText) finalText = 'I could not produce an answer for that request. Please rephrase or try again.'
 
     // ── Persist turn + usage (best effort, never block the response) ──────────
+    // The assistant row id is returned so the Command Center can attach
+    // feedback (ai_feedback.assistant_message_id) to this exact answer.
+    let assistantMessageId: number | null = null
     try {
-      await svc.from('ai_messages').insert([
+      const { data: inserted, error: insErr } = await svc.from('ai_messages').insert([
         { conversation_id: conversationId, role: 'user', content: message },
         {
           conversation_id: conversationId, role: 'assistant', content: finalText,
           tokens_in: inputTokens, tokens_out: outputTokens,
         },
-      ])
+      ]).select('id, role')
+      if (insErr) throw insErr
+      const row = Array.isArray(inserted) ? inserted.find((r: { role: string }) => r.role === 'assistant') : null
+      assistantMessageId = row && Number.isFinite(Number(row.id)) ? Number(row.id) : null
       await svc.from('ai_conversations')
         .update({ updated_at: new Date().toISOString() })
         .eq('id', conversationId)
@@ -366,6 +372,8 @@ serve(async (req) => {
     return jsonResponse(req, {
       content: finalText,
       conversation_id: conversationId,
+      assistant_message_id: assistantMessageId,
+      prompt_version: PROMPT_VERSION,
       tool_calls: toolCalls,
       agents,
       denied_agents: denied,

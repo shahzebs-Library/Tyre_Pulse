@@ -237,6 +237,13 @@ export function toolsForAgents(agents: AgentType[]): string[] {
   return [...set]
 }
 
+/**
+ * Version of the agent prompts above. Bump it whenever AGENT_PROFILES,
+ * GLOBAL_RULES or WEAR_RULES change, so feedback and offline evaluation
+ * (src/lib/aiEvaluation.js) can compare answers prompt version by version.
+ */
+export const PROMPT_VERSION = 'agents-2026-11-v1'
+
 export function buildSystemPrompt(agents: AgentType[]): string {
   const parts = [GLOBAL_RULES]
   for (const a of agents) {

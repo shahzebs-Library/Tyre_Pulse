@@ -53,6 +53,10 @@ Project skills: `.claude/skills/` (committed). Reusable skills: `~/.claude/skill
 | packages / dependabot | `dependency-audit` |
 | code review / before merge | `full-review`, `git-safety` |
 | any commit, push, merge | `git-safety` (mandatory) |
+| "check CPK / tyre life", CPK / brand CPK / running life maths | `tyre-engineering-validation` |
+| AI accuracy / budget / token log / redeploy an AI edge fn | `ai-tyre-inspection-evaluation` |
+| "trace this workflow / end to end", intake -> RPC -> trigger hops | `cross-module-workflow-testing` |
+| multi-agent audit, mergeable finding registers | `audit-findings-register` |
 
 Every stage: DETECT, REPORT, FIX, TEST, VERIFY AGAIN. Render UI before calling it fixed. Verify security at the
 database, never by hidden UI. Never skip tests, weaken security, delete features, touch production data or run

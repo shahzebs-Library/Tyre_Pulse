@@ -16,11 +16,27 @@ description: Orchestrates a full Tyre Pulse audit across web app, System Console
 | Backend | Supabase `jhssdmeruxtrlqnwfksc`, `supabase/functions/*`, `supabase/migrations/`, `MIGRATIONS_V*.sql` | Postgres + RLS + Deno edge fns |
 | Python services | `services/` | report engine, analytics |
 
+## Stage 0 - capability check + environment (run before stage 1)
+`ls .claude/skills ~/.claude/skills; claude plugin list`. Record installed vs missing. Many plugin skills named
+below are NOT installed in cloud sessions and the run silently substitutes - name the fallback explicitly:
+- `full-review` -> `code-review` (built-in) + `audit-findings-register`
+- `owasp-security` -> `supabase-review` + `auth-testing` + `rbac-testing` + `api-testing` + a secrets grep
+- `frontend-design` / `responsive-design` / `frontend-visual-qa` / `accessibility-audit` -> `visual-regression` +
+  the accessibility + design-token rules below + a local Playwright harness (production hosts are blocked)
+- `performance-audit` -> `performance-review`
+- `webapp-testing` -> `cross-module-workflow-testing`
+
+Environment facts the sequence depends on: Flutter SDK is ABSENT (stage 19 is static review only; CI verifies);
+production hosts are unreachable from the container (stages 7-9 need a local harness or are NOT RUN, named);
+Supabase is reachable ONLY via the capital-S `Supabase` MCP connector. Use `audit-findings-register` for the
+finding schema so parallel agents produce mergeable registers.
+
 ## Sequence (skip a stage only when its surface is absent, and say so)
 1. architecture inspection (table above, `CLAUDE.md`, `PROJECT_MEMORY.md` top entries)
 2. `git-safety` - status, branch, diff; note other sessions' work
 3. identify web / mobile / backend / database parts touched or in scope
-4. `full-review` (differential mode for a PR, deep mode for an audit)
+4. `full-review` (differential mode for a PR, deep mode for an audit) [fallback: `code-review` + `audit-findings-register`]
+4b. engineering + finance maths -> `tyre-engineering-validation` (CPK, tyre life, running/remaining life, km caps, one price per tyre, currency never blended)
 5. `frontend-design` - critique against the approved design; never redesign approved screens
 6. `responsive-design`
 7. `frontend-visual-qa`
@@ -33,7 +49,8 @@ description: Orchestrates a full Tyre Pulse audit across web app, System Console
 14. `api-testing`
 15. `supabase-review`
 16. `database-migration-safety` (for any pending/new migration)
-17. `owasp-security`
+17. `owasp-security` [fallback: `supabase-review` + `auth-testing` + `rbac-testing` + `api-testing` + secrets grep]
+17b. AI governance -> `ai-tyre-inspection-evaluation` (accuracy vs expert labels, budget/token accounting, prompt injection, grounding, deploy safety: no backslash-u escapes)
 18. mobile security if mobile code in scope: `auth-assessment`, `secure-storage-audit`, `network-security-check`,
     `platform-interaction-review`, `crypto-review`, `privacy-audit`, `code-quality-scan`, `resilience-assessment`;
     user-invoked only: `/masvs-checklist`, `/mobile-threat-model`, `/mobile-pentest-plan`

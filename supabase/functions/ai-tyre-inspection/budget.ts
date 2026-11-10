@@ -28,11 +28,16 @@ export interface AiControls { enabled: boolean; limitUsd: number; invalidLimit: 
 
 const OFF = new Set(["false", "0", "off", "no"]);
 
-/** Parse the system_config rows for ai_enabled / ai_monthly_budget_usd. */
+const isOff = (v: string | undefined) => !!v && OFF.has(v.replace(/^"+|"+$/g, "").trim().toLowerCase());
+
+/**
+ * Parse the system_config rows for ai_enabled / ai_tyre_inspection_enabled / ai_monthly_budget_usd.
+ * Either switch off => disabled (no paid call). A missing feature switch means ON (the default).
+ */
 export function parseAiControls(rows: Array<{ key?: unknown; value?: unknown }> | null | undefined): AiControls {
   const m: Record<string, string> = {};
   for (const r of rows ?? []) if (r && typeof r.key === "string") m[r.key] = String(r.value ?? "").trim();
-  const enabled = !(m.ai_enabled && OFF.has(m.ai_enabled.toLowerCase()));
+  const enabled = !isOff(m.ai_enabled) && !isOff(m.ai_tyre_inspection_enabled);
   const raw = (m.ai_monthly_budget_usd ?? "").replace(/^"+|"+$/g, "").trim();
   if (raw === "") return { enabled, limitUsd: 0, invalidLimit: false };
   const n = Number(raw);

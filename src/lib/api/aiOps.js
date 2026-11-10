@@ -66,7 +66,7 @@ export function estimateRowCost(row, pricing = {}) {
 /* ── Usage summary (ai_token_logs) ──────────────────────────────────────────── */
 
 const USAGE_COLS =
-  'id,model,feature,prompt_tokens,completion_tokens,cost_usd,status,error,http_status,latency_ms,site,country,created_at'
+  'id,model,feature,prompt_tokens,completion_tokens,cost_usd,status,error,http_status,latency_ms,site,country,organisation_id,created_at'
 
 /**
  * Fetch raw token-log rows for a trailing window, PAGED past the 1,000-row
@@ -185,6 +185,120 @@ export async function getUsageOverview({ days = 30, country } = {}) {
     getModelPricing({ country }),
   ])
   return { summary: summarizeUsage(rows, pricing), pricing, rows, truncated }
+}
+
+/* ── Per-agent and per-organisation usage ───────────────────────────────────── */
+//
+// ai_usage_log carries the AGENT (e.g. "orchestrator:analyst", "chat:tyre"); ai_token_logs carries the
+// organisation, status and latency. Both are read here so this module stays the ONE AI usage reader.
+
+const AGENT_COLS = 'id,agent,model,input_tokens,output_tokens,total_tokens,cost_usd,source,organisation_id,country,created_at'
+
+/**
+ * Paged read of ai_usage_log for a trailing window (newest first, id tiebreak).
+ * @returns {Promise<{rows: object[], truncated: boolean}>} [] when the table is unreadable pre-migration.
+ */
+export async function readUsageLog({ days = 30, country, limit = 50000 } = {}) {
+  const since = new Date(Date.now() - days * 86_400_000).toISOString()
+  const { data, error, truncated } = await fetchAllPages((a, b) => applyCountry(
+    supabase.from('ai_usage_log').select(AGENT_COLS), country,
+  )
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .range(a, b), { max: limit })
+  if (error) {
+    if (isMissingRelation(error)) return { rows: [], truncated: false }
+    throw toServiceError(error)
+  }
+  return { rows: data || [], truncated: !!truncated }
+}
+
+/** "orchestrator:analyst" -> "orchestrator:analyst"; blank -> "unknown". Kept verbatim otherwise. */
+export function agentLabel(agent) {
+  const a = String(agent ?? '').trim()
+  return a || 'unknown'
+}
+
+/**
+ * Group ai_usage_log rows by agent. Pure. Cost is the stored cost_usd (NOT NULL on that table).
+ * Sorted by cost desc, then calls desc.
+ */
+export function summarizeByAgent(rows = []) {
+  const map = {}
+  for (const r of rows) {
+    const key = agentLabel(r.agent)
+    const a = (map[key] ||= { agent: key, calls: 0, tokens: 0, cost: 0 })
+    a.calls += 1
+    a.tokens += num(r.total_tokens) || (num(r.input_tokens) + num(r.output_tokens))
+    a.cost += num(r.cost_usd)
+  }
+  return Object.values(map).sort((x, y) => y.cost - x.cost || y.calls - x.calls)
+}
+
+/**
+ * Group ai_token_logs rows by organisation. Pure. Successful calls carry spend; failures are counted
+ * separately; a failed call with an UNKNOWN cost (cost_usd null, status error) is flagged as
+ * `unknownCostFailures` so an admin can see spend that may have been billed but is not in the total.
+ * `orgNames` maps organisation_id -> display name; rows with no organisation are grouped as "No organisation".
+ */
+export function summarizeByOrg(rows = [], pricing = {}, orgNames = {}) {
+  const map = {}
+  for (const r of rows) {
+    const id = r.organisation_id || null
+    const key = id || '__none__'
+    const o = (map[key] ||= {
+      organisationId: id,
+      name: id ? (orgNames[id] || 'Unknown organisation') : 'No organisation',
+      calls: 0, failures: 0, unknownCostFailures: 0, cost: 0, tokens: 0, latencySum: 0, latencyCount: 0,
+    })
+    if (isSuccess(r)) {
+      o.calls += 1
+      o.cost += estimateRowCost(r, pricing)
+      o.tokens += num(r.prompt_tokens) + num(r.completion_tokens)
+    } else {
+      o.failures += 1
+      if (r.status === 'error' && (r.cost_usd == null || r.cost_usd === '')) o.unknownCostFailures += 1
+      else if (r.cost_usd != null && r.cost_usd !== '') o.cost += num(r.cost_usd)
+    }
+    if (r.latency_ms != null && r.latency_ms !== '' && Number.isFinite(Number(r.latency_ms))) {
+      o.latencySum += Number(r.latency_ms); o.latencyCount += 1
+    }
+  }
+  return Object.values(map)
+    .map(({ latencySum, latencyCount, ...o }) => ({
+      ...o,
+      avgLatencyMs: latencyCount ? Math.round(latencySum / latencyCount) : null,
+    }))
+    .sort((x, y) => y.cost - x.cost || y.calls - x.calls)
+}
+
+/** organisation id -> name. Best effort: unreadable (RLS / missing) returns {}. */
+export async function getOrganisationNames() {
+  try {
+    const { data, error } = await supabase.from('organisations').select('id,name').limit(1000)
+    if (error) return {}
+    const out = {}
+    for (const o of data || []) if (o?.id) out[o.id] = o.name || 'Unnamed organisation'
+    return out
+  } catch {
+    return {}
+  }
+}
+
+/** Fetch + summarise per-agent and per-organisation usage for the Operations tab. */
+export async function getAgentOrgUsage({ days = 30, country } = {}) {
+  const [agentRead, tokenRead, pricing, orgNames] = await Promise.all([
+    readUsageLog({ days, country }),
+    readTokenLogs({ days, country }),
+    getModelPricing({ country }),
+    getOrganisationNames(),
+  ])
+  return {
+    byAgent: summarizeByAgent(agentRead.rows),
+    byOrg: summarizeByOrg(tokenRead.rows, pricing, orgNames),
+    truncated: agentRead.truncated || tokenRead.truncated,
+  }
 }
 
 /* ── Delivery & background jobs (report_send_log) ───────────────────────────── */

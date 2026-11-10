@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Activity, AlertTriangle, Coins, Cpu, RefreshCw, Send, XCircle, CheckCircle2,
-  Zap, TrendingUp, Clock,
+  Zap, TrendingUp, Clock, Bot, Building2,
 } from 'lucide-react'
 import { aiOps } from '../../lib/api'
 import { toUserMessage } from '../../lib/safeError'
@@ -99,6 +99,83 @@ function EmptyState({ Icon, title, hint }) {
   )
 }
 
+/* ── Per-agent / per-organisation usage (inside Operations) ─────────────────── */
+
+function AgentOrgUsage({ days, country }) {
+  const [state, setState] = useState({ loading: true, error: '', data: null })
+
+  useEffect(() => {
+    let alive = true
+    setState((s) => ({ ...s, loading: true, error: '' }))
+    aiOps.getAgentOrgUsage({ days, country })
+      .then((data) => { if (alive) setState({ loading: false, error: '', data }) })
+      .catch((err) => { if (alive) setState({ loading: false, error: toUserMessage(err), data: null }) })
+    return () => { alive = false }
+  }, [days, country])
+
+  const d = state.data
+  const maxAgent = useMemo(() => Math.max(1e-9, ...(d?.byAgent || []).map((a) => a.cost)), [d])
+
+  if (state.loading && !d) {
+    return <div className="h-32 rounded-2xl bg-white/5 animate-pulse" />
+  }
+  if (state.error) {
+    return (
+      <div className="card border border-red-800/50 flex items-center gap-2 text-red-300 text-sm">
+        <AlertTriangle size={16} /> Agent and organisation usage could not be loaded. {state.error}
+      </div>
+    )
+  }
+  if (!d) return null
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="card">
+        <h3 className="font-semibold mb-4 flex items-center gap-2"><Bot size={16} /> Spend by agent</h3>
+        <div className="space-y-3">
+          {d.byAgent.length === 0 ? <p className="text-sm text-[var(--text-muted)]">No agent activity recorded in this window.</p> :
+            d.byAgent.slice(0, 12).map((a) => (
+              <Bar key={a.agent} label={a.agent} value={a.cost} max={maxAgent} color="#a855f7"
+                right={`${a.calls} calls | ${fmtTokens(a.tokens)} | ${fmtUSD(a.cost)}`} />
+            ))}
+        </div>
+      </div>
+      <div className="card">
+        <h3 className="font-semibold mb-4 flex items-center gap-2"><Building2 size={16} /> Usage by organisation</h3>
+        {d.byOrg.length === 0 ? <p className="text-sm text-[var(--text-muted)]">No organisation activity recorded in this window.</p> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[var(--text-muted)] border-b border-[var(--input-border)]">
+                  <th className="py-2 pr-3 font-medium">Organisation</th>
+                  <th className="py-2 pr-3 font-medium text-right">Calls</th>
+                  <th className="py-2 pr-3 font-medium text-right">Failed</th>
+                  <th className="py-2 pr-3 font-medium text-right">Spend</th>
+                  <th className="py-2 pr-3 font-medium text-right">Avg latency</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.byOrg.map((o) => (
+                  <tr key={o.organisationId || 'none'} className="border-b border-[var(--input-border)]/50">
+                    <td className="py-2 pr-3 truncate max-w-[12rem]" title={o.name}>{o.name}</td>
+                    <td className="py-2 pr-3 text-right">{o.calls.toLocaleString()}</td>
+                    <td className="py-2 pr-3 text-right" title={o.unknownCostFailures ? `${o.unknownCostFailures} failed after the request was sent; cost unknown` : ''}>
+                      {o.failures.toLocaleString()}{o.unknownCostFailures ? ` (${o.unknownCostFailures} cost unknown)` : ''}
+                    </td>
+                    <td className="py-2 pr-3 text-right">{fmtUSD(o.cost)}</td>
+                    <td className="py-2 pr-3 text-right">{o.avgLatencyMs == null ? 'N/A' : `${(o.avgLatencyMs / 1000).toFixed(1)}s`}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {d.truncated && <p className="text-xs text-[var(--text-muted)] mt-2">Based on the newest 50,000 records only. Pick a shorter window for a complete count.</p>}
+      </div>
+    </div>
+  )
+}
+
 /* ── Operations tab ─────────────────────────────────────────────────────────── */
 
 export function AiOperationsTab({ country }) {
@@ -172,6 +249,8 @@ export function AiOperationsTab({ country }) {
               </div>
             </div>
           </div>
+
+          <AgentOrgUsage days={days} country={country} />
 
           {s.byDay.length > 1 && (
             <div className="card">

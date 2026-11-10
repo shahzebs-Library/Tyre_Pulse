@@ -40,6 +40,8 @@ export const CONFIG_DEFAULTS = Object.freeze({
   registration_open: true,
   require_approval: true,
   ai_enabled: true,
+  ai_orchestrator_enabled: true,     // feature switch for the AI copilot (ai-orchestrator)
+  ai_tyre_inspection_enabled: true,  // feature switch for the AI tyre photo worker
   ai_monthly_budget_usd: 0,      // 0 = no budget cap
   ai_rate_limit_per_min: 0,      // 0 = no rate cap
   ai_cache_ttl_hours: 24,
@@ -319,6 +321,10 @@ export const ENFORCEMENT_STATUS = Object.freeze({
   qr_login_enabled:      { status: 'active', where: 'Login page (/login): shows Scan to sign in with the Flutter app' },
   new_shell:             { status: 'active', where: 'App shell picker in App.jsx (on = Layout, off = LegacyLayout fallback); applies on the next page load' },
   // Honestly still SAVED ONLY (stored; not yet enforced) - never claimed active:
+  // Code written (ai-orchestrator / ai-tyre-inspection read these). Flip to 'active' only once both edge
+  // functions are redeployed with that code; until then the switch is stored but not read.
+  ai_orchestrator_enabled:    { status: 'saved', where: 'ai-orchestrator edge fn + budget RPC (active after redeploy)' },
+  ai_tyre_inspection_enabled: { status: 'saved', where: 'ai-tyre-inspection worker (active after redeploy)' },
   ai_model:              { status: 'saved', where: 'Model is locked server-side for safety; this value is not used' },
   alert_email:           { status: 'saved', where: 'Sentry alerts use their own console-configured email, not this key' },
   digest_frequency:      { status: 'saved', where: 'Scheduled reports use each schedule own cadence' },

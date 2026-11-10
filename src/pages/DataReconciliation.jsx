@@ -14,6 +14,7 @@ import { useFilterState } from '../hooks/useFilterState'
 import BrandGapSection from '../components/reconciliation/BrandGapSection'
 import TyreLearningSection from '../components/reconciliation/TyreLearningSection'
 import TyrePriceSection from '../components/reconciliation/TyrePriceSection'
+import TyreCostAuditSection from '../components/reconciliation/TyreCostAuditSection'
 import JobcardDateSection from '../components/reconciliation/JobcardDateSection'
 import DupKeyTyresSection from '../components/reconciliation/DupKeyTyresSection'
 import SerialMultiAssetSection from '../components/reconciliation/SerialMultiAssetSection'
@@ -170,6 +171,7 @@ export default function DataReconciliation() {
     ['trust', 'Trust'],
     ['completeness', 'Completeness'],
     ['integrity', 'Integrity'],
+    ['cost', 'Tyre Cost Audit'],
     ['assets', 'Assets'],
   ]
 
@@ -637,6 +639,11 @@ export default function DataReconciliation() {
         <SerialMultiAssetSection />
         <FreetextTyreSection />
         <TyreLifeCapSection />
+      </div>
+
+      {/* ═══ Tyre cost audit group ══════════════════════════════════════════ */}
+      <div className={group === 'cost' ? 'space-y-5' : 'hidden'}>
+        <TyreCostAuditSection />
       </div>
 
       {/* ═══ Assets group ════════════════════════════════════════════════════ */}

@@ -92,7 +92,11 @@ Rules live in `src/lib/tyreCostAudit.js`; the SQL mirror is in
    - Egypt: 4 tyres, EGP 55,952.94.
    - No existing price was overwritten, and every tyre now holds exactly its source line's price.
    - Undo: `select public.tyre_cost_correction_undo('0e4ab851-9fa6-4818-9df2-e0b497a126d1')`.
-3. **OPEN:** revert the 1,885 estimated KSA prices, or keep them labelled as estimates. They sit in the findings table as proposed and are not approved.
+3. **DONE 2026-11-10 (owner delegated the decision):** the 1,885 estimated KSA prices (SAR 1,775,663) were reverted to
+   Cost Pending Verification, as batch `068d3fe4-2956-4d74-8610-e80bdc1f4604`. Reason: they came from a median of other tyres
+   in earlier months, which breaks the no-guessed-price and no-cross-month rules. KSA cost per km is now measured on real prices only.
+   Tyre spend totals are unaffected, because they come from the expense grid.
+   Undo: `select public.tyre_cost_correction_undo('068d3fe4-2956-4d74-8610-e80bdc1f4604')`.
 4. **OPEN:** whether a one-month gap between the tyre date and its own issue line counts as the same transaction.
 5. **OPEN:** load invoice or GRN data if verification beyond ERP issue lines is wanted.
 

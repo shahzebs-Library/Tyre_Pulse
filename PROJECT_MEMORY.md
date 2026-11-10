@@ -26,12 +26,16 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
-# ⚑ SESSION 2026-11-10 (AI upgrade + tyre cost audit) — PR #484 MERGED on owner go-ahead. Migrations 20261112100000..106000 APPLIED LIVE.
+# ⚑ SESSION 2026-11-10 (AI upgrade + tyre cost audit) — PR #484 MERGED on owner go-ahead. Migrations 20261112100000..107000 APPLIED LIVE.
 - OWNER GO-AHEAD 2026-11-10: all 6 migrations applied via MCP (there is no 105000). The audit file's first apply timed out on the
   approval prompt and was re-run after the owner approved it. 147 recoverable prices applied as batch
   0e4ab851-9fa6-4818-9df2-e0b497a126d1 (KSA 141 / SAR 111,772.96; UAE 2 / AED 1,400; Egypt 4 / EGP 55,952.94; 0 overwritten).
   Undo = tyre_cost_correction_undo(batch). tyre_cost_audit_findings now holds 7,478 findings from a real scan.
-  STILL OPEN: the 1,885 KSA estimate reverts (proposed, NOT approved - owner did not choose) and the one-month gap rule.
+  1,885 KSA comparable-median estimates (SAR 1,775,663) REVERTED to NULL (Cost Pending Verification) - owner delegated the call;
+  batch 068d3fe4-2956-4d74-8610-e80bdc1f4604, undo = tyre_cost_correction_undo(batch). STILL OPEN: the one-month gap rule.
+  20261112107000 (applied): Codex P1 fixes - settle no longer writes the GENERATED total_tokens (would have stranded every
+  reservation); findings can only be inserted 'proposed' and apply checks the target tyre + source line org/country;
+  knowledge chunks of a non-draft parent cannot be edited or deleted by a signed-in user.
   Edge fns redeployed from repo (verify_jwt false): ai-orchestrator v14, chat-ai v27, ai-tyre-inspection v24, embed-worker v11.
   GOTCHA: the Supabase MCP deploy tool DECODES backslash-u escapes in file text (U+2028 became a real line break and broke the
   bundle). Never write \uXXXX in edge-function source; build such chars with String.fromCharCode (done in aiSecurity.ts, logic.ts).

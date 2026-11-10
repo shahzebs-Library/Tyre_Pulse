@@ -58,6 +58,7 @@ const AGENT_ICONS = {
   [AGENT_TYPES.PLANNER]:       ClipboardList,
   [AGENT_TYPES.SAFETY]:        ShieldAlert,
   [AGENT_TYPES.PROCUREMENT]:   ShoppingCart,
+  [AGENT_TYPES.COST_AUDIT]:    Coins,
 }
 
 const KPI_ICONS = {

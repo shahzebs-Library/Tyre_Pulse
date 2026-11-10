@@ -9,8 +9,8 @@ import * as aiRouter from '../lib/aiRouter'
 import { coverageLines, groundingNotice } from '../lib/aiCoverage'
 
 describe('shared agent registry', () => {
-  it('has six agents, each with registered read-only tools', () => {
-    expect(ALL_AGENTS).toHaveLength(6)
+  it('has seven agents, each with registered read-only tools', () => {
+    expect(ALL_AGENTS).toHaveLength(7)
     for (const a of ALL_AGENTS) {
       expect(AGENT_PROFILES[a].tools.length).toBeGreaterThan(0)
       for (const t of AGENT_PROFILES[a].tools) {
@@ -57,12 +57,12 @@ describe('engineering guidance is correct', () => {
 
 describe('role access is deny-by-default and narrows agents', () => {
   it('maps real profile roles', () => {
-    expect(agentsForRole('Manager')).toHaveLength(6)
+    expect(agentsForRole('Manager')).toHaveLength(7)
     expect(agentsForRole('Tyre Data Collector')).toEqual(['tyre_engineer', 'qa_data'])
     expect(agentsForRole('Tyre Man')).not.toContain('procurement')
     expect(agentsForRole('Welder')).toEqual([])
     expect(agentsForRole('Reporter')).toEqual([])
-    expect(agentsForRole('Welder', true)).toHaveLength(6)
+    expect(agentsForRole('Welder', true)).toHaveLength(7)
   })
   it('an explicit request for a forbidden agent is refused, auto falls back', () => {
     const allowed = agentsForRole('Tyre Man')
@@ -187,5 +187,18 @@ describe('knowledge tool returns approved documents with citations only', () => 
   it('says no approved document matched instead of returning an empty list silently', async () => {
     const r = await runTool(mockDb({ rpcData: [] }), { orgId: 'o', embedQuery: async () => [0.1], now: NOW }, 'search_knowledge_base', { query: 'x' })
     expect(JSON.parse(r.output)._provenance.notes.join(' ')).toMatch(/Do NOT invent/)
+  })
+})
+
+describe('tyre cost audit agent', () => {
+  it('routes price questions to it and runs the scan as a dry run only', async () => {
+    expect(classifyQuery('how many tyres have zero cost and can we recover the price')).toBe('cost_audit')
+    expect(buildSystemPrompt(['cost_audit'])).toMatch(/NEVER invent, average or estimate a price/)
+    const db = mockDb({ rpcData: { ok: true, checked: 10 } })
+    await runTool(db, { orgId: 'o', now: NOW }, 'get_tyre_cost_audit', { country: 'KSA' })
+    expect(db.calls[0]).toEqual({ fn: 'tyre_cost_audit_scan', args: { p_country: 'KSA', p_from: '2025-01-01', p_to: '2026-11-10', p_dry_run: true } })
+  })
+  it('field roles cannot use it', () => {
+    expect(agentsForRole('Tyre Man')).not.toContain('cost_audit')
   })
 })

@@ -56,6 +56,7 @@ export const TOOL_DEFS = [
   { name: 'get_tyre_evidence_audit', description: 'Evidence classification of tyre fitments from 2025-01-01: verified vs estimated, blank serials, duplicates, legacy actives, installs vs ERP issued quantity.', input_schema: { type: 'object', properties: { country: scope.country, from: scope.from, to: scope.to } } },
   { name: 'get_tyre_exceptions', description: 'Current tyre data exceptions: serials on two vehicles, double-active wheels, reversed dates, price anomalies.', input_schema: { type: 'object', properties: { country: scope.country } } },
   { name: 'get_maintenance_snapshot', description: 'Job card counts and maintenance spend by type, site and asset for a period.', input_schema: { type: 'object', properties: scope } },
+  { name: 'get_tyre_cost_audit', description: 'Deterministic tyre cost audit (dry run, nothing saved): tyres checked by country and class (verified, warranty excluded, exact same-month match, conflict, month mismatch, estimate not verified, unresolved) with proposed amounts per currency.', input_schema: { type: 'object', properties: { country: scope.country, from: scope.from, to: scope.to } } },
   { name: 'get_data_trust_overview', description: 'Data-quality scores and reasons per KPI domain (completeness, validity, consistency).', input_schema: { type: 'object', properties: { country: scope.country, from: scope.from, to: scope.to } } },
   { name: 'count_records', description: 'Count records the user can see. Resources: ' + Object.keys(COUNTABLE).join(', ') + '. Optional site and since-date (business date).', input_schema: { type: 'object', properties: { resource: { type: 'string', enum: Object.keys(COUNTABLE) }, site: scope.site, since: { type: 'string', description: 'YYYY-MM-DD' } }, required: ['resource'] } },
   { name: 'list_recent_events', description: 'Most recent business events (inspections, tyre changes, accidents, approvals).', input_schema: { type: 'object', properties: { event_type: { type: 'string' }, limit: { type: 'integer', description: 'Default 20, max 50' } } } },
@@ -170,6 +171,8 @@ export async function runTool(db: Db, ctx: ToolContext, name: string, input: Rec
       return callRpc(db, name, 'get_tyre_exceptions', { p_country: country }, now, notes)
     case 'get_maintenance_snapshot':
       return callRpc(db, name, 'get_maintenance_snapshot', { p_site: site, p_country: country, p_from: from, p_to: to }, now, notes)
+    case 'get_tyre_cost_audit':
+      return callRpc(db, name, 'tyre_cost_audit_scan', { p_country: country, p_from: from ?? '2025-01-01', p_to: to ?? now.toISOString().slice(0, 10), p_dry_run: true }, now, notes)
     case 'get_data_trust_overview':
       return callRpc(db, name, 'get_data_trust_overview', { p_country: country, p_from: from, p_to: to }, now, notes)
     case 'count_records': {

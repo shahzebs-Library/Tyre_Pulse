@@ -14,6 +14,7 @@ export const TOOL_POLICY: Record<string, ToolPolicy> = {
   get_tyre_evidence_audit: { risk: 'read', requiresApproval: false, sourceLabel: 'Tyre evidence audit (2025 onward)' },
   get_tyre_exceptions: { risk: 'read', requiresApproval: false, sourceLabel: 'Tyre data exceptions' },
   get_maintenance_snapshot: { risk: 'read', requiresApproval: false, sourceLabel: 'Maintenance snapshot' },
+  get_tyre_cost_audit: { risk: 'read', requiresApproval: false, sourceLabel: 'Tyre cost audit (dry run)' },
   get_data_trust_overview: { risk: 'read', requiresApproval: false, sourceLabel: 'Data trust scores' },
   search_knowledge_base: { risk: 'read', requiresApproval: false, sourceLabel: 'Knowledge base' },
   count_records: { risk: 'read', requiresApproval: false, sourceLabel: 'Operational record count' },

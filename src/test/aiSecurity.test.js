@@ -28,7 +28,7 @@ const MATRIX = [
   ['Admin', ALL_AGENTS],
   ['Manager', ALL_AGENTS],
   ['Director', ALL_AGENTS],
-  ['Tire Planning Engineer', ['analyst', 'tyre_engineer', 'qa_data', 'planner', 'procurement']],
+  ['Tire Planning Engineer', ['analyst', 'tyre_engineer', 'qa_data', 'planner', 'procurement', 'cost_audit']],
   ['Tyre Man', ['tyre_engineer', 'qa_data', 'safety']],
   ['Tyre Data Collector', ['tyre_engineer', 'qa_data']],
   ['Inspector', ['tyre_engineer', 'qa_data', 'safety']],

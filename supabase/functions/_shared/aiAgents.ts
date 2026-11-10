@@ -13,6 +13,7 @@ export const AGENT_TYPES = {
   PLANNER: 'planner',
   SAFETY: 'safety',
   PROCUREMENT: 'procurement',
+  COST_AUDIT: 'cost_audit',
 } as const
 
 export type AgentType = typeof AGENT_TYPES[keyof typeof AGENT_TYPES]
@@ -20,6 +21,7 @@ export const ALL_AGENTS: AgentType[] = Object.values(AGENT_TYPES)
 
 // Domain patterns, ordered by specificity. Analyst is the fallback.
 export const AGENT_PATTERNS: Array<[AgentType, RegExp]> = [
+  [AGENT_TYPES.COST_AUDIT, /zero.?cost|missing (tyre )?(price|cost)|tyre price|price recover|cost audit|unpriced|cost pending|(tube|flap).*(cost|price)|(cost|price).*(tube|flap)|warranty.*(price|cost)/],
   [AGENT_TYPES.QA_DATA, /duplicat|data qualit|clean|incorrect|invalid|missing data|serial.*(error|wrong|dup)|error in data|wrong entry|bad data|corrupt|data issue|verify data|overlap|odometer.*(wrong|error|suspic)|integrity/],
   [AGENT_TYPES.SAFETY, /accident|incident|hse|safety|injury|collision|rollover|near.?miss|casualt|compliance|overdue inspection|inspection.*(due|overdue|complian)|violation|driver behav|fatigue|speeding|road safety|claim.*(reject|delay)|corrective action/],
   [AGENT_TYPES.PROCUREMENT, /procure|procurement|purchas|vendor|supplier|which brand|best brand|brand.*(value|rank|choice|best|worst)|buy|order from|quotation|tender|negotiat|best deal|value for money|what.*(brand|tyre).*(buy|order)|lead time|credit term/],
@@ -172,6 +174,18 @@ export const AGENT_PROFILES: Record<AgentType, AgentProfile> = {
       'Flag small samples: a brand with few completed lives cannot be ranked with confidence.',
     responseFormat: 'Recommendation, Comparable evidence (sample sizes), Cost basis, Caveats, Next step.',
   },
+  cost_audit: {
+    label: 'Tyre Cost Audit',
+    description: 'Missing or wrong tyre prices, safe same-month price recovery, tyre vs tube/spare separation',
+    tools: ['get_tyre_cost_audit', 'get_tyre_exceptions', 'count_records'],
+    instructions:
+      'You audit tyre acquisition costs using the deterministic audit scan. You NEVER invent, average or estimate a price. ' +
+      'A price can only be recovered from the same normalised item code in the SAME month (never another month), from a tyre-only line. ' +
+      'Warranty tyres are never repriced; unclear warranty goes to review. Tubes, flaps, valves, repairs and fitting are spare parts or services, never tyre cost. ' +
+      'An unknown cost is "Cost Pending Verification", never zero. Prices come from ERP store-issue lines; there is no invoice/GRN/PO data, say so. ' +
+      'You only propose; an authorised person approves and applies corrections in Data Reconciliation > Tyre Cost Audit.',
+    responseFormat: 'Finding (counts per class with [source-N]), Why (the rule that decided it), Financial effect per currency (never summed across currencies), What needs a person, Next step.',
+  },
 }
 
 export const GLOBAL_RULES =
@@ -196,7 +210,7 @@ export const ROLE_AGENTS: Record<string, AgentType[]> = {
   pmv_manager: ALL,
   workshop_maintenance_area_manager: ALL,
   fleet_supervisor: ALL,
-  tire_planning_engineer: ['analyst', 'tyre_engineer', 'qa_data', 'planner', 'procurement'],
+  tire_planning_engineer: ['analyst', 'tyre_engineer', 'qa_data', 'planner', 'procurement', 'cost_audit'],
   maintenance_supervisor: ['tyre_engineer', 'planner', 'safety'],
   workshop_supervisor: ['tyre_engineer', 'planner', 'safety'],
   inspector: ['tyre_engineer', 'qa_data', 'safety'],
@@ -246,7 +260,7 @@ export function toolsForAgents(agents: AgentType[]): string[] {
  * GLOBAL_RULES or WEAR_RULES change, so feedback and offline evaluation
  * (src/lib/aiEvaluation.js) can compare answers prompt version by version.
  */
-export const PROMPT_VERSION = 'agents-2026-11-v2'
+export const PROMPT_VERSION = 'agents-2026-11-v3'
 
 export function buildSystemPrompt(agents: AgentType[]): string {
   const parts = [GLOBAL_RULES]

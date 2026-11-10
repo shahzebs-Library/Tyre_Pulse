@@ -16,6 +16,7 @@ export const AGENT_LABELS = {
   [AGENT_TYPES.PLANNER]:       'Planner',
   [AGENT_TYPES.SAFETY]:        'Safety & HSE',
   [AGENT_TYPES.PROCUREMENT]:   'Procurement',
+  [AGENT_TYPES.COST_AUDIT]:    'Tyre Cost Audit',
 }
 
 export const AGENT_COLORS = {
@@ -25,6 +26,7 @@ export const AGENT_COLORS = {
   [AGENT_TYPES.PLANNER]:       { bg: 'bg-emerald-900/40', text: 'text-emerald-300', border: 'border-emerald-700/50' },
   [AGENT_TYPES.SAFETY]:        { bg: 'bg-red-900/40', text: 'text-red-300', border: 'border-red-700/50' },
   [AGENT_TYPES.PROCUREMENT]:   { bg: 'bg-teal-900/40', text: 'text-teal-300', border: 'border-teal-700/50' },
+  [AGENT_TYPES.COST_AUDIT]:    { bg: 'bg-orange-900/40', text: 'text-orange-300', border: 'border-orange-700/50' },
 }
 
 export const AGENT_DESCRIPTIONS = {
@@ -34,6 +36,7 @@ export const AGENT_DESCRIPTIONS = {
   [AGENT_TYPES.PLANNER]:       'Maintenance scheduling, replacement forecasting, budget planning',
   [AGENT_TYPES.SAFETY]:        'Accidents, inspection compliance, corrective actions, driver risk',
   [AGENT_TYPES.PROCUREMENT]:   'Brand/vendor value ranking, purchasing and order planning',
+  [AGENT_TYPES.COST_AUDIT]:    'Missing tyre prices, same-month recovery, tyre vs tube/spare cost',
 }
 
 // ── Agent Routing ─────────────────────────────────────────────────────────────

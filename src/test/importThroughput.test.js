@@ -30,7 +30,7 @@ const h = vi.hoisted(() => {
     state.inFlight += 1
     state.maxInFlight = Math.max(state.maxInFlight, state.inFlight)
     const res = state.outcome(call)
-    return new Promise((resolve) => {
+    const p = new Promise((resolve) => {
       const finish = () => {
         state.inFlight -= 1
         if (res === 'transient') resolve({ data: null, error: { message: 'Failed to fetch' } })
@@ -39,13 +39,13 @@ const h = vi.hoisted(() => {
       }
       if (state.delayMs) setTimeout(finish, state.delayMs); else finish()
     })
+    p.select = () => p // parts insert asks for the stored ids back
+    return p
   }
   const from = (table) => ({
     insert: insert(table),
     select: () => ({ not: () => ({ range: () => Promise.resolve({ data: [], error: null }) }),
-                     eq: () => ({ range: () => Promise.resolve({ data: [], error: null }),
-                                  // stored-line lookup used by the re-upload guard
-                                  in: () => ({ order: () => ({ range: () => Promise.resolve({ data: [], error: null }) }) }) }),
+                     eq: () => ({ range: () => Promise.resolve({ data: [], error: null }) }),
                      range: () => Promise.resolve({ data: [], error: null }) }),
     delete: () => ({ eq: () => Promise.resolve({ error: null }) }),
   })

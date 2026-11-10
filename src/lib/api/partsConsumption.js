@@ -105,38 +105,28 @@ export function expenseLineKey(r) {
 }
 
 /**
- * Drop file rows that are already stored. Multiplicity-aware: if a line appears
- * three times in the file and twice in the database, one is kept, so two genuinely
- * identical lines on the same issue are never collapsed. Applies to every row,
- * whether or not it carries `#`. The database trigger trg_dedupe_expense_reupload
- * applies the same rule to uploads that bypass the app.
- * @returns {{ keep: Array<Object>, dropped: number }}
+ * Split rows into insert chunks so every copy of the same line lands in ONE chunk.
+ * The database guard (trg_dedupe_expense_reupload) is the single authority on
+ * re-uploaded lines and counts copies per transaction; each chunk is its own
+ * transaction, so splitting a line's copies across chunks would make the guard skip
+ * a genuinely extra copy. A group larger than `size` stays whole.
+ * @returns {Array<Array<Object>>}
  */
-export function dropStoredDuplicates(rows = [], existing = []) {
-  const stored = new Map()
-  for (const e of existing) {
-    const k = expenseLineKey(e)
-    stored.set(k, (stored.get(k) || 0) + 1)
-  }
-  const keep = []
-  let dropped = 0
+export function chunkByLineKey(rows = [], size = INSERT_CHUNK) {
+  const groups = new Map()
   for (const r of rows) {
     const k = expenseLineKey(r)
-    const left = stored.get(k) || 0
-    if (left > 0) { stored.set(k, left - 1); dropped += 1 } else keep.push(r)
+    if (!groups.has(k)) groups.set(k, [])
+    groups.get(k).push(r)
   }
-  return { keep, dropped }
-}
-
-async function loadStoredLinesForDays(country, days) {
-  if (!country || !days.length) return []
-  const { fetchAllPages } = await import('../fetchAll')
-  const build = () => supabase.from('parts_consumption')
-    .select('id, country, issue_number, work_order_no, item_code, event_date, qty, value_amount, store_code, cost_center')
-    .eq('country', country).in('event_date', days).order('id')
-  const { data, error } = await fetchAllPages(build, { max: 200000 })
-  if (error) throw toServiceError(error)
-  return data || []
+  const chunks = []
+  let cur = []
+  for (const g of groups.values()) {
+    if (cur.length && cur.length + g.length > size) { chunks.push(cur); cur = [] }
+    cur.push(...g)
+  }
+  if (cur.length) chunks.push(cur)
+  return chunks
 }
 
 /**
@@ -161,24 +151,11 @@ export async function insertPartsConsumption(rows = [], { country = null, onProg
   })
 
   // `#` is only the per-file row counter, so import_uid cannot stop a re-upload of
-  // an overlapping export. Compare every line against what is already stored for
-  // the same country and days and skip lines that are already there.
+  // an overlapping export. The database guard skips lines already stored (one
+  // authority, so a line is never counted twice); each chunk reports what it
+  // actually stored and the difference is `skipped`.
+  const clean = projected
   let skipped = 0
-  let clean = projected
-  if (projected.length) {
-    const byCountry = new Map()
-    for (const r of projected) {
-      const day = parseDate(r.txn_date)
-      if (!r.country || !day) continue
-      if (!byCountry.has(r.country)) byCountry.set(r.country, new Set())
-      byCountry.get(r.country).add(day)
-    }
-    const existing = []
-    for (const [c, days] of byCountry) existing.push(...await loadStoredLinesForDays(c, [...days]))
-    const res = dropStoredDuplicates(projected, existing)
-    clean = res.keep
-    skipped = res.dropped
-  }
 
   let inserted = 0
   const deferred = [] // chunks that hit a transient error - retried after the main pass
@@ -186,8 +163,8 @@ export async function insertPartsConsumption(rows = [], { country = null, onProg
   const tryChunk = async (chunk, attempts) => {
     let lastErr = null
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
-      const { error } = await supabase.from('parts_consumption').insert(chunk)
-      if (!error) return { ok: true }
+      const { data, error } = await supabase.from('parts_consumption').insert(chunk).select('id')
+      if (!error) return { ok: true, stored: Array.isArray(data) ? data.length : chunk.length }
       lastErr = error
       if (isFatalInsertError(error)) throw error // won't fix itself - abort
       // Only wait if another attempt follows. Sleeping after the LAST one adds
@@ -211,8 +188,7 @@ export async function insertPartsConsumption(rows = [], { country = null, onProg
   //
   // Four, not more: every row runs the classification trigger, so concurrency
   // multiplies peak write load by the same factor.
-  const chunks = []
-  for (let i = 0; i < clean.length; i += INSERT_CHUNK) chunks.push(clean.slice(i, i + INSERT_CHUNK))
+  const chunks = chunkByLineKey(clean, INSERT_CHUNK)
 
   let cursor = 0
   let fatal = null
@@ -223,7 +199,7 @@ export async function insertPartsConsumption(rows = [], { country = null, onProg
       if (idx >= chunks.length || fatal) return
       try {
         const res = await tryChunk(chunks[idx], MAX_ATTEMPTS)
-        if (res.ok) inserted += chunks[idx].length
+        if (res.ok) { inserted += res.stored; skipped += chunks[idx].length - res.stored }
         else deferred.push(chunks[idx])
       } catch (err) {
         // Hold the first fatal error and let the pool drain. Throwing from
@@ -232,7 +208,7 @@ export async function insertPartsConsumption(rows = [], { country = null, onProg
         fatal = fatal || err
         return
       }
-      if (onProgress) onProgress(inserted, clean.length)
+      if (onProgress) onProgress(inserted + skipped, clean.length)
     }
   }))
   if (fatal) { fatal.inserted = inserted; throw fatal }
@@ -243,8 +219,8 @@ export async function insertPartsConsumption(rows = [], { country = null, onProg
     await sleep(2500)
     for (const chunk of deferred) {
       const res = await tryChunk(chunk, MAX_ATTEMPTS)
-      if (res.ok) { inserted += chunk.length } else { failed += chunk.length }
-      if (onProgress) onProgress(inserted, clean.length)
+      if (res.ok) { inserted += res.stored; skipped += chunk.length - res.stored } else { failed += chunk.length }
+      if (onProgress) onProgress(inserted + skipped, clean.length)
     }
   }
   return { inserted, failed, skipped }

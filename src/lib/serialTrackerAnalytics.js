@@ -18,7 +18,7 @@
  */
 
 import {
-  toLifetimeTyres, isStrongSerial, lifetimeCpk, fullLifetimeCpk, weightedCpk, CPK_KIND, CPK_KIND_LABEL,
+  toLifetimeTyres, isStrongSerial, lifetimeCpk, fullLifetimeCpk, weightedCpk, compareFitments, CPK_KIND, CPK_KIND_LABEL,
 } from './tyreLifetime'
 
 export const ACTIVE_WINDOW_MONTHS = 12
@@ -44,17 +44,17 @@ export function recordPrice(r) {
   return n != null && n > 0 ? n : null
 }
 
-const dateKey = (r) => String(r?.issue_date ?? r?.fitment_date ?? '').slice(0, 10)
-
 /**
  * The tyre's purchase price: the FIRST priced record (oldest fitment) - rule T1.
- * A refit is never another purchase, so a later price is not used.
+ * A refit is never another purchase, so a later price is not used. "First" is
+ * the shared fitment order (date, then id - compareFitments), so a serial priced
+ * twice on the same day gets the SAME price here as in lifetime CPK, scrap cost
+ * and TCO (it used to take whichever row the query returned first).
  */
 export function serialPrice(records) {
   const list = (Array.isArray(records) ? records : []).filter((r) => recordPrice(r) != null)
   if (!list.length) return null
-  const first = list.reduce((a, r) => (dateKey(r) && (!dateKey(a) || dateKey(r) < dateKey(a)) ? r : a), list[0])
-  return recordPrice(first)
+  return recordPrice([...list].sort(compareFitments)[0])
 }
 
 /**

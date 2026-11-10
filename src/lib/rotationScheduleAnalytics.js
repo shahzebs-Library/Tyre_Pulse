@@ -17,6 +17,7 @@
  *     rotation; without both it is null, never a flat assumption factor.
  */
 import { normalizePosition } from './tyrePositions'
+import { fitmentKm, withOnePricePerTyre } from './tyreLifetime'
 
 export const DEFAULT_INTERVAL = 20_000
 export const MIN_INTERVAL = 10_000
@@ -180,7 +181,10 @@ export function lifeComparison(records = [], rotations = {}) {
     const a = num(r.km_at_fitment)
     const b = num(r.km_at_removal)
     if (a == null || b == null || b <= a) continue
-    ;(rotations[serialOf(r)] ? withRotation : withoutRotation).push(b - a)
+    // Shared km rule (T7): a placeholder fitment km or an over-cap life is unknown.
+    const km = fitmentKm(r)
+    if (km == null || km <= 0) continue
+    ;(rotations[serialOf(r)] ? withRotation : withoutRotation).push(km)
   }
   const w = mean(withRotation)
   const wo = mean(withoutRotation)
@@ -196,7 +200,8 @@ export function lifeComparison(records = [], rotations = {}) {
 export function averageTyreCost(records = []) {
   let spend = 0
   let qty = 0
-  for (const r of records) {
+  // One tyre, one price (T1): a refitted tyre priced twice is one purchase.
+  for (const r of withOnePricePerTyre(records)) {
     const c = num(r.cost_per_tyre)
     if (c == null || c <= 0) continue
     const q = num(r.qty) != null && num(r.qty) > 0 ? num(r.qty) : 1

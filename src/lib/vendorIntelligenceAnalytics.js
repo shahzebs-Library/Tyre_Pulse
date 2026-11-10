@@ -14,6 +14,7 @@
  * Per-brand / per-site cost stays on tyre_records with a note, as the grid
  * cannot attribute cost to a brand.
  */
+import { fitmentKm } from './tyreLifetime'
 
 /** Filter tyre records by site and normalised position group. */
 export function filterVendorRecords(records = [], { site = 'all', position = 'all' } = {}, normalizePosition = (p) => p) {
@@ -67,11 +68,15 @@ export function actionsBySite(actions = []) {
   return m
 }
 
-/** Measured km across records that have a valid fit to removal run. */
+/**
+ * Measured km across records that have a valid fit to removal run, each run
+ * measured by the shared km rule (fitmentKm, T7): a placeholder fitment km of 1
+ * or a life over the class cap is unknown, not distance.
+ */
 export function measuredKm(records = []) {
   return (records || [])
     .filter((r) => r.km_at_fitment != null && r.km_at_removal != null && Number(r.km_at_removal) > Number(r.km_at_fitment))
-    .reduce((s, r) => s + (Number(r.km_at_removal) - Number(r.km_at_fitment)), 0)
+    .reduce((s, r) => s + (fitmentKm(r) ?? 0), 0)
 }
 
 /**

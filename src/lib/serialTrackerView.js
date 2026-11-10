@@ -7,11 +7,13 @@
  *
  * Honesty rules:
  *   - A serial is not a unique tyre id; the records are fitments of it.
- *   - Distance is taken from the record (total_km, else removal minus fitment
- *     odometer). A missing or non-positive reading is null, never 0.
+ *   - Distance is the shared km rule (tyreKm.js, T7): removal minus fitment
+ *     odometer, else total_km; a placeholder fitment odometer of 1 or a life over
+ *     the class cap is unknown. A missing or non-positive reading is null, never 0.
  *   - Nothing is invented for columns tyre_records does not carry (pattern,
  *     load index, speed rating, DOT, temperature, who fitted the tyre).
  */
+import { fitmentKm } from './tyreLifetime'
 
 /** Status token on tyre_records -> the label and tone the page shows. */
 export const STATUS_META = {
@@ -51,12 +53,10 @@ const positionOf = (r) => cleanSerial(r?.position || r?.tyre_position) || null
 
 /** Distance one fitment ran, or null when it was not measured. */
 export function recordKm(r) {
-  const total = num(r?.total_km)
-  if (total != null && total > 0) return total
-  const a = num(r?.km_at_fitment)
-  const b = num(r?.km_at_removal)
-  if (a != null && b != null && b > a) return b - a
-  return null
+  // The shared km rule (tyreKm.js, T7). The old local rule preferred total_km,
+  // which on a placeholder fitment odometer of 1 is the MACHINE's odometer.
+  const km = fitmentKm(r)
+  return km != null && km > 0 ? km : null
 }
 
 /** The fitment the tyre is on now: the latest Active record, else null. */

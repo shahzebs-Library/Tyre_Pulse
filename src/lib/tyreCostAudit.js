@@ -280,7 +280,8 @@ export function costDisplay(cost, fmt = (n) => String(n)) {
 export function validateUploadRows(rows = [], opts = {}) {
   const seen = new Set()
   return rows.map((r, i) => {
-    const issues = []
+    const issues = []    // block the row
+    const warnings = []  // shown, row still imports (returns and reversals are real money)
     const kind = lineKind(r.description)
     const bucket = costBucket(kind)
     const date = monthKey(r.date)
@@ -288,9 +289,10 @@ export function validateUploadRows(rows = [], opts = {}) {
     const value = num(r.value)
     const item = normItemCode(r.itemCode)
     if (!date) issues.push('missing or invalid date')
-    if (!item) issues.push('missing item code')
-    if (qty == null || qty <= 0) issues.push('quantity must be above 0')
-    if (value != null && value < 0) issues.push('negative value')
+    if (!item) (bucket === 'tyre' ? issues : warnings).push('missing item code')
+    if (qty == null || qty === 0) (bucket === 'tyre' ? issues : warnings).push('quantity must be above 0')
+    if (qty != null && qty < 0) warnings.push('negative quantity (return or reversal)')
+    if (value != null && value < 0) warnings.push('negative value (return or reversal)')
     if (opts.currency && r.currency && str(r.currency).toUpperCase() !== str(opts.currency).toUpperCase()) issues.push(`currency ${r.currency} does not match ${opts.currency}`)
     const key = [item, date, qty, value, str(r.jobCard), str(r.serial)].join('|')
     const dup = seen.has(key); seen.add(key)
@@ -309,7 +311,7 @@ export function validateUploadRows(rows = [], opts = {}) {
     if (issues.length) { result = dup ? 'duplicate' : 'invalid'; action = dup ? 'Skip duplicate' : 'Correct the row' }
     return {
       row: r.line ?? i + 1, kind, bucket, uploaded: uploadedUnit ?? (value === 0 ? 0 : null),
-      proposed, source, result, action, issues,
+      proposed, source, result, action, issues, warnings,
     }
   })
 }

@@ -53,6 +53,7 @@ import {
   filterEvents, eventCounts, HISTORY_TABS, USAGE_TABS, lifeUsage, sparkPath, recordPhotos,
 } from '../lib/serialTrackerView'
 import { compareValues } from '../lib/consoleTable'
+import { costDisplay } from '../lib/tyreCostAudit'
 import './SerialTracker.css'
 
 // EnterpriseTable sorts through the shared console comparator, so blanks sort
@@ -60,6 +61,8 @@ import './SerialTracker.css'
 const sortCompare = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
 const blankToUndef = (v) => (v === null || v === undefined || v === '' ? undefined : v)
 const moneyFor = (n, country) => (n == null ? 'N/A' : formatCurrencyCompact(n, COUNTRY_CURRENCY[country] || 'SAR'))
+// Tyre price: an unknown price reads Cost Pending Verification, never 0 or N/A.
+const tyrePriceFor = (n, country) => costDisplay(n, (v) => formatCurrencyCompact(v, COUNTRY_CURRENCY[country] || 'SAR'))
 const fmtKm = (n) => (n == null ? 'N/A' : `${Math.round(n).toLocaleString('en-US')} km`)
 const dateOrNA = (v) => (v ? formatDate(v) : 'N/A')
 
@@ -556,7 +559,7 @@ export default function SerialTracker() {
     { id: 'position', accessorFn: r => blankToUndef(r.position || r.tyre_position), header: 'Position', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => <span className="font-mono">{getValue() || 'N/A'}</span> },
     { id: 'risk_level', accessorFn: r => blankToUndef(r.risk_level), header: 'Risk', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => <span className={riskColor(getValue())}>{getValue() || 'N/A'}</span> },
     { id: 'status', accessorFn: r => blankToUndef(r.status), header: 'Status', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => getValue() || 'N/A' },
-    { id: 'price', accessorFn: r => recordPrice(r) ?? undefined, header: 'Price per tyre', sortingFn: sortCompare, sortUndefined: 'last', meta: { align: 'right' }, cell: ({ row, getValue }) => moneyFor(getValue() ?? null, row.original.country) },
+    { id: 'price', accessorFn: r => recordPrice(r) ?? undefined, header: 'Price per tyre', sortingFn: sortCompare, sortUndefined: 'last', meta: { align: 'right' }, cell: ({ row, getValue }) => tyrePriceFor(getValue() ?? null, row.original.country) },
   ], [])
 
   const bulkColumns = useMemo(() => [
@@ -564,7 +567,7 @@ export default function SerialTracker() {
     { id: 'first_seen', accessorFn: r => blankToUndef(r.first_seen), header: 'First Seen', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => getValue() ? formatDate(getValue()) : 'N/A' },
     { id: 'last_asset', accessorFn: r => blankToUndef(r.last_asset), header: 'Last Asset', sortingFn: sortCompare, sortUndefined: 'last', cell: ({ getValue }) => <span className="font-mono">{getValue() || 'N/A'}</span> },
     { accessorKey: 'total_records', header: 'Records', sortingFn: sortCompare, meta: { align: 'right' } },
-    { id: 'cost', accessorFn: r => r.cost ?? undefined, header: 'Price per tyre', sortingFn: sortCompare, sortUndefined: 'last', meta: { align: 'right' }, cell: ({ row, getValue }) => moneyFor(getValue() ?? null, row.original.country) },
+    { id: 'cost', accessorFn: r => r.cost ?? undefined, header: 'Price per tyre', sortingFn: sortCompare, sortUndefined: 'last', meta: { align: 'right' }, cell: ({ row, getValue }) => tyrePriceFor(getValue() ?? null, row.original.country) },
     {
       accessorKey: 'status', header: 'Status', sortingFn: sortCompare,
       cell: ({ getValue }) => <span className={`cc-pill ${BULK_TONE[getValue()] || 'muted'}`}>{getValue()}</span>,
@@ -1125,7 +1128,7 @@ export default function SerialTracker() {
                   <Field label="Sites">{fmtInt(stats.sites)}</Field>
                   <Field label="Current life">{usage.totalKm == null ? null : fmtKm(usage.totalKm)}</Field>
                   <Field label="Expected life">{null}</Field>
-                  <Field label="Price per tyre">{moneyFor(stats.price, stats.country)}</Field>
+                  <Field label="Price per tyre">{tyrePriceFor(stats.price, stats.country)}</Field>
                   <Field label="Pattern">{catState.loading ? 'Checking' : catState.error ? 'Could not check' : (catEntry?.pattern || (catEntry ? null : 'Not in the catalogue'))}</Field>
                   <Field label="Load / speed">{catEntry ? ([[catEntry.load_index_single, catEntry.load_index_dual].filter((v) => v != null && v !== '').join('/'), catEntry.speed_rating].filter(Boolean).join(' ') || null) : null}</Field>
                 </dl>

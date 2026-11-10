@@ -144,6 +144,11 @@ describe('import validation', () => {
     expect(out[3].result).toBe('invalid')
     expect(out[3].issues.length).toBeGreaterThanOrEqual(3)
   })
+  it('returns and reversals still import, with a warning', () => {
+    const [r] = validateUploadRows([{ line: 9, description: 'INNER TUBE 1200-20', itemCode: '450001', date: '2026-03-05', qty: -1, value: -40 }], { priceIndex: idx, country: 'KSA' })
+    expect(r.result).toBe('valid')
+    expect(r.warnings.join()).toMatch(/return or reversal/)
+  })
   it('a mixed tyre+tube invoice reconciles to the file total with no double count', () => {
     const r = importReconciliation([
       { description: 'TYRE 1200R20', value: 1000 },

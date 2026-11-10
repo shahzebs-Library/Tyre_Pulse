@@ -35,7 +35,12 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   centre - raw text) was stored by ANY earlier write (IMMEDIATE since migration expense_reupload_guard_immediate;
   the 20-min window was dropped on owner request - 0 genuine same-file repeats in the data); multiplicity-aware via a txn-local GUC counter; logs to
   expense_import_rejects 'already_stored'. Bypass: old created_at (restores) or set tp.allow_dup_expense='on'.
-  Client dropStoredDuplicates now checks EVERY row (no source_row exemption) and keys on store + cost centre too.
+  CLIENT (PR #483, merged 8aea764b, prod READY): the DB trigger is the ONLY authority. Client pre-filter
+  (dropStoredDuplicates + stored-line lookup) was REMOVED after Codex P1s: (a) client and trigger both consumed the
+  same stored copy, so a genuine extra copy in the file was lost; (b) the lookup's builder ignored the page range.
+  insertPartsConsumption now sends every row, `chunkByLineKey` keeps all copies of a line in ONE chunk (trigger
+  counts per transaction = per chunk), insert uses `.select('id')` and skipped = chunk size - ids returned.
+  RULE: never re-add a client-side "already stored" filter on parts_consumption; it double-counts with the trigger.
 - Also removed: engine_hours_logs 9 exact phone double-submits (_bak.engine_hours_exact_dup_20261110); odometer 28 via
   Duplicate Control (batch 18bd650b); tyre_records 157 pairs MERGED (purchase row + removal row of one tyre; price, hours,
   second job card in extra_fields.merged_job_card; _bak.tyre_dup_merge_20261110). 32 tyre pairs with conflicting values left.

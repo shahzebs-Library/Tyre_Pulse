@@ -8,5 +8,11 @@
 -- workforce_employees, ai_tyre_inspection_jobs, ...). pre_request still blocked them over REST,
 -- but realtime and any non-REST path read RLS alone. Re-running restores full coverage
 -- (verified: 0 uncovered, 480 covered). Non-reader users are unaffected (is_reader() is false).
--- RULE: any migration that CREATES a table must end with this same call.
-select anum_integration.apply_reader_policies();
+-- RULE: any migration that CREATES a table must end with this same guarded call.
+-- Optional integration: a database built from this repository does not have it, so skip there.
+do $$
+begin
+  if to_regprocedure('anum_integration.apply_reader_policies()') is not null then
+    perform anum_integration.apply_reader_policies();
+  end if;
+end $$;

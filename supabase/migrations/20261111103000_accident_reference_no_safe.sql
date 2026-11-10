@@ -11,20 +11,18 @@
 do $$
 declare
   def text := pg_get_functiondef('public.accident_derive_fields()'::regprocedure);
-  a text := $a$      SELECT count(*) + 1 INTO v_seq
-        FROM public.accidents
-        WHERE organisation_id IS NOT DISTINCT FROM NEW.organisation_id
-          AND to_char(COALESCE(incident_date, created_at::date), 'YYYY') = v_year;$a$;
-  b text := $b$      PERFORM pg_advisory_xact_lock(hashtext('accident_ref|' || COALESCE(NEW.organisation_id::text, '') || '|' || v_year));
+  -- Whitespace-tolerant: the repo baseline (V300) and the live body wrap this differently.
+  pat text := 'SELECT\s+count\(\*\)\s*\+\s*1\s+INTO\s+v_seq\s+FROM\s+public\.accidents\s+WHERE\s+organisation_id\s+IS\s+NOT\s+DISTINCT\s+FROM\s+NEW\.organisation_id\s+AND\s+to_char\(COALESCE\(incident_date,\s*created_at::date\),\s*''YYYY''\)\s*=\s*v_year;';
+  b text := $b$PERFORM pg_advisory_xact_lock(hashtext('accident_ref|' || COALESCE(NEW.organisation_id::text, '') || '|' || v_year));
       SELECT COALESCE(max(substring(reference_no from '^ACC-' || v_year || '-(\d+)$')::int), 0) + 1 INTO v_seq
         FROM public.accidents
         WHERE organisation_id IS NOT DISTINCT FROM NEW.organisation_id
           AND reference_no LIKE 'ACC-' || v_year || '-%';$b$;
   n int;
 begin
-  n := (length(def) - length(replace(def, a, ''))) / length(a);
+  n := (select count(*) from regexp_matches(def, pat, 'g'));
   if n <> 1 then raise exception 'anchor found % times', n; end if;
-  execute replace(def, a, b);
+  execute regexp_replace(def, pat, replace(b, '\', '\\'));
 end $$;
 
 create unique index if not exists accidents_org_reference_no_uidx

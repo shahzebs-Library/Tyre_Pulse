@@ -75,3 +75,28 @@ No migration was needed.
 4. Atomic budget reservation for the orchestrator (mirror `ai-tyre-inspection/budget.ts`).
 5. Answer feedback loop: write thumbs/corrections to `ai_feedback`, build an offline evaluation set; no online retraining.
 6. AI-prepared proposals on the domain-event bus (critical findings, CPK spikes, warranty opportunities), approval-gated.
+
+## 7. Supervised feedback loop (F12) - code done, migration authored not applied
+
+- Command Center: Helpful / Not helpful under every saved answer; Not helpful takes a category
+  (wrong figure, wrong cause, missing data, unsafe, other), a correct answer and a note.
+  `src/components/ai/AnswerFeedback.jsx`, service `src/lib/api/aiFeedback.js`.
+- `ai-orchestrator` now returns `assistant_message_id` (the saved `ai_messages` row) and
+  `prompt_version` (`PROMPT_VERSION` in `_shared/aiAgents.ts`, bump on any prompt change). Needs a redeploy.
+- Migration `supabase/migrations/20261112101000_ai_feedback_loop.sql` (NOT applied). Live check:
+  `ai_feedback.message_id` is uuid but `ai_messages.id` is bigint, every member could read every
+  member's feedback, and insert did not bind `user_id`. Adds a bigint answer reference, agent, category,
+  question/answer snapshot (trigger, own answers only), expected answer, expert verification
+  (reviewer-only, trigger-enforced), own + reviewer RLS, one rating per person per answer.
+  Until applied, the client stores feedback in the V205 shape with the answer id in the note.
+- AI Administration > Feedback: filters (verdict, category, agent, verification, date), review and
+  "expert verified" in the edit dialog, Excel/PDF, and an evaluation dataset export (verified rows only).
+  Also fixed: the tab applied a country filter to a table with no country column, which silently
+  emptied it whenever a country was selected.
+- Offline evaluation `src/lib/aiEvaluation.js` + `scripts/ai-eval.mjs` (no paid calls): versioned dataset,
+  deterministic split by conversation (no leakage), checks (cites `[source-N]` when grounded, no figures
+  when nothing was retrieved, tyre engineer states missing evidence, expected figures/terms).
+- Promotion rule: candidate scored on the HOLDOUT must beat the current prompt by >= 2 points on >= 30
+  items, no regression on unsafe/critical items, then a named human approves; the previous prompt version
+  stays deployable for rollback. Nothing is promoted automatically. Reviewer role (Admin/Manager/Director)
+  is an owner decision.

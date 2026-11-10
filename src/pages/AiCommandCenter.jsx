@@ -22,6 +22,7 @@ import {
 } from '../lib/aiOrchestratorClient'
 import { getUsageOverview } from '../lib/api/aiOps'
 import { coverageLines, groundingNotice } from '../lib/aiCoverage'
+import AnswerFeedback from '../components/ai/AnswerFeedback'
 import { supabase } from '../lib/supabase'
 import { toUserMessage } from '../lib/safeError'
 import { formatDateTime } from '../lib/formatters'
@@ -426,6 +427,9 @@ function MessageBubble({ message, onCopy }) {
             {expanded ? 'Collapse' : 'Expand'}
           </button>
         </div>
+        <div className="mt-1 pl-1">
+          <AnswerFeedback message={message} />
+        </div>
       </div>
     </motion.div>
   )
@@ -606,6 +610,12 @@ export default function AiCommandCenter() {
         agentType:   Array.isArray(result.agents) && result.agents.length ? result.agents[0] : agentType,
         agents:      Array.isArray(result.agents) ? result.agents : null,
         coverage:    coverageLines(result.coverage),
+        // Feedback context: the saved ai_messages row and what the answer rested on.
+        dbMessageId:    result.assistant_message_id ?? null,
+        conversationId: result.conversation_id,
+        grounded:       typeof result.grounded === 'boolean' ? result.grounded : null,
+        rawCoverage:    Array.isArray(result.coverage) ? result.coverage : null,
+        promptVersion:  result.prompt_version ?? null,
         notice:      groundingNotice(result),
         toolCalls:   result.tool_calls ?? [],
         sources:     result.sources ?? [],
@@ -672,6 +682,8 @@ export default function AiCommandCenter() {
         role: row.role,
         content: row.content,
         agentType: row.role === 'assistant' ? (conversation.agent || AGENT_TYPES.ANALYST) : null,
+        dbMessageId: row.role === 'assistant' ? row.id : null,
+        conversationId: conversation.id,
         timestamp: row.created_at ? new Date(row.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
       })))
       setConversationId(conversation.id)

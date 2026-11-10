@@ -89,3 +89,26 @@ Rules live in `src/lib/tyreCostAudit.js`; the SQL mirror is in
 3. Approve the 147 recoverable prices: 138 + 3 KSA, 2 UAE, 4 Egypt. All 144 exact own-line matches are high confidence.
 4. Whether a one-month gap between the tyre date and its own issue line counts as the same transaction.
 5. Load invoice or GRN data if verification beyond ERP issue lines is wanted.
+
+## End-to-end proof (rolled back, live database, 2026-11-10)
+
+Run inside one transaction that was rolled back. Nothing was kept.
+
+| Check | Result |
+|---|---|
+| Real KSA-only Manager runs and saves the audit | 8,166 tyres checked, 5,461 findings saved |
+| Same Manager audits UAE | 0 rows (country scope holds) |
+| Tyre Man runs the audit | refused (42501) |
+| Second scan | 0 new findings (idempotent) |
+| Approve + apply 5 exact matches (super admin) | 5 applied, kilometres unchanged |
+| Hand-inserted finding with an invented price (99,999) | approved but **not applied** (evidence check) |
+| Undo the batch | 5 restored, 0 skipped |
+
+## Where it lives
+
+- Dashboard: Data Reconciliation, "Tyre Cost Audit" tab (shows "not installed" until the migration is applied).
+- Import preview: ERP Intake (expense grid and monthly tyres), Data Intake Center (tyre, advisory).
+  - Uploaded price, proposed price, source, result and action are shown for every row.
+  - Returns and reversals still import, with a warning.
+- Cost display: Tyre Records, Tyre Passport and Serial Tracker show "Cost Pending Verification" for an unknown price.
+- AI: "Tyre Cost Audit" agent in the AI Command Center (dry-run scan only; proposes, never applies).

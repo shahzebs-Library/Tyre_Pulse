@@ -26,6 +26,23 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-11-10/11 — ENTERPRISE DELIVERABLES PACK (29 docs) + 6 FIXES + OWNER RULINGS. Migrations 20261111100000..104000 APPLIED LIVE. Branch claude/tyrepulse-inspector-build-7rxp2t.
+- docs/enterprise-pack/ = the spec §22 pack (README index + 01..29). Roadmap ids R-001..R-123 shared by 26/27/28/29. Update the doc that owns a topic; never a new file.
+- 100000: save_stock_entry/transfer_stock_entry 40001 -> PT409 (the September retry-loop class came back via 20261018120550). tyre_one_price_per_tyre (trigger fn) + reset_login_attempts revoked from anon. RULE again: never RAISE 40001 in a PostgREST-reachable fn.
+- 101000: get_tyre_running_life is_due now mirrors measureFor: soon = least(10000, 10% expected km) / least(500, 10% target hours). Due list 655 -> 597, rest byte-identical. Mirror pinned in tyreRunningLifeBands.test.js.
+- 102000: anum_integration = OWNER'S read-only reporting bot (owner 2026-11-11). Restrictive anum_reader_* policies on every RLS table + pgrst.db_pre_request = anum_integration.pre_request (GET-only on reader_tables, own org). Policies are generated once, so 33 newer tables were uncovered; re-applied (480). RULE: any migration that CREATES a table must end with `select anum_integration.apply_reader_policies();`. Do NOT remove the pre_request setting.
+- 103000: accident reference_no was count(*)+1 (reused after a delete or a race). Now max(suffix)+1 under pg_advisory_xact_lock + unique (organisation_id, reference_no). 108000 (Codex P1): accident_derive_fields is SECURITY INVOKER and accidents are country-isolated, so a country-scoped user's max() missed other countries -> now public.next_accident_reference(org, year) SECURITY DEFINER (returns only an int, refuses another org for non-super callers). Verified as a real Manager: own org 42, other org 42501, insert ACC-2026-0042 (rolled back). ACC-2026-0001/0002 appear twice but in DIFFERENT orgs (Company A + demo org) = correct.
+- 104000: OWNER: keep the enterprise approval engine. approval_policies (governed/versioned/audited, approval_private) KEPT; approval_matrix + resolve_approvers (V477, 0 rows, no callers) RETIRED read-only. 3 draft policies still need publishing (KSA Central - Sajid, KSA Western - Muzamil, All other - Admin). 'approval_matrix' inside other fns is the KEPT engine's context flag, not the table.
+- Accident emails: ON and working (mailbox tpe@greenconcrete.sa set 2026-09-21; ACC-2026-0041 emailed 29 Oct, HTTP 200). Owner unsure it was intended; left ON pending a clear "turn off".
+- Code: 4 readers moved fleet_master (empty legacy table) -> vehicle_fleet (LiveFleetStatus + ComplianceDashboard Active only, tyreSpecs, ragService). boardOverview: real zeros are 0 not N/A, isClosedWoStatus (Cancelled not open), tyre-spend trend from the expense grid like the headline.
+- 8 duplicate migration timestamps renamed (+1s, the side with fewer refs); src/test/migrationTimestampsUnique.test.js blocks new ones. The DB records migrations by apply time, so renames change nothing live.
+- UPLOAD CHECK 2026-11-10 (KSA: 209 expense lines SAR 39,817.65, 233 job cards, 3 tyre rows, 37 km + 25 hour phone readings). Expense lines clean (0 dup vs old, buckets reconcile, all SAR) BUT import_uid null on all 209: the `#` column again not mapped, so a re-upload duplicates. Fixes applied:
+  - 105000: ERP writes 1900-01-01 into blank date cells; erpIntake parseDate now returns '' for years < 1901. 42 job cards had completed_at 1900-01-01 -> NULL (_bak.wo_blank_date_20261111). The ~10,790 year-0022..0025 rows are the century-dropped class, still left per owner.
+  - 106000: KSA 220064-O / 211014-O GREASE NIPPLE were bulk-confirmed as lubricant (all 285 other nipples are spare_part) -> spare_part; 54 lines SAR 1,144.99 oil->spare, totals unchanged.
+  - 107000: ODOMETER TYPOS POISONED THE FLEET KM. Extra-digit phone readings (TM393 22,014,121,747; MP095 7,805,419,205; TM611 990,726,629 ...) were synced to vehicle_fleet.current_km; the forward-only sync then refused every correct reading, so 12 KSA vehicles were stuck and their tyre running life km was wrong. current_km reset to the latest plausible reading (_bak.odometer_typo_20261111), outlier logs flagged, 188 false 'Meter regression' flags cleared. GUARD: flag_meter_regression flags 'Implausible reading' (> 3x current and +20,000 km, or a first reading > 2,000,000) and sync_asset_current_km ignores it. Verified with a rolled-back typo insert.
+  - Tyre rows: 3 removals with no matching new fitments uploaded (TM611 LHCO, PL064 RHF2 serial '1', TM504 LHRI). TM504 LHRI: removed YMM15600 (fit 2025-08-12 @104,011) vs still-Active YMM33047 (fit 2025-08-11 @104,010) = probably one tyre under two serials. Left for the owner.
+  - PL067 engine hours 322,761 (= 36 years) and rising consistently: a wrong meter or unit, not a typo. Left.
+
 # ⚑ SESSION 2026-11-09 (team operations) — WORKFORCE OPERATIONS CORE. MERGED (#478, #479, #480). Migrations 20261109160000/170000/180000/190000 APPLIED LIVE. Next free timestamp after 20261109190000.
 - #479/#480: workforce web screens fully en/ar (namespace `workforce`, ~730 keys each). t() placeholders are SINGLE braces `{name}` (LanguageContext line ~147); `{{x}}` renders literally. Errors from the service layer translate through `src/lib/workforceErrorText.js` (refusal code -> reasonMessage(t); ERROR_KEYS table of English service messages; qualification reasons via qualificationReason). Services keep throwing English. NOT_INSTALLED now lives in workforceTransitions.js (re-exported by api/workforceAssignments).
 - Tests rendering workforce components without a LanguageProvider use `src/test/workforceLanguageMock.js` (the namespace loads lazily).
@@ -438,7 +455,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - CAUSE of "signed but Overdue": get_schedule_adherence matched an inspection to a plan ONLY on the plan day..+grace_days(2),
   so an approved inspection 3 days early/late left its plan Missed; and nothing ever set inspection_schedules.status
   (245/245 'Scheduled'), so the web planner's per-inspector Missed counted every past plan.
-- 20261007090000_inspection_plan_match_window: RULE = an inspection completes a plan for the same asset (same org, country
+- 20261007090001_inspection_plan_match_window: RULE = an inspection completes a plan for the same asset (same org, country
   agrees when both set) from inspection_plan_early_days() = 7 days BEFORE the plan date up to the day before the NEXT
   non-cancelled plan for that asset (none = open). grace_days now only decides Due->Missed for an UNMATCHED plan.
   Same rule in the RPC and in NEW trigger trg_complete_inspection_plans (AFTER INSERT/UPDATE OF status,inspection_date,asset_no
@@ -446,7 +463,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   Backfill: 9 plans Completed (_bak.inspection_plan_complete_20261007). Dry-run proved only 8 Missed/Due->Done + 2 ->Started.
   Fixed PL053 (Done+rejected -> In Progress, unlocked) and TM402 (rejected but locked -> unlocked), _bak.inspection_fix_20261007.
   Verified: trigger flips a plan only on approval (rolled-back test), manager RLS view identical, advisor clean.
-- 20261007110000_inspection_plan_reconcile (Codex P1 on #396): plan status is now kept in step BOTH ways. ONE matching rule
+- 20261007110001_inspection_plan_reconcile (Codex P1 on #396): plan status is now kept in step BOTH ways. ONE matching rule
   = inspection_plan_best_match(plan_id), used by get_schedule_adherence AND reconcile_inspection_plans(org, asset), which
   triggers on inspections (insert/update/delete) and inspection_schedules (insert/update/delete; pg_trigger_depth guard)
   call for the old and new asset. inspection_schedules.completed_inspection_id marks SYSTEM completions; only those are
@@ -455,7 +472,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   after a Done inspection -> Completed; inspection moved away -> Scheduled; back -> Completed; approval -> Completed.
   GOTCHA: an MCP execute_sql containing DELETE waits for approval and times out - test "evidence gone" via an UPDATE.
 - REAL GAP, not a bug: 245 planned assets, only 12 ever inspected; ~160 plans genuinely Missed (mostly BP/BH plants).
-- 20261007100000_inspection_signed_flags: PostgREST computed columns has_inspector_signature(inspections) /
+- 20261007100001_inspection_signed_flags: PostgREST computed columns has_inspector_signature(inspections) /
   has_approver_signature(inspections) (INVOKER). The register list loads these, NOT the images (still 54% of payload).
   Inspections register Filters panel has a "Sign-off" select: Not signed by inspector / Not approved yet /
   Approved, no approver signature (SIGNOFF_FILTERS + signoffMatches in src/lib/inspectionTyreFlags.js; URL key `signoff`).

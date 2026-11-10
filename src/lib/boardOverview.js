@@ -13,6 +13,7 @@
 
 import { computeAllKpis } from './kpiEngine'
 import { analyzeClaims, hasClaim, isClosed } from './claimsAnalytics'
+import { isClosedWoStatus } from './workOrderStatus'
 
 const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0)
 const isNum = (v) => Number.isFinite(Number(v))
@@ -60,7 +61,9 @@ export function buildBoardKpis({ tyres = [], inspections = [], actions = [], fle
 
   const tyreSpend = tyres.reduce((s, r) => s + n(r.cost_per_tyre) * (n(r.qty) || 1), 0)
   const openAccidents = accidents.filter((a) => !isClosed(a)).length
-  const openWo = workOrders.filter((w) => !/complete|closed|done/i.test(String(w.status || ''))).length
+  // One status vocabulary (workOrderStatus.js). The old local regex missed
+  // Cancelled, so a cancelled job card was counted as open work.
+  const openWo = workOrders.filter((w) => !isClosedWoStatus(w.status)).length
   const overdueWo = workOrders.filter((w) => {
     // `target_completion` is the due date work_orders actually carries (V381).
     // It was missing here, and `due_date`/`target_date` are not columns on that
@@ -69,7 +72,7 @@ export function buildBoardKpis({ tyres = [], inspections = [], actions = [], fle
     // other two names are kept because this engine is also fed rows from other
     // shapes in tests, and an absent field is simply skipped.
     const due = String(w.target_completion || w.due_date || w.target_date || '')
-    return due && due.slice(0, 10) < now.toISOString().slice(0, 10) && !/complete|closed|done/i.test(String(w.status || ''))
+    return due && due.slice(0, 10) < now.toISOString().slice(0, 10) && !isClosedWoStatus(w.status)
   }).length
   const lowStock = stock.filter((s) => isNum(s.quantity) && isNum(s.reorder_level) && n(s.quantity) <= n(s.reorder_level)).length
 
@@ -80,17 +83,17 @@ export function buildBoardKpis({ tyres = [], inspections = [], actions = [], fle
     avgTyreLifeKm: isNum(kpi?.avgTyreLife?.avgKm) ? n(kpi.avgTyreLife.avgKm) : null,
     failureRatePct: isNum(kpi?.failureRate?.failureRate) ? n(kpi.failureRate.failureRate) * 100 : null,
     tyreSpend: tyres.length ? Math.round(tyreSpend) : null,
-    accidents: accidents.length || null,
+    accidents: accidents.length,
     openAccidents,
-    claimsCount: claims.total || null,
-    claimed: claims.claimed || null,
-    recovered: claims.recovered || null,
-    netExposure: claims.netExposure || null,
-    inspections: inspections.length || null,
+    claimsCount: claims.total ?? null,
+    claimed: claims.total ? claims.claimed : null,
+    recovered: claims.total ? claims.recovered : null,
+    netExposure: claims.total ? claims.netExposure : null,
+    inspections: inspections.length,
     inspectionCompliancePct: kpi?.inspectionCompliance?.compliancePct ?? null,
-    workOrdersOpen: openWo || null,
+    workOrdersOpen: workOrders.length ? openWo : null,
     workOrdersOverdue: overdueWo,
-    stockItems: stock.length || null,
+    stockItems: stock.length,
     lowStock,
   }
 }

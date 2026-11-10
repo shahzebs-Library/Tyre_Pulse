@@ -13,6 +13,11 @@
  * here. If that shape changes on one side, change MIGRATIONS_V541_RUNNING_LIFE_
  * DUE_EITHER_BUDGET.sql on the other, or the due-only fetch and the on-screen
  * badge start disagreeing about which tyres are due - silently.
+ *
+ * The 10%-of-expected-life cap on the soon limit is mirrored by
+ * supabase/migrations/20261111101000_tyre_due_rule_matches_app.sql. Before it
+ * the server used a flat 10,000 km / 500 h, so 58 short-life tyres were 'due'
+ * on Inspections and 'mid-life' on Running & Remaining.
  */
 import { describe, it, expect } from 'vitest'
 import {
@@ -202,5 +207,14 @@ describe('two budgets, whichever comes first', () => {
     expect(measureFor(mixer).dimension).toBe('km')
     expect(measureFor(mixer).both).toBe(false)
     expect(measureNote(mixer)).toBe('')
+  })
+})
+
+describe('soon limit is capped at 10% of expected life (mirrors 20261111101000)', () => {
+  it('a 15,000 km tyre with 5,000 km left is mid-life, not due soon', () => {
+    expect(bandFor({ remainingKm: 5000, expectedLifeKm: 15000, lifeUsedPct: 66.7 })).toBe('mid-life')
+  })
+  it('the same tyre under 1,500 km left is due soon', () => {
+    expect(bandFor({ remainingKm: 1400, expectedLifeKm: 15000, lifeUsedPct: 80 })).toBe('due-soon')
   })
 })

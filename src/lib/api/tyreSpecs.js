@@ -55,16 +55,16 @@ export function listComplianceTyreRecords({ country, from: fromDate, to: toDate 
 
 /**
  * Fleet master rows for vehicle-type resolution. Mirrors the page's read
- * including its `.catch(() => ({ data: null }))` soft-fail (fleet_master may be
+ * including its `.catch(() => ({ data: null }))` soft-fail (the asset register may be
  * absent in some deployments).
  */
 export function getFleetMaster() {
-  // Paged: fleet_master is a full asset register, so an unbounded read stops at
+  // Paged: vehicle_fleet is the asset register (fleet_master is an empty legacy table), so an unbounded read stops at
   // the server's 1000-row cap and the compliance tab measures against a partial
   // fleet. `id` is the paging tiebreak.
   return fetchAllPages(
     (from, to) => supabase
-      .from('fleet_master')
+      .from('vehicle_fleet')
       .select('id, asset_no, vehicle_type, make, model, site, country')
       .order('asset_no').order('id').range(from, to),
     { max: 20000 },

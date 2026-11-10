@@ -10,7 +10,7 @@ import { PGlite } from '@electric-sql/pglite'
 const read = f => readFile(new URL(`../migrations/${f}`, import.meta.url), 'utf8')
 const transition = await read('20261022100900_tp_employee_action_transition.sql')
 const evidence = await read('20261022102000_team_action_private_evidence.sql')
-const pushEvents = await read('20261022113000_team_push_device_events.sql')
+const pushEvents = await read('20261022113001_team_push_device_events.sql')
 const senderVisibility = await read('20261022120000_team_broadcast_sender_push_event_visibility.sql')
 const cleanup = await read('20261022122500_team_action_orphan_cleanup.sql')
 const id = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`

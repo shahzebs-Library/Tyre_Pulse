@@ -66,9 +66,9 @@ describe('service layer - tyreSpecs', () => {
     expect(h.state.last._calls.eq).toHaveLength(0)
   })
 
-  it('getFleetMaster reads fleet_master and soft-fails to { data: null }', async () => {
+  it('getFleetMaster reads vehicle_fleet (the real register) and soft-fails to { data: null }', async () => {
     const res = await tyreSpecs.getFleetMaster()
-    expect(h.state.last._table).toBe('fleet_master')
+    expect(h.state.last._table).toBe('vehicle_fleet')
     expect(h.state.last._calls.select).toContain('vehicle_type')
     expect(res).toBeTruthy()
   })

@@ -529,6 +529,20 @@ export default function BoardOverview() {
    * (accidents, inspections) are untouched - they carry no currency.
    */
   const tyreSpendTrend = useMemo(() => {
+    // Same source as the headline: the classified expense grid. Summing
+    // tyre_records.cost_per_tyre (the old trend) disagreed with the headline
+    // because a third of tyres carry no price. Fall back only when the grid is empty.
+    if (costTotals.tyre > 0) {
+      if (costMixed) {
+        const s = perCountryMonthlySeries(costPerCountry, (m) => pickCost('tyres', m))
+        return { labels: s.labels.map(monthLabel), datasets: s.datasets }
+      }
+      const rows = cost?.byMonth || []
+      return {
+        labels: rows.map((r) => monthLabel(r.month)),
+        datasets: [{ label: 'Tyre spend', data: pickMonthly('tyres', rows).map((m) => m.value) }],
+      }
+    }
     if (!mixedCurrency || !data?.trends) return data?.trends?.tyreSpend
     return {
       labels: data.trends.labels,
@@ -537,7 +551,7 @@ export default function BoardOverview() {
         data: pc.trends.tyreSpend.datasets[0].data,
       })),
     }
-  }, [mixedCurrency, data, perCountry])
+  }, [mixedCurrency, data, perCountry, cost, costMixed, costPerCountry, costTotals])
 
   const claimsTrend = useMemo(() => {
     if (!mixedCurrency || !data?.trends) return data?.trends?.claims

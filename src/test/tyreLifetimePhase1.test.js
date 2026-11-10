@@ -172,7 +172,7 @@ describe('physical tyre lifetime (Phase 1)', () => {
   })
 
   it('SQL mirror: the migration defines the same key, km rule, overlap and status vocabulary', () => {
-    const sql = readFileSync(resolve(process.cwd(), 'supabase/migrations/20261109160000_tyre_physical_lifetime_cpk.sql'), 'utf8')
+    const sql = readFileSync(resolve(process.cwd(), 'supabase/migrations/20261109160001_tyre_physical_lifetime_cpk.sql'), 'utf8')
     expect(sql).toMatch(/tyre_serial_is_strong\(t\.serial_no\)/)
     expect(sql).toMatch(/tyre_km_life\(t\.km_at_fitment, t\.km_at_removal, t\.total_km, t\.vehicle_type\)/)
     expect(sql).toMatch(/order by fit_date nulls first, id/)

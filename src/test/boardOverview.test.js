@@ -116,3 +116,19 @@ describe('overdue work orders', () => {
     expect(build([{ status: 'In Progress' }]).workOrdersOverdue).toBe(0)
   })
 })
+
+describe('board KPI honesty fixes (enterprise pack 15)', () => {
+  it('a measured zero stays 0, not N/A', () => {
+    const k = buildBoardKpis({ accidents: [], inspections: [], stock: [], workOrders: [{ status: 'Completed' }] })
+    expect(k.accidents).toBe(0)
+    expect(k.inspections).toBe(0)
+    expect(k.workOrdersOpen).toBe(0)
+  })
+  it('no work orders loaded reads N/A, not 0', () => {
+    expect(buildBoardKpis({ workOrders: [] }).workOrdersOpen).toBeNull()
+  })
+  it('a cancelled job card is not open work', () => {
+    const k = buildBoardKpis({ workOrders: [{ status: 'Cancelled' }, { status: 'cancelled' }, { status: 'Open' }] })
+    expect(k.workOrdersOpen).toBe(1)
+  })
+})

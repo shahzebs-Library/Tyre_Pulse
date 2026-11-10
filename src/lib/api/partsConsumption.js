@@ -11,6 +11,7 @@
  */
 import { supabase, isMissingRelation, toServiceError, isNotProvisioned } from './_client'
 import { PARTS_FIELDS } from '../partsExpense'
+import { parseDate } from '../erpIntake'
 
 const INSERT_CHUNK = 200
 // Chunks in flight at once. This path is latency-bound, so this is the single
@@ -86,6 +87,49 @@ export async function importExpenseBatch(rows, { country, requestId, replace = f
 }
 
 /**
+ * Content key for one expense line: country, issue number, job card, item, day,
+ * qty, value, store and cost centre. The `#` column is NOT part of it: `#` is only
+ * the row counter of each downloaded file and restarts in every export, so the
+ * same ERP line carries a different `#` in two overlapping files (owner, 2026-11-10).
+ * Store and cost centre keep two sites' lines apart (V365 rule).
+ */
+export function expenseLineKey(r) {
+  const t = (v) => String(v ?? '').trim().toUpperCase()
+  const n = (v) => {
+    const x = Number(String(v ?? '').replace(/,/g, '').trim())
+    return Number.isFinite(x) ? String(Math.round(x * 100) / 100) : ''
+  }
+  const day = r.event_date ? String(r.event_date).slice(0, 10) : parseDate(r.txn_date)
+  return [t(r.country), t(r.issue_number), t(r.work_order_no), t(r.item_code), day, n(r.qty), n(r.value_amount),
+    t(r.store_code), t(r.cost_center)].join('|')
+}
+
+/**
+ * Split rows into insert chunks so every copy of the same line lands in ONE chunk.
+ * The database guard (trg_dedupe_expense_reupload) is the single authority on
+ * re-uploaded lines and counts copies per transaction; each chunk is its own
+ * transaction, so splitting a line's copies across chunks would make the guard skip
+ * a genuinely extra copy. A group larger than `size` stays whole.
+ * @returns {Array<Array<Object>>}
+ */
+export function chunkByLineKey(rows = [], size = INSERT_CHUNK) {
+  const groups = new Map()
+  for (const r of rows) {
+    const k = expenseLineKey(r)
+    if (!groups.has(k)) groups.set(k, [])
+    groups.get(k).push(r)
+  }
+  const chunks = []
+  let cur = []
+  for (const g of groups.values()) {
+    if (cur.length && cur.length + g.length > size) { chunks.push(cur); cur = [] }
+    cur.push(...g)
+  }
+  if (cur.length) chunks.push(cur)
+  return chunks
+}
+
+/**
  * Insert parsed grid rows in resilient chunks. Each row is projected to the raw
  * PARTS_FIELDS (+ country); unknown keys are dropped. The trigger classifies on insert.
  * Resilience: small chunks with jittered exponential backoff; a chunk that keeps
@@ -99,12 +143,19 @@ export async function importExpenseBatch(rows, { country, requestId, replace = f
  * @returns {Promise<{ inserted:number, failed:number }>}
  */
 export async function insertPartsConsumption(rows = [], { country = null, onProgress } = {}) {
-  const clean = rows.map((r) => {
+  const projected = rows.map((r) => {
     const out = {}
     for (const f of PARTS_FIELDS) out[f] = r[f] === '' || r[f] == null ? null : r[f]
     out.country = r.country || country || null
     return out
   })
+
+  // `#` is only the per-file row counter, so import_uid cannot stop a re-upload of
+  // an overlapping export. The database guard skips lines already stored (one
+  // authority, so a line is never counted twice); each chunk reports what it
+  // actually stored and the difference is `skipped`.
+  const clean = projected
+  let skipped = 0
 
   let inserted = 0
   const deferred = [] // chunks that hit a transient error - retried after the main pass
@@ -112,8 +163,8 @@ export async function insertPartsConsumption(rows = [], { country = null, onProg
   const tryChunk = async (chunk, attempts) => {
     let lastErr = null
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
-      const { error } = await supabase.from('parts_consumption').insert(chunk)
-      if (!error) return { ok: true }
+      const { data, error } = await supabase.from('parts_consumption').insert(chunk).select('id')
+      if (!error) return { ok: true, stored: Array.isArray(data) ? data.length : chunk.length }
       lastErr = error
       if (isFatalInsertError(error)) throw error // won't fix itself - abort
       // Only wait if another attempt follows. Sleeping after the LAST one adds
@@ -137,8 +188,7 @@ export async function insertPartsConsumption(rows = [], { country = null, onProg
   //
   // Four, not more: every row runs the classification trigger, so concurrency
   // multiplies peak write load by the same factor.
-  const chunks = []
-  for (let i = 0; i < clean.length; i += INSERT_CHUNK) chunks.push(clean.slice(i, i + INSERT_CHUNK))
+  const chunks = chunkByLineKey(clean, INSERT_CHUNK)
 
   let cursor = 0
   let fatal = null
@@ -149,7 +199,7 @@ export async function insertPartsConsumption(rows = [], { country = null, onProg
       if (idx >= chunks.length || fatal) return
       try {
         const res = await tryChunk(chunks[idx], MAX_ATTEMPTS)
-        if (res.ok) inserted += chunks[idx].length
+        if (res.ok) { inserted += res.stored; skipped += chunks[idx].length - res.stored }
         else deferred.push(chunks[idx])
       } catch (err) {
         // Hold the first fatal error and let the pool drain. Throwing from
@@ -158,7 +208,7 @@ export async function insertPartsConsumption(rows = [], { country = null, onProg
         fatal = fatal || err
         return
       }
-      if (onProgress) onProgress(inserted, clean.length)
+      if (onProgress) onProgress(inserted + skipped, clean.length)
     }
   }))
   if (fatal) { fatal.inserted = inserted; throw fatal }
@@ -169,11 +219,11 @@ export async function insertPartsConsumption(rows = [], { country = null, onProg
     await sleep(2500)
     for (const chunk of deferred) {
       const res = await tryChunk(chunk, MAX_ATTEMPTS)
-      if (res.ok) { inserted += chunk.length } else { failed += chunk.length }
-      if (onProgress) onProgress(inserted, clean.length)
+      if (res.ok) { inserted += res.stored; skipped += chunk.length - res.stored } else { failed += chunk.length }
+      if (onProgress) onProgress(inserted + skipped, clean.length)
     }
   }
-  return { inserted, failed }
+  return { inserted, failed, skipped }
 }
 
 /**

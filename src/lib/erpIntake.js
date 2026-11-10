@@ -25,7 +25,16 @@ const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8,
 
 /** Parse a Ramco date cell to ISO 'YYYY-MM-DD', or '' when not a date. Handles
  * YYYY-MM-DD, DD-MM-YYYY, DD/MM/YYYY and DD-Mon-YY / DD-Mon-YYYY. */
+// The ERP writes 1900-01-01 (Excel day 0/1) into a date cell it has no value for.
+// It is a blank, not a date: storing it put 42 job cards "completed in 1900".
+const isBlankDateSentinel = (iso) => !iso || Number(iso.slice(0, 4)) < 1901
+
 export function parseDate(v) {
+  const iso = parseDateRaw(v)
+  return isBlankDateSentinel(iso) ? '' : iso
+}
+
+function parseDateRaw(v) {
   const s = clean(v)
   if (!s) return ''
   let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/)

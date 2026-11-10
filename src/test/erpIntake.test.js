@@ -201,3 +201,15 @@ describe('intakeSheet - monthly tyres brand mapping', () => {
     expect(res.rows[0].brand).toBeNull()
   })
 })
+
+describe('parseDate: the ERP blank-date placeholder is not a date', () => {
+  it('1900-01-01 and 01-01-1900 read as blank', () => {
+    expect(parseDate('1900-01-01')).toBe('')
+    expect(parseDate('01-01-1900')).toBe('')
+    expect(parseDate('1899-12-30')).toBe('')
+  })
+  it('real dates are unchanged', () => {
+    expect(parseDate('2026-11-09')).toBe('2026-11-09')
+    expect(parseDate('09-11-2026')).toBe('2026-11-09')
+  })
+})

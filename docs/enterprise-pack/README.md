@@ -44,21 +44,30 @@
 
 Roadmap ids (R-nnn) are shared by 26, 27, 28 and 29.
 
-## Top findings from this pass (live-verified 2026-11-10)
+## Top findings from this pass (live-verified 2026-11-10) and what happened to them
 
-Defects to fix first:
-- `save_stock_entry` / `transfer_stock_entry` raise SQLSTATE 40001, which PostgREST retries forever (the September log-flood bug class). Switch to PT409. (16, 23)
-- Two functions are callable without sign-in that should not be: `tyre_one_price_per_tyre` (trigger fn) and `reset_login_attempts`. (16, 17)
-- Four readers query the empty `fleet_master` table instead of `vehicle_fleet`: Live Fleet Status and Compliance Dashboard show an empty fleet. (01, 03)
-- Tyre "due" rule differs between JS (`bandFor`) and SQL `is_due`, so short-life tyres disagree across pages. (11)
-- Board Overview: real zeros render as N/A, trend and headline use different cost sources, Cancelled counted as open. (15)
-- Two migration timestamps are duplicated (20261109160000, 20261109170000); `supabase db push` is unsafe until renamed. (23, 29)
+All fixed on 2026-11-11 (owner instruction), verified live:
+- Stock save/transfer raised 40001 (infinite PostgREST retry): now PT409. `20261111100000`.
+- `tyre_one_price_per_tyre` and `reset_login_attempts` were callable signed-out: revoked. `20261111100000`.
+- Live Fleet Status, Compliance Dashboard, Tyre Specifications and the AI asset lookup read the empty
+  `fleet_master`: now read `vehicle_fleet` (Active vehicles for the two status pages).
+- Tyre "due" rule: the server now uses the app's rule (soon limit = smaller of 10,000 km / 500 h or
+  10% of expected life). Server due list 655 to 597; full payload otherwise byte-identical. `20261111101000`.
+- Board Overview: real zeros show 0, the tyre-spend trend uses the same expense-grid source as the
+  headline, and Cancelled work orders are no longer counted as open.
+- Duplicate migration timestamps: 8 pairs (not 2) renamed to +1 second; a test now blocks new ones.
 
-Needs the owner:
-- Unknown live schema `anum_integration` adds blocking policies to 447 tables and has no migration or memory record. (17, 18)
-- `accident_emails_enabled` is ON in production; memory says it shipped OFF. Confirm intent. (20, 26)
-- A second approval engine (`approval_policies`, 3 draft policies) exists beside `approval_matrix` (0 rows). Pick one. (08)
-- Built-but-empty foundations: org units, approval matrix, subscriptions, FX rates, vehicle expiry dates, AI budgets. (02, 06, 22)
+Owner answers, acted on:
+- `anum_integration` is the owner's read-only reporting bot. Kept. 33 newer tables lacked its reader
+  rules; re-applied (480 tables covered). Rule: a migration that creates a table ends with
+  `select anum_integration.apply_reader_policies();`. `20261111102000`.
+- Accident emails: the chain works (mailbox set 21 Sep, the one accident since then was emailed,
+  HTTP 200). A latent numbering bug was found and fixed: case numbers were count+1, so a deletion or
+  two simultaneous saves could reuse a number; now max+1 under a lock plus a unique index. `20261111103000`.
+- Two approval engines: `approval_policies` (governed, versioned, audited) is kept; the flat
+  `approval_matrix` + `resolve_approvers` (0 rows, no callers) are retired read-only. `20261111104000`.
+- Built-but-empty foundations remain: org units, subscriptions, FX rates, vehicle expiry dates, AI budgets,
+  and the 3 draft approval policies still need publishing. (02, 06, 08, 22)
 
 Corrections to project memory are recorded inside the relevant documents (fingerprint warning now wired, push tokens now exist, V579 applied in reduced form, Admin Roles page retired, and others).
 

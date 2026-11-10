@@ -431,9 +431,11 @@ export default function LiveFleetStatus() {
       // 1000-row truncation.
       const [fleetRes, tyreRes, inspRes, alertRes] = await Promise.all([
         fetchAllPages((from, to) => supabase
-          .from('fleet_master')
+          .from('vehicle_fleet')
           .select('asset_no,fleet_number,make,model,vehicle_type,site,status,operator_name')
+          .eq('status', 'Active')
           .order('asset_no')
+          .order('id')
           .range(from, to), { max: ROW_CAP }),
 
         fetchAllPages((from, to) => supabase

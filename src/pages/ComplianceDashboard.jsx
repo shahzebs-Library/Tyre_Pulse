@@ -234,8 +234,9 @@ export default function ComplianceDashboard() {
         // PAGED: this register is the DENOMINATOR of inspection compliance, so a
         // silent 1,000-row cap would inflate the score.
         fetchAllPages((from, to) => supabase
-          .from('fleet_master')
+          .from('vehicle_fleet')
           .select('asset_no,site,country,vehicle_type,status')
+          .eq('status', 'Active')
           .order('asset_no').order('id')
           .range(from, to), { max: 20000 }),
       ])

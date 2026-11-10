@@ -115,9 +115,10 @@ export async function retrieveVehicleContext(assetNo) {
       .limit(10),
 
     supabase
-      .from('fleet_master')
-      .select('asset_no, vehicle_type, make, model, registration, site, fleet_number')
+      .from('vehicle_fleet')
+      .select('asset_no, vehicle_type, make, model, registration:registration_no, site, fleet_number')
       .eq('asset_no', assetNo)
+      .limit(1)
       .maybeSingle(),
   ])
 

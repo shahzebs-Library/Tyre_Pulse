@@ -26,6 +26,23 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ SESSION 2026-11-10 (AI upgrade + tyre cost audit) — PR #484 MERGED on owner go-ahead. Migrations 20261112100000..107000 APPLIED LIVE.
+- OWNER GO-AHEAD 2026-11-10: all 6 migrations applied via MCP (there is no 105000). The audit file's first apply timed out on the
+  approval prompt and was re-run after the owner approved it. 147 recoverable prices applied as batch
+  0e4ab851-9fa6-4818-9df2-e0b497a126d1 (KSA 141 / SAR 111,772.96; UAE 2 / AED 1,400; Egypt 4 / EGP 55,952.94; 0 overwritten).
+  Undo = tyre_cost_correction_undo(batch). tyre_cost_audit_findings now holds 7,478 findings from a real scan.
+  1,885 KSA comparable-median estimates (SAR 1,775,663) REVERTED to NULL (Cost Pending Verification) - owner delegated the call;
+  batch 068d3fe4-2956-4d74-8610-e80bdc1f4604, undo = tyre_cost_correction_undo(batch). STILL OPEN: the one-month gap rule.
+  20261112107000 (applied): Codex P1 fixes - settle no longer writes the GENERATED total_tokens (would have stranded every
+  reservation); findings can only be inserted 'proposed' and apply checks the target tyre + source line org/country;
+  knowledge chunks of a non-draft parent cannot be edited or deleted by a signed-in user.
+  Edge fns redeployed from repo (verify_jwt false): ai-orchestrator v14, chat-ai v27, ai-tyre-inspection v24, embed-worker v11.
+  GOTCHA: the Supabase MCP deploy tool DECODES backslash-u escapes in file text (U+2028 became a real line break and broke the
+  bundle). Never write \uXXXX in edge-function source; build such chars with String.fromCharCode (done in aiSecurity.ts, logic.ts).
+- AI: ONE agent registry `supabase/functions/_shared/aiAgents.ts` (7 agents incl. cost_audit; patterns, prompts, tools, WEAR_RULES, ROLE_AGENTS, PROMPT_VERSION) used by the edge fn AND src/lib/aiRouter.js. Orchestrator tools (`ai-orchestrator/tools.ts`) run on the CALLER'S JWT (RLS + RPC country guards); the old service-role report_exec_digest tool is retired (it leaked other countries). Rate limit counts ai_token_logs (ai_usage_log is empty). Wear rule fixed: under-inflation = SHOULDER wear, over-inflation = centre. Edge fns NOT redeployed.
+- Merged agent work: atomic orchestrator budget (100000), feedback loop (101000, ai_feedback.message_id was uuid vs bigint), AI proposals in Action Center (102000), knowledge lifecycle + cited retrieval (103000), photo expert labels (104000), golden calc tests (5 engine bugs fixed), security hardening (12 fixes, aiSecurity.ts).
+- TYRE COST AUDIT: rules `src/lib/tyreCostAudit.js` MIRRORED by SQL `tyre_cost_audit_classify` (106000). Strict: same item code + SAME month only, warranty never repriced, tube/flap/valve/repair/service never a tyre price, unknown = "Cost Pending Verification". Only price source = parts_consumption issue lines (goods_receipts/purchase_orders/invoices = 0 rows). Live (2025+, 10,998 tyres): recoverable KSA 141 (SAR 111,772.96) / UAE 2 / Egypt 4; KSA 1,885 prices (SAR 1,775,663) are the July comparable-median backfill = cross-month estimates -> propose revert (KSA CPK 0.02603 -> 0.02871); 1,793 KSA own lines 1-18 months away = NOT priced. Apply re-checks each proposal against its source line; undo = tyre_cost_correction_undo(batch). Report docs/tyre/TYRE_COST_AUDIT_2026-11.md.
+
 # ⚑ 2026-11-10 (evening) — DUPLICATE SWEEP + `#` IS NOT A LINE ID. Migration 20261111109000 APPLIED LIVE.
 - OWNER: the expense `#` column is only the row counter of each downloaded file (restarts per export). import_uid
   (built from it) therefore never matches the same line in an overlapping file. 2,191 re-upload copies found + removed
@@ -35,7 +52,12 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   centre - raw text) was stored by ANY earlier write (IMMEDIATE since migration expense_reupload_guard_immediate;
   the 20-min window was dropped on owner request - 0 genuine same-file repeats in the data); multiplicity-aware via a txn-local GUC counter; logs to
   expense_import_rejects 'already_stored'. Bypass: old created_at (restores) or set tp.allow_dup_expense='on'.
-  Client dropStoredDuplicates now checks EVERY row (no source_row exemption) and keys on store + cost centre too.
+  CLIENT (PR #483, merged 8aea764b, prod READY): the DB trigger is the ONLY authority. Client pre-filter
+  (dropStoredDuplicates + stored-line lookup) was REMOVED after Codex P1s: (a) client and trigger both consumed the
+  same stored copy, so a genuine extra copy in the file was lost; (b) the lookup's builder ignored the page range.
+  insertPartsConsumption now sends every row, `chunkByLineKey` keeps all copies of a line in ONE chunk (trigger
+  counts per transaction = per chunk), insert uses `.select('id')` and skipped = chunk size - ids returned.
+  RULE: never re-add a client-side "already stored" filter on parts_consumption; it double-counts with the trigger.
 - Also removed: engine_hours_logs 9 exact phone double-submits (_bak.engine_hours_exact_dup_20261110); odometer 28 via
   Duplicate Control (batch 18bd650b); tyre_records 157 pairs MERGED (purchase row + removal row of one tyre; price, hours,
   second job card in extra_fields.merged_job_card; _bak.tyre_dup_merge_20261110). 32 tyre pairs with conflicting values left.

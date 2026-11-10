@@ -106,7 +106,36 @@ export function feedbackKpis(rows = []) {
     judged: judged.length,
     // Share correct among entries that were actually judged; null when none.
     correctPct: judged.length ? (correct / judged.length) * 100 : null,
+    verified: rows.filter(r => r.expert_verified === true).length,
   }
+}
+
+/**
+ * Feedback register filters (pure). `from`/`to` are YYYY-MM-DD and compared
+ * on the created_at day; agent matches any agent in a '+'-joined list.
+ */
+export function filterFeedback(rows = [], f = {}) {
+  return rows.filter((r) => {
+    if (f.verdict === 'correct' && r.correct !== true) return false
+    if (f.verdict === 'wrong' && r.correct !== false) return false
+    if (f.verdict === 'unjudged' && r.correct != null) return false
+    if (f.verdict === 'low' && !(r.rating != null && Number(r.rating) <= 2)) return false
+    if (f.category && r.category !== f.category) return false
+    if (f.agent && !String(r.agent || '').split(/[+,]/).map(a => a.trim()).includes(f.agent)) return false
+    if (f.verified === 'yes' && r.expert_verified !== true) return false
+    if (f.verified === 'no' && r.expert_verified === true) return false
+    const day = r.created_at ? String(r.created_at).slice(0, 10) : ''
+    if (f.from && (!day || day < f.from)) return false
+    if (f.to && (!day || day > f.to)) return false
+    return true
+  })
+}
+
+/** Distinct agents present in the feedback, for the filter list. */
+export function feedbackAgents(rows = []) {
+  const set = new Set()
+  for (const r of rows) for (const a of String(r.agent || '').split(/[+,]/)) if (a.trim()) set.add(a.trim())
+  return [...set].sort()
 }
 
 /** Rating histogram 1..5 (entries without a rating are not counted). */

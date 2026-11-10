@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, jsonResponse, requireApprovedRole } from '../_shared/auth.ts'
+import { validateChatPayload, pagedMonthSpend } from '../_shared/aiSecurity.ts'
 
 // Model is locked server-side - never accept a client-supplied value
 const MODEL = 'claude-haiku-4-5-20251001'
@@ -60,10 +61,11 @@ async function loadAiConfig(svc: ReturnType<typeof serviceClient>): Promise<{
 async function monthSpendUsd(svc: ReturnType<typeof serviceClient>): Promise<number> {
   if (!svc) throw new Error('AI budget datastore is unavailable')
   const start = new Date(); start.setUTCDate(1); start.setUTCHours(0, 0, 0, 0)
-  const { data, error } = await svc.from('ai_token_logs').select('cost_usd').gte('created_at', start.toISOString())
-  if (error) throw new Error(`AI budget read failed: ${error.message}`)
-  let sum = 0
-  for (const r of data ?? []) sum += Number(r.cost_usd) || 0
+  // Paged: PostgREST stops a plain select at 1000 rows, which under-counts the
+  // month and lets the cap be exceeded. Any read problem fails closed.
+  const sum = await pagedMonthSpend((f, t) => svc.from('ai_token_logs').select('id,cost_usd')
+    .gte('created_at', start.toISOString()).order('id', { ascending: true }).range(f, t))
+  if (sum === null) throw new Error('AI budget read failed')
   return sum
 }
 
@@ -119,21 +121,16 @@ serve(async (req) => {
     _uid = userId
 
     const body = await req.json()
-    const { system, user, messages, max_tokens = 2000 } = body
     const agent  = typeof body.agent === 'string' ? body.agent.slice(0, 60) : 'chat'
     const source = typeof body.source === 'string' ? body.source.slice(0, 30) : 'app'
     const country = typeof body.country === 'string' ? body.country.slice(0, 10) : null
     const site    = typeof body.site === 'string' ? body.site.slice(0, 200) : null
-    const safeMaxTokens = Math.min(Math.max(Number(max_tokens) || 1000, 1), 2000)
-
-    // Support both single-turn (user string) and multi-turn (messages array)
-    const messageArray = messages && Array.isArray(messages) && messages.length > 0
-      ? messages
-      : [{ role: 'user', content: user ?? '' }]
-
-    if (!messageArray.length || !messageArray[messageArray.length - 1]?.content) {
-      return jsonResponse(req, { error: 'Missing message content' }, 400)
-    }
+    // Support both single-turn (user string) and multi-turn (messages array).
+    // Validated: user/assistant roles only, text blocks only (no forged
+    // tool_result/images), bounded count and size, max_tokens clamped.
+    const parsed = validateChatPayload(body)
+    if (!parsed.ok) return jsonResponse(req, { error: parsed.error }, 400)
+    const { system, messages: messageArray, maxTokens: safeMaxTokens } = parsed
 
     const svc = serviceClient()
     const nowMs = Date.now()
@@ -173,8 +170,10 @@ serve(async (req) => {
         const sinceMin = new Date(nowMs - 60_000).toISOString()
         const sinceDay = new Date(nowMs - 86_400_000).toISOString()
         const [minuteResult, dayResult] = await Promise.all([
-          svc.from('ai_usage_log').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', sinceMin),
-          svc.from('ai_usage_log').select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', sinceDay),
+          // ai_token_logs is the table chat-ai actually writes; ai_usage_log holds
+          // 0 rows live, so counting it never limited anything.
+          svc.from('ai_token_logs').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('feature', 'chat').in('status', ['success', 'error']).gte('created_at', sinceMin),
+          svc.from('ai_token_logs').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('feature', 'chat').in('status', ['success', 'error']).gte('created_at', sinceDay),
         ])
         if (minuteResult.error || dayResult.error) {
           throw new Error(minuteResult.error?.message ?? dayResult.error?.message ?? 'unknown rate-limit error')

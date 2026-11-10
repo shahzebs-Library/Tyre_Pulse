@@ -11,6 +11,7 @@ import {
   evaluateMonthlyBudget, monthStartUtc, parseAiControls, sumMonthSpend,
   type MonthlyBudgetDecision,
 } from "./budget.ts";
+import { isActiveAccount, parseStorageRef } from "../_shared/aiSecurity.ts";
 
 const ALLOWED_ORIGINS = [
   ...(Deno.env.get("AI_ALLOWED_ORIGIN") ?? "").split(",").map(x => x.trim()).filter(Boolean),
@@ -50,8 +51,11 @@ async function authenticated(req: Request) {
   const { data: { user }, error } = await client.auth.getUser(auth.slice(7));
   if (error || !user) throw new Error("unauthenticated");
   const { data: profile, error: profileError } = await admin.from("profiles")
-    .select("id,organisation_id,role").eq("id", user.id).single();
+    .select("id,organisation_id,role,approved,locked").eq("id", user.id).single();
   if (profileError || !profile?.organisation_id) throw new Error("profile unavailable");
+  // A locked or unapproved account keeps a valid JWT until it expires; it must
+  // not enqueue paid work, review results, re-queue or backfill.
+  if (!isActiveAccount(profile)) throw new Error("unauthenticated");
   return { user, profile, client };
 }
 
@@ -71,15 +75,10 @@ function photos(value: unknown): string[] {
   }
   return text ? [text] : [];
 }
+// Bucket allow-list (AI_PHOTO_BUCKETS): the worker downloads with the service role, so a
+// tyre_conditions entry must not be able to point it at any other private bucket.
 function parsedStorage(value: string) {
-  if (!value.startsWith("tp-storage://")) return null;
-  const raw = value.slice("tp-storage://".length);
-  const i = raw.indexOf("/");
-  if (i <= 0) return null;
-  const bucket = raw.slice(0, i);
-  const path = raw.slice(i + 1);
-  if (!/^[a-z0-9_-]+$/.test(bucket) || !path || path.includes("..") || path.startsWith("/")) return null;
-  return { bucket, path };
+  return parseStorageRef(value);
 }
 async function fingerprint(input: string) {
   const bytes = new TextEncoder().encode(input);
@@ -309,14 +308,15 @@ async function callProvider(cfg: { providerName: string; providerKey: string; mo
   } finally { clearTimeout(timeout); }
 }
 /**
- * HARD monthly cap. Reads system_config (ai_enabled, ai_monthly_budget_usd) and the month's spend from
+ * HARD monthly cap. Reads system_config (ai_enabled, ai_tyre_inspection_enabled, ai_monthly_budget_usd)
+ * and the month's spend from
  * ai_token_logs (other features) plus ai_tyre_inspection_jobs (this path's own ledger; paged: PostgREST silently truncates a plain select at 1000 rows, which would under-count
  * and let the cap be exceeded). Any read problem => state 'unavailable' => no paid call (fail closed).
  */
 async function monthlyBudgetDecision(reserveUsd: number): Promise<MonthlyBudgetDecision> {
   try {
     const { data: cfg, error: cfgError } = await admin.from("system_config").select("key,value")
-      .in("key", ["ai_enabled", "ai_monthly_budget_usd"]);
+      .in("key", ["ai_enabled", "ai_tyre_inspection_enabled", "ai_monthly_budget_usd"]);
     if (cfgError) return evaluateMonthlyBudget({ controls: null, spentUsd: null, reserveUsd });
     const controls = parseAiControls(cfg);
     // No cap configured (or AI off / bad setting): nothing to sum.

@@ -26,6 +26,7 @@ import {
 import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import Modal from '../components/ui/Modal'
+import AiProposalsPanel from '../components/actionCenter/AiProposalsPanel'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listActionItems, createActionItem, updateActionItem, deleteActionItem,
@@ -350,6 +351,9 @@ export default function ActionCenter() {
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         {kpis.map((k) => <Kpi key={k.label} {...k} loading={loading} />)}
       </div>
+
+      {/* AI-prepared proposals: a person accepts or rejects each one. */}
+      <AiProposalsPanel country={activeCountry} onActionCreated={load} />
 
       {/* Breakdown + severity distribution */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

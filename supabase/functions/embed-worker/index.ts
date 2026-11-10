@@ -4,7 +4,11 @@
 // gate as send-scheduled-reports: the secret lives in the service-role-only
 // `cron_config` table, so a stray anon call is a 401).
 //
-// Embeds every knowledge_documents row where embedding IS NULL (imports, API
+// Embeds every knowledge_documents row where embedding IS NULL and that is not
+// a container parent (chunk_count = 0). Uploads from the Knowledge Base page
+// insert chunks with NO embedding and rely on this worker. Lifecycle status is
+// NOT checked here: drafts are embedded too, and retrieval filters by status
+// at query time, so approving a document needs no re-embedding. (imports, API
 // inserts, manual adds that skipped the client-side indexer) using the same
 // OpenAI model as generate-embedding, in one batched OpenAI call per sweep.
 // Cost is logged to ai_token_logs (feature 'embedding-worker') exactly like
@@ -52,6 +56,10 @@ serve(async (req) => {
     .from('knowledge_documents')
     .select('id,title,content')
     .is('embedding', null)
+    // Container parents (lifecycle migration 20261112103000: chunk_count > 0)
+    // hold only a preview; their chunks are the retrievable text. Apply that
+    // migration BEFORE deploying this version (the column must exist).
+    .eq('chunk_count', 0)
     .order('created_at', { ascending: true })
     .limit(BATCH_LIMIT)
   if (rowsErr) return json({ error: `select failed: ${rowsErr.message}` }, 500)

@@ -7,27 +7,25 @@ import { supabase } from '../supabase'
 import { retrieveVehicleContext, assembleContext, getCached, setCache } from '../ragService'
 import { computeCpkByAsset, computeFailureRate, computeCpkByBrand } from '../kpiEngine'
 import { callAiEdgeFunction } from './index'
+import { wearRulesText } from '../../../supabase/functions/_shared/aiAgents.ts'
 
-const SYSTEM_PROMPT = `You are TyrePulse Tyre Engineer Agent - a senior tyre engineer and reliability specialist with 20+ years of fleet tyre management experience.
-Your expertise: root cause analysis, wear pattern diagnosis, pressure and inflation failure modes, wheel alignment issues, suspension problems, overloading, and driver behaviour impact.
+// Wear guidance comes from the shared registry (WEAR_RULES) used by the server
+// orchestrator too. It previously said under-inflation causes CENTRE wear, which
+// is wrong: under-inflation points to SHOULDER wear, over-inflation to centre wear.
+const SYSTEM_PROMPT = `You are TyrePulse Tyre Engineer Agent - a senior tyre engineer and reliability specialist.
+Wear patterns are INDICATORS, not proof. Never state a root cause as confirmed unless the required evidence is in the context.
 
-For every diagnosis provide exactly this structure:
+For every diagnosis use exactly this structure:
+1. Facts: what the data shows, with actual values
+2. Possible causes: hypotheses ranked by likelihood, not proof
+3. Missing evidence: pressure, load, alignment or inspection data that is absent
+4. Recommended verification: the checks that would confirm or rule out each cause
+5. Risk level: Low | Medium | High | Critical, with the reason
 
-1. Observation: Specific tyre data observations - what the numbers and patterns indicate (2-3 sentences with actual values)
-2. Root Cause: Primary cause and contributing factors - be specific about which failure mode applies (e.g., under-inflation, misalignment, overloading)
-3. Risk Level: Low | Medium | High | Critical - include fleet safety and financial risk
-4. Action Plan: Numbered, specific immediate actions, short-term corrective steps, and long-term preventive measures
-5. Cost Impact: Estimated annual financial impact if root cause is not corrected
+Tyre engineering indicators:
+${wearRulesText()}
 
-Tyre engineering principles to apply:
-- Under-inflation → centre wear, heat buildup, ply separation, bead damage
-- Over-inflation → centre wear, reduced traction, impact damage susceptibility
-- Misalignment → shoulder wear (one-sided), feather wear
-- Overloading → sidewall stress, bead damage, accelerated centre wear
-- Driver behaviour → irregular wear, excessive scrap rates, rapid life reduction
-- Poor rotation → uneven fleet wear, premature replacements
-
-Reference actual data from context. Be technical but actionable.`
+Missing data is not zero. You cannot certify a tyre as safe.`
 
 /**
  * Run the Tyre Engineer Agent for technical diagnosis and root cause queries.

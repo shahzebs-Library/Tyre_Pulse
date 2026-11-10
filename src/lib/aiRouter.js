@@ -3,14 +3,11 @@
 // Classifies every query and routes to the best agent.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const AGENT_TYPES = {
-  ANALYST:        'analyst',
-  TYRE_ENGINEER:  'tyre_engineer',
-  QA_DATA:        'qa_data',
-  PLANNER:        'planner',
-  SAFETY:         'safety',
-  PROCUREMENT:    'procurement',
-}
+// Agent ids, patterns and classifiers come from the ONE shared registry that the
+// ai-orchestrator edge function also uses, so the label the UI previews and the
+// agent the server actually runs can never disagree.
+import { AGENT_TYPES, classifyQuery, classifyQueryMulti } from '../../supabase/functions/_shared/aiAgents.ts'
+export { AGENT_TYPES, classifyQuery, classifyQueryMulti }
 
 export const AGENT_LABELS = {
   [AGENT_TYPES.ANALYST]:       'Analyst',
@@ -19,6 +16,7 @@ export const AGENT_LABELS = {
   [AGENT_TYPES.PLANNER]:       'Planner',
   [AGENT_TYPES.SAFETY]:        'Safety & HSE',
   [AGENT_TYPES.PROCUREMENT]:   'Procurement',
+  [AGENT_TYPES.COST_AUDIT]:    'Tyre Cost Audit',
 }
 
 export const AGENT_COLORS = {
@@ -28,6 +26,7 @@ export const AGENT_COLORS = {
   [AGENT_TYPES.PLANNER]:       { bg: 'bg-emerald-900/40', text: 'text-emerald-300', border: 'border-emerald-700/50' },
   [AGENT_TYPES.SAFETY]:        { bg: 'bg-red-900/40', text: 'text-red-300', border: 'border-red-700/50' },
   [AGENT_TYPES.PROCUREMENT]:   { bg: 'bg-teal-900/40', text: 'text-teal-300', border: 'border-teal-700/50' },
+  [AGENT_TYPES.COST_AUDIT]:    { bg: 'bg-orange-900/40', text: 'text-orange-300', border: 'border-orange-700/50' },
 }
 
 export const AGENT_DESCRIPTIONS = {
@@ -37,50 +36,7 @@ export const AGENT_DESCRIPTIONS = {
   [AGENT_TYPES.PLANNER]:       'Maintenance scheduling, replacement forecasting, budget planning',
   [AGENT_TYPES.SAFETY]:        'Accidents, inspection compliance, corrective actions, driver risk',
   [AGENT_TYPES.PROCUREMENT]:   'Brand/vendor value ranking, purchasing and order planning',
-}
-
-// ── Query Classification ──────────────────────────────────────────────────────
-
-// Domain patterns, ordered by specificity (QA → Planner → Engineer → Analyst).
-// Shared by the single-agent classifier and the multi-agent orchestrator.
-const AGENT_PATTERNS = [
-  [AGENT_TYPES.QA_DATA,       /duplicat|data qualit|clean|incorrect|invalid|missing data|serial.*(error|wrong|dup)|error in data|wrong entry|bad data|corrupt|data issue|verify data/],
-  [AGENT_TYPES.SAFETY,        /accident|incident|hse|safety|injury|collision|rollover|near.?miss|casualt|compliance|overdue inspection|inspection.*(due|overdue|complian)|violation|driver behav|fatigue|speeding|road safety|claim.*(reject|delay)/],
-  [AGENT_TYPES.PROCUREMENT,   /procure|procurement|purchas|vendor|supplier|which brand|best brand|brand.*(value|rank|choice|best|worst)|buy|order from|quotation|tender|negotiat|best deal|value for money|what.*(brand|tyre).*(buy|order)/],
-  [AGENT_TYPES.PLANNER,       /schedul|forecast|when.*(replac|due|expire|next)|\bplan\b|next month|next quarter|next year|budget|replacement date|upcoming|predict|demand|inventory need|stock plan/],
-  [AGENT_TYPES.TYRE_ENGINEER, /root cause|why.*fail|why.*wear|why.*blow|wear pattern|abnormal wear|shoulder wear|center wear|pressure|inflation|under.?inflat|over.?inflat|alignment|camber|toe.in|toe.out|suspension|failure mode|blowout|puncture|sidewall|diagnos|engineer|technical analysis|tyre.*(issue|problem|fault)|heat buildup|ply separat|bead damage/],
-  [AGENT_TYPES.ANALYST,       /trend|kpi|cost|cpk|compar|report|summ|breakdown|spend|expense|average|per km|per mile|benchmark|performance|how much|total/],
-]
-
-/**
- * Classify a user query into a SINGLE agent type (most specific match wins;
- * Analyst is the default). Preserves the original routing behaviour.
- * @param {string} query
- * @returns {string} AGENT_TYPES value
- */
-export function classifyQuery(query) {
-  const q = String(query || '').toLowerCase().trim()
-  for (const [type, re] of AGENT_PATTERNS) {
-    if (type !== AGENT_TYPES.ANALYST && re.test(q)) return type
-  }
-  return AGENT_TYPES.ANALYST
-}
-
-/**
- * Classify into ALL relevant agent types for multi-agent orchestration, ordered
- * by specificity (primary first). A cross-domain question like "why did cost
- * rise and when should I replace these tyres" returns several agents; a focused
- * question returns one. Always non-empty (falls back to Analyst).
- * @param {string} query
- * @returns {string[]} ordered AGENT_TYPES values, deduped
- */
-export function classifyQueryMulti(query) {
-  const q = String(query || '').toLowerCase().trim()
-  const matches = []
-  for (const [type, re] of AGENT_PATTERNS) {
-    if (re.test(q)) matches.push(type)
-  }
-  return matches.length ? matches : [AGENT_TYPES.ANALYST]
+  [AGENT_TYPES.COST_AUDIT]:    'Missing tyre prices, same-month recovery, tyre vs tube/spare cost',
 }
 
 // ── Agent Routing ─────────────────────────────────────────────────────────────

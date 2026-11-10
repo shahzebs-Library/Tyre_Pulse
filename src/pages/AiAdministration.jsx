@@ -37,8 +37,9 @@ import { readTokenLogs } from '../lib/api/aiOps'
 import { compareValues } from '../lib/consoleTable'
 import {
   searchRecords, spendWindows, budgetUtilisation, modelKpis, promptKpis,
-  budgetKpis, feedbackKpis, ratingDistribution,
+  budgetKpis, feedbackKpis, ratingDistribution, filterFeedback, feedbackAgents,
 } from '../lib/aiAdministrationAnalytics'
+import { buildEvalDataset } from '../lib/aiEvaluation'
 import {
   listAiModels, createAiModel, updateAiModel, deleteAiModel,
 } from '../lib/api/aiModels'
@@ -50,6 +51,7 @@ import {
 } from '../lib/api/aiBudgets'
 import {
   listAiFeedback, createAiFeedback, updateAiFeedback, deleteAiFeedback,
+  FEEDBACK_CATEGORIES, categoryLabel,
 } from '../lib/api/aiFeedback'
 import { isMissingRelation } from '../lib/api/_client'
 
@@ -737,11 +739,22 @@ function BudgetsTab({ country }) {
 }
 
 // ── Feedback tab ─────────────────────────────────────────────────────────────
-const FEEDBACK_FORM = { conversation_id: '', message_id: '', rating: '', correct: '', note: '' }
+// Answer feedback from the Command Center (thumbs up/down + corrections) and
+// manual entries. An Admin reviews rows and marks the useful ones "expert
+// verified"; only verified rows go into the offline evaluation dataset
+// (src/lib/aiEvaluation.js, scripts/ai-eval.mjs). Nothing here retrains or
+// changes the assistant.
+const FEEDBACK_FORM = {
+  conversation_id: '', rating: '', correct: '', note: '',
+  category: '', expected_answer: '', review_note: '', expert_verified: false,
+}
+const FEEDBACK_FILTERS = { verdict: '', category: '', agent: '', verified: '', from: '', to: '' }
 
 function FeedbackTab({ country }) {
   const { rows, error, notProvisioned, load, setError } = useResource(listAiFeedback, country)
+  const legacy = rows?.legacy === true
   const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState(FEEDBACK_FILTERS)
   const [modal, setModal] = useState(null)
   const [form, setForm] = useState(FEEDBACK_FORM)
   const [saving, setSaving] = useState(false)
@@ -749,41 +762,46 @@ function FeedbackTab({ country }) {
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
-  const [verdictFilter, setVerdictFilter] = useState('')
   const k = useMemo(() => feedbackKpis(rows || []), [rows])
   const dist = useMemo(() => ratingDistribution(rows || []), [rows])
+  const agents = useMemo(() => feedbackAgents(rows || []), [rows])
   const total = k.total
 
-  const filtered = useMemo(() => {
-    const base = searchRecords(rows || [], search, ['note', 'conversation_id', 'message_id'])
-    if (verdictFilter === 'correct') return base.filter((r) => r.correct === true)
-    if (verdictFilter === 'wrong') return base.filter((r) => r.correct === false)
-    if (verdictFilter === 'unjudged') return base.filter((r) => r.correct == null)
-    if (verdictFilter === 'low') return base.filter((r) => r.rating != null && Number(r.rating) <= 2)
-    return base
-  }, [rows, search, verdictFilter])
+  const filtered = useMemo(() => filterFeedback(
+    searchRecords(rows || [], search, ['note', 'question', 'expected_answer', 'agent', 'conversation_id']),
+    filters,
+  ), [rows, search, filters])
 
-  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+  const setF = (key, v) => setFilters((f) => ({ ...f, [key]: v }))
+  const set = (key, v) => setForm((f) => ({ ...f, [key]: v }))
   const openCreate = () => { setForm(FEEDBACK_FORM); setFormError(''); setModal({ editing: null }) }
   const openEdit = (r) => {
     setForm({
-      conversation_id: r.conversation_id || '', message_id: r.message_id || '',
+      conversation_id: r.conversation_id || '',
       rating: r.rating ?? '', correct: r.correct == null ? '' : (r.correct ? 'true' : 'false'), note: r.note || '',
+      category: r.category || '', expected_answer: r.expected_answer || '', review_note: r.review_note || '',
+      expert_verified: r.expert_verified === true,
     })
     setFormError(''); setModal({ editing: r })
   }
-
-  const normalise = (f) => ({
-    ...f,
-    correct: f.correct === '' ? null : f.correct === 'true' || f.correct === true,
-  })
 
   const submit = async (e) => {
     e?.preventDefault?.(); setFormError('')
     setSaving(true)
     try {
-      if (modal.editing) await updateAiFeedback(modal.editing.id, normalise(form))
-      else await createAiFeedback(normalise(form))
+      const correct = form.correct === '' ? null : form.correct === 'true'
+      if (modal.editing) {
+        const patch = { rating: form.rating, correct, note: form.note }
+        if (!legacy) {
+          Object.assign(patch, {
+            category: form.category, expected_answer: form.expected_answer,
+            review_note: form.review_note, expert_verified: form.expert_verified === true,
+          })
+        }
+        await updateAiFeedback(modal.editing.id, patch)
+      } else {
+        await createAiFeedback({ conversation_id: form.conversation_id, rating: form.rating, correct, note: form.note })
+      }
       setModal(null); await load()
     } catch (err) { setFormError(toUserMessage(err, 'Could not save the feedback.')) }
     finally { setSaving(false) }
@@ -797,32 +815,59 @@ function FeedbackTab({ country }) {
     finally { setDeleting(false) }
   }
 
+  const exportDataset = () => {
+    try {
+      const now = new Date()
+      const ds = buildEvalDataset(rows || [], { version: `export-${now.toISOString().slice(0, 10)}`, generatedAt: now.toISOString() })
+      if (!ds.count) { setError('No expert-verified feedback with a question yet. Verify rows first.'); return }
+      const blob = new Blob([JSON.stringify(ds, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${reportFileName('TyrePulse AI Eval Dataset')}.json`
+      link.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (e) { setError(toUserMessage(e, 'Could not build the evaluation dataset.')) }
+  }
+
+  const truncCell = (w) => function TruncCell({ getValue }) {
+    return getValue() ? <span className="block truncate" style={{ maxWidth: w }} title={getValue()}>{getValue()}</span> : NA
+  }
   const feedbackColumns = [
     { id: 'created_at', header: 'Date', accessorFn: (r) => undef(r.created_at), size: 110, ...SORT, cell: ({ getValue }) => fmtDate(getValue()) },
+    { id: 'correct', header: 'Verdict', accessorFn: (r) => (r.correct == null ? undefined : (r.correct ? 1 : 0)), size: 100, ...SORT, cell: ({ row }) => (row.original.correct == null ? NA : <Badge ok={row.original.correct === true} yes="Helpful" no="Wrong" />) },
     { id: 'rating', header: 'Rating', accessorFn: (r) => undef(r.rating == null ? null : Number(r.rating)), size: 80, meta: { align: 'right' }, ...SORT, cell: ({ getValue }) => (getValue() == null ? NA : <span className="font-semibold">{getValue()}/5</span>) },
-    { id: 'correct', header: 'Correct', accessorFn: (r) => (r.correct == null ? undefined : (r.correct ? 1 : 0)), size: 90, ...SORT, cell: ({ row }) => (row.original.correct == null ? NA : <Badge ok={row.original.correct === true} yes="Correct" no="Wrong" />) },
-    { id: 'note', header: 'Note', accessorFn: (r) => undef(r.note), size: 320, ...SORT, cell: ({ getValue }) => (getValue() ? <span className="block max-w-[320px] truncate" title={getValue()}>{getValue()}</span> : NA) },
-    { id: 'conversation_id', header: 'Conversation', accessorFn: (r) => undef(r.conversation_id), size: 160, ...SORT, cell: ({ getValue }) => (getValue() ? <span className="font-mono text-xs block max-w-[160px] truncate" title={getValue()}>{getValue()}</span> : NA) },
+    { id: 'category', header: 'Category', accessorFn: (r) => undef(categoryLabel(r.category)), size: 130, ...SORT, cell: truncCell(130) },
+    { id: 'agent', header: 'Agent', accessorFn: (r) => undef(r.agent), size: 140, ...SORT, cell: truncCell(140) },
+    { id: 'question', header: 'Question', accessorFn: (r) => undef(r.question), size: 260, ...SORT, cell: truncCell(260) },
+    { id: 'note', header: 'Correction / note', accessorFn: (r) => undef(r.expected_answer || r.note), size: 260, ...SORT, cell: truncCell(260) },
+    { id: 'expert_verified', header: 'Verified', accessorFn: (r) => (r.expert_verified ? 1 : 0), size: 100, ...SORT, cell: ({ row }) => <Badge ok={row.original.expert_verified === true} yes="Verified" no="Not yet" /> },
     { id: 'actions', header: '', enableSorting: false, size: 90, meta: { export: false }, cell: ({ row }) => <RowActions what="feedback entry" onEdit={() => openEdit(row.original)} onDelete={() => setConfirmDelete(row.original)} /> },
   ]
 
-  const COLS = ['created_at', 'rating', 'correct', 'note', 'conversation_id']
-  const HEADERS = ['Date', 'Rating', 'Correct', 'Note', 'Conversation']
+  const COLS = ['created_at', 'verdict', 'rating', 'category', 'agent', 'question', 'expected_answer', 'note', 'verified', 'prompt_version', 'conversation_id']
+  const HEADERS = ['Date', 'Verdict', 'Rating', 'Category', 'Agent', 'Question', 'Correct answer', 'Note', 'Expert verified', 'Prompt version', 'Conversation']
   const exportRows = filtered.map((r) => ({
-    created_at: fmtDate(r.created_at), rating: r.rating ?? '', correct: fmtBool(r.correct),
-    note: r.note || '', conversation_id: r.conversation_id || '',
+    created_at: fmtDate(r.created_at),
+    verdict: r.correct === true ? 'Helpful' : r.correct === false ? 'Wrong' : 'N/A',
+    rating: r.rating ?? '', category: categoryLabel(r.category), agent: r.agent || '',
+    question: r.question || '', expected_answer: r.expected_answer || '', note: r.note || '',
+    verified: fmtBool(r.expert_verified), prompt_version: r.prompt_version || '', conversation_id: r.conversation_id || '',
   }))
+  const editing = modal?.editing
 
   return (
     <div className="space-y-6">
       {notProvisioned && <StatePanel title="AI feedback is not enabled yet.">Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V205_AI_ADMINISTRATION.sql</span>, then reload.</StatePanel>}
+      {legacy && <StatePanel title="Feedback review fields are not provisioned yet.">Answer feedback is being stored in the basic format. Apply migration <span className="font-mono text-[var(--text-primary)]">20261112101000_ai_feedback_loop.sql</span> to enable categories, corrections, expert verification and the evaluation dataset.</StatePanel>}
       {error && <StatePanel tone="red" title="Could not load feedback." onRetry={load}>{error}</StatePanel>}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <KpiTile label="Feedback entries" value={rows === null || error ? 'N/A' : k.total} Icon={Star} />
         <KpiTile label="Avg rating" value={rows === null || error || k.avgRating == null ? 'N/A' : `${k.avgRating.toFixed(2)} / 5`} Icon={Star} tone="text-amber-400" sub={k.rated ? `${k.rated} rated` : 'No ratings yet'} />
-        <KpiTile label="Marked correct" value={rows === null || error ? 'N/A' : k.correct} Icon={ThumbsUp} tone="text-green-400" sub={`of ${k.judged} judged`} />
-        <KpiTile label="Correct share" value={rows === null || error || k.correctPct == null ? 'N/A' : `${k.correctPct.toFixed(0)}%`} Icon={CheckCircle2} sub="Among judged answers" />
+        <KpiTile label="Marked helpful" value={rows === null || error ? 'N/A' : k.correct} Icon={ThumbsUp} tone="text-green-400" sub={`of ${k.judged} judged`} />
+        <KpiTile label="Helpful share" value={rows === null || error || k.correctPct == null ? 'N/A' : `${k.correctPct.toFixed(0)}%`} Icon={CheckCircle2} sub="Among judged answers" />
+        <KpiTile label="Expert verified" value={rows === null || error || legacy ? 'N/A' : k.verified} Icon={ShieldAlert} sub="Eligible for the eval set" />
       </div>
 
       {k.rated > 0 && (
@@ -843,17 +888,43 @@ function FeedbackTab({ country }) {
       )}
 
       <Toolbar
-        search={search} setSearch={setSearch} placeholder="Search note, conversation, message id"
+        search={search} setSearch={setSearch} placeholder="Search question, correction, note, agent"
         extra={(
-          <label><span className="sr-only">Verdict</span>
-            <select className={`input ${CTRL}`} value={verdictFilter} onChange={(e) => setVerdictFilter(e.target.value)}>
-              <option value="">All feedback</option>
-              <option value="correct">Correct</option>
-              <option value="wrong">Wrong</option>
-              <option value="unjudged">Not judged</option>
-              <option value="low">Rated 2 or lower</option>
-            </select>
-          </label>
+          <>
+            <label><span className="sr-only">Verdict</span>
+              <select className={`input ${CTRL}`} value={filters.verdict} onChange={(e) => setF('verdict', e.target.value)}>
+                <option value="">All verdicts</option>
+                <option value="correct">Helpful</option>
+                <option value="wrong">Wrong</option>
+                <option value="unjudged">Not judged</option>
+                <option value="low">Rated 2 or lower</option>
+              </select>
+            </label>
+            <label><span className="sr-only">Category</span>
+              <select className={`input ${CTRL}`} value={filters.category} onChange={(e) => setF('category', e.target.value)} disabled={legacy}>
+                <option value="">All categories</option>
+                {FEEDBACK_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
+            </label>
+            <label><span className="sr-only">Agent</span>
+              <select className={`input ${CTRL}`} value={filters.agent} onChange={(e) => setF('agent', e.target.value)} disabled={legacy || !agents.length}>
+                <option value="">All agents</option>
+                {agents.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+            </label>
+            <label><span className="sr-only">Verification</span>
+              <select className={`input ${CTRL}`} value={filters.verified} onChange={(e) => setF('verified', e.target.value)} disabled={legacy}>
+                <option value="">Verified and not</option>
+                <option value="yes">Expert verified</option>
+                <option value="no">Awaiting review</option>
+              </select>
+            </label>
+            <label className="text-xs text-[var(--text-muted)]">From <input type="date" className={`input ${CTRL}`} value={filters.from} onChange={(e) => setF('from', e.target.value)} /></label>
+            <label className="text-xs text-[var(--text-muted)]">To <input type="date" className={`input ${CTRL}`} value={filters.to} onChange={(e) => setF('to', e.target.value)} /></label>
+            <button onClick={exportDataset} className={`btn-secondary text-sm inline-flex items-center gap-1.5 px-3 disabled:opacity-40 ${CTRL}`} disabled={legacy || !k.verified} title="Expert-verified rows only, for offline evaluation">
+              <FileText size={14} aria-hidden="true" /> Eval dataset (JSON)
+            </button>
+          </>
         )}
         onExcel={async () => { try { await exportToExcel(exportRows, COLS, HEADERS, reportFileName('TyrePulse AI Feedback')) } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
         onPdf={async () => { try { await exportToPdf(exportRows, COLS.map((c, i) => ({ key: c, header: HEADERS[i] })), 'AI Feedback', reportFileName('TyrePulse AI Feedback'), 'landscape') } catch (e) { setError(toUserMessage(e, 'Could not export. Try again.')) } }}
@@ -873,24 +944,53 @@ function FeedbackTab({ country }) {
       />
 
       {modal && (
-        <Modal title={modal.editing ? 'Edit feedback' : 'Log feedback'} onClose={() => setModal(null)} saving={saving}>
+        <Modal title={editing ? 'Review feedback' : 'Log feedback'} onClose={() => setModal(null)} saving={saving}>
           <form onSubmit={submit} className="space-y-4">
+            {editing && (editing.question || editing.answer) && (
+              <div className="space-y-2 text-sm">
+                {editing.question && <div><span className="label">Question</span><p className="whitespace-pre-wrap text-[var(--text-secondary)] max-h-32 overflow-auto">{editing.question}</p></div>}
+                {editing.answer && <div><span className="label">AI answer {editing.prompt_version ? `(${editing.prompt_version})` : ''}</span><p className="whitespace-pre-wrap text-[var(--text-secondary)] max-h-48 overflow-auto">{editing.answer}</p></div>}
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Rating (1 to 5)"><input className="input w-full" type="number" step="1" min="1" max="5" placeholder="4" value={form.rating} onChange={(e) => set('rating', e.target.value)} /></Field>
-              <Field label="Correct?">
+              <Field label="Verdict">
                 <select className="input w-full" value={form.correct} onChange={(e) => set('correct', e.target.value)}>
                   <option value="">Unspecified</option>
-                  <option value="true">Correct</option>
-                  <option value="false">Incorrect</option>
+                  <option value="true">Helpful</option>
+                  <option value="false">Wrong</option>
                 </select>
               </Field>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {!editing && (
               <Field label="Conversation ID (optional)"><input className="input w-full font-mono text-xs" placeholder="uuid" value={form.conversation_id} onChange={(e) => set('conversation_id', e.target.value)} /></Field>
-              <Field label="Message ID (optional)"><input className="input w-full font-mono text-xs" placeholder="uuid" value={form.message_id} onChange={(e) => set('message_id', e.target.value)} /></Field>
-            </div>
-            <Field label="Note (optional)"><textarea className="input w-full min-h-[90px] resize-y" placeholder="What was right or wrong about the answer?" value={form.note} maxLength={8000} onChange={(e) => set('note', e.target.value)} /></Field>
-            <FormFooter {...{ formError, saving, editing: modal.editing, onCancel: () => setModal(null), createWord: 'Log feedback' }} />
+            )}
+            {editing && !legacy && (
+              <>
+                <Field label="Category">
+                  <select className="input w-full" value={form.category} onChange={(e) => set('category', e.target.value)}>
+                    <option value="">None</option>
+                    {FEEDBACK_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </select>
+                </Field>
+                <Field label="Correct answer" hint="Used as the expectation in the evaluation set once verified.">
+                  <textarea className="input w-full min-h-[80px] resize-y" maxLength={8000} value={form.expected_answer} onChange={(e) => set('expected_answer', e.target.value)} />
+                </Field>
+              </>
+            )}
+            <Field label="Note (optional)"><textarea className="input w-full min-h-[70px] resize-y" placeholder="What was right or wrong about the answer?" value={form.note} maxLength={8000} onChange={(e) => set('note', e.target.value)} /></Field>
+            {editing && !legacy && (
+              <div className="rounded-lg border border-[var(--border)] p-3 space-y-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={form.expert_verified} onChange={(e) => set('expert_verified', e.target.checked)} disabled={!editing.question} />
+                  Expert verified: include in the offline evaluation set
+                </label>
+                {!editing.question && <p className="text-[11px] text-[var(--text-muted)]">Only feedback attached to a saved answer can be verified.</p>}
+                <Field label="Review note (optional)"><textarea className="input w-full min-h-[50px] resize-y" maxLength={4000} value={form.review_note} onChange={(e) => set('review_note', e.target.value)} /></Field>
+                {editing.verified_at && <p className="text-[11px] text-[var(--text-muted)]">Verified {fmtDate(editing.verified_at)}</p>}
+              </div>
+            )}
+            <FormFooter {...{ formError, saving, editing, onCancel: () => setModal(null), createWord: 'Log feedback' }} />
           </form>
         </Modal>
       )}

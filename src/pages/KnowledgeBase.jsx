@@ -19,14 +19,20 @@ import {
   BookOpen, Upload, Search, Trash2, Tag, Globe, Truck,
   FileText, AlertCircle, CheckCircle, Clock, RefreshCw,
   X, Plus, Loader, Lock, FileSpreadsheet, Layers, Percent,
-  FolderOpen, LayoutTemplate, FileBarChart, ChevronRight, ExternalLink, Info,
-  MoreVertical, Sparkles, Save, Quote, Database,
+  FolderOpen, LayoutTemplate, ChevronRight, ExternalLink, Info,
+  MoreVertical, Sparkles, Save, Quote, Database, ShieldCheck, Ban, GitBranch, CalendarClock,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase' // retained solely for reindexMissingEmbeddings(supabase)
 import { toUserMessage } from '../lib/safeError'
 import * as knowledgeDocuments from '../lib/api/knowledgeDocuments'
 import { useAuth } from '../contexts/AuthContext'
-import { generateEmbedding, reindexMissingEmbeddings } from '../lib/embeddingService'
+import { reindexMissingEmbeddings } from '../lib/embeddingService'
+import { extractDocument, ingestDocument, approveKnowledgeDocument, withdrawKnowledgeDocument } from '../lib/api/knowledgeIngestion'
+import { chunkPages, pagesToText, embeddingHealth, KB_ACCEPT } from '../lib/knowledgeIngest'
+import {
+  KB_STATUS_META, effectiveStatus, reviewState, reviewNote, canApprove, canWithdraw, canSupersede,
+  nextVersion, validateLifecycleDates, lifecycleCounts, toDay,
+} from '../lib/knowledgeLifecycle'
 import Modal from '../components/ui/Modal'
 import SideDrawer from '../components/ui/SideDrawer'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
@@ -35,7 +41,7 @@ import {
 } from '../components/commandCenter/kit'
 import { formatDate } from '../lib/formatters'
 import {
-  chunkText, kbSiteOptions, kbByType, kbTopTags,
+  kbSiteOptions, kbByType, kbTopTags,
   kbExportRows, baseTitle, docTypeLabel, KB_EXPORT_COLS, KB_EXPORT_HEADERS, kbTruncationNotice,
 } from '../lib/knowledgeBaseAnalytics'
 import {
@@ -63,15 +69,6 @@ function getDocTypeMeta(type) {
   return DOC_TYPES.find(d => d.value === type) ?? DOC_TYPES[DOC_TYPES.length - 1]
 }
 
-async function readTextFromFile(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = e => resolve(e.target.result)
-    reader.onerror = () => reject(new Error('Failed to read file'))
-    reader.readAsText(file)
-  })
-}
-
 // ── Sub-components ───────────────────────────────────────────────────────────
 
 function DocTypeBadge({ type }) {
@@ -89,66 +86,84 @@ function EmbedStatusBadge({ hasEmbedding }) {
     : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-400/10 text-yellow-400 text-xs font-medium"><Clock className="w-3 h-3" aria-hidden="true" />Pending</span>
 }
 
-function UploadModal({ onClose, onSuccess, sites }) {
-  const [form, setForm] = useState({
-    title: '', doc_type: 'sop', site: '', asset_no: '', tags: '', content: '',
-  })
-  const [file, setFile] = useState(null)
+function UploadModal({ onClose, onSuccess, sites, base = null }) {
+  // `base` = the approved document this upload supersedes (new version flow).
+  const [form, setForm] = useState(() => ({
+    title: base?.title || '',
+    doc_type: base?.docType || 'sop',
+    site: base?.site && base.site !== 'Several sites' ? base.site : '',
+    asset_no: base?.assetNo || '',
+    tags: (base?.tags || []).join(', '),
+    content: '',
+    version: base ? String(nextVersion(base.lifecycle)) : '1',
+    document_ref: base?.lifecycle?.document_ref || '',
+    effective_from: '',
+    review_due: '',
+    expires_at: '',
+  }))
+  // Page-tagged text from a parsed file. null = the textarea is the source
+  // (pasted or edited text has no page numbers).
+  const [pages, setPages] = useState(null)
+  const [fileInfo, setFileInfo] = useState(null)
   const [uploading, setUploading] = useState(false)
+  const [reading, setReading] = useState(false)
   const [progress, setProgress] = useState('')
   const [error, setError] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const fileRef = useRef(null)
-  const chunkCount = chunkText(form.content).length
+  const source = pages ?? form.content
+  const chunkCount = useMemo(() => chunkPages(source).length, [source])
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
 
   async function handleFile(f) {
-    setFile(f)
     setError('')
-    if (!form.title) set('title', f.name.replace(/\.[^.]+$/, ''))
+    setReading(true)
     setProgress('Reading file')
     try {
-      const text = await readTextFromFile(f)
-      set('content', text)
-      setProgress('')
-    } catch {
-      setError('Could not read file. Only plain text (.txt, .md, .csv, .json) files are supported in the browser. For a PDF, paste the text below.')
+      const out = await extractDocument(f)
+      setPages(out.pages)
+      setFileInfo({ name: f.name, type: f.type || out.kind, kind: out.kind, pageCount: out.pageCount })
+      set('content', pagesToText(out.pages))
+      if (!form.title) set('title', f.name.replace(/\.[^.]+$/, ''))
+    } catch (err) {
+      setPages(null)
+      setFileInfo(null)
+      setError(toUserMessage(err, 'Could not read this file. Upload a PDF, a Word .docx file or a text file.'))
+    } finally {
+      setReading(false)
       setProgress('')
     }
   }
 
   async function handleSubmit(e) {
     e?.preventDefault?.()
-    if (!form.title.trim() || !form.content.trim()) {
+    if (!form.title.trim() || !String(form.content).trim()) {
       setError('Title and content are required.')
       return
     }
+    const dateErr = validateLifecycleDates(form)
+    if (dateErr) { setError(dateErr); return }
     setUploading(true)
     setError('')
     try {
-      const chunks = chunkText(form.content)
       const tags = form.tags.split(',').map(t => t.trim()).filter(Boolean)
-
-      for (let idx = 0; idx < chunks.length; idx++) {
-        setProgress(`Embedding chunk ${idx + 1} of ${chunks.length}`)
-        const chunkContent = chunks[idx]
-        const embedding = await generateEmbedding(
-          `${form.title}\n\n${chunkContent}`
-        )
-
-        await knowledgeDocuments.createKnowledgeDocument({
-          title:     `${form.title}${chunks.length > 1 ? ` (${idx + 1}/${chunks.length})` : ''}`,
-          content:   chunkContent,
-          doc_type:  form.doc_type,
-          site:      form.site || null,
-          asset_no:  form.asset_no || null,
-          tags,
-          embedding,
-        })
-      }
-
-      onSuccess(chunks.length)
+      const res = await ingestDocument({
+        title: form.title,
+        doc_type: form.doc_type,
+        site: form.site,
+        asset_no: form.asset_no,
+        tags,
+        version: Number(form.version) || 1,
+        document_ref: form.document_ref,
+        effective_from: form.effective_from,
+        review_due: form.review_due,
+        expires_at: form.expires_at,
+        supersedes_id: base?.documentId || null,
+        source_filename: fileInfo?.name || null,
+        source_mime: fileInfo?.type || null,
+      }, source, { onProgress: (done, total) => setProgress(`Saving chunk ${done} of ${total}`) })
+      onSuccess(res.chunks)
     } catch (err) {
       setError(toUserMessage(err, 'Could not process the document. Try again.'))
     } finally {
@@ -163,21 +178,23 @@ function UploadModal({ onClose, onSuccess, sites }) {
     <Modal
       open
       onClose={close}
-      title="Add knowledge document"
-      subtitle="Upload a document to the AI knowledge base"
+      title={base ? `New version of ${base.title}` : 'Add knowledge document'}
+      subtitle={base
+        ? 'Saved as a draft. When it is approved, the current version is marked superseded and stops being used by the AI.'
+        : 'Saved as a draft. The AI uses it only after another approver signs it off.'}
       size="lg"
       footer={(
         <>
-          <p className="text-[var(--text-muted)] text-xs mr-auto" aria-live="polite">{progress || (form.content ? `${chunkCount} chunk${chunkCount === 1 ? '' : 's'} will be embedded` : '')}</p>
+          <p className="text-[var(--text-muted)] text-xs mr-auto" aria-live="polite">{progress || (String(form.content).trim() ? `${chunkCount} chunk${chunkCount === 1 ? '' : 's'} will be queued for AI indexing` : '')}</p>
           <button type="button" onClick={close} className="btn-secondary text-sm min-h-[44px]" disabled={uploading}>Cancel</button>
           <button
             type="submit"
             form="kb-upload-form"
-            disabled={uploading || !form.title.trim() || !form.content.trim()}
+            disabled={uploading || reading || !form.title.trim() || !String(form.content).trim()}
             className="btn-primary text-sm inline-flex items-center gap-2 min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {uploading ? <Loader className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Upload className="w-4 h-4" aria-hidden="true" />}
-            {uploading ? 'Indexing' : 'Upload and index'}
+            {uploading ? 'Saving' : 'Save as draft'}
           </button>
         </>
       )}
@@ -185,7 +202,7 @@ function UploadModal({ onClose, onSuccess, sites }) {
       <form id="kb-upload-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
         <input
           ref={fileRef} id="kb-file-input" type="file" className="sr-only"
-          accept=".txt,.md,.csv,.json,.log"
+          accept={KB_ACCEPT}
           onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }}
         />
         <button
@@ -194,11 +211,18 @@ function UploadModal({ onClose, onSuccess, sites }) {
           onDragLeave={() => setDragOver(false)}
           onDrop={e => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
           onClick={() => fileRef.current?.click()}
+          disabled={reading || uploading}
           className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)] ${dragOver ? 'border-green-500' : 'border-[var(--border-bright)] hover:border-[var(--text-muted)]'}`}
         >
-          <Upload className="w-8 h-8 text-[var(--text-muted)] mx-auto mb-2" aria-hidden="true" />
-          <span className="block text-[var(--text-secondary)] text-sm font-medium">{file ? file.name : 'Drop a file or choose one to upload'}</span>
-          <span className="block text-[var(--text-muted)] text-xs mt-1">.txt, .md, .csv or .json, or paste text below</span>
+          {reading
+            ? <Loader className="w-8 h-8 text-[var(--text-muted)] mx-auto mb-2 animate-spin" aria-hidden="true" />
+            : <Upload className="w-8 h-8 text-[var(--text-muted)] mx-auto mb-2" aria-hidden="true" />}
+          <span className="block text-[var(--text-secondary)] text-sm font-medium">{fileInfo ? fileInfo.name : 'Drop a file or choose one to upload'}</span>
+          <span className="block text-[var(--text-muted)] text-xs mt-1">
+            {fileInfo
+              ? (fileInfo.pageCount ? `${fileInfo.pageCount} page${fileInfo.pageCount === 1 ? '' : 's'} read, page numbers kept for citations` : 'Text read (this format has no page numbers)')
+              : 'PDF, Word .docx, .txt, .md, .csv or .json, or paste text below'}
+          </span>
         </button>
 
         <div>
@@ -206,7 +230,7 @@ function UploadModal({ onClose, onSuccess, sites }) {
           <input id="kb-title" required className="input w-full" value={form.title} onChange={e => set('title', e.target.value)} placeholder="e.g. Tyre Pressure SOP: Heavy Fleet" />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label htmlFor="kb-type" className="label">Document type</label>
             <select id="kb-type" className="input w-full" value={form.doc_type} onChange={e => set('doc_type', e.target.value)}>
@@ -214,18 +238,42 @@ function UploadModal({ onClose, onSuccess, sites }) {
             </select>
           </div>
           <div>
+            <label htmlFor="kb-version" className="label">Version</label>
+            <input id="kb-version" type="number" min="1" step="1" className="input w-full" value={form.version} onChange={e => set('version', e.target.value)} />
+          </div>
+          <div>
+            <label htmlFor="kb-ref" className="label">Document reference</label>
+            <input id="kb-ref" className="input w-full" value={form.document_ref} onChange={e => set('document_ref', e.target.value)} placeholder="e.g. SOP-TYR-004" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label htmlFor="kb-effective" className="label">Effective from</label>
+            <input id="kb-effective" type="date" className="input w-full" value={form.effective_from} onChange={e => set('effective_from', e.target.value)} />
+          </div>
+          <div>
+            <label htmlFor="kb-review" className="label">Review due</label>
+            <input id="kb-review" type="date" className="input w-full" value={form.review_due} onChange={e => set('review_due', e.target.value)} />
+          </div>
+          <div>
+            <label htmlFor="kb-expires" className="label">Expires on</label>
+            <input id="kb-expires" type="date" className="input w-full" value={form.expires_at} onChange={e => set('expires_at', e.target.value)} />
+          </div>
+        </div>
+        <p className="text-[var(--text-muted)] text-xs -mt-2">Leave Effective from blank to start on the approval date. Review due raises a warning; Expires on stops the AI using it.</p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
             <label htmlFor="kb-site" className="label">Site (optional)</label>
             <select id="kb-site" className="input w-full" value={form.site} onChange={e => set('site', e.target.value)}>
               <option value="">All sites</option>
               {sites.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label htmlFor="kb-tags" className="label">Tags (comma separated)</label>
-            <input id="kb-tags" className="input w-full" value={form.tags} onChange={e => set('tags', e.target.value)} placeholder="inflation, pressure, heavy-truck" />
+            <input id="kb-tags" className="input w-full" value={form.tags} onChange={e => set('tags', e.target.value)} placeholder="inflation, pressure" />
           </div>
           <div>
             <label htmlFor="kb-asset" className="label">Asset no. (optional)</label>
@@ -235,16 +283,20 @@ function UploadModal({ onClose, onSuccess, sites }) {
 
         <div>
           <label htmlFor="kb-content" className="label">
-            Content (required) <span className="text-[var(--text-muted)] normal-case font-normal">({form.content.length.toLocaleString()} characters, {chunkCount} chunk{chunkCount === 1 ? '' : 's'})</span>
+            Content (required) <span className="text-[var(--text-muted)] normal-case font-normal">({String(form.content).length.toLocaleString()} characters, {chunkCount} chunk{chunkCount === 1 ? '' : 's'})</span>
           </label>
           <textarea
             id="kb-content"
             required
             className="input w-full font-mono text-xs"
             rows={8}
-            value={form.content} onChange={e => set('content', e.target.value)}
+            value={form.content}
+            onChange={e => { set('content', e.target.value); if (pages) setPages(null) }}
             placeholder="Paste document text here, or load from a file above"
           />
+          {fileInfo?.pageCount && !pages && (
+            <p className="text-amber-500 text-xs mt-1">You edited the text, so page numbers from the file are no longer kept. Reload the file to keep them.</p>
+          )}
         </div>
 
         {error && (
@@ -254,6 +306,87 @@ function UploadModal({ onClose, onSuccess, sites }) {
         )}
       </form>
     </Modal>
+  )
+}
+
+function WithdrawModal({ doc, onClose, onDone }) {
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const submit = async () => {
+    if (!reason.trim()) { setError('A reason is required.'); return }
+    setBusy(true)
+    setError('')
+    try {
+      await withdrawKnowledgeDocument(doc.documentId, reason)
+      onDone()
+    } catch (err) {
+      setError(toUserMessage(err, 'Could not withdraw the document.'))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Modal
+      open
+      onClose={() => { if (!busy) onClose() }}
+      title={`Withdraw ${doc.title}?`}
+      subtitle="The AI stops using it immediately. The record and its history are kept."
+      size="sm"
+      footer={(
+        <>
+          <button type="button" className="btn-secondary text-sm min-h-[44px]" onClick={onClose} disabled={busy}>Cancel</button>
+          <button type="button" className="btn-danger text-sm min-h-[44px] inline-flex items-center gap-1.5 disabled:opacity-60" onClick={submit} disabled={busy || !reason.trim()}>
+            <Ban size={14} aria-hidden="true" /> {busy ? 'Withdrawing' : 'Withdraw'}
+          </button>
+        </>
+      )}
+    >
+      <label htmlFor="kb-withdraw-reason" className="label">Reason (required)</label>
+      <textarea id="kb-withdraw-reason" className="input w-full text-sm" rows={3} value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. Procedure replaced by the 2027 manufacturer guidance" />
+      {error && <p role="alert" className="text-red-400 text-sm mt-2">{error}</p>}
+    </Modal>
+  )
+}
+
+/** Lifecycle status pill (effective today). */
+function LifecyclePill({ lifecycle, today }) {
+  if (!lifecycle) return <span className="cc-na" title="Uploaded before document approval existed">Not recorded</span>
+  const s = effectiveStatus(lifecycle, today)
+  const meta = KB_STATUS_META[s]
+  const rs = reviewState(lifecycle, today)
+  return (
+    <span className="inline-flex items-center gap-1 flex-wrap">
+      <span className={`cc-pill ${meta.tone}`} title={meta.hint}>{meta.label}</span>
+      {(rs.state === 'overdue' || rs.state === 'due_soon') && <span className={`cc-pill ${rs.state === 'overdue' ? 'bad' : 'warn'}`} title="Periodic review date">{reviewNote(rs)}</span>}
+    </span>
+  )
+}
+
+/** Approve / withdraw / new-version controls with the reason when unavailable. */
+function LifecycleActions({ doc, approver, canWrite, busy, installed, onApprove, onWithdraw, onNewVersion }) {
+  if (!doc) return null
+  if (!doc.lifecycle) {
+    return <p className="kb-note"><Info size={13} aria-hidden="true" /> {installed === false ? 'Document approval is not installed yet.' : 'This document was uploaded before approval existed. Upload it again as a new document to put it under approval.'}</p>
+  }
+  const ap = canApprove(doc.lifecycle, approver)
+  const wd = canWithdraw(doc.lifecycle, approver)
+  const status = doc.lifecycle.status
+  return (
+    <div className="kb-detail-actions">
+      {status === 'draft' && (
+        <button type="button" className="cc-btn-primary" onClick={onApprove} disabled={!ap.ok || busy} title={ap.ok ? 'Approve: the AI starts using it from its effective date' : ap.reason}>
+          <ShieldCheck size={15} aria-hidden="true" /> {busy ? 'Approving' : 'Approve'}
+        </button>
+      )}
+      {wd.ok && (
+        <button type="button" className="cc-btn-ghost" onClick={onWithdraw}><Ban size={15} aria-hidden="true" /> Withdraw</button>
+      )}
+      {canWrite && canSupersede(doc.lifecycle) && (
+        <button type="button" className="cc-btn-ghost" onClick={onNewVersion}><GitBranch size={15} aria-hidden="true" /> Upload new version</button>
+      )}
+      {status === 'draft' && !ap.ok && <p className="kb-note"><Info size={13} aria-hidden="true" /> {ap.reason}</p>}
+    </div>
   )
 }
 
@@ -320,7 +453,7 @@ function ColumnBars({ items, empty }) {
 const PREVIEW_WINDOWS = [{ key: 3, label: 'Last 3 months' }, { key: 6, label: 'Last 6 months' }, { key: 12, label: 'Last 12 months' }]
 
 export default function KnowledgeBase() {
-  const { profile } = useAuth()
+  const { profile, user, isSuperAdmin } = useAuth()
   const [docs, setDocs] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -331,6 +464,12 @@ export default function KnowledgeBase() {
   const [filterType, setFilterType] = useState('all')
   const [filterSite, setFilterSite] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
+  const [filterLifecycle, setFilterLifecycle] = useState('all')
+  // null = unknown yet; false = the lifecycle migration is not installed.
+  const [lifecycleInstalled, setLifecycleInstalled] = useState(null)
+  const [versionBase, setVersionBase] = useState(null)
+  const [withdrawDoc, setWithdrawDoc] = useState(null)
+  const [approving, setApproving] = useState(false)
   const [sort, setSort] = useState('updated')
   const [tab, setTab] = useState('documents')
   const [previewMonths, setPreviewMonths] = useState(6)
@@ -350,6 +489,8 @@ export default function KnowledgeBase() {
   const [wfLocked, setWfLocked] = useState(false)
 
   const canWrite = ['Admin', 'Manager'].includes(profile?.role)
+  const approver = { role: profile?.role, isSuperAdmin: !!(isSuperAdmin || profile?.is_super_admin), userId: user?.id || profile?.id }
+  const today = toDay(now)
 
   const fetchDocs = useCallback(async () => {
     setLoading(true)
@@ -360,6 +501,7 @@ export default function KnowledgeBase() {
       // Captured here, not read off `docs`: a later local delete filters the
       // array and would drop the hidden `truncated` flag with it.
       setTruncatedNotice(kbTruncationNotice(rows))
+      setLifecycleInstalled(rows?.lifecycle !== false)
       setNow(Date.now())
     } catch (e) {
       setError(toUserMessage(e, 'Could not load knowledge base documents.'))
@@ -378,11 +520,17 @@ export default function KnowledgeBase() {
   const sites = useMemo(() => kbSiteOptions(chunks), [chunks])
   const head = useMemo(() => kbHeadline(grouped, now), [grouped, now])
   const cols = useMemo(() => buildCollections(grouped), [grouped])
-  const hasFilters = filterType !== 'all' || filterSite !== 'all' || filterStatus !== 'all' || !!search.trim()
+  const hasFilters = filterType !== 'all' || filterSite !== 'all' || filterStatus !== 'all' || filterLifecycle !== 'all' || !!search.trim()
   const filteredDocs = useMemo(
-    () => sortDocuments(filterDocuments(grouped, { type: filterType, site: filterSite, status: filterStatus, search }), sort),
-    [grouped, filterType, filterSite, filterStatus, search, sort],
+    () => sortDocuments(
+      filterDocuments(grouped, { type: filterType, site: filterSite, status: filterStatus, search })
+        .filter((d) => filterLifecycle === 'all' || (d.lifecycle ? effectiveStatus(d.lifecycle, today) : 'none') === filterLifecycle),
+      sort,
+    ),
+    [grouped, filterType, filterSite, filterStatus, filterLifecycle, search, sort, today],
   )
+  const lifeCounts = useMemo(() => lifecycleCounts(grouped.map((d) => d.lifecycle).filter(Boolean), today), [grouped, today])
+  const embedHealth = useMemo(() => embeddingHealth(chunks, now), [chunks, now])
   const filteredChunks = useMemo(() => filteredDocs.flatMap((d) => d.chunks), [filteredDocs])
   const selected = useMemo(
     () => grouped.find((d) => d.key === selectedKey) || filteredDocs[0] || null,
@@ -445,7 +593,21 @@ export default function KnowledgeBase() {
     }
   }
 
-  const clearFilters = () => { setSearch(''); setFilterType('all'); setFilterSite('all'); setFilterStatus('all') }
+  const clearFilters = () => { setSearch(''); setFilterType('all'); setFilterSite('all'); setFilterStatus('all'); setFilterLifecycle('all') }
+
+  const approveDoc = async (d) => {
+    setActionError('')
+    setApproving(true)
+    try {
+      await approveKnowledgeDocument(d.documentId)
+      setNotice({ tone: 'good', text: `${d.title} approved. The AI can now cite it${d.lifecycle?.supersedes_id ? '; the previous version is marked superseded' : ''}.` })
+      fetchDocs()
+    } catch (e) {
+      setActionError(toUserMessage(e, 'Could not approve the document.'))
+    } finally {
+      setApproving(false)
+    }
+  }
   const selectDoc = (d) => { setSelectedKey(d.key); setDetailTab('details') }
 
   const loadState = { loading, data: docs, error, retry: fetchDocs }
@@ -455,8 +617,8 @@ export default function KnowledgeBase() {
     { icon: BookOpen, tone: 't-green', label: 'Knowledge Documents', value: known ? fmtInt(head.documents) : 'N/A', trend: known ? head.docTrend : null, sub: 'Uploaded and searchable', title: 'Source documents (chunks grouped by title). Trend compares documents added in the last 30 days with the 30 days before.' },
     { icon: Layers, tone: 't-blue', label: 'Indexed Chunks', value: known ? fmtInt(head.indexed) : 'N/A', sub: known ? `AI ready for RAG, ${fmtPct(head.coveragePct)} of ${fmtInt(head.chunks)}` : 'AI ready for RAG', title: 'Chunks that carry an embedding and can be retrieved by the AI' },
     { icon: Quote, tone: 't-purple', label: 'Citation Coverage', value: 'N/A', sub: 'Not recorded: answers do not log citations', title: 'AI answers do not record which document they cited yet' },
-    { icon: LayoutTemplate, tone: 't-amber', label: 'Report Templates', value: 'N/A', sub: 'Not recorded: no knowledge templates stored', title: 'Not recorded: no knowledge-based report templates are stored yet' },
-    { icon: FileBarChart, tone: 't-red', label: 'Generated Reports', value: 'N/A', sub: 'Not recorded: AI report runs are not logged', title: 'Not recorded: AI report generation from the knowledge base is not logged yet' },
+    { icon: ShieldCheck, tone: 't-amber', label: 'Live for AI', value: known && lifecycleInstalled ? fmtInt(lifeCounts.live) : 'N/A', sub: known && lifecycleInstalled ? `${fmtInt(lifeCounts.draft)} draft awaiting approval` : 'Lifecycle not installed', title: 'Approved and in-date documents. Only these are returned to the AI.' },
+    { icon: CalendarClock, tone: 't-red', label: 'Review due', value: known && lifecycleInstalled ? fmtInt(lifeCounts.reviewOverdue + lifeCounts.reviewSoon) : 'N/A', sub: known && lifecycleInstalled ? `${fmtInt(lifeCounts.reviewOverdue)} overdue, ${fmtInt(lifeCounts.reviewSoon)} within 30 days` : 'Lifecycle not installed', title: 'Approved documents whose periodic review date has passed or is within 30 days' },
   ]
 
   const docColumns = [
@@ -470,7 +632,9 @@ export default function KnowledgeBase() {
       ),
     },
     { key: 'typeLabel', header: 'Collection' },
-    { key: 'status', header: 'Status', sortValue: (d) => INDEX_STATUS_META[d.status].label, cell: (d) => <span className={`cc-pill ${INDEX_STATUS_META[d.status].tone}`}>{INDEX_STATUS_META[d.status].label}</span> },
+    { key: 'lifecycle', header: 'Status', sortValue: (d) => (d.lifecycle ? KB_STATUS_META[effectiveStatus(d.lifecycle, today)].label : 'Not recorded'), cell: (d) => <LifecyclePill lifecycle={d.lifecycle} today={today} /> },
+    { key: 'version', header: 'Version', sortValue: (d) => d.lifecycle?.version ?? 0, cell: (d) => (d.lifecycle?.version ? `v${d.lifecycle.version}` : <span className="cc-na">N/A</span>) },
+    { key: 'status', header: 'AI index', sortValue: (d) => INDEX_STATUS_META[d.status].label, cell: (d) => <span className={`cc-pill ${INDEX_STATUS_META[d.status].tone}`}>{INDEX_STATUS_META[d.status].label}</span> },
     { key: 'coveragePct', header: 'Coverage', cell: (d) => <MeterCell value={d.coveragePct} suffix="%" /> },
     { key: 'updatedAt', header: 'Updated', cell: (d) => fmtDay(d.updatedAt) },
     {
@@ -558,12 +722,25 @@ export default function KnowledgeBase() {
               <Database size={15} aria-hidden="true" /> {tab === 'chunks' ? 'Back to documents' : `Chunk register${known ? ` (${fmtInt(chunks.length)})` : ''}`}
             </button>
             <button type="button" className="cc-btn-ghost" onClick={fetchDocs} disabled={loading} aria-label="Refresh"><RefreshCw size={15} aria-hidden="true" /></button>
-            {canWrite && <button type="button" className="cc-btn-primary" onClick={() => setModalOpen(true)}><Plus size={15} aria-hidden="true" /> Add document</button>}
+            {canWrite && <button type="button" className="cc-btn-primary" onClick={() => { setVersionBase(null); setModalOpen(true) }} disabled={lifecycleInstalled === false} title={lifecycleInstalled === false ? 'Unavailable until the knowledge lifecycle migration is applied' : undefined}><Plus size={15} aria-hidden="true" /> Add document</button>}
           </div>
         </div>
       </div>
 
       {truncatedNotice && <div className="cc-card kb-banner warn" role="status"><AlertCircle size={18} aria-hidden="true" /><p>{truncatedNotice}</p></div>}
+      {known && lifecycleInstalled === false && (
+        <div className="cc-card kb-banner warn" role="status"><AlertCircle size={18} aria-hidden="true" /><p>Document approval, versions and review dates are not installed on the database yet. Uploading and approving documents is unavailable until the knowledge lifecycle migration is applied.</p></div>
+      )}
+      {known && embedHealth.state === 'stalled' && (
+        <div className="cc-card kb-banner warn" role="status"><AlertCircle size={18} aria-hidden="true" /><p>Embeddings are not configured: {fmtInt(embedHealth.pending)} chunk{embedHealth.pending === 1 ? '' : 's'} still wait for AI indexing ({fmtInt(embedHealth.stale)} for over 30 minutes). The embedding service needs its API key on the server, so the AI cannot search these documents yet, even once approved.</p></div>
+      )}
+      {known && embedHealth.state === 'queued' && (
+        <div className="cc-card kb-banner" role="status"><Clock size={18} aria-hidden="true" /><p>{fmtInt(embedHealth.pending)} chunk{embedHealth.pending === 1 ? ' is' : 's are'} queued for AI indexing. The indexer runs every 10 minutes.</p></div>
+      )}
+      {known && lifecycleInstalled && lifeCounts.reviewOverdue > 0 && (
+        <div className="cc-card kb-banner warn" role="status"><CalendarClock size={18} aria-hidden="true" /><p>{fmtInt(lifeCounts.reviewOverdue)} approved document{lifeCounts.reviewOverdue === 1 ? ' is' : 's are'} past the review date. They are still used by the AI until they expire or are withdrawn; review them or upload a new version.</p>
+          <button type="button" className="cc-btn-ghost" onClick={() => { setFilterLifecycle('approved'); setSort('updated'); setTab('documents') }}>Show approved</button></div>
+      )}
       {actionError && (
         <div className="cc-card kb-banner bad" role="alert">
           <AlertCircle size={18} aria-hidden="true" /><p>{actionError}</p>
@@ -665,6 +842,11 @@ export default function KnowledgeBase() {
                     <option value="all">All Sites</option>
                     <option value="global">Global (no site)</option>
                     {sites.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <select className="cc-select" aria-label="Document status" value={filterLifecycle} onChange={(e) => setFilterLifecycle(e.target.value)}>
+                    <option value="all">Document Status</option>
+                    {Object.entries(KB_STATUS_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
+                    <option value="none">Not recorded</option>
                   </select>
                   <select className="cc-select" aria-label="Index status" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
                     <option value="all">Index Status</option>
@@ -770,8 +952,16 @@ export default function KnowledgeBase() {
                     {detailTab === 'details' && (
                       <dl className="kb-facts">
                         <div><dt>Title</dt><dd>{selected.title}</dd></div>
-                        <div><dt>Version</dt><dd><span className="cc-na">Not recorded</span></dd></div>
-                        <div><dt>Owner</dt><dd><span className="cc-na">Not recorded</span></dd></div>
+                        <div><dt>Version</dt><dd>{selected.lifecycle?.version ? `v${selected.lifecycle.version}` : <span className="cc-na">Not recorded</span>}</dd></div>
+                        <div><dt>Reference</dt><dd>{selected.lifecycle?.document_ref || <span className="cc-na">None</span>}</dd></div>
+                        <div><dt>Document status</dt><dd><LifecyclePill lifecycle={selected.lifecycle} today={today} /></dd></div>
+                        <div><dt>Effective from</dt><dd>{selected.lifecycle?.effective_from ? fmtDay(selected.lifecycle.effective_from) : <span className="cc-na">{selected.lifecycle ? 'On approval' : 'Not recorded'}</span>}</dd></div>
+                        <div><dt>Review due</dt><dd>{selected.lifecycle?.review_due ? <>{fmtDay(selected.lifecycle.review_due)} {reviewNote(reviewState(selected.lifecycle, today)) && <span className="cc-pill warn">{reviewNote(reviewState(selected.lifecycle, today))}</span>}</> : <span className="cc-na">Not set</span>}</dd></div>
+                        <div><dt>Expires</dt><dd>{selected.lifecycle?.expires_at ? fmtDay(selected.lifecycle.expires_at) : <span className="cc-na">No expiry</span>}</dd></div>
+                        <div><dt>Approved</dt><dd>{selected.lifecycle?.approved_at ? <>{fmtDay(selected.lifecycle.approved_at)}{selected.lifecycle.approved_by && selected.lifecycle.approved_by === approver.userId ? ' (by you)' : ''}</> : <span className="cc-na">Not approved</span>}</dd></div>
+                        {selected.lifecycle?.supersedes_id && <div><dt>Supersedes</dt><dd>{grouped.find((g) => g.documentId === selected.lifecycle.supersedes_id)?.title || <span className="cc-na">Earlier version</span>}</dd></div>}
+                        {selected.lifecycle?.withdrawn_reason && <div><dt>Withdrawn because</dt><dd>{selected.lifecycle.withdrawn_reason}</dd></div>}
+                        {selected.lifecycle?.source_filename && <div><dt>Source file</dt><dd>{selected.lifecycle.source_filename}</dd></div>}
                         <div><dt>Collection</dt><dd>{selected.typeLabel}</dd></div>
                         <div><dt>Site</dt><dd>{selected.site || 'All sites'}</dd></div>
                         <div><dt>Asset</dt><dd>{selected.assetNo || <span className="cc-na">Not linked</span>}</dd></div>
@@ -809,8 +999,18 @@ export default function KnowledgeBase() {
                         </li>
                       ))}
                     </ul>
+                    <LifecycleActions
+                      doc={selected}
+                      approver={approver}
+                      canWrite={canWrite}
+                      busy={approving}
+                      installed={lifecycleInstalled}
+                      onApprove={() => approveDoc(selected)}
+                      onWithdraw={() => setWithdrawDoc(selected)}
+                      onNewVersion={() => { setVersionBase(selected); setModalOpen(true) }}
+                    />
                     <div className="kb-detail-actions">
-                      <button type="button" className="cc-btn-primary" onClick={() => setViewDoc(selected.chunks[0])}><ExternalLink size={15} aria-hidden="true" /> Open Document</button>
+                      <button type="button" className="cc-btn-primary" onClick={() => setViewDoc(selected.chunks[0])} disabled={!selected.chunks.length}><ExternalLink size={15} aria-hidden="true" /> Open Document</button>
                       <button type="button" className="cc-btn-ghost kb-outline" onClick={() => setDetailTab('citations')}><Quote size={15} aria-hidden="true" /> View Citations</button>
                       <button type="button" className="cc-btn-ghost" onClick={() => setDetailTab('chunks')}><Layers size={15} aria-hidden="true" /> View chunks ({fmtInt(selected.chunkCount)})</button>
                     </div>
@@ -909,10 +1109,23 @@ export default function KnowledgeBase() {
       {modalOpen && (
         <UploadModal
           sites={sites}
-          onClose={() => setModalOpen(false)}
+          base={versionBase}
+          onClose={() => { setModalOpen(false); setVersionBase(null) }}
           onSuccess={(n) => {
             setModalOpen(false)
-            setNotice({ tone: 'good', text: `Uploaded and indexed ${n} chunk${n !== 1 ? 's' : ''} successfully.` })
+            setVersionBase(null)
+            setNotice({ tone: 'good', text: `Saved as a draft with ${n} chunk${n !== 1 ? 's' : ''} queued for AI indexing. Another Admin, Manager or Director must approve it before the AI uses it.` })
+            fetchDocs()
+          }}
+        />
+      )}
+      {withdrawDoc && (
+        <WithdrawModal
+          doc={withdrawDoc}
+          onClose={() => setWithdrawDoc(null)}
+          onDone={() => {
+            setNotice({ tone: 'good', text: `${withdrawDoc.title} withdrawn. The AI no longer uses it.` })
+            setWithdrawDoc(null)
             fetchDocs()
           }}
         />

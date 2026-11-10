@@ -46,6 +46,7 @@ import {
 import { colorAt, withAlpha } from '../lib/reportColors'
 import { toUserMessage } from '../lib/safeError'
 import { COST_STATUS_LABEL } from '../lib/expenseCostStatus'
+import { costDisplay } from '../lib/tyreCostAudit'
 import './tyrePassport.css'
 
 // exportUtils pulls the PDF/Excel report engines that most sessions never
@@ -381,6 +382,11 @@ export default function TyrePassport() {
     (v) => (v == null || cur.mixed ? NA : formatCurrency(v, cur.currency || '')),
     [cur],
   )
+  // Tyre acquisition cost: an unknown price reads Cost Pending Verification, never 0.
+  const tyreCost = useCallback(
+    (v) => (cur.mixed ? NA : costDisplay(v, (n) => formatCurrency(n, cur.currency || ''))),
+    [cur],
+  )
 
   const wearChart = useMemo(() => {
     const series = passport?.treadSeries?.length ? passport.treadSeries : []
@@ -420,7 +426,7 @@ export default function TyrePassport() {
       fitted: dateTxt(s.fitted),
       removed: s.removed ? dateTxt(s.removed) : 'Current',
       km_run: s.km_run == null ? NA : Number(s.km_run).toLocaleString(),
-      cost: s.cost == null ? NA : moneyFull(s.cost),
+      cost: tyreCost(s.cost),
       cpk: s.cpk == null || cur.mixed ? NA : String(s.cpk),
       reason: s.reason || NA,
     }))
@@ -433,7 +439,7 @@ export default function TyrePassport() {
       reportFileName('Tyre Passport', passport.serial),
       'landscape',
     )
-  }, [passport, moneyFull, cur.mixed])
+  }, [passport, tyreCost, cur.mixed])
 
   const exportExcel = useCallback(async () => {
     if (!passport) return
@@ -470,11 +476,11 @@ export default function TyrePassport() {
     { accessorKey: 'km_run', header: 'Km run', meta: { align: 'right' },
       cell: ({ getValue }) => (getValue() == null ? NA : Number(getValue()).toLocaleString()) },
     { accessorKey: 'cost', header: 'Cost', meta: { align: 'right' },
-      cell: ({ getValue }) => moneyFull(getValue()) },
+      cell: ({ getValue }) => tyreCost(getValue()) },
     { accessorKey: 'cpk', header: 'CPK (per fitment)', meta: { align: 'right' },
       cell: ({ getValue }) => (getValue() == null || cur.mixed ? NA : getValue()) },
     { accessorKey: 'reason', header: 'Removal reason', cell: ({ getValue }) => getValue() || NA },
-  ], [moneyFull, cur.mixed])
+  ], [tyreCost, cur.mixed])
 
   const lifecycleColumns = useMemo(() => [
     { accessorKey: 'event_seq', header: '#', meta: { align: 'right' } },
@@ -585,7 +591,7 @@ export default function TyrePassport() {
     ['Rotations', passport.rotationCount],
     ['Retreads', passport.retreadCount],
     ['Repairs', passport.stats.repairCount],
-    ['Purchase cost', moneyFull(passport.costBreakdown.purchase || null)],
+    ['Purchase cost', tyreCost(passport.costBreakdown.purchase || null)],
     ['Service and repair cost', moneyFull(passport.costBreakdown.service)],
     ['Recovered', moneyFull(passport.costBreakdown.recovered)],
     ['Net lifetime cost', moneyFull(passport.costBreakdown.netLifetime)],
@@ -925,7 +931,7 @@ export default function TyrePassport() {
                 emptyMessage="No service or repair events recorded for this tyre." />
               <div className="tp-cost">
                 {[
-                  ['Purchase', moneyFull(passport.costBreakdown.purchase || null)],
+                  ['Purchase', tyreCost(passport.costBreakdown.purchase || null)],
                   ['Service and repairs', moneyFull(passport.costBreakdown.service)],
                   ['Recovered (warranty and retread)', moneyFull(passport.costBreakdown.recovered)],
                   ['Net lifetime cost', moneyFull(passport.costBreakdown.netLifetime)],

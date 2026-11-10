@@ -4,7 +4,7 @@ import { authorizeTool, sourceForTool, TOOL_POLICY } from '../../supabase/functi
 describe('AI orchestrator tool policy', () => {
   it('registers the current tool catalog as read-only', () => {
     expect(Object.keys(TOOL_POLICY)).toEqual(expect.arrayContaining([
-      'get_exec_digest', 'search_knowledge_base', 'count_records', 'list_recent_events',
+      'get_fleet_overview', 'get_fleet_cpk', 'search_knowledge_base', 'count_records', 'list_recent_events',
     ]))
     expect(Object.values(TOOL_POLICY).every(policy => policy.risk === 'read')).toBe(true)
   })
@@ -21,5 +21,11 @@ describe('AI orchestrator tool policy', () => {
     expect(sourceForTool('count_records', true, 2)).toEqual({
       id: 'source-2', tool: 'count_records', label: 'Operational record count', status: 'grounded',
     })
+  })
+})
+
+describe('retired service-role digest', () => {
+  it('get_exec_digest is no longer registered (it read org-wide data past country scope)', () => {
+    expect(TOOL_POLICY.get_exec_digest).toBeUndefined()
   })
 })

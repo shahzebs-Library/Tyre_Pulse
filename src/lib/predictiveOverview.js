@@ -12,6 +12,7 @@
  * Low = 30 to 49 (engine "elevated"), Healthy = under 30 (engine "low").
  */
 import { REPLACE_TARGET_MM, LIMITING_FACTORS } from './predictiveMaintenance'
+import { fitmentKm } from './tyreLifetime'
 
 export const MS_DAY = 86_400_000
 export const DUE_SOON_DAYS = 30
@@ -304,7 +305,8 @@ export function removalTrend(records = [], now = new Date(), months = 6, avgKmLi
     const i = (t.getFullYear() - first.getFullYear()) * 12 + (t.getMonth() - first.getMonth())
     if (i < 0 || i >= months) continue
     all[i] += 1
-    const life = num(r.km_at_removal) != null && num(r.km_at_fitment) != null ? num(r.km_at_removal) - num(r.km_at_fitment) : null
+    // Shared km rule (T7): placeholder fitment km / over-cap life is unknown, not early.
+    const life = num(r.km_at_removal) != null && num(r.km_at_fitment) != null ? fitmentKm(r) : null
     if (life != null && life > 0 && avgKmLife) {
       lifeKnown += 1
       if (life < avgKmLife) early[i] += 1

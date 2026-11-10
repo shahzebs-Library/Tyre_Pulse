@@ -28,7 +28,54 @@ export const ACCURACY_THRESHOLDS = Object.freeze({
   minCalibrationSamples: 30,
   maxMissingPredictions: 0,
   failOnInsufficient: true,
+  minDangerousSupport: 0,      // expert-labelled dangerous defects needed before "0 misses" means anything
 })
+
+/**
+ * RELEASE profile (owner targets, 2026-11). These are TARGETS, not claims of
+ * current performance. "No dangerous misses" only counts when enough dangerous
+ * defects were in the set: with 0 misses in 60 dangerous cases the 95% upper
+ * bound on the miss rate is still about 6%.
+ */
+export const RELEASE_THRESHOLDS = Object.freeze({
+  ...ACCURACY_THRESHOLDS,
+  minCases: 500,
+  minSupportPerCondition: 20,
+  minMicroPrecision: 0.9,
+  minMicroRecall: 0.95,
+  minConditionRecall: 0.85,
+  minAssessableAgreement: 0.95,
+  minReviewers: 2,
+  maxEce: 0.1,
+  minDangerousSupport: 60,
+})
+
+/** Wilson score 95% interval for a proportion; null when n is 0. */
+export function wilsonInterval(successes, n, z = 1.96) {
+  if (!(n > 0) || !(successes >= 0) || successes > n) return null
+  const p = successes / n, z2 = z * z
+  const den = 1 + z2 / n
+  const centre = (p + z2 / (2 * n)) / den
+  const half = (z * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n))) / den
+  return { low: round(Math.max(0, centre - half)), high: round(Math.min(1, centre + half)) }
+}
+
+/**
+ * Leakage check for train/validation/holdout splits: photos of the SAME
+ * physical tyre (or the same inspection) must sit in one split only, otherwise
+ * the holdout score measures memory, not generalisation.
+ */
+export function checkSplitLeakage(rows) {
+  const L = Array.isArray(rows) && rows.length && rows[0]?.photoRef !== undefined ? rows : normalizeLabelled(rows)
+  const seen = new Map()
+  for (const r of L) {
+    if (!r.groupKey || !r.split) continue
+    const s = seen.get(r.groupKey) || new Set(); s.add(r.split); seen.set(r.groupKey, s)
+  }
+  const leaks = [...seen].filter(([, s]) => s.size > 1).map(([g, s]) => ({ group: g, splits: [...s].sort() }))
+  const unassigned = L.filter((r) => !r.groupKey || !r.split).length
+  return { leaks, unassigned, ok: leaks.length === 0 }
+}
 
 const NONE = 'none'
 const str = (v) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim())
@@ -79,6 +126,10 @@ export function normalizeLabelled(input) {
       assessable: r.assessable === undefined || r.assessable === '' ? true : truthy(r.assessable),
       reviewer: str(r.reviewer),
       position: str(r.position),
+      vehicleType: str(r.vehicle_type ?? r.vehicleType),
+      // Physical tyre (serial) or, failing that, the inspection: the unit that must not cross splits.
+      groupKey: str(r.tyre_serial ?? r.tyreSerial ?? r.serial_no ?? r.inspection_id ?? r.inspectionId),
+      split: str(r.split).toLowerCase(),
     }
   })
 }
@@ -157,7 +208,8 @@ export function buildAccuracyReport({ labelled, predictions } = {}, thresholds =
   const confusion = new Map()
   const points = []
   const reviewers = new Set()
-  let missing = 0, assessAgree = 0, assessN = 0, dangerousMisses = 0
+  let missing = 0, assessAgree = 0, assessN = 0, dangerousMisses = 0, dangerousSupport = 0
+  const perVt = new Map()
   const missed = []
 
   for (const l of L) {
@@ -168,7 +220,15 @@ export function buildAccuracyReport({ labelled, predictions } = {}, thresholds =
     const pt = new Set(p.defects.map((d) => d.type))
     const E = new Set(l.assessable ? l.expected : [])
     const Pr = l.assessable || p.assessable ? pt : new Set()
-    for (const t of E) { const c = perCond.get(t); c.support++; if (Pr.has(t)) c.tp++; else { c.fn++; if (DANGEROUS_TYPES.includes(t)) { dangerousMisses++; missed.push({ photoRef: l.photoRef, type: t }) } } }
+    for (const t of E) {
+      const c = perCond.get(t); c.support++
+      if (DANGEROUS_TYPES.includes(t)) dangerousSupport++
+      if (Pr.has(t)) c.tp++; else { c.fn++; if (DANGEROUS_TYPES.includes(t)) { dangerousMisses++; missed.push({ photoRef: l.photoRef, type: t }) } }
+    }
+    { const vk = l.vehicleType || 'unknown'; const v = perVt.get(vk) || { cases: 0, tp: 0, fp: 0, fn: 0 }; v.cases++
+      for (const t of E) Pr.has(t) ? v.tp++ : v.fn++
+      for (const t of Pr) if (!E.has(t)) v.fp++
+      perVt.set(vk, v) }
     for (const t of Pr) if (!E.has(t)) perCond.get(t).fp++
     for (const [e, pr] of pairCase([...E], [...Pr])) {
       const row = confusion.get(e) || new Map(); row.set(pr, (row.get(pr) || 0) + 1); confusion.set(e, row)
@@ -213,7 +273,15 @@ export function buildAccuracyReport({ labelled, predictions } = {}, thresholds =
     confusion: { labels, matrix, expectedRows: true },
     calibration: calibration(points),
     dangerousMisses,
+    dangerousSupport,
     dangerousMissed: missed.slice(0, 20),
+    vehicleTypes: Object.fromEntries([...perVt].sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => [k, { cases: v.cases, ...prf(v.tp, v.fp, v.fn) }])),
+    intervals: {
+      precision: wilsonInterval(TP, TP + FP),
+      recall: wilsonInterval(TP, TP + FN),
+      assessable: wilsonInterval(assessAgree, assessN),
+      dangerousRecall: wilsonInterval(dangerousSupport - dangerousMisses, dangerousSupport),
+    },
   }
 }
 
@@ -232,6 +300,10 @@ export function evaluateAccuracyGate(report, thresholds = {}) {
   { const [v, bad] = lt(report.micro.recall, th.minMicroRecall); add('recall', 'Micro recall', v, !!(v != null && bad), v == null) }
   { const [v, bad] = lt(report.assessableAgreement, th.minAssessableAgreement); add('assessable', 'Assessable agreement', v, !!(v != null && bad), v == null) }
   add('dangerous', 'Dangerous defects missed', report.dangerousMisses, report.dangerousMisses <= th.maxDangerousMisses)
+  if (th.minDangerousSupport > 0) {
+    const ds = report.dangerousSupport ?? 0
+    add('dangerous_support', `At least ${th.minDangerousSupport} expert-labelled dangerous defects`, ds, ds >= th.minDangerousSupport, ds < th.minDangerousSupport)
+  }
   const weak = Object.entries(report.conditions).filter(([, c]) => c.recall != null && c.recall < th.minConditionRecall).map(([t]) => t)
   add('condition_recall', `Every supported condition recall >= ${th.minConditionRecall}`, weak.join(', ') || null, weak.length === 0)
   const cal = report.calibration
@@ -246,6 +318,8 @@ export function formatAccuracyReport(report, gate) {
   const out = [`Gate: ${gate.status.toUpperCase()}  cases=${report.scored}/${report.cases}  reviewers=${report.reviewers.join(', ') || 'none'}`]
   for (const c of gate.checks) out.push(`  [${c.status}] ${c.label}: ${c.value ?? 'N/A'}`)
   out.push(`Micro P=${pct(report.micro.precision)} R=${pct(report.micro.recall)} F1=${pct(report.micro.f1)}`)
+  const ci = (k) => { const v = report.intervals?.[k]; return v ? `${pct(v.low)} to ${pct(v.high)}` : 'N/A' }
+  out.push(`95% intervals: precision ${ci('precision')}, recall ${ci('recall')}, assessable ${ci('assessable')}, dangerous recall ${ci('dangerousRecall')} (n=${report.dangerousSupport ?? 0})`)
   out.push('Per condition:')
   for (const [t, c] of Object.entries(report.conditions)) out.push(`  ${t}: P=${pct(c.precision)} R=${pct(c.recall)} support=${c.support}${c.reliable ? '' : ' (low support)'}`)
   out.push('Per position:')

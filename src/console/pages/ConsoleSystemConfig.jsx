@@ -54,8 +54,10 @@ const CONFIG_GROUPS = [
     icon: Zap,
     configs: [
       { key: 'ai_enabled',            type: 'bool',   label: 'AI features enabled',      desc: 'Master toggle for all AI-powered features across the platform.' },
+      { key: 'ai_orchestrator_enabled', type: 'bool', label: 'AI copilot enabled',     desc: 'Turns the AI copilot (fleet assistant) off without touching other AI features.' },
+      { key: 'ai_tyre_inspection_enabled', type: 'bool', label: 'AI tyre photo inspection enabled', desc: 'Turns AI analysis of tyre photos off. Queued photos wait until it is on again.' },
       { key: 'ai_model',              type: 'string', label: 'Default AI model',         desc: 'The LLM model used for analysis. E.g. claude-3-5-sonnet-20241022' },
-      { key: 'ai_monthly_budget_usd', type: 'number', label: 'Monthly AI budget (USD)',  desc: 'Alert when cumulative AI spend exceeds this amount.' },
+      { key: 'ai_monthly_budget_usd', type: 'number', label: 'Monthly AI budget (USD)',  desc: 'Hard monthly cap across all AI features: paid AI calls stop once it is reached. 0 means no cap.' },
       { key: 'ai_rate_limit_per_min', type: 'number', label: 'AI rate limit (requests a minute)',  desc: 'Maximum AI requests per minute per organisation.' },
       { key: 'ai_cache_ttl_hours',    type: 'number', label: 'AI answer cache (hours)',        desc: 'How long AI responses are cached before a fresh call is made.' },
     ],

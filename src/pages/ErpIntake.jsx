@@ -39,6 +39,11 @@ import { rowsFromSheet, summarizeRows } from '../lib/partsExpense'
 import { insertPartsConsumption } from '../lib/api/partsConsumption'
 import { loadIntake, countExistingRows } from '../lib/api/erpIntake'
 import { checkImportFingerprint, fileSha256 } from '../lib/api/importHistory'
+import { loadPriceIndex } from '../lib/api/tyreCostAudit'
+import {
+  buildImportPreview, committableRows, gridRowsToAudit, monthsInRows, PREVIEW_KINDS,
+} from '../lib/importCostPreview'
+import ImportCostPreview from '../components/intake/ImportCostPreview'
 
 /** Per-report presentation: label + destination-table label. */
 const REPORT_META = {
@@ -249,6 +254,23 @@ export default function ErpIntake() {
           }
         } catch { d.dup = null }
       }
+      // Tyre cost validation BEFORE commit (expense grid + monthly tyres). Stored prices
+      // are read only for the grid: monthly tyre rows are never priced by size alone.
+      for (const d of found) {
+        if (!PREVIEW_KINDS.includes(d.type)) continue
+        let dbLines = []
+        let indexError = null
+        if (d.type === 'grid' && country) {
+          try {
+            const res = await loadPriceIndex({ country, months: monthsInRows(gridRowsToAudit(d.rows)) })
+            dbLines = res.lines
+            if (res.truncated) indexError = 'only part of the stored prices could be read'
+          } catch (e) {
+            indexError = toUserMessage(e, 'stored prices unavailable')
+          }
+        }
+        d.costPreview = buildImportPreview(d.type, d.rows, { dbLines, country, indexError })
+      }
       setDetected(found)
       setPhase('preview')
     } catch (err) {
@@ -283,7 +305,9 @@ export default function ErpIntake() {
         const onProgress = (done, total) => setProgress({ sheetIdx: i, d: done, t: total })
         // Stamp the chosen country on every row at import time (so changing the picker
         // after parsing still applies), overriding whatever was set during mapping.
-        const rows = d.rows.map((r) => ({ ...r, country }))
+        // Invalid and duplicate rows from the cost validation are held back; every
+        // other row imports as uploaded (proposed prices are never written here).
+        const rows = committableRows(d.rows, d.costPreview).map((r) => ({ ...r, country }))
         let res
         if (d.target === 'parts_consumption') {
           res = await insertPartsConsumption(rows, { country, onProgress })
@@ -299,6 +323,7 @@ export default function ErpIntake() {
         out.push({
           ...d,
           sourceRows: d.rows.length,
+          excludedByValidation: d.costPreview?.excludedCount || 0,
           inserted: res?.inserted ?? d.rows.length,
           updated: res?.updated ?? 0,
           unchanged: res?.unchanged ?? (res?.skipped ?? 0),
@@ -569,6 +594,10 @@ export default function ErpIntake() {
                     </>
                   )}
 
+                  {d.costPreview && !done && (
+                    <ImportCostPreview preview={d.costPreview} currency={currency} />
+                  )}
+
                   {/* NON-GRID: sample table */}
                   {d.type !== 'grid' && (SAMPLE_COLS[d.target] || []).length > 0 && (
                     <SamplePreview target={d.target} rows={d.rows} />
@@ -603,6 +632,14 @@ export default function ErpIntake() {
                           <span>
                             {num(done.replacement.review)} tyre(s) could not be placed automatically (dates conflict with the wheel history)
                             and are waiting in Data Reconciliation, Integrity, "Tyre uploads waiting for a decision". They were not added yet.
+                          </span>
+                        </div>
+                      )}
+                      {done.excludedByValidation > 0 && (
+                        <div className="flex items-start gap-2 text-sm text-[var(--warning,#f59e0b)]">
+                          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                          <span>
+                            {num(done.excludedByValidation)} row(s) were held back by the tyre cost validation (invalid or duplicate) and were not imported.
                           </span>
                         </div>
                       )}

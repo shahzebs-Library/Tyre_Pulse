@@ -36,6 +36,8 @@ import DataCompletenessPanel from '../components/intake/DataCompletenessPanel'
 import ImportTemplatePanel from '../components/intake/ImportTemplatePanel'
 import HeaderChangeDialog from '../components/intake/HeaderChangeDialog'
 import IntakeDiagnosticsPanel from '../components/intake/IntakeDiagnosticsPanel'
+import ImportCostPreview from '../components/intake/ImportCostPreview'
+import { buildImportPreview } from '../lib/importCostPreview'
 import { toUserMessage } from '../lib/safeError'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import {
@@ -157,6 +159,14 @@ export default function DataIntakeCenter() {
   const [profiles, setProfiles] = useState([])
   const [mapping, setMapping] = useState([])
   const [annotated, setAnnotated] = useState([])
+  // Advisory tyre cost validation (Cost Pending Verification, zero cost, invalid rows).
+  // This page keeps its own error/duplicate handling; nothing here changes the commit.
+  const tyreCostPreview = useMemo(
+    () => (module === 'tyre' && annotated.length
+      ? buildImportPreview('intake_tyre', annotated.map((r) => r.transformed), { country: activeCountry, currency: activeCurrency })
+      : null),
+    [module, annotated, activeCountry, activeCurrency],
+  )
   // {done,total} while rows are being transformed, so a big file shows
   // movement instead of a frozen tab
   const [validating, setValidating] = useState(null)
@@ -1289,6 +1299,11 @@ export default function DataIntakeCenter() {
               </div>
               <p className="text-xs text-[var(--text-secondary)] max-w-xs">Derived from <span className="text-[var(--text-primary)]">{counts.qty || counts.total}</span> tyres × unit cost. Quantity and unit cost are stored; the total is computed so all spend rolls up in one place.
                 <span className="block mt-1 text-amber-300/90">Looks too high vs your file? Your cost column may already include the quantity, go Back and map it to <span className="font-semibold">"Total Amount"</span> instead; the per-tyre price is derived automatically.</span></p>
+            </div>
+          )}
+          {module === 'tyre' && tyreCostPreview && (
+            <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4">
+              <ImportCostPreview preview={tyreCostPreview} currency={activeCurrency} />
             </div>
           )}
           {granularityWarning && (

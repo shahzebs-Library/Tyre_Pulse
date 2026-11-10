@@ -1,4 +1,4 @@
-import { toLifetimeTyres, hasLifetimeCpk, lifetimeCpk, weightedCpk, withOnePricePerTyre, isStrongSerial, lifetimeSummary, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
+import { toLifetimeTyres, hasLifetimeCpk, lifetimeCpk, weightedCpk, withOnePricePerTyre, isStrongSerial, lifetimeSummary, fitmentKm, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
 
 const _tyreKey = (r) => `${String(r.country ?? '').trim().toUpperCase()}|${String(r.serial_no ?? '').trim().toUpperCase()}`
 // ─────────────────────────────────────────────────────────────────────────────
@@ -103,8 +103,25 @@ function _groupCpk(tyres) {
   }
 }
 
-function _kmRun(r) {
-  return Number(r.km_at_removal) - Number(r.km_at_fitment)
+/**
+ * km one completed fitment ran, by the SHARED km rule (tyreKm.js, T7), or null.
+ * The removal / scrap rates used the raw removal-minus-fitment difference, so a
+ * placeholder fitment odometer of "1" put the machine's whole odometer
+ * (229,999 km) into the fleet distance, and a life above the class cap counted
+ * as real distance. A fitment measured here is the same fitment the lifetime
+ * layer measures.
+ */
+function _stintKm(r) {
+  const fit = Number(r.km_at_fitment)
+  const rem = Number(r.km_at_removal)
+  if (!(isFinite(fit) && isFinite(rem) && rem > fit)) return null
+  const km = fitmentKm(r)
+  return km != null && km > 0 ? km : null
+}
+
+/** A tyre tagged scrap: category Scrap, or the scrap action's status stamp. */
+function _isScrapTagged(r) {
+  return /scrap/i.test(String(r.category ?? '')) || /^\s*scrap/i.test(String(r.status ?? ''))
 }
 
 function _linearRegression(points) {
@@ -264,11 +281,14 @@ export function computeAvgTyreLife(records = []) {
     .map(([site, rows]) => ({ site, avgKm: _mean(rows.map(_lifeKm)), count: rows.length }))
     .sort((a, b) => b.avgKm - a.avgKm)
 
+  // Missing is not zero: with no measurable tyre the life is unknown (null),
+  // never 0 km (the AI agents and board tiles printed "0 km" for a data gap).
+  const has = kms.length > 0
   return {
-    avgKm:      _mean(kms),
-    medianKm:   _median(kms),
-    maxKm:      kms.length ? Math.max(...kms) : 0,
-    minKm:      kms.length ? Math.min(...kms) : 0,
+    avgKm:      has ? _mean(kms) : null,
+    medianKm:   has ? _median(kms) : null,
+    maxKm:      has ? Math.max(...kms) : null,
+    minKm:      has ? Math.min(...kms) : null,
     validCount: valid.length,
     byBrand,
     bySite,
@@ -284,7 +304,7 @@ export function computeFleetTyreLife(records = []) {
   // Per PHYSICAL tyre: km summed across every fitment by the shared km rule.
   const valid = toLifetimeTyres(records).filter(t => Number(t._life_km) > 0)
 
-  const avgKm = _mean(valid.map(_lifeKm))
+  const avgKm = valid.length ? _mean(valid.map(_lifeKm)) : null
 
   const byMonth = _groupBy(valid, r => _toMonthKey(r.issue_date) ?? 'Unknown')
   const trend = Object.entries(byMonth)
@@ -302,11 +322,7 @@ export function computeFleetTyreLife(records = []) {
  * @returns {{ removalPer1000Km, totalRemovals, estimatedFleetKm }}
  */
 export function computeRemovalRate(records = [], fleetKmTotal) {
-  const valid = records.filter(r => {
-    const fit = Number(r.km_at_fitment)
-    const rem = Number(r.km_at_removal)
-    return isFinite(fit) && isFinite(rem) && rem > fit
-  })
+  const valid = records.filter(r => _stintKm(r) != null)
 
   // Numerator and denominator MUST cover the same population. When the fleet km
   // is derived here it is summed from `valid` only, so counting every record as
@@ -316,7 +332,7 @@ export function computeRemovalRate(records = [], fleetKmTotal) {
   // removal legitimately counts.
   const derived          = fleetKmTotal == null
   const totalRemovals    = derived ? valid.length : records.length
-  const estimatedFleetKm = fleetKmTotal ?? valid.reduce((s, r) => s + _kmRun(r), 0)
+  const estimatedFleetKm = fleetKmTotal ?? valid.reduce((s, r) => s + _stintKm(r), 0)
   // No measured distance means no rate: null, never 0 (0 reads as a perfect fleet).
   const removalPer1000Km = estimatedFleetKm > 0
     ? (totalRemovals / estimatedFleetKm) * 1000
@@ -614,12 +630,8 @@ export function computeRetreadPerformance(records = []) {
  * @returns {{ scrapRate, scrapCount, totalCount, estimatedScrapCost, bySite }}
  */
 export function computeScrapRate(records = [], scrapKmPct = 20, defaultCost = 0) {
-  const valid  = records.filter(r => {
-    const fit = Number(r.km_at_fitment)
-    const rem = Number(r.km_at_removal)
-    return isFinite(fit) && isFinite(rem) && rem > fit
-  })
-  const avgKm = _mean(valid.map(_kmRun))
+  const stints = records.map(_stintKm).filter(k => k != null)
+  const avgKm = _mean(stints)
   const kmThreshold = avgKm * (scrapKmPct / 100)
 
   // A tyre is scrapped when it is TAGGED Scrap (category), when the scrap action
@@ -628,12 +640,10 @@ export function computeScrapRate(records = [], scrapKmPct = 20, defaultCost = 0)
   // category alone missed every live scrap: 0 rows carry category Scrap while 835
   // rows carry status Scrapped (2026-11-09), so the rate read 0%.
   const isScrap = (r) => {
-    if (/scrap/i.test(String(r.category ?? ''))) return true
-    if (/^\s*scrap/i.test(String(r.status ?? ''))) return true
+    if (_isScrapTagged(r)) return true
     if (r.risk_level === 'Critical') {
-      const fit = Number(r.km_at_fitment)
-      const rem = Number(r.km_at_removal)
-      if (isFinite(fit) && isFinite(rem) && rem > fit && _kmRun(r) < kmThreshold) return true
+      const km = _stintKm(r)
+      if (km != null && km < kmThreshold) return true
     }
     return false
   }
@@ -820,7 +830,9 @@ export function computeVendorPerformance(records = []) {
     const avgLife     = lifeTyres.length > 0 ? _mean(lifeTyres.map(_lifeKm)) : 0
     const failureCount = rows.filter(r => r.risk_level === 'High' || r.risk_level === 'Critical').length
     const failureRate  = rows.length > 0 ? failureCount / rows.length : 0
-    const scrapCount   = rows.filter(r => /scrap/i.test(String(r.category ?? ''))).length
+    // Same scrap tag as computeScrapRate: live scraps carry status 'Scrapped'
+    // (category is never set by the scrap action), so category alone read 0%.
+    const scrapCount   = rows.filter(_isScrapTagged).length
     const scrapRate    = rows.length > 0 ? scrapCount / rows.length : 0
     const totalCost    = validRows.reduce((s, t) => s + t._cost * (t._qty || 1), 0)
 

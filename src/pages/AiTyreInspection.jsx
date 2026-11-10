@@ -21,6 +21,7 @@ import { analyzeMeasurements, describeSeries } from '../lib/tyreMeasurementEngin
 import { exportInspectionExcel } from '../lib/aiTyreInspectionExport'
 import { applyRegisterFilters, conditionOptions } from '../lib/aiTyreInspectionFilters'
 import AiTyreOpsPanel from '../components/aiInspection/AiTyreOpsPanel'
+import ExpertLabellingPanel from '../components/aiInspection/ExpertLabellingPanel'
 import LazyTyrePhoto from '../components/aiInspection/LazyTyrePhoto'
 import { readInspectionMeasurements, recordDepthMeasurement, readInspectionAnalysis, enqueueInspectionPhotos, reviewAiFinding, backfillAiInspectionRange, screenInspectionPhotos, getAiReviewFeedback, getAiLabelledFindings } from '../lib/api/aiTyreInspection'
 
@@ -205,6 +206,7 @@ export default function AiTyreInspection() {
   const [aiJobsByInspection,setAiJobsByInspection]=useState({})
   const [dateFrom,setDateFrom]=useState('')
   const [dateTo,setDateTo]=useState('')
+  const [view,setView]=useState('register')
   const requestSeq = useRef(0)
   const load = useCallback(async () => {
     const seq = ++requestSeq.current
@@ -298,6 +300,8 @@ export default function AiTyreInspection() {
   ]
   return <div className="space-y-4">
     <PageHeader title="AI Tyre Inspection" subtitle="Verified measurements and defect evidence. AI processing will appear only when the secure background service is configured." icon={SearchCheck} />
+    {mayViewFeedback&&<div className="flex gap-2" role="tablist" aria-label="AI tyre inspection views">{[['register','Inspection register'],['labelling','Expert labelling']].map(([id,label])=><button key={id} type="button" role="tab" aria-selected={view===id} onClick={()=>setView(id)} className={'text-sm rounded-md px-3 py-2 border '+(view===id?'bg-brand-subtle border-brand-bright text-brand-bright':'border-[var(--border-dim)] text-[var(--text-secondary)]')}>{label}</button>)}</div>}
+    {mayViewFeedback&&view==='labelling'?<ExpertLabellingPanel/>:<>
     <div className="grid gap-3 sm:grid-cols-3">
       <Card><div className="flex items-center gap-2 text-sm"><ClipboardCheck size={17}/> Inspections loaded</div><div className="text-2xl font-semibold mt-2">{records.length}</div><div className="text-xs text-[var(--text-muted)]">on this page, {total} match on the server</div></Card>
       <Card><div className="flex items-center gap-2 text-sm"><ShieldAlert size={17}/> Defect photos for review</div><div className="text-2xl font-semibold mt-2">{records.reduce((sum,r)=>sum+r.photosForReview,0)}</div></Card>
@@ -336,6 +340,7 @@ export default function AiTyreInspection() {
       </div>
     </Card>
     {selected && <InspectionDetail inspection={selected} related={related} role={role} activeTab={tab} onTab={setTab} onClose={()=>setSelected(null)} />}
+    </>}
   </div>
 }
 

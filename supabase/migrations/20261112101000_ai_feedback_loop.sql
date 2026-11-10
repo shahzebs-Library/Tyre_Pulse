@@ -1,6 +1,6 @@
 -- ============================================================================
 -- 20261112101000_ai_feedback_loop.sql
--- STATUS: AUTHORED, NOT APPLIED. Owner applies after review.
+-- STATUS: APPLIED LIVE 2026-11-10 (owner go-ahead) via Supabase MCP apply_migration.
 --
 -- Supervised feedback loop for AI Command Center answers. NO online retraining
 -- and NO automatic prompt/model promotion: feedback is stored, an expert marks

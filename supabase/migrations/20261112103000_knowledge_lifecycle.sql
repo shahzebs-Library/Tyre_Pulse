@@ -1,6 +1,6 @@
 -- ============================================================================
 -- 20261112103000_knowledge_lifecycle
--- STATUS: AUTHORED, NOT APPLIED. Apply only on the owner's go-ahead.
+-- STATUS: APPLIED LIVE 2026-11-10 (owner go-ahead) via Supabase MCP apply_migration.
 --
 -- WHAT: the company knowledge base (SOPs, manuals, pressure guidance, removal
 -- criteria, RCA procedures, warranty rules, procurement procedures) gets a

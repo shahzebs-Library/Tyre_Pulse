@@ -1,5 +1,5 @@
 -- 20261112106000_tyre_cost_audit.sql
--- STATUS: AUTHORED, NOT APPLIED. Apply only with the owner's approval.
+-- STATUS: APPLIED LIVE 2026-11-10 (owner go-ahead) via Supabase MCP apply_migration.
 --
 -- Tyre Cost Audit: deterministic detection and SAFE recovery of tyre acquisition costs.
 -- Mirror of src/lib/tyreCostAudit.js (change both; src/test/tyreCostAudit.test.js pins the rules).

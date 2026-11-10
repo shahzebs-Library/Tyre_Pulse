@@ -1,6 +1,6 @@
 -- 20261112100000_ai_orchestrator_budget.sql
--- STATUS: AUTHORED, NOT APPLIED. Apply only on the owner's explicit go-ahead, BEFORE redeploying the
--- ai-orchestrator edge function that calls these RPCs (see "Deploy order" below).
+-- STATUS: APPLIED LIVE 2026-11-10 (owner go-ahead) via Supabase MCP apply_migration.
+-- Applied before redeploying the ai-orchestrator edge function (see "Deploy order" below).
 --
 -- WHY
 --   ai-orchestrator enforced the monthly AI budget read-then-call: it summed ai_token_logs.cost_usd for

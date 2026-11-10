@@ -84,11 +84,17 @@ Rules live in `src/lib/tyreCostAudit.js`; the SQL mirror is in
 
 ## Owner decisions
 
-1. Apply migration `20261112106000` (rule functions, findings table and RPCs).
-2. Approve reverting the 1,885 estimated KSA prices, or keep them labelled as estimates.
-3. Approve the 147 recoverable prices: 138 + 3 KSA, 2 UAE, 4 Egypt. All 144 exact own-line matches are high confidence.
-4. Whether a one-month gap between the tyre date and its own issue line counts as the same transaction.
-5. Load invoice or GRN data if verification beyond ERP issue lines is wanted.
+1. **DONE 2026-11-10:** migration `20261112106000` applied live.
+2. **DONE 2026-11-10:** the 147 recoverable prices were approved and applied as batch
+   `0e4ab851-9fa6-4818-9df2-e0b497a126d1`.
+   - KSA: 141 tyres, SAR 111,772.96.
+   - UAE: 2 tyres, AED 1,400.00.
+   - Egypt: 4 tyres, EGP 55,952.94.
+   - No existing price was overwritten, and every tyre now holds exactly its source line's price.
+   - Undo: `select public.tyre_cost_correction_undo('0e4ab851-9fa6-4818-9df2-e0b497a126d1')`.
+3. **OPEN:** revert the 1,885 estimated KSA prices, or keep them labelled as estimates. They sit in the findings table as proposed and are not approved.
+4. **OPEN:** whether a one-month gap between the tyre date and its own issue line counts as the same transaction.
+5. **OPEN:** load invoice or GRN data if verification beyond ERP issue lines is wanted.
 
 ## End-to-end proof (rolled back, live database, 2026-11-10)
 

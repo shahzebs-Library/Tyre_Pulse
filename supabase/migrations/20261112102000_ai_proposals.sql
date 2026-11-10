@@ -1,6 +1,6 @@
 -- AI-prepared proposals: findings a deterministic detector prepares and a person decides.
 --
--- STATUS: AUTHORED, NOT APPLIED. Apply only on the owner's go-ahead.
+-- STATUS: APPLIED LIVE 2026-11-10 (owner go-ahead) via Supabase MCP apply_migration.
 --
 -- WHAT: public.ai_proposals holds one row per finding (critical inspection finding
 -- with no action, repeated failure on one wheel, CPK spike, abnormal monthly

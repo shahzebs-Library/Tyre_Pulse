@@ -1,5 +1,5 @@
 -- 20261112104000_ai_tyre_expert_labels
--- STATUS: AUTHORED, NOT APPLIED. Apply only on the owner's explicit go-ahead.
+-- STATUS: APPLIED LIVE 2026-11-10 (owner go-ahead) via Supabase MCP apply_migration.
 --
 -- WHY: the 500-photo accuracy benchmark (src/lib/aiTyreAccuracy.js, scripts/ai-accuracy.mjs) needs
 -- EXPERT ground truth per photograph. Today review is accept/reject of a whole AI job through the

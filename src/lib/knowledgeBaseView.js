@@ -44,22 +44,55 @@ export const INDEX_STATUS_META = Object.freeze({
 })
 
 /**
- * Group chunk rows into source documents (key = type + base title). Each
- * document keeps its chunks in part order so the first part opens first.
+ * Lifecycle fields copied from the row that owns a document's lifecycle (the
+ * parent row in the chunked model, or a standalone row). null for legacy rows
+ * written before the lifecycle migration.
+ */
+function lifecycleOf(row) {
+  if (!row || row.status === undefined) return null
+  return {
+    id: row.id,
+    status: row.status,
+    version: row.version ?? null,
+    document_ref: row.document_ref ?? null,
+    effective_from: row.effective_from ?? null,
+    review_due: row.review_due ?? null,
+    expires_at: row.expires_at ?? null,
+    approved_by: row.approved_by ?? null,
+    approved_at: row.approved_at ?? null,
+    supersedes_id: row.supersedes_id ?? null,
+    withdrawn_at: row.withdrawn_at ?? null,
+    withdrawn_reason: row.withdrawn_reason ?? null,
+    created_by: row.created_by ?? null,
+    source_filename: row.source_filename ?? null,
+    chunk_count: row.chunk_count ?? 0,
+    content: row.content ?? null,
+    page_from: row.page_from ?? null,
+    page_to: row.page_to ?? null,
+  }
+}
+
+const isContainer = (r) => !r?.chunk_of && Number(r?.chunk_count) > 0
+const PART_SUFFIX = /\s*\(part \d+\)\s*$/i
+
+/**
+ * Group chunk rows into source documents. Rows written by the lifecycle
+ * ingestion group by their parent id (chunk_of); the parent row itself is a
+ * container (it carries the lifecycle, not retrievable text) and is NOT
+ * counted as a chunk. Legacy rows ("Manual (2/5)") still group by type + base
+ * title. Each document keeps its chunks in part order.
  */
 export function groupDocuments(chunks = []) {
   const map = new Map()
-  for (const c of Array.isArray(chunks) ? chunks : []) {
-    const type = DOC_TYPE_VALUES.includes(c?.doc_type) ? c.doc_type : 'other'
-    const title = baseTitle(c?.title)
-    const key = `${type}|${title}`
+  const ensure = (key, title, type) => {
     let d = map.get(key)
     if (!d) {
-      d = { key, title, docType: type, typeLabel: docTypeLabel(type), sites: new Set(), assets: new Set(), tags: new Set(), chunks: [], indexed: 0, addedAt: null, updatedAt: null }
+      d = { key, title, docType: type, typeLabel: docTypeLabel(type), sites: new Set(), assets: new Set(), tags: new Set(), chunks: [], indexed: 0, addedAt: null, updatedAt: null, lifecycle: null, documentId: null }
       map.set(key, d)
     }
-    d.chunks.push(c)
-    if (c?.embedding) d.indexed += 1
+    return d
+  }
+  const touch = (d, c) => {
     if (text(c?.site)) d.sites.add(text(c.site))
     if (text(c?.asset_no)) d.assets.add(text(c.asset_no))
     for (const t of Array.isArray(c?.tags) ? c.tags : []) if (text(t)) d.tags.add(text(t))
@@ -68,8 +101,39 @@ export function groupDocuments(chunks = []) {
     if (added != null && (d.addedAt == null || added < d.addedAt)) d.addedAt = added
     if (updated != null && (d.updatedAt == null || updated > d.updatedAt)) d.updatedAt = updated
   }
+  for (const c of Array.isArray(chunks) ? chunks : []) {
+    const type = DOC_TYPE_VALUES.includes(c?.doc_type) ? c.doc_type : 'other'
+    if (isContainer(c)) {
+      const d = ensure(`doc:${c.id}`, text(c.title), type)
+      d.title = text(c.title)
+      d.docType = type
+      d.typeLabel = docTypeLabel(type)
+      d.lifecycle = lifecycleOf(c)
+      d.documentId = c.id
+      touch(d, c)
+      continue
+    }
+    let d
+    if (c?.chunk_of) {
+      d = ensure(`doc:${c.chunk_of}`, text(c?.title).replace(PART_SUFFIX, ''), type)
+      if (!d.documentId) d.documentId = c.chunk_of
+    } else if (c?.status !== undefined) {
+      d = ensure(`doc:${c.id}`, baseTitle(c?.title), type)
+      d.lifecycle = lifecycleOf(c)
+      d.documentId = c.id
+    } else {
+      d = ensure(`${type}|${baseTitle(c?.title)}`, baseTitle(c?.title), type)
+    }
+    d.chunks.push(c)
+    if (c?.embedding) d.indexed += 1
+    touch(d, c)
+  }
+  const order = (c) => {
+    const i = Number(c?.chunk_index)
+    return Number.isFinite(i) && i > 0 ? i : chunkPart(c?.title)
+  }
   return [...map.values()].map((d) => {
-    const chunkList = d.chunks.slice().sort((a, b) => chunkPart(a?.title) - chunkPart(b?.title))
+    const chunkList = d.chunks.slice().sort((a, b) => order(a) - order(b))
     const n = chunkList.length
     return {
       key: d.key,
@@ -86,6 +150,8 @@ export function groupDocuments(chunks = []) {
       status: indexStatus(d.indexed, n),
       addedAt: d.addedAt,
       updatedAt: d.updatedAt,
+      lifecycle: d.lifecycle,
+      documentId: d.documentId,
     }
   })
 }

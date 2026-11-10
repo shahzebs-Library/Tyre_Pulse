@@ -15,13 +15,21 @@
  * Writes pass `values` through unchanged, INCLUDING the caller-computed
  * `embedding` vector.
  */
-import { supabase, unwrap, fetchAllPages, toServiceError } from './_client'
+import { supabase, unwrap, fetchAllPages, toServiceError, isMissingColumn } from './_client'
 
 // Least-privilege metadata columns for list/detail. Excludes `embedding`
 // (heavy vector; presence is derived separately) and `organisation_id`
 // (RLS-managed). `content` is included for detail parity but omitted from the
 // list read, which never renders document bodies.
-const LIST_COLS = 'id,title,doc_type,site,asset_no,tags,created_at,updated_at'
+const BASE_LIST_COLS = 'id,title,doc_type,site,asset_no,tags,created_at,updated_at'
+// Lifecycle columns (supabase/migrations/20261112103000_knowledge_lifecycle.sql)
+// plus the V98 chunk linkage. Read when present; a database without the
+// lifecycle migration falls back to BASE_LIST_COLS and the rows carry no
+// lifecycle (the page then says the lifecycle is not installed).
+const LIFECYCLE_LIST_COLS =
+  `${BASE_LIST_COLS},chunk_of,chunk_index,chunk_count,page_from,page_to,status,version,document_ref,` +
+  'effective_from,review_due,expires_at,approved_by,approved_at,supersedes_id,withdrawn_at,withdrawn_reason,' +
+  'created_by,source_filename,country'
 const DETAIL_COLS =
   'id,title,content,doc_type,site,asset_no,country,tags,created_at,updated_at'
 
@@ -50,22 +58,30 @@ export const KNOWLEDGE_DOCS_MAX = 20000
  * @returns {Promise<Array<object> & {truncated:boolean, max:number}>}
  */
 export async function listKnowledgeDocuments({ max = KNOWLEDGE_DOCS_MAX } = {}) {
-  const { data, error, truncated } = await fetchAllPages(
+  const readWith = (cols) => fetchAllPages(
     (from, to) =>
       supabase
         .from('knowledge_documents')
-        .select(LIST_COLS)
+        .select(cols)
         .order('created_at', { ascending: false })
         .order('id', { ascending: true })
         .range(from, to),
     { max },
   )
+  let lifecycle = true
+  let res = await readWith(LIFECYCLE_LIST_COLS)
+  if (res.error && isMissingColumn(res.error)) {
+    lifecycle = false
+    res = await readWith(BASE_LIST_COLS)
+  }
+  const { data, error, truncated } = res
   if (error) throw toServiceError(error)
   const rows = data ?? []
 
   const finish = list => {
     Object.defineProperty(list, 'truncated', { value: !!truncated, enumerable: false })
     Object.defineProperty(list, 'max', { value: max, enumerable: false })
+    Object.defineProperty(list, 'lifecycle', { value: lifecycle, enumerable: false })
     return list
   }
   if (rows.length === 0) return finish(rows)

@@ -43,7 +43,9 @@ const h = vi.hoisted(() => {
   const from = (table) => ({
     insert: insert(table),
     select: () => ({ not: () => ({ range: () => Promise.resolve({ data: [], error: null }) }),
-                     eq: () => ({ range: () => Promise.resolve({ data: [], error: null }) }),
+                     eq: () => ({ range: () => Promise.resolve({ data: [], error: null }),
+                                  // stored-line lookup used by the re-upload guard
+                                  in: () => ({ order: () => ({ range: () => Promise.resolve({ data: [], error: null }) }) }) }),
                      range: () => Promise.resolve({ data: [], error: null }) }),
     delete: () => ({ eq: () => Promise.resolve({ error: null }) }),
   })

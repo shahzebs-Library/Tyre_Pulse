@@ -87,9 +87,11 @@ export async function importExpenseBatch(rows, { country, requestId, replace = f
 }
 
 /**
- * Content key for one expense line: country, issue number, job card, item, day, qty and value.
- * Used to recognise a line that is already stored when the file carries no `#`
- * column (so there is no import_uid to dedupe on).
+ * Content key for one expense line: country, issue number, job card, item, day,
+ * qty, value, store and cost centre. The `#` column is NOT part of it: `#` is only
+ * the row counter of each downloaded file and restarts in every export, so the
+ * same ERP line carries a different `#` in two overlapping files (owner, 2026-11-10).
+ * Store and cost centre keep two sites' lines apart (V365 rule).
  */
 export function expenseLineKey(r) {
   const t = (v) => String(v ?? '').trim().toUpperCase()
@@ -98,14 +100,16 @@ export function expenseLineKey(r) {
     return Number.isFinite(x) ? String(Math.round(x * 100) / 100) : ''
   }
   const day = r.event_date ? String(r.event_date).slice(0, 10) : parseDate(r.txn_date)
-  return [t(r.country), t(r.issue_number), t(r.work_order_no), t(r.item_code), day, n(r.qty), n(r.value_amount)].join('|')
+  return [t(r.country), t(r.issue_number), t(r.work_order_no), t(r.item_code), day, n(r.qty), n(r.value_amount),
+    t(r.store_code), t(r.cost_center)].join('|')
 }
 
 /**
  * Drop file rows that are already stored. Multiplicity-aware: if a line appears
  * three times in the file and twice in the database, one is kept, so two genuinely
- * identical lines on the same issue are never collapsed. Rows that carry a
- * source_row (`#`) are left to the import_uid unique index.
+ * identical lines on the same issue are never collapsed. Applies to every row,
+ * whether or not it carries `#`. The database trigger trg_dedupe_expense_reupload
+ * applies the same rule to uploads that bypass the app.
  * @returns {{ keep: Array<Object>, dropped: number }}
  */
 export function dropStoredDuplicates(rows = [], existing = []) {
@@ -117,7 +121,6 @@ export function dropStoredDuplicates(rows = [], existing = []) {
   const keep = []
   let dropped = 0
   for (const r of rows) {
-    if (r.source_row != null && String(r.source_row).trim() !== '') { keep.push(r); continue }
     const k = expenseLineKey(r)
     const left = stored.get(k) || 0
     if (left > 0) { stored.set(k, left - 1); dropped += 1 } else keep.push(r)
@@ -129,7 +132,7 @@ async function loadStoredLinesForDays(country, days) {
   if (!country || !days.length) return []
   const { fetchAllPages } = await import('../fetchAll')
   const build = () => supabase.from('parts_consumption')
-    .select('id, country, issue_number, work_order_no, item_code, event_date, qty, value_amount')
+    .select('id, country, issue_number, work_order_no, item_code, event_date, qty, value_amount, store_code, cost_center')
     .eq('country', country).in('event_date', days).order('id')
   const { data, error } = await fetchAllPages(build, { max: 200000 })
   if (error) throw toServiceError(error)
@@ -157,15 +160,14 @@ export async function insertPartsConsumption(rows = [], { country = null, onProg
     return out
   })
 
-  // A file exported without its `#` column has no import_uid, so the unique index
-  // cannot stop a re-upload. Compare against what is already stored for the same
-  // country and days and skip lines that are already there.
+  // `#` is only the per-file row counter, so import_uid cannot stop a re-upload of
+  // an overlapping export. Compare every line against what is already stored for
+  // the same country and days and skip lines that are already there.
   let skipped = 0
   let clean = projected
-  const unkeyed = projected.filter((r) => r.source_row == null || String(r.source_row).trim() === '')
-  if (unkeyed.length) {
+  if (projected.length) {
     const byCountry = new Map()
-    for (const r of unkeyed) {
+    for (const r of projected) {
       const day = parseDate(r.txn_date)
       if (!r.country || !day) continue
       if (!byCountry.has(r.country)) byCountry.set(r.country, new Set())

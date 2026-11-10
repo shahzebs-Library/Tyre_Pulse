@@ -23,8 +23,15 @@ describe('expense re-upload dedupe (no # column)', () => {
     const { keep } = dropStoredDuplicates([line({ value_amount: '51' }), line({ country: 'UAE' })], [stored()])
     expect(keep).toHaveLength(2)
   })
-  it('rows carrying # are left to the import_uid index', () => {
-    const { keep } = dropStoredDuplicates([line({ source_row: '7' })], [stored()])
-    expect(keep).toHaveLength(1)
+  it('# is only a per-file counter: a re-upload with a shifted # is still dropped', () => {
+    const { keep, dropped } = dropStoredDuplicates([line({ source_row: '7' })], [stored({ source_row: '412' })])
+    expect(keep).toHaveLength(0)
+    expect(dropped).toBe(1)
+  })
+  it('the same line from another store or cost centre is new', () => {
+    const { keep } = dropStoredDuplicates(
+      [line({ store_code: 'NHC-ST' }), line({ cost_center: 'CC2' })],
+      [stored({ store_code: 'JED-ST' }), stored({ cost_center: 'CC1' })])
+    expect(keep).toHaveLength(2)
   })
 })

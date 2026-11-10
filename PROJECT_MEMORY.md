@@ -26,6 +26,20 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - 2026-10-06 state: #384 (marketing hero: flat cards + live feeds) merged 0878f0e8, live on tyre-pulse-eezl. #385 (app
   Inspections/Checklists workspace, other session) merged 9f7783a7.
 
+# ⚑ 2026-11-10 (evening) — DUPLICATE SWEEP + `#` IS NOT A LINE ID. Migration 20261111109000 APPLIED LIVE.
+- OWNER: the expense `#` column is only the row counter of each downloaded file (restarts per export). import_uid
+  (built from it) therefore never matches the same line in an overlapping file. 2,191 re-upload copies found + removed
+  (KSA 2,062 / SAR 369,786.07; Egypt 129 / EGP 585,375.71; backup _bak.parts_reupload_dup_20261110). KSA now 42,949,112.95.
+- GUARD: trigger trg_dedupe_expense_reupload (expense_reupload_guard, BEFORE INSERT, runs after classify by name order)
+  skips a fresh line when the same content (org, country, event_date, issue no, job card, item, qty, value, store, cost
+  centre - raw text) was stored by an upload >20 min earlier; multiplicity-aware via a txn-local GUC counter; logs to
+  expense_import_rejects 'already_stored'. Bypass: old created_at (restores) or set tp.allow_dup_expense='on'.
+  Client dropStoredDuplicates now checks EVERY row (no source_row exemption) and keys on store + cost centre too.
+- Also removed: engine_hours_logs 9 exact phone double-submits (_bak.engine_hours_exact_dup_20261110); odometer 28 via
+  Duplicate Control (batch 18bd650b); tyre_records 157 pairs MERGED (purchase row + removal row of one tyre; price, hours,
+  second job card in extra_fields.merged_job_card; _bak.tyre_dup_merge_20261110). 32 tyre pairs with conflicting values left.
+- Production 2,357 identical no-DN rows LEFT (real trips, owner rule). Owner: app is fine (Flutter), no app change for double-submit.
+
 # ⚑ 2026-11-10 (later) — PR #482 MERGED (0ccbb66, prod READY). RE-UPLOAD DUPLICATE CAUGHT + GUARD ADDED.
 - Owner re-uploaded the same KSA expense grid (txn 2026-11-09, 122 lines, SAR 23,485.12) via /erp-intake: all 122 landed AGAIN because the file has no `#` column (import_uid null) - the screen even said "0 exact duplicates dropped". Verified 1:1 exact copies (md5 over 12 cols), deleted the 06:47 copies, kept the 06:05 originals; archive _bak.expense_reupload_dup_20261110. KSA total back to 43,318,899.02.
 - GUARD (code): insertPartsConsumption now drops rows already stored when a row has no source_row: key = country|issue_number|work_order_no|item_code|day|qty|value (expenseLineKey), MULTIPLICITY-AWARE (dropStoredDuplicates) so genuine repeated lines survive; existing rows read for the file's country+days only. Returns `skipped`, shown on the result screen. Test src/test/expenseReuploadDedupe.test.js.

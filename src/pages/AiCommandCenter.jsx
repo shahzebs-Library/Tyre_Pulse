@@ -21,6 +21,7 @@ import {
   archiveConversation, listConversationMessages, listConversations, sendOrchestratorMessage,
 } from '../lib/aiOrchestratorClient'
 import { getUsageOverview } from '../lib/api/aiOps'
+import { coverageLines, groundingNotice } from '../lib/aiCoverage'
 import { supabase } from '../lib/supabase'
 import { toUserMessage } from '../lib/safeError'
 import { formatDateTime } from '../lib/formatters'
@@ -345,7 +346,7 @@ function MessageBubble({ message, onCopy }) {
         {message.agentType && (
           <div className="flex items-center gap-2 mb-2">
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${agentColor?.bg} ${agentColor?.text} ${agentColor?.border}`}>
-              {AGENT_LABELS[message.agentType]} Agent
+              {(message.agents?.length ? message.agents : [message.agentType]).map(a => AGENT_LABELS[a] ?? a).join(' + ')}
             </span>
             {message.timestamp && (
               <span className="text-xs text-[var(--text-dim)] flex items-center gap-1">
@@ -373,6 +374,19 @@ function MessageBubble({ message, onCopy }) {
           )}
           {expanded && message.agentType === AGENT_TYPES.PLANNER && message.planningData && (
             <PlannerPanel planningData={message.planningData} />
+          )}
+          {expanded && message.notice && (
+            <p role="alert" className="mt-3 text-xs rounded-lg px-3 py-2 border border-amber-500/40 bg-amber-500/10 text-amber-300">{message.notice}</p>
+          )}
+          {expanded && message.coverage?.length > 0 && (
+            <div className="mt-3 text-xs text-[var(--text-muted)]" aria-label="Data this answer used">
+              <span className="font-medium text-[var(--text-secondary)]">Data used:</span>
+              <ul className="mt-1 space-y-0.5">
+                {message.coverage.map((c, i) => (
+                  <li key={i} className={c.tone === 'warn' ? 'text-amber-300' : undefined}>{c.text}</li>
+                ))}
+              </ul>
+            </div>
           )}
           {expanded && (message.sources?.length > 0 || message.usage) && (
             <div className="mt-4 pt-3 border-t border-[var(--input-border)]/60 text-xs text-[var(--text-muted)]">
@@ -588,7 +602,11 @@ export default function AiCommandCenter() {
         id:          Date.now() + 1,
         role:        'assistant',
         content:     result.content,
-        agentType,
+        // The agents the SERVER actually ran (shared registry), not a guess.
+        agentType:   Array.isArray(result.agents) && result.agents.length ? result.agents[0] : agentType,
+        agents:      Array.isArray(result.agents) ? result.agents : null,
+        coverage:    coverageLines(result.coverage),
+        notice:      groundingNotice(result),
         toolCalls:   result.tool_calls ?? [],
         sources:     result.sources ?? [],
         usage:       result.usage,

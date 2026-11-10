@@ -309,14 +309,15 @@ async function callProvider(cfg: { providerName: string; providerKey: string; mo
   } finally { clearTimeout(timeout); }
 }
 /**
- * HARD monthly cap. Reads system_config (ai_enabled, ai_monthly_budget_usd) and the month's spend from
+ * HARD monthly cap. Reads system_config (ai_enabled, ai_tyre_inspection_enabled, ai_monthly_budget_usd)
+ * and the month's spend from
  * ai_token_logs (other features) plus ai_tyre_inspection_jobs (this path's own ledger; paged: PostgREST silently truncates a plain select at 1000 rows, which would under-count
  * and let the cap be exceeded). Any read problem => state 'unavailable' => no paid call (fail closed).
  */
 async function monthlyBudgetDecision(reserveUsd: number): Promise<MonthlyBudgetDecision> {
   try {
     const { data: cfg, error: cfgError } = await admin.from("system_config").select("key,value")
-      .in("key", ["ai_enabled", "ai_monthly_budget_usd"]);
+      .in("key", ["ai_enabled", "ai_tyre_inspection_enabled", "ai_monthly_budget_usd"]);
     if (cfgError) return evaluateMonthlyBudget({ controls: null, spentUsd: null, reserveUsd });
     const controls = parseAiControls(cfg);
     // No cap configured (or AI off / bad setting): nothing to sum.

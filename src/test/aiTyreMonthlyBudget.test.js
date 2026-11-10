@@ -22,6 +22,15 @@ describe('parseAiControls', () => {
     expect(parseAiControls(rows({ ai_monthly_budget_usd: '-5' })).invalidLimit).toBe(true)
     expect(parseAiControls(null).invalidLimit).toBe(false)
   })
+  it('honours the tyre-inspection feature switch (off = disabled, missing = on)', () => {
+    expect(parseAiControls(rows({ ai_tyre_inspection_enabled: 'false' })).enabled).toBe(false)
+    expect(parseAiControls(rows({ ai_tyre_inspection_enabled: '"off"', ai_enabled: 'true' })).enabled).toBe(false)
+    expect(parseAiControls(rows({ ai_tyre_inspection_enabled: 'true' })).enabled).toBe(true)
+    expect(parseAiControls(rows({ ai_enabled: 'true' })).enabled).toBe(true)
+    // disabled wins over an otherwise healthy cap
+    const controls = parseAiControls(rows({ ai_tyre_inspection_enabled: 'false', ai_monthly_budget_usd: '20' }))
+    expect(evaluateMonthlyBudget({ controls, spentUsd: 0, reserveUsd: 0.01 }).state).toBe('disabled')
+  })
   it('agrees with the client-side system_config defaults (0 = no cap)', () => {
     expect(CONFIG_DEFAULTS.ai_monthly_budget_usd).toBe(0)
     expect(parseConfigValue('50')).toBe(50)
@@ -148,7 +157,7 @@ describe('wiring in the edge function source', () => {
   const src = readFileSync(path.resolve(__dirname, '../../supabase/functions/ai-tyre-inspection/index.ts'), 'utf8')
   it('reads the cap from system_config and pages month spend (PostgREST truncates plain selects at 1000)', () => {
     expect(src).toMatch(/from\("system_config"\)\.select\("key,value"\)/)
-    expect(src).toMatch(/"ai_enabled",\s*"ai_monthly_budget_usd"/)
+    expect(src).toMatch(/"ai_enabled",\s*"ai_tyre_inspection_enabled",\s*"ai_monthly_budget_usd"/)
     expect(src).toMatch(/from\("ai_token_logs"\)\.select\("id,cost_usd,feature,status"\)/)
     expect(src).toMatch(/from\("ai_tyre_inspection_jobs"\)\.select\("id,cost_usd,provider_called_at,prior_billed_usd"\)/)
     expect(src).toMatch(/\.range\(f, t\)/)

@@ -6,6 +6,7 @@
 
 import { supabase } from './supabase'
 import { toLifetimeTyres, weightedCpk, lifetimeSummary, withOnePricePerTyre, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
+import { citationLabel } from './knowledgeLifecycle'
 
 /** tyre_changes carries the serial as tyre_serial; the lifetime layer reads serial_no. */
 const withSerial = (r) => (r && !r.serial_no && r.tyre_serial ? { ...r, serial_no: r.tyre_serial } : r)
@@ -393,10 +394,12 @@ export function assembleContext({
 
   // Knowledge base documents (truncated for token efficiency)
   if (knowledgeDocs.length > 0) {
+    // Cite by document id + title + version + page (approved, in-date
+    // documents only - match_knowledge_documents filters by lifecycle).
     const docSummaries = knowledgeDocs.map(d =>
-      `  [${d.doc_type ?? 'DOC'}] ${d.title ?? 'Untitled'}: ${String(d.content ?? '').slice(0, 200)}`
+      `  [${d.doc_type ?? 'DOC'}] ${citationLabel(d)}: ${String(d.content ?? '').slice(0, 200)}`
     )
-    sections.push(`KNOWLEDGE BASE:\n${docSummaries.join('\n')}`)
+    sections.push(`KNOWLEDGE BASE (approved documents; cite the bracketed source, never invent policy):\n${docSummaries.join('\n')}`)
   }
 
   let context = sections.join('\n\n')

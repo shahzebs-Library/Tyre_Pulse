@@ -172,3 +172,20 @@ describe('coverage shown to the user', () => {
     expect(groundingNotice({})).toBeNull()
   })
 })
+
+describe('knowledge tool returns approved documents with citations only', () => {
+  it('drops non-approved rows and cites the rest', async () => {
+    const db = mockDb({ rpcData: [
+      { id: 11, document_id: 'd1', title: 'Pressure SOP', version: 2, page_from: 3, page_to: 4, status: 'approved', content: 'Check cold pressure.' },
+      { id: 12, document_id: 'd2', title: 'Old SOP', version: 1, status: 'superseded', content: 'x' },
+    ] })
+    const r = await runTool(db, { orgId: 'o', embedQuery: async () => [0.1], now: NOW }, 'search_knowledge_base', { query: 'pressure' })
+    const body = JSON.parse(r.output)
+    expect(body.data).toHaveLength(1)
+    expect(body.data[0].cite).toBe('Pressure SOP v2, p.3-4 [doc d1]')
+  })
+  it('says no approved document matched instead of returning an empty list silently', async () => {
+    const r = await runTool(mockDb({ rpcData: [] }), { orgId: 'o', embedQuery: async () => [0.1], now: NOW }, 'search_knowledge_base', { query: 'x' })
+    expect(JSON.parse(r.output)._provenance.notes.join(' ')).toMatch(/Do NOT invent/)
+  })
+})

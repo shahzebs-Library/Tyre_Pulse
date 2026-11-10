@@ -14,6 +14,8 @@
 
 import { sanitizeErrorText, safeRefusalReason, cleanPromptText } from '../_shared/aiSecurity.ts'
 
+import { NO_KNOWLEDGE_MATCH, citation, pageRange } from './knowledge.ts'
+
 export const MAX_TOOL_OUTPUT = 12000
 
 type Db = {
@@ -57,7 +59,7 @@ export const TOOL_DEFS = [
   { name: 'get_data_trust_overview', description: 'Data-quality scores and reasons per KPI domain (completeness, validity, consistency).', input_schema: { type: 'object', properties: { country: scope.country, from: scope.from, to: scope.to } } },
   { name: 'count_records', description: 'Count records the user can see. Resources: ' + Object.keys(COUNTABLE).join(', ') + '. Optional site and since-date (business date).', input_schema: { type: 'object', properties: { resource: { type: 'string', enum: Object.keys(COUNTABLE) }, site: scope.site, since: { type: 'string', description: 'YYYY-MM-DD' } }, required: ['resource'] } },
   { name: 'list_recent_events', description: 'Most recent business events (inspections, tyre changes, accidents, approvals).', input_schema: { type: 'object', properties: { event_type: { type: 'string' }, limit: { type: 'integer', description: 'Default 20, max 50' } } } },
-  { name: 'search_knowledge_base', description: 'Search approved company documents (SOPs, manuals, policies, RCA reports). Use for procedures and standards, never for operational figures.', input_schema: { type: 'object', properties: { query: { type: 'string' }, doc_type: { type: 'string', enum: ['sop', 'manual', 'policy', 'inspection', 'rca', 'vendor', 'other'] } }, required: ['query'] } },
+  { name: 'search_knowledge_base', description: 'Search APPROVED, in-date company documents (SOPs, manuals, policies, RCA reports). Use for procedures and standards, never for operational figures. Quote the cite value for every policy statement.', input_schema: { type: 'object', properties: { query: { type: 'string' }, doc_type: { type: 'string', enum: ['sop', 'manual', 'policy', 'inspection', 'rca', 'vendor', 'other'] } }, required: ['query'] } },
 ]
 
 export function toolDefsFor(names: string[]) {
@@ -204,11 +206,17 @@ export async function runTool(db: Db, ctx: ToolContext, name: string, input: Rec
         filter_doc_type: cleanText(input.doc_type, 20), filter_site: null, filter_org: ctx.orgId,
       })
       if (error) return fail(name, safeErr(error))
-      const docs = (Array.isArray(data) ? data : []).map((d: Record<string, unknown>) => ({
-        title: d.title, doc_type: d.doc_type, similarity: d.similarity,
-        excerpt: String(d.content ?? '').slice(0, 800),
-      }))
-      if (!docs.length) notes.push('No approved document matched. Do not invent policy text.')
+      // Approved, in-date documents only (lifecycle migration 20261112103000); rows
+      // without status 'approved' are dropped again here as defence in depth.
+      const docs = (Array.isArray(data) ? data : [])
+        .filter((d: Record<string, unknown>) => String(d?.status ?? '').trim().toLowerCase() === 'approved')
+        .map((d: Record<string, unknown>) => ({
+          document_id: String(d.document_id ?? d.id ?? ''), title: d.title, version: d.version ?? null,
+          page: pageRange(d), doc_type: d.doc_type, similarity: d.similarity, cite: citation(d),
+          excerpt: String(d.content ?? '').slice(0, 800),
+        }))
+      if (!docs.length) notes.push(NO_KNOWLEDGE_MATCH)
+      else notes.push('Cite each company policy fact with its "cite" value.')
       return packResult(name, 'knowledge_documents', { doc_type: input.doc_type ?? null }, docs, now, notes)
     }
     default:

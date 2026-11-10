@@ -11,6 +11,7 @@
  */
 import { supabase, isMissingRelation, toServiceError, isNotProvisioned } from './_client'
 import { PARTS_FIELDS } from '../partsExpense'
+import { parseDate } from '../erpIntake'
 
 const INSERT_CHUNK = 200
 // Chunks in flight at once. This path is latency-bound, so this is the single
@@ -86,6 +87,56 @@ export async function importExpenseBatch(rows, { country, requestId, replace = f
 }
 
 /**
+ * Content key for one expense line: country, issue number, job card, item, day, qty and value.
+ * Used to recognise a line that is already stored when the file carries no `#`
+ * column (so there is no import_uid to dedupe on).
+ */
+export function expenseLineKey(r) {
+  const t = (v) => String(v ?? '').trim().toUpperCase()
+  const n = (v) => {
+    const x = Number(String(v ?? '').replace(/,/g, '').trim())
+    return Number.isFinite(x) ? String(Math.round(x * 100) / 100) : ''
+  }
+  const day = r.event_date ? String(r.event_date).slice(0, 10) : parseDate(r.txn_date)
+  return [t(r.country), t(r.issue_number), t(r.work_order_no), t(r.item_code), day, n(r.qty), n(r.value_amount)].join('|')
+}
+
+/**
+ * Drop file rows that are already stored. Multiplicity-aware: if a line appears
+ * three times in the file and twice in the database, one is kept, so two genuinely
+ * identical lines on the same issue are never collapsed. Rows that carry a
+ * source_row (`#`) are left to the import_uid unique index.
+ * @returns {{ keep: Array<Object>, dropped: number }}
+ */
+export function dropStoredDuplicates(rows = [], existing = []) {
+  const stored = new Map()
+  for (const e of existing) {
+    const k = expenseLineKey(e)
+    stored.set(k, (stored.get(k) || 0) + 1)
+  }
+  const keep = []
+  let dropped = 0
+  for (const r of rows) {
+    if (r.source_row != null && String(r.source_row).trim() !== '') { keep.push(r); continue }
+    const k = expenseLineKey(r)
+    const left = stored.get(k) || 0
+    if (left > 0) { stored.set(k, left - 1); dropped += 1 } else keep.push(r)
+  }
+  return { keep, dropped }
+}
+
+async function loadStoredLinesForDays(country, days) {
+  if (!country || !days.length) return []
+  const { fetchAllPages } = await import('../fetchAll')
+  const build = () => supabase.from('parts_consumption')
+    .select('id, country, issue_number, work_order_no, item_code, event_date, qty, value_amount')
+    .eq('country', country).in('event_date', days).order('id')
+  const { data, error } = await fetchAllPages(build, { max: 200000 })
+  if (error) throw toServiceError(error)
+  return data || []
+}
+
+/**
  * Insert parsed grid rows in resilient chunks. Each row is projected to the raw
  * PARTS_FIELDS (+ country); unknown keys are dropped. The trigger classifies on insert.
  * Resilience: small chunks with jittered exponential backoff; a chunk that keeps
@@ -99,12 +150,33 @@ export async function importExpenseBatch(rows, { country, requestId, replace = f
  * @returns {Promise<{ inserted:number, failed:number }>}
  */
 export async function insertPartsConsumption(rows = [], { country = null, onProgress } = {}) {
-  const clean = rows.map((r) => {
+  const projected = rows.map((r) => {
     const out = {}
     for (const f of PARTS_FIELDS) out[f] = r[f] === '' || r[f] == null ? null : r[f]
     out.country = r.country || country || null
     return out
   })
+
+  // A file exported without its `#` column has no import_uid, so the unique index
+  // cannot stop a re-upload. Compare against what is already stored for the same
+  // country and days and skip lines that are already there.
+  let skipped = 0
+  let clean = projected
+  const unkeyed = projected.filter((r) => r.source_row == null || String(r.source_row).trim() === '')
+  if (unkeyed.length) {
+    const byCountry = new Map()
+    for (const r of unkeyed) {
+      const day = parseDate(r.txn_date)
+      if (!r.country || !day) continue
+      if (!byCountry.has(r.country)) byCountry.set(r.country, new Set())
+      byCountry.get(r.country).add(day)
+    }
+    const existing = []
+    for (const [c, days] of byCountry) existing.push(...await loadStoredLinesForDays(c, [...days]))
+    const res = dropStoredDuplicates(projected, existing)
+    clean = res.keep
+    skipped = res.dropped
+  }
 
   let inserted = 0
   const deferred = [] // chunks that hit a transient error - retried after the main pass
@@ -173,7 +245,7 @@ export async function insertPartsConsumption(rows = [], { country = null, onProg
       if (onProgress) onProgress(inserted, clean.length)
     }
   }
-  return { inserted, failed }
+  return { inserted, failed, skipped }
 }
 
 /**

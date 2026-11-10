@@ -19,6 +19,7 @@
  *  - Demand is counted in tyres (qty, default 1), the same unit spend is priced
  *    in, so demand x average cost is a meaningful product.
  */
+import { withOnePricePerTyre } from './tyreLifetime'
 
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -230,6 +231,8 @@ function groupForecast(rows, keyFn, keys, moneyAllowed) {
 export function buildForecastModel({
   records = [], fleet = [], site = 'all', horizon = 12, moneyAllowed = true, now = new Date(),
 } = {}) {
+  // One tyre, one price (T1): a refit of a real serial is not a second purchase.
+  records = withOnePricePerTyre(records || [])
   const anchor = dataAnchor(records, now)
   const keys12 = monthKeysBack(anchor, 12)
   const keys24 = monthKeysBack(anchor, 24)

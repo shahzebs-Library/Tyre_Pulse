@@ -11,6 +11,7 @@
 // Responses are cached in-memory per record version to avoid double-billing.
 // ─────────────────────────────────────────────────────────────────────────────
 import { invokeChatAI } from './api/uploads'
+import { fitmentKm } from './tyreLifetime'
 
 export const COPILOT_MODEL = 'claude-haiku-4-5-20251001'
 export const COPILOT_MAX_TOKENS = 900
@@ -166,7 +167,7 @@ export const COPILOT_TASKS = {
       const t = capList(tyres)
       const tyreLines = t.items
         .map((x) => {
-          const km = (Number(x.km_at_removal) || 0) - (Number(x.km_at_fitment) || 0)
+          const km = fitmentKm(x) ?? 0
           return `- pos ${x.position || '?'} | ${clip(x.brand, 20) || '?'} | ${clip(x.size, 16) || '?'} | ${km > 0 ? `${km.toLocaleString()} km` : 'km n/a'} | risk ${x.risk_level || 'n/a'}`
         })
         .join('\n')

@@ -11,6 +11,38 @@
 | Tyre lifecycle events (fit, refit, rotation, transfer, removal, store, retread, warranty, scrap, disposal, ambiguous) | SQL `v_tyre_lifecycle_events` / `get_tyre_lifecycle_events`; JS `buildLifecycleEvents` (MIRROR) - Phase 3, docs/tyre/LIFECYCLE_EVENTS.md | Tyre Passport, Fitment & Movement History |
 | Site at a past date (operational attribution only, opt-in, no report uses it yet) | SQL `v_asset_site_history` / `asset_site_at`; JS `buildSiteHistory` / `siteAtDate` (MIRROR) - Phase 3, docs/tyre/SITE_ATTRIBUTION.md | none yet |
 
+## Golden reconciliation (2026-11-10)
+`src/test/fixtures/tyreGolden.js` is a hand-computed dataset (rotation, transfer, missing serial, placeholder
+km, reversed dates, reversed km, overlapping fitments, same-day duplicate price, estimated price, confirmed
+zero cost, over-cap life, provisional tyres, missing km). `src/test/tyreGoldenReconciliation.test.js` runs every
+authoritative JS engine over it (tyreKm, tyreLifetime, kpiEngine, tyreRunningLife, tco, serialTracker, tyrePassport,
+vendor/executive saving, rotation price) and asserts the hand figures AND that every engine gives the same tyre
+the same life, price, CPK and distance. A changed figure there is a changed business rule.
+
+Defects it found and fixed (each failed the golden test before the fix):
+- **Same-day double price** (K507B403860 pattern): `withOnePricePerTyre` and `serialPrice` broke a same-date tie
+  by input order, `toLifetimeTyres` by id - so lifetime CPK used one price and scrap cost / cost trend / TCO /
+  Serial Tracker another. One comparator now: `compareFitments` (date, then id) in tyreLifetime.js.
+- **Removal rate and scrap threshold** used raw removal-minus-fitment km: a placeholder fitment odometer of 1
+  added the machine's whole odometer, an over-cap life counted as distance. Now `fitmentKm` (T7).
+- **Average / fleet tyre life** returned 0 km when nothing was measurable; now null (missing != zero).
+- **Vendor scrap rate** read `category` only while live scraps carry `status = Scrapped` (as computeScrapRate
+  already knew), so it read 0%. Same tag test now.
+- Per-fitment km moved onto `fitmentKm`: vendorIntelligence `measuredKm`, executive `savingsOpportunity`,
+  rotation `lifeComparison`, predictiveOverview `removalTrend`, serialTrackerView `recordKm` (preferred total_km,
+  the machine odometer on a placeholder row), aiCopilot vehicle prompt.
+- Purchase money moved onto `withOnePricePerTyre`: rotation `averageTyreCost`, forecasting `buildForecastModel`.
+
+Still open from the golden pass (rules, not swaps - need an owner decision, SQL mirror changes with them):
+- The class cap (T7) is applied per FITMENT; a tyre whose stints each pass but whose summed lifetime exceeds the
+  cap is accepted. Capping the lifetime changes `v_tyre_lifetime` too.
+- A CONFIRMED_ZERO (warranty) tyre has a real life but `_cost` null, so it is outside every CPK; whether its km
+  should dilute fleet CPK is a policy question.
+- Average tyre life is per tyre object (a weak-serial row with qty 2 counts once) while weighted CPK honours qty.
+- An overlapping fitment's km is dropped even when the earlier, overlapping fitment has no km of its own (T18 as
+  mirrored in SQL); the tyre then reads "no km" rather than the later stint's real distance.
+- Removal rate counts each fitment row as a removal event, including an overlapping double entry.
+
 Phase 2: expense cost status (`get_expense_cost_status_summary`, Expense Report + Data Reconciliation) and Budget Planner
 actual spend from the expense grid - see docs/tyre/FINANCIAL_SOURCE_OF_TRUTH.md.
 

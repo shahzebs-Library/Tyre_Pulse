@@ -18,6 +18,7 @@
  * Reuses kpiEngine / analyticsEngine maths rather than re-deriving it.
  */
 import { recordCost } from './analyticsEngine'
+import { fitmentKm } from './tyreLifetime'
 
 // ── Formatting (shared by screen, PDF, PPTX and Excel) ───────────────────────
 
@@ -268,9 +269,10 @@ export function savingsOpportunity(cpk, records = []) {
   if (!(avg > 0) || !(best > 0)) return null
   const improvement = avg - best
   if (improvement <= 0) return 0
+  // Each stint by the shared km rule (fitmentKm, T7): placeholder / over-cap km is unknown.
   const totalKm = records.reduce((s, r) => {
     const f = Number(r?.km_at_fitment), rem = Number(r?.km_at_removal)
-    return Number.isFinite(f) && Number.isFinite(rem) && rem > f ? s + (rem - f) : s
+    return Number.isFinite(f) && Number.isFinite(rem) && rem > f ? s + (fitmentKm(r) ?? 0) : s
   }, 0)
   if (!(totalKm > 0)) return null
   const dates = records.map((r) => r?.issue_date).filter(Boolean).sort()

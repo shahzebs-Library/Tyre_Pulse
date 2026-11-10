@@ -59,7 +59,7 @@ export function withOnePricePerTyre(records = []) {
     if (!isStrongSerial(r?.serial_no) || !((num(r.cost_per_tyre) ?? 0) > 0)) return
     const key = `${String(r.country ?? '').trim().toUpperCase()}|${String(r.serial_no).trim().toUpperCase()}`
     const cur = firstPriced.get(key)
-    if (cur == null || dateOf(r) < dateOf(records[cur])) firstPriced.set(key, i)
+    if (cur == null || earlierFitment(r, records[cur])) firstPriced.set(key, i)
   })
   const keep = new Set(firstPriced.values())
   return records.map((r, i) => {
@@ -75,6 +75,21 @@ export function fitmentKm(row) {
 }
 
 const dateOf = (r) => String(r?.issue_date ?? r?.fitment_date ?? '').slice(0, 10)
+
+/**
+ * Fitment order used by EVERY "first priced fitment" decision: date, then id.
+ * withOnePricePerTyre used to break a same-date tie by input order while
+ * toLifetimeTyres broke it by id, so a serial priced twice on the same day
+ * (K507B403860: 950 on MP111, 766 on TM676) cost 766 in lifetime CPK and 950 in
+ * scrap cost / cost trend / TCO. One comparator now decides both.
+ */
+export function compareFitments(a, b) {
+  const da = dateOf(a); const db = dateOf(b)
+  if (da !== db) return da < db ? -1 : 1
+  const ia = String(a?.id ?? ''); const ib = String(b?.id ?? '')
+  return ia < ib ? -1 : ia > ib ? 1 : 0
+}
+const earlierFitment = (a, b) => compareFitments(a, b) < 0
 
 /**
  * Active fitment. MIRROR of SQL public.tyre_status_is_active(text): a status is
@@ -146,12 +161,7 @@ export function toLifetimeTyres(records = [], options = {}) {
   })
   const out = []
   for (const [key, { strong, rows }] of groups.entries()) {
-    const ordered = [...rows].sort((a, b) => {
-      const da = dateOf(a); const db = dateOf(b)
-      if (da !== db) return da < db ? -1 : 1
-      const ia = String(a?.id ?? ''); const ib = String(b?.id ?? '')
-      return ia < ib ? -1 : ia > ib ? 1 : 0
-    })
+    const ordered = [...rows].sort(compareFitments)
     const priced = ordered.find((r) => (num(r.cost_per_tyre) ?? 0) > 0)
     let km = 0
     let anyKm = false

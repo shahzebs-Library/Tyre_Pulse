@@ -56,6 +56,8 @@ import {
 } from '../components/commandCenter/kit'
 import { safeImageSrc } from '../lib/safeUrl'
 import { toUserMessage } from '../lib/safeError'
+import { costDisplay } from '../lib/tyreCostAudit'
+import { manualTyreCostWarning } from '../lib/importCostPreview'
 import './TyreRecords.css'
 
 // exportUtils pulls the PDF/Excel report engines (~41 kB gz) that most sessions
@@ -158,6 +160,11 @@ export default function TyreRecords() {
   // True only while the country is genuinely unchosen (the All-countries case),
   // which is when the field needs the hint rather than a quiet default.
   const countryUnset = !String(watch('country') || '').trim()
+  // Warn (never block) when a non-warranty tyre is saved with no cost or a zero cost.
+  const costWarning = manualTyreCostWarning({
+    cost: watch('cost_per_tyre'), description: watch('description'),
+    remarks: watch('remarks'), category: watch('category'),
+  })
 
   // Bulk selection - driven by the current page's records
   const {
@@ -736,7 +743,7 @@ export default function TyreRecords() {
               [t('records.detail.issueDate'), detailRecord.issue_date], [t('records.detail.misNumber'), detailRecord.mis_number],
               [t('records.detail.jobCard'), detailRecord.job_card], [t('records.detail.qty'), detailRecord.qty],
               [t('records.detail.riskLevel'), detailRecord.risk_level], [t('records.detail.category'), detailRecord.category],
-              [t('records.detail.cost'), detailRecord.cost_per_tyre ? formatCurrencyCompact(detailRecord.cost_per_tyre, currencyOf(detailRecord.country) || activeCurrency) : null],
+              [t('records.detail.cost'), costDisplay(detailRecord.cost_per_tyre, (n) => formatCurrencyCompact(n, currencyOf(detailRecord.country) || activeCurrency))],
               [t('records.detail.description'), detailRecord.description, true], [t('records.detail.remarks'), detailRecord.remarks, true],
             ].filter(([, v]) => v).map(([k, v, wide]) => (
               <div key={k} className={wide ? 'col-span-2' : ''}>
@@ -820,6 +827,9 @@ export default function TyreRecords() {
               <FormSelect label={t('records.form.riskLevel')} placeholder={t('records.form.none')} options={RISK_LEVELS} error={formErrors.risk_level} {...register('risk_level')} />
               <FormSelect label={t('records.form.category')} placeholder={t('records.form.none')} options={ALL_CATEGORY_LABELS} error={formErrors.category} {...register('category')} />
             </div>
+            {costWarning && (
+              <p role="status" data-testid="tyre-cost-warning" className="text-xs text-amber-300">{costWarning}</p>
+            )}
             <FormActions
               align="start"
               className="pt-2"
@@ -1051,7 +1061,7 @@ function TyreDetail({ record, fleetRow, vehicleInspection, country, activeCurren
                 <KV k="Description" v={record.description} />
                 <KV k="Category" v={record.category} />
                 <KV k="Purchase date" v={record.issue_date ? fmtDate(record.issue_date) : null} />
-                <KV k="Purchase price" v={record.cost_per_tyre != null ? (recCurrency ? formatCurrencyCompact(record.cost_per_tyre, recCurrency) : fmtInt(record.cost_per_tyre)) : null} />
+                <KV k="Purchase price" v={costDisplay(record.cost_per_tyre, (n) => (recCurrency ? formatCurrencyCompact(n, recCurrency) : fmtInt(n)))} />
                 <KV k="Cost per km (per fitment)" v={cpk != null ? cpk.toFixed(3) : null} />
                 <KV k="Lifetime CPK (physical tyre)" v={passport?.lifetime?.purchaseCpk != null ? `${passport.lifetime.purchaseCpk.toFixed(3)}${passport.lifetime.provisional ? ' (provisional)' : ''}` : null} />
                 <KV k="MIS number" v={record.mis_number} />

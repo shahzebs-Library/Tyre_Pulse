@@ -209,7 +209,10 @@ export function roleKey(raw: string | null | undefined): string {
 
 export function agentsForRole(rawRole: string | null | undefined, isSuperAdmin = false): AgentType[] {
   if (isSuperAdmin) return [...ALL]
-  return [...(ROLE_AGENTS[roleKey(rawRole)] ?? [])]
+  // Own-property lookup only: a role named "constructor" or "__proto__" must
+  // resolve to no agents, not to an Object.prototype member (which threw).
+  const key = roleKey(rawRole)
+  return Object.prototype.hasOwnProperty.call(ROLE_AGENTS, key) ? [...ROLE_AGENTS[key]] : []
 }
 
 const MAX_AGENTS = 3

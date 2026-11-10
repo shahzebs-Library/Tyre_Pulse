@@ -30,7 +30,12 @@ export function authorizeTool(name: string, approvedToolCallIds: string[] = [], 
   if (allowedForRequest && !allowedForRequest.includes(name)) {
     return { allowed: false, reason: 'Tool is not available to the active agents' }
   }
-  if (policy.risk === 'consequential' && (!policy.requiresApproval || !approvedToolCallIds.includes(toolCallId))) {
+  // A consequential tool is never executed from the assistant loop. The ids in
+  // approved_tool_call_ids come from the browser, so they cannot prove that a
+  // person approved anything; a real approval must be a server-side record.
+  // Kept as a hard refusal until such a record exists (no tool is consequential today).
+  if (policy.risk !== 'read') {
+    void approvedToolCallIds; void toolCallId
     return { allowed: false, reason: 'Human approval is required for this consequential action' }
   }
   return { allowed: true, policy }

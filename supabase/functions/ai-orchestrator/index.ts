@@ -19,6 +19,7 @@ import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-
 import { corsHeaders, jsonResponse, requireApprovedRole } from '../_shared/auth.ts'
 import { authorizeTool, sourceForTool } from './policy.ts'
 import { runTool, toolDefsFor, coverageFrom } from './tools.ts'
+import { sanitizeErrorText, ownsConversation, isUuid, pagedMonthSpend } from '../_shared/aiSecurity.ts'
 import { agentsForRole, resolveAgents, toolsForAgents, buildSystemPrompt, AGENT_PROFILES, PROMPT_VERSION } from '../_shared/aiAgents.ts'
 
 const MODEL = 'claude-haiku-4-5-20251001'
@@ -146,9 +147,10 @@ serve(async (req) => {
     if (cfgMonthlyBudget > 0) {
       try {
         const start = new Date(); start.setUTCDate(1); start.setUTCHours(0, 0, 0, 0)
-        const { data: spendRows, error: spendError } = await svc.from('ai_token_logs').select('cost_usd').gte('created_at', start.toISOString())
-        if (spendError) throw new Error(spendError.message)
-        let spend = 0; for (const r of spendRows ?? []) spend += Number(r.cost_usd) || 0
+        // Paged: a plain select stops at 1000 rows and would under-count the month.
+        const spend = await pagedMonthSpend((f, t) => svc.from('ai_token_logs').select('id,cost_usd')
+          .gte('created_at', start.toISOString()).order('id', { ascending: true }).range(f, t))
+        if (spend === null) throw new Error('month spend unreadable')
         if (spend >= cfgMonthlyBudget) {
           logAiFailure(svc, { userId, status: 'blocked', httpStatus: 402, error: `Monthly AI budget reached (${spend.toFixed(2)}/${cfgMonthlyBudget})` })
           return jsonResponse(req, { error: 'The monthly AI budget has been reached. Please contact your administrator.' }, 402)
@@ -200,8 +202,11 @@ serve(async (req) => {
     if (!ANTHROPIC_API_KEY) return jsonResponse(req, { error: 'AI service temporarily unavailable' }, 500)
 
     // ── Conversation: load or create ─────────────────────────────────────────
-    let conversationId: string | null =
-      typeof body?.conversation_id === 'string' ? body.conversation_id : null
+    const rawConversationId = body?.conversation_id
+    if (rawConversationId !== undefined && rawConversationId !== null && rawConversationId !== '' && !isUuid(rawConversationId)) {
+      return jsonResponse(req, { error: 'Conversation not found' }, 404)
+    }
+    let conversationId: string | null = isUuid(rawConversationId) ? rawConversationId : null
 
     if (conversationId) {
       const { data: conv } = await svc
@@ -209,7 +214,7 @@ serve(async (req) => {
         .select('id,user_id')
         .eq('id', conversationId)
         .maybeSingle()
-      if (!conv || conv.user_id !== userId) {
+      if (!ownsConversation(conv, userId)) {
         return jsonResponse(req, { error: 'Conversation not found' }, 404)
       }
     } else {
@@ -297,7 +302,8 @@ serve(async (req) => {
             toolResults.push({ tool: tu.name, ok: r.ok, provenance: r.provenance })
           } catch (e) {
             ok = false
-            output = `tool error: ${e instanceof Error ? e.message : 'unknown'}`
+            console.error('[ai-orchestrator] tool threw:', tu.name, e)
+            output = `tool error: ${sanitizeErrorText(e)}`
           }
         }
         toolCalls.push({ name: tu.name, ok, approval_required: authorization.policy?.requiresApproval ?? true })

@@ -12,6 +12,8 @@
 //
 // Pure: no Deno imports, so vitest exercises it with a mock client.
 
+import { sanitizeErrorText, safeRefusalReason, cleanPromptText } from '../_shared/aiSecurity.ts'
+
 export const MAX_TOOL_OUTPUT = 12000
 
 type Db = {
@@ -80,9 +82,10 @@ export function cleanDate(v: unknown): string | null {
   return isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== s ? null : s
 }
 
+// Control characters / line breaks are collapsed: these values are echoed into
+// _provenance, which the model reads, so they must not carry fake prompt lines.
 export function cleanText(v: unknown, max = 80): string | null {
-  const s = String(v ?? '').trim()
-  return s ? s.slice(0, max) : null
+  return cleanPromptText(v, max)
 }
 
 function clampInt(v: unknown, def: number, min: number, max: number) {
@@ -120,17 +123,14 @@ function fail(tool: string, msg: string): ToolResult {
 
 // Sanitise provider error text: never echo SQL / internals to the model.
 function safeErr(e: { message?: string } | null | undefined): string {
-  const m = String(e?.message ?? 'unknown error')
-  if (/permission|not allowed|forbidden|42501/i.test(m)) return 'not permitted for this user'
-  if (/does not exist|42883|PGRST20/i.test(m)) return 'not provisioned'
-  return 'query failed'
+  return sanitizeErrorText(e)
 }
 
 async function callRpc(db: Db, tool: string, fn: string, args: Record<string, unknown>, now: Date, notes: string[] = []): Promise<ToolResult> {
   const { data, error } = await db.rpc(fn, args)
   if (error) return fail(tool, safeErr(error))
   if (data && typeof data === 'object' && (data as Record<string, unknown>).ok === false) {
-    return fail(tool, String((data as Record<string, unknown>).reason ?? 'refused'))
+    return fail(tool, safeRefusalReason((data as Record<string, unknown>).reason))
   }
   return packResult(tool, fn, args, data, now, notes)
 }
@@ -142,7 +142,7 @@ export async function runTool(db: Db, ctx: ToolContext, name: string, input: Rec
   const from = cleanDate(input.from)
   const to = cleanDate(input.to)
   const notes: string[] = []
-  if (input.country && !country) notes.push(`Unknown country "${String(input.country).slice(0, 20)}" ignored; showing every country the user can see.`)
+  if (input.country && !country) notes.push(`Unknown country "${cleanPromptText(input.country, 20) ?? ''}" ignored; showing every country the user can see.`)
   if ((input.from && !from) || (input.to && !to)) notes.push('An invalid date was ignored (use YYYY-MM-DD).')
   if (from && to && from > to) return fail(name, 'start date is after end date')
 
@@ -184,7 +184,10 @@ export async function runTool(db: Db, ctx: ToolContext, name: string, input: Rec
     case 'list_recent_events': {
       const limit = clampInt(input.limit, 20, 1, 50)
       let q = db.from('domain_events').select('id,event_type,entity_type,entity_id,created_at').order('id', { ascending: false }).limit(limit)
-      const et = cleanText(input.event_type, 60)
+      // Event types are dotted lower-case tokens (inspection.created ...); anything else is ignored.
+      const etRaw = cleanText(input.event_type, 60)
+      const et = etRaw && /^[a-z0-9_.]+$/.test(etRaw) ? etRaw : null
+      if (etRaw && !et) notes.push('An invalid event type filter was ignored.')
       if (et) q = q.eq('event_type', et)
       const { data, error } = await q
       if (error) return fail(name, safeErr(error))

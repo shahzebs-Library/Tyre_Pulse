@@ -47,8 +47,12 @@ export function ownsConversation(conv: { user_id?: unknown } | null | undefined,
 // ── Free text that is echoed back into prompts ─────────────────────────────
 // Control characters and line breaks are how an injected string pretends to
 // be a new system line. Collapse them; clamp length.
+// Control characters plus U+2028/U+2029 (line terminators). Built without backslash-u escapes in the source
+// so the file survives transports that decode them.
+const CONTROL_CHARS_RE = new RegExp('[\\x00-\\x1f\\x7f' + String.fromCharCode(0x2028, 0x2029) + ']+', 'g')
+
 export function cleanPromptText(v: unknown, max = 80): string | null {
-  const s = String(v ?? '').replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, ' ').replace(/\s+/g, ' ').trim()
+  const s = String(v ?? '').replace(CONTROL_CHARS_RE, ' ').replace(/\s+/g, ' ').trim()
   return s ? s.slice(0, max) : null
 }
 
@@ -156,7 +160,7 @@ export function parseStorageRef(value: unknown, allowedBuckets: readonly string[
   const bucket = raw.slice(0, i)
   const path = raw.slice(i + 1)
   if (!/^[a-z0-9_-]+$/.test(bucket) || !allowedBuckets.includes(bucket)) return null
-  if (!path || path.includes('..') || path.startsWith('/') || /[\u0000-\u001f\\]/.test(path) || path.length > 500) return null
+  if (!path || path.includes('..') || path.startsWith('/') || /[\x00-\x1f\\]/.test(path) || path.length > 500) return null
   return { bucket, path }
 }
 

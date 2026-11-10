@@ -34,7 +34,9 @@ export const RETRY_SAFE_KINDS = ["photo_unavailable", "provider_rate_limited", "
 export const isRateLimitStatus = (s: unknown) => [429, 500, 502, 503, 504].includes(Number(s));
 
 // Model text is shown to users: em/en dashes are replaced by commas so reports stay plain ASCII punctuation.
-const plain = (v: string) => v.replace(/\s*[\u2014\u2013]\s*/g, ", ");
+// Em and en dashes become a comma. Built without backslash-u escapes so the source survives transports that decode them.
+const DASH_RE = new RegExp('\\s*[' + String.fromCharCode(0x2014, 0x2013) + ']\\s*', 'g');
+const plain = (v: string) => v.replace(DASH_RE, ", ");
 export const str = (value: unknown, length = 300) =>
   typeof value === "string" ? plain(value.trim()).slice(0, length) : "";
 

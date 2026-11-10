@@ -53,7 +53,7 @@ create or replace function public.tyre_cost_audit_classify(p_country text, p_fro
 returns table (
   tyre_id uuid, country text, site text, asset_no text, serial_no text, job_card text, month text,
   current_cost numeric, currency text, class text, proposed_cost numeric, source_line_id text,
-  item_code text, confidence text)
+  item_code text, confidence text, reason text)
 language sql stable security invoker set search_path = public
 set plan_cache_mode = force_custom_plan as $fn$
 with t as materialized (
@@ -151,7 +151,28 @@ select s.id tyre_id, s.country, s.site, s.asset_no, s.serial_no, s.jc job_card, 
   end proposed_cost,
   coalesce(s.src_same, s.ix_src) source_line_id,
   coalesce(s.item_same, s.zero_item) item_code,
-  case when s.n_p_same = 1 and s.sz is not null then 'high' when s.n_p_same = 1 then 'medium' when s.ix_n = 1 then 'medium' end confidence
+  case when s.n_p_same = 1 and s.sz is not null then 'high' when s.n_p_same = 1 then 'medium' when s.ix_n = 1 then 'medium' end confidence,
+  -- Plain-language reason shown to the reviewer (deterministic, no AI).
+  case
+    when s.cost < 0 then 'Negative cost ' || s.cost
+    when s.claim then 'Warranty claim record exists for this serial'
+    when coalesce(s.w_line, false) then 'Warranty wording on its own job card line'
+    when s.cost > 0 and s.dup_price then 'Same strong serial carries a purchase price on another row'
+    when s.cost > 0 and s.bf_source = 'comparable' then 'Price came from a median of other tyres of the same brand and size in earlier months, not a transaction'
+    when s.cost > 0 and s.n_priced = 0 then 'No tyre line on its job card to confirm the stored price'
+    when s.cost > 0 and coalesce(s.cost_matches, false) then 'Matches its own job card line'
+    when s.cost > 0 then 'Stored ' || s.cost || ' differs from its own job card line'
+    when coalesce(s.mixed, false) then 'Its job card line combines tyre and tube; split before pricing'
+    when s.n_items > 1 or s.n_p_same > 1 then s.n_items || ' item codes / ' || s.n_p_same || ' prices on its job card in ' || s.m
+    when s.n_p_same = 1 and s.spec_bad then 'Source line size or brand differs from the tyre (' || coalesce(s.sz, '?') || ', ' || coalesce(s.brand, '?') || ')'
+    when s.n_p_same = 1 then 'Own job card line ' || coalesce(s.item_same, '(no item code)') || ' in ' || s.m || ': value / qty = ' || s.p_same
+    when s.n_priced > 0 then 'Own line is in ' || coalesce(s.m_other, '?') || ', tyre is in ' || s.m || '; cross-month prices are not used'
+    when s.n_zero_items = 1 and s.ix_n > 1 then 'Item ' || s.zero_item || ' has ' || s.ix_n || ' different prices in ' || s.m
+    when s.n_zero_items = 1 and s.ix_n = 1 and s.spec_bad then 'Same-month price found but size or brand differs'
+    when s.n_zero_items = 1 and s.ix_n = 1 then 'Own line ' || s.zero_item || ' issued at zero; same item priced ' || s.ix_price || ' in ' || s.m
+    when s.n_zero > 0 then 'Own tyre line issued at zero; warranty not proven and no same-month price'
+    when coalesce(s.jc, '') = '' then 'No job card to trace a price'
+    else 'Its job card has no tyre line' end reason
 from s
 
 $fn$;
@@ -183,39 +204,42 @@ create policy tcaf_country on public.tyre_cost_audit_findings as restrictive for
 drop policy if exists tcaf_read on public.tyre_cost_audit_findings;
 create policy tcaf_read on public.tyre_cost_audit_findings for select to authenticated using ((select public.app_is_elevated()));
 revoke all on public.tyre_cost_audit_findings from anon;
-revoke insert, update, delete, truncate on public.tyre_cost_audit_findings from authenticated;
-grant select on public.tyre_cost_audit_findings to authenticated;
+drop policy if exists tcaf_insert on public.tyre_cost_audit_findings;
+create policy tcaf_insert on public.tyre_cost_audit_findings for insert to authenticated
+  with check ((select public.app_is_elevated()) or (select public.is_super_admin()));
+-- Inserts happen through the (invoker) scan as the caller. Status and cost changes only through
+-- the definer decide/apply RPCs, and apply re-checks every proposal against its source line,
+-- so a hand-inserted finding with an invented price can never be applied.
+revoke update, delete, truncate on public.tyre_cost_audit_findings from authenticated;
+grant select, insert on public.tyre_cost_audit_findings to authenticated;
 
 -- Scan: always computed as the caller (RLS). Persisting needs an elevated caller.
 create or replace function public.tyre_cost_audit_scan(p_country text default null, p_from date default '2025-01-01', p_to date default current_date, p_dry_run boolean default true)
 returns jsonb language plpgsql security invoker set search_path = public as $$
-declare v jsonb; v_new int := 0;
+declare v jsonb;
 begin
   if not public.app_is_elevated() and not public.is_super_admin() then
     raise exception 'Only Admin, Manager or Director can run the tyre cost audit' using errcode = '42501';
   end if;
   if p_from is null or p_to is null or p_from > p_to then raise exception 'Invalid date range' using errcode = '22023'; end if;
-  -- no ON COMMIT DROP: a function called twice in one transaction must still work (V368a lesson)
-  drop table if exists pg_temp._tca;
-  create temp table _tca as select * from public.tyre_cost_audit_classify(p_country, p_from, p_to);
+  -- One statement: the classification is computed once, summarised, and (when not a dry run)
+  -- saved. No temp table, so calling it twice in one transaction is safe.
+  with c as materialized (select * from public.tyre_cost_audit_classify(p_country, p_from, p_to)),
+  ins as (
+    insert into public.tyre_cost_audit_findings (organisation_id, tyre_id, country, site, asset_no, serial_no, job_card, month, class,
+      original_cost, proposed_cost, currency, item_code, source_line_id, confidence, reasons, dedupe_key)
+    select public.app_current_org(), c.tyre_id, c.country, c.site, c.asset_no, c.serial_no, c.job_card, c.month, c.class,
+      c.current_cost, c.proposed_cost, c.currency, c.item_code, c.source_line_id, c.confidence, jsonb_build_array(c.reason),
+      c.tyre_id::text || '|' || c.class || '|' || coalesce(c.proposed_cost::text, '') || '|' || coalesce(c.source_line_id, '')
+    from c where not p_dry_run and c.class not in ('priced_verified', 'priced_no_source')
+    on conflict (organisation_id, dedupe_key) where status in ('proposed','approved') do nothing
+    returning 1)
   select jsonb_build_object('ok', true, 'dry_run', p_dry_run, 'from', p_from, 'to', p_to, 'country', p_country,
-    'checked', count(*),
-    'by_country_class', (select coalesce(jsonb_agg(x), '[]') from (select country, class, count(*) n, sum(proposed_cost) proposed, min(currency) currency from _tca group by 1,2 order by 1,2) x),
+    'checked', (select count(*) from c),
+    'by_country_class', (select coalesce(jsonb_agg(x), '[]') from (select country, class, count(*) n, sum(proposed_cost) proposed, min(currency) currency from c group by 1,2 order by 1,2) x),
+    'new_findings', case when p_dry_run then null else (select count(*) from ins) end,
     'price_source_note', 'Prices come from ERP store-issue lines (parts_consumption). No invoice, GRN or PO records exist in the database.')
-  into v from _tca;
-  if not p_dry_run then
-    with ins as (
-      insert into public.tyre_cost_audit_findings (organisation_id, tyre_id, country, site, asset_no, serial_no, job_card, month, class,
-        original_cost, proposed_cost, currency, item_code, source_line_id, confidence, dedupe_key)
-      select public.app_current_org(), c.tyre_id, c.country, c.site, c.asset_no, c.serial_no, c.job_card, c.month, c.class,
-        c.current_cost, c.proposed_cost, c.currency, c.item_code, c.source_line_id, c.confidence,
-        c.tyre_id::text || '|' || c.class || '|' || coalesce(c.proposed_cost::text, '') || '|' || coalesce(c.source_line_id, '')
-      from _tca c where c.class not in ('priced_verified', 'priced_no_source')
-      on conflict (organisation_id, dedupe_key) where status in ('proposed','approved') do update set last_seen = now()
-      returning (xmax = 0) inserted)
-    select count(*) filter (where inserted) into v_new from ins;
-    v := v || jsonb_build_object('new_findings', v_new);
-  end if;
+  into v;
   return v;
 end $$;
 
@@ -255,6 +279,21 @@ begin
     from public.tyre_cost_audit_findings f
     where f.id = any(p_ids) and f.status = 'approved'
       and (f.organisation_id = public.app_current_org() or public.is_super_admin())
+      and (
+        -- price proposals: the proposed price must equal the source line's own per-tyre price,
+        -- the line must be a tyre-only line of the same item code, country and month.
+        (f.class in ('exact_match', 'same_month_item_match') and exists (
+          select 1 from public.parts_consumption p
+          where p.id::text = f.source_line_id and p.country = f.country
+            and p.qty_n > 0 and p.line_cost > 0
+            and round(p.line_cost / p.qty_n, 2) = f.proposed_cost
+            and to_char(p.event_date, 'YYYY-MM') = f.month
+            and upper(regexp_replace(coalesce(p.item_code,''), '\s+', '', 'g')) = coalesce(f.item_code, '')
+            and public.tyre_cost_line_kind(p.item_description) = 'tyre'))
+        -- estimate revert: the stored price must still be the comparable-median fill
+        or (f.class = 'priced_estimate_not_verified' and exists (
+          select 1 from public.tyre_price_backfill_log l
+          where l.tyre_id = f.tyre_id and l.source = 'comparable' and l.new_cost = f.original_cost)))
     for update),
   upd as (
     update public.tyre_records t

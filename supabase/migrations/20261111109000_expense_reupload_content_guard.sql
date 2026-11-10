@@ -7,7 +7,8 @@
 -- twice; they were removed the same day (_bak.parts_reupload_dup_20261110).
 --
 -- Rule: a freshly inserted line is skipped when the same line was already stored
--- by an EARLIER upload (older than 20 minutes). Same line = org, country, issue
+-- by ANY earlier write (immediate; was 20 min, owner asked "why not immediate" -
+-- data showed no file ever genuinely repeats a line). Same line = org, country, issue
 -- number, job card, item code, event date, qty, value, store code, cost centre.
 -- Multiplicity-aware: if the earlier upload stored a line twice and the new file
 -- carries it three times, two are skipped and one lands (per-transaction counter).
@@ -53,7 +54,7 @@ begin
     and p.value_amount is not distinct from new.value_amount
     and p.store_code is not distinct from new.store_code
     and p.cost_center is not distinct from new.cost_center
-    and p.created_at < now() - interval '20 minutes';
+    and p.created_at < now();   -- immediate (owner 2026-11-10); same-txn rows share now() so are never compared
 
   if v_prior = 0 then
     return new;

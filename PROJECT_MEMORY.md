@@ -32,7 +32,8 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   (KSA 2,062 / SAR 369,786.07; Egypt 129 / EGP 585,375.71; backup _bak.parts_reupload_dup_20261110). KSA now 42,949,112.95.
 - GUARD: trigger trg_dedupe_expense_reupload (expense_reupload_guard, BEFORE INSERT, runs after classify by name order)
   skips a fresh line when the same content (org, country, event_date, issue no, job card, item, qty, value, store, cost
-  centre - raw text) was stored by an upload >20 min earlier; multiplicity-aware via a txn-local GUC counter; logs to
+  centre - raw text) was stored by ANY earlier write (IMMEDIATE since migration expense_reupload_guard_immediate;
+  the 20-min window was dropped on owner request - 0 genuine same-file repeats in the data); multiplicity-aware via a txn-local GUC counter; logs to
   expense_import_rejects 'already_stored'. Bypass: old created_at (restores) or set tp.allow_dup_expense='on'.
   Client dropStoredDuplicates now checks EVERY row (no source_row exemption) and keys on store + cost centre too.
 - Also removed: engine_hours_logs 9 exact phone double-submits (_bak.engine_hours_exact_dup_20261110); odometer 28 via

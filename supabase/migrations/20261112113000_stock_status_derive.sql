@@ -1,9 +1,13 @@
 -- F-F-04 - stock_status is derived on EVERY write to stock_records, not only when
 --          it goes through the stock-movement / stock-count RPCs.
 --
--- STATUS: DRAFT - NOT APPLIED (Supabase MCP was down when this was written). The lead
---   applies it via apply_migration and runs the rolled-back probe below BEFORE trusting it.
---   On apply, move this file to supabase/migrations/ keeping the same stamp.
+-- STATUS: APPLIED 2026-11-11. Verified live, rolled back: backfill corrected all 3 of 36
+--   disagreeing rows (0 wrong after); a direct insert of a below-critical qty with 'OK' sent
+--   is corrected to 'Critical'; a direct update re-derives 'OK'. Confirmed the trigger rule is
+--   byte-identical to post_stock_movement / set_stock_count (CASE WHEN v_after <=
+--   COALESCE(critical_level,0) ... ), so RPC-path writes are unchanged and only direct writes
+--   gain the derivation. Applied as CREATE OR REPLACE function + guarded CREATE trigger +
+--   backfill (already DROP-free; the drops are rollback-only).
 --
 -- WHY. post_stock_movement() and set_stock_count() (V52 / V214) recompute stock_status with
 --   one rule - qty <= critical_level -> Critical, qty <= min_level -> Low, else OK - but a

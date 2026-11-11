@@ -1,7 +1,9 @@
--- STATUS: AUTHORED, NOT APPLIED. The Supabase MCP was down this session, so this
--- was drafted and NOT applied or verified against the live database. A lead must
--- apply + verify it (rolled-back impersonation) following the database-migration-
--- safety conventions before relying on it.
+-- STATUS: APPLIED 2026-11-11. Verified live: view is security_invoker=on, carries the 4
+-- resolved columns, returns exactly the inspection set (2589 == inspections, RLS applies
+-- per caller), 2390/2589 have an approver_name resolved (rest unapproved or deleted-signer
+-- -> honest null). Backend half only; the client wiring below (point the inspection read at
+-- this view / add the 4 columns) is the remaining follow-up - the view is additive and safe
+-- without it. Applied as CREATE OR REPLACE VIEW (already DROP-free; the drop is rollback-only).
 --
 -- WHY: the inspection PDF and the on-screen sign-off printed a raw LOGIN EMAIL
 -- (inspections.approver_email) or a raw user UUID (inspections.approved_by) for

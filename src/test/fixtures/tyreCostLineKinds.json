@@ -1,0 +1,57 @@
+{
+  "_doc": "Description -> financial line kind. The ONE fixture both sides of the mirror read: src/test/tyreCostAuditMirror.test.js runs the JS lineKind() (src/lib/tyreCostAudit.js) over it, and supabase/tests/tyre_cost_audit_mirror.test.mjs runs the SQL tyre_cost_line_kind() (migration 20261112106000) over the same rows. Both must return the kind below for every row. Kinds: tyre, tube, flap, valve, service, repair, warranty, mixed, other. The warranty/repair words come from src/lib/tyrePriceRules.js (WARRANTY_WORDS / REPAIR_WORDS / REPAIR_STEMS); the SQL tyre_price_is_warranty / tyre_price_is_repair in the test harness are regenerated from those SAME lists, which is why the two engines agree. Includes 7 real-shape TIRE purchase lines from the live ERP grid. If you add a case, run both test files - a size form the two size detectors disagree on belongs in the audit, not here.",
+  "cases": [
+    { "description": "TIRE 315/80 R 22.5 TRIANGLE TR691", "kind": "tyre" },
+    { "description": "TIRE 385/65 R 22.5 TRIANGLE TR691", "kind": "tyre" },
+    { "description": "TIRE 1200 R 20 DOUBLE COIN", "kind": "tyre" },
+    { "description": "TIRE 1100 R 20 16PR BRIDGESTONE", "kind": "tyre" },
+    { "description": "TIRE 23.5 R 25 L3 LOADER MICHELIN", "kind": "tyre" },
+    { "description": "TIRE 315/80R22.5 20PR PIRELLI", "kind": "tyre" },
+    { "description": "TIRE 385/65R22.5 HANKOOK", "kind": "tyre" },
+
+    { "description": "TYRE 315/80R22.5 20PR TRIANGLE", "kind": "tyre" },
+    { "description": "TYRE 1200R20 DOUBLE COIN", "kind": "tyre" },
+    { "description": "315/80R22.5 TYRE", "kind": "tyre" },
+    { "description": "NEW TYRE 385/65 R 22.5 ERICLE", "kind": "tyre" },
+    { "description": "TYRE 11.00 R 20 ROADX", "kind": "tyre" },
+
+    { "description": "INNER TUBE 1200-20", "kind": "tube" },
+    { "description": "INNER TUBE 315/80 R 22.5", "kind": "tube" },
+    { "description": "TUBE 1100-20", "kind": "tube" },
+    { "description": "TUBES 385/65R22.5", "kind": "tube" },
+
+    { "description": "TYRE FLAP 20", "kind": "flap" },
+    { "description": "FLAP 1200-20", "kind": "flap" },
+    { "description": "RIM FLAP 22.5", "kind": "flap" },
+
+    { "description": "VALVE TR78A", "kind": "valve" },
+    { "description": "TYRE VALVE V3-20-2", "kind": "valve" },
+    { "description": "TUBELESS VALVE", "kind": "valve" },
+
+    { "description": "TYRE FITTING CHARGES", "kind": "service" },
+    { "description": "WHEEL ALIGNMENT SERVICE", "kind": "service" },
+    { "description": "MOUNTING AND DISMOUNTING LABOUR", "kind": "service" },
+    { "description": "WHEEL BALANCING CHARGE", "kind": "service" },
+    { "description": "TYRE INSTALLATION SERVICE CHARGE", "kind": "service" },
+
+    { "description": "REPAIR TIRE 315/80R22.5", "kind": "repair" },
+    { "description": "TYRE PUNCTURE REPAIR", "kind": "repair" },
+    { "description": "TYRE PATCH 385/65 R 22.5", "kind": "repair" },
+    { "description": "RETREAD 1200 R 20", "kind": "repair" },
+    { "description": "VULCANIZING TYRE SIDEWALL", "kind": "repair" },
+
+    { "description": "TYRE 315/80 WARRANTY REPLACEMENT", "kind": "warranty" },
+    { "description": "TYRE 1200R20 FREE OF CHARGE", "kind": "warranty" },
+    { "description": "TIRE 385/65R22.5 UNDER CLAIM", "kind": "warranty" },
+    { "description": "TYRE 315/80R22.5 F.O.C", "kind": "warranty" },
+
+    { "description": "TYRE 1200R20 WITH TUBE & FLAP", "kind": "mixed" },
+    { "description": "TIRE 315/80 R 22.5 AND INNER TUBE", "kind": "mixed" },
+    { "description": "TYRE 385/65R22.5 INCLUDING FLAP", "kind": "mixed" },
+
+    { "description": "BRAKE DISC PAD SET", "kind": "other" },
+    { "description": "ENGINE OIL 15W40 20L", "kind": "other" },
+    { "description": "GREASE NIPPLE M10", "kind": "other" },
+    { "description": "", "kind": "other" }
+  ]
+}

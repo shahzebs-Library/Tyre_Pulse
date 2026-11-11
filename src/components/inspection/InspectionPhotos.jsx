@@ -4,6 +4,7 @@ import { normalizeTyreConditions, positionLabelMap } from '../../lib/inspectionV
 import { resolveStorageUrl } from '../../lib/storageRefs'
 import { downloadPhoto, downloadPhotosZip, photoBaseName } from '../../lib/photoDownload'
 import { safeHref, safeImageSrc } from '../../lib/safeUrl'
+import { signerDisplay } from '../../lib/signerDisplay'
 
 /**
  * The evidence an inspector captured: the pictures, the meters and the signatures.
@@ -438,14 +439,31 @@ function PhotoTile({ item, onOpen }) {
   )
 }
 
-function EvidenceBlock({ row }) {
+function EvidenceBlock({ row, signers = null }) {
   const odometer = meterText(row.odometer_km, 'km')
   const hours = meterText(row.hour_meter, 'hrs')
   const inspector = signatureView(row.inspector_signature)
   const approver = signatureView(row.approver_signature)
   const status = prettyApproval(row.approval_status)
   const approvedOn = row.approved_at ? String(row.approved_at).slice(0, 10) : null
-  const approverName = row.approver_email || row.approved_by || null
+  // "Full Name (EMP-ID)", never the approver's login email and never a raw user
+  // id. `signers` carries the profiles the viewer resolved (approver = approved_by,
+  // inspector = created_by); without them we read the row's own fields THROUGH
+  // signerDisplay, which drops an email/UUID rather than printing it.
+  const approverName = signerDisplay(
+    signers?.approver ?? {
+      full_name: row.approver_name, employee_id: row.approver_employee_id,
+      email: row.approver_email, id: row.approved_by,
+    },
+    { fallback: null },
+  )
+  const inspectorName = signerDisplay(
+    signers?.inspector ?? {
+      full_name: row.inspector_name, name: row.inspector,
+      employee_id: row.inspector_employee_id, id: row.created_by,
+    },
+    { fallback: null },
+  )
 
   const hasAny = odometer || hours || inspector.kind !== 'none' || approver.kind !== 'none' || status
   if (!hasAny) return null
@@ -469,7 +487,7 @@ function EvidenceBlock({ row }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <SignatureBox
-          caption={`Inspector${row.inspector ? `: ${row.inspector}` : ''}`}
+          caption={`Inspector${inspectorName ? `: ${inspectorName}` : ''}`}
           view={inspector}
           emptyText="Not signed"
         />
@@ -564,7 +582,7 @@ export function usePhotoItems(inspection) {
   return { refs, items }
 }
 
-export default function InspectionPhotos({ inspection, showEvidence = true, title = 'Photos' }) {
+export default function InspectionPhotos({ inspection, showEvidence = true, title = 'Photos', signers = null }) {
   const [openIndex, setOpenIndex] = useState(null)
   const { refs, items } = usePhotoItems(inspection)
   const [zipping, setZipping] = useState(null) // null | { done, total }
@@ -634,7 +652,7 @@ export default function InspectionPhotos({ inspection, showEvidence = true, titl
         </div>
       ))}
 
-      {showEvidence && inspection && <EvidenceBlock row={inspection} />}
+      {showEvidence && inspection && <EvidenceBlock row={inspection} signers={signers} />}
 
       {openIndex != null && items[openIndex] && (
         <PhotoLightbox

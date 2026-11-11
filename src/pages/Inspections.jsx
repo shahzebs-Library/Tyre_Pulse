@@ -38,6 +38,7 @@ import { normaliseSignature } from '../lib/savedSignature'
 import { canSignInspection } from '../lib/inspectionApproval'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
+import { resolveInspectionSigners } from '../lib/api/profileDirectory'
 import { shapeRunningLife } from '../lib/tyreRunningLife'
 import { buildAssetFlagMap, inspectionOverview, focusMatches, focusSummary, scopeInspections, vehicleTypesIn, SIGNOFF_FILTERS } from '../lib/inspectionTyreFlags'
 import { positionLabelMap, affectedTyresSummary, affectedTyreRowsForExport } from '../lib/inspectionView'
@@ -446,9 +447,17 @@ export default function Inspections() {
         const inspectionNo = await inspectionsApi.countAssetInspections(pdfRow.asset_no, {
           country: pdfRow.country, upTo: pdfRow.inspection_date,
         })
+        // Resolve the signer identities to "Full Name (EMP-ID)" from the SAME
+        // profiles read the app uses everywhere, so the report never prints the
+        // approver's login email or a raw user id. Best-effort: on any failure the
+        // export falls back to the row fields through signerDisplay (still no leak).
+        const signers = await resolveInspectionSigners({
+          approvedBy: pdfRow.approved_by, createdBy: pdfRow.created_by,
+        }).catch(() => undefined)
         await exportInspectionDetailPdf(pdfRow, {
           branding: await brandingForPdf(branding), company, photos, lifeRows, svgEl, boardEl, diagramBg, inspectionNo,
           vehiclePhotoUrl: vehiclePhoto(pdfRow), aiFindings: aiJobs.filter(j => j.status === 'completed'),
+          signers,
         })
       } catch (err) { if (!cancelled) setPdfError(toUserMessage(err, 'Could not create the inspection PDF. Retry the download.')) }
       finally { if (!cancelled) { setPdfRow(null); setPdfBusyId(null) } }

@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import {
-  drainQueue, processJob, ProviderCallError, canReview,
+  drainQueue, processJob, ProviderCallError, canReview, PROMPT_VERSION,
 } from '../../supabase/functions/ai-tyre-inspection/logic.ts'
 import { evaluateMonthlyBudget, parseAiControls, sumMonthSpend } from '../../supabase/functions/ai-tyre-inspection/budget.ts'
 import { buildInspectionExportRows } from '../lib/aiTyreInspectionExport'
@@ -93,7 +93,7 @@ describe('worker path: queue -> measurement -> persist -> review -> export', () 
       expect(j).toMatchObject({ status: 'completed', attempts: 1, provider: 'anthropic', input_tokens: 1000, output_tokens: 200 })
       expect(j.cost_usd).toBeCloseTo(0.0002, 6)
       expect(j.analysis).toMatchObject({ assessable: true, humanReviewRequired: true, exactTreadDepthMm: null })
-      expect(j.prompt_version).toBe('tyre-photo-v3')
+      expect(j.prompt_version).toBe(PROMPT_VERSION)
     }
     expect(w.providerCalls).toEqual(['a1', 'a2', 'a3'])
     expect(w.reservedBy.size).toBe(3)

@@ -19,13 +19,16 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const ALLOWED_ORIGINS = ['https://tyrepulse.app', 'https://www.tyrepulse.app']
-const VERCEL_ORIGIN = /^https:\/\/[a-z0-9-]+\.vercel\.app$/
+const DEFAULT_ALLOWED_ORIGINS = ['https://tyrepulse.app', 'https://www.tyrepulse.app', 'https://app.tyrepulse.app']
 function corsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('origin')
+  const configured = Deno.env.get('ALLOWED_ORIGINS')?.split(',').map((v) => v.trim()).filter(Boolean)
+  const allowed = configured?.length ? configured : DEFAULT_ALLOWED_ORIGINS
   let allowOrigin = '*'
   if (origin) {
-    allowOrigin = (ALLOWED_ORIGINS.includes(origin) || VERCEL_ORIGIN.test(origin) || origin.startsWith('http://localhost')) ? origin : 'null'
+    // *.vercel.app preview wildcard dropped (owner gate N): preview hosts must
+    // be listed in the ALLOWED_ORIGINS env explicitly.
+    allowOrigin = (allowed.includes(origin) || origin.startsWith('http://localhost')) ? origin : 'null'
   }
   const requestedHeaders = req.headers.get('access-control-request-headers')
   return {

@@ -29,6 +29,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://tyrepulse.app',
   'https://www.tyrepulse.app',
+  'https://app.tyrepulse.app',
   'http://localhost:5173',
   'http://localhost:5174',
 ]

@@ -64,13 +64,14 @@ const TABLE_RE = /^[a-z_][a-z0-9_]{0,62}$/
 const PURGE_JOBS = 50        // jobs handled per cleanup call
 
 const ALLOWED_ORIGINS = ['https://tyrepulse.app', 'https://www.tyrepulse.app', 'https://app.tyrepulse.app', 'https://admin.tyrepulse.app']
-const VERCEL_ORIGIN = /^https:\/\/[a-z0-9-]+\.vercel\.app$/
 
 function corsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('origin')
   let allowOrigin = '*'
   if (origin) {
-    allowOrigin = (ALLOWED_ORIGINS.includes(origin) || VERCEL_ORIGIN.test(origin) || origin.startsWith('http://localhost')) ? origin : 'null'
+    // *.vercel.app preview wildcard dropped (owner gate N): preview hosts must
+    // be added to ALLOWED_ORIGINS above explicitly.
+    allowOrigin = (ALLOWED_ORIGINS.includes(origin) || origin.startsWith('http://localhost')) ? origin : 'null'
   }
   return {
     'Access-Control-Allow-Origin': allowOrigin,

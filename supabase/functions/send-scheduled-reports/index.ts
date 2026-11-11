@@ -24,6 +24,7 @@ const RIYADH_OFFSET_MIN = 3 * 60 // Gulf standard time, no DST
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://tyrepulse.app',
   'https://www.tyrepulse.app',
+  'https://app.tyrepulse.app',
   'http://localhost:5173',
   'http://localhost:5174',
 ]

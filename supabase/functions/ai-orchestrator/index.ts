@@ -444,7 +444,9 @@ serve(async (req) => {
       svc.from('ai_usage_log').insert({
         user_id: userId, organisation_id: orgId, agent: `orchestrator:${agents.join('+')}`, model: MODEL,
         input_tokens: inputTokens, output_tokens: outputTokens,
-        total_tokens: inputTokens + outputTokens, cost_usd: cost,
+        // ai_usage_log.total_tokens is GENERATED (input+output); supplying it errors
+        // the insert (the #484 ai_token_logs class), so never write it.
+        cost_usd: cost,
         source: 'ai-orchestrator', created_at: new Date(nowMs).toISOString(),
       }).then(({ error }: { error: { message: string } | null }) => {
         if (error) console.error('[ai-orchestrator] usage log insert failed:', error.message)

@@ -253,7 +253,8 @@ serve(async (req) => {
         model: MODEL,
         input_tokens: inputTokens,
         output_tokens: outputTokens,
-        total_tokens: inputTokens + outputTokens,
+        // ai_usage_log.total_tokens is a GENERATED column (input+output); supplying
+        // it errors the insert (the #484 ai_token_logs class), so never write it.
         cost_usd: costUsd(MODEL, inputTokens, outputTokens),
         country,
         site,

@@ -36,24 +36,36 @@ begin
   select coalesce(sum(row_count),0) into v_expected
   from backups.snapshot_tables where snapshot_id = v_snap and table_name='stock_records' and status='ok';
 
-  -- real restore of the jsonb chunks into a scratch (temp) table
-  create temp table _restore_scratch on commit drop as
-    select r.* from backups.snapshot_tables t,
-      lateral jsonb_populate_recordset(null::public.stock_records, t.data) r
-    where t.snapshot_id = v_snap and t.table_name='stock_records' and t.status='ok';
+  -- Restore wrapped in a nested block: a raise here (e.g. a snapshot value incompatible with the
+  -- current stock_records column type) rolls back ONLY to this savepoint, so the 'running' tracking
+  -- row survives and the handler records a durable 'failed' result instead of returning a ghost id.
+  begin
+    create temp table _restore_scratch on commit drop as
+      select r.* from backups.snapshot_tables t,
+        lateral jsonb_populate_recordset(null::public.stock_records, t.data) r
+      where t.snapshot_id = v_snap and t.table_name='stock_records' and t.status='ok';
 
-  select count(*) into v_restored from _restore_scratch;
+    select count(*) into v_restored from _restore_scratch;
 
-  update backups.restore_tests set
-    finished_at = now(), rows_expected = v_expected, rows_restored = v_restored,
-    status = case when v_expected = v_restored then 'passed' else 'failed' end,
-    error = case when v_expected = v_restored then null else 'row count mismatch' end,
-    detail = jsonb_build_object('table','stock_records','method','jsonb_populate_recordset into temp table',
-      'uncovered_tables', jsonb_build_array('work_orders','parts_consumption','production_logs'))
-  where id = v_id;
+    update backups.restore_tests set
+      finished_at = now(), rows_expected = v_expected, rows_restored = v_restored,
+      status = case when v_expected = v_restored then 'passed' else 'failed' end,
+      error = case when v_expected = v_restored then null else 'row count mismatch' end,
+      detail = jsonb_build_object('table','stock_records','method','jsonb_populate_recordset into temp table',
+        'uncovered_tables', jsonb_build_array('work_orders','parts_consumption','production_logs'))
+    where id = v_id;
+  exception when others then
+    update backups.restore_tests set status='failed', finished_at=now(), rows_expected = v_expected,
+      error=left(sqlerrm,500), detail=jsonb_build_object('phase','restore')
+    where id = v_id;
+  end;
+
   return v_id;
 exception when others then
-  update backups.restore_tests set status='failed', finished_at=now(), error=left(sqlerrm,500) where id = v_id;
+  -- Pre-restore failure around the tracking insert: guarantee one durable failed row.
+  insert into backups.restore_tests (id, snapshot_id, snapshot_taken_at, started_at, finished_at, tables_tested, status, error)
+  values (v_id, v_snap, v_taken, now(), now(), 1, 'failed', left(sqlerrm,500))
+  on conflict (id) do update set status='failed', finished_at=now(), error=excluded.error;
   return v_id;
 end
 $fn$;

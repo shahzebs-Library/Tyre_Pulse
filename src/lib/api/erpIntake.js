@@ -20,7 +20,7 @@
  *
  * @module api/erpIntake
  */
-import { supabase, toServiceError } from './_client'
+import { supabase, toServiceError, isNotProvisioned } from './_client'
 import { chainFitmentsPerWheel, summariseReconcile } from '../tyreReplacement'
 
 const CHUNK = 200
@@ -104,28 +104,65 @@ async function insertChunked(table, rows, onProgress) {
   return { inserted, failed }
 }
 
-/** Existing values of a column (paged) as a lowercase Set, for merge dedup. When a
- * country is given, only rows of THAT country are considered, so the same asset/WO
- * number can exist independently in different countries. */
-async function existingKeys(table, column, country) {
+/**
+ * Build a paged existence Set, FAILING FAST on a read error.
+ *
+ * WHY FAIL FAST. These Sets are the ONLY thing that recognises a row already in
+ * the system. If a read quietly returned an empty Set on a transient failure,
+ * EVERY row would be treated as new and re-inserted - a 23505 on a global unique
+ * (e.g. work_orders.work_order_no) aborts the whole non-grid batch at zero rows.
+ * So a per-page read retries a few times (a network blip) and then THROWS; the
+ * loader must abort BEFORE any insert. The ONLY degrade allowed is a genuinely
+ * missing relation (a migration not applied yet): there is nothing to compare
+ * against, so an empty Set is correct and every row loads as new.
+ *
+ * @param {(from:number, size:number) => PromiseLike<{data:any[]|null, error:any}>} buildPageQuery
+ * @param {(set:Set<string>, row:object) => void} addRow
+ */
+async function pagedExistenceSet(buildPageQuery, addRow) {
   const keys = new Set()
   let from = 0
   const size = 1000
   for (let guard = 0; guard < 500; guard += 1) {
-    let q = supabase.from(table).select(column).not(column, 'is', null)
-    if (country) q = q.eq('country', country)
-    // Stable order on the primary key: PostgREST does NOT guarantee row order
-    // across .range() pages without an ORDER BY, so a row can be dropped or
-    // repeated at a page boundary. A dropped existing key is not recognised as
-    // a duplicate, gets re-inserted, and aborts the whole batch on 23505.
-    const { data, error } = await q.order('id', { ascending: true }).range(from, from + size - 1)
-    if (error) throw toServiceError(error)
+    let data = null
+    let lastErr = null
+    for (let a = 1; a <= 3; a += 1) {
+      const res = await buildPageQuery(from, size)
+      if (!res.error) { data = res.data; lastErr = null; break }
+      lastErr = res.error
+      // A genuinely undeployed table is the only read error we degrade: no rows
+      // to compare against, so everything is new. Never retry it - it will not
+      // start existing between attempts.
+      if (isNotProvisioned(res.error)) return keys
+      if (a < 3) await sleep(Math.min(BASE_BACKOFF_MS * 2 ** (a - 1), MAX_BACKOFF_MS) + Math.random() * 300)
+    }
+    // Still failing after retries: THROW so the caller aborts before inserting.
+    if (lastErr) throw toServiceError(lastErr)
     if (!data || data.length === 0) break
-    for (const r of data) { const v = r[column]; if (v != null) keys.add(String(v).trim().toLowerCase()) }
+    for (const r of data) addRow(keys, r)
     if (data.length < size) break
     from += size
   }
   return keys
+}
+
+/** Existing values of a column (paged) as a lowercase Set, for merge dedup. When a
+ * country is given, only rows of THAT country are considered, so the same asset/WO
+ * number can exist independently in different countries. Fails fast (see
+ * pagedExistenceSet): a transient read error THROWS; a missing table returns []. */
+async function existingKeys(table, column, country) {
+  return pagedExistenceSet(
+    (from, size) => {
+      let q = supabase.from(table).select(column).not(column, 'is', null)
+      if (country) q = q.eq('country', country)
+      // Stable order on the primary key: PostgREST does NOT guarantee row order
+      // across .range() pages without an ORDER BY, so a row can be dropped or
+      // repeated at a page boundary. A dropped existing key is not recognised as
+      // a duplicate, gets re-inserted, and aborts the whole batch on 23505.
+      return q.order('id', { ascending: true }).range(from, from + size - 1)
+    },
+    (keys, r) => { const v = r[column]; if (v != null) keys.add(String(v).trim().toLowerCase()) },
+  )
 }
 
 /**
@@ -149,25 +186,20 @@ function tyreLifecycleKey(row) {
   return [norm(row.serial_no), norm(row.asset_no), norm(row.position), day(row.issue_date)].join('|')
 }
 
-/** Existing tyre lifecycle keys for this country, paged. */
+/** Existing tyre lifecycle keys for this country, paged. Fails fast (see
+ * pagedExistenceSet): a transient read error THROWS; a missing table returns []. */
 async function existingTyreKeys(country) {
-  const keys = new Set()
-  let from = 0
-  const size = 1000
-  for (let guard = 0; guard < 500; guard += 1) {
-    let q = supabase.from('tyre_records').select('serial_no,asset_no,position,issue_date')
-    if (country) q = q.eq('country', country)
-    // Stable order on the primary key so paging never drops/repeats a row at a
-    // page boundary (PostgREST does not guarantee order across .range() pages
-    // without an ORDER BY). A missed key otherwise re-inserts and aborts the batch.
-    const { data, error } = await q.order('id', { ascending: true }).range(from, from + size - 1)
-    if (error) throw toServiceError(error)
-    if (!data || data.length === 0) break
-    for (const r of data) keys.add(tyreLifecycleKey(r))
-    if (data.length < size) break
-    from += size
-  }
-  return keys
+  return pagedExistenceSet(
+    (from, size) => {
+      let q = supabase.from('tyre_records').select('serial_no,asset_no,position,issue_date')
+      if (country) q = q.eq('country', country)
+      // Stable order on the primary key so paging never drops/repeats a row at a
+      // page boundary (PostgREST does not guarantee order across .range() pages
+      // without an ORDER BY). A missed key otherwise re-inserts and aborts the batch.
+      return q.order('id', { ascending: true }).range(from, from + size - 1)
+    },
+    (keys, r) => keys.add(tyreLifecycleKey(r)),
+  )
 }
 
 /** Lower-cased, trimmed key value for case/whitespace-insensitive matching. */
@@ -328,7 +360,9 @@ async function mergeRows(table, collapsed, seen, loadExisting, onProgress) {
  */
 export async function insertTyreRecords(rows = [], { onProgress, country } = {}) {
   const usable = rows.filter((r) => String(r.serial_no ?? '').trim() || String(r.asset_no ?? '').trim())
-  const seen = await existingTyreKeys(country).catch(() => new Set())
+  // Abort BEFORE any insert if the existence read failed: a silently-empty set
+  // treats every row as new and aborts the whole batch on a duplicate-key insert.
+  const seen = await existingTyreKeys(country)
   const { collapsed } = collapseByKey(usable, tyreLifecycleKey)
 
   // Replacement: a new fitment replaces the tyre already on that wheel. Earlier
@@ -404,7 +438,9 @@ export async function insertTyreRecords(rows = [], { onProgress, country } = {})
  * the global unique (23505). `country` is still accepted for signature compatibility.
  */
 export async function insertWorkOrders(rows = [], { onProgress, country } = {}) {
-  const seen = await existingKeys('work_orders', 'work_order_no').catch(() => new Set())
+  // Fail fast if the existence read fails (see existingKeys): proceeding with an
+  // empty set would re-insert every work order and abort on the global unique.
+  const seen = await existingKeys('work_orders', 'work_order_no')
   const { collapsed, noKey } = collapseByKey(rows, (r) => (r.work_order_no ? NORM(r.work_order_no) : ''))
   const loadExisting = async (overlapRows) => {
     const found = await fetchRowsByIn('work_orders', 'work_order_no', overlapRows.map((r) => r.work_order_no))
@@ -416,13 +452,32 @@ export async function insertWorkOrders(rows = [], { onProgress, country } = {}) 
   return { ...res, noKey, skipped: rows.length - res.inserted - res.updated }
 }
 
-/** Open-job-card snapshot -> open_work_orders. REPLACES this country's list only (so
- * other countries' open lists are untouched). */
+/**
+ * Open-job-card snapshot -> open_work_orders. REPLACES this country's list only.
+ *
+ * The delete and the insert are ONE transaction via the DEFINER RPC
+ * `replace_open_work_orders` (country-scoped, elevated-gated, PT409 on conflict):
+ * the client-side two-step below could delete the list and then fail mid-insert,
+ * leaving the open list empty. The RPC is drafted but may not be applied yet, so
+ * a NOT-PROVISIONED result falls back to the legacy two-step so the import keeps
+ * working; any other RPC error is surfaced, never silently retried.
+ */
 export async function replaceOpenWorkOrders(rows = [], { onProgress, country } = {}) {
+  if (onProgress) onProgress(0, rows.length)
+  const { data, error } = await supabase.rpc('replace_open_work_orders', {
+    p_country: country ?? null,
+    p_rows: rows,
+  })
+  if (!error) {
+    if (onProgress) onProgress(rows.length, rows.length)
+    return { inserted: Number(data?.inserted) || 0, failed: 0, skipped: 0, updated: 0, unchanged: 0 }
+  }
+  if (!isNotProvisioned(error)) throw toServiceError(error)
+  // RPC not deployed yet: legacy client-side delete-then-insert.
   let del = supabase.from('open_work_orders').delete()
   del = country ? del.eq('country', country) : del.not('id', 'is', null)
-  const { error } = await del
-  if (error) throw toServiceError(error)
+  const { error: delErr } = await del
+  if (delErr) throw toServiceError(delErr)
   const res = rows.length ? await insertChunked('open_work_orders', rows, onProgress) : { inserted: 0, failed: 0 }
   return { inserted: res.inserted, failed: res.failed || 0, skipped: 0, updated: 0, unchanged: 0 }
 }
@@ -433,7 +488,9 @@ export async function replaceOpenWorkOrders(rows = [], { onProgress, country } =
  * (org, country, asset_no) - the same asset code in another country is a different
  * machine, so the check is country-scoped. */
 export async function insertVehicleFleet(rows = [], { onProgress, country } = {}) {
-  const seen = await existingKeys('vehicle_fleet', 'asset_no', country).catch(() => new Set())
+  // Fail fast if the existence read fails (see existingKeys): proceeding with an
+  // empty set would re-insert every asset and abort on the (org, country, asset_no) unique.
+  const seen = await existingKeys('vehicle_fleet', 'asset_no', country)
   const { collapsed, noKey } = collapseByKey(rows, (r) => (r.asset_no ? NORM(r.asset_no) : ''))
   const loadExisting = async (overlapRows) => {
     const found = await fetchRowsByIn('vehicle_fleet', 'asset_no', overlapRows.map((r) => r.asset_no), { country })
@@ -464,7 +521,9 @@ const KEY_COL = {
 export async function countExistingRows(target, rows = [], { country } = {}) {
   const total = rows.length
   if (target === 'tyre_records') {
-    const seen = await existingTyreKeys(country).catch(() => new Set())
+    // Let a read failure PROPAGATE so the page records dup: null ("could not
+    // check") instead of a false all-new preview from a swallowed empty set.
+    const seen = await existingTyreKeys(country)
     let existing = 0
     const inFile = new Set()
     for (const r of rows) {
@@ -477,7 +536,8 @@ export async function countExistingRows(target, rows = [], { country } = {}) {
   }
   const col = KEY_COL[target]
   if (!col) return { total, existing: 0, fresh: total, keyed: false }
-  const seen = await existingKeys(target, col, country).catch(() => new Set())
+  // Let a read failure PROPAGATE so the page records dup: null ("could not check").
+  const seen = await existingKeys(target, col, country)
   let existing = 0
   const inFile = new Set()
   for (const r of rows) {

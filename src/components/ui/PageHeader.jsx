@@ -69,7 +69,7 @@ export default function PageHeader({
             onClick={handleBack}
             aria-label="Back to previous page"
             title="Back to previous page"
-            className="btn-secondary text-xs px-2.5 sm:px-3 py-1.5 flex items-center gap-1.5 shrink-0"
+            className="btn-secondary text-xs px-2.5 sm:px-3 py-1.5 flex items-center gap-1.5 shrink-0 tp-touch-target"
           >
             <ArrowLeft aria-hidden="true" className="w-4 h-4 rtl:rotate-180" />
             <span className="hidden sm:inline">Back</span>
@@ -107,7 +107,7 @@ export default function PageHeader({
             type="button"
             onClick={onRefresh}
             disabled={refreshing}
-            className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50"
+            className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50 tp-touch-target"
           >
             <RefreshCw aria-hidden="true" className={cn('w-3.5 h-3.5', refreshing && 'animate-spin')} />
             {refreshing ? t('common.loading') : t('common.refresh')}

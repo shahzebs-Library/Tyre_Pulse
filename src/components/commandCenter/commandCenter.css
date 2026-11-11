@@ -270,6 +270,10 @@ html.light .cc-hero-light { display: block; }
 .cc-search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--cc-ink-3); pointer-events: none; }
 .cc-search input { width: 100%; font-size: 13px; color: var(--cc-ink); background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 9px; padding: 9px 12px 9px 34px; outline: none; }
 html.light .cc-search input, html.light .cc-btn-ghost, html.light .cc-icon-btn { background: #fff; }
+/* Light mode: the outlined .cc-btn used --cc-green (#16a34a), only 3.30:1 on the
+   white card - below AA for text. --cc-green-strong (#15803d) reads at 5.02:1.
+   Scoped to light so the brighter dark-theme green (#22c55e, 8.11:1) is unchanged. */
+html.light .cc .cc-btn { color: var(--cc-green-strong); }
 .cc-search input:focus { border-color: var(--cc-green); }
 .cc-search input::placeholder { color: var(--cc-ink-3); }
 

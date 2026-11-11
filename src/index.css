@@ -643,6 +643,23 @@ html.tp-app-shell #root {
     top: 0;
     z-index: 5;
   }
+  /* The sort toggle inside a sortable .table-header. `all: unset` strips the
+     native button chrome so it inherits the header's font/colour and the header
+     looks unchanged, while remaining a real keyboard-focusable control. Mirrors
+     the cc-table th button pattern. */
+  .et-sort {
+    all: unset;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .et-sort:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
   .table-cell {
     @apply px-3.5 py-2.5 text-sm;
     color: var(--table-cell-text);
@@ -1251,6 +1268,29 @@ aside .text-gray-700 { color: #75817a; }
     height: max(100%, 44px);
     transform: translate(-50%, -50%);
   }
+  /* Same 44x44 hit-area expander applied to the kit buttons that are styled by
+     class (not by a React prop), so they can grow their touch target without
+     every call site passing tp-touch-target. The ::after is transparent and
+     absolutely positioned, so it changes neither the drawn size nor the layout
+     and clicks on it still land on the button. */
+  .tp-dialog-head button,
+  .cc-pager-nums button,
+  .cc-tab,
+  .cc-btn,
+  .cc-icon-btn { position: relative; }
+  .tp-dialog-head button::after,
+  .cc-pager-nums button::after,
+  .cc-tab::after,
+  .cc-btn::after,
+  .cc-icon-btn::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
 }
 html.light .text-slate-300   { color: #1e293b !important; }
 html.light .text-slate-400   { color: #475569 !important; }
@@ -1522,6 +1562,7 @@ html.light .console-root [class*="border-gray-800"],
 html.light .console-root [class*="border-gray-700"] { border-color: rgba(15,23,42,0.10) !important; }
 
 /* Muted labels / secondary text on the light shell. */
+html.light .console-root .text-gray-500 { color: #475569 !important; }
 html.light .console-root .text-gray-600 { color: #64748b !important; }
 html.light .console-root .text-gray-700 { color: #475569 !important; }
 

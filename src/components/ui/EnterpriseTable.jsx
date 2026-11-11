@@ -483,7 +483,7 @@ export default function EnterpriseTable({
             {typeof error === 'string' ? error : error?.message || 'Failed to load data'}
           </p>
           {onRetry && (
-            <button type="button" onClick={onRetry} className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5">
+            <button type="button" onClick={onRetry} className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5 tp-touch-target">
               <RotateCcw size={13} /> Retry
             </button>
           )}
@@ -523,24 +523,36 @@ export default function EnterpriseTable({
                             // left offset and overlap them.
                             pinned === 'left' ? 'sticky z-20'
                               : stickyFirstColumn && colIdx === 0 && 'sticky left-0 z-20',
-                            canSort && 'cursor-pointer select-none',
                             canResize && 'relative',
                           )}
-                          onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
                           aria-sort={sortDir === 'asc' ? 'ascending' : sortDir === 'desc' ? 'descending' : undefined}
-                          title={canSort ? 'Click to sort · Shift+Click for multi-sort' : undefined}
                         >
+                          {/* The sort toggle is an inner <button>, not a click on the
+                              <th>: a <th onClick> is unreachable by keyboard. The
+                              button inherits the header font via .et-sort (all:unset)
+                              so the header looks unchanged; aria-sort stays on the th. */}
                           <span className="inline-flex items-center gap-1">
-                            {header.isPlaceholder
-                              ? null
-                              : flexRender(header.column.columnDef.header, header.getContext())}
-                            {canSort && (
-                              sortDir === 'asc' ? <ChevronUp size={12} className="text-[var(--accent)]" />
-                              : sortDir === 'desc' ? <ChevronDown size={12} className="text-[var(--accent)]" />
-                              : <ChevronsUpDown size={12} className="opacity-40" />
-                            )}
-                            {sortDir && sorting.length > 1 && sortIndex > -1 && (
-                              <span className="text-[9px] font-bold text-[var(--accent)]">{sortIndex + 1}</span>
+                            {canSort ? (
+                              <button
+                                type="button"
+                                className="et-sort"
+                                onClick={header.column.getToggleSortingHandler()}
+                                title="Click to sort · Shift+Click for multi-sort"
+                              >
+                                {header.isPlaceholder
+                                  ? null
+                                  : flexRender(header.column.columnDef.header, header.getContext())}
+                                {sortDir === 'asc' ? <ChevronUp size={12} className="text-[var(--accent)]" />
+                                  : sortDir === 'desc' ? <ChevronDown size={12} className="text-[var(--accent)]" />
+                                  : <ChevronsUpDown size={12} className="opacity-40" />}
+                                {sortDir && sorting.length > 1 && sortIndex > -1 && (
+                                  <span className="text-[9px] font-bold text-[var(--accent)]">{sortIndex + 1}</span>
+                                )}
+                              </button>
+                            ) : (
+                              header.isPlaceholder
+                                ? null
+                                : flexRender(header.column.columnDef.header, header.getContext())
                             )}
                             {pinned === 'left' && <Pin size={10} className="text-[var(--accent)] opacity-70" />}
                           </span>
@@ -676,7 +688,7 @@ export default function EnterpriseTable({
                       type="button"
                       onClick={() => goToPage(effectivePageIndex - 1)}
                       disabled={effectivePageIndex === 0}
-                      className="btn-secondary py-1.5 px-3 disabled:opacity-40"
+                      className="btn-secondary py-1.5 px-3 disabled:opacity-40 tp-touch-target"
                       aria-label="Previous page"
                     >
                       <ChevronLeft size={16} />
@@ -688,7 +700,7 @@ export default function EnterpriseTable({
                       type="button"
                       onClick={() => goToPage(effectivePageIndex + 1)}
                       disabled={effectivePageIndex >= effectivePageCount - 1}
-                      className="btn-secondary py-1.5 px-3 disabled:opacity-40"
+                      className="btn-secondary py-1.5 px-3 disabled:opacity-40 tp-touch-target"
                       aria-label="Next page"
                     >
                       <ChevronRight size={16} />

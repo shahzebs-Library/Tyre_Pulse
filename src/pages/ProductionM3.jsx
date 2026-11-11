@@ -40,7 +40,9 @@ export default function ProductionM3() {
           { key: 'mix_code', header: 'Mix' },
           { key: 'm3', header: 'Supplied', align: 'right', kind: 'int' },
           { key: 'approved_m3', header: 'Approved', align: 'right', kind: 'int',
-            render: (r) => intCell(r.approved_m3 ?? r.m3) },
+            // Approved/Signed Qty only - a blank reads N/A, never the supplied m3
+            // (V523: substituting supplied counts concrete nobody signed for).
+            render: (r) => intCell(r.approved_m3) },
           { key: 'rejected', header: 'Rejected', render: (r) => (r.rejected ? 'Yes' : 'No') },
           { key: 'reason', header: 'Reason' },
         ]}

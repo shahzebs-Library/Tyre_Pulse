@@ -28,6 +28,7 @@ Always optimize for:
 * Bullet points only.
 * No long explanations or stories.
 * Keep it short.
+* Just do the work. Do not narrate steps or dump detail. Act, then report in a few bullets.
 
 ---
 

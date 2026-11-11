@@ -26,15 +26,19 @@ const MAX_BACKOFF_MS = 8000
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-/** A fatal (won't-fix-itself) error: permission / RLS / validation. Everything else
- * (network drop, timeout, 5xx, proxy reset) is transient and worth deferring + retrying. */
+/** A fatal (won't-fix-itself) error: permission / RLS / validation, or a Postgres
+ * statement timeout (57014). A statement timeout here is deterministic - the same
+ * insert re-runs the same slow scan, so retrying it 6x + the deferred sweep only
+ * burns time before the same failure. Fail fast instead. Everything else (network
+ * drop, 5xx, proxy reset) is transient and worth deferring + retrying. */
 function isFatalInsertError(error) {
   const msg = String(error?.cause?.message ?? error?.message ?? '').toLowerCase()
   const code = String(error?.code || '').toLowerCase()
   return (
     msg.includes('permission') || msg.includes('violates') || msg.includes('policy') ||
     msg.includes('duplicate key') || msg.includes('invalid input') || msg.includes('check constraint') ||
-    code === '42501' || code === '23505' || code === '22p02' || code === '23514'
+    msg.includes('statement timeout') || msg.includes('canceling statement') ||
+    code === '42501' || code === '23505' || code === '22p02' || code === '23514' || code === '57014'
   )
 }
 

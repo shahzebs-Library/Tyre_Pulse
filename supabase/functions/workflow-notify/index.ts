@@ -229,6 +229,31 @@ async function revokeDeadFcmToken(token: string): Promise<void> {
   } catch { /* best effort */ }
 }
 
+const FCM_AUTH_FAIL_LIMIT = 5
+// THIRD_PARTY_AUTH_ERROR is a project/app credential mismatch, not a dead token, so it is counted rather than
+// revoked at once; after FCM_AUTH_FAIL_LIMIT consecutive failures the device is revoked so the count stops inflating.
+// Needs migration 20261110144000_user_devices_fail_count.sql; without the column the update errors and is ignored.
+async function noteFcmAuthFailure(token: string): Promise<void> {
+  try {
+    const url = Deno.env.get('SUPABASE_URL'); const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    if (!url || !key) return
+    const admin = createClient(url, key)
+    const { data } = await admin.from('user_devices').select('fail_count').eq('push_token', token).maybeSingle()
+    const next = ((data as { fail_count?: number } | null)?.fail_count ?? 0) + 1
+    await admin.from('user_devices').update({
+      fail_count: next, last_fail_at: new Date().toISOString(), ...(next >= FCM_AUTH_FAIL_LIMIT ? { revoked: true } : {}),
+    }).eq('push_token', token)
+  } catch { /* best effort */ }
+}
+
+async function resetFcmFailures(token: string): Promise<void> {
+  try {
+    const url = Deno.env.get('SUPABASE_URL'); const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    if (!url || !key) return
+    await createClient(url, key).from('user_devices').update({ fail_count: 0 }).eq('push_token', token).gt('fail_count', 0)
+  } catch { /* best effort */ }
+}
+
 async function sendFcm(recipients: Recipient[], msg: { title: string; body: string }, payload: NotifyPayload, skipped: string[]): Promise<number> {
   const tokens = Array.from(new Set(recipients.map(r => (r.push_token || '').trim()).filter(isFcmToken)))
   if (!tokens.length) return 0
@@ -255,14 +280,17 @@ async function sendFcm(recipients: Recipient[], msg: { title: string; body: stri
           android: { priority: 'HIGH', notification: { channel_id: 'alerts', sound: 'default' } },
         } }),
       })
-      if (res.ok) { sent++; receipts.push({ channel: 'fcm', token, status: 'accepted' }); return }
+      if (res.ok) { sent++; receipts.push({ channel: 'fcm', token, status: 'accepted' }); await resetFcmFailures(token); return }
       const err = await res.json().catch(() => ({})) as { error?: { status?: string; message?: string; details?: Array<{ errorCode?: string }> } }
       const code = err.error?.details?.find(d => d.errorCode)?.errorCode || err.error?.status || `HTTP ${res.status}`
       skipped.push(`push(fcm ${token.slice(0, 12)}...): ${code}`)
       if (code === 'UNREGISTERED' || (res.status === 404) || (code === 'INVALID_ARGUMENT' && /registration token/i.test(err.error?.message || ''))) {
         await revokeDeadFcmToken(token)
         receipts.push({ channel: 'fcm', token, status: 'invalid_token', error: code })
-      } else { receipts.push({ channel: 'fcm', token, status: 'failed', error: code }) }
+      } else {
+        if (code === 'THIRD_PARTY_AUTH_ERROR') await noteFcmAuthFailure(token)
+        receipts.push({ channel: 'fcm', token, status: 'failed', error: code })
+      }
     } catch (e) { skipped.push(`push(fcm ${token.slice(0, 12)}...): ${errMsg(e)}`); receipts.push({ channel: 'fcm', token, status: 'failed', error: errMsg(e) }) }
   }
   // Bounded concurrency: 10 requests in flight.

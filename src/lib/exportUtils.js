@@ -2,6 +2,10 @@ import { formatCurrencyCompact, formatDate } from './formatters.js'
 import { configBool, configNum } from './api/systemConfig.js'
 import { assertExportAllowed } from './exportCapability.js'
 import { loadAutoTable } from './pdfEngine'
+// One definition of how a signer is named on a document: "Full Name (EMP-ID)",
+// never a raw login email and never a UUID. Every sign-off render in this file
+// goes through it, so a report can never print a credential in place of a name.
+import { signerDisplay } from './signerDisplay.js'
 // One definition of "what the inspector recorded", shared with the on-screen
 // viewer. Keeping a private copy here is exactly how the report and the screen
 // would start disagreeing about a reading somebody signed off.
@@ -1764,11 +1768,31 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     row.odometer_km != null && row.odometer_km !== '' ? `${Number(row.odometer_km).toLocaleString('en-US')} km` : null,
     row.hour_meter != null && row.hour_meter !== '' ? `${Number(row.hour_meter).toLocaleString('en-US')} hrs` : null,
   ].filter(Boolean).join('  |  ') || 'No meter reading'
+  // The signer identities, resolved to "Full Name (EMP-ID)". `opts.signers` carries
+  // the profile the caller already looked up (approver = approved_by, inspector =
+  // created_by); when it is absent we fall back to the row's own fields THROUGH
+  // signerDisplay, which drops a login email or a UUID rather than printing it.
+  const inspectorName = signerDisplay(
+    opts.signers?.inspector ?? {
+      full_name: row.inspector_name, name: row.inspector || row.attendees,
+      employee_id: row.inspector_employee_id, id: row.created_by,
+    },
+    { fallback: null },
+  )
+  const approverName = isApproved
+    ? signerDisplay(
+        opts.signers?.approver ?? {
+          full_name: row.approver_name, employee_id: row.approver_employee_id,
+          email: row.approver_email, id: row.approved_by,
+        },
+        { fallback: null },
+      )
+    : null
   const details = [
     ['Asset No.', row.asset_no || 'N/A'],
     ['Site', row.site || 'N/A'],
     ['Vehicle Type', row.vehicle_type || 'N/A'],
-    ['Tyreman', row.inspector || row.attendees || 'N/A'],
+    ['Tyreman', inspectorName || 'N/A'],
     ['Status / Meters', null],
     ['Inspection Date', ordinal(opts.inspectionNo) ? `${inspDay}  |  ${ordinal(opts.inspectionNo)} inspection of this vehicle` : inspDay],
   ]
@@ -2289,8 +2313,9 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   }
   const tyremanSig  = await toSigPng(row.inspector_signature)
   const approverSig = await toSigPng(row.approver_signature)
-  const approverName = row.approver_name || row.approver_email ||
-    (row.approved_by && !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(row.approved_by) ? row.approved_by : null)
+  // approverName / inspectorName are resolved above (Vehicle Details), the ONE
+  // place that decides how a signer is named - "Full Name (EMP-ID)", never a
+  // login email and never a UUID.
 
   y = ensure(y, 48)
   y = _insSection(doc, 'Sign-off', y, mx, accent) + 1
@@ -2318,10 +2343,10 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     doc.setFontSize(6.8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
     doc.text(dateLbl, x + 4, y + 32.2)
   }
-  drawSig(mx, 'Tyreman Signature', tyremanSig, row.inspector || row.attendees || null, `Inspected: ${inspDay}`)
+  drawSig(mx, 'Tyreman Signature', tyremanSig, inspectorName, `Inspected: ${inspDay}`)
   drawSig(mx + sigW + 5, 'Approver Signature',
     isApproved ? approverSig : null,
-    isApproved ? approverName : null,
+    approverName,
     isApproved ? `Approved: ${_insDate(row.approved_at)}` : isRejected ? 'Sign-off rejected' : 'Approval pending')
   y += sigH + 4
 

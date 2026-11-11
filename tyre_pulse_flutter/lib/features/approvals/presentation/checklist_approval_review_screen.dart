@@ -276,8 +276,19 @@ class _ChecklistApprovalReviewScreenState
     if (info == null || _stage == null) {
       return const <ChecklistApprovalBlockingAnswer>[];
     }
+    // The one-sign close preview must use the viewer's role, or a role that
+    // closes a two-stage sheet in one sign (area / PMV manager / admin) would
+    // skip the blocking-answer check and the server would refuse the close.
+    final workspace = ref.read(workspaceContextProvider);
     final bool closing =
-        nextStatusFor(_templateLike, item.asSubmissionLike, true) == 'approved';
+        nextStatusFor(
+          _templateLike,
+          item.asSubmissionLike,
+          true,
+          role: workspace?.role.rawValue,
+          isSuperAdmin: workspace?.isSuperAdmin ?? false,
+        ) ==
+        'approved';
     if (!closing) return const <ChecklistApprovalBlockingAnswer>[];
     return info.blockingAnswers(item.answers);
   }
@@ -487,7 +498,14 @@ class _ChecklistApprovalReviewScreenState
       legendBlocking: info?.legendBlocking ?? const <String>[],
     );
     final bool closing =
-        nextStatusFor(_templateLike, item.asSubmissionLike, true) == 'approved';
+        nextStatusFor(
+          _templateLike,
+          item.asSubmissionLike,
+          true,
+          role: workspace?.role.rawValue,
+          isSuperAdmin: workspace?.isSuperAdmin ?? false,
+        ) ==
+        'approved';
     final bool canApprove =
         _approverSignature != null && _nameController.text.trim().isNotEmpty;
 

@@ -78,6 +78,41 @@ export function fitmentKm(row, opts = {}) {
   return a.status === 'measured' || a.status === 'factory' ? a.km : null
 }
 
+/**
+ * THE one per-fitment cost per km. One row's own price over one stint's measured km,
+ * both by the single tyreKm rule (placeholder "1" -> unknown, factory "0" -> real,
+ * over-class-cap -> unknown). null when the price is missing/<=0 or the km is not
+ * measurable - never a flattering 0 and never computed from a raw km_at_removal -
+ * km_at_fitment that ignores the placeholder/cap rules.
+ *
+ * Replaces the divergent copies (costCenterAnalytics.calcCpk defaulted a missing
+ * fitment km to 0, analyticsEngine.recordCpk read a factory 0 as missing,
+ * opsIntelligence.tyreCpk used raw total_km). Pass opts.vehicleClass for the cap
+ * fallback when the row has no vehicle_type. For a COLLAPSED physical tyre's
+ * lifetime cost per km use lifetimeCpk/fullLifetimeCpk instead.
+ */
+export function fitmentCpk(row, opts = {}) {
+  const cost = Number(row?.cost_per_tyre)
+  if (!Number.isFinite(cost) || cost <= 0) return null
+  const km = fitmentKm(row, opts)
+  if (km == null || km <= 0) return null
+  return cost / km
+}
+
+/**
+ * THE one cost-per-km formatter. 4 decimals (CPK is a small per-km figure), the
+ * currency ahead of the value, the unit after it; "N/A" for null / non-finite,
+ * never "0.0000". Replaces the ~20 local fmtCpk copies with divergent precision.
+ * @param {number|null} value
+ * @param {string} [currency]  e.g. 'SAR'; '' omits it
+ * @param {string} [unit]      'km' (default) or 'hr'
+ */
+export function fmtCpk(value, currency = '', unit = 'km') {
+  if (value == null || !Number.isFinite(Number(value))) return 'N/A'
+  const cur = currency ? `${currency} ` : ''
+  return `${cur}${Number(value).toFixed(4)}/${unit}`
+}
+
 const dateOf = (r) => String(r?.issue_date ?? r?.fitment_date ?? '').slice(0, 10)
 
 /**

@@ -32,6 +32,10 @@ const CODE_MESSAGES = {
 
 const PERMISSION_MESSAGE = 'You do not have permission to do that.'
 const NETWORK_MESSAGE = 'Network error. Check your connection.'
+// A Postgres statement timeout (57014) is a SERVER-side limit, not the user's
+// connection, so it must never read as "check your connection".
+const SERVER_BUSY_MESSAGE = 'The server took too long and stopped the request. Try a smaller file, or try again in a moment.'
+const SERVER_TIMEOUT_MARKERS = ['statement timeout', 'canceling statement']
 
 // Substrings that indicate the message came from the database / PostgREST layer
 // and therefore must never be echoed back to the user verbatim.
@@ -137,7 +141,14 @@ export function toUserMessage(err, fallback = DEFAULT_FALLBACK) {
     return PERMISSION_MESSAGE
   }
 
-  // 3) Network / transport failures.
+  // 3) A server statement timeout is not a client connectivity problem - map it to
+  //    a clear "server took too long" before the generic network markers (which
+  //    include "timeout") would mislabel it "check your connection".
+  if (code === '57014' || includesAny(combined, SERVER_TIMEOUT_MARKERS)) {
+    return SERVER_BUSY_MESSAGE
+  }
+
+  // 4) Network / transport failures.
   if (includesAny(combined, NETWORK_MARKERS)) {
     return NETWORK_MESSAGE
   }

@@ -13,7 +13,12 @@ import { supabase, isMissingRelation, toServiceError, isNotProvisioned } from '.
 import { PARTS_FIELDS } from '../partsExpense'
 import { parseDate } from '../erpIntake'
 
-const INSERT_CHUNK = 200
+// Small chunks on purpose: the expense re-upload guard runs a per-row check over
+// the whole parts_consumption table, so a LARGE insert statement can exceed the
+// Postgres statement timeout until the hash index (pending_migrations/
+// 20261112110000) is applied. 50 keeps each statement well under the timeout so a
+// big grid upload completes; raise back to 200 once that index is live.
+const INSERT_CHUNK = 50
 // Chunks in flight at once. This path is latency-bound, so this is the single
 // biggest lever on upload time. Kept deliberately low: each row fires the
 // classification trigger, so concurrency multiplies peak database write load by
@@ -26,19 +31,20 @@ const MAX_BACKOFF_MS = 8000
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-/** A fatal (won't-fix-itself) error: permission / RLS / validation, or a Postgres
- * statement timeout (57014). A statement timeout here is deterministic - the same
- * insert re-runs the same slow scan, so retrying it 6x + the deferred sweep only
- * burns time before the same failure. Fail fast instead. Everything else (network
- * drop, 5xx, proxy reset) is transient and worth deferring + retrying. */
+/** A fatal (won't-fix-itself) error: permission / RLS / validation. A statement
+ * timeout is NOT fatal: with the small INSERT_CHUNK above each statement usually
+ * finishes under the server timeout, and a chunk that still times out under load
+ * can succeed on retry, so it is deferred + retried like any transient error - that
+ * is what lets a large grid upload complete and make progress until the re-upload
+ * guard hash index lands. Everything else (network drop, 5xx, proxy reset) is
+ * transient too. */
 function isFatalInsertError(error) {
   const msg = String(error?.cause?.message ?? error?.message ?? '').toLowerCase()
   const code = String(error?.code || '').toLowerCase()
   return (
     msg.includes('permission') || msg.includes('violates') || msg.includes('policy') ||
     msg.includes('duplicate key') || msg.includes('invalid input') || msg.includes('check constraint') ||
-    msg.includes('statement timeout') || msg.includes('canceling statement') ||
-    code === '42501' || code === '23505' || code === '22p02' || code === '23514' || code === '57014'
+    code === '42501' || code === '23505' || code === '22p02' || code === '23514'
   )
 }
 

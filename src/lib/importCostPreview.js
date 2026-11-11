@@ -15,9 +15,13 @@
  *   - Expense lines with a distinct ERP line number ('#') are never duplicates of each
  *     other: genuine repeated lines carry different line numbers (V365 rule), so the
  *     line number is folded into the duplicate key.
- *   - Monthly tyre rows carry no price and no item code. They are never priced from
- *     the index (size alone must not match two products), so they preview as
- *     Cost Pending Verification.
+ *   - Monthly tyre rows carry no price and no item code. Tyre cost comes from the
+ *     separate expense grid, never per serial from this file, and the index never
+ *     prices them (size alone must not match two products). So a monthly-tyre row
+ *     whose only flag is a missing price previews as VALID - a complete fitment -
+ *     not as Cost Pending Verification. Genuine invalid / duplicate rows are still
+ *     held. (The grid and manual/intake tyre paths keep cost_pending: there a
+ *     missing price is a real gap to chase.)
  */
 import { parseDate } from './erpIntake'
 import { toNum } from './partsExpense'
@@ -130,10 +134,19 @@ export function buildImportPreview(kind, rows = [], opts = {}) {
     ? buildPriceIndex([...(opts.dbLines || []), ...fileLinesForIndex(audit, country)])
     : null
   const checks = validateUploadRows(audit, { priceIndex, country, currency: opts.currency })
-  const rowsOut = checks.map((c, i) => ({
-    ...c, index: i, description: audit[i].description, itemCode: audit[i].itemCode,
-    date: audit[i].date, label: RESULT_LABELS[c.result] || c.result,
-  }))
+  const rowsOut = checks.map((c, i) => {
+    // The Monthly Tyres Consumption report carries NO price by design: tyre cost
+    // comes from the separate expense grid, never per serial from this file. A row
+    // whose ONLY flag is "cost pending" is a complete fitment record, so for this
+    // kind it imports as Valid and must not read as pending. Genuine problems
+    // (invalid / duplicate) are left exactly as the engine classified them. The grid
+    // and manual/intake tyre paths keep cost_pending, where a missing price is real.
+    const result = kind === 'monthly_tyres' && c.result === 'cost_pending' ? 'valid' : c.result
+    return {
+      ...c, result, index: i, description: audit[i].description, itemCode: audit[i].itemCode,
+      date: audit[i].date, label: RESULT_LABELS[result] || result,
+    }
+  })
   const counts = {}
   for (const c of rowsOut) counts[c.result] = (counts[c.result] || 0) + 1
   const excluded = rowsOut.filter((c) => EXCLUDED_RESULTS.includes(c.result))

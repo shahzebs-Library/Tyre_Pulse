@@ -83,16 +83,21 @@ describe('expense grid preview', () => {
 
 describe('monthly tyre preview', () => {
   const tr = (o = {}) => ({ serial_no: 'S1', asset_no: 'TM1', position: 'LHF1', size: '315/80R22.5', issue_date: '2026-03-01', job_card: 'JC1', ...o })
-  it('previews tyres as Cost Pending Verification and never prices them by size', () => {
+  it('previews a complete fitment as Valid, never Cost Pending, and never prices by size', () => {
+    // Cost for the Monthly Tyres file comes from the separate expense grid, so a
+    // priceless-but-complete tyre row must read Valid, not pending. It is still
+    // never priced from the index (even when a same-size grid price exists).
     const p = buildImportPreview('monthly_tyres', [tr(), tr({ serial_no: 'S2', position: 'RHF1' })], { country: 'KSA', dbLines: [{ id: 'x', country: 'KSA', itemCode: '315/80R22.5', date: '2026-03-01', description: 'TYRE 315/80R22.5', value: 900, qty: 1 }] })
-    expect(p.rows.map((r) => r.result)).toEqual(['cost_pending', 'cost_pending'])
+    expect(p.rows.map((r) => r.result)).toEqual(['valid', 'valid'])
+    expect(p.counts.cost_pending ?? 0).toBe(0)
+    expect(p.rows.every((r) => r.label === 'Valid')).toBe(true)
     expect(p.rows.every((r) => r.proposed == null)).toBe(true)
     expect(p.reconciliation).toBeNull()
   })
-  it('a repeated tyre row is a duplicate; a row with no date is invalid', () => {
+  it('a repeated tyre row is a duplicate; a row with no date is invalid; a clean row is valid', () => {
     const rows = [tr(), tr(), tr({ serial_no: 'S3', issue_date: null, removal_date: null })]
     const p = buildImportPreview('monthly_tyres', rows, { country: 'KSA' })
-    expect(p.rows.map((r) => r.result)).toEqual(['cost_pending', 'duplicate', 'invalid'])
+    expect(p.rows.map((r) => r.result)).toEqual(['valid', 'duplicate', 'invalid'])
     expect(committableRows(rows, p)).toEqual([rows[0]])
   })
 })

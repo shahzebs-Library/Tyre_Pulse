@@ -22,7 +22,6 @@ import 'package:tyre_pulse/features/approvals/data/checklist_approval_item.dart'
 import 'package:tyre_pulse/features/approvals/data/checklist_approval_repository.dart';
 import 'package:tyre_pulse/features/approvals/data/checklist_approval_template_info.dart';
 import 'package:tyre_pulse/features/approvals/presentation/checklist_approval_review_screen.dart';
-import 'package:tyre_pulse/features/profile/data/saved_signature_repository.dart';
 import 'package:tyre_pulse/features/profile/profile_providers.dart';
 
 // An Admin closes a two-stage sheet in one sign (owner rule 2026-11-08), so this

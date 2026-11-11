@@ -56,9 +56,13 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   docs/runbooks/DR_RUNBOOK.md (owner supplies PITR tier/retention + the google-services.json vs FIREBASE_SERVICE_ACCOUNT project check).
 - **F-K-02 push half (20261110144000).** `user_devices.fail_count`/`last_fail_at`; `workflow-notify` counts `THIRD_PARTY_AUTH_ERROR` per
   device + revokes after 5 (resets on success). CODE COMMITTED, **edge fn NOT REDEPLOYED** (deploy in a later wave).
-- **F-H-01/02 Flutter offline sync (Dart, CI-verified).** `queued_command_repository` exempts `_expectedPriorStatus` from the allow-list
-  filter at enqueue; `sync_engine` substitutes each `photos` local path with its media `remoteRef` before push (unresolved -> retryable
-  media error, not validation). No Play build. flutter-ci dispatched after push.
+- **HELD: F-H-01/02 Flutter offline sync** -> reverted from PR #485 (Codex P1). The drafted fix edits
+  `lib/core/sync/queued_command_repository.dart` + `lib/core/sync/sync_engine.dart`, two of the SEVEN reserved wiring files
+  `tyre_pulse_flutter/AGENTS.md` forbids ANY agent to touch ("even a change that looks purely mechanical ... a human makes it";
+  tests do not waive it). Intended fix (for a human): at enqueue, exempt `_expectedPriorStatus` from the allow-list filter;
+  at push, substitute each `photos` local path with its media `remoteRef` (unresolved -> retryable media error, not validation).
+  Draft preserved in branch history at `c9a4932f` for the human to cherry-pick/re-author. The media_dao `remoteRefFor` helper +
+  `SyncErrorClass.media` retryable (non-reserved files) were reverted with it to avoid dead half-wiring.
 - **HELD: F-K-04 profiles PII** -> `supabase/pending_migrations/20261110147000_profiles_pii_read.sql` (NOT applied, out of migrations/).
   Narrowing `profiles_select` app-wide blanks non-elevated member name reads (Flutter "assigned by <name>", pickers, workforce recommend,
   broadcast audience) unless a `security_invoker=OFF`, org-scoped, PII-free directory (the first sanctioned non-invoker view) + service

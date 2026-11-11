@@ -1,8 +1,10 @@
 -- F-F-07 - the cross-country expense guard labels its rejects 'country_mismatch'.
 --
--- STATUS: DRAFT - NOT APPLIED (Supabase MCP was down when this was written). The lead
---   applies it via apply_migration and runs the rolled-back probe below BEFORE trusting it.
---   On apply, move this file to supabase/migrations/ keeping the same stamp.
+-- STATUS: APPLIED 2026-11-11. Verified live, rolled back: 69 historical country-mismatch
+--   rejects backfilled (0 left unlabelled); a cross-country line (RM* uploaded as KSA) is
+--   skipped and labelled reject_reason='country_mismatch' detected_country='UAE', and a
+--   matching line (GCKR* uploaded as KSA) still lands. The live guard was the V491 body
+--   (no reject_reason), trigger trg_aa_expense_country_guard kept via CREATE OR REPLACE.
 --
 -- WHY. expense_country_guard() (V491) skips an expense line whose job-card prefix names a
 --   different country than it is uploaded under (RM -> UAE, EG -> Egypt, AFKR/GCKR -> KSA),

@@ -1,9 +1,17 @@
 -- F-F-05 - the expense re-upload dedupe must run AFTER the org-stamp (and after
 --          every other BEFORE trigger), so it dedupes the FINAL, stamped row.
 --
--- STATUS: DRAFT - NOT APPLIED (Supabase MCP was down when this was written). The lead
---   applies it via apply_migration and runs the rolled-back probe below BEFORE trusting it.
---   On apply, move this file to supabase/migrations/ keeping the same stamp.
+-- STATUS: APPLIED 2026-11-11. Verified live, rolled back: the BEFORE triggers now fire
+--   trg_aa_expense_country_guard -> trg_ab_uae_building_guard -> trg_classify_parts_consumption
+--   -> trg_normalize_asset_code -> trg_normalize_site -> trg_stamp_import_default_org ->
+--   trg_zz_dedupe_expense_reupload (dedupe last, no trg_dedupe_* remains); an org-provided
+--   re-upload is still skipped + logged 'already_stored' (behaviour preserved).
+--
+-- ASIDE (pre-existing, NOT fixed here): a true organisation_id=NULL service/dashboard insert
+--   fails earlier in trg_classify_parts_consumption, which writes brain_cache with the row's
+--   org (NOT NULL) and runs BEFORE trg_stamp_import_default_org fills it - so that NULL-org
+--   path never reaches the dedupe at all. Real imports evidently arrive with org set. The
+--   classify-before-stamp ordering is a separate finding if NULL-org imports are ever needed.
 --
 -- WHY. expense_reupload_guard() (20261111109000) dedupes a fresh line against stored lines
 --   on ten columns with `IS NOT DISTINCT FROM`, INCLUDING organisation_id. BEFORE triggers

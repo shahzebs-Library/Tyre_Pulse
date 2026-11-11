@@ -1,8 +1,10 @@
 -- Expense re-upload guard: index the content dedupe so a big grid upload no longer times out.
 --
--- STATUS: DRAFT - NOT APPLIED (Supabase MCP was down when this was written). The lead
---   applies it via apply_migration and runs the rolled-back probe below BEFORE trusting it.
---   On apply, move this file to supabase/migrations/ keeping the same stamp.
+-- STATUS: APPLIED 2026-11-11 (ledger version 20261111141914). Verified live, rolled back:
+--   218,605 rows all hashed (0 null); the guard lookup is now a Bitmap Index Scan on
+--   idx_parts_reupload_hash (1.9ms vs a 218k-row seq scan); 0 live rows contain the chr(30)/
+--   chr(31) separators, so the null-safe hash == the old ten-column IS NOT DISTINCT FROM; a
+--   content-duplicate upload is skipped + logged 'already_stored' and a genuinely-new line lands.
 --
 -- PROBLEM (owner-reported 2026-11-11: "ERP intake takes time to upload then it's failed"):
 --   20261111109000 added expense_reupload_guard() as a BEFORE INSERT trigger whose body runs,

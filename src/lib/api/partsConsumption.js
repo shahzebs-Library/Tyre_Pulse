@@ -13,12 +13,12 @@ import { supabase, isMissingRelation, toServiceError, isNotProvisioned } from '.
 import { PARTS_FIELDS } from '../partsExpense'
 import { parseDate } from '../erpIntake'
 
-// Small chunks on purpose: the expense re-upload guard runs a per-row check over
-// the whole parts_consumption table, so a LARGE insert statement can exceed the
-// Postgres statement timeout until the hash index (pending_migrations/
-// 20261112110000) is applied. 50 keeps each statement well under the timeout so a
-// big grid upload completes; raise back to 200 once that index is live.
-const INSERT_CHUNK = 50
+// The expense re-upload guard's per-row content check is now an index probe on
+// idx_parts_reupload_hash (migration 20261112110000, applied 2026-11-11), not a seq
+// scan over the whole parts_consumption table, so a normal-sized insert statement
+// stays well under the Postgres statement timeout. Back to 200. The 57014 deferred-
+// retry handling below stays as a safety net for an upload under heavy load.
+const INSERT_CHUNK = 200
 // Chunks in flight at once. This path is latency-bound, so this is the single
 // biggest lever on upload time. Kept deliberately low: each row fires the
 // classification trigger, so concurrency multiplies peak database write load by
@@ -32,12 +32,10 @@ const MAX_BACKOFF_MS = 8000
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 /** A fatal (won't-fix-itself) error: permission / RLS / validation. A statement
- * timeout is NOT fatal: with the small INSERT_CHUNK above each statement usually
- * finishes under the server timeout, and a chunk that still times out under load
- * can succeed on retry, so it is deferred + retried like any transient error - that
- * is what lets a large grid upload complete and make progress until the re-upload
- * guard hash index lands. Everything else (network drop, 5xx, proxy reset) is
- * transient too. */
+ * timeout is NOT fatal: each chunk's inserts clear the server timeout comfortably now
+ * the re-upload guard uses the hash index, and a chunk that still times out under
+ * heavy load can succeed on retry, so it is deferred + retried like any transient
+ * error. Everything else (network drop, 5xx, proxy reset) is transient too. */
 function isFatalInsertError(error) {
   const msg = String(error?.cause?.message ?? error?.message ?? '').toLowerCase()
   const code = String(error?.code || '').toLowerCase()

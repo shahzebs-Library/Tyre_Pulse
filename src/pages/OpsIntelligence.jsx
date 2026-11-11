@@ -125,7 +125,15 @@ export default function OpsIntelligence() {
   useEffect(() => {
     let cancelled = false
     setCostSplit(null)
-    loadGovernedCostSplit({ country: activeCountry, maxAgeMs: COST_SPLIT_TTL_MS })
+    // YTD window (current-year start -> today, LOCAL dates) so the governed total
+    // matches the current-year budget period buildFinancials compares it against.
+    // The default trailing-12-month window would pull last December into this year
+    // and overstate budget consumption. Local getters, never toISOString (UTC).
+    const today = new Date()
+    const pad = (n) => String(n).padStart(2, '0')
+    const from = `${today.getFullYear()}-01-01`
+    const to = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
+    loadGovernedCostSplit({ country: activeCountry, from, to, maxAgeMs: COST_SPLIT_TTL_MS })
       .then((res) => { if (!cancelled) setCostSplit(res) })
       .catch(() => { if (!cancelled) setCostSplit(null) })
     return () => { cancelled = true }

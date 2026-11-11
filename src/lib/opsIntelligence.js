@@ -709,8 +709,13 @@ export function buildFinancials({ budgets = [], tyres = [] } = {}, opts = {}) {
   // carry no price). When the grid is not available for the scope, fall back to a
   // PRICED TYRE RECORDS figure with a refit collapsed to one price (rule T1), and
   // say which basis was used so the screen can label it.
-  const gridTyre = Number(opts.gridTyreSpend)
-  const hasGrid = Number.isFinite(gridTyre) && gridTyre >= 0
+  // Number(null) is 0 (and finite), so convert only AFTER a null/undefined guard -
+  // otherwise a pending, failed or unavailable grid (gridTyreSpend == null) would
+  // read as a real zero, suppress the priced-record fallback, and show a country
+  // with real spend as zero YTD. A genuine numeric 0 (0 != null) is still accepted.
+  const rawGrid = opts.gridTyreSpend
+  const gridTyre = Number(rawGrid)
+  const hasGrid = rawGrid != null && Number.isFinite(gridTyre) && gridTyre >= 0
   const pricedYtd = withOnePricePerTyre(tyreList).reduce((acc, r) => {
     const d = r?.issue_date || r?.fitment_date
     return inYear(d, year) ? acc + (num(r?.cost_per_tyre) || 0) : acc

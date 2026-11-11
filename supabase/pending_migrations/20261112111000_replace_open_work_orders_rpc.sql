@@ -16,11 +16,15 @@
 --
 -- SECURITY. SECURITY DEFINER, pinned search_path. Gated by app_is_elevated() AND
 -- app_can_see_country(p_country): a country-scoped user can only replace a list for
--- a country they can see. Each row's country is FORCED to p_country server-side, so
--- a mislabelled row cannot cross the boundary, and identity/timestamp/tenancy columns
--- are stripped from the payload so the table's own defaults + the stamp-org trigger
--- apply. jsonb_populate_recordset coerces each cell to the real column type, so this
--- stays correct whatever the declared types of job_card_date / days_open are.
+-- a country they can see. The function is DEFINER (RLS does not run inside it), so
+-- BOTH the delete and the insert are scoped to the CALLER's organisation
+-- (app_current_org()); a caller can never delete or replace another tenant's open
+-- list, even one in a country they can see. Each row's country is FORCED to
+-- p_country and its organisation to the caller's org server-side, so a mislabelled
+-- row cannot cross either boundary; identity/timestamp columns are stripped from the
+-- payload so the table's own defaults apply. jsonb_populate_recordset coerces each
+-- cell to the real column type, so this stays correct whatever the declared types
+-- of job_card_date / days_open are.
 --
 -- NEVER 40001. A conflict (unique or serialization) is raised as PT409 (HTTP 409,
 -- which PostgREST does NOT auto-retry); 40001 would make PostgREST retry forever.
@@ -38,6 +42,7 @@ set search_path to 'public'
 as $fn$
 declare
   v_country  text := nullif(btrim(p_country), '');
+  v_org      uuid := public.app_current_org();
   v_rows     jsonb;
   v_deleted  integer := 0;
   v_inserted integer := 0;
@@ -47,6 +52,11 @@ begin
   end if;
   if v_country is null then
     raise exception 'A country is required to replace the open job card list' using errcode = '22023';
+  end if;
+  if v_org is null then
+    -- No tenant in context (e.g. a service_role call with no profile). A tenant-scoped
+    -- replace is impossible without one, so refuse rather than touch every org's rows.
+    raise exception 'No organisation in context to replace the open job card list' using errcode = '42501';
   end if;
   if public.app_can_see_country(v_country) is not true then
     raise exception 'Not permitted for country %', v_country using errcode = '42501';
@@ -63,14 +73,16 @@ begin
     where jsonb_typeof(elem) = 'object'
   );
 
-  -- Atomic snapshot replace for THIS country only (null-country rows untouched).
-  delete from public.open_work_orders where country = v_country;
+  -- Atomic snapshot replace for THIS tenant's rows in THIS country only. DEFINER
+  -- bypasses RLS, so the organisation predicate is what keeps the delete inside the
+  -- caller's tenant; other orgs' and null-country rows are untouched.
+  delete from public.open_work_orders where organisation_id = v_org and country = v_country;
   get diagnostics v_deleted = row_count;
 
   insert into public.open_work_orders
-    (job_card_no, location, job_card_type, jc_status, job_card_date,
+    (organisation_id, job_card_no, location, job_card_type, jc_status, job_card_date,
      open_time, asset_type, asset_no, days_open, complaint, country)
-  select r.job_card_no, r.location, r.job_card_type, r.jc_status, r.job_card_date,
+  select v_org, r.job_card_no, r.location, r.job_card_type, r.jc_status, r.job_card_date,
          r.open_time, r.asset_type, r.asset_no, r.days_open, r.complaint, v_country
   from jsonb_populate_recordset(null::public.open_work_orders, v_rows) r
   where coalesce(btrim(r.job_card_no), '') <> '';

@@ -538,6 +538,13 @@ export default function EnterpriseTable({
                                 className="et-sort"
                                 onClick={header.column.getToggleSortingHandler()}
                                 title="Click to sort · Shift+Click for multi-sort"
+                                // Name the sort control "Sort by <column>" (for a string
+                                // header) so a screen reader says what it does AND its
+                                // accessible name never collides with a row action button
+                                // that happens to share the column's label (e.g. "Review").
+                                aria-label={typeof header.column.columnDef.header === 'string'
+                                  ? `Sort by ${header.column.columnDef.header}`
+                                  : undefined}
                               >
                                 {header.isPlaceholder
                                   ? null

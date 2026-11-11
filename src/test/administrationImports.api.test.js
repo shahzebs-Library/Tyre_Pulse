@@ -10,11 +10,16 @@ describe('expense atomic import',()=>{
  it('stages all rows before finalization and strips protected fields',async()=>{
   rpc.mockResolvedValue({data:{ok:true,inserted:201,skipped:0,failed:0}})
   await importExpenseBatch(rows,options)
-  expect(rpc.mock.calls.map(c=>c[0])).toEqual(['begin_expense_import','stage_expense_import','stage_expense_import','commit_expense_import'])
+  // begin first, commit last, every row staged in between (chunk size is an
+  // internal tuning knob - assert the invariants, not the exact chunk count).
+  const names=rpc.mock.calls.map(c=>c[0])
+  expect(names[0]).toBe('begin_expense_import')
+  expect(names.at(-1)).toBe('commit_expense_import')
+  const stages=rpc.mock.calls.filter(c=>c[0]==='stage_expense_import')
+  expect(stages.length).toBeGreaterThan(0)
+  expect(stages.reduce((n,c)=>n+c[1].p_rows.length,0)).toBe(201)
   expect(rpc.mock.calls[0][1]).toMatchObject({p_country:'KSA',p_replace:true,p_expected_count:4,p_rows:201})
-  expect(rpc.mock.calls[1][1].p_rows).toHaveLength(200)
-  expect(rpc.mock.calls[2][1].p_rows).toHaveLength(1)
-  expect(rpc.mock.calls[1][1].p_rows[0]).not.toHaveProperty('organisation_id')
+  expect(stages[0][1].p_rows[0]).not.toHaveProperty('organisation_id')
  })
  it('does not commit after a staging error and allows retry of the same request',async()=>{
   rpc.mockResolvedValueOnce({data:{ok:true}}).mockResolvedValueOnce({error:{message:'offline'}})

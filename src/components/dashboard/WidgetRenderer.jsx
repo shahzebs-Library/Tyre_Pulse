@@ -35,8 +35,11 @@ import {
   formatCompactMoney,
 } from '../../lib/displayBoard'
 import {
-  WIDGET_BY_ID, computeCostTrend, groupWorkOrdersByStatus,
+  WIDGET_BY_ID, groupWorkOrdersByStatus,
 } from '../../lib/dashboardBuilder'
+// The monthly tyre-spend series comes from the SINGLE engine (one price per
+// physical tyre), not a second copy in dashboardBuilder.
+import { computeCostTrend } from '../../lib/kpiEngine'
 import {
   closedWoStatusTokens, openWorkOrderCount, recentMonths, stackWorkshopJobs,
   utilisationTrend, inspectionProgress, rollingWindows, trendChange,
@@ -138,7 +141,9 @@ const SOURCE_FETCHERS = {
     const monthStart = new Date()
     monthStart.setDate(1)
     const { data, error } = await fetchAllPages((lo, hi) => {
-      let q = supabase.from('tyre_records').select('cost_per_tyre,qty,issue_date')
+      // serial_no + country let the one-price-per-tyre collapse drop a refit's
+      // duplicate price so a re-fitment is not counted as a second purchase.
+      let q = supabase.from('tyre_records').select('cost_per_tyre,qty,issue_date,serial_no,country')
         .gte('issue_date', monthStart.toISOString().slice(0, 10))
       q = withSite(q, site)
       q = applyCountry(q, country)
@@ -149,9 +154,12 @@ const SOURCE_FETCHERS = {
   },
   costTrend: async ({ site, country } = {}) => {
     const now = new Date()
-    const start = new Date(now.getFullYear(), now.getMonth() - 5, 1)
+    // kpiEngine.computeCostTrend looks back ~13 months; fetch that span so the
+    // widget's six buckets are not starved of rows.
+    const start = new Date(now.getFullYear(), now.getMonth() - 12, 1)
     const { data, error } = await fetchAllPages((lo, hi) => {
-      let q = supabase.from('tyre_records').select('cost_per_tyre,qty,issue_date')
+      // serial_no + country drive the one-price-per-tyre collapse (refits).
+      let q = supabase.from('tyre_records').select('cost_per_tyre,qty,issue_date,serial_no,country')
         .gte('issue_date', start.toISOString().slice(0, 10))
       q = withSite(q, site)
       q = applyCountry(q, country)
@@ -479,11 +487,22 @@ function VehiclesBySiteWidget({ rows }) {
 }
 
 function CostTrendWidget({ rows, currency }) {
-  const trend = computeCostTrend(rows)
+  // Single engine, one price per physical tyre. kpiEngine.computeCostTrend
+  // returns a sparse {month, totalCost} series; fold it into the widget's six
+  // fixed calendar-month buckets so a month with no fitments reads 0, not a gap.
+  const { byMonth } = computeCostTrend(rows)
+  const byKey = new Map((byMonth || []).map(m => [m.month, m.totalCost]))
+  const now = new Date()
+  const trend = []
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    trend.push({ label: d.toLocaleString('default', { month: 'short', year: '2-digit' }), cost: Math.round(byKey.get(key) || 0) })
+  }
   if (!trend.some(b => b.cost > 0)) {
     return (
-      <ChartShell title="Tyre Cost Trend" icon={DollarSign}>
-        <EmptyNote text="No tyre cost recorded in the last 6 months" />
+      <ChartShell title="Tyre Cost Trend (priced records)" icon={DollarSign}>
+        <EmptyNote text="No priced tyre records in the last 6 months" />
       </ChartShell>
     )
   }
@@ -510,7 +529,7 @@ function CostTrendWidget({ rows, currency }) {
     },
   }
   return (
-    <ChartShell title="Tyre Cost Trend, 6 Months" icon={DollarSign}>
+    <ChartShell title="Tyre Cost Trend (priced records, 6 Months)" icon={DollarSign}>
       <Line data={data} options={opts} />
     </ChartShell>
   )

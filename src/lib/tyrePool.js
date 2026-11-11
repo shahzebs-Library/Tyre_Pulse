@@ -19,6 +19,8 @@
  *           definition, not fitted to a vehicle and so sit in the pool).
  */
 
+import { currencyForCountry } from './governedCost'
+
 const REMOVED_STATUS_RE = /scrap|removed|disposed|retired|written.?off/i
 const POOL_STATUS_RE = /spare|stock|pool|available|unfitted|unmounted/i
 
@@ -106,11 +108,28 @@ export function summarizePool(records) {
   const byBrand = groupBy(pool, (r) => r.brand, 'Unspecified')
   const bySize = groupBy(pool, (r) => r.size, 'Unspecified')
   const bySite = groupBy(pool, (r) => r.site, 'Unassigned')
-  const totalValue = pool.reduce((s, r) => s + num(r.cost_per_tyre), 0)
+  // Pool VALUE is a stock valuation of the unfitted spares (the purchase cost of
+  // what is still allocatable), a legitimate per-row inventory figure - NOT a
+  // governed spend total. It is still money, so it must never blend currencies:
+  // when the priced pool spans more than one country the total is null (the page
+  // already shows "Pick a country: mixed currencies"). Unpriced tyres count 0.
+  const pricedCurrencies = new Set()
+  let totalValue = 0
+  for (const r of pool) {
+    const c = num(r.cost_per_tyre)
+    if (!(c > 0)) continue
+    const cur = currencyForCountry(r.country)
+    if (cur) pricedCurrencies.add(cur)
+    totalValue += c
+  }
+  const mixedCurrency = pricedCurrencies.size > 1
   return {
     pool,
     totalTyres: pool.length,
-    totalValue: Math.round(totalValue * 100) / 100,
+    totalValue: mixedCurrency ? null : Math.round(totalValue * 100) / 100,
+    valueCurrency: pricedCurrencies.size === 1 ? [...pricedCurrencies][0] : null,
+    mixedCurrency,
+    valueBasis: 'priced_pool_records',
     distinctBrands: byBrand.length,
     distinctSizes: bySize.length,
     distinctSites: bySite.length,

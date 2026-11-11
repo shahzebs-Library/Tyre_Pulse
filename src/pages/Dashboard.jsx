@@ -7,7 +7,7 @@ import { loadPmDashboard } from '../lib/api/pmPrograms'
 import { loadWorkshopKpis } from '../lib/api/workshopLive'
 import { loadGovernedCostSplit, COST_SPLIT_TTL_MS } from '../lib/api/governedCost'
 import useLatestRequest from '../lib/useLatestRequest'
-import { costScopeLabel } from '../components/cost/CostValue'
+import CostValue, { costScopeLabel } from '../components/cost/CostValue'
 import DailyJobCards from '../components/dashboard/DailyJobCards'
 import { COST_MODES, pickCost } from '../lib/costSources'
 import { summarizePmCompliance } from '../lib/pmSchedule'
@@ -417,14 +417,31 @@ export default function Dashboard() {
     return { tyres: tyres.length, stock: rawStock.length, actions: open, critical: crit, cost, vehicles: new Set(tyres.map(t => t.asset_no).filter(Boolean)).size }
   }, [tyres, rawActions, rawStock, summary, isFiltered])
 
-  // The Total Cost KPI responds to the cost-view switch. 'tyres' keeps the exact
-  // window-accurate tyre figure shown before; 'combined'/'general' use the 12-month
-  // tyre + maintenance split (null-safe: falls back to the tyre figure).
+  // The Total Cost KPI responds to the cost-view switch. EVERY mode now reads the
+  // GOVERNED expense grid (loadGovernedCostSplit), including 'tyres': the old
+  // 'tyres' branch returned report_tyre_summary.total_cost = sum(cost_per_tyre*qty),
+  // which understates real tyre spend several-fold (half of tyre rows carry no
+  // price) and, on the All scope, blended SAR+AED+EGP into one SAR-labelled number.
+  // The grid is the single source so this tile reconciles with Expenses & CPK and
+  // Board Overview for the same window. Falls back to the legacy figure only when
+  // the grid split is unavailable for the scope.
   const costModeOptions = COST_MODES.map(m => ({ value: m.key, label: m.key === 'maintenance' ? 'General' : m.label }))
   const totalCostFigure = useMemo(() => {
-    if (costMode === 'tyres' || !costSplit) return stats.cost
+    if (!costSplit) return stats.cost
     return pickCost(costMode, { tyre: costSplit.tyre, maintenance: costSplit.maintenance })
   }, [costMode, costSplit, stats.cost])
+
+  // On the "All countries" scope money is in three currencies (SAR, AED, EGP) and
+  // a single-currency chart or an activeCurrency label would be a blend labelled
+  // SAR. The money charts below render a "pick a country" note instead; the
+  // headline cost tile already shows one figure per currency.
+  const isAllScope = !activeCountry || activeCountry === 'All'
+  const costCurrencyLabel = isAllScope ? 'per country' : activeCurrency
+  const mixedCostNote = (
+    <EmptyState compact icon="filter"
+      title="Pick a country to view tyre spend"
+      description="SAR, AED and EGP are not comparable; this chart shows one currency at a time." />
+  )
 
   // "Needs attention" — the highest-cost critical tyres, surfaced so the thing
   // that needs action reads at a glance. Real data only; empty when clean.
@@ -1049,8 +1066,12 @@ export default function Dashboard() {
 
       {/* ── KPI METRICS (console stat-tiles) ─────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+        {/* F-K-11: this counts assets with tyre records in the window, NOT the
+            fleet register (Command Center counts vehicle_fleet). Labelled to say
+            so, so two neighbouring screens no longer show different numbers under
+            the same word "Fleet Vehicles". */}
         <StatTile index={0} to="/fleet" icon={CircleDot} tone="accent"
-          label={tf('dashboard.kpi.fleetVehicles', 'Fleet Vehicles')} value={Number(stats.vehicles || 0).toLocaleString()}
+          label={tf('dashboard.kpi.assetsWithTyreActivity', 'Assets with tyre activity')} value={Number(stats.vehicles || 0).toLocaleString()}
           sub={tf('dashboard.kpi.fleetVehiclesSub', 'assets with tyre records')} />
         <StatTile index={1} to="/tyres" icon={CircleDot} tone="info"
           label={t('dashboard.kpi.tyreRecords')} value={Number(stats.tyres || 0).toLocaleString()}
@@ -1066,13 +1087,15 @@ export default function Dashboard() {
           spark={sparkSeries.risk} />
         <StatTile index={5} to="/analytics" icon={DollarSign} tone="accent"
           label={`${t('dashboard.kpi.totalCost')} (${costMode === 'maintenance' ? 'General' : costMode === 'tyres' ? 'Tyres' : 'Combined'})`}
-          value={`${(totalCostFigure / 1000).toFixed(0)}K`}
-          // GOVERNED: the currency comes from the cost split, not from
-          // activeCurrency. activeCurrency falls back to SAR on the "All
-          // countries" view, which labelled a SAR+AED+EGP blend as SAR. When
-          // the scope really does span currencies this now says so.
-          unit={costSplit ? costScopeLabel(costSplit) : activeCurrency}
-          spark={sparkSeries.cost} />
+          // On the "All countries" scope there is NO single total: SAR + AED + EGP
+          // are not one number. The tile shows one figure per currency (CostValue)
+          // instead of a SAR-labelled blend. A single country keeps the compact K
+          // figure with its own currency, arithmetically from the governed grid.
+          value={costSplit?.blended
+            ? <CostValue split={costSplit} mode={costMode} compact className="text-[15px]" />
+            : `${(totalCostFigure / 1000).toFixed(0)}K`}
+          unit={costSplit?.blended ? '' : (costSplit ? costScopeLabel(costSplit) : activeCurrency)}
+          spark={costSplit?.blended ? undefined : sparkSeries.cost} />
       </div>
 
       {/* ── PRIORITY RECOMMENDATIONS (concise, number-led, real data only) ─── */}
@@ -1408,7 +1431,9 @@ export default function Dashboard() {
           }
         />
         <CardBody>
-        {topVehicles.rows.length === 0 ? (
+        {isAllScope ? (
+          <div className="py-2">{mixedCostNote}</div>
+        ) : topVehicles.rows.length === 0 ? (
           <p className="text-sm text-[var(--text-muted)] py-4">{t('dashboard.topVehicles.empty')}</p>
         ) : (
           <div className="space-y-1.5">
@@ -1434,9 +1459,9 @@ export default function Dashboard() {
       </Card>
 
       {/* ── COST TREND ───────────────────────────────────────────────────── */}
-      <ChartPanel title={t('dashboard.charts.monthlyCostTrend', { currency: activeCurrency })} subtitle={t('dashboard.charts.costSubtitle')} icon={DollarSign} onExpand={() => setExpandedChart('cost')}>
+      <ChartPanel title={t('dashboard.charts.monthlyCostTrend', { currency: costCurrencyLabel })} subtitle={t('dashboard.charts.costSubtitle')} icon={DollarSign} onExpand={isAllScope ? undefined : () => setExpandedChart('cost')}>
         <div className="h-52">
-          <Line data={monthlyCostData} options={{ ...BASE_OPTS, plugins:{ legend:{ display:false }, tooltip: moneyTooltip }, scales:{ x:{ ticks:TICK, grid:GRID }, y:{ ticks:{ ...TICK, callback: moneyTick }, grid:GRID } } }} />
+          {isAllScope ? mixedCostNote : <Line data={monthlyCostData} options={{ ...BASE_OPTS, plugins:{ legend:{ display:false }, tooltip: moneyTooltip }, scales:{ x:{ ticks:TICK, grid:GRID }, y:{ ticks:{ ...TICK, callback: moneyTick }, grid:GRID } } }} />}
         </div>
       </ChartPanel>
 
@@ -1482,16 +1507,16 @@ export default function Dashboard() {
 
       {/* ── TOP ASSETS + SITES ───────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--gap-grid)]">
-        <ChartPanel title={t('dashboard.charts.topAssets', { currency: activeCurrency })} subtitle={t('dashboard.charts.topAssetsSubtitle')} icon={Cpu}>
+        <ChartPanel title={t('dashboard.charts.topAssets', { currency: costCurrencyLabel })} subtitle={t('dashboard.charts.topAssetsSubtitle')} icon={Cpu}>
           <div className="h-64">
-            {topAssetsData
+            {isAllScope ? mixedCostNote : topAssetsData
               ? <Bar data={topAssetsData} options={{ ...H_BAR, plugins:{ ...H_BAR.plugins, tooltip: moneyTooltip }, scales:{ x:{ ticks:{ ...TICK, callback: v => `${(v/1000).toFixed(0)}K` }, grid:GRID }, y:{ ticks:{ color:'#9ca3af', font:{ size:10 } }, grid:GRID } } }} />
               : <EmptyState compact icon="database" title={t('dashboard.charts.noAssetData')} />}
           </div>
         </ChartPanel>
-        <ChartPanel title={t('dashboard.charts.topSites', { currency: activeCurrency })} subtitle={t('dashboard.charts.topSitesSubtitle')} icon={BarChart2}>
+        <ChartPanel title={t('dashboard.charts.topSites', { currency: costCurrencyLabel })} subtitle={t('dashboard.charts.topSitesSubtitle')} icon={BarChart2}>
           <div className="h-64">
-            {siteCostData
+            {isAllScope ? mixedCostNote : siteCostData
               ? <Bar data={siteCostData} options={{ ...H_BAR, plugins:{ ...H_BAR.plugins, tooltip: moneyTooltip }, scales:{ x:{ ticks:{ ...TICK, callback: v => `${(v/1000).toFixed(0)}K` }, grid:GRID }, y:{ ticks:{ color:'#9ca3af' }, grid:GRID } } }} />
               : <EmptyState compact icon="database" title={t('dashboard.charts.noSiteData')} />}
           </div>
@@ -1507,9 +1532,9 @@ export default function Dashboard() {
               : <EmptyState compact icon="database" title={tf('dashboard.charts.noRiskTrend', 'No risk trend data')} description={tf('dashboard.charts.noRiskTrendDesc', 'Records with issue dates and risk levels will chart here.')} />}
           </div>
         </ChartPanel>
-        <ChartPanel title={tf('dashboard.charts.categorySplit', 'Spend Split ({currency})', { currency: activeCurrency })} subtitle={tf('dashboard.charts.categorySplitSubtitle', 'New vs retread purchase spend')} icon={DollarSign}>
+        <ChartPanel title={tf('dashboard.charts.categorySplit', 'Spend Split ({currency})', { currency: costCurrencyLabel })} subtitle={tf('dashboard.charts.categorySplitSubtitle', 'New vs retread purchase spend')} icon={DollarSign}>
           <div className="h-64 flex items-center justify-center">
-            {categorySplitData
+            {isAllScope ? mixedCostNote : categorySplitData
               ? <Doughnut data={categorySplitData} options={{ ...NO_SCALE, plugins: { ...NO_SCALE.plugins, tooltip: moneyTooltip } }} />
               : <EmptyState compact icon="database" title={tf('dashboard.charts.noSpendSplit', 'No spend data')} description={tf('dashboard.charts.noSpendSplitDesc', 'Records with cost values will chart here.')} />}
           </div>

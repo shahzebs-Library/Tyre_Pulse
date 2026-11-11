@@ -12,6 +12,7 @@
 
 import { severityRank } from './severity'
 import { computePressureCompliance } from './kpiEngine'
+import { withOnePricePerTyre } from './tyreLifetime'
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0)
 
@@ -67,9 +68,13 @@ export function computeTyreAttention(tyres = []) {
 }
 
 /**
- * Sum of cost_per_tyre × qty for rows whose issue_date falls inside the
- * calendar month of `now` (qty defaults to 1 — same rule as
- * analyticsEngine.recordCost / supplierScorecard).
+ * PRICED TYRE RECORDS tyre spend for the calendar month of `now`: sum of
+ * cost_per_tyre × qty for rows whose issue_date falls inside that month, with a
+ * refit of the same physical tyre collapsed to one price (withOnePricePerTyre)
+ * so a re-fitment is never double counted. This is a priced-records figure (a
+ * large share of tyre rows carry no price), not the governed expense-grid total;
+ * the TV board labels it "priced tyres". It is single-currency by construction
+ * (the board/widget are country-scoped).
  * @returns {{ cost:number, tyreCount:number }}
  */
 export function computeMonthlyTyreCost(tyres = [], now = new Date()) {
@@ -77,7 +82,7 @@ export function computeMonthlyTyreCost(tyres = [], now = new Date()) {
   const m = now.getMonth()
   let cost = 0
   let tyreCount = 0
-  tyres.forEach(t => {
+  withOnePricePerTyre(tyres).forEach(t => {
     if (!t.issue_date) return
     const d = new Date(t.issue_date)
     if (Number.isNaN(d.getTime()) || d.getFullYear() !== y || d.getMonth() !== m) return

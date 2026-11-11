@@ -14,6 +14,7 @@
  *    numbers are windowed by the date range.
  */
 import { ANOMALY_TYPES } from './anomalyEngine'
+import { withOnePricePerTyre } from './tyreLifetime'
 
 const num = (v) => {
   if (v === null || v === undefined || v === '') return null
@@ -87,7 +88,11 @@ export function computeFleetPolicyFlags(assetRecords = [], fleetRecord = null) {
   const budget = num(fleetRecord.monthly_tyre_budget)
   if (budget) {
     const byMonth = {}
-    assetRecords.forEach(r => {
+    // Monthly spend is measured from PRICED TYRE RECORDS for this one asset (so
+    // single-currency), with a refit of the same physical tyre collapsed to one
+    // price - a re-fitment must not trip the budget twice. This is a priced-
+    // records figure, not the governed expense grid; the message says so.
+    withOnePricePerTyre(assetRecords).forEach(r => {
       if (!r.issue_date) return
       const month = String(r.issue_date).slice(0, 7)
       ;(byMonth[month] ||= []).push(r)
@@ -100,8 +105,8 @@ export function computeFleetPolicyFlags(assetRecords = [], fleetRecord = null) {
           severity: 'high',
           record_ids: recs.map(r => r.id),
           records: recs,
-          message: `Monthly budget exceeded in ${month}: spent ${spend.toLocaleString()} vs budget ${budget.toLocaleString()}`,
-          detail: `${recs.length} tyre record(s) in ${month}, total cost: ${spend.toLocaleString()}`,
+          message: `Monthly budget exceeded in ${month}: priced tyre spend ${spend.toLocaleString()} vs budget ${budget.toLocaleString()}`,
+          detail: `${recs.length} priced tyre record(s) in ${month}, total cost: ${spend.toLocaleString()}`,
         })
       }
     })

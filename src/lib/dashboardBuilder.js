@@ -596,33 +596,13 @@ export function pickInitialLayout(layouts, userId) {
 const num = v => (Number.isFinite(Number(v)) ? Number(v) : 0)
 
 /**
- * Monthly tyre spend for the last `months` calendar months (oldest first).
- * Cost rule mirrors displayBoard.computeMonthlyTyreCost:
- * cost_per_tyre × qty (qty defaults to 1).
- * @param {Array<{issue_date?:string, cost_per_tyre?:number, qty?:number}>} tyres
- * @returns {Array<{ key:string, label:string, cost:number }>}
+ * REMOVED: computeCostTrend. There were two engines with this name computing a
+ * different monthly tyre-spend series for the SAME widget - this one summed
+ * cost_per_tyre with no one-price-per-tyre collapse, so a refitted tyre was
+ * double counted and it disagreed with kpiEngine.computeCostTrend. The widget
+ * now reads the single kpiEngine.computeCostTrend (one price per tyre). See
+ * src/lib/kpiEngine.js and src/components/dashboard/WidgetRenderer.jsx.
  */
-export function computeCostTrend(tyres = [], now = new Date(), months = 6) {
-  const buckets = []
-  const index = new Map()
-  for (let i = months - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-    const bucket = { key, label: d.toLocaleString('default', { month: 'short', year: '2-digit' }), cost: 0 }
-    buckets.push(bucket)
-    index.set(key, bucket)
-  }
-  tyres.forEach(t => {
-    if (!t?.issue_date) return
-    const key = String(t.issue_date).slice(0, 7)
-    const bucket = index.get(key)
-    if (!bucket) return
-    const qty = t.qty == null ? 1 : num(t.qty) || 1
-    bucket.cost += num(t.cost_per_tyre) * qty
-  })
-  buckets.forEach(b => { b.cost = Math.round(b.cost) })
-  return buckets
-}
 
 /**
  * Work orders grouped by status, descending; null/empty status buckets as

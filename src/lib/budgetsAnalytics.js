@@ -16,7 +16,35 @@
  *     (`unbudgetedSpend`) rather than silently dropped from the totals.
  */
 
+import { withOnePricePerTyre } from './tyreLifetime'
+import { currencyForCountry } from './governedCost'
+
 export const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/**
+ * The basis of the per-site actual spend on /budgets, shown next to the figures.
+ * Owner decision (2026-11, gate I): the per-site actual is measured from PRICED
+ * TYRE RECORDS at the issuing site, not the full classified expense grid - the
+ * grid has no per-site x month attribution without the store->site map. A site
+ * with unpriced tyres therefore reads low; the authoritative org/country total
+ * lives on Budget Planner (the grid). Refits are collapsed to one price.
+ */
+export const SPEND_BASIS_NOTE =
+  'Actual spend is measured from priced tyre records at the issuing site (a refit ' +
+  'is counted once). Sites with tyres that carry no price read low; the full ' +
+  'expense-grid total is on Budget Planner.'
+
+/** The distinct currencies among priced rows; >1 means a figure would blend. */
+export function spendCurrencies(rows = []) {
+  const set = new Set()
+  for (const r of Array.isArray(rows) ? rows : []) {
+    const n = typeof r?.cost_per_tyre === 'number' ? r.cost_per_tyre : parseFloat(r?.cost_per_tyre)
+    if (!(Number.isFinite(n) && n > 0)) continue
+    const cur = currencyForCountry(r?.country)
+    if (cur) set.add(cur)
+  }
+  return [...set]
+}
 
 /** Utilisation bands, in display order. The label always carries the meaning. */
 export const UTIL_BANDS = [
@@ -58,7 +86,10 @@ export function tyreRowCost(row) {
  */
 export function buildSpendIndex(rows = [], { year, month = null } = {}) {
   const out = {}
-  for (const r of Array.isArray(rows) ? rows : []) {
+  // A refit of the same physical tyre is not a second purchase (rule T1):
+  // collapse refit duplicate prices before indexing so a re-fitment does not
+  // inflate a site's actual spend.
+  for (const r of withOnePricePerTyre(Array.isArray(rows) ? rows : [])) {
     let m = month
     if (m == null) {
       const ym = yearMonthOf(r?.issue_date)

@@ -36,7 +36,7 @@ import { compareValues, isBlank } from '../lib/consoleTable'
 import {
   MONTH_LABELS, UTIL_BANDS, bandLabel, buildSpendIndex, monthlyRows, summarizeMonth,
   unbudgetedSpend, filterMonthlyRows, annualGrid, annualSummary, cumulativeSeries,
-  monthlyExportRows, annualExportRows, annualExportColumns,
+  monthlyExportRows, annualExportRows, annualExportColumns, SPEND_BASIS_NOTE, spendCurrencies,
 } from '../lib/budgetsAnalytics'
 
 ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Filler, Tooltip, Legend, BarElement)
@@ -226,6 +226,10 @@ export default function Budgets() {
   const monthLabels = useMemo(() => MONTH_LABELS.map((_, i) => t(`budgets.months.${i}`)), [t])
 
   // ── Monthly view ───────────────────────────────────────────────────────────
+  // On the All-countries scope the priced tyre rows span SAR + AED + EGP, so a
+  // single actual-spend figure and the activeCurrency label would be a blend.
+  // Warn and refuse the over/under colouring (money is not comparable).
+  const spendMixed = useMemo(() => spendCurrencies(tyreRows).length > 1, [tyreRows])
   const monthIndex = useMemo(
     () => buildSpendIndex(tyreRows, { year: filterYear, month: filterMonth }),
     [tyreRows, filterYear, filterMonth],
@@ -580,15 +584,21 @@ export default function Budgets() {
       {/* ── MONTHLY VIEW ──────────────────────────────────────────────────── */}
       {viewMode === 'month' && !loadError && (
         <>
+          {spendMixed && (
+            <p className="text-xs text-amber-400 -mt-1">
+              All countries selected: actual spend is in SAR, AED and EGP and cannot be added. Pick a country to compare budget vs spend.
+            </p>
+          )}
+          <p className="text-[11px] text-[var(--text-muted)] -mt-1">{SPEND_BASIS_NOTE}</p>
           <div className="finance-kpis grid grid-cols-2 lg:grid-cols-5 gap-3">
             <Kpi loading={loading} label={t('budgets.kpi.totalBudget')} icon={Wallet} value={formatCurrencyCompact(monthSummary.totalBudget, activeCurrency)} sub={`${monthSummary.sites} site${monthSummary.sites === 1 ? '' : 's'}`} />
             <Kpi loading={loading} label={t('budgets.kpi.totalSpent')} icon={TrendingUp}
-              tone={monthSummary.totalSpend > monthSummary.totalBudget ? 'text-red-400' : 'text-green-400'}
-              value={formatCurrencyCompact(monthSummary.totalSpend, activeCurrency)} />
+              tone={spendMixed ? 'text-[var(--text-primary)]' : monthSummary.totalSpend > monthSummary.totalBudget ? 'text-red-400' : 'text-green-400'}
+              value={spendMixed ? 'Mixed' : formatCurrencyCompact(monthSummary.totalSpend, activeCurrency)} />
             <Kpi loading={loading} label={t('budgets.kpi.remaining')} icon={PiggyBank}
-              tone={monthSummary.remaining < 0 ? 'text-red-400' : 'text-sky-400'}
-              value={formatCurrencyCompact(monthSummary.remaining, activeCurrency)}
-              sub={monthSummary.remaining < 0 ? 'Overspent' : undefined} />
+              tone={spendMixed ? 'text-[var(--text-primary)]' : monthSummary.remaining < 0 ? 'text-red-400' : 'text-sky-400'}
+              value={spendMixed ? 'N/A' : formatCurrencyCompact(monthSummary.remaining, activeCurrency)}
+              sub={spendMixed ? 'Pick a country' : monthSummary.remaining < 0 ? 'Overspent' : undefined} />
             <Kpi loading={loading} label={t('budgets.kpi.utilization')} icon={Percent}
               tone={utilTone(monthSummary.utilPct)}
               value={monthSummary.utilPct == null ? 'N/A' : `${Math.round(monthSummary.utilPct)}%`}

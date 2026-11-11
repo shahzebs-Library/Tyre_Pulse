@@ -6,7 +6,7 @@ import {
   placeWidget, makeLayout, validateLayout,
   addWidget, removeWidget, moveWidget, resizeWidget,
   visibleLayouts, setDefaultLayout, pickInitialLayout,
-  computeCostTrend, groupWorkOrdersByStatus,
+  groupWorkOrdersByStatus,
   parseLayoutsValue, fetchLayouts, saveLayouts,
 } from '../lib/dashboardBuilder'
 
@@ -211,31 +211,9 @@ describe('visibility & defaults', () => {
   })
 })
 
-describe('computeCostTrend', () => {
-  const now = new Date('2026-07-15T12:00:00')
-
-  it('buckets cost_per_tyre × qty into the last 6 calendar months, oldest first', () => {
-    const trend = computeCostTrend([
-      { issue_date: '2026-07-01', cost_per_tyre: 100, qty: 2 },   // 200 in Jul
-      { issue_date: '2026-07-20', cost_per_tyre: 50 },            // +50 (qty defaults 1)
-      { issue_date: '2026-02-10', cost_per_tyre: 300, qty: 1 },   // 300 in Feb
-      { issue_date: '2025-12-31', cost_per_tyre: 999 },           // outside window
-      { issue_date: null, cost_per_tyre: 999 },                   // no date
-    ], now)
-    expect(trend).toHaveLength(6)
-    expect(trend[0].key).toBe('2026-02')
-    expect(trend[0].cost).toBe(300)
-    expect(trend[5].key).toBe('2026-07')
-    expect(trend[5].cost).toBe(250)
-    expect(trend[1].cost + trend[2].cost + trend[3].cost + trend[4].cost).toBe(0)
-  })
-
-  it('handles empty input', () => {
-    const trend = computeCostTrend([], now)
-    expect(trend).toHaveLength(6)
-    expect(trend.every(b => b.cost === 0)).toBe(true)
-  })
-})
+// computeCostTrend removed from dashboardBuilder (it double-counted refits and
+// duplicated kpiEngine.computeCostTrend). The widget now reads the single
+// kpiEngine engine; its coverage lives in kpiEngineCore.test.js.
 
 describe('groupWorkOrdersByStatus', () => {
   it('groups, sorts descending, buckets missing status as Unknown', () => {

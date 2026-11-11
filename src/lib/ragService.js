@@ -362,7 +362,11 @@ export function assembleContext({
     const sites = [...new Set(kpiData.map(r => r.site).filter(Boolean))]
     const brands = [...new Set(kpiData.map(r => r.brand).filter(Boolean))]
     const assets = [...new Set(kpiData.map(r => r.asset_no).filter(Boolean))]
-    // A refit of the same physical tyre is not a second purchase (rule T1).
+    // Priced tyre records only, with a refit of the same physical tyre collapsed
+    // to one price (rule T1). This is a SAMPLE for the model's context, NOT the
+    // governed fleet spend: about half of tyre rows carry no price, so it reads
+    // low and must never be quoted as the total. The governed expense-grid total
+    // comes from the orchestrator's own cost tools; the label below says so.
     const totalCost = withOnePricePerTyre(kpiData.map(withSerial))
       .reduce((s, r) => s + (Number(r.cost_per_tyre) || 0) * (Number(r.qty) || 1), 0)
     const fleetKpis = summarizeTyreKpis(kpiData)
@@ -379,7 +383,7 @@ export function assembleContext({
       `FLEET DATA SCOPE: ${kpiData.length} fitment records | ${fleetKpis.physicalTyres} physical tyres | ${assets.length} vehicles | ${sites.length} sites | ` +
       `Period: ${dateRange.min ?? 'N/A'} to ${dateRange.max ?? 'N/A'}\n` +
       `Fleet CPK=${fleetKpis.avgCpk?.toFixed(4) ?? 'N/A'}. ${describeCpkBasis(fleetKpis)}. Sample only, not the expense-grid total.\n` +
-      `Tyre purchase cost in sample: ${totalCost.toFixed(0)} | High/Critical Risk: ${highRisk} (${kpiData.length > 0 ? ((highRisk / kpiData.length) * 100).toFixed(1) : 0}%)\n` +
+      `Priced tyre records in sample: ${totalCost.toFixed(0)} (one price per physical tyre; NOT the expense-grid spend total, which is higher - do not quote this as fleet spend) | High/Critical Risk: ${highRisk} (${kpiData.length > 0 ? ((highRisk / kpiData.length) * 100).toFixed(1) : 0}%)\n` +
       `Sites: ${sites.slice(0, 10).join(', ')}\n` +
       `Brands: ${brands.slice(0, 10).join(', ')}`
     )

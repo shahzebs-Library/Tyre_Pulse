@@ -21,8 +21,12 @@ import { supabase, unwrap, fetchAllPages } from './_client'
 const BUDGET_COLS =
   'id,site,region,monthly_budget,year,month,created_by,created_at,country,status'
 
-// Column set for the tyre_records spend read - EXACTLY the page's select.
-const TYRE_RECORD_COLS = 'site, cost_per_tyre, qty, issue_date'
+// Column set for the tyre_records spend read. serial_no + country let the engine
+// collapse a refit of the same physical tyre to one price (withOnePricePerTyre)
+// and detect when a scope spans currencies (the per-site actual is a priced tyre
+// records figure, labelled; the expense grid has no per-site x month attribution
+// without the store->site map, so the full grid total is shown on Budget Planner).
+const TYRE_RECORD_COLS = 'site, cost_per_tyre, qty, issue_date, serial_no, country'
 
 /**
  * List budgets for a year (and optional month), ordered by site. Applies the

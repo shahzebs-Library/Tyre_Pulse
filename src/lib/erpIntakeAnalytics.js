@@ -10,18 +10,28 @@
 const n = (v) => Number(v) || 0
 export const num = (v) => n(v).toLocaleString('en-US')
 
-/** Per-sheet result counts. `notAdded` = exact duplicates the merge dropped. */
+/**
+ * Per-sheet result counts, as five accountable buckets:
+ *   inserted (new) | updated (refreshed) | notAdded (exact duplicate, unchanged)
+ *   | excludedByValidation (held back by the tyre cost check) | heldForReview
+ *   (tyre replacement could not be placed on the wheel).
+ * `notAdded` is now EXACT DUPLICATES ONLY: the validation-excluded and the
+ * review-held rows are carved out of the residual so they are never read as
+ * "exact duplicate dropped" (a different thing the operator must act on).
+ */
 export function resultCounts(row) {
   const source = n(row?.sourceRows ?? row?.rows?.length ?? 0)
   const inserted = n(row?.inserted)
   const updated = n(row?.updated)
   const failed = n(row?.failed)
-  const notAdded = Math.max(0, source - inserted - updated - failed)
+  const excludedByValidation = n(row?.excludedByValidation)
+  const heldForReview = n(row?.heldForReview ?? row?.replacement?.review)
+  const notAdded = Math.max(0, source - inserted - updated - failed - excludedByValidation - heldForReview)
   const processed = Math.max(0, source - failed)
-  return { source, inserted, updated, failed, notAdded, processed }
+  return { source, inserted, updated, failed, excludedByValidation, heldForReview, notAdded, processed }
 }
 
-/** One-line plain-English summary of a sheet's import result. */
+/** One-line plain-English summary of a sheet's import result (the five buckets). */
 export function resultSummary(row) {
   const c = resultCounts(row)
   const parts = [`${num(c.processed)} row${c.processed === 1 ? '' : 's'} processed`]
@@ -30,6 +40,8 @@ export function resultSummary(row) {
   else {
     if (c.updated) parts.push(`${num(c.updated)} refreshed`)
     if (c.notAdded) parts.push(`${num(c.notAdded)} exact duplicate(s) dropped`)
+    if (c.excludedByValidation) parts.push(`${num(c.excludedByValidation)} excluded by validation`)
+    if (c.heldForReview) parts.push(`${num(c.heldForReview)} held for review`)
   }
   if (c.failed) parts.push(`${num(c.failed)} failed`)
   return parts.join(', ')
@@ -45,9 +57,10 @@ export function reconcile(detected = []) {
       acc.noKey += n(a.noKey)
       acc.footer += n(a.footer)
       acc.blank += n(a.blank)
+      acc.unparsedDates += n(a.unparsedDates)
       return acc
     },
-    { read: 0, mapped: 0, noKey: 0, footer: 0, blank: 0 },
+    { read: 0, mapped: 0, noKey: 0, footer: 0, blank: 0, unparsedDates: 0 },
   )
 }
 
@@ -84,7 +97,7 @@ export function previewTotals(detected = []) {
   }
 }
 
-/** Totals across completed sheet results. */
+/** Totals across completed sheet results (five buckets + failed + tyre side). */
 export function resultTotals(results = []) {
   return (Array.isArray(results) ? results : []).reduce(
     (acc, r) => {
@@ -93,12 +106,17 @@ export function resultTotals(results = []) {
       acc.inserted += c.inserted
       acc.updated += c.updated
       acc.notAdded += c.notAdded
+      acc.excludedByValidation += c.excludedByValidation
+      acc.heldForReview += c.heldForReview
       acc.failed += c.failed
       acc.tyresInserted += n(r?.tyresInserted)
       acc.tyresUpdated += n(r?.tyresUpdated)
       return acc
     },
-    { processed: 0, inserted: 0, updated: 0, notAdded: 0, failed: 0, tyresInserted: 0, tyresUpdated: 0 },
+    {
+      processed: 0, inserted: 0, updated: 0, notAdded: 0,
+      excludedByValidation: 0, heldForReview: 0, failed: 0, tyresInserted: 0, tyresUpdated: 0,
+    },
   )
 }
 
@@ -111,6 +129,8 @@ export const REPORT_COLUMNS = [
   { key: 'inserted', header: 'New' },
   { key: 'updated', header: 'Refreshed' },
   { key: 'duplicates', header: 'Exact duplicates dropped' },
+  { key: 'excluded', header: 'Excluded by validation' },
+  { key: 'heldForReview', header: 'Held for review' },
   { key: 'failed', header: 'Failed' },
   { key: 'tyres', header: 'Tyre changes (new / refreshed)' },
 ]
@@ -119,6 +139,7 @@ export const REPORT_COLUMNS = [
 export function importReportRows(results = [], country = '') {
   return (Array.isArray(results) ? results : []).map((r) => {
     const c = resultCounts(r)
+    const isSnapshot = r?.target === 'open_work_orders'
     return {
       report: r?.label || r?.type || '',
       sheet: r?.sheetName || 'Sheet1',
@@ -126,8 +147,10 @@ export function importReportRows(results = [], country = '') {
       country: country || '',
       source: c.source,
       inserted: c.inserted,
-      updated: r?.target === 'open_work_orders' ? 'List replaced' : c.updated,
-      duplicates: r?.target === 'open_work_orders' ? 'N/A' : c.notAdded,
+      updated: isSnapshot ? 'List replaced' : c.updated,
+      duplicates: isSnapshot ? 'N/A' : c.notAdded,
+      excluded: isSnapshot ? 'N/A' : c.excludedByValidation,
+      heldForReview: isSnapshot ? 'N/A' : c.heldForReview,
       failed: c.failed,
       tyres: n(r?.tyresSourceRows) ? `${num(r.tyresInserted)} / ${num(r.tyresUpdated)}` : 'N/A',
     }

@@ -224,6 +224,7 @@ export default function ErpIntake() {
             noKey: res.noKey || 0,
             footer: res.footerRows || 0,
             blank: res.blankRows || 0,
+            unparsedDates: res.unparsedDates || 0,
           }
           found.push({
             sheetName: sheet.name || '',
@@ -320,16 +321,23 @@ export default function ErpIntake() {
           const tyres = d.tyreRows.map((r) => ({ ...r, country }))
           tyreRes = await loadIntake('tyre_records', tyres, { country })
         }
+        const excludedByValidation = d.costPreview?.excludedCount || 0
+        // Tyre rows the replacement check could not place on the wheel were held
+        // (not inserted): a bucket of its own, not an "exact duplicate". Only the
+        // MAIN target's held count belongs here (a combined sheet's tyre side is
+        // reported separately as tyresNotAdded).
+        const heldForReview = Number(res?.replacement?.review) || 0
         out.push({
           ...d,
           sourceRows: d.rows.length,
-          excludedByValidation: d.costPreview?.excludedCount || 0,
+          excludedByValidation,
+          heldForReview,
           inserted: res?.inserted ?? d.rows.length,
           updated: res?.updated ?? 0,
           unchanged: res?.unchanged ?? (res?.skipped ?? 0),
           skipped: res?.skipped ?? 0,
           failed: res?.failed ?? 0,
-          notAdded: Math.max(0, d.rows.length - (res?.inserted ?? d.rows.length) - (res?.updated ?? 0) - (res?.failed ?? 0)),
+          notAdded: Math.max(0, d.rows.length - (res?.inserted ?? d.rows.length) - (res?.updated ?? 0) - (res?.failed ?? 0) - excludedByValidation - heldForReview),
           replacement: res?.replacement || tyreRes?.replacement || null,
           tyresSourceRows: Array.isArray(d.tyreRows) ? d.tyreRows.length : 0,
           tyresInserted: tyreRes?.inserted ?? 0,
@@ -559,6 +567,11 @@ export default function ErpIntake() {
                     <span className="text-[var(--text-tertiary)]">
                       | {num(d.accounting.footer)} footer + {num(d.accounting.blank)} blank dropped
                     </span>
+                    {d.accounting.unparsedDates > 0 && (
+                      <span className="text-[var(--warning,#f59e0b)]">
+                        | {num(d.accounting.unparsedDates)} date{d.accounting.unparsedDates === 1 ? '' : 's'} could not be read
+                      </span>
+                    )}
                   </div>
                 )}
 
@@ -685,6 +698,13 @@ export default function ErpIntake() {
                 Check the source file if these should import.
               </p>
             )}
+            {recon.unparsedDates > 0 && (
+              <p className="text-xs text-[var(--warning,#f59e0b)] inline-flex items-start gap-1">
+                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                {num(recon.unparsedDates)} date value(s) could not be read and were left blank.
+                Check the date format in the source file if these matter.
+              </p>
+            )}
           </div>
 
           {/* Big-file guidance */}
@@ -750,10 +770,15 @@ export default function ErpIntake() {
           <div className="flex flex-col items-center text-center">
             <CheckCircle2 className="h-12 w-12 text-[var(--accent,#22c55e)]" />
             <p className="mt-3 text-lg font-semibold text-[var(--text-primary)]">Import complete</p>
-            <div className="mt-4 w-full grid grid-cols-2 lg:grid-cols-4 gap-3 text-left">
+            {/* Five accountable buckets + failed: inserted (New), refreshed,
+                exact duplicates (unchanged), excluded by validation, held for review. */}
+            <div className="mt-4 w-full grid grid-cols-2 lg:grid-cols-3 gap-3 text-left">
               <KpiTile label="Processed" value={num(doneTotals.processed)} sub={`tagged ${countryChoice}`} />
               <KpiTile label="New" value={num(doneTotals.inserted)} tone="text-[var(--brand-bright)]" sub={doneTotals.tyresInserted ? `+ ${num(doneTotals.tyresInserted)} tyre changes` : null} />
-              <KpiTile label="Refreshed" value={num(doneTotals.updated)} sub={`${num(doneTotals.notAdded)} exact duplicates dropped`} />
+              <KpiTile label="Refreshed" value={num(doneTotals.updated)} />
+              <KpiTile label="Exact duplicates" value={num(doneTotals.notAdded)} sub="unchanged, already stored" />
+              <KpiTile label="Excluded by validation" value={num(doneTotals.excludedByValidation)} tone={doneTotals.excludedByValidation ? 'text-amber-400' : 'text-[var(--text-primary)]'} sub={doneTotals.excludedByValidation ? 'invalid or duplicate cost rows' : 'none'} />
+              <KpiTile label="Held for review" value={num(doneTotals.heldForReview)} tone={doneTotals.heldForReview ? 'text-amber-400' : 'text-[var(--text-primary)]'} sub={doneTotals.heldForReview ? 'tyre placement needs a decision' : 'none'} />
               <KpiTile label="Failed" value={num(doneTotals.failed)} tone={doneTotals.failed ? 'text-red-400' : 'text-[var(--text-primary)]'} sub={doneTotals.failed ? 're-run to retry these' : 'none'} />
             </div>
             <div className="mt-4 w-full max-w-lg space-y-2 text-left">

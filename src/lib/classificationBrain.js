@@ -341,8 +341,11 @@ export function classifyLine(line = {}, evidence = {}) {
     return out(byCode.category, 0.95, 'code-range', byCode.note)
   }
 
-  // 3. Explicit tyre wording.
-  const saysTyre = /\btyre|tire\b/i.test(desc)
+  // 3. Explicit tyre wording. The word boundary wraps the WHOLE alternation:
+  //    /\btyre|tire\b/ reads as (\btyre) OR (tire\b), so it matched any word
+  //    ENDING in tire ("ENTIRE", "RETIRE") and any word starting with tyre. The
+  //    grouped /\b(tyre|tire)\b/ matches the whole word tyre or tire only.
+  const saysTyre = /\b(tyre|tire)\b/i.test(desc)
   if (saysTyre || (hasTyreBrand(desc) && hasTyreSize(desc))) {
     return out('tyre', 0.85, saysTyre ? 'description-tyre' : 'brand-and-size',
       saysTyre ? 'Description says tyre' : 'Names a tyre brand next to a tyre size')

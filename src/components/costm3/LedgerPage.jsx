@@ -303,6 +303,11 @@ export default function LedgerPage({
     },
     ...(isProd ? [
       { key: 'supplied', label: 'Supplied M3', value: fmtSummaryVal(summary.totals.supplied_m3) },
+      {
+        key: 'unapproved',
+        label: 'Unapproved loads / M3',
+        value: `${summary.totals.unapproved_loads == null ? 'N/A' : summary.totals.unapproved_loads.toLocaleString()} / ${summary.totals.unapproved_m3 == null ? 'N/A' : `${Math.round(summary.totals.unapproved_m3).toLocaleString()} M3`}`,
+      },
       { key: 'rejected', label: 'Rejected loads', value: summary.totals.rejected_loads.toLocaleString() },
     ] : []),
     ...(kind === 'sany' ? [

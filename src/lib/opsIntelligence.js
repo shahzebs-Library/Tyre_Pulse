@@ -703,11 +703,25 @@ export function buildFinancials({ budgets = [], tyres = [] } = {}, opts = {}) {
     if (b?.year != null && Number(b.year) !== year) return acc
     return acc + (num(b?.monthly_budget) || 0)
   }, 0)
-  // A refit of the same physical tyre is not a second purchase (rule T1).
-  const ytdSpend = withOnePricePerTyre(tyreList).reduce((acc, r) => {
+  // YTD tyre spend. Prefer the GOVERNED classified expense grid (opts.gridTyreSpend,
+  // passed by the page when a single country is scoped and the grid is available):
+  // the tyre_records sum understates spend several-fold (about half of tyre rows
+  // carry no price). When the grid is not available for the scope, fall back to a
+  // PRICED TYRE RECORDS figure with a refit collapsed to one price (rule T1), and
+  // say which basis was used so the screen can label it.
+  // Number(null) is 0 (and finite), so convert only AFTER a null/undefined guard -
+  // otherwise a pending, failed or unavailable grid (gridTyreSpend == null) would
+  // read as a real zero, suppress the priced-record fallback, and show a country
+  // with real spend as zero YTD. A genuine numeric 0 (0 != null) is still accepted.
+  const rawGrid = opts.gridTyreSpend
+  const gridTyre = Number(rawGrid)
+  const hasGrid = rawGrid != null && Number.isFinite(gridTyre) && gridTyre >= 0
+  const pricedYtd = withOnePricePerTyre(tyreList).reduce((acc, r) => {
     const d = r?.issue_date || r?.fitment_date
     return inYear(d, year) ? acc + (num(r?.cost_per_tyre) || 0) : acc
   }, 0)
+  const ytdSpend = hasGrid ? gridTyre : pricedYtd
+  const spendBasis = hasGrid ? 'expense_grid' : 'priced_tyre_records'
 
   const consumptionPct = annualBudget > 0 ? round((ytdSpend / annualBudget) * 100, 1) : null
   const budgetStatus =
@@ -727,6 +741,7 @@ export function buildFinancials({ budgets = [], tyres = [] } = {}, opts = {}) {
     year,
     annualBudget: round(annualBudget, 2),
     ytdTyreSpend: round(ytdSpend, 2),
+    spendBasis,
     remainingBudget: annualBudget > 0 ? round(annualBudget - ytdSpend, 2) : null,
     budgetConsumptionPct: consumptionPct,
     budgetStatus,

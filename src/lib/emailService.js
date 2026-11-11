@@ -132,7 +132,7 @@ export async function sendReportEmail({ to, subject, bodyHtml, pdfBase64 = null,
  * @param {any} err - the error object from functions.invoke
  * @returns {Promise<string|null>}
  */
-async function readFunctionError(err) {
+export async function readFunctionError(err) {
   try {
     const res = err?.context
     if (res && typeof res.json === 'function') {

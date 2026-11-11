@@ -24,31 +24,95 @@ const clean = (v) => String(v == null ? '' : v).replace(/["\r\n\t]/g, ' ').repla
 const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 }
 
 /** Parse a Ramco date cell to ISO 'YYYY-MM-DD', or '' when not a date. Handles
- * YYYY-MM-DD, DD-MM-YYYY, DD/MM/YYYY and DD-Mon-YY / DD-Mon-YYYY. */
+ * YYYY-MM-DD, DD-MM-YYYY, DD/MM/YYYY, DD-Mon-YY / DD-Mon-YYYY, a bare 2-digit-year
+ * DD-MM-YY (Egypt/KSA exports), and a 5-digit Excel date serial. */
 // The ERP writes 1900-01-01 (Excel day 0/1) into a date cell it has no value for.
 // It is a blank, not a date: storing it put 42 job cards "completed in 1900".
 const isBlankDateSentinel = (iso) => !iso || Number(iso.slice(0, 4)) < 1901
 
+/** A candidate ISO 'YYYY-MM-DD' that is a real calendar day (rejects 2026-13-32,
+ *  31 Feb, etc.) - a regex can match a shape that is not a date. */
+function isValidIsoDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '')
+  if (!m) return false
+  const y = +m[1]
+  const mo = +m[2]
+  const d = +m[3]
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return false
+  const dt = new Date(Date.UTC(y, mo - 1, d))
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d
+}
+
+// Excel stores a date as the number of days since 1899-12-30 (the base accounts
+// for Excel's phantom 1900 leap day). A date cell exported as a raw serial is a
+// 5-digit integer; we only accept the business window (~2000-01-01 to 2099-12-31)
+// so a 5-digit meter reading that lands in a date column is not read as a date.
+const EXCEL_SERIAL_MIN = 36526 // 2000-01-01
+const EXCEL_SERIAL_MAX = 73050 // 2099-12-31
+function excelSerialToIso(s) {
+  const n = Number(s)
+  if (!Number.isFinite(n) || n < EXCEL_SERIAL_MIN || n > EXCEL_SERIAL_MAX) return ''
+  const dt = new Date(Date.UTC(1899, 11, 30) + n * 86400000)
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`
+}
+
 export function parseDate(v) {
+  const st = parseDateStatus(v)
+  return st.value == null ? '' : st.value
+}
+
+/**
+ * parseDate with a reason. Returns { value, unparsed }:
+ *   - blank cell          -> { value: null, unparsed: false }   (nothing to read)
+ *   - a real date         -> { value: 'YYYY-MM-DD', unparsed: false }
+ *   - the ERP 1900 blank  -> { value: null, unparsed: false }   (a deliberate blank)
+ *   - non-empty junk      -> { value: null, unparsed: true }    (could not be read)
+ * This is THE single source of the intake "N dates could not be read" count;
+ * parseDate() is the string-returning wrapper every other caller already uses.
+ */
+export function parseDateStatus(v) {
+  const s = clean(v)
+  if (!s) return { value: null, unparsed: false }
   const iso = parseDateRaw(v)
-  return isBlankDateSentinel(iso) ? '' : iso
+  if (!iso) return { value: null, unparsed: true }
+  if (isBlankDateSentinel(iso)) return { value: null, unparsed: false }
+  return { value: iso, unparsed: false }
 }
 
 function parseDateRaw(v) {
   const s = clean(v)
   if (!s) return ''
+  let cand = ''
   let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/)
-  if (m) return `${m[1]}-${m[2]}-${m[3]}`
-  m = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/)          // DD-MM-YYYY
-  if (m) return `${m[3]}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`
-  m = s.match(/^(\d{1,2})[-/]([A-Za-z]{3})[-/](\d{2,4})/)     // DD-Mon-YY
   if (m) {
+    cand = `${m[1]}-${m[2]}-${m[3]}`
+  } else if ((m = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/))) {       // DD-MM-YYYY
+    cand = `${m[3]}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`
+  } else if ((m = s.match(/^(\d{1,2})[-/]([A-Za-z]{3})[-/](\d{2,4})/))) { // DD-Mon-YY / DD-Mon-YYYY
     const mo = MONTHS[m[2].toLowerCase()]
-    if (!mo) return ''
-    let y = Number(m[3]); if (y < 100) y += 2000
-    return `${y}-${String(mo).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`
+    if (mo) {
+      let y = Number(m[3]); if (y < 100) y += 2000
+      cand = `${y}-${String(mo).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`
+    }
+  } else if ((m = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2})(?!\d)/))) { // DD-MM-YY (2-digit year)
+    // Century pivot matches Postgres to_date(..., 'YY') and master_parse_date:
+    // 00-69 -> 2000s, 70-99 -> 1900s.
+    const yy = Number(m[3])
+    const y = yy <= 69 ? 2000 + yy : 1900 + yy
+    cand = `${y}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`
+  } else if (/^\d{5}$/.test(s)) {                                        // Excel date serial
+    cand = excelSerialToIso(s)
   }
-  return ''
+  return isValidIsoDate(cand) ? cand : ''
+}
+
+/** Parse a date cell AND tally an unreadable (non-empty junk) cell on `acc`.
+ *  Returns the ISO string or null - behaviour-identical to `parseDate(raw) || null`
+ *  at every call site, plus the side-effect count the result screen reports. */
+function dateCell(raw, acc) {
+  const st = parseDateStatus(raw)
+  if (st.unparsed && acc) acc.unparsed += 1
+  return st.value
 }
 
 const numStr = (v) => {
@@ -160,7 +224,8 @@ function orderFitRemove(fit, rem, numeric) {
 }
 
 /** Map a monthly tyre-consumption sheet to tyre_records rows. Cost is NOT taken. */
-function mapMonthlyTyres(dataRows, headerRow, country) {
+function mapMonthlyTyres(dataRows, headerRow, country, acc) {
+  const pd = (raw) => dateCell(raw, acc)
   const h = indexByToken(headerRow)
   const c = {
     job: h.find('job card no.', 'job card no', 'job card'), veh: h.find('veh.no', 'veh no', 'veh no.'),
@@ -180,7 +245,7 @@ function mapMonthlyTyres(dataRows, headerRow, country) {
     const serial = cellAt(r, c.serial)
     const asset = cellAt(r, c.veh)
     if (!serial && !asset) continue
-    let [issue, removal] = orderFitRemove(parseDate(cellAt(r, c.fixd)) || null, parseDate(cellAt(r, c.remd)) || null, false)
+    let [issue, removal] = orderFitRemove(pd(cellAt(r, c.fixd)), pd(cellAt(r, c.remd)), false)
     const [fkm, rkm] = orderFitRemove(numStr(cellAt(r, c.fixkm)) || null, numStr(cellAt(r, c.remkm)) || null, true)
     const [fhr, rhr] = orderFitRemove(numStr(cellAt(r, c.fixhr)) || null, numStr(cellAt(r, c.remhr)) || null, true)
     out.push({
@@ -203,7 +268,8 @@ function mapMonthlyTyres(dataRows, headerRow, country) {
 }
 
 /** Map a vehicle-complaints history sheet to work_orders rows. Cost is NOT taken. */
-function mapComplaints(dataRows, headerRow, country) {
+function mapComplaints(dataRows, headerRow, country, acc) {
+  const pd = (raw) => dateCell(raw, acc)
   const h = indexByToken(headerRow)
   const c = {
     veh: h.find('veh no.', 'veh no'), driver: h.find('driver name'), loc: h.find('location'),
@@ -216,7 +282,8 @@ function mapComplaints(dataRows, headerRow, country) {
     const wo = cellAt(r, c.jc)
     const asset = cellAt(r, c.veh)
     if (!wo && !asset) continue
-    const outDate = parseDate(cellAt(r, c.outdt))
+    const outDate = pd(cellAt(r, c.outdt))
+    const openedAt = pd(cellAt(r, c.indt))
     const notes = [cellAt(r, c.done), cellAt(r, c.qc)].filter(Boolean).join(' | ').slice(0, 1500)
     out.push({
       work_order_no: wo || null, asset_no: asset || null,
@@ -228,7 +295,7 @@ function mapComplaints(dataRows, headerRow, country) {
       odometer: numStr(cellAt(r, c.kmhr)) || null,
       // See the note in mapCombined: an explicit null defeats the NOT NULL
       // column default and kills the whole batch on one blank date.
-      ...(parseDate(cellAt(r, c.indt)) ? { opened_at: parseDate(cellAt(r, c.indt)) } : {}),
+      ...(openedAt ? { opened_at: openedAt } : {}),
       completed_at: outDate || null,
       custom_data: { source: 'Vehicle Complaints History', ...rawObject(headerRow, r) },
       country,
@@ -241,7 +308,8 @@ function mapComplaints(dataRows, headerRow, country) {
  * carry a tyre change (srno). Returns BOTH the work_orders rows (deduped downstream by
  * work_order_no) and the tyre_records rows (only where a tyre serial is present). Cost
  * is NOT taken from this file. */
-function mapCombined(dataRows, headerRow, country) {
+function mapCombined(dataRows, headerRow, country, acc) {
+  const pd = (raw) => dateCell(raw, acc)
   const h = indexByToken(headerRow)
   const c = {
     loc: h.find('asset location'), cat: h.find('category'), jtype: h.find('job type'),
@@ -260,7 +328,8 @@ function mapCombined(dataRows, headerRow, country) {
     const wo = cellAt(r, c.jc)
     const asset = cellAt(r, c.asset)
     if (wo || asset) {
-      const outDate = parseDate(cellAt(r, c.outdt))
+      const outDate = pd(cellAt(r, c.outdt))
+      const openedAt = pd(cellAt(r, c.indt))
       const notes = [cellAt(r, c.done), cellAt(r, c.qc), cellAt(r, c.jcrem)].filter(Boolean).join(' | ').slice(0, 1500)
       workOrders.push({
         work_order_no: wo || null, asset_no: asset || null,
@@ -274,7 +343,7 @@ function mapCombined(dataRows, headerRow, country) {
         // blank date used to abort the entire batch at zero rows with a sanitized
         // message that never mentioned the column. Omitting the key lets the
         // default do its job; the real value is still preserved in custom_data.
-        ...(parseDate(cellAt(r, c.indt)) ? { opened_at: parseDate(cellAt(r, c.indt)) } : {}),
+        ...(openedAt ? { opened_at: openedAt } : {}),
         completed_at: outDate || null,
         custom_data: { source: 'Combined Job Card + Tyre', ...rawObject(headerRow, r) },
         country,
@@ -282,7 +351,7 @@ function mapCombined(dataRows, headerRow, country) {
     }
     const serial = cellAt(r, c.srno)
     if (serial) {
-      const [issue, removal] = orderFitRemove(parseDate(cellAt(r, c.fixd)) || null, parseDate(cellAt(r, c.remd)) || null, false)
+      const [issue, removal] = orderFitRemove(pd(cellAt(r, c.fixd)), pd(cellAt(r, c.remd)), false)
       const [fkm, rkm] = orderFitRemove(numStr(cellAt(r, c.fixkm)) || null, numStr(cellAt(r, c.remkm)) || null, true)
       const [fhr, rhr] = orderFitRemove(numStr(cellAt(r, c.fixhm)) || null, numStr(cellAt(r, c.remhm)) || null, true)
       tyres.push({
@@ -304,7 +373,8 @@ function mapCombined(dataRows, headerRow, country) {
 }
 
 /** Map an open-job-card follow-up sheet to open_work_orders rows (a replaceable snapshot). */
-function mapOpenWo(dataRows, headerRow, country) {
+function mapOpenWo(dataRows, headerRow, country, acc) {
+  const pd = (raw) => dateCell(raw, acc)
   const h = indexByToken(headerRow)
   const c = {
     loc: h.find('location'), jtype: h.find('job card type'), jc: h.find('job card no'),
@@ -318,7 +388,7 @@ function mapOpenWo(dataRows, headerRow, country) {
     if (!jc) continue
     out.push({
       job_card_no: jc, location: cellAt(r, c.loc) || null, job_card_type: cellAt(r, c.jtype) || null,
-      jc_status: cellAt(r, c.status) || null, job_card_date: parseDate(cellAt(r, c.jdate)) || null,
+      jc_status: cellAt(r, c.status) || null, job_card_date: pd(cellAt(r, c.jdate)),
       open_time: cellAt(r, c.jtime) || null, asset_type: cellAt(r, c.atype) || null,
       asset_no: cellAt(r, c.asset) || null, days_open: numStr(cellAt(r, c.days)) || null,
       complaint: (cellAt(r, c.comp) || '').slice(0, 1000), country,
@@ -329,7 +399,8 @@ function mapOpenWo(dataRows, headerRow, country) {
 
 /** Map an asset master (equipment grid) to vehicle_fleet rows. Only the fleet fields
  * the app uses are taken; ERP finance/insurance/driver-licence extras are ignored. */
-function mapAssets(dataRows, headerRow, country) {
+function mapAssets(dataRows, headerRow, country, acc) {
+  const pd = (raw) => dateCell(raw, acc)
   const h = indexByToken(headerRow)
   const c = {
     asset: h.find('asset no.', 'asset no'), desc: h.find('asset desc.', 'asset desc'),
@@ -361,17 +432,17 @@ function mapAssets(dataRows, headerRow, country) {
       site: cellAt(r, c.loc) || null, arabic_location: cellAt(r, c.arloc) || null,
       status: cellAt(r, c.status) || null, asset_shift: cellAt(r, c.shift) || null,
       current_km: numStr(cellAt(r, c.km)) || null, current_hours: numStr(cellAt(r, c.hour)) || null,
-      driver_licence_issue: parseDate(cellAt(r, c.dli)) || null, driver_licence_expiry: parseDate(cellAt(r, c.dle)) || null,
-      mvip_issue: parseDate(cellAt(r, c.mvi)) || null, mvip_expiry: parseDate(cellAt(r, c.mve)) || null,
+      driver_licence_issue: pd(cellAt(r, c.dli)), driver_licence_expiry: pd(cellAt(r, c.dle)),
+      mvip_issue: pd(cellAt(r, c.mvi)), mvip_expiry: pd(cellAt(r, c.mve)),
       user1_code: cellAt(r, c.u1c) || null, user1_name: cellAt(r, c.u1n) || null,
       user2_code: cellAt(r, c.u2c) || null, user2_name: cellAt(r, c.u2n) || null,
       insurance_type: cellAt(r, c.itype) || null, insurance_name: cellAt(r, c.iname) || null,
-      insurance_start: parseDate(cellAt(r, c.istart)) || null, insurance_expiry: parseDate(cellAt(r, c.iexp)) || null,
+      insurance_start: pd(cellAt(r, c.istart)), insurance_expiry: pd(cellAt(r, c.iexp)),
       insurance_value: numStr(cellAt(r, c.ival)) || null,
-      operating_card_no: cellAt(r, c.ocno) || null, operating_card_issue: parseDate(cellAt(r, c.oci)) || null,
-      operating_card_expiry: parseDate(cellAt(r, c.oce)) || null,
+      operating_card_no: cellAt(r, c.ocno) || null, operating_card_issue: pd(cellAt(r, c.oci)),
+      operating_card_expiry: pd(cellAt(r, c.oce)),
       model_year: intVal(cellAt(r, c.myear)) || null, useful_life: cellAt(r, c.ulife) || null,
-      operation_start_date: parseDate(cellAt(r, c.ostart)) || null,
+      operation_start_date: pd(cellAt(r, c.ostart)),
       purchase_value: numStr(cellAt(r, c.pval)) || null, net_book_value: numStr(cellAt(r, c.nbv)) || null,
       monthly_depreciation: numStr(cellAt(r, c.dep)) || null, fa_asset_number: cellAt(r, c.fano) || null,
       asset_remarks: cellAt(r, c.remarks) || null,
@@ -403,14 +474,17 @@ export function intakeSheet(aoa = [], { country = 'KSA' } = {}) {
   }
   let rows = []
   let tyreRows = [] // combined export: tyre_records rows carried alongside the work orders
-  if (det.type === REPORT_TYPES.MONTHLY_TYRES) rows = mapMonthlyTyres(kept, det.headerRow, country)
-  else if (det.type === REPORT_TYPES.COMPLAINTS) rows = mapComplaints(kept, det.headerRow, country)
+  // Tally date cells that carried content but could not be read, so the result
+  // screen can say "N dates could not be read" instead of silently dropping them.
+  const dateStats = { unparsed: 0 }
+  if (det.type === REPORT_TYPES.MONTHLY_TYRES) rows = mapMonthlyTyres(kept, det.headerRow, country, dateStats)
+  else if (det.type === REPORT_TYPES.COMPLAINTS) rows = mapComplaints(kept, det.headerRow, country, dateStats)
   else if (det.type === REPORT_TYPES.COMBINED) {
-    const combined = mapCombined(kept, det.headerRow, country)
+    const combined = mapCombined(kept, det.headerRow, country, dateStats)
     rows = combined.workOrders
     tyreRows = combined.tyres
-  } else if (det.type === REPORT_TYPES.OPEN_WO) rows = mapOpenWo(kept, det.headerRow, country)
-  else if (det.type === REPORT_TYPES.ASSETS) rows = mapAssets(kept, det.headerRow, country)
+  } else if (det.type === REPORT_TYPES.OPEN_WO) rows = mapOpenWo(kept, det.headerRow, country, dateStats)
+  else if (det.type === REPORT_TYPES.ASSETS) rows = mapAssets(kept, det.headerRow, country, dateStats)
   // GRID rows are handled by the parts-expense engine (cost source) - the importer
   // routes type === 'grid' there; intakeSheet returns the detection so the caller knows.
   // FULL ROW ACCOUNTING so nothing is ever silently lost:
@@ -419,5 +493,5 @@ export function intakeSheet(aoa = [], { country = 'KSA' } = {}) {
   const read = kept.length
   const noKey = Math.max(0, read - rows.length)
   const dropped = footerRows + blankRows // back-compat (footer/blank only)
-  return { type: det.type, target: det.target, rows, tyreRows, dropped, read, footerRows, blankRows, noKey }
+  return { type: det.type, target: det.target, rows, tyreRows, dropped, read, footerRows, blankRows, noKey, unparsedDates: dateStats.unparsed }
 }

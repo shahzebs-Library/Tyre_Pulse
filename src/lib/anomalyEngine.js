@@ -4,6 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { currencyForCountry } from './governedCost'
+import { withOnePricePerTyre } from './tyreLifetime'
 import { mean, stdDev, groupBy } from './analyticsEngine'
 
 export const ANOMALY_TYPES = {
@@ -381,7 +382,11 @@ export function computeVisitStats(records, opts = {}) {
     if (!days.has(d)) days.set(d, [])
     days.get(d).push(rec)
   }
-  ;(records || []).forEach(r => add(normaliseVisitRecord(r, 'tyre')))
+  // A refit of the same physical tyre is not a second purchase: collapse refit
+  // duplicate prices (withOnePricePerTyre) before accumulating per-asset cost so
+  // `total_cost` is not inflated. This call has already been narrowed to one
+  // country above, so the figure is single-currency.
+  ;(withOnePricePerTyre(records || [])).forEach(r => add(normaliseVisitRecord(r, 'tyre')))
   ;(workOrders || []).forEach(w => add(normaliseVisitRecord(w, 'wo')))
 
   const nowMs = now.getTime()
@@ -420,7 +425,10 @@ export function computeVisitStats(records, opts = {}) {
       last30: within(30),
       last90: within(90),
       peak90,
+      // Priced tyre records only (refits collapsed), not the governed expense
+      // grid; the Ops feed labels it so it is not mistaken for total spend.
       total_cost: Math.round(totalCost),
+      cost_basis: 'priced_records',
       visits,
     })
   }

@@ -1,0 +1,4 @@
+{
+  "_comment": "i18n ratchet (F-J-02 infra). Count of src/pages/*.jsx files that call NO t() helper AND carry more than 10 literal JSX strings. The ratchet test (pagesWithoutT.ratchet.test.js) fails if the live count rises above this baseline, so no new page may ship un-internationalised while the backlog is worked down. When a page is localised, the count drops; LOWER this number to lock the gain in. Measured 2026-11-11.",
+  "baseline": 194
+}

@@ -14,6 +14,7 @@
 import { computeAllKpis } from './kpiEngine'
 import { analyzeClaims, hasClaim, isClosed } from './claimsAnalytics'
 import { isClosedWoStatus } from './workOrderStatus'
+import { withOnePricePerTyre } from './tyreLifetime'
 
 const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0)
 const isNum = (v) => Number.isFinite(Number(v))
@@ -59,7 +60,14 @@ export function buildBoardKpis({ tyres = [], inspections = [], actions = [], fle
   const kpi = computeAllKpis(tyres, inspections, actions, fleetSize)
   const claims = analyzeClaims(accidents, { now })
 
-  const tyreSpend = tyres.reduce((s, r) => s + n(r.cost_per_tyre) * (n(r.qty) || 1), 0)
+  // FALLBACK tyre spend. The authoritative figure is the classified expense
+  // grid (BoardOverview.jsx prefers loadCostSplit and only drops to this engine
+  // value when the grid holds nothing for the scope). It is a PRICED TYRE
+  // RECORDS figure: a refit of the same physical tyre is collapsed to one price
+  // (withOnePricePerTyre) so a re-fitment is never double counted, and roughly
+  // half of tyre rows carry no price, so it reads low. It is single-currency by
+  // construction here (buildBoardKpis is called per country scope).
+  const tyreSpend = withOnePricePerTyre(tyres).reduce((s, r) => s + n(r.cost_per_tyre) * (n(r.qty) || 1), 0)
   const openAccidents = accidents.filter((a) => !isClosed(a)).length
   // One status vocabulary (workOrderStatus.js). The old local regex missed
   // Cancelled, so a cancelled job card was counted as open work.
@@ -107,9 +115,13 @@ export function buildTrends({ tyres = [], accidents = [], inspections = [], now 
   const labels = slots.map((m) => m.label)
   const claimed = bucketMonthly(accidents.filter(hasClaim), 'incident_date', (r) => n(r.claim_amount), now)
   const recovered = bucketMonthly(accidents.filter(hasClaim), 'incident_date', (r) => n(r.recovered_amount), now)
+  // Fallback tyre-spend trend over PRICED TYRE RECORDS (refits collapsed to one
+  // price). The page prefers the grid series and relabels; see the note on
+  // tyreSpend in buildBoardKpis.
+  const pricedTyres = withOnePricePerTyre(tyres)
   return {
     labels,
-    tyreSpend: { labels, datasets: [{ label: 'Tyre spend', data: bucketMonthly(tyres, 'issue_date', (r) => n(r.cost_per_tyre) * (n(r.qty) || 1), now) }] },
+    tyreSpend: { labels, datasets: [{ label: 'Tyre spend', data: bucketMonthly(pricedTyres, 'issue_date', (r) => n(r.cost_per_tyre) * (n(r.qty) || 1), now) }] },
     accidents: { labels, datasets: [{ label: 'Accidents', data: bucketMonthly(accidents, 'incident_date', () => 1, now) }] },
     claims: { labels, datasets: [{ label: 'Claimed', data: claimed }, { label: 'Recovered', data: recovered }] },
     inspections: { labels, datasets: [{ label: 'Inspections', data: bucketMonthly(inspections, 'completed_date', () => 1, now) }] },

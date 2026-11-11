@@ -33,6 +33,7 @@ import EnterpriseTable from '../components/ui/EnterpriseTable'
 import EmailPdfButton from '../components/EmailPdfButton'
 import { useSettings } from '../contexts/SettingsContext'
 import { loadOpsData } from '../lib/api/opsIntelligence'
+import { loadGovernedCostSplit, COST_SPLIT_TTL_MS } from '../lib/api/governedCost'
 import { loadPmDashboard } from '../lib/api/pmPrograms'
 import { summarizePmCompliance } from '../lib/pmSchedule'
 import {
@@ -116,6 +117,28 @@ export default function OpsIntelligence() {
   // degrades to an empty bundle (honest: nothing extra surfaces when no plans).
   const [pmData, setPmData] = useState(null)
 
+  // GOVERNED tyre spend (classified expense grid) so the YTD tyre-spend figure
+  // and budget consumption reconcile with Expenses & CPK instead of being a
+  // cost_per_tyre sum that reads several-fold low. Loaded independently; null
+  // until it resolves, and never used on the All scope (currencies not comparable).
+  const [costSplit, setCostSplit] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    setCostSplit(null)
+    // YTD window (current-year start -> today, LOCAL dates) so the governed total
+    // matches the current-year budget period buildFinancials compares it against.
+    // The default trailing-12-month window would pull last December into this year
+    // and overstate budget consumption. Local getters, never toISOString (UTC).
+    const today = new Date()
+    const pad = (n) => String(n).padStart(2, '0')
+    const from = `${today.getFullYear()}-01-01`
+    const to = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
+    loadGovernedCostSplit({ country: activeCountry, from, to, maxAgeMs: COST_SPLIT_TTL_MS })
+      .then((res) => { if (!cancelled) setCostSplit(res) })
+      .catch(() => { if (!cancelled) setCostSplit(null) })
+    return () => { cancelled = true }
+  }, [activeCountry])
+
   const load = useCallback(async () => {
     setRefreshing(true); setError('')
     try {
@@ -157,7 +180,15 @@ export default function OpsIntelligence() {
 
   const pulse = useMemo(() => (data ? buildFleetPulse(data, { now }) : null), [data, now])
   const anomalies = useMemo(() => (data ? buildAnomalyFeed(data, { now }) : []), [data, now])
-  const financials = useMemo(() => (data ? buildFinancials(data, { now }) : null), [data, now])
+  // Pass the governed grid tyre spend only for a single country (the engine then
+  // uses it as YTD spend instead of the priced-records sum). On the All scope the
+  // grid is blended across currencies, so we pass nothing and the page shows N/A.
+  const gridTyreSpend = useMemo(() => {
+    if (!activeCountry || activeCountry === 'All') return null
+    if (!costSplit || costSplit.blended) return null
+    return Number(costSplit.tyre) > 0 ? Number(costSplit.tyre) : null
+  }, [activeCountry, costSplit])
+  const financials = useMemo(() => (data ? buildFinancials(data, { now, gridTyreSpend }) : null), [data, now, gridTyreSpend])
   const executive = useMemo(
     () => (pulse ? buildExecutiveSummary({ pulse, anomalies, financials }, { currency }) : null),
     [pulse, anomalies, financials, currency],

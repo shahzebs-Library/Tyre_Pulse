@@ -297,6 +297,28 @@ describe('the job card is corroboration, never an override', () => {
   })
 })
 
+describe('the tyre word is whole-word only (F-F-06)', () => {
+  it('a word merely ENDING in tire is not a tyre', () => {
+    // /\btyre|tire\b/ matched "ENTIRE"/"RETIRE" because the end boundary bound
+    // only "tire". The grouped /\b(tyre|tire)\b/ does not.
+    for (const d of ['ENTIRE REPLACEMENT KIT', 'RETIRE PLANT UNIT', 'ATTIRE SAFETY VEST']) {
+      expect(classifyLine({ description: d }).bucket, d).toBe('spare')
+    }
+  })
+
+  it('a TIRES tool is not a tyre on the word test alone', () => {
+    // No tyre size, no brand, no code - the whole-word test does not fire on the
+    // plural "TIRES", so it stays the honest spare default rather than a tyre cost.
+    const r = classifyLine({ description: 'TIRES PRESSURE GAUGE TOOL' })
+    expect(r.bucket).toBe('spare')
+  })
+
+  it('still recognises the whole words tyre and tire', () => {
+    expect(classifyLine({ description: 'TYRE 315/80R22.5 20PR' }).decidedBy).toBe('description-tyre')
+    expect(classifyLine({ description: 'TIRE 10-16.5TL 12PR' }).bucket).toBe('tyre')
+  })
+})
+
 describe('a human decision wins over everything', () => {
   it('honours a reviewed category even against the code range', () => {
     // 450115-O is "COMPRESSOR OIL 68" but sits outside every code range; a reviewer

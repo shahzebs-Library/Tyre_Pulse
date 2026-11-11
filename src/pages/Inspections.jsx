@@ -50,6 +50,7 @@ import InspectionViewerDrawer from '../components/inspection/InspectionViewerDra
 import { vehiclePhoto } from '../lib/vehiclePhoto'
 import InspectionDiagram from '../components/inspection/InspectionDiagram'
 import { buildApprovalEmailHtml } from '../lib/inspectionApprovalEmail'
+import { readFunctionError } from '../lib/emailService'
 import { brandingForPdf, buildChecklistReportPdf, checklistReportFileName } from '../lib/inspectionChecklistReport'
 import {
   toList, fromList, deriveRegisterRows, tabCounts, rowsForTab, registerKpis,
@@ -1124,37 +1125,59 @@ export default function Inspections() {
   async function sendChecklistForApproval() {
     if (!clSaved?.id) return
     setClSendingEmail(true)
-    // Update DB status
+    setClError(null)
     try {
-      await inspectionsApi.patchInspection(clSaved.id, {
-        approval_status: 'pending_approval',
-        approver_email: clApproverEmail,
-        status: 'In Progress',
+      // Record "pending approval" FIRST. The status move and the email are one
+      // action to the user: if we cannot even mark it pending, we must not then
+      // claim an approval email went out - abort on the patch failure.
+      try {
+        await inspectionsApi.patchInspection(clSaved.id, {
+          approval_status: 'pending_approval',
+          approver_email: clApproverEmail,
+          status: 'In Progress',
+        })
+      } catch (patchErr) {
+        setClError(toUserMessage(patchErr, 'Could not mark the checklist pending approval. Try again.'))
+        return
+      }
+      const approvalLink = `${window.location.origin}/inspections?approve=${clSaved.id}`
+      // Send email via Edge Function. supabase-js wraps a non-2xx as a
+      // FunctionsHttpError whose .context is the raw Response; readFunctionError
+      // surfaces the function's own sanitized { error } so the user sees the real
+      // reason (never a raw transport/internal string), and we do NOT falsely
+      // report the email as sent on failure.
+      const { data, error } = await supabase.functions.invoke('send-email', {
+        body: {
+          to: clApproverEmail,
+          subject: `Inspection Approval Required: Asset ${clSaved.asset_no || clAsset}`,
+          body: buildApprovalEmailHtml({
+            assetNo: clSaved.asset_no || clAsset,
+            inspector: clInspector || profile?.full_name || '',
+            date: clDate,
+            site: clSite,
+            odometer: clOdometer,
+            hourMeter: clHourMeter,
+            notes: clNotes,
+            approvalLink,
+            signature: clSignature,
+          }),
+        },
       })
-    } catch { /* mirror prior fire-and-forget: proceed to send email regardless */ }
-    const approvalLink = `${window.location.origin}/inspections?approve=${clSaved.id}`
-    // Send email via Edge Function
-    await supabase.functions.invoke('send-email', {
-      body: {
-        to: clApproverEmail,
-        subject: `Inspection Approval Required: Asset ${clSaved.asset_no || clAsset}`,
-        body: buildApprovalEmailHtml({
-          assetNo: clSaved.asset_no || clAsset,
-          inspector: clInspector || profile?.full_name || '',
-          date: clDate,
-          site: clSite,
-          odometer: clOdometer,
-          hourMeter: clHourMeter,
-          notes: clNotes,
-          approvalLink,
-          signature: clSignature,
-        }),
-      },
-    })
-    setClSendingEmail(false)
-    setClEmailSent(true)
-    setClApprovalStatus('pending_approval')
-    setShowApprovalForm(false)
+      if (error) {
+        const serverMsg = await readFunctionError(error)
+        setClError(serverMsg || toUserMessage(error, 'Could not send the approval email. Try again.'))
+        return
+      }
+      if (data?.error) {
+        setClError(String(data.error))
+        return
+      }
+      setClEmailSent(true)
+      setClApprovalStatus('pending_approval')
+      setShowApprovalForm(false)
+    } finally {
+      setClSendingEmail(false)
+    }
   }
 
   if (loading || authLoading) return <div className="flex items-center justify-center h-64 text-[var(--text-secondary)]">{t('common.loading')}</div>

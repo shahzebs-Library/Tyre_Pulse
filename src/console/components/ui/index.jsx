@@ -47,7 +47,7 @@ export function PanelHeader({ icon: Icon, title, subtitle, actions, tone = 'defa
       {Icon && <Icon size={16} className={`${iconTone} mt-0.5 shrink-0`} />}
       <div className="flex-1 min-w-0">
         <h3 className="text-sm font-semibold text-gray-200">{title}</h3>
-        {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
+        {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2 max-w-full">{actions}</div>}
     </header>
@@ -99,10 +99,10 @@ export function StatTile({ label, value, sub, tone = 'default', icon: Icon, onCl
     >
       <div className="flex items-center gap-1.5 mb-1">
         {Icon && <Icon size={12} className="text-gray-500" aria-hidden="true" />}
-        <p className="text-[11px] uppercase tracking-wide text-gray-500 truncate">{label}</p>
+        <p className="text-[11px] uppercase tracking-wide text-gray-400 truncate">{label}</p>
       </div>
       <p className={`text-xl font-semibold tabular-nums ${TILE_TONE[tone] || TILE_TONE.default}`}>{value}</p>
-      {sub && <p className="text-[11px] text-gray-500 mt-0.5 truncate">{sub}</p>}
+      {sub && <p className="text-[11px] text-gray-400 mt-0.5 truncate">{sub}</p>}
     </Tag>
   )
 }
@@ -144,7 +144,7 @@ const BADGE_TONE = {
   warning: 'bg-amber-500/15 text-amber-200 border-amber-700/50',
   danger: 'bg-red-500/15 text-red-300 border-red-700/50',
   info: 'bg-blue-500/15 text-blue-300 border-blue-700/50',
-  quiet: 'bg-gray-900 text-gray-500 border-gray-800',
+  quiet: 'bg-gray-900 text-gray-400 border-gray-800',
 }
 
 export function Badge({ children, tone = 'default', icon: Icon, title }) {
@@ -180,7 +180,7 @@ export function Btn({ children, onClick, variant = 'ghost', size = 'sm', icon: I
   return (
     <button {...rest} type={type} onClick={onClick} disabled={disabled || busy} title={title}
       aria-label={ariaLabel || ariaLabelAttr || (!children && title ? title : undefined)} aria-busy={busy ? true : undefined}
-      className={`rounded-lg border inline-flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${FOCUS_RING} ${variants[variant] || variants.ghost} ${sizes[size] || sizes.sm} ${className}`}>
+      className={`rounded-lg border inline-flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed tp-touch-target ${FOCUS_RING} ${variants[variant] || variants.ghost} ${sizes[size] || sizes.sm} ${className}`}>
       {busy ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : (Icon && <Icon size={13} aria-hidden="true" />)}
       {children}
     </button>
@@ -207,7 +207,7 @@ export function Segmented({ options = [], value, onChange, size = 'sm', ariaLabe
           <button key={o.key} type="button" onClick={() => { if (!off) onChange?.(o.key) }} title={o.hint}
             role={itemRole} aria-selected={itemRole ? on : undefined} aria-pressed={itemRole ? undefined : on}
             disabled={off}
-            className={`rounded-md inline-flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${FOCUS_RING} ${pad} ${
+            className={`rounded-md inline-flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed tp-touch-target ${FOCUS_RING} ${pad} ${
               on ? 'bg-orange-500/20 text-orange-200 border border-orange-600/50'
                  : 'border border-transparent text-gray-500 hover:text-gray-300 hover:bg-gray-800/60'}`}>
             {o.label}
@@ -229,10 +229,10 @@ export function SearchInput({ value, onChange, placeholder = 'Search', className
       <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none" />
       <input {...rest} id={id} value={value} onChange={(e) => onChange?.(e.target.value)} placeholder={placeholder}
         aria-label={ariaLabel || ariaLabelAttr || placeholder}
-        className="w-full pl-8 pr-7 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-500 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
+        className="w-full pl-8 pr-7 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-200 placeholder-gray-400 focus:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />
       {value ? (
         <button type="button" onClick={() => onChange?.('')} title="Clear" aria-label="Clear search"
-          className={`absolute right-2 top-1/2 -translate-y-1/2 rounded text-gray-500 hover:text-gray-300 ${FOCUS_RING}`}>
+          className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded text-gray-500 hover:text-gray-300 tp-touch-target ${FOCUS_RING}`}>
           <X size={12} />
         </button>
       ) : null}
@@ -332,7 +332,7 @@ export function LoadingState({ label = 'Loading', rows = 4 }) {
           <div key={i} className="h-8 rounded-lg bg-gray-900/60 animate-pulse" style={{ opacity: 1 - i * 0.15 }} />
         ))}
       </div>
-      <p className="text-xs text-gray-500 text-center mt-3">{label}...</p>
+      <p className="text-xs text-gray-400 text-center mt-3">{label}...</p>
     </div>
   )
 }
@@ -347,7 +347,7 @@ export function EmptyState({ icon: Icon = Inbox, title, reason, action }) {
     <div className="py-10 text-center">
       <Icon size={22} className="mx-auto text-gray-600 mb-2" aria-hidden="true" />
       <p className="text-sm text-gray-400">{title}</p>
-      {reason && <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto break-words">{reason}</p>}
+      {reason && <p className="text-xs text-gray-400 mt-1 max-w-md mx-auto break-words">{reason}</p>}
       {action && <div className="mt-3 flex justify-center">{action}</div>}
     </div>
   )

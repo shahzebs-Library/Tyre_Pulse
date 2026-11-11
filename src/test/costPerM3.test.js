@@ -244,17 +244,27 @@ describe('summarizeLedger', () => {
     expect(s.totals.currencies).toEqual(['AED', 'SAR'])
   })
 
-  it('production sums approved m3 with supplied fallback + rejection counts', () => {
+  it('production counts approved m3 only - never falls back to supplied (V523)', () => {
     const s = summarizeLedger([
       { period_date: '2026-07-02', site: 'NHC', m3: 12, approved_m3: 12, rejected: false },
       { period_date: '2026-07-03', site: 'NHC', m3: 10, approved_m3: 7, rejected: true },
-      { period_date: '2026-07-04', site: 'NHC', m3: 8 }, // approved blank -> falls back to supplied
+      { period_date: '2026-07-04', site: 'NHC', m3: 8 }, // approved blank -> NOT counted as approved
     ], 'production')
-    expect(s.totals.value).toBe(27) // 12 + 7 + 8
+    expect(s.totals.value).toBe(19) // 12 + 7 + 0 (blank approved does not fall back to supplied)
     expect(s.totals.supplied_m3).toBe(30)
-    expect(s.totals.approved_m3).toBe(27)
+    expect(s.totals.approved_m3).toBe(19)
+    expect(s.totals.unapproved_loads).toBe(1) // the one load with no approved figure
+    expect(s.totals.unapproved_m3).toBe(11) // supplied 30 - approved 19
     expect(s.totals.rejected_loads).toBe(1)
     expect(s.totals.rejected_m3).toBe(3)
+  })
+
+  it('a blank approved figure is counted as 0 approved / 12 supplied, not approved', () => {
+    const s = summarizeLedger([{ period_date: '2026-07-02', site: 'NHC', m3: 12, approved_m3: null }], 'production')
+    expect(s.totals.approved_m3).toBe(0)
+    expect(s.totals.supplied_m3).toBe(12)
+    expect(s.totals.unapproved_loads).toBe(1)
+    expect(s.totals.unapproved_m3).toBe(12)
   })
 
   it('sany splits counted (non-detail) value from detail lines', () => {

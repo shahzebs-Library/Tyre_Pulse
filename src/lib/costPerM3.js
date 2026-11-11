@@ -85,7 +85,11 @@ export function fmtCostPerM3Guarded(value, productionM3, currency = '', minM3 = 
  */
 export function summarizeLedger(rows = [], kind = 'sco') {
   const list = Array.isArray(rows) ? rows : []
-  const valueOf = (r) => (kind === 'production' ? (num(r?.approved_m3) ?? num(r?.m3)) : num(r?.amount))
+  // Approved/Signed Qty IS the counted quantity (V523). A load with no approved
+  // figure has no approved quantity, so it contributes 0 here - substituting the
+  // supplied m3 would count concrete nobody signed for and inflate the ledger's
+  // Approved M3 above get_cost_per_m3.total.production_m3.
+  const valueOf = (r) => (kind === 'production' ? (num(r?.approved_m3) ?? 0) : num(r?.amount))
   const monthOf = (r) => {
     const s = String(r?.period_date || r?.invoice_date || '').slice(0, 7)
     return /^\d{4}-\d{2}$/.test(s) ? s : 'Unknown'
@@ -101,6 +105,7 @@ export function summarizeLedger(rows = [], kind = 'sco') {
   let value = 0
   let supplied = 0
   let approved = 0
+  let unapprovedLoads = 0 // production: loads supplied with no approved figure
   let rejectedLoads = 0
   let rejectedM3 = 0
   let countedValue = 0 // sany: doc_type <> 'detail' (what feeds Cost/M3)
@@ -120,8 +125,11 @@ export function summarizeLedger(rows = [], kind = 'sco') {
     if (kind === 'production') {
       const sup = num(r?.m3) ?? num(r?.supplied_m3)
       if (sup != null) supplied += sup
-      const app = num(r?.approved_m3) ?? num(r?.m3)
+      // Approved only - no supplied fallback (V523). A null approved figure is a
+      // load supplied but not signed for, counted as unapproved rather than approved.
+      const app = num(r?.approved_m3)
       if (app != null) approved += app
+      else unapprovedLoads += 1
       if (r?.rejected === true || r?.rejected === 'true') {
         rejectedLoads += 1
         const gap = (sup ?? 0) - (num(r?.approved_m3) ?? 0)
@@ -157,6 +165,10 @@ export function summarizeLedger(rows = [], kind = 'sco') {
     totals.approved_m3 = list.length ? approved : null
     totals.rejected_loads = rejectedLoads
     totals.rejected_m3 = rejectedM3
+    // The gap between what was supplied and what was approved, stated rather than
+    // left silent: loads with no approved figure, and the m3 that carries.
+    totals.unapproved_loads = list.length ? unapprovedLoads : null
+    totals.unapproved_m3 = list.length ? Math.max(supplied - approved, 0) : null
   }
   if (kind === 'sany') {
     totals.counted_value = list.length ? countedValue : null
@@ -193,6 +205,8 @@ export function summaryFromMonthly(monthly = [], kind = 'sco', opts = {}) {
   let value = 0
   let supplied = 0
   let approved = 0
+  let unapprovedLoads = 0
+  let unapprovedLoadsSeen = false // did the server aggregate carry the field at all?
   let rejectedLoads = 0
   let rejectedM3 = 0
   let countedValue = 0
@@ -214,6 +228,10 @@ export function summaryFromMonthly(monthly = [], kind = 'sco', opts = {}) {
       approved += num(m?.approved_m3) ?? 0
       rejectedLoads += num(m?.rejected_loads) ?? 0
       rejectedM3 += num(m?.rejected_m3) ?? num(m?.not_approved_m3) ?? 0
+      // Loads supplied but not approved, if the server reports them per month;
+      // left null (not a fabricated 0) when the aggregate does not carry the field.
+      const ul = num(m?.unapproved_loads)
+      if (ul != null) { unapprovedLoads += ul; unapprovedLoadsSeen = true }
     } else {
       // sany separates the payable summary from the parts detail; only the
       // summary feeds Cost per M3, so the two must not be added together.
@@ -259,6 +277,8 @@ export function summaryFromMonthly(monthly = [], kind = 'sco', opts = {}) {
     totals.approved_m3 = list.length ? approved : null
     totals.rejected_loads = rejectedLoads
     totals.rejected_m3 = rejectedM3
+    totals.unapproved_loads = (list.length && unapprovedLoadsSeen) ? unapprovedLoads : null
+    totals.unapproved_m3 = list.length ? Math.max(supplied - approved, 0) : null
   } else if (kind === 'sany') {
     totals.counted_value = list.length ? countedValue : null
     totals.detail_rows = detailRows

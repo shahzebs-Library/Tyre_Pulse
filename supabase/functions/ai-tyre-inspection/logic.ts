@@ -18,7 +18,7 @@ export const ENQUEUE_ROLES = ["admin", "manager", "director", "maintenance super
 export const REVIEW_ROLES = ["admin", "manager", "director", "maintenance supervisor"] as const;
 export const BACKFILL_ROLES = ["admin", "manager", "director", "maintenance supervisor", "pmv manager"] as const;
 export const RETRY_ROLES = ["admin", "manager", "director"] as const;
-export const PROMPT_VERSION = "tyre-photo-v3";
+export const PROMPT_VERSION = "tyre-photo-v4";
 
 const norm = (role: unknown) => String(role ?? "").trim().toLowerCase();
 export const roleAllowed = (role: unknown, allowed: readonly string[]) => allowed.includes(norm(role));

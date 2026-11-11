@@ -78,10 +78,10 @@ export async function runAnalystAgent(query, {
     `Scrap Rate: ${((kpis.scrapRate?.scrapRate ?? 0) * 100).toFixed(1)}% (est. cost: ${kpis.scrapRate?.estimatedScrapCost?.toFixed(0) ?? 'N/A'})`,
     `Fleet Availability: ${kpis.fleetAvailability?.availabilityPct?.toFixed(1) ?? 'N/A'}%`,
     vendorRank.length
-      ? `Top Brands (lifetime CPK weighted, best first): ${vendorRank.map(b => `${b.brand} (${b.avgCpk?.toFixed(3)})`).join(', ')}`
+      ? `Top Brands (lifetime CPK weighted, best first): ${vendorRank.map(b => `${b.brand} (${(b.avgCpk != null ? b.avgCpk.toFixed(3) : 'N/A')})`).join(', ')}`
       : '',
     siteCpk.length
-      ? `Worst Sites by lifetime CPK (weighted): ${siteCpk.map(s => `${s.site} (${s.avgCpk?.toFixed(3)})`).join(', ')}`
+      ? `Worst Sites by lifetime CPK (weighted): ${siteCpk.map(s => `${s.site} (${(s.avgCpk != null ? s.avgCpk.toFixed(3) : 'N/A')})`).join(', ')}`
       : '',
   ].filter(Boolean).join('\n')
 

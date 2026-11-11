@@ -859,7 +859,10 @@ export function computeVendorPerformance(records = []) {
     const rows        = eventGroups[brand] ?? []
     const validRows   = tyres.filter(_isValidRecord)
     const cpkBlock    = _groupCpk(validRows)
-    const avgCpk      = cpkBlock.avgCpk ?? 0
+    // HONEST NULL: a vendor with no measurable, same-currency CPK stays null (N/A),
+    // never a flattering 0 that would rank an unpriced brand as the cheapest per km.
+    // The score math below reads `avgCpk > 0`, which is false for null exactly as for 0.
+    const avgCpk      = cpkBlock.avgCpk
     const lifeTyres   = tyres.filter(t => Number(t._life_km) > 0)
     const avgLife     = lifeTyres.length > 0 ? _mean(lifeTyres.map(_lifeKm)) : 0
     const failureCount = rows.filter(r => r.risk_level === 'High' || r.risk_level === 'Critical').length
@@ -912,7 +915,8 @@ export function computeWorkshopPerformance(records = [], actions = []) {
     const totalCost   = valid.reduce((s, t) => s + t._cost * (t._qty || 1), 0)
     const qtySum      = _qtySum(valid)
     const avgCost     = qtySum > 0 ? totalCost / qtySum : 0
-    const avgCpk      = cpkBlock.avgCpk ?? 0
+    // HONEST NULL (see computeVendorPerformance): an unmeasurable site CPK stays null.
+    const avgCpk      = cpkBlock.avgCpk
     const highRiskPct = rows.length > 0 ? (highRisk.length / rows.length) * 100 : 0
 
     const siteActions = actionBySite[site] ?? []

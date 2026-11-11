@@ -112,12 +112,12 @@ export async function runPlannerAgent(query, {
     ``,
     `## Site Priorities (Highest CPK - Act First)`,
     highPrioritySites.length
-      ? highPrioritySites.map(s => `- ${s.site}: lifetime CPK ${s.avgCpk?.toFixed(3)}, ${s.count} physical tyres`).join('\n')
+      ? highPrioritySites.map(s => `- ${s.site}: lifetime CPK ${(s.avgCpk != null ? s.avgCpk.toFixed(3) : 'N/A')}, ${s.count} physical tyres`).join('\n')
       : '- No site data available',
     ``,
     `## Procurement Recommendation (Best Value Brands)`,
     topBrands.length
-      ? topBrands.map(b => `- ${b.brand}: CPK ${b.avgCpk?.toFixed(3)}, Life ${b.avgLife?.toFixed(0)} km (Rank #${b.rank})`).join('\n')
+      ? topBrands.map(b => `- ${b.brand}: CPK ${(b.avgCpk != null ? b.avgCpk.toFixed(3) : 'N/A')}, Life ${b.avgLife?.toFixed(0)} km (Rank #${b.rank})`).join('\n')
       : '- Insufficient brand data for recommendation',
   ].filter(s => s !== null).join('\n')
 

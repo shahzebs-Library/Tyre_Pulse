@@ -94,8 +94,14 @@ export function headlineMetrics(kpis, { inspectionsLoaded = 0 } = {}) {
   const cpk = kpis.cpk || {}
   const life = kpis.avgTyreLife || {}
   const scrap = kpis.scrapRate || {}
+  // A fleet CPK summed across countries blends currencies (rule T10), so on the
+  // "All countries" view the scalar is null and the page shows the per-country
+  // rows instead of a single SAR-labelled number.
+  const cpkMixedCurrency = Boolean(cpk.mixedCurrency)
   return {
-    cpk: cpk.validCount > 0 ? (cpk.weightedCpk ?? cpk.fleetAvgCpk) : null,
+    cpk: !cpkMixedCurrency && cpk.validCount > 0 ? (cpk.weightedCpk ?? cpk.fleetAvgCpk) : null,
+    cpkMixedCurrency,
+    cpkByCountry: cpk.cpkByCountry ?? [],
     cpkCoveragePct: cpk.totalCount > 0 ? cpk.coveragePct : null,
     cpkValidCount: cpk.validCount ?? 0,
     cpkTotalCount: cpk.totalCount ?? 0,

@@ -428,6 +428,14 @@ export default function EngineeringKpi() {
     } = kpis
     const currency = activeCurrency
     const cpkMeasured = head.cpk != null
+    // Mixed currency (the All-countries view): never print one SAR/km number that
+    // blends SAR + AED + EGP (rule T10). Show the per-country figures instead,
+    // each in its own currency.
+    const cpkMixed = head.cpkMixedCurrency
+    const cpkNaReason = cpkMixed ? 'N/A (mixed currencies)' : 'N/A (no km data)'
+    const cpkByCountryText = (head.cpkByCountry || [])
+      .filter(r => r.cpk != null)
+      .map(r => `${r.country}: ${r.cpk.toFixed(4)}`).join(', ')
 
     // Failure rate: null means no tyre was rated; `null * 100` would be 0 and
     // flatter an unmeasured metric to "0.0% good".
@@ -458,20 +466,24 @@ export default function EngineeringKpi() {
     return [
       {
         title: 'CPK Fleet Average',
-        value: cpkMeasured ? `${currency} ${head.cpk.toFixed(4)}/km` : 'N/A (no km data)',
+        value: cpkMeasured ? `${currency} ${head.cpk.toFixed(4)}/km` : cpkNaReason,
         subValue: `Coverage: ${cpk.validCount} of ${cpk.totalCount} records (${cpk.coveragePct.toFixed(0)}%)`,
-        description: `Median CPK: ${cpkMeasured && isMeasured(cpk.medianCpk) ? `${currency} ${cpk.medianCpk.toFixed(4)}/km` : 'N/A'}`,
+        description: cpkMixed
+          ? (cpkByCountryText ? `Per country (own currency /km): ${cpkByCountryText}. Pick a country for a single-currency figure.` : 'Pick a country for a single-currency figure.')
+          : `Median CPK: ${cpkMeasured && isMeasured(cpk.medianCpk) ? `${currency} ${cpk.medianCpk.toFixed(4)}/km` : 'N/A'}`,
         status: cpkStatus(head.cpk),
         trend: cpkMeasured ? (head.cpk < 1.5 ? 'down' : 'up') : null,
         trendLabel: cpkMeasured ? (head.cpk < 1.5 ? 'Optimal range' : 'Above target') : null,
       },
       {
         title: 'Cost Per Mile',
-        value: cpkMeasured ? `${currency} ${(head.cpk * 1.60934).toFixed(4)}/mile` : 'N/A (no km data)',
+        value: cpkMeasured ? `${currency} ${(head.cpk * 1.60934).toFixed(4)}/mile` : cpkNaReason,
         subValue: 'Derived from CPK x 1.609',
-        description: cpkMeasured && isMeasured(cpk.p10Cpk)
-          ? `P10: ${currency} ${(cpk.p10Cpk * 1.60934).toFixed(4)}, P90: ${currency} ${(cpk.p90Cpk * 1.60934).toFixed(4)}`
-          : 'Upload km at fitment and km at removal',
+        description: cpkMixed
+          ? 'Pick a country for a single-currency figure.'
+          : cpkMeasured && isMeasured(cpk.p10Cpk)
+            ? `P10: ${currency} ${(cpk.p10Cpk * 1.60934).toFixed(4)}, P90: ${currency} ${(cpk.p90Cpk * 1.60934).toFixed(4)}`
+            : 'Upload km at fitment and km at removal',
         status: cpkStatus(head.cpk),
       },
       {
@@ -934,8 +946,8 @@ export default function EngineeringKpi() {
               metricId="fleet_cpk"
               country={activeCountry}
               title="Fleet CPK"
-              value={head.cpk == null ? 'N/A' : `${activeCurrency} ${head.cpk.toFixed(4)}`}
-              sub={head.cpk == null ? 'No km and price data' : `${activeCurrency}/km, ${head.cpkCoveragePct.toFixed(0)}% coverage`}
+              value={head.cpk == null ? (head.cpkMixedCurrency ? 'N/A (mixed)' : 'N/A') : `${activeCurrency} ${head.cpk.toFixed(4)}`}
+              sub={head.cpk == null ? (head.cpkMixedCurrency ? 'Mixed currencies - pick one country' : 'No km and price data') : `${activeCurrency}/km, ${head.cpkCoveragePct.toFixed(0)}% coverage`}
               status={cpkStatus(head.cpk)}
             />
             <HeadlineCard

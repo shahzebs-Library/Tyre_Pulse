@@ -1,4 +1,19 @@
-import { toLifetimeTyres, hasLifetimeCpk, lifetimeCpk, weightedCpk, withOnePricePerTyre, isStrongSerial, lifetimeSummary, fitmentKm, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
+import { toLifetimeTyres, hasLifetimeCpk, lifetimeCpk, weightedCpk, withOnePricePerTyre, isStrongSerial, lifetimeSummary, fitmentKm, spansMultipleCurrencies, cpkByCountry, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
+
+// Measurable records span more than one country (currency). A CPK, a cost/km
+// trend or a scrap cost summed across SAR + AED + EGP is rule T10 forbidden, so
+// the scalar is reported null and the caller renders the per-country rows.
+const _recordsMixCurrency = (records = []) => {
+  const s = new Set()
+  for (const r of records) {
+    if ((Number(r.cost_per_tyre) || 0) <= 0) continue
+    s.add(String(r.country ?? '').trim().toUpperCase())
+  }
+  return s.size > 1
+}
+// Sort comparator that pushes a null CPK to the end regardless of direction.
+const _cpkAsc = (a, b) => (a == null ? Infinity : a) - (b == null ? Infinity : b)
+const _cpkDesc = (a, b) => (b == null ? -Infinity : b) - (a == null ? -Infinity : a)
 
 const _tyreKey = (r) => `${String(r.country ?? '').trim().toUpperCase()}|${String(r.serial_no ?? '').trim().toUpperCase()}`
 // ─────────────────────────────────────────────────────────────────────────────
@@ -160,6 +175,12 @@ export function computeCpkFleet(records = []) {
   // which cannot catch a 0).
   const has = cpks.length > 0
   const summary = lifetimeSummary(tyres)
+  // Mixed currency: a fleet CPK, its median and percentiles all collapse several
+  // currencies into one number when the scope is "All countries". They are null
+  // then (rule T10), with the per-country weighted CPK rows in cpkByCountry; a
+  // single-country scope is unchanged.
+  const mixedCurrency = spansMultipleCurrencies(valid)
+  const measurable = has && !mixedCurrency
 
   return {
     cpkKind:      CPK_KIND.FLEET_AGGREGATE,
@@ -173,16 +194,18 @@ export function computeCpkFleet(records = []) {
     // (weighted). Every page reads fleetAvgCpk, so the correction lands
     // everywhere at once. The plain average of per-tyre ratios stays available
     // as meanCpk for distribution views only.
-    fleetAvgCpk:  has ? weightedCpk(valid) : null,
-    weightedCpk:  has ? weightedCpk(valid) : null,
-    meanCpk:      has ? _mean(cpks) : null,
-    medianCpk:    has ? _median(cpks) : null,
+    fleetAvgCpk:  measurable ? weightedCpk(valid) : null,
+    weightedCpk:  measurable ? weightedCpk(valid) : null,
+    meanCpk:      measurable ? _mean(cpks) : null,
+    medianCpk:    measurable ? _median(cpks) : null,
+    mixedCurrency,
+    cpkByCountry: mixedCurrency ? cpkByCountry(valid) : [],
     validCount:   valid.length,
     totalCount:   total,
     fitmentRows:  records.length,
     coveragePct:  total > 0 ? (valid.length / total) * 100 : 0,
-    p10Cpk:       has ? _percentile(cpks, 10) : null,
-    p90Cpk:       has ? _percentile(cpks, 90) : null,
+    p10Cpk:       measurable ? _percentile(cpks, 10) : null,
+    p90Cpk:       measurable ? _percentile(cpks, 90) : null,
   }
 }
 
@@ -210,7 +233,9 @@ export function computeCpkByBrand(records = []) {
         maxCpk:    Math.max(...cpks),
       }
     })
-    .sort((a, b) => a.avgCpk - b.avgCpk)
+    // avgCpk is null for a group that spans currencies (weightedCpk returns null
+    // on mixed); such a group sorts last rather than poisoning the order with NaN.
+    .sort((a, b) => _cpkAsc(a.avgCpk, b.avgCpk))
 }
 
 /**
@@ -234,7 +259,8 @@ export function computeCpkByAsset(records = []) {
         validCount: rows.length,
       }
     })
-    .sort((a, b) => b.avgCpk - a.avgCpk)
+    // worst CPK first; a null (mixed-currency) group sorts last.
+    .sort((a, b) => _cpkDesc(a.avgCpk, b.avgCpk))
 }
 
 /**
@@ -259,7 +285,8 @@ export function computeCpkBySite(records = []) {
         maxCpk:    Math.max(...cpks),
       }
     })
-    .sort((a, b) => b.avgCpk - a.avgCpk)
+    // worst site first; a null (mixed-currency) group sorts last.
+    .sort((a, b) => _cpkDesc(a.avgCpk, b.avgCpk))
 }
 
 /**
@@ -693,6 +720,10 @@ export function computeScrapRate(records = [], scrapKmPct = 20, defaultCost = 0)
     scrapRows:          scrapped.length,
     fitmentRows:        records.length,
     estimatedScrapCost,
+    // estimatedScrapCost sums purchase prices; when the records span countries it
+    // blends currencies (rule T10). The scalar is kept for single-country callers;
+    // mixedCurrency tells a caller on the All view to withhold the money figure.
+    mixedCurrency:      _recordsMixCurrency(records),
     bySite,
   }
 }
@@ -804,7 +835,10 @@ export function computeCostTrend(records = [], defaultCost = 0) {
       ? 'worsening'
       : 'improving'
 
-  return { byMonth, slope, trend, avgMonthlyCost, forecastNextMonth }
+  // byMonth.totalCost blends currencies when the records span countries (rule
+  // T10). The money series is kept for single-country callers; mixedCurrency
+  // tells a caller on the All view the trend is not a single-currency figure.
+  return { byMonth, slope, trend, avgMonthlyCost, forecastNextMonth, mixedCurrency: _recordsMixCurrency(records) }
 }
 
 /**

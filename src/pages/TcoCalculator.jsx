@@ -274,8 +274,16 @@ export default function TcoCalculator() {
   const typeOptions = useMemo(() => vehicleTypeOptions(assets), [assets])
   const filteredAssets = useMemo(() => filterAssets(assets, { search, band, vehicleType, km: kmFilter }), [assets, search, band, vehicleType, kmFilter])
 
-  const money = (v) => (v == null ? 'N/A' : formatCurrencyCompact(v, activeCurrency))
+  // On "All countries" every money / cost-per-km figure sums SAR + AED + EGP
+  // into one currency label (rule T10). They are withheld as N/A then; the
+  // canonical fleet CPK is already null-guarded for mixed currency in
+  // computeCpkFleet. Pick a country to see the single-currency totals.
+  const mixedCurrency = activeCountry === 'All'
+  const money = (v) => (mixedCurrency ? 'N/A (mixed currencies)' : v == null ? 'N/A' : formatCurrencyCompact(v, activeCurrency))
   const cpkStr = (v) => (v == null ? 'N/A' : `${formatCurrency(v, activeCurrency, 3)}/km`)
+  // CPK per km stays currency-relative per country; blended-scope CPK figures
+  // that are not already null from the engine are withheld here.
+  const cpkScoped = (v) => (mixedCurrency ? 'N/A (mixed currencies)' : cpkStr(v))
 
   const runExport = async (format, which) => {
     setActionError('')
@@ -387,7 +395,7 @@ export default function TcoCalculator() {
           )}
           {actionError && <p role="alert" className="text-sm text-red-400">{actionError}</p>}
           {activeCountry === 'All' && !error && (
-            <WarnNote>Mixed currencies: tyre cost of ownership across countries is shown under one currency label. Pick a country for a single-currency total.</WarnNote>
+            <WarnNote>Mixed currencies: SAR, AED and EGP are never summed into one total (rule T10), so the fleet money and cost-per-km figures read N/A on this view. Pick a country for its single-currency totals.</WarnNote>
           )}
           {truncated && (
             <WarnNote>Capped view: only the most recent 50,000 tyre records were loaded. Figures may be incomplete. Narrow the country to see full detail.</WarnNote>
@@ -415,7 +423,7 @@ export default function TcoCalculator() {
                 <StatTile label="Total tyre TCO" value={measuredCost ? money(rollup.total_tco) : 'N/A'} icon={Wallet} tone="accent" sub={`${meta.recordCount.toLocaleString()} records`} />
                 <StatTile label="Fleet CPK (canonical)" value={canonicalCpk.validCount ? cpkStr(canonicalCpk.fleetAvgCpk) : 'N/A'} icon={Gauge} tone="info"
                   sub={canonicalCpk.validCount ? `${CPK_KIND_LABEL.fleet_aggregate}. ${canonicalCpk.validCount}/${canonicalCpk.totalCount} physical tyres with cost and km` : 'No km data'} />
-                <StatTile label="Blended cost / km" value={cpkStr(rollup.fleet_cost_per_km)} icon={Activity} sub={`Tyre cost on assets / km run on assets (one price per tyre). ${meta.assetCount} assets`} />
+                <StatTile label="Blended cost / km" value={cpkScoped(rollup.fleet_cost_per_km)} icon={Activity} sub={`Tyre cost on assets / km run on assets (one price per tyre). ${meta.assetCount} assets`} />
                 <StatTile label="Km coverage" value={kmCoverage == null ? 'N/A' : `${kmCoverage}%`} icon={Ruler} tone={kmCoverage != null && kmCoverage < 50 ? 'warn' : 'neutral'} sub="Records with a measurable km run" />
                 <StatTile label="Assets poor or critical" value={aKpis.atRisk} icon={AlertTriangle} tone={aKpis.atRisk > 0 ? 'crit' : 'neutral'} sub={`of ${Object.values(aKpis.bands).reduce((s, v) => s + v, 0)} banded assets`} />
                 <StatTile label="Savings potential / yr" value={money(savings.total)} icon={PiggyBank} tone="accent" sub={savings.perVehicle == null ? 'No active vehicles' : `${money(savings.perVehicle)} / vehicle`} />

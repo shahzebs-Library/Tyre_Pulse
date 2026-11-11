@@ -40,6 +40,10 @@ async function setup() {
    CREATE TABLE inspection_audit_log(id bigint GENERATED ALWAYS AS IDENTITY,inspection_id uuid,changed_by uuid,action text,new_values jsonb);
    CREATE TABLE approval_execution_requests(id uuid PRIMARY KEY,entity_type text,organisation_id uuid,approval_status text,approved_by uuid,approved_at timestamptz,
     approver_signature text,approver_name text,review_note text);
+   -- Loop 3 / F-B-01: carry the real live chk_status so the accident-closure stand-in below cannot
+   -- hide a Title-Case 'Closed' regression (it would raise 23514 on the normal-approver call).
+   CREATE TABLE accidents(id uuid PRIMARY KEY,organisation_id uuid,status text,closure_status text,
+    CONSTRAINT chk_status CHECK (status = ANY (ARRAY['reported','under_review','repair_in_progress','awaiting_parts','awaiting_approval','insurance_claim','released','closed'])));
    INSERT INTO profiles(id,org_id,role,full_name) VALUES
     ('${U.admin}','${org}','Admin','Admin'),('${U.insp}','${org}','PMV Manager','Approver'),('${U.insp2}','${org}','PMV Manager','Approver Two'),
     ('${U.granted}','${org}','Reporter','Granted'),('${U.sub}','${org}','Tyre Data Collector','Submitter'),
@@ -50,11 +54,13 @@ async function setup() {
   await db.exec(v242.match(/CREATE OR REPLACE FUNCTION public\.app_cap_revoked[\s\S]*?\$\$;/)[0]);
   await db.exec(execDecide);
   // Stand-ins with the same shape (DECLARE/BEGIN body) as the accident closure writers.
+  // Loop 3 / F-B-01: approve writes the real lowercase status against chk_status (above), so a
+  // 'Closed' regression here raises 23514 instead of silently passing (the alibi is gone).
   await db.exec(`
    CREATE FUNCTION public.approve_accident_closure(p_accident_id uuid) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $f$
    DECLARE v int;
    BEGIN
-     PERFORM 1;
+     UPDATE public.accidents SET status = 'closed', closure_status = 'closed' WHERE id = p_accident_id;
    END;
    $f$;
    CREATE FUNCTION public.reject_accident_closure(p_accident_id uuid, p_reason text DEFAULT NULL) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $f$
@@ -85,6 +91,7 @@ test('approve capability: revoke blocks, normal approver unaffected, grant adds'
        ('${uuid(40)}','${org}','pending_approval'),('${uuid(41)}','${org}','pending_approval'),('${uuid(42)}','${org}','pending_approval'),('${uuid(43)}','${org}','pending_approval');
       INSERT INTO approval_execution_requests VALUES('${uuid(50)}','work_order','${org}','pending',null,null,null,null,null),
        ('${uuid(51)}','work_order','${org}','pending',null,null,null,null,null);
+      INSERT INTO accidents(id,organisation_id,status,closure_status) VALUES('${uuid(60)}','${org}','under_review','pending_closure');
       INSERT INTO user_access_grants VALUES
        ('${U.revoked}','checklists','approve','revoke',null),('${U.revoked}','inspections','approve','revoke',null),('${U.revoked}','work_orders','approve','revoke',null),
        ('${U.revoked}','accidents','approve','revoke',null),
@@ -103,6 +110,8 @@ test('approve capability: revoke blocks, normal approver unaffected, grant adds'
       assert.equal((await call(`SELECT decide_inspection_approval('${uuid(40)}','approved','ok','sig') r`)).rows[0].r.ok, true);
       assert.equal((await call(`SELECT approval_private.execution_decide('work_order','${uuid(50)}','approved',null,'sig') r`)).rows[0].r.ok, true);
       await call(`SELECT approve_accident_closure('${uuid(60)}')`);
+      // Loop 3 / F-B-01: the write landed as lowercase 'closed' (chk_status would reject 'Closed').
+      assert.equal((await call(`SELECT status FROM accidents WHERE id='${uuid(60)}'`)).rows[0].status, 'closed');
     });
 
     await t.test('revoked approver is blocked on every writer with 42501 and nothing changes', async () => {

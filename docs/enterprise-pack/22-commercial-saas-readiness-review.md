@@ -112,6 +112,14 @@ Built: company logo (`system_config.company_logo`, Console Report Colors), repor
 | Onboard tenant two, sales-led, invite-only | Go after Phase 1 | Fix V290 default-org stamp and V237 signup org default; run the isolation impersonation suite against the new org; per-org email sender; provision subscription row so limits apply |
 | Self-serve paid SaaS | No-go | Needs V316 (owner decision), live Stripe, enforced plan limits on all metered resources, DPA, uptime/on-call, tenant-scoped AI budgets |
 
+## Addendum 2026-11-10 - single-tenant statement and deploy path (360 fix, wave 1)
+
+**Tenancy statement.** Tyre Pulse is currently operated as a managed, single-customer deployment (Green Concrete Company, org Company A `00000000-0000-0000-0000-000000000001`) on a multi-tenant schema. Isolation between organisations is enforced and proven (RESTRICTIVE org policies; a demo-org Manager reads 0 rows of tenant 1). It is NOT yet a self-serve SaaS: `handle_new_user()` still places every signup in Company A, role matrices (`module_permissions`) are global, and V316 workspace signup is deliberately unapplied (owner decision 6: SaaS signup later).
+
+**Import resolver (migration 20261110146000).** `stamp_import_default_org()` now resolves the organisation in this order: `current_setting('tp.import_org')` (validated against `organisations`), then Company A only while `system_config.single_tenant_mode='true'` (seeded true), otherwise the write is refused with error code PT409. Before a second tenant is onboarded set `single_tenant_mode='false'` and make every dashboard/service-role import set `tp.import_org`.
+
+**Deploy path.** Web (`tyre-pulse`) and marketing (`tyre-pulse-eezl`) deploy through the Vercel Git integration from `main`; Supabase migrations are applied by the lead via the Supabase MCP, edge functions are redeployed from the repo and byte-diffed. Owner decision 7: keep the Git integration, remove the CLI deploy workflow and require CI via branch protection. Recovery: see `docs/runbooks/DR_RUNBOOK.md`.
+
 ## Open decisions for the owner
 
 - Keep invite-only (V316 off) or open self-serve workspaces.

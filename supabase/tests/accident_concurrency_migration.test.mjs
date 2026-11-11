@@ -7,6 +7,10 @@ import { PGlite } from '@electric-sql/pglite';
 
 const db = new PGlite();
 const migration = await readFile(new URL('../security-rollout/migrations/20260907075433_serialize_accident_closure_and_claim_registration.sql', import.meta.url), 'utf8');
+// Loop 3 / F-B-01: the lowercase-status fix, applied on top of the serialize migration so the
+// real live chk_status (added to the accidents fixture below) can bite. Reverting its one token
+// back to 'Closed' makes approve_accident_closure raise 23514 here (the alibi is gone).
+const lowercaseFix = await readFile(new URL('../migrations/20261110141000_approve_accident_closure_lowercase.sql', import.meta.url), 'utf8');
 
 const actor = '00000000-0000-0000-0000-000000000001';
 const requester = '00000000-0000-0000-0000-000000000002';
@@ -20,7 +24,10 @@ await db.exec(`
     id uuid primary key, organisation_id uuid, country text, site text,
     close_requested_by uuid, closure_status text, status text,
     closure_approved_by uuid, closure_approved_at timestamptz,
-    closure_rejected_reason text, claim_amount numeric
+    closure_rejected_reason text, claim_amount numeric,
+    -- Loop 3 / F-B-01: the real live constraint. approve_accident_closure must write a value it
+    -- allows; 'Closed' (Title Case) is NOT in the list, so the old body raises 23514 here.
+    constraint chk_status check (status = any (array['reported','under_review','repair_in_progress','awaiting_parts','awaiting_approval','insurance_claim','released','closed']))
   );
   create table public.profiles (id uuid primary key, full_name text, username text);
   create table public.accident_remarks (
@@ -61,12 +68,20 @@ await db.exec(`
   end $$;
   insert into public.profiles values ('${actor}', 'Reviewer', 'reviewer');
   insert into public.accidents(id,organisation_id,country,site,close_requested_by,closure_status,status)
-  values ('${caseA}','${actor}','KSA','Site A','${requester}','pending_closure','Open'),
-         ('${caseB}','${actor}','KSA','Site A','${requester}','pending_closure','Open'),
-         ('${caseC}','${actor}','KSA','Site A','${requester}',null,'Open');
+  values ('${caseA}','${actor}','KSA','Site A','${requester}','pending_closure','reported'),
+         ('${caseB}','${actor}','KSA','Site A','${requester}','pending_closure','reported'),
+         ('${caseC}','${actor}','KSA','Site A','${requester}',null,'reported');
 `);
 
 await db.exec(migration);
+// Loop 3 / F-B-01: stubs the lowercase fix needs (app_cap_revoked for the cap-guard; the dormant
+// V417 functions for its COMMENTs), then apply the fix so approve writes lowercase 'closed'.
+await db.exec(`
+  create function public.app_cap_revoked(text,text) returns boolean language sql as $$ select false $$;
+  create function public.accident_request_closure(uuid, text, text, uuid) returns void language plpgsql as $$ begin end $$;
+  create function public.accident_decide_closure(uuid, text, text, uuid, text, jsonb) returns void language plpgsql as $$ begin end $$;
+`);
+await db.exec(lowercaseFix);
 const scalar = async (sql, params = []) => Object.values((await db.query(sql, params)).rows[0])[0];
 const rejected = async (sql, params, code) => {
   await assert.rejects(db.query(sql, params), error => error.code === code);

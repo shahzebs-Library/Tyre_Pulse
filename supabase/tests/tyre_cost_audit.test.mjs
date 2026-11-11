@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { createCostAuditDb, asClient, asUser, ORG_A, ORG_B, U } from './fixtures/tyre_cost_harness.mjs'
+import { createCostAuditDb, asClient, asUser, ORG_A, U } from './fixtures/tyre_cost_harness.mjs'
 
 // The tyre cost audit, end to end against the REAL migrations 20261112106000 + 107000:
 // scan (dry then persist) -> decide -> apply (Admin only) -> undo (super admin), plus the

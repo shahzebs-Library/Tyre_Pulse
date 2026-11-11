@@ -62,10 +62,16 @@ Helpers moved onto the lifetime layer in Phase 1 (each with refit tests):
 Deliberately still per fitment (events, not tyres): removals, failures, replacements, fitment counts, downtime,
 availability, risk ratings.
 
+LIFETIME / T7-based on the server (repointed 2026-11-10, migrations 20261110142000 + 143000, F-E-01/F-E-02):
+`fleet_tyre_km_by_asset` sums `tyre_km_life(...)` with the fleet-register class as fallback (so `get_fleet_cpk`
+and `get_cpk_drivers`, which read its `km_run`, divide tyre/total cost by the T7 rule km, not raw total_km);
+`get_brand_size_cpk` is the weighted lifetime CPK from `v_tyre_lifetime` (price once per tyre, km_known). The
+before/after denominators per country are in docs/tyre/CPK_REPOINT_2026-11.md.
+
 STILL per fitment row on the server (kept unchanged on purpose until the new figures are verified - repointing them
-changes production numbers): `get_fleet_cpk`, `get_cpk_drivers`, `get_brand_size_cpk`, `get_tyre_running_life`,
+changes production numbers): `get_tyre_running_life` (running-life baseline + hours; Wave 2 Loop 13),
 `report_tyre_summary`, `report_asset_metrics`, `report_country_metrics`, `get_report_snapshot(_authed)`,
-`get_mobile_analytics`. The before/after numbers are in docs/tyre/PHASE1_LIFETIME_CPK.md.
+`get_mobile_analytics`. The earlier before/after numbers are in docs/tyre/PHASE1_LIFETIME_CPK.md.
 
 
 Audit date 2026-11-09 (after PR #470 + migration 20261109150000). **Updated by Phase 1 (migrations

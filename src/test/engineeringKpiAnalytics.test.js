@@ -49,6 +49,20 @@ describe('engineeringKpiAnalytics', () => {
     expect(h.avgLifeKm).toBe(50000)
   })
 
+  // F-E-03: on the All-countries view a fleet CPK blends currencies. headline
+  // cpk is null then, flagged mixed, with the per-country rows - never one
+  // SAR-labelled figure.
+  it('headlineMetrics reports cpk null + mixed-currency flag across countries', () => {
+    const records = [
+      rec({ country: 'KSA', cost_per_tyre: 1000, km_at_fitment: 1000, km_at_removal: 51000 }),
+      rec({ country: 'UAE', cost_per_tyre: 1000, km_at_fitment: 1000, km_at_removal: 51000 }),
+    ]
+    const h = headlineMetrics(computeAllKpis(records, [], [], 10), { inspectionsLoaded: 0 })
+    expect(h.cpk).toBeNull()
+    expect(h.cpkMixedCurrency).toBe(true)
+    expect(h.cpkByCountry.map(r => r.country).sort()).toEqual(['KSA', 'UAE'])
+  })
+
   it('assetCpkRows reads tyre spend from the grid only', () => {
     const records = [
       rec({ asset_no: 'TM1', cost_per_tyre: 1000, km_at_fitment: 1000, km_at_removal: 11000, risk_level: 'High' }),

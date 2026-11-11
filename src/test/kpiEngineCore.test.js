@@ -53,6 +53,31 @@ describe('computeCpkFleet - honest nulls', () => {
     expect(r.coveragePct).toBe(25)
     expect(r.fleetAvgCpk).toBeCloseTo(0.02, 6)
   })
+
+  // Rule T10: a fleet CPK across countries would blend SAR + AED + EGP into a
+  // number that is not a quantity of anything. It is null then, with per-country
+  // rows, never one SAR-labelled figure (F-E-03).
+  it('refuses a blended CPK when the measurable tyres span currencies', () => {
+    const r = computeCpkFleet([usable({ country: 'KSA' }), usable({ country: 'UAE' })])
+    expect(r.validCount).toBe(2)
+    expect(r.fleetAvgCpk).toBeNull()
+    expect(r.weightedCpk).toBeNull()
+    expect(r.medianCpk).toBeNull()
+    expect(r.p10Cpk).toBeNull()
+    expect(r.p90Cpk).toBeNull()
+    expect(r.mixedCurrency).toBe(true)
+    // the per-country figures are still available for the All view
+    const byC = Object.fromEntries(r.cpkByCountry.map(x => [x.country, x.cpk]))
+    expect(byC.KSA).toBeCloseTo(0.02, 6)
+    expect(byC.UAE).toBeCloseTo(0.02, 6)
+  })
+
+  it('a single-country scope is unchanged (not mixed)', () => {
+    const r = computeCpkFleet([usable({ country: 'KSA' }), usable({ country: 'KSA' })])
+    expect(r.mixedCurrency).toBe(false)
+    expect(r.fleetAvgCpk).toBeCloseTo(0.02, 6)
+    expect(r.cpkByCountry).toEqual([])
+  })
 })
 
 describe('computeRemovalRate - numerator matches denominator', () => {

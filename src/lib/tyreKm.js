@@ -31,9 +31,17 @@ export function tyreLifeCapKm(vehicleType) {
  *  - missing:     nothing recorded. km = null.
  * Measured live 2026-11-04 on 6,464 removed tyres: 545 carried the "1" placeholder
  * (55 of them over 100,000 km), which is where "worn out at 230,000 km" came from.
+ *
+ * The class cap is a property of the MACHINE, so the authoritative class is the
+ * fleet register's vehicle_type (tyre_records.vehicle_type is blank on most ERP
+ * tyre loads - F-E-04). Callers that know the asset's fleet class pass it as
+ * `opts.vehicleClass`; it is used only when the tyre row has no class of its own,
+ * so a correct row type is never overridden by a junk fleet type. With no option
+ * the behaviour is unchanged (the row's own vehicle_type).
  */
-export function tyreKmAssessment(t) {
-  const cap = tyreLifeCapKm(t?.vehicle_type)
+export function tyreKmAssessment(t, opts = {}) {
+  const rowClass = String(t?.vehicle_type ?? '').trim()
+  const cap = tyreLifeCapKm(rowClass !== '' ? rowClass : (opts.vehicleClass ?? t?.vehicle_type))
   const total = num(t?.total_km)
   const fit = num(t?.km_at_fitment)
   const rem = num(t?.km_at_removal)

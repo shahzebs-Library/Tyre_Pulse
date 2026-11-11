@@ -68,9 +68,13 @@ export function withOnePricePerTyre(records = []) {
   })
 }
 
-/** km one completed fitment ran, by the shared rule; null when not measurable. */
-export function fitmentKm(row) {
-  const a = tyreKmAssessment(row)
+/**
+ * km one completed fitment ran, by the shared rule; null when not measurable.
+ * `opts.vehicleClass` lets a caller that knows the asset's fleet class supply it
+ * as the class cap fallback (F-E-04); omitted, the row's own type is used.
+ */
+export function fitmentKm(row, opts = {}) {
+  const a = tyreKmAssessment(row, opts)
   return a.status === 'measured' || a.status === 'factory' ? a.km : null
 }
 
@@ -266,12 +270,60 @@ export function fullLifetimeCpk(t) {
 }
 
 /**
+ * Distinct countries among the measurable tyres (those with a price and km).
+ * Country is what selects the currency, so a CPK summed across more than one is
+ * blending currencies (rule T10) and is not a quantity of anything.
+ */
+function _measurableCountries(tyres = []) {
+  const s = new Set()
+  for (const t of tyres) {
+    if (!hasLifetimeCpk(t)) continue
+    s.add(String(t.country ?? '').trim().toUpperCase())
+  }
+  return s
+}
+
+/** True when the measurable tyres span more than one country (currency). */
+export function spansMultipleCurrencies(tyres = []) {
+  return _measurableCountries(tyres).size > 1
+}
+
+/**
+ * Per-country weighted CPK rows for the "All countries" view, so a page can
+ * show each country in its own currency instead of one blended number.
+ * options.basis: 'purchase' (default) | 'full'.
+ */
+export function cpkByCountry(tyres = [], options = {}) {
+  const full = options.basis === 'full'
+  const map = new Map()
+  for (const t of tyres) {
+    if (!hasLifetimeCpk(t)) continue
+    const key = String(t.country ?? '').trim().toUpperCase()
+    const cur = map.get(key) || { country: t.country ?? '', cost: 0, km: 0, tyres: 0 }
+    const c = full ? (num(t._full_cost) ?? t._cost) : t._cost
+    const q = t._qty || 1
+    cur.cost += c * q
+    cur.km += t._life_km * q
+    cur.tyres += q
+    map.set(key, cur)
+  }
+  return [...map.values()]
+    .map((r) => ({ ...r, cpk: r.km > 0 ? r.cost / r.km : null }))
+    .sort((a, b) => String(a.country).localeCompare(String(b.country)))
+}
+
+/**
  * Fleet cost per tyre-km, WEIGHTED (rule T8): total cost of the measurable tyres
  * divided by their total km. An average of per-tyre ratios would let one short,
  * expensive tyre swing the whole fleet figure.
  * options.basis: 'purchase' (default) | 'full'.
+ *
+ * Returns null when the measurable tyres span more than one country: summing
+ * SAR + AED + EGP into one figure is rule T10 forbidden. Use cpkByCountry() for
+ * the per-country rows under an All-countries view.
  */
 export function weightedCpk(tyres = [], options = {}) {
+  if (spansMultipleCurrencies(tyres)) return null
   const full = options.basis === 'full'
   let cost = 0
   let km = 0
@@ -309,14 +361,20 @@ export function lifetimeSummary(tyres = []) {
     km += t._life_km * q
     if (t._cost_status === 'ESTIMATED') estimated += t._cost * q
   }
+  // Currency is never blended (rule T10): a cost/km summed across countries is
+  // meaningless. When the measurable tyres span more than one country the
+  // weighted CPK scalars are null and the per-country rows carry the figures.
+  const mixedCurrency = _measurableCountries(tyres).size > 1
   return {
     tyres: tyres.length,
     measurable,
     purchaseCost: cost,
     fullCost,
     km,
-    cpkPurchase: km > 0 ? cost / km : null,
-    cpkFull: km > 0 ? fullCost / km : null,
+    cpkPurchase: mixedCurrency ? null : (km > 0 ? cost / km : null),
+    cpkFull: mixedCurrency ? null : (km > 0 ? fullCost / km : null),
+    mixedCurrency,
+    byCountry: mixedCurrency ? cpkByCountry(tyres) : [],
     estimatedCostInCpk: estimated,
     estimatedShare: cost > 0 ? estimated / cost : null,
     coverage,

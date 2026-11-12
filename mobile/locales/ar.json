@@ -30,7 +30,11 @@
     "all": "الكل",
     "saving": "جار الحفظ...",
     "no": "لا",
-    "notAvailable": "غير متوفر"
+    "notAvailable": "غير متوفر",
+    "cameraFailedTitle": "الكاميرا غير متاحة",
+    "cameraFailedMsg": "تعذّر فتح الكاميرا على هذا الجهاز. حاول مرة أخرى أو أضف صورة من المعرض بدلاً من ذلك.",
+    "galleryFailedTitle": "المعرض غير متاح",
+    "galleryFailedMsg": "تعذّر فتح معرض الصور على هذا الجهاز. حاول مرة أخرى."
   },
   "language": {
     "english": "English",

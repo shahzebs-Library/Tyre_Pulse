@@ -306,7 +306,7 @@ export default function ObservationsBoard({
                     ? <Link className="cc-link" to="/actions">Action raised</Link>
                     : o.tyreNow?.state === 'replaced' ? null
                     : (o.tone === 'bad' || o.tone === 'warn') && onRaiseAction
-                      ? <button type="button" className="cc-btn iw-inline" onClick={() => onRaiseAction(o.row)}>Create action</button>
+                      ? <button type="button" className="cc-btn iw-inline" onClick={() => onRaiseAction(o.row, o.kind === 'tyre' ? `damage:${o.rawPosition}` : undefined)}>Create action</button>
                       : null)}
                 </span>
               </div>
@@ -320,7 +320,7 @@ export default function ObservationsBoard({
           obs={all.find((o) => o.key === detail.key) || detail}
           onClose={() => setDetail(null)}
           onOpenInspection={(r) => { setDetail(null); onOpen(r) }}
-          onRaiseAction={onRaiseAction ? (r) => { setDetail(null); onRaiseAction(r) } : null}
+          onRaiseAction={onRaiseAction ? (r, key) => { setDetail(null); onRaiseAction(r, key) } : null}
         />
       )}
     </div>

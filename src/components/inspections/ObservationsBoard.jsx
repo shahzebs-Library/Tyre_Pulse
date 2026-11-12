@@ -52,7 +52,7 @@ export default function ObservationsBoard({
   const [inspector, setInspector] = useState([])
   const [action, setAction] = useState('all')
   const [observation, setObservation] = useState([])
-  const [detail, setDetail] = useState(null)
+  const [detail, setDetail] = useState(null) // inspection ID
   // Fitment records for the vehicles these observations name. null while loading
   // or unreadable, so no row is given a status it was not checked for.
   const [fitments, setFitments] = useState(null)
@@ -151,7 +151,16 @@ export default function ObservationsBoard({
 
   const unreadable = !!error
   const show = (v) => (unreadable ? 'N/A' : fmtInt(v))
-  const pageRows = list.slice(page * PAGE, page * PAGE + PAGE)
+  // Register is one row per inspection; underlying finding filters remain per tyre.
+  const grouped = useMemo(() => {
+    const map = new Map()
+    for (const finding of list) {
+      if (!map.has(finding.inspectionId)) map.set(finding.inspectionId, { ...finding, findings: [] })
+      map.get(finding.inspectionId).findings.push(finding)
+    }
+    return [...map.values()]
+  }, [list])
+  const pageRows = grouped.slice(page * PAGE, page * PAGE + PAGE)
   const severities = SEVERITIES.filter((s) => s !== 'all' && all.some((o) => o.severity === s))
 
   async function exportExcel() {
@@ -203,7 +212,7 @@ export default function ObservationsBoard({
       </div>
 
       <Card
-        title={`Observations (${unreadable ? 'N/A' : fmtInt(list.length)}${list.length !== all.length ? ` of ${fmtInt(all.length)}` : ''})`}
+        title={`Observations (${unreadable ? 'N/A' : fmtInt(grouped.length)} inspections, ${fmtInt(list.length)} findings)`}
         sub="Tyres recorded as anything other than Good, inspector findings and notes, and site observations, over the dates and site above."
         action={(
           <span className="iw-actions">
@@ -306,46 +315,45 @@ export default function ObservationsBoard({
                 <span role="cell" className="iw-o-day">{fmtDay(o.day)}</span>
                 <span role="cell"><b>{o.asset_no || 'No asset'}</b><small>{o.site || 'No site'}</small></span>
                 <span role="cell" className="iw-o-text">
-                  <small className="iw-o-kind">{KIND_LABEL[o.kind]}{o.position ? `, ${o.position}` : ''}</small>
-                  <b>{o.text}</b>
-                  {o.remarks && <small>{o.remarks}</small>}
+                  <small className="iw-o-kind">{o.findings.length} findings in this inspection</small>
+                  <b>{o.findings.filter((f) => f.kind === 'tyre').length} tyre finding(s)</b>
+                  <small>{o.findings.map((f) => [f.position, f.text].filter(Boolean).join(': ')).join(' | ')}</small>
                 </span>
-                <span role="cell"><span className={`cc-pill ${o.tone}`}>{o.severity}</span></span>
+                <span role="cell"><span className={`cc-pill ${o.findings.some((f) => f.tone === 'bad') ? 'bad' : o.tone}`}>{o.findings.some((f) => f.tone === 'bad') ? 'Critical' : o.severity}</span></span>
                 <span role="cell">
-                  {o.kind !== 'tyre' ? <span className="cc-na">-</span>
-                    : !o.tyreNow ? <small>{fitError ? 'N/A' : 'Checking...'}</small>
+                  {!o.findings.some((f) => f.kind === 'tyre') ? <span className="cc-na">-</span>
+                    : !o.findings.find((f) => f.kind === 'tyre')?.tyreNow ? <small>{fitError ? 'N/A' : 'Checking...'}</small>
                       : (
                         <>
-                          <span className={`cc-pill ${TYRE_NOW_META[o.tyreNow.state].tone}`}>{TYRE_NOW_META[o.tyreNow.state].label}</span>
-                          {o.tyreNow.state === 'replaced' && <small>{fmtDay(o.tyreNow.replacement?.fittedOn)}</small>}
-                          {o.tyreNow.state === 'replaced' && o.tyreNow.replacement?.jobCard && <small>JC {o.tyreNow.replacement.jobCard}</small>}
+                          <small>{o.findings.filter((f) => f.kind === 'tyre' && f.tyreNow?.state === 'replaced').length} replaced / {o.findings.filter((f) => f.kind === 'tyre').length} reported</small>
                         </>
                       )}
                 </span>
                 <span role="cell">{o.inspector || 'N/A'}</span>
                 <span role="cell" className="iw-o-acts">
-                  <button type="button" className="cc-btn-ghost iw-inline" onClick={() => setDetail(o)}>
+                  <button type="button" className="cc-btn-ghost iw-inline" onClick={() => setDetail(o.inspectionId)}>
                     <Eye size={12} aria-hidden="true" /> Open
                   </button>
-                  {o.kind !== 'note' && (!actionsReady
+                  {!actionsReady
                     ? <small role="status">{actionError ? 'Action status unavailable' : 'Checking actions...'}</small>
-                    : o.actionRaised
-                    ? <Link className="cc-link" to="/actions">Action raised</Link>
-                    : o.tyreNow?.state === 'replaced' ? null
-                    : (o.tone === 'bad' || o.tone === 'warn') && onRaiseAction
-                      ? <button type="button" className="cc-btn iw-inline" onClick={() => onRaiseAction(o.row, o.kind === 'tyre' ? `damage:${o.rawPosition}` : undefined)}>Create action</button>
-                      : null)}
+                    : <>
+                      <small>{o.findings.filter((f) => f.actionRaised).length} / {o.findings.filter((f) => f.kind !== 'note').length} actions raised</small>
+                      {o.findings.some((f) => f.kind === 'tyre' && !f.actionRaised && f.tyreNow?.state !== 'replaced') && onRaiseAction && (
+                        <button type="button" className="cc-btn iw-inline" onClick={() => onRaiseAction(o.row)}>Create actions</button>
+                      )}
+                    </>}
                 </span>
               </div>
             ))}
           </div>
         )}
         {actionError && <p role="alert" className="text-sm text-red-500 mt-3">{actionError}</p>}
-        {list.length > PAGE && <Pager page={page} pageSize={PAGE} total={list.length} onPage={setPage} noun="observations" />}
+        {grouped.length > PAGE && <Pager page={page} pageSize={PAGE} total={grouped.length} onPage={setPage} noun="inspections" />}
       </Card>
       {detail && (
         <ObservationDetail
-          obs={all.find((o) => o.key === detail.key) || detail}
+          observations={all.filter((o) => o.inspectionId === detail)}
+          obs={all.find((o) => o.inspectionId === detail)}
           onClose={() => setDetail(null)}
           onOpenInspection={(r) => { setDetail(null); onOpen(r) }}
           onRaiseAction={actionsReady && onRaiseAction ? (r, key) => { setDetail(null); onRaiseAction(r, key) } : null}

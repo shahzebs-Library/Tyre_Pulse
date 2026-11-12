@@ -94,7 +94,7 @@ export default function ObservationDetail({ obs: first, observations = [], onClo
           <h4>Inspection details</h4>
           <dl className="iw-od-facts">
             <div><dt>Report ID</dt><dd>{observationReportId(obs.row)}</dd></div>
-            <div><dt>Report version</dt><dd>1.0</dd></div>
+            <div><dt>PDF template version</dt><dd>1.0</dd></div>
             <div><dt>Source revision</dt><dd>{observationRevision(obs.row)}</dd></div>
             <div><dt>Asset</dt><dd>{obs.asset_no || 'Not recorded'}</dd></div>
             <div><dt>Inspection date</dt><dd>{fmtDay(obs.day)}</dd></div>

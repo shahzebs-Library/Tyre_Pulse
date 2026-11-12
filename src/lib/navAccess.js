@@ -139,3 +139,36 @@ export function navItemAllowedForCustomRole(path, hasPermission) {
   if (!key) return false
   return typeof hasPermission === 'function' ? hasPermission(key) === true : false
 }
+
+/**
+ * Module Control status for a ROUTE (not a key). A page answers to two keys: its
+ * own route slug and, when the route shares a curated module, that module's key.
+ * Either one being off takes the page off, so a single page that shares a key
+ * with a working module (e.g. /driver-management under fleet_master) can be
+ * switched off on its own slug without touching its siblings. Worst status wins:
+ * disabled > maintenance > live. Paths every user must always reach are never
+ * gated, so nobody can be locked out of Settings.
+ *
+ * @param {string} path
+ * @param {(key:string)=>string} moduleStatus  AuthContext.moduleStatus
+ * @returns {{status:'live'|'maintenance'|'disabled', key:string|null}}
+ */
+export function pathModuleStatus(path, moduleStatus) {
+  const live = { status: 'live', key: null }
+  if (typeof moduleStatus !== 'function') return live
+  const canonical = canonicalRoute(path)
+  if (!canonical || ALWAYS_ALLOWED_PATHS.has(canonical)) return live
+  const keys = [slugify(canonical), NAV_MODULE_KEY[canonical]].filter(Boolean)
+  let found = live
+  for (const key of new Set(keys)) {
+    const s = moduleStatus(key)
+    if (s === 'disabled') return { status: 'disabled', key }
+    if (s === 'maintenance' && found.status === 'live') found = { status: 'maintenance', key }
+  }
+  return found
+}
+
+/** Is this route switched Off in Module Control? Used to drop it from menus. */
+export function isPathSwitchedOff(path, moduleStatus) {
+  return pathModuleStatus(path, moduleStatus).status === 'disabled'
+}

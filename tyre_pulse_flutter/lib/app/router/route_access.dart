@@ -58,6 +58,7 @@ final class RouteModule {
   static const RouteModule washing = RouteModule('washing');
   static const RouteModule reportIssue = RouteModule('reportIssue');
   static const RouteModule repairRequest = RouteModule('repairRequest');
+  static const RouteModule handover = RouteModule('handover');
 
   // --- Fleet ---
   static const RouteModule records = RouteModule('records');
@@ -181,6 +182,13 @@ abstract final class TpRouteGuards {
     TpRouteId.washing: ModuleGuarded(RouteModule.washing),
     TpRouteId.reportIssue: ModuleGuarded(RouteModule.reportIssue),
     TpRouteId.repairRequest: ModuleGuarded(RouteModule.repairRequest),
+
+    // Vehicle Handover. The screen also asks the server to SIGN (the
+    // decide_handover_approval RPC and the stage guard); this module gate only
+    // opens the capture/history/detail surface.
+    TpRouteId.handover: ModuleGuarded(RouteModule.handover),
+    TpRouteId.newHandover: ModuleGuarded(RouteModule.handover),
+    TpRouteId.handoverDetail: ModuleGuarded(RouteModule.handover),
 
     // Checklists.
     TpRouteId.checklists: ModuleGuarded(RouteModule.checklists),

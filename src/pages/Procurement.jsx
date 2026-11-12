@@ -37,6 +37,7 @@ import {
   orderExportRows, receiptProgress, daysBetween,
 } from '../lib/procurementAnalytics'
 import TableNotInUse from '../components/ui/TableNotInUse'
+import { safeJsonToSheet } from '../lib/csvSafe.js'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, PointElement, LineElement,
@@ -506,7 +507,7 @@ export default function Procurement() {
   async function exportExcel() {
     const XLSX = await import('xlsx')
     const rows = orderExportRows(filtered)
-    const ws = XLSX.utils.json_to_sheet(rows)
+    const ws = safeJsonToSheet(XLSX, rows)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Purchase Orders')
     XLSX.writeFile(wb, `purchase-orders-${new Date().toISOString().slice(0, 10)}.xlsx`)

@@ -69,6 +69,22 @@ enum ProfileStatus {
   failed,
 }
 
+/// Whether the current session still owes a multi-factor code.
+///
+/// Mirrors the web rule (`src/lib/authAssurance.js`): a code is owed only when
+/// a verified factor exists and the session is still at the password-only
+/// level. See `mfa_repository.dart`.
+enum MfaStatus {
+  /// Nothing owed: no verified factor, already verified, or the assurance
+  /// could not be read (fails open - a user with no factor is never locked
+  /// out by a broken check).
+  satisfied,
+
+  /// A code is owed. The profile is NOT fetched while this holds, and
+  /// [deriveSession] reports [TpShellGate.mfaRequired].
+  required,
+}
+
 /// The full picture the auth layer holds. Immutable; every change produces a
 /// new value so a provider watching it sees a real change.
 /// Where the per-user grants and role matrix read stands for this sign-in.
@@ -100,6 +116,7 @@ final class AuthState {
     this.profileStale = false,
     this.versionGate = const VersionGateResult.notChecked(),
     this.permissionsStatus = PermissionsStatus.none,
+    this.mfaStatus = MfaStatus.satisfied,
   });
 
   /// The state before anything has been read. The starting point of every
@@ -144,6 +161,10 @@ final class AuthState {
   /// See [PermissionsStatus].
   final PermissionsStatus permissionsStatus;
 
+  /// See [MfaStatus]. Only meaningful when [sessionPhase] is
+  /// [AuthSessionPhase.authenticated].
+  final MfaStatus mfaStatus;
+
   AuthState copyWith({
     AuthSessionPhase? sessionPhase,
     String? userId,
@@ -156,6 +177,7 @@ final class AuthState {
     bool? profileStale,
     VersionGateResult? versionGate,
     PermissionsStatus? permissionsStatus,
+    MfaStatus? mfaStatus,
   }) =>
       AuthState(
         sessionPhase: sessionPhase ?? this.sessionPhase,
@@ -167,6 +189,7 @@ final class AuthState {
         profileStale: profileStale ?? this.profileStale,
         versionGate: versionGate ?? this.versionGate,
         permissionsStatus: permissionsStatus ?? this.permissionsStatus,
+        mfaStatus: mfaStatus ?? this.mfaStatus,
       );
 
   @override
@@ -174,7 +197,7 @@ final class AuthState {
       'AuthState(session: ${sessionPhase.name}, user: $userId, '
       'profile: ${profileStatus.name}, stale: $profileStale, '
       'versionGate: ${versionGate.reason.name}, '
-      'permissions: ${permissionsStatus.name})';
+      'permissions: ${permissionsStatus.name}, mfa: ${mfaStatus.name})';
 }
 
 /// Turns the full [AuthState] into the narrow [TpSession] navigation depends
@@ -184,6 +207,9 @@ final class AuthState {
 ///
 /// 1. The underlying Supabase session is not yet resolved, timed out, or
 ///    absent - reported straight through as the matching [TpSessionPhase].
+/// 1a. The session owes a multi-factor code - [TpShellGate.mfaRequired]. This
+///    sits ahead of every profile rule because the profile is not read until
+///    the code is accepted; nothing below is known yet.
 /// 2. THE JOINT-RESOLVING RULE. A session existing is not enough: while the
 ///    profile fetch is still [ProfileStatus.none] or [ProfileStatus.loading],
 ///    this reports [TpSessionPhase.resolving] - never [TpShellGate.none] with
@@ -212,6 +238,10 @@ TpSession deriveSession(AuthState state) {
       return const TpSession.signedOut();
     case AuthSessionPhase.authenticated:
       break;
+  }
+
+  if (state.mfaStatus == MfaStatus.required) {
+    return const TpSession.signedIn(gate: TpShellGate.mfaRequired);
   }
 
   switch (state.profileStatus) {

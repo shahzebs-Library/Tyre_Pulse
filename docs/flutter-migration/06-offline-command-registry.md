@@ -272,3 +272,33 @@ evidence and retrying is the fix.
 `advance()` (a plain `update({'status': ...})` on `workforce_assignments`) was
 removed, and since `20261109160000` the database refuses a direct status
 UPDATE for everyone (42501). The queue above is the only status write path.
+
+### 7.9 Vehicle handover (added 2026-11-12)
+
+The handover feature has its OWN durable write path, like My Work (7.8) and for
+the same reason: it is not one of the 14 `CommandRegistry` commands and does not
+go through `queued_command_repository.dart`.
+
+**Capture is queued.** `handover_sync_engine.dart` enqueues the submission to
+`FileHandoverSubmissionQueue` FIRST (one JSON file per entry under
+`handover_submissions/`, written atomically via a `.tmp` + rename), then
+attempts delivery. The row is idempotent on a client-generated `client_uuid`,
+upserted on `client_uuid`, so a replay after a dropped response lands exactly
+once. An unreadable queue entry is distinguished from an absent one
+(`HandoverQueueReadResult` ok / unreadable - refuse, do not guess), the same
+"a torn read is not an empty queue" rule the rest of the app follows. Photos
+are captured to a durable per-session folder and, on sync, uploaded and swapped
+for `tp-storage://` references (general photos and per-marker photos both,
+bounded to `uploadConcurrency = 2` so a 13-wheel vehicle cannot decode every
+bitmap at once); a photo that cannot upload yet leaves the row queued rather
+than losing the capture. An in-progress capture is ALSO held as an on-device
+draft (`handover_draft_store.dart`, one file per user), which is NOT a
+submission - it is cleared on submit, including an offline submit.
+
+**The sign-off is online only.** A decision (`decide_handover_approval`) depends
+on current server state - which rung the row is at, and whether someone else has
+already signed - so it is never queued. This mirrors the approvals rule in 7.x:
+"Decisions that depend on current server state are NOT blindly queued." The
+detail screen pre-checks `handover_approval.dart` (`canDecide`) only to show the
+sign-off bar; the server is the authority, and a sign-off attempted offline
+fails with the mapped server message rather than being replayed later.

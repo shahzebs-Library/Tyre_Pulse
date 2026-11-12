@@ -39,8 +39,8 @@ vi.mock('../lib/api/accidentCommunications', () => ({ logCommunication: (...a) =
 
 vi.mock('../lib/api/accidentCase', () => ({ listWorkstreams: () => Promise.resolve([]) }))
 vi.mock('../lib/api/accidentSla', () => ({ listSlaInstances: () => Promise.resolve([]) }))
-vi.mock('../lib/api/users', () => ({
-  listProfiles: () => Promise.resolve([
+vi.mock('../lib/api/profileDirectory', () => ({
+  listDirectoryPeople: () => Promise.resolve([
     { id: 'u1', full_name: 'Sara Khan', role: 'Fleet Supervisor' },
     { id: 'u2', full_name: 'Omar Ali', role: 'Insurance Officer' },
   ]),

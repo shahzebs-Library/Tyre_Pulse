@@ -45,6 +45,7 @@ import {
   typePenalty, trendWindow, assetTypeOptions, comparePeriods,
 } from '../lib/fuelEfficiencyView'
 import './FuelEfficiency.css'
+import { safeJsonToSheet } from '../lib/csvSafe.js'
 
 ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, BarElement, BarController, LineController, Tooltip, Legend, Filler)
 
@@ -262,7 +263,7 @@ export default function FuelEfficiency() {
     const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
     const na = (v) => (v == null ? 'N/A' : v)
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{
+    XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, [{
       Report: 'Fuel Efficiency Impact (modelled estimates)',
       Scope: scopeLine,
       'Measured km/L': 'Not recorded (no fuel transactions)',
@@ -273,7 +274,7 @@ export default function FuelEfficiency() {
       'Monthly excess fuel (L)': na(kpis.extraLitresMonth),
       [`Monthly fuel loss cost (${activeCurrency})`]: na(kpis.extraCostMonth),
     }]), 'Summary')
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(vehicles.map((v) => ({
+    XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, vehicles.map((v) => ({
       'Asset No': v.asset_no,
       Site: v.site || 'Not recorded',
       Tyres: v.tyreCount,
@@ -287,7 +288,7 @@ export default function FuelEfficiency() {
       [`Annual Extra Cost (${activeCurrency})`]: na(v.annualExtraCost),
       Status: vehicleStatus(v).label,
     }))), 'Vehicles')
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sites.map((s) => ({
+    XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, sites.map((s) => ({
       Site: s.site,
       Vehicles: s.vehicles,
       'Measured Tyres': s.measuredTyres,

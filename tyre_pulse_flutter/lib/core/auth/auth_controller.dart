@@ -52,6 +52,7 @@ import 'package:tyre_pulse/core/auth/auth_repository.dart';
 import 'package:tyre_pulse/core/auth/auth_state.dart';
 import 'package:tyre_pulse/core/auth/auth_version_gate_repository.dart';
 import 'package:tyre_pulse/core/auth/foreground_signal.dart';
+import 'package:tyre_pulse/core/auth/mfa_repository.dart';
 import 'package:tyre_pulse/core/auth/profile_cache.dart';
 import 'package:tyre_pulse/core/auth/sign_in_outcome.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
@@ -66,6 +67,7 @@ final class AuthController extends Notifier<AuthState> {
   late final ProfileRepository _profiles;
   late final VersionGateRepository _versionGate;
   late final AccessPermissionsRepository _permissions;
+  late final MfaRepository _mfa;
   late final ProfileCache _cache;
   late final Duration _restoreTimeout;
 
@@ -108,6 +110,7 @@ final class AuthController extends Notifier<AuthState> {
     _profiles = ref.read(profileRepositoryProvider);
     _versionGate = ref.read(versionGateRepositoryProvider);
     _permissions = ref.read(accessPermissionsRepositoryProvider);
+    _mfa = ref.read(mfaRepositoryProvider);
     _cache = ref.read(profileCacheProvider);
     _restoreTimeout = ref.read(sessionRestoreTimeoutDurationProvider);
     final ForegroundSignal foreground = ref.read(foregroundSignalProvider);
@@ -121,11 +124,13 @@ final class AuthController extends Notifier<AuthState> {
     if (initial.hasSession) {
       final String userId = initial.userId!;
       _generation++;
-      unawaited(_startSession(userId, _generation));
+      final MfaStatus mfa = _readMfaStatus();
+      unawaited(_startSession(userId, _generation, mfa));
       return AuthState(
         sessionPhase: AuthSessionPhase.authenticated,
         userId: userId,
         profileStatus: ProfileStatus.loading,
+        mfaStatus: mfa,
       );
     }
 
@@ -152,6 +157,43 @@ final class AuthController extends Notifier<AuthState> {
   }) =>
       _auth.signIn(identifier: identifier, password: password);
 
+  /// Verifies the multi-factor [code] owed by the current session and, once
+  /// accepted, carries on with the profile load that was held back for it.
+  ///
+  /// Never throws. A no-op answering [MfaVerified] when nothing is owed, so a
+  /// stale gate can never strand anybody.
+  Future<MfaVerifyOutcome> verifyMfa(String code) async {
+    final String? userId = state.userId;
+    if (state.sessionPhase != AuthSessionPhase.authenticated ||
+        userId == null ||
+        state.mfaStatus != MfaStatus.required) {
+      return const MfaVerified();
+    }
+    final int myGeneration = _generation;
+    MfaVerifyOutcome outcome;
+    try {
+      outcome = await _mfa.verify(code.trim());
+    } on Object {
+      outcome = const MfaVerifyUnavailable();
+    }
+    if (myGeneration != _generation) {
+      return outcome; // signed out, or another account, while verifying
+    }
+    if (outcome is MfaVerified) {
+      // The SDK also emits a session event for the upgraded token; it is the
+      // same user, so `_applySessionSignal` ignores it and this is the one
+      // place the held-back profile load starts.
+      state = state.copyWith(
+        mfaStatus: MfaStatus.satisfied,
+        profileStatus: ProfileStatus.loading,
+      );
+      unawaited(
+        _fetchAndApplyProfile(userId, myGeneration, hardFailOnError: true),
+      );
+    }
+    return outcome;
+  }
+
   /// Re-attempts reading the session after [TpSessionPhase.timedOut].
   Future<void> retrySession() async {
     _restoreTimer?.cancel();
@@ -173,7 +215,7 @@ final class AuthController extends Notifier<AuthState> {
   /// Re-attempts the profile fetch after [TpShellGate.profileUnavailable].
   Future<void> retryProfile() async {
     final String? userId = state.userId;
-    if (userId == null) {
+    if (userId == null || state.mfaStatus == MfaStatus.required) {
       return;
     }
     _generation++;
@@ -280,12 +322,28 @@ final class AuthController extends Notifier<AuthState> {
     _generation++;
     _forgetPermissions();
     final int myGeneration = _generation;
+    final MfaStatus mfa = _readMfaStatus();
     state = AuthState(
       sessionPhase: AuthSessionPhase.authenticated,
       userId: userId,
       profileStatus: ProfileStatus.loading,
+      mfaStatus: mfa,
     );
-    unawaited(_startSession(userId, myGeneration));
+    unawaited(_startSession(userId, myGeneration, mfa));
+  }
+
+  /// Whether the session that just appeared (password sign-in OR a restored
+  /// session) still owes a multi-factor code. Synchronous and local - see
+  /// [MfaRepository.currentAssurance] - and fails open: anything but a clear
+  /// "owed" answer lets the session through, exactly as the web app does.
+  MfaStatus _readMfaStatus() {
+    try {
+      return _mfa.currentAssurance() == MfaAssurance.challengeRequired
+          ? MfaStatus.required
+          : MfaStatus.satisfied;
+    } on Object {
+      return MfaStatus.satisfied;
+    }
   }
 
   void _handleRestoreTimeout() {
@@ -295,13 +353,23 @@ final class AuthController extends Notifier<AuthState> {
     state = const AuthState.timedOut();
   }
 
-  Future<void> _startSession(String userId, int myGeneration) async {
+  Future<void> _startSession(
+    String userId,
+    int myGeneration,
+    MfaStatus mfa,
+  ) async {
     unawaited(_auth.startAutoRefresh());
     // The version-gate check runs in parallel with the profile fetch; the
     // grants/matrix load starts once the profile resolves (see
     // `_refreshPermissions`) because it needs the role - the profile is the
     // security-critical path.
     unawaited(_runVersionGateCheck(myGeneration));
+    if (mfa == MfaStatus.required) {
+      // Held back until `verifyMfa` succeeds: a session that still owes its
+      // second factor reads nothing about the account, and never writes the
+      // offline profile cache.
+      return;
+    }
     await _fetchAndApplyProfile(userId, myGeneration, hardFailOnError: true);
   }
 
@@ -326,7 +394,7 @@ final class AuthController extends Notifier<AuthState> {
       return;
     }
     final String? userId = state.userId;
-    if (userId == null) {
+    if (userId == null || state.mfaStatus == MfaStatus.required) {
       return;
     }
     final DateTime now = DateTime.now();

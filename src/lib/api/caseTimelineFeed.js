@@ -16,7 +16,7 @@ import { listCommunications } from './accidentCommunications'
 import { listHandoverInspections } from './accidentHandover'
 import { listSlaInstances } from './accidentSla'
 import { getInsuranceClaim } from './accidentInsuranceClaims'
-import { listProfiles } from './users'
+import { listDirectoryPeople as listProfiles } from './profileDirectory'
 import { listEvidence } from './accidentEvidence'
 import { buildTimelineFeed, buildParticipants, groupMemberCounts } from '../caseTimelineFeed'
 

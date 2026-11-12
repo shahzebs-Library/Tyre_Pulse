@@ -35,6 +35,7 @@ import {
   isImprovement, deltaVsGood, targetStatus, monthlyMatrix, siteKpiRows, vehicleRows,
   kpiAlerts, kpiSummaryExportRows, isMeasured,
 } from '../lib/kpiCommandCenterAnalytics'
+import { safeJsonToSheet } from '../lib/csvSafe.js'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement,
@@ -568,22 +569,22 @@ export default function KpiCommandCenter() {
         KPI: r.kpi, Current: r.value, Score: r.score, Rating: r.rating, 'vs Previous': r.change, 'vs Good': r.vsGood,
         'World Class': r.worldClass, Good: r.good, Average: r.average, Poor: r.poor,
       }))
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'KPI Summary')
+      XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, rows), 'KPI Summary')
       if (siteRows.length) {
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(siteRows.map(sd => ({
+        XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, siteRows.map(sd => ({
           Site: sd.site, 'Overall Score': sd.overall == null ? 'N/A' : Math.round(sd.overall), Records: sd.records,
           ...Object.fromEntries(KPI_KEYS.map(k => [BENCHMARKS[k].label, BENCHMARKS[k].format(sd[k])])),
         }))), 'Site Comparison')
       }
       if (vehicles.length) {
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(vehicles.map(v => ({
+        XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, vehicles.map(v => ({
           Asset: v.asset, Score: v.overall ?? 'N/A', Records: v.records,
           CPK: BENCHMARKS.cpk.format(v.cpk), 'Tyre Life': BENCHMARKS.tyre_life.format(v.tyre_life),
           'Failure Rate': BENCHMARKS.failure_rate.format(v.failure_rate), 'Scrap Rate': BENCHMARKS.scrap_rate.format(v.scrap_rate),
         }))), 'Vehicles')
       }
       if (matrix.length) {
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(matrix.map(m => ({
+        XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, matrix.map(m => ({
           Month: m.month, Records: m.records,
           ...Object.fromEntries(KPI_KEYS.map(k => [BENCHMARKS[k].label, BENCHMARKS[k].format(m[k])])),
         }))), 'Monthly Trend')

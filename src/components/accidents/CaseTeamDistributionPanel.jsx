@@ -7,7 +7,7 @@ import {
 import { buildTeamDistribution } from '../../lib/accidentTeams'
 import { canFullyClose, buildCaseRoute } from '../../lib/accidentCase'
 import { listWorkstreams, setWorkstreamStatus, listWorkstreamEvents } from '../../lib/api/accidentCase'
-import { listProfiles } from '../../lib/api/users'
+import { listDirectoryPeople as listProfiles } from '../../lib/api/profileDirectory'
 import { isMissingRelation } from '../../lib/api/_client'
 import { resolveStorageUrls } from '../../lib/storageRefs'
 import { safeHref, safeImageSrc } from '../../lib/safeUrl'

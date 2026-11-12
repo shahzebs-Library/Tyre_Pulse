@@ -58,6 +58,11 @@ enum ModuleKey {
   washing,
   reportIssue,
   repairRequest,
+
+  /// Vehicle Handover (checkout/checkin condition capture + two-stage sign-off).
+  /// A Flutter-era module - the frozen Expo registry never had it - so it is
+  /// listed in [flutterOnlyModules] and the drift guard skips it by name.
+  handover,
   // Fleet
   records,
   vehicles,
@@ -170,7 +175,12 @@ const Map<String, ModuleKey> webModuleKeyAliases = <String, ModuleKey>{
 /// a new field module can only be born here. The drift guard compares every
 /// OTHER module against the TypeScript and skips exactly these, by name - a
 /// module is never silently exempted.
-const Set<ModuleKey> flutterOnlyModules = <ModuleKey>{};
+const Set<ModuleKey> flutterOnlyModules = <ModuleKey>{
+  // Vehicle Handover is born in Flutter - `mobile/lib/permissions.ts` has no
+  // such module - so the drift guard skips it rather than comparing it against
+  // a phone registry that cannot contain it.
+  ModuleKey.handover,
+};
 
 /// Parses a `mobile:<webKey>` row to the phone module it means, via
 /// [webModuleKeyAliases]. Null for a phone key, an unknown key or a key
@@ -296,6 +306,15 @@ const Map<ModuleKey, Set<RoleId>> flutterRoleDefaultExtensions =
   // Workshop Status: the server seeds Fleet Supervisor in its managers group
   // (20261007100000_workshop_status_permissions.sql).
   ModuleKey.workshopStatus: <RoleId>{RoleId.fleetSupervisor},
+  // Vehicle Handover: the two sign-off rungs. Fleet Supervisor signs the first
+  // rung and Fleet Incharge the closing one (20261112130000_handover_two_stage_
+  // signoff.sql). Neither role is in the Expo parity lists, so their reach is
+  // stated here. The server (decide_handover_approval) is still the boundary:
+  // this only opens the handover queue to them so they can sign.
+  ModuleKey.handover: <RoleId>{
+    RoleId.fleetSupervisor,
+    RoleId.fleetIncharge,
+  },
 };
 
 /// The registry itself.
@@ -436,6 +455,25 @@ abstract final class ModuleRegistry {
         RoleId.driver,
         RoleId.mechanic,
         RoleId.electrician,
+      },
+    ),
+    // Vehicle Handover is Flutter-only (see [flutterOnlyModules]), so this
+    // role default is NOT pinned against the Expo registry. The creators are
+    // the field roles who hand a vehicle over at driver change-over - the same
+    // set as Vehicle Washing. The two sign-off roles (Fleet Supervisor, Fleet
+    // Incharge) reach it through [flutterRoleDefaultExtensions]; admins reach
+    // it through the resolver break-glass. The server (decide_handover_approval)
+    // still decides who may actually SIGN.
+    ModuleDef.forRoles(
+      key: ModuleKey.handover,
+      defaultLabel: 'Vehicle Handover',
+      group: ModuleGroup.field,
+      defaultRoles: <RoleId>{
+        RoleId.manager,
+        RoleId.director,
+        RoleId.inspector,
+        RoleId.driver,
+        RoleId.tyreMan,
       },
     ),
     // --- Fleet -------------------------------------------------------------

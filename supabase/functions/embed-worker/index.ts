@@ -31,6 +31,17 @@ function json(body: unknown, status = 200): Response {
   })
 }
 
+// Constant-time comparison so the cron secret cannot be probed through response
+// timing. Local copy on purpose: this function deploys as one self-contained file.
+function constantTimeEqual(a: string, b: string): boolean {
+  if (!a || !b) return false
+  const enc = new TextEncoder(); const ab = enc.encode(a); const bb = enc.encode(b)
+  let diff = ab.length ^ bb.length
+  const n = Math.max(ab.length, bb.length)
+  for (let i = 0; i < n; i++) diff |= (ab[i] ?? 0) ^ (bb[i] ?? 0)
+  return diff === 0
+}
+
 serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405)
 
@@ -43,7 +54,7 @@ serve(async (req) => {
   // Gate: only the DB cron job knows the secret.
   const given = req.headers.get('x-cron-secret') ?? ''
   const { data: cfg } = await svc.from('cron_config').select('value').eq('name', 'cron_secret').maybeSingle()
-  if (!cfg?.value || given !== cfg.value) return json({ error: 'unauthorised' }, 401)
+  if (!cfg?.value || !constantTimeEqual(given, String(cfg.value))) return json({ error: 'unauthorised' }, 401)
 
   const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')
   if (!OPENAI_API_KEY) {

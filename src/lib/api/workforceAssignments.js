@@ -1,6 +1,7 @@
 import {supabase,unwrap,ServiceError,fetchAllPages,isMissingColumn,isNotProvisioned,toServiceError} from './_client'
 import {TRANSITIONS,reasonMessage,BLOCK_REASONS,NOT_INSTALLED} from '../workforceTransitions'
 import {pickEstimate} from '../workforceEstimate'
+import { fetchDirectory } from './profileDirectory'
 export const BASE_COLUMNS='id,organisation_id,assigned_to,assigned_by,title,instructions,site,priority,status,due_at,estimated_minutes,source_module,source_record_id,created_at,updated_at'
 export const CLASSIFIED_COLUMNS=BASE_COLUMNS+',task_type,vehicle_type,assignee_role'
 export const COLUMNS=CLASSIFIED_COLUMNS+',asset_no,tyre_serial,tyre_position,operational_record_table,operational_record_id,supporting_employee_ids,qualification,override_reason,overridden_by'
@@ -71,11 +72,10 @@ export async function linkOperationalRecord(id,table,recordId,{key=newKey()}={})
  return data
 }
 export async function listAssignableEmployees(){
- const result=await fetchAllPages((from,to)=>supabase.from('profiles')
-  .select('id,employee_id,username,full_name,role,site,approved,locked')
-  .eq('approved',true).eq('locked',false).order('id',{ascending:true}).range(from,to),{max:20000})
- if(result.error||result.truncated) throw new ServiceError('Unable to load a complete employee directory')
- return result.data||[]
+ let result
+ try{result=await fetchDirectory({activeOnly:true,max:20000})}catch{throw new ServiceError('Unable to load a complete employee directory')}
+ if(result.truncated) throw new ServiceError('Unable to load a complete employee directory')
+ return result.rows
 }
 const newKey=()=>globalThis.crypto?.randomUUID?globalThis.crypto.randomUUID():`web-${Date.now()}-${Math.random().toString(36).slice(2,12)}`
 /**

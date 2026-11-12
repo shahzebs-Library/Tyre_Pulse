@@ -236,7 +236,7 @@ Deno.serve(async (req) => {
           expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString(),
         } })
         if (insertError) throw insertError
-        if (!reserved) return noStore(jsonResponse(req, { error: 'Too many requests. Try again in 15 minutes.' }, 429))
+        if (!reserved) return noStore(jsonResponse(req, { error: 'Too many requests. Try again in 15 minutes.' }, 429, { 'Retry-After': '900' }))
         try { await deliver(channel, destination, code) }
         catch (deliveryError) {
           // Retain the reservation on delivery failure so retries cannot bypass limits.

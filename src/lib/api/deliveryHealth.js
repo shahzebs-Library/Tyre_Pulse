@@ -93,12 +93,11 @@ export async function listPushLog({ days = 30, from, to, max = DELIVERY_LOG_MAX 
 /** Head count of devices reachable by push (profiles.push_token not null). */
 export async function pushReach() {
   try {
-    const { count, error } = await supabase
-      .from('profiles')
-      .select('id', { count: 'exact', head: true })
-      .not('push_token', 'is', null)
+    // The token column is not readable through the table (column privileges);
+    // an elevated-only function returns the count.
+    const { data, error } = await supabase.rpc('count_profiles_with_push_token')
     if (error) throw toServiceError(error)
-    return count || 0
+    return Number(data) || 0
   } catch (err) {
     if (isMissingRelation(err)) return 0
     throw toServiceError(err)

@@ -11,11 +11,11 @@
  */
 import { supabase, unwrap, fetchAllPages, isMissingRelation, toServiceError, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
+import { fetchDirectory } from './profileDirectory'
 
 /** Uploading more than this in one go is a sign the sheet is wrong, not big. */
 export const PLAN_INSERT_CHUNK = 200
 
-const PEOPLE_COLS = 'id, full_name, username, role, country, sites, approved, locked'
 const FLEET_COLS = 'id, asset_no, site, vehicle_type, country, status'
 
 function rpcArgs(extra = {}) {
@@ -89,11 +89,11 @@ export async function loadUnplannedAssets({ country, horizonDays = 30, site, lim
  * handed to a locked account is work nobody can do.
  */
 export async function loadPlanPeople({ country } = {}) {
-  const result = await fetchAllPages((fromRow, toRow) => supabase
-    .from('profiles').select(PEOPLE_COLS)
-    .eq('approved', true).eq('locked', false)
-    .order('full_name').order('id').range(fromRow, toRow), { max: 5000 })
-  if (result.error) throw toServiceError(result.error)
+  let result
+  try {
+    const dir = await fetchDirectory({ activeOnly: true, max: 5000 })
+    result = { data: dir.rows, truncated: dir.truncated }
+  } catch (error) { throw toServiceError(error) }
   const scope = scopeCountry(country)
   const rows = (result.data || []).filter(person => {
     if (!scope) return true

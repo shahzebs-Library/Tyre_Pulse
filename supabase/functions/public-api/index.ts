@@ -106,7 +106,7 @@ serve(async (req) => {
   if (authErr) return json({ error: 'auth_failed' }, 500)
   if (!auth?.ok) {
     return auth?.error === 'rate_limited'
-      ? json({ error: 'rate_limited', limit: auth.limit }, 429)
+      ? json({ error: 'rate_limited', limit: auth.limit }, 429, { 'Retry-After': '60' })
       : json({ error: 'invalid_api_key' }, 401)
   }
   const orgId: string = auth.organisation_id

@@ -6,7 +6,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence, MotionConfig } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { isChecklistOnlyRole, isChecklistPathAllowed, CHECKLIST_ONLY_ROLES } from '../lib/checklistAccess'
-import { navItemAllowedForCustomRole, NAV_MODULE_KEY, governingModuleKey } from '../lib/navAccess'
+import { navItemAllowedForCustomRole, NAV_MODULE_KEY, governingModuleKey, isPathSwitchedOff } from '../lib/navAccess'
 import { ACCESS_ROLES } from '../lib/moduleCatalog'
 import { applyNavLayout } from '../lib/navLayout'
 import { REPORT_BUILDER_ROUTES, canUseReportBuilder } from '../lib/reportBuilderAccess'
@@ -77,7 +77,7 @@ import StockBoxIc from './icons/stock-box.icon'
 import BarcodeScanIc from './icons/barcode-scan.icon'
 import OdometerIc from './icons/odometer.icon'
 import { supabase } from '../lib/supabase'
-import { detectAlertBadgeCount } from '../lib/alertEngine'
+import { detectAlertBadgeCount, ALERT_BADGE_MAX_AGE_MS } from '../lib/alertEngine'
 import { syncPendingInspections, getPendingCount, getFailedCount, getFailedInspections, retryFailedInspection } from '../lib/offlineQueue'
 import { useWakeLock } from '../hooks/useWakeLock'
 import { useFeatureFlags } from '../hooks/useFeatureFlags'
@@ -142,7 +142,7 @@ const NAV_GROUPS = [
       { to: '/odometer-logs',       label: 'Odometer Logs', parent: 'Meters',      icon: Activity },
       { to: '/fleet-utilization',   label: 'Fleet Utilization', parent: 'Meters',  icon: Gauge, roles: ANALYTICS_ROLES },
       { to: '/vehicle-checkinout',  label: 'Vehicle Check In/Out', parent: 'Movement', icon: ArrowLeftRight, adminOnly: A },
-      { to: '/handovers',           label: 'Vehicle Handover', parent: 'Movement',   icon: KeyRound, adminOnly: A },
+      { to: '/handovers',           label: 'Vehicle Handover', parent: 'Movement',   icon: KeyRound, roles: ['Admin', 'Manager', 'Director', 'Fleet Supervisor', 'Fleet Incharge'] },
       { to: '/reservations',        label: 'Vehicle Reservations', parent: 'Movement', icon: BookMarked, adminOnly: A },
       { to: '/gate-pass',       label: 'Gate Pass', parent: 'Movement',          icon: GatePassIc },
     ],
@@ -817,7 +817,7 @@ export default function Layout({ children }) {
   // subscribe in that page to that table and consume the payload.
 
   const auth = useAuth()
-  const { profile, hasPermission, grantedModules, isSuperAdmin } = auth
+  const { profile, hasPermission, grantedModules, isSuperAdmin, moduleStatus } = auth
   const canLoadAlerts = moduleAvailable(auth, 'alerts')
   const alertModules = ['stock', 'corrective_actions', 'tyre_records', 'inspections'].filter(key => moduleAvailable(auth, key)).join(',')
   const { t, isRTL }                        = useLanguage()
@@ -946,9 +946,10 @@ export default function Layout({ children }) {
     const entry = navByRoute.get(route)
     if (!entry) return false
     return Boolean(
-      shouldShowNavItem(entry.item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry),
+      shouldShowNavItem(entry.item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry)
+        && !isPathSwitchedOff(entry.item.to, moduleStatus),
     )
-  }, [navByRoute, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry])
+  }, [navByRoute, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry, moduleStatus])
 
   const workspaceNavigation = useMemo(() => [...navByRoute.values()]
     .filter(entry => entry.groupAllowed && canSeeRoute(entry.item.to))
@@ -1108,7 +1109,10 @@ export default function Layout({ children }) {
           try { return new Set(JSON.parse(localStorage.getItem('tp_dismissed_alerts') || '[]')) }
           catch { return new Set() }
         })()
-        const count = await detectAlertBadgeCount(supabase, country, dismissed, alertModules.split(','))
+        const count = await detectAlertBadgeCount(supabase, country, dismissed, alertModules.split(','), {
+          key: [profile?.id, country, alertModules, profile?.site, (profile?.sites || []).join(',')].join('|'),
+          maxAgeMs: ALERT_BADGE_MAX_AGE_MS,
+        })
         if (!cancelled) setAlertCount(count)
       } catch { /* ignore */ }
     }
@@ -1319,7 +1323,7 @@ export default function Layout({ children }) {
             // React key, collapse state, and translation lookup.
             const groupId = group.key || group.label
             if (!shouldShowGroup(group, profile)) return null
-            const visibleItems = items.filter(item => shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry) && matchesModule(item, group))
+            const visibleItems = items.filter(item => shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry) && !isPathSwitchedOff(item.to, moduleStatus) && matchesModule(item, group))
             if (visibleItems.length === 0) return null
             const isCollapsed = !normalizedModuleQuery && collapsedGroups.has(groupId)
             const groupHeading = groupHeadingFor(t, group)

@@ -122,12 +122,18 @@ async function insertChunked(table, rows, onProgress) {
 async function pagedExistenceSet(buildPageQuery, addRow) {
   const keys = new Set()
   let from = 0
+  // Keyset cursor: the id of the last row of the previous page. Paging by OFFSET
+  // made the server walk and sort every earlier row again for each page (measured
+  // on work_orders: 15,452 buffers plus a temp spill per 1,000-row page at offset
+  // 50,000, against 1,470 for the same page by `id > cursor`), so the whole read
+  // grew with the square of the table.
+  let after = null
   const size = 1000
   for (let guard = 0; guard < 500; guard += 1) {
     let data = null
     let lastErr = null
     for (let a = 1; a <= 3; a += 1) {
-      const res = await buildPageQuery(from, size)
+      const res = await buildPageQuery(from, size, after)
       if (!res.error) { data = res.data; lastErr = null; break }
       lastErr = res.error
       // A genuinely undeployed table is the only read error we degrade: no rows
@@ -141,7 +147,13 @@ async function pagedExistenceSet(buildPageQuery, addRow) {
     if (!data || data.length === 0) break
     for (const r of data) addRow(keys, r)
     if (data.length < size) break
-    from += size
+    const lastId = data[data.length - 1]?.id
+    if (lastId != null) {
+      after = lastId      // next page starts after this row; offset stays 0
+    } else {
+      after = null        // no id in the projection: fall back to offset paging
+      from += size
+    }
   }
   return keys
 }
@@ -152,9 +164,10 @@ async function pagedExistenceSet(buildPageQuery, addRow) {
  * pagedExistenceSet): a transient read error THROWS; a missing table returns []. */
 async function existingKeys(table, column, country) {
   return pagedExistenceSet(
-    (from, size) => {
-      let q = supabase.from(table).select(column).not(column, 'is', null)
+    (from, size, after) => {
+      let q = supabase.from(table).select(column === 'id' ? 'id' : `${column},id`).not(column, 'is', null)
       if (country) q = q.eq('country', country)
+      if (after != null) q = q.gt('id', after)
       // Stable order on the primary key: PostgREST does NOT guarantee row order
       // across .range() pages without an ORDER BY, so a row can be dropped or
       // repeated at a page boundary. A dropped existing key is not recognised as
@@ -190,9 +203,10 @@ function tyreLifecycleKey(row) {
  * pagedExistenceSet): a transient read error THROWS; a missing table returns []. */
 async function existingTyreKeys(country) {
   return pagedExistenceSet(
-    (from, size) => {
-      let q = supabase.from('tyre_records').select('serial_no,asset_no,position,issue_date')
+    (from, size, after) => {
+      let q = supabase.from('tyre_records').select('serial_no,asset_no,position,issue_date,id')
       if (country) q = q.eq('country', country)
+      if (after != null) q = q.gt('id', after)
       // Stable order on the primary key so paging never drops/repeats a row at a
       // page boundary (PostgREST does not guarantee order across .range() pages
       // without an ORDER BY). A missed key otherwise re-inserts and aborts the batch.

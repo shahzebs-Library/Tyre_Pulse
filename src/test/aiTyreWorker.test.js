@@ -299,7 +299,7 @@ describe('tenant and role refusal', () => {
     expect(edge).toMatch(/inspection\.organisation_id !== profile\.organisation_id\) return fail\("Inspection unavailable", 403\)/)
     expect(edge).toMatch(/job\.organisation_id !== profile\.organisation_id\) return fail\("Job not found",404\)/)
     expect(edge).toMatch(/\.eq\("organisation_id",profile\.organisation_id\)/) // backfill scope
-    expect(edge).toMatch(/provided !== expected\) return fail\("Worker unauthorized",403\)/)
+    expect(edge).toMatch(/!constantTimeEqual\(provided, expected\)\) return fail\("Worker unauthorized",403\)/)
   })
   it('the worker reserves budget through the atomic RPC and has no unmetered provider path', () => {
     expect(edge).toMatch(/ai_tyre_reserve_budget/)

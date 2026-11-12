@@ -28,7 +28,9 @@ export async function getMobileOps() {
   const [cfg, devices, tokens] = await Promise.allSettled([
     supabase.from('system_config').select('key, value, updated_at').in('key', [KEY_MIN, KEY_LATEST]),
     supabase.from('user_devices').select('id', { count: 'exact', head: true }).eq('revoked', false),
-    supabase.from('profiles').select('id', { count: 'exact', head: true }).not('push_token', 'is', null),
+    // The token column is not readable through the table; an elevated-only
+    // function returns the count (NULL for anyone else).
+    supabase.rpc('count_profiles_with_push_token'),
   ])
   const rows = cfg.status === 'fulfilled' ? (cfg.value.data || []) : []
   return {
@@ -36,7 +38,7 @@ export async function getMobileOps() {
     latestVersion: val(rows, KEY_LATEST),
     updatedAt: (rows.find((r) => r.key === KEY_MIN) || {}).updated_at || null,
     activeDevices: devices.status === 'fulfilled' ? (devices.value.count ?? null) : null,
-    usersWithPush: tokens.status === 'fulfilled' ? (tokens.value.count ?? null) : null,
+    usersWithPush: tokens.status === 'fulfilled' && !tokens.value.error && Number.isFinite(Number(tokens.value.data)) && tokens.value.data !== null ? Number(tokens.value.data) : null,
     configOk: cfg.status === 'fulfilled' && !cfg.value.error,
   }
 }

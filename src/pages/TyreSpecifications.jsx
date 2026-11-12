@@ -72,6 +72,7 @@ import {
   SpecGrid, specTableColumns, SpecDetail, TreadPatternCard, TechnicalDrawingCard,
 } from '../components/tyreSpec/SpecCatalog'
 import './TyreSpecifications.css'
+import { safeJsonToSheet } from '../lib/csvSafe.js'
 
 const uuidv4 = () => crypto.randomUUID()
 const SPEC_PAGE_SIZES = [6, 12, 24, 48]
@@ -554,14 +555,14 @@ export default function TyreSpecifications() {
       'Source Note': c.source_note || '',
     }))
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{
+    XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, [{
       'Report': 'Tyre Specification Catalogue',
       'Specifications included': filteredCatalog.length,
       'Specifications in catalogue': catalog.length,
       'Filters applied': catalogScope || 'None (whole catalogue)',
       'Scope': country || 'All countries',
     }]), 'Report Scope')
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Catalogue')
+    XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, rows), 'Catalogue')
     XLSX.writeFile(wb, 'TyrePulse_Tyre_Specification_Catalogue.xlsx')
   }
 
@@ -692,7 +693,7 @@ export default function TyreSpecifications() {
     })
     if (rows.length === 0) return
     const XLSX = await import('xlsx')
-    const ws = XLSX.utils.json_to_sheet(rows)
+    const ws = safeJsonToSheet(XLSX, rows)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Value Advisor')
     XLSX.writeFile(wb, 'TyrePulse_Value_Advisor.xlsx')
@@ -720,13 +721,13 @@ export default function TyreSpecifications() {
     }))
     const wb = XLSX.utils.book_new()
     // A workbook outlives the filter that produced it, so it names its scope.
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{
+    XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, [{
       'Report': 'Tyre Specification Library',
       'Specifications included': filteredSpecs.length,
       'Specifications defined': specs.length,
       'Filters applied': specLibraryScope || 'None (whole library)',
     }]), 'Report Scope')
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Tyre Specs')
+    XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, rows), 'Tyre Specs')
     XLSX.writeFile(wb, 'TyrePulse_Specifications.xlsx')
   }
 
@@ -842,14 +843,14 @@ export default function TyreSpecifications() {
       'Brands Fitted But Not Approved': r.brandsFittedNotApproved.join(', '),
     }))
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{
+    XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, [{
       'Report': 'Current Fleet Tyre Inventory by Size',
       'Sizes included': filteredSizeInventory.length,
       'Sizes in fleet': sizeInventory.length,
       'Search applied': sizeSearch.trim() || 'None (whole fleet)',
       'Scope': country || 'All Countries',
     }]), 'Report Scope')
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Tyre Size Inventory')
+    XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, rows), 'Tyre Size Inventory')
     XLSX.writeFile(wb, 'TyrePulse_Tyre_Size_Inventory.xlsx')
   }
 

@@ -1060,3 +1060,20 @@ A sheet rather than a route means the driver workspace has no deep link and no
 back-stack entry of its own: Back closes the sheet and returns to Profile,
 which is the behaviour spec section 5 asks for. If it ever needs a shareable
 link, it needs a real route in `routes.dart`, which is a human change.
+
+### 9.1 The multi-factor gate (added 2026-11-12)
+
+A fifth shell gate, `TpShellGate.mfaRequired`, rendered by `TpMfaRequiredScreen`
+(`lib/app/router/mfa_gate.dart`). It is a STATE, not a route, like the gates in
+section 5.6, so a deep link cannot skip it.
+
+| When | Rule | Where |
+|---|---|---|
+| After a password sign-in and on session restore | Owed only when the session is `aal1` and a verified factor makes `aal2` available. The same rule as web `hasUnmetMfa` (`src/lib/authAssurance.js`). An unreadable assurance FAILS OPEN | `MfaRepository.currentAssurance`, `AuthController._readMfaStatus` |
+| While owed | The gate is checked before every profile rule in `deriveSession`. The `profiles` row is not fetched, the offline profile cache is not written and foreground revalidation is skipped | `auth_state.dart`, `auth_controller.dart` |
+| Verify | 6 digits, challenge + verify of the verified TOTP factor. A refused code clears the field and says so; an unreachable server says the code could not be checked. Then the held-back profile load runs | `AuthController.verifyMfa` |
+| Way out | Sign out | `TpShellGateActions.onSignOut` |
+
+Enrolment stays on the web; the app has no enrolment screen. Tests:
+`test/core/auth/mfa_gate_controller_test.dart`, `test/app/router/mfa_gate_test.dart`
+and one case in `test/app/router/app_router_test.dart`.

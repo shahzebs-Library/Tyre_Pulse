@@ -11,7 +11,7 @@ import {
   evaluateMonthlyBudget, monthStartUtc, parseAiControls, sumMonthSpend,
   type MonthlyBudgetDecision,
 } from "./budget.ts";
-import { isActiveAccount, parseStorageRef } from "../_shared/aiSecurity.ts";
+import { constantTimeEqual, isActiveAccount, parseStorageRef } from "../_shared/aiSecurity.ts";
 
 const ALLOWED_ORIGINS = [
   ...(Deno.env.get("AI_ALLOWED_ORIGIN") ?? "").split(",").map(x => x.trim()).filter(Boolean),
@@ -23,15 +23,20 @@ const ALLOWED_ORIGINS = [
 ];
 // Echo the caller origin only when allow-listed (a single fixed origin made the browser
 // block calls from tyrepulse.app / www as "Failed to send a request to the Edge Function").
-let currentOrigin = ALLOWED_ORIGINS[0] ?? "https://app.tyrepulse.app";
-const cors = {
-  get "access-control-allow-origin"() { return currentOrigin; },
-  "vary": "Origin",
-  "access-control-allow-headers": "authorization, apikey, content-type, x-client-info, x-worker-secret",
-  "access-control-allow-methods": "POST, OPTIONS",
+// The CORS headers are built PER REQUEST (corsFor) and stamped on the finished response in the
+// serve handler. They used to live in a module-level variable mutated per request, so two
+// concurrent requests could receive each other's Access-Control-Allow-Origin.
+const corsFor = (req: Request): Record<string, string> => {
+  const origin = req.headers.get("origin") ?? "";
+  return {
+    "access-control-allow-origin": ALLOWED_ORIGINS.includes(origin) ? origin : (ALLOWED_ORIGINS[0] ?? "https://app.tyrepulse.app"),
+    "vary": "Origin",
+    "access-control-allow-headers": "authorization, apikey, content-type, x-client-info, x-worker-secret",
+    "access-control-allow-methods": "POST, OPTIONS",
+  };
 };
 const response = (payload: Json, status = 200) =>
-  new Response(JSON.stringify(payload), { status, headers: { ...cors, "content-type": "application/json" } });
+  new Response(JSON.stringify(payload), { status, headers: { "content-type": "application/json" } });
 const fail = (message: string, status = 400) => response({ error: message }, status);
 const apiUrl = Deno.env.get("SUPABASE_URL")!;
 const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -352,7 +357,7 @@ async function work(req:Request) {
   // Cron workers authenticate using the dedicated x-worker-secret header.
   const provided = req.headers.get("x-worker-secret");
   const expected = Deno.env.get("AI_WORKER_SECRET");
-  if (!expected || !provided || provided !== expected) return fail("Worker unauthorized",403);
+  if (!expected || !provided || !constantTimeEqual(provided, expected)) return fail("Worker unauthorized",403);
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
   const providerName = anthropicKey ? "anthropic" : "google";
   const providerKey = anthropicKey || Deno.env.get("AI_PROVIDER_KEY");
@@ -477,9 +482,7 @@ async function work(req:Request) {
   if (drained.stoppedBecause === "queue_error" && drained.batches === 0) return fail("Queue unavailable",500);
   return response({ ...drained, dailyLimit, budget: lastBudget });
 }
-Deno.serve(async req => {
-  { const o = req.headers.get("origin") ?? ""; currentOrigin = ALLOWED_ORIGINS.includes(o) ? o : (ALLOWED_ORIGINS[0] ?? "https://app.tyrepulse.app"); }
-  if (req.method === "OPTIONS") return new Response(null,{headers:cors});
+async function handle(req: Request): Promise<Response> {
   if (req.method !== "POST") return fail("Method not allowed",405);
   try {
     const payload = await req.json() as Json;
@@ -494,4 +497,11 @@ Deno.serve(async req => {
     if (error instanceof Error && error.message === "unauthenticated") return fail("Unauthorized",401);
     return fail("Request could not be completed",500);
   }
+}
+Deno.serve(async req => {
+  const cors = corsFor(req);
+  if (req.method === "OPTIONS") return new Response(null,{headers:cors});
+  const res = await handle(req);
+  for (const [name, value] of Object.entries(cors)) res.headers.set(name, value);
+  return res;
 });

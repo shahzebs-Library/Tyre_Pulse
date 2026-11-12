@@ -66,15 +66,18 @@ describe('service layer - consoleSessions', () => {
     expect(h.state.last._table).toBe('profiles')
   })
 
-  it('listUserDevices derives has_device from push_token', async () => {
+  it('listUserDevices derives has_device from the private reader, never the token', async () => {
     h.state.result = {
       data: [
-        { id: 'u1', full_name: 'A', push_token: 'ExpoTok', login_count: 3 },
-        { id: 'u2', full_name: 'B', push_token: null },
+        { id: 'u1', full_name: 'A', login_count: 3 },
+        { id: 'u2', full_name: 'B' },
       ],
       error: null,
     }
+    h.state.rpcResult = { data: [{ id: 'u1', has_push_token: true }, { id: 'u2', has_push_token: false }], error: null }
     const rows = await svc.listUserDevices()
+    expect(h.state.rpc.name).toBe('list_profile_private')
+    expect(h.state.rpc.args).toEqual({ p_ids: ['u1', 'u2'] })
     expect(rows[0].has_device).toBe(true)
     expect(rows[1].has_device).toBe(false)
     // Raw token is never surfaced.

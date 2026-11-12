@@ -115,6 +115,23 @@ enum RoleId {
     token: 'fleet_supervisor',
     databaseName: 'Fleet Supervisor',
     isBuiltIn: false,
+  ),
+
+  /// A real `custom_roles` row, seeded by
+  /// `supabase/migrations/20261112130000_handover_two_stage_signoff.sql` (the
+  /// same way Fleet Supervisor was seeded). It is the SECOND rung of the two-
+  /// stage vehicle-handover sign-off, above Fleet Supervisor: it gives the
+  /// final approval that closes a handover. Until this token existed the phone
+  /// resolved it to [UserRole.unknown], which denied every module, so a Fleet
+  /// Incharge could not reach the handover queue to sign at all. Its module
+  /// reach is stated in `flutterRoleDefaultExtensions` (only the `handover`
+  /// module), NOT in the phone-parity role lists, because the frozen Expo
+  /// registry never learned this role. The server boundary is unchanged: who
+  /// may actually sign is re-checked by `decide_handover_approval`.
+  fleetIncharge(
+    token: 'fleet_incharge',
+    databaseName: 'Fleet Incharge',
+    isBuiltIn: false,
   );
 
   const RoleId({

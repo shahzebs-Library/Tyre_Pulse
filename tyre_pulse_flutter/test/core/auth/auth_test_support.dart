@@ -37,6 +37,7 @@ import 'package:tyre_pulse/core/auth/auth_profile_repository.dart';
 import 'package:tyre_pulse/core/auth/auth_repository.dart';
 import 'package:tyre_pulse/core/auth/auth_version_gate_repository.dart';
 import 'package:tyre_pulse/core/auth/foreground_signal.dart';
+import 'package:tyre_pulse/core/auth/mfa_repository.dart';
 import 'package:tyre_pulse/core/auth/profile_cache.dart';
 import 'package:tyre_pulse/core/auth/sign_in_outcome.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
@@ -259,6 +260,32 @@ final class FakeAccessPermissionsRepository
   }
 }
 
+/// Fake second-factor repository. Defaults to "nothing owed", so every test
+/// written before the MFA step behaves exactly as it did.
+final class FakeMfaRepository implements MfaRepository {
+  MfaAssurance assurance = MfaAssurance.satisfied;
+
+  /// When true, [currentAssurance] throws - the fail-open path.
+  bool assuranceThrows = false;
+
+  MfaVerifyOutcome verifyOutcome = const MfaVerified();
+  final List<String> verifiedCodes = <String>[];
+
+  @override
+  MfaAssurance currentAssurance() {
+    if (assuranceThrows) {
+      throw StateError('assurance unreadable');
+    }
+    return assurance;
+  }
+
+  @override
+  Future<MfaVerifyOutcome> verify(String code) async {
+    verifiedCodes.add(code);
+    return verifyOutcome;
+  }
+}
+
 List<Override> authTestOverrides({
   required FakeAuthRepository auth,
   required FakeProfileRepository profiles,
@@ -267,8 +294,12 @@ List<Override> authTestOverrides({
   required FakeForegroundSignal foreground,
   Duration restoreTimeout = const Duration(milliseconds: 30),
   FakeAccessPermissionsRepository? permissions,
+  FakeMfaRepository? mfa,
 }) =>
     <Override>[
+      mfaRepositoryProvider.overrideWith(
+        (Ref ref) => mfa ?? FakeMfaRepository(),
+      ),
       accessPermissionsRepositoryProvider.overrideWith(
         (Ref ref) => permissions ?? FakeAccessPermissionsRepository(),
       ),

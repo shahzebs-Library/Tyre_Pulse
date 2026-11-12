@@ -10,9 +10,10 @@
  * run the migration) degrades listing to an empty array so the page can render
  * its "apply the migration" empty state instead of erroring.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, ServiceError } from './_client'
 import { toFiniteNumber } from '../handoverReports'
 import { safeHref } from '../safeUrl'
+import { toUserMessage } from '../safeError'
 
 /** Scheme-guard a URL on write: safe → the string, anything unsafe/blank → null. */
 const asUrl = (v) => { const s = safeHref(v); return s === undefined ? null : s }
@@ -35,8 +36,70 @@ function asSignature(v) {
 export const COLS =
   'id,organisation_id,country,report_no,asset_no,handover_type,from_driver,' +
   'to_driver,handover_at,odometer_km,fuel_level_pct,condition_rating,damages,' +
-  'damage_count,cleanliness,signature_url,photo_url,notes,created_by,' +
-  'created_at,updated_at'
+  'damage_count,cleanliness,signature_url,photo_url,photos,notes,created_by,' +
+  'created_at,updated_at,document_no,approval_status,review_note,' +
+  'supervisor_name,supervisor_signature,supervisor_at,supervisor_by,' +
+  'incharge_name,incharge_signature,incharge_at,incharge_by'
+
+// Photos live in the PRIVATE `tyre-photos` bucket, the same bucket the wash and
+// inspection modules use, so a handover's photos resolve identically through
+// src/lib/storageRefs.js. The `photos` jsonb column holds `tp-storage://` refs
+// (never a public URL); the single legacy `photo_url` column is still read.
+const PHOTO_BUCKET = 'tyre-photos'
+const PHOTO_MIME_EXT = Object.freeze({
+  'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic',
+})
+const MAX_PHOTO_BYTES = 20 * 1024 * 1024
+const MAX_PHOTOS = 24
+
+/**
+ * Validate a user-supplied handover image before upload. Returns the canonical
+ * extension derived from the (trusted) MIME type, never the raw filename, so a
+ * spoofed extension cannot influence the storage path. Throws on invalid input.
+ */
+export function validateHandoverPhoto(file) {
+  if (!file || typeof file !== 'object') throw new Error('No image file was provided.')
+  const ext = PHOTO_MIME_EXT[file.type]
+  if (!ext) throw new Error('Only JPEG, PNG, WebP, or HEIC images are allowed.')
+  if (Number(file.size) > MAX_PHOTO_BYTES) throw new Error('Image must be 20 MB or smaller.')
+  return ext
+}
+
+/**
+ * Upload one handover photo to the private bucket and return a tp-storage:// ref.
+ * Path is collision-resistant: modules/handover/<uid>/<timestamp>_<index>_<rand>.<ext>
+ */
+export async function uploadHandoverPhoto(file, index = 0) {
+  const ext = validateHandoverPhoto(file)
+  const { data: { user } = {} } = await supabase.auth.getUser()
+  const uid = (user?.id || 'anon').slice(0, 8)
+  const rand = Math.random().toString(36).slice(2, 6)
+  const path = `modules/handover/${uid}/${Date.now()}_${index}_${rand}.${ext}`
+  const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, file, {
+    upsert: false, contentType: file.type || 'image/jpeg', cacheControl: '3600',
+  })
+  if (error) throw new ServiceError(toUserMessage(error, 'Photo upload failed.'), error.code, error)
+  return `tp-storage://${PHOTO_BUCKET}/${path}`
+}
+
+/**
+ * Normalise a photos payload to an array of stored refs. Each entry is kept only
+ * when it is a tp-storage:// ref or a safe http(s) URL; anything else is dropped
+ * so a poisoned value can never reach display. Capped at MAX_PHOTOS.
+ */
+function asPhotos(v) {
+  if (!Array.isArray(v)) return []
+  const out = []
+  for (const item of v) {
+    const s = typeof item === 'string' ? item.trim() : ''
+    if (!s) continue
+    if (s.startsWith('tp-storage://')) { out.push(s.slice(0, 500)); continue }
+    const safe = asUrl(s.slice(0, 2000))
+    if (safe) out.push(safe)
+    if (out.length >= MAX_PHOTOS) break
+  }
+  return out
+}
 
 /** True when the failure is "table does not exist yet" (pre-migration). */
 function isMissingRelation(err) {
@@ -144,6 +207,7 @@ export async function createHandoverReport(values = {}) {
     cleanliness: asEnum(values.cleanliness, CLEANLINESS),
     signature_url: asSignature(values.signature_url),
     photo_url: asUrl(asText(values.photo_url, 2000)),
+    photos: asPhotos(values.photos),
     notes: values.notes ? String(values.notes).slice(0, 8000) : null,
     country: values.country ?? null,
   }
@@ -180,6 +244,7 @@ export async function updateHandoverReport(id, patch = {}) {
   if (patch.cleanliness !== undefined) clean.cleanliness = asEnum(patch.cleanliness, CLEANLINESS)
   if (patch.signature_url !== undefined) clean.signature_url = asSignature(patch.signature_url)
   if (patch.photo_url !== undefined) clean.photo_url = asUrl(asText(patch.photo_url, 2000))
+  if (patch.photos !== undefined) clean.photos = asPhotos(patch.photos)
   if (patch.notes !== undefined) clean.notes = patch.notes ? String(patch.notes).slice(0, 8000) : null
   if (patch.country !== undefined) clean.country = patch.country ?? null
 
@@ -188,6 +253,35 @@ export async function updateHandoverReport(id, patch = {}) {
 
 export async function deleteHandoverReport(id) {
   return unwrap(await supabase.from('handover_reports').delete().eq('id', id))
+}
+
+/**
+ * Decide a handover's two-stage sign-off. The database RPC
+ * `decide_handover_approval` is the authority: it resolves which rung this is,
+ * derives the signer identity and timestamp from the session, enforces the role
+ * gates and refuses a rung skip or a non-signer write. This layer never writes
+ * approval_status directly.
+ *
+ * @param {string} id
+ * @param {{ approved:boolean, signature?:string|null, note?:string|null }} opts
+ * @returns {Promise<{ok:boolean, decision:string, status:string, both_steps:boolean}>}
+ */
+export async function decideHandover(id, { approved, signature = null, note = null } = {}) {
+  if (!id) throw new Error('A handover is required to sign off.')
+  const sig = asSignature(signature)
+  try {
+    const { data, error } = await supabase.rpc('decide_handover_approval', {
+      p_id: id,
+      p_approved: approved === true,
+      p_signature: approved ? sig : null,
+      p_note: note == null || note === '' ? null : String(note).slice(0, 2000),
+    })
+    if (error) throw new ServiceError(toUserMessage(error, 'Could not record the decision.'), error.code, error)
+    return data || { ok: true, decision: approved ? 'approved' : 'rejected', status: '', both_steps: false }
+  } catch (err) {
+    if (err instanceof ServiceError) throw err
+    throw new ServiceError(toUserMessage(err, 'Could not record the decision.'), err?.code, err)
+  }
 }
 
 /**

@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
+import 'package:tyre_pulse/app/router/mfa_gate.dart';
 import 'package:tyre_pulse/app/router/route_access.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/router/session.dart';
@@ -54,6 +55,8 @@ class TpAppShell extends ConsumerWidget {
         return const TpProfileUnavailableScreen();
       case TpShellGate.accessBlocked:
         return const TpAccessBlockedScreen();
+      case TpShellGate.mfaRequired:
+        return const TpMfaRequiredScreen();
       case TpShellGate.none:
         break;
     }

@@ -10,6 +10,7 @@
 import { supabase, unwrap, fetchAllPages, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 import { isActiveDelegation } from '../approvalDelegations'
+import { fetchDirectoryByIds } from './profileDirectory'
 
 // Definition columns for the admin builder (list + edit form).
 // Omits created_by (write-time scoping only).
@@ -236,8 +237,7 @@ export async function myDelegatedApprovals() {
     // Roles of the delegators — role-based steps are matched by approver_role.
     const delegatorIds = [...new Set(active.map((d) => d.delegator_id).filter(Boolean))]
     if (!delegatorIds.length) return []
-    const profiles =
-      unwrap(await supabase.from('profiles').select('id,role').in('id', delegatorIds)) || []
+    const profiles = await fetchDirectoryByIds(delegatorIds)
     const roleById = new Map(
       profiles.map((p) => [p.id, String(p.role || '').toLowerCase()]),
     )

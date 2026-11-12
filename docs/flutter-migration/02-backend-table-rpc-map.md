@@ -247,6 +247,7 @@ Each was confirmed by locating its `create function` in a migration.
 |---|---|---|---|
 | `decide_checklist_approval` | `MIGRATIONS_V597_DECIDE_CHECKLIST_APPROVAL_TWO_STAGE.sql` | Server derives the approver | Checklist approval. Omitted from section 3's list of 27, named in sections 1 and in artifact 06 section 4 |
 | `get_schedule_adherence(p_country text, p_from date, p_to date)` | `20260921074351_inspection_plan_adherence.sql`; anon revoked by `20260921084516_plan_rpc_anon_revoke.sql` | SECURITY INVOKER, so RLS bounds it | Inspection plans. Set-returning: capped at 1000 rows, and the cap is SHARED with colleagues' plans because it returns the whole country scope. The client keeps the window short and reports `truncated` |
+| `list_profile_directory(p_ids uuid[], p_search text, p_limit int, p_offset int, p_roles text[], p_active_only boolean)` | `20261112170000_profile_directory_and_private_readers.sql`; anon and PUBLIC revoked in the same file | SECURITY DEFINER; organisation resolved in the body from the caller, active callers only | The staff directory: names, employee id, role and scope, no contact data. The reader for OTHER people's names (accident case owners, inspection action assignee picker). Set-returning: capped at 1000 rows per call by the function; page with `p_offset` |
 | `driver_workspace(p_driver_id uuid, p_offset integer)` | `20260912110325_driver_workspace_fines_and_assignments.sql`; body in `private.driver_workspace_read`, redefined by `20260921134725_driver_fine_enterprise_workflows.sql` | INVOKER wrapper over a DEFINER reader that checks org and `driver_workspace_access` | Driver workspace read, paged 100 rows at a time per list. **Not in registry** |
 | `driver_workspace_command(p_action text, p_payload jsonb, p_request_id uuid)` | Same two migrations; the 2026-09-21 one makes it DEFINER and routes `review_fine`, `correct_fine`, `reassign_fine` to `private.driver_fine_enterprise_command` | DEFINER | Every driver-workspace write. Actions include `create_driver`, `link_account`, `assign_team`, `create_fine`, `respond_fine`, `review_fine`, `attach_evidence`, `link_record`, `unlink_record`. `p_request_id` makes a retry idempotent. **Not in registry** |
 | `driver_workspace_options(p_kind text, p_search text, p_offset integer)` | Same two migrations | DEFINER | Pickers inside the driver workspace. **Not in registry** |
@@ -385,3 +386,31 @@ the phone only displays the result as needed / linked), the qualification gate
 (trigger `zz_workforce_assignment_qualify`, `workforce_qualification`,
 `workforce_recommend_assignees`) and the board RPCs `workforce_board_summary`,
 `workforce_team_analytics`, `workforce_employee_timeline`.
+
+### 7.12 Vehicle handover (added 2026-11-12)
+
+`MIGRATIONS_V181_HANDOVER_REPORTS.sql` (base table),
+`20261112130000_handover_two_stage_signoff.sql` (the two-stage ladder, the
+`decide_handover_approval` RPC, the `Fleet Incharge` `custom_roles` seed) and
+`20261112143000_handover_signoff_forgery_guard.sql` are APPLIED LIVE. Every
+object below was checked against the migration that creates it. **These two ARE
+in the registry** - `SupabaseTables.handoverReports` and
+`SupabaseRpcs.decideHandoverApproval` - so, unlike 7.5 and 7.11, the repository
+does not reference them by string literal.
+
+| Object | Created or last redefined in | Security | Flutter use |
+|---|---|---|---|
+| `handover_reports` SELECT / INSERT (upsert on `client_uuid`) | Table from `MIGRATIONS_V181_HANDOVER_REPORTS.sql`; approval ladder columns (`approval_status` default `pending_supervisor`, `supervisor_*`, `incharge_*`, `review_note`) and `document_no` (auto `HND-<8 hex>`) from `20261112130000` | RLS (org + country + site). The phone reads its own (`created_by = auth.uid()`) and the sign-off queue (`approval_status in (pending_supervisor, pending_incharge)`); it inserts the capture with `approval_status = 'pending_supervisor'` | `HandoverRemoteRepository` (`handoverRecordColumns`): `byId`, `myHandovers`, `pendingHandovers`, `upsertHandover(onConflict: client_uuid)`. The capture carries `damages` (jsonb per marker: `view,x,y,type,level,note,photo_url`), `photos` (array of `tp-storage://` refs), `signature_url` (the driver's data-URL mark), plus odometer/fuel/condition/cleanliness. A write is idempotent on `client_uuid`, so a replay from the offline queue lands once |
+| `handover_reports` direct UPDATE of the approval columns | Refused outside the RPC by `20261112143000` (the forgery guard) | n/a | **Not used.** The app never writes a signature or status directly; every decision goes through `decide_handover_approval` |
+| `decide_handover_approval(p_id uuid, p_approved boolean, p_signature text default null, p_note text default null)` | `20261112130000` | DEFINER; the supervisor rung is signable by `app_is_elevated()` OR `Fleet Supervisor` / `Fleet Incharge`, the incharge rung by super / Admin / `Fleet Incharge`; an incharge-level signer at the supervisor rung closes both (`both_steps`); a reject needs a note. Returns `{ok, decision, status, both_steps}` | `HandoverRemoteRepository.decide(HandoverDecision)`. The approve path must carry `p_signature`; the UI pre-checks it with the pure `handover_approval.dart` (`canDecide` / `stageFor`) only to show or hide the sign-off bar - the server stays the authority |
+| Bucket `tyre-photos` | Pre-existing private bucket (authenticated upload) | Private; `tp-storage://` refs resolved to short-lived signed URLs by the shared `privateStorageImageUrlProvider` | `HandoverPhotoUploader` uploads each capture photo (general and per-marker) to `handover/<id>/<slot>_<microsecond>.<ext>` and returns `tp-storage://tyre-photos/<path>`; the sync engine swaps the local paths for the refs before the row write |
+
+### 7.13 Multi-factor sign-in step (added 2026-11-12)
+
+No table, RPC or edge function. `lib/core/auth/mfa_repository.dart` uses only
+the Supabase Auth (GoTrue) MFA endpoints through `supabase_flutter`:
+`auth.mfa.getAuthenticatorAssuranceLevel` (local, reads the access token),
+`auth.mfa.listFactors` (fallback only) and `auth.mfa.challengeAndVerify`.
+The server rule it serves is `20261112160000_super_admin_requires_mfa_session.sql`
+(a super admin with a verified factor is one only at `aal2`). See artifact 03
+section 9.1.

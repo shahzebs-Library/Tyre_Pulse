@@ -9,7 +9,7 @@
 //   - ilike or-clause building + record-row mapping for the universal search.
 
 import { sanitizeSearchTerm } from './searchFilter'
-import { NAV_MODULE_KEY, governingModuleKey, ALWAYS_ALLOWED_PATHS } from './navAccess'
+import { NAV_MODULE_KEY, governingModuleKey, ALWAYS_ALLOWED_PATHS, isPathSwitchedOff } from './navAccess'
 import { isChecklistOnlyRole, isChecklistPathAllowed } from './checklistAccess'
 import { REPORT_BUILDER_ROUTES, canUseReportBuilder } from './reportBuilderAccess'
 import { ACCESS_ROLES } from './moduleCatalog'
@@ -297,10 +297,12 @@ export const ACTION_COMMANDS = [
  * @param {Set<string>} [grantedModules]  AuthContext.grantedModules
  * @param {boolean} [isSuperAdmin]  AuthContext.isSuperAdmin
  */
-export function isCommandVisible(cmd, profile, hasPermission, grantedModules, isSuperAdmin) {
+export function isCommandVisible(cmd, profile, hasPermission, grantedModules, isSuperAdmin, moduleStatus) {
   const role = profile?.role
   if (!role) return false
   const path = cmd.path
+  // A module switched Off in Module Control is out of every menu, for everyone.
+  if (moduleStatus && isPathSwitchedOff(path, moduleStatus)) return false
   const perm = typeof hasPermission === 'function' ? hasPermission : null
 
   if (path === '/odometer-logs') return perm ? perm('odometer_logs') === true : false
@@ -345,8 +347,8 @@ export function isCommandVisible(cmd, profile, hasPermission, grantedModules, is
   return true
 }
 
-export function visibleCommands(commands, profile, hasPermission, grantedModules, isSuperAdmin) {
-  return commands.filter((c) => isCommandVisible(c, profile, hasPermission, grantedModules, isSuperAdmin))
+export function visibleCommands(commands, profile, hasPermission, grantedModules, isSuperAdmin, moduleStatus) {
+  return commands.filter((c) => isCommandVisible(c, profile, hasPermission, grantedModules, isSuperAdmin, moduleStatus))
 }
 
 // ── Command ranking ──────────────────────────────────────────────────────────

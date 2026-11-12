@@ -4,6 +4,7 @@
  * Used by EnterpriseTable but written as pure functions so they are
  * unit-testable and reusable by any module that needs CSV output.
  */
+import { csvCell } from './csvSafe.js'
 
 /** UTF-8 byte-order mark so Excel opens Arabic/accented text correctly. */
 const UTF8_BOM = String.fromCharCode(0xfeff)
@@ -13,23 +14,12 @@ const UTF8_BOM = String.fromCharCode(0xfeff)
  * - null/undefined become empty strings
  * - Dates serialize as ISO strings
  * - quotes/commas/newlines are RFC 4180 quoted
- * - Cells that a spreadsheet would interpret as a formula (=, @, or +/-
- *   followed by a non-numeric character) are prefixed with a single quote
+ * - Cells that a spreadsheet would interpret as a formula (=, @, leading
+ *   TAB / CR, or +/- followed by a non-numeric character) are prefixed with a single quote
  *   to neutralise CSV-injection payloads.
  */
 export function escapeCsvValue(value) {
-  if (value === null || value === undefined) return ''
-  let s = value instanceof Date ? value.toISOString() : String(value)
-
-  // Formula-injection guard (keeps plain negative numbers like -12.5 intact).
-  if (/^[=@]/.test(s) || (/^[+-]/.test(s) && !/^[+-]?\d*\.?\d+([eE][+-]?\d+)?$/.test(s))) {
-    s = `'${s}`
-  }
-
-  if (/[",\r\n]/.test(s)) {
-    return `"${s.replace(/"/g, '""')}"`
-  }
-  return s
+  return csvCell(value)
 }
 
 /**

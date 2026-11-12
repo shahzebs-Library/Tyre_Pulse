@@ -258,7 +258,7 @@ describe('worker kick + migration contract', () => {
     expect(edge).toMatch(/EdgeRuntime/)
     expect(edge).toMatch(/KICK_DEBOUNCE_MS/)
     // work path auth is unchanged
-    expect(edge).toMatch(/provided !== expected\) return fail\("Worker unauthorized",403\)/)
+    expect(edge).toMatch(/!constantTimeEqual\(provided, expected\)\) return fail\("Worker unauthorized",403\)/)
   })
 
   it('the new migration is additive, nullable, org-scoped and grants the lock only to service_role', () => {

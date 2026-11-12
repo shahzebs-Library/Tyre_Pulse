@@ -16,8 +16,8 @@ vi.mock('../lib/api/accidentCase', () => ({
   setWorkstreamStatus: (...a) => setWorkstreamStatus(...a),
 }))
 
-vi.mock('../lib/api/users', () => ({
-  listProfiles: () =>
+vi.mock('../lib/api/profileDirectory', () => ({
+  listDirectoryPeople: () =>
     Promise.resolve([
       { id: 'u1', full_name: 'Sara Khan', username: 'sara', role: 'Manager' },
       { id: 'u2', full_name: 'Omar Ali', username: 'omar', role: 'Fleet Supervisor' },

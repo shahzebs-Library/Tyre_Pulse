@@ -40,7 +40,7 @@ describe('Edge provider readiness contracts', () => {
   it('keeps Sentry access server-side and restricted to super admins or cron', () => {
     const issues = source('sentry-issues')
     const alerts = source('sentry-crash-alert')
-    expect(issues).toContain("select('is_super_admin')")
+    expect(issues).toContain("select('is_super_admin, locked')")
     expect(issues).toContain('prof?.is_super_admin !== true')
     expect(issues).toContain(".in('name', ['sentry_auth_token', 'sentry_org', 'sentry_region_url'])")
     expect(alerts).toContain("req.headers.get('x-cron-secret')")

@@ -2,6 +2,7 @@ import { formatCurrencyCompact, formatDate } from './formatters.js'
 import { configBool, configNum } from './api/systemConfig.js'
 import { assertExportAllowed } from './exportCapability.js'
 import { loadAutoTable } from './pdfEngine'
+import { sanitizeCell, safeAoa } from './csvSafe.js'
 // One definition of how a signer is named on a document: "Full Name (EMP-ID)",
 // never a raw login email and never a UUID. Every sign-off render in this file
 // goes through it, so a report can never print a credential in place of a name.
@@ -187,16 +188,9 @@ function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
 // `=HYPERLINK(...)`, `=cmd|'/c calc'!A1`). Prefixing such a value with a single
 // apostrophe forces the spreadsheet app to treat it as literal text while the
 // visible content is unchanged. Non-strings pass through untouched.
-// Exported for unit testing.
-export function sanitizeCell(v) {
-  if (typeof v !== 'string' || v.length === 0) return v
-  const first = v.charCodeAt(0)
-  // = 0x3D, + 0x2B, - 0x2D, @ 0x40, TAB 0x09, CR 0x0D
-  if (first === 0x3D || first === 0x2B || first === 0x2D || first === 0x40 || first === 0x09 || first === 0x0D) {
-    return `'${v}`
-  }
-  return v
-}
+// The implementation lives in csvSafe.js (the one shared sanitiser); it is
+// re-exported here for existing importers and tests.
+export { sanitizeCell }
 
 /** Sanitize every string value of a plain-object row (returns a new object). */
 function _sanitizeRowObject(row, keys) {
@@ -206,9 +200,7 @@ function _sanitizeRowObject(row, keys) {
 }
 
 /** Sanitize every cell of an array-of-arrays (AOA) sheet. */
-function _sanitizeAoa(aoa) {
-  return aoa.map(row => (Array.isArray(row) ? row.map(sanitizeCell) : row))
-}
+const _sanitizeAoa = safeAoa
 
 // ── Tenant branding helpers ──────────────────────────────────────────────────
 // Reports accept an optional `branding` object (from TenantContext / V68):

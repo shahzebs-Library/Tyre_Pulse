@@ -146,17 +146,25 @@ final class SupabaseInspectionActionRepository
   }) async {
     final List<Map<String, dynamic>> rows =
         await guard<List<Map<String, dynamic>>>(() async {
-      var q = _client
-          .from(SupabaseTables.profiles)
-          .select('id,full_name,username,role,site')
-          .eq('approved', true)
-          .eq('locked', false);
-      if (roles.isNotEmpty) q = q.inFilter('role', roles);
+      // The PII-free staff directory, never a select on `profiles` (see
+      // SupabaseRpcs.listProfileDirectory). It filters approved and unlocked
+      // people, matches the term against name, username and employee id, and
+      // orders by name then id on the server.
       final String term = sanitizePersonSearch(search);
-      if (term.isNotEmpty) {
-        q = q.or('full_name.ilike.%$term%,username.ilike.%$term%');
-      }
-      return await q.order('full_name').order('id').limit(limit);
+      final Object? result = await _client.rpc(
+        SupabaseRpcs.listProfileDirectory,
+        params: <String, Object?>{
+          'p_search': term.isEmpty ? null : term,
+          'p_roles': roles.isEmpty ? null : roles,
+          'p_active_only': true,
+          'p_limit': limit,
+        },
+      );
+      return <Map<String, dynamic>>[
+        if (result is List)
+          for (final Object? row in result)
+            if (row is Map) Map<String, dynamic>.from(row),
+      ];
     });
     return <AssignablePerson>[
       for (final Map<String, dynamic> r in rows) AssignablePerson.fromRow(r),

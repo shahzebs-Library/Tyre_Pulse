@@ -28,7 +28,7 @@ function corsHeaders(req: Request): Record<string, string> {
   if (origin) {
     // *.vercel.app preview wildcard dropped (owner gate N): preview hosts must
     // be listed in the ALLOWED_ORIGINS env explicitly.
-    allowOrigin = (allowed.includes(origin) || origin.startsWith('http://localhost')) ? origin : 'null'
+    allowOrigin = (allowed.includes(origin) || /^http:\/\/localhost(:\d{1,5})?$/.test(origin)) ? origin : 'null'
   }
   const requestedHeaders = req.headers.get('access-control-request-headers')
   return {
@@ -40,6 +40,22 @@ function corsHeaders(req: Request): Record<string, string> {
 }
 function json(req: Request, body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } })
+}
+
+// The stored region URL decides where the Sentry bearer token is sent, so it is
+// accepted only when it is https://sentry.io or an https://<region>.sentry.io host
+// (no port, no credentials, no path). Anything else is treated as not configured
+// and the token never leaves this function.
+function sentryRegion(raw: string | undefined): string | null {
+  const value = (raw || 'https://de.sentry.io').trim()
+  let parsed: URL
+  try { parsed = new URL(value) } catch { return null }
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.port) return null
+  if (parsed.pathname !== '/' && parsed.pathname !== '') return null
+  if (parsed.search || parsed.hash) return null
+  const host = parsed.hostname.toLowerCase()
+  if (host !== 'sentry.io' && !/^[a-z0-9-]+\.sentry\.io$/.test(host)) return null
+  return `https://${host}`
 }
 
 const VALID_PERIODS = new Set(['24h', '7d', '14d', '30d', '90d'])
@@ -72,8 +88,9 @@ serve(async (req) => {
   const authClient = createClient(url, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } } })
   const { data: userData, error: userErr } = await authClient.auth.getUser(token)
   if (userErr || !userData?.user) return json(req, { ok: false, reason: 'unauthorized' }, 401)
-  const { data: prof } = await authClient.from('profiles').select('is_super_admin').eq('id', userData.user.id).maybeSingle()
-  if (prof?.is_super_admin !== true) return json(req, { ok: false, reason: 'unauthorized' }, 403)
+  const { data: prof } = await authClient.from('profiles').select('is_super_admin, locked').eq('id', userData.user.id).maybeSingle()
+  // A locked super admin with a still-valid access token must not keep using the proxy.
+  if (prof?.is_super_admin !== true || prof?.locked === true) return json(req, { ok: false, reason: 'unauthorized' }, 403)
 
   const admin = createClient(url, serviceKey)
   const { data: cfgRows } = await admin.from('cron_config').select('name, value')
@@ -82,8 +99,12 @@ serve(async (req) => {
   for (const r of cfgRows ?? []) cfg[r.name] = r.value
   const sentryToken = cfg['sentry_auth_token']
   const org = cfg['sentry_org'] || 'shah-profile'
-  const region = (cfg['sentry_region_url'] || 'https://de.sentry.io').replace(/\/+$/, '')
   if (!sentryToken) return json(req, { ok: false, reason: 'not_configured' })
+  const region = sentryRegion(cfg['sentry_region_url'])
+  if (!region) {
+    console.error('[sentry-issues] stored region URL is not a Sentry host; refusing to send the token')
+    return json(req, { ok: false, reason: 'not_configured' })
+  }
 
   const authHeader = { Authorization: `Bearer ${sentryToken}` }
   const jsonHeader = { ...authHeader, 'Content-Type': 'application/json' }

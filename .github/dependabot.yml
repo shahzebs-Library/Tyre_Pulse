@@ -1,0 +1,67 @@
+# Dependabot configuration.
+#
+# npm (root web app, marketing site, Expo app): SECURITY updates only.
+#   `open-pull-requests-limit: 0` turns routine version-bump pull requests off;
+#   Dependabot security updates are not subject to that limit, so a package with
+#   a published advisory still gets a pull request. They are grouped so one
+#   advisory wave is one pull request per package folder, not ten.
+#   NOTE: security updates also need "Dependabot security updates" switched on
+#   in the repository settings (Settings -> Code security).
+#
+# github-actions: weekly version updates, grouped into one pull request. This is
+#   what keeps the action pins (tags today, commit SHAs once pinned) current.
+#
+# Majors are deliberately never forced here: several (Expo SDK, react-router,
+# vite) need a hand migration. Review each pull request; do not auto-merge.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(ci)"
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 0
+    groups:
+      web-security:
+        applies-to: security-updates
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: npm
+    directory: /marketing
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 0
+    groups:
+      marketing-security:
+        applies-to: security-updates
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(deps-marketing)"
+
+  - package-ecosystem: npm
+    directory: /mobile
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 0
+    groups:
+      mobile-security:
+        applies-to: security-updates
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(deps-mobile)"

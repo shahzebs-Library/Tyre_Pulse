@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
   detectAlerts,
   detectAlertBadgeCount,
+  clearAlertBadgeCache,
   countAlertsBySeverity,
   ALERT_TYPES,
   SEVERITY,
@@ -1087,5 +1088,78 @@ describe('detectAlertBadgeCount', () => {
 
   it('is zero when nothing is wrong', async () => {
     expect(await detectAlertBadgeCount(makeProjectingMock({}), null)).toBe(0)
+  })
+
+  describe('opt-in cache', () => {
+    const cache = { key: 'user-1|KSA|all', maxAgeMs: 60000 }
+
+    it('reads the database once for repeat asks under one key', async () => {
+      clearAlertBadgeCache()
+      const supabase = makeProjectingMock(BADGE_FIXTURE)
+      const first = await detectAlertBadgeCount(supabase, null, new Set(), null, cache)
+      const reads = supabase.from.mock.calls.length
+      const second = await detectAlertBadgeCount(supabase, null, new Set(), null, cache)
+      expect(reads).toBeGreaterThan(0)
+      expect(supabase.from.mock.calls.length).toBe(reads)
+      expect(second).toBe(first)
+    })
+
+    it('still applies a dismissal made after the cached read', async () => {
+      clearAlertBadgeCache()
+      const supabase = makeProjectingMock(BADGE_FIXTURE)
+      const all = await detectAlertBadgeCount(supabase, null, new Set(), null, cache)
+      const after = await detectAlertBadgeCount(supabase, null, new Set(['STOCK_CRITICAL::s1']), null, cache)
+      expect(after).toBe(all - 1)
+    })
+
+    it('never serves one key the answer for another', async () => {
+      clearAlertBadgeCache()
+      const full = await detectAlertBadgeCount(makeProjectingMock(BADGE_FIXTURE), null, new Set(), null, cache)
+      const other = await detectAlertBadgeCount(
+        makeProjectingMock({}), null, new Set(), null, { key: 'user-2|KSA|all', maxAgeMs: 60000 },
+      )
+      expect(full).toBeGreaterThan(0)
+      expect(other).toBe(0)
+    })
+
+    it('shares one read between concurrent asks', async () => {
+      clearAlertBadgeCache()
+      const supabase = makeProjectingMock(BADGE_FIXTURE)
+      const single = makeProjectingMock(BADGE_FIXTURE)
+      await detectAlertBadgeCount(single, null)
+      const [a, b] = await Promise.all([
+        detectAlertBadgeCount(supabase, null, new Set(), null, cache),
+        detectAlertBadgeCount(supabase, null, new Set(), null, cache),
+      ])
+      expect(a).toBe(b)
+      expect(supabase.from.mock.calls.length).toBe(single.from.mock.calls.length)
+    })
+
+    it('reads again once the entry is older than maxAgeMs', async () => {
+      clearAlertBadgeCache()
+      const supabase = makeProjectingMock(BADGE_FIXTURE)
+      await detectAlertBadgeCount(supabase, null, new Set(), null, { key: 'k', maxAgeMs: 1 })
+      const reads = supabase.from.mock.calls.length
+      await new Promise((r) => setTimeout(r, 5))
+      await detectAlertBadgeCount(supabase, null, new Set(), null, { key: 'k', maxAgeMs: 1 })
+      expect(supabase.from.mock.calls.length).toBe(reads * 2)
+    })
+
+    it('does not cache a failed read', async () => {
+      clearAlertBadgeCache()
+      const failing = { from: vi.fn(() => { throw new Error('offline') }) }
+      await expect(detectAlertBadgeCount(failing, null, new Set(), null, cache)).rejects.toThrow()
+      const ok = await detectAlertBadgeCount(makeProjectingMock(BADGE_FIXTURE), null, new Set(), null, cache)
+      expect(ok).toBeGreaterThan(0)
+    })
+
+    it('does not cache at all without a key', async () => {
+      clearAlertBadgeCache()
+      const supabase = makeProjectingMock(BADGE_FIXTURE)
+      await detectAlertBadgeCount(supabase, null)
+      const reads = supabase.from.mock.calls.length
+      await detectAlertBadgeCount(supabase, null)
+      expect(supabase.from.mock.calls.length).toBe(reads * 2)
+    })
   })
 })

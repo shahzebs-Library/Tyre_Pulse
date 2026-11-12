@@ -25,7 +25,7 @@ const SESSION_COLS =
   'id, admin_id, action, target_id, target_type, details, ip_address, created_at'
 
 const DEVICE_COLS =
-  'id, full_name, username, role, country, locked, approved, last_login_at, login_count, push_token, push_token_updated_at'
+  'id, full_name, username, role, country, locked, approved, last_login_at, login_count, push_token_updated_at'
 
 /**
  * Recent console activity (audit trail). Super-admin readable; RLS is the
@@ -65,7 +65,18 @@ export async function listUserDevices() {
     .order('id')
     .range(from, to), { max: 50000 })
   if (error) throw new ServiceError(toUserMessage(error), error.code, error)
-  return (Array.isArray(data) ? data : []).map((r) => ({
+  const rows = Array.isArray(data) ? data : []
+  // The push token is not readable through the table (column privileges). An
+  // elevated-only function answers "does this person have one" without ever
+  // returning the token.
+  const hasDevice = new Map()
+  for (let i = 0; i < rows.length; i += 500) {
+    const ids = rows.slice(i, i + 500).map((r) => r.id)
+    const res = await supabase.rpc('list_profile_private', { p_ids: ids })
+    if (res.error) throw new ServiceError(toUserMessage(res.error), res.error.code, res.error)
+    for (const p of res.data || []) hasDevice.set(p.id, p.has_push_token === true)
+  }
+  return rows.map((r) => ({
       id: r.id,
       full_name: r.full_name,
       username: r.username,
@@ -75,7 +86,7 @@ export async function listUserDevices() {
       approved: r.approved,
       last_login_at: r.last_login_at,
       login_count: r.login_count,
-      has_device: r.push_token != null && r.push_token !== '',
+      has_device: hasDevice.get(r.id) === true,
       push_token_updated_at: r.push_token_updated_at,
   }))
 }

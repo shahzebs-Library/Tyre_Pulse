@@ -35,7 +35,7 @@ import {
 import { listEvidence, addEvidence, verifyEvidence } from '../../lib/api/accidentEvidence'
 import { logCommunication } from '../../lib/api/accidentCommunications'
 import { listWorkstreams } from '../../lib/api/accidentCase'
-import { listProfiles } from '../../lib/api/users'
+import { listDirectoryPeople as listProfiles } from '../../lib/api/profileDirectory'
 import { isMissingColumn } from '../../lib/api/_client'
 import { useAuth } from '../../contexts/AuthContext'
 import {

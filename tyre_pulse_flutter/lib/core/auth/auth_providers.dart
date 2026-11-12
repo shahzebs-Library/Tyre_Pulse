@@ -68,6 +68,7 @@ import 'package:tyre_pulse/app/router/session.dart';
 import 'package:tyre_pulse/app/router/shell_gates.dart';
 import 'package:tyre_pulse/core/auth/auth_controller.dart';
 import 'package:tyre_pulse/core/auth/auth_state.dart';
+import 'package:tyre_pulse/core/auth/mfa_repository.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Builds the actions the shell gates may offer, wired to [AuthController].
@@ -92,6 +93,12 @@ TpShellGateActions buildAuthShellGateActions(
     onRetryProfile: () => unawaited(notifier().retryProfile()),
     onRetrySession: () => unawaited(notifier().retrySession()),
     onOpenStore: onOpenStore ?? _openPlayListing,
+    onVerifyMfa: (String code) async =>
+        switch (await notifier().verifyMfa(code)) {
+      MfaVerified() => TpMfaVerifyResult.verified,
+      MfaCodeRejected() => TpMfaVerifyResult.rejected,
+      MfaVerifyUnavailable() => TpMfaVerifyResult.unavailable,
+    },
   );
 }
 

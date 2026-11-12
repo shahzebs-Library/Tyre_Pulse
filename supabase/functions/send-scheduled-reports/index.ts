@@ -28,7 +28,9 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://localhost:5174',
 ]
-const VERCEL_ORIGIN = /^https:\/\/[a-z0-9-]+\.vercel\.app$/
+// *.vercel.app preview wildcard dropped (same owner decision as tenant-export /
+// sentry-issues): a preview host must be listed in ALLOWED_ORIGINS explicitly.
+const LOCAL_DEV_ORIGIN = /^http:\/\/localhost(:\d{1,5})?$/
 
 function corsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('origin')
@@ -36,7 +38,7 @@ function corsHeaders(req: Request): Record<string, string> {
   const allowedOrigins = configured?.length ? configured : DEFAULT_ALLOWED_ORIGINS
   let allowOrigin = '*'
   if (origin) {
-    allowOrigin = (allowedOrigins.includes(origin) || VERCEL_ORIGIN.test(origin) || origin.startsWith('http://localhost'))
+    allowOrigin = (allowedOrigins.includes(origin) || LOCAL_DEV_ORIGIN.test(origin))
       ? origin
       : 'null'
   }
@@ -49,12 +51,38 @@ function corsHeaders(req: Request): Record<string, string> {
   }
 }
 
-function jsonResponse(req: Request, body: unknown, status = 200): Response {
+function jsonResponse(req: Request, body: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders(req), 'Content-Type': 'application/json', ...extraHeaders },
   })
 }
+
+// Constant-time comparison so the cron secret cannot be probed through response
+// timing. Local copy on purpose: this function deploys as one self-contained file.
+function constantTimeEqual(a: string, b: string): boolean {
+  if (!a || !b) return false
+  const enc = new TextEncoder(); const ab = enc.encode(a); const bb = enc.encode(b)
+  let diff = ab.length ^ bb.length
+  const n = Math.max(ab.length, bb.length)
+  for (let i = 0; i < n; i++) diff |= (ab[i] ?? 0) ^ (bb[i] ?? 0)
+  return diff === 0
+}
+
+// Every digest in this file is built with the SERVICE ROLE, which bypasses row
+// security, so the organisation filter in each query is the only tenant wall.
+// A schedule with no organisation used to mean "no filter" = a digest across
+// EVERY organisation. It is now refused everywhere a digest is built.
+const NO_ORG_MESSAGE = 'This schedule has no organisation, so it cannot be sent. Edit and save it again, or ask an administrator.'
+function requireOrg(orgId: string | null | undefined): string {
+  const id = typeof orgId === 'string' ? orgId.trim() : ''
+  if (!id) throw new Error(NO_ORG_MESSAGE)
+  return id
+}
+
+// "Send now" cooldown per schedule. Each call builds a digest with the service
+// role and e-mails every recipient, so it must not be callable in a loop.
+const SEND_NOW_COOLDOWN_SECONDS = 300
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -219,6 +247,7 @@ type Digest = {
 
 // deno-lint-ignore no-explicit-any
 async function buildDigest(svc: any, orgId: string | null): Promise<Digest> {
+  orgId = requireOrg(orgId)
   // Single server-side aggregate. A null org_id yields a global/admin digest;
   // a tenant org_id stays strictly scoped to that organisation.
   const { data, error } = await svc.rpc('report_exec_digest', { p_org: orgId, p_days: 30 })
@@ -596,7 +625,7 @@ async function buildClaimsDigest(svc: any, orgId: string | null, win: { from: st
       .order('incident_date', { ascending: false })
       .order('id', { ascending: true })
     // Service role bypasses RLS, so scope to the schedule's org explicitly.
-    if (orgId) q = q.eq('organisation_id', orgId)
+    q = q.eq('organisation_id', requireOrg(orgId))
     // The schedule's own coverage window on the incident date (same rule as the
     // dataset digests: a missing bound leaves that side open, never narrows to
     // nothing).
@@ -985,7 +1014,7 @@ function scopeDatasetQuery(q: any, cfg: DatasetDigestCfg, orgId: string | null, 
   if (cfg.eqFilter) for (const [col, val] of Object.entries(cfg.eqFilter)) q = q.eq(col, val)
   if (cfg.nullFilter) for (const col of cfg.nullFilter) q = q.is(col, null)
   // Service role bypasses RLS, so scope to the schedule's org explicitly.
-  if (orgId) q = q.eq('organisation_id', orgId)
+  q = q.eq('organisation_id', requireOrg(orgId))
   // The schedule's configured coverage window (see resolvePeriodBounds). Prior
   // to this, every digest read the WHOLE table regardless of the period the
   // owner picked - "Yesterday" or a 3-day custom range would still show
@@ -1201,7 +1230,8 @@ async function handleSendNow(req: Request, svc: any): Promise<Response> {
   if (userError || !userData?.user) return jsonResponse(req, { error: 'Invalid session' }, 401)
   const { data: profile } = await userClient
     .from('profiles').select('id, role, approved, locked').eq('id', userData.user.id).maybeSingle()
-  if (!profile || profile.approved === false || profile.locked === true) {
+  // Fail closed: a NULL / missing approval must not pass (same rule as _shared/auth.ts).
+  if (!profile || profile.approved !== true || profile.locked === true) {
     return jsonResponse(req, { error: 'Account is not approved for this action' }, 403)
   }
   const role = String(profile.role ?? '').trim().toLowerCase().replace(/\s+/g, '_')
@@ -1217,6 +1247,35 @@ async function handleSendNow(req: Request, svc: any): Promise<Response> {
     return jsonResponse(req, { error: 'Could not load this schedule.' }, 500)
   }
   if (!s) return jsonResponse(req, { error: 'Schedule not found' }, 404)
+  if (!s.org_id) return jsonResponse(req, { error: NO_ORG_MESSAGE }, 422)
+
+  // Cooldown: refuse when this schedule was sent, or a send was attempted, inside
+  // the window. report_send_log records both outcomes, so a failing schedule
+  // cannot be hammered either. Fails CLOSED when the log cannot be read.
+  {
+    const windowStart = new Date(Date.now() - SEND_NOW_COOLDOWN_SECONDS * 1000)
+    const { data: recent, error: recentErr } = await svc
+      .from('report_send_log').select('sent_at')
+      .eq('schedule_id', s.id).gte('sent_at', windowStart.toISOString())
+      .order('sent_at', { ascending: false }).limit(1)
+    if (recentErr) {
+      console.error('send-now: cooldown read failed', recentErr)
+      return jsonResponse(req, { error: 'The report could not be sent right now. Please try again shortly.' }, 503)
+    }
+    const lastLog = recent?.[0]?.sent_at ? new Date(recent[0].sent_at).getTime() : 0
+    const lastSent = s.last_sent_at ? new Date(s.last_sent_at).getTime() : 0
+    const last = Math.max(lastLog || 0, lastSent || 0)
+    const waitMs = last + SEND_NOW_COOLDOWN_SECONDS * 1000 - Date.now()
+    if (last > 0 && waitMs > 0) {
+      const retryAfter = Math.max(1, Math.ceil(waitMs / 1000))
+      return jsonResponse(
+        req,
+        { error: 'This report was sent a moment ago. Please wait a few minutes before sending it again.', retry_after_seconds: retryAfter },
+        429,
+        { 'Retry-After': String(retryAfter) },
+      )
+    }
+  }
 
   const recipients = ((s.recipients ?? []) as string[]).filter((r) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r))
   if (!recipients.length) return jsonResponse(req, { error: 'No valid recipients on the schedule' }, 400)
@@ -1275,7 +1334,7 @@ serve(async (req) => {
   // on-demand "Send now" request for a single schedule.
   const given = req.headers.get('x-cron-secret') ?? ''
   const { data: cfg } = await svc.from('cron_config').select('value').eq('name', 'cron_secret').maybeSingle()
-  if (!cfg?.value || given !== cfg.value) {
+  if (!cfg?.value || !constantTimeEqual(given, String(cfg.value))) {
     return await handleSendNow(req, svc)
   }
 
@@ -1306,6 +1365,10 @@ serve(async (req) => {
   for (const s of (due ?? []) as Schedule[]) {
     const recipients = (s.recipients ?? []).filter((r) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r))
     try {
+      // A schedule with no organisation is never sent (it would be a digest across
+      // every organisation). It lands in the failed branch below: logged, marked
+      // failed with the reason, and backed off for an hour.
+      requireOrg(s.org_id)
       if (!recipients.length) throw new Error('No valid recipients on the schedule')
       if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY not configured for edge functions')
 

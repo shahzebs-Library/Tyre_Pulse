@@ -234,17 +234,26 @@ export async function getWorkOrdersPage({
  *
  * @returns {Promise<{rows:any[], total:number, truncated:boolean}>}
  */
-export async function getAllWorkOrdersMatching(opts = {}, { max = 50000, pageSize = 1000 } = {}) {
+export async function getAllWorkOrdersMatching(opts = {}, { max = 50000, pageSize = 200 } = {}) {
   const rows = []
   let total = 0
+  let size = pageSize
   for (let page = 1; rows.length < max; page += 1) {
-    const res = await getWorkOrdersPage({ ...opts, page, pageSize })
+    const res = await getWorkOrdersPage({ ...opts, page, pageSize: size })
     total = res.total
     if (!res.rows.length) break
+    // The server caps a page (200 today). If the first page comes back shorter
+    // than asked while more rows exist, the cap is smaller than our page size:
+    // adopt the real size and start again, or every later offset would skip rows.
+    if (page === 1 && res.rows.length < size && res.rows.length < total) {
+      size = res.rows.length
+      page = 0
+      continue
+    }
     rows.push(...res.rows)
     if (rows.length >= total) break
   }
-  return { rows: rows.slice(0, max), total, truncated: total > max }
+  return { rows: rows.slice(0, max), total, truncated: total > rows.length }
 }
 
 /** Return the committed row so server-enforced status cannot be guessed locally. */

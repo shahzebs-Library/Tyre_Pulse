@@ -12,6 +12,7 @@ import {
   positionCompliance, consolidationOps as buildConsolidationOps,
 } from '../../lib/tyreSizeAnalytics'
 import { fmtKm, fmtPct, fmtMoney, opDesc } from './sizeFormat'
+import { safeJsonToSheet } from '../../lib/csvSafe.js'
 
 function analyses(filtered, label) {
   const metrics = buildSizeMetrics(filtered, label)
@@ -90,7 +91,7 @@ export async function exportSizeExcel({ filtered, label, currency, fileBase, rec
   const { sorted, matrix, pos, ops } = analyses(filtered, label)
   const XLSX = await import('xlsx')
   const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(recommendations.map((r) => ({
+  XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, recommendations.map((r) => ({
     Asset: r.asset_no, Country: r.country || '', Site: r.site || '', 'Vehicle type': r.vehicle_type || '',
     'Application (derived)': r.application || '', 'Current size': r.currentSize || '', 'Recommended size': r.recommendedSize || '',
     'Current CPK': r.currentCpk != null ? Number(r.currentCpk.toFixed(4)) : null,
@@ -99,22 +100,22 @@ export async function exportSizeExcel({ filtered, label, currency, fileBase, rec
     'Recorded tyre km': r.tyreKm != null ? Math.round(r.tyreKm) : null,
     'Est. saving': r.saving != null ? Math.round(r.saving) : null, Currency: r.currency || '', Status: r.status,
   }))), 'Recommendations')
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sorted.map((m) => ({
+  XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, sorted.map((m) => ({
     Size: m.size, Count: m.count, 'Fleet %': fmtPct(m.pct),
     [`Avg CPK (${currency}/km)`]: m.avgCpk != null ? parseFloat(m.avgCpk.toFixed(4)) : null,
     'Avg Life (km)': m.avgLife != null ? Math.round(m.avgLife) : null,
     'Failure Rate %': m.failRate != null ? parseFloat(m.failRate.toFixed(1)) : null,
     'Rated tyres': m.ratedCount, Brands: m.brands.join(', '), Sites: m.sites.join(', '), 'Standardization Flag': m.flag,
   }))), 'Size Distribution')
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(matrix.sizes.flatMap((sz) => matrix.brands.map((br) => ({
+  XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, matrix.sizes.flatMap((sz) => matrix.brands.map((br) => ({
     Size: sz, Brand: br,
     [`Avg CPK (${currency}/km)`]: matrix.matrix[sz]?.[br] != null ? parseFloat(matrix.matrix[sz][br].toFixed(4)) : null,
   })))), 'Size-Brand Matrix')
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pos.map((p) => ({
+  XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, pos.map((p) => ({
     Position: p.pos, 'Total Tyres': p.total, 'Required Sizes': p.required.join(', '),
     'Non-Standard Count': p.nonStd, 'Compliance %': p.compliance != null ? parseFloat(p.compliance.toFixed(1)) : null,
   }))), 'Position Compliance')
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ops.map((op) => ({
+  XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, ops.map((op) => ({
     Size: op.size, Type: op.type, Recommendation: opDesc(op, currency), Impact: op.impact,
     'Est. Saving (one tyre life)': op.savings != null ? Math.round(op.savings) : null,
   }))), 'Consolidation Ops')

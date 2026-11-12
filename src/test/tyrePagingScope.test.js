@@ -105,7 +105,7 @@ describe('a paged register still exports the whole filtered set', () => {
     {
       file: 'pages/TyreExchange.jsx',
       what: 'transfer history Excel sheet',
-      required: 'XLSX.utils.json_to_sheet(filteredTransfers.map(t => ({',
+      required: 'safeJsonToSheet(XLSX, filteredTransfers.map(t => ({',
     },
   ]
 

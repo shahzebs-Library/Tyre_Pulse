@@ -18,7 +18,7 @@
  * Pure wizard logic: src/lib/vehicleHandoverView.js. Register analytics:
  * src/lib/vehicleHandoverAnalytics.js.
  */
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   Chart as ChartJS, BarElement, CategoryScale, LinearScale, Tooltip, Legend,
 } from 'chart.js'
@@ -32,17 +32,23 @@ import Modal from '../components/ui/Modal'
 import SignatureCapture from '../components/checklist/SignatureCapture'
 import SignatureView from '../components/checklist/SignatureView'
 import HandoverDamageMarker from '../components/handover/HandoverDamageMarker'
+import HandoverSignOffPanel from '../components/handover/HandoverSignOffPanel'
 import useHandoverArtwork from '../components/handover/useHandoverArtwork'
 import {
   Card, Kpi, PageHero, Donut, KitTable, Tabs, VehicleThumb, fmtInt,
 } from '../components/commandCenter/kit'
 import { useSettings } from '../contexts/SettingsContext'
+import { useTenant } from '../contexts/TenantContext'
 import {
-  listHandoverReports, createHandoverReport, updateHandoverReport, deleteHandoverReport,
-  listHandoverDrivers,
+  listHandoverReports, getHandoverReport, createHandoverReport, updateHandoverReport, deleteHandoverReport,
+  listHandoverDrivers, uploadHandoverPhoto,
 } from '../lib/api/handoverReports'
+import { brandingForPdf } from '../lib/inspectionChecklistReport'
+import { resolveStorageUrl, resolveStorageUrlMap } from '../lib/storageRefs'
+import { statusSummary } from '../lib/handoverApproval'
 import { getAssetMatches } from '../lib/api/assets'
 import { listEngineHours } from '../lib/api/engineHours'
+import { vehiclePhoto } from '../lib/vehiclePhoto'
 import { damageCount } from '../lib/handoverReports'
 import {
   HANDOVER_TYPE_LABEL, CONDITIONS, CONDITION_LABEL, CLEANLINESS, NOT_RATED,
@@ -98,12 +104,48 @@ function ConditionPill({ rating }) {
   if (!CONDITION_LABEL[rating]) return <span className="cc-na">N/A</span>
   return <span className={`cc-pill ${CONDITION_TONE[rating]}`}>{CONDITION_LABEL[rating]}</span>
 }
+const SIGNOFF_TONE = { good: 'good', bad: 'bad', warn: 'warn', muted: 'muted' }
+function SignOffPill({ row }) {
+  const s = statusSummary(row)
+  return <span className={`cc-pill ${SIGNOFF_TONE[s.tone] || 'muted'}`}>{s.text}</span>
+}
 
 /** Read-only marked views of a saved handover (detail modal). */
 function SavedMarks({ row, country }) {
   const { marks, stem } = useMemo(() => marksFromDamages(row?.damages), [row])
   const art = useHandoverArtwork(row?.asset_no, stem, country)
   return <HandoverDamageMarker stem={art.stem} views={art.views} marks={marks} compact />
+}
+
+/** The photos attached to a saved handover, resolved to signed URLs. */
+function ViewPhotos({ row }) {
+  const refs = useMemo(() => {
+    const out = []
+    if (Array.isArray(row?.photos)) out.push(...row.photos)
+    if (row?.photo_url) out.push(row.photo_url)
+    return [...new Set(out.filter((v) => typeof v === 'string' && v.trim()))]
+  }, [row])
+  const refKey = refs.join('|')
+  const [urls, setUrls] = useState({})
+  useEffect(() => {
+    let cancelled = false
+    if (!refs.length) { setUrls({}); return undefined }
+    resolveStorageUrlMap(refs).then((m) => { if (!cancelled) setUrls(m || {}) }).catch(() => { if (!cancelled) setUrls({}) })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refKey])
+  if (!refs.length) return <span className="cc-na">No photos</span>
+  return (
+    <div className="vh-photo-grid view">
+      {refs.map((ref) => {
+        const src = safeImageSrc(urls[ref])
+        const href = safeHref(urls[ref])
+        return src && href
+          ? <a key={ref} href={href} target="_blank" rel="noopener noreferrer" className="vh-photo-tile" title="Open full size"><img src={src} alt="Handover photo" /></a>
+          : <span key={ref} className="vh-photo-tile pending"><Camera size={18} aria-hidden="true" /> </span>
+      })}
+    </div>
+  )
 }
 
 function InfoField({ label, value }) {
@@ -134,7 +176,9 @@ function Stepper({ step, onJump }) {
 }
 
 export default function VehicleHandover() {
-  const { activeCountry } = useSettings()
+  const { activeCountry, appSettings } = useSettings()
+  const { branding } = useTenant()
+  const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
   const [tab, setTab] = useState('new')
 
   // ── Register data ──────────────────────────────────────────────────────────
@@ -186,9 +230,40 @@ export default function VehicleHandover() {
   const [saveError, setSaveError] = useState('')
   const [saved, setSaved] = useState(null)
   const [signKey, setSignKey] = useState(0)
+  // Photos: form.photos holds tp-storage:// refs; photoPreviews maps a ref to its
+  // resolved signed URL for the thumbnail.
+  const [photoPreviews, setPhotoPreviews] = useState({})
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const [photoError, setPhotoError] = useState('')
+  const photoInputRef = useRef(null)
 
   const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }))
   const setMarks = (marks) => setForm((f) => ({ ...f, marks }))
+
+  const onAddPhotos = useCallback(async (e) => {
+    const files = Array.from(e.target?.files || [])
+    if (photoInputRef.current) photoInputRef.current.value = ''
+    if (!files.length) return
+    setPhotoError(''); setPhotoBusy(true)
+    try {
+      for (const file of files) {
+        const ref = await uploadHandoverPhoto(file, (form.photos?.length || 0))
+        let url = null
+        try { url = await resolveStorageUrl(ref) } catch { /* preview best-effort */ }
+        setForm((f) => ({ ...f, photos: [...(f.photos || []), ref] }))
+        setPhotoPreviews((p) => ({ ...p, [ref]: url }))
+      }
+    } catch (err) {
+      setPhotoError(toUserMessage(err, 'Could not add the photo.'))
+    } finally {
+      setPhotoBusy(false)
+    }
+  }, [form.photos])
+
+  const removePhoto = useCallback((ref) => {
+    setForm((f) => ({ ...f, photos: (f.photos || []).filter((r) => r !== ref) }))
+    setPhotoPreviews((p) => { const n = { ...p }; delete n[ref]; return n })
+  }, [])
 
   const lookupAsset = useCallback(async (code) => {
     const assetNo = String(code || '').trim().toUpperCase()
@@ -232,6 +307,7 @@ export default function VehicleHandover() {
     setTab('new'); setStep(0); setForm({ ...EMPTY_WIZARD, handover_type: type })
     setStepErrors([]); setSaveError(''); setSaved(null); setAsset({ loading: false, row: null, error: '', looked: '' }); setHours(null)
     setSignKey((k) => k + 1)
+    setPhotoPreviews({}); setPhotoError('')
   }
   const next = () => {
     const errs = validateStep(step, form, prev)
@@ -328,8 +404,19 @@ export default function VehicleHandover() {
   const [pdfError, setPdfError] = useState('')
   const downloadHandoverPdf = async (row) => {
     setPdfBusy(true); setPdfError('')
-    try { await exportHandoverPdf(row) } catch (err) { setPdfError(toUserMessage(err, 'Could not build the handover PDF.')) } finally { setPdfBusy(false) }
+    try {
+      await exportHandoverPdf(row, {
+        company,
+        branding: await brandingForPdf(branding),
+        vehiclePhotoUrl: vehiclePhoto(row) || undefined,
+      })
+    } catch (err) { setPdfError(toUserMessage(err, 'Could not build the handover PDF.')) } finally { setPdfBusy(false) }
   }
+  // After a sign-off decision, refresh the open sheet so the panel reflects the
+  // new rung, and refresh the register behind it.
+  const refreshViewing = useCallback(async (id) => {
+    try { const fresh = await getHandoverReport(id); if (fresh) setViewing(fresh) } catch { /* keep the stale copy */ }
+  }, [])
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
@@ -407,6 +494,7 @@ export default function VehicleHandover() {
       cell: (r) => (damageCount(r) > 0 ? <span className="cc-pill warn"><ShieldAlert size={11} aria-hidden="true" /> {damageCount(r)}</span> : <span className="cc-na">None logged</span>),
     },
     { key: 'cleanliness', header: 'Cleanliness', cell: (r) => cap(r.cleanliness) },
+    { key: 'signoff', header: 'Sign-off', sortValue: (r) => statusSummary(r).text, cell: (r) => <SignOffPill row={r} /> },
     {
       key: 'actions', header: '', sortable: false,
       cell: (r) => (
@@ -632,16 +720,24 @@ export default function VehicleHandover() {
 
               {step === 2 && (
                 <div className="vh-grid">
-                  <Card title="Photos" sub="Paste a link to the handover photo (for example from the document store).">
-                    <label className="cc-field">
-                      <span>Photo link</span>
-                      <input className="vh-input" type="url" placeholder="https://" value={form.photo_url} maxLength={2000} onChange={(e) => setF('photo_url', e.target.value)} />
-                    </label>
-                    <div className="vh-photo">
-                      {safeImageSrc(form.photo_url) && /^https?:/i.test(form.photo_url.trim())
-                        ? <img src={safeImageSrc(form.photo_url)} alt="Handover photo preview" />
-                        : <span><Camera size={22} aria-hidden="true" /> No photo added</span>}
+                  <Card title="Photos" sub="Take or upload photos of the vehicle at handover. They are stored securely with this record.">
+                    <div className="vh-photo-grid">
+                      {(form.photos || []).map((ref) => (
+                        <div key={ref} className="vh-photo-tile">
+                          {safeImageSrc(photoPreviews[ref])
+                            ? <img src={safeImageSrc(photoPreviews[ref])} alt="Handover photo" />
+                            : <span className="vh-photo-pending"><Camera size={18} aria-hidden="true" /></span>}
+                          <button type="button" className="vh-photo-del" onClick={() => removePhoto(ref)} aria-label="Remove photo"><X size={13} /></button>
+                        </div>
+                      ))}
+                      <button type="button" className="vh-photo-add" onClick={() => photoInputRef.current?.click()} disabled={photoBusy}>
+                        <Camera size={20} aria-hidden="true" />
+                        <span>{photoBusy ? 'Uploading...' : 'Add photos'}</span>
+                      </button>
+                      <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/heic" multiple hidden aria-label="Add handover photos" onChange={onAddPhotos} />
                     </div>
+                    {photoError && <p className="vh-note" role="alert">{photoError}</p>}
+                    {!(form.photos || []).length && !photoBusy && <p className="vh-hint">No photos added yet.</p>}
                   </Card>
                   <Card title="Notes">
                     <textarea className="vh-input vh-textarea tall" aria-label="Handover notes" placeholder="For example: minor scratch on the rear left panel, noted at handover" value={form.notes} maxLength={8000} onChange={(e) => setF('notes', e.target.value)} />
@@ -678,7 +774,7 @@ export default function VehicleHandover() {
                     <InfoField label="Overall condition" value={CONDITION_LABEL[form.condition_rating]} />
                     <InfoField label="Cleanliness" value={cap(form.cleanliness)} />
                     <InfoField label="Damage marks" value={String(form.marks.length)} />
-                    <InfoField label="Photo" value={form.photo_url ? 'Added' : null} />
+                    <InfoField label="Photos" value={(form.photos || []).length ? `${form.photos.length} added` : null} />
                     <InfoField label="Signature" value={form.signature ? 'Signed' : 'Not signed'} />
                   </div>
                   <HandoverDamageMarker stem={artStem} views={artViews} marks={form.marks} compact />
@@ -843,9 +939,14 @@ export default function VehicleHandover() {
               <InfoField label="Condition" value={CONDITION_LABEL[viewing.condition_rating]} />
               <InfoField label="Cleanliness" value={viewing.cleanliness ? cap(viewing.cleanliness) : null} />
               <InfoField label="Damages" value={String(damageCount(viewing))} />
+              {viewing.document_no && <InfoField label="Document no" value={viewing.document_no} />}
             </div>
             <SavedMarks row={viewing} country={activeCountry} />
             {viewing.notes && <p className="vh-review-notes">{viewing.notes}</p>}
+            <div className="vh-view-section">
+              <span className="vh-view-label">Photos</span>
+              <ViewPhotos row={viewing} />
+            </div>
             <div className="vh-view-actions">
               <button type="button" className="cc-btn-ghost" onClick={() => downloadHandoverPdf(viewing)} disabled={pdfBusy}>
                 <FileText size={14} aria-hidden="true" /> {pdfBusy ? 'Building PDF...' : 'Download handover PDF'}
@@ -853,11 +954,9 @@ export default function VehicleHandover() {
               {pdfError && <p className="vh-error" role="alert"><AlertTriangle size={14} aria-hidden="true" /> {pdfError}</p>}
             </div>
             <div className="vh-view-media">
-              <SignatureView value={viewing.signature_url || null} label="Driver" />
-              {safeImageSrc(viewing.photo_url) && safeHref(viewing.photo_url)
-                ? <a href={safeHref(viewing.photo_url)} target="_blank" rel="noopener noreferrer" className="vh-photo small"><img src={safeImageSrc(viewing.photo_url)} alt="Handover photo" /></a>
-                : <span className="cc-na">No photo</span>}
+              <SignatureView value={viewing.signature_url || null} label="Driver" name={viewing.handover_type === 'checkin' ? (viewing.from_driver || null) : (viewing.to_driver || null)} />
             </div>
+            <HandoverSignOffPanel handover={viewing} onDecided={() => { load(); refreshViewing(viewing.id) }} />
           </div>
         )}
       </Modal>

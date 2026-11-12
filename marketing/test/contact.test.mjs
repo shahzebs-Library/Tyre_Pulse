@@ -11,7 +11,7 @@ const source = ts.transpileModule(readFileSync(new URL('../app/api/contact/route
 function handler(env, fetch) {
   const compiledModule = { exports: {} };
   const dependencies = name => name === 'next/server'
-    ? { NextResponse: { json: (body, options) => ({ body, status: options?.status ?? 200 }) } }
+    ? { NextResponse: { json: (body, options) => ({ body, status: options?.status ?? 200, headers: options?.headers ?? {} }) } }
     : require(name);
   new Function('require', 'exports', 'process', 'fetch', source)(dependencies, compiledModule.exports, { env }, fetch);
   return compiledModule.exports.POST;
@@ -153,7 +153,11 @@ test('one client is throttled after five requests in the window', async () => {
   const post = handler({}, () => { throw new Error('must not send'); });
   const req = () => withHeaders(input, { 'x-forwarded-for': '203.0.113.9' });
   for (let i = 0; i < 5; i++) assert.equal((await post(req())).status, 503);
-  assert.equal((await post(req())).status, 429);
+  const limited = await post(req());
+  assert.equal(limited.status, 429);
+  // The refusal says when to come back: a whole number of seconds inside the 10 minute window.
+  const wait = Number(limited.headers['Retry-After']);
+  assert.ok(Number.isInteger(wait) && wait >= 1 && wait <= 600, `Retry-After was ${limited.headers['Retry-After']}`);
 });
 
 test('fleet size is required server-side', async () => {

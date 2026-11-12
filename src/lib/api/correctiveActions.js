@@ -4,11 +4,12 @@
  * read corrective_actions (RCA, KPIs, executive reports, gate-pass blockers),
  * so this is the single boundary for that table as pages migrate onto it.
  */
-import { supabase, unwrap, fetchAllPages, ServiceError } from './_client'
+import { supabase, unwrap, fetchAllPages, ServiceError, toServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 import { actionRowsForInspection, applyPlanToRow } from '../inspectionTyreFlags'
 import { sanitizeSearchTerm } from '../searchFilter'
 import { ensureActionItem, updateActionItem } from './actionCenter'
+import { fetchDirectory } from './profileDirectory'
 
 // Least-privilege column set covering the CorrectiveActions page (list + detail
 // + edit form). Omits organisation_id (RLS-managed) and the legacy `photos`
@@ -195,19 +196,14 @@ export async function createWorkOrderForAction(action, overrides = {}) {
 
 /**
  * People an action can be handed to: approved, unlocked members of the caller's
- * organisation. RLS decides who the caller may see; this only narrows by role
+ * organisation, read from the PII-free directory; this only narrows by role
  * and name so a fleet with hundreds of drivers stays searchable.
  */
 export async function listAssignablePeople({ search = '', roles = [], limit = 40 } = {}) {
-  let q = supabase.from('profiles')
-    .select('id,full_name,username,role,site')
-    .eq('approved', true).eq('locked', false)
-    .order('full_name').order('id')
-    .limit(limit)
-  if (roles.length) q = q.in('role', roles)
-  const term = sanitizeSearchTerm(search)
-  if (term) q = q.or(`full_name.ilike.%${term}%,username.ilike.%${term}%`)
-  const rows = unwrap(await q) || []
+  let rows
+  try {
+    ({ rows } = await fetchDirectory({ search: sanitizeSearchTerm(search), roles, activeOnly: true, limit }))
+  } catch (error) { throw toServiceError(error, 'Could not load the list of people.') }
   return rows.map((r) => ({
     id: r.id, name: r.full_name || r.username || 'Unnamed', role: r.role || '', site: r.site || '',
   }))

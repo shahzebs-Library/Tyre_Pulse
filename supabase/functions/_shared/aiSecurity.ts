@@ -169,3 +169,21 @@ export function parseStorageRef(value: unknown, allowedBuckets: readonly string[
 export function isActiveAccount(p: { approved?: unknown; locked?: unknown } | null | undefined): boolean {
   return !!p && p.approved === true && p.locked !== true
 }
+
+/**
+ * Constant-time string comparison for shared secrets (cron / worker headers).
+ * A plain `a !== b` returns at the first differing byte, which leaks how much
+ * of the secret was right. Compares every byte of the longer input and folds
+ * the length difference in, so the time does not depend on where they differ.
+ * Non-strings and empty values never match.
+ */
+export function constantTimeEqual(a: unknown, b: unknown): boolean {
+  if (typeof a !== 'string' || typeof b !== 'string' || !a || !b) return false
+  const enc = new TextEncoder()
+  const ab = enc.encode(a)
+  const bb = enc.encode(b)
+  let diff = ab.length ^ bb.length
+  const n = Math.max(ab.length, bb.length)
+  for (let i = 0; i < n; i++) diff |= (ab[i] ?? 0) ^ (bb[i] ?? 0)
+  return diff === 0
+}

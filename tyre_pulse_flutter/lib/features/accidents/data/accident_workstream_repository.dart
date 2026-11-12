@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
+import 'package:tyre_pulse/core/network/supabase_tables.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_case_schema.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
 
@@ -153,11 +154,19 @@ final Provider<AccidentCasePeopleRepository>
         .from('accident_case_workstreams')
         .select('workstream_key,owner_id')
         .eq('accident_id', accidentId),
-    readNames: (List<String> ids) => ref
-        .read(supabaseClientProvider)
-        .from('profiles')
-        .select('id,full_name')
-        .inFilter('id', ids),
+    // Names come from the PII-free staff directory, never a select on
+    // `profiles` (see SupabaseRpcs.listProfileDirectory).
+    readNames: (List<String> ids) async {
+      final Object? rows = await ref.read(supabaseClientProvider).rpc(
+        SupabaseRpcs.listProfileDirectory,
+        params: <String, Object?>{'p_ids': ids, 'p_limit': 1000},
+      );
+      return <Map<String, dynamic>>[
+        if (rows is List)
+          for (final Object? row in rows)
+            if (row is Map) Map<String, dynamic>.from(row),
+      ];
+    },
   ),
 );
 

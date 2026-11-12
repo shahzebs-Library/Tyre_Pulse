@@ -82,6 +82,16 @@ const Map<ModuleKey, Set<RoleId>> expectedDefaults = <ModuleKey, Set<RoleId>>{
     RoleId.driver,
     RoleId.tyreMan,
   },
+  // Vehicle Handover (Flutter-only). The sign-off roles (Fleet Supervisor,
+  // Fleet Incharge) are added through flutterRoleDefaultExtensions, not here,
+  // so this mirrors only the ModuleDef.defaultRoles.
+  ModuleKey.handover: <RoleId>{
+    RoleId.manager,
+    RoleId.director,
+    RoleId.inspector,
+    RoleId.driver,
+    RoleId.tyreMan,
+  },
   ModuleKey.reportIssue: <RoleId>{
     RoleId.manager,
     RoleId.director,
@@ -209,11 +219,12 @@ const Set<ModuleKey> expectedAdminOnly = <ModuleKey>{
 
 void main() {
   group('registry shape', () {
-    test('carries exactly 32 modules, one per ModuleKey', () {
-      // The Expo registry, Workshop Status included.
-      expect(ModuleRegistry.all, hasLength(32));
-      expect(ModuleKey.values, hasLength(32));
-      expect(flutterOnlyModules, isEmpty);
+    test('carries exactly 33 modules, one per ModuleKey', () {
+      // The Expo registry (Workshop Status included) is 32; Vehicle Handover is
+      // the one Flutter-only module, so it is listed in flutterOnlyModules.
+      expect(ModuleRegistry.all, hasLength(33));
+      expect(ModuleKey.values, hasLength(33));
+      expect(flutterOnlyModules, <ModuleKey>{ModuleKey.handover});
 
       final Set<ModuleKey> defined =
           ModuleRegistry.all.map((ModuleDef d) => d.key).toSet();
@@ -250,7 +261,7 @@ void main() {
     });
 
     test('every group has at least one module and the counts are stable', () {
-      expect(ModuleRegistry.inGroup(ModuleGroup.field), hasLength(9));
+      expect(ModuleRegistry.inGroup(ModuleGroup.field), hasLength(10));
       expect(ModuleRegistry.inGroup(ModuleGroup.fleet), hasLength(5));
       expect(ModuleRegistry.inGroup(ModuleGroup.maintenance), hasLength(9));
       expect(ModuleRegistry.inGroup(ModuleGroup.management), hasLength(6));

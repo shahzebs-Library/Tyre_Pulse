@@ -138,7 +138,7 @@ function labelOr(t, key, fallback) {
 export default function CommandPalette() {
   const { open, setOpen } = useCommandPalette()
   const paletteEnabled = useFeatureGate('command_palette')
-  const { profile, hasPermission, grantedModules, isSuperAdmin } = useAuth()
+  const { profile, hasPermission, grantedModules, isSuperAdmin, moduleStatus } = useAuth()
   const navigate = useNavigate()
   const { t } = useLanguage()
 
@@ -152,12 +152,12 @@ export default function CommandPalette() {
 
   // ── RBAC-filtered command lists (same rules as the sidebar nav + ModuleRoute)
   const navCommands = useMemo(
-    () => visibleCommands(NAV_COMMANDS, profile, hasPermission, grantedModules, isSuperAdmin),
-    [profile, hasPermission, grantedModules, isSuperAdmin],
+    () => visibleCommands(NAV_COMMANDS, profile, hasPermission, grantedModules, isSuperAdmin, moduleStatus),
+    [profile, hasPermission, grantedModules, isSuperAdmin, moduleStatus],
   )
   const actionCommands = useMemo(
-    () => visibleCommands(ACTION_COMMANDS, profile, hasPermission, grantedModules, isSuperAdmin),
-    [profile, hasPermission, grantedModules, isSuperAdmin],
+    () => visibleCommands(ACTION_COMMANDS, profile, hasPermission, grantedModules, isSuperAdmin, moduleStatus),
+    [profile, hasPermission, grantedModules, isSuperAdmin, moduleStatus],
   )
   const allowedPaths = useMemo(
     () => new Set([...navCommands, ...actionCommands].map((c) => c.path)),
@@ -194,7 +194,7 @@ export default function CommandPalette() {
   const canSeeRecord = useCallback((entry) => {
     const src = recordSourceById.get(entry?.source)
     if (!src) return false
-    return isCommandVisible(src.access, profile, hasPermission, grantedModules, isSuperAdmin)
+    return isCommandVisible(src.access, profile, hasPermission, grantedModules, isSuperAdmin, moduleStatus)
   }, [recordSourceById, profile, hasPermission, grantedModules, isSuperAdmin])
 
   // ── Reset on open + focus input; give focus back on close ─────────────────

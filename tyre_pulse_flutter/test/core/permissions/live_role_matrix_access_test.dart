@@ -50,6 +50,8 @@ void main() {
       ModuleKey.workshop,
       // No matrix row: the role default (server seed) applies.
       ModuleKey.workshopStatus,
+      // Flutter-only role default via flutterRoleDefaultExtensions.
+      ModuleKey.handover,
     });
   });
 
@@ -58,6 +60,7 @@ void main() {
       ModuleKey.accidents,
       ModuleKey.reportAccident,
       ModuleKey.workshopStatus,
+      ModuleKey.handover,
     });
   });
 

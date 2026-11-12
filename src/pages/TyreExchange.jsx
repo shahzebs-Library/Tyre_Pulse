@@ -59,6 +59,7 @@ import {
   RETREAD_EXPORT_COLUMNS, PENDING_EXPORT_COLUMNS, NET_FLOW_EXPORT_COLUMNS,
   RETREAD_OVERDUE_DAYS, PENDING_CRITICAL_DAYS,
 } from '../lib/tyreExchangeAnalytics'
+import { safeJsonToSheet } from '../lib/csvSafe.js'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -391,7 +392,7 @@ export default function TyreExchange() {
   async function exportTransfersExcel() {
     const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
-    const transferSheet = XLSX.utils.json_to_sheet(filteredTransfers.map(t => ({
+    const transferSheet = safeJsonToSheet(XLSX, filteredTransfers.map(t => ({
       Serial: t.serial,
       Brand: na(t.brand),
       Size: na(t.size),
@@ -408,7 +409,7 @@ export default function TyreExchange() {
     XLSX.utils.book_append_sheet(wb, transferSheet, 'Transfers')
 
     if (custodyTable.length > 0) {
-      const custodySheet = XLSX.utils.json_to_sheet(custodyTable.map(r => ({
+      const custodySheet = safeJsonToSheet(XLSX, custodyTable.map(r => ({
         Serial: custodySerial,
         'Fitment Date': na(r.date),
         Asset: na(r.asset),

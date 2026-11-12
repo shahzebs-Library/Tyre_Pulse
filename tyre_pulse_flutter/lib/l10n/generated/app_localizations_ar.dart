@@ -8032,4 +8032,470 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get wfEvidenceUnavailable =>
       'لا يمكن إضافة دليل من البيانات المحفوظة. حدّث الصفحة أثناء الاتصال وحاول مرة أخرى.';
+
+  @override
+  String get handoverNavTitle => 'تسليم المركبة';
+
+  @override
+  String get handoverNewAction => 'تسليم جديد';
+
+  @override
+  String get handoverTabMine => 'تسليماتي';
+
+  @override
+  String get handoverTabToSign => 'بانتظار التوقيع';
+
+  @override
+  String get handoverPendingSync => 'بعض التسليمات بانتظار المزامنة.';
+
+  @override
+  String get handoverEmptyMineTitle => 'لا توجد تسليمات بعد';
+
+  @override
+  String get handoverEmptyMineMessage =>
+      'ابدأ تسليم مركبة لتسجيل تسلّم أو تسليم.';
+
+  @override
+  String get handoverEmptyToSignTitle => 'لا شيء للتوقيع';
+
+  @override
+  String get handoverEmptyToSignMessage =>
+      'ستظهر هنا التسليمات التي تنتظر توقيعك.';
+
+  @override
+  String get handoverListLoadFailed => 'تعذّر تحميل التسليمات.';
+
+  @override
+  String get handoverDetailTitle => 'التسليم';
+
+  @override
+  String get handoverNotFoundTitle => 'التسليم غير موجود';
+
+  @override
+  String get handoverNotFoundMessage => 'لم يعد هذا التسليم متاحًا.';
+
+  @override
+  String get handoverDocumentNoLabel => 'رقم المستند';
+
+  @override
+  String get handoverFromDriverLabel => 'من السائق';
+
+  @override
+  String get handoverToDriverLabel => 'إلى السائق';
+
+  @override
+  String get handoverOdometerLabel => 'عدّاد المسافة';
+
+  @override
+  String get handoverFuelLabel => 'مستوى الوقود';
+
+  @override
+  String get handoverConditionLabel => 'الحالة';
+
+  @override
+  String get handoverCleanlinessLabel => 'النظافة';
+
+  @override
+  String get handoverCapturedLabel => 'وقت التسجيل';
+
+  @override
+  String get handoverTypeLabel => 'نوع التسليم';
+
+  @override
+  String get handoverTypeCheckout => 'تسليم (خروج)';
+
+  @override
+  String get handoverTypeCheckin => 'تسلّم (دخول)';
+
+  @override
+  String get handoverConditionExcellent => 'ممتازة';
+
+  @override
+  String get handoverConditionGood => 'جيدة';
+
+  @override
+  String get handoverConditionFair => 'متوسطة';
+
+  @override
+  String get handoverConditionPoor => 'سيئة';
+
+  @override
+  String get handoverCleanlinessClean => 'نظيفة';
+
+  @override
+  String get handoverCleanlinessAcceptable => 'مقبولة';
+
+  @override
+  String get handoverCleanlinessDirty => 'متسخة';
+
+  @override
+  String get handoverPhotosLabel => 'الصور';
+
+  @override
+  String get handoverNotesLabel => 'ملاحظات';
+
+  @override
+  String get handoverNotesHint => 'أي شيء يستحق التسجيل حول التسليم';
+
+  @override
+  String get handoverSignatureLabel => 'توقيع السائق';
+
+  @override
+  String get handoverSignatureMissing => 'لم يُسجَّل توقيع السائق.';
+
+  @override
+  String get handoverReviewNoteLabel => 'ملاحظة المراجعة';
+
+  @override
+  String get handoverStatusColumn => 'الحالة';
+
+  @override
+  String get handoverSignoffTitle => 'التوقيعات';
+
+  @override
+  String get handoverRungDriver => 'السائق';
+
+  @override
+  String get handoverRungSupervisor => 'مشرف الأسطول';
+
+  @override
+  String get handoverRungIncharge => 'مسؤول الأسطول';
+
+  @override
+  String get handoverRungSigned => 'موقّع';
+
+  @override
+  String get handoverRungWaiting => 'بالانتظار';
+
+  @override
+  String get handoverRungPending => 'معلّق';
+
+  @override
+  String get handoverYourDecisionTitle => 'قرارك';
+
+  @override
+  String get handoverSignatureSignLabel => 'وقّع في الأسفل';
+
+  @override
+  String get handoverSigningAs => 'التوقيع باسم';
+
+  @override
+  String get handoverSignNoteLabel => 'ملاحظة (اختياري)';
+
+  @override
+  String get handoverSignNoteHint => 'أضف ملاحظة لهذا القرار';
+
+  @override
+  String get handoverSignApprove => 'اعتماد';
+
+  @override
+  String get handoverSignReturn => 'إعادة';
+
+  @override
+  String get handoverSignNeededTitle => 'التوقيع مطلوب';
+
+  @override
+  String get handoverSignNeededMessage => 'ارسم توقيعك قبل الاعتماد.';
+
+  @override
+  String get handoverReasonNeededTitle => 'السبب مطلوب';
+
+  @override
+  String get handoverReasonNeededMessage =>
+      'أضف ملاحظة توضّح سبب إعادة هذا التسليم.';
+
+  @override
+  String get handoverSignedTitle => 'تم التوقيع';
+
+  @override
+  String get handoverSignedMessage => 'تم تسجيل توقيعك.';
+
+  @override
+  String get handoverReturnedTitle => 'تمت الإعادة';
+
+  @override
+  String get handoverReturnedMessage => 'تمت إعادة هذا التسليم للتصحيح.';
+
+  @override
+  String get handoverSignFailedTitle => 'تعذّر التسجيل';
+
+  @override
+  String get handoverSignFailedMessage => 'تعذّر تسجيل القرار. حاول مرة أخرى.';
+
+  @override
+  String get handoverStayHere => 'البقاء هنا';
+
+  @override
+  String get handoverBackToList => 'العودة إلى القائمة';
+
+  @override
+  String get handoverStatusDraft => 'مسودة';
+
+  @override
+  String get handoverStatusPendingSupervisor => 'بانتظار المشرف';
+
+  @override
+  String get handoverStatusPendingIncharge => 'بانتظار المسؤول';
+
+  @override
+  String get handoverStatusApproved => 'معتمد';
+
+  @override
+  String get handoverStatusRejected => 'مُعادة';
+
+  @override
+  String get handoverDamageSectionTitle => 'الأضرار';
+
+  @override
+  String get handoverNoDamage => 'لا أضرار مسجّلة';
+
+  @override
+  String get handoverAddDamage => 'إضافة ضرر';
+
+  @override
+  String get handoverDamageAddTitle => 'إضافة ضرر';
+
+  @override
+  String get handoverDamageEditTitle => 'تعديل الضرر';
+
+  @override
+  String get handoverDamageViewLabel => 'الجهة';
+
+  @override
+  String get handoverDamageTypeLabel => 'نوع الضرر';
+
+  @override
+  String get handoverDamageLevelLabel => 'الشدّة';
+
+  @override
+  String get handoverDamageNoteLabel => 'ملاحظة';
+
+  @override
+  String get handoverDamageNoteHint => 'صِف الضرر';
+
+  @override
+  String get handoverDamagePhotoLabel => 'صورة الضرر';
+
+  @override
+  String get handoverDamagePhotoStored => 'تم إرفاق صورة';
+
+  @override
+  String get handoverDamageSave => 'حفظ الضرر';
+
+  @override
+  String get handoverViewFront => 'الأمام';
+
+  @override
+  String get handoverViewRear => 'الخلف';
+
+  @override
+  String get handoverViewLeft => 'اليسار';
+
+  @override
+  String get handoverViewRight => 'اليمين';
+
+  @override
+  String get handoverViewTop => 'الأعلى';
+
+  @override
+  String get handoverDamageScratch => 'خدش';
+
+  @override
+  String get handoverDamageDent => 'انبعاج';
+
+  @override
+  String get handoverDamageCrack => 'شرخ';
+
+  @override
+  String get handoverDamageChip => 'كسر صغير';
+
+  @override
+  String get handoverDamageBroken => 'مكسور';
+
+  @override
+  String get handoverDamageMissing => 'مفقود';
+
+  @override
+  String get handoverDamageRust => 'صدأ';
+
+  @override
+  String get handoverDamageOther => 'أخرى';
+
+  @override
+  String get handoverLevelMinor => 'طفيف';
+
+  @override
+  String get handoverLevelModerate => 'متوسط';
+
+  @override
+  String get handoverLevelSevere => 'كبير';
+
+  @override
+  String get handoverViewColumn => 'الجهة';
+
+  @override
+  String get handoverDamageColumn => 'الضرر';
+
+  @override
+  String get handoverLevelColumn => 'الشدّة';
+
+  @override
+  String get handoverAddPhoto => 'إضافة صورة';
+
+  @override
+  String get handoverPhotoCamera => 'الكاميرا';
+
+  @override
+  String get handoverPhotoGallery => 'المعرض';
+
+  @override
+  String get handoverNewTitle => 'تسليم جديد';
+
+  @override
+  String get handoverStepVehicle => 'المركبة';
+
+  @override
+  String get handoverStepCondition => 'الحالة';
+
+  @override
+  String get handoverStepPhotos => 'الصور';
+
+  @override
+  String get handoverStepSignature => 'التوقيع';
+
+  @override
+  String get handoverStepReview => 'المراجعة';
+
+  @override
+  String get handoverVehicleLabel => 'المركبة';
+
+  @override
+  String get handoverScanAsset => 'مسح الأصل';
+
+  @override
+  String get handoverSelectedAsset => 'المركبة المختارة';
+
+  @override
+  String get handoverVehicleSearchHint => 'ابحث برقم الأصل';
+
+  @override
+  String get handoverVehicleStartTyping => 'اكتب حرفين على الأقل للبحث.';
+
+  @override
+  String get handoverVehicleNoMatch => 'لا توجد مركبة تطابق البحث.';
+
+  @override
+  String get handoverVehicleLoadFailed => 'تعذّر تحميل المركبات.';
+
+  @override
+  String get handoverDriverHint => 'اسم السائق';
+
+  @override
+  String get handoverSignatureHint => 'اطلب من السائق التوقيع.';
+
+  @override
+  String get handoverNext => 'التالي';
+
+  @override
+  String get handoverSubmit => 'إرسال التسليم';
+
+  @override
+  String get handoverNeedsVehicle => 'اختر مركبة أولًا.';
+
+  @override
+  String get handoverNeedsDriver => 'أدخل السائق المسلّم أو المستلم.';
+
+  @override
+  String get handoverNeedsType => 'اختر نوع التسليم.';
+
+  @override
+  String get handoverNeedsCondition => 'حدّد حالة المركبة.';
+
+  @override
+  String get handoverNeedsSignature => 'التقط توقيع السائق.';
+
+  @override
+  String get handoverInvalidNumber => 'أدخل رقمًا صحيحًا.';
+
+  @override
+  String get handoverInvalidFuel => 'يجب أن يكون مستوى الوقود بين 0 و100.';
+
+  @override
+  String get handoverSubmittedTitle => 'تم إرسال التسليم';
+
+  @override
+  String get handoverSubmittedMessage => 'تم إرسال التسليم للتوقيع.';
+
+  @override
+  String get handoverQueuedTitle => 'حُفظ دون اتصال';
+
+  @override
+  String get handoverQueuedMessage => 'ستتم مزامنة التسليم عند عودة الاتصال.';
+
+  @override
+  String get handoverQueuedWarningTitle => 'حُفظ، الصور معلّقة';
+
+  @override
+  String get handoverQueuedWarningMessage =>
+      'تم حفظ التسليم لكن بعض الصور ما زالت بانتظار الرفع.';
+
+  @override
+  String get handoverSubmitFailedTitle => 'تعذّر الإرسال';
+
+  @override
+  String get handoverSubmitFailedMessage =>
+      'تعذّر إرسال التسليم. تم حفظه وستتم إعادة المحاولة.';
+
+  @override
+  String get handoverSharePdf => 'مشاركة PDF';
+
+  @override
+  String get handoverPdfTitle => 'تقرير تسليم المركبة';
+
+  @override
+  String get handoverPdfDetailsTitle => 'تفاصيل التسليم';
+
+  @override
+  String get handoverPdfSignaturesTitle => 'التوقيعات';
+
+  @override
+  String get handoverPdfSignaturePending => 'معلّق';
+
+  @override
+  String get handoverPdfShareFailed => 'تعذّرت مشاركة التقرير.';
+
+  @override
+  String get handoverSignatureSaved => 'تم حفظ التوقيع';
+
+  @override
+  String get handoverSignatureRedraw => 'ارسم توقيعًا جديدًا';
+
+  @override
+  String handoverPdfGenerated(String date) {
+    return 'تم الإنشاء في $date';
+  }
+
+  @override
+  String get mfaTitle => 'التحقق بخطوتين';
+
+  @override
+  String get mfaMessage =>
+      'أدخل الرمز المكوّن من 6 أرقام من تطبيق المصادقة لإكمال تسجيل الدخول.';
+
+  @override
+  String get mfaCodeLabel => 'رمز التحقق';
+
+  @override
+  String get mfaVerifyAction => 'تحقق';
+
+  @override
+  String get mfaCodeIncomplete => 'أدخل أرقام الرمز الستة كاملة.';
+
+  @override
+  String get mfaCodeInvalid =>
+      'لم يُقبل هذا الرمز. راجع تطبيق المصادقة وحاول مرة أخرى.';
+
+  @override
+  String get mfaVerifyUnavailable =>
+      'تعذّر التحقق من الرمز الآن. تحقق من الاتصال وحاول مرة أخرى.';
 }

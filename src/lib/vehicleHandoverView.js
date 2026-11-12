@@ -63,6 +63,7 @@ export const EMPTY_WIZARD = {
   marks: [],
   artwork_stem: null,
   photo_url: '',
+  photos: [],
   notes: '',
   signature: null,
 }
@@ -198,6 +199,7 @@ export function buildHandoverPayload(form, { country = null } = {}) {
     cleanliness: form.cleanliness || null,
     damages: damages.length ? damages : null,
     damage_count: damages.length,
+    photos: Array.isArray(form.photos) ? form.photos.filter((p) => typeof p === 'string' && p.trim()) : [],
     photo_url: String(form.photo_url || '').trim() || null,
     signature_url: form.signature || null,
     notes: String(form.notes || '').trim() || null,

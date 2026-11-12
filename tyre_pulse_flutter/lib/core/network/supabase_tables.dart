@@ -178,6 +178,17 @@ abstract final class SupabaseTables {
   /// is [SupabaseRpcs.workshopStatusUpdateRecord].
   static const String workshopStatusRecords = 'workshop_status_records';
 
+  /// Vehicle Handover / Condition reports: one row per checkout/checkin
+  /// condition record. Created by `MIGRATIONS_V181_HANDOVER_REPORTS.sql` and
+  /// extended with the two-stage sign-off columns (`approval_status`,
+  /// `supervisor_*`, `incharge_*`, `document_no`, `photos`) by
+  /// `supabase/migrations/20261112130000_handover_two_stage_signoff.sql`
+  /// (applied live 2026-11-12). RESTRICTIVE org isolation + per-command
+  /// authenticated policies; a plain update cannot forge a stage change (the
+  /// BEFORE UPDATE guard), so the sign-off goes through
+  /// [SupabaseRpcs.decideHandoverApproval].
+  static const String handoverReports = 'handover_reports';
+
   /// Every verified table name, for a drift test.
   ///
   /// A repository that needs a name not in this set is describing an object
@@ -228,6 +239,7 @@ abstract final class SupabaseTables {
     engineHoursLogs,
     repairRequests,
     workshopStatusRecords,
+    handoverReports,
   };
 
   /// Names that were declared by the Kotlin rebuild and DO NOT EXIST.
@@ -312,6 +324,17 @@ abstract final class SupabaseRpcs {
   /// sections that do name it.
   static const String decideChecklistApproval = 'decide_checklist_approval';
 
+  /// The server-stamped, two-stage vehicle-handover sign-off. SECURITY DEFINER,
+  /// takes no org id, granted to `authenticated` (anon revoked). Created by
+  /// `supabase/migrations/20261112130000_handover_two_stage_signoff.sql`
+  /// (applied live 2026-11-12). Signature `(p_id uuid, p_approved boolean,
+  /// p_signature text default null, p_note text default null)`; returns jsonb
+  /// `{ok, decision, status, both_steps}`. Derives the signer from `auth.uid()`,
+  /// enforces supervisor-then-incharge order, closes both rungs in one sign for
+  /// an incharge-level signer, and raises an "already decided" conflict on a
+  /// race. Mirrored by `lib/features/handover/domain/handover_approval.dart`.
+  static const String decideHandoverApproval = 'decide_handover_approval';
+
   static const String approvePendingUpload = 'approve_pending_upload';
   static const String rejectPendingUpload = 'reject_pending_upload';
   static const String restampPendingUploadCountry =
@@ -367,6 +390,21 @@ abstract final class SupabaseRpcs {
   /// kind of rule that drifts silently. The phone parses `plan_state`; it does
   /// not re-derive it.
   static const String getScheduleAdherence = 'get_schedule_adherence';
+
+  /// The staff directory: names, employee id, role and scope of every member
+  /// of the caller's own organisation, with NO contact data (no email, phone,
+  /// push token or notes). SECURITY DEFINER, organisation resolved server-side,
+  /// active callers only. Created by
+  /// `supabase/migrations/20261112170000_profile_directory_and_private_readers.sql`
+  /// and VERIFIED live 2026-11-12 by impersonation. Signature `(p_ids uuid[],
+  /// p_search text, p_limit int, p_offset int, p_roles text[],
+  /// p_active_only boolean)`, every argument optional.
+  ///
+  /// This is the reader for OTHER people's names. A select on `profiles` is
+  /// for the caller's own row and the admin screens: the table's row policy is
+  /// to be narrowed to "own row or elevated", after which a name lookup on the
+  /// table returns nothing for an ordinary role.
+  static const String listProfileDirectory = 'list_profile_directory';
 
   // --- Problem tracking ---
 
@@ -427,6 +465,7 @@ abstract final class SupabaseRpcs {
     adminMobileUserAction,
     decideInspectionApproval,
     decideChecklistApproval,
+    decideHandoverApproval,
     approvePendingUpload,
     rejectPendingUpload,
     restampPendingUploadCountry,
@@ -444,6 +483,7 @@ abstract final class SupabaseRpcs {
     referenceSiteOptions,
     getMobileAnalytics,
     getScheduleAdherence,
+    listProfileDirectory,
     getReportSnapshotAuthed,
     submitUserIssue,
     getAccidentAudit,
@@ -470,6 +510,11 @@ abstract final class SupabaseRpcs {
     /// thousands - but the ceiling is real and the repository reports when a
     /// result touches it rather than quietly showing a short list.
     getScheduleAdherence,
+
+    /// Capped at 1000 rows per call by the function itself. Callers either
+    /// pass the ids they need or a search term with a small `p_limit`; a full
+    /// listing must page with `p_offset`.
+    listProfileDirectory,
   };
 }
 

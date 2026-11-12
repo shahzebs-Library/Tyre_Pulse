@@ -45,6 +45,7 @@ import {
   registryRows, detectBatchFailures, brandRecallHistory, recallBreakdowns,
   daysBetween,
 } from '../lib/recallTrackerAnalytics'
+import { safeJsonToSheet } from '../lib/csvSafe.js'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -582,7 +583,7 @@ export default function RecallTracker() {
 
     // A workbook outlives the filters that produced it, so it states its own
     // scope on the first sheet rather than looking like the whole registry.
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{
+    XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, [{
       'Report': 'Tyre Recall & Batch Quality Registry',
       'Generated': nowStr(),
       'Recalls included': filtered.length,
@@ -604,7 +605,7 @@ export default function RecallTracker() {
       'Created At': r.created_at,
       'Closed At': r.closed_at,
     }))
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(recallRows), 'Recalls')
+    XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, recallRows), 'Recalls')
 
     const affectedRows = []
     filtered.forEach(r => {
@@ -623,7 +624,7 @@ export default function RecallTracker() {
         })
       })
     })
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(affectedRows), 'Affected Tyres')
+    XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, affectedRows), 'Affected Tyres')
 
     XLSX.writeFile(wb, `${reportFileName('TyrePulse Recall Registry', nowStr())}.xlsx`)
   }

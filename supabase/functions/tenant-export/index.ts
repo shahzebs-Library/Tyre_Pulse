@@ -71,7 +71,7 @@ function corsHeaders(req: Request): Record<string, string> {
   if (origin) {
     // *.vercel.app preview wildcard dropped (owner gate N): preview hosts must
     // be added to ALLOWED_ORIGINS above explicitly.
-    allowOrigin = (ALLOWED_ORIGINS.includes(origin) || origin.startsWith('http://localhost')) ? origin : 'null'
+    allowOrigin = (ALLOWED_ORIGINS.includes(origin) || /^http:\/\/localhost(:\d{1,5})?$/.test(origin)) ? origin : 'null'
   }
   return {
     'Access-Control-Allow-Origin': allowOrigin,

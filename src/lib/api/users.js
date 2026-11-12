@@ -13,11 +13,13 @@ import { supabase, unwrap, ServiceError, fetchAllOrThrow } from './_client'
 import { toUserMessage } from '../safeError'
 
 // Least-privilege column set for the admin user list + edit modal. Covers every
-// profile field the page reads or writes. Omits push_token/avatar_url and
+// profile field the page reads or writes. Omits push_token, notes and the
+// recovery contacts (not readable through the table: column privileges, see
+// migration 20261112171000; elevated readers use list_profile_private), avatar_url and
 // org-internal columns (organisation_id, org_id, is_super_admin metadata beyond
 // the flag the UI surfaces) that the page never touches.
 const COLS =
-  'id,username,full_name,role,employee_id,approved,country,countries,site,region,locked,is_super_admin,pending_reason,email,phone,last_login_at,login_count,created_at,module_overrides,notes,updated_at,org_id'
+  'id,username,full_name,role,employee_id,approved,country,countries,site,region,locked,is_super_admin,pending_reason,email,phone,last_login_at,login_count,created_at,module_overrides,updated_at,org_id'
 
 /** Organisations for the user→org assignment selector (id, name, country). */
 export async function listOrganisations() {

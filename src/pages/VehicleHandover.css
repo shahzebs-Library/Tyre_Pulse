@@ -164,3 +164,47 @@ span.vhm-pin { cursor: default; }
 .vhm-row-edit .cc-icon-btn { grid-column: 3; grid-row: 1; }
 @media (max-width: 640px) { .vhm-row-edit { grid-template-columns: 1fr auto; } .vhm-row-edit select, .vhm-row-edit input { grid-column: 1; } }
 .vh-view-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* ── Photos (wizard capture + detail gallery) ─────────────────────────────── */
+.vh-photo-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+.vh-photo-tile { position: relative; width: 104px; height: 104px; border-radius: 10px; overflow: hidden; border: 1px solid var(--cc-inner-border); background: var(--cc-inner); display: grid; place-items: center; }
+.vh-photo-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.vh-photo-tile.pending, .vh-photo-pending { color: var(--cc-ink-3); }
+.vh-photo-del { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; border: none; background: rgba(0,0,0,0.55); color: #fff; display: grid; place-items: center; cursor: pointer; }
+.vh-photo-del:hover { background: rgba(0,0,0,0.75); }
+.vh-photo-add { width: 104px; height: 104px; border-radius: 10px; border: 1px dashed var(--cc-inner-border); background: var(--cc-inner); color: var(--cc-ink-2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; font-size: 12px; cursor: pointer; }
+.vh-photo-add:hover { border-color: var(--cc-green); color: var(--cc-green); }
+.vh-photo-add:disabled { opacity: .55; cursor: not-allowed; }
+.vh-photo-grid.view .vh-photo-tile { width: 92px; height: 92px; text-decoration: none; }
+.vh-view-section { margin-top: 14px; }
+.vh-view-label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--cc-ink-3); margin-bottom: 8px; }
+
+/* ── Two-stage sign-off panel ─────────────────────────────────────────────── */
+.vh-signoff { margin-top: 16px; border: 1px solid var(--cc-inner-border); border-radius: 12px; padding: 14px; background: var(--cc-card-flat); }
+.vh-signoff-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.vh-signoff-title { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--cc-ink-2); }
+.vh-ladder { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.vh-rung { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border: 1px solid var(--cc-inner-border); border-radius: 10px; background: var(--cc-inner); }
+.vh-rung.current { border-color: var(--cc-green); }
+.vh-rung-dot { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; border: 2px solid var(--cc-inner-border); color: var(--cc-ink-3); background: var(--cc-card-flat); }
+.vh-rung.done .vh-rung-dot { border-color: var(--cc-green); color: var(--cc-green); background: var(--cc-green-tint); }
+.vh-rung.current .vh-rung-dot { border-color: var(--cc-green); color: #fff; background: var(--cc-green-strong); }
+.vh-rung-main { min-width: 0; }
+.vh-rung-main b { display: block; font-size: 13px; color: var(--cc-ink); }
+.vh-rung-main small { display: block; font-size: 11.5px; color: var(--cc-ink-3); margin-top: 1px; }
+.vh-rung-sig { margin-top: 8px; }
+.vh-signoff-act { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.vh-signoff-hint { font-size: 12px; color: var(--cc-ink-3); display: inline-flex; align-items: center; gap: 6px; margin: 0; }
+.vh-signoff-hint.warn { color: var(--cc-amber); }
+.vh-field { display: flex; flex-direction: column; gap: 5px; }
+.vh-field > span { font-size: 12px; color: var(--cc-ink-2); }
+.vh-signoff-btns { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.vh-reject { color: var(--cc-red); }
+.vh-reject:hover { border-color: var(--cc-red); }
+.vh-signoff-msg { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; margin: 10px 0 0; }
+.vh-signoff-msg.success { color: var(--cc-green); }
+.vh-signoff-msg.error { color: var(--cc-red); }
+.vh-signoff-note { display: inline-flex; align-items: flex-start; gap: 6px; font-size: 12.5px; color: var(--cc-ink-2); margin: 12px 0 0; }
+.vh-signoff-note.bad { color: var(--cc-red); }
+.vh-spin { animation: vh-spin 0.8s linear infinite; }
+@keyframes vh-spin { to { transform: rotate(360deg); } }

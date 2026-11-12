@@ -29,19 +29,30 @@ const FIELD_NAMES = new Set(["name", "email", "phone", "company", "country", "fl
 // A real request is well under 4 KB; anything far larger is refused before it is read.
 const MAX_BODY_BYTES = 16 * 1024;
 
-// Best-effort abuse guard: each serverless instance keeps a short per-IP window.
-// It does not replace an edge rate limit, but it stops one client flooding the inbox.
+// FIRST LINE ONLY, NOT A REAL LIMIT. This Map lives in one serverless instance:
+// every instance keeps its own counter and a cold start empties it, so under
+// concurrency a client can exceed 5 per 10 minutes. It stops one client hammering
+// one warm instance and nothing more. The marketing app has no durable store
+// (no KV / Upstash / database dependency), and adding one is an owner decision.
+// The real limit must be one of:
+//   - a Vercel Firewall (WAF) rate-limit rule on POST /api/contact, or
+//   - a shared store (Vercel KV / Upstash) read here instead of this Map.
+// Until then the exposure is inbox flooding and e-mail quota burn (the recipient
+// is fixed, so this route cannot be used as a relay).
 const WINDOW_MS = 10 * 60 * 1000;
 const MAX_PER_WINDOW = 5;
 const hits = new Map<string, number[]>();
 
-function rateLimited(ip: string): boolean {
+/** Seconds the caller must wait, or 0 when the request is within the limit. */
+function rateLimitWaitSeconds(ip: string): number {
   const now = Date.now();
   const recent = (hits.get(ip) ?? []).filter((t) => now - t < WINDOW_MS);
   recent.push(now);
   hits.set(ip, recent);
   if (hits.size > 5000) hits.clear();
-  return recent.length > MAX_PER_WINDOW;
+  if (recent.length <= MAX_PER_WINDOW) return 0;
+  // The window frees a slot when its oldest counted request ages out.
+  return Math.max(1, Math.ceil((recent[0] + WINDOW_MS - now) / 1000));
 }
 
 function header(request: Request, name: string): string | null {
@@ -147,8 +158,12 @@ export async function POST(request: Request) {
 
     // Counted only for well-formed requests: the limit protects the inbox, and a person
     // fixing a typo should not use up their attempts.
-    if (rateLimited(clientIp(request))) {
-      return NextResponse.json({ message: "Too many requests. Please try again in a few minutes." }, { status: 429 });
+    const waitSeconds = rateLimitWaitSeconds(clientIp(request));
+    if (waitSeconds > 0) {
+      return NextResponse.json(
+        { message: "Too many requests. Please try again in a few minutes." },
+        { status: 429, headers: { "Retry-After": String(waitSeconds) } },
+      );
     }
 
     const apiKey = process.env.RESEND_API_KEY;

@@ -18,6 +18,21 @@ import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 
+/// How one multi-factor verification attempt ended, as far as the gate needs
+/// to know. Deliberately the gate's own type: this layer does not depend on
+/// the authentication layer, only the other way round.
+enum TpMfaVerifyResult {
+  /// Accepted. The session moves on and the gate goes away.
+  verified,
+
+  /// The code was refused. Ask for a new one.
+  rejected,
+
+  /// The check could not be made (offline, server fault). The code may have
+  /// been right.
+  unavailable,
+}
+
 /// What the gates can offer to do.
 @immutable
 class TpShellGateActions {
@@ -26,7 +41,11 @@ class TpShellGateActions {
     this.onRetryProfile,
     this.onRetrySession,
     this.onOpenStore,
+    this.onVerifyMfa,
   });
+
+  /// Verifies a multi-factor code. See `mfa_gate.dart`.
+  final Future<TpMfaVerifyResult> Function(String code)? onVerifyMfa;
 
   final VoidCallback? onSignOut;
   final VoidCallback? onRetryProfile;

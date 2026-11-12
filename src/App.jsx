@@ -9,7 +9,7 @@ import { LanguageProvider } from './contexts/LanguageContext'
 import { SettingsProvider, useSettings } from './contexts/SettingsContext'
 import { TenantProvider } from './contexts/TenantContext'
 import { CommandPaletteProvider } from './contexts/CommandPaletteContext'
-import ProtectedRoute, { RoleRoute, ModuleRoute, RouteLoading } from './components/ProtectedRoute'
+import ProtectedRoute, { RoleRoute, ModuleRoute, RouteLoading, ModuleStatusGate } from './components/ProtectedRoute'
 import { useAuth } from './contexts/AuthContext'
 import Layout from './components/Layout'
 import { isSystemConfigLoaded, shouldUseNewShell, NEW_SHELL_KEY } from './lib/api/systemConfig'
@@ -630,6 +630,7 @@ function MainApp() {
                         screens felt like the app restarting each time. Scoped
                         here, only the content area swaps. */}
                     <Suspense fallback={<RouteLoading />}>
+                    <ModuleStatusGate>
                     <Routes>
                       <Route path="/"            element={<Safe><HomeRoute /></Safe>} />
                       <Route path="/tyres"       element={<Safe><ModuleRoute moduleKey="tyre_records"><TyreRecords /></ModuleRoute></Safe>} />
@@ -837,7 +838,7 @@ function MainApp() {
                       <Route path="/emissions"             element={<Safe><RoleRoute allowed={['Admin']}><Emissions /></RoleRoute></Safe>} />
                       <Route path="/proof-of-delivery"     element={<Safe><RoleRoute allowed={['Admin']}><ProofOfDelivery /></RoleRoute></Safe>} />
                       <Route path="/fuel-theft"            element={<Safe><RoleRoute allowed={['Admin']}><FuelTheftAlerts /></RoleRoute></Safe>} />
-                      <Route path="/handovers"             element={<Safe><RoleRoute allowed={['Admin']}><VehicleHandover /></RoleRoute></Safe>} />
+                      <Route path="/handovers"             element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director', 'Fleet Supervisor', 'Fleet Incharge']}><VehicleHandover /></RoleRoute></Safe>} />
                       <Route path="/driver-training"       element={<Safe><RoleRoute allowed={['Admin']}><DriverTraining /></RoleRoute></Safe>} />
                       <Route path="/tachograph"            element={<Safe><RoleRoute allowed={['Admin']}><Tachograph /></RoleRoute></Safe>} />
                       <Route path="/bay-scheduling"        element={<Safe><RoleRoute allowed={['Admin']}><BayScheduling /></RoleRoute></Safe>} />
@@ -895,6 +896,7 @@ function MainApp() {
                       <Route path="/automation-rules/builder/:ruleId"  element={<Safe><FlagRoute flag="automation_platform"><RuleBuilder /></FlagRoute></Safe>} />
                       <Route path="*"            element={<NotFound />} />
                     </Routes>
+                    </ModuleStatusGate>
                     </Suspense>
                     </ChecklistOnlyGate>
                     </SubscriptionGate>

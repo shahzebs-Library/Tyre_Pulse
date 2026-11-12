@@ -26,6 +26,7 @@ import Modal from '../components/ui/Modal'
 import PlannerWorkQueue from '../components/inspection-planner/PlannerWorkQueue'
 import PlanAdherencePanel from '../components/inspection-planner/PlanAdherencePanel'
 import { ScheduleModal, BulkModal } from '../components/inspection-planner/PlannerDialogs'
+import { safeJsonToSheet } from '../lib/csvSafe.js'
 
 const PlannerCoveragePanel = lazy(() => import('../components/inspection-planner/PlannerCoveragePanel'))
 
@@ -185,8 +186,8 @@ function PlannerWorkspace({ country, permissions }) {
       if (kind === 'excel') {
         const XLSX = await import('xlsx')
         const workbook = XLSX.utils.book_new()
-        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(exportRows.map(item => ({ Asset: item.asset_no, Country: item.country || '', Date: item.inspection_date, Time: item.inspection_time, Inspector: item.inspector_name, Site: item.site, Type: item.type, Status: item.status, Notes: item.notes }))), 'Schedule')
-        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(workQueue.map(row => ({ Asset: row.asset_no, Country: row.country || '', Site: row.site, 'Days since inspection': row.days_since ?? 'Never inspected', 'Analysis interval': interval, Status: row.status, 'Last inspector': row.inspector }))), 'Inspection gaps')
+        XLSX.utils.book_append_sheet(workbook, safeJsonToSheet(XLSX, exportRows.map(item => ({ Asset: item.asset_no, Country: item.country || '', Date: item.inspection_date, Time: item.inspection_time, Inspector: item.inspector_name, Site: item.site, Type: item.type, Status: item.status, Notes: item.notes }))), 'Schedule')
+        XLSX.utils.book_append_sheet(workbook, safeJsonToSheet(XLSX, workQueue.map(row => ({ Asset: row.asset_no, Country: row.country || '', Site: row.site, 'Days since inspection': row.days_since ?? 'Never inspected', 'Analysis interval': interval, Status: row.status, 'Last inspector': row.inspector }))), 'Inspection gaps')
         XLSX.writeFile(workbook, 'inspection_planner.xlsx')
       } else {
         const { default: jsPDF } = await import('jspdf')

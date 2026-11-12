@@ -39,8 +39,9 @@ import {
   buildPlanningRows, sortPlanningRows, filterPlanningRows, ageDistribution, pipelineSegments,
   capexByQuarter, buildRenewalKpis, planningRules, presetCounts, remainingLifeLabel,
   planningExportRows, PLANNING_EXPORT_COLUMNS, PRIORITY_META, PRIORITY_KEYS, PLAN_STATUS_META,
-  PLANNING_LIFE_YEARS, AGING_YEARS, currencyForCountry, budgetByYear, moneyText, planYear,
+  PLANNING_LIFE_YEARS, currencyForCountry, budgetByYear, moneyText, planYear,
   SCORE_WEIGHTS, SCORE_PART_LABELS, SCORE_RAISE, planExportRows, PLAN_EXPORT_COLUMNS,
+  planningCoverage, readLifeYears, writeLifeYears, agingYearsFor, MIN_LIFE_YEARS, MAX_LIFE_YEARS,
 } from '../lib/fleetRenewalView'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
@@ -53,7 +54,8 @@ const EMPTY_FORM = {
   target_replace_date: '', est_cost: '', priority: 'medium', status: 'planned',
   site: '', notes: '', country: '', planned_year: '', currency: '',
 }
-const RULE_TEXT = `Age comes from the recorded model year (implausible years are ignored). Every asset is planned against a ${PLANNING_LIFE_YEARS}-year life, because the register records no useful life per asset. Health score = 70% age score (100 at new, 0 at ${PLANNING_LIFE_YEARS} years) + 30% reliability (0 with an open breakdown, else 100). Priority: marked Plan For Scrap or 1 year or less left = Critical; 2 years or less, or over ${AGING_YEARS} years with an open breakdown = High; 4 years or less = Medium; otherwise Low. A renewal score of ${SCORE_RAISE} or more raises a Medium or Low asset to High.`
+const ruleText = (life, aging) => `Planning estimate. Age comes from the recorded model year (implausible years are ignored). Every asset is planned against an assumed ${life}-year life, because the register records no useful life per asset. Health score = 70% age score (100 at new, 0 at ${life} years) + 30% reliability (0 with an open breakdown, else 100). Priority: marked Plan For Scrap or 1 year or less left = Critical; 2 years or less, or ${aging} years or more with an open breakdown = High; 4 years or less = Medium; otherwise Low. A renewal score of ${SCORE_RAISE} or more raises a Medium or Low asset to High.`
+const browserStorage = () => { try { return window.localStorage } catch { return null } }
 const RULE_ICON = { scrap: AlertOctagon, past: AlertTriangle, bd: Wrench, noplan: CalendarClock, noage: Info }
 
 const money = (amount, currency) => (amount == null ? 'N/A' : formatCurrencyCompact(amount, currency || ''))
@@ -157,6 +159,13 @@ export default function FleetRenewal() {
   const scopeLabel = countryScope || 'All countries'
   const now = useMemo(() => new Date(), [])
 
+  // Planning life is an assumption the planner owns, kept in this browser.
+  const [lifeYears, setLifeYears] = useState(() => readLifeYears(browserStorage()))
+  const [lifeDraft, setLifeDraft] = useState(() => String(readLifeYears(browserStorage())))
+  const applyLife = (v) => { const n = writeLifeYears(browserStorage(), v); setLifeYears(n); setLifeDraft(String(n)) }
+  const agingYears = agingYearsFor(lifeYears)
+  const RULE_TEXT = ruleText(lifeYears, agingYears)
+
   // Plans (the decision layer). Kept in local state so CRUD updates in place.
   const [plans, setPlans] = useState(null)
   const [planError, setPlanError] = useState('')
@@ -194,11 +203,13 @@ export default function FleetRenewal() {
       breakdownRows: bdCard.loading ? null : bdCard.data,
       signalRows: sigCard.loading ? null : sigCard.data,
       now,
+      lifeYears,
     }))
-  }, [fleetCard.data, allPlans, utilCard.loading, utilCard.data, bdCard.loading, bdCard.data, sigCard.loading, sigCard.data, now])
+  }, [fleetCard.data, allPlans, utilCard.loading, utilCard.data, bdCard.loading, bdCard.data, sigCard.loading, sigCard.data, now, lifeYears])
 
-  const kpi = useMemo(() => buildRenewalKpis(rows, allPlans, now), [rows, allPlans, now])
-  const rules = useMemo(() => planningRules(rows, now), [rows, now])
+  const kpi = useMemo(() => buildRenewalKpis(rows, allPlans, now, { lifeYears }), [rows, allPlans, now, lifeYears])
+  const rules = useMemo(() => planningRules(rows, now, { lifeYears }), [rows, now, lifeYears])
+  const coverage = useMemo(() => planningCoverage(rows, fleetCard.data?.rows || [], { lifeYears }), [rows, fleetCard.data, lifeYears])
   const presets = useMemo(() => presetCounts(rows, now), [rows, now])
   const pipeline = useMemo(() => pipelineSegments(allPlans, now), [allPlans, now])
   const capex = useMemo(() => capexByQuarter(allPlans, now), [allPlans, now])
@@ -245,12 +256,12 @@ export default function FleetRenewal() {
   // Exports
   const doExcel = async (list = filtered) => {
     try {
-      await exportToExcel(planningExportRows(list), PLANNING_EXPORT_COLUMNS.map((c) => c.key), PLANNING_EXPORT_COLUMNS.map((c) => c.header), reportFileName('Fleet Renewal Planning', scopeLabel))
+      await exportToExcel(planningExportRows(list), PLANNING_EXPORT_COLUMNS.map((c) => c.key), PLANNING_EXPORT_COLUMNS.map((c) => c.header), reportFileName('Fleet Renewal Planning Estimate', scopeLabel, `${lifeYears} year life`))
     } catch (e) { setActionError(toUserMessage(e, 'Could not export. Try again.')) }
   }
   const doPdf = async () => {
     try {
-      await exportToPdf(planningExportRows(filtered), PLANNING_EXPORT_COLUMNS, `Fleet Renewal Planning (${scopeLabel})`, reportFileName('Fleet Renewal Planning', scopeLabel), 'landscape')
+      await exportToPdf(planningExportRows(filtered), PLANNING_EXPORT_COLUMNS, `Fleet Renewal Planning Estimate (${scopeLabel})`, reportFileName('Fleet Renewal Planning Estimate', scopeLabel, `${lifeYears} year life`), 'landscape', '', { subtitleNote: `Estimate on an assumed ${lifeYears} year life; model year on ${coverage.withModelYear} of ${coverage.assets} assets` })
     } catch (e) { setActionError(toUserMessage(e, 'Could not export. Try again.')) }
   }
   const doPlansExcel = async () => {
@@ -345,9 +356,9 @@ export default function FleetRenewal() {
     ? `Open plans span more than one currency, so no single total is shown: ${capexKpi.byCurrency.map((c) => money(c.amount, c.currency)).join(', ')}. Pick a country to see one figure.`
     : capexKpi.amount == null ? 'No open renewal plan with a cost targets the next 12 months.' : `${capexKpi.costed} open plan(s) with a cost and a target date within 12 months (overdue included).`
   const kpis = [
-    { icon: Truck, tone: 't-red', value: kpi.due, display: fleetCard.error ? 'N/A' : undefined, label: 'Assets due for replacement', loading: regLoading, title: `Critical under the planning rule: marked for scrap, or 1 year or less of a ${PLANNING_LIFE_YEARS}-year planning life left.`, onClick: () => applyPreset('due') },
-    { icon: Clock, tone: 't-amber', value: kpi.aging, display: fleetCard.error ? 'N/A' : undefined, label: `Aging assets (> ${AGING_YEARS} years)`, loading: regLoading, title: `${fmtInt(kpi.withAge)} of ${fmtInt(kpi.assets)} current assets have a usable model year.` },
-    { icon: Wallet, tone: 't-green', label: 'Forecast CAPEX (next 12 months)', loading: plansLoading, display: planError ? 'N/A' : money(capexKpi.amount, capexKpi.currency), title: planError ? 'Renewal plans could not be read.' : capexTitle },
+    { icon: Truck, tone: 't-red', value: kpi.due, display: fleetCard.error ? 'N/A' : undefined, label: 'Due for replacement (estimate)', loading: regLoading, title: `Planning estimate. Critical under the planning rule: marked for scrap, or 1 year or less of the assumed ${lifeYears}-year planning life left.`, onClick: () => applyPreset('due') },
+    { icon: Clock, tone: 't-amber', value: kpi.aging, display: fleetCard.error ? 'N/A' : undefined, label: `Aging assets (> ${agingYears} years)`, loading: regLoading, title: `${fmtInt(kpi.withAge)} of ${fmtInt(kpi.assets)} current assets have a usable model year.` },
+    { icon: Wallet, tone: 't-green', label: 'Plan costs entered (next 12 months)', loading: plansLoading, display: planError ? 'N/A' : money(capexKpi.amount, capexKpi.currency), title: planError ? 'Renewal plans could not be read.' : `${capexTitle} This is only what planners typed into renewal plans. ${coverage.budget.reason}` },
     { icon: PiggyBank, tone: 't-blue', label: 'Estimated savings', display: 'N/A', title: 'No source records savings. Renewal plans carry an estimated cost only, so a saving would be invented.' },
     { icon: CheckCircle2, tone: 't-green', value: kpi.approved, display: planError ? 'N/A' : undefined, label: 'Approved replacements', loading: plansLoading, title: 'Renewal plans with status Approved.', onClick: () => { setPreset(''); setStatus('approved') } },
     { icon: ShoppingCart, tone: 't-purple', label: 'In procurement', display: 'N/A', title: 'Renewal plans record Planned, Approved, Deferred or Completed. No procurement stage is recorded, so this cannot be counted.' },
@@ -374,9 +385,9 @@ export default function FleetRenewal() {
       key: 'utilization', header: 'Utilization',
       cell: (r) => (signalsLoading ? na('...') : <span title={utilCard.data == null ? 'Utilisation could not be read' : r.utilization == null ? 'No telematics snapshot' : 'Latest telematics snapshot'}><MeterCell value={r.utilization} suffix="%" /></span>),
     },
-    { key: 'health', header: 'Health score', cell: (r) => (signalsLoading ? na('...') : <HealthBadge value={r.health} />) },
-    { key: 'remaining', header: 'Remaining life', cell: (r) => remainingLifeLabel(r.remainingYears) },
-    { key: 'score', header: 'Renewal score', align: 'right', cell: (r) => (costLoading ? na('...') : r.score == null ? na() : <span className={`fr-health ${r.score >= SCORE_RAISE ? 'bad' : r.score >= 50 ? 'warn' : 'good'}`} title={scoreTitle(r)}>{r.score}</span>) },
+    { key: 'health', header: 'Health (est.)', cell: (r) => (signalsLoading ? na('...') : <HealthBadge value={r.health} />) },
+    { key: 'remaining', header: 'Remaining life (est.)', cell: (r) => <span title={`Assumed ${lifeYears}-year planning life minus age from the model year`}>{remainingLifeLabel(r.remainingYears)}</span> },
+    { key: 'score', header: 'Renewal score (est.)', align: 'right', cell: (r) => (costLoading ? na('...') : r.score == null ? na() : <span className={`fr-health ${r.score >= SCORE_RAISE ? 'bad' : r.score >= 50 ? 'warn' : 'good'}`} title={scoreTitle(r)}>{r.score}</span>) },
     { key: 'current_km', header: 'Km / hours', align: 'right', cell: (r) => (
       <span title={r.lastHoursAt ? `Hour meter read ${r.lastHoursAt}` : undefined}>
         {r.current_km == null ? na() : fmtInt(Math.round(r.current_km))}
@@ -388,8 +399,8 @@ export default function FleetRenewal() {
     { key: 'priority', header: 'Priority', cell: (r) => <span className={`cc-pill ${PRIORITY_META[r.priority]?.tone || 'muted'}`}>{PRIORITY_META[r.priority]?.label || 'Unknown'}</span> },
     { key: 'recommendation', header: 'Recommendation', cell: (r) => <span title={r.plan?.recommendation ? `Plan: ${r.plan.recommendation}` : undefined}>{r.recommendation}</span> },
     {
-      key: 'budget', header: 'Est. budget', align: 'right',
-      cell: (r) => (!r.plan ? na('No plan') : r.budget == null ? na() : <span title={planYear(r.plan) ? `Planned year ${planYear(r.plan)}` : 'No planned year'}>{money(r.budget, r.currency)}</span>),
+      key: 'budget', header: 'Plan cost', align: 'right',
+      cell: (r) => (!r.plan ? <span className="cc-na" title={coverage.budget.reason}>No plan</span> : r.budget == null ? <span className="cc-na" title="This plan has no cost entered">N/A</span> : <span title={planYear(r.plan) ? `Planned year ${planYear(r.plan)}` : 'No planned year'}>{money(r.budget, r.currency)}</span>),
     },
     {
       key: 'status', header: 'Approval status',
@@ -422,7 +433,7 @@ export default function FleetRenewal() {
     <div className="cc fr-page">
       <PageHero
         title="Fleet Renewal"
-        lead={<>Plan smarter. Replace at the right time. Maximize value.<span className="fr-lead-2">Replacement planning from the fleet register, the breakdown log and telematics, with every plan's budget and approval in one place.</span></>}
+        lead={<>A planning estimate of which assets to replace first.<span className="fr-lead-2">Built from the model year, an assumed planning life you set below, repair spend, downtime and accidents. It is a ranking to plan from, not a costed budget.</span></>}
         imgLight="/dashboard/hero-renewal-light.webp"
         imgDark="/dashboard/hero-renewal-dark.webp"
       />
@@ -447,6 +458,31 @@ export default function FleetRenewal() {
         </div>
       )}
 
+      <div className="cc-card fr-banner" role="note" aria-label="Planning assumptions">
+        <Info size={17} aria-hidden="true" />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <b>Planning estimate, built on an assumed asset life</b>
+          <p>
+            No useful life is recorded per asset, so every asset is measured against the planning life below. Change it and the score, priority and remaining life recalculate. It is saved in this browser only.
+          </p>
+          <form className="fr-head-actions" style={{ marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}
+            onSubmit={(e) => { e.preventDefault(); applyLife(lifeDraft) }}>
+            <label htmlFor="fr-life" style={{ fontSize: 13 }}>Planning life (years)</label>
+            <input id="fr-life" type="number" inputMode="numeric" min={MIN_LIFE_YEARS} max={MAX_LIFE_YEARS} step="1" className="cc-select" style={{ width: 90 }}
+              value={lifeDraft} onChange={(e) => setLifeDraft(e.target.value)} onBlur={() => applyLife(lifeDraft)} />
+            <button type="submit" className="cc-btn-ghost">Apply</button>
+            {lifeYears !== PLANNING_LIFE_YEARS && <button type="button" className="cc-btn-ghost" onClick={() => applyLife(PLANNING_LIFE_YEARS)}>Reset to {PLANNING_LIFE_YEARS}</button>}
+            <span className="fr-sub">Allowed {MIN_LIFE_YEARS} to {MAX_LIFE_YEARS}. Aging starts at {agingYears} years.</span>
+          </form>
+          {fleetCard.data && (
+            <p style={{ marginTop: 8 }}>
+              <b>Model year:</b> recorded on {fmtInt(coverage.withModelYear)} of {fmtInt(coverage.assets)} current assets{coverage.modelYearPct == null ? '' : ` (${coverage.modelYearPct}%)`}. The other {fmtInt(coverage.withoutModelYear)} have no usable model year, so their age, remaining life and priority read N/A or Unknown.
+              {' '}<b>Replacement budget:</b> N/A. {coverage.budget.reason}
+            </p>
+          )}
+        </div>
+      </div>
+
       <div className="cc-kpis">
         {kpis.map((k) => <Kpi key={k.label} {...k} />)}
       </div>
@@ -466,7 +502,7 @@ export default function FleetRenewal() {
             >
               <CardState state={fleetCard} empty={fleetCard.data && ageDist.total - ageDist.unknown === 0 ? (ageDist.total === 0 ? 'No current assets in this scope.' : 'None of these assets has a usable model year.') : null}>
                 <Bars label="Assets by age in years" data={ageDist.bands.map((b) => ({ key: b.key, label: b.label, value: b.count }))} />
-                <p className="fr-foot">Asset age (years), from the model year.</p>
+                <p className="fr-foot">Asset age (years), from the model year. {fmtInt(coverage.withModelYear)} of {fmtInt(coverage.assets)} assets have one.</p>
               </CardState>
             </Card>
 
@@ -478,18 +514,18 @@ export default function FleetRenewal() {
               </CardState>
             </Card>
 
-            <Card title="CAPEX Forecast by Quarter" sub={`Open plans with a cost and a target date, next 4 quarters${capex.currency ? ` (${capex.currency})` : ''}.`}>
+            <Card title="Plan Costs by Quarter" sub={`Costs typed into open plans with a target date, next 4 quarters${capex.currency ? ` (${capex.currency})` : ''}.`}>
               <CardState state={plansState}
-                empty={plans && (capex.mixed ? 'Plans in this scope are in more than one currency, so quarters are not summed. Pick a country.' : !capex.hasData ? 'No open plan with a cost targets the next 4 quarters.' : null)}>
-                <Bars label="Planned capital spend by quarter" fmt={(v) => (v ? formatCurrencyCompact(v, '') : '0')} data={capex.quarters.map((x) => ({ key: x.key, label: x.label, value: x.amount ?? 0 }))} />
-                <p className="fr-foot">Sum of estimated cost of planned and approved plans.</p>
+                empty={plans && (capex.mixed ? 'Plans in this scope are in more than one currency, so quarters are not summed. Pick a country.' : !capex.hasData ? `No open plan with a cost targets the next 4 quarters. A fleet replacement budget is N/A: ${coverage.budget.reason}` : null)}>
+                <Bars label="Planned capital spend by quarter" fmt={(v) => (v ? formatCurrencyCompact(v, '') : '0')} data={capex.quarters.map((x) => ({ key: x.key, label: x.label, value: x.plans ? x.amount : null }))} />
+                <p className="fr-foot">Sum of the cost entered on planned and approved plans. Quarters with no plan read N/A. This is not a fleet replacement budget.</p>
               </CardState>
             </Card>
           </div>
 
-          <Card title="Renewal Budget by Year" sub="Every renewal plan by planned year (or its target date year), one column per currency. Currencies are never added together.">
+          <Card title="Plan Costs by Year" sub="Entered plan costs only, not a fleet budget. Every renewal plan by planned year (or its target date year), one column per currency. Currencies are never added together.">
             <CardState state={plansState}
-              empty={plans && budget.years.length === 0 ? (notProvisioned ? 'Renewal plans are not enabled yet.' : 'No renewal plans yet. Add one from the planning table.') : null}>
+              empty={plans && budget.years.length === 0 ? (notProvisioned ? 'Renewal plans are not enabled yet.' : `No renewal plans yet, so there is no plan cost to show. A fleet replacement budget is N/A: ${coverage.budget.reason}`) : null}>
               <KitTable className="fr-table" enableSorting={false} showPagination={false}
                 getRowId={(y) => String(y.year ?? 'none')} rows={budget.years}
                 columns={[
@@ -505,8 +541,8 @@ export default function FleetRenewal() {
 
           <div ref={tableRef}>
             <Card
-              title="Replacement Planning"
-              sub={<span title={RULE_TEXT}>Every current asset, assessed by the planning rule, with its renewal plan. <Info size={12} aria-hidden="true" style={{ verticalAlign: '-2px' }} /></span>}
+              title="Replacement Planning (estimate)"
+              sub={<span title={RULE_TEXT}>A planning estimate: every current asset ranked by the planning rule on an assumed {lifeYears}-year life, with its renewal plan. <Info size={12} aria-hidden="true" style={{ verticalAlign: '-2px' }} /></span>}
               action={
                 <div className="fr-head-actions">
                   <button type="button" className="cc-btn-ghost" onClick={() => doExcel()} disabled={!filtered.length}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
@@ -571,13 +607,13 @@ export default function FleetRenewal() {
               {costUnreadable && (
                 <p className="fr-foot" role="alert">Repair cost, downtime, accidents and hour meter could not be read, so the renewal score uses age and km only. <button type="button" className="cc-btn-ghost" onClick={sigCard.retry}><RefreshCw size={12} aria-hidden="true" /> Retry</button></p>
               )}
-              <p className="fr-foot">Renewal score (0 to 100, higher means a stronger replacement case): {Object.entries(SCORE_WEIGHTS).map(([k, w]) => `${Math.round(w * 100)}% ${SCORE_PART_LABELS[k]}`).join('; ')}. Ranks are relative to the assets in this scope; parts that cannot be measured drop out. The 10 year life is ASSUMED because the register holds no useful life per asset.</p>
+              <p className="fr-foot">Renewal score (0 to 100, higher means a stronger replacement case): {Object.entries(SCORE_WEIGHTS).map(([k, w]) => `${Math.round(w * 100)}% ${SCORE_PART_LABELS[k]}`).join('; ')}. Ranks are relative to the assets in this scope; parts that cannot be measured drop out. This is a planning estimate: the {lifeYears} year life is assumed (set at the top of the page) because the register holds no useful life per asset, and {fmtInt(coverage.withoutModelYear)} of {fmtInt(coverage.assets)} assets have no model year to age from.</p>
             </Card>
           </div>
         </div>
 
         <aside className="fr-rail" aria-label="Planning guidance">
-          <Card title={<>Planning Rules <span className="fr-tag">Rule based</span></>} sub="Findings from the register. These are fixed rules, not AI."
+          <Card title={<>Planning Rules <span className="fr-tag">Rule based</span></>} sub="Findings from the register on the assumed planning life. Fixed rules, not AI."
             action={<button type="button" className="cc-icon-btn" onClick={refreshAll} aria-label="Refresh"><RefreshCw size={14} /></button>}>
             <CardState state={fleetCard} empty={fleetCard.data && rules.length === 0 ? 'Nothing needs attention under the planning rule.' : null}>
               <div className="fr-rules">

@@ -3,6 +3,8 @@ import {
   ageFromModelYear, assessAsset, buildPlanningRows, filterPlanningRows, sortPlanningRows,
   ageDistribution, pipelineSegments, capexByQuarter, buildRenewalKpis, planningRules,
   presetCounts, remainingLifeLabel, isCurrentFleet, planningExportRows, PLANNING_LIFE_YEARS,
+  normalizeLifeYears, agingYearsFor, readLifeYears, writeLifeYears, planningCoverage,
+  PLANNING_EXPORT_COLUMNS, LIFE_STORAGE_KEY,
 } from '../lib/fleetRenewalView'
 
 const NOW = new Date(2026, 8, 29) // 29 Sep 2026
@@ -168,5 +170,85 @@ describe('pipeline, capex and kpis', () => {
     expect(k.aging).toBe(2)
     expect(k.approved).toBe(1)
     expect(k.capex.amount).toBe(400000)
+  })
+})
+
+describe('editable planning life (an assumption, not a recorded fact)', () => {
+  it('normalises junk to the default and clamps the range', () => {
+    expect(normalizeLifeYears(null)).toBe(PLANNING_LIFE_YEARS)
+    expect(normalizeLifeYears('')).toBe(PLANNING_LIFE_YEARS)
+    expect(normalizeLifeYears('abc')).toBe(PLANNING_LIFE_YEARS)
+    expect(normalizeLifeYears('12')).toBe(12)
+    expect(normalizeLifeYears(0)).toBe(3)
+    expect(normalizeLifeYears(999)).toBe(40)
+    expect(agingYearsFor(10)).toBe(7)
+    expect(agingYearsFor(20)).toBe(14)
+  })
+  it('keeps the default behaviour when no life is passed', () => {
+    expect(assessAsset({ age: 9, openBreakdown: false })).toEqual(assessAsset({ age: 9, openBreakdown: false, lifeYears: 10 }))
+  })
+  it('moves remaining life, health and priority with the assumption', () => {
+    const short = assessAsset({ age: 9, openBreakdown: false, lifeYears: 10 })
+    const long = assessAsset({ age: 9, openBreakdown: false, lifeYears: 15 })
+    expect(short.priority).toBe('critical')
+    expect(long.remainingYears).toBe(6)
+    expect(long.priority).toBe('low')
+    expect(long.health).toBeGreaterThan(short.health)
+    const rows = buildPlanningRows({ fleet: [{ id: 'x', asset_no: 'X1', country: 'KSA', model_year: 2017 }], now: NOW, lifeYears: 15 })
+    expect(rows[0].remainingYears).toBe(6)
+    expect(rows[0].scoreParts.age).toBe(60)
+    expect(planningRules(rows, NOW, { lifeYears: 5 }).some((r) => /assumed 5-year planning life/.test(r.title))).toBe(false)
+  })
+  it('names the assumed life in the past-life rule', () => {
+    const rows = buildPlanningRows({ fleet: [{ id: 'x', asset_no: 'X1', country: 'KSA', model_year: 2010 }], now: NOW, lifeYears: 12 })
+    expect(planningRules(rows, NOW, { lifeYears: 12 }).find((r) => r.key === 'past').title).toMatch(/assumed 12-year planning life/)
+  })
+  it('reads and writes storage without throwing when storage is blocked', () => {
+    const mem = new Map()
+    const store = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) }
+    expect(readLifeYears(store)).toBe(PLANNING_LIFE_YEARS)
+    expect(writeLifeYears(store, '14')).toBe(14)
+    expect(mem.get(LIFE_STORAGE_KEY)).toBe('14')
+    expect(readLifeYears(store)).toBe(14)
+    const blocked = { getItem: () => { throw new Error('denied') }, setItem: () => { throw new Error('denied') } }
+    expect(readLifeYears(blocked)).toBe(PLANNING_LIFE_YEARS)
+    expect(writeLifeYears(blocked, 8)).toBe(8)
+    expect(readLifeYears(null)).toBe(PLANNING_LIFE_YEARS)
+  })
+})
+
+describe('planningCoverage', () => {
+  const reg = [
+    { id: 'a', asset_no: 'A1', country: 'KSA', model_year: 2018, purchase_value: null, useful_life: null },
+    { id: 'b', asset_no: 'A2', country: 'KSA', model_year: null, purchase_value: 0, useful_life: null },
+    { id: 'c', asset_no: 'A3', country: 'KSA', model_year: 20222, purchase_value: null, useful_life: null },
+  ]
+  it('counts model year coverage and never costs a budget without purchase values', () => {
+    const rows = buildPlanningRows({ fleet: reg, now: NOW })
+    const c = planningCoverage(rows, reg, { lifeYears: 12 })
+    expect(c).toMatchObject({ assets: 3, withModelYear: 1, withoutModelYear: 2, modelYearPct: 33, withPurchaseValue: 0, lifeYears: 12, lifeIsAssumed: true })
+    expect(c.budget.amount).toBeNull()
+    expect(c.budget.reason).toMatch(/No purchase value is recorded on any asset/)
+  })
+  it('says the value was not read when the column is absent, and is null on an empty scope', () => {
+    const bare = [{ id: 'a', asset_no: 'A1', country: 'KSA', model_year: 2018 }]
+    const c = planningCoverage(buildPlanningRows({ fleet: bare, now: NOW }), bare)
+    expect(c.withPurchaseValue).toBeNull()
+    expect(c.budget.amount).toBeNull()
+    expect(c.budget.reason).toMatch(/not read/)
+    expect(planningCoverage([], []).modelYearPct).toBeNull()
+  })
+  it('still refuses a budget on partial purchase value coverage', () => {
+    const part = [{ ...reg[0], purchase_value: 250000 }, reg[1]]
+    const c = planningCoverage(buildPlanningRows({ fleet: part, now: NOW }), part)
+    expect(c.budget.amount).toBeNull()
+    expect(c.budget.reason).toMatch(/only 1 of 2 assets/)
+  })
+  it('labels estimate columns in the export and never exports a zero for a missing plan cost', () => {
+    expect(PLANNING_EXPORT_COLUMNS.find((c) => c.key === 'score').header).toMatch(/estimate/)
+    expect(PLANNING_EXPORT_COLUMNS.find((c) => c.key === 'budget').header).toBe('Plan cost (entered)')
+    const out = planningExportRows(buildPlanningRows({ fleet: reg, now: NOW }))
+    expect(out[0].budget).toBe('')
+    expect(out[1].age).toBe('')
   })
 })

@@ -11,7 +11,7 @@ import { OG_IMAGES } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Maintenance and workshop",
-  description: "Plan, schedule and manage all maintenance: work orders, preventive maintenance, job cards, technician allocation, service history and parts and labour.",
+  description: "Run the workshop from one queue: work orders, job cards, technician allocation, service history and parts and labour. Preventive maintenance plans are set up on request.",
   alternates: alternatesFor("/platform/maintenance"),
   openGraph: { images: OG_IMAGES, title: "Maintenance and workshop | Tyre Pulse", description: "Keep your workshop, teams and spare parts in sync.", url: "/platform/maintenance", type: "website" },
 };
@@ -39,9 +39,9 @@ export default function MaintenancePage() {
       <section className="section-pad soft-bg anchor-sec" id="preventive" aria-labelledby="pm-h">
         <div className="site-shell split">
           <div>
-            <h2 className="sec-h" id="pm-h">Preventive maintenance that follows the meter.</h2>
+            <h2 className="sec-h" id="pm-h">Preventive maintenance that follows the meter, set up on request.</h2>
             <ul className="tick-list">
-              {["Service plans by engine hours, kilometres or calendar", "Overdue work surfaced before it becomes a breakdown", "Recording a service sets the next due date automatically"].map((t) => <li key={t}><CheckCircle2 size={18} aria-hidden="true" />{t}</li>)}
+              {["Service plans by engine hours, kilometres or calendar, set up with your intervals", "Overdue work surfaced before it becomes a breakdown", "Recording a service sets the next due date automatically"].map((t) => <li key={t}><CheckCircle2 size={18} aria-hidden="true" />{t}</li>)}
             </ul>
           </div>
           <Photo name="technicianGenerator" position="45% 40%" />

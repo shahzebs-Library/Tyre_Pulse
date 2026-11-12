@@ -39,10 +39,10 @@ function WebWindow({ role }: { role: Role }) {
         <span className="rs-url">app.tyrepulse.app/{a.path}</span>
       </div>
       <div className="rs-app">
-        <nav className="rs-side">
+        <div className="rs-side">
           <b className="rs-logo">TP</b>
           {AREAS.map((x) => <span key={x} className={x === a.area ? "on" : ""}>{x}</span>)}
-        </nav>
+        </div>
         <div className="rs-main">
           <div className="rs-main-h"><strong>{a.area}</strong><span className="rs-tag">Sample data</span></div>
           <div className="rs-tiles">

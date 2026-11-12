@@ -112,7 +112,7 @@ export const maintenance: Scenario = {
   id: "maintenance",
   label: "Preventive maintenance",
   icon: CalendarClock,
-  pitch: "Service every machine on time, by hours or by km, and watch breakdowns fall as compliance rises.",
+  pitch: "Set up on request with your service intervals: service every machine on time, by hours or by km, and see overdue work before it becomes a breakdown.",
   appTitle: "My services",
   site: "Riyadh",
   defaultSel: "gn305",

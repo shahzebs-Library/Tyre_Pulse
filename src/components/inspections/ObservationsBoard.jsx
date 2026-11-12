@@ -20,6 +20,7 @@ import { exportToExcel } from '../../lib/exportUtils'
 import { listFitmentsForAssets } from '../../lib/api/tyreChangeTracking'
 import { withTyreNow, tyreNowSummary, matchesTyreNow, TYRE_NOW_META } from '../../lib/observationTracking'
 import ObservationDetail from './ObservationDetail'
+import { listActionsForInspectionIds } from '../../lib/api/correctiveActions'
 import { toUserMessage } from '../../lib/safeError'
 import MultiSelectFilter from '../ui/MultiSelectFilter'
 import { selectionMatches, isSelectionActive } from '../../lib/filterSelection'
@@ -56,8 +57,20 @@ export default function ObservationsBoard({
   // or unreadable, so no row is given a status it was not checked for.
   const [fitments, setFitments] = useState(null)
   const [fitError, setFitError] = useState('')
+  const [actionRows, setActionRows] = useState(null)
+  const [actionError, setActionError] = useState('')
 
   const base = useMemo(() => observationRegister(rows), [rows])
+  const inspectionKey = useMemo(() => [...new Set(base.map((o) => o.inspectionId).filter(Boolean))].sort().join('|'), [base])
+  useEffect(() => {
+    let alive = true
+    setActionRows(null); setActionError('')
+    const ids = inspectionKey ? inspectionKey.split('|') : []
+    listActionsForInspectionIds(ids)
+      .then((actions) => { if (alive) setActionRows(actions) })
+      .catch(() => { if (alive) setActionError('Corrective action status could not be verified. Please retry before creating another action.') })
+    return () => { alive = false }
+  }, [inspectionKey])
   const assetKey = useMemo(
     () => [...new Set(base.filter((o) => o.kind === 'tyre').map((o) => o.asset_no).filter(Boolean))].sort().join('|'),
     [base],
@@ -76,7 +89,19 @@ export default function ObservationsBoard({
       .catch(() => { if (alive) setFitError('Could not read the tyre change records.') })
     return () => { alive = false }
   }, [assetKey, country])
-  const all = useMemo(() => withTyreNow(base, fitments), [base, fitments])
+  const all = useMemo(() => {
+    const byFinding = new Map()
+    for (const a of actionRows || []) {
+      const key = `${a.source_id}:${a.source_detail}`
+      if (!byFinding.has(key)) byFinding.set(key, a)
+    }
+    return withTyreNow(base, fitments).map((obs) => {
+      const detailKey = obs.kind === 'tyre' ? `damage:${obs.rawPosition}` : 'general'
+      const actionRecord = actionRows == null ? null : byFinding.get(`${obs.inspectionId}:${detailKey}`) || null
+      return { ...obs, actionRaised: !!actionRecord, actionRecord }
+    })
+  }, [base, fitments, actionRows])
+  const actionsReady = actionRows != null && !actionError
   // Region lives on the site register, so it is looked up from the site; a site
   // the register does not place has no region and never matches a region pick.
   const regionFor = (siteName) => (regionOf && siteName ? regionOf(siteName) || '' : '')
@@ -302,7 +327,9 @@ export default function ObservationsBoard({
                   <button type="button" className="cc-btn-ghost iw-inline" onClick={() => setDetail(o)}>
                     <Eye size={12} aria-hidden="true" /> Open
                   </button>
-                  {o.kind !== 'note' && (o.actionRaised
+                  {o.kind !== 'note' && (!actionsReady
+                    ? <small role="status">{actionError ? 'Action status unavailable' : 'Checking actions...'}</small>
+                    : o.actionRaised
                     ? <Link className="cc-link" to="/actions">Action raised</Link>
                     : o.tyreNow?.state === 'replaced' ? null
                     : (o.tone === 'bad' || o.tone === 'warn') && onRaiseAction
@@ -313,9 +340,10 @@ export default function ObservationsBoard({
             ))}
           </div>
         )}
+        {actionError && <p role="alert" className="text-sm text-red-500 mt-3">{actionError}</p>}
         {list.length > PAGE && <Pager page={page} pageSize={PAGE} total={list.length} onPage={setPage} noun="observations" />}
       </Card>
-      {detail && (
+      {detail && actionsReady && (
         <ObservationDetail
           obs={all.find((o) => o.key === detail.key) || detail}
           onClose={() => setDetail(null)}

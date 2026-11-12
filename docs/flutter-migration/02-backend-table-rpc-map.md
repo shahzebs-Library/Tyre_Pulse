@@ -385,3 +385,21 @@ the phone only displays the result as needed / linked), the qualification gate
 (trigger `zz_workforce_assignment_qualify`, `workforce_qualification`,
 `workforce_recommend_assignees`) and the board RPCs `workforce_board_summary`,
 `workforce_team_analytics`, `workforce_employee_timeline`.
+
+### 7.12 Vehicle handover (added 2026-11-12)
+
+`MIGRATIONS_V181_HANDOVER_REPORTS.sql` (base table),
+`20261112130000_handover_two_stage_signoff.sql` (the two-stage ladder, the
+`decide_handover_approval` RPC, the `Fleet Incharge` `custom_roles` seed) and
+`20261112143000_handover_signoff_forgery_guard.sql` are APPLIED LIVE. Every
+object below was checked against the migration that creates it. **These two ARE
+in the registry** - `SupabaseTables.handoverReports` and
+`SupabaseRpcs.decideHandoverApproval` - so, unlike 7.5 and 7.11, the repository
+does not reference them by string literal.
+
+| Object | Created or last redefined in | Security | Flutter use |
+|---|---|---|---|
+| `handover_reports` SELECT / INSERT (upsert on `client_uuid`) | Table from `MIGRATIONS_V181_HANDOVER_REPORTS.sql`; approval ladder columns (`approval_status` default `pending_supervisor`, `supervisor_*`, `incharge_*`, `review_note`) and `document_no` (auto `HND-<8 hex>`) from `20261112130000` | RLS (org + country + site). The phone reads its own (`created_by = auth.uid()`) and the sign-off queue (`approval_status in (pending_supervisor, pending_incharge)`); it inserts the capture with `approval_status = 'pending_supervisor'` | `HandoverRemoteRepository` (`handoverRecordColumns`): `byId`, `myHandovers`, `pendingHandovers`, `upsertHandover(onConflict: client_uuid)`. The capture carries `damages` (jsonb per marker: `view,x,y,type,level,note,photo_url`), `photos` (array of `tp-storage://` refs), `signature_url` (the driver's data-URL mark), plus odometer/fuel/condition/cleanliness. A write is idempotent on `client_uuid`, so a replay from the offline queue lands once |
+| `handover_reports` direct UPDATE of the approval columns | Refused outside the RPC by `20261112143000` (the forgery guard) | n/a | **Not used.** The app never writes a signature or status directly; every decision goes through `decide_handover_approval` |
+| `decide_handover_approval(p_id uuid, p_approved boolean, p_signature text default null, p_note text default null)` | `20261112130000` | DEFINER; the supervisor rung is signable by `app_is_elevated()` OR `Fleet Supervisor` / `Fleet Incharge`, the incharge rung by super / Admin / `Fleet Incharge`; an incharge-level signer at the supervisor rung closes both (`both_steps`); a reject needs a note. Returns `{ok, decision, status, both_steps}` | `HandoverRemoteRepository.decide(HandoverDecision)`. The approve path must carry `p_signature`; the UI pre-checks it with the pure `handover_approval.dart` (`canDecide` / `stageFor`) only to show or hide the sign-off bar - the server stays the authority |
+| Bucket `tyre-photos` | Pre-existing private bucket (authenticated upload) | Private; `tp-storage://` refs resolved to short-lived signed URLs by the shared `privateStorageImageUrlProvider` | `HandoverPhotoUploader` uploads each capture photo (general and per-marker) to `handover/<id>/<slot>_<microsecond>.<ext>` and returns `tp-storage://tyre-photos/<path>`; the sync engine swaps the local paths for the refs before the row write |

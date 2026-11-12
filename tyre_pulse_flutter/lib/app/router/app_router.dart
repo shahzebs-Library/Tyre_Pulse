@@ -377,6 +377,25 @@ List<RouteBase> _buildRoutes() => <RouteBase>[
                 (TpRouteParameters _) => const WorkshopStatusRoute(),
               ),
               _route(
+                TpRoutePaths.handover,
+                TpRouteId.handover,
+                (TpRouteParameters _) => const HandoverRoute(),
+                routes: <RouteBase>[
+                  // Literal before parameter: `new` would also match
+                  // `:handoverId`, and GoRouter takes the first match.
+                  _route(
+                    'new',
+                    TpRouteId.newHandover,
+                    NewHandoverRoute.parse,
+                  ),
+                  _route(
+                    ':${TpRoutePaths.pHandoverId}',
+                    TpRouteId.handoverDetail,
+                    HandoverDetailRoute.parse,
+                  ),
+                ],
+              ),
+              _route(
                 TpRoutePaths.adminConsole,
                 TpRouteId.adminConsole,
                 (TpRouteParameters _) => const AdminConsoleRoute(),

@@ -613,10 +613,26 @@ void main() {
     // add, three pick options, uploading / uploaded / failed, size and type
     // rules, online-only note, status rule, cached-row rule)
     // (wfBlockCauseTitle ... wfEvidenceUnavailable).
-    test('en, ar and ur each carry exactly 2306 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2306);
-      expect(_translatableKeys(ar).length, 2306);
-      expect(_translatableKeys(ur).length, 2306);
+    // 2306 + 145 = 2451. Vehicle handover (handover_reports two-stage sign-off):
+    // the history/queue (nav, new action, mine/to-sign tabs, pending-sync,
+    // empty + load-failed states), the detail + its facts (type, drivers,
+    // odometer, fuel, condition, cleanliness, captured, notes, driver
+    // signature, review note), the sign-off ladder and decision flow (sign-off
+    // title, four rung labels, three rung states, your-decision, sign-below,
+    // signing-as, note, approve/return, signature/reason-needed, signed/
+    // returned/failed dialogs, stay/back), the five status strings, the damage
+    // sheet (section, add/edit, view/type/severity/note/photo/save, five views,
+    // eight damage types, three levels, three table columns), photo add +
+    // camera/gallery, the five-step new-handover wizard (steps, vehicle search
+    // + scan + selected, driver/signature hints, next/submit), seven
+    // validation messages, six submit-outcome dialogs, the PDF/share set
+    // (share, title, details, signatures, pending, generated{date},
+    // share-failed) and the signature pad saved/redraw labels
+    // (handoverNavTitle ... handoverSignatureRedraw).
+    test('en, ar and ur each carry exactly 2451 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2451);
+      expect(_translatableKeys(ar).length, 2451);
+      expect(_translatableKeys(ur).length, 2451);
     });
   });
 

@@ -114,6 +114,11 @@ final class WorkOrderId extends TpIdentifier {
   const WorkOrderId(super.value);
 }
 
+/// `handover_reports.id`.
+final class HandoverId extends TpIdentifier {
+  const HandoverId(super.value);
+}
+
 /// `vehicle_fleet.asset_no`.
 ///
 /// NOT a uuid. It is a business code such as `TM514` or `MP093`, and it is
@@ -206,6 +211,11 @@ abstract final class TpRouteId {
 
   static const String newInspection = 'newInspection';
 
+  /// Vehicle Handover: the history list, the capture wizard and one record.
+  static const String handover = 'handover';
+  static const String newHandover = 'newHandover';
+  static const String handoverDetail = 'handoverDetail';
+
   static const String accidentDashboard = 'accidentDashboard';
   static const String accidentReport = 'accidentReport';
   static const String accidentDetail = 'accidentDetail';
@@ -278,6 +288,10 @@ abstract final class TpRoutePaths {
 
   static const String newInspection = '/inspect/new';
 
+  /// Vehicle Handover list. The capture wizard is `/handover/new` and one
+  /// record is `/handover/:handoverId`, both nested so Back returns here.
+  static const String handover = '/handover';
+
   static const String accidentDashboard = '/accidents';
   static const String accidentReport = '/accidents/report';
 
@@ -304,6 +318,7 @@ abstract final class TpRoutePaths {
   static const String pSubmissionId = 'submissionId';
   static const String pTemplateId = 'templateId';
   static const String pWorkOrderId = 'workOrderId';
+  static const String pHandoverId = 'handoverId';
 
   /// The query parameter names.
   static const String qAssetNo = 'assetNo';
@@ -977,6 +992,62 @@ final class NewInspectionRoute extends TpRoute {
         TpRoutePaths.qTyreSerial: tyreSerial?.value,
         TpRoutePaths.qTyrePosition: tyrePosition?.value,
       });
+}
+
+// --- Handover branch --------------------------------------------------------
+
+/// The vehicle handover history list.
+final class HandoverRoute extends TpRoute {
+  const HandoverRoute();
+
+  @override
+  String get routeId => TpRouteId.handover;
+
+  @override
+  String get location => TpRoutePaths.handover;
+}
+
+/// The handover capture wizard. Optionally carries a preselected [assetNo]
+/// (for example when launched from a scanned asset), named the same as every
+/// other capture surface.
+final class NewHandoverRoute extends TpRoute {
+  const NewHandoverRoute({this.assetNo});
+
+  static NewHandoverRoute parse(TpRouteParameters p) {
+    final String? asset = p.optionalQuery(TpRoutePaths.qAssetNo);
+    return NewHandoverRoute(assetNo: asset == null ? null : AssetNo(asset));
+  }
+
+  final AssetNo? assetNo;
+
+  @override
+  String get routeId => TpRouteId.newHandover;
+
+  @override
+  String get location => _location(
+        '${TpRoutePaths.handover}/new',
+        <String, String?>{TpRoutePaths.qAssetNo: assetNo?.value},
+      );
+}
+
+/// One handover, opened from the list. Nested under `/handover`, so Back
+/// returns to the list rather than to Home - the same pattern the work-order
+/// and accident detail routes use.
+final class HandoverDetailRoute extends TpRoute {
+  const HandoverDetailRoute({required this.handoverId});
+
+  static HandoverDetailRoute parse(TpRouteParameters p) => HandoverDetailRoute(
+        handoverId: HandoverId(p.requirePath(TpRoutePaths.pHandoverId)),
+      );
+
+  final HandoverId handoverId;
+
+  @override
+  String get routeId => TpRouteId.handoverDetail;
+
+  @override
+  String get location =>
+      '${TpRoutePaths.handover}/${_segment(handoverId.value)}';
 }
 
 // --- Accidents branch -------------------------------------------------------

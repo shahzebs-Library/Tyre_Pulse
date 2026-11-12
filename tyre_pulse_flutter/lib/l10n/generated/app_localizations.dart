@@ -13936,6 +13936,876 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Evidence cannot be added from saved data. Refresh while online and try again.'**
   String get wfEvidenceUnavailable;
+
+  /// No description provided for @handoverNavTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle handover'**
+  String get handoverNavTitle;
+
+  /// No description provided for @handoverNewAction.
+  ///
+  /// In en, this message translates to:
+  /// **'New handover'**
+  String get handoverNewAction;
+
+  /// No description provided for @handoverTabMine.
+  ///
+  /// In en, this message translates to:
+  /// **'My handovers'**
+  String get handoverTabMine;
+
+  /// No description provided for @handoverTabToSign.
+  ///
+  /// In en, this message translates to:
+  /// **'To sign'**
+  String get handoverTabToSign;
+
+  /// No description provided for @handoverPendingSync.
+  ///
+  /// In en, this message translates to:
+  /// **'Some handovers are waiting to sync.'**
+  String get handoverPendingSync;
+
+  /// No description provided for @handoverEmptyMineTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No handovers yet'**
+  String get handoverEmptyMineTitle;
+
+  /// No description provided for @handoverEmptyMineMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Start a vehicle handover to record a check-out or check-in.'**
+  String get handoverEmptyMineMessage;
+
+  /// No description provided for @handoverEmptyToSignTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to sign'**
+  String get handoverEmptyToSignTitle;
+
+  /// No description provided for @handoverEmptyToSignMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Handovers awaiting your sign-off will appear here.'**
+  String get handoverEmptyToSignMessage;
+
+  /// No description provided for @handoverListLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The handovers could not be loaded.'**
+  String get handoverListLoadFailed;
+
+  /// No description provided for @handoverDetailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Handover'**
+  String get handoverDetailTitle;
+
+  /// No description provided for @handoverNotFoundTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Handover not found'**
+  String get handoverNotFoundTitle;
+
+  /// No description provided for @handoverNotFoundMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This handover is no longer available.'**
+  String get handoverNotFoundMessage;
+
+  /// No description provided for @handoverDocumentNoLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Document no.'**
+  String get handoverDocumentNoLabel;
+
+  /// No description provided for @handoverFromDriverLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'From driver'**
+  String get handoverFromDriverLabel;
+
+  /// No description provided for @handoverToDriverLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'To driver'**
+  String get handoverToDriverLabel;
+
+  /// No description provided for @handoverOdometerLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Odometer'**
+  String get handoverOdometerLabel;
+
+  /// No description provided for @handoverFuelLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Fuel level'**
+  String get handoverFuelLabel;
+
+  /// No description provided for @handoverConditionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Condition'**
+  String get handoverConditionLabel;
+
+  /// No description provided for @handoverCleanlinessLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cleanliness'**
+  String get handoverCleanlinessLabel;
+
+  /// No description provided for @handoverCapturedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Captured'**
+  String get handoverCapturedLabel;
+
+  /// No description provided for @handoverTypeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Handover type'**
+  String get handoverTypeLabel;
+
+  /// No description provided for @handoverTypeCheckout.
+  ///
+  /// In en, this message translates to:
+  /// **'Check-out'**
+  String get handoverTypeCheckout;
+
+  /// No description provided for @handoverTypeCheckin.
+  ///
+  /// In en, this message translates to:
+  /// **'Check-in'**
+  String get handoverTypeCheckin;
+
+  /// No description provided for @handoverConditionExcellent.
+  ///
+  /// In en, this message translates to:
+  /// **'Excellent'**
+  String get handoverConditionExcellent;
+
+  /// No description provided for @handoverConditionGood.
+  ///
+  /// In en, this message translates to:
+  /// **'Good'**
+  String get handoverConditionGood;
+
+  /// No description provided for @handoverConditionFair.
+  ///
+  /// In en, this message translates to:
+  /// **'Fair'**
+  String get handoverConditionFair;
+
+  /// No description provided for @handoverConditionPoor.
+  ///
+  /// In en, this message translates to:
+  /// **'Poor'**
+  String get handoverConditionPoor;
+
+  /// No description provided for @handoverCleanlinessClean.
+  ///
+  /// In en, this message translates to:
+  /// **'Clean'**
+  String get handoverCleanlinessClean;
+
+  /// No description provided for @handoverCleanlinessAcceptable.
+  ///
+  /// In en, this message translates to:
+  /// **'Acceptable'**
+  String get handoverCleanlinessAcceptable;
+
+  /// No description provided for @handoverCleanlinessDirty.
+  ///
+  /// In en, this message translates to:
+  /// **'Dirty'**
+  String get handoverCleanlinessDirty;
+
+  /// No description provided for @handoverPhotosLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos'**
+  String get handoverPhotosLabel;
+
+  /// No description provided for @handoverNotesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes'**
+  String get handoverNotesLabel;
+
+  /// No description provided for @handoverNotesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Anything worth recording about the handover'**
+  String get handoverNotesHint;
+
+  /// No description provided for @handoverSignatureLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver signature'**
+  String get handoverSignatureLabel;
+
+  /// No description provided for @handoverSignatureMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'No driver signature recorded.'**
+  String get handoverSignatureMissing;
+
+  /// No description provided for @handoverReviewNoteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Review note'**
+  String get handoverReviewNoteLabel;
+
+  /// No description provided for @handoverStatusColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get handoverStatusColumn;
+
+  /// No description provided for @handoverSignoffTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-off'**
+  String get handoverSignoffTitle;
+
+  /// No description provided for @handoverRungDriver.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver'**
+  String get handoverRungDriver;
+
+  /// No description provided for @handoverRungSupervisor.
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet supervisor'**
+  String get handoverRungSupervisor;
+
+  /// No description provided for @handoverRungIncharge.
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet incharge'**
+  String get handoverRungIncharge;
+
+  /// No description provided for @handoverRungSigned.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed'**
+  String get handoverRungSigned;
+
+  /// No description provided for @handoverRungWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting'**
+  String get handoverRungWaiting;
+
+  /// No description provided for @handoverRungPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get handoverRungPending;
+
+  /// No description provided for @handoverYourDecisionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your decision'**
+  String get handoverYourDecisionTitle;
+
+  /// No description provided for @handoverSignatureSignLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign below'**
+  String get handoverSignatureSignLabel;
+
+  /// No description provided for @handoverSigningAs.
+  ///
+  /// In en, this message translates to:
+  /// **'Signing as'**
+  String get handoverSigningAs;
+
+  /// No description provided for @handoverSignNoteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get handoverSignNoteLabel;
+
+  /// No description provided for @handoverSignNoteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a note for this decision'**
+  String get handoverSignNoteHint;
+
+  /// No description provided for @handoverSignApprove.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve'**
+  String get handoverSignApprove;
+
+  /// No description provided for @handoverSignReturn.
+  ///
+  /// In en, this message translates to:
+  /// **'Return'**
+  String get handoverSignReturn;
+
+  /// No description provided for @handoverSignNeededTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Signature needed'**
+  String get handoverSignNeededTitle;
+
+  /// No description provided for @handoverSignNeededMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Draw your signature before approving.'**
+  String get handoverSignNeededMessage;
+
+  /// No description provided for @handoverReasonNeededTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason needed'**
+  String get handoverReasonNeededTitle;
+
+  /// No description provided for @handoverReasonNeededMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a note explaining why this handover is returned.'**
+  String get handoverReasonNeededMessage;
+
+  /// No description provided for @handoverSignedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed'**
+  String get handoverSignedTitle;
+
+  /// No description provided for @handoverSignedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Your sign-off has been recorded.'**
+  String get handoverSignedMessage;
+
+  /// No description provided for @handoverReturnedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Returned'**
+  String get handoverReturnedTitle;
+
+  /// No description provided for @handoverReturnedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This handover has been returned for correction.'**
+  String get handoverReturnedMessage;
+
+  /// No description provided for @handoverSignFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not record'**
+  String get handoverSignFailedTitle;
+
+  /// No description provided for @handoverSignFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The decision could not be recorded. Try again.'**
+  String get handoverSignFailedMessage;
+
+  /// No description provided for @handoverStayHere.
+  ///
+  /// In en, this message translates to:
+  /// **'Stay here'**
+  String get handoverStayHere;
+
+  /// No description provided for @handoverBackToList.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to list'**
+  String get handoverBackToList;
+
+  /// No description provided for @handoverStatusDraft.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft'**
+  String get handoverStatusDraft;
+
+  /// No description provided for @handoverStatusPendingSupervisor.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting supervisor'**
+  String get handoverStatusPendingSupervisor;
+
+  /// No description provided for @handoverStatusPendingIncharge.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting incharge'**
+  String get handoverStatusPendingIncharge;
+
+  /// No description provided for @handoverStatusApproved.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved'**
+  String get handoverStatusApproved;
+
+  /// No description provided for @handoverStatusRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Returned'**
+  String get handoverStatusRejected;
+
+  /// No description provided for @handoverDamageSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Damage'**
+  String get handoverDamageSectionTitle;
+
+  /// No description provided for @handoverNoDamage.
+  ///
+  /// In en, this message translates to:
+  /// **'No damage recorded'**
+  String get handoverNoDamage;
+
+  /// No description provided for @handoverAddDamage.
+  ///
+  /// In en, this message translates to:
+  /// **'Add damage'**
+  String get handoverAddDamage;
+
+  /// No description provided for @handoverDamageAddTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add damage'**
+  String get handoverDamageAddTitle;
+
+  /// No description provided for @handoverDamageEditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit damage'**
+  String get handoverDamageEditTitle;
+
+  /// No description provided for @handoverDamageViewLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'View'**
+  String get handoverDamageViewLabel;
+
+  /// No description provided for @handoverDamageTypeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Damage type'**
+  String get handoverDamageTypeLabel;
+
+  /// No description provided for @handoverDamageLevelLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Severity'**
+  String get handoverDamageLevelLabel;
+
+  /// No description provided for @handoverDamageNoteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Note'**
+  String get handoverDamageNoteLabel;
+
+  /// No description provided for @handoverDamageNoteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Describe the damage'**
+  String get handoverDamageNoteHint;
+
+  /// No description provided for @handoverDamagePhotoLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Damage photo'**
+  String get handoverDamagePhotoLabel;
+
+  /// No description provided for @handoverDamagePhotoStored.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo attached'**
+  String get handoverDamagePhotoStored;
+
+  /// No description provided for @handoverDamageSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save damage'**
+  String get handoverDamageSave;
+
+  /// No description provided for @handoverViewFront.
+  ///
+  /// In en, this message translates to:
+  /// **'Front'**
+  String get handoverViewFront;
+
+  /// No description provided for @handoverViewRear.
+  ///
+  /// In en, this message translates to:
+  /// **'Rear'**
+  String get handoverViewRear;
+
+  /// No description provided for @handoverViewLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Left'**
+  String get handoverViewLeft;
+
+  /// No description provided for @handoverViewRight.
+  ///
+  /// In en, this message translates to:
+  /// **'Right'**
+  String get handoverViewRight;
+
+  /// No description provided for @handoverViewTop.
+  ///
+  /// In en, this message translates to:
+  /// **'Top'**
+  String get handoverViewTop;
+
+  /// No description provided for @handoverDamageScratch.
+  ///
+  /// In en, this message translates to:
+  /// **'Scratch'**
+  String get handoverDamageScratch;
+
+  /// No description provided for @handoverDamageDent.
+  ///
+  /// In en, this message translates to:
+  /// **'Dent'**
+  String get handoverDamageDent;
+
+  /// No description provided for @handoverDamageCrack.
+  ///
+  /// In en, this message translates to:
+  /// **'Crack'**
+  String get handoverDamageCrack;
+
+  /// No description provided for @handoverDamageChip.
+  ///
+  /// In en, this message translates to:
+  /// **'Chip'**
+  String get handoverDamageChip;
+
+  /// No description provided for @handoverDamageBroken.
+  ///
+  /// In en, this message translates to:
+  /// **'Broken'**
+  String get handoverDamageBroken;
+
+  /// No description provided for @handoverDamageMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing'**
+  String get handoverDamageMissing;
+
+  /// No description provided for @handoverDamageRust.
+  ///
+  /// In en, this message translates to:
+  /// **'Rust'**
+  String get handoverDamageRust;
+
+  /// No description provided for @handoverDamageOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get handoverDamageOther;
+
+  /// No description provided for @handoverLevelMinor.
+  ///
+  /// In en, this message translates to:
+  /// **'Minor'**
+  String get handoverLevelMinor;
+
+  /// No description provided for @handoverLevelModerate.
+  ///
+  /// In en, this message translates to:
+  /// **'Moderate'**
+  String get handoverLevelModerate;
+
+  /// No description provided for @handoverLevelSevere.
+  ///
+  /// In en, this message translates to:
+  /// **'Major'**
+  String get handoverLevelSevere;
+
+  /// No description provided for @handoverViewColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'View'**
+  String get handoverViewColumn;
+
+  /// No description provided for @handoverDamageColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Damage'**
+  String get handoverDamageColumn;
+
+  /// No description provided for @handoverLevelColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Severity'**
+  String get handoverLevelColumn;
+
+  /// No description provided for @handoverAddPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Add photo'**
+  String get handoverAddPhoto;
+
+  /// No description provided for @handoverPhotoCamera.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera'**
+  String get handoverPhotoCamera;
+
+  /// No description provided for @handoverPhotoGallery.
+  ///
+  /// In en, this message translates to:
+  /// **'Gallery'**
+  String get handoverPhotoGallery;
+
+  /// No description provided for @handoverNewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New handover'**
+  String get handoverNewTitle;
+
+  /// No description provided for @handoverStepVehicle.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle'**
+  String get handoverStepVehicle;
+
+  /// No description provided for @handoverStepCondition.
+  ///
+  /// In en, this message translates to:
+  /// **'Condition'**
+  String get handoverStepCondition;
+
+  /// No description provided for @handoverStepPhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos'**
+  String get handoverStepPhotos;
+
+  /// No description provided for @handoverStepSignature.
+  ///
+  /// In en, this message translates to:
+  /// **'Signature'**
+  String get handoverStepSignature;
+
+  /// No description provided for @handoverStepReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Review'**
+  String get handoverStepReview;
+
+  /// No description provided for @handoverVehicleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle'**
+  String get handoverVehicleLabel;
+
+  /// No description provided for @handoverScanAsset.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan asset'**
+  String get handoverScanAsset;
+
+  /// No description provided for @handoverSelectedAsset.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected vehicle'**
+  String get handoverSelectedAsset;
+
+  /// No description provided for @handoverVehicleSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search by asset number'**
+  String get handoverVehicleSearchHint;
+
+  /// No description provided for @handoverVehicleStartTyping.
+  ///
+  /// In en, this message translates to:
+  /// **'Type at least two characters to search.'**
+  String get handoverVehicleStartTyping;
+
+  /// No description provided for @handoverVehicleNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No vehicle matches that search.'**
+  String get handoverVehicleNoMatch;
+
+  /// No description provided for @handoverVehicleLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicles could not be loaded.'**
+  String get handoverVehicleLoadFailed;
+
+  /// No description provided for @handoverDriverHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver name'**
+  String get handoverDriverHint;
+
+  /// No description provided for @handoverSignatureHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask the driver to sign.'**
+  String get handoverSignatureHint;
+
+  /// No description provided for @handoverNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get handoverNext;
+
+  /// No description provided for @handoverSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit handover'**
+  String get handoverSubmit;
+
+  /// No description provided for @handoverNeedsVehicle.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a vehicle first.'**
+  String get handoverNeedsVehicle;
+
+  /// No description provided for @handoverNeedsDriver.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the driver handing over or receiving.'**
+  String get handoverNeedsDriver;
+
+  /// No description provided for @handoverNeedsType.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a handover type.'**
+  String get handoverNeedsType;
+
+  /// No description provided for @handoverNeedsCondition.
+  ///
+  /// In en, this message translates to:
+  /// **'Set the vehicle condition.'**
+  String get handoverNeedsCondition;
+
+  /// No description provided for @handoverNeedsSignature.
+  ///
+  /// In en, this message translates to:
+  /// **'Capture the driver signature.'**
+  String get handoverNeedsSignature;
+
+  /// No description provided for @handoverInvalidNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid number.'**
+  String get handoverInvalidNumber;
+
+  /// No description provided for @handoverInvalidFuel.
+  ///
+  /// In en, this message translates to:
+  /// **'Fuel level must be between 0 and 100.'**
+  String get handoverInvalidFuel;
+
+  /// No description provided for @handoverSubmittedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Handover submitted'**
+  String get handoverSubmittedTitle;
+
+  /// No description provided for @handoverSubmittedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The handover was sent for sign-off.'**
+  String get handoverSubmittedMessage;
+
+  /// No description provided for @handoverQueuedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved offline'**
+  String get handoverQueuedTitle;
+
+  /// No description provided for @handoverQueuedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The handover will sync when you are back online.'**
+  String get handoverQueuedMessage;
+
+  /// No description provided for @handoverQueuedWarningTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved, photos pending'**
+  String get handoverQueuedWarningTitle;
+
+  /// No description provided for @handoverQueuedWarningMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The handover was saved but some photos are still waiting to upload.'**
+  String get handoverQueuedWarningMessage;
+
+  /// No description provided for @handoverSubmitFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not submit'**
+  String get handoverSubmitFailedTitle;
+
+  /// No description provided for @handoverSubmitFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The handover could not be submitted. It has been saved and will retry.'**
+  String get handoverSubmitFailedMessage;
+
+  /// No description provided for @handoverSharePdf.
+  ///
+  /// In en, this message translates to:
+  /// **'Share PDF'**
+  String get handoverSharePdf;
+
+  /// No description provided for @handoverPdfTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle Handover Report'**
+  String get handoverPdfTitle;
+
+  /// No description provided for @handoverPdfDetailsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Handover details'**
+  String get handoverPdfDetailsTitle;
+
+  /// No description provided for @handoverPdfSignaturesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Signatures'**
+  String get handoverPdfSignaturesTitle;
+
+  /// No description provided for @handoverPdfSignaturePending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get handoverPdfSignaturePending;
+
+  /// No description provided for @handoverPdfShareFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The report could not be shared.'**
+  String get handoverPdfShareFailed;
+
+  /// No description provided for @handoverSignatureSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Signature saved'**
+  String get handoverSignatureSaved;
+
+  /// No description provided for @handoverSignatureRedraw.
+  ///
+  /// In en, this message translates to:
+  /// **'Draw a new signature'**
+  String get handoverSignatureRedraw;
+
+  /// PDF header line with the generation date and time.
+  ///
+  /// In en, this message translates to:
+  /// **'Generated {date}'**
+  String handoverPdfGenerated(String date);
 }
 
 class _AppLocalizationsDelegate

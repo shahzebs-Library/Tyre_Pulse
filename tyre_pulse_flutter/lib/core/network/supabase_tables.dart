@@ -178,6 +178,17 @@ abstract final class SupabaseTables {
   /// is [SupabaseRpcs.workshopStatusUpdateRecord].
   static const String workshopStatusRecords = 'workshop_status_records';
 
+  /// Vehicle Handover / Condition reports: one row per checkout/checkin
+  /// condition record. Created by `MIGRATIONS_V181_HANDOVER_REPORTS.sql` and
+  /// extended with the two-stage sign-off columns (`approval_status`,
+  /// `supervisor_*`, `incharge_*`, `document_no`, `photos`) by
+  /// `supabase/migrations/20261112130000_handover_two_stage_signoff.sql`
+  /// (applied live 2026-11-12). RESTRICTIVE org isolation + per-command
+  /// authenticated policies; a plain update cannot forge a stage change (the
+  /// BEFORE UPDATE guard), so the sign-off goes through
+  /// [SupabaseRpcs.decideHandoverApproval].
+  static const String handoverReports = 'handover_reports';
+
   /// Every verified table name, for a drift test.
   ///
   /// A repository that needs a name not in this set is describing an object
@@ -228,6 +239,7 @@ abstract final class SupabaseTables {
     engineHoursLogs,
     repairRequests,
     workshopStatusRecords,
+    handoverReports,
   };
 
   /// Names that were declared by the Kotlin rebuild and DO NOT EXIST.
@@ -311,6 +323,17 @@ abstract final class SupabaseRpcs {
   /// section 3's list of 27 omits it. Included here on the strength of the two
   /// sections that do name it.
   static const String decideChecklistApproval = 'decide_checklist_approval';
+
+  /// The server-stamped, two-stage vehicle-handover sign-off. SECURITY DEFINER,
+  /// takes no org id, granted to `authenticated` (anon revoked). Created by
+  /// `supabase/migrations/20261112130000_handover_two_stage_signoff.sql`
+  /// (applied live 2026-11-12). Signature `(p_id uuid, p_approved boolean,
+  /// p_signature text default null, p_note text default null)`; returns jsonb
+  /// `{ok, decision, status, both_steps}`. Derives the signer from `auth.uid()`,
+  /// enforces supervisor-then-incharge order, closes both rungs in one sign for
+  /// an incharge-level signer, and raises an "already decided" conflict on a
+  /// race. Mirrored by `lib/features/handover/domain/handover_approval.dart`.
+  static const String decideHandoverApproval = 'decide_handover_approval';
 
   static const String approvePendingUpload = 'approve_pending_upload';
   static const String rejectPendingUpload = 'reject_pending_upload';
@@ -427,6 +450,7 @@ abstract final class SupabaseRpcs {
     adminMobileUserAction,
     decideInspectionApproval,
     decideChecklistApproval,
+    decideHandoverApproval,
     approvePendingUpload,
     rejectPendingUpload,
     restampPendingUploadCountry,

@@ -48,6 +48,8 @@ import 'package:tyre_pulse/features/calendar/calendar_screen_registrations.dart'
 import 'package:tyre_pulse/features/checklists/'
     'checklists_screen_registrations.dart';
 import 'package:tyre_pulse/features/extras/extras_screen_registrations.dart';
+import 'package:tyre_pulse/features/handover/'
+    'handover_screen_registrations.dart';
 import 'package:tyre_pulse/features/home/home_screen_registrations.dart';
 import 'package:tyre_pulse/features/inspections/'
     'inspections_screen_registrations.dart';
@@ -373,6 +375,7 @@ Future<void> main() async {
               .withAll(pmScreenRegistrations)
               .withAll(meterLogsScreenRegistrations)
               .withAll(washingScreenRegistrations)
+              .withAll(handoverScreenRegistrations)
               .withAll(homeScreenRegistrations)
               .withAll(workOrdersScreenRegistrations)
               .withAll(workshopScreenRegistrations)

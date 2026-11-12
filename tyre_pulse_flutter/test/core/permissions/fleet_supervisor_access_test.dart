@@ -33,13 +33,16 @@ void main() {
 
   test('gains nothing else: other modules stay closed', () {
     // Workshop Status mirrors the server seed, which lists Fleet Supervisor
-    // among its managers.
+    // among its managers. Vehicle Handover is opened to the two sign-off roles
+    // through flutterRoleDefaultExtensions so a Fleet Supervisor can reach the
+    // queue to sign the first rung.
     expect(
       allowedModulesFor(access),
       <ModuleKey>{
         ModuleKey.reportAccident,
         ModuleKey.accidents,
         ModuleKey.workshopStatus,
+        ModuleKey.handover,
       },
     );
   });

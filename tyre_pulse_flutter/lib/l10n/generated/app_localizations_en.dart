@@ -8013,4 +8013,452 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get wfEvidenceUnavailable =>
       'Evidence cannot be added from saved data. Refresh while online and try again.';
+
+  @override
+  String get handoverNavTitle => 'Vehicle handover';
+
+  @override
+  String get handoverNewAction => 'New handover';
+
+  @override
+  String get handoverTabMine => 'My handovers';
+
+  @override
+  String get handoverTabToSign => 'To sign';
+
+  @override
+  String get handoverPendingSync => 'Some handovers are waiting to sync.';
+
+  @override
+  String get handoverEmptyMineTitle => 'No handovers yet';
+
+  @override
+  String get handoverEmptyMineMessage =>
+      'Start a vehicle handover to record a check-out or check-in.';
+
+  @override
+  String get handoverEmptyToSignTitle => 'Nothing to sign';
+
+  @override
+  String get handoverEmptyToSignMessage =>
+      'Handovers awaiting your sign-off will appear here.';
+
+  @override
+  String get handoverListLoadFailed => 'The handovers could not be loaded.';
+
+  @override
+  String get handoverDetailTitle => 'Handover';
+
+  @override
+  String get handoverNotFoundTitle => 'Handover not found';
+
+  @override
+  String get handoverNotFoundMessage => 'This handover is no longer available.';
+
+  @override
+  String get handoverDocumentNoLabel => 'Document no.';
+
+  @override
+  String get handoverFromDriverLabel => 'From driver';
+
+  @override
+  String get handoverToDriverLabel => 'To driver';
+
+  @override
+  String get handoverOdometerLabel => 'Odometer';
+
+  @override
+  String get handoverFuelLabel => 'Fuel level';
+
+  @override
+  String get handoverConditionLabel => 'Condition';
+
+  @override
+  String get handoverCleanlinessLabel => 'Cleanliness';
+
+  @override
+  String get handoverCapturedLabel => 'Captured';
+
+  @override
+  String get handoverTypeLabel => 'Handover type';
+
+  @override
+  String get handoverTypeCheckout => 'Check-out';
+
+  @override
+  String get handoverTypeCheckin => 'Check-in';
+
+  @override
+  String get handoverConditionExcellent => 'Excellent';
+
+  @override
+  String get handoverConditionGood => 'Good';
+
+  @override
+  String get handoverConditionFair => 'Fair';
+
+  @override
+  String get handoverConditionPoor => 'Poor';
+
+  @override
+  String get handoverCleanlinessClean => 'Clean';
+
+  @override
+  String get handoverCleanlinessAcceptable => 'Acceptable';
+
+  @override
+  String get handoverCleanlinessDirty => 'Dirty';
+
+  @override
+  String get handoverPhotosLabel => 'Photos';
+
+  @override
+  String get handoverNotesLabel => 'Notes';
+
+  @override
+  String get handoverNotesHint => 'Anything worth recording about the handover';
+
+  @override
+  String get handoverSignatureLabel => 'Driver signature';
+
+  @override
+  String get handoverSignatureMissing => 'No driver signature recorded.';
+
+  @override
+  String get handoverReviewNoteLabel => 'Review note';
+
+  @override
+  String get handoverStatusColumn => 'Status';
+
+  @override
+  String get handoverSignoffTitle => 'Sign-off';
+
+  @override
+  String get handoverRungDriver => 'Driver';
+
+  @override
+  String get handoverRungSupervisor => 'Fleet supervisor';
+
+  @override
+  String get handoverRungIncharge => 'Fleet incharge';
+
+  @override
+  String get handoverRungSigned => 'Signed';
+
+  @override
+  String get handoverRungWaiting => 'Waiting';
+
+  @override
+  String get handoverRungPending => 'Pending';
+
+  @override
+  String get handoverYourDecisionTitle => 'Your decision';
+
+  @override
+  String get handoverSignatureSignLabel => 'Sign below';
+
+  @override
+  String get handoverSigningAs => 'Signing as';
+
+  @override
+  String get handoverSignNoteLabel => 'Note (optional)';
+
+  @override
+  String get handoverSignNoteHint => 'Add a note for this decision';
+
+  @override
+  String get handoverSignApprove => 'Approve';
+
+  @override
+  String get handoverSignReturn => 'Return';
+
+  @override
+  String get handoverSignNeededTitle => 'Signature needed';
+
+  @override
+  String get handoverSignNeededMessage =>
+      'Draw your signature before approving.';
+
+  @override
+  String get handoverReasonNeededTitle => 'Reason needed';
+
+  @override
+  String get handoverReasonNeededMessage =>
+      'Add a note explaining why this handover is returned.';
+
+  @override
+  String get handoverSignedTitle => 'Signed';
+
+  @override
+  String get handoverSignedMessage => 'Your sign-off has been recorded.';
+
+  @override
+  String get handoverReturnedTitle => 'Returned';
+
+  @override
+  String get handoverReturnedMessage =>
+      'This handover has been returned for correction.';
+
+  @override
+  String get handoverSignFailedTitle => 'Could not record';
+
+  @override
+  String get handoverSignFailedMessage =>
+      'The decision could not be recorded. Try again.';
+
+  @override
+  String get handoverStayHere => 'Stay here';
+
+  @override
+  String get handoverBackToList => 'Back to list';
+
+  @override
+  String get handoverStatusDraft => 'Draft';
+
+  @override
+  String get handoverStatusPendingSupervisor => 'Awaiting supervisor';
+
+  @override
+  String get handoverStatusPendingIncharge => 'Awaiting incharge';
+
+  @override
+  String get handoverStatusApproved => 'Approved';
+
+  @override
+  String get handoverStatusRejected => 'Returned';
+
+  @override
+  String get handoverDamageSectionTitle => 'Damage';
+
+  @override
+  String get handoverNoDamage => 'No damage recorded';
+
+  @override
+  String get handoverAddDamage => 'Add damage';
+
+  @override
+  String get handoverDamageAddTitle => 'Add damage';
+
+  @override
+  String get handoverDamageEditTitle => 'Edit damage';
+
+  @override
+  String get handoverDamageViewLabel => 'View';
+
+  @override
+  String get handoverDamageTypeLabel => 'Damage type';
+
+  @override
+  String get handoverDamageLevelLabel => 'Severity';
+
+  @override
+  String get handoverDamageNoteLabel => 'Note';
+
+  @override
+  String get handoverDamageNoteHint => 'Describe the damage';
+
+  @override
+  String get handoverDamagePhotoLabel => 'Damage photo';
+
+  @override
+  String get handoverDamagePhotoStored => 'Photo attached';
+
+  @override
+  String get handoverDamageSave => 'Save damage';
+
+  @override
+  String get handoverViewFront => 'Front';
+
+  @override
+  String get handoverViewRear => 'Rear';
+
+  @override
+  String get handoverViewLeft => 'Left';
+
+  @override
+  String get handoverViewRight => 'Right';
+
+  @override
+  String get handoverViewTop => 'Top';
+
+  @override
+  String get handoverDamageScratch => 'Scratch';
+
+  @override
+  String get handoverDamageDent => 'Dent';
+
+  @override
+  String get handoverDamageCrack => 'Crack';
+
+  @override
+  String get handoverDamageChip => 'Chip';
+
+  @override
+  String get handoverDamageBroken => 'Broken';
+
+  @override
+  String get handoverDamageMissing => 'Missing';
+
+  @override
+  String get handoverDamageRust => 'Rust';
+
+  @override
+  String get handoverDamageOther => 'Other';
+
+  @override
+  String get handoverLevelMinor => 'Minor';
+
+  @override
+  String get handoverLevelModerate => 'Moderate';
+
+  @override
+  String get handoverLevelSevere => 'Major';
+
+  @override
+  String get handoverViewColumn => 'View';
+
+  @override
+  String get handoverDamageColumn => 'Damage';
+
+  @override
+  String get handoverLevelColumn => 'Severity';
+
+  @override
+  String get handoverAddPhoto => 'Add photo';
+
+  @override
+  String get handoverPhotoCamera => 'Camera';
+
+  @override
+  String get handoverPhotoGallery => 'Gallery';
+
+  @override
+  String get handoverNewTitle => 'New handover';
+
+  @override
+  String get handoverStepVehicle => 'Vehicle';
+
+  @override
+  String get handoverStepCondition => 'Condition';
+
+  @override
+  String get handoverStepPhotos => 'Photos';
+
+  @override
+  String get handoverStepSignature => 'Signature';
+
+  @override
+  String get handoverStepReview => 'Review';
+
+  @override
+  String get handoverVehicleLabel => 'Vehicle';
+
+  @override
+  String get handoverScanAsset => 'Scan asset';
+
+  @override
+  String get handoverSelectedAsset => 'Selected vehicle';
+
+  @override
+  String get handoverVehicleSearchHint => 'Search by asset number';
+
+  @override
+  String get handoverVehicleStartTyping =>
+      'Type at least two characters to search.';
+
+  @override
+  String get handoverVehicleNoMatch => 'No vehicle matches that search.';
+
+  @override
+  String get handoverVehicleLoadFailed => 'Vehicles could not be loaded.';
+
+  @override
+  String get handoverDriverHint => 'Driver name';
+
+  @override
+  String get handoverSignatureHint => 'Ask the driver to sign.';
+
+  @override
+  String get handoverNext => 'Next';
+
+  @override
+  String get handoverSubmit => 'Submit handover';
+
+  @override
+  String get handoverNeedsVehicle => 'Select a vehicle first.';
+
+  @override
+  String get handoverNeedsDriver =>
+      'Enter the driver handing over or receiving.';
+
+  @override
+  String get handoverNeedsType => 'Choose a handover type.';
+
+  @override
+  String get handoverNeedsCondition => 'Set the vehicle condition.';
+
+  @override
+  String get handoverNeedsSignature => 'Capture the driver signature.';
+
+  @override
+  String get handoverInvalidNumber => 'Enter a valid number.';
+
+  @override
+  String get handoverInvalidFuel => 'Fuel level must be between 0 and 100.';
+
+  @override
+  String get handoverSubmittedTitle => 'Handover submitted';
+
+  @override
+  String get handoverSubmittedMessage => 'The handover was sent for sign-off.';
+
+  @override
+  String get handoverQueuedTitle => 'Saved offline';
+
+  @override
+  String get handoverQueuedMessage =>
+      'The handover will sync when you are back online.';
+
+  @override
+  String get handoverQueuedWarningTitle => 'Saved, photos pending';
+
+  @override
+  String get handoverQueuedWarningMessage =>
+      'The handover was saved but some photos are still waiting to upload.';
+
+  @override
+  String get handoverSubmitFailedTitle => 'Could not submit';
+
+  @override
+  String get handoverSubmitFailedMessage =>
+      'The handover could not be submitted. It has been saved and will retry.';
+
+  @override
+  String get handoverSharePdf => 'Share PDF';
+
+  @override
+  String get handoverPdfTitle => 'Vehicle Handover Report';
+
+  @override
+  String get handoverPdfDetailsTitle => 'Handover details';
+
+  @override
+  String get handoverPdfSignaturesTitle => 'Signatures';
+
+  @override
+  String get handoverPdfSignaturePending => 'Pending';
+
+  @override
+  String get handoverPdfShareFailed => 'The report could not be shared.';
+
+  @override
+  String get handoverSignatureSaved => 'Signature saved';
+
+  @override
+  String get handoverSignatureRedraw => 'Draw a new signature';
+
+  @override
+  String handoverPdfGenerated(String date) {
+    return 'Generated $date';
+  }
 }

@@ -8031,4 +8031,451 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get wfEvidenceUnavailable =>
       'محفوظ ڈیٹا سے ثبوت شامل نہیں ہو سکتا۔ آن لائن ریفریش کر کے دوبارہ کوشش کریں۔';
+
+  @override
+  String get handoverNavTitle => 'گاڑی کی حوالگی';
+
+  @override
+  String get handoverNewAction => 'نئی حوالگی';
+
+  @override
+  String get handoverTabMine => 'میری حوالگیاں';
+
+  @override
+  String get handoverTabToSign => 'دستخط کے لیے';
+
+  @override
+  String get handoverPendingSync => 'کچھ حوالگیاں سنک کی منتظر ہیں۔';
+
+  @override
+  String get handoverEmptyMineTitle => 'ابھی کوئی حوالگی نہیں';
+
+  @override
+  String get handoverEmptyMineMessage =>
+      'چیک آؤٹ یا چیک اِن ریکارڈ کرنے کے لیے گاڑی کی حوالگی شروع کریں۔';
+
+  @override
+  String get handoverEmptyToSignTitle => 'دستخط کے لیے کچھ نہیں';
+
+  @override
+  String get handoverEmptyToSignMessage =>
+      'آپ کے دستخط کی منتظر حوالگیاں یہاں دکھائی دیں گی۔';
+
+  @override
+  String get handoverListLoadFailed => 'حوالگیاں لوڈ نہ ہو سکیں۔';
+
+  @override
+  String get handoverDetailTitle => 'حوالگی';
+
+  @override
+  String get handoverNotFoundTitle => 'حوالگی نہیں ملی';
+
+  @override
+  String get handoverNotFoundMessage => 'یہ حوالگی اب دستیاب نہیں۔';
+
+  @override
+  String get handoverDocumentNoLabel => 'دستاویز نمبر';
+
+  @override
+  String get handoverFromDriverLabel => 'موجودہ ڈرائیور';
+
+  @override
+  String get handoverToDriverLabel => 'نیا ڈرائیور';
+
+  @override
+  String get handoverOdometerLabel => 'اوڈو میٹر';
+
+  @override
+  String get handoverFuelLabel => 'ایندھن کی سطح';
+
+  @override
+  String get handoverConditionLabel => 'حالت';
+
+  @override
+  String get handoverCleanlinessLabel => 'صفائی';
+
+  @override
+  String get handoverCapturedLabel => 'ریکارڈ وقت';
+
+  @override
+  String get handoverTypeLabel => 'حوالگی کی قسم';
+
+  @override
+  String get handoverTypeCheckout => 'چیک آؤٹ';
+
+  @override
+  String get handoverTypeCheckin => 'چیک اِن';
+
+  @override
+  String get handoverConditionExcellent => 'بہترین';
+
+  @override
+  String get handoverConditionGood => 'اچھی';
+
+  @override
+  String get handoverConditionFair => 'درمیانی';
+
+  @override
+  String get handoverConditionPoor => 'خراب';
+
+  @override
+  String get handoverCleanlinessClean => 'صاف';
+
+  @override
+  String get handoverCleanlinessAcceptable => 'قابلِ قبول';
+
+  @override
+  String get handoverCleanlinessDirty => 'گندی';
+
+  @override
+  String get handoverPhotosLabel => 'تصاویر';
+
+  @override
+  String get handoverNotesLabel => 'نوٹس';
+
+  @override
+  String get handoverNotesHint => 'حوالگی کے بارے میں قابلِ ذکر کوئی بات';
+
+  @override
+  String get handoverSignatureLabel => 'ڈرائیور کے دستخط';
+
+  @override
+  String get handoverSignatureMissing => 'ڈرائیور کے دستخط ریکارڈ نہیں۔';
+
+  @override
+  String get handoverReviewNoteLabel => 'جائزہ نوٹ';
+
+  @override
+  String get handoverStatusColumn => 'صورتحال';
+
+  @override
+  String get handoverSignoffTitle => 'دستخطی منظوری';
+
+  @override
+  String get handoverRungDriver => 'ڈرائیور';
+
+  @override
+  String get handoverRungSupervisor => 'فلیٹ سپروائزر';
+
+  @override
+  String get handoverRungIncharge => 'فلیٹ انچارج';
+
+  @override
+  String get handoverRungSigned => 'دستخط شدہ';
+
+  @override
+  String get handoverRungWaiting => 'منتظر';
+
+  @override
+  String get handoverRungPending => 'باقی';
+
+  @override
+  String get handoverYourDecisionTitle => 'آپ کا فیصلہ';
+
+  @override
+  String get handoverSignatureSignLabel => 'نیچے دستخط کریں';
+
+  @override
+  String get handoverSigningAs => 'بطور دستخط کنندہ';
+
+  @override
+  String get handoverSignNoteLabel => 'نوٹ (اختیاری)';
+
+  @override
+  String get handoverSignNoteHint => 'اس فیصلے کے لیے نوٹ شامل کریں';
+
+  @override
+  String get handoverSignApprove => 'منظور';
+
+  @override
+  String get handoverSignReturn => 'واپس';
+
+  @override
+  String get handoverSignNeededTitle => 'دستخط درکار';
+
+  @override
+  String get handoverSignNeededMessage => 'منظوری سے پہلے اپنے دستخط بنائیں۔';
+
+  @override
+  String get handoverReasonNeededTitle => 'وجہ درکار';
+
+  @override
+  String get handoverReasonNeededMessage =>
+      'وضاحت کریں کہ یہ حوالگی کیوں واپس کی جا رہی ہے۔';
+
+  @override
+  String get handoverSignedTitle => 'دستخط ہو گئے';
+
+  @override
+  String get handoverSignedMessage => 'آپ کی منظوری ریکارڈ ہو گئی۔';
+
+  @override
+  String get handoverReturnedTitle => 'واپس کر دیا';
+
+  @override
+  String get handoverReturnedMessage =>
+      'یہ حوالگی تصحیح کے لیے واپس کر دی گئی۔';
+
+  @override
+  String get handoverSignFailedTitle => 'ریکارڈ نہ ہو سکا';
+
+  @override
+  String get handoverSignFailedMessage =>
+      'فیصلہ ریکارڈ نہ ہو سکا۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get handoverStayHere => 'یہیں رہیں';
+
+  @override
+  String get handoverBackToList => 'فہرست پر واپس';
+
+  @override
+  String get handoverStatusDraft => 'مسودہ';
+
+  @override
+  String get handoverStatusPendingSupervisor => 'سپروائزر کا انتظار';
+
+  @override
+  String get handoverStatusPendingIncharge => 'انچارج کا انتظار';
+
+  @override
+  String get handoverStatusApproved => 'منظور شدہ';
+
+  @override
+  String get handoverStatusRejected => 'واپس شدہ';
+
+  @override
+  String get handoverDamageSectionTitle => 'نقصان';
+
+  @override
+  String get handoverNoDamage => 'کوئی نقصان ریکارڈ نہیں';
+
+  @override
+  String get handoverAddDamage => 'نقصان شامل کریں';
+
+  @override
+  String get handoverDamageAddTitle => 'نقصان شامل کریں';
+
+  @override
+  String get handoverDamageEditTitle => 'نقصان میں ترمیم';
+
+  @override
+  String get handoverDamageViewLabel => 'رُخ';
+
+  @override
+  String get handoverDamageTypeLabel => 'نقصان کی قسم';
+
+  @override
+  String get handoverDamageLevelLabel => 'شدت';
+
+  @override
+  String get handoverDamageNoteLabel => 'نوٹ';
+
+  @override
+  String get handoverDamageNoteHint => 'نقصان بیان کریں';
+
+  @override
+  String get handoverDamagePhotoLabel => 'نقصان کی تصویر';
+
+  @override
+  String get handoverDamagePhotoStored => 'تصویر منسلک';
+
+  @override
+  String get handoverDamageSave => 'نقصان محفوظ کریں';
+
+  @override
+  String get handoverViewFront => 'سامنے';
+
+  @override
+  String get handoverViewRear => 'پیچھے';
+
+  @override
+  String get handoverViewLeft => 'بائیں';
+
+  @override
+  String get handoverViewRight => 'دائیں';
+
+  @override
+  String get handoverViewTop => 'اوپر';
+
+  @override
+  String get handoverDamageScratch => 'خراش';
+
+  @override
+  String get handoverDamageDent => 'ڈینٹ';
+
+  @override
+  String get handoverDamageCrack => 'دراڑ';
+
+  @override
+  String get handoverDamageChip => 'چِپ';
+
+  @override
+  String get handoverDamageBroken => 'ٹوٹا';
+
+  @override
+  String get handoverDamageMissing => 'غائب';
+
+  @override
+  String get handoverDamageRust => 'زنگ';
+
+  @override
+  String get handoverDamageOther => 'دیگر';
+
+  @override
+  String get handoverLevelMinor => 'معمولی';
+
+  @override
+  String get handoverLevelModerate => 'درمیانہ';
+
+  @override
+  String get handoverLevelSevere => 'بڑا';
+
+  @override
+  String get handoverViewColumn => 'رُخ';
+
+  @override
+  String get handoverDamageColumn => 'نقصان';
+
+  @override
+  String get handoverLevelColumn => 'شدت';
+
+  @override
+  String get handoverAddPhoto => 'تصویر شامل کریں';
+
+  @override
+  String get handoverPhotoCamera => 'کیمرہ';
+
+  @override
+  String get handoverPhotoGallery => 'گیلری';
+
+  @override
+  String get handoverNewTitle => 'نئی حوالگی';
+
+  @override
+  String get handoverStepVehicle => 'گاڑی';
+
+  @override
+  String get handoverStepCondition => 'حالت';
+
+  @override
+  String get handoverStepPhotos => 'تصاویر';
+
+  @override
+  String get handoverStepSignature => 'دستخط';
+
+  @override
+  String get handoverStepReview => 'جائزہ';
+
+  @override
+  String get handoverVehicleLabel => 'گاڑی';
+
+  @override
+  String get handoverScanAsset => 'اثاثہ اسکین کریں';
+
+  @override
+  String get handoverSelectedAsset => 'منتخب گاڑی';
+
+  @override
+  String get handoverVehicleSearchHint => 'اثاثہ نمبر سے تلاش کریں';
+
+  @override
+  String get handoverVehicleStartTyping =>
+      'تلاش کے لیے کم از کم دو حروف لکھیں۔';
+
+  @override
+  String get handoverVehicleNoMatch => 'اس تلاش سے کوئی گاڑی نہیں ملی۔';
+
+  @override
+  String get handoverVehicleLoadFailed => 'گاڑیاں لوڈ نہ ہو سکیں۔';
+
+  @override
+  String get handoverDriverHint => 'ڈرائیور کا نام';
+
+  @override
+  String get handoverSignatureHint => 'ڈرائیور سے دستخط کروائیں۔';
+
+  @override
+  String get handoverNext => 'اگلا';
+
+  @override
+  String get handoverSubmit => 'حوالگی جمع کریں';
+
+  @override
+  String get handoverNeedsVehicle => 'پہلے گاڑی منتخب کریں۔';
+
+  @override
+  String get handoverNeedsDriver =>
+      'دینے یا لینے والے ڈرائیور کا نام درج کریں۔';
+
+  @override
+  String get handoverNeedsType => 'حوالگی کی قسم منتخب کریں۔';
+
+  @override
+  String get handoverNeedsCondition => 'گاڑی کی حالت متعین کریں۔';
+
+  @override
+  String get handoverNeedsSignature => 'ڈرائیور کے دستخط حاصل کریں۔';
+
+  @override
+  String get handoverInvalidNumber => 'درست نمبر درج کریں۔';
+
+  @override
+  String get handoverInvalidFuel =>
+      'ایندھن کی سطح 0 اور 100 کے درمیان ہونی چاہیے۔';
+
+  @override
+  String get handoverSubmittedTitle => 'حوالگی جمع ہو گئی';
+
+  @override
+  String get handoverSubmittedMessage => 'حوالگی دستخط کے لیے بھیج دی گئی۔';
+
+  @override
+  String get handoverQueuedTitle => 'آف لائن محفوظ';
+
+  @override
+  String get handoverQueuedMessage => 'آن لائن ہونے پر حوالگی سنک ہو جائے گی۔';
+
+  @override
+  String get handoverQueuedWarningTitle => 'محفوظ، تصاویر باقی';
+
+  @override
+  String get handoverQueuedWarningMessage =>
+      'حوالگی محفوظ ہو گئی لیکن کچھ تصاویر ابھی اپ لوڈ کی منتظر ہیں۔';
+
+  @override
+  String get handoverSubmitFailedTitle => 'جمع نہ ہو سکی';
+
+  @override
+  String get handoverSubmitFailedMessage =>
+      'حوالگی جمع نہ ہو سکی۔ محفوظ کر لی گئی، دوبارہ کوشش ہوگی۔';
+
+  @override
+  String get handoverSharePdf => 'پی ڈی ایف شیئر کریں';
+
+  @override
+  String get handoverPdfTitle => 'گاڑی حوالگی رپورٹ';
+
+  @override
+  String get handoverPdfDetailsTitle => 'حوالگی کی تفصیلات';
+
+  @override
+  String get handoverPdfSignaturesTitle => 'دستخط';
+
+  @override
+  String get handoverPdfSignaturePending => 'باقی';
+
+  @override
+  String get handoverPdfShareFailed => 'رپورٹ شیئر نہ ہو سکی۔';
+
+  @override
+  String get handoverSignatureSaved => 'دستخط محفوظ';
+
+  @override
+  String get handoverSignatureRedraw => 'نئے دستخط بنائیں';
+
+  @override
+  String handoverPdfGenerated(String date) {
+    return 'تیار کردہ $date';
+  }
 }

@@ -44,6 +44,19 @@ describe('fuelEfficiencyAnalytics', () => {
     expect(baseMonthlyFuel(35, 10000)).toBe(3500)
   })
 
+  it('monthly km uses the tyreKm rule: placeholder-1 and over-cap excluded, factory 0 real', () => {
+    // A placeholder-1 fitment (odometer, not a tyre life) and a reading above the
+    // class cap are both unknown and left out; a factory 0 is real km.
+    const rows = [
+      { km_at_fitment: 0, km_at_removal: 30000 },        // factory -> 30000
+      { km_at_fitment: 10000, km_at_removal: 40000 },    // measured -> 30000
+      { km_at_fitment: 1, km_at_removal: 50000 },        // placeholder -> excluded
+      { km_at_fitment: 5000, km_at_removal: 300000, vehicle_type: 'TR-MIXER' }, // over 80k cap -> excluded
+    ]
+    // (30000 + 30000) / 2 samples / 3 months = 10000
+    expect(deriveMonthlyKm(rows)).toEqual({ km: 10000, samples: 2 })
+  })
+
   it('filters by site and search and lists sites', () => {
     expect(fuelSites(records)).toEqual(['JED', 'NHC'])
     expect(filterFuelRecords(records, { site: 'NHC' })).toHaveLength(2)

@@ -25,7 +25,7 @@
 
 import { isCompletedInspection } from './inspectionCoverage'
 import { lifetimeGroups, lifetimeMetrics } from './analyticsEngine'
-import { toLifetimeTyres, withOnePricePerTyre, weightedCpk, lifetimeSummary, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
+import { toLifetimeTyres, withOnePricePerTyre, weightedCpk, lifetimeSummary, fitmentKm, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
 
 /** KPI kind of every CPK on the improvement page (weighted fleet aggregate). */
 export const CI_CPK_KIND = CPK_KIND.FLEET_AGGREGATE
@@ -99,11 +99,14 @@ export function monthLabel(key) {
 const isFailure = (r) => r?.risk_level === 'High' || r?.risk_level === 'Critical' || r?.category === 'Scrap'
 const isInspectionDone = (i) => inspectionDone(i)
 
-/** km of ONE fitment (removal - fitment), or null. Per fitment; tyre life is meanLifeKm. */
+/**
+ * km of ONE fitment by the shared km rule (tyreKm.js via fitmentKm): placeholder
+ * fitment km 1 and readings above the vehicle class limit are unknown, a factory 0
+ * is real. Null when not measurable. Per fitment; tyre life is meanLifeKm.
+ */
 export function lifeKmOf(r) {
-  if (r?.km_at_fitment == null || r?.km_at_removal == null) return null
-  const km = Number(r.km_at_removal) - Number(r.km_at_fitment)
-  return Number.isFinite(km) && km > 0 ? km : null
+  const v = fitmentKm(r)
+  return v != null && v > 0 ? v : null
 }
 
 /**

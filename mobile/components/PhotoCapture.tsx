@@ -85,10 +85,13 @@ export default function PhotoCapture({ value, onChange, module = 'module', tint 
   async function pickFromGallery() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
     if (status !== 'granted') { Alert.alert(t('photoCapture.photosNeededTitle'), t('photoCapture.photosNeededMsg')); return }
-    const result = await safeLaunchLibrary({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.55,
-      allowsMultipleSelection: true, selectionLimit: Math.max(1, max - value.length),
-    })
+    const result = await safeLaunchLibrary(
+      {
+        mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.55,
+        allowsMultipleSelection: true, selectionLimit: Math.max(1, max - value.length),
+      },
+      () => Alert.alert(t('common.galleryFailedTitle'), t('common.galleryFailedMsg')),
+    )
     if (result.canceled || !result.assets?.length) return
     await ingest(result.assets.map(a => a.uri))
   }

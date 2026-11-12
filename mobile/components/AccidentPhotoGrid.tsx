@@ -171,10 +171,13 @@ export default function AccidentPhotoGrid({ entries, onChange, onUploadingChange
       Alert.alert(t('accident.cameraPermissionTitle'), t('accident.cameraPermissionMessage'))
       return []
     }
-    const result = await safeLaunchLibrary({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.55,
-      allowsMultipleSelection: limit > 1, selectionLimit: limit,
-    })
+    const result = await safeLaunchLibrary(
+      {
+        mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.55,
+        allowsMultipleSelection: limit > 1, selectionLimit: limit,
+      },
+      () => Alert.alert(t('common.galleryFailedTitle'), t('common.galleryFailedMsg')),
+    )
     if (result.canceled || !result.assets?.length) return []
     return result.assets.slice(0, limit).map(a => a.uri)
   }

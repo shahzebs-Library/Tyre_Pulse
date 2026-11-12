@@ -32,7 +32,9 @@
     "no": "No",
     "notAvailable": "N/A",
     "cameraFailedTitle": "Camera unavailable",
-    "cameraFailedMsg": "The camera couldn't open on this device. Please try again, or add a photo from the gallery instead."
+    "cameraFailedMsg": "The camera couldn't open on this device. Please try again, or add a photo from the gallery instead.",
+    "galleryFailedTitle": "Gallery unavailable",
+    "galleryFailedMsg": "The photo gallery couldn't open on this device. Please try again."
   },
   "language": {
     "english": "English",

@@ -101,7 +101,7 @@ function Web({ step, sel, choose }: SceneProps) {
             </li>
           ))}
         </ol>
-        <div className="idemo-live"><i />The tag follows the tyre, so its history moves with it between vehicles</div>
+        <div className="idemo-live"><i />The record follows the tyre, so its history moves with it between vehicles</div>
       </Pane>
       <Pane on={step === "tpms"} className="web">
         <PsiLine />
@@ -166,14 +166,14 @@ export const tyreIntel: Scenario = {
   id: "tyres",
   label: "Tyre intelligence",
   icon: Radar,
-  pitch: "RFID tags, live TPMS through your telematics connection and every inspection feed one tyre record, so you know which tyre fails next and which brand is worth the money.",
+  pitch: "Serial scans, live TPMS through your telematics connection and every inspection feed one tyre record, so you know which tyres are due next and which brand is worth the money.",
   appTitle: "Tyres",
   site: "Riyadh",
   defaultSel: "lhr1",
   steps: [
-    { id: "rfid", icon: Nfc, title: "Read the RFID tag", text: "One read opens the tyre's passport: every vehicle, wheel and km it has run.", url: "app.tyrepulse.app/tyre-passport/DX-4471-208", nav: "Tyres" },
+    { id: "rfid", icon: Nfc, title: "Scan the tyre", text: "A serial scan, or an optional RFID read, opens the tyre's passport: every vehicle, wheel and km it has run.", url: "app.tyrepulse.app/tyre-passport/DX-4471-208", nav: "Tyres" },
     { id: "tpms", icon: Activity, title: "Live TPMS catches the leak", text: "TPMS pressure arrives live through your telematics connection. A tyre losing pressure raises an alert to the tyre team before it fails.", url: "app.tyrepulse.app/tpms", nav: "Tyres", bell: true },
-    { id: "predict", icon: TrendingDown, title: "Forecast the removal", text: "Tread trend predicts when each tyre reaches its limit. Click a tyre to see its date.", url: "app.tyrepulse.app/predictive-maintenance", nav: "Tyres" },
+    { id: "predict", icon: TrendingDown, title: "Forecast the removal", text: "Kilometres and hours run against expected life show when each tyre is due. Click a tyre to see its date.", url: "app.tyrepulse.app/predictive-maintenance", nav: "Tyres" },
     { id: "anomaly", icon: AlertOctagon, title: "Anomalies flagged", text: "Meter rollbacks, duplicate expenses and odd pressures are found for you. Click one.", url: "app.tyrepulse.app/ops-intelligence", nav: "Overview", bell: true },
     { id: "value", icon: BadgeDollarSign, title: "Buy the right brand", text: "Cost per km by brand and fleet tyre health show where the money and the risk are.", url: "app.tyrepulse.app/cpk-intelligence", nav: "Costs" },
   ],

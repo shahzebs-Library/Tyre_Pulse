@@ -64,8 +64,8 @@ const nextConfig: NextConfig = {
       // Preserve the legacy super-admin entry point on the marketing host.
       // This is an external redirect, not a proxy: the application serves its
       // own isolated console authentication and MFA on the app origin.
-      { source: "/console", destination: "https://app.tyrepulse.app/console", permanent: false },
-      { source: "/console/:path*", destination: "https://app.tyrepulse.app/console/:path*", permanent: false },
+      { source: "/console", destination: `${APP_URL}/console`, permanent: false },
+      { source: "/console/:path*", destination: `${APP_URL}/console/:path*`, permanent: false },
       // /product was replaced by the platform section on 2026-09-28.
       { source: "/product", destination: "/platform", permanent: true },
       {

@@ -7,6 +7,10 @@ import { ORG_A, ORG_B, USERS, asUser, asService, assertLiveMd5, code, createDb, 
   from './fixtures/tenant_isolation_harness.mjs';
 
 const migration = await pendingMigration('20261113104000_ten5_subscription_and_plan_write_guard.sql');
+// TEN-5b: the live trigger fires only on UPDATE OF settings, so the plan-column check TEN-5 put
+// inside guard_organisation_configuration() never runs for a plan update. TEN-5b adds its own trigger.
+const migrationB = await pendingMigration('20261113114500_ten5b_organisation_plan_columns_trigger.sql');
+const PLAN_SETS = [`locked = false`, `plan = 'enterprise'`, `max_users = 100000`, `active = false`, `parent_organisation_id = '${ORG_A}'`];
 
 async function setup() {
   const db = await createDb();
@@ -36,7 +40,8 @@ async function setup() {
 
     ${liveFunction('guard_organisation_configuration')}
     ${liveFunction('ensure_org_subscription')}
-    create trigger guard_organisation_configuration before update on public.organisations
+    -- LIVE definition (pg_get_triggerdef, read from the production catalog baseline): column limited.
+    create trigger guard_organisation_configuration before update of settings on public.organisations
       for each row execute function public.guard_organisation_configuration();
     alter table public.organisations enable row level security;
     grant select, insert, update, delete on public.organisations to authenticated; grant all on public.organisations to service_role;
@@ -81,9 +86,16 @@ test('TEN-5 AFTER: plan, status, limits and lock are refused for a customer Admi
   try {
     await db.exec(migration);
     await db.exec(migration); // idempotent
+    await db.exec(migrationB);
+    await db.exec(migrationB); // idempotent
     const acl = await db.query(`select has_function_privilege('authenticated','public.guard_org_subscription_writes()','EXECUTE') a,
-      has_function_privilege('anon','public.guard_org_subscription_writes()','EXECUTE') n`);
-    assert.deepEqual(acl.rows[0], { a: false, n: false });
+      has_function_privilege('anon','public.guard_org_subscription_writes()','EXECUTE') n,
+      has_function_privilege('authenticated','public.guard_organisation_platform_columns()','EXECUTE') a2,
+      has_function_privilege('anon','public.guard_organisation_platform_columns()','EXECUTE') n2`);
+    assert.deepEqual(acl.rows[0], { a: false, n: false, a2: false, n2: false });
+    const trg = await db.query(`select tgenabled::text e, tgattr::text cols from pg_trigger
+      where tgrelid = 'public.organisations'::regclass and tgname = 'trg_guard_organisation_platform_columns'`);
+    assert.deepEqual(trg.rows, [{ e: 'O', cols: '' }], 'one enabled trigger with no column list');
 
     // The trial row still appears through the definer RPC, for the customer and for Company A.
     await asUser(db, USERS.adminB, () => db.query('select * from public.ensure_org_subscription()'));
@@ -113,9 +125,14 @@ test('TEN-5 AFTER: plan, status, limits and lock are refused for a customer Admi
     assert.equal(await asUser(db, USERS.mgrB, () => written(db, 'update public.org_subscriptions set cancel_at_period_end = true')), 0, 'a Manager still cannot');
 
     // organisations: plan-class columns refused one by one, ordinary columns still editable.
-    for (const set of [`locked = false`, `plan = 'enterprise'`, `max_users = 100000`, `active = false`, `parent_organisation_id = '${ORG_A}'`]) {
-      await assert.rejects(asUser(db, USERS.adminB, () => db.query(`update public.organisations set ${set} where id = '${ORG_B}'`)), code('42501'), set);
+    for (const set of [...PLAN_SETS, `locked = false, plan = 'enterprise', max_users = 9999`, `name = 'X', max_users = 6`]) {
+      await assert.rejects(asUser(db, USERS.adminB, () => db.query(`update public.organisations set ${set} where id = '${ORG_B}'`)),
+        e => e.code === '42501' && e.message === 'Plan, status and limits are managed by the platform.', set);
     }
+    await assert.rejects(asUser(db, USERS.adminA, () => db.query(`update public.organisations set max_users = 9999 where id = '${ORG_A}'`)), code('42501'),
+      'a future plain Company A Admin is held to the same rule');
+    // Writing the same value back is not a change and is not refused.
+    assert.equal(await asUser(db, USERS.adminB, () => written(db, `update public.organisations set plan = 'starter', name = 'Tenant B' where id = '${ORG_B}'`)), 1);
     assert.equal(await asUser(db, USERS.adminB, () => written(db, `update public.organisations set name = 'Tenant B Ltd' where id = '${ORG_B}'`)), 1);
     assert.equal(await asUser(db, USERS.adminB, () => written(db, `delete from public.organisations where id = '${ORG_B}'`)), 0);
     assert.deepEqual(await org(db, ORG_B), { name: 'Tenant B Ltd', plan: 'starter', active: true, locked: true, max_users: 5, parent_organisation_id: null });
@@ -148,5 +165,50 @@ test('TEN-5 migration aborts when guard_organisation_configuration no longer mat
   try {
     await db.exec(`create or replace function public.guard_organisation_configuration() returns trigger language plpgsql as $$ begin return new; end $$;`);
     await assert.rejects(db.exec(migration), /TEN-5 aborted/);
+  } finally { await db.close(); }
+});
+
+test('TEN-5 alone leaves organisations plan columns open: the live trigger fires only on UPDATE OF settings', async () => {
+  const db = await setup();
+  try {
+    await db.exec(migration);
+    // The check TEN-5 added is in the function, but the trigger does not run for this statement.
+    assert.equal(await asUser(db, USERS.adminB, () => written(db,
+      `update public.organisations set locked = false, plan = 'enterprise', max_users = 9999 where id = '${ORG_B}'`)), 1);
+    assert.deepEqual([(await org(db, ORG_B)).plan, (await org(db, ORG_B)).max_users, (await org(db, ORG_B)).locked], ['enterprise', 9999, false]);
+    // It does run when the statement names settings, which is how the first fixture hid the gap.
+    await assert.rejects(asUser(db, USERS.adminB, () => db.query(
+      `update public.organisations set plan = 'starter', settings = settings where id = '${ORG_B}'`)), code('42501'));
+  } finally { await db.close(); }
+});
+
+test('TEN-5b closes the plan columns on its own (without TEN-5) and leaves platform paths alone', async () => {
+  const db = await setup();
+  try {
+    await db.exec(migrationB);
+    for (const set of PLAN_SETS) {
+      await assert.rejects(asUser(db, USERS.adminB, () => db.query(`update public.organisations set ${set} where id = '${ORG_B}'`)), code('42501'), set);
+    }
+    assert.deepEqual(await org(db, ORG_B), { name: 'Tenant B', plan: 'starter', active: true, locked: true, max_users: 5, parent_organisation_id: null });
+    assert.equal(await asUser(db, USERS.adminB, () => written(db, `update public.organisations set name = 'Tenant B Ltd' where id = '${ORG_B}'`)), 1);
+    // Super admin, service role and a SECURITY DEFINER RPC still write the guarded columns.
+    assert.equal(await asUser(db, USERS.superA, () => written(db, `update public.organisations set plan = 'enterprise', max_users = 250, locked = false where id = '${ORG_B}'`)), 1);
+    assert.equal(await asUser(db, USERS.superA, () => written(db, `update public.organisations set max_users = 900 where id = '${ORG_A}'`)), 1);
+    assert.equal(await asService(db, () => written(db, `update public.organisations set plan = 'professional' where id = '${ORG_B}'`)), 1);
+    await asUser(db, USERS.adminB, () => db.query('select public.test_definer_set_active($1, false)', [ORG_B]));
+    assert.deepEqual(await org(db, ORG_B), { name: 'Tenant B Ltd', plan: 'professional', active: false, locked: false, max_users: 250, parent_organisation_id: null });
+    // The ROLLBACK statement from the file header reopens the columns (and nothing else is needed).
+    await db.exec('alter table public.organisations disable trigger trg_guard_organisation_platform_columns');
+    assert.equal(await asUser(db, USERS.adminB, () => written(db, `update public.organisations set max_users = 7 where id = '${ORG_B}'`)), 1);
+  } finally { await db.close(); }
+});
+
+test('TEN-5b migration aborts when organisations has lost a guarded column', async () => {
+  const db = await setup();
+  try {
+    await db.exec('alter table public.organisations rename column max_users to max_seats');
+    await assert.rejects(db.exec(migrationB), /TEN-5b aborted: organisations no longer has column\(s\) max_users/);
+    const { rows } = await db.query(`select count(*)::int n from pg_proc where proname = 'guard_organisation_platform_columns'`);
+    assert.equal(rows[0].n, 0, 'nothing was created');
   } finally { await db.close(); }
 });

@@ -42,7 +42,8 @@
 --   * No reader is repointed to org_config(): the accident e-mail consumer, the report
 --     palette loader (SettingsContext), brandLogo.js and the edge functions still read
 --     system_config. Tenant B therefore still SEES the global mailbox / logo until
---     those readers move (roadmap, client and edge work).
+--     those readers move (roadmap, client and edge work). The three accident mailbox
+--     keys are closed at the table by TEN-7b (20261113115000); logo and palette are not.
 --   * modules.status stays platform-wide; the per-tenant switch is org_module_overrides
 --     from TEN-6.
 --   * upload_feeds, due_alert_rules, metric / dashboard registries are not scoped here.

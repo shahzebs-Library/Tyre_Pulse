@@ -38,6 +38,12 @@
 --   (suggested: request_plan_downgrade() that sets cancel_at_period_end and never restarts a
 --   trial). setCancelAtPeriodEnd() keeps working. Decide before the first paying tenant.
 --
+-- KNOWN GAP, CLOSED BY TEN-5b (20261113114500_ten5b_organisation_plan_columns_trigger.sql)
+--   The live trigger on organisations is BEFORE UPDATE OF settings, so the plan-column check this
+--   file adds to guard_organisation_configuration() runs only when the statement also names
+--   settings. Measured on PostgreSQL 16 staging with this file alone: a company Admin still set
+--   plan = enterprise and max_users = 9999 on its own row. Apply TEN-5b together with this file.
+--
 -- WHAT IT DOES NOT FIX
 --   subscription_plans prices are closed by TEN-3, not here. Entitlements are still not ENFORCED
 --   anywhere that matters (TEN-6). enforce_plan_limit and get_subscription_overview unchanged.

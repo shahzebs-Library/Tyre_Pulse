@@ -220,12 +220,14 @@
     {
      "check": "Alpha job card rewritten by a Beta upload",
      "vulnerable": true,
-     "evidence": "Alpha asset after=['HIJACK01'] was=MP001"
+     "evidence": "Alpha asset after=['HIJACK01'] was=MP001",
+     "hold": null
     },
     {
      "check": "Beta cannot hold the same job card number itself",
      "vulnerable": true,
-     "evidence": "Beta row created=False error=None"
+     "evidence": "Beta row created=False error=None",
+     "hold": null
     }
    ],
    "evidence": "Alpha job card rewritten by a Beta upload: VULNERABLE (Alpha asset after=['HIJACK01'] was=MP001) | Beta cannot hold the same job card number itself: VULNERABLE (Beta row created=False error=None)"
@@ -239,7 +241,8 @@
     {
      "check": "Beta Admin reads an Alpha row in ksa_kms",
      "vulnerable": true,
-     "evidence": "beta.admin count=1 error=None; control alpha.admin count=1; marker insert error=None"
+     "evidence": "beta.admin count=1 error=None; control alpha.admin count=1; marker insert error=None",
+     "hold": null
     }
    ],
    "evidence": "Beta Admin reads an Alpha row in ksa_kms: VULNERABLE (beta.admin count=1 error=None; control alpha.admin count=1; marker insert error=None)"
@@ -253,17 +256,20 @@
     {
      "check": "modules",
      "vulnerable": true,
-     "evidence": "rows=1 "
+     "evidence": "rows=1 ",
+     "hold": null
     },
     {
      "check": "subscription_plans",
      "vulnerable": true,
-     "evidence": "rows=1 "
+     "evidence": "rows=1 ",
+     "hold": null
     },
     {
      "check": "due_alert_rules",
      "vulnerable": true,
-     "evidence": "rows=8 "
+     "evidence": "rows=8 ",
+     "hold": null
     }
    ],
    "evidence": "modules: VULNERABLE (rows=1 ) | subscription_plans: VULNERABLE (rows=1 ) | due_alert_rules: VULNERABLE (rows=8 )"
@@ -277,20 +283,23 @@
     {
      "check": "admin_set_user_sites",
      "vulnerable": true,
-     "evidence": "sites after=['HIJACKED'] "
+     "evidence": "sites after=['HIJACKED'] ",
+     "hold": null
     },
     {
      "check": "admin_set_web_access",
      "vulnerable": false,
-     "evidence": "web_access after=True Not authorized to manage a user in another organisation."
+     "evidence": "web_access after=True Not authorized to manage a user in another organisation.",
+     "hold": null
     },
     {
      "check": "get_user_module_permissions answers for a foreign user id",
      "vulnerable": true,
-     "evidence": "rows=1 "
+     "evidence": "module keys returned=78 ; control own map keys=78, same-company Admin keys=78",
+     "hold": null
     }
    ],
-   "evidence": "admin_set_user_sites: VULNERABLE (sites after=['HIJACKED'] ) | admin_set_web_access: closed (web_access after=True Not authorized to manage a user in another organisation.) | get_user_module_permissions answers for a foreign user id: VULNERABLE (rows=1 )"
+   "evidence": "admin_set_user_sites: VULNERABLE (sites after=['HIJACKED'] ) | admin_set_web_access: closed (web_access after=True Not authorized to manage a user in another organisation.) | get_user_module_permissions answers for a foreign user id: VULNERABLE (module keys returned=78 ; control own map keys=78, same-company Admin keys=78)"
   },
   {
    "section": "T",
@@ -301,12 +310,14 @@
     {
      "check": "own org_subscriptions row",
      "vulnerable": true,
-     "evidence": "rows=1 "
+     "evidence": "rows=1 ",
+     "hold": null
     },
     {
      "check": "own organisations.plan / max_users / locked",
      "vulnerable": true,
-     "evidence": "plan after=enterprise max_users after=9999 rows=1 "
+     "evidence": "plan after=enterprise max_users after=9999 rows=1 ",
+     "hold": null
     }
    ],
    "evidence": "own org_subscriptions row: VULNERABLE (rows=1 ) | own organisations.plan / max_users / locked: VULNERABLE (plan after=enterprise max_users after=9999 rows=1 )"
@@ -320,30 +331,35 @@
     {
      "check": "locked company still reads data (switches as shipped)",
      "vulnerable": true,
-     "evidence": "locked Beta manager reads 22 vehicles "
+     "evidence": "locked Beta manager reads 22 vehicles ",
+     "hold": "deliberate: entitlement_enforcement ships off to protect the current company; closed when the owner turns it on (see the two rows below)"
     },
     {
      "check": "no subscription row means no vehicle limit (switches as shipped)",
      "vulnerable": true,
-     "evidence": "company with no subscription row inserted 30 vehicles (trial cap 25) "
+     "evidence": "company with no subscription row inserted 30 vehicles (trial cap 25) ",
+     "hold": "deliberate: entitlement_enforcement ships off to protect the current company; closed when the owner turns it on (see the two rows below)"
     },
     {
      "check": "locked company still reads data (entitlement_enforcement = on)",
      "vulnerable": true,
-     "evidence": "locked Beta manager reads 22 vehicles "
+     "evidence": "locked Beta manager reads 22 vehicles ",
+     "hold": null
     },
     {
      "check": "no subscription row means no vehicle limit (entitlement_enforcement = on)",
      "vulnerable": true,
-     "evidence": "company with no subscription row inserted 30 vehicles (trial cap 25) "
+     "evidence": "company with no subscription row inserted 30 vehicles (trial cap 25) ",
+     "hold": null
     },
     {
      "check": "missing subscription row reported as an endless trial",
      "vulnerable": true,
-     "evidence": "overview reports a usable plan with no end date=True "
+     "evidence": "overview reports a usable plan with no end date=True ",
+     "hold": null
     }
    ],
-   "evidence": "locked company still reads data (switches as shipped): VULNERABLE (locked Beta manager reads 22 vehicles ) | no subscription row means no vehicle limit (switches as shipped): VULNERABLE (company with no subscription row inserted 30 vehicles (trial cap 25) ) | locked company still reads data (entitlement_enforcement = on): VULNERABLE (locked Beta manager reads 22 vehicles ) | no subscription row means no vehicle limit (entitlement_enforcement = on): VULNERABLE (company with no subscription row inserted 30 vehicles (trial cap 25) ) | missing subscription row reported as an endless trial: VULNERABLE (overview reports a usable plan with no end date=True )"
+   "evidence": "locked company still reads data (switches as shipped): HELD (locked Beta manager reads 22 vehicles ) | no subscription row means no vehicle limit (switches as shipped): HELD (company with no subscription row inserted 30 vehicles (trial cap 25) ) | locked company still reads data (entitlement_enforcement = on): VULNERABLE (locked Beta manager reads 22 vehicles ) | no subscription row means no vehicle limit (entitlement_enforcement = on): VULNERABLE (company with no subscription row inserted 30 vehicles (trial cap 25) ) | missing subscription row reported as an endless trial: VULNERABLE (overview reports a usable plan with no end date=True )"
   },
   {
    "section": "T",
@@ -354,25 +370,29 @@
     {
      "check": "Beta runs on the one global role matrix",
      "vulnerable": true,
-     "evidence": "global rows visible to beta.manager=538"
+     "evidence": "global rows visible to beta.manager=538",
+     "hold": "by design (TEN-7 decision D1): the global rows are the starter matrix every company inherits for the built-in roles, and reading them is how the current company resolves access today"
     },
     {
      "check": "Beta manager reads the shared accident mailbox keys",
      "vulnerable": true,
-     "evidence": "keys visible=2 "
+     "evidence": "keys visible to beta.manager=2 ; control alpha.manager=2",
+     "hold": null
     },
     {
      "check": "a Beta site name is silently rewritten",
      "vulnerable": true,
-     "evidence": "typed \"BETA NEW-ST\" stored as \"BETA NEW\" "
+     "evidence": "typed \"BETA NEW-ST\" stored as \"BETA NEW\" ",
+     "hold": null
     },
     {
      "check": "a role name defined only in Alpha is accepted for a Beta user",
      "vulnerable": true,
-     "evidence": "role stored=Alpha Only Role"
+     "evidence": "role stored=Alpha Only Role",
+     "hold": null
     }
    ],
-   "evidence": "Beta runs on the one global role matrix: VULNERABLE (global rows visible to beta.manager=538) | Beta manager reads the shared accident mailbox keys: VULNERABLE (keys visible=2 ) | a Beta site name is silently rewritten: VULNERABLE (typed \"BETA NEW-ST\" stored as \"BETA NEW\" ) | a role name defined only in Alpha is accepted for a Beta user: VULNERABLE (role stored=Alpha Only Role)"
+   "evidence": "Beta runs on the one global role matrix: HELD (global rows visible to beta.manager=538) | Beta manager reads the shared accident mailbox keys: VULNERABLE (keys visible to beta.manager=2 ; control alpha.manager=2) | a Beta site name is silently rewritten: VULNERABLE (typed \"BETA NEW-ST\" stored as \"BETA NEW\" ) | a role name defined only in Alpha is accepted for a Beta user: VULNERABLE (role stored=Alpha Only Role)"
   },
   {
    "section": "T",
@@ -383,25 +403,29 @@
     {
      "check": "sign-up lands in Alpha (single_tenant_mode = true, as shipped)",
      "vulnerable": true,
-     "evidence": "sign-up with no invitation got organisation=Alpha "
+     "evidence": "sign-up with no invitation got organisation=Alpha ",
+     "hold": "deliberate: single_tenant_mode ships true, which is the current company behaviour; closed when the owner sets it false (see the two rows below)"
     },
     {
      "check": "service load lands in Alpha (single_tenant_mode = true, as shipped)",
      "vulnerable": true,
-     "evidence": "service insert with no organisation landed in=Alpha "
+     "evidence": "service insert with no organisation landed in=Alpha ",
+     "hold": "deliberate: single_tenant_mode ships true, which is the current company behaviour; closed when the owner sets it false (see the two rows below)"
     },
     {
      "check": "sign-up lands in Alpha (single_tenant_mode = false)",
      "vulnerable": true,
-     "evidence": "sign-up with no invitation got organisation=Alpha "
+     "evidence": "sign-up with no invitation got organisation=Alpha ",
+     "hold": null
     },
     {
      "check": "service load lands in Alpha (single_tenant_mode = false)",
      "vulnerable": false,
-     "evidence": "service insert with no organisation landed in=None Import refused: organisation_id is null, tp.import_org is not set and single_tenant_mode is off"
+     "evidence": "service insert with no organisation landed in=None Import refused: organisation_id is null, tp.import_org is not set and single_tenant_mode is off",
+     "hold": null
     }
    ],
-   "evidence": "sign-up lands in Alpha (single_tenant_mode = true, as shipped): VULNERABLE (sign-up with no invitation got organisation=Alpha ) | service load lands in Alpha (single_tenant_mode = true, as shipped): VULNERABLE (service insert with no organisation landed in=Alpha ) | sign-up lands in Alpha (single_tenant_mode = false): VULNERABLE (sign-up with no invitation got organisation=Alpha ) | service load lands in Alpha (single_tenant_mode = false): closed (service insert with no organisation landed in=None Import refused: organisation_id is null, tp.import_org is not set and single_tenant_mode )"
+   "evidence": "sign-up lands in Alpha (single_tenant_mode = true, as shipped): HELD (sign-up with no invitation got organisation=Alpha ) | service load lands in Alpha (single_tenant_mode = true, as shipped): HELD (service insert with no organisation landed in=Alpha ) | sign-up lands in Alpha (single_tenant_mode = false): VULNERABLE (sign-up with no invitation got organisation=Alpha ) | service load lands in Alpha (single_tenant_mode = false): closed (service insert with no organisation landed in=None Import refused: organisation_id is null, tp.import_org is not set and single_tenant_mode )"
   },
   {
    "section": "T",
@@ -412,20 +436,23 @@
     {
      "check": "no invitation table",
      "vulnerable": true,
-     "evidence": "org_invitations exists=False"
+     "evidence": "org_invitations exists=False",
+     "hold": null
     },
     {
      "check": "no provisioning or purge function",
      "vulnerable": true,
-     "evidence": "functions present=none"
+     "evidence": "functions present=none",
+     "hold": null
     },
     {
      "check": "username is unique across ALL companies",
      "vulnerable": true,
-     "evidence": "global unique keys still present=['profiles_username_key', 'profiles_username_lower_uidx', 'ux_profiles_username_lower']"
+     "evidence": "global unique keys still present=['profiles_username_key', 'profiles_username_lower_uidx', 'ux_profiles_username_lower']",
+     "hold": "documented design hold: sign-in resolves a user by username alone, so the key must stay global until sign-in takes a company code"
     }
    ],
-   "evidence": "no invitation table: VULNERABLE (org_invitations exists=False) | no provisioning or purge function: VULNERABLE (functions present=none) | username is unique across ALL companies: VULNERABLE (global unique keys still present=['profiles_username_key', 'profiles_username_lower_uidx', 'ux_profiles_username_lower'])"
+   "evidence": "no invitation table: VULNERABLE (org_invitations exists=False) | no provisioning or purge function: VULNERABLE (functions present=none) | username is unique across ALL companies: HELD (global unique keys still present=['profiles_username_key', 'profiles_username_lower_uidx', 'ux_profiles_username_lower'])"
   }
  ]
 }

@@ -12,6 +12,7 @@ Sections
   C  country scoping inside one company
   D  empty company (Gamma): zero rows and no errors on key RPCs
   T  tenancy findings TEN-1..TEN-9: does each one REPRODUCE on this database
+     (a sub-check printed HELD is still open; it is a documented design hold, with the reason shown)
 
 Usage: run_tests.py --dsn "<dsn>" [--json out.json] [--label before]
 Exit code 1 when an isolation check in A to D fails. Section T never fails the run: it reports state.
@@ -194,14 +195,22 @@ with as_user('gamma.admin'):
         'returned organisation=%s error=%s' % ('gamma' if r and r[0][0] == ORG['gamma'] else (r[0][0] if r else None), err))
 
 # ---------------------------------------------------------------- T: tenancy findings
-# Each finding is split into sub-checks. A sub-check is (label, vulnerable?, evidence).
+# Each finding is split into sub-checks. A sub-check is (label, vulnerable?, evidence[, hold reason]).
 # REPRODUCES = every sub-check vulnerable, PARTIAL = some, NOT REPRODUCED = none.
+# A hold reason never changes the measurement: the sub-check still counts as vulnerable. It only says,
+# next to the result, that the open state is a documented design hold (and why), so it is not read as
+# an oversight. When every still-open sub-check carries a hold reason the state is OPEN BY DESIGN HOLD.
 def ten(code, title, subs):
+    subs = [tuple(x) + (None,) * (4 - len(x)) for x in subs]
     v = [x for x in subs if x[1]]
     state = 'REPRODUCES' if len(v) == len(subs) else ('PARTIAL' if v else 'NOT REPRODUCED')
+    if v and len(v) < len(subs) and all(x[3] for x in v):
+        state = 'OPEN BY DESIGN HOLD'
+    def word(x): return ('HELD' if x[3] else 'VULNERABLE') if x[1] else 'closed'
     results.append({'section': 'T', 'name': '%s %s' % (code, title), 'ok': None, 'state': state,
-                    'subs': [{'check': x[0], 'vulnerable': bool(x[1]), 'evidence': str(x[2])[:300]} for x in subs],
-                    'evidence': ' | '.join('%s: %s (%s)' % (x[0], 'VULNERABLE' if x[1] else 'closed', str(x[2])[:140]) for x in subs)})
+                    'subs': [{'check': x[0], 'vulnerable': bool(x[1]), 'evidence': str(x[2])[:300],
+                              'hold': (x[3] if x[1] else None)} for x in subs],
+                    'evidence': ' | '.join('%s: %s (%s)' % (x[0], word(x), str(x[2])[:140]) for x in subs)})
 
 def impersonate(username):
     cur.execute("set local role authenticated")
@@ -254,11 +263,22 @@ with as_user('beta.admin'):
     r1, e1 = attempt("select public.admin_set_user_sites(%s, array['HIJACKED'], null)", (USER['alpha.manager'],))
     r2, e2 = attempt("select public.admin_set_web_access(%s, false)", (USER['alpha.manager'],))
     after = privileged("select sites, web_access from public.profiles where id=%s", (USER['alpha.manager'],))[0]
-    r3, e3 = attempt("select count(*) from public.get_user_module_permissions(%s)", (USER['alpha.manager'],))
+    # The function returns ONE jsonb value, so a row count is always 1. Vulnerable means a non-empty
+    # module map came back for the foreign id. Controls: the Alpha manager's own map is non-empty, and an
+    # Alpha Admin still gets it (same company), so a refusal here is the rule and not a broken function.
+    r3, e3 = attempt("select public.get_user_module_permissions(%s)", (USER['alpha.manager'],))
+    foreign_keys = len(r3[0][0] or {}) if r3 else 0
+    impersonate('alpha.manager')
+    own, eo = attempt("select public.get_user_module_permissions()")
+    impersonate('alpha.admin')
+    same, es = attempt("select public.get_user_module_permissions(%s)", (USER['alpha.manager'],))
+    impersonate('beta.admin')
+    ctl = 'control own map keys=%s, same-company Admin keys=%s%s' % (len(own[0][0] or {}) if own else eo, len(same[0][0] or {}) if same else es,
+                                                               '' if (own and own[0][0]) else ' (CONTROL EMPTY: result not conclusive)')
     ten('TEN-4', 'admin RPCs act on a user in another company', [
         ('admin_set_user_sites', after[0] != ['ALL'], 'sites after=%s %s' % (after[0], e1 or '')),
         ('admin_set_web_access', after[1] is False, 'web_access after=%s %s' % (after[1], e2 or '')),
-        ('get_user_module_permissions answers for a foreign user id', bool(r3 and r3[0][0] > 0), 'rows=%s %s' % (r3[0][0] if r3 else None, e3 or ''))])
+        ('get_user_module_permissions answers for a foreign user id', foreign_keys > 0, 'module keys returned=%s %s; %s' % (foreign_keys, e3 or '', ctl))])
 
 # TEN-5: customer Admin grants itself a plan / unlocks itself
 with as_user('beta.admin'):
@@ -293,17 +313,22 @@ def ten6(switch_on):
 a1, b1, c1 = ten6(False)
 has_switch = True
 a2, b2, c2 = ten6(True)
+HOLD_SWITCH6 = 'deliberate: entitlement_enforcement ships off to protect the current company; closed when the owner turns it on (see the two rows below)'
 ten('TEN-6', 'subscription state and plan limits are not enforced', [
-    ('locked company still reads data (switches as shipped)', a1[0], a1[1]),
-    ('no subscription row means no vehicle limit (switches as shipped)', b1[0], b1[1]),
+    ('locked company still reads data (switches as shipped)', a1[0], a1[1], HOLD_SWITCH6),
+    ('no subscription row means no vehicle limit (switches as shipped)', b1[0], b1[1], HOLD_SWITCH6),
     ('locked company still reads data (entitlement_enforcement = on)', a2[0], a2[1]),
     ('no subscription row means no vehicle limit (entitlement_enforcement = on)', b2[0], b2[1]),
-    ('missing subscription row reported as an endless trial', c1[0], c1[1])])
+    ('missing subscription row reported as an endless trial (switches as shipped)', c1[0], c1[1], HOLD_SWITCH6),
+    ('missing subscription row reported as an endless trial (entitlement_enforcement = on)', c2[0], c2[1])])
 
 # TEN-7: second tenant shares configuration that shapes its data
 with as_user('beta.manager'):
     mp = attempt("select count(*) from public.module_permissions where org_id is null")[0]
     mail, me_ = attempt("select count(*) from public.system_config where key in ('accident_email_to','accident_email_cc')")
+    impersonate('alpha.manager')   # control: the company the mailbox belongs to must still read it
+    mail_ctl, mce = attempt("select count(*) from public.system_config where key in ('accident_email_to','accident_email_cc')")
+    impersonate('beta.manager')
     r, err = attempt("insert into public.accidents (asset_no, incident_date, accident_type, severity, status, site, country) values ('TM001', current_date, 'other', 'minor', 'reported', 'BETA NEW-ST', 'KSA') returning site")
     cur.execute('reset role')
     cur.execute("insert into public.custom_roles (organisation_id, name) values (%s, 'Alpha Only Role')", (ORG['alpha'],))
@@ -311,8 +336,10 @@ with as_user('beta.manager'):
     cur.execute("update public.profiles set role='Alpha Only Role' where id=%s returning role", (USER['beta.driver'],))
     role_after = cur.fetchone()[0]
     ten('TEN-7', 'second tenant shares and is shaped by global configuration', [
-        ('Beta runs on the one global role matrix', bool(mp and mp[0][0]), 'global rows visible to beta.manager=%s' % (mp[0][0] if mp else None)),
-        ('Beta manager reads the shared accident mailbox keys', bool(mail and mail[0][0]), 'keys visible=%s %s' % (mail[0][0] if mail else None, me_ or '')),
+        ('Beta runs on the one global role matrix', bool(mp and mp[0][0]), 'global rows visible to beta.manager=%s' % (mp[0][0] if mp else None),
+         'by design (TEN-7 decision D1): the global rows are the starter matrix every company inherits for the built-in roles, and reading them is how the current company resolves access today'),
+        ('Beta manager reads the shared accident mailbox keys', bool(mail and mail[0][0]),
+         'keys visible to beta.manager=%s %s; control alpha.manager=%s' % (mail[0][0] if mail else None, me_ or '', mail_ctl[0][0] if mail_ctl else mce)),
         ('a Beta site name is silently rewritten', bool(r) and r[0][0] != 'BETA NEW-ST', 'typed "BETA NEW-ST" stored as "%s" %s' % (r[0][0] if r else None, err or '')),
         ('a role name defined only in Alpha is accepted for a Beta user', role_after == 'Alpha Only Role', 'role stored=%s' % role_after)])
 
@@ -329,9 +356,10 @@ def ten8(single_tenant):
     return (org_of_new == ORG['alpha'], 'sign-up with no invitation got organisation=%s %s' % ('Alpha' if org_of_new == ORG['alpha'] else org_of_new, e1 or '')), \
            (bool(r) and r[0][0] == ORG['alpha'], 'service insert with no organisation landed in=%s %s' % ('Alpha' if r and r[0][0] == ORG['alpha'] else (r[0][0] if r else None), err or ''))
 x1, y1 = ten8('true'); x2, y2 = ten8('false')
+HOLD_SWITCH8 = 'deliberate: single_tenant_mode ships true, which is the current company behaviour; closed when the owner sets it false (see the two rows below)'
 ten('TEN-8', 'sign-ups and service loads fall back into the first company', [
-    ('sign-up lands in Alpha (single_tenant_mode = true, as shipped)', x1[0], x1[1]),
-    ('service load lands in Alpha (single_tenant_mode = true, as shipped)', y1[0], y1[1]),
+    ('sign-up lands in Alpha (single_tenant_mode = true, as shipped)', x1[0], x1[1], HOLD_SWITCH8),
+    ('service load lands in Alpha (single_tenant_mode = true, as shipped)', y1[0], y1[1], HOLD_SWITCH8),
     ('sign-up lands in Alpha (single_tenant_mode = false)', x2[0], x2[1]),
     ('service load lands in Alpha (single_tenant_mode = false)', y2[0], y2[1])])
 
@@ -344,7 +372,8 @@ conn.rollback()
 ten('TEN-9', 'no safe tenant lifecycle', [
     ('no invitation table', not inv, 'org_invitations exists=%s' % inv),
     ('no provisioning or purge function', not prov, 'functions present=%s' % (prov or 'none')),
-    ('username is unique across ALL companies', bool(glob_keys), 'global unique keys still present=%s' % (glob_keys or 'none'))])
+    ('username is unique across ALL companies', bool(glob_keys), 'global unique keys still present=%s' % (glob_keys or 'none'),
+     'documented design hold: sign-in resolves a user by username alone, so the key must stay global until sign-in takes a company code')])
 
 # ---------------------------------------------------------------- report
 conn.rollback()
@@ -354,7 +383,9 @@ for r in results:
     if r['section'] == 'T':
         print('[%s] %-14s %s' % (r['section'], r['state'], r['name']))
         for x in r['subs']:
-            print('       - %-10s %s :: %s' % ('VULNERABLE' if x['vulnerable'] else 'closed', x['check'], x['evidence'][:170]))
+            print('       - %-10s %s :: %s' % (('HELD' if x.get('hold') else 'VULNERABLE') if x['vulnerable'] else 'closed', x['check'], x['evidence'][:230]))
+            if x.get('hold'):
+                print('         %-10s still open, held on purpose: %s' % ('', x['hold']))
     else:
         fails += not r['ok']
         print('[%s] %-4s %s\n       %s' % (r['section'], 'PASS' if r['ok'] else 'FAIL', r['name'], r['evidence']))

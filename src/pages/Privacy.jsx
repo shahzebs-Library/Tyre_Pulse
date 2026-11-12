@@ -75,28 +75,21 @@ export default function Privacy() {
             what is described, for the stated purpose, and none of them may use it for advertising. Some are
             used only when a feature is used or has been switched on.
           </p>
-          <div style={S.tableWrap}>
-            <table style={S.table}>
-              <thead>
-                <tr>
-                  <th style={S.th}>Company</th>
-                  <th style={S.th}>What it does</th>
-                  <th style={S.th}>What it receives</th>
-                  <th style={S.th}>When</th>
-                </tr>
-              </thead>
-              <tbody>
-                {PRIVACY_PROCESSORS.map((p) => (
-                  <tr key={p.id}>
-                    <td style={S.tdStrong}>{p.name}</td>
-                    <td style={S.td}>{p.role}. {p.why}</td>
-                    <td style={S.td}>{p.data}</td>
-                    <td style={S.td}>{PROCESSOR_WHEN_LABEL[p.when]}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ul style={S.procList}>
+            {PRIVACY_PROCESSORS.map((p) => (
+              <li key={p.id} style={S.procItem}>
+                <div style={S.procName}>{p.name}</div>
+                <dl style={S.procFacts}>
+                  <dt style={S.procTerm}>What it does</dt>
+                  <dd style={S.procDesc}>{p.role}. {p.why}</dd>
+                  <dt style={S.procTerm}>What it receives</dt>
+                  <dd style={S.procDesc}>{p.data}</dd>
+                  <dt style={S.procTerm}>When</dt>
+                  <dd style={S.procDesc}>{PROCESSOR_WHEN_LABEL[p.when]}</dd>
+                </dl>
+              </li>
+            ))}
+          </ul>
           <p style={{ ...S.p, marginTop: 12 }}>
             <strong>AI features.</strong> When a tyre photo is analysed, the photo leaves our backend and is sent
             to the AI provider named above. Photos can include people, number plates or surroundings if they are
@@ -161,9 +154,10 @@ const S = {
   p: { fontSize: 14.5, color: '#334155', lineHeight: 1.65, margin: 0 },
   ul: { margin: 0, paddingLeft: 18, color: '#334155', fontSize: 14.5, lineHeight: 1.75 },
   link: { color: '#15803d', fontWeight: 600, textDecoration: 'none' },
-  tableWrap: { overflowX: 'auto', marginTop: 12, border: '1px solid #e2e8f0', borderRadius: 12 },
-  table: { width: '100%', minWidth: 640, borderCollapse: 'collapse', fontSize: 13.5, color: '#334155', lineHeight: 1.55 },
-  th: { textAlign: 'left', padding: '10px 12px', background: '#f8fafc', color: '#475569', fontSize: 12, fontWeight: 700, borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' },
-  td: { padding: '10px 12px', borderBottom: '1px solid #f1f5f9', verticalAlign: 'top' },
-  tdStrong: { padding: '10px 12px', borderBottom: '1px solid #f1f5f9', verticalAlign: 'top', fontWeight: 700, color: '#0f172a' },
+  procList: { listStyle: 'none', margin: '12px 0 0', padding: 0, border: '1px solid #e2e8f0', borderRadius: 12 },
+  procItem: { padding: '12px 14px', borderBottom: '1px solid #f1f5f9' },
+  procName: { fontWeight: 700, color: '#0f172a', fontSize: 14 },
+  procFacts: { margin: '6px 0 0', fontSize: 13.5, color: '#334155', lineHeight: 1.55 },
+  procTerm: { color: '#475569', fontSize: 12, fontWeight: 700, marginTop: 6 },
+  procDesc: { margin: 0 },
 }

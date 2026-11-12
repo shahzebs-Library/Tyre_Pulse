@@ -80,6 +80,14 @@ describe('vehicleHandoverView', () => {
     expect(back).toMatchObject({ from_driver: 'Ali', to_driver: null, damages: null, damage_count: 0, country: null })
   })
 
+  it('carries photo refs in the payload, dropping blanks and non-strings', () => {
+    const out = buildHandoverPayload(form({
+      photos: ['tp-storage://tyre-photos/a.jpg', '', '   ', 42, null, 'tp-storage://tyre-photos/b.jpg'],
+    }), { country: 'KSA' })
+    expect(out.photos).toEqual(['tp-storage://tyre-photos/a.jpg', 'tp-storage://tyre-photos/b.jpg'])
+    expect(buildHandoverPayload(form(), {}).photos).toEqual([])
+  })
+
   it('reading deltas are null when a side is unknown', () => {
     expect(readingDeltas(form({ odometer_km: '1500', fuel_level_pct: '40' }), { prevOdometer: 1000, prevFuel: 70 }))
       .toEqual({ kmSince: 500, fuelChange: -30 })

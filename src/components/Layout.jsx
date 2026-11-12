@@ -142,7 +142,7 @@ const NAV_GROUPS = [
       { to: '/odometer-logs',       label: 'Odometer Logs', parent: 'Meters',      icon: Activity },
       { to: '/fleet-utilization',   label: 'Fleet Utilization', parent: 'Meters',  icon: Gauge, roles: ANALYTICS_ROLES },
       { to: '/vehicle-checkinout',  label: 'Vehicle Check In/Out', parent: 'Movement', icon: ArrowLeftRight, adminOnly: A },
-      { to: '/handovers',           label: 'Vehicle Handover', parent: 'Movement',   icon: KeyRound, adminOnly: A },
+      { to: '/handovers',           label: 'Vehicle Handover', parent: 'Movement',   icon: KeyRound, roles: ['Admin', 'Manager', 'Director', 'Fleet Supervisor', 'Fleet Incharge'] },
       { to: '/reservations',        label: 'Vehicle Reservations', parent: 'Movement', icon: BookMarked, adminOnly: A },
       { to: '/gate-pass',       label: 'Gate Pass', parent: 'Movement',          icon: GatePassIc },
     ],

@@ -837,7 +837,7 @@ function MainApp() {
                       <Route path="/emissions"             element={<Safe><RoleRoute allowed={['Admin']}><Emissions /></RoleRoute></Safe>} />
                       <Route path="/proof-of-delivery"     element={<Safe><RoleRoute allowed={['Admin']}><ProofOfDelivery /></RoleRoute></Safe>} />
                       <Route path="/fuel-theft"            element={<Safe><RoleRoute allowed={['Admin']}><FuelTheftAlerts /></RoleRoute></Safe>} />
-                      <Route path="/handovers"             element={<Safe><RoleRoute allowed={['Admin']}><VehicleHandover /></RoleRoute></Safe>} />
+                      <Route path="/handovers"             element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director', 'Fleet Supervisor', 'Fleet Incharge']}><VehicleHandover /></RoleRoute></Safe>} />
                       <Route path="/driver-training"       element={<Safe><RoleRoute allowed={['Admin']}><DriverTraining /></RoleRoute></Safe>} />
                       <Route path="/tachograph"            element={<Safe><RoleRoute allowed={['Admin']}><Tachograph /></RoleRoute></Safe>} />
                       <Route path="/bay-scheduling"        element={<Safe><RoleRoute allowed={['Admin']}><BayScheduling /></RoleRoute></Safe>} />

@@ -6,6 +6,7 @@
 import { resolveStorageUrl } from './storageRefs'
 import { safeImageSrc } from './safeUrl'
 import { shrinkImageForPdf } from './pdfImage'
+import { applyExportPolicy } from './exportUtils'
 
 export const observationReportId = (row) => `OBS-${String(row?.id || 'UNKNOWN').toUpperCase()}`
 export const observationRevision = (row) => String(row?.updated_at || row?.created_at || row?.inspection_date || 'Not recorded')
@@ -34,6 +35,8 @@ async function photoData(ref) {
 
 export async function downloadObservationReport(inspection, findings = []) {
   if (!inspection?.id) throw new Error('A saved inspection is required for the observation report.')
+  const approved = applyExportPolicy(findings, `Observation PDF ${observationReportId(inspection)}`)
+  if (approved.length !== findings.length) throw new Error('This observation exceeds the configured export row limit. Ask your administrator for a complete export.')
   const { default: jsPDF } = await import('jspdf')
   const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true })
   const stamp = new Date().toISOString()
@@ -53,10 +56,11 @@ export async function downloadObservationReport(inspection, findings = []) {
     doc.text(lines, 53, y)
     y += Math.max(7, lines.length * 4.5 + 2)
   }
-  doc.setFillColor(19, 44, 74); doc.rect(0, 0, 210, 26, 'F')
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(255, 255, 255)
+  doc.setFillColor(255, 255, 255); doc.rect(0, 0, 210, 26, 'F')
+  doc.setDrawColor(22, 101, 52); doc.setLineWidth(0.8); doc.line(15, 24, 195, 24)
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(22, 30, 44)
   doc.text('TYRE PULSE | OBSERVATION REPORT', 15, 13)
-  doc.setFontSize(9); doc.text('Source-linked audit copy | Template v1.0', 15, 20)
+  doc.setFontSize(9); doc.setTextColor(100, 116, 139); doc.text('Source-linked audit copy | Template v1.0', 15, 20)
   y = 36
   write('Report ID', ref)
   write('Source revision', sourceRevision)

@@ -60,10 +60,15 @@ export function corsHeaders(req: Request): Record<string, string> {
   }
 }
 
-export function jsonResponse(req: Request, body: unknown, status = 200): Response {
+export function jsonResponse(
+  req: Request,
+  body: unknown,
+  status = 200,
+  extraHeaders: Record<string, string> = {},
+): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders(req), 'Content-Type': 'application/json', ...extraHeaders },
   })
 }
 

@@ -1,14 +1,17 @@
 name: Take Play Store Screenshots
 
+# The sign-in used for the screenshots comes from repository SECRETS, never from
+# workflow inputs: inputs are stored with the run and printed unmasked in the log.
+# Required secrets (Settings -> Secrets and variables -> Actions):
+#   SCREENSHOT_EMAIL     sign-in of a dedicated low-privilege demo account
+#   SCREENSHOT_PASSWORD  its password
 on:
   workflow_dispatch:
-    inputs:
-      email:
-        description: 'App login email'
-        required: true
-      password:
-        description: 'App login password'
-        required: true
+
+# Least privilege: this workflow only reads the repository. Nothing here needs
+# to write contents, issues, pull requests or packages with GITHUB_TOKEN.
+permissions:
+  contents: read
 
 jobs:
   screenshots:
@@ -24,13 +27,18 @@ jobs:
           node-version: 22
 
       - name: Install Playwright
-        run: npm install -g playwright && npx playwright install chromium --with-deps
+        # Pinned to the version in the root package-lock.json, not "latest".
+        run: npm install -g playwright@1.61.1 && npx playwright install chromium --with-deps
 
       - name: Take screenshots
         env:
-          APP_EMAIL: ${{ github.event.inputs.email }}
-          APP_PASSWORD: ${{ github.event.inputs.password }}
+          APP_EMAIL: ${{ secrets.SCREENSHOT_EMAIL }}
+          APP_PASSWORD: ${{ secrets.SCREENSHOT_PASSWORD }}
         run: |
+          if [ -z "$APP_EMAIL" ] || [ -z "$APP_PASSWORD" ]; then
+            echo "::error::Set the SCREENSHOT_EMAIL and SCREENSHOT_PASSWORD repository secrets first."
+            exit 1
+          fi
           cat > /tmp/screenshots.mjs << 'SCRIPT'
           import { chromium } from 'playwright';
           import { mkdirSync } from 'fs';

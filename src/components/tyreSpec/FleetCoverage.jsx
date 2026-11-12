@@ -19,6 +19,7 @@ import {
 } from '../../lib/tyreSpecView'
 import { safeHref } from '../../lib/safeUrl'
 import { toUserMessage } from '../../lib/safeError'
+import { safeJsonToSheet } from '../../lib/csvSafe.js'
 
 const PAGE_SIZES = [10, 25, 50, 100]
 const NA = <span className="cc-na">N/A</span>
@@ -83,13 +84,13 @@ export default function FleetCoverage({ country, catalog, catalogError, onOpenSp
       'Source URLs': r.specs.map((s) => s.source_url).filter(Boolean).join(' '),
     }))
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{
+    XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, [{
       Report: 'Tyre specification coverage of the fleet',
       Scope: country || 'All countries',
       'Combinations included': filtered.length,
       'Tyres covered by an approved spec (%)': kpis.tyreSharePct == null ? 'N/A' : kpis.tyreSharePct.toFixed(1),
     }]), 'Report Scope')
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(out), 'Coverage')
+    XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, out), 'Coverage')
     XLSX.writeFile(wb, 'TyrePulse_Tyre_Spec_Coverage.xlsx')
   }
 

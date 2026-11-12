@@ -58,6 +58,7 @@ import { safeImageSrc } from '../lib/safeUrl'
 import { toUserMessage } from '../lib/safeError'
 import { costDisplay } from '../lib/tyreCostAudit'
 import { manualTyreCostWarning } from '../lib/importCostPreview'
+import { csvCell } from '../lib/csvSafe.js'
 import './TyreRecords.css'
 
 // exportUtils pulls the PDF/Excel report engines (~41 kB gz) that most sessions
@@ -391,7 +392,7 @@ export default function TyreRecords() {
         r.issue_date ?? '', r.asset_no ?? '', r.serial_no ?? '', r.brand ?? '', r.size ?? '',
         r.position ?? '', r.status ?? '', r.site ?? '', r.mis_number ?? '', r.job_card ?? '',
         r.risk_level ?? '', r.cost_per_tyre ?? '', r.category ?? '', r.remarks ?? '',
-      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')),
+      ].map(csvCell).join(',')),
     ].join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)

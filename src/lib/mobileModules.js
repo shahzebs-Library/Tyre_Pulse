@@ -43,6 +43,7 @@ export const MOBILE_MODULES = [
   { key: 'washing',        label: 'Vehicle Washing',  group: 'Field',       roles: ['manager', 'director', 'inspector', 'driver', 'tyre_man'] },
   { key: 'reportIssue',    label: 'Report Issue',     group: 'Field',       roles: ['manager', 'director', 'reporter', 'driver', 'mechanic', 'electrician', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager'] },
   { key: 'repairRequest',  label: 'Repair Request',   group: 'Field',       roles: ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver', 'mechanic', 'electrician'] },
+  { key: 'handover',       label: 'Vehicle Handover', group: 'Field',       roles: ['manager', 'director', 'inspector', 'driver', 'tyre_man', 'fleet_supervisor', 'fleet_incharge'] },
   // Fleet ---------------------------------------------------------------------
   { key: 'records',        label: 'Tyre Records',     group: 'Fleet',       roles: [] },
   { key: 'vehicles',       label: 'Vehicles',         group: 'Fleet',       roles: ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver', 'mechanic', 'electrician', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager'] },

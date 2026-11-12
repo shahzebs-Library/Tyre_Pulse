@@ -38,6 +38,7 @@ import {
   KM_STATUS_LABEL, nextClaimStatuses, claimSaveProblem, overdueClaims, SUPPLIER_WAIT_LIMIT_DAYS,
 } from '../lib/warrantyTrackerAnalytics'
 import ClaimProcedure from '../components/warranty/ClaimProcedure'
+import { safeJsonToSheet } from '../lib/csvSafe.js'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -584,7 +585,7 @@ export default function WarrantyTracker() {
     // a wider population than the claim list beside them.
     const exportBrandPerf = brandPerformance(filtered)
     const exportFailures = failureBreakdown(filtered)
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Warranty Claims')
+    XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, rows), 'Warranty Claims')
     if (exportBrandPerf.length > 0) {
       const bpRows = exportBrandPerf.map(b => ({
         Brand: b.brand,
@@ -593,9 +594,9 @@ export default function WarrantyTracker() {
         'Avg Credit': b.avgCredit == null ? null : +b.avgCredit.toFixed(0),
         'Avg km at Failure': b.avgKm == null ? null : +b.avgKm.toFixed(0),
       }))
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bpRows), 'Brand Performance')
+      XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, bpRows), 'Brand Performance')
     }
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(exportFailures.map(f => ({
+    XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, exportFailures.map(f => ({
       'Failure Type': f.type,
       Count: f.count,
       'Avg km at Failure': f.avgKm,

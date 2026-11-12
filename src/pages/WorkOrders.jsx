@@ -51,6 +51,7 @@ import { loadAutoTable } from '../lib/pdfEngine'
 import { defaultWindow } from '../lib/defaultPeriod'
 import { defaultPeriodFor } from '../lib/api/latestActivity'
 import PeriodNotice from '../components/ui/PeriodNotice'
+import { safeJsonToSheet } from '../lib/csvSafe.js'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -707,7 +708,7 @@ export default function WorkOrders() {
         await exportToPdf(rows, keys.map(k => ({ key: k, header: k })), 'Work Orders', name, 'landscape', company)
       } else {
         const XLSX = await import('xlsx')
-        const ws = XLSX.utils.json_to_sheet(rows)
+        const ws = safeJsonToSheet(XLSX, rows)
         const wb = XLSX.utils.book_new()
         XLSX.utils.book_append_sheet(wb, ws, 'Work Orders')
         XLSX.writeFile(wb, `${name}.xlsx`)

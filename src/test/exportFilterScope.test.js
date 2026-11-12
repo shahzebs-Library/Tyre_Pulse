@@ -105,7 +105,7 @@ const CASES = [
     file: 'pages/WarrantyTracker.jsx',
     what: 'Excel failure sheet scope',
     required: 'const exportFailures = failureBreakdown(filtered)',
-    forbidden: 'XLSX.utils.json_to_sheet(failureCounts.map(f => ({',
+    forbidden: 'safeJsonToSheet(XLSX, failureCounts.map(f => ({',
   },
   {
     file: 'pages/WorkOrders.jsx',

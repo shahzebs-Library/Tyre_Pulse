@@ -21,8 +21,11 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const ALLOWED_ORIGINS = ['https://tyrepulse.app', 'https://www.tyrepulse.app', 'https://app.tyrepulse.app', 'https://admin.tyrepulse.app']
-const VERCEL_ORIGIN = /^https:\/\/[a-z0-9-]+\.vercel\.app$/
+// Production hosts plus local dev only. The *.vercel.app wildcard and the
+// "starts with http://localhost" test (which also matched localhost.example.com)
+// are gone; a preview host must be listed in the ALLOWED_ORIGINS env explicitly.
+const DEFAULT_ALLOWED_ORIGINS = ['https://tyrepulse.app', 'https://www.tyrepulse.app', 'https://app.tyrepulse.app', 'https://admin.tyrepulse.app']
+const LOCAL_DEV_ORIGIN = /^http:\/\/localhost(:\d{1,5})?$/
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const NOTE =
@@ -30,9 +33,11 @@ const NOTE =
 
 function corsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('origin')
+  const configured = Deno.env.get('ALLOWED_ORIGINS')?.split(',').map((v) => v.trim()).filter(Boolean)
+  const allowed = configured?.length ? configured : DEFAULT_ALLOWED_ORIGINS
   let allowOrigin = '*'
   if (origin) {
-    allowOrigin = (ALLOWED_ORIGINS.includes(origin) || VERCEL_ORIGIN.test(origin) || origin.startsWith('http://localhost')) ? origin : 'null'
+    allowOrigin = (allowed.includes(origin) || LOCAL_DEV_ORIGIN.test(origin)) ? origin : 'null'
   }
   const requestedHeaders = req.headers.get('access-control-request-headers')
   return {

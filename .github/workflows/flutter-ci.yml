@@ -21,6 +21,11 @@ on:
         type: boolean
         default: false
 
+# Least privilege: this workflow only reads the repository. Nothing here needs
+# to write contents, issues, pull requests or packages with GITHUB_TOKEN.
+permissions:
+  contents: read
+
 concurrency:
   group: flutter-ci-${{ github.ref }}
   cancel-in-progress: true
@@ -30,14 +35,58 @@ defaults:
     working-directory: tyre_pulse_flutter
 
 jobs:
+  regenerate_goldens:
+    name: Regenerate goldens
+    # Opt-in only (manual run with update_goldens). Goldens are exact-pixel
+    # Windows renders, so they can only be regenerated here. This is the ONLY
+    # job with write access; it never runs on push or pull_request. The commit
+    # is made with GITHUB_TOKEN, which does not start another workflow run;
+    # re-run this workflow normally afterwards to confirm green.
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_goldens }}
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+        working-directory: tyre_pulse_flutter
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.2
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Generate sources
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Regenerate goldens
+        run: |
+          flutter test --update-goldens
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- ':(glob)test/**/goldens/*.png'
+          if git diff --cached --quiet; then
+            echo "Goldens already current."
+          else
+            git commit -m "test(flutter): regenerate goldens on Windows [update-goldens]"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
+
   analyze_test:
     name: Analyze and test
     # Golden images were authored on Windows. Keep exact pixel assertions on
     # that renderer; Linux and macOS still compile the Android/iOS applications.
     runs-on: windows-latest
-    # Write access is only used by the opt-in "Regenerate goldens" step.
-    permissions:
-      contents: write
+    # A golden-regeneration run (manual, update_goldens ticked) only runs the
+    # regenerate_goldens job below; re-run this workflow normally afterwards to
+    # confirm green. Every other run is read-only.
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.update_goldens) }}
     defaults:
       run:
         shell: bash
@@ -111,24 +160,6 @@ jobs:
         # matter to errors already; anything left at info level is still a
         # signal we chose to keep.
         run: flutter analyze --fatal-infos
-
-      - name: Regenerate goldens
-        # Opt-in only (manual run with update_goldens). Goldens are exact-pixel
-        # Windows renders, so they can only be regenerated here. The commit is
-        # made with GITHUB_TOKEN, which does not start another workflow run;
-        # re-run this workflow normally afterwards to confirm green.
-        if: github.event_name == 'workflow_dispatch' && inputs.update_goldens
-        run: |
-          flutter test --update-goldens
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A -- ':(glob)test/**/goldens/*.png'
-          if git diff --cached --quiet; then
-            echo "Goldens already current."
-          else
-            git commit -m "test(flutter): regenerate goldens on Windows [update-goldens]"
-            git push origin "HEAD:${GITHUB_REF_NAME}"
-          fi
 
       - name: Prefetch sqlite3 native library (retries)
         # The sqlite3 build hook downloads sqlite3.x64.windows.dll from the

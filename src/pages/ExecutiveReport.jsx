@@ -61,6 +61,7 @@ import {
   riskCounts, riskScore, riskBand, buildRiskMatrix, topHighRisk, riskTrend,
   honestKpis, kpiExportRows, actionPhaseOf, RISK_LEVELS,
 } from '../lib/executiveReportAnalytics'
+import { safeJsonToSheet } from '../lib/csvSafe.js'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement,
@@ -1180,7 +1181,7 @@ export default function ExecutiveReport() {
     const wb = XLSX.utils.book_new()
 
     const kpiRows = kpiExportRows(hk, { currency, totalSpend, projectedAnnual })
-    const addSheet = (rows, name) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.length ? rows : [{}]), name)
+    const addSheet = (rows, name) => XLSX.utils.book_append_sheet(wb, safeJsonToSheet(XLSX, rows.length ? rows : [{}]), name)
 
     // Sheets are appended per visible built-in section, in the customized order.
     const excelRenderers = {

@@ -23,6 +23,19 @@ function ct(a: string, b: string): boolean {
   for (let i = 0; i < n; i++) d |= (x[i] ?? 0) ^ (y[i] ?? 0)
   return d === 0
 }
+// Same rule as sentry-issues: the bearer token goes only to https://sentry.io or
+// an https://<region>.sentry.io host (no port, credentials, path or query).
+function sentryRegion(raw: string | undefined): string | null {
+  const value = (raw || 'https://de.sentry.io').trim()
+  let parsed: URL
+  try { parsed = new URL(value) } catch { return null }
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.port) return null
+  if (parsed.pathname !== '/' && parsed.pathname !== '') return null
+  if (parsed.search || parsed.hash) return null
+  const host = parsed.hostname.toLowerCase()
+  if (host !== 'sentry.io' && !/^[a-z0-9-]+\.sentry\.io$/.test(host)) return null
+  return `https://${host}`
+}
 function esc(s: string): string {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
@@ -51,7 +64,11 @@ serve(async (req) => {
     return new Response(JSON.stringify({ ok: true, skipped: 'disabled or not configured' }), { status: 200 })
   }
   const org = cfg['sentry_org'] || 'shah-profile'
-  const region = (cfg['sentry_region_url'] || 'https://de.sentry.io').replace(/\/+$/, '')
+  const region = sentryRegion(cfg['sentry_region_url'])
+  if (!region) {
+    // Never send the Sentry token to a host that is not Sentry.
+    return new Response(JSON.stringify({ ok: true, skipped: 'region url is not a Sentry host' }), { status: 200 })
+  }
   const base = `${region}/api/0/organizations/${encodeURIComponent(org)}`
 
   // Fetch unresolved fatal issues.

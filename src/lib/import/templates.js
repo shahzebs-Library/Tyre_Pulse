@@ -8,6 +8,7 @@
  * is exactly what "arrange my file to get 100% data" needs.
  */
 import { MODULE_FIELDS } from './synonyms.js'
+import { csvCell } from '../csvSafe.js'
 
 /**
  * Every intake module has a downloadable template so an operator can arrange any
@@ -148,10 +149,6 @@ const SAMPLE = {
   assigned_asset_no: ['TRK-2201', 'TRK-2202'],
 }
 
-function csvCell(v) {
-  const s = v == null ? '' : String(v)
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-}
 
 /**
  * Build a UTF-8 CSV template string for a module: a header row of canonical

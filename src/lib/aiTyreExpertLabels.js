@@ -14,6 +14,7 @@
  */
 import { DEFECT_TYPES, DANGEROUS_TYPES } from './aiTyreAdjudication.js'
 import * as accuracy from './aiTyreAccuracy.js'
+import { csvCell } from './csvSafe.js'
 
 /** Owner benchmark targets: 500 labelled cases, of which at least 60 carry a dangerous defect. */
 export const LABEL_TARGETS = Object.freeze({ cases: 500, dangerous: 60 })
@@ -344,11 +345,6 @@ export function buildBenchmarkExport({ consensus, jobsById, inspectionsById, nam
   return { labelled, predictions, excludedDisagreement, excludedSingle, missingJob, duplicatePhoto }
 }
 
-const csvCell = (v) => {
-  let s = Array.isArray(v) ? v.join(';') : v == null ? '' : String(v)
-  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s // spreadsheet formula guard
-  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
-}
 export function labelledToCsv(rows) {
   return [LABELLED_COLUMNS.join(','), ...(rows || []).map((r) => LABELLED_COLUMNS.map((k) => csvCell(r[k])).join(','))].join('\n')
 }

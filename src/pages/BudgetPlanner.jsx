@@ -33,6 +33,7 @@ import {
   FileText, Edit2, Save, X, Sliders, BarChart2, PieChart as PieIcon,
   Calendar, Target, Zap, ArrowUpRight, ArrowDownRight, Minus, Info,
 } from 'lucide-react'
+import { safeJsonToSheet } from '../lib/csvSafe.js'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -589,7 +590,7 @@ export default function BudgetPlanner() {
       const monthlyRows = monthlyExportRows(monthlyActuals, monthlyBudget).map(r => ({
         Month: r.month, Budget: r.budget, Actual: r.actual, Variance: r.variance, 'Variance %': r.used,
       }))
-      const ws1 = XLSX.utils.json_to_sheet(monthlyRows)
+      const ws1 = safeJsonToSheet(XLSX, monthlyRows)
       ws1['!cols'] = [{ wch: 10 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 12 }]
       XLSX.utils.book_append_sheet(wb, ws1, 'Monthly Budget vs Actual')
 
@@ -603,7 +604,7 @@ export default function BudgetPlanner() {
         'Projection': s.projection == null ? 'N/A' : Math.round(s.projection),
         Status: s.status,
       }))
-      const ws2 = XLSX.utils.json_to_sheet(siteRows)
+      const ws2 = safeJsonToSheet(XLSX, siteRows)
       ws2['!cols'] = [{ wch: 20 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 14 }, { wch: 14 }]
       XLSX.utils.book_append_sheet(wb, ws2, 'Site Allocation')
 
@@ -616,13 +617,13 @@ export default function BudgetPlanner() {
         'CPK weighted (curr)': b.cpk != null ? b.cpk.toFixed(4) : 'N/A',
         'CPK Change %': b.cpkChange != null ? fmtPct(b.cpkChange) : 'N/A',
       }))
-      const ws3 = XLSX.utils.json_to_sheet(brandRows)
+      const ws3 = safeJsonToSheet(XLSX, brandRows)
       ws3['!cols'] = [{ wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 14 }]
       XLSX.utils.book_append_sheet(wb, ws3, 'Brand Analysis')
 
       // Sheet 4: Recommendations
       const recRows = recommendations.map((r, i) => ({ '#': i + 1, Recommendation: r }))
-      const ws4 = XLSX.utils.json_to_sheet(recRows)
+      const ws4 = safeJsonToSheet(XLSX, recRows)
       ws4['!cols'] = [{ wch: 4 }, { wch: 80 }]
       XLSX.utils.book_append_sheet(wb, ws4, 'Recommendations')
 

@@ -20,6 +20,11 @@ name: Release to Google Play (Closed testing)
 on:
   workflow_dispatch:
 
+# Least privilege: this workflow only reads the repository. Nothing here needs
+# to write contents, issues, pull requests or packages with GITHUB_TOKEN.
+permissions:
+  contents: read
+
 jobs:
   release:
     name: Build AAB + submit to Play closed testing

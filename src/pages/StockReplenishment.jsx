@@ -36,6 +36,7 @@ import {
   plannedQty, summarizeMatrix, consumptionBySize, trendForSize, allSizes as listSizes, consumptionGrid,
   seasonalVariance, orderTotals, matrixExportRows, MATRIX_EXPORT_COLS, MATRIX_EXPORT_HEADERS,
 } from '../lib/stockReplenishmentAnalytics'
+import { safeJsonToSheet } from '../lib/csvSafe.js'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, PointElement, LineElement,
@@ -320,7 +321,7 @@ export default function StockReplenishment() {
         'Unit Cost': l.unitCost, 'Total Cost': l.totalCost, 'Preferred Supplier': l.supplier,
       }))
       rows.push({ '#': '', Brand: '', Size: '', Site: '', Quantity: '', 'Unit Cost': 'TOTAL', 'Total Cost': totals.total, 'Preferred Supplier': '' })
-      const ws = XLSX.utils.json_to_sheet(rows)
+      const ws = safeJsonToSheet(XLSX, rows)
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, 'Purchase Order')
       XLSX.writeFile(wb, `${reportFileName('Replenishment PO', formatDate(new Date()))}.xlsx`)

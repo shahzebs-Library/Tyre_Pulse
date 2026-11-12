@@ -84,7 +84,14 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 Deno.serve(async (req) => {
   const started = Date.now()
   const headers = { ...cors(req), 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
-  const reply = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers })
+  // A 429 carries Retry-After (seconds) taken from the body's own retry_after_seconds.
+  const reply = (status: number, body: unknown) => {
+    const wait = Number((body as { retry_after_seconds?: unknown } | null)?.retry_after_seconds)
+    const extra: Record<string, string> = status === 429 && Number.isFinite(wait) && wait > 0
+      ? { 'Retry-After': String(Math.ceil(wait)) }
+      : {}
+    return new Response(JSON.stringify(body), { status, headers: { ...headers, ...extra } })
+  }
   const refuse = async (status: number, body: unknown) => {
     const wait = MIN_REFUSAL_MS - (Date.now() - started)
     if (wait > 0) await sleep(wait + Math.floor(Math.random() * 120))

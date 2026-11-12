@@ -182,7 +182,7 @@ serve(async (req) => {
         const perDay = dayResult.count
         if ((perMin ?? 0) >= aiCfg.ratePerMin || (perDay ?? 0) >= RL_PER_DAY) {
           logAiFailure(svc, { userId, status: 'rate_limited', httpStatus: 429, error: 'Rate limit exceeded' })
-          return jsonResponse(req, { error: 'Rate limit exceeded. Please wait before sending more AI requests.' }, 429)
+          return jsonResponse(req, { error: 'Rate limit exceeded. Please wait before sending more AI requests.' }, 429, { 'Retry-After': (perMin ?? 0) >= aiCfg.ratePerMin ? '60' : '3600' })
         }
       } catch (e) {
         console.error('[chat-ai] rate-limit check failed (blocking request):', e)

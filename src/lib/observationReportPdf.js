@@ -27,7 +27,8 @@ async function photoData(ref) {
       reader.onerror = reject
       reader.readAsDataURL(blob)
     })
-    return (await shrinkImageForPdf(raw, 'JPEG')).dataUrl
+    const image = await shrinkImageForPdf(raw, blob.type === 'image/png' ? 'PNG' : 'JPEG')
+    return image
   } catch { return null }
 }
 
@@ -55,7 +56,7 @@ export async function downloadObservationReport(inspection, findings = []) {
   doc.setFillColor(19, 44, 74); doc.rect(0, 0, 210, 26, 'F')
   doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(255, 255, 255)
   doc.text('TYRE PULSE | OBSERVATION REPORT', 15, 13)
-  doc.setFontSize(9); doc.text('Source-linked audit copy | Version 1.0', 15, 20)
+  doc.setFontSize(9); doc.text('Source-linked audit copy | Template v1.0', 15, 20)
   y = 36
   write('Report ID', ref)
   write('Source revision', sourceRevision)
@@ -90,7 +91,7 @@ export async function downloadObservationReport(inspection, findings = []) {
       const data = await photoData(f.photo)
       if (data) {
         pageBreak(57)
-        try { doc.addImage(data, 'JPEG', 15, y, 87, 53); y += 59 }
+        try { doc.addImage(data.dataUrl, data.fmt, 15, y, 87, 53); y += 59 }
         catch { write('Evidence', 'Photo stored but could not be embedded') }
       } else write('Evidence', 'Photo stored but unavailable for PDF export')
     } else if (f.kind === 'tyre') write('Evidence', 'No photo recorded')
@@ -99,7 +100,7 @@ export async function downloadObservationReport(inspection, findings = []) {
   const pages = doc.internal.getNumberOfPages()
   for (let page = 1; page <= pages; page++) {
     doc.setPage(page); doc.setFontSize(8); doc.setTextColor(100, 116, 139)
-    doc.text(`Observation report ${ref} | v1.0 | page ${page} of ${pages}`, 15, 287)
+    doc.text(`Observation report ${ref} | Template v1.0 | page ${page} of ${pages}`, 15, 287)
   }
   doc.save(`Tyre Observation ${filePart(inspection.asset_no)} ${filePart(String(inspection.inspection_date || '').slice(0, 10))} ${filePart(inspection.id)}.pdf`)
 }

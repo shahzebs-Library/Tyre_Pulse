@@ -191,9 +191,10 @@ export function availableCreateActions({
   isSuperAdmin,
   capabilities,
   isFlagEnabled,
+  moduleStatus,
 } = {}) {
   return actions.filter((a) => {
-    if (!isCommandVisible(a.access, profile, hasPermission, grantedModules, isSuperAdmin)) return false
+    if (!isCommandVisible(a.access, profile, hasPermission, grantedModules, isSuperAdmin, moduleStatus)) return false
     if (a.flag && typeof isFlagEnabled === 'function' && isFlagEnabled(a.flag) !== true) return false
     if (createRevoked(capabilities, a.access?.moduleKey)) return false
     return true
@@ -207,7 +208,7 @@ export function availableCreateActions({
 export default function GlobalCreate({ isMobile = false }) {
   const { t } = useLanguage()
   const navigate = useNavigate()
-  const { profile, hasPermission, grantedModules, isSuperAdmin, capabilities } = useAuth() || {}
+  const { profile, hasPermission, grantedModules, isSuperAdmin, capabilities, moduleStatus } = useAuth() || {}
   // No `|| {}` guard here, unlike useAuth above: useFeatureFlags is a plain hook
   // that always returns an object, not a context read that can be undefined
   // outside its provider.
@@ -224,8 +225,9 @@ export default function GlobalCreate({ isMobile = false }) {
       isSuperAdmin,
       capabilities,
       isFlagEnabled: isEnabled,
+      moduleStatus,
     }),
-    [profile, hasPermission, grantedModules, isSuperAdmin, capabilities, isEnabled],
+    [profile, hasPermission, grantedModules, isSuperAdmin, capabilities, isEnabled, moduleStatus],
   )
 
   // Sized from the real entry count so the popover never opens off-screen.

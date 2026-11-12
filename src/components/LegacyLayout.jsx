@@ -28,7 +28,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { isChecklistOnlyRole, isChecklistPathAllowed, CHECKLIST_ONLY_ROLES } from '../lib/checklistAccess'
-import { navItemAllowedForCustomRole, NAV_MODULE_KEY, governingModuleKey } from '../lib/navAccess'
+import { navItemAllowedForCustomRole, NAV_MODULE_KEY, governingModuleKey, isPathSwitchedOff } from '../lib/navAccess'
 import { ACCESS_ROLES } from '../lib/moduleCatalog'
 import { applyNavLayout } from '../lib/navLayout'
 import { getNavLayout } from '../lib/api/navLayout'
@@ -711,7 +711,7 @@ export default function LegacyLayout({ children }) {
   // subscriptions per tab, every one invalidating a query key no page reads, against a
   // WAL decoder that is this instance's single largest cost.
 
-  const { profile, signOut, hasPermission, grantedModules, isSuperAdmin } = useAuth()
+  const { profile, signOut, hasPermission, grantedModules, isSuperAdmin, moduleStatus } = useAuth()
   const { t }                               = useLanguage()
   const { branding }                        = useTenant()
   // Org-assigned app icon (V120); falls back to the built-in mark so an
@@ -1051,7 +1051,7 @@ export default function LegacyLayout({ children }) {
             // React key, collapse state, and translation lookup.
             const groupId = group.key || group.label
             if (!shouldShowGroup(group, profile)) return null
-            const visibleItems = items.filter(item => shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin))
+            const visibleItems = items.filter(item => shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin) && !isPathSwitchedOff(item.to, moduleStatus))
             if (visibleItems.length === 0) return null
             const isCollapsed = collapsedGroups.has(groupId)
             const _grpKey = `nav.groups.${groupId}`

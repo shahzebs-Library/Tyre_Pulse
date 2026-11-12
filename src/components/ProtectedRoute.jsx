@@ -2,7 +2,7 @@ import { REPORT_BUILDER_ROUTES, canUseReportBuilder } from '../lib/reportBuilder
 import { Navigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import { governingModuleKey } from '../lib/navAccess'
+import { governingModuleKey, pathModuleStatus } from '../lib/navAccess'
 import { isBuiltInRole } from '../lib/api/customRoles'
 import { configBool } from '../lib/api/systemConfig'
 import LoadingSpinner from './LoadingSpinner'
@@ -203,6 +203,25 @@ export function ModuleRoute({ moduleKey, children }) {
     return <ModuleUnavailable status={status} until={window?.until} note={window?.note} />
   }
   return children
+}
+
+/**
+ * Module Control enforcement for EVERY page, whatever guard its route uses.
+ * ModuleRoute only covered about a third of the routes; RoleRoute, FlagRoute and
+ * unguarded pages ignored the switch, so turning a module Off left it open. This
+ * gate sits inside the shell around the page content and reads the current
+ * route, so one switch now reaches every page. Admin and Super Admin still pass
+ * (they administer and verify the module); an unknown key reads as live.
+ */
+export function ModuleStatusGate({ children }) {
+  const { profile, loading, isSuperAdmin, moduleStatus, moduleMaintenance } = useAuth()
+  const location = useLocation()
+  if (loading || !profile) return children
+  if (isSuperAdmin || profile.role === 'Admin') return children
+  const { status, key } = pathModuleStatus(location.pathname, moduleStatus)
+  if (status === 'live') return children
+  const win = typeof moduleMaintenance === 'function' ? moduleMaintenance(key) : null
+  return <ModuleUnavailable status={status} until={win?.until} note={win?.note} />
 }
 
 // Gates a route to Super Admins only (profiles.is_super_admin). Renders the same

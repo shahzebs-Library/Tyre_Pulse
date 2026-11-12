@@ -9,7 +9,7 @@ import { LanguageProvider } from './contexts/LanguageContext'
 import { SettingsProvider, useSettings } from './contexts/SettingsContext'
 import { TenantProvider } from './contexts/TenantContext'
 import { CommandPaletteProvider } from './contexts/CommandPaletteContext'
-import ProtectedRoute, { RoleRoute, ModuleRoute, RouteLoading } from './components/ProtectedRoute'
+import ProtectedRoute, { RoleRoute, ModuleRoute, RouteLoading, ModuleStatusGate } from './components/ProtectedRoute'
 import { useAuth } from './contexts/AuthContext'
 import Layout from './components/Layout'
 import { isSystemConfigLoaded, shouldUseNewShell, NEW_SHELL_KEY } from './lib/api/systemConfig'
@@ -630,6 +630,7 @@ function MainApp() {
                         screens felt like the app restarting each time. Scoped
                         here, only the content area swaps. */}
                     <Suspense fallback={<RouteLoading />}>
+                    <ModuleStatusGate>
                     <Routes>
                       <Route path="/"            element={<Safe><HomeRoute /></Safe>} />
                       <Route path="/tyres"       element={<Safe><ModuleRoute moduleKey="tyre_records"><TyreRecords /></ModuleRoute></Safe>} />
@@ -895,6 +896,7 @@ function MainApp() {
                       <Route path="/automation-rules/builder/:ruleId"  element={<Safe><FlagRoute flag="automation_platform"><RuleBuilder /></FlagRoute></Safe>} />
                       <Route path="*"            element={<NotFound />} />
                     </Routes>
+                    </ModuleStatusGate>
                     </Suspense>
                     </ChecklistOnlyGate>
                     </SubscriptionGate>

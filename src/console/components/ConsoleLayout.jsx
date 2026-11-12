@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import useAppShellScrollLock from '../../hooks/useAppShellScrollLock'
-import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import {
   Shield, LayoutDashboard, Building2, Users, Settings2,
   ClipboardList, Zap, Megaphone, Lock, LogOut, ChevronDown,
@@ -16,6 +16,7 @@ import ThemeToggle from '../../components/ui/ThemeToggle'
 import { getCurrentSupportSession, endSupportSession } from '../../lib/api/supportSessions'
 import ConsoleCommandPalette from './ConsoleCommandPalette'
 import ConsoleTopBarActions from './ConsoleTopBarActions'
+import ErrorBoundary from '../../components/ErrorBoundary'
 
 /**
  * The Control Center sidebar: five AREAS (Monitor, Platform, Trust, Runtime,
@@ -26,6 +27,10 @@ import ConsoleTopBarActions from './ConsoleTopBarActions'
  * `section` groups consecutive items under a collapsible sub-heading. Items
  * are still written as plain object literals because the module
  * coverage test reads this file as text to prove every route has an entry.
+ *
+ * `at` is where an item really lands when its `to` is an old route that now
+ * redirects into another screen. The sidebar highlights by `at`, so "Backups"
+ * lights up on /console/database/backups instead of nothing at all.
  */
 export const NAV_GROUPS = [
   {
@@ -68,13 +73,13 @@ export const NAV_GROUPS = [
       { to: '/console/notifications',     label: 'Notifications',     icon: BellRing,       section: 'Notifications' },
       { to: '/console/api-keys',          label: 'API Monitor',       icon: KeyRound,       section: 'API Monitor' },
       { to: '/console/database',          label: 'Database Center',   icon: Database,       section: 'Database' },
-      { to: '/console/data-browser',      label: 'Data Browser',      icon: Search,         section: 'Database' },
-      { to: '/console/backups',           label: 'Backups',           icon: DatabaseBackup, section: 'Database' },
-      { to: '/console/control-center',    label: 'Data Trust & Control', icon: ShieldCheck, section: 'Database' },
-      { to: '/console/data-quality',      label: 'Data Quality',      icon: ShieldCheck,    section: 'Database' },
-      { to: '/console/reconciliation',    label: 'Reconciliation',    icon: Scale,          section: 'Database' },
-      { to: '/console/correction-center', label: 'Correction Center', icon: ClipboardList,  section: 'Database' },
-      { to: '/console/lineage',           label: 'Lineage Explorer',  icon: GitBranch,      section: 'Database' },
+      { to: '/console/data-browser',      label: 'Data Browser',      icon: Search,         section: 'Database', at: '/console/database/browser' },
+      { to: '/console/backups',           label: 'Backups',           icon: DatabaseBackup, section: 'Database', at: '/console/database/backups' },
+      { to: '/console/control-center',    label: 'Data Trust & Control', icon: ShieldCheck, section: 'Database', at: '/console/database/trust/control' },
+      { to: '/console/data-quality',      label: 'Data Quality',      icon: ShieldCheck,    section: 'Database', at: '/console/database/trust/quality' },
+      { to: '/console/reconciliation',    label: 'Reconciliation',    icon: Scale,          section: 'Database', at: '/console/database/trust/recon' },
+      { to: '/console/correction-center', label: 'Correction Center', icon: ClipboardList,  section: 'Database', at: '/console/database/trust/cases' },
+      { to: '/console/lineage',           label: 'Lineage Explorer',  icon: GitBranch,      section: 'Database', at: '/console/database/trust/lineage' },
       { to: '/console/storage',           label: 'Storage',           icon: HardDrive,      section: 'Storage' },
       { to: '/console/crash-reports',     label: 'Error Center',      icon: Bug,            section: 'Error Center' },
     ],
@@ -133,29 +138,67 @@ function writeNavState(key, value) {
   try { window.localStorage.setItem(key, JSON.stringify(value)) } catch { /* storage unavailable: state stays in memory */ }
 }
 
-function NavItem({ item, sidebarOpen, compact = false }) {
+/** Every sidebar item, flat, for working out which one the current URL belongs to. */
+const ALL_NAV_ITEMS = NAV_GROUPS.flatMap((g) => g.items)
+
+/**
+ * The ONE sidebar item that owns a pathname: the item whose landing path
+ * (`at`, else `to`) is the longest prefix of it. Longest wins so that
+ * /console/database/backups lights "Backups" and not also "Database Center".
+ */
+export function activeNavTo(pathname, items = ALL_NAV_ITEMS) {
+  const path = String(pathname || '').replace(/\/+$/, '') || '/console'
+  let best = null
+  let bestLen = -1
+  for (const it of items) {
+    const base = it.at || it.to
+    const hit = it.end ? path === base : (path === base || path.startsWith(`${base}/`))
+    if (hit && base.length > bestLen) { best = it.to; bestLen = base.length }
+  }
+  return best
+}
+
+function NavItem({ item, sidebarOpen, compact = false, active = false, onNavigate }) {
   const Icon = item.icon
   return (
-    <NavLink to={item.to} end={item.end} title={item.label}
+    <Link to={item.to} title={item.label} onClick={onNavigate}
       aria-label={sidebarOpen ? undefined : item.label}
-      className={({ isActive }) =>
+      aria-current={active ? 'page' : undefined}
+      className={
         `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 flex items-center gap-2.5 px-2.5 ${compact ? 'py-1.5' : 'py-2'} rounded-lg transition-all text-xs font-medium group ${
-          isActive
+          active
             ? 'bg-orange-950/60 text-orange-300 border border-orange-800/40'
             : 'text-gray-500 hover:text-gray-200 hover:bg-gray-800/60'
         }`
       }>
       {!compact && <Icon size={15} className="flex-shrink-0" aria-hidden="true" />}
       {sidebarOpen && <span className="truncate">{item.label}</span>}
-    </NavLink>
+    </Link>
   )
+}
+
+/** True below the md breakpoint, where the open sidebar becomes a drawer. */
+function useNarrowScreen() {
+  const query = '(max-width: 767px)'
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.(query).matches)
+  useEffect(() => {
+    const mq = window.matchMedia?.(query)
+    if (!mq) return undefined
+    const on = (e) => setNarrow(e.matches)
+    mq.addEventListener?.('change', on)
+    return () => mq.removeEventListener?.('change', on)
+  }, [])
+  return narrow
 }
 
 export default function ConsoleLayout() {
   useAppShellScrollLock()
   const { admin, signOut, activeOrg, setActiveOrg, orgs } = useConsoleAuth()
   const navigate  = useNavigate()
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  // On a phone an open 224px sidebar leaves the page 166px wide, so it starts
+  // as the icon rail there and opens as a drawer OVER the page instead.
+  const narrow = useNarrowScreen()
+  const [sidebarOpen, setSidebarOpen] = useState(() => !(typeof window !== 'undefined' && window.matchMedia?.('(max-width: 767px)').matches))
   const [navFilter, setNavFilter]     = useState('')
   // A collapsed sidebar has no filter box, so it must never render a filtered set.
   const visibleGroups = sidebarOpen ? filterGroups(NAV_GROUPS, navFilter) : NAV_GROUPS
@@ -163,9 +206,25 @@ export default function ConsoleLayout() {
   const location = useLocation()
   const [collapsedAreas, setCollapsedAreas] = useState(() => readNavState('tp_console_nav_areas'))
   const [openSections, setOpenSections]     = useState(() => readNavState('tp_console_nav_sections'))
-  const isActiveRoute = useCallback((item) => (item.end
-    ? location.pathname === item.to || location.pathname === `${item.to}/`
-    : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)), [location.pathname])
+  const activeTo = activeNavTo(location.pathname)
+  const isActiveRoute = useCallback((item) => item.to === activeTo, [activeTo])
+  // The page scrolls inside <main>, which the router knows nothing about: a
+  // new page used to open wherever the last one had been scrolled to. Changing
+  // only a tab (?tab=) keeps the position.
+  useEffect(() => {
+    const main = document.getElementById('console-main')
+    if (main) main.scrollTop = 0
+  }, [location.pathname])
+  const drawer = narrow && sidebarOpen
+  const closeDrawer = useCallback(() => { if (narrow) setSidebarOpen(false) }, [narrow])
+  // Crossing the breakpoint: a phone gets the rail, a wide screen the full sidebar.
+  useEffect(() => { setSidebarOpen(!narrow) }, [narrow])
+  useEffect(() => {
+    if (!drawer) return undefined
+    const onKey = (e) => { if (e.key === 'Escape') setSidebarOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [drawer])
   const toggleArea = (label) => setCollapsedAreas((prev) => {
     const next = { ...prev, [label]: !prev[label] }
     writeNavState('tp_console_nav_areas', next)
@@ -241,13 +300,25 @@ export default function ConsoleLayout() {
         Skip to content
       </a>
       {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
-      <aside aria-label="Console navigation" className={`${sidebarOpen ? 'w-56' : 'w-14'} min-h-0 flex-shrink-0 flex flex-col border-r border-gray-800/80 transition-all duration-200 bg-gray-950`}>
+      {drawer && (
+        <>
+          {/* Keeps the page where it was while the drawer floats over it. */}
+          <div className="w-14 flex-shrink-0" aria-hidden="true" />
+          <button type="button" aria-label="Close navigation" onClick={() => setSidebarOpen(false)}
+            className="fixed inset-0 z-40 bg-black/60 cursor-default" />
+        </>
+      )}
+      <aside aria-label="Console navigation" className={`${drawer ? 'fixed inset-y-0 left-0 z-50 w-64 max-w-[85vw] shadow-2xl' : sidebarOpen ? 'w-56' : 'w-14'} min-h-0 flex-shrink-0 flex flex-col border-r border-gray-800/80 transition-all duration-200 bg-gray-950`}>
         {/* Logo */}
-        <div className="h-14 flex items-center px-3 border-b border-gray-800/80 gap-3">
+        {/* Collapsed, the rail is 56px: the badge and the toggle do not both
+            fit, so the toggle takes the badge's place. */}
+        <div className={`h-14 flex-shrink-0 flex items-center border-b border-gray-800/80 gap-3 ${sidebarOpen ? 'px-3' : 'justify-center'}`}>
+          {sidebarOpen && (
           <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
             style={{ background: 'rgba(249,115,22,0.15)', border: '1px solid rgba(249,115,22,0.3)' }}>
             <Shield size={16} className="text-orange-400" />
           </div>
+          )}
           {sidebarOpen && (
             <div className="min-w-0">
               <p className="text-xs font-bold text-white truncate">Tyre Pulse</p>
@@ -257,8 +328,8 @@ export default function ConsoleLayout() {
           <button type="button" onClick={() => setSidebarOpen(s => !s)}
             aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'} aria-expanded={sidebarOpen}
             title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-            className={`ml-auto rounded text-gray-500 hover:text-gray-300 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500`}>
-            {sidebarOpen ? <X size={14} aria-hidden="true" /> : <Menu size={14} aria-hidden="true" />}
+            className={`${sidebarOpen ? 'ml-auto w-7 h-7' : 'w-9 h-9 border border-gray-800'} inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-800/60 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500`}>
+            {sidebarOpen ? <X size={14} aria-hidden="true" /> : <Menu size={16} aria-hidden="true" />}
           </button>
         </div>
 
@@ -312,7 +383,7 @@ export default function ConsoleLayout() {
             </div>
           </div>
         )}
-        <nav aria-label="Console pages" className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain py-2 px-2">
+        <nav aria-label="Console pages" className="relative flex-1 min-h-0 overflow-y-auto overscroll-y-contain py-2 px-2">
           {visibleGroups.length === 0 && sidebarOpen && (
             <p className="text-[11px] text-gray-500 px-2 py-4 text-center" role="status">No page matches that.</p>
           )}
@@ -331,7 +402,7 @@ export default function ConsoleLayout() {
                   <div className="space-y-0.5">
                     {sidebarOpen ? sectionsOf(group.items).map((sec) => {
                       const single = sec.items.length === 1 && sec.items[0].label === sec.name
-                      if (single) return <NavItem key={sec.name} item={sec.items[0]} sidebarOpen />
+                      if (single) return <NavItem key={sec.name} item={sec.items[0]} sidebarOpen active={isActiveRoute(sec.items[0])} onNavigate={closeDrawer} />
                       const secKey = `${group.label}/${sec.name}`
                       const hasActive = sec.items.some((i) => isActiveRoute(i))
                       const secOpen = filtering || (openSections[secKey] ?? hasActive)
@@ -347,12 +418,12 @@ export default function ConsoleLayout() {
                           </button>
                           {secOpen && (
                             <div className="ml-4 pl-2 border-l border-gray-800 space-y-0.5 my-0.5">
-                              {sec.items.map((item) => <NavItem key={item.to} item={item} sidebarOpen compact />)}
+                              {sec.items.map((item) => <NavItem key={item.to} item={item} sidebarOpen compact active={isActiveRoute(item)} onNavigate={closeDrawer} />)}
                             </div>
                           )}
                         </div>
                       )
-                    }) : group.items.map((item) => <NavItem key={item.to} item={item} sidebarOpen={false} />)}
+                    }) : group.items.map((item) => <NavItem key={item.to} item={item} sidebarOpen={false} active={isActiveRoute(item)} />)}
                   </div>
                 )}
               </div>
@@ -410,7 +481,7 @@ export default function ConsoleLayout() {
             aria-label="Open Super Admin command palette">
             <Command size={13} className="text-orange-400" />
             <span className="flex-1 text-left truncate hidden sm:inline">Search all capabilities</span>
-            <kbd className="rounded border border-gray-700 px-1.5 py-0.5 text-[9px] text-gray-500">Ctrl K</kbd>
+            <kbd className="hidden sm:inline rounded border border-gray-700 px-1.5 py-0.5 text-[9px] text-gray-500 whitespace-nowrap">Ctrl K</kbd>
           </button>
           <ConsoleTopBarActions />
         </header>
@@ -436,10 +507,18 @@ export default function ConsoleLayout() {
         )}
 
         {/* Page content */}
-        <main id="console-main" tabIndex={-1} className="flex-1 min-w-0 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain p-3 sm:p-6 focus:outline-none">
-          <Suspense fallback={<div className="p-8 text-sm text-gray-400" role="status">Loading</div>}>
-            <Outlet />
-          </Suspense>
+        {/* `relative` makes <main> the containing block for every absolutely
+            positioned child (sr-only inputs and labels above all). Without it
+            those children hang off <body>, lengthen the document, and focusing
+            one scrolls the whole shell out of view. */}
+        <main id="console-main" tabIndex={-1} className="relative flex-1 min-w-0 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain p-3 sm:p-6 focus:outline-none">
+          {/* One page crashing must not take the sidebar with it: the boundary
+              is keyed by route, so moving to another page clears it. */}
+          <ErrorBoundary key={location.pathname} name="console">
+            <Suspense fallback={<div className="p-8 text-sm text-gray-400" role="status">Loading</div>}>
+              <Outlet />
+            </Suspense>
+          </ErrorBoundary>
         </main>
       </div>
     </div>

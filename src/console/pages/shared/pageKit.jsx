@@ -34,6 +34,7 @@ import {
 } from 'lucide-react'
 import { Btn, Segmented, Select } from '../../components/ui'
 import useDialogBehavior from '../../../components/ui/useDialogBehavior'
+import { isConsoleRoute } from '../../lib/openRoute'
 
 const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500'
 
@@ -532,11 +533,18 @@ const PLAIN = `inline-flex items-center gap-1 text-orange-300 hover:text-orange-
  * A drill-down link to another console page: a small chip by default, an
  * inline orange text link with `plain`. Uses the router when there is one (no
  * reload, console session untouched) and a plain anchor otherwise.
+ *
+ * A target OUTSIDE /console (a main-app page) always opens in a new tab. The
+ * console tab holds its own tab-local session, so following such a link in
+ * place would leave the console and land on the app's sign-in page.
  */
 export function ConsoleLink({ to, children, icon: Icon, className = '', plain = false }) {
   const inRouter = useInRouterContext()
   const cls = `${plain ? PLAIN : CHIP} ${className}`
   const body = (<>{Icon && <Icon size={12} aria-hidden="true" />}{children}</>)
+  if (!isConsoleRoute(typeof to === 'string' ? to : to?.pathname)) {
+    return <a href={typeof to === 'string' ? to : to?.pathname} target="_blank" rel="noopener noreferrer" className={cls}>{body}</a>
+  }
   return inRouter ? <Link to={to} className={cls}>{body}</Link> : <a href={to} className={cls}>{body}</a>
 }
 

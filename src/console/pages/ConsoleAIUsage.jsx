@@ -231,12 +231,12 @@ export default function ConsoleAIUsage({ tabParam = 'tab' } = {}) {
       attention.push({ key: 'fail', tone: 'info', text: `${nf.format(s.failedCalls)} AI requests failed (${pct(s.failureRate)}).`, actionLabel: 'See failures', onAction: () => setTab('failures') })
     }
     if (rateLimited) {
-      attention.push({ key: 'rl', tone: 'warning', text: `${nf.format(rateLimited)} requests were refused by the rate limit. Raise it in System Configuration if these are genuine users.`, to: '/console/config?tab=ai', actionLabel: 'AI settings' })
+      attention.push({ key: 'rl', tone: 'warning', text: `${nf.format(rateLimited)} requests were refused by the rate limit. Raise it in System Configuration if these are genuine users.`, to: '/console/config?tab=classic&ctab=ai', actionLabel: 'AI settings' })
     }
     if (budget.value && mtd.spend != null) {
       const share = mtd.spend / budget.value
       if (share >= 0.8) {
-        attention.push({ key: 'budget', tone: share >= 1 ? 'danger' : 'warning', text: `Month-to-date spend ${usd(mtd.spend)} is ${pct(share)} of the ${usd(budget.value)} monthly budget.`, to: '/console/config?tab=ai', actionLabel: 'Budget setting' })
+        attention.push({ key: 'budget', tone: share >= 1 ? 'danger' : 'warning', text: `Month-to-date spend ${usd(mtd.spend)} is ${pct(share)} of the ${usd(budget.value)} monthly budget.`, to: '/console/config?tab=classic&ctab=ai', actionLabel: 'Budget setting' })
       }
     }
     const top = (s.byFeature || [])[0]

@@ -192,6 +192,9 @@ transactions that are always rolled back, and confirms every write with a privil
 - C: country scoping inside a company, read and write, with a control row.
 - D: the empty company reads zero rows of others, 28 key RPCs return without error, first vehicle lands in it.
 - T: findings TEN-1 to TEN-9, each split into sub-checks, reported as REPRODUCES, PARTIAL or NOT REPRODUCED.
+  A sub-check printed `HELD` is still open (it counts as vulnerable in the JSON) and carries the reason it is
+  a documented design hold; when every open sub-check of a finding is held the state reads OPEN BY DESIGN HOLD.
+  The after-state per finding, with evidence lines, is in `reports/RESULTS.md`.
 
 Result on the baseline as extracted (before-state): A to D 35 of 35 pass. TEN-1, 2, 3, 5, 6, 7, 9
 reproduce in full; TEN-4 and TEN-8 are partial (`admin_set_web_access` already refuses another company;

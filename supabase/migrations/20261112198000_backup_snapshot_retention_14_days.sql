@@ -1,5 +1,5 @@
 -- Nightly snapshot retention 30 -> 14 days (PERF-9)
--- STATUS: NOT APPLIED. Needs the owner's yes: the next nightly run would remove 16 nights of snapshots.
+-- STATUS: APPLIED 2026-11-12 on the owner's yes. The next nightly run keeps 14 nights of snapshots.
 --
 -- MEASURED 2026-11-12: backups.snapshot_tables 456 MB (30 snapshots, 300 rows), _bak schema
 --   137 tables / 177 MB, cron.job_run_details 104 MB, ksa_country_upload_template_staging 159 MB,

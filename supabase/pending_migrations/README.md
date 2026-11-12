@@ -38,7 +38,7 @@ ever wanted. The reconcile is therefore closed by deletion, not re-application.
   PII-free directory view + service-reader repoint land first, which needs browser E2E
   verification. Do not apply without the owner's go-ahead.
 
-- `20261112198000_backup_snapshot_retention_14_days.sql` — HELD for the owner's yes.
+- `20261112198000_backup_snapshot_retention_14_days.sql` — APPLIED 2026-11-12, moved to migrations/.
   Shortens nightly snapshot retention from 30 to 14 days (`backups.snapshot_tables` is
   456 MB). The next nightly run after applying removes 16 nights of snapshots, which is
   a removal of stored data, so it is not applied unattended. It frees disk only; no

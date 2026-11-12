@@ -6,12 +6,13 @@
  */
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ExternalLink, Wrench, ImageOff } from 'lucide-react'
+import { ExternalLink, Wrench, ImageOff, Download } from 'lucide-react'
 import SideDrawer from '../ui/SideDrawer'
 import InspectionDiagram from '../inspection/InspectionDiagram'
 import { resolveStorageUrl } from '../../lib/storageRefs'
 import { safeImageSrc } from '../../lib/safeUrl'
 import { TYRE_NOW_META } from '../../lib/observationTracking'
+import { downloadObservationReport, observationReportId, observationRevision } from '../../lib/observationReportPdf'
 
 const fmtDay = (d) => {
   if (!d) return 'N/A'
@@ -48,7 +49,12 @@ function Photo({ refValue }) {
   )
 }
 
-export default function ObservationDetail({ obs, onClose, onOpenInspection, onRaiseAction }) {
+export default function ObservationDetail({ obs: first, observations = [], onClose, onOpenInspection, onRaiseAction }) {
+  const [selected, setSelected] = useState(null)
+  const [pdfBusy, setPdfBusy] = useState(false)
+  const [pdfError, setPdfError] = useState('')
+  const findings = observations.length ? observations : first ? [first] : []
+  const obs = findings.find((f) => f.key === selected) || findings[0]
   if (!obs) return null
   const now = obs.tyreNow
   const meta = now ? TYRE_NOW_META[now.state] : null
@@ -64,6 +70,12 @@ export default function ObservationDetail({ obs, onClose, onOpenInspection, onRa
       closeLabel="Close observation"
       footer={(
         <div className="cc iw-od-foot">
+          <button type="button" className="cc-btn" disabled={pdfBusy} onClick={async () => {
+            setPdfBusy(true); setPdfError('')
+            try { await downloadObservationReport(obs.row, findings) }
+            catch (e) { setPdfError(e?.message || 'Could not download the observation report.') }
+            finally { setPdfBusy(false) }
+          }}><Download size={14} aria-hidden="true" /> {pdfBusy ? 'Preparing PDF...' : 'Download observation PDF'}</button>
           {canAct && onRaiseAction && (
             <button type="button" className="cc-btn" onClick={() => onRaiseAction(obs.row, obs.kind === 'tyre' ? `damage:${obs.rawPosition}` : undefined)}>
               <Wrench size={14} aria-hidden="true" /> Create action
@@ -77,9 +89,13 @@ export default function ObservationDetail({ obs, onClose, onOpenInspection, onRa
       )}
     >
       <div className="cc iw-od">
+        {pdfError && <p role="alert" className="iw-od-muted">{pdfError}</p>}
         <section className="iw-od-block" aria-label="Inspection report reference">
           <h4>Inspection details</h4>
           <dl className="iw-od-facts">
+            <div><dt>Report ID</dt><dd>{observationReportId(obs.row)}</dd></div>
+            <div><dt>Report version</dt><dd>1.0</dd></div>
+            <div><dt>Source revision</dt><dd>{observationRevision(obs.row)}</dd></div>
             <div><dt>Asset</dt><dd>{obs.asset_no || 'Not recorded'}</dd></div>
             <div><dt>Inspection date</dt><dd>{fmtDay(obs.day)}</dd></div>
             <div><dt>Site</dt><dd>{obs.site || 'Not recorded'}</dd></div>
@@ -87,6 +103,19 @@ export default function ObservationDetail({ obs, onClose, onOpenInspection, onRa
             <div><dt>Inspector</dt><dd>{obs.inspector || 'Not recorded'}</dd></div>
             <div><dt>Status</dt><dd>{obs.row?.approval_status || obs.row?.status || 'Not recorded'}</dd></div>
           </dl>
+        </section>
+        <section className="iw-od-block" aria-label="Findings in this inspection">
+          <h4>Findings ({findings.length})</h4>
+          <div className="flex flex-wrap gap-2">
+            {findings.map((f, i) => (
+              <button key={f.key} type="button" className={`cc-btn ${f.key === obs.key ? 'font-bold border-[var(--accent)]' : ''}`}
+                aria-pressed={f.key === obs.key} onClick={() => setSelected(f.key)}>
+                {i + 1}. {f.position || (f.kind === 'note' ? 'Inspector note' : 'Site observation')} - {f.text}
+                {f.actionRaised ? ' (Action raised)' : ''}
+              </button>
+            ))}
+          </div>
+          <p className="iw-od-muted">Select a finding to view its recorded readings, photos and action status. All findings share this inspection.</p>
         </section>
         <section className="iw-od-head">
           <span className={`cc-pill ${obs.tone}`}>{obs.severity}</span>

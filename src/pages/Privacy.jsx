@@ -8,11 +8,19 @@
  *
  * Keep in lockstep with the Data Safety declaration and the /data-deletion
  * page. SUPPORT_EMAIL is the real monitored inbox.
+ *
+ * The list of outside companies that receive data lives in
+ * src/lib/privacyProcessors.js and is guarded by a test that scans the code,
+ * so this page cannot fall behind what the product really does.
+ * LEGAL: the wording here is a factual description written by engineering. The
+ * owner should have it reviewed before relying on it.
  */
+
+import { PRIVACY_PROCESSORS, PROCESSOR_WHEN_LABEL } from '../lib/privacyProcessors'
 
 const SUPPORT_EMAIL = 'info@tyrepulse.app'
 const APP_NAME = 'Tyre Pulse'
-const EFFECTIVE = '18 July 2026'
+const EFFECTIVE = '12 November 2026'
 const RETENTION_DAYS = 30
 
 export default function Privacy() {
@@ -37,10 +45,12 @@ export default function Privacy() {
         <section style={S.section}>
           <h2 style={S.h2}>Data we collect</h2>
           <ul style={S.ul}>
-            <li><strong>Account information</strong> - name, username, Employee ID, and optional phone number. Login uses your username/Employee ID; email addresses are internal, non-routable identifiers.</li>
+            <li><strong>Account information</strong> - name, username, Employee ID, and optional phone number. Most accounts sign in with a username or Employee ID and carry an internal identifier in place of an email address. If your organisation gives us a real email address or phone number for you, it is used for sign-in, account recovery and notices.</li>
             <li><strong>App activity</strong> - the operational records you create: inspections, accidents, meter readings, work orders and stock counts.</li>
             <li><strong>Location</strong> - approximate/precise location captured only while the app is in use, to geotag where an inspection was performed. Declined permission simply omits the tag.</li>
-            <li><strong>Photos</strong> - images you take or attach to inspections and accident reports.</li>
+            <li><strong>Photos</strong> - images you take or attach to inspections, checklists, meter readings and accident reports.</li>
+            <li><strong>Questions to the AI assistant</strong> - what you type when you use it.</li>
+            <li><strong>Usage information (web app)</strong> - which pages and buttons are used, with on-screen text masked, when usage analytics is switched on.</li>
             <li><strong>Device identifiers</strong> - a push notification token, so we can send you approval and sync alerts.</li>
             <li><strong>Diagnostics &amp; performance</strong> - crash logs and a sample of performance traces, to keep the app reliable.</li>
           </ul>
@@ -50,19 +60,53 @@ export default function Privacy() {
           <h2 style={S.h2}>How we use it</h2>
           <p style={S.p}>
             Solely to provide the service: authenticating you, recording and displaying fleet operations,
-            geotagging and attaching evidence to records, sending operational notifications, and diagnosing
+            geotagging and attaching evidence to records, analysing tyre photos and answering questions with AI
+            when those features are used, sending operational notifications and reports, and diagnosing
             crashes/performance. We do <strong>not</strong> use your data for advertising and we do <strong>not
             </strong> sell it.
           </p>
         </section>
 
         <section style={S.section}>
-          <h2 style={S.h2}>Sharing</h2>
+          <h2 style={S.h2}>Who receives your data</h2>
           <p style={S.p}>
-            Your data is stored in our secure backend (Supabase) and is visible only within your organisation
-            under strict role and country/site access controls. The only data shared with a third party is
-            crash and performance <strong>diagnostics</strong>, sent to our error-monitoring provider (Sentry)
-            purely to keep the app stable. No advertising or analytics-tracking SDKs are used in the mobile app.
+            Your records are visible only within your organisation, under role, country and site access
+            controls. To run the service we use the outside companies listed below. Each one receives only
+            what is described, for the stated purpose, and none of them may use it for advertising. Some are
+            used only when a feature is used or has been switched on.
+          </p>
+          <div style={S.tableWrap}>
+            <table style={S.table}>
+              <thead>
+                <tr>
+                  <th style={S.th}>Company</th>
+                  <th style={S.th}>What it does</th>
+                  <th style={S.th}>What it receives</th>
+                  <th style={S.th}>When</th>
+                </tr>
+              </thead>
+              <tbody>
+                {PRIVACY_PROCESSORS.map((p) => (
+                  <tr key={p.id}>
+                    <td style={S.tdStrong}>{p.name}</td>
+                    <td style={S.td}>{p.role}. {p.why}</td>
+                    <td style={S.td}>{p.data}</td>
+                    <td style={S.td}>{PROCESSOR_WHEN_LABEL[p.when]}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p style={{ ...S.p, marginTop: 12 }}>
+            <strong>AI features.</strong> When a tyre photo is analysed, the photo leaves our backend and is sent
+            to the AI provider named above. Photos can include people, number plates or surroundings if they are
+            in the frame, so take tyre photos that show the tyre only. AI results are suggestions for your team
+            to check; they are not a safety certificate.
+          </p>
+          <p style={{ ...S.p, marginTop: 12 }}>
+            <strong>Where data is processed.</strong> These companies may process data outside your country. The
+            mobile apps contain no advertising software and no usage-analytics software. Links that you choose
+            to open, such as a map link, take you to another company&apos;s site under its own policy.
           </p>
         </section>
 
@@ -117,4 +161,9 @@ const S = {
   p: { fontSize: 14.5, color: '#334155', lineHeight: 1.65, margin: 0 },
   ul: { margin: 0, paddingLeft: 18, color: '#334155', fontSize: 14.5, lineHeight: 1.75 },
   link: { color: '#15803d', fontWeight: 600, textDecoration: 'none' },
+  tableWrap: { overflowX: 'auto', marginTop: 12, border: '1px solid #e2e8f0', borderRadius: 12 },
+  table: { width: '100%', minWidth: 640, borderCollapse: 'collapse', fontSize: 13.5, color: '#334155', lineHeight: 1.55 },
+  th: { textAlign: 'left', padding: '10px 12px', background: '#f8fafc', color: '#475569', fontSize: 12, fontWeight: 700, borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' },
+  td: { padding: '10px 12px', borderBottom: '1px solid #f1f5f9', verticalAlign: 'top' },
+  tdStrong: { padding: '10px 12px', borderBottom: '1px solid #f1f5f9', verticalAlign: 'top', fontWeight: 700, color: '#0f172a' },
 }

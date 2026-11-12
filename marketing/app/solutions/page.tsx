@@ -18,8 +18,8 @@ export const metadata: Metadata = {
 };
 
 const CARDS = [
-  { href: "/solutions/tyre-management", title: "Tyre management", text: "Cost per km by brand and size, tyre life forecasts from kilometres and hours run, a history per serial, and TPMS alerts through telematics." },
-  { href: "/solutions/ready-mix-fleet", title: "Ready-mix fleet", text: "Preventive maintenance for mixers, pumps and plant, breakdown downtime split into waiting and repair, and cost per m3." },
+  { href: "/solutions/tyre-management", title: "Tyre management", text: "Cost per km by brand and size, tyre life forecasts from kilometres and hours run, and a history per serial. Live TPMS alerts are planned." },
+  { href: "/solutions/ready-mix-fleet", title: "Ready-mix fleet", text: "Breakdown downtime split into waiting and repair, cost per m3, and service plans on request for mixers, pumps and plant." },
   { href: "/solutions/spreadsheets-to-platform", title: "Spreadsheets to platform", text: "A factual comparison with spreadsheets and generic maintenance tools, and what moving your files involves." },
 ] as const;
 

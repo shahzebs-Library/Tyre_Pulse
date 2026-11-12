@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { uploadModulePhoto } from '../lib/photoUpload'
 import { safeImageSrc } from '../lib/safeUrl'
 import * as ImagePicker from 'expo-image-picker'
+import { safeLaunchCamera, safeLaunchLibrary } from '../lib/safePicker'
 
 interface Props {
   value: string[]                       // tp-storage:// refs, or file:// URIs pending upload
@@ -69,9 +70,10 @@ export default function PhotoCapture({ value, onChange, module = 'module', tint 
     const { status } = await ImagePicker.requestCameraPermissionsAsync()
     if (status !== 'granted') { Alert.alert('Camera needed', 'Enable camera access to attach photos.'); return }
     // quality 0.55 keeps photos legible while roughly halving file size vs 0.7.
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.55, allowsEditing: false,
-    })
+    const result = await safeLaunchCamera(
+      { mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.55, allowsEditing: false },
+      () => Alert.alert('Camera unavailable', "The camera couldn't open on this device. Please try again, or add a photo from the gallery instead."),
+    )
     if (result.canceled || !result.assets[0]) return
     await ingest([result.assets[0].uri])
   }
@@ -79,10 +81,13 @@ export default function PhotoCapture({ value, onChange, module = 'module', tint 
   async function pickFromGallery() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
     if (status !== 'granted') { Alert.alert('Photos needed', 'Enable photo library access to attach photos.'); return }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.55,
-      allowsMultipleSelection: true, selectionLimit: Math.max(1, max - value.length),
-    })
+    const result = await safeLaunchLibrary(
+      {
+        mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.55,
+        allowsMultipleSelection: true, selectionLimit: Math.max(1, max - value.length),
+      },
+      () => Alert.alert('Gallery unavailable', "The photo gallery couldn't open on this device. Please try again."),
+    )
     if (result.canceled || !result.assets?.length) return
     await ingest(result.assets.map(a => a.uri))
   }

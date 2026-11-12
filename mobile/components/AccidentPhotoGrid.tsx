@@ -24,6 +24,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as ImagePicker from 'expo-image-picker'
+import { safeLaunchCamera, safeLaunchLibrary } from '../lib/safePicker'
 import { File } from 'expo-file-system'
 import { supabase } from '../lib/supabase'
 import { storageRef } from '../lib/storageRefs'
@@ -156,9 +157,10 @@ export default function AccidentPhotoGrid({ entries, onChange, onUploadingChange
       Alert.alert(t('accident.cameraPermissionTitle'), t('accident.cameraPermissionMessage'))
       return null
     }
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.55, allowsEditing: false,
-    })
+    const result = await safeLaunchCamera(
+      { mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.55, allowsEditing: false },
+      () => Alert.alert('Camera unavailable', "The camera couldn't open on this device. Please try again, or add a photo from the gallery instead."),
+    )
     if (result.canceled || !result.assets[0]) return null
     return result.assets[0].uri
   }
@@ -169,10 +171,13 @@ export default function AccidentPhotoGrid({ entries, onChange, onUploadingChange
       Alert.alert(t('accident.cameraPermissionTitle'), t('accident.cameraPermissionMessage'))
       return []
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.55,
-      allowsMultipleSelection: limit > 1, selectionLimit: limit,
-    })
+    const result = await safeLaunchLibrary(
+      {
+        mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.55,
+        allowsMultipleSelection: limit > 1, selectionLimit: limit,
+      },
+      () => Alert.alert('Gallery unavailable', "The photo gallery couldn't open on this device. Please try again."),
+    )
     if (result.canceled || !result.assets?.length) return []
     return result.assets.slice(0, limit).map(a => a.uri)
   }

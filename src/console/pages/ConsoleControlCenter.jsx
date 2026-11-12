@@ -16,6 +16,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { openConsoleRoute } from '../lib/openRoute'
 import {
   ShieldCheck, RefreshCw, GitBranch, Activity, Database, FileClock,
   ArrowRight, ChevronRight, Download, FileText, Clock,
@@ -463,7 +464,7 @@ export default function ConsoleControlCenter() {
                           {fmtInt(issue.count)}
                         </span>
                         {route && (
-                          <Btn size="xs" icon={ArrowRight} onClick={() => navigate(route)} title={`Open ${route}`}>
+                          <Btn size="xs" icon={ArrowRight} onClick={() => openConsoleRoute(route, navigate)} title={`Open ${route}`}>
                             View
                           </Btn>
                         )}

@@ -144,7 +144,10 @@ function fmt(v) { return v === null || v === undefined ? 'N/A' : String(v) }
 export default function ConsoleAccessControl() {
   const { logAction } = useConsoleAuth()
   const [params, setParams] = useSearchParams()
-  const requested = ALIASES[params.get('tab')] || params.get('tab')
+  // Deep links from the Platform Map carry ?surface=web|mobile instead of a tab.
+  const surfaceTab = { web: 'web', mobile: 'mobile' }[params.get('surface')] || null
+  const requested = ALIASES[params.get('tab')] || params.get('tab') || surfaceTab
+  const focusUser = params.get('user') || ''
   const active = ALL_KEYS.has(requested) ? requested : 'roles'
 
   function selectTab(key) {
@@ -266,7 +269,7 @@ export default function ConsoleAccessControl() {
       case 'web': return <Suspense fallback={<TabFallback />}><AccessManager /></Suspense>
       case 'mobile': return <Suspense fallback={<TabFallback />}><MobileAccessTab columns={columns} profiles={profiles || []} /></Suspense>
       case 'people':
-        return <PeopleGrants grants={grants} profiles={profiles || []} loading={grantsQ.loading} error={grantsQ.error}
+        return <PeopleGrants grants={grants} profiles={profiles || []} loading={grantsQ.loading} error={grantsQ.error} focusUserId={focusUser}
           onRetry={grantsQ.reload} onChanged={grantsQ.reload} />
       case 'custom':
         return (

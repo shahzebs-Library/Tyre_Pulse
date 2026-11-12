@@ -57,9 +57,9 @@ export default function ImpactBox({ what, change, who, undo, tone = 'info', stat
       )}
       <dl className="space-y-1">
         {rows.map(([k, v]) => (
-          <div key={k} className="grid grid-cols-[8.5rem_1fr] gap-2">
+          <div key={k} className="grid grid-cols-1 sm:grid-cols-[8.5rem_minmax(0,1fr)] gap-x-2 gap-y-0.5">
             <dt className="text-gray-500">{k}</dt>
-            <dd className="text-gray-300 break-words">{v}</dd>
+            <dd className="text-gray-300 min-w-0 [overflow-wrap:anywhere]">{v}</dd>
           </div>
         ))}
       </dl>

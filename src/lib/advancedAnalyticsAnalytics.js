@@ -27,7 +27,7 @@ import {
   computeAssetMetrics, computeSeasonalTrends, recordCost,
   lifetimeGroups, lifetimeMetrics,
 } from './analyticsEngine'
-import { withOnePricePerTyre, toLifetimeTyres, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
+import { withOnePricePerTyre, toLifetimeTyres, fitmentKm, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
 
 /** KPI kind of every CPK this engine returns (group, weighted). */
 export const ADVANCED_CPK_KIND = CPK_KIND.FLEET_AGGREGATE
@@ -373,8 +373,13 @@ export function buildFailure(filtered) {
   const kmCounts = KM_BUCKETS.map(b => ({
     ...b,
     count: filtered.filter(r => {
-      const km = (r.km_at_removal ?? 0) - (r.km_at_fitment ?? 0)
-      return km > 0 && km >= b.min && km < b.max
+      // ONE km rule (fitmentKm/tyreKm): a placeholder-1 fitment and an
+      // over-class-cap reading are unknown (null, excluded), a factory 0 is real.
+      // Was a raw removal-minus-fitment diff, which counted the machine odometer
+      // as a tyre life (no cap) - the "100K+" bucket was 269 artifacts, 2 real
+      // fleet-wide.
+      const km = fitmentKm(r)
+      return km != null && km > 0 && km >= b.min && km < b.max
     }).length,
   }))
   const months = bucketByMonth(filtered, r => r.issue_date).slice(-12).map(b => b.month)

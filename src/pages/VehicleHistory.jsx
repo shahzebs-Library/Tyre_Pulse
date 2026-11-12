@@ -24,6 +24,7 @@ import { loadGridTyreByAsset } from '../lib/api/costSummary'
 import { loadGovernedCostSplit, COST_SPLIT_TTL_MS } from '../lib/api/governedCost'
 import { useSettings } from '../contexts/SettingsContext'
 import { computeAssetMetrics, bucketByMonth, countBy } from '../lib/analyticsEngine'
+import { fitmentKm } from '../lib/tyreLifetime'
 import { detectAnomalies } from '../lib/anomalyEngine'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement,
@@ -1389,9 +1390,11 @@ function TyreAnalysisCard({ row, currency, defaultCost, fleetRecord, tyrePositio
   const totalCost   = row.totalCost
   const avgCostTyre = row.count > 0 ? totalCost / row.count : 0
   const highRiskPct = row.count > 0 ? (row.highRiskCount / row.count) * 100 : 0
+  // avgKm uses the ONE km rule (fitmentKm/tyreKm): placeholder-1 and over-class-cap
+  // readings are unknown (excluded), a factory 0 is real. Was a raw removal - fitment.
   const kmValues = row.records
-    .map(r => (r.km_at_removal != null && r.km_at_fitment != null) ? +r.km_at_removal - +r.km_at_fitment : null)
-    .filter(v => v !== null && v > 0)
+    .map(r => fitmentKm(r))
+    .filter(v => v != null && v > 0)
   const avgKm = kmValues.length ? Math.round(kmValues.reduce((s, v) => s + v, 0) / kmValues.length) : null
 
   return (
@@ -1804,11 +1807,11 @@ function replacementReasonKey(position, healthScore) {
 
 function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord }) {
   const { t } = useLanguage()
-  // Derive avgKm from records with km data
+  // Derive avgKm from records with km data (ONE km rule via fitmentKm/tyreKm:
+  // placeholder-1 and over-class-cap excluded, factory 0 real).
   const kmValues = row.records
-    .map(r => (r.km_at_removal != null && r.km_at_fitment != null)
-      ? +r.km_at_removal - +r.km_at_fitment : null)
-    .filter(v => v !== null && v > 0)
+    .map(r => fitmentKm(r))
+    .filter(v => v != null && v > 0)
   const avgKm = kmValues.length
     ? Math.round(kmValues.reduce((s, v) => s + v, 0) / kmValues.length)
     : null

@@ -16,13 +16,27 @@ import { join } from 'node:path'
 const ROOTS = ['src/lib', 'src/pages', 'src/components']
 const SANCTIONED = new Set(['src/lib/tyreKm.js', 'src/lib/tyreLifetime.js'])
 
-// Known divergent files to migrate onto fitmentCpk(). Shrink toward empty.
-// tyreBay.js and analyticsEngine.js carry labelled per-stint uses (see F-A-02).
+// The remaining entries are NOT pending migrations - they are documented
+// non-targets the ratchet pins so a raw stint-km / cost-per-km divide cannot
+// spread to a NEW file. The three genuine divergences (advancedAnalyticsAnalytics,
+// fuelEfficiencyAnalytics, VehicleHistory) were migrated onto fitmentKm; their
+// deltas were large and owner-visible (failure "100K+" bucket 269 -> 2 real,
+// fuel monthly-km estimate 28,520 -> 11,986 km/month fleet-wide).
+//
+// Why each remaining entry stays:
+//  - tyreBay.js       intentional labelled PER-STINT helpers (tyreLifeKm/cpk):
+//                     the Tyre Bay shows stints, the physical-tyre lifetime
+//                     figure sits beside it via bayLifetimeIndex() (F-A-02).
+//  - fleetRisk.js     a labelled per-fitment CPK fallback; scoreTyres() reports
+//                     the physical-tyre LIFETIME CPK when it can.
+//  - tyreScrapView.js cost_per_tyre / km_run, where km_run is ALREADY the
+//                     tyreKm-rule life from list_scrapped_tyres - correct.
+//  - anomalyEngine.js FALSE POSITIVE: the matched line is a cost Z-SCORE,
+//                     (cost_per_tyre - mean) / sd, not a cost-per-km.
+//  - UploadData.jsx   FALSE POSITIVE: the matched line is a unit PRICE on import
+//                     (total / qty), not a cost-per-km.
 const KM_DIFF_BACKLOG = new Set([
-  'src/lib/advancedAnalyticsAnalytics.js',
-  'src/lib/fuelEfficiencyAnalytics.js',
   'src/lib/tyreBay.js',
-  'src/pages/VehicleHistory.jsx',
 ])
 const CPK_DIVIDE_BACKLOG = new Set([
   'src/lib/anomalyEngine.js',

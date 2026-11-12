@@ -20,6 +20,8 @@
  * - Time-dependent functions take an injectable `now`.
  */
 
+import { fitmentKm } from './tyreLifetime'
+
 export const FUEL_CONSTANTS = Object.freeze({
   UNDER_INFLATION_FUEL_PCT_PER_10PCT: 0.02, // +2% fuel per 10% under-inflation
   WORN_TREAD_FUEL_PENALTY_PCT: 0.03, // <=3mm vs >8mm = +3% fuel
@@ -90,16 +92,17 @@ export function tyreFuelPenalty(record) {
 /**
  * Monthly distance per vehicle derived from removed tyres' km run, assuming an
  * average tyre spends about three months on the vehicle. Returns
- * { km, samples } with km null when no tyre carries both readings.
+ * { km, samples } with km null when no tyre has a measurable life.
+ *
+ * km per tyre is the ONE rule (fitmentKm/tyreKm): a placeholder-1 fitment and an
+ * over-class-cap reading are unknown (excluded), a factory 0 is real. The old
+ * raw removal-minus-fitment diff counted the machine odometer as a tyre's life,
+ * which roughly doubled this estimate (28,520 -> 11,986 km/month fleet-wide).
  */
 export function deriveMonthlyKm(records) {
-  const pairs = (Array.isArray(records) ? records : []).filter((r) => {
-    const a = num(r?.km_at_fitment)
-    const b = num(r?.km_at_removal)
-    return a != null && b != null && b > a
-  })
+  const pairs = (Array.isArray(records) ? records : []).filter((r) => fitmentKm(r) != null)
   if (!pairs.length) return { km: null, samples: 0 }
-  const total = pairs.reduce((s, r) => s + (num(r.km_at_removal) - num(r.km_at_fitment)), 0)
+  const total = pairs.reduce((s, r) => s + fitmentKm(r), 0)
   return { km: Math.round(total / pairs.length / 3), samples: pairs.length }
 }
 

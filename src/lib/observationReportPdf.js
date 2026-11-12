@@ -6,7 +6,8 @@
 import { resolveStorageUrl } from './storageRefs'
 import { safeImageSrc } from './safeUrl'
 import { shrinkImageForPdf } from './pdfImage'
-import { applyExportPolicy } from './exportUtils'
+import { applyExportPolicy, resolvePdfBrand, pdfInspectionKit } from './exportUtils'
+import { brandingForPdf } from './inspectionChecklistReport'
 
 export const observationReportId = (row) => `OBS-${String(row?.id || 'UNKNOWN').toUpperCase()}`
 export const observationRevision = (row) => String(row?.updated_at || row?.created_at || row?.inspection_date || 'Not recorded')
@@ -60,89 +61,153 @@ async function vehicleDiagramData(svgEl) {
   } catch { return null }
 }
 
-export async function downloadObservationReport(inspection, findings = [], { svgEl = null } = {}) {
-  if (!inspection?.id) throw new Error('A saved inspection is required for the observation report.')
-  const approved = applyExportPolicy(findings, `Observation PDF ${observationReportId(inspection)}`)
-  if (approved.length !== findings.length) throw new Error('This observation exceeds the configured export row limit. Ask your administrator for a complete export.')
+export async function downloadObservationReport(inspection, findings = [], { svgEl = null, branding = null, company = '' } = {}) {
+  if (!inspection?.id) throw new Error('A saved inspection is required.')
+  const allowed = applyExportPolicy(findings, 'Observation PDF ' + observationReportId(inspection))
+  if (allowed.length !== findings.length) throw new Error('Export limit would omit inspection findings.')
   const { default: jsPDF } = await import('jspdf')
-  const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true })
-  const stamp = new Date().toISOString()
-  const ref = observationReportId(inspection)
-  const sourceRevision = observationRevision(inspection)
-  let y = 17
-  const pageHeight = 297
-  const pageBreak = (height = 12) => {
-    if (y + height > pageHeight - 20) { doc.addPage(); y = 18 }
+  const { P, section, pill, glyph } = pdfInspectionKit
+  const brand = await resolvePdfBrand(await brandingForPdf(branding))
+  const accent = brand.logoData ? brand.accent : P.green
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true })
+  const pw = doc.internal.pageSize.width, ph = doc.internal.pageSize.height
+  const mx = 14, W = pw - 28, bottom = ph - 18
+  const ref = observationReportId(inspection), generated = new Date().toISOString()
+  const day = String(inspection.inspection_date || inspection.completed_date || inspection.created_at || '').slice(0, 10)
+  let y = 32
+  const header = () => {
+    doc.setFillColor(...P.white); doc.rect(0, 0, pw, 26, 'F')
+    let x = mx
+    if (brand.logoData) {
+      try { doc.addImage(brand.logoData, /image\/jpe?g/i.test(brand.logoData) ? 'JPEG' : 'PNG', mx, 5, 15, 15); x += 19 } catch { /* logo is optional */ }
+    }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(...P.ink)
+    doc.text('Vehicle Tyres Observation Report', x, 13.5)
+    if (company && !brand.logoData) {
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...P.ghost)
+      doc.text(company, x, 18.3)
+    }
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...P.ghost)
+    doc.text('Generated: ' + generated.slice(0, 10), pw - mx, 9, { align: 'right' })
+    doc.text('Document No: ' + ref.slice(0, 28), pw - mx, 13.2, { align: 'right' })
+    doc.text('Inspection Date: ' + (day || 'N/A'), pw - mx, 17.4, { align: 'right' })
+    doc.setDrawColor(...accent); doc.setLineWidth(0.8); doc.line(mx, 22.5, pw - mx, 22.5)
   }
-  const write = (label, value) => {
-    pageBreak(9)
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(75, 85, 99)
-    doc.text(`${label}: `, 15, y)
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(22, 30, 44)
-    const lines = doc.splitTextToSize(printable(value), 142)
-    doc.text(lines, 53, y)
-    y += Math.max(7, lines.length * 4.5 + 2)
+  const newPage = () => { doc.addPage(); header(); return 32 }
+  const ensure = (height) => { if (y + height > bottom) y = newPage() }
+  const detail = (label, value) => {
+    const wrapped = doc.splitTextToSize(printable(value), W - 61)
+    const h = Math.max(7, wrapped.length * 4.2 + 2)
+    ensure(h + 1)
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...P.ghost)
+    doc.text(label, mx + 5, y + 4.6)
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...P.ink)
+    doc.text(wrapped, mx + 54, y + 4.6)
+    doc.setDrawColor(...P.silver); doc.setLineWidth(0.15)
+    doc.line(mx + 4, y + h, mx + W - 4, y + h)
+    y += h + 1
   }
-  doc.setFillColor(255, 255, 255); doc.rect(0, 0, 210, 26, 'F')
-  doc.setDrawColor(22, 101, 52); doc.setLineWidth(0.8); doc.line(15, 24, 195, 24)
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(22, 30, 44)
-  doc.text('TYRE PULSE | OBSERVATION REPORT', 15, 13)
-  doc.setFontSize(9); doc.setTextColor(100, 116, 139); doc.text('Source-linked audit copy | Template v1.0', 15, 20)
-  y = 36
-  write('Report ID', ref)
-  write('Source revision', sourceRevision)
-  write('Generated (UTC)', stamp)
-  write('Inspection ID', inspection.id)
-  write('Asset', inspection.asset_no)
-  write('Inspection date', inspection.inspection_date || inspection.completed_date || inspection.created_at)
-  write('Site', inspection.site)
-  write('Inspector', inspection.inspector)
-  write('Inspection type', inspection.inspection_type)
-  write('Approval', inspection.approval_status || inspection.status)
+  header()
+  y = section(doc, 'Vehicle Details', y, mx, accent) + 2
+  doc.setFillColor(...P.offWhite); doc.setDrawColor(...P.silver)
+  doc.roundedRect(mx, y - 4, W, 4, 2, 2, 'FD')
+  detail('Asset No.', inspection.asset_no)
+  detail('Site', inspection.site)
+  detail('Vehicle Type', inspection.vehicle_type)
+  detail('Tyreman', inspection.inspector_name || inspection.inspector)
+  detail('Inspection Date', day)
+  detail('Inspection Type', inspection.inspection_type)
+  detail('Approval Status', inspection.approval_status || inspection.status)
+  detail('Source Inspection', inspection.id)
+  detail('Source Revision', observationRevision(inspection))
+  detail('PDF Template', '1.0 / Observation-only document')
+  y += 8
+  ensure(39)
+  y = section(doc, 'Observation Summary', y, mx, accent) + 3
+  const tiles = [
+    [findings.length, 'Findings', 'none'],
+    [findings.filter(f => f.kind === 'tyre').length, 'Tyres Flagged', 'warning'],
+    [findings.filter(f => f.tone === 'bad').length, 'Critical', 'critical'],
+    [findings.filter(f => !!f.actionRecord).length, 'Actions Raised', 'good'],
+  ]
+  const tw = (W - 9) / 4
+  tiles.forEach(([count, label, tone], i) => {
+    const x = mx + i * (tw + 3)
+    doc.setFillColor(...P.offWhite); doc.setDrawColor(...P.silver)
+    doc.roundedRect(x, y, tw, 20, 2, 2, 'FD')
+    glyph(doc, x + 7, y + 7, 2.5, tone)
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(...P.ink)
+    doc.text(String(count), x + 13, y + 9)
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...P.iron)
+    doc.text(label, x + tw / 2, y + 16, { align: 'center' })
+  })
+  y += 28
   const diagram = await vehicleDiagramData(svgEl)
   if (diagram) {
-    const diagramHeight = Math.min(95, 125 * diagram.ratio)
-    pageBreak(diagramHeight + 15)
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(19, 44, 74)
-    doc.text('VEHICLE TYRE LAYOUT', 15, y); y += 5
-    try { doc.addImage(diagram.dataUrl, 'PNG', 15, y, 125, diagramHeight); y += diagramHeight + 8 }
-    catch { write('Layout', 'Vehicle diagram available in the inspection view') }
-  } else if (svgEl) {
-    write('Layout', 'Vehicle diagram could not be embedded; see source inspection')
+    const h = Math.min(85, 115 * diagram.ratio)
+    ensure(h + 18)
+    y = section(doc, 'Vehicle Tyre Condition Map', y, mx, accent) + 2
+    doc.setFillColor(...P.offWhite); doc.setDrawColor(...P.silver)
+    doc.roundedRect(mx, y, W, h + 8, 2, 2, 'FD')
+    try { doc.addImage(diagram.dataUrl, 'PNG', mx + (W - 115) / 2, y + 4, 115, h) } catch { /* report still has details */ }
+    y += h + 15
   }
-  pageBreak(13)
-  doc.setDrawColor(210, 218, 228); doc.line(15, y, 195, y); y += 8
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(19, 44, 74)
-  doc.text(`OBSERVATIONS (${findings.length})`, 15, y); y += 9
-  for (let index = 0; index < findings.length; index++) {
-    const f = findings[index]
-    pageBreak(32)
-    doc.setFillColor(240, 244, 249); doc.roundedRect(14, y - 5, 182, 9, 1.5, 1.5, 'F')
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(19, 44, 74)
-    doc.text(`${index + 1}. ${printable(f.position || 'General observation')} - ${printable(f.text)}`.slice(0, 102), 17, y + 1)
-    y += 10
-    write('Severity', f.severity)
-    write('Remarks', f.remarks || 'No remarks')
+  // These use the EXACT section/pill/glyph primitives exposed by the approved
+  // Vehicle Tyres Inspection Report, without changing its implementation.
+  for (let i = 0; i < findings.length; i++) {
+    const f = findings[i]
+    ensure(55)
+    y = section(doc, 'Observation ' + (i + 1) + ': ' + printable(f.position || 'General').slice(0, 35), y, mx, accent) + 3
+    const tone = f.tone === 'bad' ? 'critical' : f.tone === 'warn' ? 'warning' : 'none'
+    pill(doc, mx + 2, y - 2, 26, 6, printable(f.severity || 'Finding').slice(0, 13), tone)
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...P.ink)
+    const label = doc.splitTextToSize(printable(f.text), W - 35)
+    doc.text(label, mx + 33, y + 2)
+    y += Math.max(11, label.length * 4.5 + 4)
+    detail('Position', f.position || 'General observation')
     if (f.kind === 'tyre') {
-      write('Pressure', f.pressure == null ? 'Not recorded' : `${f.pressure} PSI`)
-      write('Tread', f.tread == null ? 'Not recorded' : `${f.tread} mm`)
-      write('Tyre status', f.tyreNow?.state || 'Not verified')
+      detail('Pressure', f.pressure == null ? 'Not recorded' : f.pressure + ' PSI')
+      detail('Tread', f.tread == null ? 'Not recorded' : f.tread + ' mm')
+      detail('Tyre Status', f.tyreNow?.state || 'Not verified')
     }
-    write('Action', f.actionRecord ? `${f.actionRecord.id} (${f.actionRecord.status})` : 'No action linked')
-    if (f.photo) {
-      const data = await photoData(f.photo)
-      if (data) {
-        pageBreak(57)
-        try { doc.addImage(data.dataUrl, data.fmt, 15, y, 87, 53); y += 59 }
-        catch { write('Evidence', 'Photo stored but could not be embedded') }
-      } else write('Evidence', 'Photo stored but unavailable for PDF export')
-    } else if (f.kind === 'tyre') write('Evidence', 'No photo recorded')
-    y += 4
+    detail('Remarks', f.remarks || 'No remarks')
+    detail('Action', f.actionRecord ? f.actionRecord.id + ' (' + f.actionRecord.status + ')' : 'No action linked')
+    y += 6
   }
-  const pages = doc.internal.getNumberOfPages()
-  for (let page = 1; page <= pages; page++) {
-    doc.setPage(page); doc.setFontSize(8); doc.setTextColor(100, 116, 139)
-    doc.text(`Observation report ${ref} | Template v1.0 | page ${page} of ${pages}`, 15, 287)
+  // As in the inspection PDF, photographs are grouped AFTER detailed readings.
+  const photographed = findings.filter(f => f.kind === 'tyre')
+  if (photographed.length) {
+    y = newPage()
+    y = section(doc, 'Tyre Photo Evidence', y, mx, accent) + 4
+    for (const f of photographed) {
+      ensure(18)
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...P.ink)
+      doc.text(printable(f.position || 'Position') + ': ' + printable(f.text).slice(0, 62), mx + 3, y + 4)
+      y += 10
+      const photo = f.photo ? await photoData(f.photo) : null
+      if (photo) {
+        ensure(75)
+        doc.setFillColor(...P.offWhite); doc.setDrawColor(...P.silver)
+        doc.roundedRect(mx, y, W, 70, 2, 2, 'FD')
+        try { doc.addImage(photo.dataUrl, photo.fmt, mx + 4, y + 4, 110, 62, undefined, 'FAST') }
+        catch { doc.text('Photo could not be embedded.', mx + 5, y + 12) }
+        y += 76
+      } else {
+        ensure(12)
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...P.ghost)
+        doc.text(f.photo ? 'Stored photo unavailable for PDF export.' : 'No photo recorded for this tyre.', mx + 3, y + 4)
+        y += 12
+      }
+    }
   }
-  doc.save(`Tyre Observation ${filePart(inspection.asset_no)} ${filePart(String(inspection.inspection_date || '').slice(0, 10))} ${filePart(inspection.id)}.pdf`)
+  const totalPages = doc.internal.getNumberOfPages()
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i)
+    doc.setDrawColor(...P.silver); doc.setLineWidth(0.25)
+    doc.line(mx, ph - 12, pw - mx, ph - 12)
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...P.ghost)
+    doc.text('Observation ' + ref.slice(0, 24) + ' | Template v1.0 | ' + generated, mx, ph - 7)
+    doc.text('Page ' + i + ' of ' + totalPages, pw - mx, ph - 7, { align: 'right' })
+  }
+  doc.save('Tyre Observation ' + filePart(inspection.asset_no) + ' ' + filePart(day) + ' ' + filePart(inspection.id) + '.pdf')
 }

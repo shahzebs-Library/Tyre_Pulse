@@ -111,13 +111,13 @@ class WorkforceAssignmentsPanel extends ConsumerWidget {
                       key: WorkforceAssignmentsPanelKeys.empty,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        if (data.offline) _offlineNote(),
+                        if (data.offline) _offlineNote(context),
                         Text(copy('wfEmpty')),
                       ],
                     )
                   : Column(
                       children: <Widget>[
-                        if (data.offline) _offlineNote(),
+                        if (data.offline) _offlineNote(context),
                         for (final WorkforceAssignmentView view in data.views)
                           _AssignmentTile(
                             view: view,
@@ -135,14 +135,23 @@ class WorkforceAssignmentsPanel extends ConsumerWidget {
     );
   }
 
-  Widget _offlineNote() => const Padding(
+  Widget _offlineNote(BuildContext context) => Padding(
         key: WorkforcePanelKeys.offlineBanner,
-        padding: EdgeInsetsDirectional.only(bottom: 8),
-        child: Text(
-          'Offline: showing saved assignments. Updates '
-          'you make are kept and sent when you reconnect.',
-        ),
+        padding: const EdgeInsetsDirectional.only(bottom: 8),
+        child: Text(AppLocalizations.of(context).wfOfflineNote),
       );
+}
+
+/// The translated button text for [action]. `WorkforceAction.label` stays the
+/// English name used in logs and diagnostics; a person never reads it.
+String workforceActionLabel(AppLocalizations l10n, WorkforceAction action) {
+  return switch (action) {
+    WorkforceAction.accept => l10n.wfActionAccept,
+    WorkforceAction.start => l10n.wfActionStart,
+    WorkforceAction.block => l10n.wfActionBlock,
+    WorkforceAction.resume => l10n.wfActionResume,
+    WorkforceAction.complete => l10n.wfActionComplete,
+  };
 }
 
 String workforceStatusLabel(String status) {
@@ -240,8 +249,7 @@ class _AssignmentTile extends StatelessWidget {
             Padding(
               key: WorkforcePanelKeys.pending(id),
               padding: const EdgeInsets.only(top: 4),
-              child:
-                  const Text('Pending sync: will be sent when you are online.'),
+              child: Text(l10n.wfPendingSync),
             ),
           for (final QueuedWorkforceTransition entry in view.rejected)
             _RejectedNotice(entry: entry, assignmentId: id),
@@ -253,7 +261,7 @@ class _AssignmentTile extends StatelessWidget {
                   TextButton(
                     key: WorkforcePanelKeys.action(id, action),
                     onPressed: () => _submit(context, view, action),
-                    child: Text(action.label),
+                    child: Text(workforceActionLabel(l10n, action)),
                   ),
               ],
             ),
@@ -273,10 +281,12 @@ class _AssignmentTile extends StatelessWidget {
     final String? userId = container.read(workforceUserIdProvider);
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final TasksCopy copy = TasksCopy.of(context);
+    String statusLabel(String status) =>
+        _localised(copy, 'wfS_', status, workforceStatusLabel(status));
+    final String actionLabel = workforceActionLabel(l10n, action);
     if (userId == null) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Sign in to update assignments.')),
-      );
+      messenger.showSnackBar(SnackBar(content: Text(l10n.wfSignInRequired)));
       return;
     }
     String? note;
@@ -286,7 +296,7 @@ class _AssignmentTile extends StatelessWidget {
           await showDialog<({WorkforceBlockReason reason, String note})>(
         context: context,
         builder: (BuildContext context) =>
-            WorkforceBlockDialog(title: action.label),
+            WorkforceBlockDialog(title: actionLabel),
       );
       if (picked == null) return;
       reason = picked.reason;
@@ -294,7 +304,7 @@ class _AssignmentTile extends StatelessWidget {
     } else if (action.noteRequired) {
       note = await showDialog<String>(
         context: context,
-        builder: (BuildContext context) => _NoteDialog(title: action.label),
+        builder: (BuildContext context) => _NoteDialog(title: actionLabel),
       );
       if (note == null) return;
     }
@@ -315,20 +325,21 @@ class _AssignmentTile extends StatelessWidget {
     final String message;
     switch (result.outcome) {
       case WorkforceSubmitOutcome.deliveredNow:
-        message = 'Updated.';
+        message = l10n.wfUpdated;
       case WorkforceSubmitOutcome.queued:
-        message = 'Saved on this device. It will be sent when you are online.';
+        message = l10n.wfSavedOffline;
       case WorkforceSubmitOutcome.rejected:
         message = workforceRefusalText(
               l10n,
               result.item?.rejectionReason,
               currentStatus: result.item?.serverStatus,
-              statusLabel: workforceStatusLabel,
+              statusLabel: statusLabel,
             ) ??
-            result.message ??
             l10n.wfRefusedUnknown;
       case WorkforceSubmitOutcome.refused:
-        message = result.message ?? 'That update is not available.';
+        // The engine's own sentence is an English diagnostic; a person gets
+        // the translated one.
+        message = l10n.wfUpdateUnavailable;
     }
     messenger.showSnackBar(SnackBar(content: Text(message)));
   }
@@ -403,33 +414,37 @@ class _EvidenceRowState extends ConsumerState<_EvidenceRow> {
     final _EvidenceChoice? choice = await showModalBottomSheet<_EvidenceChoice>(
       context: context,
       builder: (BuildContext context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            Padding(
-              padding: const EdgeInsetsDirectional.fromSTEB(16, 16, 16, 8),
-              child: Text(l10n.wfEvidenceOnlineOnly),
-            ),
-            ListTile(
-              key: WorkforcePanelKeys.evidenceCamera,
-              leading: const Icon(Icons.photo_camera_outlined),
-              title: Text(l10n.wfEvidenceTakePhoto),
-              onTap: () => Navigator.of(context).pop(_EvidenceChoice.camera),
-            ),
-            ListTile(
-              key: WorkforcePanelKeys.evidenceGallery,
-              leading: const Icon(Icons.photo_library_outlined),
-              title: Text(l10n.wfEvidenceChoosePhoto),
-              onTap: () => Navigator.of(context).pop(_EvidenceChoice.gallery),
-            ),
-            ListTile(
-              key: WorkforcePanelKeys.evidencePdf,
-              leading: const Icon(Icons.picture_as_pdf_outlined),
-              title: Text(l10n.wfEvidenceChoosePdf),
-              onTap: () => Navigator.of(context).pop(_EvidenceChoice.pdf),
-            ),
-          ],
+        // Scrolls: with large text the note and three choices are taller
+        // than the sheet (16 px over at 360x640 with text scale 2.0).
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsetsDirectional.fromSTEB(16, 16, 16, 8),
+                child: Text(l10n.wfEvidenceOnlineOnly),
+              ),
+              ListTile(
+                key: WorkforcePanelKeys.evidenceCamera,
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: Text(l10n.wfEvidenceTakePhoto),
+                onTap: () => Navigator.of(context).pop(_EvidenceChoice.camera),
+              ),
+              ListTile(
+                key: WorkforcePanelKeys.evidenceGallery,
+                leading: const Icon(Icons.photo_library_outlined),
+                title: Text(l10n.wfEvidenceChoosePhoto),
+                onTap: () => Navigator.of(context).pop(_EvidenceChoice.gallery),
+              ),
+              ListTile(
+                key: WorkforcePanelKeys.evidencePdf,
+                leading: const Icon(Icons.picture_as_pdf_outlined),
+                title: Text(l10n.wfEvidenceChoosePdf),
+                onTap: () => Navigator.of(context).pop(_EvidenceChoice.pdf),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -497,11 +512,13 @@ class _RejectedNotice extends StatelessWidget {
   Widget build(BuildContext context) {
     final ColorScheme colors = Theme.of(context).colorScheme;
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final TasksCopy copy = TasksCopy.of(context);
     final String explanation = workforceRefusalText(
           l10n,
           entry.rejectionReason,
           currentStatus: entry.serverStatus,
-          statusLabel: workforceStatusLabel,
+          statusLabel: (String status) =>
+              _localised(copy, 'wfS_', status, workforceStatusLabel(status)),
         ) ??
         entry.error ??
         l10n.wfRefusedUnknown;
@@ -517,7 +534,7 @@ class _RejectedNotice extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'Not accepted: ${entry.action.label}'
+            '${l10n.wfNotAccepted(workforceActionLabel(l10n, entry.action))}'
             '${entry.action == WorkforceAction.block ? ' (${workforceBlockCauseLabel(l10n, entry.reasonCode)})' : ''}'
             '${entry.note == null ? '' : ' ("${entry.note}")'}',
             style: TextStyle(color: colors.error, fontWeight: FontWeight.w600),
@@ -538,7 +555,7 @@ class _RejectedNotice extends StatelessWidget {
                     ..invalidate(workforceQueuedProvider)
                     ..invalidate(workforceAssignmentsProvider);
                 },
-                child: const Text('Dismiss'),
+                child: Text(l10n.wfDismiss),
               ),
               if (!workforceTerminalRefusals.contains(entry.rejectionReason))
                 TextButton(
@@ -553,7 +570,7 @@ class _RejectedNotice extends StatelessWidget {
                       ..invalidate(workforceQueuedProvider)
                       ..invalidate(workforceAssignmentsProvider);
                   },
-                  child: const Text('Try again'),
+                  child: Text(l10n.actionRetry),
                 ),
             ],
           ),
@@ -591,13 +608,15 @@ class _NoteDialogState extends State<_NoteDialog> {
         autofocus: true,
         maxLength: 2000,
         maxLines: 3,
-        decoration: const InputDecoration(labelText: 'Reason (required)'),
+        decoration: InputDecoration(
+          labelText: AppLocalizations.of(context).wfBlockNoteLabel,
+        ),
         onChanged: (_) => setState(() {}),
       ),
       actions: <Widget>[
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(AppLocalizations.of(context).wfDialogCancel),
         ),
         FilledButton(
           key: WorkforcePanelKeys.noteConfirm,

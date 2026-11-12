@@ -201,7 +201,7 @@ class _InspectionSignaturePadState extends State<InspectionSignaturePad> {
         if (!widget.readOnly) ...<Widget>[
           const SizedBox(height: TpSpace.sm),
           Align(
-            alignment: Alignment.centerRight,
+            alignment: AlignmentDirectional.centerEnd,
             child: TpButton.text(
               label: l10n.actionClear,
               onPressed: () {

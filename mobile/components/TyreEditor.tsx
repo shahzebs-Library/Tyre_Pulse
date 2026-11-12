@@ -14,6 +14,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as ImagePicker from 'expo-image-picker'
+import { safeLaunchCamera } from '../lib/safePicker'
 import { File } from 'expo-file-system'
 import { TyrePositionData } from '../lib/types'
 import { CONDITION_META, CONDITIONS, SHOW_TREAD_DEPTH } from '../lib/tyreConditions'
@@ -73,12 +74,15 @@ export default function TyreEditor({ data, onChange }: Props) {
     }
     setPickingPhoto(true)
     try {
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        // Lower quality trims upload size, memory and battery on capture.
-        quality: 0.55,
-        allowsEditing: false,
-      })
+      const result = await safeLaunchCamera(
+        {
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          // Lower quality trims upload size, memory and battery on capture.
+          quality: 0.55,
+          allowsEditing: false,
+        },
+        () => Alert.alert(t('common.cameraFailedTitle'), t('common.cameraFailedMsg')),
+      )
       if (!result.canceled && result.assets[0]) {
         const localUri = result.assets[0].uri
         update({ photo_uri: localUri, photo_url: null })

@@ -24,6 +24,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as ImagePicker from 'expo-image-picker'
+import { safeLaunchCamera, safeLaunchLibrary } from '../lib/safePicker'
 import { File } from 'expo-file-system'
 import { supabase } from '../lib/supabase'
 import { storageRef } from '../lib/storageRefs'
@@ -156,9 +157,10 @@ export default function AccidentPhotoGrid({ entries, onChange, onUploadingChange
       Alert.alert(t('accident.cameraPermissionTitle'), t('accident.cameraPermissionMessage'))
       return null
     }
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.55, allowsEditing: false,
-    })
+    const result = await safeLaunchCamera(
+      { mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.55, allowsEditing: false },
+      () => Alert.alert(t('common.cameraFailedTitle'), t('common.cameraFailedMsg')),
+    )
     if (result.canceled || !result.assets[0]) return null
     return result.assets[0].uri
   }
@@ -169,7 +171,7 @@ export default function AccidentPhotoGrid({ entries, onChange, onUploadingChange
       Alert.alert(t('accident.cameraPermissionTitle'), t('accident.cameraPermissionMessage'))
       return []
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
+    const result = await safeLaunchLibrary({
       mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.55,
       allowsMultipleSelection: limit > 1, selectionLimit: limit,
     })

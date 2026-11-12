@@ -33,7 +33,34 @@ async function photoData(ref) {
   } catch { return null }
 }
 
-export async function downloadObservationReport(inspection, findings = []) {
+async function vehicleDiagramData(svgEl) {
+  if (!svgEl || typeof document === 'undefined') return null
+  try {
+    const { serializeSvgInlined } = await import('./svgInline')
+    const svgText = await serializeSvgInlined(svgEl)
+    const url = URL.createObjectURL(new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' }))
+    try {
+      const image = await new Promise((resolve) => {
+        const img = new Image()
+        img.onload = () => resolve(img)
+        img.onerror = () => resolve(null)
+        img.src = url
+      })
+      if (!image) return null
+      const canvas = document.createElement('canvas')
+      canvas.width = 700
+      canvas.height = Math.max(320, Math.round((image.naturalHeight / Math.max(image.naturalWidth, 1)) * 700))
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return null
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
+      return { dataUrl: canvas.toDataURL('image/png'), ratio: canvas.height / canvas.width }
+    } finally { URL.revokeObjectURL(url) }
+  } catch { return null }
+}
+
+export async function downloadObservationReport(inspection, findings = [], { svgEl = null } = {}) {
   if (!inspection?.id) throw new Error('A saved inspection is required for the observation report.')
   const approved = applyExportPolicy(findings, `Observation PDF ${observationReportId(inspection)}`)
   if (approved.length !== findings.length) throw new Error('This observation exceeds the configured export row limit. Ask your administrator for a complete export.')
@@ -72,6 +99,17 @@ export async function downloadObservationReport(inspection, findings = []) {
   write('Inspector', inspection.inspector)
   write('Inspection type', inspection.inspection_type)
   write('Approval', inspection.approval_status || inspection.status)
+  const diagram = await vehicleDiagramData(svgEl)
+  if (diagram) {
+    const diagramHeight = Math.min(95, 125 * diagram.ratio)
+    pageBreak(diagramHeight + 15)
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(19, 44, 74)
+    doc.text('VEHICLE TYRE LAYOUT', 15, y); y += 5
+    try { doc.addImage(diagram.dataUrl, 'PNG', 15, y, 125, diagramHeight); y += diagramHeight + 8 }
+    catch { write('Layout', 'Vehicle diagram available in the inspection view') }
+  } else if (svgEl) {
+    write('Layout', 'Vehicle diagram could not be embedded; see source inspection')
+  }
   pageBreak(13)
   doc.setDrawColor(210, 218, 228); doc.line(15, y, 195, y); y += 8
   doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(19, 44, 74)

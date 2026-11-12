@@ -4,7 +4,7 @@
  * has since been replaced. "Open full inspection" is still one click away, but
  * a reviewer no longer has to find the finding inside the whole sheet.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ExternalLink, Wrench, ImageOff, Download } from 'lucide-react'
 import SideDrawer from '../ui/SideDrawer'
@@ -50,6 +50,7 @@ function Photo({ refValue }) {
 }
 
 export default function ObservationDetail({ obs: first, observations = [], onClose, onOpenInspection, onRaiseAction }) {
+  const diagramRef = useRef(null)
   const [selected, setSelected] = useState(null)
   const [pdfBusy, setPdfBusy] = useState(false)
   const [pdfError, setPdfError] = useState('')
@@ -72,7 +73,7 @@ export default function ObservationDetail({ obs: first, observations = [], onClo
         <div className="cc iw-od-foot">
           <button type="button" className="cc-btn" disabled={pdfBusy} onClick={async () => {
             setPdfBusy(true); setPdfError('')
-            try { await downloadObservationReport(obs.row, findings) }
+            try { await downloadObservationReport(obs.row, findings, { svgEl: diagramRef.current?.querySelector('svg[data-tyre-map]') || diagramRef.current?.querySelector('svg') }) }
             catch (e) { setPdfError(e?.message || 'Could not download the observation report.') }
             finally { setPdfBusy(false) }
           }}><Download size={14} aria-hidden="true" /> {pdfBusy ? 'Preparing PDF...' : 'Download observation PDF'}</button>
@@ -162,7 +163,7 @@ export default function ObservationDetail({ obs: first, observations = [], onClo
         {obs.row && (
           <section className="iw-od-block">
             <h4>On the vehicle</h4>
-            <InspectionDiagram inspection={obs.row} width={360} showReadings={false} variant="board" />
+            <div ref={diagramRef}><InspectionDiagram inspection={obs.row} width={360} showReadings={false} variant="board" /></div>
           </section>
         )}
       </div>

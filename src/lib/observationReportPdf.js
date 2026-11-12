@@ -29,7 +29,8 @@ async function photoData(ref) {
       reader.onerror = reject
       reader.readAsDataURL(blob)
     })
-    const image = await shrinkImageForPdf(raw, blob.type === 'image/png' ? 'PNG' : 'JPEG')
+    const format = blob.type === 'image/png' ? 'PNG' : blob.type === 'image/webp' ? 'WEBP' : 'JPEG'
+    const image = await shrinkImageForPdf(raw, format)
     return image
   } catch { return null }
 }

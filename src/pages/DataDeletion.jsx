@@ -86,6 +86,12 @@ export default function DataDeletion() {
               Minimal records required by law or for fraud/security auditing may be kept for the period the law
               requires, then deleted.
             </li>
+            <li>
+              Copies that were already sent to an outside company while you used a feature (for example a tyre
+              photo sent for AI analysis, an email that was delivered, or a crash report) are held under that
+              company&apos;s own retention rules. We ask for removal where the company offers it, but we cannot
+              recall a message that has already been delivered.
+            </li>
           </ul>
         </section>
 
@@ -93,9 +99,10 @@ export default function DataDeletion() {
           <h2 style={S.h2}>Timeline &amp; data we handle</h2>
           <p style={S.p}>
             Verified requests are completed within <strong>{RETENTION_DAYS} days</strong>. Data is encrypted in
-            transit (HTTPS/TLS). {APP_NAME} does not sell your data and uses no third-party advertising. Crash
-            and performance diagnostics are processed by our error-monitoring provider solely to keep the app
-            reliable.
+            transit (HTTPS/TLS). {APP_NAME} does not sell your data and uses no third-party advertising. Some
+            outside companies process data for us (hosting, error monitoring, email and push delivery, and AI
+            analysis of tyre photos and assistant questions when those features are used). The full list, and
+            what each one receives, is in the <a href="/privacy" style={S.link}>Privacy Policy</a>.
           </p>
         </section>
 

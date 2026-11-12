@@ -43,7 +43,7 @@ export default function FleetPage() {
           <div>
             <h2 className="sec-h" id="util-h">Meters that keep themselves current.</h2>
             <ul className="tick-list">
-              {["Hour and kilometre readings from inspections, job cards and telematics", "Readings that go backwards are flagged, never silently accepted", "Preventive schedules driven by the real meter"].map((t) => <li key={t}><CheckCircle2 size={18} aria-hidden="true" />{t}</li>)}
+              {["Hour and kilometre readings from inspections, job cards and telematics export files", "Readings that go backwards are flagged, never silently accepted", "Preventive schedules driven by the real meter, on request"].map((t) => <li key={t}><CheckCircle2 size={18} aria-hidden="true" />{t}</li>)}
             </ul>
           </div>
           <Photo name="fleetLineup" className="art art-frame" fit="contain" />

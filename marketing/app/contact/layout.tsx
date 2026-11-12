@@ -6,12 +6,12 @@ import { OG_IMAGES } from "@/lib/site";
  * The contact page itself is a client component, so its metadata lives here.
  */
 export const metadata: Metadata = {
-  title: "Contact",
+  title: "Book a demo or contact sales",
   description:
     "Book a tailored Tyre Pulse demo. Tell us your assets, countries, sites and users, and the walkthrough will cover the workflows that matter to you.",
   alternates: alternatesFor("/contact"),
   openGraph: { images: OG_IMAGES,
-    title: "Contact | Tyre Pulse",
+    title: "Book a demo or contact sales | Tyre Pulse",
     description: "Book a demo built around your real operation, not a generic product tour.",
     url: "/contact",
     type: "website",

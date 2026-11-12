@@ -27,7 +27,9 @@ const ENTRIES: Entry[] = [
   { path: "/platform/fleet-assets", changeFrequency: "monthly", priority: 0.8 },
   { path: "/platform/maintenance", changeFrequency: "monthly", priority: 0.8 },
   { path: "/platform/inspections", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/platform/tyre-lifecycle", changeFrequency: "monthly", priority: 0.8 },
   { path: "/platform/inventory", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/platform/reports", changeFrequency: "monthly", priority: 0.8 },
   { path: "/solutions", changeFrequency: "monthly", priority: 0.8 },
   { path: "/solutions/tyre-management", changeFrequency: "monthly", priority: 0.8 },
   { path: "/solutions/ready-mix-fleet", changeFrequency: "monthly", priority: 0.8 },
@@ -35,6 +37,8 @@ const ENTRIES: Entry[] = [
   { path: "/industries", changeFrequency: "monthly", priority: 0.8 },
   { path: "/pricing", changeFrequency: "monthly", priority: 0.8 },
   { path: "/security", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/faq", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/about", changeFrequency: "monthly", priority: 0.6 },
   { path: "/contact", changeFrequency: "monthly", priority: 0.7 },
   { path: "/ar", changeFrequency: "weekly", priority: 0.9, alternates: HOME_ALTERNATES },
   // Plain-text summaries for AI assistants, listed so crawlers can find them.

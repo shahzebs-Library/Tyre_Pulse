@@ -9,7 +9,7 @@ import { OG_IMAGES } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Inventory, procurement and reporting",
-  description: "Control inventory, manage purchase requests and suppliers, and get clear visibility of costs, availability and performance across your fleet.",
+  description: "Control stock by site, see which parts each job consumed and what every machine costs to run. Purchase requests and supplier records are set up on request.",
   alternates: alternatesFor("/platform/inventory"),
   openGraph: { images: OG_IMAGES, title: "Inventory, procurement and reporting | Tyre Pulse", description: "Control costs. Keep your fleet moving.", url: "/platform/inventory", type: "website" },
 };
@@ -31,8 +31,8 @@ export default function InventoryPage() {
             <div id="purchasing" className="anchor-sec">
               <PurchaseRequest />
               <div id="suppliers" className="anchor-sec panel stack-gap">
-                <div className="panel-head"><strong>Suppliers</strong></div>
-                <p className="panel-text">Keep supplier details, price history and delivery performance next to every purchase, so the next request goes to the supplier that actually delivered.</p>
+                <div className="panel-head"><strong>Purchasing and suppliers, on request</strong></div>
+                <p className="panel-text">Purchase requests with approval and a supplier list are set up with you on request. Supplier price history and delivery performance are planned.</p>
               </div>
             </div>
             <div id="costs" className="anchor-sec"><div id="dashboards" className="anchor-sec"><FleetCostPanel /></div></div>

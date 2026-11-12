@@ -35,8 +35,8 @@ function PsiLine() {
   const top = (v: number) => ((hi - v) / (hi - lo)) * 100;
   const left = (i: number) => 3 + i * (94 / (PSI.length - 1));
   return (
-    <figure className="idemo-chart" aria-label="Live TPMS pressure on LHR1 over the last 6 hours, falling from 118 to 94 psi, alert level 105 psi">
-      <figcaption><span>LHR1 live pressure, last 6 hours</span><b>94 psi</b><em className="warn">Slow leak detected</em></figcaption>
+    <figure className="idemo-chart" aria-label="Illustration of a planned feature: TPMS pressure on LHR1 over 6 hours, falling from 118 to 94 psi, alert level 105 psi">
+      <figcaption><span>Planned feature · LHR1 pressure, 6 hours</span><b>94 psi</b><em className="warn">Slow leak detected</em></figcaption>
       <div className="idemo-line" aria-hidden="true">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none">
           <line x1="0" x2="100" y1={top(lim)} y2={top(lim)} className="limit" vectorEffect="non-scaling-stroke" />
@@ -62,14 +62,14 @@ function Phone({ step, sel }: SceneProps) {
           <span className="idemo-qr"><Nfc size={30} /></span><i className="idemo-beam" />
         </div>
         <div className="idemo-asset">
-          <b>Tag read · DX-4471-208</b>
+          <b>Serial scan · DX-4471-208</b>
           <span>315/80R22.5 · Brand A · DOT 2025</span>
           <span>3 vehicles · 82,700 km so far</span>
         </div>
       </Pane>
       <Pane on={step === "tpms"}>
-        <Notice title="TPMS alert" body="MX-214 LHR1 at 94 psi, losing pressure" when="now" />
-        <div className="idemo-asset"><b>MX-214 · live TPMS</b><span>Via telematics, every wheel</span></div>
+        <Notice title="TPMS alert (planned feature)" body="MX-214 LHR1 at 94 psi, losing pressure" when="now" />
+        <div className="idemo-asset"><b>MX-214 · TPMS, planned</b><span>Illustration, not in the product today</span></div>
         <div className="idemo-reading bad"><b>LHR1</b><span>94 psi · 19% low</span><em>Flagged</em></div>
         <div className="idemo-reading good"><b>RHR1</b><span>117 psi</span><em>Normal</em></div>
       </Pane>
@@ -101,7 +101,7 @@ function Web({ step, sel, choose }: SceneProps) {
             </li>
           ))}
         </ol>
-        <div className="idemo-live"><i />The tag follows the tyre, so its history moves with it between vehicles</div>
+        <div className="idemo-live"><i />The record follows the tyre, so its history moves with it between vehicles</div>
       </Pane>
       <Pane on={step === "tpms"} className="web">
         <PsiLine />
@@ -166,14 +166,14 @@ export const tyreIntel: Scenario = {
   id: "tyres",
   label: "Tyre intelligence",
   icon: Radar,
-  pitch: "RFID tags, live TPMS through your telematics connection and every inspection feed one tyre record, so you know which tyre fails next and which brand is worth the money.",
+  pitch: "Serial scans and every inspection feed one tyre record, so you know which tyres are due next and which brand is worth the money. Live TPMS is planned.",
   appTitle: "Tyres",
   site: "Riyadh",
   defaultSel: "lhr1",
   steps: [
-    { id: "rfid", icon: Nfc, title: "Read the RFID tag", text: "One read opens the tyre's passport: every vehicle, wheel and km it has run.", url: "app.tyrepulse.app/tyre-passport/DX-4471-208", nav: "Tyres" },
-    { id: "tpms", icon: Activity, title: "Live TPMS catches the leak", text: "TPMS pressure arrives live through your telematics connection. A tyre losing pressure raises an alert to the tyre team before it fails.", url: "app.tyrepulse.app/tpms", nav: "Tyres", bell: true },
-    { id: "predict", icon: TrendingDown, title: "Forecast the removal", text: "Tread trend predicts when each tyre reaches its limit. Click a tyre to see its date.", url: "app.tyrepulse.app/predictive-maintenance", nav: "Tyres" },
+    { id: "rfid", icon: Nfc, title: "Scan the tyre", text: "A serial scan opens the tyre's passport: every vehicle, wheel and km it has run. RFID reads are set up on request.", url: "app.tyrepulse.app/tyre-passport/DX-4471-208", nav: "Tyres" },
+    { id: "tpms", icon: Activity, title: "Planned: live TPMS alerts", text: "Planned, not in the product today: pressure received from TPMS sensors, with an alert when a tyre loses pressure. Today, pressure is recorded at each inspection.", url: "app.tyrepulse.app/tpms", nav: "Tyres", bell: true },
+    { id: "predict", icon: TrendingDown, title: "Forecast the removal", text: "Kilometres and hours run against expected life show when each tyre is due. Click a tyre to see its date.", url: "app.tyrepulse.app/predictive-maintenance", nav: "Tyres" },
     { id: "anomaly", icon: AlertOctagon, title: "Anomalies flagged", text: "Meter rollbacks, duplicate expenses and odd pressures are found for you. Click one.", url: "app.tyrepulse.app/ops-intelligence", nav: "Overview", bell: true },
     { id: "value", icon: BadgeDollarSign, title: "Buy the right brand", text: "Cost per km by brand and fleet tyre health show where the money and the risk are.", url: "app.tyrepulse.app/cpk-intelligence", nav: "Costs" },
   ],

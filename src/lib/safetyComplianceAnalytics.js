@@ -15,11 +15,16 @@
  *  - `now` is injectable so month buckets and range cut-offs are deterministic.
  */
 import { normalizePosition } from './tyrePositions'
+import { pressureRule, hasPressureReading, PRESSURE_TOLERANCE_PCT, NOT_RECORDED } from './complianceRules'
 
 /** Minimum legal tread depth by functional position (mm). */
 export const LEGAL_TREAD = { steer: 3, drive: 3, trailer: 3, default: 2 }
-/** Permitted pressure deviation from the recommended pressure, in percent. */
-export const PRESSURE_TOLERANCE = 10
+/**
+ * Permitted pressure deviation, in percent. Pressure compliance on this view is
+ * the shared rule in complianceRules.js (kpiEngine: each reading against its own
+ * vehicle median), the same rule the Compliance register view uses.
+ */
+export const PRESSURE_TOLERANCE = PRESSURE_TOLERANCE_PCT
 /** Weights of the overall score components (renormalised over measured ones). */
 export const SCORE_WEIGHTS = { tread: 0.35, pressure: 0.25, inspection: 0.30, risk: 0.10 }
 /** Reporting windows offered by the page, in days. */
@@ -129,28 +134,6 @@ export function treadFailRows(tyreRecords = []) {
   return out.sort((a, b) => b.deficit - a.deficit)
 }
 
-/** Inspections with both a reading and a recommended pressure, with deviation. */
-export function pressureRows(inspections = []) {
-  const out = []
-  for (const r of inspections) {
-    const reading = toNum(r?.pressure_reading)
-    const target = toNum(r?.recommended_pressure)
-    if (reading == null || target == null || target === 0) continue
-    const deviationPct = round1(((reading - target) / target) * 100)
-    out.push({
-      id: r.id,
-      asset: r.asset_no || null,
-      date: r.inspection_date || null,
-      site: r.site || null,
-      reading,
-      target,
-      deviationPct,
-      compliant: Math.abs(deviationPct) <= PRESSURE_TOLERANCE,
-    })
-  }
-  return out
-}
-
 /** Inspection register rows with measurement flags (text, not colour). */
 export function inspectionRows(inspections = []) {
   return inspections.map((r) => ({
@@ -160,7 +143,7 @@ export function inspectionRows(inspections = []) {
     date: r.inspection_date || null,
     site: r.site || null,
     treadRecorded: toNum(r?.tread_depth) != null,
-    pressureRecorded: toNum(r?.pressure_reading) != null,
+    pressureRecorded: hasPressureReading(r),
     status: r.status || null,
   }))
 }
@@ -227,9 +210,8 @@ export function computeSafetyCompliance({ tyreRecords = [], inspections = [], ac
   const avgTread = treadValues.length ? round1(treadValues.reduce((a, b) => a + b, 0) / treadValues.length) : null
 
   // Pressure
-  const pressure = pressureRows(inspections)
-  const pressureFails = pressure.filter((p) => !p.compliant)
-  const pressureCompliance = pressure.length ? round1(((pressure.length - pressureFails.length) / pressure.length) * 100) : null
+  const pressure = pressureRule(inspections)
+  const pressureCompliance = pressure.pct == null ? null : round1(pressure.pct)
 
   // Risk (rated tyres only)
   const rated = tyreRecords.filter(RATED)
@@ -273,9 +255,12 @@ export function computeSafetyCompliance({ tyreRecords = [], inspections = [], ac
     belowLimitPct,
     avgTread,
     treadFails,
-    pressure,
-    pressureChecked: pressure.length,
-    pressureFails: pressureFails.length,
+    pressureBySite: pressure.bySite,
+    pressureChecked: pressure.readings,
+    pressureFails: pressure.outside,
+    pressureInspectionsMeasured: pressure.measuredInspections,
+    pressureInspectionsNotMeasured: pressure.notMeasuredInspections,
+    pressureBasis: pressure.basis,
     pressureCompliance,
     ratedCount: rated.length,
     criticalCount,
@@ -303,9 +288,11 @@ export function complianceSummaryRows(c) {
   if (!c) return []
   const f = (v) => (v == null ? 'N/A' : `${v.toFixed(1)}%`)
   const band = (v) => scoreBand(v).label
+  // No tyre carries a tread depth: say so, rather than a percentage or a band.
+  const noTread = !c.treadMeasured
   return [
-    { metric: 'Tread depth compliance', score: f(c.treadCompliance), status: band(c.treadCompliance), basis: `${c.treadMeasured} of ${c.total} tyres measured` },
-    { metric: 'Pressure compliance', score: f(c.pressureCompliance), status: band(c.pressureCompliance), basis: `${c.pressureChecked} inspections with a recommended pressure` },
+    { metric: 'Tread depth compliance', score: noTread ? NOT_RECORDED : f(c.treadCompliance), status: noTread ? NOT_RECORDED : band(c.treadCompliance), basis: `${c.treadMeasured} of ${c.total} tyres measured` },
+    { metric: 'Pressure compliance', score: f(c.pressureCompliance), status: band(c.pressureCompliance), basis: c.pressureBasis },
     { metric: 'Inspection coverage', score: f(c.inspectionCompliance), status: band(c.inspectionCompliance), basis: `${c.inspectedAssets} of ${c.tyreAssets} assets inspected` },
     { metric: 'Risk level score', score: f(c.riskScore), status: band(c.riskScore), basis: `${c.criticalCount} critical of ${c.ratedCount} rated tyres` },
     { metric: 'Accident tyre correlation', score: f(c.accidentCorrelation), status: c.accidentCorrelation == null ? 'Not measured' : c.accidentCorrelation < 30 ? 'Low' : 'Review', basis: `${c.accidents} accidents in period` },

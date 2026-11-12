@@ -12,7 +12,8 @@
  *   - Age = current year minus the recorded model year. A model year outside
  *     1970 .. next year (the register holds typos such as 20222) is rejected,
  *     so the asset's age is unknown rather than wrong.
- *   - Planning life = PLANNING_LIFE_YEARS. The register records no useful life
+ *   - Planning life defaults to PLANNING_LIFE_YEARS and is an editable
+ *     ASSUMPTION (see normalizeLifeYears); every function takes `lifeYears`. The register records no useful life
  *     per asset, so one planning life is applied to every asset and named.
  *   - Remaining life = planning life minus age (years).
  *   - Health score (0 to 100) = 70% age score + 30% reliability, where
@@ -30,6 +31,36 @@ export { latestUtilByAsset }
 
 export const PLANNING_LIFE_YEARS = 10
 export const AGING_YEARS = 7
+export const MIN_LIFE_YEARS = 3
+export const MAX_LIFE_YEARS = 40
+export const LIFE_STORAGE_KEY = 'fleetRenewal.planningLifeYears.v1'
+
+/**
+ * The planning life is an ASSUMPTION the planner types in, not a recorded
+ * fact (vehicle_fleet.useful_life is empty on every asset). Anything that is
+ * not a whole number of years in a sane range falls back to the default.
+ */
+export function normalizeLifeYears(v) {
+  if (v == null || v === '') return PLANNING_LIFE_YEARS
+  const n = Math.round(Number(v))
+  if (!Number.isFinite(n)) return PLANNING_LIFE_YEARS
+  return Math.max(MIN_LIFE_YEARS, Math.min(MAX_LIFE_YEARS, n))
+}
+
+/** "Aging" starts at 70% of the planning life (7 of the default 10 years). */
+export function agingYearsFor(lifeYears = PLANNING_LIFE_YEARS) {
+  return Math.round(normalizeLifeYears(lifeYears) * (AGING_YEARS / PLANNING_LIFE_YEARS))
+}
+
+/** Read the saved planning life. Storage may be blocked, so this never throws. */
+export function readLifeYears(storage) {
+  try { return normalizeLifeYears(storage?.getItem(LIFE_STORAGE_KEY)) } catch { return PLANNING_LIFE_YEARS }
+}
+export function writeLifeYears(storage, v) {
+  const n = normalizeLifeYears(v)
+  try { storage?.setItem(LIFE_STORAGE_KEY, String(n)) } catch { /* private window: keep it for this visit only */ }
+  return n
+}
 export const COUNTRY_CURRENCY = Object.freeze({ KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' })
 
 export const PRIORITY_META = {
@@ -93,20 +124,22 @@ export function openBreakdownsByAsset(rows) {
 }
 
 /** Apply the documented assessment rule to one asset. */
-export function assessAsset({ age, openBreakdown, opsStatus }) {
+export function assessAsset({ age, openBreakdown, opsStatus, lifeYears }) {
+  const life = normalizeLifeYears(lifeYears)
+  const aging = agingYearsFor(life)
   const scrap = /plan(ned)?[\s_-]*(for[\s_-]*)?scrap/i.test(String(opsStatus || ''))
   if (age == null) {
     const priority = scrap ? 'critical' : 'unknown'
     return { health: null, remainingYears: null, priority, recommendation: scrap ? 'Replace now' : PRIORITY_META.unknown.rec, scrap }
   }
-  const ageScore = Math.max(0, Math.min(100, 100 * (1 - age / PLANNING_LIFE_YEARS)))
+  const ageScore = Math.max(0, Math.min(100, 100 * (1 - age / life)))
   const health = openBreakdown == null
     ? Math.round(ageScore)
     : Math.round(ageScore * 0.7 + (openBreakdown ? 0 : 100) * 0.3)
-  const remainingYears = PLANNING_LIFE_YEARS - age
+  const remainingYears = life - age
   let priority
   if (scrap || remainingYears <= 1) priority = 'critical'
-  else if (remainingYears <= 2 || (openBreakdown && age >= AGING_YEARS)) priority = 'high'
+  else if (remainingYears <= 2 || (openBreakdown && age >= aging)) priority = 'high'
   else if (remainingYears <= 4) priority = 'medium'
   else priority = 'low'
   return { health, remainingYears, priority, recommendation: PRIORITY_META[priority].rec, scrap }
@@ -143,7 +176,8 @@ function planFor(index, asset) {
  * One planning row per current asset, plus a row for any plan whose asset is
  * not in the register (so every plan stays reachable for edit and delete).
  */
-export function buildPlanningRows({ fleet = [], plans = [], utilRows = null, breakdownRows = null, signalRows = null, now = new Date() } = {}) {
+export function buildPlanningRows({ fleet = [], plans = [], utilRows = null, breakdownRows = null, signalRows = null, now = new Date(), lifeYears } = {}) {
+  const life = normalizeLifeYears(lifeYears)
   const utilMap = utilRows == null ? null : latestUtilByAsset(utilRows)
   const sigIndex = indexSignals(signalRows)
   const bdMap = openBreakdownsByAsset(breakdownRows)
@@ -155,7 +189,7 @@ export function buildPlanningRows({ fleet = [], plans = [], utilRows = null, bre
     const k = assetKey(a.asset_no)
     const age = ageFromModelYear(a.model_year, now)
     const openBreakdown = bdMap == null ? null : (bdMap.get(k) || 0) > 0
-    const res = assessAsset({ age, openBreakdown, opsStatus: a.ops_status })
+    const res = assessAsset({ age, openBreakdown, opsStatus: a.ops_status, lifeYears: life })
     const plan = planFor(index, a)
     if (plan) used.add(plan.id)
     const util = utilMap?.get(k)?.v
@@ -212,7 +246,7 @@ export function buildPlanningRows({ fleet = [], plans = [], utilRows = null, bre
       ...signalFields(null, sigIndex),
     })
   }
-  return scoreRows(rows)
+  return scoreRows(rows, { lifeYears: life })
 }
 
 export function sortPlanningRows(rows = []) {
@@ -349,7 +383,8 @@ export function capexByQuarter(plans = [], now = new Date()) {
   }
 }
 
-export function buildRenewalKpis(rows = [], plans = [], now = new Date()) {
+export function buildRenewalKpis(rows = [], plans = [], now = new Date(), { lifeYears } = {}) {
+  const aging = agingYearsFor(lifeYears)
   const reg = rows.filter((r) => r.inRegister)
   const aged = reg.filter((r) => r.age != null)
   const capex = sumMoney((plans || []).filter((p) => isPlanDueWithin12m(p, now))
@@ -358,7 +393,8 @@ export function buildRenewalKpis(rows = [], plans = [], now = new Date()) {
     assets: reg.length,
     withAge: aged.length,
     due: reg.filter((r) => r.priority === 'critical').length,
-    aging: aged.filter((r) => r.age > AGING_YEARS).length,
+    aging: aged.filter((r) => r.age > aging).length,
+    agingYears: aging,
     capex,
     plans: (plans || []).length,
     approved: (plans || []).filter((p) => p.status === 'approved').length,
@@ -370,15 +406,17 @@ export function buildRenewalKpis(rows = [], plans = [], now = new Date()) {
  * Deterministic planning rules for the right rail. These are rules over the
  * register, not AI output, and each carries the preset or filter it opens.
  */
-export function planningRules(rows = [], now = new Date()) {
+export function planningRules(rows = [], now = new Date(), { lifeYears } = {}) {
+  const life = normalizeLifeYears(lifeYears)
+  const aging = agingYearsFor(life)
   const reg = rows.filter((r) => r.inRegister)
   const out = []
   const scrap = reg.filter((r) => r.scrap && !r.plan).length
   if (scrap) out.push({ key: 'scrap', tone: 'bad', title: `${scrap} asset${scrap === 1 ? '' : 's'} marked for scrap with no plan`, detail: 'The register marks them Plan For Scrap. Add a renewal plan so a replacement is budgeted.', preset: 'noplan' })
   const past = reg.filter((r) => r.remainingYears != null && r.remainingYears <= 0).length
-  if (past) out.push({ key: 'past', tone: 'bad', title: `${past} asset${past === 1 ? '' : 's'} past the ${PLANNING_LIFE_YEARS}-year planning life`, detail: 'Replacement is due now under the planning rule.', preset: 'due' })
-  const bdAging = reg.filter((r) => r.openBreakdown && r.age != null && r.age >= AGING_YEARS).length
-  if (bdAging) out.push({ key: 'bd', tone: 'warn', title: `${bdAging} aging asset${bdAging === 1 ? '' : 's'} currently broken down`, detail: `Over ${AGING_YEARS} years old with an open breakdown. Compare repair against replacement.`, preset: 'high' })
+  if (past) out.push({ key: 'past', tone: 'bad', title: `${past} asset${past === 1 ? '' : 's'} past the assumed ${life}-year planning life`, detail: 'A planning estimate from the model year. No useful life is recorded per asset.', preset: 'due' })
+  const bdAging = reg.filter((r) => r.openBreakdown && r.age != null && r.age >= aging).length
+  if (bdAging) out.push({ key: 'bd', tone: 'warn', title: `${bdAging} aging asset${bdAging === 1 ? '' : 's'} currently broken down`, detail: `${aging} years old or more with an open breakdown. Compare repair against replacement.`, preset: 'high' })
   const noPlan = reg.filter((r) => (r.priority === 'critical' || r.priority === 'high') && !r.plan).length
   if (noPlan) out.push({ key: 'noplan', tone: 'info', title: `${noPlan} high priority asset${noPlan === 1 ? '' : 's'} without a plan`, detail: 'No budget or target date is recorded for them yet.', preset: 'noplan' })
   const noAge = reg.filter((r) => r.age == null).length
@@ -395,17 +433,17 @@ export const PLANNING_EXPORT_COLUMNS = [
   { key: 'country', header: 'Country' },
   { key: 'age', header: 'Age (years)' },
   { key: 'utilization', header: 'Utilization %' },
-  { key: 'health', header: 'Health score' },
-  { key: 'remaining', header: 'Remaining life' },
-  { key: 'priority', header: 'Priority' },
-  { key: 'score', header: 'Renewal score' },
+  { key: 'health', header: 'Health score (estimate)' },
+  { key: 'remaining', header: 'Remaining planning life (estimate)' },
+  { key: 'priority', header: 'Priority (estimate)' },
+  { key: 'score', header: 'Renewal score (estimate)' },
   { key: 'current_km', header: 'Current km' },
   { key: 'hours', header: 'Hour meter' },
   { key: 'repair12m', header: 'Repair cost 12 months' },
   { key: 'downtime12m', header: 'Downtime hours 12 months' },
   { key: 'accidents', header: 'Accidents (all time)' },
   { key: 'recommendation', header: 'Recommendation' },
-  { key: 'budget', header: 'Est. budget' },
+  { key: 'budget', header: 'Plan cost (entered)' },
   { key: 'currency', header: 'Currency' },
   { key: 'target', header: 'Target date' },
   { key: 'planned_year', header: 'Planned year' },
@@ -440,6 +478,42 @@ export function planningExportRows(rows = []) {
   }))
 }
 
+/**
+ * What the planning estimate rests on. Counts how many current assets carry
+ * the facts each figure needs, so the page can say "from 600 of 1,622" instead
+ * of leaving a reader to assume full coverage.
+ *
+ * `budget` is the replacement budget for the WHOLE candidate list. It needs a
+ * purchase value per asset and none is recorded, so it is null with a reason,
+ * never a computed zero. (Individual renewal plans may still carry a cost a
+ * planner typed in; that is shown apart as plan cost.)
+ */
+export function planningCoverage(rows = [], fleet = [], { lifeYears } = {}) {
+  const reg = rows.filter((r) => r.inRegister)
+  const withYear = reg.filter((r) => r.age != null).length
+  const current = (fleet || []).filter((a) => a?.asset_no && isCurrentFleet(a))
+  const hasCol = (k) => current.some((a) => a && Object.prototype.hasOwnProperty.call(a, k))
+  const count = (k) => current.filter((a) => { const v = num(a?.[k]); return v != null && v > 0 }).length
+  const valueRead = hasCol('purchase_value')
+  const withValue = valueRead ? count('purchase_value') : null
+  const withUsefulLife = hasCol('useful_life') ? count('useful_life') : null
+  const costable = withValue != null && reg.length > 0 && withValue === reg.length
+  const reason = reg.length === 0 ? 'No current assets in this scope.'
+    : withValue == null ? 'Purchase value was not read, so a replacement budget cannot be costed.'
+      : withValue === 0 ? 'No purchase value is recorded on any asset, so a replacement budget cannot be costed.'
+        : `Purchase value is recorded on only ${withValue} of ${reg.length} assets, so a replacement budget for the list cannot be costed.`
+  return {
+    assets: reg.length,
+    withModelYear: withYear,
+    withoutModelYear: reg.length - withYear,
+    modelYearPct: reg.length ? Math.round((withYear / reg.length) * 100) : null,
+    withPurchaseValue: withValue,
+    withUsefulLife,
+    lifeYears: normalizeLifeYears(lifeYears),
+    lifeIsAssumed: !(withUsefulLife > 0),
+    budget: { amount: null, costable, reason: costable ? 'Purchase value is recorded, but no replacement price rule is defined.' : reason },
+  }
+}
 
 /* ------------------------------------------------------------------ *
  * Renewal signals and score                                            *
@@ -520,7 +594,7 @@ function signalFields(sig, index) {
 /** Weights of each score part. Parts that cannot be measured drop out and the rest re-normalise. */
 export const SCORE_WEIGHTS = Object.freeze({ age: 0.3, repair: 0.25, downtime: 0.15, km: 0.1, hours: 0.1, accidents: 0.1 })
 export const SCORE_PART_LABELS = Object.freeze({
-  age: 'Age (ASSUMED 10 year planning life)',
+  age: 'Age against the assumed planning life',
   repair: 'Repair cost last 12 months, rank within the same currency',
   downtime: 'Downtime last 12 months, rank within this fleet',
   km: 'Current km, rank within this fleet',
@@ -544,7 +618,8 @@ export function percentileRank(sorted, v) {
  * relative to the assets loaded in this scope, and repair cost is only ranked
  * against assets billed in the same currency.
  */
-export function scoreRows(rows = []) {
+export function scoreRows(rows = [], { lifeYears } = {}) {
+  const life = normalizeLifeYears(lifeYears)
   const reg = rows.filter((r) => r.inRegister)
   const sorted = (f) => reg.map(f).filter((v) => v != null && v > 0).sort((a, b) => a - b)
   const kmS = sorted((r) => r.current_km)
@@ -559,7 +634,7 @@ export function scoreRows(rows = []) {
   return rows.map((r) => {
     if (!r.inRegister) return { ...r, score: null, scoreParts: {} }
     const parts = {}
-    if (r.age != null) parts.age = Math.max(0, Math.min(100, Math.round((r.age / PLANNING_LIFE_YEARS) * 100)))
+    if (r.age != null) parts.age = Math.max(0, Math.min(100, Math.round((r.age / life) * 100)))
     if (r.signalsRead) {
       const costEntries = Object.entries(r.repairCost12m || {}).filter(([, a]) => a > 0)
       if (costEntries.length) {

@@ -40,6 +40,7 @@ import {
   computeSafetyCompliance, complianceSummaryRows, inspectionRows, filterBySite,
   siteOptions, scoreBand, rangeCutoff, RANGE_OPTIONS, PRESSURE_TOLERANCE, LEGAL_TREAD,
 } from '../lib/safetyComplianceAnalytics'
+import { NOT_RECORDED, PRESSURE_RULE_TEXT } from '../lib/complianceRules'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement,
@@ -236,16 +237,14 @@ export default function SafetyCompliance() {
     { id: 'site', header: 'Site', accessorFn: (r) => r.site ?? '', meta: { filterVariant: 'select' }, cell: ({ row }) => text(row.original.site) },
   ], [])
 
+  // Pressure by site, from the shared rule (see complianceRules.js).
   const pressureColumns = useMemo(() => [
-    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset ?? '', cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{text(row.original.asset)}</span> },
-    { id: 'date', header: 'Date', accessorFn: (r) => r.date ?? '', cell: ({ row }) => fmtDay(row.original.date) },
-    { id: 'site', header: 'Site', accessorFn: (r) => r.site ?? '', cell: ({ row }) => text(row.original.site) },
-    { id: 'reading', header: 'Reading', accessorFn: (r) => r.reading, meta: { align: 'right' } },
-    { id: 'target', header: 'Recommended', accessorFn: (r) => r.target, meta: { align: 'right' } },
-    { id: 'deviation', header: 'Deviation %', accessorFn: (r) => r.deviationPct, meta: { align: 'right' }, cell: ({ row }) => <span className="tabular-nums">{row.original.deviationPct > 0 ? '+' : ''}{row.original.deviationPct.toFixed(1)}%</span> },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site ?? '', cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{text(row.original.site)}</span> },
+    { id: 'inspections', header: 'Inspections', accessorFn: (r) => r.inspections, meta: { align: 'right' } },
+    { id: 'readings', header: 'Pressures recorded', accessorFn: (r) => r.readings, meta: { align: 'right' } },
     {
-      id: 'result', header: 'Result', accessorFn: (r) => (r.compliant ? 'Within tolerance' : 'Out of tolerance'), meta: { filterVariant: 'select' },
-      cell: ({ row }) => <BandBadge value={row.original.compliant ? 100 : 0} />,
+      id: 'pct', header: 'Within tolerance', accessorFn: (r) => r.pct, meta: { align: 'right' },
+      cell: ({ row }) => <span className={`tabular-nums font-medium ${BAND_TEXT[scoreBand(row.original.pct).key]}`}>{fmtPct(row.original.pct)}</span>,
     },
   ], [])
 
@@ -262,11 +261,11 @@ export default function SafetyCompliance() {
     { id: 'site', header: 'Site', accessorFn: (r) => r.site, cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.site}</span> },
     { id: 'total', header: 'Tyres', accessorFn: (r) => r.total, meta: { align: 'right' } },
     { id: 'measured', header: 'Tread measured', accessorFn: (r) => r.measured, meta: { align: 'right' } },
-    { id: 'fails', header: 'Below legal', accessorFn: (r) => r.fails, meta: { align: 'right' } },
+    { id: 'fails', header: 'Below legal', accessorFn: (r) => (r.measured ? r.fails : NOT_RECORDED), meta: { align: 'right' } },
     { id: 'critical', header: 'Critical risk', accessorFn: (r) => r.critical, meta: { align: 'right' } },
     {
-      id: 'compliance', header: 'Compliance', accessorFn: (r) => r.compliance ?? -1, meta: { align: 'right', exportValue: (r) => (r.compliance == null ? NA : r.compliance) },
-      cell: ({ row }) => <span className={`tabular-nums font-medium ${BAND_TEXT[scoreBand(row.original.compliance).key]}`}>{fmtPct(row.original.compliance)}</span>,
+      id: 'compliance', header: 'Compliance', accessorFn: (r) => r.compliance ?? -1, meta: { align: 'right', exportValue: (r) => (r.compliance == null ? NOT_RECORDED : r.compliance) },
+      cell: ({ row }) => <span className={`tabular-nums font-medium ${BAND_TEXT[scoreBand(row.original.compliance).key]}`}>{row.original.measured ? fmtPct(row.original.compliance) : NOT_RECORDED}</span>,
     },
     { id: 'status', header: 'Status', accessorFn: (r) => scoreBand(r.compliance).label, meta: { filterVariant: 'select' }, cell: ({ row }) => <BandBadge value={row.original.compliance} /> },
   ], [])
@@ -294,7 +293,7 @@ export default function SafetyCompliance() {
           ...pdfTableTheme(brand.accent),
           startY: (doc.lastAutoTable?.finalY || 80) + 8,
           head: [['Site', 'Tyres', 'Tread measured', 'Below legal', 'Compliance', 'Status']],
-          body: compliance.siteTread.map((s) => [s.site, s.total, s.measured, s.fails, fmtPct(s.compliance), scoreBand(s.compliance).label]),
+          body: compliance.siteTread.map((s) => [s.site, s.total, s.measured, s.measured ? s.fails : NOT_RECORDED, s.measured ? fmtPct(s.compliance) : NOT_RECORDED, scoreBand(s.compliance).label]),
         })
       }
       if (compliance.treadFails.length) {
@@ -321,7 +320,7 @@ export default function SafetyCompliance() {
         { name: 'Compliance', rows: complianceSummaryRows(compliance), columns: ['metric', 'score', 'status', 'basis'], headers: ['Metric', 'Score', 'Status', 'Basis'] },
         {
           name: 'By site',
-          rows: compliance.siteTread.map((s) => ({ ...s, compliance: s.compliance == null ? NA : s.compliance, status: scoreBand(s.compliance).label })),
+          rows: compliance.siteTread.map((s) => ({ ...s, fails: s.measured ? s.fails : NOT_RECORDED, compliance: s.compliance == null ? NOT_RECORDED : s.compliance, status: scoreBand(s.compliance).label })),
           columns: ['site', 'total', 'measured', 'fails', 'critical', 'compliance', 'status'],
           headers: ['Site', 'Tyres', 'Tread measured', 'Below legal', 'Critical risk', 'Compliance %', 'Status'],
         },
@@ -332,10 +331,10 @@ export default function SafetyCompliance() {
           headers: ['Asset', 'Serial', 'Position', 'Tread mm', 'Legal min mm', 'Deficit mm', 'Risk level', 'Site'],
         },
         {
-          name: 'Pressure checks',
-          rows: compliance.pressure.map((r) => ({ ...r, result: r.compliant ? 'Within tolerance' : 'Out of tolerance' })),
-          columns: ['asset', 'date', 'site', 'reading', 'target', 'deviationPct', 'result'],
-          headers: ['Asset', 'Date', 'Site', 'Reading', 'Recommended', 'Deviation %', 'Result'],
+          name: 'Pressure by site',
+          rows: compliance.pressureBySite.map((r) => ({ ...r, pct: Number(r.pct.toFixed(1)) })),
+          columns: ['site', 'inspections', 'readings', 'pct'],
+          headers: ['Site', 'Inspections', 'Pressures recorded', 'Within tolerance %'],
         },
         {
           name: 'Inspections',
@@ -446,19 +445,19 @@ export default function SafetyCompliance() {
               </div>
               <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 {[
-                  { label: 'Tread depth', value: compliance.treadCompliance, icon: CircleDot, detail: compliance.treadMeasured ? `${compliance.treadFails.length} of ${compliance.treadMeasured} measured below legal` : 'No tread readings in scope' },
-                  { label: 'Pressure', value: compliance.pressureCompliance, icon: Gauge, detail: compliance.pressureChecked ? `${compliance.pressureFails} of ${compliance.pressureChecked} outside tolerance` : 'No readings with a recommended pressure' },
+                  { label: 'Tread depth', value: compliance.treadCompliance, icon: CircleDot, detail: compliance.treadMeasured ? `${compliance.treadFails.length} of ${compliance.treadMeasured} measured below legal` : 'No tyre in scope has a tread depth', notRecorded: !compliance.treadMeasured },
+                  { label: 'Pressure', value: compliance.pressureCompliance, icon: Gauge, detail: compliance.pressureChecked ? `${compliance.pressureFails} of ${compliance.pressureChecked} recorded pressures outside tolerance` : 'No inspection has enough recorded pressures' },
                   { label: 'Inspection coverage', value: compliance.inspectionCompliance, icon: ClipboardCheck, detail: `${compliance.inspectedAssets} of ${compliance.tyreAssets} assets inspected` },
                   { label: 'Risk level', value: compliance.riskScore, icon: AlertOctagon, detail: compliance.ratedCount ? `${compliance.criticalCount} critical of ${compliance.ratedCount} rated` : 'No tyres carry a risk rating' },
-                ].map(({ label, value, icon: Icon, detail }) => (
+                ].map(({ label, value, icon: Icon, detail, notRecorded }) => (
                   <div key={label} className="bg-[var(--input-bg)] rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <Icon size={15} className={BAND_TEXT[scoreBand(value).key]} aria-hidden="true" />
                       <span className="text-[var(--text-muted)] text-xs">{label}</span>
                     </div>
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className={`text-2xl font-bold tabular-nums ${BAND_TEXT[scoreBand(value).key]}`}>{value == null ? NA : `${value.toFixed(0)}%`}</span>
-                      <span className="text-[11px] text-[var(--text-muted)]">{scoreBand(value).label}</span>
+                      <span className={`text-2xl font-bold tabular-nums ${BAND_TEXT[scoreBand(value).key]}`}>{notRecorded ? NOT_RECORDED : value == null ? NA : `${value.toFixed(0)}%`}</span>
+                      <span className="text-[11px] text-[var(--text-muted)]">{notRecorded ? '' : scoreBand(value).label}</span>
                     </div>
                     <div className="mt-2"><Meter value={value} label={`${label} compliance`} /></div>
                     <div className="text-[var(--text-muted)] text-xs mt-1">{detail}</div>
@@ -474,7 +473,7 @@ export default function SafetyCompliance() {
             <StatTile label="Risk rated" value={compliance.ratedCount} icon={Layers} sub={`${compliance.total - compliance.ratedCount} not rated`} tone="info" />
             <StatTile label="Critical tyres" value={compliance.ratedCount ? compliance.criticalCount : NA} icon={AlertOctagon} tone="crit" sub={fmtPct(compliance.criticalPct)} />
             <StatTile label="High risk tyres" value={compliance.ratedCount ? compliance.highRiskCount : NA} icon={AlertTriangle} tone="warn" />
-            <StatTile label="Avg tread" value={compliance.avgTread == null ? NA : compliance.avgTread.toFixed(1)} unit={compliance.avgTread == null ? undefined : 'mm'} icon={Activity} sub={`${compliance.treadMeasured} measured`} />
+            <StatTile label="Avg tread" value={compliance.avgTread == null ? NOT_RECORDED : compliance.avgTread.toFixed(1)} unit={compliance.avgTread == null ? undefined : 'mm'} icon={Activity} sub={`${compliance.treadMeasured} measured`} />
             <StatTile label="Accidents" value={compliance.accidents} icon={Car} tone="warn" sub={compliance.accidentCorrelation == null ? 'Correlation N/A' : `${fmtPct(compliance.accidentCorrelation)} on risky tyres`} />
           </div>
 
@@ -533,9 +532,10 @@ export default function SafetyCompliance() {
             {activeTab === 'tread' && (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <StatTile label="Tread compliance" value={fmtPct(compliance.treadCompliance)} icon={CircleDot} sub={scoreBand(compliance.treadCompliance).label} />
-                  <StatTile label="Below legal limit" value={fmtPct(compliance.belowLimitPct)} icon={AlertTriangle} tone="crit" sub={`${compliance.treadFails.length} tyres`} />
-                  <StatTile label="Avg tread depth" value={compliance.avgTread == null ? NA : compliance.avgTread.toFixed(1)} unit={compliance.avgTread == null ? undefined : 'mm'} icon={Activity} sub={`${compliance.treadMeasured} measured`} />
+                  {/* No tread depth recorded: say so. Never a percentage or "0 tyres" for a check nobody made. */}
+                  <StatTile label="Tread compliance" value={compliance.treadMeasured ? fmtPct(compliance.treadCompliance) : NOT_RECORDED} icon={CircleDot} sub={compliance.treadMeasured ? scoreBand(compliance.treadCompliance).label : 'No tyre in scope has a tread depth'} />
+                  <StatTile label="Below legal limit" value={compliance.treadMeasured ? fmtPct(compliance.belowLimitPct) : NOT_RECORDED} icon={AlertTriangle} tone="crit" sub={compliance.treadMeasured ? `${compliance.treadFails.length} tyres` : 'Not checked'} />
+                  <StatTile label="Avg tread depth" value={compliance.avgTread == null ? NOT_RECORDED : compliance.avgTread.toFixed(1)} unit={compliance.avgTread == null ? undefined : 'mm'} icon={Activity} sub={`${compliance.treadMeasured} measured`} />
                 </div>
                 <Card pad="none">
                   <div className="px-5 pt-4">
@@ -557,20 +557,20 @@ export default function SafetyCompliance() {
               <div className="space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <StatTile label="Pressure compliance" value={fmtPct(compliance.pressureCompliance)} icon={Gauge} sub={scoreBand(compliance.pressureCompliance).label} />
-                  <StatTile label="Readings checked" value={compliance.pressureChecked} icon={ClipboardCheck} tone="info" sub="with a recommended pressure" />
-                  <StatTile label="Out of tolerance" value={compliance.pressureChecked ? compliance.pressureFails : NA} icon={AlertTriangle} tone="crit" sub={`more than ${PRESSURE_TOLERANCE}% from recommended`} />
+                  <StatTile label="Pressures checked" value={compliance.pressureChecked} icon={ClipboardCheck} tone="info" sub={`${compliance.pressureInspectionsMeasured} inspections measured, ${compliance.pressureInspectionsNotMeasured} without enough readings`} />
+                  <StatTile label="Out of tolerance" value={compliance.pressureChecked ? compliance.pressureFails : NA} icon={AlertTriangle} tone="crit" sub={`more than ${PRESSURE_TOLERANCE}% from the vehicle median`} />
                 </div>
                 <Card pad="none">
                   <div className="px-5 pt-4">
-                    <CardHeader title="Pressure checks" description={`A reading more than ${PRESSURE_TOLERANCE}% above or below the recommended pressure is non-compliant. Under-inflation raises heat and blowout risk; over-inflation shrinks the contact patch.`} />
+                    <CardHeader title="Pressure by site" description={`${PRESSURE_RULE_TEXT} Under-inflation raises heat and blowout risk; over-inflation shrinks the contact patch.`} />
                   </div>
                   <EnterpriseTable
                     columns={pressureColumns}
-                    data={compliance.pressure}
-                    getRowId={(r, i) => String(r.id ?? i)}
-                    searchPlaceholder="Search asset or site"
+                    data={compliance.pressureBySite}
+                    getRowId={(r) => String(r.site)}
+                    searchPlaceholder="Search site"
                     enableExport={false}
-                    emptyMessage="No inspection in scope records both a pressure reading and a recommended pressure."
+                    emptyMessage="No inspection in scope has enough recorded pressures to be judged."
                   />
                 </Card>
               </div>

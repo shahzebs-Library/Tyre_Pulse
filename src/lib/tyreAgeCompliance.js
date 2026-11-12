@@ -36,19 +36,23 @@ export const COMPLIANT_BANDS = ['ok', 'watch']
 // Bands considered non-compliant (at or past the replace threshold).
 export const NON_COMPLIANT_BANDS = ['replace', 'overdue']
 
+// WORDING RULE: the fleet records no DOT code or manufacture date, so what this
+// engine measures today is TIME IN SERVICE counted from the fitment (or stock
+// issue) date, not the age of the rubber. Every label says so. A row that does
+// carry a DOT or manufacture date is still read and labelled as such.
 export const AGE_BAND_META = Object.freeze({
-  ok: { key: 'ok', label: 'OK', tone: 'green', order: 0, description: 'Within safe calendar age.' },
-  watch: { key: 'watch', label: 'Watch', tone: 'amber', order: 1, description: 'Aging. Monitor at each inspection.' },
-  replace: { key: 'replace', label: 'Replace', tone: 'orange', order: 2, description: 'Past service life. Plan replacement.' },
-  overdue: { key: 'overdue', label: 'Overdue', tone: 'red', order: 3, description: 'Beyond age limit. Remove now.' },
-  unknown: { key: 'unknown', label: 'Date unknown', tone: 'slate', order: 4, description: 'No birth date on record.' },
+  ok: { key: 'ok', label: 'OK', tone: 'green', order: 0, description: 'Within the time in service limit.' },
+  watch: { key: 'watch', label: 'Watch', tone: 'amber', order: 1, description: 'Long in service. Monitor at each inspection.' },
+  replace: { key: 'replace', label: 'Replace', tone: 'orange', order: 2, description: 'Past the time in service limit. Plan replacement.' },
+  overdue: { key: 'overdue', label: 'Overdue', tone: 'red', order: 3, description: 'Well past the time in service limit. Remove now.' },
+  unknown: { key: 'unknown', label: 'Date unknown', tone: 'slate', order: 4, description: 'No fitment date on record.' },
 })
 
 export const DATE_SOURCE_META = Object.freeze({
-  dot: { key: 'dot', label: 'DOT code', estimated: false },
+  dot: { key: 'dot', label: 'DOT code (manufacture)', estimated: false },
   manufacture: { key: 'manufacture', label: 'Manufacture date', estimated: false },
-  issue: { key: 'issue', label: 'Issue date (estimated)', estimated: true },
-  fitment: { key: 'fitment', label: 'Fitment date (estimated)', estimated: true },
+  issue: { key: 'issue', label: 'Issue date (in service)', estimated: true },
+  fitment: { key: 'fitment', label: 'Fitment date (in service)', estimated: true },
   unknown: { key: 'unknown', label: 'No date', estimated: false },
 })
 

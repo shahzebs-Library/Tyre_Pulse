@@ -11,6 +11,7 @@
     "noFailures": "No high/critical risk records found in selected filters."
   },
   "tabs": {
+    "overview": "Overview",
     "trend": "Trend Analysis",
     "seasonal": "Seasonal Analysis",
     "geo": "Geographic Analysis",

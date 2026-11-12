@@ -173,12 +173,9 @@ describe('capped documents disclose the cap', () => {
    * outlives the screen it came from.
    */
   const CAPPED = [
-    {
-      file: 'pages/PredictiveMaintenance.jsx',
-      cap: 'PDF_ROW_CAP',
-      // :862 sliced at 500 with no disclosure at all.
-      discloses: 'narrow the filters to include the rest',
-    },
+    // pages/PredictiveMaintenance.jsx used to be listed here. Its rebuild on
+    // real signals exports the whole filtered table with no cap, so there is
+    // nothing left to disclose (pinned in predictiveSignals.test.js).
     {
       file: 'pages/ReportCenter.jsx',
       cap: 'PDF_ROW_CAP',

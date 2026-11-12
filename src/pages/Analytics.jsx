@@ -1,32 +1,32 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import useLatestRequest from '../lib/useLatestRequest'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import { computeBrandMetrics, computeSiteMetrics, recordCost } from '../lib/analyticsEngine'
+import { recordCost } from '../lib/analyticsEngine'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, Title, Tooltip, Legend,
 } from 'chart.js'
-import { Bar, Line } from 'react-chartjs-2'
-import { BarChart2, TrendingUp, AlertTriangle, Activity, Layers } from 'lucide-react'
+import { Bar } from 'react-chartjs-2'
+import { BarChart2, AlertTriangle, Activity, Layers } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
-import PeriodFilter, { filterByPeriodValue } from '../components/ui/PeriodFilter'
+import PeriodFilter from '../components/ui/PeriodFilter'
 import { formatCurrencyCompact } from '../lib/formatters'
-import { fetchAllPages } from '../lib/fetchAll'
-import EnterpriseTable from '../components/ui/EnterpriseTable'
-import { useReportMeta } from '../hooks/useReportMeta'
 import { toUserMessage } from '../lib/safeError'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import { COST_MODES, costModeLabel, pickMonthly, splitTotals } from '../lib/costSources'
 import { loadGovernedCostSplit, COST_SPLIT_TTL_MS } from '../lib/api/governedCost'
 import CostValue from '../components/cost/CostValue'
+import { governedWindow, governedWindowLabel } from '../lib/governedWindow'
 import Card, { CardHeader, CardBody } from '../components/ui/Card'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
 /**
- * Monthly record-count + cost buckets behind the Monthly Trend chart.
+ * Monthly record-count + cost buckets. The Monthly Trend chart that drew these
+ * was removed from this view when it became the Overview tab of Advanced
+ * Analytics (the Trend Analysis tab draws records per month, and cost per month
+ * comes from the expense grid chart below). Kept as a tested pure helper.
  *
  * Cost must be the ROW total, never the unit price: cost_per_tyre is the
  * "Unit Cost / Tyre" and one tyre_records row can cover several tyres (qty).
@@ -60,32 +60,21 @@ export function periodBounds(period) {
   return { from: null, to: null }
 }
 
-/** Hard row ceiling for the bounded client read behind the trend + tables. */
-const ROW_CAP = 50000
-
-export default function Analytics() {
-  const reportMeta = useReportMeta('Fleet Analytics')
+export default function Analytics({ embedded = false }) {
   const { t } = useLanguage()
   const { activeCountry, activeCurrency } = useSettings()
-  const [records, setRecords] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [truncated, setTruncated] = useState(false)
-  // Opens on the CURRENT YEAR rather than all of history. All-time read up to
-  // 50,000 tyre rows on every visit; the year is a fraction of that and still
-  // gives the monthly trend a full set of points to draw. The month would not -
-  // a one-month trend chart is a single dot, which is why the default is the
-  // year and not the month.
+  // Opens on the CURRENT YEAR rather than all of history.
   const [period, setPeriod] = useState(() => ({ mode: 'year', year: new Date().getFullYear() }))
 
-  // Period -> server-side date bounds. These drive BOTH the exact KPI RPC and
-  // the bounded row read below, so neither one pulls the whole table.
+  // Period -> date bounds. They drive the tyre counts AND the expense grid
+  // window, so every figure on this view covers the same dates.
   const { from: fromDate, to: toDate } = useMemo(() => periodBounds(period), [period])
+  const win = useMemo(() => governedWindow({ from: fromDate, to: toDate }), [fromDate, toDate])
+  const winLabel = governedWindowLabel(win)
 
-  // Exact headline KPIs (Total Tyres / Total Cost / Avg Cost / High Risk) come
-  // from the server-side aggregate RPC (report_tyre_summary), so they stay
-  // accurate for millions of rows and never depend on the capped row read below.
-  // Same country + date scope as the tables.
+  // Tyre COUNTS (total tyres, high risk) and the average recorded price come
+  // from the server-side aggregate (report_tyre_summary). Its cost total is NOT
+  // shown: the tyre cost total on this page is the expense grid figure below.
   const [summary, setSummary] = useState(null)
   const [summaryLoading, setSummaryLoading] = useState(true)
   const [summaryError, setSummaryError] = useState(null)
@@ -112,46 +101,8 @@ export default function Analytics() {
     return () => { cancelled = true }
   }, [activeCountry, fromDate, toDate])
 
-  // Row read for the Monthly Trend chart + Site/Brand tables ONLY. The RPC above
-  // cannot supply these (per-row avg cost, top category, failure/high-risk rate,
-  // full monthly series), so they keep their exact client computation, but the
-  // read is now bounded: country + period date window applied SERVER-SIDE, plus
-  // a hard row ceiling. A truncated read is surfaced as a "capped view" note.
-  // A newer filter change supersedes an in-flight read: drop the stale answer.
-  const latestLoad = useLatestRequest()
-  const load = useCallback(async () => {
-    const stale = latestLoad.begin()
-    setLoading(true); setError(null)
-    try {
-      const { data, error: e, truncated: tr } = await fetchAllPages((from, to) => {
-        let q = supabase
-          .from('tyre_records')
-          .select('id,issue_date,brand,site,category,risk_level,cost_per_tyre,qty,serial_no,country,status,removal_date,km_at_fitment,km_at_removal,total_km,vehicle_type')
-          .order('issue_date')
-        if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-        if (fromDate) q = q.gte('issue_date', fromDate)
-        if (toDate) q = q.lte('issue_date', toDate)
-        return q.range(from, to)
-      }, { max: ROW_CAP })
-      if (stale()) return
-      if (e) throw new Error(e.message || e)
-      setRecords(data || [])
-      setTruncated(Boolean(tr))
-    } catch (err) {
-      if (stale()) return
-      setError(toUserMessage(err, 'Failed to load data.'))
-      setRecords([])
-      setTruncated(false)
-    } finally {
-      if (!stale()) setLoading(false)
-    }
-  }, [activeCountry, fromDate, toDate, latestLoad])
-
-  useEffect(() => { load() }, [load])
-
-  // Additive Tyres vs Maintenance split (independent tri-state load, own
-  // cancellation guard, re-fetches on activeCountry change). Never blocks or
-  // alters the existing Analytics content above.
+  // The ONE tyre and maintenance cost source for this page: the expense grid,
+  // for the same country and period as the counts above.
   const [costMode, setCostMode] = useState('combined')
   const [costSplit, setCostSplit] = useState(null)
   const [costLoading, setCostLoading] = useState(true)
@@ -160,7 +111,10 @@ export default function Analytics() {
   useEffect(() => {
     let cancelled = false
     setCostLoading(true); setCostError(null)
-    loadGovernedCostSplit({ country: activeCountry === 'All' ? undefined : activeCountry, maxAgeMs: COST_SPLIT_TTL_MS })
+    loadGovernedCostSplit({
+      country: activeCountry === 'All' ? undefined : activeCountry,
+      from: win.from, to: win.to, maxAgeMs: COST_SPLIT_TTL_MS,
+    })
       .then((res) => { if (!cancelled) setCostSplit(res) })
       .catch((err) => {
         if (cancelled) return
@@ -169,7 +123,7 @@ export default function Analytics() {
       })
       .finally(() => { if (!cancelled) setCostLoading(false) })
     return () => { cancelled = true }
-  }, [activeCountry])
+  }, [activeCountry, win.from, win.to])
 
   const costByMonth = useMemo(() => costSplit?.byMonth || [], [costSplit])
   const costTotals = useMemo(() => splitTotals(costByMonth), [costByMonth])
@@ -201,137 +155,68 @@ export default function Analytics() {
     },
   }
 
-  const filtered = useMemo(() =>
-    filterByPeriodValue(records, period, 'issue_date'),
-    [records, period]
-  )
-
-  // Exact KPI values from the server aggregate (0 while loading). total_cost is
-  // sum(cost_per_tyre * coalesce(qty,1)); high_risk is Critical + High count -
-  // the same formulas the page computed client-side, now unbounded by row count.
+  // The reader falls back to tyre records only when the grid holds nothing for
+  // the window; the card says which one it is showing.
+  const fromGrid = !costSplit || String(costSplit.source || '').startsWith('governed')
   const kpiTotal = Number(summary?.total_records) || 0
-  const kpiCost = Number(summary?.total_cost) || 0
-  const kpiAvg = kpiTotal > 0 ? kpiCost / kpiTotal : 0
+  // Average RECORDED purchase price per tyre record. A unit price, not a total.
+  const kpiAvg = kpiTotal > 0 ? (Number(summary?.total_cost) || 0) / kpiTotal : null
   const kpiHighRisk = Number(summary?.high_risk) || 0
-
-  const siteMetrics = useMemo(() => computeSiteMetrics(filtered), [filtered])
-  const brandMetrics = useMemo(() => computeBrandMetrics(filtered), [filtered])
-
-  // Monthly trend chart
-  const monthlyData = useMemo(() => buildMonthlyTrend(filtered), [filtered])
-
-  const chartData = useMemo(() => ({
-    labels: monthlyData.map(d => d.month),
-    datasets: [
-      { label: 'Records', data: monthlyData.map(d => d.count), backgroundColor: withAlpha(colorAt(0), 0.6), borderColor: colorAt(0), yAxisID: 'y', borderRadius: 4 },
-      { label: 'Cost', data: monthlyData.map(d => d.cost), backgroundColor: withAlpha(colorAt(3), 0.6), borderColor: colorAt(3), yAxisID: 'y1', borderRadius: 4 },
-    ],
-  }), [monthlyData])
-
-  const chartOpts = {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: '#9ca3af' } } },
-    scales: {
-      x: { ticks: { color: '#6b7280' }, grid: { color: 'var(--panel-2)' } },
-      y: { ticks: { color: '#6b7280' }, grid: { color: '#374151' } },
-      y1: { position: 'right', grid: { display: false }, ticks: { color: '#6b7280' } },
-    },
-  }
-
-  const siteColumns = useMemo(() => [
-    { id: 'site', header: 'Site', accessorFn: r => r.site, size: 140 },
-    { id: 'count', header: 'Records', accessorFn: r => r.count, size: 80, meta: { align: 'right' } },
-    {
-      id: 'totalCost', header: 'Total Cost', accessorFn: r => r.totalCost, size: 110, meta: { align: 'right' },
-      cell: ({ getValue }) => <span>{formatCurrencyCompact(getValue(), activeCurrency)}</span>,
-    },
-    {
-      id: 'avgCost', header: 'Avg Cost', accessorFn: r => r.avgCost, size: 100, meta: { align: 'right' },
-      cell: ({ getValue }) => <span>{formatCurrencyCompact(getValue(), activeCurrency)}</span>,
-    },
-    {
-      id: 'highRiskPct', header: 'High Risk %', accessorFn: r => r.highRiskPct, size: 100, meta: { align: 'right' },
-      cell: ({ getValue }) => {
-        const val = getValue()
-        return <span className={`text-xs px-2 py-0.5 rounded-full ${val > 30 ? 'bg-red-900/40 text-red-400' : 'bg-gray-800 text-gray-400'}`}>{val.toFixed(1)}%</span>
-      },
-    },
-    { id: 'topCategory', header: 'Top Category', accessorFn: r => r.topCategory ?? '-', size: 120 },
-  ], [activeCurrency])
-
-  const brandColumns = useMemo(() => [
-    { id: 'brand', header: 'Brand', accessorFn: r => r.brand, size: 140 },
-    { id: 'count', header: 'Records', accessorFn: r => r.count, size: 80, meta: { align: 'right' } },
-    {
-      id: 'totalCost', header: 'Total Cost', accessorFn: r => r.totalCost, size: 110, meta: { align: 'right' },
-      cell: ({ getValue }) => <span>{formatCurrencyCompact(getValue(), activeCurrency)}</span>,
-    },
-    {
-      id: 'avgCost', header: 'Avg Cost', accessorFn: r => r.avgCost, size: 100, meta: { align: 'right' },
-      cell: ({ getValue }) => <span>{formatCurrencyCompact(getValue(), activeCurrency)}</span>,
-    },
-    {
-      id: 'failureRate', header: 'Failure Rate', accessorFn: r => r.failureRate, size: 100, meta: { align: 'right' },
-      cell: ({ getValue }) => {
-        const val = getValue()
-        return <span className={`text-xs px-2 py-0.5 rounded-full ${val > 30 ? 'bg-red-900/40 text-red-400' : val > 15 ? 'bg-yellow-900/40 text-yellow-400' : 'bg-green-900/40 text-green-400'}`}>{val.toFixed(1)}%</span>
-      },
-    },
-    { id: 'topCategory', header: 'Top Category', accessorFn: r => r.topCategory ?? '-', size: 120 },
-  ], [activeCurrency])
+  const pulse = (w) => <span className={`inline-block h-7 ${w} rounded bg-white/10 animate-pulse align-middle`} />
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={t('analytics.title')}
-        subtitle={t('analytics.subtitle')}
-        icon={BarChart2}
-      />
+      {/* Embedded as the Overview tab of Advanced Analytics: that page owns the title. */}
+      {!embedded && (
+        <PageHeader
+          title={t('analytics.title')}
+          subtitle={t('analytics.subtitle')}
+          icon={BarChart2}
+        />
+      )}
 
-      <PeriodFilter records={records} value={period} onChange={setPeriod} />
+      <PeriodFilter value={period} onChange={setPeriod} />
 
-      {/* KPI cards - exact server-side aggregates (accurate beyond the row cap) */}
       {summaryError && !summaryLoading && (
-        <div className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-xl px-4 py-3">
+        <div role="alert" className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-xl px-4 py-3">
           <AlertTriangle size={14} /> {summaryError}
         </div>
       )}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-[var(--gap-grid)]">
         <Card className="text-center">
           <p className="text-2xl font-bold text-white">
-            {summaryLoading
-              ? <span className="inline-block h-7 w-16 rounded bg-white/10 animate-pulse align-middle" />
-              : kpiTotal.toLocaleString()}
+            {summaryLoading ? pulse('w-16') : summaryError ? 'N/A' : kpiTotal.toLocaleString()}
           </p>
           <p className="text-xs text-gray-500 mt-1">{t('analytics.kpi.totalTyres')}</p>
         </Card>
         <Card className="text-center">
           <p className="text-2xl font-bold text-blue-400">
-            {summaryLoading
-              ? <span className="inline-block h-7 w-20 rounded bg-white/10 animate-pulse align-middle" />
-              : formatCurrencyCompact(kpiCost, activeCurrency)}
+            {costLoading ? pulse('w-20') : costError ? 'N/A' : <CostValue split={costSplit} mode="tyres" />}
           </p>
-          <p className="text-xs text-gray-500 mt-1">{t('analytics.kpi.totalCost')}</p>
+          <p className="text-xs text-gray-500 mt-1">{fromGrid ? 'Tyre cost, expense grid' : 'Tyre cost, tyre records (no expense grid data for this window)'}</p>
         </Card>
         <Card className="text-center">
           <p className="text-2xl font-bold text-emerald-400">
-            {summaryLoading
-              ? <span className="inline-block h-7 w-20 rounded bg-white/10 animate-pulse align-middle" />
+            {summaryLoading ? pulse('w-20')
+              : summaryError || kpiAvg === null || activeCountry === 'All' ? 'N/A'
               : formatCurrencyCompact(kpiAvg, activeCurrency)}
           </p>
-          <p className="text-xs text-gray-500 mt-1">{t('analytics.kpi.avgCost')}</p>
+          <p className="text-xs text-gray-500 mt-1">
+            {activeCountry === 'All' ? 'Avg recorded price: pick a country' : 'Avg recorded price per tyre record'}
+          </p>
         </Card>
         <Card className="text-center">
           <p className="text-2xl font-bold text-red-400">
-            {summaryLoading
-              ? <span className="inline-block h-7 w-12 rounded bg-white/10 animate-pulse align-middle" />
-              : kpiHighRisk.toLocaleString()}
+            {summaryLoading ? pulse('w-12') : summaryError ? 'N/A' : kpiHighRisk.toLocaleString()}
           </p>
           <p className="text-xs text-gray-500 mt-1">{t('analytics.kpi.highRisk')}</p>
         </Card>
       </div>
+      <p className="text-xs text-gray-500">
+        Figures cover {winLabel}. Tyre cost is the expense grid total for that window; site, brand, vehicle and monthly breakdowns are on the analysis tabs.
+      </p>
 
-      {/* Tyres vs Maintenance cost split (additive, independent load) */}
+      {/* Tyres vs Maintenance cost split, same window as the cards above */}
       <Card>
         <CardHeader
           level={2}
@@ -361,24 +246,23 @@ export default function Analytics() {
         {costLoading ? (
           <div className="animate-pulse h-64 rounded-lg bg-white/5" />
         ) : costError ? (
-          <div className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-xl px-4 py-3">
+          <div role="alert" className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-xl px-4 py-3">
             <AlertTriangle size={14} /> {costError}
           </div>
         ) : costTotals.combined === 0 ? (
           <div className="text-center py-12">
             <Activity size={32} className="text-gray-700 mx-auto mb-3" />
             <p className="text-gray-400 font-medium">No cost data</p>
-            <p className="text-gray-600 text-sm mt-1">No tyre or maintenance spend in the last 12 months.</p>
+            <p className="text-gray-600 text-sm mt-1">No tyre or maintenance spend for {winLabel}.</p>
           </div>
         ) : (
           <>
             <div className="mb-4">
-              {/* GOVERNED: per-currency figures. activeCurrency is SAR on the
-                  All-countries view, which mislabelled a SAR+AED+EGP blend. */}
+              {/* GOVERNED: per-currency figures, never a blended total. */}
               <p className="text-2xl font-bold" style={{ color: costModeColor }}>
                 <CostValue split={costSplit} mode={costMode} />
               </p>
-              <p className="text-xs text-gray-500 mt-1">{costModeLabel(costMode)} spend, last 12 months</p>
+              <p className="text-xs text-gray-500 mt-1">{costModeLabel(costMode)} spend, {winLabel}</p>
             </div>
             <div style={{ height: 280 }}>
               <Bar data={costChartData} options={costChartOpts} />
@@ -387,95 +271,6 @@ export default function Analytics() {
         )}
         </CardBody>
       </Card>
-
-      {error && !loading && (
-        <div className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-xl px-4 py-3">
-          <AlertTriangle size={14} /> {error}
-        </div>
-      )}
-
-      {truncated && !loading && (
-        <div className="flex items-center gap-2 text-amber-400 text-xs bg-amber-400/10 border border-amber-400/20 rounded-xl px-4 py-2.5">
-          <AlertTriangle size={13} />
-          Showing a capped view of {ROW_CAP.toLocaleString()} records in the trend and tables below. The KPI totals above are exact.
-        </div>
-      )}
-
-      {loading ? (
-        <div className="grid grid-cols-1 gap-[var(--gap-section)]">
-          <Card className="animate-pulse h-64" />
-          <Card className="animate-pulse h-64" />
-        </div>
-      ) : filtered.length > 0 ? (
-        <>
-          {/* Monthly trend chart */}
-          <Card>
-            <CardHeader level={2} icon={TrendingUp} title="Monthly Trend" />
-            <CardBody>
-              <div style={{ height: 300 }}>
-                <Bar data={chartData} options={chartOpts} />
-              </div>
-            </CardBody>
-          </Card>
-
-          {/* Site Metrics */}
-          <Card pad="none" clip>
-            <CardHeader
-              level={2}
-              title={t('analytics.site.title')}
-              className="!mb-0 px-[var(--space-4)] py-[var(--space-3)] border-b border-[var(--border-dim)]"
-            />
-            <EnterpriseTable
-              reportMeta={reportMeta}
-              columns={siteColumns}
-              data={siteMetrics}
-              getRowId={(row) => row.site}
-              enableGlobalFilter={true}
-              searchPlaceholder="Search sites..."
-              enableSorting={true}
-              enableExport={true}
-              exportFileName="site_analytics"
-              initialPageSize={25}
-              pageSizeOptions={[10, 25, 50]}
-              emptyMessage="No site data"
-            />
-          </Card>
-
-          {/* Brand Metrics */}
-          <Card pad="none" clip>
-            <CardHeader
-              level={2}
-              title={t('analytics.brand.title')}
-              className="!mb-0 px-[var(--space-4)] py-[var(--space-3)] border-b border-[var(--border-dim)]"
-            />
-            <EnterpriseTable
-              reportMeta={reportMeta}
-              columns={brandColumns}
-              data={brandMetrics}
-              getRowId={(row) => row.brand}
-              enableGlobalFilter={true}
-              searchPlaceholder="Search brands..."
-              enableSorting={true}
-              enableExport={true}
-              exportFileName="brand_analytics"
-              initialPageSize={25}
-              pageSizeOptions={[10, 25, 50]}
-              emptyMessage="No brand data"
-            />
-          </Card>
-        </>
-      ) : (
-        <Card>
-          {/* The vertical room lives on this inner element, not the Card: Card
-              sets `padding` inline and a plain py-* class cannot beat that, so
-              the empty state would silently collapse to --pad-card. */}
-          <div className="text-center" style={{ paddingTop: 'var(--space-10)', paddingBottom: 'var(--space-10)' }}>
-            <Activity size={36} className="text-gray-700 mx-auto mb-3" />
-            <p className="text-gray-400 font-medium">No data available</p>
-            <p className="text-gray-600 text-sm mt-1">Adjust your filters or import tyre records.</p>
-          </div>
-        </Card>
-      )}
     </div>
   )
 }

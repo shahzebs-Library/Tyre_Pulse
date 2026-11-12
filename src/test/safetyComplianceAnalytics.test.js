@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  computeSafetyCompliance, treadFailRows, pressureRows, siteTread, monthlyTrend,
+  computeSafetyCompliance, treadFailRows, siteTread, monthlyTrend,
   scoreBand, riskScore, legalMinFor, rangeCutoff, filterBySite, siteOptions,
   complianceSummaryRows, toNum,
 } from '../lib/safetyComplianceAnalytics'
@@ -80,16 +80,27 @@ describe('safetyComplianceAnalytics', () => {
     expect(rows[0]).toMatchObject({ asset: 'A', legalMin: 3, deficit: 0.5 })
   })
 
-  it('computes pressure deviation and ignores rows without a target', () => {
-    const rows = pressureRows([
-      { id: 1, pressure_reading: 110, recommended_pressure: 100 },
-      { id: 2, pressure_reading: 111, recommended_pressure: 100 },
-      { id: 3, pressure_reading: 100 },
-      { id: 4, pressure_reading: 100, recommended_pressure: 0 },
-    ])
-    expect(rows).toHaveLength(2)
-    expect(rows[0].compliant).toBe(true)
-    expect(rows[1].compliant).toBe(false)
+  it('pressure is the shared vehicle-median rule, read from the recorded pressures', () => {
+    const insp = (id, psis) => ({ id, asset_no: 'A', site: 'NHC', status: 'Done', tyre_conditions: psis.map((p) => ({ pressure_psi: p })) })
+    const c = computeSafetyCompliance({
+      tyreRecords: [{ id: 1, asset_no: 'A', site: 'NHC' }],
+      // 5 readings, one 40% under the vehicle median; a 2-reading inspection cannot be judged
+      inspections: [insp(1, [100, 100, 100, 100, 60]), insp(2, [100, 90])],
+      now: NOW,
+    })
+    expect(c.pressureCompliance).toBe(80)
+    expect(c.pressureChecked).toBe(5)
+    expect(c.pressureFails).toBe(1)
+    expect(c.pressureInspectionsMeasured).toBe(1)
+    expect(c.pressureInspectionsNotMeasured).toBe(1)
+    expect(c.pressureBySite).toEqual([{ site: 'NHC', pct: 80, readings: 5, inspections: 2 }])
+    // The old rule (a reading against a recommended pressure) no longer counts for anything.
+    const legacy = computeSafetyCompliance({
+      tyreRecords: [{ id: 1, asset_no: 'A' }],
+      inspections: [{ id: 1, pressure_reading: 110, recommended_pressure: 100 }],
+      now: NOW,
+    })
+    expect(legacy.pressureCompliance).toBeNull()
   })
 
   it('site tread is null for a site with no measured tyre and sorts it last', () => {
@@ -134,6 +145,8 @@ describe('safetyComplianceAnalytics', () => {
     const c = computeSafetyCompliance({ tyreRecords: [{ id: 1 }], now: NOW })
     const rows = complianceSummaryRows(c)
     expect(rows.find((r) => r.metric === 'Pressure compliance').score).toBe('N/A')
+    // No tyre has a tread depth: the row says so instead of N/A or a percentage.
+    expect(rows.find((r) => r.metric === 'Tread depth compliance').score).toBe('Not recorded')
     expect(complianceSummaryRows(null)).toEqual([])
     expect(toNum('')).toBeNull()
   })

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
   UploadCloud, FileSpreadsheet, Wand2, ShieldCheck, CheckCircle2, AlertTriangle,
@@ -29,6 +29,13 @@ import ProductionM3 from './ProductionM3'
 import ScoCosts from './ScoCosts'
 import SanyInvoices from './SanyInvoices'
 import SitesIntake from './SitesIntake'
+
+// The three ERP file importers live here as tabs, so every upload starts from one
+// page. Each keeps its own pipeline and destination tables; they load on demand.
+const ErpIntakeTab = lazy(() => import('./ErpIntake'))
+const ExpenseImportTab = lazy(() => import('./ExpenseImport'))
+const ErpImportTab = lazy(() => import('./ErpImport'))
+const INTAKE_TAB_KEYS = ['erp', 'reports', 'expenses', 'templates', 'production', 'sco', 'sany', 'sites']
 import MappingProfilesManager from '../components/intake/MappingProfilesManager'
 import DataLinkPanel from '../components/intake/DataLinkPanel'
 import CostControlPanel from '../components/intake/CostControlPanel'
@@ -136,7 +143,10 @@ export default function DataIntakeCenter() {
     return MODULES.some((m) => m.key === requested) ? requested : 'fleet'
   })()
 
-  const [intakeTab, setIntakeTab] = useState('erp')
+  const [intakeTab, setIntakeTab] = useState(() => {
+    const wanted = searchParams.get('tab')
+    return INTAKE_TAB_KEYS.includes(wanted) ? wanted : 'erp'
+  })
   const [step, setStep] = useState(0)
   const [module, setModule] = useState(initialModule)
   const [file, setFile] = useState(null)
@@ -1077,6 +1087,9 @@ export default function DataIntakeCenter() {
 
   const INTAKE_TABS = [
     { key: 'erp', label: 'ERP Import' },
+    { key: 'reports', label: 'ERP reports (auto-detect)' },
+    { key: 'expenses', label: 'Expense grid' },
+    { key: 'templates', label: 'ERP templates' },
     { key: 'production', label: 'Production' },
     { key: 'sco', label: 'SCO Cost' },
     { key: 'sany', label: 'SANY Invoices' },
@@ -1095,12 +1108,17 @@ export default function DataIntakeCenter() {
   // Cost per M3 uploads live here as tabs (own country + import, so they render
   // outside the ERP wizard's single-country gate).
   if (intakeTab !== 'erp') {
-    const Comp = { production: ProductionM3, sco: ScoCosts, sany: SanyInvoices, sites: SitesIntake }[intakeTab]
+    const Comp = {
+      reports: ErpIntakeTab, expenses: ExpenseImportTab, templates: ErpImportTab,
+      production: ProductionM3, sco: ScoCosts, sany: SanyInvoices, sites: SitesIntake,
+    }[intakeTab]
     return (
       <div className="p-4 md:p-6 max-w-[1800px] mx-auto text-[var(--text-primary)]">
         <h1 className="text-xl font-bold flex items-center gap-2 mb-3"><Database size={20} /> Data Intake Center</h1>
         {IntakeTabStrip}
-        {Comp ? <Comp /> : null}
+        <Suspense fallback={<p role="status" className="py-10 text-center text-sm text-[var(--text-secondary)]">Loading...</p>}>
+          {Comp ? <Comp /> : null}
+        </Suspense>
       </div>
     )
   }

@@ -1541,6 +1541,21 @@ html.light samp {
 }
 html.light pre code { background-color: transparent !important; }
 
+/* ── CONSOLE SCROLL BOXES ARE CONTAINING BLOCKS ────────────────────────────────
+   An absolutely positioned child (every `sr-only` input, label and status line)
+   sits at its place in the content but is anchored to the nearest POSITIONED
+   ancestor. Inside a plain scroll box that ancestor is <body>: the child does
+   not scroll with the box, is not clipped by it, lengthens the document, and
+   focusing it (clicking a switch whose checkbox is sr-only) scrolls the whole
+   console shell up with no way to scroll back. Making each console scroll box
+   positioned keeps those children inside it.
+   :where() keeps the specificity at zero, so a scroll box that is itself
+   `fixed`, `absolute` or `sticky` (drawers, menus, sticky panes) keeps its own
+   position. */
+:where(.console-root) :where([class*="overflow-y-auto"], [class*="overflow-auto"], [class*="overflow-x-auto"], [class*="overflow-y-scroll"]) {
+  position: relative;
+}
+
 /* ─── System Console (/console) light theme ─────────────────────────────────
    The System Console is dark-only by design (ConsoleLayout hardcodes near-black
    surfaces + raw dark utilities). These rules — scoped under

@@ -46,6 +46,7 @@ import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import CpkDataTable from '../components/cpk/CpkDataTable'
 import { toUserMessage } from '../lib/safeError'
 import { currencyForCountryCode } from '../lib/expenseReportAnalytics'
+import { initialTabFromUrl } from '../lib/urlTab'
 import './CpkIntelligence.css'
 
 const CpkScenarioStudioPanel = lazy(() => import('../components/cpk/CpkScenarioStudioPanel'))
@@ -55,6 +56,8 @@ const CpkUnitAuditPanel = lazy(() => import('../components/cpk/CpkUnitAuditPanel
 const CpkKmIntelligencePanel = lazy(() => import('../components/cpk/CpkKmIntelligencePanel'))
 const CpkReportPanel = lazy(() => import('../components/cpk/CpkReportPanel'))
 const LifetimeCpkPanel = lazy(() => import('../components/cpk/LifetimeCpkPanel'))
+// The former Tyre Failure and CPK board (/tyre-failure-cpk) lives here as a tab.
+const TyreFailureCpkBoard = lazy(() => import('./TyreFailureCpkBoard'))
 
 const MOBILITIES = ['movable', 'non_movable']
 
@@ -62,6 +65,7 @@ const TABS = [
   { key: 'fleet', label: 'Fleet CPK', icon: Gauge },
   { key: 'vehicles', label: 'Per vehicle', icon: Table2 },
   { key: 'lifetime', label: 'Tyre lifetime', icon: Layers },
+  { key: 'failures', label: 'Failures & tyre life', icon: AlertTriangle },
   { key: 'km_source', label: 'KM source', icon: Milestone },
   { key: 'units', label: 'Units & why different', icon: Layers },
   { key: 'km_intel', label: 'KM intelligence', icon: Gauge },
@@ -80,7 +84,7 @@ export default function CpkIntelligence() {
   const initialCountry = activeCountry && activeCountry !== 'All' ? activeCountry : COUNTRIES[0]
   const [country, setCountry] = useState(initialCountry)
   const [periodKey, setPeriodKey] = useState(DEFAULT_PERIOD)
-  const [tab, setTab] = useState('fleet')
+  const [tab, setTab] = useState(() => initialTabFromUrl(TABS.map((t) => t.key), 'fleet'))
   // Registered site (vehicle_fleet.site). '' = all sites. Options come from the
   // site register for the chosen country; a failed read says so and offers Retry.
   const [site, setSite] = useState('')
@@ -593,6 +597,12 @@ export default function CpkIntelligence() {
       {tab === 'lifetime' && (
         <Suspense fallback={<Loading />}>
           <LifetimeCpkPanel country={country} from={bounds.from} to={bounds.to} site={siteArg} />
+        </Suspense>
+      )}
+
+      {tab === 'failures' && (
+        <Suspense fallback={<Loading />}>
+          <TyreFailureCpkBoard embedded />
         </Suspense>
       )}
 

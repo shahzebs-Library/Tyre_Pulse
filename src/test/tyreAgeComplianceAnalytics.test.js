@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { assessFleet } from '../lib/tyreAgeCompliance'
 import {
   filterAssessed, sortByAge, buildAgeView, ageHistogram, dateSourceMix, actionList,
-  ageExportRows, EXPORT_COLS,
+  ageExportRows, EXPORT_COLS, EXPORT_HEADERS, measurementBasis, REPORT_TITLE, REPORT_BASIS_NOTE,
 } from '../lib/tyreAgeComplianceAnalytics'
 
 const NOW = new Date('2026-09-27T00:00:00Z')
@@ -57,5 +57,33 @@ describe('tyreAgeComplianceAnalytics', () => {
     expect(undated.ageYears).toBe('N/A')
     expect(undated.birthDate).toBe('N/A')
     expect(undated.band).toBe('Date unknown')
+  })
+
+  it('says time in service, not age, when no manufacture date is recorded', () => {
+    const fitted = assessFleet([
+      { id: 1, serial_no: 'F1', fitment_date: '2020-01-01' },
+      { id: 2, serial_no: 'F2', issue_date: '2024-01-01' },
+      { id: 3, serial_no: 'F3' },
+    ], NOW).rows
+    const b = measurementBasis(fitted)
+    expect(b).toMatchObject({ total: 3, manufacture: 0, inService: 2, undated: 1, manufactureRecorded: false })
+    expect(b.note).toMatch(/^Manufacture date not recorded/)
+    expect(b.note).toMatch(/fitment date/)
+  })
+
+  it('reports partial manufacture-date coverage and stays silent on an empty scope', () => {
+    const b = measurementBasis(assessed)
+    expect(b.manufacture).toBe(2)
+    expect(b.manufactureRecorded).toBe(true)
+    expect(b.note).toMatch(/recorded on 2 of 4 tyres/)
+    expect(measurementBasis([]).note).toBe('')
+  })
+
+  it('names the export by what it measures, with no dash punctuation', () => {
+    expect(REPORT_TITLE).toBe('Tyre Time in Service')
+    expect(EXPORT_HEADERS).toContain('Years in service')
+    expect(EXPORT_HEADERS).toContain('In service since')
+    expect(EXPORT_HEADERS.join(' ')).not.toMatch(/\bAge\b|Birth/)
+    expect(`${REPORT_BASIS_NOTE} ${EXPORT_HEADERS.join(' ')}`).not.toMatch(/[\u2013\u2014]/)
   })
 })

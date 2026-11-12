@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback, lazy, Suspense } from 'react'
 import { useLanguage } from '../contexts/LanguageContext'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
@@ -17,6 +17,9 @@ import {
   MapPin, Coins, ShieldAlert, Scale, Percent, Layers, X, Info,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import ViewSwitch from '../components/ui/ViewSwitch'
+import { useAuth } from '../contexts/AuthContext'
+import { initialTabFromUrl } from '../lib/urlTab'
 import Card, { CardHeader } from '../components/ui/Card'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import EmailPdfButton from '../components/EmailPdfButton'
@@ -104,7 +107,32 @@ function BandBadge({ band }) {
   )
 }
 
+// Period against period (formerly its own page at /comparison) is a view of this page.
+const PeriodComparison = lazy(() => import('./Comparison'))
+
 export default function SiteComparison() {
+  const { hasPermission } = useAuth()
+  // The period view keeps the access rule of its old route (the analytics module).
+  const canSeePeriods = typeof hasPermission === 'function' ? hasPermission('analytics') : false
+  const views = canSeePeriods
+    ? [{ key: 'sites', label: 'Site against site' }, { key: 'periods', label: 'Period against period' }]
+    : [{ key: 'sites', label: 'Site against site' }]
+  const [view, setView] = useState(() => initialTabFromUrl(views.map((v) => v.key), 'sites'))
+  return (
+    <div className="space-y-4">
+      <ViewSwitch views={views} value={view} onChange={setView} label="Comparison views" />
+      {view === 'periods' && canSeePeriods ? (
+        <Suspense fallback={<p role="status" className="py-10 text-center text-sm text-[var(--text-secondary)]">Loading...</p>}>
+          <PeriodComparison />
+        </Suspense>
+      ) : (
+        <SiteComparisonView />
+      )}
+    </div>
+  )
+}
+
+function SiteComparisonView() {
   const { t } = useLanguage()
   const { activeCountry, activeCurrency } = useSettings()
   const [records, setRecords] = useState([])

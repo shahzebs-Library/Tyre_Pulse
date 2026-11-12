@@ -29,6 +29,7 @@ import { COUNTRY_POINTS, utilizationByMonth, monthLabel, changePct } from '../li
 import * as sitesApi from '../lib/api/sites'
 import { listSiteFleetOps, listSiteUtilization, listSiteInspectionDates } from '../lib/api/siteOperations'
 import { useAuth } from '../contexts/AuthContext'
+import { resolveWriteAccess, writeRefusalReason } from '../lib/writeAccessRules'
 import { useSettings } from '../contexts/SettingsContext'
 import { enrichSites, filterSites, countryOptions, regionOptions, GAP_KEYS, GAP_LABEL } from '../lib/siteManagementAnalytics'
 import {
@@ -359,7 +360,10 @@ export default function SiteManagement() {
   const { profile } = useAuth()
   const { activeCountry } = useSettings()
   const role = profile?.role
-  const canManage = role === 'Admin' || role === 'Manager' || role === 'Director'
+  // Mirrors the sites_write policy exactly: Admin and Manager. Director was
+  // listed here but the database refuses a Director's save, so the control was
+  // offered and then failed (writeAccessRules.js is the shared mirror).
+  const canManage = resolveWriteAccess('sites', { role }).edit
 
   const [params, setParams] = useSearchParams()
   const f = useMemo(() => Object.fromEntries(FILTER_KEYS.map((k) => [k, params.get(k) || ''])), [params])
@@ -647,7 +651,7 @@ export default function SiteManagement() {
 
         <Card area="sm-a-qa" title="Quick Actions">
           <div className="sm-qa">
-            <button type="button" className="cc-insight" onClick={() => setShowAdd(true)} disabled={!canManage} title={canManage ? undefined : 'Only Admin, Manager or Director can add sites'}>
+            <button type="button" className="cc-insight" onClick={() => setShowAdd(true)} disabled={!canManage} title={canManage ? undefined : writeRefusalReason('sites', 'create')}>
               <span className="cc-row-icon t-green"><Plus size={17} aria-hidden="true" /></span>
               <span className="cc-row-main"><b>Add New Site</b><small>Create and configure a new site</small></span>
               <ChevronRight size={15} className="cc-chev" aria-hidden="true" />

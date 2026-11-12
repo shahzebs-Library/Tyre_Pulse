@@ -12,7 +12,7 @@
  */
 import { cleanRemovalReason } from './removalReason'
 import { tyreAgeBand, tyreAgeYears } from './tyreAge'
-import { toLifetimeTyres, tyreKey, lifetimeCpk, weightedCpk, withOnePricePerTyre, lifetimeSummary, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
+import { toLifetimeTyres, tyreKey, lifetimeCpk, fitmentCpk, weightedCpk, withOnePricePerTyre, lifetimeSummary, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
 
 /**
  * Map each fitment row (by its index in `rows`) to its PHYSICAL tyre: price once,
@@ -79,12 +79,14 @@ const round = (n, dp = 2) => {
   return Math.round(n * f) / f
 }
 
-/** PER-FITMENT cost-per-km for one row (cost / total_km), or null. Not a lifetime CPK. */
+/**
+ * PER-FITMENT cost-per-km for one row, by THE single tyreKm rule (placeholder "1"
+ * -> N/A, factory "0" -> real, over class cap -> N/A, null never 0). The old copy
+ * used the raw `total_km` column, which priced placeholder/over-cap tyres at a
+ * misleadingly low cost per km. Not a lifetime CPK.
+ */
 export function tyreCpk(rec) {
-  const cost = num(rec?.cost_per_tyre)
-  const km = num(rec?.total_km)
-  if (cost == null || km == null || km <= 0) return null
-  return cost / km
+  return fitmentCpk(rec)
 }
 
 /**

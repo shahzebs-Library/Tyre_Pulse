@@ -13,7 +13,7 @@
 // intervals) stay per fitment row on purpose.
 // ─────────────────────────────────────────────────────────────────────────────
 import {
-  toLifetimeTyres, withOnePricePerTyre, lifetimeSummary, lifetimeCpk,
+  toLifetimeTyres, withOnePricePerTyre, lifetimeSummary, lifetimeCpk, fitmentCpk,
   CPK_KIND, CPK_KIND_LABEL,
 } from './tyreLifetime'
 
@@ -562,9 +562,11 @@ export function buildSiteRadar(siteMetrics) {
  * the lifetime layer (lifetimeMetrics / weightedCpk), never an average of this.
  */
 export function recordCpk(record) {
-  const kmRun = (record.km_at_removal ?? 0) - (record.km_at_fitment ?? 0)
-  if (kmRun <= 0 || !record.km_at_fitment || !record.km_at_removal) return null
-  return (record.cost_per_tyre || 0) / kmRun
+  // THE single per-fitment rule (tyreKm): placeholder "1" -> N/A, factory "0" ->
+  // real km, over class cap -> N/A, null never 0. The old inline removal-minus-
+  // fitment copy here dropped factory-0 fitments and priced placeholder "1" /
+  // over-cap rows at a misleadingly low cost per km.
+  return fitmentCpk(record)
 }
 
 /**

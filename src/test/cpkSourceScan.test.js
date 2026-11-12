@@ -20,14 +20,12 @@ const SANCTIONED = new Set(['src/lib/tyreKm.js', 'src/lib/tyreLifetime.js'])
 // tyreBay.js and analyticsEngine.js carry labelled per-stint uses (see F-A-02).
 const KM_DIFF_BACKLOG = new Set([
   'src/lib/advancedAnalyticsAnalytics.js',
-  'src/lib/analyticsEngine.js',
   'src/lib/continuousImprovementAnalytics.js',
   'src/lib/fuelEfficiencyAnalytics.js',
   'src/lib/tyreBay.js',
   'src/pages/VehicleHistory.jsx',
 ])
 const CPK_DIVIDE_BACKLOG = new Set([
-  'src/lib/analyticsEngine.js',
   'src/lib/anomalyEngine.js',
   'src/lib/fleetRisk.js',
   'src/lib/tyreBay.js',

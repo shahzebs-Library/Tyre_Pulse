@@ -83,6 +83,11 @@ describe('opsIntelligence — pure helpers', () => {
     expect(tyreCpk({ cost_per_tyre: null, total_km: 10000 })).toBeNull()
   })
 
+  it('tyreCpk now applies the class cap (single rule, not raw total_km)', () => {
+    // mixer cap 80000; a 120000 total_km is a reading error -> N/A, not a low CPK
+    expect(tyreCpk({ cost_per_tyre: 1000, total_km: 120000, vehicle_type: 'TR-MIXER' })).toBeNull()
+  })
+
   it('percentile interpolates and handles edge cases', () => {
     expect(percentile([], 0.9)).toBeNull()
     expect(percentile([42], 0.9)).toBe(42)

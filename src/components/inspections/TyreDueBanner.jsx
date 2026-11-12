@@ -29,7 +29,7 @@ export default function TyreDueBanner({ entry, damaged = [], inspection = null }
 
   const canRaise = Boolean(inspection?.id) && !String(inspection.id).startsWith('offline-')
   const allDefects = canRaise
-    ? defectsForAction(inspection, inspection.asset_no ? { [inspection.asset_no]: entry } : {})
+    ? defectsForAction(inspection).filter((defect) => defect.kind === 'damage')
     : []
 
   // What has already been raised from this inspection. A defect with an action

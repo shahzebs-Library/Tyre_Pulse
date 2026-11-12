@@ -26,7 +26,7 @@ export default function InspectionActionRaiser({ inspection, flagMap, onClose, o
     if (!inspection?.id) return undefined
     let live = true
     setExisting(null); setLoadError('')
-    listActionsForSource('inspection', inspection.id)
+    listActionsForSource('inspection', inspection.id, { strict: true })
       .then((rows) => { if (live) setExisting(rows || []) })
       .catch((e) => { if (live) { setExisting([]); setLoadError(toUserMessage(e, 'Could not check actions already raised.')) } })
     return () => { live = false }
@@ -35,12 +35,14 @@ export default function InspectionActionRaiser({ inspection, flagMap, onClose, o
   const raisedKeys = useMemo(() => new Set((existing || []).map((a) => a.source_detail).filter(Boolean)), [existing])
   const defects = useMemo(() => {
     if (!inspection || existing == null) return []
-    const tyre = defectsForAction(inspection, flagMap || {}).filter((d) => !raisedKeys.has(d.key))
+    // The running-life feed belongs in the warning banner, not in the findings picker.
+    const tyre = defectsForAction(inspection).filter((d) => d.kind === 'damage' && !raisedKeys.has(d.key))
+    const preferred = inspection.__preferredDefectKeys || (inspection.__preferredDefectKey ? [inspection.__preferredDefectKey] : null)
     const general = generalDefectFor(inspection)
     const out = [...tyre]
-    if (general && !raisedKeys.has(general.key)) out.push({ ...general, defaultInclude: tyre.length === 0 })
-    return out
-  }, [inspection, flagMap, existing, raisedKeys])
+    if (general && !raisedKeys.has(general.key)) out.push({ ...general, defaultInclude: tyre.length === 0 && !preferred })
+    return out.map((d) => ({ ...d, defaultInclude: preferred ? preferred.includes(d.key) : d.defaultInclude }))
+  }, [inspection, existing, raisedKeys])
 
   const finish = async (res) => {
     const first = res?.created?.[0]?.id
@@ -60,6 +62,10 @@ export default function InspectionActionRaiser({ inspection, flagMap, onClose, o
         <p className="text-sm text-[var(--text-secondary)]" role="status">Checking actions already raised for {inspection.asset_no || 'this vehicle'}...</p>
       </Modal>
     )
+  }
+
+  if (loadError) {
+    return <Modal open onClose={onClose} title="Raise corrective actions" size="md"><p role="alert">{loadError} Please retry before creating actions.</p></Modal>
   }
 
   if (!defects.length) {

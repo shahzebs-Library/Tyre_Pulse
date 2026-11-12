@@ -309,7 +309,7 @@ export default function ObservationsBoard({
                 <span role="cell" className="iw-o-text">
                   <small className="iw-o-kind">{o.findings.length} findings in this inspection</small>
                   <b>{o.findings.filter((f) => f.kind === 'tyre').length} tyre finding(s)</b>
-                  <small>{o.findings.map((f) => [f.position, f.text].filter(Boolean).join(': ')).join(' | ')}</small>
+                  <small title={o.findings.map((f) => [f.position, f.text].filter(Boolean).join(': ')).join(' | ')} style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{o.findings.map((f) => [f.position, f.text].filter(Boolean).join(': ')).join(' | ')}</small>
                 </span>
                 <span role="cell"><span className={`cc-pill ${o.findings.some((f) => f.tone === 'bad') ? 'bad' : o.tone}`}>{o.findings.some((f) => f.tone === 'bad') ? 'Critical' : o.severity}</span></span>
                 <span role="cell">

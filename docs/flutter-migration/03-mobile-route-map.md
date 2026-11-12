@@ -1077,3 +1077,24 @@ section 5.6, so a deep link cannot skip it.
 Enrolment stays on the web; the app has no enrolment screen. Tests:
 `test/core/auth/mfa_gate_controller_test.dart`, `test/app/router/mfa_gate_test.dart`
 and one case in `test/app/router/app_router_test.dart`.
+
+### 9.2 Notification routing corrections (added 2026-11-12)
+
+Measured against the live `notifications` table, three kinds were landing on
+a screen that only shared a word with them, and the due-alert digests had no
+destination at all. `notification_routing.dart` now matches these on the EXACT
+type, ahead of every substring bucket:
+
+| Type | Was | Now |
+|---|---|---|
+| `security` (entity `platform_incident`, `console_session`, ...) | An accident detail screen opened with an id that is not an accident ("incident") | No destination; the row stays in the inbox |
+| `system` (entity `cron_job`) | The workshop board ("job") | No destination |
+| `upload_gap` (entity `import`) | No destination | Unchanged, now explicit |
+| `due_pm_due` | No destination | Maintenance |
+| `due_stock_low` | No destination | Stock count |
+| `due_tyre_end_of_life` | No destination | Tyre records |
+| `due_fleet_document_expiry`, `due_fleet_document_missing` | No destination | Fleet list |
+| `due_inspection_plan_overdue` | My plans (by the "inspection_plan" substring) | My plans, now explicit |
+| `due_certification_expiry`, `due_insurance_policy_expiry` | No destination | No destination (no phone screen) |
+
+Tests: two groups at the end of `test/app/router/notification_routing_test.dart`.

@@ -1199,7 +1199,7 @@ class _FilterButton extends StatelessWidget {
       label: l10n.recordsFilterTitle,
       value: l10n.recordsActiveFilters(activeCount),
       child: Padding(
-        padding: const EdgeInsets.only(right: TpSpace.sm),
+        padding: const EdgeInsetsDirectional.only(end: TpSpace.sm),
         child: Stack(
           clipBehavior: Clip.none,
           children: <Widget>[
@@ -1210,9 +1210,9 @@ class _FilterButton extends StatelessWidget {
               color: hasActive ? palette.primary : palette.textSecondary,
             ),
             if (hasActive)
-              Positioned(
+              PositionedDirectional(
                 top: 4,
-                right: 2,
+                end: 2,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: palette.critical.base,

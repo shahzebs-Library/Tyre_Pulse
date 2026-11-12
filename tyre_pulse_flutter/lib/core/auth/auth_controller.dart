@@ -95,6 +95,7 @@ final class AuthController extends Notifier<AuthState> {
   Map<String, Object?>? _lastGrantsRaw;
   Map<String, Object?>? _lastMatrixRaw;
   UserRole? _lastMatrixRole;
+  Map<String, Object?>? _lastModuleStatusRaw;
 
   DateTime? _lastForegroundCheckAt;
 
@@ -523,6 +524,7 @@ final class AuthController extends Notifier<AuthState> {
     _lastGrantsRaw = null;
     _lastMatrixRaw = null;
     _lastMatrixRole = null;
+    _lastModuleStatusRaw = null;
   }
 
   /// Loads `get_my_access_grants` + `get_user_module_permissions` and applies
@@ -559,6 +561,15 @@ final class AuthController extends Notifier<AuthState> {
       _lastMatrixRole = profile.role;
     }
 
+    // Module Control fails OPEN: a failed read keeps the last good answer of
+    // this sign-in, and with none to keep every module stays available. It
+    // never contributes to `failed`.
+    final Map<String, Object?>? moduleStatus =
+        snapshot.moduleStatusRaw ?? _lastModuleStatusRaw;
+    if (snapshot.moduleStatusRaw != null) {
+      _lastModuleStatusRaw = snapshot.moduleStatusRaw;
+    }
+
     final bool failed = grants == null || matrix == null;
     ref.read(workspaceControllerProvider.notifier).updatePermissions(
           AccessState.fromRaw(
@@ -566,6 +577,7 @@ final class AuthController extends Notifier<AuthState> {
             isSuperAdmin: profile.isSuperAdmin,
             grantsRaw: grants,
             roleMatrixRaw: matrix,
+            moduleStatusRaw: moduleStatus,
             permissionsError: failed,
           ),
         );

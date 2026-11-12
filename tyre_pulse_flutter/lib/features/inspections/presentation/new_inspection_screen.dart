@@ -3431,7 +3431,7 @@ class _ReviewStep extends ConsumerWidget {
         onBack: () => controller.backToTyres(),
         actions: const <Widget>[
           Padding(
-            padding: EdgeInsets.only(right: TpSpace.lg),
+            padding: EdgeInsetsDirectional.only(end: TpSpace.lg),
             child: Center(child: _StepTrack(current: 3)),
           ),
         ],

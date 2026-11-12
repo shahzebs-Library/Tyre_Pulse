@@ -25,6 +25,7 @@ import 'package:tyre_pulse/app/router/shell_gates.dart';
 import 'package:tyre_pulse/app/router/shell_tabs.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
+import 'package:tyre_pulse/core/design_system/tp_text_scale.dart';
 
 class TpAppShell extends ConsumerWidget {
   const TpAppShell({required this.navigationShell, super.key});
@@ -121,7 +122,9 @@ class _TabBar extends StatelessWidget {
           ),
         ),
         child: SizedBox(
-          height: 72,
+          // The tab label grows with the person's text size; a fixed 72 left
+          // it 4 px short on every screen at text scale 2.0.
+          height: tpTextScaledExtent(context, base: 72, textHeight: 16),
           child: Row(
             children: <Widget>[
               for (int index = 0; index < layout.visible.length; index++)

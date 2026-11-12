@@ -414,3 +414,9 @@ the Supabase Auth (GoTrue) MFA endpoints through `supabase_flutter`:
 The server rule it serves is `20261112160000_super_admin_requires_mfa_session.sql`
 (a super admin with a verified factor is one only at `aal2`). See artifact 03
 section 9.1.
+
+### 7.14 Module Control status (added 2026-11-12)
+
+| Object | Created by | Access | Flutter use |
+|---|---|---|---|
+| `modules` SELECT of `module_id, status` | Table from V258 (applied live; it has no file in the repo, so its existence and columns were verified against the live database on 2026-11-12). The authenticated read policy is `MIGRATIONS_V275_CONSOLE_AUDIT.sql`; the maintenance window columns are `MIGRATIONS_V278_MAINTENANCE_WEBGATE.sql` | GLOBAL table (no `organisation_id`); every signed-in user may read, only super admin / Admin may write | `SupabaseAccessPermissionsRepository._readModuleStatuses`: one bounded read (about 200 rows) beside the two permission RPCs, at sign-in and on resume. Read-only. A failed read returns null and FAILS OPEN. See artifact 04 section 11 |

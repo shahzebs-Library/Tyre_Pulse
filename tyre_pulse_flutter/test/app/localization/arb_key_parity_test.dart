@@ -634,10 +634,22 @@ void main() {
     // code field label, the verify button, the incomplete-code message, the
     // refused-code message and the could-not-check message
     // (mfaTitle ... mfaVerifyUnavailable). Sign out reuses actionSignOut.
-    test('en, ar and ur each carry exactly 2458 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2458);
-      expect(_translatableKeys(ar).length, 2458);
-      expect(_translatableKeys(ur).length, 2458);
+    // 2458 + 56 = 2514. Three surfaces that were still hard-coded English
+    // and showed raw exception text: the My work assignment lane's own
+    // sentences and action buttons (13: wfOfflineNote, wfPendingSync,
+    // wfSignInRequired, wfUpdated, wfSavedOffline, wfUpdateUnavailable,
+    // wfNotAccepted{action}, wfDismiss, wfActionAccept ... wfActionComplete),
+    // the assigned follow-up dialog opened from a notification (33:
+    // teamActionTitle ... teamActionUploadFailed, incl. the seven status
+    // labels and the validation / upload / failure sentences) and the team
+    // message dialog (10: teamMessageTitle ... teamMessageSend). Close,
+    // Cancel, Try again, "Details (required)" and "Evidence uploaded." reuse
+    // actionClose, wfDialogCancel, actionRetry, wfBlockNoteLabel and
+    // wfEvidenceUploaded.
+    test('en, ar and ur each carry exactly 2514 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2514);
+      expect(_translatableKeys(ar).length, 2514);
+      expect(_translatableKeys(ur).length, 2514);
     });
   });
 

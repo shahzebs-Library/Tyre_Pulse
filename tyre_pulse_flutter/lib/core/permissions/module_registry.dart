@@ -170,6 +170,72 @@ const Map<String, ModuleKey> webModuleKeyAliases = <String, ModuleKey>{
   'daily_ops:workshop': ModuleKey.workshopStatus,
 };
 
+/// WEB Module Control ids (`public.modules.module_id`) and the phone module
+/// each one switches.
+///
+/// The web console's Module Control marks a module Live, Maintenance or Off.
+/// That table is keyed by the WEB catalogue, so this map is the only bridge:
+/// [webModuleKeyAliases] for a module the two sides name differently, plus the
+/// modules whose key is identical on both sides.
+///
+/// Explicit, never guessed, exactly like [webModuleKeyAliases]: a web module
+/// with no phone twin is absent, and a phone module with no web twin (`scan`,
+/// `reportIssue`, `tasks`, `overview`, ...) can never be switched off from
+/// here. A composite key (`daily_ops:workshop`) is not a Module Control row
+/// and is deliberately left out.
+const Map<String, ModuleKey> webModuleStatusKeys = <String, ModuleKey>{
+  'tyre_records': ModuleKey.records,
+  'inspections': ModuleKey.inspect,
+  'work_orders': ModuleKey.workorders,
+  'fleet_master': ModuleKey.vehicles,
+  'serial_tracker': ModuleKey.serial,
+  'maintenance_calendar': ModuleKey.calendar,
+  'odometer_logs': ModuleKey.meter,
+  'vehicle_washing': ModuleKey.washing,
+  'pm_programs': ModuleKey.pm,
+  'repair_requests': ModuleKey.repairRequest,
+  'handovers': ModuleKey.handover,
+  'accidents': ModuleKey.accidents,
+  'alerts': ModuleKey.alerts,
+  'stock': ModuleKey.stock,
+  'rca': ModuleKey.rca,
+  'analytics': ModuleKey.analytics,
+  'reports': ModuleKey.reports,
+  'checklists': ModuleKey.checklists,
+};
+
+/// The Module Control statuses that take a module out of service. `live`,
+/// `beta`, a blank and any value this app version does not know all leave the
+/// module available: Module Control fails OPEN, matching the web, where an
+/// unknown status is read as `live`.
+const Set<String> moduleOutOfServiceStatuses = <String>{
+  'disabled',
+  'maintenance',
+};
+
+/// The phone modules the web console has switched Off or put into
+/// Maintenance, from a raw `{module_id: status}` map.
+///
+/// Null (the read failed) and an empty map both return the empty set, so a
+/// failed read can never close a module.
+Set<ModuleKey> switchedOffModulesFromRaw(Map<String, Object?>? raw) {
+  if (raw == null || raw.isEmpty) {
+    return const <ModuleKey>{};
+  }
+  final Set<ModuleKey> off = <ModuleKey>{};
+  for (final MapEntry<String, Object?> entry in raw.entries) {
+    final ModuleKey? key = webModuleStatusKeys[entry.key];
+    final Object? status = entry.value;
+    if (key == null || status is! String) {
+      continue;
+    }
+    if (moduleOutOfServiceStatuses.contains(status.trim().toLowerCase())) {
+      off.add(key);
+    }
+  }
+  return off;
+}
+
 /// Modules this app has and the frozen Expo registry (`mobile/lib/
 /// permissions.ts`) does not. The Expo app is retired and cannot be edited, so
 /// a new field module can only be born here. The drift guard compares every

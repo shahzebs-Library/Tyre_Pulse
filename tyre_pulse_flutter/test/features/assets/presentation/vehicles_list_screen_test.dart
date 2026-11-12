@@ -561,6 +561,44 @@ void main() {
   });
 
   testWidgets(
+      'on a 360x640 phone with 2x text the header scrolls with the list '
+      'instead of overflowing', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await _pump(
+      tester,
+      _resolved(
+        const VehicleFleetListLoaded(
+          assets: <VehicleAsset>[
+            VehicleAsset(id: 'v1', assetNo: 'TM514', status: 'Active'),
+            VehicleAsset(id: 'v2', assetNo: 'GN101', status: 'Active'),
+          ],
+          truncated: false,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // The pinned header alone was 162 px taller than this screen.
+    expect(tester.takeException(), isNull);
+
+    // The cards are reachable by scrolling the one list.
+    final Finder card = find.byKey(VehiclesListScreenKeys.asset('v1'));
+    await tester.scrollUntilVisible(
+      card,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(card, findsOneWidget);
+    // The scan action stays pinned at the bottom.
+    expect(find.byKey(VehiclesListScreenKeys.scanner), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
       'group tabs announce selection, keep a minimum (not fixed) height at a '
       'large text scale, and read as unselected while a search bypasses them',
       (WidgetTester tester) async {

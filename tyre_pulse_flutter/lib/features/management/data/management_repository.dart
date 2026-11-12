@@ -3,6 +3,8 @@ library;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
+import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart'
+    show PagedRows, fetchAllPages;
 import 'package:tyre_pulse/features/management/domain/management_models.dart';
 
 abstract interface class ManagementRepository {
@@ -74,14 +76,24 @@ final class SupabaseManagementRepository
   @override
   Future<List<TeamMember>> team() {
     return guard<List<TeamMember>>(() async {
-      final List<Map<String, dynamic>> rows = await _client
-          .from(SupabaseTables.profiles)
-          .select(
-            'id,full_name,username,role,site,country,phone,email,approved,'
-            'last_login_at',
-          )
-          .order('full_name')
-          .limit(1000);
+      // Paged: the roster is already at 769 people and one response never
+      // carries more than 1000 rows, whatever `.limit()` asks for, so a
+      // single read would silently drop the tail of the alphabet as the team
+      // grows. `id` is the unique tiebreak the pager requires (many names
+      // repeat, and a blank name sorts with every other blank).
+      final PagedRows<Map<String, dynamic>> paged =
+          await fetchAllPages<Map<String, dynamic>>(
+        (int from, int to) => _client
+            .from(SupabaseTables.profiles)
+            .select(
+              'id,full_name,username,role,site,country,phone,email,approved,'
+              'last_login_at',
+            )
+            .order('full_name')
+            .order('id')
+            .range(from, to),
+      );
+      final List<Map<String, dynamic>> rows = paged.rows;
       return rows
           .map(_member)
           .where((TeamMember member) => member.id.isNotEmpty)

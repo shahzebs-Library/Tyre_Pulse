@@ -8485,4 +8485,194 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get mfaVerifyUnavailable =>
       'The code could not be checked right now. Check your connection and try again.';
+
+  @override
+  String get wfOfflineNote =>
+      'Offline: showing saved assignments. Updates you make are kept and sent when you reconnect.';
+
+  @override
+  String get wfPendingSync => 'Pending sync: will be sent when you are online.';
+
+  @override
+  String get wfSignInRequired => 'Sign in to update assignments.';
+
+  @override
+  String get wfUpdated => 'Updated.';
+
+  @override
+  String get wfSavedOffline =>
+      'Saved on this device. It will be sent when you are online.';
+
+  @override
+  String get wfUpdateUnavailable =>
+      'That update is not available for this assignment right now.';
+
+  @override
+  String wfNotAccepted(String action) {
+    return 'Not accepted: $action';
+  }
+
+  @override
+  String get wfDismiss => 'Dismiss';
+
+  @override
+  String get wfActionAccept => 'Accept';
+
+  @override
+  String get wfActionStart => 'Start';
+
+  @override
+  String get wfActionBlock => 'Block';
+
+  @override
+  String get wfActionResume => 'Resume';
+
+  @override
+  String get wfActionComplete => 'Complete';
+
+  @override
+  String get teamActionTitle => 'Assigned follow-up';
+
+  @override
+  String get teamActionFallbackTitle => 'Action';
+
+  @override
+  String teamActionStatusDue(String status, String due) {
+    return 'Status: $status · Due: $due';
+  }
+
+  @override
+  String get teamActionDueNotSet => 'Not set';
+
+  @override
+  String get teamActionBlockReason => 'Block reason';
+
+  @override
+  String get teamActionCompletionDetails => 'Completion details';
+
+  @override
+  String teamActionEvidenceCount(int count) {
+    return 'Evidence ($count)';
+  }
+
+  @override
+  String get teamActionEvidenceFallback => 'Evidence';
+
+  @override
+  String teamActionResolution(String text) {
+    return 'Resolution: $text';
+  }
+
+  @override
+  String get teamActionUploading => 'Uploading...';
+
+  @override
+  String get teamActionSelectPhoto => 'Add a photo';
+
+  @override
+  String get teamActionAttachFile => 'Attach PDF or file';
+
+  @override
+  String get teamActionStartWork => 'Start work';
+
+  @override
+  String get teamActionBlocked => 'Blocked';
+
+  @override
+  String get teamActionStatusOpen => 'Open';
+
+  @override
+  String get teamActionStatusAcknowledged => 'Accepted';
+
+  @override
+  String get teamActionStatusInProgress => 'In progress';
+
+  @override
+  String get teamActionStatusEscalated => 'Escalated';
+
+  @override
+  String get teamActionStatusPendingApproval => 'Awaiting approval';
+
+  @override
+  String get teamActionStatusResolved => 'Completed';
+
+  @override
+  String get teamActionStatusDismissed => 'Dismissed';
+
+  @override
+  String get teamActionSignIn => 'Sign in to view this assignment.';
+
+  @override
+  String get teamActionNotYours =>
+      'This action is not assigned to your account.';
+
+  @override
+  String get teamActionBlockTooShort =>
+      'Enter at least five characters explaining what is blocking the work.';
+
+  @override
+  String get teamActionResolutionTooShort =>
+      'Describe the completed work in at least ten characters.';
+
+  @override
+  String get teamActionPhotoTooLarge => 'The photo must be smaller than 10 MB.';
+
+  @override
+  String get teamActionFileType =>
+      'Only PDF, JPG, PNG or WEBP files can be attached.';
+
+  @override
+  String get teamActionFileSize => 'The file must be 10 MB or smaller.';
+
+  @override
+  String get teamActionPhotoUploaded => 'Photo uploaded.';
+
+  @override
+  String get teamActionOpenFailed =>
+      'The attachment could not be opened. Try again.';
+
+  @override
+  String get teamActionLoadFailed =>
+      'This assignment could not be loaded. Check your connection and try again.';
+
+  @override
+  String get teamActionSaveFailed =>
+      'The change was not saved. Check your connection and try again.';
+
+  @override
+  String get teamActionUploadFailed =>
+      'The file could not be uploaded. Check your connection and try again.';
+
+  @override
+  String get teamMessageTitle => 'Team message';
+
+  @override
+  String get teamMessageSignIn => 'Sign in to view this message.';
+
+  @override
+  String get teamMessageUnavailable =>
+      'This message is not available to this account.';
+
+  @override
+  String get teamMessageLoadFailed =>
+      'This message could not be loaded. Please try again.';
+
+  @override
+  String get teamMessageActionFailed =>
+      'That did not go through. Check your connection and try again.';
+
+  @override
+  String get teamMessageAcknowledged => 'Acknowledged';
+
+  @override
+  String get teamMessageAckRequired => 'Acknowledgement required';
+
+  @override
+  String get teamMessageAcknowledge => 'Acknowledge';
+
+  @override
+  String get teamMessageReplyLabel => 'Reply to team';
+
+  @override
+  String get teamMessageSend => 'Send reply';
 }

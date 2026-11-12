@@ -899,7 +899,19 @@ class _DocumentRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: TpSpace.sm),
-          TpStatusChip(status: tone, label: stateLabel, isCompact: true),
+          // Bounded so a long state label (large text, or a longer
+          // translation) ellipsizes inside the chip instead of squeezing the
+          // document title to nothing and overflowing the row.
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.sizeOf(context).width * 0.42,
+            ),
+            child: TpStatusChip(
+              status: tone,
+              label: stateLabel,
+              isCompact: true,
+            ),
+          ),
         ],
       ),
     );

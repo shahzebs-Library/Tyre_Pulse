@@ -1,0 +1,431 @@
+{
+ "label": "after",
+ "results": [
+  {
+   "section": "A",
+   "name": "alpha.admin cannot read beta rows (370 org tables, 13 hold beta rows)",
+   "ok": true,
+   "evidence": "leaks=none errors=none other-company profiles visible=0 own rows visible=3483"
+  },
+  {
+   "section": "A",
+   "name": "alpha.manager cannot read beta rows (370 org tables, 13 hold beta rows)",
+   "ok": true,
+   "evidence": "leaks=none errors=none other-company profiles visible=0 own rows visible=2384"
+  },
+  {
+   "section": "A",
+   "name": "alpha.director cannot read beta rows (370 org tables, 13 hold beta rows)",
+   "ok": true,
+   "evidence": "leaks=none errors=none other-company profiles visible=0 own rows visible=3483"
+  },
+  {
+   "section": "A",
+   "name": "alpha.engineer cannot read beta rows (370 org tables, 13 hold beta rows)",
+   "ok": true,
+   "evidence": "leaks=none errors=none other-company profiles visible=0 own rows visible=536"
+  },
+  {
+   "section": "A",
+   "name": "alpha.tyreman cannot read beta rows (370 org tables, 13 hold beta rows)",
+   "ok": true,
+   "evidence": "leaks=none errors=none other-company profiles visible=0 own rows visible=1044"
+  },
+  {
+   "section": "A",
+   "name": "alpha.inspector cannot read beta rows (370 org tables, 13 hold beta rows)",
+   "ok": true,
+   "evidence": "leaks=none errors=none other-company profiles visible=0 own rows visible=591"
+  },
+  {
+   "section": "A",
+   "name": "alpha.driver cannot read beta rows (370 org tables, 13 hold beta rows)",
+   "ok": true,
+   "evidence": "leaks=none errors=none other-company profiles visible=0 own rows visible=1044"
+  },
+  {
+   "section": "A",
+   "name": "beta.admin cannot read alpha rows (370 org tables, 14 hold alpha rows)",
+   "ok": true,
+   "evidence": "leaks=none errors=none other-company profiles visible=0 own rows visible=3092"
+  },
+  {
+   "section": "A",
+   "name": "beta.manager cannot read alpha rows (370 org tables, 14 hold alpha rows)",
+   "ok": true,
+   "evidence": "leaks=none errors=none other-company profiles visible=0 own rows visible=2107"
+  },
+  {
+   "section": "A",
+   "name": "beta.director cannot read alpha rows (370 org tables, 14 hold alpha rows)",
+   "ok": true,
+   "evidence": "leaks=none errors=none other-company profiles visible=0 own rows visible=3092"
+  },
+  {
+   "section": "A",
+   "name": "beta.engineer cannot read alpha rows (370 org tables, 14 hold alpha rows)",
+   "ok": true,
+   "evidence": "leaks=none errors=none other-company profiles visible=0 own rows visible=486"
+  },
+  {
+   "section": "A",
+   "name": "beta.tyreman cannot read alpha rows (370 org tables, 14 hold alpha rows)",
+   "ok": true,
+   "evidence": "leaks=none errors=none other-company profiles visible=0 own rows visible=928"
+  },
+  {
+   "section": "A",
+   "name": "beta.inspector cannot read alpha rows (370 org tables, 14 hold alpha rows)",
+   "ok": true,
+   "evidence": "leaks=none errors=none other-company profiles visible=0 own rows visible=517"
+  },
+  {
+   "section": "A",
+   "name": "beta.driver cannot read alpha rows (370 org tables, 14 hold alpha rows)",
+   "ok": true,
+   "evidence": "leaks=none errors=none other-company profiles visible=0 own rows visible=928"
+  },
+  {
+   "section": "B",
+   "name": "alpha.admin cannot INSERT a vehicle into beta",
+   "ok": true,
+   "evidence": "error=new row violates row-level security policy \"vehicle_fleet_org_isolation\" for table \"vehicle_fleet\" rows landed in beta (privileged recount)=0"
+  },
+  {
+   "section": "B",
+   "name": "alpha.admin cannot UPDATE or DELETE beta fleet, tyres, job cards, expense lines",
+   "ok": true,
+   "evidence": "rows affected fleet-update=0 tyre-update=0 wo-delete=0 expense-delete=0 errors=none fleet hash unchanged=True"
+  },
+  {
+   "section": "B",
+   "name": "control: alpha.admin CAN insert a vehicle into its own company",
+   "ok": true,
+   "evidence": "rows=1 error=None"
+  },
+  {
+   "section": "B",
+   "name": "alpha.admin cannot MOVE its own vehicle into beta",
+   "ok": true,
+   "evidence": "rows=0 error=new row violates row-level security policy \"vehicle_fleet_org_isolation\" for table \"vehicle_fleet\""
+  },
+  {
+   "section": "B",
+   "name": "beta.admin cannot INSERT a vehicle into alpha",
+   "ok": true,
+   "evidence": "error=new row violates row-level security policy \"vehicle_fleet_org_isolation\" for table \"vehicle_fleet\" rows landed in alpha (privileged recount)=0"
+  },
+  {
+   "section": "B",
+   "name": "beta.admin cannot UPDATE or DELETE alpha fleet, tyres, job cards, expense lines",
+   "ok": true,
+   "evidence": "rows affected fleet-update=0 tyre-update=0 wo-delete=0 expense-delete=0 errors=none fleet hash unchanged=True"
+  },
+  {
+   "section": "B",
+   "name": "control: beta.admin CAN insert a vehicle into its own company",
+   "ok": true,
+   "evidence": "rows=1 error=None"
+  },
+  {
+   "section": "B",
+   "name": "beta.admin cannot MOVE its own vehicle into alpha",
+   "ok": true,
+   "evidence": "rows=0 error=new row violates row-level security policy \"vehicle_fleet_org_isolation\" for table \"vehicle_fleet\""
+  },
+  {
+   "section": "C",
+   "name": "alpha.manager (scope KSA) sees only KSA rows",
+   "ok": true,
+   "evidence": "table: (in scope, out of scope) {'vehicle_fleet': (26, 0), 'tyre_records': (279, 0), 'work_orders': (335, 0), 'parts_consumption': (353, 0), 'inspections': (26, 0), 'accidents': (2, 0), 'stock_records': (4, 0)}"
+  },
+  {
+   "section": "C",
+   "name": "alpha.engineer (scope UAE) sees only UAE rows",
+   "ok": true,
+   "evidence": "table: (in scope, out of scope) {'vehicle_fleet': (12, 0), 'tyre_records': (137, 0), 'work_orders': (168, 0), 'parts_consumption': (184, 0), 'inspections': (15, 0), 'accidents': (0, 0), 'stock_records': (4, 0)}"
+  },
+  {
+   "section": "C",
+   "name": "alpha.inspector (scope Egypt) sees only Egypt rows",
+   "ok": true,
+   "evidence": "table: (in scope, out of scope) {'vehicle_fleet': (14, 0), 'tyre_records': (153, 0), 'work_orders': (186, 0), 'parts_consumption': (195, 0), 'inspections': (19, 0), 'accidents': (2, 0), 'stock_records': (4, 0)}"
+  },
+  {
+   "section": "C",
+   "name": "alpha.tyreman (scope KSA) sees only KSA rows",
+   "ok": true,
+   "evidence": "table: (in scope, out of scope) {'vehicle_fleet': (26, 0), 'tyre_records': (279, 0), 'work_orders': (335, 0), 'parts_consumption': (353, 0), 'inspections': (26, 0), 'accidents': (2, 0), 'stock_records': (4, 0)}"
+  },
+  {
+   "section": "C",
+   "name": "alpha.manager (KSA) cannot write a UAE tyre row; KSA control row accepted",
+   "ok": true,
+   "evidence": "UAE insert landed=0 error=new row violates row-level security policy \"tyre_records_country_write\" for table \"tyre_records\" | KSA control rows=1 error=None"
+  },
+  {
+   "section": "C",
+   "name": "beta.manager (scope KSA) sees only KSA rows",
+   "ok": true,
+   "evidence": "table: (in scope, out of scope) {'vehicle_fleet': (22, 0), 'tyre_records': (237, 0), 'work_orders': (298, 0), 'parts_consumption': (325, 0), 'inspections': (27, 0), 'accidents': (2, 0), 'stock_records': (4, 0)}"
+  },
+  {
+   "section": "C",
+   "name": "beta.engineer (scope UAE) sees only UAE rows",
+   "ok": true,
+   "evidence": "table: (in scope, out of scope) {'vehicle_fleet': (11, 0), 'tyre_records': (119, 0), 'work_orders': (151, 0), 'parts_consumption': (172, 0), 'inspections': (16, 0), 'accidents': (1, 0), 'stock_records': (4, 0)}"
+  },
+  {
+   "section": "C",
+   "name": "beta.inspector (scope Egypt) sees only Egypt rows",
+   "ok": true,
+   "evidence": "table: (in scope, out of scope) {'vehicle_fleet': (13, 0), 'tyre_records': (133, 0), 'work_orders': (160, 0), 'parts_consumption': (177, 0), 'inspections': (17, 0), 'accidents': (1, 0), 'stock_records': (4, 0)}"
+  },
+  {
+   "section": "C",
+   "name": "beta.tyreman (scope KSA) sees only KSA rows",
+   "ok": true,
+   "evidence": "table: (in scope, out of scope) {'vehicle_fleet': (22, 0), 'tyre_records': (237, 0), 'work_orders': (298, 0), 'parts_consumption': (325, 0), 'inspections': (27, 0), 'accidents': (2, 0), 'stock_records': (4, 0)}"
+  },
+  {
+   "section": "C",
+   "name": "beta.manager (KSA) cannot write a UAE tyre row; KSA control row accepted",
+   "ok": true,
+   "evidence": "UAE insert landed=0 error=new row violates row-level security policy \"tyre_records_country_write\" for table \"tyre_records\" | KSA control rows=1 error=None"
+  },
+  {
+   "section": "D",
+   "name": "gamma.admin reads zero rows of any other company on 370 org tables, without errors",
+   "ok": true,
+   "evidence": "other-company rows visible=none errors=none own or null-org rows visible={'custom_roles': 1, 'org_subscriptions': 1, 'profiles': 1}"
+  },
+  {
+   "section": "D",
+   "name": "gamma.admin: 28 key RPCs return without error on an empty company",
+   "ok": true,
+   "evidence": "ok=28 failed=none"
+  },
+  {
+   "section": "D",
+   "name": "gamma.admin can add its first vehicle and it lands in Gamma",
+   "ok": true,
+   "evidence": "returned organisation=gamma error=None"
+  },
+  {
+   "section": "T",
+   "name": "TEN-1 job card import overwrites another company work order",
+   "ok": null,
+   "state": "NOT REPRODUCED",
+   "subs": [
+    {
+     "check": "Alpha job card rewritten by a Beta upload",
+     "vulnerable": false,
+     "evidence": "Alpha asset after=['MP001'] was=MP001"
+    },
+    {
+     "check": "Beta cannot hold the same job card number itself",
+     "vulnerable": false,
+     "evidence": "Beta row created=True error=None"
+    }
+   ],
+   "evidence": "Alpha job card rewritten by a Beta upload: closed (Alpha asset after=['MP001'] was=MP001) | Beta cannot hold the same job card number itself: closed (Beta row created=True error=None)"
+  },
+  {
+   "section": "T",
+   "name": "TEN-2 raw upload tables readable by any company Admin",
+   "ok": null,
+   "state": "NOT REPRODUCED",
+   "subs": [
+    {
+     "check": "Beta Admin reads an Alpha row in ksa_kms",
+     "vulnerable": false,
+     "evidence": "beta.admin count=0 error=None; control alpha.admin count=1; marker insert error=None"
+    }
+   ],
+   "evidence": "Beta Admin reads an Alpha row in ksa_kms: closed (beta.admin count=0 error=None; control alpha.admin count=1; marker insert error=None)"
+  },
+  {
+   "section": "T",
+   "name": "TEN-3 customer Admin changes platform-wide configuration",
+   "ok": null,
+   "state": "NOT REPRODUCED",
+   "subs": [
+    {
+     "check": "modules",
+     "vulnerable": false,
+     "evidence": "rows=0 "
+    },
+    {
+     "check": "subscription_plans",
+     "vulnerable": false,
+     "evidence": "rows=0 "
+    },
+    {
+     "check": "due_alert_rules",
+     "vulnerable": false,
+     "evidence": "rows=0 "
+    }
+   ],
+   "evidence": "modules: closed (rows=0 ) | subscription_plans: closed (rows=0 ) | due_alert_rules: closed (rows=0 )"
+  },
+  {
+   "section": "T",
+   "name": "TEN-4 admin RPCs act on a user in another company",
+   "ok": null,
+   "state": "PARTIAL",
+   "subs": [
+    {
+     "check": "admin_set_user_sites",
+     "vulnerable": false,
+     "evidence": "sites after=['ALL'] not authorized"
+    },
+    {
+     "check": "admin_set_web_access",
+     "vulnerable": false,
+     "evidence": "web_access after=True Not authorized to change web access."
+    },
+    {
+     "check": "get_user_module_permissions answers for a foreign user id",
+     "vulnerable": true,
+     "evidence": "rows=1 "
+    }
+   ],
+   "evidence": "admin_set_user_sites: closed (sites after=['ALL'] not authorized) | admin_set_web_access: closed (web_access after=True Not authorized to change web access.) | get_user_module_permissions answers for a foreign user id: VULNERABLE (rows=1 )"
+  },
+  {
+   "section": "T",
+   "name": "TEN-5 customer Admin grants itself any plan",
+   "ok": null,
+   "state": "PARTIAL",
+   "subs": [
+    {
+     "check": "own org_subscriptions row",
+     "vulnerable": false,
+     "evidence": "rows=0 Plan, status, seats and billing period are managed by the platform."
+    },
+    {
+     "check": "own organisations.plan / max_users / locked",
+     "vulnerable": true,
+     "evidence": "plan after=enterprise max_users after=9999 rows=1 "
+    }
+   ],
+   "evidence": "own org_subscriptions row: closed (rows=0 Plan, status, seats and billing period are managed by the platform.) | own organisations.plan / max_users / locked: VULNERABLE (plan after=enterprise max_users after=9999 rows=1 )"
+  },
+  {
+   "section": "T",
+   "name": "TEN-6 subscription state and plan limits are not enforced",
+   "ok": null,
+   "state": "PARTIAL",
+   "subs": [
+    {
+     "check": "locked company still reads data (switches as shipped)",
+     "vulnerable": false,
+     "evidence": "locked Beta manager reads 0 vehicles "
+    },
+    {
+     "check": "no subscription row means no vehicle limit (switches as shipped)",
+     "vulnerable": true,
+     "evidence": "company with no subscription row inserted 30 vehicles (trial cap 25) "
+    },
+    {
+     "check": "locked company still reads data (entitlement_enforcement = on)",
+     "vulnerable": false,
+     "evidence": "locked Beta manager reads 0 vehicles "
+    },
+    {
+     "check": "no subscription row means no vehicle limit (entitlement_enforcement = on)",
+     "vulnerable": false,
+     "evidence": "company with no subscription row inserted 0 vehicles (trial cap 25) Your organisation has no active subscription. Contact your administrator."
+    },
+    {
+     "check": "missing subscription row reported as an endless trial",
+     "vulnerable": true,
+     "evidence": "overview reports a usable plan with no end date=True "
+    }
+   ],
+   "evidence": "locked company still reads data (switches as shipped): closed (locked Beta manager reads 0 vehicles ) | no subscription row means no vehicle limit (switches as shipped): VULNERABLE (company with no subscription row inserted 30 vehicles (trial cap 25) ) | locked company still reads data (entitlement_enforcement = on): closed (locked Beta manager reads 0 vehicles ) | no subscription row means no vehicle limit (entitlement_enforcement = on): closed (company with no subscription row inserted 0 vehicles (trial cap 25) Your organisation has no active subscription. Contact your administrator) | missing subscription row reported as an endless trial: VULNERABLE (overview reports a usable plan with no end date=True )"
+  },
+  {
+   "section": "T",
+   "name": "TEN-7 second tenant shares and is shaped by global configuration",
+   "ok": null,
+   "state": "PARTIAL",
+   "subs": [
+    {
+     "check": "Beta runs on the one global role matrix",
+     "vulnerable": true,
+     "evidence": "global rows visible to beta.manager=538"
+    },
+    {
+     "check": "Beta manager reads the shared accident mailbox keys",
+     "vulnerable": true,
+     "evidence": "keys visible=2 "
+    },
+    {
+     "check": "a Beta site name is silently rewritten",
+     "vulnerable": false,
+     "evidence": "typed \"BETA NEW-ST\" stored as \"BETA NEW-ST\" "
+    },
+    {
+     "check": "a role name defined only in Alpha is accepted for a Beta user",
+     "vulnerable": false,
+     "evidence": "role stored=Reporter"
+    }
+   ],
+   "evidence": "Beta runs on the one global role matrix: VULNERABLE (global rows visible to beta.manager=538) | Beta manager reads the shared accident mailbox keys: VULNERABLE (keys visible=2 ) | a Beta site name is silently rewritten: closed (typed \"BETA NEW-ST\" stored as \"BETA NEW-ST\" ) | a role name defined only in Alpha is accepted for a Beta user: closed (role stored=Reporter)"
+  },
+  {
+   "section": "T",
+   "name": "TEN-8 sign-ups and service loads fall back into the first company",
+   "ok": null,
+   "state": "PARTIAL",
+   "subs": [
+    {
+     "check": "sign-up lands in Alpha (single_tenant_mode = true, as shipped)",
+     "vulnerable": true,
+     "evidence": "sign-up with no invitation got organisation=Alpha "
+    },
+    {
+     "check": "service load lands in Alpha (single_tenant_mode = true, as shipped)",
+     "vulnerable": true,
+     "evidence": "service insert with no organisation landed in=Alpha "
+    },
+    {
+     "check": "sign-up lands in Alpha (single_tenant_mode = false)",
+     "vulnerable": false,
+     "evidence": "sign-up with no invitation got organisation=None "
+    },
+    {
+     "check": "service load lands in Alpha (single_tenant_mode = false)",
+     "vulnerable": false,
+     "evidence": "service insert with no organisation landed in=None Import refused: organisation_id is null, tp.import_org is not set and single_tenant_mode is off"
+    }
+   ],
+   "evidence": "sign-up lands in Alpha (single_tenant_mode = true, as shipped): VULNERABLE (sign-up with no invitation got organisation=Alpha ) | service load lands in Alpha (single_tenant_mode = true, as shipped): VULNERABLE (service insert with no organisation landed in=Alpha ) | sign-up lands in Alpha (single_tenant_mode = false): closed (sign-up with no invitation got organisation=None ) | service load lands in Alpha (single_tenant_mode = false): closed (service insert with no organisation landed in=None Import refused: organisation_id is null, tp.import_org is not set and single_tenant_mode )"
+  },
+  {
+   "section": "T",
+   "name": "TEN-9 no safe tenant lifecycle",
+   "ok": null,
+   "state": "PARTIAL",
+   "subs": [
+    {
+     "check": "no invitation table",
+     "vulnerable": false,
+     "evidence": "org_invitations exists=True"
+    },
+    {
+     "check": "no provisioning or purge function",
+     "vulnerable": false,
+     "evidence": "functions present=['admin_provision_organisation', 'admin_purge_organisation', 'org_invite_member']"
+    },
+    {
+     "check": "username is unique across ALL companies",
+     "vulnerable": true,
+     "evidence": "global unique keys still present=['profiles_username_key', 'profiles_username_lower_uidx', 'ux_profiles_username_lower']"
+    }
+   ],
+   "evidence": "no invitation table: closed (org_invitations exists=True) | no provisioning or purge function: closed (functions present=['admin_provision_organisation', 'admin_purge_organisation', 'org_invite_member']) | username is unique across ALL companies: VULNERABLE (global unique keys still present=['profiles_username_key', 'profiles_username_lower_uidx', 'ux_profiles_username_lower'])"
+  }
+ ]
+}

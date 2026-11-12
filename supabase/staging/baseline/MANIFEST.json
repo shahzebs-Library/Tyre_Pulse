@@ -1,0 +1,32 @@
+{
+ "files": {
+  "01_schemas.sql": 8,
+  "02_sequences.sql": 24,
+  "03_functions.sql": 1102,
+  "04_tables.sql": 497,
+  "05_functions_after_tables.sql": 26,
+  "06_constraints.sql": 1635,
+  "07_indexes.sql": 1168,
+  "08_views.sql": 21,
+  "08_views_dependent_functions.sql": 2,
+  "09_triggers.sql": 513,
+  "10_rls_enable.sql": 495,
+  "11_policies.sql": 4433,
+  "12_storage_policies.sql": 31,
+  "13_grants.sql": 4850,
+  "14_misc.sql": 38
+ },
+ "expected": {
+  "tables": 497,
+  "functions": 1127,
+  "policies": 4464,
+  "policies_app": 4433,
+  "constraints": 1635,
+  "indexes_non_constraint": 1168,
+  "views": 21,
+  "triggers": 512,
+  "sequences_standalone": 24,
+  "sequences_total": 44,
+  "rls_enabled_tables": 492
+ }
+}

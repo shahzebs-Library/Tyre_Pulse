@@ -141,3 +141,39 @@ describe('service layer - integrations: webhook deliveries', () => {
     expect(h.state.last._calls.eq).toEqual([])
   })
 })
+
+describe('reliable delivery helpers (pending migration 20261113141000)', () => {
+  it('sendWebhookTest calls the org-scoped RPC with the subscription id', async () => {
+    h.state.rpc = { data: { ok: true, delivery_id: 42 }, error: null }
+    const out = await integrations.sendWebhookTest('sub-1')
+    expect(h.state.lastRpc).toEqual({ name: 'webhook_send_test', args: { p_subscription_id: 'sub-1' } })
+    expect(out).toEqual({ ok: true, delivery_id: 42 })
+  })
+
+  it('retryWebhookDelivery calls the org-scoped RPC with the delivery id', async () => {
+    h.state.rpc = { data: { ok: false, reason: 'webhook_inactive' }, error: null }
+    const out = await integrations.retryWebhookDelivery(7)
+    expect(h.state.lastRpc).toEqual({ name: 'webhook_retry_delivery', args: { p_id: 7 } })
+    expect(integrations.webhookActionMessage(out)).toBe('This webhook is switched off. Switch it on first.')
+  })
+
+  it('degrades to not_available while the function is not installed, never a raw error', async () => {
+    h.state.rpc = { data: null, error: { code: 'PGRST202', message: 'Could not find the function public.webhook_send_test' } }
+    const out = await integrations.sendWebhookTest('sub-1')
+    expect(out).toEqual({ ok: false, reason: 'not_available' })
+    expect(integrations.webhookActionMessage(out)).toMatch(/not switched on yet/)
+  })
+
+  it('a permission refusal is still an error, not a silent success', async () => {
+    h.state.rpc = { data: null, error: { code: '42501', message: 'You do not have permission to test a webhook.' } }
+    await expect(integrations.sendWebhookTest('sub-1')).rejects.toBeInstanceOf(ServiceError)
+  })
+
+  it('has a plain message for every reason and none for success', () => {
+    expect(integrations.webhookActionMessage({ ok: true })).toBe('')
+    expect(integrations.webhookActionMessage({ ok: false, reason: 'nope' }, 'fallback')).toBe('fallback')
+    for (const k of ['not_found', 'too_soon', 'already_delivered', 'still_pending']) {
+      expect(integrations.WEBHOOK_ACTION_MESSAGES[k]).toBeTruthy()
+    }
+  })
+})

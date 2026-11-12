@@ -6,7 +6,7 @@
  * `webhook_deliveries` audit. Explicit column lists (no SELECT *), unwrap
  * error surfacing, mirrors alertThresholds.js.
  */
-import { supabase, unwrap } from './_client'
+import { supabase, unwrap, isNotProvisioned } from './_client'
 
 // api_keys columns for the keys table. Deliberately excludes key_hash
 // (secret material) and organisation_id / created_by (RLS-scoped).
@@ -121,4 +121,54 @@ export async function listWebhookDeliveries({ subscriptionId = null, limit = 50,
   const result = await q
   const rows = unwrap(result) ?? []
   return { rows, count: result.count ?? 0 }
+}
+
+/* ── Reliable delivery helpers (pending migration 20261113141000) ─────────────
+   Both call SECURITY DEFINER RPCs that act only inside the caller's own
+   organisation. Until that migration is applied the functions do not exist, so
+   each returns { ok: false, reason: 'not_available' } instead of throwing: the
+   page can say the feature is not switched on yet rather than show an error. */
+
+/** Plain-English text for every reason the two RPCs can return. */
+export const WEBHOOK_ACTION_MESSAGES = Object.freeze({
+  not_available: 'This action is not switched on yet. Ask your administrator.',
+  not_found: 'That webhook or delivery was not found in your organisation.',
+  webhook_inactive: 'This webhook is switched off. Switch it on first.',
+  too_soon: 'A test was sent less than a minute ago. Wait a moment and try again.',
+  already_delivered: 'This delivery was already delivered.',
+  still_pending: 'This delivery is still waiting to be sent.',
+})
+
+/** Message for an RPC result of the form { ok, reason }. */
+export function webhookActionMessage(result, fallback = 'The request could not be completed.') {
+  if (result?.ok) return ''
+  return WEBHOOK_ACTION_MESSAGES[result?.reason] ?? fallback
+}
+
+async function callWebhookRpc(name, args) {
+  const result = await supabase.rpc(name, args)
+  if (result?.error && isNotProvisioned(result.error)) return { ok: false, reason: 'not_available' }
+  const data = unwrap(result)
+  return data && typeof data === 'object' ? data : { ok: false, reason: 'not_available' }
+}
+
+/**
+ * Queue ONE test event ("webhook.test", no business data, one attempt) for a
+ * webhook of the caller's own organisation, so a new receiver can be proven
+ * before real events depend on it. The result shows in the delivery log.
+ * @param {string} subscriptionId
+ * @returns {Promise<{ok:boolean, reason?:string, delivery_id?:number}>}
+ */
+export async function sendWebhookTest(subscriptionId) {
+  return callWebhookRpc('webhook_send_test', { p_subscription_id: subscriptionId })
+}
+
+/**
+ * Put one failed (dead-letter) delivery of the caller's own organisation back
+ * in the queue for exactly one more attempt.
+ * @param {number} deliveryId
+ * @returns {Promise<{ok:boolean, reason?:string}>}
+ */
+export async function retryWebhookDelivery(deliveryId) {
+  return callWebhookRpc('webhook_retry_delivery', { p_id: deliveryId })
 }

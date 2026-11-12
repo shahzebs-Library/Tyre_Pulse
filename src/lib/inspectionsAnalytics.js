@@ -80,16 +80,20 @@ export function isoDay(now = new Date()) {
 
 /**
  * The register's read of each row: the display record type restored, and any
- * record still open past its scheduled day shown as Overdue. A Done or
- * Cancelled record is never overdue, and a row with no scheduled date cannot be
- * judged, so it keeps its stored status.
+ * record still open past its scheduled day shown as Overdue. A Done, Cancelled
+ * or REJECTED record is never overdue - a rejected sign-off was inspected and
+ * returned for a fix, a recorded decision shown as Rejected, not work still
+ * waiting past its due date - and a row with no scheduled date cannot be judged,
+ * so it keeps its stored status.
  */
 export function deriveRegisterRows(rows, now = new Date()) {
   const today = isoDay(now)
   return (rows || []).map((r) => ({
     ...r,
     inspection_type: resolveRecordType(r),
-    status: r.status !== 'Done' && r.status !== 'Cancelled' && r.scheduled_date && r.scheduled_date < today
+    status: r.status !== 'Done' && r.status !== 'Cancelled'
+      && r.approval_status !== 'rejected'
+      && r.scheduled_date && r.scheduled_date < today
       ? 'Overdue'
       : r.status,
   }))

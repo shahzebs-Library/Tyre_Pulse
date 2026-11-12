@@ -47,3 +47,15 @@ fix · Acceptance test · Implementation area (DB, edge fn, web, Flutter, consol
 Write your report to the file named in your task under `docs/commercial-readiness/audit/`. Plain English, no
 em or en dashes. End your final message with a 10-line summary: top findings, counts by severity, what you
 could not verify.
+
+## Two separate readiness results (owner decision, added 2026-11-12)
+Every report must give TWO verdicts and keep them apart:
+- **Internal Production Readiness**: is this safe and correct for the CURRENT company's daily operations
+  (one tenant, three countries, existing users and data)?
+- **Commercial SaaS Readiness**: is this safe and correct to sell to a DIFFERENT, independent company starting
+  from zero?
+A feature can pass the first and fail the second. For every finding and every module give both statuses
+(Internal: ready / at risk / broken. Commercial: one of the six classes). For every recommended fix state its
+RISK TO THE CURRENT COMPANY (none / low / medium / high, and why) so that commercial changes never break the
+system the existing team uses. Prefer fixes that are additive and leave current behaviour unchanged for the
+existing tenant.

@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'fs'
+import { join } from 'path'
 import { NAV_CATALOG } from '../components/Layout'
 
 /**
@@ -246,7 +248,41 @@ const ROUTES_ADDED_SINCE_REGROUP = [
   '/daily-ops/workshop',
   '/workforce-daily',
   '/ai-tyre-inspection',
+  // The single Executive menu entry (lands on the executive page the user may open).
+  '/executive',
 ]
+
+// Routes folded DELIBERATELY into a deeper page (owner instruction: one page per job,
+// the weaker duplicate is switched off). Each old route must (a) be gone from the
+// sidebar, (b) redirect in App.jsx to its keeper, and (c) have a keeper that is itself
+// still in the sidebar, so nothing became unreachable. Adding an entry here is a
+// deliberate act that says "this page now lives as a tab of that one".
+const ROUTES_MERGED_INTO = {
+  '/analytics': '/advanced-analytics',
+  '/comparison': '/site-comp?tab=periods',
+  '/erp-import': '/data-intake?tab=templates',
+  '/erp-intake': '/data-intake?tab=reports',
+  '/expense-import': '/data-intake?tab=expenses',
+  '/safety-compliance': '/compliance?tab=safety',
+  '/tyre-failure-cpk': '/cpk-intelligence?tab=failures',
+  '/workshop': '/work-orders?tab=analytics',
+  '/asset-management': '/fleet-master?tab=analysis',
+}
+
+// Routes that left the sidebar but are STILL real pages, reached from the tab bar
+// of a single menu entry (owner instruction: one KPI entry, one Executive entry).
+// Each must still be a routed page in App.jsx (not a redirect), must be listed in
+// the shared tab bar, and its menu entry must be in the sidebar.
+const ROUTES_NOW_TABS = {
+  '/kpi-engine': '/kpi',
+  '/kpi-command': '/kpi',
+  '/executive-report': '/executive',
+  '/executive-analytics': '/executive',
+}
+
+const TABS_SOURCE = readFileSync(join(process.cwd(), 'src/components/ui/SectionTabs.jsx'), 'utf8').replace(/\r\n/g, '\n')
+
+const APP_SOURCE = readFileSync(join(process.cwd(), 'src/App.jsx'), 'utf8').replace(/\r\n/g, '\n')
 
 const catalogItems = () => NAV_CATALOG.flatMap((g) => g.items)
 
@@ -254,7 +290,41 @@ describe('sidebar re-group parity', () => {
   it('still exposes every route that existed before the re-group', () => {
     const now = new Set(catalogItems().map((i) => i.key))
     const lost = ROUTES_BEFORE_REGROUP.filter((r) => !now.has(r))
-    expect(lost).toEqual([])
+    // The only routes allowed to leave the sidebar are the ones merged into a keeper.
+    // ... or the ones now reached from a single menu entry's tab bar.
+    expect(lost).toEqual([...Object.keys(ROUTES_MERGED_INTO), ...Object.keys(ROUTES_NOW_TABS)].sort())
+  })
+
+  it('every merged route redirects to a keeper that is still in the sidebar', () => {
+    const now = new Set(catalogItems().map((i) => i.key))
+    for (const [from, to] of Object.entries(ROUTES_MERGED_INTO)) {
+      expect(now.has(from), `${from} is merged, so it must not also be a sidebar item`).toBe(false)
+      expect(now.has(to.split('?')[0]), `keeper ${to} must be reachable from the sidebar`).toBe(true)
+      const redirect = `<Route path="${from}"`
+      const line = APP_SOURCE.split('\n').find((l) => l.includes(redirect))
+      expect(line, `App.jsx must still answer ${from}`).toBeTruthy()
+      expect(line).toContain(`<Navigate to="${to}" replace />`)
+    }
+  })
+
+  it('every page moved behind a tab bar is still routed, listed in the tab bar, and has its menu entry', () => {
+    const now = new Set(catalogItems().map((i) => i.key))
+    for (const [route, entry] of Object.entries(ROUTES_NOW_TABS)) {
+      expect(now.has(route), `${route} must not also be a sidebar item`).toBe(false)
+      expect(now.has(entry), `menu entry ${entry} must be in the sidebar`).toBe(true)
+      const line = APP_SOURCE.split('\n').find((l) => l.includes(`<Route path="${route}"`))
+      expect(line, `App.jsx must still route ${route}`).toBeTruthy()
+      expect(line, `${route} must stay a real page, not a redirect`).not.toContain('<Navigate')
+      expect(TABS_SOURCE, `${route} must be reachable from the shared tab bar`).toContain(`to: '${route}'`)
+    }
+  })
+
+  it('the Executive entry is shown by the unchanged rules of its two pages', () => {
+    const layout = readFileSync(join(process.cwd(), 'src/components/Layout.jsx'), 'utf8')
+    // The members are the OLD nav items, so visibility cannot drift from before.
+    expect(layout).toMatch(/\{ to: '\/executive-report', adminOnly: A \}/)
+    expect(layout).toMatch(/\{ to: '\/executive-analytics', roles: ANALYTICS_ROLES \}/)
+    expect(layout).toMatch(/item\.anyOf\.some\(\(m\) => shouldShowNavItem\(m,/)
   })
 
   it('invents no route that did not exist before', () => {

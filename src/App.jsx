@@ -28,6 +28,15 @@ import { ConsoleAuthProvider, useConsoleAuth } from './console/ConsoleAuthContex
 import { IS_CONSOLE_SURFACE } from './lib/supabase'
 import ConsoleLayout from './console/components/ConsoleLayout'
 import ConsoleAuthBridge from './console/ConsoleAuthBridge'
+// The single "Executive" menu entry lands on Executive Report for those the
+// executive_report module admits, otherwise on Executive Analytics. Access is
+// decided by each page's own route guard, exactly as before.
+function ExecutiveLanding() {
+  const auth = useAuth()
+  const canReport = typeof auth?.hasPermission === 'function' && auth.hasPermission('executive_report') === true
+  return <Navigate to={canReport ? '/executive-report' : '/executive-analytics'} replace />
+}
+
 function LegacyRedirect({ to }) {
   const { search, hash } = useLocation()
   return <Navigate to={`${to}${search}${hash}`} replace />
@@ -110,7 +119,6 @@ const CorrectiveActions      = lazy(() => import('./pages/CorrectiveActions'))
 const RcaRecords             = lazy(() => import('./pages/RcaRecords'))
 const DataCleaning           = lazy(() => import('./pages/DataCleaning'))
 const DataReconciliation     = lazy(() => import('./pages/DataReconciliation'))
-const ErpImport              = lazy(() => import('./pages/ErpImport'))
 const UploadData             = lazy(() => import('./pages/UploadData'))
 const DataIntakeCenter       = lazy(() => import('./pages/DataIntakeCenter'))
 const NotFound               = lazy(() => import('./pages/NotFound'))
@@ -220,7 +228,6 @@ const HoldingCompany         = lazy(() => import('./pages/HoldingCompany'))
 const OrgHierarchy           = lazy(() => import('./pages/OrgHierarchy'))
 const AdminConsole           = lazy(() => import('./pages/AdminConsole'))
 const ApprovalDelegations    = lazy(() => import('./pages/ApprovalDelegations'))
-const Analytics              = lazy(() => import('./pages/Analytics'))
 const BrandPerformance       = lazy(() => import('./pages/BrandPerformance'))
 const SiteComparison         = lazy(() => import('./pages/SiteComparison'))
 const FleetAnalytics         = lazy(() => import('./pages/FleetAnalytics'))
@@ -248,7 +255,6 @@ const Reports                = lazy(() => import('./pages/Reports'))
 const GatePass               = lazy(() => import('./pages/GatePass'))
 const SerialTracker          = lazy(() => import('./pages/SerialTracker'))
 const RfidRegistry           = lazy(() => import('./pages/RfidRegistry'))
-const Comparison             = lazy(() => import('./pages/Comparison'))
 const EngineeringKpi         = lazy(() => import('./pages/EngineeringKpi'))
 const PositionIntelligence   = lazy(() => import('./pages/PositionIntelligence'))
 const InspectionIntelligence = lazy(() => import('./pages/InspectionIntelligence'))
@@ -260,7 +266,6 @@ const AdvancedAnalytics      = lazy(() => import('./pages/AdvancedAnalytics'))
 const AiCommandCenter        = lazy(() => import('./pages/AiCommandCenter'))
 const ExecutiveReport        = lazy(() => import('./pages/ExecutiveReport'))
 const BoardOverview          = lazy(() => import('./pages/BoardOverview'))
-const TyreFailureCpkBoard    = lazy(() => import('./pages/TyreFailureCpkBoard'))
 const MaintenanceCostBoard   = lazy(() => import('./pages/MaintenanceCostBoard'))
 const ExpenseReport          = lazy(() => import('./pages/ExpenseReport'))
 const ExpenseTrends          = lazy(() => import('./pages/ExpenseTrends'))
@@ -270,8 +275,6 @@ const ScoCosts               = lazy(() => import('./pages/ScoCosts'))
 const SanyInvoices           = lazy(() => import('./pages/SanyInvoices'))
 const SanyDelayPenalty       = lazy(() => import('./pages/SanyDelayPenalty'))
 const ProductionM3           = lazy(() => import('./pages/ProductionM3'))
-const ErpIntake             = lazy(() => import('./pages/ErpIntake'))
-const ExpenseImport          = lazy(() => import('./pages/ExpenseImport'))
 const ReportSharing          = lazy(() => import('./pages/ReportSharing'))
 const ForecastingEngine      = lazy(() => import('./pages/ForecastingEngine'))
 const ContinuousImprovement  = lazy(() => import('./pages/ContinuousImprovement'))
@@ -287,7 +290,6 @@ const WorkshopTv             = lazy(() => import('./pages/WorkshopTv'))
 const MaintenanceCalendar    = lazy(() => import('./pages/MaintenanceCalendar'))
 const DriverManagement       = lazy(() => import('./pages/DriverManagement'))
 const DriverWorkspace        = lazy(() => import('./pages/DriverWorkspace'))
-const SafetyCompliance       = lazy(() => import('./pages/SafetyCompliance'))
 const CostCenter             = lazy(() => import('./pages/CostCenter'))
 const PerformanceBenchmark   = lazy(() => import('./pages/PerformanceBenchmark'))
 const Procurement            = lazy(() => import('./pages/Procurement'))
@@ -296,7 +298,6 @@ const DowntimeTracker        = lazy(() => import('./pages/DowntimeTracker'))
 const BudgetPlanner          = lazy(() => import('./pages/BudgetPlanner'))
 const FleetHealthBoard       = lazy(() => import('./pages/FleetHealthBoard'))
 const TyreLifecycle          = lazy(() => import('./pages/TyreLifecycle'))
-const WorkshopManagement     = lazy(() => import('./pages/WorkshopManagement'))
 const PressureIntelligence   = lazy(() => import('./pages/PressureIntelligence'))
 const SupplierManagement     = lazy(() => import('./pages/SupplierManagement'))
 const FuelEfficiency         = lazy(() => import('./pages/FuelEfficiency'))
@@ -308,7 +309,6 @@ const RecallTracker          = lazy(() => import('./pages/RecallTracker'))
 const WarrantyTracker        = lazy(() => import('./pages/WarrantyTracker'))
 const TyreExchange           = lazy(() => import('./pages/TyreExchange'))
 const TyreSpecifications     = lazy(() => import('./pages/TyreSpecifications'))
-const AssetManagement        = lazy(() => import('./pages/AssetManagement'))
 const AssetDisposals         = lazy(() => import('./pages/AssetDisposals'))
 const AssetBreakdowns        = lazy(() => import('./pages/AssetBreakdowns'))
 const SiteManagement         = lazy(() => import('./pages/SiteManagement'))
@@ -394,7 +394,11 @@ function HomeRoute() {
 function PublicRootRoute() {
   const { profile, loading } = useAuth()
   const isDedicatedAppHost = typeof window !== 'undefined' && window.location.hostname === 'app.tyrepulse.app'
-  if (isDedicatedAppHost && !loading && !profile) return <Navigate to="/login" replace />
+  // On the app hostname the public landing page must never appear, not even
+  // for the moment the session is being read: it showed a small page with a
+  // Sign in button before the real login. Wait, then go straight to sign-in.
+  if (isDedicatedAppHost && loading) return <LoadingSpinner />
+  if (isDedicatedAppHost && !profile) return <Navigate to="/login" replace />
   if (loading || !profile) return <Safe><PublicMarketingHome /></Safe>
   return (
     <ProtectedRoute>
@@ -635,13 +639,16 @@ function MainApp() {
                       <Route path="/"            element={<Safe><HomeRoute /></Safe>} />
                       <Route path="/tyres"       element={<Safe><ModuleRoute moduleKey="tyre_records"><TyreRecords /></ModuleRoute></Safe>} />
                       {/* ── Analytics ── */}
-                      <Route path="/analytics"    element={<Safe><ModuleRoute moduleKey="analytics"><Analytics /></ModuleRoute></Safe>} />
+                      {/* Merged pages: the old routes below redirect to the page that absorbed them
+                          (/analytics, /comparison, /safety-compliance, /tyre-failure-cpk, /workshop,
+                          /erp-intake, /expense-import, /erp-import). Each lives on as a tab of its keeper. */}
+                      <Route path="/analytics"    element={<Navigate to="/advanced-analytics" replace />} />
                       <Route path="/brand-perf"   element={<Safe><ModuleRoute moduleKey="brand_performance"><BrandPerformance /></ModuleRoute></Safe>} />
                       <Route path="/site-comp"    element={<Safe><ModuleRoute moduleKey="site_comparison"><SiteComparison /></ModuleRoute></Safe>} />
                       <Route path="/fleet"        element={<Safe><ModuleRoute moduleKey="fleet_analytics"><FleetAnalytics /></ModuleRoute></Safe>} />
                       <Route path="/kpi"          element={<Safe><ModuleRoute moduleKey="kpi_scorecard"><KpiScorecard /></ModuleRoute></Safe>} />
                       <Route path="/country-comp" element={<Safe><ModuleRoute moduleKey="country_comparison"><CountryComparison /></ModuleRoute></Safe>} />
-                      <Route path="/comparison"   element={<Safe><ModuleRoute moduleKey="analytics"><Comparison /></ModuleRoute></Safe>} />
+                      <Route path="/comparison"   element={<Navigate to="/site-comp?tab=periods" replace />} />
                       {/* ── Operations ── */}
                       <Route path="/stock"       element={<Safe><ModuleRoute moduleKey="stock"><StockManagement /></ModuleRoute></Safe>} />
                       <Route path="/budgets"     element={<Safe><ModuleRoute moduleKey="budgets"><Budgets /></ModuleRoute></Safe>} />
@@ -677,8 +684,8 @@ function MainApp() {
                       <Route path="/workshop-settings"    element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><WorkshopSettings /></RoleRoute></Safe>} />
                       <Route path="/parts-requests"       element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><PartsRequests /></RoleRoute></Safe>} />
                       <Route path="/maintenance-calendar" element={<Safe><RoleRoute allowed={['Admin']}><MaintenanceCalendar /></RoleRoute></Safe>} />
-                      <Route path="/safety-compliance"    element={<Safe><RoleRoute allowed={['Admin']}><SafetyCompliance /></RoleRoute></Safe>} />
-                      <Route path="/asset-management"     element={<Safe><ModuleRoute moduleKey="fleet_master"><AssetManagement /></ModuleRoute></Safe>} />
+                      <Route path="/safety-compliance"    element={<Navigate to="/compliance?tab=safety" replace />} />
+                      <Route path="/asset-management"     element={<Navigate to="/fleet-master?tab=analysis" replace />} />
                       <Route path="/asset-disposals"       element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']} moduleKey="asset_disposals"><AssetDisposals /></RoleRoute></Safe>} />
                       <Route path="/repair-requests"      element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']} moduleKey="repair_requests"><RepairRequests /></RoleRoute></Safe>} />
                       <Route path="/asset-breakdowns"      element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']} moduleKey="asset_breakdowns"><AssetBreakdowns /></RoleRoute></Safe>} />
@@ -711,9 +718,11 @@ function MainApp() {
                       <Route path="/fleet-health"            element={<Safe><ModuleRoute moduleKey="fleet_intelligence"><FleetHealthBoard /></ModuleRoute></Safe>} />
                       <Route path="/advanced-analytics"      element={<Safe><ModuleRoute moduleKey="analytics"><AdvancedAnalytics /></ModuleRoute></Safe>} />
                       <Route path="/ai-command-center"       element={<Safe><FlagRoute flag="ai_tools"><ModuleRoute moduleKey="ai_command_center"><AiCommandCenter /></ModuleRoute></FlagRoute></Safe>} />
+                      {/* One "Executive" menu entry: opens the executive page this user may open. Each page keeps its own guard. */}
+                      <Route path="/executive"               element={<ExecutiveLanding />} />
                       <Route path="/executive-report"        element={<Safe><ModuleRoute moduleKey="executive_report"><ExecutiveReport /></ModuleRoute></Safe>} />
                       <Route path="/board-overview"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><BoardOverview /></RoleRoute></Safe>} />
-                      <Route path="/tyre-failure-cpk"        element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><TyreFailureCpkBoard /></RoleRoute></Safe>} />
+                      <Route path="/tyre-failure-cpk"        element={<Navigate to="/cpk-intelligence?tab=failures" replace />} />
                       <Route path="/maintenance-cost-board"  element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><MaintenanceCostBoard /></RoleRoute></Safe>} />
                       <Route path="/expense-report"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ExpenseReport /></RoleRoute></Safe>} />
                       <Route path="/expense-trends"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ExpenseTrends /></RoleRoute></Safe>} />
@@ -723,8 +732,8 @@ function MainApp() {
                       <Route path="/sany-invoices"           element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><SanyInvoices /></RoleRoute></Safe>} />
                       <Route path="/sany-delay-penalty"      element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><SanyDelayPenalty /></RoleRoute></Safe>} />
                       <Route path="/production-m3"           element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ProductionM3 /></RoleRoute></Safe>} />
-                      <Route path="/erp-intake"             element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ErpIntake /></RoleRoute></Safe>} />
-                      <Route path="/expense-import"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ExpenseImport /></RoleRoute></Safe>} />
+                      <Route path="/erp-intake"             element={<Navigate to="/data-intake?tab=reports" replace />} />
+                      <Route path="/expense-import"          element={<Navigate to="/data-intake?tab=expenses" replace />} />
                       <Route path="/report-sharing"          element={<Safe><RoleRoute allowed={['Admin']}><ReportSharing /></RoleRoute></Safe>} />
                       <Route path="/forecasting"             element={<Safe><ModuleRoute moduleKey="forecasting"><ForecastingEngine /></ModuleRoute></Safe>} />
                       <Route path="/cost-center"             element={<Safe><ModuleRoute moduleKey="budgets"><CostCenter /></ModuleRoute></Safe>} />
@@ -735,7 +744,7 @@ function MainApp() {
                       <Route path="/tyre-lifecycle"          element={<Safe><ModuleRoute moduleKey="tyre_records"><TyreLifecycle /></ModuleRoute></Safe>} />
                       <Route path="/downtime"                element={<Safe><ModuleRoute moduleKey="fleet_analytics"><DowntimeTracker /></ModuleRoute></Safe>} />
                       <Route path="/budget-planner"          element={<Safe><ModuleRoute moduleKey="budgets"><BudgetPlanner /></ModuleRoute></Safe>} />
-                      <Route path="/workshop"                element={<Safe><ModuleRoute moduleKey="work_orders"><WorkshopManagement /></ModuleRoute></Safe>} />
+                      <Route path="/workshop"                element={<Navigate to="/work-orders?tab=analytics" replace />} />
                       <Route path="/fuel-efficiency"         element={<Safe><ModuleRoute moduleKey="fleet_analytics"><FuelEfficiency /></ModuleRoute></Safe>} />
                       <Route path="/continuous-improvement"  element={<Safe><ModuleRoute moduleKey="analytics"><ContinuousImprovement /></ModuleRoute></Safe>} />
                       <Route path="/erp-sync"                element={<Safe><FlagRoute flag="erp_sync"><ModuleRoute moduleKey="erp_sync"><ErpSync /></ModuleRoute></FlagRoute></Safe>} />
@@ -746,7 +755,7 @@ function MainApp() {
                       {/* ── Data ── */}
                       <Route path="/cleaning"    element={<Safe><ModuleRoute moduleKey="data_cleaning"><DataCleaning /></ModuleRoute></Safe>} />
                       <Route path="/data-reconciliation" element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><DataReconciliation /></RoleRoute></Safe>} />
-                      <Route path="/erp-import"  element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><ErpImport /></RoleRoute></Safe>} />
+                      <Route path="/erp-import"  element={<Navigate to="/data-intake?tab=templates" replace />} />
                       <Route path="/audit"       element={<Safe><ModuleRoute moduleKey="audit_trail"><AuditTrail /></ModuleRoute></Safe>} />
                       <Route path="/users"       element={<LegacyRedirect to="/console/users" />} />
                       {/* ── Universal ── */}

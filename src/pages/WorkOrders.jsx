@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // WorkOrders.jsx - Workshop Job Card Management · /work-orders
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement,
@@ -31,6 +31,7 @@ import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import WorkOrderApprovalGate from '../components/workorders/WorkOrderApprovalGate'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
+import { initialTabFromUrl } from '../lib/urlTab'
 import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -148,6 +149,9 @@ const isOverdue = (wo) => isOverdueAt(wo, Date.now())
 const daysOpen = (wo) => daysOpenAt(wo, Date.now())
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Site performance, technician and cost analysis for the workshop. Loaded only when opened.
+const WorkshopAnalytics = lazy(() => import('./WorkshopManagement'))
+
 export default function WorkOrders() {
   const { activeCountry, activeCurrency, appSettings } = useSettings()
   const { branding } = useTenant()
@@ -158,6 +162,9 @@ export default function WorkOrders() {
   // Deleting a work order is an Admin-only action (matches the RLS policy).
   // Super-admins are always admitted (break-glass), consistent with the rest of the app.
   const isAdmin = isSuperAdmin || (profile?.role || '').toLowerCase() === 'admin'
+  // The sidebar offered Workshop Management to administrators only; the view keeps that rule.
+  const canSeeAnalytics = isAdmin
+  const [view, setView] = useState(() => (canSeeAnalytics ? initialTabFromUrl(['jobs', 'analytics'], 'jobs') : 'jobs'))
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleteError, setDeleteError] = useState('')
   // Multi-select delete (Admin-only). Holds selected work-order ids.
@@ -761,6 +768,25 @@ export default function WorkOrders() {
         }
       />
 
+      {/* Workshop analytics (formerly its own page at /workshop) is a view of this page. */}
+      {canSeeAnalytics && (
+        <div role="tablist" aria-label="Work order views" className="flex flex-wrap gap-1 border-b border-[var(--border-subtle)]">
+          {[{ key: 'jobs', label: 'Job cards' }, { key: 'analytics', label: 'Workshop analytics' }].map((v) => (
+            <button key={v.key} type="button" role="tab" aria-selected={view === v.key} onClick={() => setView(v.key)}
+              className={`min-h-[44px] px-3 py-2 text-sm border-b-2 -mb-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 ${view === v.key ? 'border-orange-500 font-semibold text-[var(--text-primary)]' : 'border-transparent text-[var(--text-secondary)]'}`}>
+              {v.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {view === 'analytics' && canSeeAnalytics && (
+        <Suspense fallback={<p role="status" className="py-10 text-center text-sm text-[var(--text-secondary)]">Loading...</p>}>
+          <WorkshopAnalytics embedded />
+        </Suspense>
+      )}
+
+      {view === 'jobs' && (<>
       <PeriodNotice period={defaultPeriod} onShowAll={() => { setDateFrom(''); setDateTo('') }} />
 
       {error && (
@@ -931,6 +957,8 @@ export default function WorkOrders() {
           )}
         </div>
       </Card>
+
+      </>)}
 
       {/* ── Create / Edit Modal ─────────────────────────────────────────────── */}
       {/* closeOnBackdrop is FALSE on purpose: the hand-rolled panel this replaced

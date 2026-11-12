@@ -1,6 +1,7 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import ViewSwitch from '../components/ui/ViewSwitch'
 import { useFilterState } from '../hooks/useFilterState'
 import { useScrollRestore } from '../hooks/useScrollRestore'
 import { toUserMessage } from '../lib/safeError'
@@ -242,7 +243,36 @@ function Insight({ icon: Icon, tone, num, text, fallback, sub, onClick, to }) {
   return <button type="button" className="cc-insight" onClick={onClick}>{body}</button>
 }
 
+// Asset analysis (formerly its own page at /asset-management): health matrix,
+// fleet composition, utilisation trend, operational status and PDF export.
+// Same access rule as this page (the fleet_master module). Loaded when opened.
+const AssetAnalysis = lazy(() => import('./AssetManagement'))
+const FLEET_VIEWS = [
+  { key: 'register', label: 'Asset register' },
+  { key: 'analysis', label: 'Asset analysis' },
+]
+
 export default function FleetMaster() {
+  const [params, setParams] = useSearchParams()
+  const view = params.get('tab') === 'analysis' ? 'analysis' : 'register'
+  // Both views keep their filters in the address bar under the same names
+  // (search, site, status, page), so switching view starts the other one clean.
+  const changeView = (next) => setParams(next === 'analysis' ? { tab: 'analysis' } : {})
+  return (
+    <div className="space-y-4">
+      <ViewSwitch views={FLEET_VIEWS} value={view} onChange={changeView} label="Asset views" />
+      {view === 'analysis' ? (
+        <Suspense fallback={<p role="status" className="py-10 text-center text-sm text-[var(--text-secondary)]">Loading...</p>}>
+          <AssetAnalysis />
+        </Suspense>
+      ) : (
+        <FleetRegister />
+      )}
+    </div>
+  )
+}
+
+function FleetRegister() {
   const navigate = useNavigate()
   const { profile, isSuperAdmin } = useAuth()
   const { activeCountry, activeCurrency } = useSettings()

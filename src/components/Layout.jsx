@@ -112,6 +112,15 @@ const AUDIT_ROLES = ['Admin', 'Integration Admin']
 
 // Eight operational workspaces (directive Phase 5) + Overview. Every route is
 // unchanged - pages are only regrouped and no journey is removed.
+// The single "Executive" entry stands for two pages that keep their own access
+// rules. It is shown to exactly the people who saw either of the old entries:
+// each member below is the old nav item, judged by shouldShowNavItem unchanged.
+// (Written without a label on purpose: these are rules, not sidebar items.)
+const EXECUTIVE_MEMBERS = [
+  { to: '/executive-report', adminOnly: A },
+  { to: '/executive-analytics', roles: ANALYTICS_ROLES },
+]
+
 const NAV_GROUPS = [
   {
     label: 'Overview',
@@ -127,7 +136,6 @@ const NAV_GROUPS = [
     label: 'Fleet & Assets',
     items: [
       { to: '/fleet-master',        label: 'Fleet Master', parent: 'Registry',       icon: TruckIc },
-      { to: '/asset-management',    label: 'Asset Management', parent: 'Registry',   icon: LayoutGrid },
       { to: '/sites',               label: 'Site Management', parent: 'Registry',    icon: MapPin },
       { to: '/fleet-groups',        label: 'Fleet Groups', parent: 'Registry',       icon: Network, adminOnly: A },
       { to: '/combinations',        label: 'Combinations', parent: 'Registry',       icon: Combine, adminOnly: A },
@@ -162,7 +170,7 @@ const NAV_GROUPS = [
       { to: '/pressure-intel',         label: 'Pressure Intelligence', parent: 'Condition',  icon: PsiGaugeIc, adminOnly: A },
       { to: '/tpms',                   label: 'TPMS', parent: 'Condition',                icon: Radio, adminOnly: A },
       { to: '/position-intelligence',  label: 'Position Intelligence', parent: 'Condition',  icon: MapPin, adminOnly: A },
-      { to: '/tyre-age-compliance',    label: 'Tyre Age Compliance', parent: 'Condition',    icon: ShieldCheck, roles: ANALYTICS_ROLES },
+      { to: '/tyre-age-compliance',    label: 'Tyre Time in Service', parent: 'Condition',    icon: ShieldCheck, roles: ANALYTICS_ROLES },
       { to: '/heat-intelligence',      label: 'Heat Intelligence', parent: 'Condition',      icon: Thermometer, roles: ANALYTICS_ROLES },
       { to: '/tyre-lifecycle',         label: 'Tyre Lifecycle', parent: 'Lifecycle',         icon: RefreshCw, adminOnly: A },
       { to: '/tyre-service-events',    label: 'Tyre Service Events', parent: 'Lifecycle',    icon: Activity, roles: ANALYTICS_ROLES },
@@ -172,7 +180,6 @@ const NAV_GROUPS = [
       { to: '/retread-claims',         label: 'Retread Claims', parent: 'Lifecycle',      icon: Recycle, adminOnly: A },
       { to: '/warranty',       label: 'Warranty Tracker', parent: 'Lifecycle', icon: ShieldCheck },
       { to: '/brand-perf',   label: 'Brand Performance', parent: 'Performance',  icon: Shield,         roles: ANALYTICS_ROLES },
-      { to: '/tyre-failure-cpk',  label: 'Tyre Failure & CPK', parent: 'Performance', icon: AlertTriangle, roles: ANALYTICS_ROLES },
       { to: '/cpk-intelligence',  label: 'CPK Intelligence', parent: 'Performance',  icon: Gauge,      roles: ANALYTICS_ROLES },
       { to: '/fleet-risk-score',       label: 'Fleet Risk Score', parent: 'Performance',       icon: ShieldAlert, roles: ANALYTICS_ROLES },
       { to: '/digital-twin',           label: 'Digital Twin', parent: 'Performance',           icon: Cpu, roles: ANALYTICS_ROLES },
@@ -182,7 +189,6 @@ const NAV_GROUPS = [
     label: 'Workshop & Maintenance',
     items: [
       { to: '/work-orders',     label: 'Work Orders', parent: 'Jobs',        icon: WorkOrderIc },
-      { to: '/workshop',        label: 'Workshop Management', parent: 'Jobs', icon: WorkshopIc, adminOnly: A },
       { to: '/workshop-live',   label: 'Live Control', parent: 'Jobs',       icon: Activity, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/bay-scheduling',  label: 'Bay Scheduling', parent: 'Jobs',     icon: CalendarRange, adminOnly: A },
       { to: '/service-requests', label: 'Service Requests', parent: 'Jobs',   icon: LifeBuoy, adminOnly: A },
@@ -223,7 +229,6 @@ const NAV_GROUPS = [
       { to: '/root-cause',             label: 'Root Cause Engine', parent: 'Findings',      icon: Microscope, roles: ANALYTICS_ROLES },
       { to: '/anomalies',           label: 'Anomaly Scan', parent: 'Findings',       icon: AnomalyScanIc, adminOnly: A },
       { to: '/compliance',             label: 'Compliance Dashboard', parent: 'Compliance', icon: Shield, adminOnly: A },
-      { to: '/safety-compliance',      label: 'Safety & Compliance', parent: 'Compliance', icon: ShieldCheck, adminOnly: A },
       { to: '/certifications',         label: 'Certifications', parent: 'Compliance',      icon: BadgeCheck, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/policies',               label: 'Policy Management', parent: 'Compliance',    icon: ScrollText, adminOnly: A },
       { to: '/emissions',              label: 'Emissions Tests', parent: 'Compliance',     icon: Leaf, adminOnly: A },
@@ -330,18 +335,13 @@ const NAV_GROUPS = [
     label: 'Analytics & Reports',
     items: [
       { to: '/board-overview',    label: 'Board Overview', parent: 'Dashboards',    icon: BarChartBig, roles: ANALYTICS_ROLES },
-      { to: '/executive-report',  label: 'Executive Report', parent: 'Dashboards',  icon: BookOpen, adminOnly: A },
-      { to: '/executive-analytics', label: 'Executive Analytics', parent: 'Dashboards', icon: TrendingUp, roles: ANALYTICS_ROLES },
-      { to: '/analytics',    label: 'Analytics', parent: 'Dashboards',          icon: BarChart2,      roles: ANALYTICS_ROLES },
+      { to: '/executive',  label: 'Executive', parent: 'Dashboards',  icon: BookOpen, anyOf: EXECUTIVE_MEMBERS },
       { to: '/advanced-analytics',     label: 'Advanced Analytics', parent: 'Dashboards',     icon: BarChartBig, roles: ANALYTICS_ROLES },
       { to: '/kpi',          label: 'KPI Center', parent: 'KPIs',         icon: ClipboardCheck, roles: ANALYTICS_ROLES },
-      { to: '/kpi-engine',   label: 'Engineering KPI', parent: 'KPIs',    icon: Gauge,          roles: ANALYTICS_ROLES },
-      { to: '/kpi-command',  label: 'KPI Command Center', parent: 'KPIs', icon: Target,         roles: ANALYTICS_ROLES },
       { to: '/benchmark',              label: 'Performance Benchmark', parent: 'KPIs',  icon: Target, adminOnly: A },
       { to: '/sla-dashboard',     label: 'SLA Dashboard', parent: 'KPIs',     icon: Target, adminOnly: A },
       { to: '/site-comp',    label: 'Site Comparison', parent: 'Comparison',    icon: Layers,         roles: ANALYTICS_ROLES },
       { to: '/country-comp', label: 'Country Comparison', parent: 'Comparison', icon: Globe,          roles: ANALYTICS_ROLES },
-      { to: '/comparison',   label: 'Comparison', parent: 'Comparison',         icon: GitCompare,     roles: ANALYTICS_ROLES },
       { to: '/fleet',        label: 'Fleet Analytics', parent: 'Comparison',    icon: GitBranch,      roles: ANALYTICS_ROLES },
       { to: '/fleet-intelligence',     label: 'Fleet Intelligence', parent: 'Intelligence',     icon: Brain, roles: ANALYTICS_ROLES },
       { to: '/ops-intelligence',  label: 'Ops Intelligence', parent: 'Intelligence',  icon: Siren, adminOnly: A },
@@ -375,9 +375,6 @@ const NAV_GROUPS = [
     label: 'Administration',
     items: [
       { to: '/data-intake',      label: 'Data Intake Center', parent: 'Data', icon: Database, roles: ['Admin', 'Manager', 'Director'] },
-      { to: '/erp-import',       label: 'ERP Data Import', parent: 'Data',    icon: Upload, roles: ANALYTICS_ROLES },
-      { to: '/erp-intake',       label: 'Data Intake (ERP)', parent: 'Data', icon: Layers, roles: ANALYTICS_ROLES },
-      { to: '/expense-import',   label: 'Expense Import', parent: 'Data',     icon: Receipt, roles: ANALYTICS_ROLES },
       { to: '/upload-approvals', label: 'Upload Approvals', parent: 'Data',   icon: ClipboardList, roles: UPLOAD_ROLES },
       { to: '/cleaning',         label: 'Data Cleaning', parent: 'Data',      icon: Wand2, roles: CLEANING_ROLES },
       { to: '/data-reconciliation', label: 'Data Reconciliation', parent: 'Data', icon: GitCompare, adminOnly: true },
@@ -422,7 +419,14 @@ function shouldShowGroup(group, profile) {
   return group.groupRoles.includes(profile?.role)
 }
 
-function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry) {
+function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry, moduleStatus) {
+  // A grouped entry (one menu item for several pages that keep their own access
+  // rules): shown when the user would have seen at least one member, each judged
+  // by the unchanged rules below, and that member is not switched Off.
+  if (Array.isArray(item.anyOf)) {
+    return item.anyOf.some((m) => shouldShowNavItem(m, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry, moduleStatus)
+      && !(moduleStatus && isPathSwitchedOff(m.to, moduleStatus)))
+  }
   // Feature-flag gate first: a disabled capability is hidden entirely, so its
   // nav item never renders (not just redirected at the route).
   if (item.flag && isFlagEnabled && !isFlagEnabled(item.flag)) return false
@@ -946,7 +950,7 @@ export default function Layout({ children }) {
     const entry = navByRoute.get(route)
     if (!entry) return false
     return Boolean(
-      shouldShowNavItem(entry.item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry)
+      shouldShowNavItem(entry.item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry, moduleStatus)
         && !isPathSwitchedOff(entry.item.to, moduleStatus),
     )
   }, [navByRoute, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry, moduleStatus])
@@ -1323,7 +1327,7 @@ export default function Layout({ children }) {
             // React key, collapse state, and translation lookup.
             const groupId = group.key || group.label
             if (!shouldShowGroup(group, profile)) return null
-            const visibleItems = items.filter(item => shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry) && !isPathSwitchedOff(item.to, moduleStatus) && matchesModule(item, group))
+            const visibleItems = items.filter(item => shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry, moduleStatus) && !isPathSwitchedOff(item.to, moduleStatus) && matchesModule(item, group))
             if (visibleItems.length === 0) return null
             const isCollapsed = !normalizedModuleQuery && collapsedGroups.has(groupId)
             const groupHeading = groupHeadingFor(t, group)

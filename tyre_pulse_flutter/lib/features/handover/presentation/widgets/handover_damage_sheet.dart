@@ -240,7 +240,8 @@ class _HandoverDamageFormState extends ConsumerState<_HandoverDamageForm> {
                     isBusy: _capturing,
                     onPressed: _capturing
                         ? null
-                        : () => unawaited(_capture(HandoverPhotoSource.gallery)),
+                        : () =>
+                            unawaited(_capture(HandoverPhotoSource.gallery)),
                   ),
                 ),
               ],

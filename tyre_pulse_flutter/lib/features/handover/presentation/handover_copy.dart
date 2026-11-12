@@ -51,7 +51,10 @@ TpStatus handoverCleanlinessTone(HandoverCleanliness cleanliness) =>
       HandoverCleanliness.dirty => TpStatus.critical,
     };
 
-String handoverDamageViewLabel(AppLocalizations l10n, HandoverDamageView view) =>
+String handoverDamageViewLabel(
+  AppLocalizations l10n,
+  HandoverDamageView view,
+) =>
     switch (view) {
       HandoverDamageView.front => l10n.handoverViewFront,
       HandoverDamageView.rear => l10n.handoverViewRear,
@@ -60,7 +63,10 @@ String handoverDamageViewLabel(AppLocalizations l10n, HandoverDamageView view) =
       HandoverDamageView.top => l10n.handoverViewTop,
     };
 
-String handoverDamageTypeLabel(AppLocalizations l10n, HandoverDamageType type) =>
+String handoverDamageTypeLabel(
+  AppLocalizations l10n,
+  HandoverDamageType type,
+) =>
     switch (type) {
       HandoverDamageType.scratch => l10n.handoverDamageScratch,
       HandoverDamageType.dent => l10n.handoverDamageDent,
@@ -102,7 +108,9 @@ String handoverStatusText(AppLocalizations l10n, String? approvalStatus) {
 }
 
 TpStatus handoverStatusTone(String? approvalStatus) {
-  return switch (statusSummary(HandoverApprovalLike(approvalStatus: approvalStatus)).tone) {
+  return switch (
+      statusSummary(HandoverApprovalLike(approvalStatus: approvalStatus))
+          .tone) {
     HandoverStatusTone.good => TpStatus.ok,
     HandoverStatusTone.bad => TpStatus.critical,
     HandoverStatusTone.warn => TpStatus.warning,

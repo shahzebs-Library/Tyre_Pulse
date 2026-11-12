@@ -629,10 +629,15 @@ void main() {
     // (share, title, details, signatures, pending, generated{date},
     // share-failed) and the signature pad saved/redraw labels
     // (handoverNavTitle ... handoverSignatureRedraw).
-    test('en, ar and ur each carry exactly 2451 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2451);
-      expect(_translatableKeys(ar).length, 2451);
-      expect(_translatableKeys(ur).length, 2451);
+    // 2451 + 7 = 2458. The second sign-in step for an account with a verified
+    // authenticator factor (the MFA gate): the title, the instruction, the
+    // code field label, the verify button, the incomplete-code message, the
+    // refused-code message and the could-not-check message
+    // (mfaTitle ... mfaVerifyUnavailable). Sign out reuses actionSignOut.
+    test('en, ar and ur each carry exactly 2458 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2458);
+      expect(_translatableKeys(ar).length, 2458);
+      expect(_translatableKeys(ur).length, 2458);
     });
   });
 

@@ -13,7 +13,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:tyre_pulse/app/localization/tp_direction.dart' show TpIdentifierText;
+import 'package:tyre_pulse/app/localization/tp_direction.dart'
+    show TpIdentifierText;
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/back_navigation.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
@@ -106,8 +107,9 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
 
   Future<void> _restore() async {
     final String userKey = _userKey;
-    final HandoverDraft? draft =
-        userKey.isEmpty ? null : await ref.read(handoverDraftStoreProvider).read(userKey);
+    final HandoverDraft? draft = userKey.isEmpty
+        ? null
+        : await ref.read(handoverDraftStoreProvider).read(userKey);
     if (!mounted) return;
     setState(() {
       if (draft != null && !draft.isEmpty) {
@@ -234,7 +236,8 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
       );
       return;
     }
-    if (_fuel.text.trim().isNotEmpty && (fuelPct == null || fuelPct < 0 || fuelPct > 100)) {
+    if (_fuel.text.trim().isNotEmpty &&
+        (fuelPct == null || fuelPct < 0 || fuelPct > 100)) {
       await showHandoverInfoDialog(
         context,
         title: l10n.handoverNewTitle,
@@ -247,7 +250,8 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
     final HandoverPayload payload = HandoverPayload(
       assetNo: _assetNo.trim(),
       handoverType: _handoverType,
-      fromDriver: _fromDriver.text.trim().isEmpty ? null : _fromDriver.text.trim(),
+      fromDriver:
+          _fromDriver.text.trim().isEmpty ? null : _fromDriver.text.trim(),
       toDriver: _toDriver.text.trim().isEmpty ? null : _toDriver.text.trim(),
       handoverAt: DateTime.now().toUtc(),
       odometerKm: odometerKm,
@@ -368,7 +372,8 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
     );
   }
 
-  String _stepLabel(AppLocalizations l10n, _HandoverStep step) => switch (step) {
+  String _stepLabel(AppLocalizations l10n, _HandoverStep step) =>
+      switch (step) {
         _HandoverStep.vehicle => l10n.handoverStepVehicle,
         _HandoverStep.condition => l10n.handoverStepCondition,
         _HandoverStep.photos => l10n.handoverStepPhotos,
@@ -409,7 +414,8 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
                         label: l10n.handoverSubmit,
                         icon: Icons.check_circle_outline,
                         isBusy: _submitting,
-                        onPressed: _submitting ? null : () => unawaited(_submit()),
+                        onPressed:
+                            _submitting ? null : () => unawaited(_submit()),
                       )
                     : TpButton.primary(
                         label: l10n.handoverNext,
@@ -512,7 +518,7 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
     String code,
     AsyncValue<VehicleFleetListOutcome> fleet,
   ) {
-    final List<VehicleAsset> assets = _assetsOf(fleet.valueOrNull);
+    final List<VehicleAsset> assets = _assetsOf(fleet.value);
     final String wanted = code.trim().toUpperCase();
     for (final VehicleAsset a in assets) {
       if ((a.assetNo ?? '').trim().toUpperCase() == wanted) return a;
@@ -551,7 +557,8 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
               child: TpInput(
                 label: l10n.handoverOdometerLabel,
                 controller: _odometer,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
               ),
             ),
             const SizedBox(width: TpSpace.md),
@@ -559,7 +566,8 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
               child: TpInput(
                 label: l10n.handoverFuelLabel,
                 controller: _fuel,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
               ),
             ),
           ],
@@ -643,8 +651,11 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
               child: _DamageRow(
                 marker: _damages[i],
                 onEdit: () => unawaited(_editDamage(i)),
-                onRemove: () =>
-                    _mutate(() => _damages = <HandoverDamageMarker>[..._damages]..removeAt(i)),
+                onRemove: () => _mutate(
+                  () => _damages = <HandoverDamageMarker>[
+                    ..._damages,
+                  ]..removeAt(i),
+                ),
               ),
             ),
         const SizedBox(height: TpSpace.sm),
@@ -700,7 +711,8 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
 
   Future<void> _choosePhotoSource() async {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final HandoverPhotoSource? source = await TpBottomSheet.show<HandoverPhotoSource>(
+    final HandoverPhotoSource? source =
+        await TpBottomSheet.show<HandoverPhotoSource>(
       context: context,
       title: l10n.handoverPhotosLabel,
       builder: (BuildContext sheetContext) => Padding(
@@ -808,7 +820,10 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
     final VehicleAsset? asset = _assetFor(_assetNo, fleet);
     final List<(String, String)> rows = <(String, String)>[
       (l10n.handoverTypeLabel, handoverTypeLabel(l10n, _handoverType)),
-      (l10n.handoverVehicleLabel, _assetNo.isEmpty ? l10n.valueUnavailable : _assetNo),
+      (
+        l10n.handoverVehicleLabel,
+        _assetNo.isEmpty ? l10n.valueUnavailable : _assetNo
+      ),
       if (_fromDriver.text.trim().isNotEmpty)
         (l10n.handoverFromDriverLabel, _fromDriver.text.trim()),
       if (_toDriver.text.trim().isNotEmpty)
@@ -818,14 +833,22 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
       if (_fuel.text.trim().isNotEmpty)
         (l10n.handoverFuelLabel, '${_fuel.text.trim()}%'),
       if (_condition != null)
-        (l10n.handoverConditionLabel, handoverConditionLabel(l10n, _condition!)),
+        (
+          l10n.handoverConditionLabel,
+          handoverConditionLabel(l10n, _condition!)
+        ),
       if (_cleanliness != null)
-        (l10n.handoverCleanlinessLabel, handoverCleanlinessLabel(l10n, _cleanliness!)),
+        (
+          l10n.handoverCleanlinessLabel,
+          handoverCleanlinessLabel(l10n, _cleanliness!)
+        ),
       (l10n.handoverDamageSectionTitle, '${_damages.length}'),
       (l10n.handoverPhotosLabel, '${_photos.length}'),
       (
         l10n.handoverSignatureLabel,
-        _signature == null ? l10n.handoverSignatureMissing : l10n.handoverSignatureSaved,
+        _signature == null
+            ? l10n.handoverSignatureMissing
+            : l10n.handoverSignatureSaved,
       ),
     ];
     return ListView(
@@ -1022,7 +1045,9 @@ class _AssetResults extends StatelessWidget {
         if (matches.isEmpty) {
           return TpCard(
             child: Text(
-              q.isEmpty ? l10n.handoverVehicleStartTyping : l10n.handoverVehicleNoMatch,
+              q.isEmpty
+                  ? l10n.handoverVehicleStartTyping
+                  : l10n.handoverVehicleNoMatch,
               style: Theme.of(context).textTheme.bodySmall,
             ),
           );
@@ -1050,7 +1075,8 @@ class _AssetResults extends StatelessWidget {
                             Text(
                               <String?>[a.make, a.model, a.vehicleType]
                                   .where(
-                                    (String? v) => v != null && v.trim().isNotEmpty,
+                                    (String? v) =>
+                                        v != null && v.trim().isNotEmpty,
                                   )
                                   .map((String? v) => v!.trim())
                                   .join(' - '),

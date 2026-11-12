@@ -195,9 +195,9 @@ final class SupabaseHandoverRemoteRepository
           .from(SupabaseTables.handoverReports)
           .select(handoverRecordColumns)
           .inFilter(
-            'approval_status',
-            <String>['pending_supervisor', 'pending_incharge'],
-          );
+        'approval_status',
+        <String>['pending_supervisor', 'pending_incharge'],
+      );
       final String? filter = handoverCountryFilter(country);
       if (filter != null) {
         query = query.or(filter);

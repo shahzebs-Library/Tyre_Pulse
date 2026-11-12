@@ -391,6 +391,21 @@ abstract final class SupabaseRpcs {
   /// not re-derive it.
   static const String getScheduleAdherence = 'get_schedule_adherence';
 
+  /// The staff directory: names, employee id, role and scope of every member
+  /// of the caller's own organisation, with NO contact data (no email, phone,
+  /// push token or notes). SECURITY DEFINER, organisation resolved server-side,
+  /// active callers only. Created by
+  /// `supabase/migrations/20261112170000_profile_directory_and_private_readers.sql`
+  /// and VERIFIED live 2026-11-12 by impersonation. Signature `(p_ids uuid[],
+  /// p_search text, p_limit int, p_offset int, p_roles text[],
+  /// p_active_only boolean)`, every argument optional.
+  ///
+  /// This is the reader for OTHER people's names. A select on `profiles` is
+  /// for the caller's own row and the admin screens: the table's row policy is
+  /// to be narrowed to "own row or elevated", after which a name lookup on the
+  /// table returns nothing for an ordinary role.
+  static const String listProfileDirectory = 'list_profile_directory';
+
   // --- Problem tracking ---
 
   /// "Report a problem". SECURITY DEFINER: stamps reporter, company, country,
@@ -468,6 +483,7 @@ abstract final class SupabaseRpcs {
     referenceSiteOptions,
     getMobileAnalytics,
     getScheduleAdherence,
+    listProfileDirectory,
     getReportSnapshotAuthed,
     submitUserIssue,
     getAccidentAudit,
@@ -494,6 +510,11 @@ abstract final class SupabaseRpcs {
     /// thousands - but the ceiling is real and the repository reports when a
     /// result touches it rather than quietly showing a short list.
     getScheduleAdherence,
+
+    /// Capped at 1000 rows per call by the function itself. Callers either
+    /// pass the ids they need or a search term with a small `p_limit`; a full
+    /// listing must page with `p_offset`.
+    listProfileDirectory,
   };
 }
 

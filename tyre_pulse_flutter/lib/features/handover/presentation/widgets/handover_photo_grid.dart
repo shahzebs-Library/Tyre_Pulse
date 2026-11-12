@@ -14,7 +14,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
-import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/storage/private_storage_reference_resolver.dart';
 import 'package:tyre_pulse/core/storage/storage_providers.dart';
 
@@ -156,8 +155,11 @@ class _PhotoTile extends ConsumerWidget {
       final Uri? uri = Uri.tryParse(value);
       final UriData? data = uri?.data;
       if (data != null && data.mimeType.toLowerCase().startsWith('image/')) {
-        return Image.memory(data.contentAsBytes(),
-            fit: BoxFit.cover, errorBuilder: _broken);
+        return Image.memory(
+          data.contentAsBytes(),
+          fit: BoxFit.cover,
+          errorBuilder: _broken,
+        );
       }
       return _unavailable(context);
     }

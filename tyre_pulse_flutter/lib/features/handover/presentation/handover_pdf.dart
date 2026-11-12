@@ -125,7 +125,9 @@ Future<Uint8List> buildHandoverPdf({
     ],
     <String>[
       l10n.handoverOdometerLabel,
-      record.odometerKm == null ? notRecorded : '${num2(record.odometerKm!)} km',
+      record.odometerKm == null
+          ? notRecorded
+          : '${num2(record.odometerKm!)} km',
     ],
     <String>[
       l10n.handoverFuelLabel,
@@ -158,9 +160,11 @@ Future<Uint8List> buildHandoverPdf({
   final List<pw.Widget> damageBlock = <pw.Widget>[];
   if (record.damages.isNotEmpty) {
     damageBlock
-      ..add(sectionTitle(
-        '${l10n.handoverDamageSectionTitle} (${record.effectiveDamageCount})',
-      ))
+      ..add(
+        sectionTitle(
+          '${l10n.handoverDamageSectionTitle} (${record.effectiveDamageCount})',
+        ),
+      )
       ..add(
         pw.TableHelper.fromTextArray(
           headers: <String>[

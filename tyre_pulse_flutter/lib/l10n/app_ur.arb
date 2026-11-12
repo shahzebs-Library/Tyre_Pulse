@@ -3452,5 +3452,12 @@
   "handoverPdfShareFailed": "رپورٹ شیئر نہ ہو سکی۔",
   "handoverSignatureSaved": "دستخط محفوظ",
   "handoverSignatureRedraw": "نئے دستخط بنائیں",
-  "handoverPdfGenerated": "تیار کردہ {date}"
+  "handoverPdfGenerated": "تیار کردہ {date}",
+  "mfaTitle": "دو مرحلہ تصدیق",
+  "mfaMessage": "سائن اِن مکمل کرنے کے لیے اپنی تصدیقی ایپ کا 6 ہندسوں کا کوڈ درج کریں۔",
+  "mfaCodeLabel": "تصدیقی کوڈ",
+  "mfaVerifyAction": "تصدیق کریں",
+  "mfaCodeIncomplete": "کوڈ کے تمام 6 ہندسے درج کریں۔",
+  "mfaCodeInvalid": "یہ کوڈ قبول نہیں ہوا۔ اپنی تصدیقی ایپ دیکھیں اور دوبارہ کوشش کریں۔",
+  "mfaVerifyUnavailable": "کوڈ ابھی چیک نہیں ہو سکا۔ کنکشن چیک کریں اور دوبارہ کوشش کریں۔"
 }

@@ -8478,4 +8478,28 @@ class AppLocalizationsUr extends AppLocalizations {
   String handoverPdfGenerated(String date) {
     return 'تیار کردہ $date';
   }
+
+  @override
+  String get mfaTitle => 'دو مرحلہ تصدیق';
+
+  @override
+  String get mfaMessage =>
+      'سائن اِن مکمل کرنے کے لیے اپنی تصدیقی ایپ کا 6 ہندسوں کا کوڈ درج کریں۔';
+
+  @override
+  String get mfaCodeLabel => 'تصدیقی کوڈ';
+
+  @override
+  String get mfaVerifyAction => 'تصدیق کریں';
+
+  @override
+  String get mfaCodeIncomplete => 'کوڈ کے تمام 6 ہندسے درج کریں۔';
+
+  @override
+  String get mfaCodeInvalid =>
+      'یہ کوڈ قبول نہیں ہوا۔ اپنی تصدیقی ایپ دیکھیں اور دوبارہ کوشش کریں۔';
+
+  @override
+  String get mfaVerifyUnavailable =>
+      'کوڈ ابھی چیک نہیں ہو سکا۔ کنکشن چیک کریں اور دوبارہ کوشش کریں۔';
 }

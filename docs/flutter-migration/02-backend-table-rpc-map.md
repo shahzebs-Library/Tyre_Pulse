@@ -404,3 +404,13 @@ does not reference them by string literal.
 | `handover_reports` direct UPDATE of the approval columns | Refused outside the RPC by `20261112143000` (the forgery guard) | n/a | **Not used.** The app never writes a signature or status directly; every decision goes through `decide_handover_approval` |
 | `decide_handover_approval(p_id uuid, p_approved boolean, p_signature text default null, p_note text default null)` | `20261112130000` | DEFINER; the supervisor rung is signable by `app_is_elevated()` OR `Fleet Supervisor` / `Fleet Incharge`, the incharge rung by super / Admin / `Fleet Incharge`; an incharge-level signer at the supervisor rung closes both (`both_steps`); a reject needs a note. Returns `{ok, decision, status, both_steps}` | `HandoverRemoteRepository.decide(HandoverDecision)`. The approve path must carry `p_signature`; the UI pre-checks it with the pure `handover_approval.dart` (`canDecide` / `stageFor`) only to show or hide the sign-off bar - the server stays the authority |
 | Bucket `tyre-photos` | Pre-existing private bucket (authenticated upload) | Private; `tp-storage://` refs resolved to short-lived signed URLs by the shared `privateStorageImageUrlProvider` | `HandoverPhotoUploader` uploads each capture photo (general and per-marker) to `handover/<id>/<slot>_<microsecond>.<ext>` and returns `tp-storage://tyre-photos/<path>`; the sync engine swaps the local paths for the refs before the row write |
+
+### 7.13 Multi-factor sign-in step (added 2026-11-12)
+
+No table, RPC or edge function. `lib/core/auth/mfa_repository.dart` uses only
+the Supabase Auth (GoTrue) MFA endpoints through `supabase_flutter`:
+`auth.mfa.getAuthenticatorAssuranceLevel` (local, reads the access token),
+`auth.mfa.listFactors` (fallback only) and `auth.mfa.challengeAndVerify`.
+The server rule it serves is `20261112160000_super_admin_requires_mfa_session.sql`
+(a super admin with a verified factor is one only at `aal2`). See artifact 03
+section 9.1.

@@ -38,6 +38,7 @@ import 'package:tyre_pulse/core/auth/auth_profile_repository.dart';
 import 'package:tyre_pulse/core/auth/auth_repository.dart';
 import 'package:tyre_pulse/core/auth/auth_version_gate_repository.dart';
 import 'package:tyre_pulse/core/auth/foreground_signal.dart';
+import 'package:tyre_pulse/core/auth/mfa_repository.dart';
 import 'package:tyre_pulse/core/auth/profile_cache.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
 import 'package:tyre_pulse/core/storage/storage_providers.dart';
@@ -69,6 +70,11 @@ final Provider<ProfileCache> profileCacheProvider = Provider<ProfileCache>(
 final Provider<AuthRepository> authRepositoryProvider =
     Provider<AuthRepository>(
   (ref) => SupabaseAuthRepository(ref.watch(supabaseClientProvider)),
+);
+
+/// The second sign-in step for an account with a verified MFA factor.
+final Provider<MfaRepository> mfaRepositoryProvider = Provider<MfaRepository>(
+  (ref) => SupabaseMfaRepository(ref.watch(supabaseClientProvider)),
 );
 
 /// Loading the `profiles` row, with an offline fallback.

@@ -42,7 +42,8 @@ import 'package:tyre_pulse/features/handover/domain/handover_payload.dart';
 /// that only coordinate several claimants would carry no information here.
 enum HandoverQueueStatus { pending, synced, failed }
 
-String handoverQueueStatusToWire(HandoverQueueStatus status) => switch (status) {
+String handoverQueueStatusToWire(HandoverQueueStatus status) =>
+    switch (status) {
       HandoverQueueStatus.pending => 'pending',
       HandoverQueueStatus.synced => 'synced',
       HandoverQueueStatus.failed => 'failed',
@@ -193,9 +194,9 @@ class QueuedHandover {
                   HandoverDamageLevel.minor,
               x: (m['x'] as num?)?.toDouble(),
               y: (m['y'] as num?)?.toDouble(),
-              note: (m['note'] as Object?)?.toString(),
-              photoUrl: (m['photo_url'] as Object?)?.toString(),
-              photoLocalPath: (m['photoLocalPath'] as Object?)?.toString(),
+              note: m['note']?.toString(),
+              photoUrl: m['photo_url']?.toString(),
+              photoLocalPath: m['photoLocalPath']?.toString(),
             ),
           );
         }

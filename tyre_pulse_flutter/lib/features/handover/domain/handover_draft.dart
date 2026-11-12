@@ -145,9 +145,9 @@ class HandoverDraft {
                   HandoverDamageLevel.minor,
               x: (m['x'] as num?)?.toDouble(),
               y: (m['y'] as num?)?.toDouble(),
-              note: (m['note'] as Object?)?.toString(),
-              photoUrl: (m['photo_url'] as Object?)?.toString(),
-              photoLocalPath: (m['photoLocalPath'] as Object?)?.toString(),
+              note: m['note']?.toString(),
+              photoUrl: m['photo_url']?.toString(),
+              photoLocalPath: m['photoLocalPath']?.toString(),
             ),
           );
         }

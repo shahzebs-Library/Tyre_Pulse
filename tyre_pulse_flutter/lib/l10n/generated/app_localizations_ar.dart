@@ -8474,4 +8474,28 @@ class AppLocalizationsAr extends AppLocalizations {
   String handoverPdfGenerated(String date) {
     return 'تم الإنشاء في $date';
   }
+
+  @override
+  String get mfaTitle => 'التحقق بخطوتين';
+
+  @override
+  String get mfaMessage =>
+      'أدخل الرمز المكوّن من 6 أرقام من تطبيق المصادقة لإكمال تسجيل الدخول.';
+
+  @override
+  String get mfaCodeLabel => 'رمز التحقق';
+
+  @override
+  String get mfaVerifyAction => 'تحقق';
+
+  @override
+  String get mfaCodeIncomplete => 'أدخل أرقام الرمز الستة كاملة.';
+
+  @override
+  String get mfaCodeInvalid =>
+      'لم يُقبل هذا الرمز. راجع تطبيق المصادقة وحاول مرة أخرى.';
+
+  @override
+  String get mfaVerifyUnavailable =>
+      'تعذّر التحقق من الرمز الآن. تحقق من الاتصال وحاول مرة أخرى.';
 }

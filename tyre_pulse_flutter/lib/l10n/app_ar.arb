@@ -3452,5 +3452,12 @@
   "handoverPdfShareFailed": "تعذّرت مشاركة التقرير.",
   "handoverSignatureSaved": "تم حفظ التوقيع",
   "handoverSignatureRedraw": "ارسم توقيعًا جديدًا",
-  "handoverPdfGenerated": "تم الإنشاء في {date}"
+  "handoverPdfGenerated": "تم الإنشاء في {date}",
+  "mfaTitle": "التحقق بخطوتين",
+  "mfaMessage": "أدخل الرمز المكوّن من 6 أرقام من تطبيق المصادقة لإكمال تسجيل الدخول.",
+  "mfaCodeLabel": "رمز التحقق",
+  "mfaVerifyAction": "تحقق",
+  "mfaCodeIncomplete": "أدخل أرقام الرمز الستة كاملة.",
+  "mfaCodeInvalid": "لم يُقبل هذا الرمز. راجع تطبيق المصادقة وحاول مرة أخرى.",
+  "mfaVerifyUnavailable": "تعذّر التحقق من الرمز الآن. تحقق من الاتصال وحاول مرة أخرى."
 }

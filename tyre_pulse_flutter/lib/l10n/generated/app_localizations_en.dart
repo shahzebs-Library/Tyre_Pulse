@@ -8461,4 +8461,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String handoverPdfGenerated(String date) {
     return 'Generated $date';
   }
+
+  @override
+  String get mfaTitle => 'Two-step verification';
+
+  @override
+  String get mfaMessage =>
+      'Enter the 6-digit code from your authenticator app to finish signing in.';
+
+  @override
+  String get mfaCodeLabel => 'Verification code';
+
+  @override
+  String get mfaVerifyAction => 'Verify';
+
+  @override
+  String get mfaCodeIncomplete => 'Enter all 6 digits of the code.';
+
+  @override
+  String get mfaCodeInvalid =>
+      'That code was not accepted. Check your authenticator app and try again.';
+
+  @override
+  String get mfaVerifyUnavailable =>
+      'The code could not be checked right now. Check your connection and try again.';
 }

@@ -224,6 +224,7 @@ void main() {
         ModuleKey.washing,
         ModuleKey.reportIssue,
         ModuleKey.repairRequest,
+        ModuleKey.handover,
         ModuleKey.vehicles,
       });
     });

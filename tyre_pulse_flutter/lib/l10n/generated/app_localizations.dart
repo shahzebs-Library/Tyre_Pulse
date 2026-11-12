@@ -14806,6 +14806,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Generated {date}'**
   String handoverPdfGenerated(String date);
+
+  /// No description provided for @mfaTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Two-step verification'**
+  String get mfaTitle;
+
+  /// No description provided for @mfaMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the 6-digit code from your authenticator app to finish signing in.'**
+  String get mfaMessage;
+
+  /// No description provided for @mfaCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification code'**
+  String get mfaCodeLabel;
+
+  /// No description provided for @mfaVerifyAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify'**
+  String get mfaVerifyAction;
+
+  /// No description provided for @mfaCodeIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter all 6 digits of the code.'**
+  String get mfaCodeIncomplete;
+
+  /// No description provided for @mfaCodeInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'That code was not accepted. Check your authenticator app and try again.'**
+  String get mfaCodeInvalid;
+
+  /// No description provided for @mfaVerifyUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The code could not be checked right now. Check your connection and try again.'**
+  String get mfaVerifyUnavailable;
 }
 
 class _AppLocalizationsDelegate

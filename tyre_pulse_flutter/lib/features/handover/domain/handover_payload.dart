@@ -250,8 +250,8 @@ List<HandoverSubmitIssue> validateHandoverForSubmit(HandoverPayload payload) {
   if (payload.assetNo.trim().isEmpty) {
     issues.add(HandoverSubmitIssue.missingVehicle);
   }
-  final bool hasFrom = (payload.fromDriver?.trim().isNotEmpty) ?? false;
-  final bool hasTo = (payload.toDriver?.trim().isNotEmpty) ?? false;
+  final bool hasFrom = payload.fromDriver?.trim().isNotEmpty ?? false;
+  final bool hasTo = payload.toDriver?.trim().isNotEmpty ?? false;
   if (!hasFrom && !hasTo) {
     issues.add(HandoverSubmitIssue.missingDriver);
   }

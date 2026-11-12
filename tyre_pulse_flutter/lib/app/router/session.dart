@@ -57,6 +57,11 @@ enum TpShellGate {
 
   /// The account is not approved, or is locked.
   accessBlocked,
+
+  /// The account has a verified multi-factor method and this session has not
+  /// passed it yet. Checked before anything is known about the profile: the
+  /// profile is not even read until the code is accepted.
+  mfaRequired,
 }
 
 /// What navigation knows about the current user.

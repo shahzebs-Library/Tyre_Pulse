@@ -27,7 +27,8 @@ void main() {
   });
 
   group('who may act on a rung', () {
-    test('the supervisor rung admits the supervisor and the elevated roles', () {
+    test('the supervisor rung admits the supervisor and the elevated roles',
+        () {
       for (final String role in <String>[
         'Fleet Supervisor',
         'fleet_supervisor',
@@ -57,7 +58,10 @@ void main() {
       // Manager and Director sign the supervisor rung only.
       expect(canActOnStage(HandoverStage.incharge, 'Manager'), isFalse);
       expect(canActOnStage(HandoverStage.incharge, 'Director'), isFalse);
-      expect(canActOnStage(HandoverStage.incharge, 'Fleet Supervisor'), isFalse);
+      expect(
+        canActOnStage(HandoverStage.incharge, 'Fleet Supervisor'),
+        isFalse,
+      );
     });
 
     test('a super admin passes any rung, and even a null rung directly', () {
@@ -109,16 +113,25 @@ void main() {
   group('closesInOneSign', () {
     test('an incharge-signer at the supervisor rung closes both', () {
       expect(closesInOneSign(at('pending_supervisor'), 'Admin'), isTrue);
-      expect(closesInOneSign(at('pending_supervisor'), 'Fleet Incharge'), isTrue);
       expect(
-        closesInOneSign(at('pending_supervisor'), 'Reporter', isSuperAdmin: true),
+        closesInOneSign(at('pending_supervisor'), 'Fleet Incharge'),
+        isTrue,
+      );
+      expect(
+        closesInOneSign(
+          at('pending_supervisor'),
+          'Reporter',
+          isSuperAdmin: true,
+        ),
         isTrue,
       );
     });
 
     test('a plain supervisor at the supervisor rung does NOT close both', () {
-      expect(closesInOneSign(at('pending_supervisor'), 'Fleet Supervisor'),
-          isFalse);
+      expect(
+        closesInOneSign(at('pending_supervisor'), 'Fleet Supervisor'),
+        isFalse,
+      );
       expect(closesInOneSign(at('pending_supervisor'), 'Manager'), isFalse);
     });
 
@@ -130,7 +143,11 @@ void main() {
   group('nextStatusFor', () {
     test('a rejection always resolves to rejected, at either rung', () {
       expect(
-        nextStatusFor(at('pending_supervisor'), false, role: 'Fleet Supervisor'),
+        nextStatusFor(
+          at('pending_supervisor'),
+          false,
+          role: 'Fleet Supervisor',
+        ),
         'rejected',
       );
       expect(
@@ -182,7 +199,7 @@ void main() {
 
   group('approvalProgress', () {
     test('always two rungs, filled from the right column sets', () {
-      final HandoverApprovalLike sub = HandoverApprovalLike(
+      const HandoverApprovalLike sub = HandoverApprovalLike(
         approvalStatus: 'pending_incharge',
         supervisorName: 'Sara',
         supervisorSignature: 'data:image/png;base64,AAA',
@@ -208,7 +225,8 @@ void main() {
     });
 
     test('a pending_supervisor handover has the first rung current', () {
-      final List<HandoverRung> rungs = approvalProgress(at('pending_supervisor'));
+      final List<HandoverRung> rungs =
+          approvalProgress(at('pending_supervisor'));
       expect(rungs[0].current, isTrue);
       expect(rungs[0].done, isFalse);
       expect(rungs[1].done, isFalse);

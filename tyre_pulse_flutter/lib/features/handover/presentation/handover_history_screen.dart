@@ -12,7 +12,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:tyre_pulse/app/localization/tp_direction.dart' show TpIdentifierText;
+import 'package:tyre_pulse/app/localization/tp_direction.dart'
+    show TpIdentifierText;
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
@@ -85,7 +86,9 @@ class _HandoverHistoryScreenState extends ConsumerState<HandoverHistoryScreen> {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final AsyncValue<int> pending = ref.watch(handoverPendingCountProvider);
     final AsyncValue<List<HandoverRecord>> records = ref.watch(
-      _scope == _HandoverScope.mine ? myHandoversProvider : pendingHandoversProvider,
+      _scope == _HandoverScope.mine
+          ? myHandoversProvider
+          : pendingHandoversProvider,
     );
 
     return TpScaffold(
@@ -131,9 +134,14 @@ class _HandoverHistoryScreenState extends ConsumerState<HandoverHistoryScreen> {
                 onChanged: (_HandoverScope s) => setState(() => _scope = s),
               ),
             ),
-            if ((pending.valueOrNull ?? 0) > 0)
+            if ((pending.value ?? 0) > 0)
               Padding(
-                padding: const EdgeInsets.fromLTRB(TpSpace.lg, 0, TpSpace.lg, TpSpace.sm),
+                padding: const EdgeInsets.fromLTRB(
+                  TpSpace.lg,
+                  0,
+                  TpSpace.lg,
+                  TpSpace.sm,
+                ),
                 child: _PendingSyncBanner(count: pending.value!),
               ),
             Expanded(
@@ -142,7 +150,8 @@ class _HandoverHistoryScreenState extends ConsumerState<HandoverHistoryScreen> {
                 child: records.when(
                   loading: () => const TpLoadingState(),
                   error: (Object error, StackTrace stack) => TpErrorState(
-                    error: handoverAsAppError(error, l10n.handoverListLoadFailed),
+                    error:
+                        handoverAsAppError(error, l10n.handoverListLoadFailed),
                     onRetry: _refresh,
                   ),
                   data: (List<HandoverRecord> list) {
@@ -161,7 +170,8 @@ class _HandoverHistoryScreenState extends ConsumerState<HandoverHistoryScreen> {
                             actionLabel: _scope == _HandoverScope.mine
                                 ? l10n.handoverNewAction
                                 : null,
-                            onAction: _scope == _HandoverScope.mine ? _openNew : null,
+                            onAction:
+                                _scope == _HandoverScope.mine ? _openNew : null,
                           ),
                         ],
                       );
@@ -241,7 +251,8 @@ class _HandoverCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
-    final String? when = formatHandoverDateTime(record.handoverAt ?? record.createdAt);
+    final String? when =
+        formatHandoverDateTime(record.handoverAt ?? record.createdAt);
     final String typeLabel = record.handoverType == null
         ? l10n.handoverNavTitle
         : handoverTypeLabel(l10n, record.handoverType!);

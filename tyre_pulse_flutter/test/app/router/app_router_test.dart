@@ -405,6 +405,24 @@ void main() {
       expect(find.text(TpRouteId.meterLog), findsNothing);
     });
 
+    testWidgets('an owed multi-factor code blocks the app, deep link or not', (
+      WidgetTester tester,
+    ) async {
+      final GoRouter router = await pumpApp(
+        tester,
+        session: const TpSession.signedIn(gate: TpShellGate.mfaRequired),
+      );
+
+      expect(find.text('Two-step verification'), findsOneWidget);
+      expect(find.text(TpRouteId.home), findsNothing);
+
+      router.go(TpRoutePaths.meterLog);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Two-step verification'), findsOneWidget);
+      expect(find.text(TpRouteId.meterLog), findsNothing);
+    });
+
     testWidgets('a profile failure fails closed', (WidgetTester tester) async {
       await pumpApp(
         tester,

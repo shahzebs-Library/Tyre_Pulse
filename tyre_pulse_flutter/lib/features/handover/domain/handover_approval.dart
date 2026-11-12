@@ -168,8 +168,7 @@ final class HandoverApprovalLike {
       );
 
   @override
-  String toString() =>
-      'HandoverApprovalLike(approvalStatus: $approvalStatus)';
+  String toString() => 'HandoverApprovalLike(approvalStatus: $approvalStatus)';
 }
 
 /// `'Fleet Supervisor'` and `'fleet_supervisor'` are the same role. The
@@ -253,7 +252,8 @@ bool canActOnStage(
   if (stage == null) return false;
   final String normalised = normaliseHandoverRole(role);
   if (normalised.isEmpty) return false;
-  return _rolesOf(stage).any((String r) => normaliseHandoverRole(r) == normalised);
+  return _rolesOf(stage)
+      .any((String r) => normaliseHandoverRole(r) == normalised);
 }
 
 /// Can [role] do anything at all with [submission] right now?
@@ -287,8 +287,7 @@ bool closesInOneSign(
 
 /// The English label for [stage], or `''` for `null`. See the library comment
 /// on English text in this file. #mirror: `stageLabel`.
-String stageLabel(HandoverStage? stage) =>
-    stage == null ? '' : _labelOf(stage);
+String stageLabel(HandoverStage? stage) => stage == null ? '' : _labelOf(stage);
 
 /// One rung of the ladder, with what has actually happened on it - who signed,
 /// when, and their mark - so a "tap to see who signed this" panel has

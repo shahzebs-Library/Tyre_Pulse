@@ -96,7 +96,9 @@ class _HandoverDetailScreenState extends ConsumerState<HandoverDetailScreen> {
     try {
       final HandoverRecord? record =
           await ref.read(handoverRemoteRepositoryProvider).byId(requestedId);
-      if (!mounted || generation != _loadGeneration || requestedId != _handoverId) {
+      if (!mounted ||
+          generation != _loadGeneration ||
+          requestedId != _handoverId) {
         return;
       }
       setState(() {
@@ -104,7 +106,9 @@ class _HandoverDetailScreenState extends ConsumerState<HandoverDetailScreen> {
         _loading = false;
       });
     } on Object catch (error) {
-      if (!mounted || generation != _loadGeneration || requestedId != _handoverId) {
+      if (!mounted ||
+          generation != _loadGeneration ||
+          requestedId != _handoverId) {
         return;
       }
       setState(() {
@@ -120,8 +124,9 @@ class _HandoverDetailScreenState extends ConsumerState<HandoverDetailScreen> {
   Future<void> _loadSignerName() async {
     final String userId = ref.read(workspaceContextProvider)?.userId ?? '';
     if (userId.isEmpty) return;
-    final String? name =
-        await ref.read(handoverRemoteRepositoryProvider).currentUserDisplayName(userId);
+    final String? name = await ref
+        .read(handoverRemoteRepositoryProvider)
+        .currentUserDisplayName(userId);
     if (!mounted) return;
     setState(() => _signerName = name);
   }
@@ -163,7 +168,10 @@ class _HandoverDetailScreenState extends ConsumerState<HandoverDetailScreen> {
       return;
     }
 
-    setState(() => _busy = approved ? _DecisionBusy.approving : _DecisionBusy.rejecting);
+    setState(
+      () =>
+          _busy = approved ? _DecisionBusy.approving : _DecisionBusy.rejecting,
+    );
     try {
       final String note = _note.text.trim();
       await ref.read(handoverRemoteRepositoryProvider).decide(
@@ -185,8 +193,9 @@ class _HandoverDetailScreenState extends ConsumerState<HandoverDetailScreen> {
       final bool goToList = await TpDialog.confirm(
         context: context,
         title: approved ? l10n.handoverSignedTitle : l10n.handoverReturnedTitle,
-        message:
-            approved ? l10n.handoverSignedMessage : l10n.handoverReturnedMessage,
+        message: approved
+            ? l10n.handoverSignedMessage
+            : l10n.handoverReturnedMessage,
         cancelLabel: l10n.handoverStayHere,
         confirmLabel: l10n.handoverBackToList,
       );
@@ -214,7 +223,7 @@ class _HandoverDetailScreenState extends ConsumerState<HandoverDetailScreen> {
     setState(() => _sharing = true);
     try {
       final HandoverShareResult result =
-          await shareHandoverPdf(record: record, l10n: l10n);
+          await shareHandoverPdf(context: context, record: record);
       if (!mounted) return;
       if (result == HandoverShareResult.failed) {
         await showHandoverInfoDialog(
@@ -235,7 +244,9 @@ class _HandoverDetailScreenState extends ConsumerState<HandoverDetailScreen> {
     final HandoverRecord? record = _record;
     final String title = record == null
         ? l10n.handoverDetailTitle
-        : (record.assetNo.isNotEmpty ? record.assetNo : l10n.handoverDetailTitle);
+        : (record.assetNo.isNotEmpty
+            ? record.assetNo
+            : l10n.handoverDetailTitle);
 
     return TpScaffold(
       backFallback: fallback,
@@ -382,7 +393,8 @@ class _DetailBody extends StatelessWidget {
           const SizedBox(height: TpSpace.sm),
           TpCard(
             background: TpPalette.of(context).forStatus(TpStatus.critical).soft,
-            borderColor: TpPalette.of(context).forStatus(TpStatus.critical).base,
+            borderColor:
+                TpPalette.of(context).forStatus(TpStatus.critical).base,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
@@ -456,7 +468,10 @@ class _SummaryCard extends StatelessWidget {
                           .titleMedium
                           ?.copyWith(fontWeight: FontWeight.w800),
                     ),
-                    Text(typeLabel, style: Theme.of(context).textTheme.bodySmall),
+                    Text(
+                      typeLabel,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   ],
                 ),
               ),
@@ -600,7 +615,8 @@ class _DamageCard extends StatelessWidget {
               ),
             ],
           ),
-          if (marker.note != null && marker.note!.trim().isNotEmpty) ...<Widget>[
+          if (marker.note != null &&
+              marker.note!.trim().isNotEmpty) ...<Widget>[
             const SizedBox(height: TpSpace.xs),
             Text(
               marker.note!.trim(),
@@ -633,7 +649,8 @@ class _SignoffLadder extends StatelessWidget {
       children: <Widget>[
         for (int i = 0; i < rungs.length; i++)
           Padding(
-            padding: EdgeInsets.only(bottom: i == rungs.length - 1 ? 0 : TpSpace.sm),
+            padding:
+                EdgeInsets.only(bottom: i == rungs.length - 1 ? 0 : TpSpace.sm),
             child: _RungTile(rung: rungs[i]),
           ),
       ],
@@ -760,18 +777,18 @@ class _DecisionForm extends StatelessWidget {
                       children: <Widget>[
                         Text(
                           '${l10n.handoverSigningAs} ',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: TpPalette.of(context).textMuted),
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: TpPalette.of(context).textMuted,
+                                  ),
                         ),
                         Flexible(
                           child: Text(
                             TpDirection.isolateLtr(signerName!.trim()),
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(color: TpPalette.of(context).textMuted),
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: TpPalette.of(context).textMuted,
+                                    ),
                           ),
                         ),
                       ],

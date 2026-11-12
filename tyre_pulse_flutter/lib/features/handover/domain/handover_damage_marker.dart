@@ -174,8 +174,8 @@ final class HandoverDamageMarker {
           HandoverDamageLevel.minor,
       x: (json['x'] as num?)?.toDouble(),
       y: (json['y'] as num?)?.toDouble(),
-      note: (json['note'] as Object?)?.toString(),
-      photoUrl: (json['photo_url'] as Object?)?.toString(),
+      note: json['note']?.toString(),
+      photoUrl: json['photo_url']?.toString(),
     );
   }
 
@@ -187,7 +187,8 @@ final class HandoverDamageMarker {
     final List<HandoverDamageMarker> markers = <HandoverDamageMarker>[];
     for (final Object? item in raw) {
       if (item is Map) {
-        markers.add(HandoverDamageMarker.fromJson(item.cast<String, Object?>()));
+        markers
+            .add(HandoverDamageMarker.fromJson(item.cast<String, Object?>()));
       }
     }
     return markers;

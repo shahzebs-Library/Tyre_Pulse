@@ -110,8 +110,8 @@ class _HandoverSignaturePadState extends State<HandoverSignaturePad> {
             child: Image.memory(
               _decodeDataUrl(widget.value!),
               fit: BoxFit.contain,
-              errorBuilder: (BuildContext context, Object error, StackTrace? s) =>
-                  Center(
+              errorBuilder:
+                  (BuildContext context, Object error, StackTrace? s) => Center(
                 child: Text(
                   l10n.handoverSignatureSaved,
                   style: Theme.of(context).textTheme.bodyMedium,

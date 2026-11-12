@@ -8787,5 +8787,12 @@
         "type": "String"
       }
     }
-  }
+  },
+  "mfaTitle": "Two-step verification",
+  "mfaMessage": "Enter the 6-digit code from your authenticator app to finish signing in.",
+  "mfaCodeLabel": "Verification code",
+  "mfaVerifyAction": "Verify",
+  "mfaCodeIncomplete": "Enter all 6 digits of the code.",
+  "mfaCodeInvalid": "That code was not accepted. Check your authenticator app and try again.",
+  "mfaVerifyUnavailable": "The code could not be checked right now. Check your connection and try again."
 }

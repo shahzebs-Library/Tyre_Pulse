@@ -67,6 +67,25 @@ export async function listActionsForSource(sourceType, sourceId) {
 }
 
 /**
+ * Read actions for inspection observation boards in bounded batches. Unlike
+ * listActionsForSource, a read error must be visible to the caller: an unreadable
+ * action must never look as if it has not been raised.
+ */
+export async function listActionsForInspectionIds(ids = []) {
+  const unique = [...new Set(ids.filter(Boolean))]
+  const rows = []
+  for (let i = 0; i < unique.length; i += 100) {
+    const batch = unique.slice(i, i + 100)
+    const found = await unwrap(await fetchAllPages((from, to) => supabase
+      .from('corrective_actions').select(COLS)
+      .eq('source_type', 'inspection').in('source_id', batch)
+      .order('created_at', { ascending: false }).range(from, to)))
+    rows.push(...found)
+  }
+  return rows
+}
+
+/**
  * Assign the Action Center item that mirrors a corrective action. The mirror is
  * created by the database trigger (V 20261104090000); ensureActionItem keys on
  * the same source so a deployment without the trigger still gets exactly one.

@@ -26,7 +26,7 @@ export default function InspectionActionRaiser({ inspection, flagMap, onClose, o
     if (!inspection?.id) return undefined
     let live = true
     setExisting(null); setLoadError('')
-    listActionsForSource('inspection', inspection.id)
+    listActionsForSource('inspection', inspection.id, { strict: true })
       .then((rows) => { if (live) setExisting(rows || []) })
       .catch((e) => { if (live) { setExisting([]); setLoadError(toUserMessage(e, 'Could not check actions already raised.')) } })
     return () => { live = false }

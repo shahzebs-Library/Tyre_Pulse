@@ -343,12 +343,12 @@ export default function ObservationsBoard({
         {actionError && <p role="alert" className="text-sm text-red-500 mt-3">{actionError}</p>}
         {list.length > PAGE && <Pager page={page} pageSize={PAGE} total={list.length} onPage={setPage} noun="observations" />}
       </Card>
-      {detail && actionsReady && (
+      {detail && (
         <ObservationDetail
           obs={all.find((o) => o.key === detail.key) || detail}
           onClose={() => setDetail(null)}
           onOpenInspection={(r) => { setDetail(null); onOpen(r) }}
-          onRaiseAction={onRaiseAction ? (r, key) => { setDetail(null); onRaiseAction(r, key) } : null}
+          onRaiseAction={actionsReady && onRaiseAction ? (r, key) => { setDetail(null); onRaiseAction(r, key) } : null}
         />
       )}
     </div>

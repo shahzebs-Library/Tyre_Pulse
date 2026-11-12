@@ -30,15 +30,18 @@ describe('register rows', () => {
     expect(isoDay(now)).toBe('2026-03-10')
   })
 
-  it('marks an open record past its day Overdue, and never a done or cancelled one', () => {
+  it('marks an open record past its day Overdue, but never a done, cancelled or rejected one', () => {
     const out = deriveRegisterRows([
       { id: 1, status: 'Scheduled', scheduled_date: '2026-03-09' },
       { id: 2, status: 'Done', scheduled_date: '2026-03-01' },
       { id: 3, status: 'Cancelled', scheduled_date: '2026-03-01' },
       { id: 4, status: 'In Progress', scheduled_date: '2026-03-10' },
       { id: 5, status: 'Scheduled', scheduled_date: null },
+      // A rejected sign-off was inspected then returned for a fix; past its day
+      // it stays In Progress (shown as Rejected), not Overdue.
+      { id: 6, status: 'In Progress', approval_status: 'rejected', scheduled_date: '2026-03-01' },
     ], now)
-    expect(out.map((r) => r.status)).toEqual(['Overdue', 'Done', 'Cancelled', 'In Progress', 'Scheduled'])
+    expect(out.map((r) => r.status)).toEqual(['Overdue', 'Done', 'Cancelled', 'In Progress', 'Scheduled', 'In Progress'])
   })
 
   it('restores the display type from custom_data', () => {

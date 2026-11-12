@@ -1314,7 +1314,7 @@ export default function Inspections() {
           onFilter={(k, v) => setFilter(k, v)}
           onView={(r) => setViewId(r.id)}
           onPdf={(r) => exportRowPdf(r)}
-          onRaiseAction={(r, key) => setRaisingAction(key ? { ...r, __preferredDefectKey: key } : r)}
+          onRaiseAction={(r, keys) => setRaisingAction(keys ? { ...r, __preferredDefectKeys: Array.isArray(keys) ? keys : [keys] } : r)}
           onEdit={(r) => setForm({ ...r, tyre_conditions: r.tyre_conditions ?? {} })}
           onApprove={canApproveInspection ? openApproveFor : null}
           onAddObservation={() => setForm({ ...EMPTY_FORM, inspection_type: 'Site Observation' })}

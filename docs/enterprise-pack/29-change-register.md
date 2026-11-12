@@ -164,7 +164,7 @@
 | # | Item | Verified 2026-11-10 | State | Action | R-id |
 |---|---|---|---|---|---|
 | A1 | `send-scheduled-reports` repo carries `DATASET_DIGEST.workshop_status` | Yes: repo has it, deployed v28 has "Workshop Summary" but no `workshop_status` | Repo ahead of deployed | Deploy + byte-diff | R-001 |
-| A2 | `supabase/pending_migrations/20261011140000_workshop_status_stale_conflict.sql` | Yes, file present; README says never apply as-is | Not applied by design | Owner picks reconcile option | R-081 |
+| A2 | `supabase/pending_migrations/20261011140000_workshop_status_stale_conflict.sql` | Removed 2026-11-12 (reconciled) | Retired - live `workshop_status_stale_file_guard` already enforces the rule | Done: draft deleted; per-row keep/take UI left as a future enhancement | R-081 |
 | A3 | Duplicate timestamps: `20261109160001_tyre_physical_lifetime_cpk.sql` + `20261109160000_workforce_operations_core.sql`; `20261109170001_tyre_price_provenance.sql` + `20261109170000_workforce_time_accounting.sql` | Yes (`ls`) | Applied live under other version numbers (for example `tyre_physical_lifetime_cpk` = 20261109090920) | Rename files to their live versions | R-008 |
 | A4 | Repo file timestamps differ from live versions for the 20261110* tyre files (live versions 20261109102234 to 20261109102620) | Yes (live `schema_migrations`) | Applied | Align names so `db push` does not re-run them | R-008 |
 | A5 | `MIGRATIONS_V316_WORKSPACE_ONBOARDING.sql` | File present; live migration `revoke_create_workspace_owner` exists | Kept OFF by decision | None (decision) | - |

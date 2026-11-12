@@ -14,7 +14,7 @@
 |---|---|---|
 | `MIGRATIONS_V*.sql` (repo root, 576 files) | Older numbered series V1 to ~V612. Each header carries STATUS, reproduction, verification, rollback. | Mostly applied; a STATUS header is a claim, not evidence |
 | `supabase/migrations/*.sql` (241 files) | Timestamped series from 2026-08-30 onward | Mostly applied |
-| `supabase/pending_migrations/` | Kept for reference, must never be applied as-is (e.g. `20261011140000_workshop_status_stale_conflict.sql`) | No |
+| `supabase/pending_migrations/` | Kept for reference, must never be applied as-is (e.g. `20261110147000_profiles_pii_read.sql`) | No |
 | `supabase/security-rollout/` | Reviewed security batch with a status table (2026-11-08) | Per README |
 | `supabase_migrations.schema_migrations` (live) | 1,027 rows | Authoritative history of what ran |
 

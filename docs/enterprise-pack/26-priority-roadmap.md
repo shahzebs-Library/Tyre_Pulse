@@ -136,7 +136,7 @@ These are deliberate and must not be "fixed" by a later engineer without a new o
 | R-078 | Storage retention rules exist but never run; announcements table read by no client | 18, 11 | P3 | S | OWN | - |
 | R-079 | Saved-only config keys: password_min_length, app_version, email_notifications, push_notifications, digest_frequency | 7 | P2 | M | ENG | - |
 | R-080 | Theme and branding manager: tenant branding editor reachable from the console; font/density/radius settings | 15 | P2 | M | ENG | - |
-| R-081 | Workshop Status: decide the stale-conflict migration (`supabase/pending_migrations/20261011140000`); loops 18-20 | 7 | P2 | M | OWN | - |
+| R-081 | Workshop Status: stale-conflict migration RECONCILED 2026-11-12 (draft retired; live guard holds the rule). Remaining: loops 19-20 (ops hygiene, final review) | 3 | P2 | S | OWN | - |
 
 ## Phase 4 - Reports, executive, Data Intake, notifications, integrations
 

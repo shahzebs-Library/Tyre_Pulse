@@ -164,7 +164,7 @@ export default function ConsoleTopBarActions() {
           )}
         </button>
         {bell.open && (
-          <div className="absolute right-0 mt-2 w-80 z-40 rounded-xl border border-gray-800 bg-gray-950 shadow-2xl p-2" role="dialog" aria-label="Waiting on you">
+          <div className="fixed inset-x-3 top-14 mt-1 sm:absolute sm:inset-x-auto sm:top-auto sm:right-0 sm:mt-2 sm:w-80 z-40 max-h-[70dvh] overflow-y-auto rounded-xl border border-gray-800 bg-gray-950 shadow-2xl p-2" role="dialog" aria-label="Waiting on you">
             <p className="px-2 pt-1 pb-2 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Waiting on you</p>
             {attention.items === null ? (
               <p className="px-2 py-3 text-xs text-gray-400">Could not check right now. Open System Health to be sure.</p>
@@ -190,7 +190,7 @@ export default function ConsoleTopBarActions() {
           <ChevronDown size={12} aria-hidden="true" />
         </button>
         {qa.open && (
-          <div className="absolute right-0 mt-2 w-72 z-40 rounded-xl border border-gray-800 bg-gray-950 shadow-2xl p-2" role="menu" aria-label="Quick actions">
+          <div className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-1.5rem)] z-40 rounded-xl border border-gray-800 bg-gray-950 shadow-2xl p-2" role="menu" aria-label="Quick actions">
             <p className="px-2 pt-1 pb-1 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Users</p>
             <MenuItem icon={UserPlus} onClick={() => { qa.setOpen(false); navigate('/console/users') }}>Invite or approve a user</MenuItem>
             <p className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Platform</p>

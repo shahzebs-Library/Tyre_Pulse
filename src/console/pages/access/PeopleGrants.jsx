@@ -11,7 +11,7 @@
  * Writes go through the super-admin RPCs (set_user_access_grant /
  * revoke_user_access_grant); the access_audit trigger records each one.
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Pencil, Trash2, Check, X, Plus, CalendarClock, UserCheck } from 'lucide-react'
 import { ALL_MODULES } from '../../../lib/moduleCatalog'
 import { MOBILE_MODULES } from '../../../lib/mobileModules'
@@ -41,8 +41,18 @@ function toIsoEnd(dateStr) {
 
 const inputCls = 'px-2 py-1 rounded-md bg-gray-900 border border-gray-800 text-xs text-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500'
 
-export default function PeopleGrants({ grants, profiles, loading, error, onRetry, onChanged }) {
+export default function PeopleGrants({ grants, profiles, loading, error, onRetry, onChanged, focusUserId = '' }) {
   const [search, setSearch] = useState('')
+  // Opened for one person (?user=<id> from their page): start narrowed to them,
+  // once, as soon as their profile is loaded. The search box stays editable.
+  const focused = useRef(false)
+  useEffect(() => {
+    if (focused.current || !focusUserId) return
+    const p = (profiles || []).find((x) => x.id === focusUserId)
+    if (!p) return
+    focused.current = true
+    setSearch(displayName(p))
+  }, [focusUserId, profiles])
   const [effect, setEffect] = useState('')
   const [surface, setSurface] = useState('')
   const [status, setStatus] = useState('')

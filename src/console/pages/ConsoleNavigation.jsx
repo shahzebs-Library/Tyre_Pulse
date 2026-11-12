@@ -543,11 +543,11 @@ export default function ConsoleNavigation({ tabParam = 'tab' } = {}) {
                       {preview.length === 0 ? (
                         <EmptyState icon={EyeOff} title="Everything hidden" reason="Every group or item is hidden, so the sidebar would be empty." />
                       ) : preview.map((g) => (
-                        <div key={g.key} className="mb-3">
+                        <div key={g.key || g.label} className="mb-3">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">{g.label}</p>
                           <div className="space-y-0.5">
                             {g.items.map((it) => (
-                              <div key={it.to} className="text-[12px] text-gray-300 px-2 py-1 rounded-md bg-gray-800/40 truncate">{it.label}</div>
+                              <div key={it.key || it.to} className="text-[12px] text-gray-300 px-2 py-1 rounded-md bg-gray-800/40 truncate">{it.label}</div>
                             ))}
                           </div>
                         </div>

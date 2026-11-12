@@ -452,7 +452,7 @@ export default function ConsoleOrganisations({ tabParam = 'tab' } = {}) {
             </div>
             <p className="text-xs text-gray-400">Created {fmtDate(openOrg.created_at)}</p>
             <ImpactLine change={canOfferOrgDelete(overview?.[openOrg.id]).ok ? 'Delete is available: this organisation holds nothing.' : `Delete is not offered. ${canOfferOrgDelete(overview?.[openOrg.id]).reason}`} />
-            <Link to={`/console/users?org=${openOrg.id}`} className="inline-flex items-center gap-1 text-xs text-orange-300 hover:text-orange-200 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
+            <Link to={`/console/users?tab=manage&org=${openOrg.id}`} className="inline-flex items-center gap-1 text-xs text-orange-300 hover:text-orange-200 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
               Manage this organisation&apos;s users <ArrowUpRight size={11} aria-hidden="true" />
             </Link>
           </>

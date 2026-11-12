@@ -252,7 +252,7 @@ export async function upsertSite(site) {
 
   if (existing?.id) {
     const { error } = await supabase.from('sites')
-      .update({ ...payload, updated_by: uid }).eq('id', existing.id)
+      .update(payload).eq('id', existing.id)
     if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return existing.id
   }

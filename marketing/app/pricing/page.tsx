@@ -9,7 +9,7 @@ import { PRICING_FAQ as PRICE_FAQ } from "@/lib/faqs";
 import { OG_IMAGES } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Pricing",
+  title: "Pricing: plans quoted on your fleet size",
   description:
     "Tyre Pulse plans for solo owners, teams, professional operators and enterprises. Quoted on request by fleet size, users, modules, countries and integrations.",
   alternates: alternatesFor("/pricing"),
@@ -25,7 +25,7 @@ const plans = [
   ["Solo", "For an owner managing a small fleet", ["Core asset and tyre records", "Inspections", "Basic dashboards", "Standard exports"]],
   ["Team", "For growing site and workshop teams", ["Multiple users and sites", "Approvals", "Maintenance and inventory", "PDF and Excel reports"]],
   ["Professional", "For established fleet operations", ["Advanced analytics", "Scheduled reports", "TV dashboards", "API and automation options"]],
-  ["Enterprise", "For large and multi-country groups", ["Custom users and assets", "SSO and security controls", "Data migration and integrations", "SLA and priority support"]],
+  ["Enterprise", "For large and multi-country groups", ["Custom users and assets", "Single sign-on, on request", "Data migration and integrations", "Support terms agreed on request"]],
 ];
 
 const INCLUDED = [
@@ -45,7 +45,7 @@ export default function PricingPage() {
     <section className="section-pad tight"><div className="site-shell">
       <div className="price-grid">
         {plans.map(([name, text, features], i) => (
-          <article className={`card price-card ${i === 2 ? "featured" : ""}`} key={String(name)} aria-label={i === 2 ? `${name}, most flexible` : String(name)}>
+          <article className={`price-card tp-priced ${i === 2 ? "featured" : ""}`} key={String(name)} aria-label={i === 2 ? `${name}, most flexible` : String(name)}>
             {i === 2 && <span className="eyebrow">Most flexible</span>}
             <h2 className="h2 price-name">{String(name)}</h2>
             <p className="muted price-for">{String(text)}</p>

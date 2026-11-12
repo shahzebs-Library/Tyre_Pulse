@@ -6,6 +6,7 @@
  * stays with the ai-tyre-inspection edge function. Provenance on a label is re-stamped by the DB.
  */
 import { supabase, fetchAllOrThrow, isNotProvisioned, toServiceError } from './_client'
+import { fetchDirectoryByIds } from './profileDirectory'
 
 const JOB_COLS = 'id,inspection_id,tyre_position,photo_ref,status,analysis,model_version,prompt_version,review_status,created_at'
 const INSPECTION_COLS = 'id,asset_no,vehicle_type,site,inspection_date,tyre_conditions'
@@ -61,8 +62,7 @@ export async function reviewerNames(ids) {
   const keys = Array.from(new Set((ids || []).filter(Boolean)))
   for (const part of chunk(keys, 100)) {
     try {
-      const rows = await fetchAllOrThrow((from, to) => supabase.from('profiles')
-        .select('id,full_name,username').in('id', part).order('id').range(from, to), { max: 1000 })
+      const rows = await fetchDirectoryByIds(part)
       rows.forEach((p) => names.set(p.id, p.full_name || p.username || p.id))
     } catch { /* names are cosmetic; ids still identify the reviewer */ }
   }

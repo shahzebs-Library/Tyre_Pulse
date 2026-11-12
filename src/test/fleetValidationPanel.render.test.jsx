@@ -20,7 +20,7 @@ vi.mock('../lib/api/accidentCase', () => ({
 vi.mock('../lib/api/accidentLiability', () => ({ listAuthorityReports: (...a) => listAuthorityReports(...a) }))
 vi.mock('../lib/api/accidentDamageAssessment', () => ({ getDamageAssessment: (...a) => getDamageAssessment(...a) }))
 vi.mock('../lib/api/assets', () => ({ getAssetByNo: (...a) => getAssetByNo(...a) }))
-vi.mock('../lib/api/users', () => ({ listProfiles: (...a) => listProfiles(...a) }))
+vi.mock('../lib/api/profileDirectory', () => ({ listDirectoryPeople: (...a) => listProfiles(...a) }))
 vi.mock('../lib/api/accidentCommunications', () => ({ logCommunication: (...a) => logCommunication(...a) }))
 vi.mock('../lib/api/fleetValidationItems', () => ({
   listFleetValidationItems: (...a) => listFleetValidationItems(...a),

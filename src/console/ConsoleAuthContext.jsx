@@ -66,7 +66,9 @@ export function ConsoleAuthProvider({ children }) {
   const resolveAdmin = useCallback(async (userId) => {
     const { data } = await supabase
       .from('profiles')
-      .select('*, email')
+      // Explicit columns: a `*` asks for columns the role may not read
+      // (push token, notes, recovery contacts are not granted on the table).
+      .select('id,username,full_name,role,region,avatar_url,created_at,employee_id,approved,country,countries,site,sites,is_super_admin,locked,organisation_id,org_id,last_login_at,login_count,module_overrides,phone,email,updated_at,web_access,language')
       .eq('id', userId)
       .maybeSingle()
     if (data?.is_super_admin) {

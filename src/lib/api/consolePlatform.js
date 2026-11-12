@@ -23,7 +23,7 @@ async function rpc(name, args, fallback) {
 
 const PROFILE_COLS =
   'id,username,full_name,role,employee_id,approved,locked,is_super_admin,country,site,sites,region,' +
-  'email,phone,organisation_id,org_id,web_access,created_at,updated_at,notes'
+  'email,phone,organisation_id,org_id,web_access,created_at,updated_at'
 
 /** Every profile (paged past the 1000-row cap). */
 export async function listPlatformProfiles() {

@@ -19,6 +19,10 @@ const h = vi.hoisted(() => {
     state,
     supabase: {
       from,
+      // The delegators' roles are read from the staff directory function.
+      rpc: vi.fn((name) => Promise.resolve({
+        data: name === 'list_profile_directory' ? (state.rows.profiles || []) : null, error: null,
+      })),
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'delegate' } } }) },
     },
   }

@@ -8,7 +8,7 @@ import {
   WORKSTREAMS, WORKSTREAM_STATUS_TOKENS, NON_WAIVABLE,
 } from '../../lib/accidentCase'
 import { listWorkstreams, setWorkstreamStatus } from '../../lib/api/accidentCase'
-import { listProfiles } from '../../lib/api/users'
+import { listDirectoryPeople as listProfiles } from '../../lib/api/profileDirectory'
 import { isMissingRelation } from '../../lib/api/_client'
 import { toUserMessage } from '../../lib/safeError'
 

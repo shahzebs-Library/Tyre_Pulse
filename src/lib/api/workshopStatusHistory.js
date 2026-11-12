@@ -12,6 +12,7 @@
  */
 import { supabase, toServiceError } from './_client'
 import { collectPersonIds } from '../workshopStatus/history'
+import { fetchDirectoryByIds, directoryName } from './profileDirectory'
 
 const EVENT_COLS = 'id,record_id,asset_no,upload_id,event_type,field_name,old_value,new_value,reason,source,details,actor_id,actor_name,created_at'
 const DEFAULT_PAGE = 60
@@ -59,15 +60,13 @@ export async function listRecordHistory(recordId, { limit = DEFAULT_PAGE, before
 export async function resolveHistoryNames(events) {
   const ids = collectPersonIds(events)
   const out = {}
-  for (let i = 0; i < ids.length; i += PROFILE_CHUNK) {
-    const chunk = ids.slice(i, i + PROFILE_CHUNK)
-    const { data, error } = await supabase
-      .from('profiles').select('id,full_name,username').in('id', chunk).limit(PROFILE_CHUNK)
-    if (error) throw toServiceError(error, 'Could not load the names in the history.')
-    for (const p of data || []) {
-      const name = (p.full_name && String(p.full_name).trim()) || (p.username && String(p.username).trim()) || ''
-      if (p.id && name) out[p.id] = name
-    }
+  let rows
+  try { rows = await fetchDirectoryByIds(ids) } catch (error) {
+    throw toServiceError(error, 'Could not load the names in the history.')
+  }
+  for (const p of rows) {
+    const name = directoryName(p)
+    if (p.id && name) out[p.id] = name
   }
   return out
 }

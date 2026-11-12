@@ -15,7 +15,7 @@ const DEPT_COLS = 'id,name,code,description,active,sort_order,created_at,updated
 const RULE_COLS =
   'id,name,description,active,priority,event_key,match_severities,match_types,match_sites,match_countries,min_cost,require_injury,require_vor,require_third_party,departments,to_roles,cc_roles,escalate_roles,created_at,updated_at'
 const TPL_COLS = 'id,key,name,subject,body_html,active,approved,updated_at'
-const PROFILE_COLS = 'id,full_name,email,role,site,sites,country,push_token,approved,locked,organisation_id'
+const PROFILE_COLS = 'id,full_name,email,role,site,sites,country,approved,locked,organisation_id'
 
 // ── departments ───────────────────────────────────────────────────────────────
 export async function listDepartments({ activeOnly = false } = {}) {

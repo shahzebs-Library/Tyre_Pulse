@@ -1,0 +1,106 @@
+-- =============================================================================
+-- Staff directory privacy, part 2 of 2 (audit RLS-9).
+-- STATUS: AUTHORED AND PROVEN BY ROLLED-BACK IMPERSONATION, **NOT APPLIED**.
+-- Parked in pending_migrations on purpose. APPLY ONLY AFTER the web build that
+-- contains the matching client change is live in production (see GATE below).
+-- When applied, move this file to supabase/migrations/ unchanged.
+--
+-- WHAT IT DOES
+--   Withdraws the table-wide SELECT on public.profiles from `authenticated` and
+--   grants SELECT column by column on everything EXCEPT:
+--       push_token, notes, recovery_email, recovery_email_verified_at,
+--       recovery_phone, recovery_phone_verified_at
+--   Row visibility (RLS) is untouched, so every name that shows today still
+--   shows, on every client, including builds already installed on phones.
+--   After this, no signed-in user - of any role - can read another person's push
+--   token, admin notes or recovery contacts through the table or through
+--   Realtime (Realtime drops columns the subscriber may not select). Elevated
+--   screens read what they need through list_profile_private() /
+--   count_profiles_with_push_token() (part 1), which never return the token.
+--
+-- WHY COLUMN PRIVILEGES AND NOT THE ROW POLICY
+--   See part 1 (20261112170000). 143 of 155 active phones run the retired Expo
+--   build; it and the Flutter build read other people's rows as ordinary roles
+--   (assignee pickers, submitter and owner names). Narrowing the row policy
+--   empties those pickers. Column privileges need no client change on phones.
+--
+-- WHAT IT DOES NOT PROTECT (stated, not hidden)
+--   * email stays selectable. The installed Expo build selects `email` in its
+--     own-profile read at sign-in (mobile/contexts/AuthContext.tsx), and a
+--     column the role may not select fails the WHOLE request, i.e. sign-in.
+--     765 of 769 values are synthetic (<username>@users.tyrepulse.app, no new
+--     information beyond the username); 4 are real addresses (2 super admins,
+--     1 Inspector, 1 Reporter). get_user_email_by_id is already closed (part 1).
+--   * phone stays selectable for the same reason (installed Team screens select
+--     it). It holds 0 values today. Do not start filling it before the narrow.
+--   Both close when profiles_select is narrowed to own row / elevated, which
+--   needs: every client on list_profile_directory, the minimum mobile versions
+--   raised past those builds, and the invoker readers (v_inspection_signoff,
+--   get_schedule_adherence, wash_entry_people, workforce_assignment_classify)
+--   moved to a definer name lookup.
+--
+-- GATE - check before applying
+--   1. Production web bundle contains the change that stops selecting the
+--      withheld columns: src/console/ConsoleAuthContext.jsx (was `select('*, email')`,
+--      which would lock the console sign-in), src/lib/api/users.js,
+--      consolePlatform.js, consoleSessions.js, accidentWorkflow.js, mobileOps.js,
+--      deliveryHealth.js. Confirm on the deployed sha, not the merged PR.
+--   2. Part 1 is applied (list_profile_private exists).
+--   3. Give open browser tabs time to pick the new build up (prompt-mode PWA):
+--      an old tab's people lists on those screens error until it reloads.
+--
+-- PRE-FLIGHT (database-migration-safety)
+--   Data loss      : none. Privileges only; no row or column is changed.
+--   Rename/removal : none.
+--   Old clients    : inventoried every profiles select.
+--                    Expo (installed): explicit lists, none names a withheld
+--                      column; its push-token write is an UPDATE with no
+--                      returning clause (needs UPDATE only). Unaffected.
+--                    Flutter (installed): explicit lists, none withheld, except
+--                      accident_claim_package_repository._profileNames, which
+--                      selects every column; it is wrapped in a catch and falls
+--                      back to the role label ("Insurance Officer" instead of a
+--                      person's name) on the claim notify list.
+--                    Edge functions: service role, or explicit granted columns.
+--                    Invoker SQL (4 functions, 1 view, 27 policies): granted
+--                      columns only.
+--   Future columns : a column added to profiles later is NOT selectable by
+--                    `authenticated` until granted. That is the safe default;
+--                    grant it in the migration that adds it if clients read it.
+--   Locks          : brief ACCESS EXCLUSIVE on profiles (catalog change only).
+--   Triggers / RLS : untouched.
+--   Realtime       : profiles is published; subscribers stop receiving the
+--                    withheld columns. No subscriber reads them.
+--
+-- VERIFY (measured 2026-11-12 inside a rolled-back transaction, one user each)
+--   Driver            before: other people's push tokens 115, notes 41
+--                     after : push_token / notes / recovery_email not selectable;
+--                             rows 768 and 767 other names unchanged; own-profile
+--                             read with the installed column lists 1 row; own
+--                             push-token UPDATE 1 row; v_inspection_signoff 2608
+--   Tyre Man, Fleet Supervisor   rows 768 unchanged; private reader 0 rows
+--   KSA Manager       rows 768; console user column list 768 rows;
+--                     private reader 768 rows (41 with notes, 115 with a token)
+--   demo-org Manager  rows 1 (own organisation), private reader 1
+--   super admin aal2  rows 769; console sign-in column list 1 row
+--   locked account    own row only; directory 0, private 0
+--   After applying, re-run:
+--     select has_column_privilege('authenticated','public.profiles','push_token','SELECT'),  -- f
+--            has_column_privilege('authenticated','public.profiles','notes','SELECT'),       -- f
+--            has_column_privilege('authenticated','public.profiles','full_name','SELECT'),   -- t
+--            has_column_privilege('authenticated','public.profiles','email','SELECT');       -- t
+-- =============================================================================
+
+revoke select on public.profiles from authenticated;
+
+grant select (
+  id, username, full_name, role, region, avatar_url, created_at, employee_id,
+  approved, country, pending_reason, countries, site, is_super_admin, locked,
+  organisation_id, last_login_at, login_count, module_overrides, phone, email,
+  updated_at, org_id, push_token_updated_at, sites, web_access, language
+) on public.profiles to authenticated;
+
+-- =============================================================================
+-- ROLLBACK
+--   grant select on public.profiles to authenticated;
+-- =============================================================================

@@ -13,6 +13,7 @@
 import { supabase } from './_client'
 import { toUserMessage } from '../safeError'
 import { SAFE_SERVER_MESSAGES, describeClient, webAppVersion, validateIssueInput, shapeIssueSummary } from '../problemReport'
+import { fetchDirectoryByIds } from './profileDirectory'
 
 export const USER_ISSUE_COLS =
   'id,organisation_id,country,site,reporter_id,platform,app_version,device,os,page_or_screen,' +
@@ -100,11 +101,7 @@ async function profileNames(ids) {
   const out = new Map()
   if (!ids.length) return out
   try {
-    for (let i = 0; i < ids.length; i += 200) {
-      const { data } = await supabase.from('profiles')
-        .select('id,full_name,username').in('id', ids.slice(i, i + 200)).limit(200)
-      for (const p of data || []) out.set(p.id, p.full_name || p.username || null)
-    }
+    for (const p of await fetchDirectoryByIds(ids)) out.set(p.id, p.full_name || p.username || null)
   } catch { /* names are a convenience; the list still renders */ }
   return out
 }

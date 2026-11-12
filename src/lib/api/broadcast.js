@@ -21,6 +21,7 @@ import { supabase, fetchAllPages, isNotProvisioned, ServiceError, toServiceError
 import { toUserMessage } from '../safeError'
 import { listSiteAliases } from './workshopStatus'
 import { listCustomRoles } from './customRoles'
+import { fetchDirectory } from './profileDirectory'
 
 const COLS = 'id,title,body,title_ar,body_ar,target_roles,target_countries,target_sites,'
   + 'send_push,status,recipient_count,push_count,sent_at,created_at'
@@ -95,7 +96,6 @@ export async function sendBroadcast({
   }
 }
 
-const PROFILE_COLS = 'id,full_name,username,employee_id,role,site,sites,country,approved,locked,org_id,organisation_id'
 const SITE_COLS = 'id,name,country,active,organisation_id'
 
 /**
@@ -119,9 +119,13 @@ export async function loadAudienceDirectory() {
     } catch { errors.push(label); return [] }
   }
   const [profiles, sites, customRoles, aliases] = await Promise.all([
-    paged('people', (from, to) => supabase.from('profiles').select(PROFILE_COLS)
-      .eq('approved', true).eq('locked', false)
-      .order('id', { ascending: true }).range(from, to)),
+    (async () => {
+      try {
+        const dir = await fetchDirectory({ activeOnly: true, max: 20000 })
+        if (dir.truncated) { errors.push('people'); return [] }
+        return dir.rows
+      } catch { errors.push('people'); return [] }
+    })(),
     paged('sites', (from, to) => supabase.from('sites').select(SITE_COLS)
       .order('id', { ascending: true }).range(from, to)),
     listCustomRoles().catch(() => { errors.push('custom roles'); return [] }),

@@ -22,7 +22,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Truck, MapPin, User, Search, ChevronDown, X, Loader2, Check, AlertTriangle } from 'lucide-react'
 import { listAssets, listDataAssetOptions } from '../../lib/api/assets'
 import { listSites, siteOptionsForCountry, listDataSiteOptions } from '../../lib/api/sites'
-import { listProfiles } from '../../lib/api/users'
+import { listDirectoryPeople as listProfiles } from '../../lib/api/profileDirectory'
 import { toUserMessage } from '../../lib/safeError'
 
 const SOURCE_META = {

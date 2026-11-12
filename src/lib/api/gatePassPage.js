@@ -9,6 +9,7 @@
  * pass-throughs return the raw query builder the page reads via `.data`.
  */
 import { supabase, fetchAllPages } from './_client'
+import { fetchDirectoryByIds } from './profileDirectory'
 
 /**
  * Distinct-site source list for the site filter (non-null sites only). PAGED:
@@ -88,11 +89,7 @@ export function listGateFleet() {
 export async function listActorNames(ids = []) {
   const list = [...new Set(ids.filter(Boolean))]
   const out = {}
-  for (let i = 0; i < list.length; i += 200) {
-    const { data, error } = await supabase.from('profiles').select('id, full_name').in('id', list.slice(i, i + 200)).limit(200)
-    if (error) throw error
-    for (const r of data || []) if (r.full_name) out[r.id] = r.full_name
-  }
+  for (const r of await fetchDirectoryByIds(list)) if (r.full_name) out[r.id] = r.full_name
   return out
 }
 

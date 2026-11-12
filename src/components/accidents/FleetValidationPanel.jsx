@@ -26,7 +26,7 @@ import { listWorkstreams, setWorkstreamStatus } from '../../lib/api/accidentCase
 import { listAuthorityReports } from '../../lib/api/accidentLiability'
 import { getDamageAssessment } from '../../lib/api/accidentDamageAssessment'
 import { getAssetByNo } from '../../lib/api/assets'
-import { listProfiles } from '../../lib/api/users'
+import { listDirectoryPeople as listProfiles } from '../../lib/api/profileDirectory'
 import { logCommunication } from '../../lib/api/accidentCommunications'
 import { listFleetValidationItems, upsertFleetValidationItem, upsertFleetValidationItems } from '../../lib/api/fleetValidationItems'
 import { renderAccidentCasePdf } from '../../lib/accidentCasePdf'

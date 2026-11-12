@@ -11,6 +11,7 @@
  */
 import { supabase, fetchAllPages, toServiceError } from './_client'
 import { RECORD_COLS } from './workshopStatus'
+import { fetchDirectoryByIds, directoryName } from './profileDirectory'
 
 const MAX_ROWS = 20000
 const LOOKUP_CHUNK = 200
@@ -68,19 +69,11 @@ export async function loadPeopleNames(ids) {
   const list = uniqueIds(ids)
   const out = new Map()
   if (!list.length) return out
-  for (const part of chunks(list, LOOKUP_CHUNK)) {
-    const { data, error } = await fetchAllPages((from, to) =>
-      supabase
-        .from('profiles')
-        .select('id,full_name,username')
-        .in('id', part)
-        .order('id', { ascending: true })
-        .range(from, to), { max: LOOKUP_CHUNK })
-    if (error) return out
-    for (const p of data || []) {
-      const name = (p.full_name && String(p.full_name).trim()) || (p.username && String(p.username).trim()) || null
-      if (name) out.set(String(p.id), name)
-    }
+  let rows = []
+  try { rows = await fetchDirectoryByIds(list) } catch { return out }
+  for (const p of rows) {
+    const name = directoryName(p)
+    if (name) out.set(String(p.id), name)
   }
   return out
 }

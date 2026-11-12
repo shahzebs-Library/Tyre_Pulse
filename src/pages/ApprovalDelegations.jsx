@@ -28,7 +28,7 @@ import { useAuth } from '../contexts/AuthContext'
 import {
   listDelegations, myDelegations, createDelegation, updateDelegation, deleteDelegation,
 } from '../lib/api/approvalDelegations'
-import { listProfiles } from '../lib/api/users'
+import { listDirectoryPeople as listProfiles } from '../lib/api/profileDirectory'
 import {
   delegationKpis, delegationStatus, filterDelegations, delegationExportRows,
   personName, scopeLabel, ENTITY_TYPE_OPTIONS, STATUS_LABEL, EXPORT_COLS, EXPORT_HEADERS,

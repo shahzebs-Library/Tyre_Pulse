@@ -9,6 +9,7 @@
  * time for "updated by".
  */
 import { supabase, fetchAllOrThrow, ServiceError, toServiceError } from './_client'
+import { fetchDirectory } from './profileDirectory'
 
 const blank = (v) => v == null || (typeof v === 'string' && v.trim() === '')
 
@@ -49,17 +50,14 @@ export async function updateWorkshopRecord(recordId, patch, { expectedUpdatedAt 
   return data || { ok: true, changed: 0, fields: [] }
 }
 
-const PROFILE_COLS = 'id,full_name,username,role'
-
 /**
  * People who can be named responsible / supporting: approved, unlocked
- * profiles (RLS scopes them to the caller's organisation). Light columns,
+ * members of the caller's organisation, read from the PII-free directory. Light columns,
  * paged past the 1000-row cap with a ceiling. Sorted by display name.
  */
 export async function listAssignableUsers() {
-  const rows = await fetchAllOrThrow((from, to) => supabase
-    .from('profiles').select(PROFILE_COLS).eq('approved', true).eq('locked', false)
-    .order('id').range(from, to), { max: 5000 })
+  const { rows, truncated } = await fetchDirectory({ activeOnly: true, max: 5000 })
+  if (truncated) throw new ServiceError('Could not load the complete list of people.')
   const out = rows.map((r) => ({
     id: r.id,
     name: (r.full_name && String(r.full_name).trim()) || (r.username && String(r.username).trim()) || '',

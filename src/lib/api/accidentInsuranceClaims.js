@@ -24,7 +24,7 @@ import { getOpenRepairOrder } from './accidentRepairOrders'
 import { getDamageAssessment } from './accidentDamageAssessment'
 import { listWorkstreams } from './accidentCase'
 import { listCommunications } from './accidentCommunications'
-import { listProfiles } from './users'
+import { listDirectoryPeople as listProfiles } from './profileDirectory'
 
 const CLAIM_COLS =
   'id,accident_id,country,site,insurance_applicable,policy_id,policy_no,insurer,broker,' +

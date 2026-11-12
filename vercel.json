@@ -127,6 +127,11 @@
   "git": {
     "deploymentEnabled": {
       "claude/tyrepulse-inspector-build-7rxp2t": false,
+      "claude/console-fixes-7rxp2t": false,
+      "claude/flutter-fixes-7rxp2t": false,
+      "claude/tenant-security-drafts-7rxp2t": false,
+      "claude/engineering-accuracy-7rxp2t": false,
+      "claude/staging-environment-7rxp2t": false,
       "claude/tyre-lifecycle-hardening-20261109": false,
       "claude/tyre-lifetime-cpk-phase1": false,
       "claude/relaxed-planck-ur3ji5": false,

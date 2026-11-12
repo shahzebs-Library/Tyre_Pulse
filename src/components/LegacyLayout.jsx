@@ -86,7 +86,7 @@ import StockBoxIc from './icons/stock-box.icon'
 import BarcodeScanIc from './icons/barcode-scan.icon'
 import OdometerIc from './icons/odometer.icon'
 import { supabase } from '../lib/supabase'
-import { detectAlertBadgeCount } from '../lib/alertEngine'
+import { detectAlertBadgeCount, ALERT_BADGE_MAX_AGE_MS } from '../lib/alertEngine'
 import { syncPendingInspections, getPendingCount, getFailedCount, getFailedInspections, retryFailedInspection } from '../lib/offlineQueue'
 import { useWakeLock } from '../hooks/useWakeLock'
 import { useFeatureFlags } from '../hooks/useFeatureFlags'
@@ -828,7 +828,10 @@ export default function LegacyLayout({ children }) {
           try { return new Set(JSON.parse(localStorage.getItem('tp_dismissed_alerts') || '[]')) }
           catch { return new Set() }
         })()
-        const count = await detectAlertBadgeCount(supabase, country, dismissed)
+        const count = await detectAlertBadgeCount(supabase, country, dismissed, null, {
+          key: [profile?.id, country, profile?.site, (profile?.sites || []).join(',')].join('|'),
+          maxAgeMs: ALERT_BADGE_MAX_AGE_MS,
+        })
         if (!cancelled) setAlertCount(count)
       } catch { /* ignore */ }
     }
@@ -844,7 +847,7 @@ export default function LegacyLayout({ children }) {
       clearInterval(iv)
       document.removeEventListener('visibilitychange', fetchAlertCount)
     }
-  }, [activeCountry])
+  }, [activeCountry, profile?.id, profile?.site, profile?.sites])
 
   useEffect(() => {
     function onKeyDown(e) {

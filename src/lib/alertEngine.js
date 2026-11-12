@@ -451,16 +451,69 @@ export async function detectAlerts(supabase, country = null, { badgeOnly = false
  * that no severity rule reads. Callers pass the dismissed-id set because the
  * badge must exclude alerts the user has already cleared.
  *
+ * `cache` is opt-in. The shell re-asks for this number far more often than the
+ * answer can change (its effect re-runs whenever the profile object is refreshed,
+ * and again each time the tab becomes visible), and every ask pages up to 2,000
+ * tyre rows. With a `key` and `maxAgeMs` the badge-eligible alert ids are kept in
+ * memory for that long and concurrent asks share one read. The dismissed set is
+ * applied AFTER the cache, so dismissing an alert still moves the number at once.
+ * A failed read is never cached. The key must identify the reader (user, country,
+ * modules, site scope) so one account can never be shown another's count.
+ *
  * @param {import('@supabase/supabase-js').SupabaseClient} supabase
  * @param {string|null} country
  * @param {Set<string>} [dismissed]
+ * @param {string[]|null} [allowedModules]
+ * @param {{key?:string|null, maxAgeMs?:number}} [cache]
  * @returns {Promise<number>}
  */
-export async function detectAlertBadgeCount(supabase, country = null, dismissed = new Set(), allowedModules = null) {
-  const found = await detectAlerts(supabase, country, { badgeOnly: true, allowedModules })
-  return found.filter(
-    (a) => !dismissed.has(a.id) && (a.severity === SEVERITY.CRITICAL || a.severity === SEVERITY.HIGH),
-  ).length
+export async function detectAlertBadgeCount(
+  supabase, country = null, dismissed = new Set(), allowedModules = null,
+  { key = null, maxAgeMs = 0 } = {},
+) {
+  const load = async () => {
+    const found = await detectAlerts(supabase, country, { badgeOnly: true, allowedModules })
+    return found
+      .filter((a) => a.severity === SEVERITY.CRITICAL || a.severity === SEVERITY.HIGH)
+      .map((a) => a.id)
+  }
+  let ids
+  if (key && maxAgeMs > 0) {
+    const hit = BADGE_CACHE.get(key)
+    if (hit?.ids && Date.now() - hit.at < maxAgeMs) {
+      ids = hit.ids
+    } else if (hit?.promise) {
+      ids = await hit.promise
+    } else {
+      if (BADGE_CACHE.size > 8) BADGE_CACHE.clear()
+      const promise = load()
+      BADGE_CACHE.set(key, { promise })
+      try {
+        ids = await promise
+        BADGE_CACHE.set(key, { at: Date.now(), ids })
+      } catch (err) {
+        BADGE_CACHE.delete(key)
+        throw err
+      }
+    }
+  } else {
+    ids = await load()
+  }
+  return ids.filter((id) => !dismissed.has(id)).length
+}
+
+const BADGE_CACHE = new Map()
+
+/**
+ * How long the shell may reuse a badge read. Just under its 5 minute timer, so the
+ * timer itself always fetches while profile refreshes and tab-focus events in
+ * between are served from memory.
+ */
+export const ALERT_BADGE_MAX_AGE_MS = 4.5 * 60 * 1000
+
+/** Forget every cached badge read (sign-out, tests). */
+export function clearAlertBadgeCache() {
+  BADGE_CACHE.clear()
 }
 
 /**

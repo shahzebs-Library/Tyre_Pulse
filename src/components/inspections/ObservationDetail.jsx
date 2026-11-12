@@ -65,7 +65,7 @@ export default function ObservationDetail({ obs, onClose, onOpenInspection, onRa
       footer={(
         <div className="cc iw-od-foot">
           {canAct && onRaiseAction && (
-            <button type="button" className="cc-btn" onClick={() => onRaiseAction(obs.row)}>
+            <button type="button" className="cc-btn" onClick={() => onRaiseAction(obs.row, obs.kind === 'tyre' ? `damage:${obs.rawPosition}` : undefined)}>
               <Wrench size={14} aria-hidden="true" /> Create action
             </button>
           )}
@@ -77,6 +77,17 @@ export default function ObservationDetail({ obs, onClose, onOpenInspection, onRa
       )}
     >
       <div className="cc iw-od">
+        <section className="iw-od-block" aria-label="Inspection report reference">
+          <h4>Inspection details</h4>
+          <dl className="iw-od-facts">
+            <div><dt>Asset</dt><dd>{obs.asset_no || 'Not recorded'}</dd></div>
+            <div><dt>Inspection date</dt><dd>{fmtDay(obs.day)}</dd></div>
+            <div><dt>Site</dt><dd>{obs.site || 'Not recorded'}</dd></div>
+            <div><dt>Inspection type</dt><dd>{obs.row?.inspection_type || 'Not recorded'}</dd></div>
+            <div><dt>Inspector</dt><dd>{obs.inspector || 'Not recorded'}</dd></div>
+            <div><dt>Status</dt><dd>{obs.row?.approval_status || obs.row?.status || 'Not recorded'}</dd></div>
+          </dl>
+        </section>
         <section className="iw-od-head">
           <span className={`cc-pill ${obs.tone}`}>{obs.severity}</span>
           <h3>{obs.text}</h3>

@@ -1,0 +1,2277 @@
+{
+ "generated": "2026-11-12",
+ "scope": "Overview, Fleet & Assets, Tyre Management",
+ "cross_cutting": {
+  "MODA-1": {
+   "severity": "P1",
+   "confidence": "VERIFIED",
+   "evidence": "tyre_status_marks UNIQUE(serial, mark_type) has no organisation column; SECURITY DEFINER scrap_tyre_by_serial does ON CONFLICT (serial, mark_type) DO UPDATE with no org predicate; client upsert src/lib/api/tyreExchange.js:48 uses the same key",
+   "summary": "Scrap / returned / written-off marks collide across tenants: a second company scrapping a serial another company already marked overwrites that company's reason, actor and date and gets no mark of its own"
+  },
+  "MODA-2": {
+   "severity": "P1",
+   "confidence": "VERIFIED",
+   "evidence": "warranty_claims unique index warranty_claim_no_country_uniq (claim_no, country); number minted in the browser from the tenant's own list: src/pages/WarrantyTracker.jsx:459, src/lib/warrantyTrackerAnalytics.js generateClaimNo",
+   "summary": "Warranty claim numbers WAR-YYYY-00001 are unique per country across ALL tenants, so the first claim of a second company in the same country fails with a duplicate error"
+  },
+  "MODA-3": {
+   "severity": "P1",
+   "confidence": "VERIFIED",
+   "evidence": "src/contexts/SettingsContext.jsx:21-23 COUNTRIES/COUNTRY_CURRENCY; src/pages/FleetMaster.jsx:1252; src/pages/TyreRecords.jsx:815; src/pages/AssetManagement.jsx:326; COUNTRY_CURRENCY copies in 10+ lib files; tyre_records CHECK length(country) <= 10",
+   "summary": "Countries (KSA, UAE, Egypt) and their currencies are hard-coded; a company in any other country cannot register a vehicle or tyre under its own country or see its own currency"
+  },
+  "MODA-4": {
+   "severity": "P1",
+   "confidence": "VERIFIED",
+   "evidence": "SQL public.tyre_life_km_cap(text) and src/lib/tyreKm.js:18-21 (mixer 80000, pump 56000, loader 15000, else 100000)",
+   "summary": "Tyre life ceilings are the current company's own rule and are hard-coded; any tyre life above 100,000 km is treated as invalid and dropped, which would blank life and CPK for a long-haul fleet"
+  },
+  "MODA-5": {
+   "severity": "P1",
+   "confidence": "VERIFIED",
+   "evidence": "src/lib/api/sites.js:255 writes updated_by; information_schema shows sites has no updated_by column (id,name,country,region,city,active,notes,created_by,created_at,updated_at,organisation_id,site_code,site_type); caller src/pages/SiteManagement.jsx:101",
+   "summary": "Editing an existing registered site sends a column that does not exist, so the whole update is rejected; only creating a new site works"
+  },
+  "MODA-6": {
+   "severity": "P1",
+   "confidence": "VERIFIED",
+   "evidence": "src/pages/TyreRecords.jsx form registers only sr, issue_date, description, brand, serial_no, qty, job_card, mis_number, asset_no, site, country, remarks, cost_per_tyre, risk_level, category, km_at_fitment, km_at_removal",
+   "summary": "The web Add Tyre form has no size, wheel position, vehicle type, status or removal date, so a manually entered tyre cannot feed running life, the tyre map, rotation or fitment"
+  },
+  "MODA-7": {
+   "severity": "P2",
+   "confidence": "VERIFIED",
+   "evidence": "src/lib/api/tyreRecords.js:245 update without .select(); src/pages/TyreRecords.jsx saveRecord, :344 bulk edit and :455 bulk scrap fallback never check affected rows; page has no role gate on Add/Edit",
+   "summary": "A role that RLS does not allow to update tyre_records gets a silent zero-row update that the page reports as saved"
+  },
+  "MODA-8": {
+   "severity": "P2",
+   "confidence": "VERIFIED",
+   "evidence": "src/pages/FleetMaster.jsx:349,352 (Manager/Director may edit, Manager may delete) vs policies vehicle_fleet_cap_insert/update = app_user_can (Admin or explicit grant) and admin_only_delete_guard; src/pages/SiteManagement.jsx:362 includes Director vs sites_write Admin/Manager",
+   "summary": "Buttons are offered to roles the database refuses; the user fills a form and is then told they have no permission"
+  },
+  "MODA-9": {
+   "severity": "P2",
+   "confidence": "VERIFIED",
+   "evidence": "public.modules has no organisation column (module_id,name,category,status,...); src/components/ProtectedRoute.jsx:199 and :223 let Admin pass disabled modules; module_permissions has 0 of 1346 rows with an org_id; system_config has no org column",
+   "summary": "Module on/off, the role matrix and system_config (logo, palette, nav layout) are global to all tenants, and every company Admin can still open modules that were switched off as unfinished"
+  },
+  "MODA-10": {
+   "severity": "P2",
+   "confidence": "VERIFIED",
+   "evidence": "src/App.jsx:694 /warranty, :696 /scrap, :787 /tyre-pool, :770 /my-checklists, :873 /scan have no RoleRoute or ModuleRoute",
+   "summary": "Pages are reachable by any signed-in role by URL; only the menu and RLS limit them"
+  },
+  "MODA-11": {
+   "severity": "P2",
+   "confidence": "VERIFIED",
+   "evidence": "src/components/commandCenter/CommandCenter.jsx:65,125,212,334,385 empty texts with no link; no onboarding or first-step prompt in the file",
+   "summary": "A brand-new company lands on a board of empty cards with no guided first action (add a site, add a vehicle, import)"
+  },
+  "MODA-12": {
+   "severity": "P2",
+   "confidence": "VERIFIED",
+   "evidence": "SQL on tyre_records: 11260 rows, risk_level 0, tread_depth 0, pressure_reading 0, supplier 0, category 88, cost_per_tyre 4895, total_km 6527",
+   "summary": "Several analytics are built on columns that are empty in production, so they have never been proven on real data"
+  },
+  "MODA-13": {
+   "severity": "P3",
+   "confidence": "VERIFIED",
+   "evidence": "src/pages/FleetMaster.jsx:592 created_by set on every save; src/pages/TyreRecords.jsx:316 region: profile.region ?? 'KSA' and :317 uploaded_by on edit",
+   "summary": "Editing a record rewrites who created it, and a tyre saved by a user without a region is stamped KSA"
+  },
+  "MODA-14": {
+   "severity": "P2",
+   "confidence": "PLAUSIBLE",
+   "evidence": "src/lib/heatIntelligence.js GCC_CITIES / GCC_CITY_COORDS; src/lib/api/weather.js:17,162 api.open-meteo.com free endpoint",
+   "summary": "Heat Intelligence only knows Gulf cities and uses a free weather API whose terms for commercial use were not checked"
+  },
+  "MODA-15": {
+   "severity": "P2",
+   "confidence": "VERIFIED",
+   "evidence": "no insert/upsert into asset_utilization anywhere in src; src/lib/api/assetUtilization.js is read-only",
+   "summary": "Fleet Utilization has no way to receive data in the product; current rows were loaded by hand from telematics exports"
+  },
+  "MODA-16": {
+   "severity": "P2",
+   "confidence": "VERIFIED",
+   "evidence": "workflow_instances: 15 of 53 rows have organisation_id NULL; public.workflow_act only checks the org when the instance org is not null; start_workflow has no org check of its own",
+   "summary": "Approval instances without an organisation are visible and actionable across tenants"
+  },
+  "MODA-17": {
+   "severity": "P1",
+   "confidence": "VERIFIED",
+   "evidence": "system_config has columns key,value,description,updated_by,updated_at,category,value_text (no org); src/lib/api/brandLogo.js:21 company_logo; src/pages/QrLabels.jsx:193",
+   "summary": "Every tenant's QR labels (and any other document that reads company_logo) carry the one global logo, i.e. the current company's logo"
+  },
+  "MODA-18": {
+   "severity": "P3",
+   "confidence": "VERIFIED",
+   "evidence": "/rfid and /rfid-registry; /fleet-master analysis view, /asset-management/:assetNo, /vehicle/:assetNo, /digital-twin/:assetNo, /vehicle-history; /tyre-lifecycle, /tyre-passport, /serial-tracker; check in/out, handover, reservations, gate pass",
+   "summary": "Several pages answer the same question for the same record; they need one owner each before being sold"
+  }
+ },
+ "modules": [
+  {
+   "group": "Overview",
+   "label": "Command Center",
+   "route": "/",
+   "module_key": "dashboard",
+   "guard": "none (HomeRoute: role redirect, executiveHomeAllowed else MyWorkspace)",
+   "page": "src/pages/CommandCenter.jsx -> src/components/commandCenter/CommandCenter.jsx",
+   "services": [
+    "api/commandCenter.js",
+    "lib/commandCenter.js",
+    "tyreRunningLife",
+    "actionCenter",
+    "pmPrograms",
+    "assetUtilization",
+    "governedCost",
+    "approvalsQueue"
+   ],
+   "tables": [
+    "vehicle_fleet",
+    "tyre_records",
+    "work_orders",
+    "inspections",
+    "action_items",
+    "asset_utilization",
+    "parts_consumption"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Loads; every card shows its own honest empty text (No vehicles registered yet, No expense data, N/A). No link or guided first step. Map only plots 10 named countries (lib/commandCenter.js:222).",
+   "defects": [
+    {
+     "id": "MODA-11",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "src/components/commandCenter/CommandCenter.jsx:65,125,212,334,385 empty texts with no link; no onboarding or first-step prompt in the file",
+     "summary": "A brand-new company lands on a board of empty cards with no guided first action (add a site, add a vehicle, import)"
+    },
+    {
+     "id": "MODA-3",
+     "severity": "P1",
+     "confidence": "VERIFIED",
+     "evidence": "src/contexts/SettingsContext.jsx:21-23 COUNTRIES/COUNTRY_CURRENCY; src/pages/FleetMaster.jsx:1252; src/pages/TyreRecords.jsx:815; src/pages/AssetManagement.jsx:326; COUNTRY_CURRENCY copies in 10+ lib files; tyre_records CHECK length(country) <= 10",
+     "summary": "Countries (KSA, UAE, Egypt) and their currencies are hard-coded; a company in any other country cannot register a vehicle or tyre under its own country or see its own currency"
+    }
+   ],
+   "remediation": "Add a first-run panel (add site, add vehicle, import, invite) shown while the fleet is empty; derive map points and currency from an org country table.",
+   "priority": "P2",
+   "area": "web",
+   "tests": [
+    "commandCenter.test.js (pure engine, real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Overview",
+   "label": "Action Center",
+   "route": "/action-center",
+   "module_key": "action_center",
+   "guard": "RoleRoute ['Admin']",
+   "page": "src/pages/ActionCenter.jsx",
+   "services": [
+    "api/actionCenter.js (transition_action_item RPC)"
+   ],
+   "tables": [
+    "action_items",
+    "action_item_history"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty list with empty state; items arise from corrective actions, checklists and manual entry.",
+   "defects": [
+    {
+     "id": "MODA-A1",
+     "severity": "P3",
+     "confidence": "PLAUSIBLE",
+     "evidence": "action_items_insert policy = auth.uid() IS NOT NULL; action_item_history.organisation_id NOT NULL without default",
+     "summary": "Any signed-in user of the tenant may insert action items by API; history rows depend on the writer supplying the org (trigger or RPC). Write path through the RPC was not executed."
+    }
+   ],
+   "remediation": "Keep; confirm the history writer stamps the org for a second tenant with a rolled-back test on a staging copy.",
+   "priority": "P3",
+   "area": "DB",
+   "tests": [
+    "actionCenter.test.js, actionCenterAnalytics.test.js, actionCenterLoadingContract.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Overview",
+   "label": "Approvals",
+   "route": "/approvals",
+   "module_key": "approvals",
+   "guard": "FlagRoute automation_platform (nav: Admin/Manager/Director)",
+   "page": "src/pages/Approvals.jsx",
+   "services": [
+    "api/approvalsQueue.js",
+    "api/workflows.js",
+    "api/userSignature.js"
+   ],
+   "tables": [
+    "workflow_instances",
+    "checklist_submissions",
+    "inspections",
+    "user_signatures"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Tabs show zero counts and an empty queue. Nothing to set up for inspections and checklists; workflow definitions must exist for other approval types.",
+   "defects": [
+    {
+     "id": "MODA-16",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "workflow_instances: 15 of 53 rows have organisation_id NULL; public.workflow_act only checks the org when the instance org is not null; start_workflow has no org check of its own",
+     "summary": "Approval instances without an organisation are visible and actionable across tenants"
+    }
+   ],
+   "remediation": "Backfill or close the 15 organisation-less workflow instances; make workflow_act and the read policy require an organisation match.",
+   "priority": "P2",
+   "area": "DB",
+   "tests": [
+    "approvalsDashboard.test.jsx, approvalsBulk.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Overview",
+   "label": "My Checklists",
+   "route": "/my-checklists",
+   "module_key": "my_checklists",
+   "guard": "none",
+   "page": "src/pages/MyChecklists.jsx",
+   "services": [
+    "api/checklists.js",
+    "api/checklistSchedules.js"
+   ],
+   "tables": [
+    "checklist_templates",
+    "checklist_assignments",
+    "checklist_schedules",
+    "checklist_submissions"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Honest \"nothing assigned\" state (MyChecklists.jsx:486). A new company has no templates; the 12 current templates belong to the current organisation, so the first action is building a template, which only Admin authors can do.",
+   "defects": [
+    {
+     "id": "MODA-10",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "src/App.jsx:694 /warranty, :696 /scrap, :787 /tyre-pool, :770 /my-checklists, :873 /scan have no RoleRoute or ModuleRoute",
+     "summary": "Pages are reachable by any signed-in role by URL; only the menu and RLS limit them"
+    },
+    {
+     "id": "MODA-B1",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "checklist_schedules 0 rows and checklist_assignments 0 rows in production (module register baseline)",
+     "summary": "The due list has never been exercised with real schedules in production"
+    }
+   ],
+   "remediation": "Ship a small starter template library per industry that a new organisation can copy.",
+   "priority": "P2",
+   "area": "web, DB",
+   "tests": [
+    "myChecklistsAnalytics.test.js, myChecklistsRoleFilter.test.jsx (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Overview",
+   "label": "Message the Team",
+   "route": "/broadcast",
+   "module_key": "broadcast",
+   "guard": "RoleRoute ['Admin','Manager','Director'] moduleKey broadcast",
+   "page": "src/pages/Broadcast.jsx",
+   "services": [
+    "api/broadcast.js (broadcast_audience, broadcast_send RPCs)"
+   ],
+   "tables": [
+    "broadcast_messages",
+    "broadcast_recipient_receipts",
+    "broadcast_replies"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty history with a compose form; works as soon as the company has more than one user. Phone delivery needs registered devices.",
+   "defects": [
+    {
+     "id": "MODA-C1",
+     "severity": "P3",
+     "confidence": "VERIFIED",
+     "evidence": "src/pages/Broadcast.jsx:351 placeholder text \"All supervisors report to NHC at 07:00.\"",
+     "summary": "Sample text names a site of the current company"
+    }
+   ],
+   "remediation": "Replace the placeholder with neutral wording.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "broadcast.test.js, broadcastAnalytics.test.js, broadcastAudience.test.js, broadcastPage.render.test.jsx (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Fleet & Assets",
+   "label": "Fleet Master",
+   "route": "/fleet-master",
+   "module_key": "fleet_master",
+   "guard": "ModuleRoute fleet_master",
+   "page": "src/pages/FleetMaster.jsx (hosts AssetManagement as ?tab=analysis on the working tree; on main /asset-management is its own page)",
+   "services": [
+    "api/assets.js",
+    "api/billing.js (org_can_add)",
+    "api/fleetMasterData.js"
+   ],
+   "tables": [
+    "vehicle_fleet",
+    "sites"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Empty table with an Add button; plan limit is checked before insert. Only an Admin (or a user with an explicit grant) can save, so the first user of a new company must be an Admin. Country list offers only KSA, UAE, Egypt.",
+   "defects": [
+    {
+     "id": "MODA-3",
+     "severity": "P1",
+     "confidence": "VERIFIED",
+     "evidence": "src/contexts/SettingsContext.jsx:21-23 COUNTRIES/COUNTRY_CURRENCY; src/pages/FleetMaster.jsx:1252; src/pages/TyreRecords.jsx:815; src/pages/AssetManagement.jsx:326; COUNTRY_CURRENCY copies in 10+ lib files; tyre_records CHECK length(country) <= 10",
+     "summary": "Countries (KSA, UAE, Egypt) and their currencies are hard-coded; a company in any other country cannot register a vehicle or tyre under its own country or see its own currency"
+    },
+    {
+     "id": "MODA-8",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "src/pages/FleetMaster.jsx:349,352 (Manager/Director may edit, Manager may delete) vs policies vehicle_fleet_cap_insert/update = app_user_can (Admin or explicit grant) and admin_only_delete_guard; src/pages/SiteManagement.jsx:362 includes Director vs sites_write Admin/Manager",
+     "summary": "Buttons are offered to roles the database refuses; the user fills a form and is then told they have no permission"
+    },
+    {
+     "id": "MODA-13",
+     "severity": "P3",
+     "confidence": "VERIFIED",
+     "evidence": "src/pages/FleetMaster.jsx:592 created_by set on every save; src/pages/TyreRecords.jsx:316 region: profile.region ?? 'KSA' and :317 uploaded_by on edit",
+     "summary": "Editing a record rewrites who created it, and a tyre saved by a user without a region is stamped KSA"
+    }
+   ],
+   "remediation": "Country list from an org table; align canEdit/canDelete with app_user_can results; stop sending created_by on update.",
+   "priority": "P1",
+   "area": "web, DB",
+   "tests": [
+    "fleetMasterFilters.test.jsx, fleetMasterSearch.api.test.js, assetManagement.api.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Fleet & Assets",
+   "label": "Site Management",
+   "route": "/sites",
+   "module_key": "fleet_master (shared)",
+   "guard": "ModuleRoute fleet_master",
+   "page": "src/pages/SiteManagement.jsx",
+   "services": [
+    "api/sites.js",
+    "api/siteOperations.js"
+   ],
+   "tables": [
+    "sites",
+    "vehicle_fleet"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Empty directory with Add site; a new site can be created by Admin or Manager. Editing it afterwards fails.",
+   "defects": [
+    {
+     "id": "MODA-5",
+     "severity": "P1",
+     "confidence": "VERIFIED",
+     "evidence": "src/lib/api/sites.js:255 writes updated_by; information_schema shows sites has no updated_by column (id,name,country,region,city,active,notes,created_by,created_at,updated_at,organisation_id,site_code,site_type); caller src/pages/SiteManagement.jsx:101",
+     "summary": "Editing an existing registered site sends a column that does not exist, so the whole update is rejected; only creating a new site works"
+    },
+    {
+     "id": "MODA-8",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "src/pages/FleetMaster.jsx:349,352 (Manager/Director may edit, Manager may delete) vs policies vehicle_fleet_cap_insert/update = app_user_can (Admin or explicit grant) and admin_only_delete_guard; src/pages/SiteManagement.jsx:362 includes Director vs sites_write Admin/Manager",
+     "summary": "Buttons are offered to roles the database refuses; the user fills a form and is then told they have no permission"
+    },
+    {
+     "id": "MODA-D1",
+     "severity": "P3",
+     "confidence": "VERIFIED",
+     "evidence": "unique index ux_sites_org_country_name uses COALESCE(organisation_id, '00000000-0000-0000-0000-000000000001')",
+     "summary": "The site uniqueness rule falls back to the current company's organisation id"
+    }
+   ],
+   "remediation": "Remove updated_by from the update payload (or add the column); add a service test that runs against the real column list; drop the COALESCE once organisation_id is NOT NULL.",
+   "priority": "P1",
+   "area": "web, DB",
+   "tests": [
+    "siteManagementAnalytics.test.js only (pure). No test covers upsertSite, which is why the unknown column was not caught."
+   ],
+   "note": ""
+  },
+  {
+   "group": "Fleet & Assets",
+   "label": "Fleet Groups",
+   "route": "/fleet-groups",
+   "module_key": "fleet_groups",
+   "guard": "RoleRoute ['Admin']",
+   "page": "src/pages/FleetGroups.jsx",
+   "services": [
+    "api/fleetGroups.js",
+    "api/fleetGroupSignals.js"
+   ],
+   "tables": [
+    "fleet_groups"
+   ],
+   "internal_status": "at risk (disabled, 0 rows, never used)",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty state with create form; payload matches the table and its CHECK (group_type).",
+   "defects": [
+    {
+     "id": "MODA-9",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "public.modules has no organisation column (module_id,name,category,status,...); src/components/ProtectedRoute.jsx:199 and :223 let Admin pass disabled modules; module_permissions has 0 of 1346 rows with an org_id; system_config has no org column",
+     "summary": "Module on/off, the role matrix and system_config (logo, palette, nav layout) are global to all tenants, and every company Admin can still open modules that were switched off as unfinished"
+    },
+    {
+     "id": "MODA-E1",
+     "severity": "P3",
+     "confidence": "VERIFIED",
+     "evidence": "fleet_groups has asset_count typed by hand; membership is inferred from sites in fleetGroupSignals",
+     "summary": "A group does not actually own vehicles; the count is a typed number"
+    }
+   ],
+   "remediation": "See restore list. Do not market until membership is real.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "fleetGroups.test.js, fleetGroupsAnalytics.test.js, fleetGroupsView.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Fleet & Assets",
+   "label": "Combinations",
+   "route": "/combinations",
+   "module_key": "combinations",
+   "guard": "RoleRoute ['Admin']",
+   "page": "src/pages/Combinations.jsx",
+   "services": [
+    "api/combinations.js"
+   ],
+   "tables": [
+    "asset_combinations",
+    "vehicle_fleet",
+    "tyre_records"
+   ],
+   "internal_status": "at risk (disabled, 0 rows)",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty state; create payload matches columns and CHECKs.",
+   "defects": [
+    {
+     "id": "MODA-9",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "public.modules has no organisation column (module_id,name,category,status,...); src/components/ProtectedRoute.jsx:199 and :223 let Admin pass disabled modules; module_permissions has 0 of 1346 rows with an org_id; system_config has no org column",
+     "summary": "Module on/off, the role matrix and system_config (logo, palette, nav layout) are global to all tenants, and every company Admin can still open modules that were switched off as unfinished"
+    }
+   ],
+   "remediation": "See restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "combinations.test.js, combinationsAnalytics.test.js, combinationManagerView.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Fleet & Assets",
+   "label": "Customers",
+   "route": "/customers",
+   "module_key": "customers",
+   "guard": "RoleRoute ['Admin']",
+   "page": "src/pages/Customers.jsx",
+   "services": [
+    "api/customers.js",
+    "api/customerPortal.js",
+    "api/contracts.js"
+   ],
+   "tables": [
+    "customers",
+    "customer_accounts",
+    "contracts"
+   ],
+   "internal_status": "at risk (disabled, 0 rows)",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty state; accounts and contracts are linked by exact name only (project memory).",
+   "defects": [
+    {
+     "id": "MODA-9",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "public.modules has no organisation column (module_id,name,category,status,...); src/components/ProtectedRoute.jsx:199 and :223 let Admin pass disabled modules; module_permissions has 0 of 1346 rows with an org_id; system_config has no org column",
+     "summary": "Module on/off, the role matrix and system_config (logo, palette, nav layout) are global to all tenants, and every company Admin can still open modules that were switched off as unfinished"
+    }
+   ],
+   "remediation": "See restore list. The word Customers will confuse a SaaS buyer (these are the tenant's own customers).",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "customers.test.js, customersAnalytics.test.js, customersView.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Fleet & Assets",
+   "label": "Vehicle History",
+   "route": "/vehicle-history",
+   "module_key": "fleet_master (shared)",
+   "guard": "ModuleRoute fleet_master (menu Admin only)",
+   "page": "src/pages/VehicleHistory.jsx",
+   "services": [
+    "api/vehicleHistory.js",
+    "api/vehicleHistoryExtra.js",
+    "api/assetHistory.js",
+    "api/costSummary.js",
+    "api/governedCost.js"
+   ],
+   "tables": [
+    "work_orders",
+    "tyre_records",
+    "parts_consumption",
+    "vehicle_fleet",
+    "odometer_logs",
+    "inspections",
+    "accidents"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Asset picker is empty until vehicles exist; timeline fills from job cards, tyres and expenses, which a new company only has after imports.",
+   "defects": [
+    {
+     "id": "MODA-3",
+     "severity": "P1",
+     "confidence": "VERIFIED",
+     "evidence": "src/contexts/SettingsContext.jsx:21-23 COUNTRIES/COUNTRY_CURRENCY; src/pages/FleetMaster.jsx:1252; src/pages/TyreRecords.jsx:815; src/pages/AssetManagement.jsx:326; COUNTRY_CURRENCY copies in 10+ lib files; tyre_records CHECK length(country) <= 10",
+     "summary": "Countries (KSA, UAE, Egypt) and their currencies are hard-coded; a company in any other country cannot register a vehicle or tyre under its own country or see its own currency"
+    },
+    {
+     "id": "MODA-F1",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "menu item adminOnly while route guard is the shared fleet_master key (Layout.jsx:143 vs App.jsx:752)",
+     "summary": "Menu and route disagree: non-admins with Fleet Master access can open it by URL"
+    }
+   ],
+   "remediation": "Decide one access rule; give the page its own module key.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "vehicleHistory.api.test.js, vehicleHistoryAnalytics.test.js, vehicleHistoryRework.test.js, vehicleHistoryView.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Fleet & Assets",
+   "label": "Asset Disposal",
+   "route": "/asset-disposals",
+   "module_key": "asset_disposals",
+   "guard": "RoleRoute ['Admin','Manager','Director'] moduleKey asset_disposals",
+   "page": "src/pages/AssetDisposals.jsx",
+   "services": [
+    "api/assetDisposals.js (3 RPCs, upsert on org,country,asset)",
+    "api/assetBreakdowns.js"
+   ],
+   "tables": [
+    "asset_disposals",
+    "asset_breakdowns",
+    "asset_replacement_costs"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Empty register with add and import. Import mapper is written for the current company's committee workbook.",
+   "defects": [
+    {
+     "id": "MODA-3",
+     "severity": "P1",
+     "confidence": "VERIFIED",
+     "evidence": "src/contexts/SettingsContext.jsx:21-23 COUNTRIES/COUNTRY_CURRENCY; src/pages/FleetMaster.jsx:1252; src/pages/TyreRecords.jsx:815; src/pages/AssetManagement.jsx:326; COUNTRY_CURRENCY copies in 10+ lib files; tyre_records CHECK length(country) <= 10",
+     "summary": "Countries (KSA, UAE, Egypt) and their currencies are hard-coded; a company in any other country cannot register a vehicle or tyre under its own country or see its own currency"
+    },
+    {
+     "id": "MODA-G1",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "src/pages/AssetDisposals.jsx:79 COUNTRY_CURRENCY and :483,:561,:572,:587 currency fallback 'SAR'; api/assetDisposals.js mapDisposalSheetRows",
+     "summary": "Currency falls back to SAR and the import expects the current company's sheet layout"
+    }
+   ],
+   "remediation": "Generic import template; currency from org settings.",
+   "priority": "P2",
+   "area": "web",
+   "tests": [
+    "assetDisposal*.test.js(x), assetDisposals.api.test.js, assetDisposalsPage.render.test.jsx, assetDisposalWorkflow.test.jsx (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Fleet & Assets",
+   "label": "Fleet Renewal",
+   "route": "/fleet-renewal",
+   "module_key": "fleet_renewal",
+   "guard": "RoleRoute ['Admin','Manager','Director']",
+   "page": "src/pages/FleetRenewal.jsx",
+   "services": [
+    "api/fleetRenewal.js",
+    "api/fleetRenewalSignals.js (get_fleet_renewal_signals)"
+   ],
+   "tables": [
+    "fleet_renewal_plans",
+    "vehicle_fleet",
+    "asset_utilization",
+    "asset_breakdowns"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Works from the fleet register alone. Score uses an ASSUMED planning life (default 10 years, labelled as an assumption) because useful life is not recorded; model year is present on 600 of 1622 current vehicles, purchase value on 0.",
+   "defects": [
+    {
+     "id": "MODA-H1",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "src/lib/fleetRenewalView.js:15-20,39,417 planning life assumption; SQL: vehicle_fleet model_year 600/1622, purchase_value 0/1622",
+     "summary": "Renewal ranking is an estimate from an assumed life and partial model years; it is labelled, but budget figures stay empty"
+    },
+    {
+     "id": "MODA-3",
+     "severity": "P1",
+     "confidence": "VERIFIED",
+     "evidence": "src/contexts/SettingsContext.jsx:21-23 COUNTRIES/COUNTRY_CURRENCY; src/pages/FleetMaster.jsx:1252; src/pages/TyreRecords.jsx:815; src/pages/AssetManagement.jsx:326; COUNTRY_CURRENCY copies in 10+ lib files; tyre_records CHECK length(country) <= 10",
+     "summary": "Countries (KSA, UAE, Egypt) and their currencies are hard-coded; a company in any other country cannot register a vehicle or tyre under its own country or see its own currency"
+    }
+   ],
+   "remediation": "Keep the label; add model year and purchase value to the vehicle form and import template.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "fleetRenewal.test.js, fleetRenewalRegister.test.js, fleetRenewalScore.test.js, fleetRenewalView.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Fleet & Assets",
+   "label": "Battery Lifecycle",
+   "route": "/batteries",
+   "module_key": "batteries",
+   "guard": "RoleRoute ['Admin']",
+   "page": "src/pages/Batteries.jsx",
+   "services": [
+    "api/batteries.js"
+   ],
+   "tables": [
+    "batteries"
+   ],
+   "internal_status": "at risk (disabled, 0 rows)",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty state with add form; payload matches table. Life is an assumed 36 months (project memory), no type or charge fields.",
+   "defects": [
+    {
+     "id": "MODA-9",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "public.modules has no organisation column (module_id,name,category,status,...); src/components/ProtectedRoute.jsx:199 and :223 let Admin pass disabled modules; module_permissions has 0 of 1346 rows with an org_id; system_config has no org column",
+     "summary": "Module on/off, the role matrix and system_config (logo, palette, nav layout) are global to all tenants, and every company Admin can still open modules that were switched off as unfinished"
+    }
+   ],
+   "remediation": "See restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "batteries.test.js, batteriesAnalytics.test.js, batteryLifecycleView.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Fleet & Assets",
+   "label": "QR Labels",
+   "route": "/qr-labels",
+   "module_key": "qr_labels",
+   "guard": "RoleRoute ['Admin'] + ModuleRoute qr_labels",
+   "page": "src/pages/QrLabels.jsx (queries tyre_records and vehicle_fleet directly)",
+   "services": [
+    "api/brandLogo.js",
+    "direct supabase in page"
+   ],
+   "tables": [
+    "vehicle_fleet",
+    "tyre_records",
+    "qr_print_jobs",
+    "system_config"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Nothing to print until vehicles or tyres exist; then works without setup. The header logo is the single global logo.",
+   "defects": [
+    {
+     "id": "MODA-17",
+     "severity": "P1",
+     "confidence": "VERIFIED",
+     "evidence": "system_config has columns key,value,description,updated_by,updated_at,category,value_text (no org); src/lib/api/brandLogo.js:21 company_logo; src/pages/QrLabels.jsx:193",
+     "summary": "Every tenant's QR labels (and any other document that reads company_logo) carry the one global logo, i.e. the current company's logo"
+    },
+    {
+     "id": "MODA-I1",
+     "severity": "P3",
+     "confidence": "VERIFIED",
+     "evidence": "qr_print_jobs 0 rows in production",
+     "summary": "Print history has not been used in production"
+    }
+   ],
+   "remediation": "Move company_logo (and palette, nav layout) to an org-scoped settings row; fall back to the Tyre Pulse wordmark.",
+   "priority": "P1",
+   "area": "DB, web",
+   "tests": [
+    "qrLabelLayout.test.js, qrBulkMatch.test.js, qrBulkPageWiring.test.js, qrLabelsAnalytics.test.js, qrLabelsView.test.js, qrPrintJobs.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Fleet & Assets",
+   "label": "RFID Registry",
+   "route": "/rfid",
+   "module_key": "rfid",
+   "guard": "RoleRoute ['Admin']",
+   "page": "src/pages/Rfid.jsx",
+   "services": [
+    "api/rfid.js"
+   ],
+   "tables": [
+    "rfid_tags",
+    "rfid_tag_events"
+   ],
+   "internal_status": "at risk (1 row, effectively unused)",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty state with add tag; unique per organisation (uq_rfid_tags_org_tag). Needs handheld reader hardware used as a keyboard; no reader integration.",
+   "defects": [
+    {
+     "id": "MODA-18",
+     "severity": "P3",
+     "confidence": "VERIFIED",
+     "evidence": "/rfid and /rfid-registry; /fleet-master analysis view, /asset-management/:assetNo, /vehicle/:assetNo, /digital-twin/:assetNo, /vehicle-history; /tyre-lifecycle, /tyre-passport, /serial-tracker; check in/out, handover, reservations, gate pass",
+     "summary": "Several pages answer the same question for the same record; they need one owner each before being sold"
+    }
+   ],
+   "remediation": "Keep off the price list until a customer has readers; retire /rfid-registry.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "rfid.test.js, rfidAnalytics.test.js, rfidTagEvents.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Fleet & Assets",
+   "label": "RFID Registry (old page, no menu item)",
+   "route": "/rfid-registry",
+   "module_key": "tyre_records (shared)",
+   "guard": "ModuleRoute tyre_records",
+   "page": "src/pages/RfidRegistry.jsx",
+   "services": [
+    "direct supabase in page"
+   ],
+   "tables": [
+    "rfid_tags",
+    "rfid_readers",
+    "rfid_read_events",
+    "rfid_alerts"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 5,
+   "empty_account_behaviour": "Second page over the same tags table, reachable only by URL, guarded by the tyre records key.",
+   "defects": [
+    {
+     "id": "MODA-18",
+     "severity": "P3",
+     "confidence": "VERIFIED",
+     "evidence": "/rfid and /rfid-registry; /fleet-master analysis view, /asset-management/:assetNo, /vehicle/:assetNo, /digital-twin/:assetNo, /vehicle-history; /tyre-lifecycle, /tyre-passport, /serial-tracker; check in/out, handover, reservations, gate pass",
+     "summary": "Several pages answer the same question for the same record; they need one owner each before being sold"
+    }
+   ],
+   "remediation": "Redirect to /rfid.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "rfidRegistryAnalytics.test.js, rfidRegistryView.test.js, rfidRegistryPage.render.test.jsx (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Fleet & Assets",
+   "label": "Engine Hours",
+   "route": "/engine-hours",
+   "module_key": "engine_hours",
+   "guard": "RoleRoute ['Admin']",
+   "page": "src/pages/EngineHours.jsx",
+   "services": [
+    "api/engineHours.js",
+    "api/assets.js",
+    "api/assetUtilization.js",
+    "api/pmPrograms.js"
+   ],
+   "tables": [
+    "engine_hours_logs",
+    "vehicle_fleet"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty log with add form; insert open to any signed-in user of the tenant (policy), page is Admin only. Readings normally arrive from the phone app.",
+   "defects": [
+    {
+     "id": "MODA-J1",
+     "severity": "P3",
+     "confidence": "VERIFIED",
+     "evidence": "Odometer Logs and Engine Hours are two menu items; /odometer-logs already records both through save_vehicle_meter_readings",
+     "summary": "Two entry points for hour readings"
+    }
+   ],
+   "remediation": "Fold into Odometer Logs as one Meter Readings page.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "engineHours.test.js, engineHoursView.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Fleet & Assets",
+   "label": "Odometer Logs",
+   "route": "/odometer-logs",
+   "module_key": "odometer_logs",
+   "guard": "ModuleRoute odometer_logs",
+   "page": "src/pages/OdometerLogs.jsx",
+   "services": [
+    "api/vehicleMeters.js (save_vehicle_meter_readings, correct_vehicle_meter_reading, vehicle_meter_permissions)"
+   ],
+   "tables": [
+    "odometer_logs",
+    "engine_hours_logs",
+    "vehicle_fleet"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Lists the fleet with no readings; first action is to add vehicles, then log a reading. Server RPC handles validation and stale-save conflicts.",
+   "defects": [],
+   "remediation": "None blocking.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "odometerLogs.test.js (run, pass), odometerLogsAnalytics.test.js, odometerLogsView.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Fleet & Assets",
+   "label": "Fleet Utilization",
+   "route": "/fleet-utilization",
+   "module_key": "fleet_utilization",
+   "guard": "RoleRoute ['Admin','Manager','Director']",
+   "page": "src/pages/FleetUtilization.jsx",
+   "services": [
+    "api/assetUtilization.js (read only)"
+   ],
+   "tables": [
+    "asset_utilization"
+   ],
+   "internal_status": "ready (static snapshot of 556 rows)",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Permanently empty: there is no screen, import or integration that writes utilisation.",
+   "defects": [
+    {
+     "id": "MODA-15",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "no insert/upsert into asset_utilization anywhere in src; src/lib/api/assetUtilization.js is read-only",
+     "summary": "Fleet Utilization has no way to receive data in the product; current rows were loaded by hand from telematics exports"
+    }
+   ],
+   "remediation": "Either build a telematics import or keep it internal.",
+   "priority": "P2",
+   "area": "web, DB",
+   "tests": [
+    "fleetUtilization.test.js, fleetUtilizationAnalytics.test.js, fleetUtilizationTable.test.js, fleetUtilizationView.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Fleet & Assets",
+   "label": "Vehicle Check In/Out",
+   "route": "/vehicle-checkinout",
+   "module_key": "vehicle_checkinout",
+   "guard": "RoleRoute ['Admin']",
+   "page": "src/pages/VehicleCheckInOut.jsx",
+   "services": [
+    "api/vehicleCheckInOut.js"
+   ],
+   "tables": [
+    "vehicle_checkinout"
+   ],
+   "internal_status": "at risk (disabled, 0 rows)",
+   "commercial_class": 5,
+   "empty_account_behaviour": "Empty state with form; overlaps Handover and Gate Pass.",
+   "defects": [
+    {
+     "id": "MODA-9",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "public.modules has no organisation column (module_id,name,category,status,...); src/components/ProtectedRoute.jsx:199 and :223 let Admin pass disabled modules; module_permissions has 0 of 1346 rows with an org_id; system_config has no org column",
+     "summary": "Module on/off, the role matrix and system_config (logo, palette, nav layout) are global to all tenants, and every company Admin can still open modules that were switched off as unfinished"
+    },
+    {
+     "id": "MODA-18",
+     "severity": "P3",
+     "confidence": "VERIFIED",
+     "evidence": "/rfid and /rfid-registry; /fleet-master analysis view, /asset-management/:assetNo, /vehicle/:assetNo, /digital-twin/:assetNo, /vehicle-history; /tyre-lifecycle, /tyre-passport, /serial-tracker; check in/out, handover, reservations, gate pass",
+     "summary": "Several pages answer the same question for the same record; they need one owner each before being sold"
+    }
+   ],
+   "remediation": "See restore list; merge into Handover.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "vehicleCheckInOut.test.js, vehicleCheckInOutAnalytics.test.js, vehicleCheckInOutView.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Fleet & Assets",
+   "label": "Vehicle Handover",
+   "route": "/handovers",
+   "module_key": "handovers",
+   "guard": "RoleRoute ['Admin','Manager','Director','Fleet Supervisor','Fleet Incharge']",
+   "page": "src/pages/VehicleHandover.jsx",
+   "services": [
+    "api/handoverReports.js (decide_handover_approval)",
+    "api/assets.js",
+    "api/engineHours.js"
+   ],
+   "tables": [
+    "handover_reports"
+   ],
+   "internal_status": "at risk (live but 0 rows in production)",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty register with a five-step form; has a Flutter counterpart (features/handover). Two custom roles named in the guard must exist in the new company.",
+   "defects": [
+    {
+     "id": "MODA-K1",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "handover_reports 0 rows (module register baseline)",
+     "summary": "The full flow including two-stage sign-off has no production record yet"
+    }
+   ],
+   "remediation": "Run one real handover end to end on web and phone before selling.",
+   "priority": "P2",
+   "area": "web, Flutter",
+   "tests": [
+    "handoverApproval.test.js, handoverGating.test.js, handoverReports.test.js, handoverSignoffService.test.js, handoverPanel.render.test.jsx, vehicleHandover*.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Fleet & Assets",
+   "label": "Vehicle Reservations",
+   "route": "/reservations",
+   "module_key": "reservations",
+   "guard": "RoleRoute ['Admin']",
+   "page": "src/pages/VehicleReservations.jsx",
+   "services": [
+    "api/vehicleReservations.js"
+   ],
+   "tables": [
+    "vehicle_reservations",
+    "vehicle_reservation_events"
+   ],
+   "internal_status": "at risk (disabled, 0 rows)",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty calendar with create form.",
+   "defects": [
+    {
+     "id": "MODA-9",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "public.modules has no organisation column (module_id,name,category,status,...); src/components/ProtectedRoute.jsx:199 and :223 let Admin pass disabled modules; module_permissions has 0 of 1346 rows with an org_id; system_config has no org column",
+     "summary": "Module on/off, the role matrix and system_config (logo, palette, nav layout) are global to all tenants, and every company Admin can still open modules that were switched off as unfinished"
+    }
+   ],
+   "remediation": "See restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "vehicleReservations.test.js, vehicleReservations.page.test.jsx, vehicleReservationsAnalytics.test.js, vehicleReservationsView.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Fleet & Assets",
+   "label": "Gate Pass",
+   "route": "/gate-pass",
+   "module_key": "gate_pass",
+   "guard": "ModuleRoute gate_pass",
+   "page": "src/pages/GatePass.jsx",
+   "services": [
+    "api/gatePassPage.js"
+   ],
+   "tables": [
+    "gate_passes",
+    "inspections",
+    "vehicle_fleet"
+   ],
+   "internal_status": "at risk (2 rows in production)",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty day view; clearance looks for an inspection of the asset, so it depends on inspections being done. Direction, driver and times are kept in custom_data.",
+   "defects": [
+    {
+     "id": "MODA-L1",
+     "severity": "P3",
+     "confidence": "VERIFIED",
+     "evidence": "src/lib/api/gatePassPage.js:59,98 insert/update without select; src/pages/GatePass.jsx has one raw .message use",
+     "summary": "Update result is not verified; minor"
+    },
+    {
+     "id": "MODA-L2",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "gate_passes 2 rows",
+     "summary": "Barely used in production"
+    }
+   ],
+   "remediation": "Pilot internally before selling.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "gatePassPage.api.test.js (run, pass), gatePassAnalytics.test.js, gatePassView.test.js, gatePassWorkflow.test.jsx, gatepassAdapter.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Fleet & Assets",
+   "label": "Asset detail (no menu item)",
+   "route": "/asset-management/:assetNo",
+   "module_key": "fleet_master (shared)",
+   "guard": "ModuleRoute fleet_master",
+   "page": "src/pages/AssetDetail.jsx (queries vehicle_fleet and work_orders directly)",
+   "services": [
+    "api/assetManagement.js",
+    "api/assetMaster.js",
+    "api/assetOwnership.js",
+    "api/costSummary.js",
+    "api/pmPrograms.js"
+   ],
+   "tables": [
+    "vehicle_fleet",
+    "work_orders",
+    "tyre_records"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 5,
+   "empty_account_behaviour": "Opens only from a vehicle row.",
+   "defects": [
+    {
+     "id": "MODA-18",
+     "severity": "P3",
+     "confidence": "VERIFIED",
+     "evidence": "/rfid and /rfid-registry; /fleet-master analysis view, /asset-management/:assetNo, /vehicle/:assetNo, /digital-twin/:assetNo, /vehicle-history; /tyre-lifecycle, /tyre-passport, /serial-tracker; check in/out, handover, reservations, gate pass",
+     "summary": "Several pages answer the same question for the same record; they need one owner each before being sold"
+    },
+    {
+     "id": "MODA-3",
+     "severity": "P1",
+     "confidence": "VERIFIED",
+     "evidence": "src/contexts/SettingsContext.jsx:21-23 COUNTRIES/COUNTRY_CURRENCY; src/pages/FleetMaster.jsx:1252; src/pages/TyreRecords.jsx:815; src/pages/AssetManagement.jsx:326; COUNTRY_CURRENCY copies in 10+ lib files; tyre_records CHECK length(country) <= 10",
+     "summary": "Countries (KSA, UAE, Egypt) and their currencies are hard-coded; a company in any other country cannot register a vehicle or tyre under its own country or see its own currency"
+    }
+   ],
+   "remediation": "Pick one vehicle page (this, Vehicle 360 or Digital Twin).",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "assetDetailAnalytics.test.js, assetDetailHistoryTab.test.jsx (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Fleet & Assets",
+   "label": "Vehicle 360 (no menu item)",
+   "route": "/vehicle/:assetNo",
+   "module_key": "vehicle_360 (flag)",
+   "guard": "FlagRoute vehicle_360",
+   "page": "src/pages/Vehicle360.jsx",
+   "services": [
+    "api/assetHistory.js",
+    "api/vehicleInsurance.js",
+    "api/vehicleMeters.js"
+   ],
+   "tables": [
+    "vehicle_fleet",
+    "tyre_records",
+    "work_orders",
+    "insurance_policy_assets"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 5,
+   "empty_account_behaviour": "Opens only from links.",
+   "defects": [
+    {
+     "id": "MODA-18",
+     "severity": "P3",
+     "confidence": "VERIFIED",
+     "evidence": "/rfid and /rfid-registry; /fleet-master analysis view, /asset-management/:assetNo, /vehicle/:assetNo, /digital-twin/:assetNo, /vehicle-history; /tyre-lifecycle, /tyre-passport, /serial-tracker; check in/out, handover, reservations, gate pass",
+     "summary": "Several pages answer the same question for the same record; they need one owner each before being sold"
+    }
+   ],
+   "remediation": "As above.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "vehicle360Analytics*.test.js, vehicle360Page.render.test.jsx, vehicle360TyreMetrics.test.js, vehicle360View.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Tyre Records",
+   "route": "/tyres",
+   "module_key": "tyre_records",
+   "guard": "ModuleRoute tyre_records",
+   "page": "src/pages/TyreRecords.jsx",
+   "services": [
+    "api/tyreRecords.js",
+    "api/tyreExchange.js",
+    "api/tyrePassport.js",
+    "api/tyreRunningLife.js"
+   ],
+   "tables": [
+    "tyre_records",
+    "tyre_status_marks"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Empty grid with Add. The form cannot capture size or wheel position, so a new company can only build a useful tyre register by import or from the phone app.",
+   "defects": [
+    {
+     "id": "MODA-6",
+     "severity": "P1",
+     "confidence": "VERIFIED",
+     "evidence": "src/pages/TyreRecords.jsx form registers only sr, issue_date, description, brand, serial_no, qty, job_card, mis_number, asset_no, site, country, remarks, cost_per_tyre, risk_level, category, km_at_fitment, km_at_removal",
+     "summary": "The web Add Tyre form has no size, wheel position, vehicle type, status or removal date, so a manually entered tyre cannot feed running life, the tyre map, rotation or fitment"
+    },
+    {
+     "id": "MODA-7",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "src/lib/api/tyreRecords.js:245 update without .select(); src/pages/TyreRecords.jsx saveRecord, :344 bulk edit and :455 bulk scrap fallback never check affected rows; page has no role gate on Add/Edit",
+     "summary": "A role that RLS does not allow to update tyre_records gets a silent zero-row update that the page reports as saved"
+    },
+    {
+     "id": "MODA-3",
+     "severity": "P1",
+     "confidence": "VERIFIED",
+     "evidence": "src/contexts/SettingsContext.jsx:21-23 COUNTRIES/COUNTRY_CURRENCY; src/pages/FleetMaster.jsx:1252; src/pages/TyreRecords.jsx:815; src/pages/AssetManagement.jsx:326; COUNTRY_CURRENCY copies in 10+ lib files; tyre_records CHECK length(country) <= 10",
+     "summary": "Countries (KSA, UAE, Egypt) and their currencies are hard-coded; a company in any other country cannot register a vehicle or tyre under its own country or see its own currency"
+    },
+    {
+     "id": "MODA-13",
+     "severity": "P3",
+     "confidence": "VERIFIED",
+     "evidence": "src/pages/FleetMaster.jsx:592 created_by set on every save; src/pages/TyreRecords.jsx:316 region: profile.region ?? 'KSA' and :317 uploaded_by on edit",
+     "summary": "Editing a record rewrites who created it, and a tyre saved by a user without a region is stamped KSA"
+    },
+    {
+     "id": "MODA-1",
+     "severity": "P1",
+     "confidence": "VERIFIED",
+     "evidence": "tyre_status_marks UNIQUE(serial, mark_type) has no organisation column; SECURITY DEFINER scrap_tyre_by_serial does ON CONFLICT (serial, mark_type) DO UPDATE with no org predicate; client upsert src/lib/api/tyreExchange.js:48 uses the same key",
+     "summary": "Scrap / returned / written-off marks collide across tenants: a second company scrapping a serial another company already marked overwrites that company's reason, actor and date and gets no mark of its own"
+    }
+   ],
+   "remediation": "Add size, position, vehicle type, status and removal fields to the form; return affected rows from update and show a refusal; gate buttons on app_user_can.",
+   "priority": "P1",
+   "area": "web",
+   "tests": [
+    "tyreRecords.api.test.js (run, pass), tyreRecordsView.test.js, tyreRecordsView.lifetime.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Serial Tracker",
+   "route": "/serial-tracker",
+   "module_key": "serial_tracker",
+   "guard": "RoleRoute ['Admin'] + ModuleRoute serial_tracker",
+   "page": "src/pages/SerialTracker.jsx",
+   "services": [
+    "api/serialTracker.js",
+    "api/tyreExchange.js",
+    "api/tyreRecords.js",
+    "api/assetMaster.js"
+   ],
+   "tables": [
+    "tyre_records",
+    "tyre_status_marks"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Search returns nothing until tyres exist. Scrap marking is where tenants collide.",
+   "defects": [
+    {
+     "id": "MODA-1",
+     "severity": "P1",
+     "confidence": "VERIFIED",
+     "evidence": "tyre_status_marks UNIQUE(serial, mark_type) has no organisation column; SECURITY DEFINER scrap_tyre_by_serial does ON CONFLICT (serial, mark_type) DO UPDATE with no org predicate; client upsert src/lib/api/tyreExchange.js:48 uses the same key",
+     "summary": "Scrap / returned / written-off marks collide across tenants: a second company scrapping a serial another company already marked overwrites that company's reason, actor and date and gets no mark of its own"
+    },
+    {
+     "id": "MODA-3",
+     "severity": "P1",
+     "confidence": "VERIFIED",
+     "evidence": "src/contexts/SettingsContext.jsx:21-23 COUNTRIES/COUNTRY_CURRENCY; src/pages/FleetMaster.jsx:1252; src/pages/TyreRecords.jsx:815; src/pages/AssetManagement.jsx:326; COUNTRY_CURRENCY copies in 10+ lib files; tyre_records CHECK length(country) <= 10",
+     "summary": "Countries (KSA, UAE, Egypt) and their currencies are hard-coded; a company in any other country cannot register a vehicle or tyre under its own country or see its own currency"
+    }
+   ],
+   "remediation": "Fix the mark key; currency from org.",
+   "priority": "P1",
+   "area": "DB, web",
+   "tests": [
+    "serialTrackerAnalytics.test.js, serialTrackerAnalytics.lifetime.test.js, serialTrackerView.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Tyre Passport",
+   "route": "/tyre-passport (and /:serial)",
+   "module_key": "tyre_passport",
+   "guard": "ModuleRoute tyre_passport",
+   "page": "src/pages/TyrePassport.jsx",
+   "services": [
+    "api/tyrePassport.js",
+    "api/tyrePassportInspections.js",
+    "api/serialTracker.js",
+    "api/assets.js"
+   ],
+   "tables": [
+    "tyre_records",
+    "inspections",
+    "tyre_service_events",
+    "warranty_claims",
+    "tyre_status_marks",
+    "retread_claims"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Search with honest empty and N/A states; needs tyre history.",
+   "defects": [
+    {
+     "id": "MODA-M1",
+     "severity": "P3",
+     "confidence": "VERIFIED",
+     "evidence": "tread and wear sections depend on tread_depth (0 of 11260 rows)",
+     "summary": "Wear curve is empty for the current company"
+    }
+   ],
+   "remediation": "None blocking.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "tyrePassport.test.js, tyrePassport.lifetime.test.js, tyrePassportView.test.js, tyrePassportViewShapers.test.js, tyreScrapPassport.render.test.jsx (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Tyre Specifications",
+   "route": "/tyre-specs",
+   "module_key": "tyre_specs",
+   "guard": "RoleRoute ['Admin'] (no module key on the route; gate uses the slug)",
+   "page": "src/pages/TyreSpecifications.jsx",
+   "services": [
+    "api/tyreSpecs.js",
+    "api/tyreSpecCatalog.js",
+    "api/tyreProcurement.js",
+    "api/engineeringKpi.js"
+   ],
+   "tables": [
+    "tyre_specifications",
+    "tyre_spec_catalog",
+    "tyre_spec_catalog_events",
+    "tyre_procurement_options"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Empty catalogue and rules with add forms. Built-in defaults (vehicle types, brand list led by specific brands, a ready-made fitment policy PDF) are the current company's choices.",
+   "defects": [
+    {
+     "id": "MODA-N1",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "src/lib/tyreSpecCatalog.js SMART_DEFAULTS / APPROVED_BRANDS / BRAND_META; src/lib/tyreSpecPolicy.js policy text",
+     "summary": "Starter content is one company's policy and brand ranking, presented as product defaults"
+    },
+    {
+     "id": "MODA-N2",
+     "severity": "P3",
+     "confidence": "VERIFIED",
+     "evidence": "no render test for src/pages/TyreSpecifications.jsx",
+     "summary": "Page itself is untested"
+    }
+   ],
+   "remediation": "Make defaults a neutral template the tenant edits; remove brand ranking metadata that is opinion.",
+   "priority": "P2",
+   "area": "web",
+   "tests": [
+    "tyreSpecCatalog.api.test.js, tyreSpecs.api.test.js, tyreSpecCoverage.test.js, tyreSpecView.test.js (mock-based (supabase mocked); pure engine tests exercise real logic); no page test"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Tyre Exchange",
+   "route": "/tyre-exchange",
+   "module_key": "tyre_exchange",
+   "guard": "RoleRoute ['Admin']",
+   "page": "src/pages/TyreExchange.jsx",
+   "services": [
+    "api/tyreExchange.js",
+    "api/tyreServiceEvents.js"
+   ],
+   "tables": [
+    "tyre_records",
+    "tyre_service_events",
+    "tyre_status_marks"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Register is built from tyre history, so it is empty until tyres exist. Saving an exchange writes one service event and does not move the tyre record (stated in project memory).",
+   "defects": [
+    {
+     "id": "MODA-1",
+     "severity": "P1",
+     "confidence": "VERIFIED",
+     "evidence": "tyre_status_marks UNIQUE(serial, mark_type) has no organisation column; SECURITY DEFINER scrap_tyre_by_serial does ON CONFLICT (serial, mark_type) DO UPDATE with no org predicate; client upsert src/lib/api/tyreExchange.js:48 uses the same key",
+     "summary": "Scrap / returned / written-off marks collide across tenants: a second company scrapping a serial another company already marked overwrites that company's reason, actor and date and gets no mark of its own"
+    },
+    {
+     "id": "MODA-O1",
+     "severity": "P2",
+     "confidence": "PLAUSIBLE",
+     "evidence": "PROJECT_MEMORY (Tyre Exchange 5a7508a2): a new exchange saves ONE tyre_service_events row and does NOT change tyre_records; tyre_service_events 0 rows",
+     "summary": "Recording an exchange does not update the fitted tyre, and the save path has no production rows"
+    }
+   ],
+   "remediation": "Route exchanges through the tyre_move / replacement RPC so the register changes.",
+   "priority": "P2",
+   "area": "web, DB",
+   "tests": [
+    "tyreExchange.api.test.js (run, pass), tyreExchangeAnalytics.test.js, tyreExchangeView.test.js, tyreExchangeWorkflow.test.jsx (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Rotation Schedule",
+   "route": "/rotation",
+   "module_key": "rotation",
+   "guard": "RoleRoute ['Admin']",
+   "page": "src/pages/RotationSchedule.jsx",
+   "services": [
+    "api/rotations.js",
+    "api/assets.js",
+    "api/workshopLive.js"
+   ],
+   "tables": [
+    "tyre_rotations"
+   ],
+   "internal_status": "at risk (disabled, 0 rows)",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty schedule with create form; CHECK on rotation_type matches the page vocabulary per project memory.",
+   "defects": [
+    {
+     "id": "MODA-9",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "public.modules has no organisation column (module_id,name,category,status,...); src/components/ProtectedRoute.jsx:199 and :223 let Admin pass disabled modules; module_permissions has 0 of 1346 rows with an org_id; system_config has no org column",
+     "summary": "Module on/off, the role matrix and system_config (logo, palette, nav layout) are global to all tenants, and every company Admin can still open modules that were switched off as unfinished"
+    }
+   ],
+   "remediation": "See restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "rotations.api.test.js, rotationScheduleAnalytics.test.js, rotationScheduleView.test.js, rotationWorkflow.test.jsx (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Rotation Optimizer",
+   "route": "/rotation-optimizer",
+   "module_key": "rotation_optimizer",
+   "guard": "RoleRoute ['Admin','Manager','Director']",
+   "page": "src/pages/RotationOptimizer.jsx",
+   "services": [
+    "api/rotationOptimizer.js"
+   ],
+   "tables": [
+    "tyre_records"
+   ],
+   "internal_status": "at risk (disabled; input tread depth is empty)",
+   "commercial_class": 4,
+   "empty_account_behaviour": "No recommendations: it needs tread depth per wheel, which nothing in the product records today. Benefit figure uses a fixed 10,000 km per mm (lib/rotationOptimizer.js:31).",
+   "defects": [
+    {
+     "id": "MODA-9",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "public.modules has no organisation column (module_id,name,category,status,...); src/components/ProtectedRoute.jsx:199 and :223 let Admin pass disabled modules; module_permissions has 0 of 1346 rows with an org_id; system_config has no org column",
+     "summary": "Module on/off, the role matrix and system_config (logo, palette, nav layout) are global to all tenants, and every company Admin can still open modules that were switched off as unfinished"
+    },
+    {
+     "id": "MODA-12",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "SQL on tyre_records: 11260 rows, risk_level 0, tread_depth 0, pressure_reading 0, supplier 0, category 88, cost_per_tyre 4895, total_km 6527",
+     "summary": "Several analytics are built on columns that are empty in production, so they have never been proven on real data"
+    },
+    {
+     "id": "MODA-P1",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "src/lib/rotationOptimizer.js:30-31 LEGAL_MIN_TREAD_MM 1.6 \"GCC legal minimum\", BENEFIT_KM_PER_MM 10000",
+     "summary": "Benefit is an assumed constant shown as kilometres recovered; legal minimum is one region's"
+    }
+   ],
+   "remediation": "See restore list; do not market.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "rotationOptimizer.test.js, rotationOptimizerPage.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Fitment Validation",
+   "route": "/fitment-validation",
+   "module_key": "fitment_validation",
+   "guard": "RoleRoute ['Admin','Manager','Director']",
+   "page": "src/pages/FitmentValidation.jsx",
+   "services": [
+    "api/fitmentValidation.js"
+   ],
+   "tables": [
+    "fitment_rules",
+    "fitment_validations",
+    "tyre_specifications",
+    "tyre_spec_catalog"
+   ],
+   "internal_status": "at risk (live, 0 rules and 0 validations)",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty rules and history; the tenant must write its rules first. Age, retread and pair checks are reported as not evaluated when data is missing.",
+   "defects": [
+    {
+     "id": "MODA-12",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "SQL on tyre_records: 11260 rows, risk_level 0, tread_depth 0, pressure_reading 0, supplier 0, category 88, cost_per_tyre 4895, total_km 6527",
+     "summary": "Several analytics are built on columns that are empty in production, so they have never been proven on real data"
+    }
+   ],
+   "remediation": "Pilot with real rules before selling.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "fitmentValidation.test.js, fitmentValidation.engine.test.js, fitmentValidationAnalytics.test.js, fitmentValidationView.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Size Optimizer",
+   "route": "/tyre-size",
+   "module_key": "tyre_records (shared)",
+   "guard": "ModuleRoute tyre_records (menu Admin only)",
+   "page": "src/pages/TyreSizeAnalysis.jsx (queries tyre_records directly)",
+   "services": [
+    "api/sizeOptimizer.js",
+    "api/governedCost.js"
+   ],
+   "tables": [
+    "tyre_records"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty until tyres with price and distance exist; recommendations are session only.",
+   "defects": [
+    {
+     "id": "MODA-3",
+     "severity": "P1",
+     "confidence": "VERIFIED",
+     "evidence": "src/contexts/SettingsContext.jsx:21-23 COUNTRIES/COUNTRY_CURRENCY; src/pages/FleetMaster.jsx:1252; src/pages/TyreRecords.jsx:815; src/pages/AssetManagement.jsx:326; COUNTRY_CURRENCY copies in 10+ lib files; tyre_records CHECK length(country) <= 10",
+     "summary": "Countries (KSA, UAE, Egypt) and their currencies are hard-coded; a company in any other country cannot register a vehicle or tyre under its own country or see its own currency"
+    },
+    {
+     "id": "MODA-Q1",
+     "severity": "P3",
+     "confidence": "VERIFIED",
+     "evidence": "no render test for the page; sizeOptimizerView.test.js only",
+     "summary": "Page untested"
+    }
+   ],
+   "remediation": "None blocking.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "sizeOptimizerView.test.js (pure)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Pressure Intelligence",
+   "route": "/pressure-intel",
+   "module_key": "pressure_intelligence",
+   "guard": "ModuleRoute pressure_intelligence",
+   "page": "src/pages/PressureIntelligence.jsx",
+   "services": [
+    "api/pressureIntelligence.js"
+   ],
+   "tables": [
+    "inspections (tyre_conditions)",
+    "tpms_readings"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty until inspections with pressure readings exist; compares against each vehicle's own median because no target pressure is stored.",
+   "defects": [
+    {
+     "id": "MODA-R1",
+     "severity": "P3",
+     "confidence": "VERIFIED",
+     "evidence": "project memory: bands 5%/10% and median reference are the builder's choice awaiting owner confirmation",
+     "summary": "Compliance bands are not a customer setting"
+    }
+   ],
+   "remediation": "Expose the bands as a setting.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "pressureIntelligenceAnalytics.test.js, pressureIntelligenceView.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "TPMS",
+   "route": "/tpms",
+   "module_key": "tpms",
+   "guard": "RoleRoute ['Admin']",
+   "page": "src/pages/Tpms.jsx",
+   "services": [
+    "api/tpms.js"
+   ],
+   "tables": [
+    "tpms_readings",
+    "tyre_records"
+   ],
+   "internal_status": "at risk (disabled, 0 rows)",
+   "commercial_class": 4,
+   "empty_account_behaviour": "No sensor integration; page falls back to tyre_records.pressure_reading, which is also empty.",
+   "defects": [
+    {
+     "id": "MODA-9",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "public.modules has no organisation column (module_id,name,category,status,...); src/components/ProtectedRoute.jsx:199 and :223 let Admin pass disabled modules; module_permissions has 0 of 1346 rows with an org_id; system_config has no org column",
+     "summary": "Module on/off, the role matrix and system_config (logo, palette, nav layout) are global to all tenants, and every company Admin can still open modules that were switched off as unfinished"
+    },
+    {
+     "id": "MODA-12",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "SQL on tyre_records: 11260 rows, risk_level 0, tread_depth 0, pressure_reading 0, supplier 0, category 88, cost_per_tyre 4895, total_km 6527",
+     "summary": "Several analytics are built on columns that are empty in production, so they have never been proven on real data"
+    }
+   ],
+   "remediation": "See restore list; do not market as live TPMS.",
+   "priority": "P3",
+   "area": "web, DB",
+   "tests": [
+    "tpms.test.js, tpmsPageAnalytics.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Position Intelligence",
+   "route": "/position-intelligence",
+   "module_key": "position_intelligence",
+   "guard": "ModuleRoute position_intelligence (menu Admin only)",
+   "page": "src/pages/PositionIntelligence.jsx (queries tyre_records directly)",
+   "services": [],
+   "tables": [
+    "tyre_records"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Empty until tyres with positions exist. Risk based views rest on risk_level, which is empty in production.",
+   "defects": [
+    {
+     "id": "MODA-12",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "SQL on tyre_records: 11260 rows, risk_level 0, tread_depth 0, pressure_reading 0, supplier 0, category 88, cost_per_tyre 4895, total_km 6527",
+     "summary": "Several analytics are built on columns that are empty in production, so they have never been proven on real data"
+    }
+   ],
+   "remediation": "Define where risk level comes from (inspection result) or remove the risk views.",
+   "priority": "P2",
+   "area": "web",
+   "tests": [
+    "positionIntelligenceAnalytics.test.js (pure)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Tyre Time in Service",
+   "route": "/tyre-age-compliance",
+   "module_key": "tyre_age_compliance",
+   "guard": "RoleRoute ['Admin','Manager','Director']",
+   "page": "src/pages/TyreAgeCompliance.jsx",
+   "services": [
+    "api/tyreAgeCompliance.js"
+   ],
+   "tables": [
+    "tyre_records"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty until tyres have fitment or issue dates. Age is time since fitment, not manufacture date (no DOT field); the working tree renames the page accordingly, main still says Tyre Age Compliance.",
+   "defects": [
+    {
+     "id": "MODA-S1",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "src/lib/tyreAge.js:4-5,25 age anchored on fitment_date then issue_date; Layout.jsx:173 label differs from main",
+     "summary": "On main the page is titled as age compliance while measuring time in service"
+    }
+   ],
+   "remediation": "Merge the rename; add a manufacture date field if real age compliance is to be sold.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "tyreAge.test.js, tyreAgeComplianceAnalytics.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Heat Intelligence",
+   "route": "/heat-intelligence",
+   "module_key": "heat_intelligence",
+   "guard": "RoleRoute ['Admin','Manager','Director']",
+   "page": "src/pages/HeatIntelligence.jsx",
+   "services": [
+    "api/heatIntelligence.js",
+    "api/weather.js (Open-Meteo)"
+   ],
+   "tables": [
+    "tyre_temperature_readings",
+    "tyre_records"
+   ],
+   "internal_status": "at risk (0 temperature readings)",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Shows climate and weather for a fixed list of Gulf cities; fleet risk section is empty without tyres. Useless outside the Gulf.",
+   "defects": [
+    {
+     "id": "MODA-14",
+     "severity": "P2",
+     "confidence": "PLAUSIBLE",
+     "evidence": "src/lib/heatIntelligence.js GCC_CITIES / GCC_CITY_COORDS; src/lib/api/weather.js:17,162 api.open-meteo.com free endpoint",
+     "summary": "Heat Intelligence only knows Gulf cities and uses a free weather API whose terms for commercial use were not checked"
+    },
+    {
+     "id": "MODA-12",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "SQL on tyre_records: 11260 rows, risk_level 0, tread_depth 0, pressure_reading 0, supplier 0, category 88, cost_per_tyre 4895, total_km 6527",
+     "summary": "Several analytics are built on columns that are empty in production, so they have never been proven on real data"
+    }
+   ],
+   "remediation": "City list from the tenant's sites with coordinates; confirm the weather provider licence.",
+   "priority": "P2",
+   "area": "web, owner action",
+   "tests": [
+    "heatIntelligence.test.js, heatBlowout.test.js, heatWeather.test.js, heatAirQuality.test.js, heatIntelligenceAnalytics.test.js (pure)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Tyre Lifecycle",
+   "route": "/tyre-lifecycle",
+   "module_key": "tyre_records (shared)",
+   "guard": "ModuleRoute tyre_records (menu Admin only)",
+   "page": "src/pages/TyreLifecycle.jsx (queries tyre_records directly)",
+   "services": [
+    "api/tyreRunningLife.js (get_tyre_running_life, SECURITY INVOKER)"
+   ],
+   "tables": [
+    "tyre_records",
+    "tyre_life_targets",
+    "vehicle_fleet",
+    "engine_hours_logs"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Empty until fitted tyres and meter readings exist; expected life needs targets per size or type (8 to 12 rows exist for the current company only).",
+   "defects": [
+    {
+     "id": "MODA-4",
+     "severity": "P1",
+     "confidence": "VERIFIED",
+     "evidence": "SQL public.tyre_life_km_cap(text) and src/lib/tyreKm.js:18-21 (mixer 80000, pump 56000, loader 15000, else 100000)",
+     "summary": "Tyre life ceilings are the current company's own rule and are hard-coded; any tyre life above 100,000 km is treated as invalid and dropped, which would blank life and CPK for a long-haul fleet"
+    },
+    {
+     "id": "MODA-T1",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "tyre_life_targets rows belong to the current organisation; get_tyre_running_life falls back to measured baselines with sample >= 3",
+     "summary": "A new company sees Unknown for most tyres until it sets targets or builds history"
+    }
+   ],
+   "remediation": "Org level life ceiling and targets with a setup step.",
+   "priority": "P1",
+   "area": "DB, web",
+   "tests": [
+    "tyreLifecycleAnalytics*.test.js, tyreLifecycleEvents*.test.js, tyreLifecycleHardening.test.js, tyreLifecycleView.test.js, tyreRunningLife*.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Tyre Service Events",
+   "route": "/tyre-service-events",
+   "module_key": "tyre_service_events",
+   "guard": "RoleRoute ['Admin','Manager','Director']",
+   "page": "src/pages/TyreServiceEvents.jsx",
+   "services": [
+    "api/tyreServiceEvents.js"
+   ],
+   "tables": [
+    "tyre_service_events"
+   ],
+   "internal_status": "at risk (disabled, 0 rows)",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty log with add form; CHECK on event_type respected by the service per tests.",
+   "defects": [
+    {
+     "id": "MODA-9",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "public.modules has no organisation column (module_id,name,category,status,...); src/components/ProtectedRoute.jsx:199 and :223 let Admin pass disabled modules; module_permissions has 0 of 1346 rows with an org_id; system_config has no org column",
+     "summary": "Module on/off, the role matrix and system_config (logo, palette, nav layout) are global to all tenants, and every company Admin can still open modules that were switched off as unfinished"
+    },
+    {
+     "id": "MODA-18",
+     "severity": "P3",
+     "confidence": "VERIFIED",
+     "evidence": "/rfid and /rfid-registry; /fleet-master analysis view, /asset-management/:assetNo, /vehicle/:assetNo, /digital-twin/:assetNo, /vehicle-history; /tyre-lifecycle, /tyre-passport, /serial-tracker; check in/out, handover, reservations, gate pass",
+     "summary": "Several pages answer the same question for the same record; they need one owner each before being sold"
+    }
+   ],
+   "remediation": "See restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "tyreServiceEvents.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Tyre Pool",
+   "route": "/tyre-pool",
+   "module_key": "tyre_pool",
+   "guard": "none",
+   "page": "src/pages/TyrePool.jsx",
+   "services": [
+    "api/tyrePool.js"
+   ],
+   "tables": [
+    "tyre_pool",
+    "tyre_records"
+   ],
+   "internal_status": "at risk (disabled, 0 rows)",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty pool; insert is Admin/Manager/Director by policy while the route is open to all roles.",
+   "defects": [
+    {
+     "id": "MODA-9",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "public.modules has no organisation column (module_id,name,category,status,...); src/components/ProtectedRoute.jsx:199 and :223 let Admin pass disabled modules; module_permissions has 0 of 1346 rows with an org_id; system_config has no org column",
+     "summary": "Module on/off, the role matrix and system_config (logo, palette, nav layout) are global to all tenants, and every company Admin can still open modules that were switched off as unfinished"
+    },
+    {
+     "id": "MODA-10",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "src/App.jsx:694 /warranty, :696 /scrap, :787 /tyre-pool, :770 /my-checklists, :873 /scan have no RoleRoute or ModuleRoute",
+     "summary": "Pages are reachable by any signed-in role by URL; only the menu and RLS limit them"
+    }
+   ],
+   "remediation": "See restore list; add a guard.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "tyrePool.test.js, tyrePoolAnalytics.test.js, tyrePoolManager.test.js, tollTripTyrePoolPages.render.test.jsx (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Scrap Management",
+   "route": "/scrap",
+   "module_key": "scrap",
+   "guard": "none",
+   "page": "src/pages/TyreScrapManagement.jsx",
+   "services": [
+    "api/tyreScrap.js",
+    "api/tyreExchange.js (scrap RPCs)"
+   ],
+   "tables": [
+    "tyre_status_marks",
+    "tyre_records",
+    "tyre_disposals",
+    "audit_log_v2"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Empty register with Mark a tyre as scrap; works once tyres exist. Disposal log has 0 production rows.",
+   "defects": [
+    {
+     "id": "MODA-1",
+     "severity": "P1",
+     "confidence": "VERIFIED",
+     "evidence": "tyre_status_marks UNIQUE(serial, mark_type) has no organisation column; SECURITY DEFINER scrap_tyre_by_serial does ON CONFLICT (serial, mark_type) DO UPDATE with no org predicate; client upsert src/lib/api/tyreExchange.js:48 uses the same key",
+     "summary": "Scrap / returned / written-off marks collide across tenants: a second company scrapping a serial another company already marked overwrites that company's reason, actor and date and gets no mark of its own"
+    },
+    {
+     "id": "MODA-10",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "src/App.jsx:694 /warranty, :696 /scrap, :787 /tyre-pool, :770 /my-checklists, :873 /scan have no RoleRoute or ModuleRoute",
+     "summary": "Pages are reachable by any signed-in role by URL; only the menu and RLS limit them"
+    },
+    {
+     "id": "MODA-U1",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "tyre_disposals 0 rows; scrapping does not create a disposal row (project memory V384)",
+     "summary": "Scrap register and disposal log are two unconnected halves"
+    }
+   ],
+   "remediation": "Fix the mark key before a second tenant; add a route guard.",
+   "priority": "P1",
+   "area": "DB, web",
+   "tests": [
+    "tyreScrap.api.test.js (run, pass), scrapRegister.test.js (run, pass), tyreScrapManagementAnalytics*.test.js, tyreScrapView.test.js, tyreScrapWorkflow.test.jsx (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Retread Management",
+   "route": "/retread",
+   "module_key": "retread",
+   "guard": "RoleRoute ['Admin']",
+   "page": "src/pages/RetreadManagement.jsx (queries tyre_records directly)",
+   "services": [
+    "api/retreadJobs.js"
+   ],
+   "tables": [
+    "retread_jobs",
+    "tyre_records"
+   ],
+   "internal_status": "at risk (disabled, 0 rows)",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty; eligibility uses risk level and tread depth, both empty.",
+   "defects": [
+    {
+     "id": "MODA-9",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "public.modules has no organisation column (module_id,name,category,status,...); src/components/ProtectedRoute.jsx:199 and :223 let Admin pass disabled modules; module_permissions has 0 of 1346 rows with an org_id; system_config has no org column",
+     "summary": "Module on/off, the role matrix and system_config (logo, palette, nav layout) are global to all tenants, and every company Admin can still open modules that were switched off as unfinished"
+    },
+    {
+     "id": "MODA-12",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "SQL on tyre_records: 11260 rows, risk_level 0, tread_depth 0, pressure_reading 0, supplier 0, category 88, cost_per_tyre 4895, total_km 6527",
+     "summary": "Several analytics are built on columns that are empty in production, so they have never been proven on real data"
+    }
+   ],
+   "remediation": "See restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "retreadManagement.render.test.jsx, retreadManagementAnalytics*.test.js, retreadView.test.js, retreadWorkflow.test.jsx (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Retread Claims",
+   "route": "/retread-claims",
+   "module_key": "retread_claims",
+   "guard": "RoleRoute ['Admin']",
+   "page": "src/pages/RetreadClaims.jsx",
+   "services": [
+    "api/retreadClaims.js"
+   ],
+   "tables": [
+    "retread_claims"
+   ],
+   "internal_status": "at risk (disabled, 0 rows)",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty with add form; currency falls back to SAR (RetreadClaims.jsx:200).",
+   "defects": [
+    {
+     "id": "MODA-9",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "public.modules has no organisation column (module_id,name,category,status,...); src/components/ProtectedRoute.jsx:199 and :223 let Admin pass disabled modules; module_permissions has 0 of 1346 rows with an org_id; system_config has no org column",
+     "summary": "Module on/off, the role matrix and system_config (logo, palette, nav layout) are global to all tenants, and every company Admin can still open modules that were switched off as unfinished"
+    },
+    {
+     "id": "MODA-3",
+     "severity": "P1",
+     "confidence": "VERIFIED",
+     "evidence": "src/contexts/SettingsContext.jsx:21-23 COUNTRIES/COUNTRY_CURRENCY; src/pages/FleetMaster.jsx:1252; src/pages/TyreRecords.jsx:815; src/pages/AssetManagement.jsx:326; COUNTRY_CURRENCY copies in 10+ lib files; tyre_records CHECK length(country) <= 10",
+     "summary": "Countries (KSA, UAE, Egypt) and their currencies are hard-coded; a company in any other country cannot register a vehicle or tyre under its own country or see its own currency"
+    }
+   ],
+   "remediation": "See restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "retreadClaims.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Warranty Tracker",
+   "route": "/warranty",
+   "module_key": "warranty",
+   "guard": "none",
+   "page": "src/pages/WarrantyTracker.jsx",
+   "services": [
+    "api/warranty.js"
+   ],
+   "tables": [
+    "warranty_claims",
+    "warranty_claim_events",
+    "tyre_records"
+   ],
+   "internal_status": "at risk (disabled, 0 rows)",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty with candidate list from removed tyres. First claim of a second tenant can fail on the global claim number.",
+   "defects": [
+    {
+     "id": "MODA-2",
+     "severity": "P1",
+     "confidence": "VERIFIED",
+     "evidence": "warranty_claims unique index warranty_claim_no_country_uniq (claim_no, country); number minted in the browser from the tenant's own list: src/pages/WarrantyTracker.jsx:459, src/lib/warrantyTrackerAnalytics.js generateClaimNo",
+     "summary": "Warranty claim numbers WAR-YYYY-00001 are unique per country across ALL tenants, so the first claim of a second company in the same country fails with a duplicate error"
+    },
+    {
+     "id": "MODA-9",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "public.modules has no organisation column (module_id,name,category,status,...); src/components/ProtectedRoute.jsx:199 and :223 let Admin pass disabled modules; module_permissions has 0 of 1346 rows with an org_id; system_config has no org column",
+     "summary": "Module on/off, the role matrix and system_config (logo, palette, nav layout) are global to all tenants, and every company Admin can still open modules that were switched off as unfinished"
+    },
+    {
+     "id": "MODA-10",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "src/App.jsx:694 /warranty, :696 /scrap, :787 /tyre-pool, :770 /my-checklists, :873 /scan have no RoleRoute or ModuleRoute",
+     "summary": "Pages are reachable by any signed-in role by URL; only the menu and RLS limit them"
+    },
+    {
+     "id": "MODA-V1",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "src/lib/warrantyTrackerAnalytics.js:181-182 \"30% of tyres eligible, 40% of cost recoverable\"",
+     "summary": "An unclaimed-recovery figure is produced from fixed assumed percentages"
+    }
+   ],
+   "remediation": "See restore list; fix the key and label or remove the assumed figure.",
+   "priority": "P2",
+   "area": "DB, web",
+   "tests": [
+    "warranty.api.test.js (run, pass), warrantyAdapter.test.js, warrantyTrackerAnalytics.test.js, warrantyWorkflow.test.jsx (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Brand Performance",
+   "route": "/brand-perf",
+   "module_key": "brand_performance",
+   "guard": "ModuleRoute brand_performance",
+   "page": "src/pages/BrandPerformance.jsx (queries tyre_records directly)",
+   "services": [
+    "api/brandSizeCpk.js",
+    "api/governedCost.js",
+    "api/warranty.js"
+   ],
+   "tables": [
+    "tyre_records",
+    "parts_consumption",
+    "warranty_claims"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty until tyres with brand, price and distance exist.",
+   "defects": [
+    {
+     "id": "MODA-4",
+     "severity": "P1",
+     "confidence": "VERIFIED",
+     "evidence": "SQL public.tyre_life_km_cap(text) and src/lib/tyreKm.js:18-21 (mixer 80000, pump 56000, loader 15000, else 100000)",
+     "summary": "Tyre life ceilings are the current company's own rule and are hard-coded; any tyre life above 100,000 km is treated as invalid and dropped, which would blank life and CPK for a long-haul fleet"
+    }
+   ],
+   "remediation": "None blocking beyond the life ceiling.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "brandPerformance.render.test.jsx, brandPerformanceAnalytics*.test.js, brandPerformanceView.test.js, brandSizeCpk.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "CPK Intelligence (hosts Tyre Failure and CPK as ?tab=failures on the working tree)",
+   "route": "/cpk-intelligence",
+   "module_key": "cpk_intelligence",
+   "guard": "RoleRoute ['Admin','Manager','Director'] + ModuleRoute cpk_intelligence",
+   "page": "src/pages/CpkIntelligence.jsx",
+   "services": [
+    "api/fleetCpk.js",
+    "api/cpkDrivers.js",
+    "api/brandSizeCpk.js",
+    "api/tyrePriceBackfill.js",
+    "api/sites.js"
+   ],
+   "tables": [
+    "tyre_records",
+    "parts_consumption",
+    "engine_hours_logs",
+    "vehicle_fleet"
+   ],
+   "internal_status": "ready (with stated caveats: 4895 of 11260 tyres priced)",
+   "commercial_class": 3,
+   "empty_account_behaviour": "N/A everywhere until tyres have prices and distance. Cost comes from the expense grid, which a new company can only fill through an import built around the current ERP export.",
+   "defects": [
+    {
+     "id": "MODA-4",
+     "severity": "P1",
+     "confidence": "VERIFIED",
+     "evidence": "SQL public.tyre_life_km_cap(text) and src/lib/tyreKm.js:18-21 (mixer 80000, pump 56000, loader 15000, else 100000)",
+     "summary": "Tyre life ceilings are the current company's own rule and are hard-coded; any tyre life above 100,000 km is treated as invalid and dropped, which would blank life and CPK for a long-haul fleet"
+    },
+    {
+     "id": "MODA-3",
+     "severity": "P1",
+     "confidence": "VERIFIED",
+     "evidence": "src/contexts/SettingsContext.jsx:21-23 COUNTRIES/COUNTRY_CURRENCY; src/pages/FleetMaster.jsx:1252; src/pages/TyreRecords.jsx:815; src/pages/AssetManagement.jsx:326; COUNTRY_CURRENCY copies in 10+ lib files; tyre_records CHECK length(country) <= 10",
+     "summary": "Countries (KSA, UAE, Egypt) and their currencies are hard-coded; a company in any other country cannot register a vehicle or tyre under its own country or see its own currency"
+    },
+    {
+     "id": "MODA-W1",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "get_cpk_km_intelligence contains a 'KSA' literal and reads the current company's staging upload table (catalog scan: hard_ksa true)",
+     "summary": "One CPK tab is tied to the current company's master upload"
+    },
+    {
+     "id": "MODA-W2",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "cpk_unit_for_asset_type and costIntelligence.cpkUnitForAssetType decide km or hours from the current company's vehicle type names",
+     "summary": "Unit per vehicle type is a hard-coded name match"
+    }
+   ],
+   "remediation": "Org level settings for unit by vehicle type and life ceiling; hide the KSA master tab for other tenants.",
+   "priority": "P1",
+   "area": "DB, web",
+   "tests": [
+    "cpkIntelligence.render.test.jsx, cpkPanels.render.test.jsx, cpkModule.test.js, cpkDrivers.test.js, fleetCpk.api.test.js, cpkSiteFilter.api.test.js, cpkSourceScan.test.js and others (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Fleet Risk Score",
+   "route": "/fleet-risk-score",
+   "module_key": "fleet_risk_score",
+   "guard": "RoleRoute ['Admin','Manager','Director']",
+   "page": "src/pages/FleetRiskScore.jsx",
+   "services": [
+    "api/fleetRisk.js"
+   ],
+   "tables": [
+    "tyre_records",
+    "inspections"
+   ],
+   "internal_status": "at risk (disabled; main inputs empty)",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Score has little to work on: tread, pressure and risk level are empty.",
+   "defects": [
+    {
+     "id": "MODA-9",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "public.modules has no organisation column (module_id,name,category,status,...); src/components/ProtectedRoute.jsx:199 and :223 let Admin pass disabled modules; module_permissions has 0 of 1346 rows with an org_id; system_config has no org column",
+     "summary": "Module on/off, the role matrix and system_config (logo, palette, nav layout) are global to all tenants, and every company Admin can still open modules that were switched off as unfinished"
+    },
+    {
+     "id": "MODA-12",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "SQL on tyre_records: 11260 rows, risk_level 0, tread_depth 0, pressure_reading 0, supplier 0, category 88, cost_per_tyre 4895, total_km 6527",
+     "summary": "Several analytics are built on columns that are empty in production, so they have never been proven on real data"
+    }
+   ],
+   "remediation": "See restore list; do not market.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "fleetRisk.test.js, fleetRisk.lifetime.test.js, fleetRiskScoreAnalytics.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Digital Twin",
+   "route": "/digital-twin (and /:assetNo)",
+   "module_key": "digital_twin",
+   "guard": "RoleRoute ['Admin','Manager','Director']",
+   "page": "src/pages/DigitalTwin.jsx",
+   "services": [
+    "api/digitalTwin.js",
+    "api/tyreRunningLife.js"
+   ],
+   "tables": [
+    "tyre_records",
+    "vehicle_fleet"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 5,
+   "empty_account_behaviour": "Asset picker empty until vehicles exist; it is another per vehicle tyre view.",
+   "defects": [
+    {
+     "id": "MODA-18",
+     "severity": "P3",
+     "confidence": "VERIFIED",
+     "evidence": "/rfid and /rfid-registry; /fleet-master analysis view, /asset-management/:assetNo, /vehicle/:assetNo, /digital-twin/:assetNo, /vehicle-history; /tyre-lifecycle, /tyre-passport, /serial-tracker; check in/out, handover, reservations, gate pass",
+     "summary": "Several pages answer the same question for the same record; they need one owner each before being sold"
+    }
+   ],
+   "remediation": "Fold into the single vehicle page.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "digitalTwin.test.js, digitalTwin.lifetime.test.js, digitalTwinAnalytics.test.js (mock-based (supabase mocked); pure engine tests exercise real logic)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Tyre Management",
+   "label": "Tyre Scan (no menu item)",
+   "route": "/scan",
+   "module_key": "none",
+   "guard": "none",
+   "page": "src/pages/TyreScan.jsx",
+   "services": [],
+   "tables": [
+    "none (history kept in browser storage)"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Scan history lives only in the browser (TyreScan.jsx:13).",
+   "defects": [
+    {
+     "id": "MODA-10",
+     "severity": "P2",
+     "confidence": "VERIFIED",
+     "evidence": "src/App.jsx:694 /warranty, :696 /scrap, :787 /tyre-pool, :770 /my-checklists, :873 /scan have no RoleRoute or ModuleRoute",
+     "summary": "Pages are reachable by any signed-in role by URL; only the menu and RLS limit them"
+    }
+   ],
+   "remediation": "Remove or finish.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "tyreScanAnalytics.test.js (pure)"
+   ],
+   "note": ""
+  },
+  {
+   "group": "Overview",
+   "label": "My Problems (no menu item)",
+   "route": "/my-problems",
+   "module_key": "none",
+   "guard": "none",
+   "page": "src/pages/MyProblems.jsx",
+   "services": [
+    "api/userIssues.js (RPCs)"
+   ],
+   "tables": [
+    "user_issues"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty list of the user's own reported problems.",
+   "defects": [
+    {
+     "id": "MODA-X1",
+     "severity": "P3",
+     "confidence": "VERIFIED",
+     "evidence": "src/pages/MyProblems.jsx:75,108 show err.message directly",
+     "summary": "Raw error text can reach the user on this page"
+    }
+   ],
+   "remediation": "Use toUserMessage.",
+   "priority": "P3",
+   "area": "web",
+   "tests": [
+    "none found"
+   ],
+   "note": ""
+  }
+ ]
+}

@@ -130,6 +130,55 @@ void main() {
     );
   });
 
+  test('a module switched off in Module Control reaches the resolver',
+      () async {
+    permissions.snapshot = const AccessPermissionsSnapshot(
+      grantsRaw: <String, Object?>{},
+      roleMatrixRaw: <String, Object?>{},
+      moduleStatusRaw: <String, Object?>{'pm_programs': 'disabled'},
+    );
+    await signIn();
+
+    expect(access().permissionsError, isFalse);
+    expect(access().switchedOff, <ModuleKey>{ModuleKey.pm});
+    expect(canAccessModule(module: ModuleKey.pm, access: access()), isFalse);
+  });
+
+  test('a failed Module Control read fails open and is not a permission error',
+      () async {
+    permissions.snapshot = const AccessPermissionsSnapshot(
+      grantsRaw: <String, Object?>{},
+      roleMatrixRaw: <String, Object?>{},
+    );
+    await signIn();
+
+    expect(
+      container.read(authControllerProvider).permissionsStatus,
+      PermissionsStatus.loaded,
+    );
+    expect(access().switchedOff, isEmpty);
+    expect(canAccessModule(module: ModuleKey.pm, access: access()), isTrue);
+  });
+
+  test('a later failed Module Control read keeps the last good answer',
+      () async {
+    permissions.snapshot = const AccessPermissionsSnapshot(
+      grantsRaw: <String, Object?>{},
+      roleMatrixRaw: <String, Object?>{},
+      moduleStatusRaw: <String, Object?>{'pm_programs': 'disabled'},
+    );
+    await signIn();
+    expect(access().switchedOff, <ModuleKey>{ModuleKey.pm});
+
+    permissions.snapshot = const AccessPermissionsSnapshot(
+      grantsRaw: <String, Object?>{},
+      roleMatrixRaw: <String, Object?>{},
+    );
+    await container.read(authControllerProvider.notifier).retryPermissions();
+    await pumpEventQueue(times: 10);
+    expect(access().switchedOff, <ModuleKey>{ModuleKey.pm});
+  });
+
   test('a good read is reported as loaded', () async {
     await signIn();
     expect(

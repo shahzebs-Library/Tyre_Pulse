@@ -926,3 +926,25 @@ cannot switch off per role or per user. That is consistent with section 4's
 principle that the server is the real boundary, but it means an administrator
 looking for it in the module list will not find it. Decision D11 in artifact 09
 asks whether it should get a key.
+
+## 11. Module Control: a module switched Off on the web (added 2026-11-12)
+
+The web console's Module Control marks each WEB module `live`, `beta`,
+`maintenance` or `disabled` in `public.modules.status`. Until this section the
+phone never read it, so a module switched Off for the business stayed open on
+every phone.
+
+| Rule | Detail | Where |
+|---|---|---|
+| Which phone module a web row switches | An explicit map, never guessed: `webModuleStatusKeys` (the `webModuleKeyAliases` pairs plus the keys that are identical on both sides: `accidents`, `alerts`, `stock`, `rca`, `analytics`, `reports`, `checklists`, and `handovers` to `handover`). A phone module with no web twin (`scan`, `reportIssue`, `tasks`, `overview`, `workshop`, ...) cannot be switched off from the web | `module_registry.dart` |
+| Out of service | `disabled` and `maintenance`. `live`, `beta`, a blank and any unknown value leave the module open | `moduleOutOfServiceStatuses` |
+| Who is still admitted | Super admin and the administrator role, under either `AdminRevokePrecedence`, as on the web | `resolveModuleAccess` step 2a |
+| Precedence | After the admin tests, BEFORE the per-user revoke and grant. Off outranks a per-user grant, as the web's status gate does | `resolveModuleAccess` step 2a, reason `AccessReason.moduleSwitchedOff` |
+| Failure | FAILS OPEN. A failed read keeps the last good answer of this sign-in; with none, nothing is switched off. It never sets `permissionsError` | `AuthController._refreshPermissions`, `AccessPermissionsSnapshot.anyFailed` |
+| What the person sees | The tile and tab disappear (they are built from `allowedModulesProvider`); a direct route shows the denied state with the "not granted" sentence, because `ModuleDenialReason` lives in the reserved `route_access.dart` and has no dedicated value | `module_access_resolver_impl.dart` |
+
+Measured live 2026-11-12: 75 web modules are `disabled`. Two have a phone
+twin: `pm_programs` (phone `pm`, the Maintenance screen) and `repair_requests`
+(phone `repairRequest`). Both close for non-administrators on the first build
+that carries this change. Tests: `test/core/permissions/module_control_status_test.dart`
+and three cases in `test/core/auth/access_permissions_load_test.dart`.

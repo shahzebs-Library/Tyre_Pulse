@@ -22,31 +22,38 @@ class TpBrandLockup extends StatelessWidget {
     return Semantics(
       label: 'Tyre Pulse',
       image: true,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          // The transparent cut of the login pulse: the login artwork sits
-          // on an opaque navy plate made for the dark hero, which reads as a
-          // black box on the light app chrome.
-          Image.asset(
-            'assets/login/figma_brand_pulse_mark.png',
-            width: compact ? 42 : 48,
-            height: compact ? 24 : 28,
-            fit: BoxFit.contain,
-            excludeFromSemantics: true,
-          ),
-          const SizedBox(width: 5),
-          Text(
-            'TYRE\nPULSE',
-            style: TextStyle(
-              color: palette.text,
-              fontSize: compact ? 13 : 15,
-              height: .84,
-              fontWeight: FontWeight.w900,
-              letterSpacing: .8,
+      // A brand mark shrinks to the room it is given rather than overflowing:
+      // with large text the app bar's actions leave the title as little as
+      // 55 px, where the fixed-size lockup overflowed by 102 px.
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: AlignmentDirectional.centerStart,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            // The transparent cut of the login pulse: the login artwork sits
+            // on an opaque navy plate made for the dark hero, which reads as a
+            // black box on the light app chrome.
+            Image.asset(
+              'assets/login/figma_brand_pulse_mark.png',
+              width: compact ? 42 : 48,
+              height: compact ? 24 : 28,
+              fit: BoxFit.contain,
+              excludeFromSemantics: true,
             ),
-          ),
-        ],
+            const SizedBox(width: 5),
+            Text(
+              'TYRE\nPULSE',
+              style: TextStyle(
+                color: palette.text,
+                fontSize: compact ? 13 : 15,
+                height: .84,
+                fontWeight: FontWeight.w900,
+                letterSpacing: .8,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

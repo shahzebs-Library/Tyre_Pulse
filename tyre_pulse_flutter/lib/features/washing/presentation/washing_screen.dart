@@ -719,7 +719,12 @@ class _WashTypeSelector extends StatelessWidget {
                       final bool isSelected = selected == entry.key;
                       return SizedBox(
                         width: tileWidth,
-                        height: 100,
+                        // Two label lines grow with the text size.
+                        height: tpTextScaledExtent(
+                          context,
+                          base: 100,
+                          textHeight: 34,
+                        ),
                         child: Material(
                           color:
                               isSelected ? palette.info.soft : palette.surface,
@@ -851,7 +856,7 @@ class _DueForWashCard extends StatelessWidget {
             const SizedBox(
               height: 20,
               child: Align(
-                alignment: Alignment.centerLeft,
+                alignment: AlignmentDirectional.centerStart,
                 child: SizedBox(
                   width: 16,
                   height: 16,

@@ -8498,4 +8498,190 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get mfaVerifyUnavailable =>
       'تعذّر التحقق من الرمز الآن. تحقق من الاتصال وحاول مرة أخرى.';
+
+  @override
+  String get wfOfflineNote =>
+      'غير متصل: تُعرض المهام المحفوظة. تُحفظ تحديثاتك وتُرسل عند عودة الاتصال.';
+
+  @override
+  String get wfPendingSync => 'بانتظار المزامنة: سيُرسل عند اتصالك بالإنترنت.';
+
+  @override
+  String get wfSignInRequired => 'سجّل الدخول لتحديث المهام.';
+
+  @override
+  String get wfUpdated => 'تم التحديث.';
+
+  @override
+  String get wfSavedOffline =>
+      'حُفظ على هذا الجهاز. سيُرسل عند اتصالك بالإنترنت.';
+
+  @override
+  String get wfUpdateUnavailable => 'هذا التحديث غير متاح لهذه المهمة حاليًا.';
+
+  @override
+  String wfNotAccepted(String action) {
+    return 'لم يُقبل: $action';
+  }
+
+  @override
+  String get wfDismiss => 'تجاهل';
+
+  @override
+  String get wfActionAccept => 'قبول';
+
+  @override
+  String get wfActionStart => 'بدء';
+
+  @override
+  String get wfActionBlock => 'إيقاف';
+
+  @override
+  String get wfActionResume => 'استئناف';
+
+  @override
+  String get wfActionComplete => 'إكمال';
+
+  @override
+  String get teamActionTitle => 'متابعة مُسندة إليك';
+
+  @override
+  String get teamActionFallbackTitle => 'إجراء';
+
+  @override
+  String teamActionStatusDue(String status, String due) {
+    return 'الحالة: $status · الاستحقاق: $due';
+  }
+
+  @override
+  String get teamActionDueNotSet => 'غير محدد';
+
+  @override
+  String get teamActionBlockReason => 'سبب التعطّل';
+
+  @override
+  String get teamActionCompletionDetails => 'تفاصيل الإنجاز';
+
+  @override
+  String teamActionEvidenceCount(int count) {
+    return 'الأدلة ($count)';
+  }
+
+  @override
+  String get teamActionEvidenceFallback => 'دليل';
+
+  @override
+  String teamActionResolution(String text) {
+    return 'ما تم إنجازه: $text';
+  }
+
+  @override
+  String get teamActionUploading => 'جارٍ الرفع...';
+
+  @override
+  String get teamActionSelectPhoto => 'إضافة صورة';
+
+  @override
+  String get teamActionAttachFile => 'إرفاق PDF أو ملف';
+
+  @override
+  String get teamActionStartWork => 'بدء العمل';
+
+  @override
+  String get teamActionBlocked => 'متعطّل';
+
+  @override
+  String get teamActionStatusOpen => 'مفتوح';
+
+  @override
+  String get teamActionStatusAcknowledged => 'مقبول';
+
+  @override
+  String get teamActionStatusInProgress => 'قيد التنفيذ';
+
+  @override
+  String get teamActionStatusEscalated => 'مُصعَّد';
+
+  @override
+  String get teamActionStatusPendingApproval => 'بانتظار الاعتماد';
+
+  @override
+  String get teamActionStatusResolved => 'مكتمل';
+
+  @override
+  String get teamActionStatusDismissed => 'مُستبعد';
+
+  @override
+  String get teamActionSignIn => 'سجّل الدخول لعرض هذه المهمة.';
+
+  @override
+  String get teamActionNotYours => 'هذا الإجراء غير مُسند إلى حسابك.';
+
+  @override
+  String get teamActionBlockTooShort =>
+      'اكتب خمسة أحرف على الأقل توضّح سبب التعطّل.';
+
+  @override
+  String get teamActionResolutionTooShort =>
+      'صف العمل المنجز بعشرة أحرف على الأقل.';
+
+  @override
+  String get teamActionPhotoTooLarge =>
+      'يجب أن تكون الصورة أقل من 10 ميغابايت.';
+
+  @override
+  String get teamActionFileType =>
+      'يمكن إرفاق ملفات PDF أو JPG أو PNG أو WEBP فقط.';
+
+  @override
+  String get teamActionFileSize => 'يجب ألا يتجاوز الملف 10 ميغابايت.';
+
+  @override
+  String get teamActionPhotoUploaded => 'تم رفع الصورة.';
+
+  @override
+  String get teamActionOpenFailed => 'تعذّر فتح المرفق. حاول مرة أخرى.';
+
+  @override
+  String get teamActionLoadFailed =>
+      'تعذّر تحميل هذه المهمة. تحقق من الاتصال وحاول مرة أخرى.';
+
+  @override
+  String get teamActionSaveFailed =>
+      'لم يُحفظ التغيير. تحقق من الاتصال وحاول مرة أخرى.';
+
+  @override
+  String get teamActionUploadFailed =>
+      'تعذّر رفع الملف. تحقق من الاتصال وحاول مرة أخرى.';
+
+  @override
+  String get teamMessageTitle => 'رسالة الفريق';
+
+  @override
+  String get teamMessageSignIn => 'سجّل الدخول لعرض هذه الرسالة.';
+
+  @override
+  String get teamMessageUnavailable => 'هذه الرسالة غير متاحة لهذا الحساب.';
+
+  @override
+  String get teamMessageLoadFailed => 'تعذّر تحميل هذه الرسالة. حاول مرة أخرى.';
+
+  @override
+  String get teamMessageActionFailed =>
+      'لم تتم العملية. تحقق من الاتصال وحاول مرة أخرى.';
+
+  @override
+  String get teamMessageAcknowledged => 'تم الإقرار بالاستلام';
+
+  @override
+  String get teamMessageAckRequired => 'الإقرار بالاستلام مطلوب';
+
+  @override
+  String get teamMessageAcknowledge => 'إقرار بالاستلام';
+
+  @override
+  String get teamMessageReplyLabel => 'الرد على الفريق';
+
+  @override
+  String get teamMessageSend => 'إرسال الرد';
 }

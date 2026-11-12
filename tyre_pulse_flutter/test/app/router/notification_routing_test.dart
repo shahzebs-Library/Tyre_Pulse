@@ -308,4 +308,89 @@ void main() {
       expect(route(entityType: 'workshop'), const WorkshopRoute());
     });
   });
+  group('console and platform notices have no phone destination', () {
+    // Measured against the live `notifications` table: each of these fell
+    // into a field-work bucket that merely shared a word with it.
+    test('a security notice about a platform incident is not an accident', () {
+      expect(
+        route(
+          type: 'security',
+          entityType: 'platform_incident',
+          entityId: '00000000-0000-0000-0000-000000000001',
+        ),
+        isNull,
+      );
+      expect(route(type: 'security', entityType: 'console_session'), isNull);
+    });
+
+    test('a system notice about a cron job is not workshop work', () {
+      expect(route(type: 'system', entityType: 'cron_job'), isNull);
+    });
+
+    test('an upload gap notice stays in the inbox', () {
+      expect(route(type: 'upload_gap', entityType: 'import'), isNull);
+    });
+
+    test('a real accident notification still opens the accident', () {
+      expect(
+        route(type: 'accident', entityType: 'accident', entityId: 'acc-1'),
+        const AccidentDetailRoute(accidentId: AccidentId('acc-1')),
+      );
+    });
+  });
+
+  group('due alerts open the screen the alert is about', () {
+    test('each rule with a phone screen', () {
+      expect(
+        route(type: 'due_pm_due', entityType: 'pm_due'),
+        const PreventiveMaintenanceRoute(),
+      );
+      expect(
+        route(type: 'due_stock_low', entityType: 'stock_low'),
+        const StockCountRoute(),
+      );
+      expect(
+        route(
+          type: 'due_inspection_plan_overdue',
+          entityType: 'inspection_plan_overdue',
+        ),
+        const MyPlansRoute(),
+      );
+      expect(
+        route(type: 'due_tyre_end_of_life', entityType: 'tyre_end_of_life'),
+        const TyreRecordsRoute(),
+      );
+      expect(
+        route(
+          type: 'due_fleet_document_missing',
+          entityType: 'fleet_document_missing',
+        ),
+        const VehiclesRoute(),
+      );
+      expect(
+        route(
+          type: 'due_fleet_document_expiry',
+          entityType: 'fleet_document_expiry',
+        ),
+        const VehiclesRoute(),
+      );
+    });
+
+    test('a rule with no phone screen stays in the inbox', () {
+      expect(
+        route(
+          type: 'due_insurance_policy_expiry',
+          entityType: 'insurance_policy_expiry',
+        ),
+        isNull,
+      );
+      expect(
+        route(
+          type: 'due_certification_expiry',
+          entityType: 'certification_expiry',
+        ),
+        isNull,
+      );
+    });
+  });
 }

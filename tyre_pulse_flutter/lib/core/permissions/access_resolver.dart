@@ -116,6 +116,10 @@ enum AccessReason {
     message: 'Allowed for your role by your administrator.',
   ),
   roleDefault(allows: true, message: 'Allowed for your role.'),
+  moduleSwitchedOff(
+    allows: false,
+    message: 'This section has been switched off by your administrator.',
+  ),
   perUserRevoke(
     allows: false,
     message: 'Your administrator has removed your access to this section.',
@@ -170,6 +174,7 @@ final class AccessState {
     this.isSuperAdmin = false,
     this.grants = const <ModuleKey, GrantEffect>{},
     this.roleMatrix = const <ModuleKey, bool>{},
+    this.switchedOff = const <ModuleKey>{},
     this.permissionsError = false,
   });
 
@@ -196,6 +201,7 @@ final class AccessState {
     bool? isSuperAdmin,
     Map<String, Object?>? grantsRaw,
     Map<String, Object?>? roleMatrixRaw,
+    Map<String, Object?>? moduleStatusRaw,
     bool permissionsError = false,
   }) {
     // Grants: the phone's own key and a `mobile:<webKey>` alias
@@ -249,6 +255,10 @@ final class AccessState {
       isSuperAdmin: isSuperAdmin == true,
       grants: Map<ModuleKey, GrantEffect>.unmodifiable(grants),
       roleMatrix: Map<ModuleKey, bool>.unmodifiable(matrix),
+      // Module Control. Null (read failed) yields the empty set: fail open.
+      switchedOff: Set<ModuleKey>.unmodifiable(
+        switchedOffModulesFromRaw(moduleStatusRaw),
+      ),
       permissionsError: permissionsError,
     );
   }
@@ -277,6 +287,16 @@ final class AccessState {
   /// which case the role default is the whole story.
   final Map<ModuleKey, bool> roleMatrix;
 
+  /// Modules the web console's Module Control has switched Off or put into
+  /// Maintenance (`public.modules.status`), already mapped to phone modules.
+  ///
+  /// EMPTY means "nothing is switched off" and is also what a failed read
+  /// produces: Module Control fails OPEN. A module in this set is closed to
+  /// everyone except a super-admin and the administrator role, which is the
+  /// web's rule too - the people who can switch it back on must still be able
+  /// to reach it.
+  final Set<ModuleKey> switchedOff;
+
   /// True when the grants RPC or the matrix RPC failed and the maps above are
   /// therefore empty or stale.
   ///
@@ -290,6 +310,7 @@ final class AccessState {
     bool? isSuperAdmin,
     Map<ModuleKey, GrantEffect>? grants,
     Map<ModuleKey, bool>? roleMatrix,
+    Set<ModuleKey>? switchedOff,
     bool? permissionsError,
   }) =>
       AccessState(
@@ -297,6 +318,7 @@ final class AccessState {
         isSuperAdmin: isSuperAdmin ?? this.isSuperAdmin,
         grants: grants ?? this.grants,
         roleMatrix: roleMatrix ?? this.roleMatrix,
+        switchedOff: switchedOff ?? this.switchedOff,
         permissionsError: permissionsError ?? this.permissionsError,
       );
 
@@ -307,6 +329,8 @@ final class AccessState {
           other.role == role &&
           other.isSuperAdmin == isSuperAdmin &&
           other.permissionsError == permissionsError &&
+          other.switchedOff.length == switchedOff.length &&
+          other.switchedOff.containsAll(switchedOff) &&
           _mapEquals<ModuleKey, GrantEffect>(other.grants, grants) &&
           _mapEquals<ModuleKey, bool>(other.roleMatrix, roleMatrix);
 
@@ -317,11 +341,13 @@ final class AccessState {
         permissionsError,
         grants.length,
         roleMatrix.length,
+        switchedOff.length,
       );
 
   @override
   String toString() => 'AccessState(role: $role, superAdmin: $isSuperAdmin, '
       'grants: ${grants.length}, matrix: ${roleMatrix.length}, '
+      'switchedOff: ${switchedOff.length}, '
       'permissionsError: $permissionsError)';
 }
 
@@ -412,6 +438,7 @@ final class AccessDecision {
 /// ```text
 /// 1. super-admin                                  -> ALLOW
 /// 2. role is Admin                                -> ALLOW   (see note)
+/// 2a. module switched off in Module Control       -> DENY   (not for admins)
 /// 3. per-user revoke                              -> DENY
 /// 4. per-user grant                               -> ALLOW
 /// 5. permissions unavailable AND module sensitive -> DENY
@@ -458,6 +485,17 @@ AccessDecision resolveModuleAccess({
   //    per-user override. See AdminRevokePrecedence.
   if (precedence == AdminRevokePrecedence.serverAppUserCan && isAdminRole) {
     return decide(AccessReason.adminRole);
+  }
+
+  // 2a. Module Control. A module the web console has switched Off or put
+  //     into Maintenance is closed for everyone but a super-admin and the
+  //     administrator role - under EITHER precedence, because the people who
+  //     can switch it back on must keep reaching it. It outranks a per-user
+  //     grant on purpose: the web applies its status gate before any grant
+  //     too, so "Off" means off. An empty set (nothing off, or the read
+  //     failed) skips this step entirely.
+  if (!isAdminRole && access.switchedOff.contains(module)) {
+    return decide(AccessReason.moduleSwitchedOff);
   }
 
   // 3 and 4. The per-user overlay. A revoke beats a grant for the same module,

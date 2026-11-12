@@ -12,6 +12,12 @@
 /// The two reads fail INDEPENDENTLY (artifact 04 section 8.2): a grants
 /// failure must not discard a matrix that loaded, and vice versa. Each failed
 /// read comes back as null so the caller can keep what it already had.
+///
+/// A third, OPTIONAL read carries Module Control: the web console's
+/// Live / Maintenance / Off switch per module (`public.modules.status`). It
+/// fails OPEN - a failed read comes back as null, is never counted as a
+/// permission failure, and leaves every module available, exactly as the web
+/// treats an unreadable status as `live`.
 library;
 
 import 'dart:async';
@@ -26,7 +32,11 @@ const Duration accessPermissionsReadTimeout = Duration(seconds: 12);
 
 /// The two raw maps, each null when its read failed.
 final class AccessPermissionsSnapshot {
-  const AccessPermissionsSnapshot({this.grantsRaw, this.roleMatrixRaw});
+  const AccessPermissionsSnapshot({
+    this.grantsRaw,
+    this.roleMatrixRaw,
+    this.moduleStatusRaw,
+  });
 
   /// `{module_key: 'grant' | 'revoke'}` or null when the read failed.
   final Map<String, Object?>? grantsRaw;
@@ -34,6 +44,12 @@ final class AccessPermissionsSnapshot {
   /// `{module_key: bool}` or null when the read failed.
   final Map<String, Object?>? roleMatrixRaw;
 
+  /// `{web module_id: status}` from Module Control, or null when the read
+  /// failed. Null means "unknown", which is treated as every module live.
+  final Map<String, Object?>? moduleStatusRaw;
+
+  /// Deliberately ignores [moduleStatusRaw]: Module Control fails open and
+  /// must never flag the session's permissions as failed.
   bool get anyFailed => grantsRaw == null || roleMatrixRaw == null;
 }
 
@@ -56,11 +72,34 @@ final class SupabaseAccessPermissionsRepository
         await Future.wait(<Future<Map<String, Object?>?>>[
       _readMap(SupabaseRpcs.getMyAccessGrants),
       _readMap(SupabaseRpcs.getUserModulePermissions),
+      _readModuleStatuses(),
     ]);
     return AccessPermissionsSnapshot(
       grantsRaw: results[0],
       roleMatrixRaw: results[1],
+      moduleStatusRaw: results[2],
     );
+  }
+
+  /// One small page: the table holds one row per web module (about 200) and
+  /// only two narrow columns are read. The explicit limit keeps the read
+  /// bounded if the catalogue ever grows.
+  Future<Map<String, Object?>?> _readModuleStatuses() async {
+    try {
+      final List<Map<String, dynamic>> rows = await _client
+          .from(SupabaseTables.modules)
+          .select('module_id,status')
+          .order('module_id')
+          .limit(1000)
+          .timeout(accessPermissionsReadTimeout);
+      return <String, Object?>{
+        for (final Map<String, dynamic> row in rows)
+          if (row['module_id'] != null)
+            row['module_id'].toString(): row['status'],
+      };
+    } on Object {
+      return null;
+    }
   }
 
   Future<Map<String, Object?>?> _readMap(String rpc) async {

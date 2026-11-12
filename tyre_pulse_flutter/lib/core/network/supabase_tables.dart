@@ -112,6 +112,15 @@ abstract final class SupabaseTables {
   static const String woAssignments = 'wo_assignments';
   static const String washRecords = 'wash_records';
   static const String userAccessGrants = 'user_access_grants';
+
+  /// Module Control. The table is V258 (applied live, no file in the repo;
+  /// verified against the live database). Its authenticated read policy is
+  /// `MIGRATIONS_V275_CONSOLE_AUDIT.sql` and the maintenance window is
+  /// `MIGRATIONS_V278_MAINTENANCE_WEBGATE.sql`. One GLOBAL row per web module
+  /// with `status` live / beta / maintenance / disabled. Read-only here, by
+  /// every signed-in user, to honour a module switched Off or put into
+  /// Maintenance in the web console.
+  static const String modules = 'modules';
   static const String tyreStatusMarks = 'tyre_status_marks';
   static const String systemConfig = 'system_config';
   static const String stockMovements = 'stock_movements';
@@ -218,6 +227,7 @@ abstract final class SupabaseTables {
     woAssignments,
     washRecords,
     userAccessGrants,
+    modules,
     tyreStatusMarks,
     systemConfig,
     stockMovements,

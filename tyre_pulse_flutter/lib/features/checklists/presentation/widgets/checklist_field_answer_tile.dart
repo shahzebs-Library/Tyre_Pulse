@@ -262,7 +262,7 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
       suffix: widget.field.unit == null
           ? null
           : Padding(
-              padding: const EdgeInsets.only(right: TpSpace.md),
+              padding: const EdgeInsetsDirectional.only(end: TpSpace.md),
               child: Center(widthFactor: 1, child: Text(widget.field.unit!)),
             ),
       onChanged: _isEditable ? (String v) => widget.onChanged?.call(v) : null,

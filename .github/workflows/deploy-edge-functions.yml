@@ -12,9 +12,24 @@ on:
         required: true
         type: choice
         options:
-          - ai-tyre-inspection
-          - chat-ai
+          - account-recovery
+          - admin-revoke-sessions
           - ai-orchestrator
+          - ai-tyre-inspection
+          - billing-checkout
+          - billing-webhook
+          - chat-ai
+          - embed-worker
+          - generate-embedding
+          - public-api
+          - qr-login
+          - send-email
+          - send-scheduled-reports
+          - sentry-crash-alert
+          - sentry-issues
+          - sign-in
+          - tenant-export
+          - workflow-notify
 
 permissions:
   contents: read
@@ -41,7 +56,12 @@ jobs:
         with:
           version: latest
 
-      # All three functions validate the caller themselves, so they are
-      # deployed with gateway JWT verification off (as they run today).
+      # Every function validates the caller itself and runs today with gateway
+      # JWT verification off, except generate-embedding, which keeps it on.
       - name: Deploy
-        run: supabase functions deploy "$FUNCTION_NAME" --project-ref "$PROJECT_REF" --no-verify-jwt
+        run: |
+          if [ "$FUNCTION_NAME" = "generate-embedding" ]; then
+            supabase functions deploy "$FUNCTION_NAME" --project-ref "$PROJECT_REF"
+          else
+            supabase functions deploy "$FUNCTION_NAME" --project-ref "$PROJECT_REF" --no-verify-jwt
+          fi

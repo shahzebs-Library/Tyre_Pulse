@@ -148,7 +148,7 @@ export async function loadDetectorInputs({ country, now = new Date() } = {}) {
       const p = prevBy.get(r.country)
       if (!p) return []
       return [
-        { scope: 'fleet', unit: 'km', country: r.country, currency: r.currency, metric: 'tyre_spend_ratio', current: r.km?.cpk_tyre, prior: p.km?.cpk_tyre, period: curFrom },
+        { scope: 'fleet', unit: 'km', country: r.country, currency: r.currency, current: r.km?.cpk_total, prior: p.km?.cpk_total, period: curFrom },
         { scope: 'fleet', unit: 'hours', country: r.country, currency: r.currency, current: r.hours?.cpk_total, prior: p.hours?.cpk_total, period: curFrom },
       ]
     })

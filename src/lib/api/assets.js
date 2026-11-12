@@ -269,11 +269,16 @@ export async function getFleetSummary({ country, search, site, type } = {}) {
 }
 
 export async function saveFleetRecord(payload, id) {
+  // The update asks for the changed id back: row security refuses an update by
+  // matching zero rows without raising, which used to read as a successful save.
   const q = id
-    ? supabase.from('vehicle_fleet').update(payload).eq('id', id)
+    ? supabase.from('vehicle_fleet').update(payload).eq('id', id).select('id')
     : supabase.from('vehicle_fleet').insert(payload)
-  const { error } = await q
+  const { data, error } = await q
   if (error) throw new ServiceError(toUserMessage(error), error.code, error)
+  if (id && (!Array.isArray(data) || data.length === 0)) {
+    throw new ServiceError('This vehicle was not updated. You do not have permission to change the fleet register, or the vehicle no longer exists.')
+  }
 }
 
 export async function deleteFleetRecord(id) {

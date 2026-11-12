@@ -70,6 +70,8 @@ describe('service layer - budgets', () => {
   })
 
   it('updateBudgetStatus patches status by id', async () => {
+    // The write asks for the changed id back; a row coming back is a real save.
+    h.state.result = { data: [{ id: 'b1' }], error: null }
     await budgets.updateBudgetStatus('b1', 'Approved')
     expect(h.state.last._calls.update).toEqual({ status: 'Approved' })
     expect(h.state.last._calls.eq).toContainEqual(['id', 'b1'])

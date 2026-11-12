@@ -52,12 +52,18 @@ describe('service layer - kpiTargets', () => {
     expect(res.data).toEqual([{ metric: 'max_monthly_cost', target_value: 150000 }])
   })
 
-  it('upsert preserves the exact onConflict target (metric,year,month,site)', async () => {
-    const rows = [{ metric: 'max_monthly_cost', target_value: 150000, year: 2026 }]
-    await kpiTargets.upsertKpiTargets(rows)
+  // CHANGED 2026-11-12 (MODC-03). This case used to pin
+  // upsert(..., { onConflict: 'metric,year,month,site' }). That conflict target
+  // never matches a target saved with blank month and site, so the second save
+  // of any target failed as a duplicate. The save no longer upserts at all; the
+  // full behaviour is covered in src/test/kpiTargetsSave.test.js.
+  it('saving a target never uses the upsert that could not match blank month and site', async () => {
+    h.state.result = { data: [{ id: 'k1', metric: 'max_monthly_cost', year: 2026, month: null, site: null, country: 'KSA' }], error: null }
+    const res = await kpiTargets.upsertKpiTargets([{ metric: 'max_monthly_cost', target_value: 150000, year: 2026 }])
+    expect(res.error).toBeNull()
     expect(h.state.last._table).toBe('kpi_targets')
-    expect(h.state.last._calls.upsert).toEqual(rows)
-    expect(h.state.last._calls.upsertOpts).toEqual({ onConflict: 'metric,year,month,site' })
+    expect(h.state.last._calls.upsert).toBeUndefined()
+    expect(h.state.last._calls.update).toMatchObject({ target_value: 150000 })
   })
 
   it('listOpenCorrectiveActions applies neq(status,Closed) + strict country eq', async () => {

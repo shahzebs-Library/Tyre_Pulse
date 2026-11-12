@@ -10,6 +10,7 @@
  */
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { useWriteAccess } from '../hooks/useWriteAccess'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import {
@@ -104,6 +105,18 @@ function ErrorCard({ message, onRetry }) {
 export default function Budgets() {
   const reportMeta = useReportMeta('Budgets & Cost')
   const { profile }   = useAuth()
+  // Budgets are written by an Admin, or by a role or person an Admin has given
+  // the budgets create and edit rights to in Access Control. Managers and
+  // Directors used to see the full editor and then meet a refused save; the
+  // editor is now read-only for anyone the database will refuse, with the
+  // reason. Saving a budget is an insert-or-update, so both rights are needed.
+  const access = useWriteAccess('budgets')
+  // `known` is required: the editor stays read-only while the server answer is
+  // loading or could not be read, so it is never offered on a guess.
+  const canEditBudgets = access.known && access.create && access.edit
+  const budgetReadOnlyReason = canEditBudgets
+    ? undefined
+    : access.known ? access.reason('edit') : 'Your right to edit budgets could not be confirmed. Reload the page to try again.'
   const { activeCountry, activeCurrency } = useSettings()
   const { t } = useLanguage()
   const [budgets, setBudgets]     = useState([])
@@ -322,6 +335,8 @@ export default function Budgets() {
             className="input text-xs py-1 min-h-[36px]"
             aria-label={`Status for ${b.site || 'this budget'}`}
             value={b.status}
+            disabled={!canEditBudgets}
+            title={budgetReadOnlyReason}
             onChange={(e) => changeStatus(b, e.target.value)}
           >
             {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{t(`budgets.status.${s.toLowerCase()}`)}</option>)}
@@ -329,7 +344,7 @@ export default function Budgets() {
         )
       },
     },
-  ], [activeCurrency, changeStatus, t])
+  ], [activeCurrency, changeStatus, t, canEditBudgets, budgetReadOnlyReason])
 
   // ── Annual planner ─────────────────────────────────────────────────────────
   const plannerIndex = useMemo(() => buildSpendIndex(tyreRows, { year: plannerYear }), [tyreRows, plannerYear])
@@ -394,7 +409,9 @@ export default function Budgets() {
                   : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-secondary)]'
               }`}
               value={c.value}
-              onChange={(e) => setPlannerEdits((prev) => ({ ...prev, [`${site}~${c.month}`]: e.target.value }))}
+              readOnly={!canEditBudgets}
+              title={budgetReadOnlyReason}
+              onChange={(e) => canEditBudgets && setPlannerEdits((prev) => ({ ...prev, [`${site}~${c.month}`]: e.target.value }))}
               placeholder="0"
             />
             {c.spent > 0 && (
@@ -423,7 +440,7 @@ export default function Budgets() {
         </span>
       ),
     },
-  ], [monthLabels, activeCurrency, t])
+  ], [monthLabels, activeCurrency, t, canEditBudgets, budgetReadOnlyReason])
 
   // ── Exports ────────────────────────────────────────────────────────────────
   async function exportExcel() {
@@ -505,7 +522,7 @@ export default function Budgets() {
             <button type="button" onClick={exportPdfFn} disabled={!canExport} className="btn-secondary text-sm flex items-center gap-1.5 min-h-[44px] disabled:opacity-50">
               <FileText size={14} aria-hidden="true" /> {t('budgets.actions.pdf')}
             </button>
-            <button type="button" onClick={() => { setForm(EMPTY_FORM); setShowForm(true); setError('') }} className="btn-primary flex items-center gap-2 text-sm min-h-[44px]">
+            <button type="button" onClick={() => { setForm(EMPTY_FORM); setShowForm(true); setError('') }} disabled={!canEditBudgets} title={budgetReadOnlyReason} className="btn-primary flex items-center gap-2 text-sm min-h-[44px] disabled:opacity-50">
               <Plus size={16} aria-hidden="true" /> {t('budgets.actions.setBudget')}
             </button>
           </div>
@@ -535,6 +552,11 @@ export default function Budgets() {
       </p>
 
       {loadError && <ErrorCard message={loadError} onRetry={load} />}
+      {!canEditBudgets && !access.loading && (
+        <p role="note" className="text-sm text-[var(--text-muted)] flex items-center gap-1.5">
+          <AlertTriangle size={14} aria-hidden="true" /> Budgets are read-only for your account. {budgetReadOnlyReason}
+        </p>
+      )}
       {actionError && (
         <p role="alert" className="text-sm text-red-400 flex items-center gap-1.5">
           <AlertTriangle size={14} aria-hidden="true" /> {actionError}

@@ -13,6 +13,7 @@
  * instead of throwing.
  */
 import { supabase, unwrap, applyCountry, ServiceError, isMissingRelation, fetchAllOrThrow } from './_client'
+import { expectRows } from './writeGuard'
 import { EVENT_TYPES, buildBoard, computeKpis } from '../workshopLive'
 import { normalizeWoStatus } from '../workOrderStatus'
 import { generateWorkOrderNo } from './workOrders'
@@ -240,23 +241,42 @@ export async function listJobsCompletedToday({ site, country, limit = 500 } = {}
   }
 }
 
+export const JOB_WRITE_REFUSED =
+  'This job was not changed. Your account is not allowed to change work orders, or the job no longer exists.'
+
+/**
+ * Update one work order and return the updated row.
+ *
+ * The row is asked back as a LIST, not `.single()`. Row security refuses an
+ * update by matching zero rows, and `.single()` turned that into "Not found.",
+ * which sent a Manager looking for a job that was in front of them. Zero rows
+ * is reported as what it is: a refused change.
+ */
+async function updateJobRow(jobId, patch) {
+  const rows = expectRows(
+    await supabase.from('work_orders').update(patch).eq('id', jobId).select(WO_COLS),
+    JOB_WRITE_REFUSED,
+  )
+  return rows[0]
+}
+
 /** Set a job's status. Returns the updated row. */
 export async function setJobStatus(jobId, status) {
   if (!jobId) throw new ServiceError('A job is required.')
-  return unwrap(await supabase.from('work_orders').update({ status }).eq('id', jobId).select(WO_COLS).single())
+  return updateJobRow(jobId, { status })
 }
 
 /** Set a job's priority. Returns the updated row. */
 export async function setJobPriority(jobId, priority) {
   if (!jobId) throw new ServiceError('A job is required.')
-  return unwrap(await supabase.from('work_orders').update({ priority }).eq('id', jobId).select(WO_COLS).single())
+  return updateJobRow(jobId, { priority })
 }
 
 /** Flag / clear a job as Vehicle Off Road; stamps vor_since when turned on. */
 export async function setVor(jobId, on) {
   if (!jobId) throw new ServiceError('A job is required.')
   const patch = on ? { vor: true, vor_since: new Date().toISOString() } : { vor: false, vor_since: null }
-  return unwrap(await supabase.from('work_orders').update(patch).eq('id', jobId).select(WO_COLS).single())
+  return updateJobRow(jobId, patch)
 }
 
 /** Coerce a datetime-local / ISO value to an ISO string, or null when invalid. */
@@ -311,9 +331,7 @@ export async function createJob(values = {}) {
 export async function setQcStatus(jobId, status) {
   if (!jobId) throw new ServiceError('A job is required.')
   if (!QC_STATUSES.includes(status)) throw new ServiceError('Unknown QC status.')
-  return unwrap(
-    await supabase.from('work_orders').update({ qc_status: status }).eq('id', jobId).select(WO_COLS).single(),
-  )
+  return updateJobRow(jobId, { qc_status: status })
 }
 
 // ── Tasks (wo_tasks) ─────────────────────────────────────────────────────────

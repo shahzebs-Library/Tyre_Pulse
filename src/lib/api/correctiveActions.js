@@ -55,13 +55,14 @@ export async function updateCorrectiveAction(id, patch) {
  * submission). Degrades to [] rather than throwing, so a failure to read the
  * existing actions can never block the page that shows the defects.
  */
-export async function listActionsForSource(sourceType, sourceId) {
+export async function listActionsForSource(sourceType, sourceId, { strict = false } = {}) {
   if (!sourceType || !sourceId) return []
   try {
     return await unwrap(await supabase.from('corrective_actions').select(COLS)
       .eq('source_type', sourceType).eq('source_id', sourceId)
       .order('created_at', { ascending: false }))
-  } catch {
+  } catch (error) {
+    if (strict) throw toServiceError(error, 'Could not verify existing corrective actions.')
     return []
   }
 }

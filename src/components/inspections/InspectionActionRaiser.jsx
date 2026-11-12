@@ -37,10 +37,11 @@ export default function InspectionActionRaiser({ inspection, flagMap, onClose, o
     if (!inspection || existing == null) return []
     // The running-life feed belongs in the warning banner, not in the findings picker.
     const tyre = defectsForAction(inspection).filter((d) => d.kind === 'damage' && !raisedKeys.has(d.key))
+    const preferred = inspection.__preferredDefectKeys || (inspection.__preferredDefectKey ? [inspection.__preferredDefectKey] : null)
     const general = generalDefectFor(inspection)
     const out = [...tyre]
-    if (general && !raisedKeys.has(general.key)) out.push({ ...general, defaultInclude: tyre.length === 0 && !inspection.__preferredDefectKey })
-    return out.map((d) => ({ ...d, defaultInclude: inspection.__preferredDefectKey ? d.key === inspection.__preferredDefectKey : d.defaultInclude }))
+    if (general && !raisedKeys.has(general.key)) out.push({ ...general, defaultInclude: tyre.length === 0 && !preferred })
+    return out.map((d) => ({ ...d, defaultInclude: preferred ? preferred.includes(d.key) : d.defaultInclude }))
   }, [inspection, existing, raisedKeys])
 
   const finish = async (res) => {

@@ -31,7 +31,7 @@
  */
 import { currencyForCountry, MIXED_CURRENCY } from './governedCost'
 import {
-  withOnePricePerTyre, toLifetimeTyres, tyreKey, fitmentKm, weightedCpk, lifetimeSummary,
+  withOnePricePerTyre, toLifetimeTyres, tyreKey, fitmentKm, fitmentCpk, weightedCpk, lifetimeSummary,
   CPK_KIND, CPK_KIND_LABEL,
 } from './tyreLifetime'
 
@@ -54,7 +54,13 @@ const toNum = (v) => {
   return Number.isFinite(n) ? n : null
 }
 
-/** Cost per km for one tyre, or null when either side is not measurable. */
+/**
+ * Cost per km for one tyre, or null when not measurable. DEPRECATED divergent
+ * copy kept only for its own unit tests and legacy callers that pass separate
+ * km args; `normaliseRecord` now routes through the single `fitmentCpk` row rule
+ * (placeholder "1" -> N/A, factory "0" -> real, over class cap -> N/A). Do NOT
+ * use this for a new per-fitment CPK - call `fitmentCpk(row)`.
+ */
 export function calcCpk(cost, kmFit, kmRem) {
   const c = toNum(cost)
   const f = toNum(kmFit) ?? 0
@@ -100,7 +106,7 @@ export function normaliseRecord(r = {}) {
     cost: priced ? cost : 0,
     priced,
     currency: currencyForCountry(r.country) || null,
-    cpk: calcCpk(r.cost_per_tyre, r.km_at_fitment, r.km_at_removal),
+    cpk: fitmentCpk(r),
     failed: /fail|burst|damage|scrap/i.test(r.removal_reason || ''),
     highRisk: /high|critical/i.test(r.risk_level || ''),
   }

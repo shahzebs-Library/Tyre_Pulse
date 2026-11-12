@@ -746,10 +746,24 @@ describe('recordCpk', () => {
     expect(recordCpk(record)).toBeNull()
   })
 
-  it('returns 0 CPK when cost_per_tyre is 0', () => {
+  it('returns null when cost_per_tyre is 0 (never a flattering 0)', () => {
     const record = { km_at_fitment: 0, km_at_removal: 10000, cost_per_tyre: 0 }
-    // km_at_fitment=0 treated as falsy, so returns null
     expect(recordCpk(record)).toBeNull()
+  })
+
+  // Lock in the single-rule fix (recordCpk now delegates to fitmentCpk). The old
+  // inline copy got each of these wrong.
+  it('prices a factory fit (km_at_fitment 0) that the old copy nulled', () => {
+    expect(recordCpk({ km_at_fitment: 0, km_at_removal: 10000, cost_per_tyre: 1000 })).toBeCloseTo(0.1)
+  })
+
+  it('N/A for a placeholder "1" fitment meter (total_km is the machine odometer)', () => {
+    expect(recordCpk({ km_at_fitment: 1, km_at_removal: 90000, total_km: 90000, cost_per_tyre: 1000 })).toBeNull()
+  })
+
+  it('N/A for a life above the class cap (reading error, not a low CPK)', () => {
+    // default cap 100000; removal - fitment = 150000 -> N/A
+    expect(recordCpk({ km_at_fitment: 10000, km_at_removal: 160000, cost_per_tyre: 1000 })).toBeNull()
   })
 })
 

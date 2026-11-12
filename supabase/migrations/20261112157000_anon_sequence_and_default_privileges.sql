@@ -2,10 +2,29 @@
 -- functions are no longer born anon-executable.
 --
 -- FINDINGS: API-10 (P3), RLS-13 (P3)  - audit 2026-11-12.
--- STATUS: AUTHORED, NOT APPLIED. The deployment tool became unavailable before
---   this file could be applied or its pre-apply checks run. Nothing in it uses a
---   keyword the tool holds for confirmation, so it can be applied with
---   apply_migration once the PRE-APPLY CHECKS below have been run.
+-- STATUS: APPLIED LIVE on jhssdmeruxtrlqnwfksc 2026-11-12 (statements below,
+--   unchanged). Pre-apply checks run first; results:
+--   (a) anon-executable functions in public that write: every one is SECURITY
+--       DEFINER (log_client_error, record_login_failure, request_password_reset,
+--       qr_login_start, qr_login_status, the five token snapshot functions).
+--       The only INVOKER writers were the two generators and two trigger
+--       functions (workforce_assignment_classify / _guard, never called over
+--       the API). anon holds no table grants, so it cannot reach a sequence
+--       through an insert either. Section 2 kept.
+--   (b) 44 sequences: authenticated USAGE 44 / anon USAGE 0 after apply.
+--   Verified after apply, as anon, rolled back: get_public_config,
+--   login_attempt_status, record_login_failure, get_email_by_identifier,
+--   get_login_showcase, request_password_reset, qr_login_start, qr_login_status,
+--   log_client_error, get_report_snapshot (bad token and a real token),
+--   get_report_tyre_maintenance (real token), get_workshop_snapshot,
+--   get_accident_portal_snapshot, get_display_snapshot all answer as before;
+--   generate_work_order_no and a direct nextval -> 42501. As a Manager
+--   generate_work_order_no still returns a number.
+--   pg_default_acl (postgres): functions, all schemas = owner only; functions
+--   and sequences in public = authenticated + service_role, no anon.
+--   Note: the first default-privilege statement is not schema-bound, so a
+--   function postgres creates in ANY schema is no longer executable by PUBLIC;
+--   grant explicitly when a non-public-schema function must be callable.
 --
 -- WHAT IS WRONG (catalog, read live 2026-11-12; the calls were not made because
 -- nextval is not rolled back)

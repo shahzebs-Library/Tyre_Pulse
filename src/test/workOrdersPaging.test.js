@@ -89,15 +89,28 @@ describe('work orders - server-side paging', () => {
   })
 
   it('the export pages the whole filtered set, not just the visible page', async () => {
-    // 2,500 matches at pageSize 1000 -> three pages, then stop.
-    const pageOf = (n) => ({ data: { rows: Array.from({ length: n }, (_, i) => ({ id: i })), total: 2500 }, error: null })
-    h.state.resultsByCall = [pageOf(1000), pageOf(1000), pageOf(500)]
+    // The server caps a page at 200 rows. 500 matches -> three pages of 200/200/100.
+    const pageOf = (n) => ({ data: { rows: Array.from({ length: n }, (_, i) => ({ id: i })), total: 500 }, error: null })
+    h.state.resultsByCall = [pageOf(200), pageOf(200), pageOf(100)]
 
     const out = await workOrders.getAllWorkOrdersMatching({ country: 'KSA' })
 
     expect(h.state.rpc).toHaveLength(3)
-    expect(h.state.rpc.map(c => c.args.p_offset)).toEqual([0, 1000, 2000])
-    expect(out.rows).toHaveLength(2500)
+    expect(h.state.rpc.map(c => c.args.p_offset)).toEqual([0, 200, 400])
+    expect(out.rows).toHaveLength(500)
+    expect(out.truncated).toBe(false)
+  })
+
+  it('the export adapts when the server returns a shorter page than asked', async () => {
+    // Asked for 1000, the server gave 200 of 500: offsets must follow the real
+    // page size, or rows 200..999 are skipped (the bug this pins).
+    const pageOf = (n) => ({ data: { rows: Array.from({ length: n }, (_, i) => ({ id: i })), total: 500 }, error: null })
+    h.state.resultsByCall = [pageOf(200), pageOf(200), pageOf(200), pageOf(100)]
+
+    const out = await workOrders.getAllWorkOrdersMatching({ country: 'KSA' }, { pageSize: 1000 })
+
+    expect(h.state.rpc.map(c => c.args.p_offset)).toEqual([0, 0, 200, 400])
+    expect(out.rows).toHaveLength(500)
     expect(out.truncated).toBe(false)
   })
 

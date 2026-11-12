@@ -1,0 +1,2705 @@
+{
+ "generated": "2026-11-12",
+ "scope": "Workshop & Maintenance, Inspections & Compliance, Drivers & Safety, Monitoring & Logistics (web menu) plus unlisted routes",
+ "modules": [
+  {
+   "group": "Workshop & Maintenance",
+   "label": "Work Orders",
+   "route": "/work-orders",
+   "module_key": "work_orders",
+   "guard": "ModuleRoute",
+   "page": "src/pages/WorkOrders.jsx",
+   "services": [
+    "(many; page imports the api barrel)"
+   ],
+   "tables": [
+    "work_orders",
+    "(page imports the api barrel)"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Empty register with New Work Order. Only the Admin can save; other roles are refused.",
+   "defects": [
+    {
+     "id": "MODB-3",
+     "severity": "P1",
+     "evidence": "pg_policies work_orders: only work_orders_cap_insert / work_orders_cap_update are permissive for writes; app_user_can reads organisations.settings permission_overrides (new org has none); src/pages/WorkOrders.jsx:164 gates only delete; src/App.jsx:681 admits Manager and Director to Live Control",
+     "summary": "Work order create and edit is capability-only. In a new company only the Admin can create or edit a job card; Managers see New Work Order, New Job, assign and status controls and receive a permission refusal. In the current company only Admin, Tyre Data Collector and Data Monitor Officer hold the capability, so the 3 Managers on Live Control cannot create jobs or change job status."
+    },
+    {
+     "id": "MODB-6",
+     "severity": "P1",
+     "evidence": "pg_indexes work_orders_work_order_no_key UNIQUE (work_order_no) with no organisation column; generate_work_order_no uses one global sequence work_order_seq",
+     "summary": "Job card numbers are unique across all tenants. A second company importing ERP job cards whose numbers already exist for another tenant is refused with a duplicate error it cannot see or resolve, and the staging pipe upsert on work_order_no could refresh another tenant row. App generated WO numbers come from one shared sequence, so gaps expose other tenants volume."
+    },
+    {
+     "id": "MODB-19",
+     "severity": "P1",
+     "evidence": "pg_proc stamp_import_default_org contains the current company UUID; trigger trg_stamp_import_default_org on inspections and work_orders",
+     "summary": "Rows written without an organisation (service role or dashboard import) are stamped with the current company. A second tenant loaded that way would land inside the first tenant."
+    }
+   ],
+   "remediation": "Per-tenant work order numbering (unique on organisation + number, per-org sequence); seed sensible create/edit capability defaults for Manager on tenant creation; hide write controls from users without the capability.",
+   "priority": "P1",
+   "area": "DB, web",
+   "tests": "workOrdersPaging, workOrderStatus, jobCard (RUN: pass)"
+  },
+  {
+   "group": "Workshop & Maintenance",
+   "label": "Live Control",
+   "route": "/workshop-live",
+   "module_key": "workshop_live",
+   "guard": "RoleRoute(Admin,Manager,Director)+ModuleRoute",
+   "page": "src/pages/WorkshopLive.jsx",
+   "services": [
+    "assets.js",
+    "pmPrograms.js",
+    "reportShares.js",
+    "workOrders.js",
+    "workshopAnalytics.js",
+    "workshopConfig.js",
+    "workshopLive.js"
+   ],
+   "tables": [
+    "engine_hours_logs",
+    "odometer_logs",
+    "pm_programs",
+    "pm_service_records",
+    "profiles",
+    "report_shares",
+    "shifts",
+    "tech_activity_events",
+    "technician_skills",
+    "vehicle_fleet",
+    "wo_assignments",
+    "wo_tasks",
+    "work_orders",
+    "workshop_attendance"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Empty technician board and kanban. New Job works for Admin only. Technicians appear only when they hold workshop roles or skills rows.",
+   "defects": [
+    {
+     "id": "MODB-3",
+     "severity": "P1",
+     "evidence": "pg_policies work_orders: only work_orders_cap_insert / work_orders_cap_update are permissive for writes; app_user_can reads organisations.settings permission_overrides (new org has none); src/pages/WorkOrders.jsx:164 gates only delete; src/App.jsx:681 admits Manager and Director to Live Control",
+     "summary": "Work order create and edit is capability-only. In a new company only the Admin can create or edit a job card; Managers see New Work Order, New Job, assign and status controls and receive a permission refusal. In the current company only Admin, Tyre Data Collector and Data Monitor Officer hold the capability, so the 3 Managers on Live Control cannot create jobs or change job status."
+    },
+    {
+     "id": "MODB-21",
+     "severity": "P2",
+     "evidence": "src/lib/workshopLive.js:444,599-608 DEFAULT_LABOUR_RATE = 120; live workshop_config 0 rows; src/pages/WorkshopAnalytics.jsx:264 labels it with the active currency",
+     "summary": "Delay cost impact on Live Control and Workshop Analytics is hours lost multiplied by a labour rate that falls back to a hard-coded 120 per hour, labelled SAR, AED or EGP alike, with no statement that the rate is a default."
+    },
+    {
+     "id": "MODB-23",
+     "severity": "P3",
+     "evidence": "live: all workforce_* tables 0 rows including workforce_task_types and workforce_employees; tech_activity_events 27, wo_assignments 27, workshop_attendance 0, shifts 0, pm_programs 0, technician_skills 0",
+     "summary": "The workforce, attendance, shift and PM features have never carried real data, so their end to end behaviour is unproven outside tests."
+    }
+   ],
+   "remediation": "Same capability fix as Work Orders; show delay cost only when a labour rate is configured, or label the default.",
+   "priority": "P1",
+   "area": "DB, web",
+   "tests": "workshopLive engine + api, workshopTasks, workshopAssign (workshopLive RUN: pass)"
+  },
+  {
+   "group": "Workshop & Maintenance",
+   "label": "Bay Scheduling",
+   "route": "/bay-scheduling",
+   "module_key": "bay_scheduling (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/BayScheduling.jsx",
+   "services": [
+    "bayScheduling.js"
+   ],
+   "tables": [
+    "bay_schedules"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty table with an Add button; a new company can start typing records at once. Nothing is prefilled.",
+   "defects": [
+    {
+     "id": "MODB-17",
+     "severity": "P3",
+     "evidence": "src/lib/api/trips.js:59, bayScheduling.js:112, serviceRequests.js:54, dispatch.js:22, gpsPositions.js:84, journeys.js:37, certifications.js:28, dvir.js:33, equipment.js:44, driverDocuments.js:26: limit = 500",
+     "summary": "The simple ledgers read the newest 500 rows and compute their KPI tiles and exports from that page of data. Only some pages state the cap."
+    }
+   ],
+   "remediation": "Keep hidden until a customer asks; see restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Workshop & Maintenance",
+   "label": "Service Requests",
+   "route": "/service-requests",
+   "module_key": "service_requests (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/ServiceRequests.jsx",
+   "services": [
+    "serviceRequests.js"
+   ],
+   "tables": [
+    "service_requests"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 5,
+   "empty_account_behaviour": "Empty table with an Add button; a new company can start typing records at once. Nothing is prefilled.",
+   "defects": [
+    {
+     "id": "MODB-17",
+     "severity": "P3",
+     "evidence": "src/lib/api/trips.js:59, bayScheduling.js:112, serviceRequests.js:54, dispatch.js:22, gpsPositions.js:84, journeys.js:37, certifications.js:28, dvir.js:33, equipment.js:44, driverDocuments.js:26: limit = 500",
+     "summary": "The simple ledgers read the newest 500 rows and compute their KPI tiles and exports from that page of data. Only some pages state the cap."
+    }
+   ],
+   "remediation": "Overlaps Repair Requests and Report Issue; consolidate before selling. See restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Workshop & Maintenance",
+   "label": "Breakdown Callouts",
+   "route": "/breakdowns",
+   "module_key": "breakdowns (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/BreakdownCallouts.jsx",
+   "services": [
+    "breakdownCallouts.js"
+   ],
+   "tables": [
+    "breakdown_callouts"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 5,
+   "empty_account_behaviour": "Empty table with an Add button; a new company can start typing records at once. Nothing is prefilled.",
+   "defects": [
+    {
+     "id": "MODB-17",
+     "severity": "P3",
+     "evidence": "src/lib/api/trips.js:59, bayScheduling.js:112, serviceRequests.js:54, dispatch.js:22, gpsPositions.js:84, journeys.js:37, certifications.js:28, dvir.js:33, equipment.js:44, driverDocuments.js:26: limit = 500",
+     "summary": "The simple ledgers read the newest 500 rows and compute their KPI tiles and exports from that page of data. Only some pages state the cap."
+    }
+   ],
+   "remediation": "Overlaps Breakdown Register; keep one. See restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Workshop & Maintenance",
+   "label": "Repair Requests (RFR)",
+   "route": "/repair-requests",
+   "module_key": "repair_requests (disabled)",
+   "guard": "RoleRoute(Admin,Manager,Director)+moduleKey",
+   "page": "src/pages/RepairRequests.jsx",
+   "services": [
+    "repairRequests.js"
+   ],
+   "tables": [
+    "repair_requests",
+    "work_orders"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty register; drivers and trades raise requests (web or Flutter); conversion to a job card needs the work order capability.",
+   "defects": [
+    {
+     "id": "MODB-3",
+     "severity": "P1",
+     "evidence": "pg_policies work_orders: only work_orders_cap_insert / work_orders_cap_update are permissive for writes; app_user_can reads organisations.settings permission_overrides (new org has none); src/pages/WorkOrders.jsx:164 gates only delete; src/App.jsx:681 admits Manager and Director to Live Control",
+     "summary": "Work order create and edit is capability-only. In a new company only the Admin can create or edit a job card; Managers see New Work Order, New Job, assign and status controls and receive a permission refusal. In the current company only Admin, Tyre Data Collector and Data Monitor Officer hold the capability, so the 3 Managers on Live Control cannot create jobs or change job status."
+    },
+    {
+     "id": "MODB-6",
+     "severity": "P1",
+     "evidence": "pg_indexes work_orders_work_order_no_key UNIQUE (work_order_no) with no organisation column; generate_work_order_no uses one global sequence work_order_seq",
+     "summary": "Job card numbers are unique across all tenants. A second company importing ERP job cards whose numbers already exist for another tenant is refused with a duplicate error it cannot see or resolve, and the staging pipe upsert on work_order_no could refresh another tenant row. App generated WO numbers come from one shared sequence, so gaps expose other tenants volume."
+    }
+   ],
+   "remediation": "Restore together with the work order capability fix. RFR number prefix should be per tenant (check next_rfr_no prefix).",
+   "priority": "P2",
+   "area": "DB, web, Flutter",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Workshop & Maintenance",
+   "label": "Breakdown Register",
+   "route": "/asset-breakdowns",
+   "module_key": "asset_breakdowns",
+   "guard": "RoleRoute(Admin,Manager,Director)+moduleKey",
+   "page": "src/pages/AssetBreakdowns.jsx",
+   "services": [
+    "assetBreakdowns.js"
+   ],
+   "tables": [
+    "asset_breakdowns"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty register with add form; elevated roles write.",
+   "defects": [],
+   "remediation": "None blocking.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Workshop & Maintenance",
+   "label": "Preventive Maintenance",
+   "route": "/pm-programs",
+   "module_key": "pm_programs (disabled)",
+   "guard": "RoleRoute(Admin,Manager,Director)+ModuleRoute",
+   "page": "src/pages/PmPrograms.jsx",
+   "services": [
+    "assets.js",
+    "costSummary.js",
+    "governedCost.js",
+    "partsCatalog.js",
+    "pmPrograms.js",
+    "workOrders.js"
+   ],
+   "tables": [
+    "engine_hours_logs",
+    "odometer_logs",
+    "parts_catalog",
+    "pm_programs",
+    "pm_service_records",
+    "tyre_records",
+    "vehicle_fleet",
+    "work_orders"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty plans list with templates to start from; record service is an atomic RPC.",
+   "defects": [
+    {
+     "id": "MODB-23",
+     "severity": "P3",
+     "evidence": "live: all workforce_* tables 0 rows including workforce_task_types and workforce_employees; tech_activity_events 27, wo_assignments 27, workshop_attendance 0, shifts 0, pm_programs 0, technician_skills 0",
+     "summary": "The workforce, attendance, shift and PM features have never carried real data, so their end to end behaviour is unproven outside tests."
+    }
+   ],
+   "remediation": "Restore after a pilot with real plans; meter axis needs odometer or hour logs.",
+   "priority": "P2",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Workshop & Maintenance",
+   "label": "Maintenance Calendar",
+   "route": "/maintenance-calendar",
+   "module_key": "maintenance_calendar",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/MaintenanceCalendar.jsx",
+   "services": [
+    "pmPrograms.js"
+   ],
+   "tables": [
+    "engine_hours_logs",
+    "odometer_logs",
+    "pm_programs",
+    "pm_service_records",
+    "tyre_records",
+    "vehicle_fleet",
+    "work_orders"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Empty calendar. Fills only from PM plans and work orders.",
+   "defects": [
+    {
+     "id": "MODB-10",
+     "severity": "P2",
+     "evidence": "live: tyre_records risk_level, tread_depth, pressure_reading populated on 0 of 11,260 rows; readings live in inspections.tyre_conditions (2,630 rows); src/pages/LiveFleetStatus.jsx:443, FleetHealthBoard.jsx:229, ComplianceDashboard.jsx:250 select those tyre_records columns",
+     "summary": "Live Fleet Status, Fleet Health Board, the tread and pressure parts of Compliance Dashboard, tyre alerts and the estimated tyre dates on Maintenance Calendar read condition columns that nothing populates. They render honest N/A but deliver no information for the current company or a new one."
+    },
+    {
+     "id": "MODB-23",
+     "severity": "P3",
+     "evidence": "live: all workforce_* tables 0 rows including workforce_task_types and workforce_employees; tech_activity_events 27, wo_assignments 27, workshop_attendance 0, shifts 0, pm_programs 0, technician_skills 0",
+     "summary": "The workforce, attendance, shift and PM features have never carried real data, so their end to end behaviour is unproven outside tests."
+    }
+   ],
+   "remediation": "Drop or relabel the estimated tyre events until tyre condition data exists.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Workshop & Maintenance",
+   "label": "Predictive Maintenance",
+   "route": "/predictive-maintenance",
+   "module_key": "predictive_maintenance",
+   "guard": "ModuleRoute",
+   "page": "src/pages/PredictiveMaintenance.jsx",
+   "services": [
+    "assetBreakdowns.js",
+    "predictiveSignals.js",
+    "tyreRunningLife.js"
+   ],
+   "tables": [
+    "asset_breakdowns",
+    "tyre_life_targets",
+    "tyre_records",
+    "work_orders"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Honest empty overview; needs tyre fitments with meters, job cards and breakdowns.",
+   "defects": [],
+   "remediation": "Name over-promises (it is a rules overview, not prediction); consider renaming.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Workshop & Maintenance",
+   "label": "Downtime Tracker",
+   "route": "/downtime",
+   "module_key": "fleet_analytics (shared)",
+   "guard": "ModuleRoute",
+   "page": "src/pages/DowntimeTracker.jsx",
+   "services": [],
+   "tables": [
+    "tyre_records",
+    "work_orders"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Empty; with job cards only, hours come from open to complete times.",
+   "defects": [
+    {
+     "id": "MODB-10",
+     "severity": "P2",
+     "evidence": "live: tyre_records risk_level, tread_depth, pressure_reading populated on 0 of 11,260 rows; readings live in inspections.tyre_conditions (2,630 rows); src/pages/LiveFleetStatus.jsx:443, FleetHealthBoard.jsx:229, ComplianceDashboard.jsx:250 select those tyre_records columns",
+     "summary": "Live Fleet Status, Fleet Health Board, the tread and pressure parts of Compliance Dashboard, tyre alerts and the estimated tyre dates on Maintenance Calendar read condition columns that nothing populates. They render honest N/A but deliver no information for the current company or a new one."
+    }
+   ],
+   "remediation": "Remove the severity-based estimated hours path (risk level is never populated) and rely on job card times only.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Workshop & Maintenance",
+   "label": "DTC Diagnostics",
+   "route": "/dtc",
+   "module_key": "dtc (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/DtcDiagnostics.jsx",
+   "services": [
+    "dtcCodes.js"
+   ],
+   "tables": [
+    "dtc_codes"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty forever unless someone types device readings by hand. No feed exists.",
+   "defects": [
+    {
+     "id": "MODB-15",
+     "severity": "P2",
+     "evidence": "live row count 0 on gps_positions, trips, trip_segments, telematics_devices, dashcam_events, cold_chain_logs, tachograph_records, hos_logs, ifta_records, charging_sessions, fuel_cards, fuel_transactions, fuel_theft_alerts, dtc_codes, geofences, route_plans; services are plain table CRUD (example src/lib/api/trips.js); no ingest edge function or RPC",
+     "summary": "GPS, telematics, trip, tachograph, dashcam, cold chain, DTC, fuel card and charging modules are manual entry ledgers. No device, card or telematics feed exists. The names promise live monitoring that the product does not do."
+    }
+   ],
+   "remediation": "Do not market; needs an OBD or telematics feed.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Workshop & Maintenance",
+   "label": "Vehicle Washing",
+   "route": "/vehicle-washing",
+   "module_key": "vehicle_washing",
+   "guard": "ModuleRoute",
+   "page": "src/pages/VehicleWashing.jsx",
+   "services": [
+    "assets.js",
+    "brandLogo.js",
+    "sites.js",
+    "washRecords.js"
+   ],
+   "tables": [
+    "sites",
+    "system_config",
+    "vehicle_fleet",
+    "wash_record_corrections",
+    "wash_records"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty report and quick log; drivers log washes on the phone. Cost defaults to zero (in-house washing).",
+   "defects": [],
+   "remediation": "Make wash interval and cost model a tenant setting. No test file is named after the page (engine tests exist).",
+   "priority": "P3",
+   "area": "web, Flutter",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Workshop & Maintenance",
+   "label": "Absence & Attendance",
+   "route": "/workshop-absence",
+   "module_key": "workshop_absence (disabled)",
+   "guard": "RoleRoute(Admin,Manager,Director)",
+   "page": "src/pages/WorkshopAbsence.jsx",
+   "services": [
+    "workshopAbsence.js"
+   ],
+   "tables": [
+    "profiles",
+    "shifts",
+    "workshop_attendance"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty; needs shifts and phone check-ins.",
+   "defects": [
+    {
+     "id": "MODB-23",
+     "severity": "P3",
+     "evidence": "live: all workforce_* tables 0 rows including workforce_task_types and workforce_employees; tech_activity_events 27, wo_assignments 27, workshop_attendance 0, shifts 0, pm_programs 0, technician_skills 0",
+     "summary": "The workforce, attendance, shift and PM features have never carried real data, so their end to end behaviour is unproven outside tests."
+    }
+   ],
+   "remediation": "Restore only with shifts in use.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Workshop & Maintenance",
+   "label": "Technician Scorecard",
+   "route": "/technician-scorecard",
+   "module_key": "technician_scorecard",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/TechnicianScorecard.jsx",
+   "services": [
+    "technicianScorecard.js",
+    "users.js"
+   ],
+   "tables": [
+    "audit_log",
+    "organisations",
+    "profiles",
+    "technician_certs",
+    "technician_skills",
+    "work_orders"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty leaderboard; skills and certificates matrix empty.",
+   "defects": [
+    {
+     "id": "MODB-23",
+     "severity": "P3",
+     "evidence": "live: all workforce_* tables 0 rows including workforce_task_types and workforce_employees; tech_activity_events 27, wo_assignments 27, workshop_attendance 0, shifts 0, pm_programs 0, technician_skills 0",
+     "summary": "The workforce, attendance, shift and PM features have never carried real data, so their end to end behaviour is unproven outside tests."
+    }
+   ],
+   "remediation": "None blocking.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Workshop & Maintenance",
+   "label": "Shift Scheduling",
+   "route": "/shifts",
+   "module_key": "shifts (disabled)",
+   "guard": "RoleRoute(Admin)+ModuleRoute",
+   "page": "src/pages/ShiftScheduling.jsx",
+   "services": [
+    "shifts.js"
+   ],
+   "tables": [
+    "shifts"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty table with an Add button; a new company can start typing records at once. Nothing is prefilled.",
+   "defects": [
+    {
+     "id": "MODB-23",
+     "severity": "P3",
+     "evidence": "live: all workforce_* tables 0 rows including workforce_task_types and workforce_employees; tech_activity_events 27, wo_assignments 27, workshop_attendance 0, shifts 0, pm_programs 0, technician_skills 0",
+     "summary": "The workforce, attendance, shift and PM features have never carried real data, so their end to end behaviour is unproven outside tests."
+    }
+   ],
+   "remediation": "See restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Workshop & Maintenance",
+   "label": "My Day & Team Reviews",
+   "route": "/workforce-daily",
+   "module_key": "workforce_daily (no registry row)",
+   "guard": "none (in-page checks)",
+   "page": "src/pages/WorkforceDailyWork.jsx",
+   "services": [
+    "technicianScorecard.js",
+    "workforceAnalyticsServer.js",
+    "workforceAssignments.js",
+    "workforceDaily.js",
+    "workforceEmployees.js",
+    "workforceEvidence.js",
+    "workforceStockReadiness.js"
+   ],
+   "tables": [
+    "stock_records",
+    "technician_certs",
+    "technician_skills",
+    "tyre_records",
+    "work_orders",
+    "workforce_assignment_events",
+    "workforce_assignment_evidence",
+    "workforce_assignments",
+    "workforce_daily_entries",
+    "workforce_daily_entry_corrections",
+    "workforce_daily_reports",
+    "workforce_dependencies",
+    "workforce_employee_certifications",
+    "workforce_employee_history"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty; a supervisor must first create employees and task types. No guided setup.",
+   "defects": [
+    {
+     "id": "MODB-23",
+     "severity": "P3",
+     "evidence": "live: all workforce_* tables 0 rows including workforce_task_types and workforce_employees; tech_activity_events 27, wo_assignments 27, workshop_attendance 0, shifts 0, pm_programs 0, technician_skills 0",
+     "summary": "The workforce, attendance, shift and PM features have never carried real data, so their end to end behaviour is unproven outside tests."
+    }
+   ],
+   "remediation": "Add a first-run setup (task types, employees) and a registry row so it can be switched per tenant.",
+   "priority": "P2",
+   "area": "web, DB",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Workshop & Maintenance",
+   "label": "Parts Requests",
+   "route": "/parts-requests",
+   "module_key": "parts_requests (disabled)",
+   "guard": "RoleRoute(Admin,Manager,Director)",
+   "page": "src/pages/PartsRequests.jsx",
+   "services": [
+    "partsRequests.js"
+   ],
+   "tables": [
+    "parts_catalog",
+    "parts_requests",
+    "work_orders"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Empty; needs parts catalog and open jobs.",
+   "defects": [
+    {
+     "id": "MODB-5",
+     "severity": "P1",
+     "evidence": "pg_proc notify_elevated_users (inserts for every profile with role Admin, Manager or Director, no org filter); caller notify_workshop_parts, trigger on parts_requests",
+     "summary": "A new parts request notifies the Admin, Manager and Director users of every organisation, with the request title and body."
+    }
+   ],
+   "remediation": "Scope notify_elevated_users (or its caller) to the row organisation before restoring.",
+   "priority": "P1",
+   "area": "DB",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Workshop & Maintenance",
+   "label": "Tool & Equipment",
+   "route": "/equipment",
+   "module_key": "equipment (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/Equipment.jsx",
+   "services": [
+    "equipment.js"
+   ],
+   "tables": [
+    "equipment"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty table with an Add button; a new company can start typing records at once. Nothing is prefilled.",
+   "defects": [
+    {
+     "id": "MODB-17",
+     "severity": "P3",
+     "evidence": "src/lib/api/trips.js:59, bayScheduling.js:112, serviceRequests.js:54, dispatch.js:22, gpsPositions.js:84, journeys.js:37, certifications.js:28, dvir.js:33, equipment.js:44, driverDocuments.js:26: limit = 500",
+     "summary": "The simple ledgers read the newest 500 rows and compute their KPI tiles and exports from that page of data. Only some pages state the cap."
+    }
+   ],
+   "remediation": "See restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Workshop & Maintenance",
+   "label": "Workshop Analytics",
+   "route": "/workshop-analytics",
+   "module_key": "workshop_analytics",
+   "guard": "RoleRoute(Admin,Manager,Director)",
+   "page": "src/pages/WorkshopAnalytics.jsx",
+   "services": [
+    "workshopAnalytics.js",
+    "workshopLive.js"
+   ],
+   "tables": [
+    "profiles",
+    "shifts",
+    "tech_activity_events",
+    "technician_skills",
+    "wo_assignments",
+    "wo_tasks",
+    "work_orders",
+    "workshop_attendance"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Empty charts; needs technician activity events from phones.",
+   "defects": [
+    {
+     "id": "MODB-21",
+     "severity": "P2",
+     "evidence": "src/lib/workshopLive.js:444,599-608 DEFAULT_LABOUR_RATE = 120; live workshop_config 0 rows; src/pages/WorkshopAnalytics.jsx:264 labels it with the active currency",
+     "summary": "Delay cost impact on Live Control and Workshop Analytics is hours lost multiplied by a labour rate that falls back to a hard-coded 120 per hour, labelled SAR, AED or EGP alike, with no statement that the rate is a default."
+    },
+    {
+     "id": "MODB-23",
+     "severity": "P3",
+     "evidence": "live: all workforce_* tables 0 rows including workforce_task_types and workforce_employees; tech_activity_events 27, wo_assignments 27, workshop_attendance 0, shifts 0, pm_programs 0, technician_skills 0",
+     "summary": "The workforce, attendance, shift and PM features have never carried real data, so their end to end behaviour is unproven outside tests."
+    }
+   ],
+   "remediation": "Fix the default labour rate disclosure.",
+   "priority": "P2",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Workshop & Maintenance",
+   "label": "Maintenance Cost & Tasks",
+   "route": "/maintenance-cost-board",
+   "module_key": "maintenance_cost_board",
+   "guard": "RoleRoute(Admin,Manager,Director)",
+   "page": "src/pages/MaintenanceCostBoard.jsx",
+   "services": [
+    "maintenanceAnalytics.js"
+   ],
+   "tables": [],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty board; needs job cards and job card lines (ERP import).",
+   "defects": [],
+   "remediation": "None blocking.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Workshop & Maintenance",
+   "label": "Workshop Settings",
+   "route": "/workshop-settings",
+   "module_key": "workshop_settings",
+   "guard": "RoleRoute(Admin,Manager,Director)",
+   "page": "src/pages/WorkshopSettings.jsx",
+   "services": [
+    "workshopConfig.js"
+   ],
+   "tables": [
+    "workshop_config"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Shows defaults (0 rows saved live); Admin saves.",
+   "defects": [
+    {
+     "id": "MODB-21",
+     "severity": "P2",
+     "evidence": "src/lib/workshopLive.js:444,599-608 DEFAULT_LABOUR_RATE = 120; live workshop_config 0 rows; src/pages/WorkshopAnalytics.jsx:264 labels it with the active currency",
+     "summary": "Delay cost impact on Live Control and Workshop Analytics is hours lost multiplied by a labour rate that falls back to a hard-coded 120 per hour, labelled SAR, AED or EGP alike, with no statement that the rate is a default."
+    }
+   ],
+   "remediation": "Require a labour rate with currency before cost impact is shown.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "(no menu item)",
+   "label": "Workshop job detail",
+   "route": "/workshop/:jobId",
+   "module_key": "work_orders",
+   "guard": "ModuleRoute",
+   "page": "src/pages/WorkshopJobDetail.jsx",
+   "services": [],
+   "tables": [
+    "work_orders"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Reached from a job; nothing to show without jobs.",
+   "defects": [
+    {
+     "id": "MODB-3",
+     "severity": "P1",
+     "evidence": "pg_policies work_orders: only work_orders_cap_insert / work_orders_cap_update are permissive for writes; app_user_can reads organisations.settings permission_overrides (new org has none); src/pages/WorkOrders.jsx:164 gates only delete; src/App.jsx:681 admits Manager and Director to Live Control",
+     "summary": "Work order create and edit is capability-only. In a new company only the Admin can create or edit a job card; Managers see New Work Order, New Job, assign and status controls and receive a permission refusal. In the current company only Admin, Tyre Data Collector and Data Monitor Officer hold the capability, so the 3 Managers on Live Control cannot create jobs or change job status."
+    }
+   ],
+   "remediation": "As Work Orders.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "(no menu item)",
+   "label": "Workshop TV board",
+   "route": "/workshop-tv/:token",
+   "module_key": "(anonymous token)",
+   "guard": "none (token RPC get_workshop_snapshot)",
+   "page": "src/pages/WorkshopTv.jsx",
+   "services": [
+    "reportShares.js"
+   ],
+   "tables": [
+    "report_shares"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Needs a share link created by an elevated user.",
+   "defects": [],
+   "remediation": "None in this scope; token security is covered by the security audit.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Inspections & Compliance",
+   "label": "Inspections",
+   "route": "/inspections",
+   "module_key": "inspections",
+   "guard": "ModuleRoute",
+   "page": "src/pages/Inspections.jsx",
+   "services": [
+    "aiTyreInspection.js",
+    "approvalDecisions.js",
+    "brandLogo.js",
+    "checklists.js",
+    "correctiveActions.js",
+    "inspections.js",
+    "sites.js",
+    "systemConfig.js"
+   ],
+   "tables": [
+    "ai_tyre_depth_measurements",
+    "ai_tyre_inspection_jobs",
+    "checklist_submissions",
+    "checklist_templates",
+    "corrective_actions",
+    "inspections",
+    "sites",
+    "system_config",
+    "tyre_life_targets",
+    "tyre_records",
+    "user_signatures",
+    "vehicle_fleet"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Empty workspace with New inspection; needs the fleet register first. Sign-off needs an Admin.",
+   "defects": [
+    {
+     "id": "MODB-1",
+     "severity": "P1",
+     "evidence": "pg_proc decide_inspection_approval (role list Admin, PMV Manager, Workshop Area Manager, Workshop Maintenance Area Manager, Tyre Data Collector); src/lib/inspectionApproval.js:27-33",
+     "summary": "Inspection sign-off is limited to a hard-coded list of role names that exist only as custom roles of the current company. Built-in Manager and Director are refused. A new company can only sign inspections as Admin (or by recreating those exact role names, or a per-user approve grant)."
+    },
+    {
+     "id": "MODB-7",
+     "severity": "P2",
+     "evidence": "src/lib/api/correctiveActions.js:49-51 and src/lib/api/inspections.js:211-213 update with no returning row; pg_policies actions_update (Manager, Admin) and role_update_inspections (admin, manager, inspector); src/pages/Inspections.jsx:847-861 markDone and confirmDelete swallow errors",
+     "summary": "An update refused by row security affects 0 rows and returns success, so a Director, Inspector, Tyre Man or supervisor who changes a corrective action status (or a Tyre Man who edits an inspection) sees no error and no change. Mark done and delete on inspections discard any error by design."
+    },
+    {
+     "id": "MODB-8",
+     "severity": "P2",
+     "evidence": "src/pages/Inspections.jsx:824-835: payload sets created_by to the current user and is sent to patchInspection on edit",
+     "summary": "Editing an unlocked inspection reassigns created_by to the editor, which changes authorship and the \"my inspections\" filter."
+    },
+    {
+     "id": "MODB-9",
+     "severity": "P2",
+     "evidence": "src/pages/Inspections.jsx:814-819 WRITABLE_COLS has no country; live: 61 of 2,630 inspections have country NULL; corrective_actions 2 NULL",
+     "summary": "Web created inspections carry no country, so they are visible to every country scope and drop out of per-country reports."
+    },
+    {
+     "id": "MODB-19",
+     "severity": "P1",
+     "evidence": "pg_proc stamp_import_default_org contains the current company UUID; trigger trg_stamp_import_default_org on inspections and work_orders",
+     "summary": "Rows written without an organisation (service role or dashboard import) are stamped with the current company. A second tenant loaded that way would land inside the first tenant."
+    },
+    {
+     "id": "MODB-20",
+     "severity": "P3",
+     "evidence": "decide_inspection_approval honours app_cap_granted(inspections, approve); src/lib/inspectionApproval.js:21-25 says a grant is not consulted",
+     "summary": "A user given a per-user approve grant is accepted by the server but is never shown the sign-off control."
+    }
+   ],
+   "remediation": "Move signer roles to a per-tenant setting (or the approval matrix); return the updated row on writes; stamp country from the asset; stop sending created_by on edit.",
+   "priority": "P1",
+   "area": "DB, web, Flutter",
+   "tests": "inspectionApproval, inspectionTyreFlags (RUN: pass), inspectionsPage.api, inspectionsWorkflow"
+  },
+  {
+   "group": "Inspections & Compliance",
+   "label": "AI Tyre Inspection",
+   "route": "/ai-tyre-inspection",
+   "module_key": "inspections (shared)",
+   "guard": "RoleRoute(list incl. custom roles)+ModuleRoute",
+   "page": "src/pages/AiTyreInspection.jsx",
+   "services": [
+    "aiTyreExpertLabels.js",
+    "aiTyreInspection.js",
+    "aiTyreOps.js",
+    "inspections.js",
+    "sites.js"
+   ],
+   "tables": [
+    "ai_token_logs",
+    "ai_tyre_depth_measurements",
+    "ai_tyre_expert_labels",
+    "ai_tyre_inspection_jobs",
+    "inspections",
+    "sites",
+    "system_config",
+    "vehicle_fleet"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Empty register; fills as inspections with photos arrive; AI analysis needs the platform AI key and budget.",
+   "defects": [
+    {
+     "id": "MODB-1",
+     "severity": "P1",
+     "evidence": "pg_proc decide_inspection_approval (role list Admin, PMV Manager, Workshop Area Manager, Workshop Maintenance Area Manager, Tyre Data Collector); src/lib/inspectionApproval.js:27-33",
+     "summary": "Inspection sign-off is limited to a hard-coded list of role names that exist only as custom roles of the current company. Built-in Manager and Director are refused. A new company can only sign inspections as Admin (or by recreating those exact role names, or a per-user approve grant)."
+    }
+   ],
+   "remediation": "Route allow list names current company roles; AI budget and key are platform wide (see AI audit).",
+   "priority": "P2",
+   "area": "web, edge fn",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Inspections & Compliance",
+   "label": "Inspection Planner",
+   "route": "/inspection-planner",
+   "module_key": "inspection_planner",
+   "guard": "none (in-page access check)",
+   "page": "src/pages/InspectionPlanner.jsx",
+   "services": [
+    "assetHistory.js",
+    "inspectionPlanner.js",
+    "schedulePlanning.js",
+    "sites.js",
+    "workflows.js"
+   ],
+   "tables": [
+    "accidents",
+    "approval_delegations",
+    "asset_breakdowns",
+    "asset_disposals",
+    "asset_utilization",
+    "checklist_submissions",
+    "engine_hours_logs",
+    "inspection_schedules",
+    "inspections",
+    "odometer_logs",
+    "parts_consumption",
+    "pm_service_records",
+    "sany_delay_penalties",
+    "sites"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty agenda and coverage; needs fleet.",
+   "defects": [
+    {
+     "id": "MODB-14",
+     "severity": "P3",
+     "evidence": "live: corrective_actions 159 Open, 2 Closed (144 raised by the checklist trigger); checklist_submissions 81 pending + 9 pending area manager; inspections 263 rejected and In Progress; inspection_schedules 1 future plan of 245",
+     "summary": "Operational backlog signals in the current company: actions are raised automatically but almost never closed, sign-off queues are long, the planner has one future plan."
+    }
+   ],
+   "remediation": "None blocking.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Inspections & Compliance",
+   "label": "Inspection Intelligence",
+   "route": "/inspection-intelligence",
+   "module_key": "inspections (shared)",
+   "guard": "ModuleRoute",
+   "page": "src/pages/InspectionIntelligence.jsx",
+   "services": [
+    "inspectionIntelligence.js"
+   ],
+   "tables": [
+    "corrective_actions",
+    "inspections",
+    "vehicle_fleet"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty analytics until inspections exist.",
+   "defects": [],
+   "remediation": "None blocking.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Inspections & Compliance",
+   "label": "DVIR Reports",
+   "route": "/dvir",
+   "module_key": "dvir (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/Dvir.jsx",
+   "services": [
+    "dvir.js"
+   ],
+   "tables": [
+    "dvir_reports"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 5,
+   "empty_account_behaviour": "Empty table with an Add button; a new company can start typing records at once. Nothing is prefilled.",
+   "defects": [
+    {
+     "id": "MODB-17",
+     "severity": "P3",
+     "evidence": "src/lib/api/trips.js:59, bayScheduling.js:112, serviceRequests.js:54, dispatch.js:22, gpsPositions.js:84, journeys.js:37, certifications.js:28, dvir.js:33, equipment.js:44, driverDocuments.js:26: limit = 500",
+     "summary": "The simple ledgers read the newest 500 rows and compute their KPI tiles and exports from that page of data. Only some pages state the cap."
+    }
+   ],
+   "remediation": "Duplicate of a pre-trip checklist; retire or fold into Checklists.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Inspections & Compliance",
+   "label": "Checklists",
+   "route": "/checklists",
+   "module_key": "checklists",
+   "guard": "none (ModuleStatusGate only)",
+   "page": "src/pages/Checklists.jsx",
+   "services": [
+    "brandLogo.js",
+    "checklists.js"
+   ],
+   "tables": [
+    "checklist_submissions",
+    "checklist_templates",
+    "corrective_actions",
+    "system_config"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "empty_account_behaviour": "\"No checklists yet\". An author must build the first template; nothing is seeded.",
+   "defects": [
+    {
+     "id": "MODB-2",
+     "severity": "P1",
+     "evidence": "pg_proc checklist_is_supervisor (Admin, Maintenance Supervisor, Workshop Supervisor, PMV Manager, Workshop Area Manager, Workshop Maintenance Area Manager, Tyre Data Collector); decide_checklist_approval; src/lib/checklistAccess.js:13,54",
+     "summary": "Checklist approval (both stages) is tied to the current company role names. Manager and Director can author templates but cannot approve a submission. Final approval needs checklist_is_area_manager (same hard-coding)."
+    },
+    {
+     "id": "MODB-13",
+     "severity": "P2",
+     "evidence": "live: checklist_templates 12 rows (9 published, 3 archived) all in one organisation; no starter library in src/pages/ChecklistBuilder.jsx or src/lib/checklist; checklist_schedules 0 rows, checklist_assignments 0 rows",
+     "summary": "A new company starts with zero checklist templates and must author every form in the builder (file import exists). Schedules have never been used, so the \"due\" list and the daily assignment cron are unproven with real data."
+    }
+   ],
+   "remediation": "Ship a starter template library per tenant; move approver roles to tenant configuration.",
+   "priority": "P1",
+   "area": "DB, web, Flutter",
+   "tests": "checklistApproval, approvalsBulk (RUN: pass), checklistView, checklistApprovalQueue; supabase/tests checklist_*"
+  },
+  {
+   "group": "(no menu item)",
+   "label": "Checklist Builder",
+   "route": "/checklist-builder",
+   "module_key": "checklist_builder",
+   "guard": "RoleRoute(Admin,Manager,Director,Maintenance Supervisor)",
+   "page": "src/pages/ChecklistBuilder.jsx",
+   "services": [
+    "checklists.js",
+    "customRoles.js",
+    "modulePermissions.js"
+   ],
+   "tables": [
+    "checklist_submissions",
+    "checklist_templates",
+    "corrective_actions",
+    "custom_roles",
+    "module_permissions",
+    "profiles"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Blank builder with field presets and file import.",
+   "defects": [
+    {
+     "id": "MODB-13",
+     "severity": "P2",
+     "evidence": "live: checklist_templates 12 rows (9 published, 3 archived) all in one organisation; no starter library in src/pages/ChecklistBuilder.jsx or src/lib/checklist; checklist_schedules 0 rows, checklist_assignments 0 rows",
+     "summary": "A new company starts with zero checklist templates and must author every form in the builder (file import exists). Schedules have never been used, so the \"due\" list and the daily assignment cron are unproven with real data."
+    }
+   ],
+   "remediation": "Starter library.",
+   "priority": "P2",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "(no menu item)",
+   "label": "Checklist run and submission view",
+   "route": "/checklists/:templateId/run, /checklists/submission/:id",
+   "module_key": "checklists",
+   "guard": "none",
+   "page": "src/pages/ChecklistRun.jsx",
+   "services": [
+    "assets.js",
+    "checklistSchedules.js",
+    "checklists.js",
+    "sites.js"
+   ],
+   "tables": [
+    "checklist_assignments",
+    "checklist_schedules",
+    "checklist_submissions",
+    "checklist_templates",
+    "corrective_actions",
+    "sites",
+    "vehicle_fleet"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Needs a published template.",
+   "defects": [
+    {
+     "id": "MODB-2",
+     "severity": "P1",
+     "evidence": "pg_proc checklist_is_supervisor (Admin, Maintenance Supervisor, Workshop Supervisor, PMV Manager, Workshop Area Manager, Workshop Maintenance Area Manager, Tyre Data Collector); decide_checklist_approval; src/lib/checklistAccess.js:13,54",
+     "summary": "Checklist approval (both stages) is tied to the current company role names. Manager and Director can author templates but cannot approve a submission. Final approval needs checklist_is_area_manager (same hard-coding)."
+    }
+   ],
+   "remediation": "As Checklists.",
+   "priority": "P2",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "(no menu item)",
+   "label": "My Checklists",
+   "route": "/my-checklists",
+   "module_key": "my_checklists",
+   "guard": "none",
+   "page": "src/pages/MyChecklists.jsx",
+   "services": [
+    "checklistSchedules.js",
+    "checklists.js"
+   ],
+   "tables": [
+    "checklist_assignments",
+    "checklist_schedules",
+    "checklist_submissions",
+    "checklist_templates",
+    "corrective_actions"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty due list (no schedules); lists published forms for the user trade.",
+   "defects": [
+    {
+     "id": "MODB-13",
+     "severity": "P2",
+     "evidence": "live: checklist_templates 12 rows (9 published, 3 archived) all in one organisation; no starter library in src/pages/ChecklistBuilder.jsx or src/lib/checklist; checklist_schedules 0 rows, checklist_assignments 0 rows",
+     "summary": "A new company starts with zero checklist templates and must author every form in the builder (file import exists). Schedules have never been used, so the \"due\" list and the daily assignment cron are unproven with real data."
+    }
+   ],
+   "remediation": "None blocking.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Inspections & Compliance",
+   "label": "Checklist Schedules",
+   "route": "/checklist-schedules",
+   "module_key": "checklist_schedules",
+   "guard": "RoleRoute(author roles)",
+   "page": "src/pages/ChecklistSchedules.jsx",
+   "services": [
+    "checklistSchedules.js",
+    "checklists.js",
+    "customRoles.js",
+    "modulePermissions.js",
+    "sites.js"
+   ],
+   "tables": [
+    "checklist_assignments",
+    "checklist_schedules",
+    "checklist_submissions",
+    "checklist_templates",
+    "corrective_actions",
+    "custom_roles",
+    "module_permissions",
+    "profiles",
+    "sites",
+    "vehicle_fleet"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty; first action is New schedule, which needs a published template.",
+   "defects": [
+    {
+     "id": "MODB-13",
+     "severity": "P2",
+     "evidence": "live: checklist_templates 12 rows (9 published, 3 archived) all in one organisation; no starter library in src/pages/ChecklistBuilder.jsx or src/lib/checklist; checklist_schedules 0 rows, checklist_assignments 0 rows",
+     "summary": "A new company starts with zero checklist templates and must author every form in the builder (file import exists). Schedules have never been used, so the \"due\" list and the daily assignment cron are unproven with real data."
+    }
+   ],
+   "remediation": "Pilot one schedule end to end before selling the feature (0 schedules and 0 assignments live).",
+   "priority": "P2",
+   "area": "web, DB",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Inspections & Compliance",
+   "label": "Checklist Insights",
+   "route": "/checklist-insights",
+   "module_key": "checklist_insights",
+   "guard": "RoleRoute(author roles)",
+   "page": "src/pages/ChecklistInsights.jsx",
+   "services": [
+    "checklistSchedules.js",
+    "checklists.js"
+   ],
+   "tables": [
+    "checklist_assignments",
+    "checklist_schedules",
+    "checklist_submissions",
+    "checklist_templates",
+    "corrective_actions"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty until submissions exist.",
+   "defects": [],
+   "remediation": "None blocking.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Inspections & Compliance",
+   "label": "Audit Pack",
+   "route": "/checklist-audit",
+   "module_key": "checklist_audit (no registry row)",
+   "guard": "RoleRoute(author roles)",
+   "page": "src/pages/ChecklistAuditPack.jsx",
+   "services": [
+    "brandLogo.js",
+    "checklistSchedules.js",
+    "checklists.js"
+   ],
+   "tables": [
+    "checklist_assignments",
+    "checklist_schedules",
+    "checklist_submissions",
+    "checklist_templates",
+    "corrective_actions",
+    "system_config"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty pack; needs controlled forms and records.",
+   "defects": [],
+   "remediation": "None blocking.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Inspections & Compliance",
+   "label": "Corrective Actions",
+   "route": "/actions",
+   "module_key": "corrective_actions",
+   "guard": "ModuleRoute",
+   "page": "src/pages/CorrectiveActions.jsx",
+   "services": [
+    "(many; page imports the api barrel)"
+   ],
+   "tables": [
+    "corrective_actions",
+    "(page imports the api barrel)"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Empty board with New action. Reporter, Manager and Admin can create; others are refused.",
+   "defects": [
+    {
+     "id": "MODB-7",
+     "severity": "P2",
+     "evidence": "src/lib/api/correctiveActions.js:49-51 and src/lib/api/inspections.js:211-213 update with no returning row; pg_policies actions_update (Manager, Admin) and role_update_inspections (admin, manager, inspector); src/pages/Inspections.jsx:847-861 markDone and confirmDelete swallow errors",
+     "summary": "An update refused by row security affects 0 rows and returns success, so a Director, Inspector, Tyre Man or supervisor who changes a corrective action status (or a Tyre Man who edits an inspection) sees no error and no change. Mark done and delete on inspections discard any error by design."
+    },
+    {
+     "id": "MODB-9",
+     "severity": "P2",
+     "evidence": "src/pages/Inspections.jsx:814-819 WRITABLE_COLS has no country; live: 61 of 2,630 inspections have country NULL; corrective_actions 2 NULL",
+     "summary": "Web created inspections carry no country, so they are visible to every country scope and drop out of per-country reports."
+    },
+    {
+     "id": "MODB-14",
+     "severity": "P3",
+     "evidence": "live: corrective_actions 159 Open, 2 Closed (144 raised by the checklist trigger); checklist_submissions 81 pending + 9 pending area manager; inspections 263 rejected and In Progress; inspection_schedules 1 future plan of 245",
+     "summary": "Operational backlog signals in the current company: actions are raised automatically but almost never closed, sign-off queues are long, the planner has one future plan."
+    },
+    {
+     "id": "MODB-22",
+     "severity": "P3",
+     "evidence": "pg_policies corrective_actions: actions_insert (Reporter, Manager, Admin), actions_update (Manager, Admin); rca_records insert (Admin, Manager, Reporter); no role gating in src/pages/CorrectiveActions.jsx",
+     "summary": "Write policies name roles that do not match who uses the screen (Director and Inspector excluded) while the page shows create, edit and status controls to everyone."
+    }
+   ],
+   "remediation": "Return the updated row and show a refusal; align write policy with the roles that use the page; review why 159 actions are open.",
+   "priority": "P2",
+   "area": "DB, web",
+   "tests": "correctiveActionsAnalytics only; no test of the write path"
+  },
+  {
+   "group": "Inspections & Compliance",
+   "label": "Root Cause",
+   "route": "/rca",
+   "module_key": "rca",
+   "guard": "ModuleRoute",
+   "page": "src/pages/RcaRecords.jsx",
+   "services": [
+    "actionCenter.js",
+    "correctiveActions.js",
+    "rca.js",
+    "workshopLive.js"
+   ],
+   "tables": [
+    "action_item_history",
+    "action_items",
+    "corrective_actions",
+    "profiles",
+    "rca_records",
+    "shifts",
+    "tech_activity_events",
+    "technician_skills",
+    "wo_assignments",
+    "wo_tasks",
+    "work_orders",
+    "workshop_attendance"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty list with add form. 1 record live. No page test.",
+   "defects": [
+    {
+     "id": "MODB-22",
+     "severity": "P3",
+     "evidence": "pg_policies corrective_actions: actions_insert (Reporter, Manager, Admin), actions_update (Manager, Admin); rca_records insert (Admin, Manager, Reporter); no role gating in src/pages/CorrectiveActions.jsx",
+     "summary": "Write policies name roles that do not match who uses the screen (Director and Inspector excluded) while the page shows create, edit and status controls to everyone."
+    }
+   ],
+   "remediation": "None blocking.",
+   "priority": "P3",
+   "area": "web, Flutter",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Inspections & Compliance",
+   "label": "Root Cause Engine",
+   "route": "/root-cause",
+   "module_key": "root_cause_engine",
+   "guard": "ModuleRoute",
+   "page": "src/pages/RootCauseEngine.jsx",
+   "services": [],
+   "tables": [
+    "tyre_records"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Empty; needs removed tyres with a removal reason.",
+   "defects": [],
+   "remediation": "Removal reason quality (brands stored as reasons on UAE rows per project memory) limits the output; clean before selling.",
+   "priority": "P3",
+   "area": "DB",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Inspections & Compliance",
+   "label": "Anomaly Scan",
+   "route": "/anomalies",
+   "module_key": "tyre_records (shared)",
+   "guard": "ModuleRoute",
+   "page": "src/pages/Anomalies.jsx",
+   "services": [],
+   "tables": [
+    "tyre_records",
+    "work_orders"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty scan; needs tyre records and job cards.",
+   "defects": [],
+   "remediation": "None blocking.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Inspections & Compliance",
+   "label": "Compliance Dashboard",
+   "route": "/compliance",
+   "module_key": "compliance",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/ComplianceDashboard.jsx",
+   "services": [],
+   "tables": [
+    "inspections",
+    "tyre_records",
+    "vehicle_fleet"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "empty_account_behaviour": "All scores N/A until tread and pressure exist on tyre records.",
+   "defects": [
+    {
+     "id": "MODB-10",
+     "severity": "P2",
+     "evidence": "live: tyre_records risk_level, tread_depth, pressure_reading populated on 0 of 11,260 rows; readings live in inspections.tyre_conditions (2,630 rows); src/pages/LiveFleetStatus.jsx:443, FleetHealthBoard.jsx:229, ComplianceDashboard.jsx:250 select those tyre_records columns",
+     "summary": "Live Fleet Status, Fleet Health Board, the tread and pressure parts of Compliance Dashboard, tyre alerts and the estimated tyre dates on Maintenance Calendar read condition columns that nothing populates. They render honest N/A but deliver no information for the current company or a new one."
+    }
+   ],
+   "remediation": "Feed the board from inspection readings.",
+   "priority": "P2",
+   "area": "web, DB",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Inspections & Compliance",
+   "label": "Certifications",
+   "route": "/certifications",
+   "module_key": "certifications (disabled)",
+   "guard": "RoleRoute(Admin,Manager,Director)",
+   "page": "src/pages/Certifications.jsx",
+   "services": [
+    "certifications.js"
+   ],
+   "tables": [
+    "certifications"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty table with an Add button; a new company can start typing records at once. Nothing is prefilled.",
+   "defects": [
+    {
+     "id": "MODB-17",
+     "severity": "P3",
+     "evidence": "src/lib/api/trips.js:59, bayScheduling.js:112, serviceRequests.js:54, dispatch.js:22, gpsPositions.js:84, journeys.js:37, certifications.js:28, dvir.js:33, equipment.js:44, driverDocuments.js:26: limit = 500",
+     "summary": "The simple ledgers read the newest 500 rows and compute their KPI tiles and exports from that page of data. Only some pages state the cap."
+    }
+   ],
+   "remediation": "See restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Inspections & Compliance",
+   "label": "Policy Management",
+   "route": "/policies",
+   "module_key": "policies (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/PolicyManagement.jsx",
+   "services": [
+    "policies.js"
+   ],
+   "tables": [
+    "policies"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty table with an Add button; a new company can start typing records at once. Nothing is prefilled.",
+   "defects": [],
+   "remediation": "No page test. See restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Inspections & Compliance",
+   "label": "Emissions Tests",
+   "route": "/emissions",
+   "module_key": "emissions (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/Emissions.jsx",
+   "services": [
+    "emissionsTests.js"
+   ],
+   "tables": [
+    "emissions_tests"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty table with an Add button; a new company can start typing records at once. Nothing is prefilled.",
+   "defects": [
+    {
+     "id": "MODB-17",
+     "severity": "P3",
+     "evidence": "src/lib/api/trips.js:59, bayScheduling.js:112, serviceRequests.js:54, dispatch.js:22, gpsPositions.js:84, journeys.js:37, certifications.js:28, dvir.js:33, equipment.js:44, driverDocuments.js:26: limit = 500",
+     "summary": "The simple ledgers read the newest 500 rows and compute their KPI tiles and exports from that page of data. Only some pages state the cap."
+    }
+   ],
+   "remediation": "See restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Inspections & Compliance",
+   "label": "Hours of Service",
+   "route": "/hours-of-service",
+   "module_key": "hours_of_service (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/HoursOfService.jsx",
+   "services": [
+    "hosLogs.js"
+   ],
+   "tables": [
+    "hos_logs"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty forever unless someone types device readings by hand. No feed exists.",
+   "defects": [
+    {
+     "id": "MODB-15",
+     "severity": "P2",
+     "evidence": "live row count 0 on gps_positions, trips, trip_segments, telematics_devices, dashcam_events, cold_chain_logs, tachograph_records, hos_logs, ifta_records, charging_sessions, fuel_cards, fuel_transactions, fuel_theft_alerts, dtc_codes, geofences, route_plans; services are plain table CRUD (example src/lib/api/trips.js); no ingest edge function or RPC",
+     "summary": "GPS, telematics, trip, tachograph, dashcam, cold chain, DTC, fuel card and charging modules are manual entry ledgers. No device, card or telematics feed exists. The names promise live monitoring that the product does not do."
+    }
+   ],
+   "remediation": "Do not market; manual duty log only.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Inspections & Compliance",
+   "label": "Tachograph",
+   "route": "/tachograph",
+   "module_key": "tachograph (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/Tachograph.jsx",
+   "services": [
+    "tachographRecords.js"
+   ],
+   "tables": [
+    "tachograph_records"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty forever unless someone types device readings by hand. No feed exists.",
+   "defects": [
+    {
+     "id": "MODB-15",
+     "severity": "P2",
+     "evidence": "live row count 0 on gps_positions, trips, trip_segments, telematics_devices, dashcam_events, cold_chain_logs, tachograph_records, hos_logs, ifta_records, charging_sessions, fuel_cards, fuel_transactions, fuel_theft_alerts, dtc_codes, geofences, route_plans; services are plain table CRUD (example src/lib/api/trips.js); no ingest edge function or RPC",
+     "summary": "GPS, telematics, trip, tachograph, dashcam, cold chain, DTC, fuel card and charging modules are manual entry ledgers. No device, card or telematics feed exists. The names promise live monitoring that the product does not do."
+    }
+   ],
+   "remediation": "Do not market; no tachograph download.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Inspections & Compliance",
+   "label": "Speed Limiter",
+   "route": "/speed-limiter",
+   "module_key": "speed_limiter",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/SpeedLimiter.jsx",
+   "services": [
+    "speedLimiters.js"
+   ],
+   "tables": [
+    "speed_limiters",
+    "vehicle_fleet"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty register; coverage against fleet. 1 row live.",
+   "defects": [],
+   "remediation": "None blocking.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Inspections & Compliance",
+   "label": "Alerts",
+   "route": "/alerts",
+   "module_key": "alerts",
+   "guard": "ModuleRoute",
+   "page": "src/pages/Alerts.jsx",
+   "services": [],
+   "tables": [
+    "budgets",
+    "corrective_actions",
+    "inspections",
+    "stock_records",
+    "tyre_records"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "empty_account_behaviour": "\"All clear\" style empty state; alerts are computed in the browser from tyre, inspection, stock and budget rows. The alerts table is unused (0 rows).",
+   "defects": [
+    {
+     "id": "MODB-10",
+     "severity": "P2",
+     "evidence": "live: tyre_records risk_level, tread_depth, pressure_reading populated on 0 of 11,260 rows; readings live in inspections.tyre_conditions (2,630 rows); src/pages/LiveFleetStatus.jsx:443, FleetHealthBoard.jsx:229, ComplianceDashboard.jsx:250 select those tyre_records columns",
+     "summary": "Live Fleet Status, Fleet Health Board, the tread and pressure parts of Compliance Dashboard, tyre alerts and the estimated tyre dates on Maintenance Calendar read condition columns that nothing populates. They render honest N/A but deliver no information for the current company or a new one."
+    }
+   ],
+   "remediation": "Tyre condition alerts cannot fire without condition data; persist dismissals server side.",
+   "priority": "P2",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Inspections & Compliance",
+   "label": "Alert Thresholds",
+   "route": "/alert-thresholds",
+   "module_key": "alerts (shared)",
+   "guard": "ModuleRoute",
+   "page": "src/pages/AlertThresholds.jsx",
+   "services": [
+    "alertThresholds.js"
+   ],
+   "tables": [
+    "alert_thresholds"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Empty rules list; first action is New rule. Rules are per user.",
+   "defects": [
+    {
+     "id": "MODB-4",
+     "severity": "P1",
+     "evidence": "pg_proc evaluate_alert_thresholds (SECURITY DEFINER, cron evaluate-alert-thresholds): dynamic counts over public.inspections and public.tyre_records with site and brand filters only, no organisation predicate; references inspections.tread_depth, a column that does not exist (information_schema count 0)",
+     "summary": "Alert rules are evaluated across every organisation, so a second company would be alerted on (and learn counts about) the first company data. The tread_depth metric would raise an unknown column error at run time. Latent today: alert_thresholds holds 0 rows."
+    }
+   ],
+   "remediation": "Scope every metric query to the rule owner organisation; remove or repoint the tread_depth metric.",
+   "priority": "P1",
+   "area": "DB",
+   "tests": "alertRules api test; no test of evaluate_alert_thresholds"
+  },
+  {
+   "group": "Drivers & Safety",
+   "label": "Driver Intelligence",
+   "route": "/driver-management",
+   "module_key": "driver_management (disabled) + fleet_master",
+   "guard": "ModuleRoute",
+   "page": "src/pages/DriverManagement.jsx",
+   "services": [],
+   "tables": [
+    "tyre_records"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Empty; and stays empty because tyre records carry no driver.",
+   "defects": [
+    {
+     "id": "MODB-11",
+     "severity": "P2",
+     "evidence": "live: tyre_records.driver_name populated on 0 of 11,260; src/pages/DriverManagement.jsx:189 reads tyre_records only; drivers register (674 rows) is not read by that page",
+     "summary": "Driver Intelligence and the driver to tyre correlation in Driver Safety have no data source in practice."
+    }
+   ],
+   "remediation": "Rebuild on the drivers register or retire.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "(no menu item)",
+   "label": "Driver detail",
+   "route": "/driver-management/:driverId",
+   "module_key": "fleet_master",
+   "guard": "ModuleRoute",
+   "page": "src/pages/DriverDetail.jsx",
+   "services": [],
+   "tables": [
+    "tyre_records"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "empty_account_behaviour": "As Driver Intelligence.",
+   "defects": [
+    {
+     "id": "MODB-11",
+     "severity": "P2",
+     "evidence": "live: tyre_records.driver_name populated on 0 of 11,260; src/pages/DriverManagement.jsx:189 reads tyre_records only; drivers register (674 rows) is not read by that page",
+     "summary": "Driver Intelligence and the driver to tyre correlation in Driver Safety have no data source in practice."
+    }
+   ],
+   "remediation": "As Driver Intelligence.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Drivers & Safety",
+   "label": "Driver workspace",
+   "route": "/driver-workspace",
+   "module_key": "driver_workspace",
+   "guard": "none (RPC enforces)",
+   "page": "src/pages/DriverWorkspace.jsx",
+   "services": [
+    "driverWorkspace.js"
+   ],
+   "tables": [
+    "driver_fine_responses"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty roster; needs the drivers register (import) and fines entered. 674 drivers, 0 fines live.",
+   "defects": [],
+   "remediation": "Fines workflow is unproven with real data; pilot first.",
+   "priority": "P2",
+   "area": "web, Flutter",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Drivers & Safety",
+   "label": "Driver Safety",
+   "route": "/driver-safety",
+   "module_key": "driver_safety (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/DriverSafety.jsx",
+   "services": [
+    "driverSafety.js"
+   ],
+   "tables": [
+    "driver_safety_events",
+    "trips",
+    "tyre_records"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty forever unless someone types device readings by hand. No feed exists.",
+   "defects": [
+    {
+     "id": "MODB-11",
+     "severity": "P2",
+     "evidence": "live: tyre_records.driver_name populated on 0 of 11,260; src/pages/DriverManagement.jsx:189 reads tyre_records only; drivers register (674 rows) is not read by that page",
+     "summary": "Driver Intelligence and the driver to tyre correlation in Driver Safety have no data source in practice."
+    },
+    {
+     "id": "MODB-15",
+     "severity": "P2",
+     "evidence": "live row count 0 on gps_positions, trips, trip_segments, telematics_devices, dashcam_events, cold_chain_logs, tachograph_records, hos_logs, ifta_records, charging_sessions, fuel_cards, fuel_transactions, fuel_theft_alerts, dtc_codes, geofences, route_plans; services are plain table CRUD (example src/lib/api/trips.js); no ingest edge function or RPC",
+     "summary": "GPS, telematics, trip, tachograph, dashcam, cold chain, DTC, fuel card and charging modules are manual entry ledgers. No device, card or telematics feed exists. The names promise live monitoring that the product does not do."
+    }
+   ],
+   "remediation": "Do not market; events are typed by hand.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Drivers & Safety",
+   "label": "Driver Training",
+   "route": "/driver-training",
+   "module_key": "driver_training (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/DriverTraining.jsx",
+   "services": [
+    "driverTraining.js"
+   ],
+   "tables": [
+    "driver_training"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty table with an Add button; a new company can start typing records at once. Nothing is prefilled.",
+   "defects": [],
+   "remediation": "See restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Drivers & Safety",
+   "label": "Driver Coaching",
+   "route": "/driver-coaching",
+   "module_key": "driver_coaching (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/DriverCoaching.jsx",
+   "services": [
+    "driverCoaching.js"
+   ],
+   "tables": [
+    "driver_coaching"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Scores (safety, fuel, harsh events) must be typed by hand.",
+   "defects": [
+    {
+     "id": "MODB-15",
+     "severity": "P2",
+     "evidence": "live row count 0 on gps_positions, trips, trip_segments, telematics_devices, dashcam_events, cold_chain_logs, tachograph_records, hos_logs, ifta_records, charging_sessions, fuel_cards, fuel_transactions, fuel_theft_alerts, dtc_codes, geofences, route_plans; services are plain table CRUD (example src/lib/api/trips.js); no ingest edge function or RPC",
+     "summary": "GPS, telematics, trip, tachograph, dashcam, cold chain, DTC, fuel card and charging modules are manual entry ledgers. No device, card or telematics feed exists. The names promise live monitoring that the product does not do."
+    }
+   ],
+   "remediation": "Do not market without telematics.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Drivers & Safety",
+   "label": "Driver Documents",
+   "route": "/driver-documents",
+   "module_key": "driver_documents (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/DriverDocuments.jsx",
+   "services": [
+    "driverDocuments.js"
+   ],
+   "tables": [
+    "driver_documents"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty table with an Add button; a new company can start typing records at once. Nothing is prefilled.",
+   "defects": [
+    {
+     "id": "MODB-17",
+     "severity": "P3",
+     "evidence": "src/lib/api/trips.js:59, bayScheduling.js:112, serviceRequests.js:54, dispatch.js:22, gpsPositions.js:84, journeys.js:37, certifications.js:28, dvir.js:33, equipment.js:44, driverDocuments.js:26: limit = 500",
+     "summary": "The simple ledgers read the newest 500 rows and compute their KPI tiles and exports from that page of data. Only some pages state the cap."
+    }
+   ],
+   "remediation": "Keyed on free-text driver name, not the drivers register. See restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Drivers & Safety",
+   "label": "Driver Expenses",
+   "route": "/driver-expenses",
+   "module_key": "driver_expenses (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/DriverExpenses.jsx",
+   "services": [
+    "driverExpenses.js"
+   ],
+   "tables": [
+    "driver_expenses"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty table with an Add button; a new company can start typing records at once. Nothing is prefilled.",
+   "defects": [
+    {
+     "id": "MODB-24",
+     "severity": "P3",
+     "evidence": "information_schema: driver_expenses has amount but no currency column; src/pages/DriverExpenses.jsx:564 formats with the active country currency",
+     "summary": "Driver expense amounts carry no currency of their own."
+    }
+   ],
+   "remediation": "Add a currency column. No page test.",
+   "priority": "P3",
+   "area": "web, DB",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Drivers & Safety",
+   "label": "Video Telematics",
+   "route": "/video-telematics",
+   "module_key": "video_telematics (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/VideoTelematics.jsx",
+   "services": [
+    "dashcamEvents.js"
+   ],
+   "tables": [
+    "dashcam_events"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty forever unless someone types device readings by hand. No feed exists.",
+   "defects": [
+    {
+     "id": "MODB-15",
+     "severity": "P2",
+     "evidence": "live row count 0 on gps_positions, trips, trip_segments, telematics_devices, dashcam_events, cold_chain_logs, tachograph_records, hos_logs, ifta_records, charging_sessions, fuel_cards, fuel_transactions, fuel_theft_alerts, dtc_codes, geofences, route_plans; services are plain table CRUD (example src/lib/api/trips.js); no ingest edge function or RPC",
+     "summary": "GPS, telematics, trip, tachograph, dashcam, cold chain, DTC, fuel card and charging modules are manual entry ledgers. No device, card or telematics feed exists. The names promise live monitoring that the product does not do."
+    }
+   ],
+   "remediation": "Do not market.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Drivers & Safety",
+   "label": "Fuel Theft Alerts",
+   "route": "/fuel-theft",
+   "module_key": "fuel_theft (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/FuelTheftAlerts.jsx",
+   "services": [
+    "fuelTheftAlerts.js"
+   ],
+   "tables": [
+    "fuel_theft_alerts"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty forever unless someone types device readings by hand. No feed exists.",
+   "defects": [
+    {
+     "id": "MODB-15",
+     "severity": "P2",
+     "evidence": "live row count 0 on gps_positions, trips, trip_segments, telematics_devices, dashcam_events, cold_chain_logs, tachograph_records, hos_logs, ifta_records, charging_sessions, fuel_cards, fuel_transactions, fuel_theft_alerts, dtc_codes, geofences, route_plans; services are plain table CRUD (example src/lib/api/trips.js); no ingest edge function or RPC",
+     "summary": "GPS, telematics, trip, tachograph, dashcam, cold chain, DTC, fuel card and charging modules are manual entry ledgers. No device, card or telematics feed exists. The names promise live monitoring that the product does not do."
+    }
+   ],
+   "remediation": "Do not market; \"alerts\" are hand-entered records.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Monitoring & Logistics",
+   "label": "Live Fleet Status",
+   "route": "/live-fleet",
+   "module_key": "live_fleet (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/LiveFleetStatus.jsx",
+   "services": [
+    "vehicleAxles.js"
+   ],
+   "tables": [
+    "alerts",
+    "inspections",
+    "tyre_records",
+    "vehicle_fleet"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Vehicle grid with no tyre condition; nothing live about it.",
+   "defects": [
+    {
+     "id": "MODB-10",
+     "severity": "P2",
+     "evidence": "live: tyre_records risk_level, tread_depth, pressure_reading populated on 0 of 11,260 rows; readings live in inspections.tyre_conditions (2,630 rows); src/pages/LiveFleetStatus.jsx:443, FleetHealthBoard.jsx:229, ComplianceDashboard.jsx:250 select those tyre_records columns",
+     "summary": "Live Fleet Status, Fleet Health Board, the tread and pressure parts of Compliance Dashboard, tyre alerts and the estimated tyre dates on Maintenance Calendar read condition columns that nothing populates. They render honest N/A but deliver no information for the current company or a new one."
+    }
+   ],
+   "remediation": "Rename (it is a tyre condition board, not live tracking) and feed from inspections.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Monitoring & Logistics",
+   "label": "Daily Ops",
+   "route": "/daily-ops",
+   "module_key": "daily_ops",
+   "guard": "ModuleRoute",
+   "page": "src/pages/DailyOps.jsx",
+   "services": [
+    "actionCenter.js",
+    "dailyOps.js",
+    "operationalWorkflow.js",
+    "workshopStatusActive.js",
+    "workshopStatusActivity.js",
+    "workshopStatusPermissions.js",
+    "workshopStatusRemoved.js"
+   ],
+   "tables": [
+    "accidents",
+    "action_item_history",
+    "action_items",
+    "alerts",
+    "inspections",
+    "shift_handover_items",
+    "shift_handovers",
+    "tyre_records",
+    "work_orders",
+    "workshop_status_events",
+    "workshop_status_records",
+    "workshop_status_uploads"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty overview tiles and action list; shift handover empty.",
+   "defects": [],
+   "remediation": "None blocking.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Monitoring & Logistics",
+   "label": "Workshop Status",
+   "route": "/daily-ops/workshop",
+   "module_key": "daily_ops:workshop",
+   "guard": "ModuleRoute",
+   "page": "src/pages/WorkshopStatus.jsx",
+   "services": [
+    "workshopStatus.js",
+    "workshopStatusActive.js",
+    "workshopStatusActivity.js",
+    "workshopStatusHistory.js",
+    "workshopStatusLatest.js",
+    "workshopStatusNotifications.js",
+    "workshopStatusPermissions.js",
+    "workshopStatusRemoved.js"
+   ],
+   "tables": [
+    "notifications",
+    "site_aliases",
+    "workshop_status_events",
+    "workshop_status_records",
+    "workshop_status_uploads"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Empty tabs; the only way to create records is the daily Excel upload in the current company layout.",
+   "defects": [
+    {
+     "id": "MODB-12",
+     "severity": "P2",
+     "evidence": "src/lib/workshopStatus/excelParser.js:7-8,37-68 (sectioned workbook with merged title rows); no insert or create RPC in src/lib/api/workshopStatus*.js; no template download in DailyUploadPanel.jsx; workshop_status_can requires app_sees_all_sites for upload",
+     "summary": "Workshop Status records can only be created by uploading a daily Excel in the current company layout. There is no manual add and no downloadable template, so a new company sees an empty board with no usable first action unless it reproduces that file layout."
+    }
+   ],
+   "remediation": "Add manual add-vehicle and a downloadable template; document the file format.",
+   "priority": "P1",
+   "area": "web, DB, Flutter",
+   "tests": "23 web test files + 8 PGlite suites in supabase/tests/workshop_status_* (not run here)"
+  },
+  {
+   "group": "Monitoring & Logistics",
+   "label": "GPS Tracking",
+   "route": "/gps-tracking",
+   "module_key": "gps_tracking (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/GpsTracking.jsx",
+   "services": [
+    "gpsPositions.js"
+   ],
+   "tables": [
+    "gps_positions"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty forever unless someone types device readings by hand. No feed exists.",
+   "defects": [
+    {
+     "id": "MODB-15",
+     "severity": "P2",
+     "evidence": "live row count 0 on gps_positions, trips, trip_segments, telematics_devices, dashcam_events, cold_chain_logs, tachograph_records, hos_logs, ifta_records, charging_sessions, fuel_cards, fuel_transactions, fuel_theft_alerts, dtc_codes, geofences, route_plans; services are plain table CRUD (example src/lib/api/trips.js); no ingest edge function or RPC",
+     "summary": "GPS, telematics, trip, tachograph, dashcam, cold chain, DTC, fuel card and charging modules are manual entry ledgers. No device, card or telematics feed exists. The names promise live monitoring that the product does not do."
+    }
+   ],
+   "remediation": "Do not market.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Monitoring & Logistics",
+   "label": "Fleet Health Board",
+   "route": "/fleet-health",
+   "module_key": "fleet_health (disabled) + fleet_intelligence",
+   "guard": "ModuleRoute",
+   "page": "src/pages/FleetHealthBoard.jsx",
+   "services": [],
+   "tables": [
+    "tyre_records"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "empty_account_behaviour": "Vehicles shown as not rated.",
+   "defects": [
+    {
+     "id": "MODB-10",
+     "severity": "P2",
+     "evidence": "live: tyre_records risk_level, tread_depth, pressure_reading populated on 0 of 11,260 rows; readings live in inspections.tyre_conditions (2,630 rows); src/pages/LiveFleetStatus.jsx:443, FleetHealthBoard.jsx:229, ComplianceDashboard.jsx:250 select those tyre_records columns",
+     "summary": "Live Fleet Status, Fleet Health Board, the tread and pressure parts of Compliance Dashboard, tyre alerts and the estimated tyre dates on Maintenance Calendar read condition columns that nothing populates. They render honest N/A but deliver no information for the current company or a new one."
+    }
+   ],
+   "remediation": "Feed from inspections or retire.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Monitoring & Logistics",
+   "label": "Trip Replay",
+   "route": "/trip-replay",
+   "module_key": "trip_replay (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/TripReplay.jsx",
+   "services": [
+    "tripReplay.js"
+   ],
+   "tables": [
+    "trip_segments"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty forever unless someone types device readings by hand. No feed exists.",
+   "defects": [
+    {
+     "id": "MODB-15",
+     "severity": "P2",
+     "evidence": "live row count 0 on gps_positions, trips, trip_segments, telematics_devices, dashcam_events, cold_chain_logs, tachograph_records, hos_logs, ifta_records, charging_sessions, fuel_cards, fuel_transactions, fuel_theft_alerts, dtc_codes, geofences, route_plans; services are plain table CRUD (example src/lib/api/trips.js); no ingest edge function or RPC",
+     "summary": "GPS, telematics, trip, tachograph, dashcam, cold chain, DTC, fuel card and charging modules are manual entry ledgers. No device, card or telematics feed exists. The names promise live monitoring that the product does not do."
+    }
+   ],
+   "remediation": "Do not market.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Monitoring & Logistics",
+   "label": "Trip History",
+   "route": "/trips",
+   "module_key": "trips (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/Trips.jsx",
+   "services": [
+    "trips.js"
+   ],
+   "tables": [
+    "trips"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty forever unless someone types device readings by hand. No feed exists.",
+   "defects": [
+    {
+     "id": "MODB-15",
+     "severity": "P2",
+     "evidence": "live row count 0 on gps_positions, trips, trip_segments, telematics_devices, dashcam_events, cold_chain_logs, tachograph_records, hos_logs, ifta_records, charging_sessions, fuel_cards, fuel_transactions, fuel_theft_alerts, dtc_codes, geofences, route_plans; services are plain table CRUD (example src/lib/api/trips.js); no ingest edge function or RPC",
+     "summary": "GPS, telematics, trip, tachograph, dashcam, cold chain, DTC, fuel card and charging modules are manual entry ledgers. No device, card or telematics feed exists. The names promise live monitoring that the product does not do."
+    }
+   ],
+   "remediation": "Do not market.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Monitoring & Logistics",
+   "label": "Journey Log",
+   "route": "/journeys",
+   "module_key": "journeys (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/JourneyLog.jsx",
+   "services": [
+    "journeys.js"
+   ],
+   "tables": [
+    "journeys"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty table with an Add button; a new company can start typing records at once. Nothing is prefilled.",
+   "defects": [
+    {
+     "id": "MODB-17",
+     "severity": "P3",
+     "evidence": "src/lib/api/trips.js:59, bayScheduling.js:112, serviceRequests.js:54, dispatch.js:22, gpsPositions.js:84, journeys.js:37, certifications.js:28, dvir.js:33, equipment.js:44, driverDocuments.js:26: limit = 500",
+     "summary": "The simple ledgers read the newest 500 rows and compute their KPI tiles and exports from that page of data. Only some pages state the cap."
+    }
+   ],
+   "remediation": "See restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Monitoring & Logistics",
+   "label": "Route Optimization",
+   "route": "/route-optimization",
+   "module_key": "route_optimization (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/RouteOptimization.jsx",
+   "services": [
+    "routePlans.js"
+   ],
+   "tables": [
+    "route_plans"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty; \"optimized\" distances are typed by the user. The page says savings are estimates.",
+   "defects": [
+    {
+     "id": "MODB-15",
+     "severity": "P2",
+     "evidence": "live row count 0 on gps_positions, trips, trip_segments, telematics_devices, dashcam_events, cold_chain_logs, tachograph_records, hos_logs, ifta_records, charging_sessions, fuel_cards, fuel_transactions, fuel_theft_alerts, dtc_codes, geofences, route_plans; services are plain table CRUD (example src/lib/api/trips.js); no ingest edge function or RPC",
+     "summary": "GPS, telematics, trip, tachograph, dashcam, cold chain, DTC, fuel card and charging modules are manual entry ledgers. No device, card or telematics feed exists. The names promise live monitoring that the product does not do."
+    }
+   ],
+   "remediation": "Do not market; there is no optimizer.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Monitoring & Logistics",
+   "label": "Geofencing",
+   "route": "/geofencing",
+   "module_key": "geofencing (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/Geofencing.jsx",
+   "services": [
+    "geofences.js"
+   ],
+   "tables": [
+    "geofences"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Zones can be recorded; nothing evaluates them (no positions, no map).",
+   "defects": [
+    {
+     "id": "MODB-15",
+     "severity": "P2",
+     "evidence": "live row count 0 on gps_positions, trips, trip_segments, telematics_devices, dashcam_events, cold_chain_logs, tachograph_records, hos_logs, ifta_records, charging_sessions, fuel_cards, fuel_transactions, fuel_theft_alerts, dtc_codes, geofences, route_plans; services are plain table CRUD (example src/lib/api/trips.js); no ingest edge function or RPC",
+     "summary": "GPS, telematics, trip, tachograph, dashcam, cold chain, DTC, fuel card and charging modules are manual entry ledgers. No device, card or telematics feed exists. The names promise live monitoring that the product does not do."
+    }
+   ],
+   "remediation": "Do not market.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Monitoring & Logistics",
+   "label": "Dispatch Planning",
+   "route": "/dispatch",
+   "module_key": "dispatch (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/Dispatch.jsx",
+   "services": [
+    "dispatch.js"
+   ],
+   "tables": [
+    "dispatch_loads"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty table with an Add button; a new company can start typing records at once. Nothing is prefilled.",
+   "defects": [
+    {
+     "id": "MODB-17",
+     "severity": "P3",
+     "evidence": "src/lib/api/trips.js:59, bayScheduling.js:112, serviceRequests.js:54, dispatch.js:22, gpsPositions.js:84, journeys.js:37, certifications.js:28, dvir.js:33, equipment.js:44, driverDocuments.js:26: limit = 500",
+     "summary": "The simple ledgers read the newest 500 rows and compute their KPI tiles and exports from that page of data. Only some pages state the cap."
+    }
+   ],
+   "remediation": "See restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Monitoring & Logistics",
+   "label": "Load Planning",
+   "route": "/load-planning",
+   "module_key": "load_planning (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/LoadPlanning.jsx",
+   "services": [
+    "assets.js",
+    "fleetMasterData.js",
+    "loadPlans.js"
+   ],
+   "tables": [
+    "asset_utilization",
+    "load_plans",
+    "pm_programs",
+    "vehicle_fleet",
+    "work_orders"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty table with an Add button; a new company can start typing records at once. Nothing is prefilled.",
+   "defects": [],
+   "remediation": "See restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Monitoring & Logistics",
+   "label": "Telematics Devices",
+   "route": "/telematics-devices",
+   "module_key": "telematics_devices (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/TelematicsDevices.jsx",
+   "services": [
+    "telematicsDevices.js"
+   ],
+   "tables": [
+    "telematics_devices",
+    "vehicle_fleet"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Device inventory only; no connection to any device.",
+   "defects": [
+    {
+     "id": "MODB-15",
+     "severity": "P2",
+     "evidence": "live row count 0 on gps_positions, trips, trip_segments, telematics_devices, dashcam_events, cold_chain_logs, tachograph_records, hos_logs, ifta_records, charging_sessions, fuel_cards, fuel_transactions, fuel_theft_alerts, dtc_codes, geofences, route_plans; services are plain table CRUD (example src/lib/api/trips.js); no ingest edge function or RPC",
+     "summary": "GPS, telematics, trip, tachograph, dashcam, cold chain, DTC, fuel card and charging modules are manual entry ledgers. No device, card or telematics feed exists. The names promise live monitoring that the product does not do."
+    }
+   ],
+   "remediation": "Do not market.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Monitoring & Logistics",
+   "label": "Cold-Chain Monitor",
+   "route": "/cold-chain",
+   "module_key": "cold_chain (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/ColdChain.jsx",
+   "services": [
+    "coldChain.js"
+   ],
+   "tables": [
+    "cold_chain_logs"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty forever unless someone types device readings by hand. No feed exists.",
+   "defects": [
+    {
+     "id": "MODB-15",
+     "severity": "P2",
+     "evidence": "live row count 0 on gps_positions, trips, trip_segments, telematics_devices, dashcam_events, cold_chain_logs, tachograph_records, hos_logs, ifta_records, charging_sessions, fuel_cards, fuel_transactions, fuel_theft_alerts, dtc_codes, geofences, route_plans; services are plain table CRUD (example src/lib/api/trips.js); no ingest edge function or RPC",
+     "summary": "GPS, telematics, trip, tachograph, dashcam, cold chain, DTC, fuel card and charging modules are manual entry ledgers. No device, card or telematics feed exists. The names promise live monitoring that the product does not do."
+    }
+   ],
+   "remediation": "Do not market.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Monitoring & Logistics",
+   "label": "Weighbridge",
+   "route": "/weighbridge",
+   "module_key": "weighbridge (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/Weighbridge.jsx",
+   "services": [
+    "weighbridgeTickets.js"
+   ],
+   "tables": [
+    "weighbridge_tickets"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty table with an Add button; a new company can start typing records at once. Nothing is prefilled.",
+   "defects": [
+    {
+     "id": "MODB-17",
+     "severity": "P3",
+     "evidence": "src/lib/api/trips.js:59, bayScheduling.js:112, serviceRequests.js:54, dispatch.js:22, gpsPositions.js:84, journeys.js:37, certifications.js:28, dvir.js:33, equipment.js:44, driverDocuments.js:26: limit = 500",
+     "summary": "The simple ledgers read the newest 500 rows and compute their KPI tiles and exports from that page of data. Only some pages state the cap."
+    }
+   ],
+   "remediation": "See restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Monitoring & Logistics",
+   "label": "Proof of Delivery",
+   "route": "/proof-of-delivery",
+   "module_key": "proof_of_delivery (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/ProofOfDelivery.jsx",
+   "services": [
+    "podRecords.js"
+   ],
+   "tables": [
+    "pod_records"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty table with an Add button; a new company can start typing records at once. Nothing is prefilled.",
+   "defects": [
+    {
+     "id": "MODB-17",
+     "severity": "P3",
+     "evidence": "src/lib/api/trips.js:59, bayScheduling.js:112, serviceRequests.js:54, dispatch.js:22, gpsPositions.js:84, journeys.js:37, certifications.js:28, dvir.js:33, equipment.js:44, driverDocuments.js:26: limit = 500",
+     "summary": "The simple ledgers read the newest 500 rows and compute their KPI tiles and exports from that page of data. Only some pages state the cap."
+    }
+   ],
+   "remediation": "See restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Monitoring & Logistics",
+   "label": "Toll Transactions",
+   "route": "/toll-transactions",
+   "module_key": "toll_transactions (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/TollTransactions.jsx",
+   "services": [
+    "tollTransactions.js"
+   ],
+   "tables": [
+    "toll_transactions"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty table with an Add button; a new company can start typing records at once. Nothing is prefilled.",
+   "defects": [],
+   "remediation": "See restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Monitoring & Logistics",
+   "label": "Fuel Cards",
+   "route": "/fuel-cards",
+   "module_key": "fuel_cards (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/FuelCards.jsx",
+   "services": [
+    "fuelCards.js"
+   ],
+   "tables": [
+    "fuel_cards"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Card register only; no card provider feed, fuel_transactions empty.",
+   "defects": [
+    {
+     "id": "MODB-15",
+     "severity": "P2",
+     "evidence": "live row count 0 on gps_positions, trips, trip_segments, telematics_devices, dashcam_events, cold_chain_logs, tachograph_records, hos_logs, ifta_records, charging_sessions, fuel_cards, fuel_transactions, fuel_theft_alerts, dtc_codes, geofences, route_plans; services are plain table CRUD (example src/lib/api/trips.js); no ingest edge function or RPC",
+     "summary": "GPS, telematics, trip, tachograph, dashcam, cold chain, DTC, fuel card and charging modules are manual entry ledgers. No device, card or telematics feed exists. The names promise live monitoring that the product does not do."
+    }
+   ],
+   "remediation": "Do not market as fuel card integration.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Monitoring & Logistics",
+   "label": "Fuel Delivery",
+   "route": "/fuel-delivery",
+   "module_key": "fuel_delivery (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/FuelDelivery.jsx",
+   "services": [
+    "fuelDeliveries.js"
+   ],
+   "tables": [
+    "fuel_deliveries"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "empty_account_behaviour": "Empty table with an Add button; a new company can start typing records at once. Nothing is prefilled.",
+   "defects": [],
+   "remediation": "See restore list.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Monitoring & Logistics",
+   "label": "Fuel Efficiency",
+   "route": "/fuel-efficiency",
+   "module_key": "fuel_efficiency (disabled) + fleet_analytics",
+   "guard": "ModuleRoute",
+   "page": "src/pages/FuelEfficiency.jsx",
+   "services": [],
+   "tables": [
+    "tyre_records"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Modelled fuel impact from tyre data; no fuel consumption data exists. Labelled \"modelled estimates\" in exports.",
+   "defects": [
+    {
+     "id": "MODB-10",
+     "severity": "P2",
+     "evidence": "live: tyre_records risk_level, tread_depth, pressure_reading populated on 0 of 11,260 rows; readings live in inspections.tyre_conditions (2,630 rows); src/pages/LiveFleetStatus.jsx:443, FleetHealthBoard.jsx:229, ComplianceDashboard.jsx:250 select those tyre_records columns",
+     "summary": "Live Fleet Status, Fleet Health Board, the tread and pressure parts of Compliance Dashboard, tyre alerts and the estimated tyre dates on Maintenance Calendar read condition columns that nothing populates. They render honest N/A but deliver no information for the current company or a new one."
+    },
+    {
+     "id": "MODB-15",
+     "severity": "P2",
+     "evidence": "live row count 0 on gps_positions, trips, trip_segments, telematics_devices, dashcam_events, cold_chain_logs, tachograph_records, hos_logs, ifta_records, charging_sessions, fuel_cards, fuel_transactions, fuel_theft_alerts, dtc_codes, geofences, route_plans; services are plain table CRUD (example src/lib/api/trips.js); no ingest edge function or RPC",
+     "summary": "GPS, telematics, trip, tachograph, dashcam, cold chain, DTC, fuel card and charging modules are manual entry ledgers. No device, card or telematics feed exists. The names promise live monitoring that the product does not do."
+    }
+   ],
+   "remediation": "Do not market as fuel efficiency measurement.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Monitoring & Logistics",
+   "label": "EV Charging",
+   "route": "/charging-sessions",
+   "module_key": "charging_sessions (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/ChargingSessions.jsx",
+   "services": [
+    "chargingSessions.js"
+   ],
+   "tables": [
+    "charging_sessions"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 4,
+   "empty_account_behaviour": "Empty forever unless someone types device readings by hand. No feed exists.",
+   "defects": [
+    {
+     "id": "MODB-15",
+     "severity": "P2",
+     "evidence": "live row count 0 on gps_positions, trips, trip_segments, telematics_devices, dashcam_events, cold_chain_logs, tachograph_records, hos_logs, ifta_records, charging_sessions, fuel_cards, fuel_transactions, fuel_theft_alerts, dtc_codes, geofences, route_plans; services are plain table CRUD (example src/lib/api/trips.js); no ingest edge function or RPC",
+     "summary": "GPS, telematics, trip, tachograph, dashcam, cold chain, DTC, fuel card and charging modules are manual entry ledgers. No device, card or telematics feed exists. The names promise live monitoring that the product does not do."
+    }
+   ],
+   "remediation": "Do not market.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  },
+  {
+   "group": "Monitoring & Logistics",
+   "label": "IFTA Fuel Tax",
+   "route": "/ifta-reporting",
+   "module_key": "ifta_reporting (disabled)",
+   "guard": "RoleRoute(Admin)",
+   "page": "src/pages/IftaReporting.jsx",
+   "services": [
+    "iftaRecords.js"
+   ],
+   "tables": [
+    "ifta_records"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 6,
+   "empty_account_behaviour": "Empty; a North American fuel tax return with no relevance to the target markets.",
+   "defects": [
+    {
+     "id": "MODB-15",
+     "severity": "P2",
+     "evidence": "live row count 0 on gps_positions, trips, trip_segments, telematics_devices, dashcam_events, cold_chain_logs, tachograph_records, hos_logs, ifta_records, charging_sessions, fuel_cards, fuel_transactions, fuel_theft_alerts, dtc_codes, geofences, route_plans; services are plain table CRUD (example src/lib/api/trips.js); no ingest edge function or RPC",
+     "summary": "GPS, telematics, trip, tachograph, dashcam, cold chain, DTC, fuel card and charging modules are manual entry ledgers. No device, card or telematics feed exists. The names promise live monitoring that the product does not do."
+    }
+   ],
+   "remediation": "Retire.",
+   "priority": "P3",
+   "area": "web",
+   "tests": "engine and page level vitest files exist by name"
+  }
+ ],
+ "defects": {
+  "MODB-1": {
+   "severity": "P1",
+   "confidence": "VERIFIED",
+   "evidence": "pg_proc decide_inspection_approval (role list Admin, PMV Manager, Workshop Area Manager, Workshop Maintenance Area Manager, Tyre Data Collector); src/lib/inspectionApproval.js:27-33",
+   "summary": "Inspection sign-off is limited to a hard-coded list of role names that exist only as custom roles of the current company. Built-in Manager and Director are refused. A new company can only sign inspections as Admin (or by recreating those exact role names, or a per-user approve grant)."
+  },
+  "MODB-2": {
+   "severity": "P1",
+   "confidence": "VERIFIED",
+   "evidence": "pg_proc checklist_is_supervisor (Admin, Maintenance Supervisor, Workshop Supervisor, PMV Manager, Workshop Area Manager, Workshop Maintenance Area Manager, Tyre Data Collector); decide_checklist_approval; src/lib/checklistAccess.js:13,54",
+   "summary": "Checklist approval (both stages) is tied to the current company role names. Manager and Director can author templates but cannot approve a submission. Final approval needs checklist_is_area_manager (same hard-coding)."
+  },
+  "MODB-3": {
+   "severity": "P1",
+   "confidence": "VERIFIED",
+   "evidence": "pg_policies work_orders: only work_orders_cap_insert / work_orders_cap_update are permissive for writes; app_user_can reads organisations.settings permission_overrides (new org has none); src/pages/WorkOrders.jsx:164 gates only delete; src/App.jsx:681 admits Manager and Director to Live Control",
+   "summary": "Work order create and edit is capability-only. In a new company only the Admin can create or edit a job card; Managers see New Work Order, New Job, assign and status controls and receive a permission refusal. In the current company only Admin, Tyre Data Collector and Data Monitor Officer hold the capability, so the 3 Managers on Live Control cannot create jobs or change job status."
+  },
+  "MODB-4": {
+   "severity": "P1",
+   "confidence": "VERIFIED",
+   "evidence": "pg_proc evaluate_alert_thresholds (SECURITY DEFINER, cron evaluate-alert-thresholds): dynamic counts over public.inspections and public.tyre_records with site and brand filters only, no organisation predicate; references inspections.tread_depth, a column that does not exist (information_schema count 0)",
+   "summary": "Alert rules are evaluated across every organisation, so a second company would be alerted on (and learn counts about) the first company data. The tread_depth metric would raise an unknown column error at run time. Latent today: alert_thresholds holds 0 rows."
+  },
+  "MODB-5": {
+   "severity": "P1",
+   "confidence": "VERIFIED",
+   "evidence": "pg_proc notify_elevated_users (inserts for every profile with role Admin, Manager or Director, no org filter); caller notify_workshop_parts, trigger on parts_requests",
+   "summary": "A new parts request notifies the Admin, Manager and Director users of every organisation, with the request title and body."
+  },
+  "MODB-6": {
+   "severity": "P1",
+   "confidence": "VERIFIED (index, sequence); PLAUSIBLE (cross-tenant overwrite through staging upsert)",
+   "evidence": "pg_indexes work_orders_work_order_no_key UNIQUE (work_order_no) with no organisation column; generate_work_order_no uses one global sequence work_order_seq",
+   "summary": "Job card numbers are unique across all tenants. A second company importing ERP job cards whose numbers already exist for another tenant is refused with a duplicate error it cannot see or resolve, and the staging pipe upsert on work_order_no could refresh another tenant row. App generated WO numbers come from one shared sequence, so gaps expose other tenants volume."
+  },
+  "MODB-7": {
+   "severity": "P2",
+   "confidence": "VERIFIED",
+   "evidence": "src/lib/api/correctiveActions.js:49-51 and src/lib/api/inspections.js:211-213 update with no returning row; pg_policies actions_update (Manager, Admin) and role_update_inspections (admin, manager, inspector); src/pages/Inspections.jsx:847-861 markDone and confirmDelete swallow errors",
+   "summary": "An update refused by row security affects 0 rows and returns success, so a Director, Inspector, Tyre Man or supervisor who changes a corrective action status (or a Tyre Man who edits an inspection) sees no error and no change. Mark done and delete on inspections discard any error by design."
+  },
+  "MODB-8": {
+   "severity": "P2",
+   "confidence": "VERIFIED (code); ASSUMED (no trigger restores it)",
+   "evidence": "src/pages/Inspections.jsx:824-835: payload sets created_by to the current user and is sent to patchInspection on edit",
+   "summary": "Editing an unlocked inspection reassigns created_by to the editor, which changes authorship and the \"my inspections\" filter."
+  },
+  "MODB-9": {
+   "severity": "P2",
+   "confidence": "VERIFIED",
+   "evidence": "src/pages/Inspections.jsx:814-819 WRITABLE_COLS has no country; live: 61 of 2,630 inspections have country NULL; corrective_actions 2 NULL",
+   "summary": "Web created inspections carry no country, so they are visible to every country scope and drop out of per-country reports."
+  },
+  "MODB-10": {
+   "severity": "P2",
+   "confidence": "VERIFIED",
+   "evidence": "live: tyre_records risk_level, tread_depth, pressure_reading populated on 0 of 11,260 rows; readings live in inspections.tyre_conditions (2,630 rows); src/pages/LiveFleetStatus.jsx:443, FleetHealthBoard.jsx:229, ComplianceDashboard.jsx:250 select those tyre_records columns",
+   "summary": "Live Fleet Status, Fleet Health Board, the tread and pressure parts of Compliance Dashboard, tyre alerts and the estimated tyre dates on Maintenance Calendar read condition columns that nothing populates. They render honest N/A but deliver no information for the current company or a new one."
+  },
+  "MODB-11": {
+   "severity": "P2",
+   "confidence": "VERIFIED",
+   "evidence": "live: tyre_records.driver_name populated on 0 of 11,260; src/pages/DriverManagement.jsx:189 reads tyre_records only; drivers register (674 rows) is not read by that page",
+   "summary": "Driver Intelligence and the driver to tyre correlation in Driver Safety have no data source in practice."
+  },
+  "MODB-12": {
+   "severity": "P2",
+   "confidence": "VERIFIED",
+   "evidence": "src/lib/workshopStatus/excelParser.js:7-8,37-68 (sectioned workbook with merged title rows); no insert or create RPC in src/lib/api/workshopStatus*.js; no template download in DailyUploadPanel.jsx; workshop_status_can requires app_sees_all_sites for upload",
+   "summary": "Workshop Status records can only be created by uploading a daily Excel in the current company layout. There is no manual add and no downloadable template, so a new company sees an empty board with no usable first action unless it reproduces that file layout."
+  },
+  "MODB-13": {
+   "severity": "P2",
+   "confidence": "VERIFIED",
+   "evidence": "live: checklist_templates 12 rows (9 published, 3 archived) all in one organisation; no starter library in src/pages/ChecklistBuilder.jsx or src/lib/checklist; checklist_schedules 0 rows, checklist_assignments 0 rows",
+   "summary": "A new company starts with zero checklist templates and must author every form in the builder (file import exists). Schedules have never been used, so the \"due\" list and the daily assignment cron are unproven with real data."
+  },
+  "MODB-14": {
+   "severity": "P3",
+   "confidence": "VERIFIED",
+   "evidence": "live: corrective_actions 159 Open, 2 Closed (144 raised by the checklist trigger); checklist_submissions 81 pending + 9 pending area manager; inspections 263 rejected and In Progress; inspection_schedules 1 future plan of 245",
+   "summary": "Operational backlog signals in the current company: actions are raised automatically but almost never closed, sign-off queues are long, the planner has one future plan."
+  },
+  "MODB-15": {
+   "severity": "P2",
+   "confidence": "VERIFIED",
+   "evidence": "live row count 0 on gps_positions, trips, trip_segments, telematics_devices, dashcam_events, cold_chain_logs, tachograph_records, hos_logs, ifta_records, charging_sessions, fuel_cards, fuel_transactions, fuel_theft_alerts, dtc_codes, geofences, route_plans; services are plain table CRUD (example src/lib/api/trips.js); no ingest edge function or RPC",
+   "summary": "GPS, telematics, trip, tachograph, dashcam, cold chain, DTC, fuel card and charging modules are manual entry ledgers. No device, card or telematics feed exists. The names promise live monitoring that the product does not do."
+  },
+  "MODB-16": {
+   "severity": "P2",
+   "confidence": "VERIFIED",
+   "evidence": "information_schema: public.modules has no organisation column (module_id, status, ...)",
+   "summary": "Module Control is global: switching a module off for one tenant switches it off for every tenant. See restore list."
+  },
+  "MODB-17": {
+   "severity": "P3",
+   "confidence": "VERIFIED (services); ASSUMED (no notice on each page)",
+   "evidence": "src/lib/api/trips.js:59, bayScheduling.js:112, serviceRequests.js:54, dispatch.js:22, gpsPositions.js:84, journeys.js:37, certifications.js:28, dvir.js:33, equipment.js:44, driverDocuments.js:26: limit = 500",
+   "summary": "The simple ledgers read the newest 500 rows and compute their KPI tiles and exports from that page of data. Only some pages state the cap."
+  },
+  "MODB-19": {
+   "severity": "P1",
+   "confidence": "VERIFIED",
+   "evidence": "pg_proc stamp_import_default_org contains the current company UUID; trigger trg_stamp_import_default_org on inspections and work_orders",
+   "summary": "Rows written without an organisation (service role or dashboard import) are stamped with the current company. A second tenant loaded that way would land inside the first tenant."
+  },
+  "MODB-20": {
+   "severity": "P3",
+   "confidence": "VERIFIED",
+   "evidence": "decide_inspection_approval honours app_cap_granted(inspections, approve); src/lib/inspectionApproval.js:21-25 says a grant is not consulted",
+   "summary": "A user given a per-user approve grant is accepted by the server but is never shown the sign-off control."
+  },
+  "MODB-21": {
+   "severity": "P2",
+   "confidence": "VERIFIED",
+   "evidence": "src/lib/workshopLive.js:444,599-608 DEFAULT_LABOUR_RATE = 120; live workshop_config 0 rows; src/pages/WorkshopAnalytics.jsx:264 labels it with the active currency",
+   "summary": "Delay cost impact on Live Control and Workshop Analytics is hours lost multiplied by a labour rate that falls back to a hard-coded 120 per hour, labelled SAR, AED or EGP alike, with no statement that the rate is a default."
+  },
+  "MODB-22": {
+   "severity": "P3",
+   "confidence": "VERIFIED",
+   "evidence": "pg_policies corrective_actions: actions_insert (Reporter, Manager, Admin), actions_update (Manager, Admin); rca_records insert (Admin, Manager, Reporter); no role gating in src/pages/CorrectiveActions.jsx",
+   "summary": "Write policies name roles that do not match who uses the screen (Director and Inspector excluded) while the page shows create, edit and status controls to everyone."
+  },
+  "MODB-23": {
+   "severity": "P3",
+   "confidence": "VERIFIED",
+   "evidence": "live: all workforce_* tables 0 rows including workforce_task_types and workforce_employees; tech_activity_events 27, wo_assignments 27, workshop_attendance 0, shifts 0, pm_programs 0, technician_skills 0",
+   "summary": "The workforce, attendance, shift and PM features have never carried real data, so their end to end behaviour is unproven outside tests."
+  },
+  "MODB-24": {
+   "severity": "P3",
+   "confidence": "VERIFIED",
+   "evidence": "information_schema: driver_expenses has amount but no currency column; src/pages/DriverExpenses.jsx:564 formats with the active country currency",
+   "summary": "Driver expense amounts carry no currency of their own."
+  }
+ }
+}

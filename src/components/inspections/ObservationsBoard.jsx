@@ -14,7 +14,7 @@ import { Link } from 'react-router-dom'
 import { MessageSquare, AlertTriangle, Truck, Wrench, Search, Download, Plus, Eye, ArrowLeft, CheckCircle2 } from 'lucide-react'
 import { Card, Kpi, Tabs, Pager, fmtInt } from '../commandCenter/kit'
 import {
-  observationRegister, filterObservations, observationSummary, OBSERVATION_KINDS, observationOptions, observationLabel,
+  observationRegister, filterObservations, observationSummary, OBSERVATION_KINDS, observationOptions, observationLabel, groupObservationsByInspection,
 } from '../../lib/inspectionWorkspaceView'
 import { exportToExcel } from '../../lib/exportUtils'
 import { listFitmentsForAssets } from '../../lib/api/tyreChangeTracking'
@@ -151,15 +151,7 @@ export default function ObservationsBoard({
 
   const unreadable = !!error
   const show = (v) => (unreadable ? 'N/A' : fmtInt(v))
-  // Register is one row per inspection; underlying finding filters remain per tyre.
-  const grouped = useMemo(() => {
-    const map = new Map()
-    for (const finding of list) {
-      if (!map.has(finding.inspectionId)) map.set(finding.inspectionId, { ...finding, findings: [] })
-      map.get(finding.inspectionId).findings.push(finding)
-    }
-    return [...map.values()]
-  }, [list])
+  const grouped = useMemo(() => groupObservationsByInspection(list), [list])
   const pageRows = grouped.slice(page * PAGE, page * PAGE + PAGE)
   const severities = SEVERITIES.filter((s) => s !== 'all' && all.some((o) => o.severity === s))
 

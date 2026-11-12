@@ -23,7 +23,8 @@
 --   to test whether a user id exists in another company.
 --
 -- WHAT IT DOES NOT FIX
---   get_user_module_permissions(p_user_id) still answers for any id (RLS-14). A plain Admin can
+--   get_user_module_permissions(p_user_id) still answers for any id (RLS-14): closed separately by
+--   TEN-4b (20261113114000_ten4b_module_permissions_same_org.sql). A plain Admin can
 --   still change the site scope or web access of a SUPER ADMIN in the same organisation (a super
 --   admin ignores site scope, and web access off would lock the owner out of the web app: worth
 --   a separate decision). admin_set_user_sites still switches the profile guard trigger off and

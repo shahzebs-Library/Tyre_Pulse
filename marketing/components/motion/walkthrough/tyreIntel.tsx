@@ -10,7 +10,7 @@ const PASSPORT = [
   { asset: "PT-118", pos: "LHF1", from: "Jun 2025", km: "18,900 km", note: "First fitment" },
 ] as const;
 
-/** Live TPMS pressure on the leaking wheel over the last 6 hours, via the telematics connection (psi). */
+/** Illustration of the planned TPMS feature: pressure on the leaking wheel over 6 hours (psi). */
 const PSI = [118, 117, 116, 112, 107, 101, 94];
 /** Tread forecast per tyre: mm now, weeks until 3 mm. */
 const FORECAST = [

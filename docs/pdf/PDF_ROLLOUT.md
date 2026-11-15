@@ -153,3 +153,34 @@ Timings are from one local machine and only show the shape (generated vs served)
 measurement. Not Tested: the hosted Supabase Storage service and its policies as deployed (local Storage API
 only); GoTrue (sign-in is the local shim, the JWT shape and claims match); the retention purge for real (dry
 run only, by design).
+
+## 9. Browser rerun on main + #527, and rollback rehearsal (2026-11-15, local copies only)
+
+Tree: `claude/pdf-cache-service-7rxp2t` at 9009181c with `origin/main` (3ca4561b) merged into a THROWAWAY
+local commit (not pushed; the only conflicts were `supabase/pending_migrations/README.md` and `vercel.json`,
+neither read by the build). Production build of that tree, local Storage API (supabase/storage v1.11.13, file
+backend), PostgREST 12, local sign-in gateway. Database copies `tp_pdf7` (drafts 090000, 091000, 093000
+applied) and `tp_pdf7_nodraft` (same build steps, no drafts). No Supabase MCP call, production untouched.
+
+| Check | Result | Label |
+|---|---|---|
+| `round2.cjs`, drafts applied | 60 of 60. Manager first 2.7 s / repeat 0.31 s; Admin 1.8 s / 0.21 s; observation 1.0 s / 0.32 s | Verified Fixed |
+| `browser.cjs`, drafts applied | 20 of 20 | Verified Fixed |
+| `browser.cjs` unprovisioned, first run | 16 of 16 (database copy was missing the non-PDF buckets, storage policies and harness rows because the build script stopped early; rebuilt, then rerun) | superseded |
+| `browser.cjs` unprovisioned, complete copy | 7 of 8 then timeout waiting for the bulk ZIP `download` event (same flake as section 8); rerun still running when this section was written; its result is not recorded here | Not Tested (rerun incomplete) |
+| Rollback: stored files removed through the Storage API (service key), then 093000 header block (without `cron.unschedule`: pg_cron is not installed on the staging copy), then 091000 header block, then `20261117090000_report_pdf_cache_ROLLBACK.sql` | All three ran without error; 0 `pdf_*` / `report_pdf*` functions or relations left; `report-pdfs` bucket gone | Verified Fixed |
+| Schema fingerprint after rollback vs `tp_pdf7_nodraft` (19,085 entries: relations, columns, indexes, constraints, functions, policies, triggers, buckets; positive control before rollback: 318 differences) | Identical except 64 `anum_reader_*` policy lines (see below) | Verified Fixed (with the note below) |
+
+Note on the 64 `anum_reader_*` lines: every draft ends with `select anum_integration.apply_reader_policies();`,
+which regenerates the reader policies on EVERY RLS table from `anum_integration.reader_tables`. That table is
+EMPTY in the synthetic staging baseline while its policies were generated when it had rows, so on staging the
+call turns 28 `anum_reader_select_scope` policies from "own organisation" into "deny" and adds reader policies to
+the two observation tables. No rollback file can undo this, and none should: in production `reader_tables` is
+populated, so the call re-derives the same text (idempotent). Before applying in production, compare
+`pg_policies` for `anum_reader_%` before and after; a difference means `reader_tables` drifted, not a #527 defect.
+
+Also seen: the local file backend kept 7 files under `report-pdfs/` while `storage.objects` held 3 rows (rows
+removed directly in the database by the specs leave the file). Local harness artefact only.
+
+Not Tested: hosted Supabase Storage; GoTrue; the `cron.unschedule('report-pdf-retention')` line (no pg_cron
+locally); the retention purge for real.

@@ -94,3 +94,21 @@ objects before and after), so rollback cannot affect inspections, costs, tyre re
 4. Is a headless renderer (5 to 25 USD a month, 1 to 2 weeks) wanted so that reports approved on the phone are
    prepared with nobody at a computer?
 5. How long should superseded working copies be kept (the draft rule says 90 days)?
+
+## 7. Verification, 2026-11-15 (local staging copies only, production untouched)
+
+Merge gate, drafts NOT applied:
+- `src/test/pdfCacheNotProvisioned.test.js` (26 tests): the real data-access module answering 42P01, PGRST205,
+  PGRST202 and 42883 for every function this branch added. Each download is generated in the browser once, only
+  the one lookup is attempted, nothing is uploaded, signed or queued, no message is shown, the bulk gate falls back
+  to the client limit and the retention sweep does nothing.
+- Browser, real production build against a database copy with no PDF tables, functions or bucket: 16 of 16
+  (Manager and Administrator, single, second record and bulk ZIP downloads, no error, nothing uploaded, no panel).
+
+Drafts applied (copy only):
+- `supabase/tests/staging/report_pdf_cache_tests.sh`: existing objects byte-identical (4678 fingerprints),
+  157 SQL checks, 5 simultaneous claims give one generator, 1020 concurrent lookups all ready.
+- `e2e/pdf-storage/specs/storage_api.mjs` against the real Supabase Storage API: 64 of 64.
+- `e2e/pdf-storage/specs/browser.cjs`: 20 of 20. First download 1.3 to 2.7 s (generated and stored),
+  repeat 0.16 to 0.28 s (signed link, no generation). The Tyre Man part is checked with his own session against
+  the server: on the web he is kept on checklist capture and does not see the register's download buttons.

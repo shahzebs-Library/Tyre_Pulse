@@ -32,7 +32,7 @@ function ok(cond, name, detail = '') {
 }
 
 let browser
-async function signIn(username) {
+async function signIn(username, { register = true } = {}) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block', acceptDownloads: true })
   const page = await context.newPage()
   const log = { uploads: 0, signs: 0, http: [], errors: [], pdfRpc: 0 }
@@ -52,7 +52,8 @@ async function signIn(username) {
   const skip = page.getByRole('button', { name: 'Skip tour' }).first()
   if (await skip.waitFor({ state: 'visible', timeout: 4000 }).then(() => true, () => false)) await skip.click()
   await page.goto(`${WEB}/inspections`, { waitUntil: 'domcontentloaded' })
-  await page.locator('button[aria-label^="Export detailed PDF"]').first().waitFor({ timeout: 30000 })
+  if (register) await page.locator('button[aria-label^="Export detailed PDF"]').first().waitFor({ timeout: 30000 })
+  else await page.waitForLoadState('networkidle').catch(() => {})
   return { context, page, log }
 }
 const rowButton = (page, asset) => page.locator(`button[aria-label^="Export detailed PDF"][aria-label*="${asset}"]`).first()
@@ -159,16 +160,19 @@ async function provisioned() {
   await adminNorth.page.waitForTimeout(1200); await adminNorth.context.close()
   const north = sql(`select storage_path from public.report_pdf_files where site = 'ALPHA NORTH PLANT' and status = 'ready' limit 1`)
   ok(!!north, 'fixture: a report of ALPHA NORTH PLANT is stored')
-  const t = await signIn('alpha.tyreman')
-  const body = await t.page.locator('body').innerText()
-  ok(!body.includes('ALPHA NORTH PLANT') && !body.includes('ALPHA CENTRAL YARD') && body.includes('ALPHA EAST PLANT'), 'tyre man: the register lists only his own site')
-  for (let i = 0; i < 3; i++) await t.page.locator('input[aria-label="Select row"]').nth(i).check()
-  const z = await download(t.page, () => t.page.getByRole('button', { name: /Download 3 PDFs/ }).click())
-  const zip = await JSZip.loadAsync(z.bytes); const man = JSON.parse(await zip.file('manifest.json').async('string'))
-  const ids = man.reports.map((r) => `'${r.source_id}'`).join(',')
-  ok(man.included === 3 && man.missing === 0 && sql(`select count(*) from public.inspections where id in (${ids}) and site = 'ALPHA EAST PLANT'`) === '3', 'tyre man: bulk ZIP holds three reports, all of his own site', JSON.stringify({ i: man.included, m: man.missing }))
-  ok(sql(`select requested || '/' || allowed || '/' || outcome from public.report_pdf_bulk_requests order by id desc limit 1`) === '3/3/accepted', 'the server recorded and authorised the bulk request')
+  // On the web a Tyre Man is kept on the checklist capture view (Inspections.jsx: showWorkspace is
+  // false and the register with its download buttons is not shown to him), so his authorisation
+  // is checked with HIS OWN browser session against the server: the bulk request answers only for
+  // his site, and the Storage API refuses the other site's file.
+  const t = await signIn('alpha.tyreman', { register: false })
   const tk = await t.page.evaluate(() => JSON.parse(localStorage.getItem('tp_auth')).access_token)
+  const rest = `http://127.0.0.1:${process.env.GATEWAY_PORT}/rest/v1/rpc/pdf_cache_bulk_request`
+  const anonKey = fs.readFileSync(`${RUN}/anon_key`, 'utf8').trim()
+  const eastIds = sql(`select string_agg(id::text, ',') from (select id from public.inspections where organisation_id = '00000000-0000-0000-0000-000000000001' and site = 'ALPHA EAST PLANT' order by id limit 2) x`).split(',')
+  const northId = sql(`select source_id from public.report_pdf_files where site = 'ALPHA NORTH PLANT' and status = 'ready' limit 1`)
+  const br = await (await fetch(rest, { method: 'POST', headers: { apikey: anonKey, authorization: `Bearer ${tk}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ p_type: 'tyre_inspection', p_sources: [...eastIds, northId] }) })).json()
+  ok(br.ok && br.allowed.length === 2 && !br.allowed.includes(northId), 'tyre man: bulk request authorises only reports of his own site', JSON.stringify(br))
   const g = `http://127.0.0.1:${process.env.GATEWAY_PORT}/storage/v1/object`
   const h = { authorization: `Bearer ${tk}`, 'content-type': 'application/json' }
   const r1 = await fetch(`${g}/authenticated/report-pdfs/${north}`, { headers: h })

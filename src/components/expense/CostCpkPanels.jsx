@@ -10,6 +10,7 @@ import { useMemo } from 'react'
 import {
   TrendingUp, TrendingDown, Minus, Gauge, ArrowRight, ShieldCheck, AlertTriangle, Info,
 } from 'lucide-react'
+import { CPK_METRIC, metricDef } from '../../lib/cpkMetrics'
 import {
   comparisonRows, cpkView, movers, evidenceBreakdown, PERIODS,
 } from '../../lib/costCpk'
@@ -161,7 +162,10 @@ export function ComparisonStrip({ snap, money }) {
 }
 
 /**
- * Cost per kilometre, with the coverage that makes it readable.
+ * Operating cost per VEHICLE km (parts and materials), with the coverage that
+ * makes it readable. Named from the one glossary (src/lib/cpkMetrics.js): this
+ * is tyres + spares + oil over the km the vehicles drove. It is not the Tyre CPK
+ * (price of a tyre over that tyre's own km), which lives on CPK Intelligence.
  *
  * The distance comes from the odometer readings recorded against tyre fitments
  * and removals, because odometer_logs is empty. That is a real but sparse
@@ -172,21 +176,26 @@ export function ComparisonStrip({ snap, money }) {
 export function CpkPanel({ snap, money }) {
   const v = useMemo(() => cpkView(snap), [snap])
   const cur = v.currency || ''
-  const fmtCpk = (n) => (n == null ? 'N/A' : `${n.toFixed(3)} ${cur}/km`)
+  const fmtCpk = (n) => (n == null ? 'N/A' : `${n.toFixed(3)} ${cur} per vehicle km`)
+  const M = metricDef(CPK_METRIC.OPERATING_COST_PER_VEHICLE_KM)
   const fmtPct = (n) => (n == null ? 'N/A' : `${(n * 100).toFixed(1)}%`)
 
   return (
     <section className="space-y-3">
       <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2">
-        <Gauge size={15} /> Cost per kilometre
+        <Gauge size={15} /> {M.name}
       </h2>
+      <p className="text-xs text-[var(--text-muted)]">{M.definition}</p>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <div className="card">
           <p className="text-[11px] text-[var(--text-muted)]">This period</p>
           <p className="text-2xl font-bold text-[var(--text-primary)] leading-tight">{fmtCpk(v.current.cpk)}</p>
           <p className="text-[11px] text-[var(--text-dim)] mt-1">
-            {v.current.assetsMeasured} assets measured, {(v.current.km || 0).toLocaleString('en-US')} km
+            {v.current.assetsMeasured} assets measured, {(v.current.km || 0).toLocaleString('en-US')} vehicle km
+          </p>
+          <p className="text-[11px] text-[var(--text-dim)] mt-1">
+            Tyres {fmtCpk(v.current.cpkTyre)}. Maintenance {fmtCpk(v.current.cpkMaintenance)}.
           </p>
         </div>
         <div className="card">
@@ -220,7 +229,7 @@ export function CpkPanel({ snap, money }) {
         <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30">
           <AlertTriangle size={13} className="text-amber-400 flex-shrink-0 mt-0.5" />
           <p className="text-xs text-amber-300">
-            {v.withheldReason} A cost per kilometre is only shown against a period where the
+            {v.withheldReason} A cost per vehicle km is only shown against a period where the
             measured assets cover at least {Math.round((v.minCoverage || 0.25) * 100)}% of the spend,
             so a change in coverage is never mistaken for a change in cost.
           </p>
@@ -232,7 +241,8 @@ export function CpkPanel({ snap, money }) {
         <p className="text-xs text-sky-300">
           Distance comes from the odometer recorded when a tyre is fitted and when it is removed,
           which is the only running-kilometre data the fleet currently captures. Logging daily
-          meter readings raises the coverage above and makes this figure fleet-wide.
+          meter readings raises the coverage above and makes this figure fleet-wide. The tyre and
+          maintenance split reads N/A until the database function that returns it is updated.
         </p>
       </div>
     </section>

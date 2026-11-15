@@ -86,13 +86,23 @@
   "redirects": [
     {
       "source": "/:path*",
-      "has": [{ "type": "host", "value": "www.tyrepulse.app" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "www.tyrepulse.app"
+        }
+      ],
       "destination": "https://app.tyrepulse.app/:path*",
       "permanent": false
     },
     {
       "source": "/:path*",
-      "has": [{ "type": "host", "value": "tyrepulse.app" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "tyrepulse.app"
+        }
+      ],
       "destination": "https://app.tyrepulse.app/:path*",
       "permanent": false
     },
@@ -131,6 +141,7 @@
       "claude/work-order-permissions-7rxp2t": false,
       "claude/closure-workflow-7rxp2t": false,
       "claude/commercial-blockers-7rxp2t": false,
+      "claude/at-risk-module-fixes-7rxp2t": false,
       "claude/fix-observation-test-7rxp2t": false,
       "claude/legal-links-redirect-7rxp2t": false,
       "claude/tyrepulse-inspector-build-7rxp2t": false,
@@ -144,7 +155,8 @@
       "feature/accident-case-web-redesign": false,
       "claude/modest-hopper-5bnq8c": false,
       "claude/marketing-audit-qc": false,
-      "claude/marketing-walkthrough": false
+      "claude/marketing-walkthrough": false,
+      "claude/erp-followup-v2-7rxp2t": false
     }
   },
   "ignoreCommand": "node scripts/vercel-ignore-build.mjs"

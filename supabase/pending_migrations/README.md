@@ -82,6 +82,14 @@ Status per finding (TEN-1 to TEN-13): `docs/commercial-readiness/audit/TENANCY_S
 20261115090615). These are FOLLOW-UP drafts on top of it, apply in this order, neither applied anywhere
 but the local staging copy:
 
+- `20261116084000_observation_erp_confirm_interim_lock.sql` : interim restriction. Three REVOKE
+  statements so no signed-in user can record an ERP job card decision until the corrected function
+  is installed. Independent; reversible by three GRANT statements (in its header).
+- `20261116085000_tyre_layout_versions_and_position_mappings.sql` : layout history
+  (`vehicle_diagram_config_versions`, written by a trigger, append-only) and verified per-layout
+  ERP spellings (`tyre_layout_position_mappings`, ships empty). Apply before 090000.
+- Order: 084000 (alone, first), then 085000, 090000, 091000 together. Owner's approval pack:
+  `docs/commercial-readiness/audit/ERP_FOLLOWUP_APPROVAL_PACK.md`.
 - `20261116090000_tyre_position_service.sql` : pure functions that resolve an inspection slot id or an
   ERP position code to one canonical wheel on the asset's own layout (SQL mirror of
   `src/lib/tyrePositionService.js`, pinned by `src/test/fixtures/tyrePositionCases.json`). No table.
@@ -94,3 +102,12 @@ but the local staging copy:
 
 Tests: `node --test supabase/tests/tyre_position_service.test.mjs` (PGlite) and
 `python3 supabase/tests/staging/observation_erp_position_tests.py` (local staging copy).
+
+## At-risk module fixes, round 2 (ATR, 2026-11-15) - NOT APPLIED
+
+- `20261117100000_atr_user_view_prefs.sql` - creates `user_view_prefs` (personal saved table views; owner-only
+  rows inside the owner's company; reader policies applied). Supersedes the never-applied
+  `supabase/migrations/20260921090000_user_view_prefs.sql`. No dependency. Tested on local staging.
+- `20261117101000_atr_carbon_offsets_blank_is_null.sql` - `carbon_offsets.aed_cost` and `trees_equivalent`
+  become nullable with no default, so a blank is stored as "not recorded" and not 0. Contains `drop default` /
+  `drop not null` (unavoidable), so the apply prompt needs the owner. No dependency. Tested on local staging.

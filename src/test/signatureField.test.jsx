@@ -127,3 +127,25 @@ describe('SignatureField - the saved signature', () => {
     expect(await screen.findByTestId('signature-capture')).toBeInTheDocument()
   })
 })
+
+describe('SignatureField - touch targets (D5)', () => {
+  const big = (el) => {
+    expect(el.className).toMatch(/min-h-\[44px\]/)
+    expect(el.className).toMatch(/focus-visible:ring-2/)
+  }
+
+  it('draw-new, use-saved and clear are at least 44x44 px with a focus ring', async () => {
+    h.getMySignature.mockResolvedValue(SVG_A)
+    render(<SignatureField onChange={vi.fn()} />)
+    const drawNew = await screen.findByRole('button', { name: 'signature.field.drawNew' })
+    big(drawNew)
+    expect(drawNew.className).toMatch(/min-w-\[44px\]/)
+    fireEvent.click(drawNew)
+    const useSaved = await screen.findByRole('button', { name: 'signature.field.useSaved' })
+    big(useSaved)
+    const clear = screen.getByRole('button', { name: /clear/i })
+    big(clear)
+    expect(clear.className).toMatch(/min-w-\[44px\]/)
+    expect(screen.getByRole('checkbox').closest('label').className).toMatch(/min-h-\[44px\]/)
+  })
+})

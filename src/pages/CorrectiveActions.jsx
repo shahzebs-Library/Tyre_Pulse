@@ -17,6 +17,7 @@ import { formatDate } from '../lib/formatters'
 import { RISK_BADGE_DARK } from '../lib/formatters'
 import { useLanguage } from '../contexts/LanguageContext'
 import { toUserMessage } from '../lib/safeError'
+import { closureText } from '../lib/closureText'
 import { compareValues } from '../lib/consoleTable'
 import { colorAt } from '../lib/reportColors'
 import ClosureReviewPanel from '../components/correctiveActions/ClosureReviewPanel'
@@ -382,7 +383,7 @@ export default function CorrectiveActions() {
     try {
       if (editId) await correctiveActions.updateCorrectiveAction(editId, payload)
       else await correctiveActions.createCorrectiveAction(payload)
-    } catch (err) { setFormError(toUserMessage(err, 'Something went wrong. Please try again.')); setSaving(false); return }
+    } catch (err) { setFormError(closureText(t, toUserMessage(err, 'Something went wrong. Please try again.'))); setSaving(false); return }
     setShowForm(false)
     load(true)
     setSaving(false)
@@ -398,7 +399,7 @@ export default function CorrectiveActions() {
           : { closed_by: null, closed_at: null }),
       })
     } catch (err) {
-      setActionError(toUserMessage(err, 'The status could not be changed.'))
+      setActionError(closureText(t, toUserMessage(err, 'The status could not be changed.')))
     }
     load(true)
   }

@@ -151,6 +151,7 @@
     "ackActionRequired": "Acknowledged, Action Required",
     "ackException": "Acknowledged, compliant by exception",
     "ackResolved": "Acknowledged, faults resolved",
-    "notPhoto": "That file is not a photograph."
+    "notPhoto": "That file is not a photograph.",
+    "exceptionPendingClose": "An exception has been requested on this action. Approve or refuse the exception first."
   }
 }

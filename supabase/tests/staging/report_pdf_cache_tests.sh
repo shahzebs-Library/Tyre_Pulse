@@ -51,7 +51,7 @@ SQL
 
 echo "== 1. fingerprint before"
 fingerprint > "$TMP/before.txt"
-for f in 20261117090000_report_pdf_cache 20261117091000_report_pdf_autoqueue; do
+for f in 20261117090000_report_pdf_cache 20261117091000_report_pdf_autoqueue 20261117093000_report_pdf_retention_bulk; do
   "${P[@]}" -d "$DB" -1 -f "$ROOT/supabase/pending_migrations/$f.sql" >/dev/null 2>&1
 done
 fingerprint > "$TMP/after.txt"
@@ -64,7 +64,7 @@ fi
 [ "$("${P[@]}" -d "$DB" -At -c "select count(*) from storage.buckets where id = 'report-pdfs' and not public and allowed_mime_types = array['application/pdf']")" = 1 ] \
   && echo "PASS bucket report-pdfs is private and accepts application/pdf only"
 # re-running the drafts is harmless
-for f in 20261117090000_report_pdf_cache 20261117091000_report_pdf_autoqueue; do
+for f in 20261117090000_report_pdf_cache 20261117091000_report_pdf_autoqueue 20261117093000_report_pdf_retention_bulk; do
   "${P[@]}" -d "$DB" -1 -f "$ROOT/supabase/pending_migrations/$f.sql" >/dev/null 2>&1
 done
 echo "PASS drafts are re-runnable"

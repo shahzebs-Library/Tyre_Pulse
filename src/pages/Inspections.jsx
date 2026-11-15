@@ -45,12 +45,13 @@ import InspectionViewerDrawer from '../components/inspection/InspectionViewerDra
 import InspectionDiagram from '../components/inspection/InspectionDiagram'
 import { useInspectionPdfRenderer } from '../components/inspections/useInspectionPdfRenderer'
 import StoredPdfPanel from '../components/pdf/StoredPdfPanel'
-import { getOrCreatePdf, deliverPdf, saveBlob } from '../lib/pdfCache/service'
+import PdfSettingsPanel from '../components/pdf/PdfSettingsPanel'
+import { getOrCreatePdf, deliverPdf, saveBlob, authorizeBulk, sweepPdfRetention } from '../lib/pdfCache/service'
 import { inspectionPdfRequest } from '../lib/pdfCache/reportRequests'
 import { REPORT_TYPES } from '../lib/pdfCache/templates'
 import { buildPdfZip, resolveBulkLimit, DEFAULT_BULK_LIMIT } from '../lib/pdfCache/bulkZip'
 import { startExportTask } from '../lib/pdfCache/exportTasks'
-import { listPendingPdfRequests, closePdfRequest, recordPdfDownload } from '../lib/api/pdfCache'
+import { listPendingPdfRequests, closePdfRequest, recordPdfDownload, getPdfSettings } from '../lib/api/pdfCache'
 import { configNum } from '../lib/api/systemConfig'
 import { buildApprovalEmailHtml } from '../lib/inspectionApprovalEmail'
 import { readFunctionError } from '../lib/emailService'
@@ -429,6 +430,8 @@ export default function Inspections() {
           await closePdfRequest(REPORT_TYPES.INSPECTION, req.source_id)
         } catch { /* left queued: bounded retries are recorded on the job */ }
       }
+      // Retention housekeeping: only an administrator's browser is allowed to remove marked copies.
+      if (!cancelled && isAdmin) await sweepPdfRetention(20)
     }, 6000)
     return () => { cancelled = true; clearTimeout(timer) }
   // once per page visit
@@ -863,7 +866,15 @@ export default function Inspections() {
   // Bulk PDF download: stored reports are zipped as they are; missing ones are prepared
   // (two at a time) and stored. The task keeps running if the person opens another page;
   // reports that still needed drawing at that point are listed as missing in the manifest.
-  const bulkPdfLimit = resolveBulkLimit(configNum('pdf_bulk_limit', DEFAULT_BULK_LIMIT))
+  // The limit is a company setting (initially 50). The server enforces it again when the download starts.
+  const [pdfSettings, setPdfSettings] = useState(null)
+  useEffect(() => {
+    if (authLoading || !profile?.id) return undefined
+    let live = true
+    getPdfSettings().then((s) => { if (live) setPdfSettings(s) })
+    return () => { live = false }
+  }, [authLoading, profile?.id])
+  const bulkPdfLimit = resolveBulkLimit(pdfSettings?.bulk_limit ?? configNum('pdf_bulk_limit', DEFAULT_BULK_LIMIT))
   function downloadSelectedPdfs() {
     const byId = new Map(filtered.map((r) => [String(r.id), r]))
     const items = [...selectedIds].map((id) => {
@@ -874,8 +885,10 @@ export default function Inspections() {
     try { applyExportPolicy(items, `Inspection PDFs bulk download (${items.length})`) }
     catch (err) { setPdfError(toUserMessage(err, 'Exports are not available.')); return }
     startExportTask(`Inspection PDFs (${items.length})`, async ({ report, isCancelled }) => {
+      // The server checks the limit and answers with the records this account may see.
+      const gate = await authorizeBulk(REPORT_TYPES.INSPECTION, items.map((i) => i.sourceId), bulkPdfLimit)
       const out = await buildPdfZip({
-        type: REPORT_TYPES.INSPECTION, items, limit: bulkPdfLimit, isCancelled,
+        type: REPORT_TYPES.INSPECTION, items, limit: gate.limit || bulkPdfLimit, allowed: gate.allowed, isCancelled,
         onProgress: (p) => report(p),
         ensure: async (item) => {
           const r = await ensureInspectionPdf(item.row, { waitMs: 30000 })
@@ -2144,6 +2157,8 @@ export default function Inspections() {
           </div>
         </div>
       )}
+
+      {isAdmin && <PdfSettingsPanel onChange={(next) => setPdfSettings((prev) => ({ ...(prev || {}), ...next }))} />}
 
       {/* The register. EnterpriseTable pages and sorts the FULL filtered set;
           the row opens the record in place. */}

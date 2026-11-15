@@ -1,5 +1,5 @@
--- Staging tests for supabase/pending_migrations/20261117090000_report_pdf_cache.sql and
--- 20261117091000_report_pdf_autoqueue.sql. LOCAL staging copy only (run through
+-- Staging tests for supabase/pending_migrations/20261117090000_report_pdf_cache.sql,
+-- 20261117091000_report_pdf_autoqueue.sql and 20261117093000_report_pdf_retention_bulk.sql. LOCAL staging copy only (run through
 -- report_pdf_cache_tests.sh, which refuses any host but 127.0.0.1). Synthetic companies
 -- Alpha / Beta / Gamma. Everything runs in ONE transaction that is rolled back.
 \set ON_ERROR_STOP on
@@ -193,8 +193,8 @@ select pg_temp.ok((pg_temp.look('tyre_inspection', pg_temp.ctx('ins_ksa_pending'
 insert into t_ctx select 'claimA', pg_temp.claim('tyre_inspection', pg_temp.ctx('ins_ksa_approved'))::text;
 select pg_temp.upload(pg_temp.ctx('claimA')::jsonb->>'path', 2000);
 select pg_temp.ok((public.pdf_cache_complete((pg_temp.ctx('claimA')::jsonb->>'file_id')::uuid, pg_temp.sha('approved-1'), 2000)->>'immutable')::boolean, 'approved inspection: stored revision is immutable');
-select pg_temp.ok((public.pdf_cache_regenerate('tyre_inspection', pg_temp.ctx('ins_ksa_approved')::uuid, 'tpl-test', 'b-test', '', null, 'looks wrong', 180)->>'reason') = 'approved_needs_admin',
-  'manager cannot replace an approved revision');
+select pg_temp.ok((public.pdf_cache_regenerate('tyre_inspection', pg_temp.ctx('ins_ksa_approved')::uuid, 'tpl-test', 'b-test', '', null, 'looks wrong', 180)->>'reason') = 'approved_needs_authorisation',
+  'manager cannot replace an approved revision by default');
 reset role;
 do $$ begin
   delete from public.report_pdf_files where id = (pg_temp.ctx('claimA')::jsonb->>'file_id')::uuid;
@@ -363,6 +363,176 @@ select pg_temp.ok(public.pdf_cache_pending('tyre_inspection', 5) = '[]'::jsonb, 
 select pg_temp.upload(pg_temp.ctx('claimQ')::jsonb->>'path', 800);
 select pg_temp.ok((public.pdf_cache_complete((pg_temp.ctx('claimQ')::jsonb->>'file_id')::uuid, pg_temp.sha('queued'), 800)->>'immutable')::boolean, 'queued report stored as an approved revision');
 select pg_temp.ok((public.pdf_cache_queue_done('tyre_inspection', pg_temp.ctx('ins_ksa_queue')::uuid)->>'closed')::int = 1, 'request closed once stored');
+
+-- ---------------------------------------------------------------- 16. owner decision 1: who may replace an approved report
+reset role; select pg_temp.login('alpha.manager@staging.tyrepulse.invalid'); set local role authenticated;
+select pg_temp.ok((public.pdf_cache_settings()->>'can_regenerate_approved')::boolean = false
+  and (public.pdf_cache_settings()->>'manager_regenerate_approved')::boolean = false
+  and (public.pdf_cache_settings()->>'bulk_limit')::int = 50
+  and (public.pdf_cache_settings()->>'retention_days')::int = 90, 'defaults: manager not authorised, bulk limit 50, retention 90 days');
+select pg_temp.ok((pg_temp.look('tyre_inspection', pg_temp.ctx('ins_ksa_approved'))->>'can_regenerate_approved')::boolean = false
+  and (pg_temp.look('tyre_inspection', pg_temp.ctx('ins_ksa_approved'))->>'can_regenerate')::boolean, 'lookup tells the screen what the caller may do');
+select pg_temp.ok((public.pdf_cache_update_settings(null, null, true)->>'reason') = 'admin_only', 'a manager cannot authorise himself');
+reset role; select pg_temp.login('alpha.tyreman@staging.tyrepulse.invalid'); set local role authenticated;
+select pg_temp.ok((public.pdf_cache_update_settings(10, null, null)->>'reason') = 'admin_only', 'a tyre man cannot change the settings');
+reset role; select pg_temp.login('alpha.admin@staging.tyrepulse.invalid'); set local role authenticated;
+select pg_temp.ok((public.pdf_cache_settings()->>'can_regenerate_approved')::boolean, 'administrator keeps the right');
+select pg_temp.ok((public.pdf_cache_update_settings(null, 60, null)->>'reason') = 'retention_below_minimum'
+  and (public.pdf_cache_update_settings(null, 89, null)->>'reason') = 'retention_below_minimum', 'retention below 90 days is refused');
+select pg_temp.ok((public.pdf_cache_update_settings(0, null, null)->>'reason') = 'bulk_limit_range'
+  and (public.pdf_cache_update_settings(501, null, null)->>'reason') = 'bulk_limit_range', 'bulk limit outside 1 to 500 is refused');
+select pg_temp.ok((public.pdf_cache_update_settings(null, 120, true)->>'retention_days')::int = 120, 'administrator sets retention 120 days and authorises managers');
+select pg_temp.ok((select count(*) from public.report_pdf_settings_events where actor = auth.uid()) = 1, 'the settings change is recorded with its actor');
+reset role;
+do $$ begin
+  update public.report_pdf_settings set superseded_retention_days = 30;
+  raise exception 'FAIL: retention below the minimum was stored';
+exception when check_violation then perform pg_temp.ok(true, 'the table itself refuses retention below 90 days');
+end $$;
+insert into t_ctx select 'approved_before', (select string_agg(id::text || ':' || sha256 || ':' || bytes || ':' || immutable || ':' || created_by, ',' order by generation, completed_at)
+  from public.report_pdf_files where source_id = pg_temp.ctx('ins_ksa_approved')::uuid and status = 'ready');
+insert into t_ctx select 'approved_events_before', (select count(*)::text from public.report_pdf_events where source_id = pg_temp.ctx('ins_ksa_approved')::uuid);
+insert into t_ctx select 'approved_current', (select id::text from public.report_pdf_files where source_id = pg_temp.ctx('ins_ksa_approved')::uuid and status = 'ready' and superseded_at is null);
+select pg_temp.login('beta.manager@staging.tyrepulse.invalid'); set local role authenticated;
+select pg_temp.ok((public.pdf_cache_settings()->>'can_regenerate_approved')::boolean = false
+  and (public.pdf_cache_settings()->>'retention_days')::int = 90, 'another company is not affected by Alpha''s settings');
+reset role; select pg_temp.login('alpha.manager@staging.tyrepulse.invalid'); set local role authenticated;
+select pg_temp.ok((public.pdf_cache_settings()->>'can_regenerate_approved')::boolean, 'authorised manager: capability on');
+select pg_temp.ok((public.pdf_cache_regenerate('tyre_inspection', pg_temp.ctx('ins_ksa_approved')::uuid, 'tpl-test', 'b-test', '', null, '  ', 180)->>'reason') = 'reason_required',
+  'authorised manager still has to give a reason');
+insert into t_ctx select 'regenM', public.pdf_cache_regenerate('tyre_inspection', pg_temp.ctx('ins_ksa_approved')::uuid, 'tpl-test', 'b-test', '', null, 'Customer asked for a fresh print', 180)::text;
+select pg_temp.ok((pg_temp.ctx('regenM')::jsonb->>'state') = 'claimed', 'authorised manager with a reason: new revision started');
+select pg_temp.upload(pg_temp.ctx('regenM')::jsonb->>'path', 2300);
+select pg_temp.ok((public.pdf_cache_complete((pg_temp.ctx('regenM')::jsonb->>'file_id')::uuid, pg_temp.sha('approved-4'), 2300)->>'state') = 'ready', 'manager revision stored');
+reset role;
+select pg_temp.ok((select regenerate_reason = 'Customer asked for a fresh print' and regenerated_from = pg_temp.ctx('approved_current')::uuid
+    and created_by = (select id from public.profiles where email = 'alpha.manager@staging.tyrepulse.invalid') and created_at is not null and immutable
+    and storage_path <> (select storage_path from public.report_pdf_files where id = pg_temp.ctx('approved_current')::uuid)
+  from public.report_pdf_files where id = (pg_temp.ctx('regenM')::jsonb->>'file_id')::uuid),
+  'the new revision records who, when, why and which revision it follows, on its own path');
+select pg_temp.ok((select string_agg(id::text || ':' || sha256 || ':' || bytes || ':' || immutable || ':' || created_by, ',' order by generation, completed_at)
+  from public.report_pdf_files where source_id = pg_temp.ctx('ins_ksa_approved')::uuid and status = 'ready'
+   and id <> (pg_temp.ctx('regenM')::jsonb->>'file_id')::uuid) = pg_temp.ctx('approved_before'),
+  'every earlier approved revision is still stored, byte for byte, with its author');
+select pg_temp.ok((select count(*) from storage.objects o join public.report_pdf_files f on f.storage_path = o.name
+   where f.source_id = pg_temp.ctx('ins_ksa_approved')::uuid and f.status = 'ready') = 4, 'all four stored objects still exist');
+select pg_temp.ok((select count(*) from public.report_pdf_events where source_id = pg_temp.ctx('ins_ksa_approved')::uuid) > pg_temp.ctx('approved_events_before')::int
+  and (select count(*) from public.report_pdf_events e where e.source_id = pg_temp.ctx('ins_ksa_approved')::uuid and e.event = 'regenerate_requested'
+        and e.detail->>'reason' = 'Customer asked for a fresh print' and (e.detail->>'was_immutable')::boolean) = 1,
+  'the earlier audit trail is intact and the regeneration is added to it');
+do $$ begin
+  update public.report_pdf_files set regenerate_reason = 'edited' where id = (pg_temp.ctx('regenM')::jsonb->>'file_id')::uuid;
+  raise exception 'FAIL: a stored reason was edited';
+exception when sqlstate 'PT409' then perform pg_temp.ok(true, 'the recorded reason and author cannot be edited afterwards');
+end $$;
+-- an explicit per-person revoke wins over the company switch
+insert into public.user_access_grants (org_id, user_id, module_key, capability, effect)
+select '00000000-0000-0000-0000-000000000001', id, 'report_pdfs', 'regenerate_approved', 'revoke' from public.profiles where email = 'alpha.manager@staging.tyrepulse.invalid';
+select pg_temp.login('alpha.manager@staging.tyrepulse.invalid'); set local role authenticated;
+select pg_temp.ok((public.pdf_cache_regenerate('tyre_inspection', pg_temp.ctx('ins_ksa_approved')::uuid, 'tpl-test', 'b-test', '', null, 'Second try', 180)->>'reason') = 'approved_needs_authorisation',
+  'a person whose right was revoked is refused even when the company allows managers');
+-- company switch off, one named person granted
+reset role; select pg_temp.login('alpha.admin@staging.tyrepulse.invalid'); set local role authenticated;
+select pg_temp.ok((public.pdf_cache_update_settings(null, null, false)->>'manager_regenerate_approved')::boolean = false, 'administrator switches the company permission off again');
+reset role;
+update public.user_access_grants set effect = 'grant' where module_key = 'report_pdfs';
+select pg_temp.login('alpha.director@staging.tyrepulse.invalid'); set local role authenticated;
+select pg_temp.ok((public.pdf_cache_settings()->>'can_regenerate_approved')::boolean = false, 'a director without a grant is not authorised when the switch is off');
+reset role; select pg_temp.login('alpha.manager@staging.tyrepulse.invalid'); set local role authenticated;
+select pg_temp.ok((public.pdf_cache_settings()->>'can_regenerate_approved')::boolean, 'a single manager can be authorised by an explicit grant');
+reset role;
+update public.user_access_grants set effect = 'grant', user_id = (select id from public.profiles where email = 'alpha.tyreman@staging.tyrepulse.invalid') where module_key = 'report_pdfs';
+select pg_temp.login('alpha.tyreman@staging.tyrepulse.invalid'); set local role authenticated;
+select pg_temp.ok((public.pdf_cache_settings()->>'can_regenerate_approved')::boolean = false
+  and (public.pdf_cache_regenerate('tyre_inspection', pg_temp.ctx('ins_ksa_pending')::uuid, 'tpl-test', 'b-test', '', null, 'x reason', 180)->>'reason') = 'not_allowed',
+  'a grant never lets a tyre man regenerate');
+
+-- ---------------------------------------------------------------- 17. owner decision 2: bulk limit and tyre man scope
+-- (the tyre man is limited to ALPHA EAST PLANT, KSA; see the fixture at the top)
+-- (the report of ALPHA NORTH PLANT was stored in section 11: claimL2)
+reset role; select pg_temp.login('alpha.tyreman@staging.tyrepulse.invalid'); set local role authenticated;
+insert into t_ctx select 'bulkT', public.pdf_cache_bulk_request('tyre_inspection', array[
+  pg_temp.ctx('ins_ksa_pending')::uuid, pg_temp.ctx('ins_ksa_approved')::uuid, pg_temp.ctx('ins_ksa_other_site')::uuid,
+  pg_temp.ctx('ins_uae')::uuid, pg_temp.ctx('ins_beta')::uuid, gen_random_uuid()])::text;
+select pg_temp.ok((pg_temp.ctx('bulkT')::jsonb->'allowed') = (select to_jsonb(array_agg(x order by x)) from unnest(array[pg_temp.ctx('ins_ksa_pending')::uuid, pg_temp.ctx('ins_ksa_approved')::uuid]) x)
+  and (pg_temp.ctx('bulkT')::jsonb->>'refused')::int = 4,
+  'tyre man bulk request: only his own site is allowed; other site, other country, other company and unknown ids are refused');
+select pg_temp.ok((select count(*) from public.report_pdf_files where source_id = pg_temp.ctx('ins_ksa_other_site')::uuid) = 0
+  and (select count(*) from storage.objects where name = pg_temp.ctx('claimL2')::jsonb->>'path') = 0,
+  'tyre man cannot see the other site''s stored row or its object (no signed link can be made)');
+select pg_temp.ok((public.pdf_cache_record_download((pg_temp.ctx('claimL2')::jsonb->>'file_id')::uuid, 'bulk')->>'reason') = 'not_available', 'tyre man: download of the other site''s file refused');
+select pg_temp.ok((select count(*) from public.report_pdf_files where source_id = pg_temp.ctx('ins_ksa_approved')::uuid and status = 'ready') = 4
+  and (select count(*) from storage.objects o join public.report_pdf_files f on f.storage_path = o.name where f.source_id = pg_temp.ctx('ins_ksa_approved')::uuid) = 4,
+  'tyre man can read the stored reports of his own site');
+select pg_temp.ok((select count(*) from public.report_pdf_bulk_requests) = 0, 'the bulk request log is not readable by a tyre man');
+reset role; select pg_temp.login('alpha.admin@staging.tyrepulse.invalid'); set local role authenticated;
+select pg_temp.ok((public.pdf_cache_update_settings(2, null, null)->>'bulk_limit')::int = 2, 'administrator sets the bulk limit to 2');
+reset role; select pg_temp.login('alpha.manager@staging.tyrepulse.invalid'); set local role authenticated;
+select pg_temp.ok(public.pdf_cache_bulk_request('tyre_inspection', array[pg_temp.ctx('ins_ksa_pending')::uuid, pg_temp.ctx('ins_ksa_approved')::uuid, pg_temp.ctx('ins_ksa_obs')::uuid])
+  @> '{"ok":false,"reason":"over_limit","limit":2,"requested":3}'::jsonb, 'a request above the limit is refused by the server');
+select pg_temp.ok((public.pdf_cache_bulk_request('tyre_inspection', array[pg_temp.ctx('ins_ksa_pending')::uuid, pg_temp.ctx('ins_ksa_approved')::uuid, pg_temp.ctx('ins_ksa_approved')::uuid])->>'requested')::int = 2,
+  'a request at the limit is accepted (duplicates count once)');
+select pg_temp.ok((select count(*) from public.report_pdf_bulk_requests where outcome = 'over_limit') = 1
+  and (select count(*) from public.report_pdf_bulk_requests where outcome = 'accepted' and actor is not null) = 2, 'bulk requests are logged with their actor');
+reset role;
+insert into public.system_config (key, value) values ('pdf_bulk_limit', '30') on conflict (key) do update set value = excluded.value;
+select pg_temp.login('beta.manager@staging.tyrepulse.invalid'); set local role authenticated;
+select pg_temp.ok((public.pdf_cache_settings()->>'bulk_limit')::int = 30, 'a company without its own limit uses the platform setting');
+
+-- ---------------------------------------------------------------- 18. owner decision 4: retention
+reset role; select set_config('request.jwt.claims', '', true);
+select pg_temp.ok(not has_function_privilege('authenticated', 'public.pdf_cache_retention_run(integer)', 'execute')
+  and not has_function_privilege('anon', 'public.pdf_cache_retention_run(integer)', 'execute')
+  and not has_function_privilege('anon', 'public.pdf_cache_bulk_request(text,uuid[])', 'execute')
+  and not has_function_privilege('anon', 'public.pdf_cache_purge_confirm(uuid)', 'execute')
+  and not has_function_privilege('anon', 'public.pdf_cache_update_settings(integer,integer,boolean)', 'execute')
+  and not has_function_privilege('authenticated', 'public.pdf_cache_effective_settings(uuid)', 'execute')
+  and not has_function_privilege('authenticated', 'public.pdf_cache_source_scope(text,uuid)', 'execute'),
+  'retention can only be started by cron or the service role; helpers taking an organisation id are internal');
+insert into t_ctx select 'work_old', (pg_temp.ctx('claim2')::jsonb->>'file_id');
+select pg_temp.ok((select status = 'ready' and superseded_at is not null and not immutable and not source_approved from public.report_pdf_files where id = pg_temp.ctx('work_old')::uuid),
+  'fixture: a superseded working copy exists');
+select pg_temp.ok((public.pdf_cache_retention_run(100)->>'marked')::int = 0, 'nothing is marked while copies are younger than the retention time');
+update public.report_pdf_files set superseded_at = now() - interval '100 days' where id = pg_temp.ctx('work_old')::uuid;
+update public.report_pdf_files set superseded_at = now() - interval '900 days' where source_id = pg_temp.ctx('ins_ksa_approved')::uuid and superseded_at is not null;
+select pg_temp.ok((public.pdf_cache_retention_run(100)->>'marked')::int = 0, 'Alpha keeps 120 days: a 100 day old working copy stays');
+update public.report_pdf_files set superseded_at = now() - interval '130 days' where id = pg_temp.ctx('work_old')::uuid;
+select pg_temp.ok((public.pdf_cache_retention_run(100)->>'marked')::int = 1, 'after 130 days the working copy is marked, and only it');
+select pg_temp.ok((select count(*) from public.report_pdf_files where purge_due_at is not null) = 1
+  and (select purge_due_at is not null from public.report_pdf_files where id = pg_temp.ctx('work_old')::uuid)
+  and (select count(*) from public.report_pdf_files where (immutable or source_approved) and purge_due_at is not null) = 0,
+  'approved revisions 900 days old are never marked');
+select pg_temp.ok((public.pdf_cache_retention_run(100)->>'marked')::int = 0, 'a second run marks nothing twice');
+do $$ begin
+  update public.report_pdf_files set purge_due_at = now() where id = pg_temp.ctx('approved_current')::uuid;
+  raise exception 'FAIL: an approved revision was marked for purge';
+exception when sqlstate 'PT409' or check_violation then perform pg_temp.ok(true, 'an approved revision cannot be marked for purge even by hand');
+end $$;
+select pg_temp.ok((select count(*) from storage.objects where name = (select storage_path from public.report_pdf_files where id = pg_temp.ctx('work_old')::uuid)) = 1,
+  'marking removes nothing: the object is still stored');
+select pg_temp.login('alpha.manager@staging.tyrepulse.invalid'); set local role authenticated;
+select pg_temp.ok(public.pdf_cache_purge_list(20) = '[]'::jsonb, 'a manager is not offered anything to purge');
+with d as (delete from storage.objects where bucket_id = 'report-pdfs' returning 1)
+select pg_temp.ok((select count(*) from d) = 0, 'a manager cannot remove any stored report');
+reset role; select pg_temp.login('beta.admin@staging.tyrepulse.invalid'); set local role authenticated;
+with d as (delete from storage.objects where bucket_id = 'report-pdfs' returning 1)
+select pg_temp.ok((select count(*) from d) = 0, 'another company''s administrator cannot remove it');
+select pg_temp.ok((public.pdf_cache_purge_confirm(pg_temp.ctx('work_old')::uuid)->>'reason') = 'not_available', 'another company''s administrator cannot record a purge');
+reset role; select pg_temp.login('alpha.admin@staging.tyrepulse.invalid'); set local role authenticated;
+select pg_temp.ok(jsonb_array_length(public.pdf_cache_purge_list(20)) = 1 and (public.pdf_cache_purge_list(20)->0->>'id') = pg_temp.ctx('work_old'), 'the administrator is offered exactly the marked copy');
+select pg_temp.ok((public.pdf_cache_purge_confirm(pg_temp.ctx('work_old')::uuid)->>'reason') = 'object_still_present', 'a purge cannot be recorded while the object exists');
+select pg_temp.ok((public.pdf_cache_purge_confirm(pg_temp.ctx('approved_current')::uuid)->>'reason') = 'approved_never_purged', 'an approved revision cannot be recorded as purged');
+with d as (delete from storage.objects where bucket_id = 'report-pdfs' returning name)
+select pg_temp.ok((select count(*) from d) = 1 and (select name from d) = (select storage_path from public.report_pdf_files where id = pg_temp.ctx('work_old')::uuid),
+  'the administrator can remove the marked object and nothing else (approved and current objects stay)');
+select pg_temp.ok((public.pdf_cache_purge_confirm(pg_temp.ctx('work_old')::uuid)->>'ok')::boolean, 'purge recorded once the object is gone');
+reset role;
+select pg_temp.ok((select purged_at is not null and sha256 is not null and status = 'ready' from public.report_pdf_files where id = pg_temp.ctx('work_old')::uuid)
+  and (select count(*) from public.report_pdf_events where file_id = pg_temp.ctx('work_old')::uuid and event = 'purged' and actor is not null) = 1
+  and (select count(*) from public.report_pdf_events where file_id = pg_temp.ctx('work_old')::uuid and event = 'generated') = 1,
+  'the row and its audit trail stay as the record of the purged copy');
+select pg_temp.ok((select count(*) from storage.objects o join public.report_pdf_files f on f.storage_path = o.name
+   where f.source_id = pg_temp.ctx('ins_ksa_approved')::uuid and f.status = 'ready') = 4, 'all approved objects are still stored after the purge');
 
 reset role;
 select count(*) || ' checks passed' as result from t_pass;

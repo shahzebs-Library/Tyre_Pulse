@@ -68,6 +68,17 @@ describe('bulk PDF ZIP', () => {
     expect(out.manifest.reports[11].reason).toMatch(/Over the limit of 10/)
   })
 
+  it('a record the server did not authorise is listed as missing and never requested', async () => {
+    const items = ['mine', 'other-site', 'other-company'].map((sourceId) => ({ sourceId }))
+    const ensure = vi.fn(async (item) => ({ blob: new Blob([item.sourceId]), fileName: `${item.sourceId}.pdf`, cached: true, stored: true }))
+    const out = await buildPdfZip({ type: 'tyre_inspection', items, ensure, allowed: new Set(['mine']) })
+    expect(ensure).toHaveBeenCalledTimes(1)
+    expect(ensure.mock.calls[0][0].sourceId).toBe('mine')
+    expect(out).toMatchObject({ included: 1, missing: 2 })
+    expect(out.manifest.reports.filter((r) => r.reason === 'This report is not available to your account.').map((r) => r.source_id))
+      .toEqual(['other-site', 'other-company'])
+  })
+
   it('a cancelled download lists the rest as missing', async () => {
     let cancelled = false
     const items = Array.from({ length: 6 }, (_, i) => ({ sourceId: `s${i}` }))

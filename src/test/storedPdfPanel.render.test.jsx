@@ -59,11 +59,38 @@ describe('StoredPdfPanel', () => {
     const onRegenerate = vi.fn(async () => {})
     render(<StoredPdfPanel buildRequest={req} refreshKey="a" canRegenerate isAdmin onRegenerate={onRegenerate} />)
     fireEvent.click(await screen.findByRole('button', { name: /Regenerate latest/ }))
-    const replace = screen.getByRole('button', { name: 'Replace' })
+    const replace = screen.getByRole('button', { name: 'Regenerate' })
     expect(replace.disabled).toBe(true)
-    fireEvent.change(screen.getByLabelText(/Reason for replacing/), { target: { value: 'Logo was missing' } })
+    fireEvent.change(screen.getByLabelText(/Reason for regenerating/), { target: { value: 'Logo was missing' } })
     fireEvent.click(replace)
     await waitFor(() => expect(onRegenerate).toHaveBeenCalledWith({ reason: 'Logo was missing' }))
+  })
+
+  it('a manager is offered Regenerate on an approved report only when the server says he is authorised', async () => {
+    api.look = { ok: true, state: 'ready', file, previous: null, can_regenerate: true, can_regenerate_approved: false }
+    const { unmount } = render(<StoredPdfPanel buildRequest={req} refreshKey="a" canRegenerate isAdmin={false} onRegenerate={vi.fn()} />)
+    expect(await screen.findByText('Ready')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Regenerate latest/ })).toBeNull()
+    unmount()
+    api.look = { ...api.look, can_regenerate_approved: true }
+    const onRegenerate = vi.fn(async () => {})
+    render(<StoredPdfPanel buildRequest={req} refreshKey="b" canRegenerate isAdmin={false} onRegenerate={onRegenerate} />)
+    fireEvent.click(await screen.findByRole('button', { name: /Regenerate latest/ }))
+    // never without a reason, and the wording says the original is kept
+    expect(onRegenerate).not.toHaveBeenCalled()
+    expect(screen.getByLabelText(/the approved original is kept/)).toBeTruthy()
+  })
+
+  it('a regenerated approved revision is listed with its reason beside the original', async () => {
+    api.look = { ok: true, state: 'ready', file: { ...file, id: 'f2', regenerated_from: 'f1' }, previous: null, can_regenerate_approved: false }
+    api.versions = [
+      { id: 'f2', storage_path: 'o/t/s/k.g2.pdf', completed_at: '2026-11-15T10:00:00Z', immutable: true, regenerated_from: 'f1', regenerate_reason: 'Customer asked for a fresh print' },
+      { id: 'f1', storage_path: file.path, completed_at: file.completed_at, immutable: true },
+    ]
+    render(<StoredPdfPanel buildRequest={req} refreshKey="a" />)
+    expect(await screen.findByText('Approved revision (regenerated), locked')).toBeTruthy()
+    expect(screen.getByText(/Previous stored versions \(1\), not current/)).toBeTruthy()
+    expect(screen.getByText(/approved revision/)).toBeTruthy()
   })
 
   it('re-reads only when refreshKey changes, not on every render', async () => {

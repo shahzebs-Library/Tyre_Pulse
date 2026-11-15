@@ -76,6 +76,47 @@ export function recordPdfDownload(fileId, via = 'single') {
   return rpc('pdf_cache_record_download', { p_file: fileId, p_via: via }, '').catch(() => null)
 }
 
+/** The company's stored-PDF settings and what the caller may do. null before the migration is applied. */
+export async function getPdfSettings() {
+  try {
+    const s = await rpc('pdf_cache_settings', {}, '')
+    return s?.ok ? s : null
+  } catch { return null }
+}
+
+/** Administrator only. Pass only the settings to change. */
+export function updatePdfSettings({ bulkLimit = null, retentionDays = null, managerRegenerate = null } = {}) {
+  return rpc('pdf_cache_update_settings', { p_bulk_limit: bulkLimit, p_retention_days: retentionDays, p_manager_regenerate: managerRegenerate },
+    'Could not save the stored PDF settings. Retry.')
+}
+
+/**
+ * Ask the server before a bulk download: it enforces the company's limit and answers with
+ * the records this account is authorised to see. Returns null when the server path is not
+ * set up yet (the client-side limit then applies on its own).
+ */
+export async function requestBulkPdf(type, sourceIds) {
+  try { return await rpc('pdf_cache_bulk_request', { p_type: type, p_sources: sourceIds }, 'Could not start the bulk download. Retry.') }
+  catch (err) { if (isPdfCacheNotProvisioned(err)) return null; throw err }
+}
+
+/** Retention: working copies whose time is up (administrator; [] for everyone else). */
+export async function listPdfPurgeDue(limit = 20) {
+  try { return (await rpc('pdf_cache_purge_list', { p_limit: limit }, '')) || [] }
+  catch { return [] }
+}
+
+/** Remove marked objects. The storage policy refuses anything that is not marked, or is approved. */
+export async function removePdfObjects(paths) {
+  const { data, error } = await supabase.storage.from(PDF_BUCKET).remove(paths)
+  if (error) throw toServiceError(error, 'Could not remove the expired report copies.')
+  return (data || []).map((o) => o.name)
+}
+
+export function confirmPdfPurge(fileId) {
+  return rpc('pdf_cache_purge_confirm', { p_file: fileId }, '').catch(() => null)
+}
+
 /** Open requests left by the database trigger for the caller's scope. [] when the queue is not set up. */
 export async function listPendingPdfRequests(type, limit = 3) {
   try { return (await rpc('pdf_cache_pending', { p_type: type, p_limit: limit }, '')) || [] }
@@ -109,12 +150,12 @@ export async function downloadPdfBytes(path) {
 }
 
 const VERSION_COLS = 'id,report_type,source_id,status,generation,file_name,bytes,sha256,storage_path,immutable,'
-  + 'source_approved,superseded_at,completed_at,created_at,template_version'
+  + 'source_approved,superseded_at,completed_at,created_at,template_version,regenerated_from,regenerate_reason,created_by'
 
 /** Stored revisions of one document, newest first (current and previous). RLS scopes the read. */
 export async function listPdfVersions(type, sourceId) {
   const { data, error } = await supabase.from('report_pdf_files').select(VERSION_COLS)
-    .eq('report_type', type).eq('source_id', sourceId).eq('status', 'ready')
+    .eq('report_type', type).eq('source_id', sourceId).eq('status', 'ready').is('purged_at', null)
     .order('completed_at', { ascending: false }).limit(25)
   if (error) {
     if (isNotProvisioned(error)) return []

@@ -17,17 +17,18 @@ import { sha256HexOfBytes } from './cacheKey'
 import { REPORT_LABELS } from './templates'
 import { csvCell } from '../csvSafe.js'
 
-export const BULK_LIMITS = Object.freeze([10, 50, 100])
 export const DEFAULT_BULK_LIMIT = 50
+export const MAX_BULK_LIMIT = 500
 export const BULK_CONCURRENCY = 2
 
-/** The configured limit, snapped to one of the allowed sizes (never above 100). */
+/**
+ * The configured limit: any whole number from 1 to 500, 50 when nothing usable is set.
+ * MIRROR: public.pdf_cache_effective_settings (the server enforces the same range).
+ */
 export function resolveBulkLimit(configured) {
-  const n = Number(configured)
+  const n = Math.floor(Number(configured))
   if (!Number.isFinite(n) || n <= 0) return DEFAULT_BULK_LIMIT
-  let best = BULK_LIMITS[0]
-  for (const allowed of BULK_LIMITS) if (n >= allowed) best = allowed
-  return best
+  return Math.min(MAX_BULK_LIMIT, n)
 }
 
 /** Two records can share a file name (same asset, site and day). Keep both. */
@@ -68,11 +69,13 @@ async function pool(items, size, worker) {
  * @param {Array<{sourceId: string, label?: string}>} p.items   the selected records
  * @param {(item) => Promise<object>} p.ensure  returns a getOrCreatePdf result for one record
  * @param {number} [p.limit]       records above the limit are listed as missing, not dropped
+ * @param {Set<string>|null} [p.allowed]  ids the server authorised for this account (null = not checked);
+ *                                 a record outside it is listed as missing and never requested
  * @param {(progress: {done: number, total: number, phase: string}) => void} [p.onProgress]
  * @param {() => boolean} [p.isCancelled]
  * @returns {Promise<{ blob: Blob, manifest: object, included: number, missing: number }>}
  */
-export async function buildPdfZip({ type, items, ensure, limit = DEFAULT_BULK_LIMIT, concurrency = BULK_CONCURRENCY,
+export async function buildPdfZip({ type, items, ensure, limit = DEFAULT_BULK_LIMIT, allowed = null, concurrency = BULK_CONCURRENCY,
   onProgress = () => {}, isCancelled = () => false, now = new Date() }) {
   const { default: JSZip } = await import('jszip')
   const zip = new JSZip()
@@ -89,6 +92,11 @@ export async function buildPdfZip({ type, items, ensure, limit = DEFAULT_BULK_LI
   await pool(within, concurrency, async (item, i) => {
     const base = { record: item.label || item.sourceId, source_id: item.sourceId }
     if (isCancelled()) { rows[i] = { ...base, status: 'missing', reason: 'The download was cancelled.' }; return }
+    if (allowed && !allowed.has(String(item.sourceId))) {
+      rows[i] = { ...base, status: 'missing', reason: 'This report is not available to your account.' }
+      done += 1; onProgress({ done, total: within.length, phase: 'reports' })
+      return
+    }
     try {
       const r = await ensure(item)
       const blob = r.blob || await fetchVerifiedPdf(r.file)

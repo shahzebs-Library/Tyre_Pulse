@@ -224,3 +224,41 @@ export async function fetchVerifiedPdf(file) {
   }
   return blob
 }
+
+/**
+ * Bulk download gate. The server enforces the company's limit and answers with the records
+ * this account may see; anything else is listed as missing in the manifest and never requested.
+ * Returns { limit, allowed } where allowed is null when the server path is not set up yet.
+ */
+export async function authorizeBulk(type, sourceIds, fallbackLimit) {
+  const ids = [...new Set((sourceIds || []).map(String))]
+  const res = await api.requestBulkPdf(type, ids)
+  if (res === null) return { limit: fallbackLimit, allowed: null }
+  if (!res.ok) {
+    const msg = res.reason === 'over_limit' && res.limit
+      ? `Up to ${res.limit} reports can be downloaded at once. Select fewer records and download again.`
+      : reasonMessage(res.reason)
+    throw new PdfCacheError(msg, res.reason)
+  }
+  return { limit: res.limit, allowed: new Set((res.allowed || []).map(String)) }
+}
+
+/**
+ * Retention housekeeping, run quietly in an administrator's browser. The database only MARKS
+ * working copies whose retention time is up; this removes those objects through the Storage API
+ * (the storage policy refuses anything unmarked or approved) and records each purge.
+ * Never throws. Returns the number of copies purged.
+ */
+export async function sweepPdfRetention(limit = 20) {
+  try {
+    const due = await api.listPdfPurgeDue(limit)
+    if (!due.length) return 0
+    await api.removePdfObjects(due.map((d) => d.path)).catch(() => [])
+    let purged = 0
+    for (const d of due) {
+      const r = await api.confirmPdfPurge(d.id)   // refuses while the object still exists
+      if (r?.ok) purged += 1
+    }
+    return purged
+  } catch { return 0 }
+}

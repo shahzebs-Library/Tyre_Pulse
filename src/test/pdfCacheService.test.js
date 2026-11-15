@@ -63,11 +63,15 @@ vi.mock('../lib/api/pdfCache', () => {
     recordPdfDownload: vi.fn(async () => ({ ok: true })),
     signedPdfUrl: vi.fn(async (path) => `https://signed.example/${path}`),
     downloadPdfBytes: vi.fn(async (path) => backend.objects.get(path)),
+    requestBulkPdf: vi.fn(async () => backend.bulk),
+    listPdfPurgeDue: vi.fn(async () => backend.due || []),
+    removePdfObjects: vi.fn(async (paths) => { backend.removed = paths.filter((p) => !p.includes('approved')); return backend.removed }),
+    confirmPdfPurge: vi.fn(async (id) => (backend.removed || []).some((p) => p.includes(id)) ? { ok: true } : { ok: false, reason: 'object_still_present' }),
   }
 })
 
 import * as api from '../lib/api/pdfCache'
-import { getOrCreatePdf, fetchVerifiedPdf, PdfCacheError } from '../lib/pdfCache/service'
+import { getOrCreatePdf, fetchVerifiedPdf, PdfCacheError, authorizeBulk, sweepPdfRetention } from '../lib/pdfCache/service'
 import { sha256HexOfBytes } from '../lib/pdfCache/cacheKey'
 
 const REQ = { type: 'tyre_inspection', sourceId: 'src-1', brandingRev: 'b-1', fileName: 'Tyre Insp TM400.pdf' }
@@ -216,5 +220,34 @@ describe('getOrCreatePdf', () => {
     seen.length = 0
     await getOrCreatePdf({ ...REQ, generate: gen(), onStatus: (s) => seen.push(s) })
     expect(seen).toEqual(['checking', 'ready'])
+  })
+})
+
+describe('bulk download gate and retention sweep', () => {
+  it('uses the limit and the authorised ids the server returns', async () => {
+    backend.bulk = { ok: true, limit: 50, requested: 3, allowed: ['a', 'b'], refused: 1 }
+    const gate = await authorizeBulk('tyre_inspection', ['a', 'b', 'c', 'a'], 10)
+    expect(api.requestBulkPdf).toHaveBeenCalledWith('tyre_inspection', ['a', 'b', 'c'])
+    expect(gate.limit).toBe(50)
+    expect([...gate.allowed]).toEqual(['a', 'b'])
+  })
+
+  it('a request above the company limit is refused with the limit in the message', async () => {
+    backend.bulk = { ok: false, reason: 'over_limit', limit: 50, requested: 80 }
+    await expect(authorizeBulk('tyre_inspection', ['a'], 50)).rejects.toMatchObject({ reason: 'over_limit', message: expect.stringContaining('Up to 50 reports') })
+  })
+
+  it('before the server path exists the client limit applies and nothing is filtered', async () => {
+    backend.bulk = null
+    expect(await authorizeBulk('tyre_inspection', ['a'], 50)).toEqual({ limit: 50, allowed: null })
+  })
+
+  it('the retention sweep records a purge only for copies the storage service really removed', async () => {
+    backend.due = [{ id: 'w1', path: 'org/t/s/w1.pdf' }, { id: 'approved1', path: 'org/t/s/approved1.pdf' }]
+    expect(await sweepPdfRetention()).toBe(1)
+    expect(api.removePdfObjects).toHaveBeenCalledWith(['org/t/s/w1.pdf', 'org/t/s/approved1.pdf'])
+    expect(api.confirmPdfPurge).toHaveBeenCalledTimes(2)
+    backend.due = []
+    expect(await sweepPdfRetention()).toBe(0)
   })
 })

@@ -5,8 +5,9 @@ import { fileURLToPath } from 'node:url'
 import {
   backoffMs, afterFailure, effectiveState, displayStatus, reasonMessage, STATUSES, MAX_ATTEMPTS, REASON_MESSAGES,
 } from '../lib/pdfCache/state'
-import { resolveBulkLimit, uniqueName, manifestCsv, BULK_LIMITS } from '../lib/pdfCache/bulkZip'
+import { resolveBulkLimit, uniqueName, manifestCsv, DEFAULT_BULK_LIMIT, MAX_BULK_LIMIT } from '../lib/pdfCache/bulkZip'
 
+const RETENTION_SQL = readFileSync(fileURLToPath(new URL('../../supabase/pending_migrations/20261117093000_report_pdf_retention_bulk.sql', import.meta.url)), 'utf8')
 const SQL = readFileSync(fileURLToPath(new URL('../../supabase/pending_migrations/20261117090000_report_pdf_cache.sql', import.meta.url)), 'utf8')
 
 describe('pdf cache job state machine', () => {
@@ -66,9 +67,23 @@ describe('pdf cache job state machine', () => {
 })
 
 describe('bulk download helpers', () => {
-  it('the limit snaps to 10, 50 or 100', () => {
-    expect(BULK_LIMITS).toEqual([10, 50, 100])
-    expect([undefined, 0, 'x', 5, 10, 49, 50, 99, 100, 5000].map(resolveBulkLimit)).toEqual([50, 50, 50, 10, 10, 10, 50, 50, 100, 100])
+  it('the limit is configurable: any whole number from 1 to 500, 50 when nothing usable is set', () => {
+    expect([DEFAULT_BULK_LIMIT, MAX_BULK_LIMIT]).toEqual([50, 500])
+    expect([undefined, null, 0, -3, 'x', 1, 5, 25.9, 50, 99, 500, 5000].map(resolveBulkLimit)).toEqual([50, 50, 50, 50, 50, 1, 5, 25, 50, 99, 500, 500])
+  })
+
+  it('the server enforces the same range, the 90 day retention minimum and never purges an approved revision', () => {
+    expect(SQL).toMatch(/bulk_limit\s+integer check \(bulk_limit is null or bulk_limit between 1 and 500\)/)
+    expect(SQL).toMatch(/superseded_retention_days between 90 and 3650/)
+    expect(SQL).toContain("'reason', 'retention_below_minimum'")
+    expect(SQL).toContain('report_pdf_files_approved_never_purged check (not immutable or (purge_due_at is null and purged_at is null))')
+    expect(SQL).toMatch(/manager_regenerate_approved boolean not null default false/)
+    // the retention job: marks only, never an approved revision, and is not callable by signed-in users
+    expect(RETENTION_SQL).toMatch(/not f\.immutable and not f\.source_approved/)
+    expect(RETENTION_SQL).toContain('greatest(90, e.retention_days)')
+    expect(RETENTION_SQL).toContain('revoke execute on function public.pdf_cache_retention_run(integer) from authenticated')
+    expect(RETENTION_SQL).not.toMatch(/errcode\s*=\s*'40001'/)
+    expect(RETENTION_SQL.trim().endsWith('select anum_integration.apply_reader_policies();')).toBe(true)
   })
 
   it('two reports with the same name both survive', () => {

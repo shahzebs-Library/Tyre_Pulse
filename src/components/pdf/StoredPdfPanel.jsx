@@ -1,7 +1,7 @@
 /**
  * The stored-PDF state of one document: Ready / Preparing / Update available / Failed,
- * View PDF, Regenerate (managers; an approved revision needs an administrator and a
- * reason) and the previous stored versions.
+ * View PDF, Regenerate (managers; an approved revision needs explicit authorisation and a
+ * reason, and is added beside the original, which is kept) and the previous stored versions.
  *
  * Renders nothing until the PDF cache is set up in the database, so it is safe to ship
  * before the migration.
@@ -23,7 +23,7 @@ const kb = (n) => (n ? `${Math.max(1, Math.round(n / 1024))} KB` : '')
  * @param {any} props.refreshKey                      the ONLY re-read trigger: change it when the document, its
  *                                                    printed content or the stored copy may have changed
  * @param {boolean} [props.canRegenerate]             manager, director or administrator
- * @param {boolean} [props.isAdmin]
+ * @param {boolean} [props.isAdmin]                   used only until the server says who may regenerate an approved report
  * @param {(opts: {reason: string|null}) => Promise<void>} [props.onRegenerate]
  */
 export default function StoredPdfPanel({ buildRequest, refreshKey, canRegenerate = false, isAdmin = false, onRegenerate }) {
@@ -64,6 +64,10 @@ export default function StoredPdfPanel({ buildRequest, refreshKey, canRegenerate
   const ds = displayStatus(look)
   const current = look.state === 'ready' ? look.file : null
   const previous = versions.filter((v) => !current || v.id !== current.id)
+  // The server decides who may replace an approved report (administrator, or a manager the
+  // company authorised). `isAdmin` is only the answer for a server that does not say yet.
+  const mayReplaceApproved = typeof look.can_regenerate_approved === 'boolean' ? look.can_regenerate_approved : isAdmin
+  const approvedDoc = !!current?.immutable || !!look.source_approved && versions.some((v) => v.immutable)
   const regenerate = async (withReason) => {
     setBusy(true); setMsg('')
     try { await onRegenerate({ reason: withReason || null }); setAskReason(false); setReason(''); await load() }
@@ -83,7 +87,7 @@ export default function StoredPdfPanel({ buildRequest, refreshKey, canRegenerate
           <FileCheck2 size={16} aria-hidden />
           <span className="font-medium">Stored PDF</span>
           <span className="rounded-full border px-2 py-0.5 text-xs" style={{ color: TONE[ds.tone], borderColor: TONE[ds.tone] }}>{ds.label}</span>
-          {current?.immutable && <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Approved revision, locked</span>}
+          {current?.immutable && <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{current.regenerated_from ? 'Approved revision (regenerated), locked' : 'Approved revision, locked'}</span>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {current && (
@@ -91,9 +95,9 @@ export default function StoredPdfPanel({ buildRequest, refreshKey, canRegenerate
               <Eye size={14} aria-hidden /> View PDF
             </button>
           )}
-          {canRegenerate && onRegenerate && (!current?.immutable || isAdmin) && (
+          {canRegenerate && onRegenerate && (!approvedDoc || mayReplaceApproved) && (
             <button type="button" className="btn-secondary inline-flex min-h-[36px] items-center gap-1 text-xs" disabled={busy}
-              onClick={() => (current?.immutable ? setAskReason(true) : regenerate(null))}>
+              onClick={() => (approvedDoc ? setAskReason(true) : regenerate(null))}>
               <RefreshCw size={14} aria-hidden /> {busy ? 'Preparing...' : 'Regenerate latest'}
             </button>
           )}
@@ -110,10 +114,10 @@ export default function StoredPdfPanel({ buildRequest, refreshKey, canRegenerate
       {askReason && (
         <div className="mt-2 flex flex-wrap items-end gap-2">
           <label className="flex-1 text-xs">
-            Reason for replacing the approved copy
+            Reason for regenerating this approved report (the approved original is kept)
             <input className="input mt-1 w-full text-sm" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} />
           </label>
-          <button type="button" className="btn-secondary min-h-[36px] text-xs" disabled={busy || reason.trim().length < 5} onClick={() => regenerate(reason.trim())}>Replace</button>
+          <button type="button" className="btn-secondary min-h-[36px] text-xs" disabled={busy || reason.trim().length < 5} onClick={() => regenerate(reason.trim())}>Regenerate</button>
           <button type="button" className="btn-secondary min-h-[36px] text-xs" disabled={busy} onClick={() => setAskReason(false)}>Cancel</button>
         </div>
       )}
@@ -124,7 +128,7 @@ export default function StoredPdfPanel({ buildRequest, refreshKey, canRegenerate
           <ul className="mt-1 space-y-1">
             {previous.map((v) => (
               <li key={v.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                <span>{fmt(v.completed_at)}{v.immutable ? ', approved revision' : ', working copy'}{v.bytes ? `, ${kb(v.bytes)}` : ''}</span>
+                <span>{fmt(v.completed_at)}{v.immutable ? (v.regenerated_from ? ', approved revision (regenerated)' : ', approved revision') : ', working copy'}{v.bytes ? `, ${kb(v.bytes)}` : ''}{v.regenerate_reason ? `. Reason: ${v.regenerate_reason}` : ''}</span>
                 <button type="button" className="underline min-h-[32px]" onClick={() => view(v)}>View</button>
               </li>
             ))}

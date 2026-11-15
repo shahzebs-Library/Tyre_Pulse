@@ -8,12 +8,15 @@
 --   storage bucket  report-pdfs (private, application/pdf only, 25 MB per file)
 --   public.report_pdf_files    one row per stored PDF revision (and per generation job)
 --   public.report_pdf_events   append-only audit of generation and download events
+--   public.report_pdf_settings (+ _events)  per-company switches: may a manager replace an
+--                   approved report (default NO), bulk download limit, retention days (>= 90)
 --   pure functions  pdf_canonical_json, pdf_sha256_hex, pdf_cache_compose_key
 --                   (SQL mirror of src/lib/pdfCache/cacheKey.js, pinned by
 --                    src/test/fixtures/pdfCacheKeyCases.json)
 --   RPCs            pdf_cache_lookup, pdf_cache_claim, pdf_cache_heartbeat,
 --                   pdf_cache_complete, pdf_cache_fail, pdf_cache_regenerate,
---                   pdf_cache_record_download
+--                   pdf_cache_record_download, pdf_cache_settings, pdf_cache_update_settings,
+--                   pdf_cache_can_regenerate_approved
 --   storage.objects policies for the bucket (read / upload only through a row the
 --                   caller is authorised for)
 --
@@ -60,6 +63,12 @@
 --   drop function if exists public.pdf_cache_source(text,uuid);
 --   drop function if exists public.pdf_cache_can_see(uuid,text,text);
 --   drop function if exists public.pdf_cache_source_visible(text,uuid);
+--   drop function if exists public.pdf_cache_update_settings(integer,integer,boolean);
+--   drop function if exists public.pdf_cache_settings();
+--   drop function if exists public.pdf_cache_can_regenerate_approved();
+--   drop function if exists public.pdf_cache_effective_settings(uuid);
+--   drop table if exists public.report_pdf_settings_events;
+--   drop table if exists public.report_pdf_settings;
 --   drop table if exists public.report_pdf_events;
 --   drop table if exists public.report_pdf_files;
 --   drop function if exists public.report_pdf_files_guard();
@@ -177,11 +186,19 @@ create table if not exists public.report_pdf_files (
   superseded_at    timestamptz,
   superseded_by    uuid references public.report_pdf_files(id),
   origin           text not null default 'user' check (origin in ('user','auto','bulk','regenerate')),
+  -- a regeneration NEVER overwrites: it is a new row beside the one it follows
+  regenerated_from uuid references public.report_pdf_files(id),
+  regenerate_reason text check (regenerate_reason is null or length(regenerate_reason) <= 300),
+  -- retention (working copies only; see 20261117093000): marked due, object removed, then recorded
+  purge_due_at     timestamptz,
+  purged_at        timestamptz,
   created_by       uuid,
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now(),
   completed_at     timestamptz,
-  constraint report_pdf_files_ready_has_bytes check (status <> 'ready' or (bytes is not null and sha256 is not null))
+  constraint report_pdf_files_ready_has_bytes check (status <> 'ready' or (bytes is not null and sha256 is not null)),
+  -- an approved revision is never purged by retention
+  constraint report_pdf_files_approved_never_purged check (not immutable or (purge_due_at is null and purged_at is null))
 );
 -- one CURRENT row per organisation and key; superseded revisions are kept as history
 create unique index if not exists report_pdf_files_current_key
@@ -201,7 +218,7 @@ create table if not exists public.report_pdf_events (
   source_id       uuid not null,
   event           text not null check (event in
                     ('claimed','generated','failed','retry_scheduled','lease_recovered','superseded',
-                     'regenerate_requested','downloaded','manual_retry','released')),
+                     'regenerate_requested','downloaded','manual_retry','released','purge_due','purged')),
   actor           uuid,
   detail          jsonb not null default '{}'::jsonb,
   created_at      timestamptz not null default now()
@@ -217,12 +234,19 @@ set search_path = public, pg_temp
 as $$
 begin
   if tg_op = 'DELETE' then
-    if old.immutable and coalesce(current_setting('pdf_cache.allow_purge', true), '') <> 'on' then
+    -- no switch, no role: an approved revision is never removed row by row
+    if old.immutable or old.source_approved then
       raise exception 'An approved report revision cannot be removed.' using errcode = 'PT409';
     end if;
     return old;
   end if;
   new.updated_at := now();
+  if (old.immutable or new.immutable) and (new.purge_due_at is not null or new.purged_at is not null) then
+    raise exception 'An approved report revision is never purged.' using errcode = 'PT409';
+  end if;
+  if old.purged_at is not null and new.purged_at is distinct from old.purged_at then
+    raise exception 'A purge record cannot be changed.' using errcode = 'PT409';
+  end if;
   if old.status = 'ready' then
     if new.status is distinct from 'ready'
        or new.sha256 is distinct from old.sha256 or new.bytes is distinct from old.bytes
@@ -232,6 +256,9 @@ begin
        or new.client_rev is distinct from old.client_rev or new.organisation_id is distinct from old.organisation_id
        or new.report_type is distinct from old.report_type or new.source_id is distinct from old.source_id
        or new.generation is distinct from old.generation or new.completed_at is distinct from old.completed_at
+       or new.regenerated_from is distinct from old.regenerated_from
+       or new.regenerate_reason is distinct from old.regenerate_reason
+       or new.created_by is distinct from old.created_by or new.created_at is distinct from old.created_at
        or (old.immutable and not new.immutable) then
       raise exception 'A stored report revision cannot be changed.' using errcode = 'PT409';
     end if;
@@ -400,6 +427,173 @@ revoke execute on function public.pdf_cache_source(text,uuid) from public;
 revoke execute on function public.pdf_cache_source(text,uuid) from anon;
 revoke execute on function public.pdf_cache_source(text,uuid) from authenticated;
 
+-- ----------------------------------------------------------------------------- per-company settings
+-- One row per company, written only by pdf_cache_update_settings (administrator).
+--   manager_regenerate_approved  default FALSE: a manager or director may replace an
+--                                approved report only when the company switched this on
+--                                (or the person holds the grant report_pdfs / regenerate_approved)
+--   bulk_limit                   reports in one bulk download; null = platform default
+--                                (system_config pdf_bulk_limit, else 50)
+--   superseded_retention_days    how long superseded working copies are kept; never below 90
+create table if not exists public.report_pdf_settings (
+  organisation_id             uuid primary key,
+  manager_regenerate_approved boolean not null default false,
+  bulk_limit                  integer check (bulk_limit is null or bulk_limit between 1 and 500),
+  superseded_retention_days   integer check (superseded_retention_days is null
+                                             or superseded_retention_days between 90 and 3650),
+  updated_by                  uuid,
+  updated_at                  timestamptz not null default now()
+);
+create table if not exists public.report_pdf_settings_events (
+  id              bigint generated always as identity primary key,
+  organisation_id uuid not null,
+  actor           uuid,
+  before          jsonb,
+  after           jsonb not null,
+  created_at      timestamptz not null default now()
+);
+create index if not exists report_pdf_settings_events_org on public.report_pdf_settings_events (organisation_id, created_at desc);
+
+-- INTERNAL (takes an organisation id): the settings in force for a company.
+create or replace function public.pdf_cache_effective_settings(p_org uuid)
+returns table (bulk_limit integer, retention_days integer, manager_regenerate_approved boolean)
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  s public.report_pdf_settings%rowtype;
+  v_default integer := 50;
+  v_raw text;
+begin
+  select * into s from public.report_pdf_settings r where r.organisation_id = p_org;
+  begin
+    select nullif(regexp_replace(coalesce(nullif(c.value_text, ''), c.value, ''), '[^0-9]', '', 'g'), '')
+      into v_raw from public.system_config c where c.key = 'pdf_bulk_limit';
+    if v_raw is not null and length(v_raw) <= 4 then v_default := least(500, greatest(1, v_raw::integer)); end if;
+  exception when others then v_default := 50;
+  end;
+  return query select coalesce(s.bulk_limit, v_default),
+                      greatest(90, coalesce(s.superseded_retention_days, 90)),
+                      coalesce(s.manager_regenerate_approved, false);
+end $$;
+revoke execute on function public.pdf_cache_effective_settings(uuid) from public;
+revoke execute on function public.pdf_cache_effective_settings(uuid) from anon;
+revoke execute on function public.pdf_cache_effective_settings(uuid) from authenticated;
+
+-- May the CALLER replace an approved report? Administrator: yes. Manager or director:
+-- only when their company switched it on, or the person holds an explicit grant.
+-- An explicit revoke always wins. Everyone else: no.
+create or replace function public.pdf_cache_can_regenerate_approved()
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_on boolean := false;
+begin
+  if v_uid is null or not coalesce(public.app_is_active(), false) then return false; end if;
+  if coalesce(public.is_super_admin(), false) or coalesce(public.app_is_org_admin(), false) then return true; end if;
+  if not coalesce(public.app_is_elevated(), false) then return false; end if;
+  if exists (select 1 from public.user_access_grants g
+              where g.user_id = v_uid and g.module_key = 'report_pdfs' and g.capability = 'regenerate_approved'
+                and g.effect = 'revoke' and (g.expires_at is null or g.expires_at > now())) then
+    return false;
+  end if;
+  select e.manager_regenerate_approved into v_on from public.pdf_cache_effective_settings(public.app_current_org()) e;
+  return coalesce(v_on, false) or coalesce(public.app_user_can('report_pdfs', 'regenerate_approved'), false);
+end $$;
+
+-- The settings the caller's company runs with, and what the caller may do.
+create or replace function public.pdf_cache_settings()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare e record;
+begin
+  if auth.uid() is null or not coalesce(public.app_is_active(), false) or public.app_current_org() is null then
+    return jsonb_build_object('ok', false, 'reason', 'not_available');
+  end if;
+  select * into e from public.pdf_cache_effective_settings(public.app_current_org());
+  return jsonb_build_object('ok', true, 'bulk_limit', e.bulk_limit, 'retention_days', e.retention_days,
+    'retention_min_days', 90, 'bulk_limit_max', 500,
+    'manager_regenerate_approved', e.manager_regenerate_approved,
+    'can_regenerate_approved', public.pdf_cache_can_regenerate_approved(),
+    'can_edit', coalesce(public.app_is_org_admin(), false));
+end $$;
+
+-- Administrator only. A null argument leaves that setting as it is.
+create or replace function public.pdf_cache_update_settings(
+  p_bulk_limit integer default null, p_retention_days integer default null, p_manager_regenerate boolean default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_org uuid := public.app_current_org();
+  b public.report_pdf_settings%rowtype;
+  a public.report_pdf_settings%rowtype;
+begin
+  if auth.uid() is null or v_org is null or not coalesce(public.app_is_active(), false)
+     or not coalesce(public.app_is_org_admin(), false) then
+    return jsonb_build_object('ok', false, 'reason', 'admin_only');
+  end if;
+  if p_bulk_limit is not null and p_bulk_limit not between 1 and 500 then
+    return jsonb_build_object('ok', false, 'reason', 'bulk_limit_range');
+  end if;
+  if p_retention_days is not null and p_retention_days < 90 then
+    return jsonb_build_object('ok', false, 'reason', 'retention_below_minimum');
+  end if;
+  if p_retention_days is not null and p_retention_days > 3650 then
+    return jsonb_build_object('ok', false, 'reason', 'retention_range');
+  end if;
+  select * into b from public.report_pdf_settings r where r.organisation_id = v_org for update;
+  insert into public.report_pdf_settings as r (organisation_id, manager_regenerate_approved, bulk_limit,
+                                               superseded_retention_days, updated_by, updated_at)
+  values (v_org, coalesce(p_manager_regenerate, false), p_bulk_limit, p_retention_days, auth.uid(), now())
+  on conflict (organisation_id) do update
+     set manager_regenerate_approved = coalesce(p_manager_regenerate, r.manager_regenerate_approved),
+         bulk_limit = coalesce(p_bulk_limit, r.bulk_limit),
+         superseded_retention_days = coalesce(p_retention_days, r.superseded_retention_days),
+         updated_by = auth.uid(), updated_at = now()
+  returning * into a;
+  insert into public.report_pdf_settings_events (organisation_id, actor, before, after)
+  values (v_org, auth.uid(), case when b.organisation_id is null then null else to_jsonb(b) end, to_jsonb(a));
+  return jsonb_build_object('ok', true) || (public.pdf_cache_settings() - 'ok');
+end $$;
+
+-- settings tables: row level security
+alter table public.report_pdf_settings enable row level security;
+alter table public.report_pdf_settings_events enable row level security;
+drop policy if exists report_pdf_settings_org on public.report_pdf_settings;
+create policy report_pdf_settings_org on public.report_pdf_settings as restrictive for all to authenticated
+  using (organisation_id = (select public.app_current_org()) or (select public.is_super_admin()))
+  with check (organisation_id = (select public.app_current_org()) or (select public.is_super_admin()));
+drop policy if exists report_pdf_settings_read on public.report_pdf_settings;
+create policy report_pdf_settings_read on public.report_pdf_settings for select to authenticated
+  using ((select public.app_is_active()));
+drop policy if exists report_pdf_settings_events_org on public.report_pdf_settings_events;
+create policy report_pdf_settings_events_org on public.report_pdf_settings_events as restrictive for all to authenticated
+  using (organisation_id = (select public.app_current_org()) or (select public.is_super_admin()))
+  with check (organisation_id = (select public.app_current_org()) or (select public.is_super_admin()));
+drop policy if exists report_pdf_settings_events_read on public.report_pdf_settings_events;
+create policy report_pdf_settings_events_read on public.report_pdf_settings_events for select to authenticated
+  using ((select public.app_is_active()) and (select public.app_is_elevated()));
+revoke all on public.report_pdf_settings from anon;
+revoke all on public.report_pdf_settings from authenticated;
+grant select on public.report_pdf_settings to authenticated;
+revoke all on public.report_pdf_settings_events from anon;
+revoke all on public.report_pdf_settings_events from authenticated;
+grant select on public.report_pdf_settings_events to authenticated;
+
 -- ----------------------------------------------------------------------------- RLS
 alter table public.report_pdf_files enable row level security;
 alter table public.report_pdf_events enable row level security;
@@ -452,7 +646,9 @@ create policy report_pdfs_read on storage.objects for select to authenticated
   using (bucket_id = 'report-pdfs' and exists (
     select 1 from public.report_pdf_files f
      where f.storage_path = objects.name
-       and (f.status = 'ready' or (f.status = 'processing' and f.lease_owner = (select auth.uid())))));
+       and f.purged_at is null
+       and (f.status = 'ready' or (f.status = 'processing' and f.lease_owner = (select auth.uid()))
+            or (f.purge_due_at is not null and (select public.app_is_org_admin())))));
 -- Upload: only the path of a job the caller holds a live lease on.
 drop policy if exists report_pdfs_upload on storage.objects;
 create policy report_pdfs_upload on storage.objects for insert to authenticated
@@ -542,15 +738,18 @@ begin
     -- the newest stored revision of the same document, clearly NOT the current one
     select * into prev from public.report_pdf_files r
      where r.organisation_id = k.organisation_id and r.report_type = p_type and r.source_id = p_source
-       and r.status = 'ready' and r.cache_key <> k.cache_key
+       and r.status = 'ready' and r.cache_key <> k.cache_key and r.purged_at is null
      order by r.completed_at desc limit 1;
   end if;
 
   return jsonb_build_object('ok', true, 'state', v_state, 'cache_key', k.cache_key,
     'source_approved', k.approved,
+    'can_regenerate', coalesce(public.app_is_elevated(), false) or coalesce(public.is_super_admin(), false),
+    'can_regenerate_approved', public.pdf_cache_can_regenerate_approved(),
     'file', case when f.id is null then null else jsonb_build_object(
       'id', f.id, 'status', f.status, 'bucket', f.storage_bucket, 'path', f.storage_path, 'file_name', f.file_name,
       'bytes', f.bytes, 'sha256', f.sha256, 'generation', f.generation, 'immutable', f.immutable,
+      'regenerated_from', f.regenerated_from,
       'completed_at', f.completed_at, 'attempts', f.attempts, 'max_attempts', f.max_attempts,
       'next_retry_at', f.next_retry_at, 'lease_expires_at', f.lease_expires_at,
       'mine', f.lease_owner = auth.uid(), 'last_error', f.last_error) end,
@@ -793,6 +992,7 @@ declare
   v_lease interval := make_interval(secs => greatest(30, least(coalesce(p_lease_seconds, 180), 900)));
   v_name text;
   v_had boolean;
+  v_prev_ready uuid;
 begin
   select * into k from public.pdf_cache_key_for(p_type, p_source, p_template, p_branding, p_client_rev);
   if not k.ok then return jsonb_build_object('ok', false, 'reason', k.reason); end if;
@@ -809,9 +1009,17 @@ begin
   if v_had and f.status = 'processing' and f.lease_expires_at > now() and f.lease_owner is distinct from auth.uid() then
     return jsonb_build_object('ok', true, 'state', 'processing', 'file_id', f.id, 'lease_expires_at', f.lease_expires_at);
   end if;
-  if v_had and f.immutable then
-    if not coalesce(public.app_is_org_admin(), false) and not coalesce(public.is_super_admin(), false) then
-      return jsonb_build_object('ok', false, 'reason', 'approved_needs_admin');
+  -- An approved report: only with explicit authorisation, always with a reason. The
+  -- original is kept (same bytes, same sha256, same audit rows); this adds a revision.
+  select r.id into v_prev_ready from public.report_pdf_files r
+   where r.organisation_id = k.organisation_id and r.cache_key = k.cache_key and r.status = 'ready'
+   order by r.generation desc limit 1;
+  if (v_had and f.immutable) or exists (
+       select 1 from public.report_pdf_files r
+        where r.organisation_id = k.organisation_id and r.report_type = p_type and r.source_id = p_source
+          and r.status = 'ready' and (r.immutable or r.source_approved)) then
+    if not public.pdf_cache_can_regenerate_approved() then
+      return jsonb_build_object('ok', false, 'reason', 'approved_needs_authorisation');
     end if;
     if length(btrim(coalesce(p_reason, ''))) < 5 then
       return jsonb_build_object('ok', false, 'reason', 'reason_required');
@@ -835,12 +1043,13 @@ begin
 
   insert into public.report_pdf_files (organisation_id, country, site, report_type, source_id, cache_key,
       source_hash, evidence_rev, template_version, branding_rev, client_rev, generation, storage_path, file_name,
-      status, lease_owner, lease_expires_at, source_approved, origin, created_by)
+      status, lease_owner, lease_expires_at, source_approved, origin, created_by, regenerated_from, regenerate_reason)
   values (k.organisation_id, k.country, k.site, p_type, p_source, k.cache_key,
       k.source_hash, k.evidence_rev, p_template, p_branding, coalesce(p_client_rev, ''), v_gen,
       k.organisation_id::text || '/' || p_type || '/' || p_source::text || '/' || k.cache_key
         || case when v_gen > 1 then '.g' || v_gen::text else '' end || '.pdf', v_name,
-      'processing', auth.uid(), now() + v_lease, k.approved, 'regenerate', auth.uid())
+      'processing', auth.uid(), now() + v_lease, k.approved, 'regenerate', auth.uid(),
+      v_prev_ready, nullif(left(btrim(coalesce(p_reason, '')), 300), ''))
   returning * into n;
 
   if v_had and f.status = 'ready' then
@@ -850,7 +1059,7 @@ begin
   insert into public.report_pdf_events (organisation_id, country, site, file_id, report_type, source_id, event, actor, detail)
   values (n.organisation_id, n.country, n.site, n.id, n.report_type, n.source_id, 'regenerate_requested', auth.uid(),
           jsonb_build_object('generation', n.generation, 'replaces', f.id, 'was_immutable', coalesce(f.immutable, false),
-                             'reason', left(coalesce(p_reason, ''), 300)));
+                             'follows', v_prev_ready, 'reason', left(coalesce(p_reason, ''), 300)));
 
   return jsonb_build_object('ok', true, 'state', 'claimed', 'cache_key', k.cache_key, 'file_id', n.id,
     'bucket', n.storage_bucket, 'path', n.storage_path, 'file_name', n.file_name,
@@ -889,7 +1098,10 @@ begin
     'public.pdf_cache_complete(uuid,text,bigint)',
     'public.pdf_cache_fail(uuid,text,boolean,boolean)',
     'public.pdf_cache_regenerate(text,uuid,text,text,text,text,text,integer)',
-    'public.pdf_cache_record_download(uuid,text)'] loop
+    'public.pdf_cache_record_download(uuid,text)',
+    'public.pdf_cache_can_regenerate_approved()',
+    'public.pdf_cache_settings()',
+    'public.pdf_cache_update_settings(integer,integer,boolean)'] loop
     execute format('revoke execute on function %s from public', fn);
     execute format('revoke execute on function %s from anon', fn);
     execute format('grant execute on function %s to authenticated, service_role', fn);
@@ -901,10 +1113,7 @@ comment on table public.report_pdf_files is
 comment on table public.report_pdf_events is
   'Append-only audit of PDF generation and download events. Written only by the pdf_cache_* functions.';
 
--- RETENTION (rule only, nothing is removed by this file):
---   keep every immutable (approved) revision for the life of the source record;
---   superseded working revisions and failed jobs may be purged after 90 days by a
---   service-role job that removes the storage object first, then the row, with
---   set_config('pdf_cache.allow_purge','on',true). That job is NOT part of this draft.
+-- RETENTION: see 20261117093000_report_pdf_retention_bulk.sql. Nothing is removed by
+--   this file. Approved revisions are never purged (constraint + trigger above).
 
 select anum_integration.apply_reader_policies();

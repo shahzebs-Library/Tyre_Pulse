@@ -11,31 +11,60 @@ const EXPENSE_FIELDS = 'id,country,asset_code,work_order_no,txn_date,issue_numbe
 
 export async function findObservationErpEvidence({ inspection, finding }) {
   if (!inspection?.id || !inspection?.asset_no || !inspection?.country || !finding?.rawPosition) {
-    throw new ServiceError('Saved inspection, country, asset, and tyre position are required for ERP matching.')
+    throw new ServiceError('A saved inspection, vehicle, country and wheel position are required.')
   }
   const country = inspection.country, asset = inspection.asset_no
-  const [wo, tyre] = await Promise.all([
-    supabase.from('work_orders').select(WO_FIELDS).eq('country', country).eq('asset_no', asset)
-      .order('opened_at', { ascending: false }).limit(100),
-    supabase.from('tyre_records').select(TYRE_FIELDS).eq('country', country).eq('asset_no', asset)
-      .order('issue_date', { ascending: false }).limit(400),
-  ])
-  const workOrders = unwrap(wo) || [], fitments = unwrap(tyre) || []
-  const jobNumbers = [...new Set(workOrders.map(w => w.work_order_no).filter(Boolean))].slice(0, 100)
+  const inspectionDate = String(inspection.inspection_date || inspection.completed_date || inspection.created_at || '').slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(inspectionDate)) {
+    throw new ServiceError('Inspection date missing. Job cards cannot be reliably reconciled.')
+  }
+  // Never scan the entire historic asset history for a recent finding. The
+  // evidence must postdate the observation; old job cards belong in ERP history.
+  const tyreQuery = supabase.from('tyre_records').select(TYRE_FIELDS)
+    .eq('country', country).eq('asset_no', asset)
+    .or(`issue_date.gte.${inspectionDate},removal_date.gte.${inspectionDate}`)
+    .order('issue_date', { ascending: false }).limit(200)
+  const tyreResult = await tyreQuery
+  const fitments = unwrap(tyreResult) || []
+  const jobNumbers = [...new Set(fitments.map(r => String(r.job_card || '').trim()).filter(Boolean))]
+  const workOrders = []
+  let limited = fitments.length >= 200
+  // Prioritise exact ERP job-card keys from actual tyre movements.
+  for (let i = 0; i < jobNumbers.length; i += 25) {
+    const rows = unwrap(await supabase.from('work_orders').select(WO_FIELDS)
+      .eq('country', country).eq('asset_no', asset)
+      .in('work_order_no', jobNumbers.slice(i, i + 25)).limit(100)) || []
+    workOrders.push(...rows)
+    if (rows.length >= 100) limited = true
+  }
+  // Then consider post-inspection tyre-specific job cards whose consumption
+  // has not been imported yet. Do not display non-tyre workshop history.
+  const recent = unwrap(await supabase.from('work_orders').select(WO_FIELDS)
+    .eq('country', country).eq('asset_no', asset)
+    .gte('opened_at', `${inspectionDate}T00:00:00`)
+    .or('description.ilike.*tyre*,description.ilike.*tire*,description.ilike.*puncture*,notes.ilike.*tyre*,notes.ilike.*tire*')
+    .order('opened_at', { ascending: false }).limit(100)) || []
+  if (recent.length >= 100) limited = true
+  const found = new Set(workOrders.map(w => w.id))
+  for (const row of recent) if (!found.has(row.id)) {
+    found.add(row.id); workOrders.push(row)
+  }
+  const relevantJobNumbers = [...new Set(workOrders.map(w => w.work_order_no).filter(Boolean))]
   const expenses = []
-  for (let i = 0; i < jobNumbers.length; i += 30) {
-    const chunk = jobNumbers.slice(i, i + 30)
-    const rows = await supabase.from('parts_consumption').select(EXPENSE_FIELDS)
-      .eq('country', country).eq('asset_code', asset).in('work_order_no', chunk).limit(500)
-    expenses.push(...(unwrap(rows) || []))
+  for (let i = 0; i < relevantJobNumbers.length; i += 25) {
+    const rows = unwrap(await supabase.from('parts_consumption').select(EXPENSE_FIELDS)
+      .eq('country', country).eq('asset_code', asset)
+      .in('work_order_no', relevantJobNumbers.slice(i, i + 25)).limit(250)) || []
+    if (rows.length >= 250) limited = true
+    expenses.push(...rows)
   }
   const candidates = matchObservationToErp({ inspection, finding, workOrders, fitments, expenses })
-  const existingJobCards = new Set(workOrders.map(w => String(w.work_order_no || '').trim().toUpperCase()))
-  const orphanTyreJobCards = [...new Set(fitments.map(t => String(t.job_card || '').trim()).filter(Boolean))]
-    .filter(number => !existingJobCards.has(number.toUpperCase()))
-    .slice(0, 30)
-  const evidenceLimited = workOrders.length === 100 || fitments.length === 400 || expenses.length >= 500
-  return { candidates, orphanTyreJobCards, evidenceLimited, totals: { workOrders: workOrders.length, fitments: fitments.length, expenses: expenses.length } }
+  const existingJobs = new Set(workOrders.map(w => String(w.work_order_no || '').trim().toUpperCase()))
+  const orphanTyreJobCards = jobNumbers.filter(number => !existingJobs.has(number.toUpperCase()))
+  return {
+    candidates, orphanTyreJobCards, evidenceLimited: limited,
+    totals: { workOrders: workOrders.length, fitments: fitments.length, expenses: expenses.length },
+  }
 }
 
 /**

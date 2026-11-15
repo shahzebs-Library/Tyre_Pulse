@@ -12,6 +12,7 @@ const USERS = {
   'alpha.tyreman': { label: 'Tyre Man', site: 'all', technician: true },
   'r2.mechanic':   { label: 'Mechanic (technician)', site: 'north', technician: true },
   'clo.collector': { label: 'Tyre Data Collector', site: 'all' },
+  'r2.monitor':    { label: 'Data Monitor Officer', site: 'all' },
 }
 const wo = (mark) => {
   const [id, no] = R.sql(`select id, work_order_no from public.work_orders where description like 'R2-${mark} %'`).split('\t')
@@ -49,8 +50,13 @@ const btnState = async (loc) => (await loc.count()) === 0 ? { present: false }
 async function saveForm(s, buttonName) {
   const before = s.alerts.length
   await s.page.locator('[role=dialog]').last().getByRole('button', { name: buttonName }).click()
-  await s.page.waitForTimeout(2500)
-  const open = await s.page.locator('[role=dialog]').getByRole('button', { name: buttonName }).isVisible().catch(() => false)
+  // Wait for the save to finish: the dialog closes on success, an alert or field error appears on refusal.
+  let open = true
+  for (let i = 0; i < 16 && open; i++) {
+    await s.page.waitForTimeout(500)
+    open = await s.page.locator('[role=dialog]').getByRole('button', { name: buttonName }).isVisible().catch(() => false)
+    if (s.alerts.length > before) { await s.page.waitForTimeout(500); break }
+  }
   const errors = open ? (await s.page.locator('[role=dialog]').last().locator('span.text-red-400').allInnerTexts()).filter((t) => t.trim() && t.trim() !== '*').slice(0, 5) : []
   return { alert: s.alerts.slice(before).join(' | '), formStillOpen: open, fieldErrors: errors }
 }

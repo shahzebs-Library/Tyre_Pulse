@@ -4,13 +4,14 @@ const h = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn() }))
 vi.mock('../lib/supabase', () => ({ supabase: { rpc: h.rpc, from: h.from } }))
 
 import {
-  getClosureReviewConfig, getActionReviewAccess, submitCompletion, reviewAction, recordException,
+  getClosureReviewConfig, getActionReviewAccess, submitCompletion, reviewAction, requestException, decideException,
+  attachAckFaultStates,
   acknowledgeChecklist, listReviewQueue, listSheetActions, isNotProvisioned,
 } from '../lib/api/closureReview'
 
 function builder(result) {
   const b = { calls: [] }
-  for (const m of ['select', 'eq', 'order', 'limit']) b[m] = (...a) => { b.calls.push([m, ...a]); return b }
+  for (const m of ['select', 'eq', 'in', 'order', 'limit']) b[m] = (...a) => { b.calls.push([m, ...a]); return b }
   b.maybeSingle = () => Promise.resolve(result)
   b.then = (ok, bad) => Promise.resolve(result).then(ok, bad)
   return b
@@ -78,11 +79,26 @@ describe('writes go through the database functions only', () => {
     await reviewAction('a1', 'return', 'Photo is blurred')
     expect(h.rpc).toHaveBeenLastCalledWith('corrective_action_review', { p_id: 'a1', p_decision: 'return', p_comment: 'Photo is blurred' })
   })
-  it('an exception needs a reason', async () => {
-    await expect(recordException('a1', 'short')).rejects.toThrow(/10 characters/)
+  it('an exception is requested with a reason, and never closes through the browser', async () => {
+    await expect(requestException('a1', 'short')).rejects.toThrow(/10 characters/)
+    h.rpc.mockResolvedValue({ data: { ok: true, review_status: 'exception_requested' }, error: null })
+    await requestException('a1', 'Vehicle sold on 1 December')
+    expect(h.rpc).toHaveBeenCalledWith('corrective_action_request_exception', { p_id: 'a1', p_reason: 'Vehicle sold on 1 December' })
+    expect(h.rpc.mock.calls.some((c) => /record_exception/.test(c[0]))).toBe(false)
+    expect(h.from).not.toHaveBeenCalled()
+  })
+  it('an exception decision goes to the decision writer; a refusal needs a reason', async () => {
+    await expect(decideException('a1', 'refuse', '')).rejects.toThrow(/why the exception is refused/)
+    expect(h.rpc).not.toHaveBeenCalled()
     h.rpc.mockResolvedValue({ data: { ok: true }, error: null })
-    await recordException('a1', 'Vehicle sold on 1 December')
-    expect(h.rpc).toHaveBeenCalledWith('corrective_action_record_exception', { p_id: 'a1', p_reason: 'Vehicle sold on 1 December' })
+    await decideException('a1', 'approve')
+    expect(h.rpc).toHaveBeenLastCalledWith('corrective_action_decide_exception', { p_id: 'a1', p_decision: 'approve', p_comment: null })
+    await decideException('a1', 'refuse', 'Repair it instead')
+    expect(h.rpc).toHaveBeenLastCalledWith('corrective_action_decide_exception', { p_id: 'a1', p_decision: 'refuse', p_comment: 'Repair it instead' })
+  })
+  it('the database refusal of a self-decided exception reaches the person', async () => {
+    h.rpc.mockResolvedValue({ data: null, error: { code: '42501', message: 'You asked for this exception, so another authorised person has to decide it.' } })
+    await expect(decideException('a1', 'approve')).rejects.toBeTruthy()
   })
   it('a server refusal reaches the user as a safe message, not database text', async () => {
     h.rpc.mockResolvedValue({ data: null, error: { code: '42501', message: 'new row violates row-level security policy for table "corrective_actions"' } })
@@ -96,5 +112,27 @@ describe('writes go through the database functions only', () => {
     h.rpc.mockResolvedValue({ data: { ok: true, status: 'acknowledged' }, error: null })
     await expect(acknowledgeChecklist('s1', { signature: 'sig', note: ' seen ' })).resolves.toMatchObject({ status: 'acknowledged' })
     expect(h.rpc).toHaveBeenLastCalledWith('acknowledge_checklist_faults', { p_submission_id: 's1', p_note: 'seen', p_signature: 'sig' })
+  })
+})
+
+describe('acknowledged sheets in a list', () => {
+  it('rows with nothing acknowledged are returned untouched and nothing is read', async () => {
+    const rows = [{ id: 's1', approval_status: 'approved' }]
+    expect(await attachAckFaultStates(rows)).toBe(rows)
+    expect(h.from).not.toHaveBeenCalled()
+  })
+  it('attaches the fault state and who signed to acknowledged rows only', async () => {
+    h.from.mockImplementation((table) => builder(table === 'v_checklist_fault_compliance'
+      ? { data: [{ submission_id: 's2', fault_state: 'fault_open', open_count: 1 }], error: null }
+      : { data: [{ id: 's2', acknowledged_name: 'Test Signer', acknowledged_at: '2026-11-11T08:00:00Z', acknowledgement_note: null }], error: null }))
+    const out = await attachAckFaultStates([{ id: 's1', approval_status: 'approved' }, { id: 's2', approval_status: 'acknowledged' }])
+    expect(out[0]).toEqual({ id: 's1', approval_status: 'approved' })
+    expect(out[1]).toMatchObject({ ack_fault_state: 'fault_open', ack_open_faults: 1, acknowledged_name: 'Test Signer' })
+  })
+  it('a failed read leaves the state unknown, which every reader shows as action required', async () => {
+    h.from.mockReturnValue(builder({ data: null, error: missingCol }))
+    const rows = [{ id: 's2', approval_status: 'acknowledged' }]
+    const out = await attachAckFaultStates(rows)
+    expect(out[0].ack_fault_state).toBeUndefined()
   })
 })

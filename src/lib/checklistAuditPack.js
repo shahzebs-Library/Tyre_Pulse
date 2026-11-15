@@ -10,6 +10,8 @@
  * Clauses quoted are ISO 9001:2015 (the other management-system standards share
  * the same Annex SL numbering for 7.2 / 7.5 / 9.2 / 10.2).
  */
+import { ACK_ACTION_REQUIRED } from './closureWorkflow'
+
 
 export const AUDIT_TYPES = [
   { key: 'internal', label: 'Internal audit', clause: 'ISO 9001 9.2',
@@ -94,6 +96,8 @@ const APPROVAL_LABEL = {
   approved: 'Approved', rejected: 'Rejected', pending: 'Awaiting supervisor',
   pending_approval: 'Awaiting approval', pending_area_manager: 'Awaiting area manager',
   not_required: 'No approval needed',
+  // Signed with a fault on record. The record register refines this per sheet (resolved / by exception).
+  acknowledged: ACK_ACTION_REQUIRED,
 }
 export const approvalLabel = (s) => APPROVAL_LABEL[s] || (s ? String(s) : 'Not recorded')
 const isPending = (s) => s === 'pending' || s === 'pending_approval' || s === 'pending_area_manager'
@@ -182,6 +186,15 @@ export function buildAuditPack({
       : toTime(s.submitted_at || s.created_at)
     const stageSla = atAreaManager ? amSla : supSla
     const ageH = pending && startT != null ? Math.floor((nowT - startT) / 3600000) : null
+    // An acknowledged sheet is neither waiting nor approved. It needs action while any of its
+    // faults has no closed corrective action; the fault itself is never rewritten.
+    const acknowledged = s.approval_status === 'acknowledged'
+    const ackOpen = acknowledged
+      ? faults.filter((f) => !cas.some((a) => a.source_detail === f.label && String(a.status || '').toLowerCase() === 'closed')).length
+      : 0
+    const ackText = !acknowledged ? null
+      : ackOpen > 0 ? ACK_ACTION_REQUIRED
+        : s.ack_fault_state === 'exception' ? 'Acknowledged, compliant by exception' : 'Acknowledged, faults resolved'
     return {
       id: s.id,
       document_no: s.document_no || '',
@@ -193,8 +206,11 @@ export function buildAuditPack({
       site: s.site || '',
       submitted: isoDay(s.submitted_at || s.created_at),
       submitted_by: who(s.printed_name),
-      approval: approvalLabel(s.approval_status),
+      approval: ackText || approvalLabel(s.approval_status),
       approval_status: s.approval_status || '',
+      acknowledged_by: acknowledged ? who(s.acknowledged_name) : '',
+      acknowledged_on: acknowledged ? isoDay(s.acknowledged_at) : '',
+      ack_open: ackOpen,
       supervisor: who(s.supervisor_name),
       approver: who(s.approver_name),
       approved_on: isoDay(s.approved_at),
@@ -275,6 +291,10 @@ export function buildAuditPack({
   add('minor', '8.5.1', 'Approvals waiting longer than the agreed time',
     `${late.length} record(s) have waited longer than the agreed sign-off time (supervisor ${supSla} h, area manager ${amSla} h).`, late.length)
   const pendingAll = records.filter((r) => isPending(r.approval_status))
+  const ackAll = records.filter((r) => r.approval_status === 'acknowledged')
+  const ackOpenAll = ackAll.filter((r) => r.ack_open > 0)
+  add('minor', '10.2', 'Checklists acknowledged with a fault still open',
+    `${ackOpenAll.length} record(s) were signed with a recorded fault that has no closed corrective action yet. They are not compliant until the fault is resolved or covered by a documented exception.`, ackOpenAll.length)
   add('observation', '8.5.1', 'Records still waiting for sign-off', `${pendingAll.length} record(s) are not yet signed off.`, pendingAll.length)
   const broad = forms.filter((f) => typeof f.assigned_roles === 'number' && f.assigned_roles > BROAD_ROLE_LIMIT)
   add('observation', '7.2', 'Forms open to a very wide set of roles',
@@ -299,6 +319,8 @@ export function buildAuditPack({
     records: records.length,
     approved,
     pending: pendingAll.length,
+    acknowledged: ackAll.length,
+    acknowledged_open: ackOpenAll.length,
     rejected: records.filter((r) => r.approval_status === 'rejected').length,
     approval_rate: records.length ? Math.round((approved / records.length) * 100) : null,
     faults: faults.length,
@@ -333,7 +355,7 @@ export const RECORD_COLS = [
   ['document_no', 'Document no'], ['form', 'Form'], ['form_ref', 'Form no'], ['form_version', 'Form version'],
   ['version_evidence', 'Form copy'], ['asset_no', 'Asset'], ['site', 'Site'], ['submitted', 'Submitted'],
   ['submitted_by', 'Submitted by'], ['approval', 'Sign-off'], ['supervisor', 'Supervisor'], ['approver', 'Approver'],
-  ['approved_on', 'Approved on'], ['faults_open', 'Open faults'], ['corrective_actions', 'Actions'], ['locked', 'Locked'],
+  ['approved_on', 'Approved on'], ['acknowledged_by', 'Acknowledged by'], ['acknowledged_on', 'Acknowledged on'], ['faults_open', 'Open faults'], ['corrective_actions', 'Actions'], ['locked', 'Locked'],
 ]
 export const FAULT_COLS = [
   ['document_no', 'Document no'], ['asset_no', 'Asset'], ['site', 'Site'], ['item', 'Item'], ['raised', 'Raised'],
@@ -347,6 +369,7 @@ export function summaryRows(summary) {
     ['Period', summary.period], ['Site', summary.site], ['Generated', summary.generated],
     ['Controlled forms', summary.forms], ['Forms with review in date', summary.forms_in_date],
     ['Records', summary.records], ['Signed off', summary.approved], ['Waiting for sign-off', summary.pending],
+    ['Acknowledged with a recorded fault', summary.acknowledged ?? 0], [ACK_ACTION_REQUIRED, summary.acknowledged_open ?? 0],
     ['Rejected', summary.rejected], ['Sign-off rate', pct(summary.approval_rate)],
     ['Faults recorded', summary.faults], ['Faults with a corrective action', summary.faults_with_action],
     ['Corrective action coverage', pct(summary.action_coverage)], ['Corrective actions open', summary.actions_open],

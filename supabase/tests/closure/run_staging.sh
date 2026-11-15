@@ -15,7 +15,7 @@ case "$HOST" in 127.0.0.1|localhost) ;; *) echo "Refusing: local staging only" >
 P=(psql -X -q -v ON_ERROR_STOP=1 -h "$HOST" -p "$PORT" -U postgres)
 "${P[@]}" -d postgres -c "drop database if exists $DB" -c "create database $DB template $BASE" 2>/dev/null
 "${P[@]}" -d "$DB" -At -f "$HERE/fixture.sql"
-FP="select 'ca ' || count(*) || ' ' || md5(coalesce(string_agg((to_jsonb(c) - array['review_status','submitted_by','submitted_at','completion_note','completion_photos','reviewed_by','reviewed_at','review_comment'])::text, '' order by id), '')) from public.corrective_actions c
+FP="select 'ca ' || count(*) || ' ' || md5(coalesce(string_agg((to_jsonb(c) - array['review_status','submitted_by','submitted_at','completion_note','completion_photos','reviewed_by','reviewed_at','review_comment','exception_requested_by','exception_requested_at','exception_reason'])::text, '' order by id), '')) from public.corrective_actions c
 union all select 'cs ' || count(*) || ' ' || md5(coalesce(string_agg((to_jsonb(s) - array['acknowledged_by','acknowledged_at','acknowledged_name','acknowledged_signature','acknowledgement_note'])::text, '' order by id), '')) from public.checklist_submissions s
 union all select 'ai ' || count(*) || ' ' || md5(coalesce(string_agg(to_jsonb(i)::text, '' order by id), '')) from public.action_items i
 union all select 'wo ' || count(*) || ' ' || md5(coalesce(string_agg(to_jsonb(w)::text, '' order by id), '')) from public.work_orders w

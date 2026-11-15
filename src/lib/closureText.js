@@ -47,6 +47,7 @@ export const MESSAGE_KEYS = Object.freeze({
   'No exception has been requested on this action.': 'noException',
   'That action does not exist or is outside your company, country or sites.': 'outsideScope',
   'Closing an action needs a reviewer. Submit your completion evidence and a reviewer will close it.': 'needsReviewer',
+  'An exception has been requested on this action. Approve or refuse the exception first.': 'exceptionPendingClose',
   // checklist acknowledge
   'This checklist is not waiting for a signature.': 'notWaitingSignature',
   'This checklist is routed through an approval policy. Decide it in the approval queue.': 'policyRouted',

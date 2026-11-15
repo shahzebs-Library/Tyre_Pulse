@@ -162,7 +162,8 @@
       "claude/current-prod-fixes-a-7rxp2t": false,
       "claude/current-prod-fixes-b-7rxp2t": false,
       "claude/commercial-fixes-7rxp2t": false,
-      "claude/module-workflow-tests-7rxp2t": false
+      "claude/module-workflow-tests-7rxp2t": false,
+      "claude/round2-browser-tests-7rxp2t": false
     }
   },
   "ignoreCommand": "node scripts/vercel-ignore-build.mjs"

@@ -17,12 +17,17 @@ const String _appStoreMessage =
     'This version of Tyre Pulse is too old to keep using. '
     'Update Tyre Pulse from the App Store to carry on.';
 
-Future<void> _pump(WidgetTester tester, TpShellGateActions actions) async {
+Future<void> _pump(
+  WidgetTester tester,
+  TpShellGateActions actions, {
+  Locale? locale,
+}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [shellGateActionsProvider.overrideWithValue(actions)],
       child: MaterialApp(
         theme: TpTheme.light,
+        locale: locale,
         localizationsDelegates: TpLocalizations.delegates,
         supportedLocales: TpLocalizations.supportedLocales,
         home: const TpUpdateRequiredScreen(),
@@ -76,4 +81,37 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
     }
   });
+
+  for (final String code in const <String>['en', 'ar', 'ur']) {
+    for (final double scale in const <double>[1, 2]) {
+      testWidgets(
+          'iPhone with no store link fits 360x640 in $code at text scale '
+          '$scale', (WidgetTester tester) async {
+        tester.view.physicalSize = const Size(360, 640);
+        tester.view.devicePixelRatio = 1;
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+        try {
+          await _pump(
+            tester,
+            TpShellGateActions(onSignOut: () {}),
+            locale: Locale(code),
+          );
+
+          expect(tester.takeException(), isNull);
+          expect(
+            Directionality.of(
+              tester.element(find.byType(TpUpdateRequiredScreen)),
+            ),
+            code == 'en' ? TextDirection.ltr : TextDirection.rtl,
+          );
+        } finally {
+          debugDefaultTargetPlatformOverride = null;
+        }
+      });
+    }
+  }
 }

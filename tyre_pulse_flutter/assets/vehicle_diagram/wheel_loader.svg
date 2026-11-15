@@ -110,7 +110,6 @@
   <rect x="62" y="225" width="14" height="10" rx="2" fill="url(#brakeLight)" />
   <rect x="124" y="225" width="14" height="10" rx="2" fill="url(#brakeLight)" />
 
-  <!-- CAT badge -->
+  <!-- Badge plate (no brand mark) -->
   <rect x="84" y="184" width="32" height="12" rx="2" fill="#1f2937" opacity="0.6" />
-  <text x="100" y="192" text-anchor="middle" font-size="7" font-weight="900" fill="#fde047" opacity="0.9">CAT</text>
 </svg>

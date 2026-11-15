@@ -51,13 +51,9 @@
 ///
 /// # What is deliberately partial
 ///
-/// [buildAuthShellGateActions] never supplies `onOpenStore`: `url_launcher` is
-/// not a declared dependency of this package, and spec section 64 forbids
-/// adding one "to shorten five lines". [authLayerOverrides] uses the
-/// no-`onOpenStore` form; the composition root may instead call
-/// [buildAuthShellGateActions] directly with a real callback once a
-/// store-launch dependency exists, in place of the `shellGateActionsProvider`
-/// entry in [authLayerOverrides].
+/// `onOpenStore` is platform-aware (see `store_listing.dart`): Play on Android,
+/// the App Store on iOS when the `APP_STORE_ID` dart-define is set, and no
+/// store button at all otherwise. An iPhone is never sent to Google Play.
 library;
 
 import 'dart:async';
@@ -69,6 +65,7 @@ import 'package:tyre_pulse/app/router/shell_gates.dart';
 import 'package:tyre_pulse/core/auth/auth_controller.dart';
 import 'package:tyre_pulse/core/auth/auth_state.dart';
 import 'package:tyre_pulse/core/auth/mfa_repository.dart';
+import 'package:tyre_pulse/core/auth/store_listing.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Builds the actions the shell gates may offer, wired to [AuthController].
@@ -79,9 +76,11 @@ import 'package:url_launcher/url_launcher.dart';
 /// [AuthController.state] rather than through a returned value a button press
 /// could inspect.
 ///
-/// [onOpenStore] defaults to opening this app's Play listing, so the
-/// update-required screen offers a real "Open the store" button. A caller may
-/// pass its own (tests do).
+/// [onOpenStore] defaults to opening this platform's own store listing (Play
+/// on Android, the App Store on iOS when its id is configured), so the
+/// update-required screen offers a real "Open the store" button. Where there
+/// is no listing to open the action is null and the button is not rendered.
+/// A caller may pass its own (tests do).
 TpShellGateActions buildAuthShellGateActions(
   Ref ref, {
   VoidCallback? onOpenStore,
@@ -92,7 +91,7 @@ TpShellGateActions buildAuthShellGateActions(
     onSignOut: () => unawaited(notifier().signOut()),
     onRetryProfile: () => unawaited(notifier().retryProfile()),
     onRetrySession: () => unawaited(notifier().retrySession()),
-    onOpenStore: onOpenStore ?? _openPlayListing,
+    onOpenStore: onOpenStore ?? defaultOpenStoreAction(),
     onVerifyMfa: (String code) async =>
         switch (await notifier().verifyMfa(code)) {
       MfaVerified() => TpMfaVerifyResult.verified,
@@ -102,26 +101,36 @@ TpShellGateActions buildAuthShellGateActions(
   );
 }
 
-/// The Play Store listing of THIS app (the Flutter package, not the retired
-/// Expo `...inspector` package). `market://` opens the Play app directly;
-/// the https link is the fallback when no store app is present.
-const String _playPackage = 'com.shahzebrahman.tyrepulse';
+/// The store action for the platform this build runs on, or null when there
+/// is no listing to open (see `store_listing.dart`): on an iPhone without a
+/// configured App Store id the update-required screen then shows no store
+/// button and tells the user to update from the App Store instead.
+VoidCallback? defaultOpenStoreAction({
+  TargetPlatform? platform,
+  String appStoreId = kAppStoreId,
+}) {
+  final StoreListing? listing = storeListingFor(
+    platform ?? defaultTargetPlatform,
+    appStoreId: appStoreId,
+  );
+  if (listing == null) return null;
+  return () => _openListing(listing);
+}
 
-void _openPlayListing() {
+void _openListing(StoreListing listing) {
   unawaited(() async {
-    final Uri market = Uri.parse('market://details?id=$_playPackage');
-    final Uri web = Uri.parse(
-      'https://play.google.com/store/apps/details?id=$_playPackage',
-    );
     try {
-      if (await launchUrl(market, mode: LaunchMode.externalApplication)) {
+      if (await launchUrl(
+        listing.primary,
+        mode: LaunchMode.externalApplication,
+      )) {
         return;
       }
     } on Object {
-      // No Play app: fall through to the browser.
+      // No store app: fall through to the browser.
     }
     try {
-      await launchUrl(web, mode: LaunchMode.externalApplication);
+      await launchUrl(listing.fallback, mode: LaunchMode.externalApplication);
     } on Object {
       // Nothing can open a link. The screen still offers sign-out.
     }

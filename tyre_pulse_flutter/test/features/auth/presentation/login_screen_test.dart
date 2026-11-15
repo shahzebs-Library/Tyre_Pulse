@@ -990,4 +990,28 @@ void main() {
       },
     );
   }
+
+  // The sign-in notice is a full sentence since the App Store review wording
+  // change, so the smallest supported phone is checked in every language at
+  // the default and the largest text size.
+  for (final String code in const <String>['en', 'ar', 'ur']) {
+    for (final double scale in const <double>[1, 2]) {
+      testWidgets(
+        'login fits a 360x640 screen in $code at text scale $scale',
+        (WidgetTester tester) async {
+          tester.view.physicalSize = const Size(360, 640);
+          tester.view.devicePixelRatio = 1;
+          tester.platformDispatcher.textScaleFactorTestValue = scale;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+          await _pump(tester, locale: Locale(code));
+          await tester.pump(const Duration(milliseconds: 500));
+
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
 }

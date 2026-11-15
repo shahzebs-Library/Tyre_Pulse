@@ -173,6 +173,10 @@ class AppLocalizationsAr extends AppLocalizations {
       'هذه النسخة من Tyre Pulse قديمة جدًا للاستمرار. ثبّت التحديث للمتابعة.';
 
   @override
+  String get updateRequiredMessageAppStore =>
+      'هذه النسخة من Tyre Pulse قديمة جدًا للاستمرار. حدّث Tyre Pulse من App Store للمتابعة.';
+
+  @override
   String get profileUnavailableTitle => 'تعذر تحميل ملفك الشخصي';
 
   @override
@@ -2776,7 +2780,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get loginSecurityCopyCatalog =>
-      'secure=مساحة عمل شركة آمنة · %country%~forgot=هل نسيت كلمة المرور؟~access=تحتاج إلى صلاحية؟ تواصل مع مسؤول النظام~or=أو~biometric=استخدام بصمة الجهاز~authorized=لموظفي PMV المصرح لهم فقط~audited=يتم تدقيق النشاط~version=الإصدار %version%~biometricReason=أكد هويتك لتسجيل الدخول إلى Tyre Pulse~biometricUnavailable=بصمة الجهاز غير متاحة أو غير مسجلة.~biometricLocked=بصمة الجهاز مقفلة مؤقتًا. استخدم كلمة المرور.~biometricFailed=تعذر إكمال التحقق من الجهاز.~credentialsRequired=أدخل بريدك الإلكتروني أو رقم الموظف وكلمة المرور قبل استخدام بصمة الجهاز.~helpTitle=مساعدة تسجيل الدخول~forgotHelp=يدير مسؤول Tyre Pulse إعادة تعيين كلمات المرور. تواصل معه لاستعادة الوصول.~accessHelp=يدير مسؤول Tyre Pulse صلاحية الهاتف واعتماد الحساب.';
+      'secure=مساحة عمل شركة آمنة · %country%~forgot=هل نسيت كلمة المرور؟~access=تحتاج إلى صلاحية؟ تواصل مع مسؤول النظام~or=أو~biometric=استخدام بصمة الجهاز~authorized=سجّل الدخول بالحساب الذي قدمته لك شركتك~audited=يتم تدقيق النشاط~version=الإصدار %version%~biometricReason=أكد هويتك لتسجيل الدخول إلى Tyre Pulse~biometricUnavailable=بصمة الجهاز غير متاحة أو غير مسجلة.~biometricLocked=بصمة الجهاز مقفلة مؤقتًا. استخدم كلمة المرور.~biometricFailed=تعذر إكمال التحقق من الجهاز.~credentialsRequired=أدخل بريدك الإلكتروني أو رقم الموظف وكلمة المرور قبل استخدام بصمة الجهاز.~helpTitle=مساعدة تسجيل الدخول~forgotHelp=يدير مسؤول Tyre Pulse إعادة تعيين كلمات المرور. تواصل معه لاستعادة الوصول.~accessHelp=يدير مسؤول Tyre Pulse صلاحية الهاتف واعتماد الحساب.';
 
   @override
   String get profileNavTitle => 'حسابي';

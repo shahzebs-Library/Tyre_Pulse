@@ -417,7 +417,7 @@ function ChecklistOnlyGate({ children }) {
   const { profile, hasPermission } = useAuth()
   const loc = useLocation()
   if (loc.pathname === '/odometer-logs' && hasPermission?.('odometer_logs') === true) return children
-  if (isChecklistOnlyRole(profile?.role) && !isChecklistPathAllowed(loc.pathname)) {
+  if (isChecklistOnlyRole(profile?.role) && !isChecklistPathAllowed(loc.pathname, hasPermission)) {
     return <Navigate to="/checklists" replace />
   }
   return children

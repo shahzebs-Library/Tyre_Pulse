@@ -54,7 +54,9 @@ const LABEL_TONE = { good: 'text-green-400', warn: 'text-amber-400', muted: 'tex
  * applied it shows the fault list only (no acknowledge control).
  */
 export default function ChecklistFaultPanel({ submission, onChanged }) {
-  const { profile } = useAuth()
+  const { profile, hasPermission } = useAuth()
+  // Offer the way to the actions only to someone who can open that screen.
+  const canOpenActions = typeof hasPermission === 'function' && hasPermission('corrective_actions') === true
   const { t } = useLanguage()
   const [state, setState] = useState({ loading: true, provisioned: false, actions: [], config: null, ack: null })
   const [note, setNote] = useState('')
@@ -156,7 +158,7 @@ export default function ChecklistFaultPanel({ submission, onChanged }) {
         </ul>
       )}
 
-      {rows.some((r) => r.action) && (
+      {canOpenActions && rows.some((r) => r.action) && (
         <p className="text-xs text-[var(--text-muted)]">
           {t('closure.fault.closeHint')}{' '}
           <Link to="/actions" className="underline text-[var(--accent)] inline-flex items-center min-h-[40px]">{t('closure.fault.openActions')}</Link>

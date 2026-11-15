@@ -309,7 +309,7 @@ export function isCommandVisible(cmd, profile, hasPermission, grantedModules, is
 
   // Restricted single-purpose roles (same as the sidebar).
   if (role === 'Inspector') return path === '/inspections' || path === '/settings' || path === '/request-access'
-  if (isChecklistOnlyRole(role)) return isChecklistPathAllowed(path)
+  if (isChecklistOnlyRole(role)) return isChecklistPathAllowed(path, perm)
 
   // Report builders are Admin-only, and deliberately checked BEFORE the per-user
   // grant below: the owner's instruction is that nobody else gets access, so a

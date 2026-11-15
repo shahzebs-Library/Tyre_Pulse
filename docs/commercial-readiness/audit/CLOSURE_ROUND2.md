@@ -22,8 +22,11 @@ local synthetic staging database (PostgreSQL 16, companies Alpha, Beta, Gamma) u
 6. Every step is written to a history that nobody can edit or remove, not even an administrator: who,
    which role, when, the comment, the evidence, and the asset, tyre, inspection or checklist and job card
    the action belongs to.
-7. Where a fix is not going to happen (vehicle sold, risk accepted), an authorised role can close the
-   action with a **documented exception**: name, time and a written reason are kept permanently.
+7. Where a fix is not going to happen (vehicle sold, risk accepted), anyone working on the action can
+   **ask for a documented exception** with a written reason. Asking does not close the action. A different
+   authorised person approves it (the action closes as an exception) or refuses it (it goes back to the
+   worker). The person who asked, and the person who submitted the completion, can never decide it. No
+   company setting relaxes this. Names, times and the reason are kept permanently.
 8. The words Open, In Progress and Closed keep their meaning. Review progress is a separate field, so every
    existing count, report and phone screen keeps working.
 
@@ -191,3 +194,75 @@ company. No role name is hard-coded in the review path except the seeded default
    only the first signature as today?
 5. Who may record an exception? Default: Admin, Director, Manager, PMV Manager, both Area Manager roles.
 6. May a supervisor still give the first signature on their own sheet (allowed today, unchanged)?
+
+## Follow-up after the browser tests (owner decisions of 2026-11-15, second set)
+
+**Nothing was applied to production.** No existing corrective action, approval or checklist was closed or
+changed. All results below are on the local synthetic staging database (`tp_close3`) and in unit tests.
+
+### What changed
+
+| Item | Change |
+|---|---|
+| C2, owner decision 1 | An exception is now a request. `corrective_action_record_exception` is gone from the draft. `corrective_action_request_exception` records the request and leaves the action open; `corrective_action_decide_exception` approves or refuses. The database refuses the person who asked and the person who submitted the completion, also when self review is switched on, also for a super admin, and also through the status field. New state `exception_requested`, three new columns, two new history event types |
+| Owner decision 2 | Verified, no rule change needed: every writer loads the action or sheet through the company, country and site check. New tests C06 (corrective actions) next to B18 and B21 (checklists). On a two-signature sheet the Workshop Supervisor still gives the first signature only, unless the company adds the role as a final signer (one setting) |
+| K1, K2, owner decision 3 | One wording, "Acknowledged, Action Required", from one place (`closureWorkflow.js`). Shown in the Checklists workspace list and its own tab, the register table, the viewer and sign-off ladder, the history, My Queue, asset history, the checklist PDF, the Excel export and the Audit Pack (label, two summary lines, a tile and a finding). Not counted as pending or as signed off. When every fault is settled the same places read "Acknowledged, faults resolved" or "Acknowledged, compliant by exception". The fault and its corrective action are never rewritten |
+| A1, owner decision 4 | Both panels and the settings dialog read from a new dictionary, `closure`, in English and Arabic (140 keys each). Sentences from the rules and the database are translated through `closureText.js` |
+| A2 | The two small links are now 40 px tall |
+| C3 | History shows the person's name and the time of day. The name is stored with each history line |
+| C4 | Resubmitting after a return without a new photograph keeps the stored photographs; the screen says so |
+| C5 | A person with nothing to do sees no box on an action never in review, otherwise one line saying who it is waiting for |
+| K3 | The confirmation after acknowledging survives the page reload |
+| K4 | Test fixture templates carry `options_ref` and the option list, like real templates |
+| C1 | Already fixed on this branch (path and draft `20261116102000`) |
+
+Not fixed here: **C6**. The sentence is in `src/lib/api/correctiveActions.js` on another branch (it is not in
+this branch or in main), so it has to be changed where it was added. Suggested text: "Only a reviewer can
+close a corrective action. Submit it for review."
+
+### Tests run
+
+- Staging suite `CLOSURE_DB=tp_close3 supabase/tests/closure/run_staging.sh`: **75 passed, 0 failed**
+  Existing rows byte-identical after the drafts (13 actions, 8 sheets, 6 mirrors, 1,298 job
+  cards, 120 inspections).
+- Vitest, 73 files touching the changed code (closure rules, service, dictionaries, checklists, Audit
+  Pack, PDF, My Queue, asset history, approvals, `webI18nKeyCoverage`, design ratchet): **1,077 passed**.
+- ESLint on every changed file: 0 errors. One `vite build`: passed.
+
+### Not Tested
+
+- Production and real data. A real browser run of the changed panels (the harness lives on the browser
+  test branch). Arabic checked by dictionary tests, not by a native reader and not on screen.
+- Expo and Flutter against the new rules: both still know nothing about `exception_requested` or
+  `acknowledged`. They read these as unknown values.
+- A super admin deciding their own exception request (no synthetic super admin in the fixture; the rule
+  has no super admin bypass in the code and the unit test covers the screen side).
+- Photographs through storage, emails, push.
+
+### Apply order and rollback
+
+1. `20261116100000_clo_corrective_action_review.sql`
+2. `20261116101000_clo_checklist_acknowledge_exception.sql`
+3. `20261116102000_clo_supervisor_actions_visibility.sql`
+
+Ship the web build first (it works without the drafts). Rollback statements are in each file header. The
+first two add columns, tables and functions only, so rolling back loses only reviews, requests and
+acknowledgements recorded after applying.
+
+### Remaining risks
+
+- Reviewers may still close an action directly from the status list while `ca_allow_direct_close` is on
+  (default, kept so the installed phone app keeps working). That path has no second person. It is refused
+  while a completion they submitted or any exception request is waiting.
+- A list shows "Action Required" for an acknowledged sheet whenever the fault state cannot be read. That is
+  the safe direction, but it can be briefly wrong after a network failure.
+- The phone apps need the same wording before acknowledged sheets are common in the field.
+
+### Questions for the owner
+
+1. Two-signature checklists: should Workshop Supervisor be a final signer by default, or stay a company
+   setting (today: setting, off)?
+2. Should the person who RAISED a corrective action also be barred from deciding its exception? Today the
+   bar covers the person who asked and the person who submitted the completion.
+3. Should direct closing from the status list be switched off for all companies once the phones are updated?
+

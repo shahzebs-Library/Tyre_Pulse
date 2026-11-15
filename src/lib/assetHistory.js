@@ -47,6 +47,7 @@ import {
   workOrderMaintenanceAmount,
 } from './governedCost'
 import { jobCardDurations, jobCardStage } from './jobCard'
+import { acknowledgedText } from './closureWorkflow'
 
 /* ------------------------------------------------------------------ *
  * Identity - (country, asset_no), never asset_no alone                 *
@@ -756,7 +757,7 @@ function checklistEvents(rows) {
       at: r?.submitted_at || r?.created_at || null,
       title: text(r?.template_name) || text(r?.title) || 'Checklist sheet',
       detail: [
-        text(r?.approval_status),
+        acknowledgedText(r) || text(r?.approval_status),
         score != null ? `Score ${score}%` : null,
       ].filter(Boolean).join(' - ') || null,
       severity: r?.score_passed === false ? 'high' : 'info',

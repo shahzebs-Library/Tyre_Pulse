@@ -35,13 +35,13 @@ alter table public.profiles enable trigger user;
 insert into public.checklist_templates (id, organisation_id, country, name, status, require_approval, require_area_manager, fields, option_sets, created_by)
 values
  ('c2000000-0000-4000-8000-000000000001','00000000-0000-0000-0000-000000000001','KSA','Synthetic Workshop Daily','published',true,true,
-  '[{"id":"f1","label":"Brakes","type":"select"},{"id":"f2","label":"Mirrors","type":"select"},{"id":"f3","label":"Seat belts","type":"select"}]',
-  '{"legend":{"blocking":["Not OK"]}}','af52a86f-2c24-5ce2-a00d-7ac6ca5d715f'),
+  '[{"id":"f1","label":"Brakes","type":"select","options_ref":"legend"},{"id":"f2","label":"Mirrors","type":"select","options_ref":"legend"},{"id":"f3","label":"Seat belts","type":"select","options_ref":"legend"}]',
+  '{"legend":{"options":["OK","Not OK"],"blocking":["Not OK"]}}','af52a86f-2c24-5ce2-a00d-7ac6ca5d715f'),
  ('c2000000-0000-4000-8000-000000000002','00000000-0000-0000-0000-000000000001','KSA','Synthetic Single Sign','published',true,false,
-  '[{"id":"g1","label":"Horn","type":"select"},{"id":"g2","label":"Lights","type":"select"}]',
-  '{"legend":{"blocking":["Not OK"]}}','af52a86f-2c24-5ce2-a00d-7ac6ca5d715f'),
+  '[{"id":"g1","label":"Horn","type":"select","options_ref":"legend"},{"id":"g2","label":"Lights","type":"select","options_ref":"legend"}]',
+  '{"legend":{"options":["OK","Not OK"],"blocking":["Not OK"]}}','af52a86f-2c24-5ce2-a00d-7ac6ca5d715f'),
  ('c2000000-0000-4000-8000-000000000003','bbbbbbbb-0000-4000-8000-000000000002','KSA','Synthetic Beta Daily','published',true,true,
-  '[{"id":"f1","label":"Brakes","type":"select"}]','{"legend":{"blocking":["Not OK"]}}','9c149942-c3b2-54c6-a6e8-c34b2933bb3c');
+  '[{"id":"f1","label":"Brakes","type":"select","options_ref":"legend"}]','{"legend":{"options":["OK","Not OK"],"blocking":["Not OK"]}}','9c149942-c3b2-54c6-a6e8-c34b2933bb3c');
 
 insert into public.checklist_submissions
  (id, organisation_id, template_id, template_name, country, site, asset_no, answers, submitted_by, approval_status,

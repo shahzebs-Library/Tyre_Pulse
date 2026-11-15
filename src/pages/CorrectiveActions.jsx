@@ -619,7 +619,7 @@ export default function CorrectiveActions() {
             className={`px-3 rounded text-xs font-medium border transition-colors ${ctrlCls} ${
               reviewOnly ? 'bg-amber-500/10 border-amber-500/40 text-amber-400 ring-1 ring-[var(--accent)]' : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border)] hover:text-[var(--text-primary)]'
             }`}
-          >Waiting for review ({reviewCount})</button>
+          >{t('closure.review.waitingFilter')} ({reviewCount})</button>
         )}
 
         {sites.length > 0 && (
@@ -689,7 +689,7 @@ export default function CorrectiveActions() {
           {priorityFilter && <Chip label={priorityFilter} onRemove={() => setPriorityFilter('')} />}
           {siteFilter     && <Chip label={siteFilter}     onRemove={() => setSiteFilter('')} />}
           {overdueOnly    && <Chip label={t('correctiveactions.filtersBar.overdueOnly')} onRemove={() => setOverdueOnly(false)} />}
-          {reviewOnly     && <Chip label="Waiting for review" onRemove={() => setReviewOnly(false)} />}
+          {reviewOnly     && <Chip label={t('closure.review.waitingFilter')} onRemove={() => setReviewOnly(false)} />}
           {search         && <Chip label={`"${search}"`}  onRemove={() => setSearch('')} />}
           <button onClick={clearAll} className={`text-[var(--text-muted)] hover:text-red-400 transition-colors ml-1 min-h-[32px] px-1 ${FOCUS}`}>
             {t('correctiveactions.filtersBar.clearAll')}

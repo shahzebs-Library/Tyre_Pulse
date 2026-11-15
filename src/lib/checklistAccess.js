@@ -31,6 +31,11 @@ export const CHECKLIST_PATH_PREFIXES = [
   // decide_checklist_approval, which re-resolves the rung server-side and
   // refuses anything this person cannot give.
   '/approvals',
+  // Corrective actions: a supervisor is a default reviewer of the closure
+  // workflow, so the review screen has to be reachable. The route is still
+  // behind the corrective_actions module switch, and every decision goes
+  // through the review RPCs, which re-check the reviewer server-side.
+  '/actions',
   // Just-in-time access requests (V116 request_elevation). A checklist-only
   // person who needs one module for an hour must be able to ask for it; the
   // request is decided by a super admin, so reaching the page grants nothing.

@@ -341,6 +341,7 @@ export default function ChecklistAuditPack() {
             <Tile label="Records" value={s.records} />
             <Tile label="Signed off" value={s.approval_rate == null ? 'N/A' : `${s.approval_rate}%`} tone={s.approval_rate == null ? '' : s.approval_rate < 80 ? 'warn' : 'good'} />
             <Tile label="Waiting for sign-off" value={s.pending} tone={s.pending ? 'warn' : 'good'} />
+            {s.acknowledged > 0 && <Tile label="Acknowledged, Action Required" value={s.acknowledged_open} tone={s.acknowledged_open ? 'warn' : 'good'} />}
             <Tile label="Faults with an action" value={s.action_coverage == null ? 'N/A' : `${s.action_coverage}%`} tone={s.action_coverage == null ? '' : s.action_coverage < 100 ? 'bad' : 'good'} />
             <Tile label="Findings (major / minor / obs.)" value={`${s.majors} / ${s.minors} / ${s.observations}`} tone={s.majors ? 'bad' : s.minors ? 'warn' : 'good'} />
           </div>

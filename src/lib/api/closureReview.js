@@ -9,10 +9,13 @@
  * writes raise a plain "not switched on yet" message.
  */
 import { supabase, unwrap, isMissingColumn, isMissingRelation, ServiceError, toServiceError } from './_client'
-import { accessFromServer, withDefaults, completionProblem, reviewProblem, exceptionProblem } from '../closureWorkflow'
+import {
+  accessFromServer, withDefaults, completionProblem, reviewProblem, exceptionProblem, exceptionDecisionProblem,
+  CHECKLIST_ACKNOWLEDGED,
+} from '../closureWorkflow'
 
-const REVIEW_COLS = 'id,review_status,submitted_by,submitted_at,completion_note,completion_photos,reviewed_by,reviewed_at,review_comment'
-const EVENT_COLS = 'id,action_id,event_type,actor_id,actor_role,note,evidence,linked,created_at'
+const REVIEW_COLS = 'id,review_status,submitted_by,submitted_at,completion_note,completion_photos,reviewed_by,reviewed_at,review_comment,exception_requested_by,exception_requested_at,exception_reason'
+const EVENT_COLS = 'id,action_id,event_type,actor_id,actor_role,actor_name,note,evidence,linked,created_at'
 const NOT_ON = 'Closure review is not switched on for this system yet.'
 
 /** A missing function, table or column all mean "the drafts are not applied". */
@@ -68,8 +71,8 @@ export async function getActionReview(actionId) {
 
 /** Ids of the actions waiting for a reviewer, with who submitted and when. */
 export async function listReviewQueue({ country } = {}) {
-  let q = supabase.from('corrective_actions').select('id,submitted_by,submitted_at')
-    .eq('review_status', 'submitted').order('submitted_at', { ascending: true }).limit(500)
+  let q = supabase.from('corrective_actions').select('id,review_status,submitted_by,submitted_at')
+    .in('review_status', ['submitted', 'exception_requested']).order('submitted_at', { ascending: true }).limit(500)
   if (country && country !== 'All') q = q.eq('country', country)
   const { data, error } = await q
   if (error) {
@@ -109,11 +112,24 @@ export async function reviewAction(actionId, decision, comment = '') {
     'Could not record the review decision.')
 }
 
-export async function recordException(actionId, reason) {
+/**
+ * Ask for a documented exception. This does NOT close the action: a different
+ * authorised person approves or refuses the request.
+ */
+export async function requestException(actionId, reason) {
   const problem = exceptionProblem(reason)
   if (problem) throw new ServiceError(problem)
-  return call('corrective_action_record_exception', { p_id: actionId, p_reason: String(reason).trim() },
-    'Could not record the exception.')
+  return call('corrective_action_request_exception', { p_id: actionId, p_reason: String(reason).trim() },
+    'Could not record the exception request.')
+}
+
+/** Approve or refuse a requested exception. The database refuses the person who asked. */
+export async function decideException(actionId, decision, comment = '') {
+  const problem = exceptionDecisionProblem(decision, comment)
+  if (problem) throw new ServiceError(problem)
+  return call('corrective_action_decide_exception',
+    { p_id: actionId, p_decision: decision, p_comment: String(comment || '').trim() || null },
+    'Could not record the exception decision.')
 }
 
 // ─── Checklist ────────────────────────────────────────────────────────────────
@@ -166,4 +182,43 @@ export async function getAcknowledgement(submissionId) {
     throw toServiceError(error, 'Could not read the acknowledgement.')
   }
   return data
+}
+
+/**
+ * Attach `ack_fault_state` ('fault_open' | 'exception' | 'fault_resolved') to every
+ * acknowledged sheet in a list, read from v_checklist_fault_compliance, so a list can say
+ * "Acknowledged, Action Required" only while a fault is really open. Rows are returned as
+ * given when nothing is acknowledged. A failed or unavailable read leaves the field unset,
+ * which every reader treats as "Action Required": never settled without evidence.
+ */
+export async function attachAckFaultStates(rows) {
+  const list = Array.isArray(rows) ? rows : []
+  const ids = list.filter((r) => r && String(r.approval_status ?? '') === CHECKLIST_ACKNOWLEDGED && r.id).map((r) => r.id)
+  if (!ids.length) return rows
+  const states = new Map()
+  const signers = new Map()
+  try {
+    for (let i = 0; i < ids.length; i += 150) {
+      const chunk = ids.slice(i, i + 150)
+      const [view, who] = await Promise.all([
+        supabase.from('v_checklist_fault_compliance').select('submission_id,fault_state,open_count').in('submission_id', chunk),
+        supabase.from('checklist_submissions').select('id,acknowledged_name,acknowledged_at,acknowledgement_note').in('id', chunk),
+      ])
+      if (view.error) throw view.error
+      for (const r of view.data || []) states.set(r.submission_id, r)
+      // Who signed is extra detail: a failure here never hides the fault state.
+      if (!who.error) for (const r of who.data || []) signers.set(r.id, r)
+    }
+  } catch { return rows }
+  return list.map((r) => {
+    const st = r && states.get(r.id)
+    if (!st) return r
+    const w = signers.get(r.id) || {}
+    return {
+      ...r, ack_fault_state: st.fault_state, ack_open_faults: st.open_count,
+      acknowledged_name: w.acknowledged_name ?? r.acknowledged_name ?? null,
+      acknowledged_at: w.acknowledged_at ?? r.acknowledged_at ?? null,
+      acknowledgement_note: w.acknowledgement_note ?? r.acknowledgement_note ?? null,
+    }
+  })
 }

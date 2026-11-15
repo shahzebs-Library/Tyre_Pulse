@@ -59,7 +59,9 @@ $$;
 select pg_temp.ok('A01 anon cannot execute any closure writer',
   not has_function_privilege('anon', 'public.corrective_action_review(uuid,text,text)', 'execute')
   and not has_function_privilege('anon', 'public.corrective_action_submit_completion(uuid,text,jsonb)', 'execute')
-  and not has_function_privilege('anon', 'public.corrective_action_record_exception(uuid,text)', 'execute')
+  and not has_function_privilege('anon', 'public.corrective_action_request_exception(uuid,text)', 'execute')
+  and not has_function_privilege('anon', 'public.corrective_action_decide_exception(uuid,text,text)', 'execute')
+  and to_regprocedure('public.corrective_action_record_exception(uuid,text)') is null
   and not has_function_privilege('anon', 'public.acknowledge_checklist_faults(uuid,text,text)', 'execute')
   and not has_function_privilege('anon', 'public.save_closure_review_config(jsonb)', 'execute')
   and not has_function_privilege('authenticated', 'public.closure_review_settings(uuid)', 'execute')
@@ -307,21 +309,46 @@ select pg_temp.try(:am, $$select public.acknowledge_checklist_faults('c3000000-0
 select pg_temp.ok('B12 final signer acknowledges the two-fault sheet',
   left(:'t60', 3) = 'ok:'
   and (select fault_count = 2 and open_count = 2 and not compliant from public.v_checklist_fault_compliance where submission_id = :s3));
-select pg_temp.try(:tman, $$select public.corrective_action_record_exception((select id from public.corrective_actions where source_id = 'c3000000-0000-4000-8000-000000000003' and source_detail = 'Mirrors'), 'Vehicle is being sold next week')::text$$) as t61 \gset
-select pg_temp.try(:supn, $$select public.corrective_action_record_exception((select id from public.corrective_actions where source_id = 'c3000000-0000-4000-8000-000000000003' and source_detail = 'Mirrors'), 'Vehicle is being sold next week')::text$$) as t62 \gset
-select pg_temp.try(:mgr, $$select public.corrective_action_record_exception((select id from public.corrective_actions where source_id = 'c3000000-0000-4000-8000-000000000003' and source_detail = 'Mirrors'), 'short')::text$$) as t63 \gset
-select pg_temp.ok('B13 exception needs an authorised role and a reason',
+select pg_temp.try(:tman, $$select public.corrective_action_request_exception((select id from public.corrective_actions where source_id = 'c3000000-0000-4000-8000-000000000003' and source_detail = 'Mirrors'), 'Vehicle is being sold next week')::text$$) as t61 \gset
+select pg_temp.try(:supn, $$select public.corrective_action_decide_exception((select id from public.corrective_actions where source_id = 'c3000000-0000-4000-8000-000000000003' and source_detail = 'Mirrors'), 'approve')::text$$) as t62 \gset
+select pg_temp.try(:mgr, $$select public.corrective_action_request_exception((select id from public.corrective_actions where source_id = 'c3000000-0000-4000-8000-000000000003' and source_detail = 'Mirrors'), 'short')::text$$) as t63 \gset
+select pg_temp.ok('B13 an exception request needs a person with a part in the action and a reason; nothing to decide before a request',
   left(:'t61', 5) = '42501'
   and left(:'t62', 5) = '42501'
   and left(:'t63', 5) = '22023');
-select pg_temp.try(:mgr, $$select public.corrective_action_record_exception((select id from public.corrective_actions where source_id = 'c3000000-0000-4000-8000-000000000003' and source_detail = 'Mirrors'), 'Vehicle is being sold next week, mirror not replaced')::text$$) as t64 \gset
-select pg_temp.ok('B14 documented exception records who, when and why; the other fault keeps the sheet non-compliant',
+select pg_temp.try(:mgr, $$select public.corrective_action_request_exception((select id from public.corrective_actions where source_id = 'c3000000-0000-4000-8000-000000000003' and source_detail = 'Mirrors'), 'Vehicle is being sold next week, mirror not replaced')::text$$) as t64 \gset
+select pg_temp.ok('B14a asking for an exception does not close the action and the sheet stays non-compliant',
   left(:'t64', 3) = 'ok:'
-  and (select status = 'Closed' and review_status = 'exception' and reviewed_by = :mgr and reviewed_at is not null
-              and review_comment like 'Vehicle is being sold%' and verified_at is null
+  and (select status <> 'Closed' and review_status = 'exception_requested' and exception_requested_by = :mgr
+              and exception_reason like 'Vehicle is being sold%' and closed_at is null
          from public.corrective_actions where source_id = :s3 and source_detail = 'Mirrors')
+  and (select fault_state = 'fault_open' and not compliant and exception_count = 0 from public.v_checklist_fault_compliance where submission_id = :s3));
+select pg_temp.try(:mgr, $$select public.corrective_action_decide_exception((select id from public.corrective_actions where source_id = 'c3000000-0000-4000-8000-000000000003' and source_detail = 'Mirrors'), 'approve', 'my own')::text$$) as t64b \gset
+select pg_temp.try(:mgr, $$update public.corrective_actions set status = 'Closed' where source_id = 'c3000000-0000-4000-8000-000000000003' and source_detail = 'Mirrors'$$) as t64c \gset
+select pg_temp.try(:mgr, $$select public.corrective_action_my_permissions((select id from public.corrective_actions where source_id = 'c3000000-0000-4000-8000-000000000003' and source_detail = 'Mirrors'))::text$$) as t64d \gset
+select pg_temp.try(:admin, $$select public.save_closure_review_config('{"ca_allow_self_review":true}')::text$$) as t64e \gset
+select pg_temp.try(:mgr, $$select public.corrective_action_decide_exception((select id from public.corrective_actions where source_id = 'c3000000-0000-4000-8000-000000000003' and source_detail = 'Mirrors'), 'approve', 'self review is on')::text$$) as t64f \gset
+select pg_temp.try(:admin, $$select public.save_closure_review_config('{"ca_allow_self_review":false}')::text$$) as t64g \gset
+select pg_temp.ok('B14b the person who asked can never approve or close their own exception, even when self review is switched on',
+  left(:'t64b', 5) = '42501' and :'t64b' like '%You asked for this exception%'
+  and left(:'t64c', 5) = 'PT409'
+  and (:'t64d')::text like '%"can_decide_exception": false%' and (:'t64d')::text like '%"exception_self_blocked": true%'
+  and left(:'t64e', 3) = 'ok:' and left(:'t64f', 5) = '42501' and left(:'t64g', 3) = 'ok:'
+  and (select status <> 'Closed' and review_status = 'exception_requested' from public.corrective_actions where source_id = :s3 and source_detail = 'Mirrors'));
+select pg_temp.try(:supn, $$select public.corrective_action_decide_exception((select id from public.corrective_actions where source_id = 'c3000000-0000-4000-8000-000000000003' and source_detail = 'Mirrors'), 'approve')::text$$) as t64h \gset
+select pg_temp.try(:am, $$select public.corrective_action_decide_exception((select id from public.corrective_actions where source_id = 'c3000000-0000-4000-8000-000000000003' and source_detail = 'Mirrors'), 'approve', 'Agreed with the fleet manager')::text$$) as t64i \gset
+select pg_temp.ok('B14c a different authorised person approves: who asked, who decided, when and why are all recorded',
+  left(:'t64h', 5) = '42501'
+  and left(:'t64i', 3) = 'ok:'
+  and (select status = 'Closed' and review_status = 'exception' and reviewed_by = :am and closed_by = :am and reviewed_at is not null
+              and exception_requested_by = :mgr and review_comment like 'Vehicle is being sold%' and verified_at is null
+         from public.corrective_actions where source_id = :s3 and source_detail = 'Mirrors')
+  and (select string_agg(e.event_type, ',' order by e.id) = 'exception_requested,exception'
+         from public.corrective_action_review_events e join public.corrective_actions a on a.id = e.action_id
+        where a.source_id = :s3 and a.source_detail = 'Mirrors')
   and (select count(*) = 1 from public.corrective_action_review_events e join public.corrective_actions a on a.id = e.action_id
-        where a.source_id = :s3 and e.event_type = 'exception' and e.note like 'Vehicle is being sold%' and e.linked->>'source_id' = 'c3000000-0000-4000-8000-000000000003')
+        where a.source_id = :s3 and e.event_type = 'exception' and e.note like 'Vehicle is being sold%' and e.actor_id = :am
+          and e.actor_name is not null and e.linked->>'source_id' = 'c3000000-0000-4000-8000-000000000003')
   and (select fault_state = 'fault_open' and not compliant and exception_count = 1 from public.v_checklist_fault_compliance where submission_id = :s3));
 select pg_temp.try(:coll, $$select public.corrective_action_submit_completion((select id from public.corrective_actions where source_id = 'c3000000-0000-4000-8000-000000000003' and source_detail = 'Brakes'), 'Brakes adjusted')::text$$) as t65 \gset
 select pg_temp.try(:supn, $$select public.corrective_action_review((select id from public.corrective_actions where source_id = 'c3000000-0000-4000-8000-000000000003' and source_detail = 'Brakes'), 'approve', 'ok')::text$$) as t66 \gset
@@ -393,4 +420,81 @@ select pg_temp.ok('B25 the compliance view obeys the reader''s own scope (other 
   :'t80' = 'ok:0'
   and :'t81' = 'ok:0'
   and :'t82' = 'ok:0');
+-- ============================== C. round 2 owner decisions ==============================
+insert into public.corrective_actions (id, organisation_id, title, priority, status, site, country, region, asset_no, created_by, source_type)
+values
+ ('c4000000-0000-4000-8000-00000000000a','00000000-0000-0000-0000-000000000001','Synthetic: round 2 north','Medium','Open','ALPHA NORTH PLANT','KSA','KSA','TM001','c1000000-0000-4000-8000-000000000001','manual'),
+ ('c4000000-0000-4000-8000-00000000000b','00000000-0000-0000-0000-000000000001','Synthetic: round 2 north two','Medium','Open','ALPHA NORTH PLANT','KSA','KSA','TM004','c1000000-0000-4000-8000-000000000001','manual'),
+ ('c4000000-0000-4000-8000-00000000000c','00000000-0000-0000-0000-000000000001','Synthetic: round 2 east','Medium','Open','ALPHA EAST PLANT','KSA','KSA','TM007','c1000000-0000-4000-8000-000000000001','manual');
+
+-- C4: resubmitting without a photograph keeps the stored evidence
+select pg_temp.try(:coll, $$select public.corrective_action_submit_completion('c4000000-0000-4000-8000-00000000000a', 'Valve replaced', '["data:image/jpeg;base64,P1"]')::text$$) as c1 \gset
+select pg_temp.try(:supn, $$select public.corrective_action_review('c4000000-0000-4000-8000-00000000000a', 'return', 'Add the torque value')::text$$) as c2 \gset
+select pg_temp.try(:coll, $$select public.corrective_action_submit_completion('c4000000-0000-4000-8000-00000000000a', 'Valve replaced, torque 600 Nm')::text$$) as c3 \gset
+select pg_temp.ok('C01 resubmitting after a return without a new photograph keeps the stored photograph',
+  left(:'c1', 3) = 'ok:' and left(:'c2', 3) = 'ok:' and left(:'c3', 3) = 'ok:'
+  and (select review_status = 'submitted' and completion_photos = '["data:image/jpeg;base64,P1"]'::jsonb
+         from public.corrective_actions where id = 'c4000000-0000-4000-8000-00000000000a'));
+select pg_temp.ok('C02 history names the person and keeps the time of each step',
+  (select bool_and(e.actor_name is not null and e.created_at is not null)
+          and bool_or(e.actor_name = 'Test clo.collector') and bool_or(e.actor_name = 'Test clo.sup.north')
+     from public.corrective_action_review_events e where e.action_id = 'c4000000-0000-4000-8000-00000000000a'));
+
+-- Tyre Data Collector: submits evidence and documents, no final closure authority
+select pg_temp.try(:coll, $$select public.corrective_action_review('c4000000-0000-4000-8000-00000000000a', 'approve', 'mine')::text$$) as c4 \gset
+select pg_temp.try(:coll2, $$select public.corrective_action_review('c4000000-0000-4000-8000-00000000000a', 'approve', 'for a colleague')::text$$) as c5 \gset
+select pg_temp.try(:coll, $$with u as (update public.corrective_actions set status = 'Closed' where id = 'c4000000-0000-4000-8000-00000000000b' returning 1) select count(*)::text from u$$) as c6 \gset
+select pg_temp.try(:coll, $$select public.corrective_action_request_exception('c4000000-0000-4000-8000-00000000000b', 'Asset is parked awaiting disposal')::text$$) as c7 \gset
+select pg_temp.try(:coll, $$select public.corrective_action_decide_exception('c4000000-0000-4000-8000-00000000000b', 'approve')::text$$) as c8 \gset
+select pg_temp.try(:coll2, $$select public.corrective_action_decide_exception('c4000000-0000-4000-8000-00000000000b', 'approve')::text$$) as c9 \gset
+select pg_temp.try(:coll, $$select public.corrective_action_my_permissions('c4000000-0000-4000-8000-00000000000b')::text$$) as c10 \gset
+select pg_temp.try(:coll, $$select public.corrective_action_worker_update('c4000000-0000-4000-8000-00000000000b', 'More work done')::text$$) as c11 \gset
+select pg_temp.ok('C03 Tyre Data Collector submits evidence and may ask for an exception, but cannot approve, close or decide anything',
+  left(:'c4', 5) = '42501' and left(:'c5', 5) = '42501'
+  and (:'c6' = 'ok:0' or left(:'c6', 5) = '42501')
+  and left(:'c7', 3) = 'ok:' and left(:'c8', 5) = '42501' and left(:'c9', 5) = '42501'
+  and (:'c10')::text like '%"can_review": false%' and (:'c10')::text like '%"can_decide_exception": false%'
+  and left(:'c11', 5) = 'PT409'
+  and (select count(*) = 0 from public.corrective_actions where id in ('c4000000-0000-4000-8000-00000000000a','c4000000-0000-4000-8000-00000000000b') and status = 'Closed'));
+
+-- the completion submitter cannot decide the exception either; refusal returns the action
+select pg_temp.try(:am, $$select public.corrective_action_decide_exception('c4000000-0000-4000-8000-00000000000b', 'refuse', '')::text$$) as c12 \gset
+select pg_temp.try(:am, $$select public.corrective_action_decide_exception('c4000000-0000-4000-8000-00000000000b', 'refuse', 'Disposal is not approved, repair it')::text$$) as c13 \gset
+select pg_temp.ok('C04 refusing an exception needs a reason and returns the action to the worker, still open',
+  left(:'c12', 5) = '22023' and left(:'c13', 3) = 'ok:'
+  and (select status = 'In Progress' and review_status = 'returned' and review_comment like 'Disposal is not approved%' and closed_at is null
+         from public.corrective_actions where id = 'c4000000-0000-4000-8000-00000000000b')
+  and (select string_agg(event_type, ',' order by id) = 'exception_requested,exception_refused'
+         from public.corrective_action_review_events where action_id = 'c4000000-0000-4000-8000-00000000000b'));
+select pg_temp.try(:mgr, $$select public.corrective_action_submit_completion('c4000000-0000-4000-8000-00000000000b', 'Repaired by the manager')::text$$) as c14 \gset
+select pg_temp.try(:admin, $$select public.corrective_action_request_exception('c4000000-0000-4000-8000-00000000000b', 'Close as exception, asset is leaving the fleet')::text$$) as c15 \gset
+select pg_temp.try(:mgr, $$select public.corrective_action_decide_exception('c4000000-0000-4000-8000-00000000000b', 'approve')::text$$) as c16 \gset
+select pg_temp.try(:admin, $$select public.corrective_action_decide_exception('c4000000-0000-4000-8000-00000000000b', 'approve')::text$$) as c17 \gset
+select pg_temp.try(:am, $$select public.corrective_action_decide_exception('c4000000-0000-4000-8000-00000000000b', 'approve')::text$$) as c18 \gset
+select pg_temp.ok('C05 neither the person who submitted the completion nor the person who asked can decide; a third person does',
+  left(:'c14', 3) = 'ok:' and left(:'c15', 3) = 'ok:'
+  and left(:'c16', 5) = '42501' and :'c16' like '%You submitted this action%'
+  and left(:'c17', 5) = '42501' and :'c17' like '%You asked for this exception%'
+  and left(:'c18', 3) = 'ok:'
+  and (select status = 'Closed' and review_status = 'exception' and reviewed_by = :am from public.corrective_actions where id = 'c4000000-0000-4000-8000-00000000000b'));
+
+-- Workshop Supervisor: review within authorised sites only
+select pg_temp.try(:coll, $$select public.corrective_action_submit_completion('c4000000-0000-4000-8000-00000000000c', 'Pressure corrected at East')::text$$) as c19 \gset
+select pg_temp.try(:supn, $$select public.corrective_action_my_permissions('c4000000-0000-4000-8000-00000000000c')::text$$) as c20 \gset
+select pg_temp.try(:supn, $$select public.corrective_action_review('c4000000-0000-4000-8000-00000000000c', 'approve', 'not my site')::text$$) as c21 \gset
+select pg_temp.try(:supn, $$select public.corrective_action_request_exception('c4000000-0000-4000-8000-00000000000c', 'Trying from another site')::text$$) as c22 \gset
+select pg_temp.try(:supn, $$select count(*)::text from public.corrective_action_review_events where action_id = 'c4000000-0000-4000-8000-00000000000c'$$) as c23 \gset
+select pg_temp.try(:supe, $$select public.corrective_action_my_permissions('c4000000-0000-4000-8000-00000000000c')::text$$) as c24 \gset
+select pg_temp.try(:supe, $$select public.corrective_action_review('c4000000-0000-4000-8000-00000000000c', 'approve', 'Checked at East')::text$$) as c25 \gset
+select pg_temp.ok('C06 Workshop Supervisor reviews corrective actions at an authorised site and is refused everywhere else',
+  left(:'c19', 3) = 'ok:'
+  and (:'c20')::text like '%"ok": false%' and left(:'c21', 5) = '42501' and left(:'c22', 5) = '42501' and :'c23' = 'ok:0'
+  and (:'c24')::text like '%"can_review": true%' and left(:'c25', 3) = 'ok:'
+  and (select status = 'Closed' and reviewed_by = :supe from public.corrective_actions where id = 'c4000000-0000-4000-8000-00000000000c'));
+
+select pg_temp.ok('C07 no existing action or sheet outcome was changed by any of the above',
+  (select status = 'Closed' and review_status is null and reviewed_by is null and exception_requested_by is null
+     from public.corrective_actions where id = :a3)
+  and (select bool_and(approval_status = 'approved') from public.checklist_submissions
+        where id in ('c3000000-0000-4000-8000-000000000004', 'c3000000-0000-4000-8000-000000000005')));
 rollback;

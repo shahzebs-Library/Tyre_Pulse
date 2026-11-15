@@ -6,8 +6,10 @@ import { blockingAnswers } from '../../lib/checklist/checklistMarks'
 import { isTwoStage } from '../../lib/checklist/checklistApproval'
 import { templateFromSubmission, submissionAnswers } from '../../lib/checklistView'
 import {
-  faultRows, faultSummary, complianceLabel, acknowledgeCheck, isAcknowledged, FAULT_STATE_TEXT,
+  faultRows, faultSummary, complianceLabel, acknowledgeCheck, isAcknowledged,
 } from '../../lib/closureWorkflow'
+import { closureText } from '../../lib/closureText'
+import { useLanguage } from '../../contexts/LanguageContext'
 import {
   listSheetActions, getClosureReviewConfig, getAcknowledgement, acknowledgeChecklist,
 } from '../../lib/api/closureReview'
@@ -15,8 +17,25 @@ import { useAuth } from '../../contexts/AuthContext'
 import { toUserMessage } from '../../lib/safeError'
 import { formatDate } from '../../lib/formatters'
 
+// A sheet that was just acknowledged is reloaded by its page, which rebuilds this panel.
+// The id is remembered here so the confirmation still shows once on the rebuilt panel.
+const justAcknowledged = new Set()
+
+/** Fault state label. Literal keys so the dictionary check sees every one of them. */
+function stateText(t, state) {
+  switch (state) {
+    case 'unlinked': return t('closure.fault.state.unlinked')
+    case 'open': return t('closure.fault.state.open')
+    case 'in_review': return t('closure.fault.state.in_review')
+    case 'exception_requested': return t('closure.fault.state.exception_requested')
+    case 'resolved': return t('closure.fault.state.resolved')
+    case 'exception': return t('closure.fault.state.exception')
+    default: return ''
+  }
+}
+
 const STATE_TONE = {
-  unlinked: 'text-red-400', open: 'text-amber-400', in_review: 'text-amber-400',
+  unlinked: 'text-red-400', open: 'text-amber-400', in_review: 'text-amber-400', exception_requested: 'text-amber-400',
   resolved: 'text-green-400', exception: 'text-[var(--text-secondary)]',
 }
 const LABEL_TONE = { good: 'text-green-400', warn: 'text-amber-400', muted: 'text-[var(--text-secondary)]' }
@@ -36,11 +55,12 @@ const LABEL_TONE = { good: 'text-green-400', warn: 'text-amber-400', muted: 'tex
  */
 export default function ChecklistFaultPanel({ submission, onChanged }) {
   const { profile } = useAuth()
+  const { t } = useLanguage()
   const [state, setState] = useState({ loading: true, provisioned: false, actions: [], config: null, ack: null })
   const [note, setNote] = useState('')
   const [signature, setSignature] = useState(null)
   const [busy, setBusy] = useState(false)
-  const [feedback, setFeedback] = useState(null)
+  const [feedback, setFeedback] = useState(() => (submission?.id && justAcknowledged.has(submission.id) ? { ok: true, confirm: true } : null))
 
   const template = useMemo(() => (submission ? templateFromSubmission(submission) : null), [submission])
   const blocking = useMemo(
@@ -57,10 +77,12 @@ export default function ChecklistFaultPanel({ submission, onChanged }) {
       setState({ loading: false, provisioned: sheet.provisioned && cfg.provisioned, actions: sheet.actions, config: cfg.config, ack })
     } catch (err) {
       setState((s) => ({ ...s, loading: false }))
-      setFeedback({ ok: false, text: toUserMessage(err, 'Could not load the faults on this checklist.') })
+      setFeedback({ ok: false, text: closureText(t, toUserMessage(err, t('closure.fault.loadFailed'))) })
     }
-  }, [id, hasFaults])
+  }, [id, hasFaults, t])
   useEffect(() => { load() }, [load])
+  // The remembered confirmation is shown once, on the first panel built after the reload.
+  useEffect(() => { if (id) justAcknowledged.delete(id) }, [id])
 
   if (!submission || !hasFaults) return null
 
@@ -83,31 +105,42 @@ export default function ChecklistFaultPanel({ submission, onChanged }) {
     setBusy(true); setFeedback(null)
     try {
       await acknowledgeChecklist(id, { note, signature })
-      setFeedback({ ok: true, text: 'Acknowledged. The fault stays on record and the checklist is not compliant until it is resolved.' })
+      justAcknowledged.add(id)
+      setTimeout(() => justAcknowledged.delete(id), 15000)
+      setFeedback({ ok: true, confirm: true })
       onChanged?.('acknowledged')
     } catch (err) {
-      setFeedback({ ok: false, text: toUserMessage(err, 'The checklist could not be acknowledged.') })
+      setFeedback({ ok: false, text: closureText(t, toUserMessage(err, t('closure.fault.ackFailed'))) })
     } finally { setBusy(false) }
   }
 
   return (
-    <section className="rounded-xl border p-4 space-y-3" style={{ borderColor: 'var(--input-border)' }} data-testid="checklist-fault-panel" aria-label="Recorded faults">
+    <section className="rounded-xl border p-4 space-y-3" style={{ borderColor: 'var(--input-border)' }} data-testid="checklist-fault-panel" aria-label={t('closure.fault.title', { count: rows.length })}>
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h3 className="text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5 text-[var(--text-secondary)]">
-          <AlertTriangle className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" /> Recorded faults ({rows.length})
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" /> {t('closure.fault.title', { count: rows.length })}
         </h3>
-        {label && <span className={`text-xs font-medium ${LABEL_TONE[label.tone]}`}>{label.text}</span>}
+        {label && (
+          <span className={`text-xs font-medium ${LABEL_TONE[label.tone]}`} data-testid="checklist-ack-label">
+            {closureText(t, label.text)}
+            {label.open > 0 ? ` (${label.open === 1 ? t('closure.fault.detailOne') : t('closure.fault.detailMany', { count: label.open })})` : ''}
+          </span>
+        )}
       </div>
+
+      {acknowledged && label?.state === 'fault_open' && (
+        <p className="text-xs text-amber-400">{t('closure.fault.actionRequiredHint')}</p>
+      )}
 
       {acknowledged && state.ack?.acknowledged_at && (
         <p className="text-xs text-[var(--text-muted)]">
-          Acknowledged by {state.ack.acknowledged_name || 'a signer'} on {formatDate(state.ack.acknowledged_at)}
-          {state.ack.acknowledgement_note ? `. Note: ${state.ack.acknowledgement_note}` : ''}
+          {t('closure.fault.ackBy', { name: state.ack.acknowledged_name || t('closure.fault.aSigner'), date: formatDate(state.ack.acknowledged_at) })}
+          {state.ack.acknowledgement_note ? `. ${t('closure.fault.ackNote', { note: state.ack.acknowledgement_note })}` : ''}
         </p>
       )}
 
       {state.loading ? (
-        <p className="text-xs text-[var(--text-muted)] flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> Loading</p>
+        <p className="text-xs text-[var(--text-muted)] flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> {t('closure.fault.loading')}</p>
       ) : (
         <ul className="space-y-1.5">
           {rows.map((r) => (
@@ -116,7 +149,7 @@ export default function ChecklistFaultPanel({ submission, onChanged }) {
               <span className={`shrink-0 text-xs inline-flex items-center gap-1 ${STATE_TONE[r.state]}`}>
                 {r.state === 'resolved' ? <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
                   : r.state === 'exception' ? <FileWarning className="w-3.5 h-3.5" aria-hidden="true" /> : null}
-                {FAULT_STATE_TEXT[r.state]}
+                {stateText(t, r.state)}
               </span>
             </li>
           ))}
@@ -125,33 +158,32 @@ export default function ChecklistFaultPanel({ submission, onChanged }) {
 
       {rows.some((r) => r.action) && (
         <p className="text-xs text-[var(--text-muted)]">
-          Each fault is closed through its corrective action, by a reviewed fix or a documented exception.{' '}
-          <Link to="/actions" className="underline text-[var(--accent)]">Open corrective actions</Link>
+          {t('closure.fault.closeHint')}{' '}
+          <Link to="/actions" className="underline text-[var(--accent)] inline-flex items-center min-h-[40px]">{t('closure.fault.openActions')}</Link>
         </p>
       )}
 
-      {feedback && <p role={feedback.ok ? 'status' : 'alert'} className={`text-sm ${feedback.ok ? 'text-green-400' : 'text-red-400'}`}>{feedback.text}</p>}
+      {feedback && <p role={feedback.ok ? 'status' : 'alert'} className={`text-sm ${feedback.ok ? 'text-green-400' : 'text-red-400'}`}>{feedback.confirm ? t('closure.fault.done') : feedback.text}</p>}
 
       {state.provisioned && waiting && !feedback?.ok && (
         check.ok ? (
           <div className="space-y-2 pt-2 border-t border-[var(--border)]">
             <p className="text-xs text-[var(--text-secondary)]">
-              This checklist cannot be approved while a fault is recorded. You can acknowledge it instead: the fault stays as
-              written, the sheet is locked, and it counts as compliant only when every fault is resolved or has a documented exception.
-              {check.bothSteps ? ' Your signature is recorded on both signing steps.' : ''}
+              {t('closure.fault.intro')}
+              {check.bothSteps ? ` ${t('closure.fault.bothSteps')}` : ''}
             </p>
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Note (optional)"
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder={t('closure.fault.notePlaceholder')}
               className="w-full rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-500"
               style={{ background: 'var(--surface-2)', border: '1px solid var(--input-border)', color: 'var(--text-primary)' }} />
-            <SignatureField label="Acknowledgement signature" onChange={setSignature} />
+            <SignatureField label={t('closure.fault.signatureLabel')} onChange={setSignature} />
             <button type="button" onClick={acknowledge} disabled={busy || !signature}
               className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm border border-amber-600/60 text-amber-300 hover:bg-amber-500/10 disabled:opacity-50">
               {busy ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <PenLine className="w-4 h-4" aria-hidden="true" />}
-              Acknowledge with fault
+              {t('closure.fault.acknowledgeBtn')}
             </button>
           </div>
         ) : (
-          <p className="text-xs text-[var(--text-muted)] pt-2 border-t border-[var(--border)]">{check.reason}</p>
+          <p className="text-xs text-[var(--text-muted)] pt-2 border-t border-[var(--border)]">{closureText(t, check.reason)}</p>
         )
       )}
     </section>

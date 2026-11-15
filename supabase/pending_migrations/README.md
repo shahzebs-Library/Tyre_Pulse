@@ -72,12 +72,16 @@ Apply in this order, each after a rolled-back check on production. Test: `supaba
 
 - `20261116100000_clo_corrective_action_review.sql` - per-company review settings (`closure_review_config`),
   review columns on `corrective_actions` (status vocabulary unchanged), append-only
-  `corrective_action_review_events`, the submit / review / exception writers and the guard trigger.
+  `corrective_action_review_events`, the submit / review writers, the exception REQUEST and DECISION
+  writers (the person who asks can never decide; no company switch relaxes that) and the guard trigger.
 - `20261116101000_clo_checklist_acknowledge_exception.sql` - depends on the file above. Adds the
   `acknowledged` checklist outcome, `acknowledge_checklist_faults()`, `v_checklist_fault_compliance`,
   append-only `checklist_decision_events`, and per-company extra final signer roles. Contains one
   `drop constraint` + `add constraint` pair (a CHECK cannot be widened in place), so the MCP confirm
   prompt will appear. The blocking-mark rule (`guard_checklist_approval_stages`) is not touched.
+- `20261116102000_clo_supervisor_actions_visibility.sql` - depends on `20261116100000`. Switches the
+  `corrective_actions` module on for Workshop Supervisor and Maintenance Supervisor so a default
+  reviewer can open the review screen (browser test defect C1). Two rows, no rights change.
 
 ## Work order permissions (draft PR #519, owner decisions 2026-11-15)
 

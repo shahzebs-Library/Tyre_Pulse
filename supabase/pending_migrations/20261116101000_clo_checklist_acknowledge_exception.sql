@@ -2,7 +2,7 @@
 -- 20261116101000_clo_checklist_acknowledge_exception.sql
 -- STATUS: AUTHORED, NOT APPLIED. Draft for owner approval. Tested on local staging only.
 -- DEPENDS ON: 20261116100000_clo_corrective_action_review.sql (config table, review columns,
---             exception writer). Apply that one first.
+--             exception request and decision writers). Apply that one first.
 --
 -- WHAT IT DOES (owner decision 2026-11-15, checklist sign-off and fault handling)
 --   Today a sheet with an answer marked "Not OK" can never be closed: the approval guard

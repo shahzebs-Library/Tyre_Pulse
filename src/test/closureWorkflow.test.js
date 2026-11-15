@@ -4,8 +4,13 @@ import { resolve } from 'node:path'
 import {
   roleIn, normaliseRole, reviewLabel, isAwaitingReview, completionProblem, reviewProblem, exceptionProblem,
   actionAccess, accessFromServer, withDefaults, DEFAULT_CONFIG, acknowledgeCheck, isFinalSigner,
-  faultRows, faultSummary, isCompliant, complianceLabel,
+  faultRows, faultSummary, isCompliant, complianceLabel, hasNoAction, exceptionDecisionProblem,
+  ACK_ACTION_REQUIRED, acknowledgedLabel, acknowledgedText,
 } from '../lib/closureWorkflow'
+import { workspaceBucket, WORKSPACE_BUCKETS, workspaceKpis, listTabCounts, filterWorkspaceList } from '../lib/checklistWorkspaceView'
+import { prettyStatus } from '../lib/checklistView'
+import { submissionExportRows } from '../lib/checklistsAnalytics'
+import { buildAuditPack, approvalLabel } from '../lib/checklistAuditPack'
 import { statusSummary, stageFor, isFullyClosed } from '../lib/checklist/checklistApproval'
 
 // Comment lines are dropped: the headers discuss names the statements must not contain.
@@ -43,7 +48,7 @@ describe('status vocabulary stays compatible', () => {
     expect(new Set(written)).toEqual(new Set(['In Progress', 'Closed']))
   })
   it('review progress lives in review_status', () => {
-    expect(CA).toMatch(/review_status in \('submitted','returned','approved','exception'\)/)
+    expect(CA).toMatch(/review_status in \('submitted','returned','approved','exception_requested','exception'\)/)
   })
   it('never raises a serialisation failure code', () => {
     expect(CA + CL).not.toMatch(/40001|40P01/)
@@ -75,7 +80,7 @@ describe('corrective action review', () => {
     const a = actionAccess(open, { userId: 'u1', role: 'Tyre Data Collector', isAssignee: true })
     expect(a.canSubmit).toBe(true)
     expect(a.canReview).toBe(false)
-    expect(a.canException).toBe(false)
+    expect(a.canDecideException).toBe(false)
   })
   it('somebody else in the same role may do nothing', () => {
     const a = actionAccess(open, { userId: 'u2', role: 'Tyre Data Collector', isAssignee: false })
@@ -99,7 +104,7 @@ describe('corrective action review', () => {
   })
   it('nothing is offered on a closed action or while it is waiting', () => {
     const closed = actionAccess({ status: 'Closed' }, { userId: 'u1', role: 'Admin', isAssignee: true })
-    expect(closed.canSubmit || closed.canReview || closed.canException).toBe(false)
+    expect(closed.canSubmit || closed.canReview || closed.canRequestException || closed.canDecideException).toBe(false)
     expect(actionAccess(submitted, { userId: 'u1', role: 'Tyre Data Collector', isAssignee: true }).canSubmit).toBe(false)
   })
   it('evidence: a note is always required, photographs when the company asks', () => {
@@ -122,7 +127,7 @@ describe('corrective action review', () => {
   it('an unreadable server answer offers nothing', () => {
     const a = accessFromServer(null)
     expect(a.known).toBe(false)
-    expect(a.canSubmit || a.canReview || a.canException || a.canUpdate).toBe(false)
+    expect(a.canSubmit || a.canReview || a.canRequestException || a.canDecideException || a.canUpdate).toBe(false)
     expect(accessFromServer({ ok: true, can_review: true, min_photos: 2 })).toMatchObject({ known: true, canReview: true, minPhotos: 2 })
   })
   it('labels say where the action is, and an old closed action is not given an invented review', () => {
@@ -181,7 +186,8 @@ describe('checklist with a fault', () => {
     const s = { approval_status: 'acknowledged' }
     expect(isFullyClosed(s)).toBe(false)
     expect(stageFor({ require_area_manager: true }, s)).toBeNull()
-    expect(statusSummary(null, s)).toEqual({ tone: 'warn', text: 'Acknowledged with a recorded fault' })
+    expect(statusSummary(null, s)).toEqual({ tone: 'warn', text: 'Acknowledged, Action Required' })
+    expect(statusSummary(null, { ...s, ack_fault_state: 'fault_resolved' }).text).toBe('Acknowledged, faults resolved')
   })
 
   const blocking = [{ id: 'f1', label: 'Brakes', value: 'Not OK' }, { id: 'f2', label: 'Mirrors', value: 'Not OK' }]
@@ -198,7 +204,7 @@ describe('checklist with a fault', () => {
     const oneOpen = faultSummary(faultRows(blocking, [{ source_detail: 'Brakes', status: 'Closed', review_status: 'approved' }, { source_detail: 'Mirrors', status: 'Open' }]))
     expect(oneOpen).toMatchObject({ open: 1, state: 'fault_open' })
     expect(isCompliant(ack, oneOpen)).toBe(false)
-    expect(complianceLabel(ack, oneOpen).text).toBe('Acknowledged, 1 fault open')
+    expect(complianceLabel(ack, oneOpen)).toMatchObject({ text: 'Acknowledged, Action Required', detail: '1 fault open', open: 1 })
 
     const excepted = faultSummary(faultRows(blocking, [{ source_detail: 'Brakes', status: 'Closed', review_status: 'approved' }, { source_detail: 'Mirrors', status: 'Closed', review_status: 'exception' }]))
     expect(excepted).toMatchObject({ open: 0, exception: 1, state: 'exception' })
@@ -215,3 +221,99 @@ describe('checklist with a fault', () => {
     expect(isCompliant({ approval_status: 'rejected' }, faultSummary([]))).toBe(false)
   })
 })
+
+describe('round 2 owner decisions', () => {
+  const cfg = withDefaults(null)
+  const requested = { status: 'In Progress', review_status: 'exception_requested', exception_requested_by: 'mgr', submitted_by: 'worker' }
+
+  it('an exception is a request: the person who asked can never decide it', () => {
+    const asker = actionAccess(requested, { userId: 'mgr', role: 'Manager', config: cfg })
+    expect(asker).toMatchObject({ canDecideException: false, exceptionSelfBlocked: true, canRequestException: false })
+    const other = actionAccess(requested, { userId: 'am', role: 'Workshop Maintenance Area Manager', config: cfg })
+    expect(other).toMatchObject({ canDecideException: true, exceptionSelfBlocked: false })
+  })
+  it('the self review switch never applies to exceptions, and a super admin is bound too', () => {
+    const on = { ...cfg, ca_allow_self_review: true }
+    expect(actionAccess(requested, { userId: 'mgr', role: 'Manager', config: on }).canDecideException).toBe(false)
+    expect(actionAccess(requested, { userId: 'mgr', role: 'Admin', isSuperAdmin: true, config: on }).canDecideException).toBe(false)
+  })
+  it('the person who submitted the completion cannot decide the exception either', () => {
+    const a = { ...requested, exception_requested_by: 'admin', submitted_by: 'mgr' }
+    expect(actionAccess(a, { userId: 'mgr', role: 'Manager', config: cfg })).toMatchObject({ canDecideException: false, exceptionSelfBlocked: true })
+  })
+  it('a worker may ask for an exception but has no closing right of any kind', () => {
+    const open = { status: 'In Progress', review_status: null }
+    const worker = actionAccess(open, { userId: 'w', role: 'Tyre Data Collector', isAssignee: true, config: cfg })
+    expect(worker).toMatchObject({ canSubmit: true, canRequestException: true, canReview: false, canDecideException: false, isReviewer: false })
+    const waiting = actionAccess({ ...requested, exception_requested_by: 'w' }, { userId: 'w', role: 'Tyre Data Collector', isAssignee: true, config: cfg })
+    expect(waiting).toMatchObject({ canSubmit: false, canUpdate: false, canDecideException: false, exceptionSelfBlocked: false, waitingOn: 'exception_decider' })
+    expect(hasNoAction(waiting)).toBe(true)
+  })
+  it('a requested exception is not a closed action and sits in the queue', () => {
+    expect(reviewLabel(requested)).toEqual({ tone: 'warn', text: 'Exception requested, waiting for a decision' })
+    expect(isAwaitingReview(requested)).toBe(true)
+    expect(exceptionDecisionProblem('refuse', '')).toMatch(/why the exception is refused/)
+    expect(exceptionDecisionProblem('approve', '')).toBeNull()
+    expect(exceptionDecisionProblem('close', '')).toMatch(/approve or refuse/)
+    expect(faultRows([{ id: 'f', label: 'Brakes', value: 'Not OK' }], [{ source_detail: 'Brakes', ...requested }])[0].state).toBe('exception_requested')
+  })
+  it('the server answer carries the same exception fields, failing closed', () => {
+    expect(accessFromServer({ ok: true, can_request_exception: true, exception_self_blocked: true, waiting_on: 'reviewer' }))
+      .toMatchObject({ canRequestException: true, exceptionSelfBlocked: true, canDecideException: false, waitingOn: 'reviewer' })
+    expect(accessFromServer({ ok: true, waiting_on: 'someone' }).waitingOn).toBeNull()
+  })
+  it('the SQL draft has the request and decision writers and no self-service exception', () => {
+    expect(CA).toMatch(/corrective_action_request_exception/)
+    expect(CA).toMatch(/corrective_action_decide_exception/)
+    expect(CA).not.toMatch(/function public\.corrective_action_record_exception/)
+    expect(CA).toMatch(/You asked for this exception, so another authorised person has to decide it\./)
+    expect(CA).not.toMatch(/errcode = '40001'/)
+  })
+
+  it('an acknowledged sheet reads "Acknowledged, Action Required" unless its fault is known to be settled', () => {
+    expect(ACK_ACTION_REQUIRED).toBe('Acknowledged, Action Required')
+    expect(acknowledgedLabel({ approval_status: 'acknowledged' })).toMatchObject({ text: ACK_ACTION_REQUIRED, actionRequired: true })
+    expect(acknowledgedLabel({ approval_status: 'acknowledged', ack_fault_state: 'fault_open' }).actionRequired).toBe(true)
+    expect(acknowledgedLabel({ approval_status: 'acknowledged', ack_fault_state: 'exception' })).toMatchObject({ text: 'Acknowledged, compliant by exception', actionRequired: false })
+    expect(acknowledgedLabel({ approval_status: 'acknowledged', ack_fault_state: 'fault_resolved' }).text).toBe('Acknowledged, faults resolved')
+    expect(acknowledgedLabel({ approval_status: 'approved' })).toBeNull()
+    expect(acknowledgedText({ approval_status: 'pending' })).toBeNull()
+  })
+  it('lists: not pending, not approved, counted as action required', () => {
+    const subs = [
+      { id: 1, approval_status: 'acknowledged' },
+      { id: 2, approval_status: 'acknowledged', ack_fault_state: 'fault_resolved' },
+      { id: 3, approval_status: 'pending' },
+      { id: 4, approval_status: 'approved' },
+    ]
+    expect(subs.map(workspaceBucket)).toEqual(['ack_action', 'ack_settled', 'pending', 'approved'])
+    expect(WORKSPACE_BUCKETS.ack_action.label).toBe(ACK_ACTION_REQUIRED)
+    const k = workspaceKpis(subs)
+    expect(k).toMatchObject({ pending: 1, actionRequired: 1, done: 2 })
+    expect(listTabCounts(subs)).toMatchObject({ pending: 1, action: 1 })
+    expect(filterWorkspaceList(subs, { tab: 'action' }).map((s) => s.id)).toEqual([1])
+  })
+  it('viewer, export and queue rows use the same words', () => {
+    const s = { id: 1, approval_status: 'acknowledged', status: 'submitted' }
+    expect(prettyStatus(s.approval_status, s)).toBe(ACK_ACTION_REQUIRED)
+    expect(prettyStatus('acknowledged')).toBe(ACK_ACTION_REQUIRED)
+    expect(prettyStatus('pending_area_manager')).toBe('Pending Area Manager')
+    expect(submissionExportRows([s])[0].status).toBe(ACK_ACTION_REQUIRED)
+    expect(submissionExportRows([{ ...s, ack_fault_state: 'exception' }])[0].status).toBe('Acknowledged, compliant by exception')
+  })
+  it('Audit Pack: acknowledged is named, not waiting, not signed off, and raises a finding while a fault is open', () => {
+    const tpl = { id: 't1', name: 'Daily', status: 'published', fields: [{ id: 'f1', label: 'Brakes', type: 'select', options_ref: 'legend' }],
+      option_sets: { legend: { options: ['OK', 'Not OK'], blocking: ['Not OK'] } } }
+    const sub = { id: 's1', template_id: 't1', approval_status: 'acknowledged', answers: { f1: 'Not OK' }, submitted_at: '2026-11-10T08:00:00Z', acknowledged_name: 'Test Signer', acknowledged_at: '2026-11-11T08:00:00Z' }
+    const openPack = buildAuditPack({ templates: [tpl], submissions: [sub], actions: [{ id: 'a1', source_id: 's1', source_detail: 'Brakes', status: 'Open' }], now: '2026-11-15T00:00:00Z' })
+    expect(openPack.records[0]).toMatchObject({ approval: ACK_ACTION_REQUIRED, ack_open: 1, acknowledged_by: 'Test Signer' })
+    expect(openPack.summary).toMatchObject({ acknowledged: 1, acknowledged_open: 1, pending: 0, approved: 0 })
+    expect(openPack.findings.some((f) => /acknowledged with a fault still open/i.test(f.title))).toBe(true)
+    expect(openPack.faults[0]).toMatchObject({ item: 'Brakes', has_action: true, action_status: 'Open' })
+    const donePack = buildAuditPack({ templates: [tpl], submissions: [sub], actions: [{ id: 'a1', source_id: 's1', source_detail: 'Brakes', status: 'Closed' }], now: '2026-11-15T00:00:00Z' })
+    expect(donePack.records[0]).toMatchObject({ approval: 'Acknowledged, faults resolved', ack_open: 0 })
+    expect(donePack.summary.acknowledged_open).toBe(0)
+    expect(approvalLabel('acknowledged')).toBe(ACK_ACTION_REQUIRED)
+  })
+})
+

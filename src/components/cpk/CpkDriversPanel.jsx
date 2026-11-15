@@ -22,6 +22,7 @@ import {
 } from '../../lib/cpkDrivers'
 import { groupBySize } from '../../lib/brandSizeCpk'
 import { fleetTiles, sortByTypeWorstFirst, unitSuffix } from '../../lib/fleetCpkView'
+import { rowRate } from '../../lib/cpkMetrics'
 import { exportToPdf } from '../../lib/exportUtils'
 import {
   GitBranch, TrendingUp, TrendingDown, Minus, AlertTriangle, Award,
@@ -130,7 +131,7 @@ export default function CpkDriversPanel({
 
   const summaryTiles = useMemo(() => fleetTiles(fleetCpk?.fleet || []), [fleetCpk])
   const worstTypes = useMemo(
-    () => sortByTypeWorstFirst(fleetCpk?.byType || []).filter((r) => r.cpk_total != null).slice(0, 3),
+    () => sortByTypeWorstFirst(fleetCpk?.byType || []).filter((r) => rowRate(r) != null).slice(0, 3),
     [fleetCpk],
   )
   const bestBrand = useMemo(
@@ -203,11 +204,11 @@ export default function CpkDriversPanel({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* current fleet CPK, km and hours */}
           <div className="rounded-md bg-gray-900/50 border border-gray-800 p-3">
-            <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Current fleet CPK</p>
+            <p className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Tyre spend ratio and cost per engine hour</p>
             {summaryTiles.length ? (
               summaryTiles.map((t, i) => (
                 <p key={i} className="text-sm text-gray-200">
-                  {t.cpkTotal == null ? 'N/A' : `${t.currency} ${Number(t.cpkTotal).toFixed(4)}${unitSuffix(t.unit)}`}
+                  {t.rate == null ? 'N/A' : `${t.currency} ${Number(t.rate).toFixed(4)}${unitSuffix(t.unit)}`}
                   <span className="text-[11px] text-gray-500 ml-1">
                     {unitNoun(t.unit)}{t.coveragePct != null ? ` | ${Number(t.coveragePct).toFixed(0)}% cov` : ''}
                   </span>
@@ -240,7 +241,7 @@ export default function CpkDriversPanel({
               worstTypes.map((r, i) => (
                 <p key={i} className="text-xs text-gray-300 flex items-center justify-between gap-2">
                   <span className="truncate" title={r.vehicle_type}>{r.vehicle_type}</span>
-                  <span className="text-gray-400">{r.currency} {Number(r.cpk_total).toFixed(3)}{unitSuffix(r.unit)}</span>
+                  <span className="text-gray-400">{r.currency} {Number(rowRate(r)).toFixed(4)}{unitSuffix(r.unit)}</span>
                 </p>
               ))
             ) : (

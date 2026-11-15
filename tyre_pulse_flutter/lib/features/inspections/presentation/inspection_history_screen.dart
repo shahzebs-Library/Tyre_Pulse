@@ -183,7 +183,7 @@ class _InspectionHistoryScreenState
         backFallback: TpRoutePaths.home,
         actions: <Widget>[
           Padding(
-            padding: const EdgeInsets.only(right: TpSpace.md),
+            padding: const EdgeInsetsDirectional.only(end: TpSpace.md),
             child: TpSyncIndicator(
               summary: TpSyncSummary(
                 connectivity: TpConnectivity.unknown,

@@ -1320,14 +1320,14 @@ export default function DisplayDashboard() {
             </div>
 
             <div className="col-span-12 xl:col-span-4">
-              <Panel title="Pressure Compliance" icon={ShieldCheck} className="h-full">
+              <Panel title="Pressure Consistency" icon={ShieldCheck} className="h-full">
                 <SliceGuard slice={inspections} lines={4}>
                   <div className="flex flex-col h-full">
                     <div className="flex-1 min-h-[200px] flex items-center justify-center">
                       {compliance.pct == null ? (
                         <p className="text-slate-400 text-lg text-center px-4">Not measured</p>
                       ) : (
-                        <EChart option={tc(gaugeOption(compliance.pct, { label: 'Compliant' }))} ariaLabel="Pressure compliance" style={{ height: '100%', width: '100%' }} />
+                        <EChart option={tc(gaugeOption(compliance.pct, { label: 'Consistent' }))} ariaLabel="Pressure consistency" style={{ height: '100%', width: '100%' }} />
                       )}
                     </div>
                     <p className="text-slate-400 text-base text-center">
@@ -1875,7 +1875,7 @@ export default function DisplayDashboard() {
                 </SliceGuard>
               </Panel>
               <div className="grid grid-cols-2 gap-6">
-                <StatTile label="Pressure Compliance"
+                <StatTile label="Pressure Consistency"
                   value={inspections.error || compliance.pct == null ? 'N/A' : `${compliance.pct}`}
                   unit={compliance.pct == null ? '' : '%'}
                   tone={compliance.pct == null ? 'neutral'

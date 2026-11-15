@@ -143,7 +143,7 @@ export default function ChecklistDecisionPanel({ submission, onDecided }) {
           </p>
 
           {wouldClose && !closeCheck.ok && (
-            <BlockingMarksNotice template={template} answers={submissionAnswers(submission)} />
+            <BlockingMarksNotice template={template} answers={submissionAnswers(submission)} submission={submission} />
           )}
 
           <textarea

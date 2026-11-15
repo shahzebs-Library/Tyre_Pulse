@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
 import DateField from '../components/ui/DateField'
-import SectionTabs, { ANALYTICS_TABS } from '../components/ui/SectionTabs'
+import SectionTabs, { EXECUTIVE_TABS } from '../components/ui/SectionTabs'
 import { SkeletonChart } from '../components/ui/Skeleton'
 import EChart from '../components/charts/EChart'
 import { getEchartsTheme } from '../components/charts/echartsTheme'
@@ -631,7 +631,7 @@ export default function ExecutiveAnalytics() {
         }
         .tp-exec-paper .card::before { background:transparent !important; }
       `}</style>
-      <SectionTabs tabs={ANALYTICS_TABS} />
+      <SectionTabs tabs={EXECUTIVE_TABS} />
       <PageHeader
         title="Executive Analytics"
         subtitle="Boardroom-grade fleet intelligence: heatmaps, flows, gauges and risk quadrants"

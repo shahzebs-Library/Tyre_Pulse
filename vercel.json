@@ -137,6 +137,7 @@
   "git": {
     "deploymentEnabled": {
       "claude/tenancy-main-7rxp2t": false,
+      "claude/prodb-main-7rxp2t": false,
       "claude/console-main-7rxp2t": false,
       "claude/tyre-position-service-7rxp2t": false,
       "claude/work-order-permissions-7rxp2t": false,
@@ -146,6 +147,11 @@
       "claude/fix-observation-test-7rxp2t": false,
       "claude/legal-links-redirect-7rxp2t": false,
       "claude/tyrepulse-inspector-build-7rxp2t": false,
+      "claude/console-fixes-7rxp2t": false,
+      "claude/flutter-fixes-7rxp2t": false,
+      "claude/tenant-security-drafts-7rxp2t": false,
+      "claude/engineering-accuracy-7rxp2t": false,
+      "claude/staging-environment-7rxp2t": false,
       "claude/tyre-lifecycle-hardening-20261109": false,
       "claude/tyre-lifetime-cpk-phase1": false,
       "claude/relaxed-planck-ur3ji5": false,
@@ -157,6 +163,12 @@
       "claude/modest-hopper-5bnq8c": false,
       "claude/marketing-audit-qc": false,
       "claude/marketing-walkthrough": false,
+      "claude/pdf-cache-service-7rxp2t": false,
+      "claude/current-prod-fixes-a-7rxp2t": false,
+      "claude/current-prod-fixes-b-7rxp2t": false,
+      "claude/commercial-fixes-7rxp2t": false,
+      "claude/module-workflow-tests-7rxp2t": false,
+      "claude/job-card-parts-cost-fix-7rxp2t": false,
       "claude/erp-followup-v2-7rxp2t": false
     }
   },

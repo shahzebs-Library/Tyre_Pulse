@@ -8794,5 +8794,92 @@
   "mfaVerifyAction": "Verify",
   "mfaCodeIncomplete": "Enter all 6 digits of the code.",
   "mfaCodeInvalid": "That code was not accepted. Check your authenticator app and try again.",
-  "mfaVerifyUnavailable": "The code could not be checked right now. Check your connection and try again."
+  "mfaVerifyUnavailable": "The code could not be checked right now. Check your connection and try again.",
+  "wfOfflineNote": "Offline: showing saved assignments. Updates you make are kept and sent when you reconnect.",
+  "wfPendingSync": "Pending sync: will be sent when you are online.",
+  "wfSignInRequired": "Sign in to update assignments.",
+  "wfUpdated": "Updated.",
+  "wfSavedOffline": "Saved on this device. It will be sent when you are online.",
+  "wfUpdateUnavailable": "That update is not available for this assignment right now.",
+  "wfNotAccepted": "Not accepted: {action}",
+  "@wfNotAccepted": {
+    "placeholders": {
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "wfDismiss": "Dismiss",
+  "wfActionAccept": "Accept",
+  "wfActionStart": "Start",
+  "wfActionBlock": "Block",
+  "wfActionResume": "Resume",
+  "wfActionComplete": "Complete",
+  "teamActionTitle": "Assigned follow-up",
+  "teamActionFallbackTitle": "Action",
+  "teamActionStatusDue": "Status: {status} · Due: {due}",
+  "@teamActionStatusDue": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      },
+      "due": {
+        "type": "String"
+      }
+    }
+  },
+  "teamActionDueNotSet": "Not set",
+  "teamActionBlockReason": "Block reason",
+  "teamActionCompletionDetails": "Completion details",
+  "teamActionEvidenceCount": "Evidence ({count})",
+  "@teamActionEvidenceCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "teamActionEvidenceFallback": "Evidence",
+  "teamActionResolution": "Resolution: {text}",
+  "@teamActionResolution": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "teamActionUploading": "Uploading...",
+  "teamActionSelectPhoto": "Add a photo",
+  "teamActionAttachFile": "Attach PDF or file",
+  "teamActionStartWork": "Start work",
+  "teamActionBlocked": "Blocked",
+  "teamActionStatusOpen": "Open",
+  "teamActionStatusAcknowledged": "Accepted",
+  "teamActionStatusInProgress": "In progress",
+  "teamActionStatusEscalated": "Escalated",
+  "teamActionStatusPendingApproval": "Awaiting approval",
+  "teamActionStatusResolved": "Completed",
+  "teamActionStatusDismissed": "Dismissed",
+  "teamActionSignIn": "Sign in to view this assignment.",
+  "teamActionNotYours": "This action is not assigned to your account.",
+  "teamActionBlockTooShort": "Enter at least five characters explaining what is blocking the work.",
+  "teamActionResolutionTooShort": "Describe the completed work in at least ten characters.",
+  "teamActionPhotoTooLarge": "The photo must be smaller than 10 MB.",
+  "teamActionFileType": "Only PDF, JPG, PNG or WEBP files can be attached.",
+  "teamActionFileSize": "The file must be 10 MB or smaller.",
+  "teamActionPhotoUploaded": "Photo uploaded.",
+  "teamActionOpenFailed": "The attachment could not be opened. Try again.",
+  "teamActionLoadFailed": "This assignment could not be loaded. Check your connection and try again.",
+  "teamActionSaveFailed": "The change was not saved. Check your connection and try again.",
+  "teamActionUploadFailed": "The file could not be uploaded. Check your connection and try again.",
+  "teamMessageTitle": "Team message",
+  "teamMessageSignIn": "Sign in to view this message.",
+  "teamMessageUnavailable": "This message is not available to this account.",
+  "teamMessageLoadFailed": "This message could not be loaded. Please try again.",
+  "teamMessageActionFailed": "That did not go through. Check your connection and try again.",
+  "teamMessageAcknowledged": "Acknowledged",
+  "teamMessageAckRequired": "Acknowledgement required",
+  "teamMessageAcknowledge": "Acknowledge",
+  "teamMessageReplyLabel": "Reply to team",
+  "teamMessageSend": "Send reply"
 }

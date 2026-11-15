@@ -102,7 +102,7 @@ export default function ChecklistAnswers({
             // template with no prefix has none, and the tile is dropped rather
             // than printing a placeholder somebody would go on to quote.
             ...(documentNo(sub) ? [['Document no', documentNo(sub)]] : []),
-            ['Status', prettyStatus(sub.approval_status || sub.status)],
+            ['Status', prettyStatus(sub.approval_status || sub.status, sub)],
             ['Points recorded', summary.points],
             ['With a photo', summary.withPhotos],
             ['Score', summary.score == null ? 'Not scored' : `${summary.score}%`],
@@ -185,7 +185,7 @@ export default function ChecklistAnswers({
           offered an approve button. The database refuses it either way; this is
           so the refusal is not the first anyone hears of it. */}
       {showApproval && (
-        <BlockingMarksNotice template={template} answers={submissionAnswers(sub)} className="mt-5" />
+        <BlockingMarksNotice template={template} answers={submissionAnswers(sub)} submission={sub} className="mt-5" />
       )}
 
       {/* Who has signed, in the order the rules require. */}

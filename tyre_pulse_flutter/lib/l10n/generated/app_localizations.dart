@@ -14848,6 +14848,342 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The code could not be checked right now. Check your connection and try again.'**
   String get mfaVerifyUnavailable;
+
+  /// No description provided for @wfOfflineNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline: showing saved assignments. Updates you make are kept and sent when you reconnect.'**
+  String get wfOfflineNote;
+
+  /// No description provided for @wfPendingSync.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending sync: will be sent when you are online.'**
+  String get wfPendingSync;
+
+  /// No description provided for @wfSignInRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to update assignments.'**
+  String get wfSignInRequired;
+
+  /// No description provided for @wfUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated.'**
+  String get wfUpdated;
+
+  /// No description provided for @wfSavedOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved on this device. It will be sent when you are online.'**
+  String get wfSavedOffline;
+
+  /// No description provided for @wfUpdateUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'That update is not available for this assignment right now.'**
+  String get wfUpdateUnavailable;
+
+  /// No description provided for @wfNotAccepted.
+  ///
+  /// In en, this message translates to:
+  /// **'Not accepted: {action}'**
+  String wfNotAccepted(String action);
+
+  /// No description provided for @wfDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get wfDismiss;
+
+  /// No description provided for @wfActionAccept.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept'**
+  String get wfActionAccept;
+
+  /// No description provided for @wfActionStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get wfActionStart;
+
+  /// No description provided for @wfActionBlock.
+  ///
+  /// In en, this message translates to:
+  /// **'Block'**
+  String get wfActionBlock;
+
+  /// No description provided for @wfActionResume.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get wfActionResume;
+
+  /// No description provided for @wfActionComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete'**
+  String get wfActionComplete;
+
+  /// No description provided for @teamActionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Assigned follow-up'**
+  String get teamActionTitle;
+
+  /// No description provided for @teamActionFallbackTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Action'**
+  String get teamActionFallbackTitle;
+
+  /// No description provided for @teamActionStatusDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Status: {status} · Due: {due}'**
+  String teamActionStatusDue(String status, String due);
+
+  /// No description provided for @teamActionDueNotSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get teamActionDueNotSet;
+
+  /// No description provided for @teamActionBlockReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Block reason'**
+  String get teamActionBlockReason;
+
+  /// No description provided for @teamActionCompletionDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Completion details'**
+  String get teamActionCompletionDetails;
+
+  /// No description provided for @teamActionEvidenceCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence ({count})'**
+  String teamActionEvidenceCount(int count);
+
+  /// No description provided for @teamActionEvidenceFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence'**
+  String get teamActionEvidenceFallback;
+
+  /// No description provided for @teamActionResolution.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolution: {text}'**
+  String teamActionResolution(String text);
+
+  /// No description provided for @teamActionUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading...'**
+  String get teamActionUploading;
+
+  /// No description provided for @teamActionSelectPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a photo'**
+  String get teamActionSelectPhoto;
+
+  /// No description provided for @teamActionAttachFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach PDF or file'**
+  String get teamActionAttachFile;
+
+  /// No description provided for @teamActionStartWork.
+  ///
+  /// In en, this message translates to:
+  /// **'Start work'**
+  String get teamActionStartWork;
+
+  /// No description provided for @teamActionBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked'**
+  String get teamActionBlocked;
+
+  /// No description provided for @teamActionStatusOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get teamActionStatusOpen;
+
+  /// No description provided for @teamActionStatusAcknowledged.
+  ///
+  /// In en, this message translates to:
+  /// **'Accepted'**
+  String get teamActionStatusAcknowledged;
+
+  /// No description provided for @teamActionStatusInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'In progress'**
+  String get teamActionStatusInProgress;
+
+  /// No description provided for @teamActionStatusEscalated.
+  ///
+  /// In en, this message translates to:
+  /// **'Escalated'**
+  String get teamActionStatusEscalated;
+
+  /// No description provided for @teamActionStatusPendingApproval.
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting approval'**
+  String get teamActionStatusPendingApproval;
+
+  /// No description provided for @teamActionStatusResolved.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get teamActionStatusResolved;
+
+  /// No description provided for @teamActionStatusDismissed.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismissed'**
+  String get teamActionStatusDismissed;
+
+  /// No description provided for @teamActionSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to view this assignment.'**
+  String get teamActionSignIn;
+
+  /// No description provided for @teamActionNotYours.
+  ///
+  /// In en, this message translates to:
+  /// **'This action is not assigned to your account.'**
+  String get teamActionNotYours;
+
+  /// No description provided for @teamActionBlockTooShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter at least five characters explaining what is blocking the work.'**
+  String get teamActionBlockTooShort;
+
+  /// No description provided for @teamActionResolutionTooShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Describe the completed work in at least ten characters.'**
+  String get teamActionResolutionTooShort;
+
+  /// No description provided for @teamActionPhotoTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'The photo must be smaller than 10 MB.'**
+  String get teamActionPhotoTooLarge;
+
+  /// No description provided for @teamActionFileType.
+  ///
+  /// In en, this message translates to:
+  /// **'Only PDF, JPG, PNG or WEBP files can be attached.'**
+  String get teamActionFileType;
+
+  /// No description provided for @teamActionFileSize.
+  ///
+  /// In en, this message translates to:
+  /// **'The file must be 10 MB or smaller.'**
+  String get teamActionFileSize;
+
+  /// No description provided for @teamActionPhotoUploaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo uploaded.'**
+  String get teamActionPhotoUploaded;
+
+  /// No description provided for @teamActionOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The attachment could not be opened. Try again.'**
+  String get teamActionOpenFailed;
+
+  /// No description provided for @teamActionLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'This assignment could not be loaded. Check your connection and try again.'**
+  String get teamActionLoadFailed;
+
+  /// No description provided for @teamActionSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The change was not saved. Check your connection and try again.'**
+  String get teamActionSaveFailed;
+
+  /// No description provided for @teamActionUploadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The file could not be uploaded. Check your connection and try again.'**
+  String get teamActionUploadFailed;
+
+  /// No description provided for @teamMessageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Team message'**
+  String get teamMessageTitle;
+
+  /// No description provided for @teamMessageSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to view this message.'**
+  String get teamMessageSignIn;
+
+  /// No description provided for @teamMessageUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This message is not available to this account.'**
+  String get teamMessageUnavailable;
+
+  /// No description provided for @teamMessageLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'This message could not be loaded. Please try again.'**
+  String get teamMessageLoadFailed;
+
+  /// No description provided for @teamMessageActionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'That did not go through. Check your connection and try again.'**
+  String get teamMessageActionFailed;
+
+  /// No description provided for @teamMessageAcknowledged.
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledged'**
+  String get teamMessageAcknowledged;
+
+  /// No description provided for @teamMessageAckRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledgement required'**
+  String get teamMessageAckRequired;
+
+  /// No description provided for @teamMessageAcknowledge.
+  ///
+  /// In en, this message translates to:
+  /// **'Acknowledge'**
+  String get teamMessageAcknowledge;
+
+  /// No description provided for @teamMessageReplyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reply to team'**
+  String get teamMessageReplyLabel;
+
+  /// No description provided for @teamMessageSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send reply'**
+  String get teamMessageSend;
 }
 
 class _AppLocalizationsDelegate

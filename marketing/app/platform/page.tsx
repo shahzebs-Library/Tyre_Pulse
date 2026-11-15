@@ -10,6 +10,8 @@ import { ProofStrip } from "@/components/ProofStrip";
 import { TourBand } from "@/components/TourBand";
 import { AssetsWindow, ConditionCard, FleetCostPanel, InventoryTable, OfflineInspectionPhone, WorkOrdersTable } from "@/components/mock/Screens";
 import { Tabs } from "@/components/Tabs";
+import { Card, CardGrid, type CardProps } from "@/components/ui/Card";
+import { StatusLegend } from "@/components/ui/StatusBadge";
 import { JsonLd, alternatesFor, pageBreadcrumb } from "../schema";
 import { OG_IMAGES } from "@/lib/site";
 
@@ -18,7 +20,7 @@ export const metadata: Metadata = {
   description:
     "PMV management platform: fleet and assets, maintenance, inspections, tyres, accidents, stores, fuel, costs and approvals in one connected system.",
   alternates: alternatesFor("/platform"),
-  openGraph: { images: OG_IMAGES, title: "Platform | Tyre Pulse", description: "One record per machine, shared by the field, workshop, stores and finance.", url: "/platform", type: "website" },
+  openGraph: { images: OG_IMAGES, title: "PMV management platform | Tyre Pulse", description: "One record per machine, shared by the field, workshop, stores and finance.", url: "/platform", type: "website" },
 };
 
 /* Each area opens in place, with the screen that belongs to it. */
@@ -30,25 +32,25 @@ const AREAS = [
   { id: "insp", icon: ClipboardCheck, label: "Inspections and safety", title: "Inspections and safety", text: "Daily walk-round checks on the phone, offline, with photos, meter readings and a supervisor signature.",
     points: ["Checklists configured by asset type", "Defects raise actions and work orders", "Signed off on the phone"], href: "/platform/inspections", cta: "Explore inspections", screen: <OfflineInspectionPhone withConditions /> },
   { id: "tyres", icon: CircleDot, label: "Tyre lifecycle", title: "Tyre lifecycle", text: "Every tyre from fitment to scrap, by serial and wheel position, with its cost per kilometre or engine hour.",
-    points: ["Fitment and removal by serial and position", "Scrap reasons recorded with who and when", "Cost per km or hour by brand and size"], href: "/platform/inspections#tyres", cta: "Explore tyres", screen: <ConditionCard /> },
+    points: ["Fitment and removal by serial and position", "Scrap reasons recorded with who and when", "Cost per km or hour by brand and size"], href: "/platform/tyre-lifecycle", cta: "Explore tyre lifecycle", screen: <ConditionCard /> },
   { id: "stores", icon: Box, label: "Stores and procurement", title: "Stores and procurement", text: "Parts are issued against the job card and the machine, and purchase requests are approved before an order is placed.",
     points: ["Stock and reorder level by site", "Parts issued against the job and asset", "Purchase requests with approval"], href: "/platform/inventory", cta: "Explore stores", screen: <InventoryTable /> },
   { id: "costs", icon: BarChart3, label: "Costs and reporting", title: "Costs and reporting", text: "Tyres, parts, oil and repairs roll up by machine, site and month, each country in its own currency.",
-    points: ["Cost by asset, site and category", "Availability and downtime", "Scheduled reports and exports"], href: "/platform/inventory#costs", cta: "Explore costs", screen: <FleetCostPanel /> },
+    points: ["Cost by asset, site and category", "Availability and downtime", "Scheduled reports and exports"], href: "/platform/reports", cta: "Explore reports", screen: <FleetCostPanel /> },
 ];
 
-const ECO = [
-  [Truck, "Fleet and assets", "Complete asset records, lifecycle, meters and utilisation.", "/platform/fleet-assets"],
-  [Wrench, "Maintenance and workshop", "Plan, schedule and manage maintenance and repairs.", "/platform/maintenance"],
-  [ClipboardCheck, "Inspections and safety", "Digitise inspections, capture defects and track actions.", "/platform/inspections"],
-  [CircleDot, "Tyre lifecycle", "Track tyre inspections, fitments, rotations and costs.", "/platform/inspections#tyres"],
-  [ShieldAlert, "Accidents and insurance", "Record incidents, manage claims and track recoveries.", null],
-  [Box, "Stores and procurement", "Control inventory, purchases and suppliers.", "/platform/inventory"],
-  [Fuel, "Fuel", "Monitor fuel use, efficiency and refuelling activity.", null],
-  [BarChart3, "Costs and reporting", "Track operating costs and analyse performance.", "/platform/inventory"],
-  [FileCheck2, "Approvals", "Route purchases, costs and work orders for approval.", null],
-  [Plug, "Integrations and API", "Connect with your ERP and existing systems.", null],
-] as const;
+const ECO: CardProps[] = [
+  { icon: Truck, title: "Fleet and assets", text: "Asset records, lifecycle, meters and documents.", href: "/platform/fleet-assets", status: "available" },
+  { icon: Wrench, title: "Maintenance and workshop", text: "Work orders, preventive plans, technicians and parts.", href: "/platform/maintenance", status: "available" },
+  { icon: ClipboardCheck, title: "Inspections and safety", text: "Checklists on the phone, defects, actions and sign-off.", href: "/platform/inspections", status: "available" },
+  { icon: CircleDot, title: "Tyre lifecycle", text: "Serial tracking, fitment to removal, cost per km and tyre life.", href: "/platform/tyre-lifecycle", status: "available" },
+  { icon: Box, title: "Stores and procurement", text: "Stock by site, issues to job cards, purchase requests.", href: "/platform/inventory", status: "available" },
+  { icon: BarChart3, title: "Reports and dashboards", text: "Dashboards, scheduled reports and shareable boards.", href: "/platform/reports", status: "available" },
+  { icon: ShieldAlert, title: "Accidents and claims", text: "Accident cases, damage, root cause and claim documents.", href: "/contact", linkLabel: "Ask in a demo", status: "available" },
+  { icon: FileCheck2, title: "Roles and approvals", text: "Access by company, country, site and role, with sign-off steps.", href: "/security", linkLabel: "See access control", status: "available" },
+  { icon: Fuel, title: "Fuel records", text: "Fuel use recorded against the asset, set up with your data source.", href: "/contact", linkLabel: "Ask in a demo", status: "on-request" },
+  { icon: Plug, title: "Integrations and API", text: "ERP file imports are built in. Direct connections are scoped with you.", href: "/contact", linkLabel: "Ask in a demo", status: "on-request" },
+];
 
 export default function PlatformPage() {
   return (
@@ -56,7 +58,7 @@ export default function PlatformPage() {
       <JsonLd data={pageBreadcrumb("Platform", "/platform")} />
       <PageTop photo="fleetLineup"
         crumbs={[{ href: "/", label: "Home" }, { label: "Platform" }]}
-        title="A complete PMV management platform."
+        title="One platform for tyres, machines, workshop and stores."
         lead="Mixers, pumps, loaders and generators: one record per machine, shared by the field, workshop, stores and finance."
       />
       {/* The tab panels carry h3 titles, so this section needs an h2 between them and the page h1.
@@ -86,21 +88,13 @@ export default function PlatformPage() {
           />
         </div>
       </section>
-      <section className="section-pad tight-sm" aria-labelledby="eco">
+      <section className="section-pad" aria-labelledby="eco">
         <div className="site-shell">
           <h2 className="sec-h" id="eco">Every area, on the same asset record.</h2>
-          <ul className="eco-grid">
-            {ECO.map(([Icon, t, d, href]) => (
-              <li key={t}>
-                <Icon size={30} strokeWidth={1.6} aria-hidden="true" />
-                <h3>{t}</h3>
-                <p>{d}</p>
-                {href
-                  ? <Link href={href} aria-label={`Learn more about ${t.toLowerCase()}`}>Learn more <ArrowRight size={14} aria-hidden="true" /></Link>
-                  : <Link href="/contact" aria-label={`Ask about ${t.toLowerCase()} in a demo`}>Ask in a demo <ArrowRight size={14} aria-hidden="true" /></Link>}
-              </li>
-            ))}
-          </ul>
+          <CardGrid cols={4}>
+            {ECO.map((c) => <Card key={c.title} {...c} linkAria={`${c.linkLabel ?? "Learn more"}: ${c.title.toLowerCase()}`} />)}
+          </CardGrid>
+          <StatusLegend />
         </div>
       </section>
       <TourBand id="tours" title="Six workflows, played step by step." />

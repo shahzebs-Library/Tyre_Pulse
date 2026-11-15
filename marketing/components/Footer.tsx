@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { APP_STORE_URL } from "@/app/schema";
-import { APP_URL, CONTACT_EMAIL, LEGAL_LINKS, WHATSAPP_URL } from "@/lib/site";
+import { APP_URL, CONTACT_EMAIL, IOS_STATEMENT, IOS_STATUS, LEGAL_LINKS, WHATSAPP_URL } from "@/lib/site";
+import { StatusBadge } from "./ui/StatusBadge";
 import { MENU_GROUPS, menuHref } from "@/lib/nav";
 import { Logo } from "./Logo";
 import { StoreBadges } from "./StoreBadges";
@@ -9,7 +10,7 @@ const COPY = {
   en: {
     about: "One operational workspace for plant, machinery and vehicles: assets, workshop, field teams and stores.",
     mobile: "Mobile app",
-    mobileText: "Inspections, meter readings and job cards from the yard, online or offline.",
+    mobileText: "Inspections, meter readings and job cards from the yard, online or offline. On Android today.",
     access: "Access",
     login: "Customer login",
     whatsapp: "WhatsApp sales",
@@ -49,14 +50,15 @@ export function Footer({ locale = "en" }: { locale?: "en" | "ar" }) {
             <p className="footer-text">{c.about}</p>
             <p className="footer-heading">{c.mobile}</p>
             <p className="footer-text">{c.mobileText}</p>
-            <StoreBadges tone="dark" appStoreUrl={APP_STORE_URL} />
+            <StoreBadges tone="dark" appStoreUrl={APP_STORE_URL} showIos={IOS_STATUS === "available"} />
+            {IOS_STATUS === "planned" && <p className="footer-ios"><StatusBadge status="planned" /> <span lang="en" dir="ltr">{IOS_STATEMENT}</span></p>}
           </div>
           {MENU_GROUPS.map((g) => (
             <nav key={g.id} aria-label={ar ? g.labelAr : g.label}>
               <p className="footer-heading" aria-hidden="true">{ar ? g.labelAr : g.label}</p>
               <div className="footer-links">
-                {g.items.map((p) => <Link key={p.href} href={menuHref(p.href)}>{ar ? p.labelAr : p.label}</Link>)}
-                {g.id === "resources" && (ar ? <Link href="/" lang="en">English</Link> : <Link href="/ar" lang="ar">العربية</Link>)}
+                {g.items.map((p) => <Link key={p.href} href={menuHref(p.href)} prefetch={false}>{ar ? p.labelAr : p.label}</Link>)}
+                {g.id === "resources" && (ar ? <Link href="/" lang="en" prefetch={false}>English</Link> : <Link href="/ar" lang="ar" prefetch={false}>العربية</Link>)}
               </div>
             </nav>
           ))}

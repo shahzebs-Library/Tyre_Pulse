@@ -15,7 +15,7 @@
  * several modules already import SITE_URL from this one.
  */
 export { SITE_URL, APP_URL } from "@/lib/site";
-import { SITE_URL, APP_URL, WHATSAPP_URL } from "@/lib/site";
+import { SITE_URL, APP_URL, IOS_STATEMENT, WHATSAPP_URL } from "@/lib/site";
 import type { Faq } from "@/lib/faqs";
 
 export const ANDROID_PACKAGE = "com.shahzebrahman.tyrepulseinspector";
@@ -44,10 +44,9 @@ export const OPERATING_SYSTEMS = HAS_IOS_APP ? "Web, Android, iOS" : "Web, Andro
 /** Prose form of the same fact, for the plain-text files. */
 export const PLATFORM_SENTENCE = HAS_IOS_APP
   ? "It is available as a web application, an Android app and an iOS app."
-  : "It is available as a web application and as an Android app. There is no iOS app.";
+  : `It is available as a web application and as an Android app. ${IOS_STATEMENT}`;
 
 export const BRAND_NAME = "Tyre Pulse";
-export const BRAND_TAGLINE = "Smarter Wheels. Stronger Fleet.";
 export const BRAND_COLOR = "#161616";
 
 export const PRODUCT_DESCRIPTION =
@@ -83,7 +82,6 @@ export function organizationSchema(): Json {
     "@id": `${SITE_URL}/#organization`,
     name: BRAND_NAME,
     alternateName: "TyrePulse",
-    slogan: BRAND_TAGLINE,
     url: SITE_URL,
     logo: {
       "@type": "ImageObject",

@@ -3,6 +3,7 @@ import { Archivo, Inter } from "next/font/google";
 import "./globals.css";
 import "./pmv.css";
 import "./motion.css";
+import "./premium.css";
 
 /*
  * Both families ship as variable fonts, so listing fewer weights does not shrink the download:
@@ -14,6 +15,7 @@ const body = Inter({ subsets: ["latin"], variable: "--font-body", display: "swap
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { LocaleSync } from "@/components/LocaleSync";
 import { MotionRoot } from "@/components/motion/MotionRoot";
+import { ViewTransitions } from "@/components/motion/ViewTransitions";
 import { BRAND_COLOR, JsonLd, SITE_URL, alternatesFor, siteSchemaGraph } from "./schema";
 import { OG_IMAGES } from "@/lib/site";
 
@@ -24,7 +26,7 @@ export const metadata: Metadata = {
     template: "%s | Tyre Pulse",
   },
   description:
-    "Tyre Pulse connects plant, machinery and vehicle assets with the workshop, field teams and stores in one operational workspace. Available on web and Android.",
+    "Tyre Pulse connects plant, machinery and vehicle assets with the workshop, field teams and stores in one operational workspace. On the web and on Android.",
   applicationName: "Tyre Pulse",
   keywords: [
     "PMV management software",
@@ -43,7 +45,7 @@ export const metadata: Metadata = {
   alternates: alternatesFor("/"),
   openGraph: { images: OG_IMAGES,
     siteName: "Tyre Pulse",
-    title: "Tyre Pulse | Complete control of your PMV operations",
+    title: "Tyre Pulse | Tyre, fleet and workshop operations in one record",
     description:
       "Assets, workshop, inspections and stores for plant, machinery and vehicles in one workspace.",
     type: "website",
@@ -53,7 +55,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Tyre Pulse | Complete control of your PMV operations",
+    title: "Tyre Pulse | Tyre, fleet and workshop operations in one record",
     description:
       "Assets, workshop, inspections and stores for plant, machinery and vehicles in one workspace.",
   },
@@ -80,6 +82,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         {children}
         <WhatsAppButton />
         <MotionRoot />
+        <ViewTransitions />
       </body>
     </html>
   );

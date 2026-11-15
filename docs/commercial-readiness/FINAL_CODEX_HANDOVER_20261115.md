@@ -409,3 +409,42 @@ Production re-checked read-only at 14:08 UTC: latest migration `20261115120856`,
 3. #520 with the `checklistAccess.js` resolution, then its three drafts.
 4. #505, #506, #508, #509, #517 from their rebuilt branches.
 5. #523 and #507 after a real-device pass. #510 after the wording decision. #513 after #504.
+
+## 15. Release package, 2026-11-15 15:40 UTC (nothing merged, nothing deployed, no production change)
+
+Production re-checked read-only at 14:50 UTC: 1,091 migrations, latest 20261115120856, ERP lock ACL {postgres, service_role},
+single_tenant_mode true, `checklist_is_area_manager()` md5 d5993d23 (matches runbook step 8 preflight).
+Reader-policy drift on production = 2 tables (observation_erp_links, observation_erp_link_events): runbook step 0 is needed.
+
+### Final heads
+| PR | Branch | Head | CI |
+|---|---|---|---|
+| #519 (contains #528, #511) | claude/work-order-permissions-7rxp2t | da69bc14 | green |
+| #520 | claude/closure-workflow-7rxp2t | c0c03df4 | green |
+| #524 | claude/at-risk-module-fixes-7rxp2t | f34ed341 | green |
+| #526 | (PR #526) | 6e9584fc | green |
+| #527 | claude/pdf-cache-service-7rxp2t | ed1bd9be | green |
+| #529 (new, D2 + D5) | claude/defects-d2-d5-7rxp2t | 0fa0d7eb | green |
+| #510 rebuilt | claude/commercial-main-7rxp2t | af1fbef0 | open a new PR from this branch (PR #510 still points at ccc4e192 on #504) |
+| integration evidence | claude/round3-integration-7rxp2t | 56ce03ad | report docs/commercial-readiness/audit/ROUND4_COMBINED_TESTS.md |
+
+### Round 4 evidence
+- #519 + #520 combined, ship order, fresh copy: 9 drafts applied clean; work order suite 305/305; closure suite 76/76;
+  business-table hashes unchanged; browser round3_ledger 17/17, closure actions 30/30, checklists 14 pass + 2 Not Tested (spec locators).
+- Exception on a never-submitted action and compliant-by-exception: Verified Fixed (requester cannot decide, independent Admin approves,
+  history keeps both people, checklist reads "Acknowledged, compliant by exception").
+- D4 fixed on #520 (9d0fe9ca + c0c03df4). D2 + D5 fixed in #529. Open defects: none known.
+- Runbook docs/commercial-readiness/RELEASE_RUNBOOK_519_520.md (on #519): steps 0 to 9, each apply / verify / rollback rehearsed;
+  every rollback restored the schema fingerprint; full reverse chain returned to start. Rollback files on both branches.
+- #524 ships alone: route list identical (342), module keys unchanged, 551 tests pass. Only change in access: Tyre Pool view = Admin/Manager/Director.
+- #527 authenticated storage (local Storage API, real JWTs): 8/8 cases pass; hosted storage Not Tested.
+- #510 wording: "Available on Android. The iPhone app is in App Store review." (en + ar). Never claims App Store availability.
+
+### Merge conflict to expect
+#520 after #519: `src/lib/api/correctiveActions.js` `updateCorrectiveAction` and `src/lib/checklistAccess.js`.
+Use the versions on claude/round3-integration-7rxp2t (map the error first, then the zero-rows check; one CHECKLIST_MODULE_GATED_PATHS map).
+
+### Owner decisions still open
+1. Tire Planning Engineer is a default reviewer role, so it now sees "Ask for exception". Keep or remove?
+2. Runbook step 0 (normalise reader policy on the 2 ERP link tables) before step 2.
+3. Owner present for MCP confirm prompts: apply files of steps 1, 2, 3, 6, 7, 8 contain drop/delete text.

@@ -38,8 +38,8 @@ SQL (they fall back to today's rules when the resolver is absent). Mobile and Fl
 ## Tests
 - Local staging copy, synthetic companies: 183 of 183 cases (role x action x own site, other site, other country,
   other company, assigned, closed, approved cost, delete, ERP pipe, in-app intake). Work order table hash identical
-  before drafts, after drafts, after matrix. Five mutations each produced failures. Verified Fixed on synthetic data.
-- Vitest: mirror 21, related existing 248, all pass. eslint 0 errors. `vite build` clean.
+  before drafts, after drafts, after matrix. Four mutations (write guard off, old update policy, old event policy, delete guard off) each produced failures. Verified Fixed on synthetic data.
+- Vitest: mirror 21, related existing 227 (23 files), all pass. eslint 0 errors. `vite build` clean.
 - Not Tested: production, a real browser, Flutter and Expo against the new rules, PGlite.
 
 ## Effect on today's users if applied (approved accounts)

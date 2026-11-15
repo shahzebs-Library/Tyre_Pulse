@@ -7,10 +7,29 @@ Usage: verify_baseline.py --dsn "<dsn>" --baseline <dir> [--report out.json]
 """
 import argparse, glob, json, os, re, sys
 import psycopg2
+
+def _read(path):
+    with open(path) as fh:
+        return fh.read()
+
+
+def _load(path):
+    with open(path) as fh:
+        return json.load(fh)
+
+
+def _dump(obj, path, **kw):
+    with open(path, 'w') as fh:
+        json.dump(obj, fh, **kw)
+
+
+def _write(path, text):
+    with open(path, 'w') as fh:
+        fh.write(text)
 ap = argparse.ArgumentParser(); ap.add_argument('--dsn', required=True); ap.add_argument('--baseline', required=True)
 ap.add_argument('--report'); a = ap.parse_args()
 if 'jhssdmeruxtrlqnwfksc' in a.dsn: sys.exit('Refusing: that is the production project.')
-exp = json.load(open(os.path.join(a.baseline, 'MANIFEST.json')))['expected']
+exp = _load(os.path.join(a.baseline, 'MANIFEST.json'))['expected']
 conn = psycopg2.connect(a.dsn); conn.autocommit = True; cur = conn.cursor()
 NS = "('public','approval_private','private','workforce_internal','ai_tyre_private','anum_integration','administration_imports')"
 EXT = "not exists (select 1 from pg_depend d where d.objid = %s.oid and d.deptype = 'e')"
@@ -37,12 +56,12 @@ for r in rows: print('%-26s %10s %8s  %s' % r)
 cur.execute('set check_function_bodies = on; set search_path = "$user", public, extensions')
 invalid = []
 for f in sorted(glob.glob(os.path.join(a.baseline, '[0-9][0-9]_*.sql'))):
-    for s in open(f).read().split('\n-- @@\n'):
+    for s in _read(f).split('\n-- @@\n'):
         if not re.match(r'\s*CREATE OR REPLACE (FUNCTION|PROCEDURE)', s): continue
         try: cur.execute(s)
         except Exception as e:
             invalid.append({'function': re.match(r'\s*CREATE OR REPLACE \w+ ([^\n(]+)', s).group(1), 'error': str(e).strip().split('\n')[0]})
 print('function bodies that fail validation with check_function_bodies = on: %d' % len(invalid))
 for i in invalid[:40]: print('  %s :: %s' % (i['function'], i['error']))
-if a.report: json.dump({'counts': rows, 'invalid_functions': invalid}, open(a.report, 'w'), indent=1)
+if a.report: _dump({'counts': rows, 'invalid_functions': invalid}, a.report, indent=1)
 sys.exit(1 if bad else 0)

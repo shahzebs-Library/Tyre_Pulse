@@ -12,6 +12,25 @@ connection string for the postgres role; never a production one).
 import argparse, glob, json, os, re, sys, time
 import psycopg2
 
+def _read(path):
+    with open(path) as fh:
+        return fh.read()
+
+
+def _load(path):
+    with open(path) as fh:
+        return json.load(fh)
+
+
+def _dump(obj, path, **kw):
+    with open(path, 'w') as fh:
+        json.dump(obj, fh, **kw)
+
+
+def _write(path, text):
+    with open(path, 'w') as fh:
+        fh.write(text)
+
 ap = argparse.ArgumentParser()
 ap.add_argument('--dsn', required=True)
 ap.add_argument('--baseline', required=True)
@@ -37,7 +56,7 @@ pending, ok, first_fail = [], 0, []
 t0 = time.time()
 per_file = {}
 for f in files:
-    stmts = [s.strip() for s in open(f).read().split('\n-- @@\n')]
+    stmts = [s.strip() for s in _read(f).split('\n-- @@\n')]
     stmts = [s for s in stmts if s and not all(l.startswith('--') or not l.strip() for l in s.split('\n'))]
     n_ok = 0
     for s in stmts:
@@ -67,7 +86,7 @@ report = {'seconds': round(time.time() - t0, 1), 'statements_ok': ok, 'retry_rou
           'first_pass_failures': [{'file': f, 'statement': k, 'error': e} for f, k, e in first_fail],
           'unresolved': [{'file': f, 'statement': key(s), 'error': e} for f, s, e in pending]}
 if a.report:
-    json.dump(report, open(a.report, 'w'), indent=1)
+    _dump(report, a.report, indent=1)
 print('baseline load: %d statements ok, %d resolved on retry, %d UNRESOLVED, %.0fs'
       % (ok, len(resolved_late), len(pending), time.time() - t0))
 for f, s, e in pending[:15]:

@@ -8,8 +8,27 @@ Each draft is committed after the check, so the chain of restores composes back 
 Optional --pre files are applied (and kept inside the same transaction) before the sequence,
 e.g. the Group B drafts (files with their own begin/commit must be applied with psql instead), to prove the tenancy drafts apply cleanly after them.
 """
-import argparse, hashlib, json, os, sys
+import argparse, json, os
 import psycopg2
+
+def _read(path):
+    with open(path) as fh:
+        return fh.read()
+
+
+def _load(path):
+    with open(path) as fh:
+        return json.load(fh)
+
+
+def _dump(obj, path, **kw):
+    with open(path, 'w') as fh:
+        json.dump(obj, fh, **kw)
+
+
+def _write(path, text):
+    with open(path, 'w') as fh:
+        fh.write(text)
 
 ap = argparse.ArgumentParser()
 ap.add_argument('--db', required=True)
@@ -61,7 +80,7 @@ cur = conn.cursor()
 def fp():
     cur.execute(FP); return cur.fetchone()[0]
 
-seq = json.load(open(a.seq))
+seq = _load(a.seq)
 files = [s['file'] for s in seq['steps']] + ([h['file'] for h in seq['hold']] if a.hold else [])
 res = {'db': a.db, 'pre': [], 'steps': [], 'ok': True}
 start = fp()
@@ -69,14 +88,14 @@ res['start'] = start
 for p in a.pre:
     cur.execute('savepoint pre')
     try:
-        cur.execute(open(p).read()); cur.execute('release savepoint pre'); conn.commit()
+        cur.execute(_read(p)); cur.execute('release savepoint pre'); conn.commit()
         res['pre'].append({'file': os.path.basename(p), 'applied': True})
     except Exception as e:
         cur.execute('rollback to savepoint pre')
         res['pre'].append({'file': os.path.basename(p), 'applied': False, 'error': str(e).splitlines()[0]})
         res['ok'] = False
 for f in files:
-    sql = open(os.path.join(a.dir, f)).read()
+    sql = _read(os.path.join(a.dir, f))
     before = fp()
     r = {'file': f}
     cur.execute('savepoint s')
@@ -97,5 +116,5 @@ for f in files:
     print('OK' if back == before else 'NOT RESTORED', f, 'changed' if after != before else 'no-schema-change', flush=True)
 res['all_applied_fp'] = fp(); conn.rollback()
 res['every_step_restores'] = all(x.get('rollback_restores') for x in res['steps'] if x.get('applied'))
-json.dump(res, open(a.out, 'w'), indent=1)
+_dump(res, a.out, indent=1)
 print('every_step_restores', res['every_step_restores'], 'ok', res['ok'])

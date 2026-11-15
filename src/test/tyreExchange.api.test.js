@@ -67,7 +67,7 @@ describe('service layer - tyreExchange', () => {
     await exchangeApi.upsertTyreStatusMark('SER1', 'returned')
     expect(h.state.last._table).toBe('tyre_status_marks')
     expect(h.state.last._calls.upsert).toEqual({ serial: 'SER1', mark_type: 'returned' })
-    expect(h.state.last._calls.upsertOpts).toEqual({ onConflict: 'serial,mark_type' })
+    expect(h.state.last._calls.upsertOpts).toEqual({ onConflict: 'organisation_id,serial,mark_type' })
   })
 
   it('pass-through surfaces the raw { data, error } the page reads', async () => {

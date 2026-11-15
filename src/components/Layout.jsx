@@ -166,7 +166,7 @@ const NAV_GROUPS = [
       { to: '/heat-intelligence',      label: 'Heat Intelligence', parent: 'Condition',      icon: Thermometer, roles: ANALYTICS_ROLES },
       { to: '/tyre-lifecycle',         label: 'Tyre Lifecycle', parent: 'Lifecycle',         icon: RefreshCw, adminOnly: A },
       { to: '/tyre-service-events',    label: 'Tyre Service Events', parent: 'Lifecycle',    icon: Activity, roles: ANALYTICS_ROLES },
-      { to: '/tyre-pool',           label: 'Tyre Pool', parent: 'Lifecycle',           icon: PackageCheck },
+      { to: '/tyre-pool',           label: 'Tyre Pool', parent: 'Lifecycle',           icon: PackageCheck, roles: ANALYTICS_ROLES },
       { to: '/scrap',               label: 'Scrap Management', parent: 'Lifecycle',    icon: ScrapBinIc },
       { to: '/retread',                label: 'Retread Management', parent: 'Lifecycle',  icon: Recycle, adminOnly: A },
       { to: '/retread-claims',         label: 'Retread Claims', parent: 'Lifecycle',      icon: Recycle, adminOnly: A },

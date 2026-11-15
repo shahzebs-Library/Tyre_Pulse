@@ -43,3 +43,12 @@ ever wanted. The reconcile is therefore closed by deletion, not re-application.
   456 MB). The next nightly run after applying removes 16 nights of snapshots, which is
   a removal of stored data, so it is not applied unattended. It frees disk only; no
   measured query gets faster from it.
+
+## At-risk module fixes, round 2 (ATR, 2026-11-15) - NOT APPLIED
+
+- `20261117100000_atr_user_view_prefs.sql` - creates `user_view_prefs` (personal saved table views; owner-only
+  rows inside the owner's company; reader policies applied). Supersedes the never-applied
+  `supabase/migrations/20260921090000_user_view_prefs.sql`. No dependency. Tested on local staging.
+- `20261117101000_atr_carbon_offsets_blank_is_null.sql` - `carbon_offsets.aed_cost` and `trees_equivalent`
+  become nullable with no default, so a blank is stored as "not recorded" and not 0. Contains `drop default` /
+  `drop not null` (unavoidable), so the apply prompt needs the owner. No dependency. Tested on local staging.

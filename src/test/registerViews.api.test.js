@@ -28,7 +28,10 @@ vi.mock('../lib/api/_client', () => {
   }
 })
 
-import { listSavedViews, loadView, saveView, deleteView, setDefaultView } from '../lib/api/registerViews'
+import {
+  listSavedViews, loadView, saveView, deleteView, setDefaultView,
+  savedViewsUnavailable, resetSavedViewsAvailability,
+} from '../lib/api/registerViews'
 
 const CATALOG = [
   { key: 'asset', label: 'Asset' },
@@ -36,7 +39,7 @@ const CATALOG = [
   { key: 'cost', label: 'Cost' },
 ]
 
-beforeEach(() => { state.rows = []; state.error = null })
+beforeEach(() => { state.rows = []; state.error = null; resetSavedViewsAvailability() })
 
 describe('savedViews service - unprovisioned', () => {
   it('lists nothing instead of erroring when the table does not exist', async () => {
@@ -111,6 +114,39 @@ describe('savedViews service - provisioned', () => {
     await expect(listSavedViews('work_orders')).resolves.toEqual([])
     await expect(saveView('work_orders', {})).resolves.toEqual({ ok: false, reason: 'save-failed' })
     await expect(deleteView('x')).resolves.toEqual({ ok: false, reason: 'delete-failed' })
+    vi.restoreAllMocks()
+  })
+})
+
+describe('savedViews service - stops asking once the table is known to be missing', () => {
+  it('sends no further request after the first definite "no such table" answer', async () => {
+    const mod = await import('../lib/api/_client')
+    const missing = { code: 'PGRST205', message: 'Could not find the table' }
+    const b = { select: () => b, eq: () => b, order: () => b, then: (res, rej) => Promise.resolve({ data: null, error: missing }).then(res, rej) }
+    const from = vi.spyOn(mod.supabase, 'from').mockReturnValue(b)
+
+    await expect(listSavedViews('work_orders')).resolves.toEqual([])
+    expect(from).toHaveBeenCalledTimes(1)
+    expect(savedViewsUnavailable()).toBe(true)
+
+    // Every register on every page would otherwise repeat the same 404.
+    await expect(listSavedViews('tyre_records')).resolves.toEqual([])
+    await expect(saveView('work_orders', { columns: [] })).resolves.toEqual({ ok: false, reason: 'not-provisioned' })
+    await expect(deleteView('x')).resolves.toEqual({ ok: false, reason: 'not-provisioned' })
+    await expect(setDefaultView('work_orders', 'x')).resolves.toEqual({ ok: false, reason: 'not-provisioned' })
+    expect(from).toHaveBeenCalledTimes(1)
+    vi.restoreAllMocks()
+  })
+
+  it('keeps asking after a permission or network fault, which is not "missing"', async () => {
+    const mod = await import('../lib/api/_client')
+    const denied = { code: '42501', message: 'permission denied for relation user_view_prefs' }
+    const b = { select: () => b, eq: () => b, order: () => b, then: (res, rej) => Promise.resolve({ data: null, error: denied }).then(res, rej) }
+    const from = vi.spyOn(mod.supabase, 'from').mockReturnValue(b)
+    await listSavedViews('work_orders')
+    await listSavedViews('work_orders')
+    expect(savedViewsUnavailable()).toBe(false)
+    expect(from).toHaveBeenCalledTimes(2)
     vi.restoreAllMocks()
   })
 })

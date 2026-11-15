@@ -181,7 +181,7 @@ export const NAV_COMMANDS = [
   { id: 'service-requests', label: 'Service Requests', path: '/service-requests', icon: 'LifeBuoy', adminOnly: true },
   { id: 'breakdowns', label: 'Breakdown Callouts', path: '/breakdowns', icon: 'PhoneCall', adminOnly: true },
   { id: 'bay-scheduling', label: 'Bay Scheduling', path: '/bay-scheduling', icon: 'CalendarRange', adminOnly: true },
-  { id: 'tyre-pool', label: 'Tyre Pool', path: '/tyre-pool', icon: 'PackageCheck' },
+  { id: 'tyre-pool', label: 'Tyre Pool', path: '/tyre-pool', icon: 'PackageCheck', roles: ANALYTICS_ROLES },
   { id: 'parts-catalog', label: 'Parts Catalog', path: '/parts-catalog', icon: 'Boxes' },
   { id: 'requisitions', label: 'Requisitions', path: '/requisitions', icon: 'ClipboardList' },
   { id: 'goods-receipt', label: 'Goods Receipt', path: '/goods-receipt', icon: 'PackageCheck', keywords: ['grn', 'goods received note', 'delivery note', 'receiving'] },

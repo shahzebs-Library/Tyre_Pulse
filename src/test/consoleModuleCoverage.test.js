@@ -41,6 +41,8 @@ const NOT_A_MODULE = {
   '/rfid-registry': 'alias of /rfid',
   '/design-system': 'admin reference page, reachable from search',
   '/my-problems': 'personal page of every user (profile menu), not a module',
+  '/kpi-engine': 'tab of KPI Center (shared tab bar), same kpi_scorecard module as /kpi',
+  '/kpi-command': 'tab of KPI Center (shared tab bar), same kpi_scorecard module as /kpi',
 }
 
 function appRoutes() {

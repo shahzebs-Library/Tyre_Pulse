@@ -32,8 +32,7 @@ export const NAV_COMMANDS = [
   { id: 'dashboard',      label: 'Command Center',       path: '/',            icon: 'LayoutDashboard', keywords: ['dashboard', 'home', 'overview'] },
   { id: 'tyres',          label: 'Tyre Records',         path: '/tyres',       icon: 'CircleDot' },
   // Operations
-  { id: 'fleet-master',   label: 'Fleet Master',         path: '/fleet-master', icon: 'Truck', keywords: ['plate', 'number plate', 'registration', 'vin', 'chassis', 'vehicle list', 'asset register'] },
-  { id: 'assets',         label: 'Asset Management',     path: '/asset-management', icon: 'LayoutGrid' },
+  { id: 'fleet-master',   label: 'Fleet Master',         path: '/fleet-master', icon: 'Truck', keywords: ['plate', 'number plate', 'registration', 'vin', 'chassis', 'vehicle list', 'asset register', 'asset management', 'asset analysis', 'health matrix', 'fleet composition', 'utilisation'] },
   { id: 'asset-disposals', label: 'Asset Disposal',      path: '/asset-disposals', icon: 'Recycle', roles: ANALYTICS_ROLES, moduleKey: 'asset_disposals' },
   { id: 'asset-breakdowns', label: 'Breakdown Register', path: '/asset-breakdowns', icon: 'Wrench', roles: ANALYTICS_ROLES, moduleKey: 'asset_breakdowns' },
   { id: 'broadcast', label: 'Message the Team',      path: '/broadcast', icon: 'Megaphone', roles: ANALYTICS_ROLES, moduleKey: 'broadcast' },
@@ -49,21 +48,17 @@ export const NAV_COMMANDS = [
   { id: 'maintenance-calendar', label: 'Maintenance Calendar', path: '/maintenance-calendar', icon: 'Calendar', adminOnly: true },
   { id: 'erp-sync',       label: 'ERP Sync',             path: '/erp-sync',    icon: 'RefreshCw',     adminOnly: true, moduleKey: 'erp_sync' },
   // Tyre Performance
-  { id: 'analytics',      label: 'Analytics',            path: '/analytics',    icon: 'BarChart2',  roles: ANALYTICS_ROLES, moduleKey: 'analytics' },
   { id: 'brand-perf',     label: 'Brand Performance',    path: '/brand-perf',   icon: 'TrendingUp', roles: ANALYTICS_ROLES, moduleKey: 'brand_performance' },
-  { id: 'site-comp',      label: 'Site Comparison',      path: '/site-comp',    icon: 'GitCompare', roles: ANALYTICS_ROLES, moduleKey: 'site_comparison' },
+  { id: 'site-comp',      label: 'Site Comparison',      path: '/site-comp',    icon: 'GitCompare', roles: ANALYTICS_ROLES, moduleKey: 'site_comparison', keywords: ['comparison', 'compare', 'period comparison', 'period against period', 'this month vs last month'] },
   { id: 'fleet',          label: 'Fleet Analytics',      path: '/fleet',        icon: 'Activity',   roles: ANALYTICS_ROLES, moduleKey: 'fleet_analytics' },
-  { id: 'kpi',            label: 'KPI Scorecard',        path: '/kpi',          icon: 'Target',     roles: ANALYTICS_ROLES, moduleKey: 'kpi_scorecard' },
+  { id: 'kpi',            label: 'KPI Center',           path: '/kpi',          icon: 'Target',     roles: ANALYTICS_ROLES, moduleKey: 'kpi_scorecard', keywords: ['kpi scorecard', 'engineering kpi', 'engineering kpis', 'kpi command center', 'command center', 'targets', 'fleet score'] },
   { id: 'country-comp',   label: 'Country Comparison',   path: '/country-comp', icon: 'GitCompare', roles: ANALYTICS_ROLES, moduleKey: 'country_comparison' },
-  { id: 'comparison',     label: 'Comparison',           path: '/comparison',   icon: 'GitCompare', roles: ANALYTICS_ROLES, moduleKey: 'analytics' },
-  { id: 'kpi-engine',     label: 'Engineering KPIs',     path: '/kpi-engine',   icon: 'Cpu',        adminOnly: true, moduleKey: 'kpi_scorecard' },
-  { id: 'kpi-command',    label: 'KPI Command Center',   path: '/kpi-command',  icon: 'LayoutGrid', adminOnly: true, moduleKey: 'kpi_scorecard' },
   { id: 'position-intelligence', label: 'Position Intelligence', path: '/position-intelligence', icon: 'MapPin', adminOnly: true, moduleKey: 'position_intelligence' },
   { id: 'pressure-intel', label: 'Pressure Intelligence', path: '/pressure-intel', icon: 'Gauge',   adminOnly: true, moduleKey: 'pressure_intelligence' },
   { id: 'predictive-maintenance', label: 'Predictive Maintenance', path: '/predictive-maintenance', icon: 'Zap', adminOnly: true, moduleKey: 'predictive_maintenance' },
   { id: 'fleet-intelligence', label: 'Fleet Intelligence', path: '/fleet-intelligence', icon: 'Activity', adminOnly: true, moduleKey: 'fleet_intelligence' },
   { id: 'fleet-health',   label: 'Fleet Health Board',   path: '/fleet-health', icon: 'Heart',      adminOnly: true, moduleKey: 'fleet_intelligence' },
-  { id: 'advanced-analytics', label: 'Advanced Analytics', path: '/advanced-analytics', icon: 'BarChart2', adminOnly: true, moduleKey: 'analytics' },
+  { id: 'advanced-analytics', label: 'Advanced Analytics', path: '/advanced-analytics', icon: 'BarChart2', roles: ANALYTICS_ROLES, moduleKey: 'analytics', keywords: ['analytics', 'overview', 'trends', 'tyres vs maintenance', 'cost split', 'site metrics', 'brand metrics'] },
   { id: 'benchmark',      label: 'Performance Benchmark', path: '/benchmark',   icon: 'Target',     adminOnly: true, moduleKey: 'analytics' },
   { id: 'tyre-size',      label: 'Size Optimizer',       path: '/tyre-size',    icon: 'CircleDot',  adminOnly: true, moduleKey: 'tyre_records' },
   { id: 'tyre-lifecycle', label: 'Tyre Lifecycle',       path: '/tyre-lifecycle', icon: 'RefreshCw', adminOnly: true, moduleKey: 'tyre_records' },
@@ -72,10 +67,9 @@ export const NAV_COMMANDS = [
   { id: 'rotation',       label: 'Rotation Schedule',    path: '/rotation',     icon: 'RefreshCcw', adminOnly: true },
   { id: 'root-cause',     label: 'Root Cause Engine',    path: '/root-cause',   icon: 'Search',     adminOnly: true, moduleKey: 'root_cause_engine' },
   // Workshop & Downtime
-  { id: 'work-orders',    label: 'Work Orders',          path: '/work-orders',  icon: 'Wrench', keywords: ['job card', 'jobcard', 'jc', 'repair order', 'wo', 'maintenance job'] },
+  { id: 'work-orders',    label: 'Work Orders',          path: '/work-orders',  icon: 'Wrench', keywords: ['job card', 'jobcard', 'jc', 'repair order', 'wo', 'maintenance job', 'workshop management', 'workshop analytics', 'site performance', 'technicians', 'turnaround'] },
   { id: 'repair-requests', label: 'Repair Requests (RFR)', path: '/repair-requests', icon: 'ClipboardList', keywords: ['rfr', 'request for repair', 'repair request', 'raise a request', 'fault report', 'job card request'] },
   { id: 'gate-pass',      label: 'Gate Pass',            path: '/gate-pass',    icon: 'ClipboardCheck' },
-  { id: 'workshop',       label: 'Workshop Management',  path: '/workshop',     icon: 'Building2',  adminOnly: true, moduleKey: 'work_orders' },
   { id: 'downtime',       label: 'Downtime Tracker',     path: '/downtime',     icon: 'Clock',      adminOnly: true, moduleKey: 'fleet_analytics' },
   { id: 'fuel-efficiency', label: 'Fuel Efficiency',     path: '/fuel-efficiency', icon: 'Gauge',   adminOnly: true, moduleKey: 'fleet_analytics' },
   // Stock & Procurement
@@ -93,8 +87,7 @@ export const NAV_COMMANDS = [
   { id: 'inspections',    label: 'Inspections',          path: '/inspections',  icon: 'ClipboardCheck' },
   { id: 'inspection-planner', label: 'Inspection Planner', path: '/inspection-planner', icon: 'CalendarCheck' },
   { id: 'inspection-intelligence', label: 'Inspection Intelligence', path: '/inspection-intelligence', icon: 'Activity', adminOnly: true, moduleKey: 'inspections' },
-  { id: 'safety-compliance', label: 'Safety & Compliance', path: '/safety-compliance', icon: 'Shield', adminOnly: true },
-  { id: 'compliance',     label: 'Compliance Dashboard', path: '/compliance',   icon: 'Shield',     adminOnly: true },
+  { id: 'compliance',     label: 'Compliance Dashboard', path: '/compliance',   icon: 'Shield',     adminOnly: true, keywords: ['safety', 'safety compliance', 'safety score', 'tread', 'pressure', 'regulatory'] },
   { id: 'alerts',         label: 'Alerts',               path: '/alerts',       icon: 'Bell',       adminOnly: true },
   { id: 'driver-management', label: 'Driver Intelligence', path: '/driver-management', icon: 'Users', adminOnly: true, moduleKey: 'fleet_master' },
   { id: 'driver-workspace', label: 'Driver Workspace', path: '/driver-workspace', icon: 'Users' },
@@ -108,15 +101,21 @@ export const NAV_COMMANDS = [
   { id: 'reports',        label: 'Reports',              path: '/reports',      icon: 'FileText' },
   { id: 'report-center',  label: 'Report Center',        path: '/report-center', icon: 'FileText' },
   { id: 'scheduled-reports', label: 'Scheduled Reports', path: '/scheduled-reports', icon: 'CalendarCheck' },
-  { id: 'executive-report', label: 'Executive Report',   path: '/executive-report', icon: 'Presentation', adminOnly: true, moduleKey: 'executive_report' },
+  // One "Executive" entry for two pages that keep their own access rules. It is
+  // offered to exactly the people who were offered either of the old commands.
+  { id: 'executive', label: 'Executive', path: '/executive', icon: 'Presentation',
+    anyOf: [
+      { path: '/executive-report', adminOnly: true, moduleKey: 'executive_report' },
+      { path: '/executive-analytics', roles: ANALYTICS_ROLES },
+    ],
+    keywords: ['executive report', 'executive analytics', 'board pack', 'management report', 'echarts', 'heatmap', 'sankey', 'treemap'] },
   { id: 'ai-command-center', label: 'AI Command Center', path: '/ai-command-center', icon: 'Cpu',    adminOnly: true, moduleKey: 'ai_command_center', keywords: ['smart analytics', 'ai analytics', 'assistant'] },
   { id: 'knowledge-base', label: 'Knowledge Base',       path: '/knowledge-base', icon: 'FileText', adminOnly: true },
   { id: 'ai-cost-monitor', label: 'AI Cost Monitor',     path: '/ai-cost-monitor', icon: 'BarChart2', adminOnly: true },
   { id: 'continuous-improvement', label: 'Continuous Improvement', path: '/continuous-improvement', icon: 'Zap', adminOnly: true, moduleKey: 'analytics' },
   // Administration & Data
   { id: 'cleaning',       label: 'Data Cleaning',        path: '/cleaning',     icon: 'Trash2',     adminOnly: true, moduleKey: 'data_cleaning' },
-  { id: 'data-intake',    label: 'Data Intake Center',   path: '/data-intake',  icon: 'Upload', keywords: ['upload', 'import', 'excel', 'csv', 'file'] },
-  { id: 'erp-import',     label: 'ERP Data Import',      path: '/erp-import',   icon: 'Upload', keywords: ['erp', 'import', 'template', 'asset', 'tyre change', 'expense', 'm3', 'production'] },
+  { id: 'data-intake',    label: 'Data Intake Center',   path: '/data-intake',  icon: 'Upload', keywords: ['upload', 'import', 'excel', 'csv', 'file', 'erp', 'erp import', 'erp intake', 'expense import', 'expense grid', 'ramco', 'template', 'tyre change', 'm3', 'production'] },
   { id: 'upload-approvals', label: 'Upload Approvals',   path: '/upload-approvals', icon: 'ClipboardCheck', adminOnly: true },
   { id: 'custom-data',    label: 'Custom Data',          path: '/custom-data',  icon: 'FileText' },
   { id: 'audit',          label: 'Audit Trail',          path: '/audit',        icon: 'History',    adminOnly: true, moduleKey: 'audit_trail' },
@@ -128,7 +127,6 @@ export const NAV_COMMANDS = [
   { id: 'report-builder',    label: 'Report Builder',      path: '/report-builder',    icon: 'FileText',   keywords: ['custom report', 'export', 'build'] },
   { id: 'design-system',     label: 'Design System',       path: '/design-system',     icon: 'Layers',     keywords: ['ui kit', 'components', 'card', 'modal', 'tokens', 'style guide', 'storybook'] },
   { id: 'dashboard-builder', label: 'Dashboard Builder',   path: '/dashboard-builder', icon: 'LayoutGrid', keywords: ['widgets', 'layout', 'custom dashboard'] },
-  { id: 'executive-analytics', label: 'Executive Analytics', path: '/executive-analytics', icon: 'BarChart2', roles: ANALYTICS_ROLES, keywords: ['echarts', 'heatmap', 'sankey', 'treemap'] },
   { id: 'tv-display',        label: 'TV Display Mode',     path: '/display',           icon: 'Radio',      adminOnly: true, keywords: ['tv', 'board', 'screen', 'wall'] },
   { id: 'security-center',   label: 'Security Center',     path: '/security-center',   icon: 'Settings',   keywords: ['login history', 'session', 'mfa', '2fa', 'two factor', 'sso', 'single sign on', 'password'] },
   { id: 'permission-matrix', label: 'Permission Matrix',   path: '/permission-matrix', icon: 'UserCog',    adminOnly: true, keywords: ['roles', 'rbac', 'access'] },
@@ -162,7 +160,7 @@ export const NAV_COMMANDS = [
   { id: 'action-center', label: 'Action Center', path: '/action-center', icon: 'ListTodo', adminOnly: true },
   { id: 'fleet-groups', label: 'Fleet Groups', path: '/fleet-groups', icon: 'Network', adminOnly: true },
   { id: 'trip-replay', label: 'Trip Replay', path: '/trip-replay', icon: 'Play', adminOnly: true },
-  { id: 'tyre-age-compliance', label: 'Tyre Age Compliance', path: '/tyre-age-compliance', icon: 'ShieldCheck', roles: ANALYTICS_ROLES },
+  { id: 'tyre-age-compliance', label: 'Tyre Time in Service', path: '/tyre-age-compliance', icon: 'ShieldCheck', roles: ANALYTICS_ROLES },
   { id: 'tyre-passport', label: 'Tyre Passport', path: '/tyre-passport', icon: 'ScanLine' },
   { id: 'fleet-risk-score', label: 'Fleet Risk Score', path: '/fleet-risk-score', icon: 'ShieldAlert', roles: ANALYTICS_ROLES },
   { id: 'rotation-optimizer', label: 'Rotation Optimizer', path: '/rotation-optimizer', icon: 'RotateCcw', roles: ANALYTICS_ROLES },
@@ -226,14 +224,13 @@ export const NAV_COMMANDS = [
   { id: 'workshop-settings', label: 'Workshop Settings', path: '/workshop-settings', icon: 'SlidersHorizontal', roles: ANALYTICS_ROLES },
   { id: 'parts-requests', label: 'Parts Requests', path: '/parts-requests', icon: 'Boxes', roles: ANALYTICS_ROLES },
   { id: 'board-overview', label: 'Board Overview', path: '/board-overview', icon: 'BarChartBig', roles: ANALYTICS_ROLES },
-  { id: 'tyre-failure-cpk', label: 'Tyre Failure & CPK', path: '/tyre-failure-cpk', icon: 'AlertTriangle', roles: ANALYTICS_ROLES },
   { id: 'maintenance-cost-board', label: 'Maintenance Cost & Tasks', path: '/maintenance-cost-board', icon: 'Wrench', roles: ANALYTICS_ROLES },
   { id: 'expense-report', label: 'Expenses & CPK', path: '/expense-report', icon: 'Wallet', roles: ANALYTICS_ROLES,
     keywords: ['expense report', 'real expenses', 'spend', 'cost per km', 'cpk', 'cost per kilometre', 'comparison', 'last year', 'last month'] },
   { id: 'expense-trends', label: 'Expense Trends', path: '/expense-trends', icon: 'TrendingUp', roles: ANALYTICS_ROLES,
     keywords: ['forecast', 'year over year', 'yoy', 'yearly spend', 'tyre spare lubricant', 'trend', 'compare years', 'projection'] },
   { id: 'cpk-intelligence', label: 'CPK Intelligence', path: '/cpk-intelligence', icon: 'Gauge', roles: ANALYTICS_ROLES,
-    keywords: ['cpk', 'cost per km', 'cost per hour', 'cost per kilometre', 'movable', 'non movable', 'engine hours', 'fleet cpk', 'per vehicle cost', 'scenario', 'brand value', 'why cpk changed'] },
+    keywords: ['cpk', 'cost per km', 'cost per hour', 'cost per kilometre', 'movable', 'non movable', 'engine hours', 'fleet cpk', 'per vehicle cost', 'scenario', 'brand value', 'why cpk changed', 'tyre failure', 'failure reasons', 'tyre life', 'removed register', 'asset ranking'] },
   { id: 'cost-per-m3', label: 'Cost per M3', path: '/cost-per-m3', icon: 'Layers', roles: ANALYTICS_ROLES,
     keywords: ['cost per cubic metre', 'cost per cubic meter', 'sar/m3', 'production cost', 'internal sco sany', 'grand total', 'concrete cost'] },
   { id: 'production-m3', label: 'Production (M3)', path: '/production-m3', icon: 'Boxes', roles: ANALYTICS_ROLES,
@@ -244,8 +241,6 @@ export const NAV_COMMANDS = [
     keywords: ['sany', 'workshop invoice', 'sany workshop', 'oem invoice'] },
   { id: 'sany-delay-penalty', label: 'SANY Delay Penalty', path: '/sany-delay-penalty', icon: 'Clock', roles: ANALYTICS_ROLES,
     keywords: ['sany delay', 'delay penalty', 'repair delay', 'deduction', '43 sar', 'downtime penalty'] },
-  { id: 'erp-intake', label: 'Data Intake (ERP)', path: '/erp-intake', icon: 'Layers', roles: ANALYTICS_ROLES },
-  { id: 'expense-import', label: 'Expense Import', path: '/expense-import', icon: 'Receipt', roles: ANALYTICS_ROLES },
   { id: 'roi-calculator', label: 'ROI Calculator', path: '/roi-calculator', icon: 'DollarSign', roles: ANALYTICS_ROLES },
   { id: 'fleet-renewal', label: 'Fleet Renewal', path: '/fleet-renewal', icon: 'Truck', roles: ANALYTICS_ROLES },
   { id: 'tco-calculator', label: 'TCO Calculator', path: '/tco-calculator', icon: 'Calculator', roles: ANALYTICS_ROLES },
@@ -300,6 +295,11 @@ export const ACTION_COMMANDS = [
 export function isCommandVisible(cmd, profile, hasPermission, grantedModules, isSuperAdmin, moduleStatus) {
   const role = profile?.role
   if (!role) return false
+  // A grouped command (one entry for several pages that keep their own access
+  // rules) is offered when at least one member would have been.
+  if (Array.isArray(cmd.anyOf)) {
+    return cmd.anyOf.some((m) => isCommandVisible(m, profile, hasPermission, grantedModules, isSuperAdmin, moduleStatus))
+  }
   const path = cmd.path
   // A module switched Off in Module Control is out of every menu, for everyone.
   if (moduleStatus && isPathSwitchedOff(path, moduleStatus)) return false

@@ -57,6 +57,7 @@ import {
 } from '../components/workshop/WorkshopLiveParts'
 import { safeImageSrc } from '../lib/safeUrl'
 import { toUserMessage } from '../lib/safeError'
+import { useWriteAccess } from '../hooks/useWriteAccess'
 import {
   fmtMins, relTime, pct, siteOptions as buildSiteOptions,
   filterBoard, filterJobs, bucketJobs, boardExportRows, BOARD_EXPORT_KEYS, BOARD_EXPORT_HEADERS,
@@ -162,6 +163,10 @@ function TechTile({ tech, now, highlight, onOpen, onViewJob }) {
 
 export default function WorkshopLive() {
   const { activeCountry } = useSettings()
+  // What the database lets this account do to work_orders, asked of the same
+  // server function the row policies call. Controls it would refuse are
+  // disabled with the reason; any refusal that still happens is shown as one.
+  const jobAccess = useWriteAccess('work_orders')
   const loadId = useRef(0)
   const [raw, setRaw] = useState(null)
   const [cfg, setCfg] = useState(null)
@@ -661,7 +666,7 @@ export default function WorkshopLive() {
           <select className="cc-select" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Filter by site" disabled={siteOptions.length <= 1}>
             {siteOptions.map((s) => <option key={s} value={s}>{s === 'All' ? 'All sites' : s}</option>)}
           </select>
-          <button type="button" className="cc-btn-primary wl-new" onClick={() => setNewJobOpen(true)}>
+          <button type="button" className="cc-btn-primary wl-new" onClick={() => setNewJobOpen(true)} disabled={!jobAccess.create} title={jobAccess.create ? undefined : jobAccess.reason('create')}>
             <Plus size={16} aria-hidden="true" /> New Job
           </button>
         </div>
@@ -896,6 +901,8 @@ export default function WorkshopLive() {
                               technicians={board}
                               techById={techById}
                               busy={busy}
+                              canEditJob={jobAccess.edit}
+                              editJobReason={jobAccess.reason('edit')}
                               onAssign={onAssign}
                               onReassign={onReassign}
                               onStatus={onStatus}

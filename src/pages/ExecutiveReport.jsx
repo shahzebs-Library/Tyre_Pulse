@@ -46,6 +46,7 @@ import { captureChartOnPaper, paperChartOptions } from '../lib/chartCapture'
 import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
+import SectionTabs, { EXECUTIVE_TABS } from '../components/ui/SectionTabs'
 import Modal from '../components/ui/Modal'
 import YearlyTrendPanel from '../components/expense/YearlyTrendPanel'
 import PeriodFilter, { filterByPeriodValue, periodLabel as periodValueLabel } from '../components/ui/PeriodFilter'
@@ -1450,6 +1451,8 @@ export default function ExecutiveReport() {
 
   return (
     <div className={`text-[var(--text-primary)] print:bg-white print:text-black space-y-6${reportMode ? ' tp-report-paper' : ''}`}>
+      {/* One Executive menu entry: this strip links the two executive pages. Not printed. */}
+      <div className="print:hidden"><SectionTabs tabs={EXECUTIVE_TABS} /></div>
 
       {/* ── Print + Report-view Styles ─────────────────────────────────────
           .tp-report-paper flips every var-driven surface to a white "paper"

@@ -67,6 +67,96 @@ describe('ERP to inspection evidence matcher', () => {
   })
 })
 
+describe('wheel position goes through the shared position service', () => {
+  const insp = { id: 'i2', asset_no: 'TM400', country: 'KSA', inspection_date: '2026-11-10', vehicle_type: 'TR-MIXER' }
+  const wo = { id: 'j9', work_order_no: 'JC-900', asset_no: 'TM400', country: 'KSA', opened_at: '2026-11-12', description: 'Tyre change' }
+  const row = (over = {}) => ({ asset_no: 'TM400', country: 'KSA', job_card: 'JC-900', position: 'RHCO', serial_no: 'NEW-555001', issue_date: '2026-11-12', ...over })
+  const run = (finding, fitments, extra = {}) => evaluateErpCandidate({
+    inspection: insp, finding, workOrder: wo, fitments, expenses: [], layoutContext: { vehicleType: 'TR-MIXER' }, ...extra,
+  })
+
+  it('an inspection slot id and an ERP code for the SAME wheel match (the production failure)', () => {
+    const r = run({ rawPosition: 'R1Ro' }, [row()])
+    expect(r.status).toBe('review')
+    expect(r.eligibleToConfirm).toBe(true)
+    expect(r.positionState).toBe('offered_for_review')
+    expect(r.evidenceSummary.canonicalPosition).toBe('RHCO')
+  })
+  it('the same slot id on another machine is another wheel: no text substitution', () => {
+    const trailer = { ...insp, asset_no: 'TR900', vehicle_type: 'TRAILER' }
+    const r = evaluateErpCandidate({
+      inspection: trailer, finding: { rawPosition: 'R1Ro' },
+      workOrder: { ...wo, asset_no: 'TR900' }, fitments: [row({ asset_no: 'TR900' })],
+      layoutContext: { vehicleType: 'TRAILER' },
+    })
+    expect(r.eligibleToConfirm).toBe(false)
+    expect(r.status).toBe('manual_review')
+  })
+  it('a different wheel is a conflict, not a match', () => {
+    const r = run({ rawPosition: 'R1Ro' }, [row({ position: 'RHRO' })])
+    expect(r.status).toBe('conflict')
+    expect(r.positionState).toBe('different_wheel')
+  })
+  it.each([
+    ['ambiguous ERP code', { rawPosition: 'R1Ro' }, { position: 'RHR1-O' }, {}],
+    ['missing ERP position', { rawPosition: 'R1Ro' }, { position: '' }, {}],
+    ['missing observed position', { rawPosition: '' }, {}, {}],
+    ['slot that is not on this machine', { rawPosition: 'RR' }, { position: 'RHRO' }, {}],
+    ['unknown vehicle type', { rawPosition: 'FL' }, { position: 'LHF1' }, { inspection: { ...insp, asset_no: 'ZZ1', vehicle_type: '' }, workOrder: { ...wo, asset_no: 'ZZ1' }, layoutContext: {} }],
+    ['tyreless equipment', { rawPosition: 'FL' }, { position: 'LHF1' }, { layoutContext: { vehicleType: 'GENERATOR' }, inspection: { ...insp, vehicle_type: '' } }],
+  ])('%s stays pending manual review and cannot be confirmed', (_n, finding, over, extra) => {
+    const asset = extra.inspection?.asset_no || 'TM400'
+    const r = run(finding, [row({ ...over, asset_no: asset })], extra)
+    expect(r.eligibleToConfirm).toBe(false)
+    expect(r.status).toBe('manual_review')
+    expect(r.positionState).toBe('pending_manual_review')
+    expect(r.conflicts).toEqual([])
+    expect(r.notes.length).toBeGreaterThan(0)
+  })
+  it('an inspection recorded on another wheel plan than the asset has is inconsistent', () => {
+    const r = run({ rawPosition: 'R1Ro' }, [row()], { inspection: { ...insp, vehicle_type: 'TRAILER' } })
+    expect(r.eligibleToConfirm).toBe(false)
+    expect(r.positionState).toBe('inconsistent')
+    expect(r.status).toBe('conflict')
+  })
+  it('a real serial leaving on the job card is evidence when the wheel cannot be read', () => {
+    const r = run({ rawPosition: 'R1Ro', serial: 'OBS-900100' },
+      [row({ position: '', serial_no: 'obs-900100', issue_date: '2026-08-01', removal_date: '2026-11-12' })])
+    expect(r.eligibleToConfirm).toBe(true)
+    expect(r.evidenceSummary.serialMatched).toBe(true)
+  })
+  it('a placeholder serial is not evidence', () => {
+    const r = run({ rawPosition: 'R1Ro', serial: 'DOT18E56' },
+      [row({ position: '', serial_no: 'DOT18E56', issue_date: '2026-08-01', removal_date: '2026-11-12' })])
+    expect(r.eligibleToConfirm).toBe(false)
+    expect(r.status).toBe('manual_review')
+  })
+  it('the observed serial on a different wheel blocks the match', () => {
+    const r = run({ rawPosition: 'R1Ro', serial: 'OBS-900100' }, [row({ position: 'RHRO', serial_no: 'OBS-900100' })])
+    expect(r.eligibleToConfirm).toBe(false)
+    expect(r.positionState).toBe('inconsistent')
+  })
+  it('a replacement tyre with its own serial does not block a same-wheel match', () => {
+    const r = run({ rawPosition: 'R1Ro', serial: 'OBS-900100' }, [row()])
+    expect(r.eligibleToConfirm).toBe(true)
+    expect(r.conflicts).toEqual([])
+  })
+  it('the 4 axle pump build decides the wheel: front axle 3 does not exist on it', () => {
+    const pump = { ...insp, asset_no: 'MP300', vehicle_type: 'PUMPS' }
+    const base = { inspection: pump, finding: { rawPosition: 'F3L' }, workOrder: { ...wo, asset_no: 'MP300' }, fitments: [row({ asset_no: 'MP300', position: 'LHF3' })] }
+    expect(evaluateErpCandidate({ ...base, layoutContext: { vehicleType: 'PUMPS' } }).eligibleToConfirm).toBe(true)
+    expect(evaluateErpCandidate({ ...base, layoutContext: { vehicleType: 'PUMPS', axleCount: 4 } }).status).toBe('manual_review')
+  })
+  it('evaluating never writes and never returns a confirmed state', () => {
+    const inputs = { inspection: insp, finding: { rawPosition: 'R1Ro' }, workOrder: wo, fitments: [row()], expenses: [], layoutContext: { vehicleType: 'TR-MIXER' } }
+    const frozen = JSON.stringify(inputs)
+    const r = evaluateErpCandidate(inputs)
+    expect(JSON.stringify(inputs)).toBe(frozen)
+    expect(['review', 'manual_review', 'insufficient', 'conflict']).toContain(r.status)
+    expect(JSON.stringify(r)).not.toMatch(/"confirmed"|"closed"/i)
+  })
+})
+
 describe('ERP evidence audit drift', () => {
   it('retains a clean review for an unchanged job card', () => {
     expect(detectConfirmedErpDrift(workOrder, { ...workOrder })).toEqual([])

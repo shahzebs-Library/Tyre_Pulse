@@ -19,7 +19,13 @@
  */
 
 /** Actions a company can give a role. */
-export const WO_ACTIONS = Object.freeze(['create', 'edit', 'assign', 'progress', 'qc', 'close'])
+export const WO_ACTIONS = Object.freeze(['create', 'edit', 'assign', 'progress', 'qc', 'close', 'cost', 'cost_approve'])
+
+/**
+ * Rights that never come from the generic Access Control switches (role matrix or
+ * per-user grant): only from a rule row an Admin writes. Deleting is Admin only.
+ */
+export const WO_RULE_ONLY_ACTIONS = Object.freeze(['assign', 'close', 'cost_approve'])
 
 /**
  * Statuses a work order ends in. Moving a job to one of them is final closure and
@@ -47,6 +53,8 @@ export const WO_COLUMN_CLASS = Object.freeze({
   // Kept as stored by the guard for everyone but an Admin (never a refusal).
   kept: ['created_by', 'created_at'],
   admin: ['id', 'organisation_id', 'source_row', 'client_uuid'],
+  // The imported baseline: never written by a form. New costs are cost ledger entries.
+  baseline: ['parts_cost'],
   cost: ['labour_cost', 'parts_cost', 'tyre_cost', 'lubricant_cost', 'outside_repair_cost', 'labour_rate'],
   assign: ['assigned_owner_id', 'technician_name'],
   qc: ['qc_status'],
@@ -54,10 +62,11 @@ export const WO_COLUMN_CLASS = Object.freeze({
     'waiting_parts_hours', 'waiting_manpower_hours', 'odometer', 'vor', 'vor_since', 'parts_used'],
 })
 
-const ALL_SIX = ['create', 'edit', 'assign', 'progress', 'qc', 'close']
+const ALL_SIX = ['create', 'edit', 'assign', 'progress', 'qc', 'close', 'cost', 'cost_approve']
+const SUPERVISOR = ['create', 'edit', 'assign', 'progress', 'qc', 'close', 'cost']
 const TECH = ['progress']
-const rule = (role, actions, scope, qcScope = null) =>
-  Object.freeze({ role, actions: Object.freeze(actions), scope, qcScope })
+const rule = (role, actions, scope, qcScope = null, costScope = null) =>
+  Object.freeze({ role, actions: Object.freeze(actions), scope, qcScope, costScope })
 
 /**
  * The built-in defaults every company starts from (owner decision 2026-11-15).
@@ -67,15 +76,15 @@ const rule = (role, actions, scope, qcScope = null) =>
 export const DEFAULT_ROLE_RULES = Object.freeze([
   rule('Manager', ALL_SIX, 'all'),
   rule('Director', ALL_SIX, 'all'),
-  rule('Workshop Supervisor', ALL_SIX, 'all'),
-  rule('Maintenance Supervisor', ALL_SIX, 'all'),
+  rule('Workshop Supervisor', SUPERVISOR, 'all'),
+  rule('Maintenance Supervisor', SUPERVISOR, 'all'),
   rule('Workshop Area Manager', ALL_SIX, 'all'),
   rule('Workshop Maintenance Area Manager', ALL_SIX, 'all'),
   rule('Tire Planning Engineer', ALL_SIX, 'tyre'),
   rule('Tyre Engineer', ALL_SIX, 'tyre'),
   // Create, update and document anywhere in their walls; quality check on assigned
   // work orders only; no assigning and no final closure.
-  rule('Tyre Data Collector', ['create', 'edit', 'progress', 'qc'], 'all', 'assigned'),
+  rule('Tyre Data Collector', ['create', 'edit', 'progress', 'qc', 'cost'], 'all', 'assigned', 'assigned'),
   rule('Tyre Man', TECH, 'assigned'),
   rule('Mechanic', TECH, 'assigned'),
   rule('Electrician', TECH, 'assigned'),
@@ -126,6 +135,7 @@ export function defaultScopeForRole(role, action, rules = DEFAULT_ROLE_RULES) {
   const r = rules.find((x) => norm(x.role) === norm(role))
   if (!r) return null
   if (!r.actions.includes(action)) return null
+  if (action === 'cost') return r.costScope || r.scope
   return action === 'qc' ? (r.qcScope || r.scope) : r.scope
 }
 
@@ -166,6 +176,9 @@ export function legacyWorkOrderAccess({ role, isSuperAdmin = false, serverCaps =
     progress: edit,
     qc: edit,
     close: edit,
+    // The cost ledger does not exist before the drafts are applied.
+    cost: null,
+    cost_approve: null,
     assign: admin || r === 'manager' || r === 'director' ? 'all' : null,
     all_sites: true,
   }
@@ -183,6 +196,8 @@ export function serverWorkOrderAccess(json) {
     progress: scope(json?.progress),
     qc: scope(json?.qc),
     close: scope(json?.close),
+    cost: scope(json?.cost),
+    cost_approve: scope(json?.cost_approve),
     all_sites: json?.all_sites === true,
   }
 }
@@ -213,7 +228,9 @@ export function canWorkOrder(action, access, row, ctx) {
   if (access.admin) return true
   if (WO_ADMIN_ONLY_ACTIONS.includes(action)) return false
   if (!WO_ACTIONS.includes(action)) return false
-  if (access.provisioned && action !== 'create' && isClosedWorkOrder(row)) return false
+  // Costs often arrive after a job is closed: the ledger stays open (entries still need approval).
+  const ledger = action === 'cost' || action === 'cost_approve'
+  if (access.provisioned && action !== 'create' && !ledger && isClosedWorkOrder(row)) return false
   // The guard lets a person with the right to edit also record progress.
   const scopes = action === 'progress' ? [access.progress, access.edit] : [access[action]]
   if (scopes.every((s) => s === undefined)) return null
@@ -240,13 +257,14 @@ export function requiredActionsForChange(changedKeys, { newStatus } = {}) {
   const edit = keys.some((k) => !C.progress.includes(k) && !C.assign.includes(k) && !C.qc.includes(k))
     || (keys.includes('status') && ['cancelled', 'canceled'].includes(statusKey))
   const close = keys.includes('status') && CLOSING_STATUS_KEYS.includes(statusKey)
-  return { adminOnly: has(C.admin), cost: has(C.cost), edit, assign, qc: has(C.qc), progress, close }
+  return { adminOnly: has(C.admin), baseline: has(C.baseline), cost: has(C.cost), edit, assign, qc: has(C.qc), progress, close }
 }
 
 export const WO_REFUSAL = Object.freeze({
   closed: 'This work order is closed. Only an Admin can change a closed work order.',
   approvedCost: 'The cost of this work order was approved. Only an Admin can change an approved cost.',
   adminOnly: 'Only an Admin can change the company or import reference of a work order.',
+  baseline: 'The stored parts cost of a work order is kept as imported. Add the new cost as a cost entry instead.',
   delete: 'Only an Admin can delete a work order.',
   create: 'Your role cannot create work orders. An Admin can change this for your role or your account.',
   createTyreOnly: 'Your role can create tyre work orders only.',
@@ -291,6 +309,7 @@ export function checkWorkOrderChange(access, row, changedKeys, { newStatus, ctx 
   if (access.provisioned) {
     if (isClosedWorkOrder(row)) return { ok: false, reason: WO_REFUSAL.closed }
     if (need.adminOnly) return { ok: false, reason: WO_REFUSAL.adminOnly }
+    if (need.baseline) return { ok: false, reason: WO_REFUSAL.baseline }
     if (need.cost && row?.execution_approval_id) return { ok: false, reason: WO_REFUSAL.approvedCost }
   }
   let unknown = false

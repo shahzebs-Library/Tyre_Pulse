@@ -506,9 +506,6 @@ export function jobCardFormValues(row) {
   return out
 }
 
-const lineKey = lines => JSON.stringify((Array.isArray(lines) ? lines : []).map(p => [
-  String(p?.part_name ?? '').trim(), parseInt(p?.quantity) || 1, parseFloat(p?.unit_cost) || 0,
-]))
 const round2 = n => Math.round(n * 100) / 100
 
 /**
@@ -522,10 +519,10 @@ const round2 = n => Math.round(n * 100) / 100
  * cost included, must only move when the user changes the input that drives it.
  *
  * Cost rules:
- *  - parts_used / parts_cost are sent ONLY when the parts lines changed. The
- *    cost moves by the CHANGE in the lines total, so a stored cost that the
- *    lines never explained (an import carries both) keeps its unexplained part.
- *    When stored cost and lines agree this is simply the new lines total.
+ *  - parts_used / parts_cost are never sent on an edit (owner decision
+ *    2026-11-15). The stored parts cost is the imported baseline. Lines added
+ *    in the form are returned by jobCardAddedPartLines and saved as draft cost
+ *    ledger entries; removing a stored line in the form changes nothing.
  *  - labour_cost is sent only when labour hours or rate changed (hours x rate,
  *    when that is above zero) or the user typed a different labour cost.
  *  - opened_at is never blanked or defaulted on an edit.
@@ -546,14 +543,30 @@ export function jobCardEditPatch(row, values) {
   if (hoursOrRateChanged && derivedLabour > 0) patch.labour_cost = round2(derivedLabour)
   else if (patch.labour_cost === null) patch.labour_cost = 0
 
-  const oldLines = Array.isArray(row?.parts_used) ? row.parts_used : []
-  const newLines = Array.isArray(values?.parts_used) ? values.parts_used : []
-  if (lineKey(oldLines) !== lineKey(newLines)) {
-    const stored = Number(row?.parts_cost) || 0
-    patch.parts_used = newLines
-    patch.parts_cost = Math.max(0, round2(stored + partsLinesTotal(newLines) - partsLinesTotal(oldLines)))
-  }
+  // parts_cost and parts_used are NEVER part of an edit patch. The stored parts cost is the
+  // imported baseline; a part typed in the form becomes a cost ledger entry (jobCardAddedPartLines)
+  // that counts only once it is approved.
+  delete patch.parts_cost
+  delete patch.parts_used
   return patch
+}
+
+/**
+ * The parts lines the user ADDED in the form, compared with the stored lines
+ * (a multiset difference, so typing the same part twice yields two lines).
+ * These become draft cost ledger entries; they are never added to parts_cost.
+ */
+export function jobCardAddedPartLines(row, values) {
+  const key = p => JSON.stringify([String(p?.part_name ?? '').trim(), parseInt(p?.quantity) || 1, parseFloat(p?.unit_cost) || 0])
+  const stored = new Map()
+  for (const p of (Array.isArray(row?.parts_used) ? row.parts_used : [])) stored.set(key(p), (stored.get(key(p)) || 0) + 1)
+  const added = []
+  for (const p of (Array.isArray(values?.parts_used) ? values.parts_used : [])) {
+    const k = key(p)
+    if (stored.get(k) > 0) { stored.set(k, stored.get(k) - 1); continue }
+    if (String(p?.part_name ?? '').trim()) added.push(p)
+  }
+  return added
 }
 
 /** How many catalog fields a row actually carries: the completeness read. */

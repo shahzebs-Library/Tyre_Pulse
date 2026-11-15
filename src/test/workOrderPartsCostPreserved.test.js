@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { jobCardEditPatch, jobCardFormValues, partsLinesTotal } from '../lib/jobCard'
+import { jobCardEditPatch, jobCardFormValues, jobCardAddedPartLines, partsLinesTotal } from '../lib/jobCard'
 
 const src = readFileSync(resolve(__dirname, '../pages/WorkOrders.jsx'), 'utf8').replace(/\r\n/g, '\n')
 
@@ -61,22 +61,28 @@ describe('job card edit sends only what the user changed', () => {
     expect(edit(imported, { priority: 'High' })).toEqual({ priority: 'High' })
   })
 
-  it('user adds a part line to an imported card: cost rises by the line, the imported cost is kept', () => {
+  // Owner decision 2026-11-15 (round 4): the stored parts cost is the imported baseline and the
+  // form never writes it. A part typed in the form becomes a draft cost ledger entry instead.
+  it('user adds a part line to an imported card: nothing is written to the work order', () => {
     const line = { part_name: 'Hose', quantity: 2, unit_cost: 10 }
-    expect(edit(imported, { parts_used: [line] })).toEqual({ parts_used: [line], parts_cost: 1795.82 })
+    expect(edit(imported, { parts_used: [line] })).toEqual({})
+    expect(jobCardAddedPartLines(imported, { ...jobCardFormValues(imported), parts_used: [line] })).toEqual([line])
   })
 
-  it('user adds and removes lines on a card whose cost equals its lines: cost is the new lines total', () => {
+  it('adding and removing lines never sends parts_cost or parts_used, whatever the stored lines are', () => {
     const a = { part_name: 'Filter', quantity: 2, unit_cost: 50 }
     const b = { part_name: 'Belt', quantity: 1, unit_cost: 30 }
     const row = { ...imported, parts_cost: 100, parts_used: [a] }
-    expect(edit(row, { parts_used: [a, b] })).toEqual({ parts_used: [a, b], parts_cost: 130 })
-    expect(edit(row, { parts_used: [] })).toEqual({ parts_used: [], parts_cost: 0 })
-  })
-
-  it('removing lines never drives the cost below zero', () => {
-    const a = { part_name: 'Filter', quantity: 2, unit_cost: 50 }
-    expect(edit({ ...imported, parts_cost: 40, parts_used: [a] }, { parts_used: [] }).parts_cost).toBe(0)
+    for (const lines of [[a, b], [], [b]]) {
+      const patch = edit(row, { parts_used: lines })
+      expect(patch).not.toHaveProperty('parts_cost')
+      expect(patch).not.toHaveProperty('parts_used')
+    }
+    // Only the genuinely new lines become ledger entries; a stored line is never re-entered.
+    expect(jobCardAddedPartLines(row, { parts_used: [a, b] })).toEqual([b])
+    expect(jobCardAddedPartLines(row, { parts_used: [a, a] })).toEqual([a])
+    expect(jobCardAddedPartLines(row, { parts_used: [] })).toEqual([])
+    expect(jobCardAddedPartLines(row, { parts_used: [a, { part_name: ' ', quantity: 1, unit_cost: 5 }] })).toEqual([])
   })
 
   it('labour hours changed: labour cost follows hours x rate', () => {
@@ -94,6 +100,11 @@ describe('job card edit sends only what the user changed', () => {
 })
 
 describe('WorkOrders page uses the edit patch', () => {
+  it('added lines go to the cost ledger, and a missing ledger writes nothing and says so', () => {
+    expect(src).toMatch(/jobCardAddedPartLines\(editOrder, formData\)/)
+    expect(src).toMatch(/addCostEntry\(editOrder\.id, costEntryFromPartLine\(line\)\)/)
+    expect(src).toMatch(/costErr\?\.unavailable \? COST_LEDGER_UNAVAILABLE/)
+  })
   it('the update call sends the patch, never the full form payload', () => {
     expect(src).toMatch(/updateWorkOrderById\(editOrder\.id, patch\)/)
     expect(src).not.toMatch(/updateWorkOrderById\(editOrder\.id, payload\)/)

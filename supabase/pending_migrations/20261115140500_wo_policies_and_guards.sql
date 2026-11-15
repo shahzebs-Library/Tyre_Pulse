@@ -37,6 +37,9 @@
 --   work_orders UPDATE   the row is reachable when the caller has edit, progress, assign or qc on
 --                        it; trigger wo_write_guard then checks WHAT changed:
 --                          closed work order                 Admin only
+--                          the stored parts cost             Admin only, always: it is the imported
+--                                                            baseline. New costs go to the cost
+--                                                            ledger (20261115142000) as entries
 --                          cost of an approved work order    Admin only
 --                          company, id, import reference     Admin only (creator and created
 --                                                            time are silently kept as stored)
@@ -67,8 +70,10 @@
 --     and the quality check on work orders assigned to them. They can no longer change a closed
 --     work order, the assigned owner or the cost of an approved one, record a quality check on a
 --     job that is not theirs, or set a work order to Completed, Closed or Cancelled (owner decision
---     2026-11-15 round 2). Data Monitor Officer 1 keeps create, edit, progress, qc and closing but
---     loses closed work orders, the assigned owner and approved costs. Manager 3 and Director 0 lose nothing they could do (they could not
+--     2026-11-15 round 2). Data Monitor Officer 1 keeps create, edit, progress and qc but loses
+--     closing (round 4), closed work orders, the assigned owner and approved costs.
+--   Everyone but an Admin loses writing work_orders.parts_cost directly: 7,099 production work
+--     orders carry an imported parts cost with no parts lines, and that figure is never overwritten. Manager 3 and Director 0 lose nothing they could do (they could not
 --     write the job at all). Admin 2: unchanged.
 --   Stored rows changed: none.
 --
@@ -157,6 +162,7 @@ declare
   v_old jsonb; v_new jsonb; v_keys text[]; v_tyre boolean; v_tyre_new boolean;
   c_ignore   constant text[] := array['updated_at', 'total_cost', 'execution_approval_id'];
   c_admin    constant text[] := array['id', 'organisation_id', 'source_row', 'client_uuid'];
+  c_baseline constant text[] := array['parts_cost'];
   c_cost     constant text[] := array['labour_cost', 'parts_cost', 'tyre_cost', 'lubricant_cost', 'outside_repair_cost', 'labour_rate'];
   c_assign   constant text[] := array['assigned_owner_id', 'technician_name'];
   c_qc       constant text[] := array['qc_status'];
@@ -189,6 +195,10 @@ begin
   end if;
   if v_keys && c_admin then
     raise exception 'Only an Admin can change the company or import reference of a work order.'
+      using errcode = '42501';
+  end if;
+  if v_keys && c_baseline then
+    raise exception 'The stored parts cost of a work order is kept as imported. Add the new cost as a cost entry instead.'
       using errcode = '42501';
   end if;
   if v_keys && c_cost and OLD.execution_approval_id is not null then

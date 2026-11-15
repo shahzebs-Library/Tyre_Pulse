@@ -46,7 +46,10 @@ import {
   totalPages as totalPagesOf, selectionFromIds, mergeSelection, activeFilterCount,
 } from '../lib/workOrdersAnalytics'
 import { categorical } from '../lib/reportColors'
-import { editableFields, toPayload, jobCardEditPatch, jobCardFormValues, readField, JOB_CARD_WORK_TYPES } from '../lib/jobCard'
+import { editableFields, toPayload, jobCardEditPatch, jobCardFormValues, jobCardAddedPartLines, readField, JOB_CARD_WORK_TYPES } from '../lib/jobCard'
+import WorkOrderCostLedger from '../components/workorders/WorkOrderCostLedger'
+import { addCostEntry, submitCostEntry } from '../lib/api/workOrderCosts'
+import { costEntryFromPartLine, COST_LEDGER_UNAVAILABLE } from '../lib/workOrderCosts'
 import JobCardForm from '../components/workorders/JobCardForm'
 import JobCardDetail from '../components/workorders/JobCardDetail'
 import { getAssetByNo } from '../lib/api/assets'
@@ -546,6 +549,22 @@ export default function WorkOrders() {
           setApprovalRevision(value => value + 1)
           logAudit({ action: 'UPDATE', entity: 'work_orders', entityId: editOrder.id, before: editOrder, after: patch })
           await load()
+        }
+        // Parts typed in the form never change the stored (imported) parts cost. Each added line
+        // becomes a cost ledger entry that counts only once approved. Where the ledger is not on
+        // the database yet, nothing is written and the person is told.
+        const addedLines = jobCardAddedPartLines(editOrder, formData)
+        if (addedLines.length > 0) {
+          try {
+            for (const line of addedLines) {
+              const entry = await addCostEntry(editOrder.id, costEntryFromPartLine(line))
+              if (entry?.id) await submitCostEntry(entry.id)
+            }
+            setApprovalRevision(value => value + 1)
+          } catch (costErr) {
+            alert(costErr?.unavailable ? COST_LEDGER_UNAVAILABLE
+              : t('workorders.form.saveFailed', { msg: workOrderRefusalFromError(costErr) || (['42501', '22023', 'PT409'].includes(String(costErr?.code)) && costErr?.cause?.message) || toUserMessage(costErr) }))
+          }
         }
       } else {
         // toPayload walks the field catalog: only editable, non-computed, typed
@@ -1162,6 +1181,10 @@ export default function WorkOrders() {
                   {Number(viewOrder.outside_repair_cost) > 0 && <div className="flex justify-between"><span className="text-[var(--text-secondary)] text-sm">{t('workorders.detail.outsideRepair')}</span><span className="text-[var(--text-primary)] text-sm">{fmtCurrency(viewOrder.outside_repair_cost)}</span></div>}
                   <div className="flex justify-between border-t border-[var(--border-bright)] pt-2 mt-2"><span className="text-[var(--text-primary)] font-semibold text-sm">{t('workorders.detail.total')}</span><span className="text-green-400 font-bold text-lg">{fmtCurrency(viewOrder.total_cost)}</span></div>
                 </div>
+
+                {/* Cost ledger: additional costs as entries; renders nothing until it is installed. */}
+                <WorkOrderCostLedger key={`${viewOrder.id}:${approvalRevision}`} order={viewOrder} currency={activeCurrency}
+                  userId={woRights.userId} canAdd={woRights.can('cost', viewOrder)} canApprove={woRights.can('cost_approve', viewOrder)} />
 
                 {/* Hours / meter */}
                 {(Number(viewOrder.labour_hours) > 0 || Number(viewOrder.standard_hours) > 0 || Number(viewOrder.breakdown_hours) > 0 || Number(viewOrder.odometer) > 0) && (

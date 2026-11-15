@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { findObservationErpEvidence, confirmObservationErpLink, rejectObservationErpSuggestion, getObservationErpLink } from '../../lib/api/observationErpEvidence'
+import { findObservationErpEvidence, confirmObservationErpLink, rejectObservationErpSuggestion, getObservationErpLink, listObservationErpDecisions } from '../../lib/api/observationErpEvidence'
 import { toUserMessage } from '../../lib/safeError'
 
 /**
@@ -10,6 +10,8 @@ import { toUserMessage } from '../../lib/safeError'
 export default function ObservationErpEvidence({ observation }) {
   const [state, setState] = useState({ status: 'idle', candidates: [], evidenceLimited: false, error: '' })
   const [linked, setLinked] = useState(null)
+  const [history, setHistory] = useState([])
+  const [linkError, setLinkError] = useState('')
   const [note, setNote] = useState('')
   const [working, setWorking] = useState('')
   const [notice, setNotice] = useState('')
@@ -19,9 +21,10 @@ export default function ObservationErpEvidence({ observation }) {
   useEffect(() => {
     let live = true
     setState({ status: 'idle', candidates: [], evidenceLimited: false, error: '' })
-    setNotice(''); setNote(''); setLinked(null)
-    if (actionId) getObservationErpLink(actionId).then((res) => { if (live) setLinked(res) })
-      .catch(() => { if (live) setNotice('Could not verify existing ERP linkage. Confirmation is unavailable.') })
+    setNotice(''); setNote(''); setLinked(null); setHistory([]); setLinkError('')
+    if (actionId) Promise.all([getObservationErpLink(actionId), listObservationErpDecisions(actionId)])
+      .then(([res, rows]) => { if (live) { setLinked(res); setHistory(rows) } })
+      .catch(() => { if (live) setLinkError('Could not verify existing ERP linkage and audit history. Confirmation is unavailable.') })
     return () => { live = false }
   }, [observation?.key, actionId])
 
@@ -52,6 +55,7 @@ export default function ObservationErpEvidence({ observation }) {
         await rejectObservationErpSuggestion({ actionId, workOrderId: id, note })
         setNotice('Candidate rejected and decision recorded. Other evidence remains available.')
       }
+      setHistory(await listObservationErpDecisions(actionId))
     } catch (error) { setNotice(toUserMessage(error)) }
     finally { setWorking('') }
   }
@@ -60,6 +64,7 @@ export default function ObservationErpEvidence({ observation }) {
     <section className="iw-od-block" aria-label="ERP job card reconciliation">
       <h4>ERP evidence and job card</h4>
       <p className="iw-od-muted">Look up imported job cards, tyre consumption and expense records for this vehicle. Only an authorised reviewer can confirm a matching job card.</p>
+      {linkError && <p role="alert" className="text-sm text-red-500">{linkError}</p>}
       {linked && <div className="iw-od-now good">
         <strong>ERP job card confirmed: {linked.source_job_card}</strong>
         <p>Confirmed {linked.reviewed_at ? new Date(linked.reviewed_at).toLocaleString() : ''}. This does not close the corrective action.</p>
@@ -83,7 +88,7 @@ export default function ObservationErpEvidence({ observation }) {
                   {c.reasons.map(r => <p key={r} className="text-xs text-[var(--text-secondary)]">Evidence: {r}</p>)}
                   {c.conflicts.map(r => <p key={r} className="text-xs text-red-500">Conflict: {r}</p>)}
                   {c.status === 'insufficient' && <p className="text-xs text-amber-500">Insufficient evidence for confirmation.</p>}
-                  {actionId && !linked && (
+                  {actionId && !linked && !linkError && (
                     <div className="space-y-2">
                       <label className="block text-xs">Review reason
                         <textarea className="input w-full" rows={2} maxLength={2000} value={note}
@@ -106,6 +111,13 @@ export default function ObservationErpEvidence({ observation }) {
         </>
       )}
       {notice && <p role="status" className="text-sm">{notice}</p>}
+      {history.length > 0 && <div className="mt-3 space-y-2">
+        <h5 className="text-sm font-semibold">Review history ({history.length})</h5>
+        {history.map(event => <div key={event.id} className="rounded-lg border border-[var(--border)] p-2 text-xs">
+          <strong>{event.decision === 'confirmed' ? 'Confirmed' : 'Rejected'}: {event.source_job_card}</strong>
+          <p>{event.reason}</p><p className="text-[var(--text-muted)]">{new Date(event.created_at).toLocaleString()} | Reviewer {event.reviewer}</p>
+        </div>)}
+      </div>}
     </section>
   )
 }

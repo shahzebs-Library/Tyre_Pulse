@@ -7,9 +7,11 @@ vi.mock('../lib/supabase', () => ({ supabase: { rpc, from } }))
 import {
   invitationStatus, canRevoke, buildInviteUrl, isPlausibleInviteToken,
   getInvitationPreview, createInvitation, revokeInvitation, listInvitations,
+  getMyOrgSignInCode, setMyOrgSignInCode,
 } from '../lib/api/orgInvitations'
 import {
   validateInviteForm, buildInviteSignUp, signInIdFor, inviteSignUpErrorKey, minPasswordLength,
+  inviteJoined, explainSignUpRefusal,
 } from '../lib/inviteSignup'
 
 const TOKEN = 'a'.repeat(64)
@@ -88,6 +90,21 @@ describe('admin calls', () => {
     rpc.mockResolvedValue({ data: { ok: false }, error: null })
     expect(await revokeInvitation('i1')).toBe(false)
   })
+  it('getMyOrgSignInCode maps the server answer and is null when the function is missing', async () => {
+    rpc.mockResolvedValue({ data: { ok: true, sign_in_code: null, slug: 'beta-haulage', effective_code: 'beta-haulage', can_set: false, reason: 'single_company_mode' }, error: null })
+    expect(await getMyOrgSignInCode()).toEqual({ code: null, slug: 'beta-haulage', effectiveCode: 'beta-haulage', canSet: false, reason: 'single_company_mode' })
+    rpc.mockResolvedValue({ data: null, error: { code: 'PGRST202', message: 'not found' } })
+    expect(await getMyOrgSignInCode()).toBeNull()
+    rpc.mockRejectedValue(new Error('offline'))
+    expect(await getMyOrgSignInCode()).toBeNull()
+  })
+  it('setMyOrgSignInCode refuses a bad shape without calling the server, and sends a good one trimmed', async () => {
+    await expect(setMyOrgSignInCode('-x')).rejects.toThrow()
+    expect(rpc).not.toHaveBeenCalled()
+    rpc.mockResolvedValue({ data: { ok: true, sign_in_code: 'BETA' }, error: null })
+    expect(await setMyOrgSignInCode(' BETA ')).toBe('BETA')
+    expect(rpc).toHaveBeenCalledWith('org_set_my_sign_in_code', { p_code: 'BETA' })
+  })
   it('listInvitations never selects the token hash', async () => {
     const chain = { select: vi.fn(() => chain), order: vi.fn(() => chain), limit: vi.fn(() => Promise.resolve({ data: [{ id: 'i1' }], error: null })) }
     from.mockReturnValue(chain)
@@ -143,5 +160,34 @@ describe('invite sign-up rules', () => {
     expect(inviteSignUpErrorKey({ status: 429 })).toBe('errRateLimited')
     expect(inviteSignUpErrorKey({ message: 'Database error saving new user' })).toBe('errTaken')
     expect(inviteSignUpErrorKey({ message: 'boom' })).toBe('errFailed')
+  })
+})
+
+describe('did the invitation actually apply (staging matrix 4l/4q/4s/4u/4x)', () => {
+  it('the new account own row decides when it can be read', () => {
+    expect(inviteJoined({ profile: { org_id: 'b', approved: true } })).toBe(true)
+    expect(inviteJoined({ profile: { org_id: null, approved: false } })).toBe(false)
+    expect(inviteJoined({ profile: { org_id: 'b', approved: false } })).toBe(false)
+  })
+  it('otherwise the link read again: used = joined, still ok or cancelled = not joined', () => {
+    expect(inviteJoined({ previewAfter: { ok: false, reason: 'used' } })).toBe(true)
+    expect(inviteJoined({ previewAfter: { ok: true } })).toBe(false)
+    expect(inviteJoined({ previewAfter: { ok: false, reason: 'revoked' } })).toBe(false)
+    expect(inviteJoined({ previewAfter: { ok: false, reason: 'expired' } })).toBe(false)
+  })
+  it('unknown when nothing could be read (network error)', () => {
+    expect(inviteJoined({ previewAfter: { ok: false, reason: 'error' } })).toBeNull()
+    expect(inviteJoined({})).toBeNull()
+  })
+  it('a refused sign-up with a now-invalid link shows that link reason', () => {
+    const p = { ok: false, reason: 'revoked' }
+    expect(explainSignUpRefusal({ message: 'Database error saving new user' }, p)).toEqual({ preview: p })
+  })
+  it('a refused sign-up while the link is still good is a taken name, or (email-bound) possibly the wrong email', () => {
+    const err = { message: 'Database error saving new user' }
+    expect(explainSignUpRefusal(err, { ok: true })).toEqual({ key: 'errTaken' })
+    expect(explainSignUpRefusal(err, { ok: true }, { emailRequired: true })).toEqual({ key: 'errTakenOrEmail' })
+    expect(explainSignUpRefusal({ status: 429 }, { ok: true }, { emailRequired: true })).toEqual({ key: 'errRateLimited' })
+    expect(explainSignUpRefusal(err, { ok: false, reason: 'error' })).toEqual({ key: 'errTaken' })
   })
 })

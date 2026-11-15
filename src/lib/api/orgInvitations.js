@@ -106,3 +106,41 @@ export async function listInvitations({ limit = 200 } = {}) {
   if (error) throw toServiceError(error, 'Could not load the invitations.')
   return data || []
 }
+
+/**
+ * The caller's company sign-in code, for the Admin screen (TEN-9d,
+ * get_my_org_sign_in_code). Never throws: null when the server function is not
+ * there yet or cannot be read, so the invite panel still works without it.
+ *   { code, slug, effectiveCode, canSet, reason }
+ *   reason: not_admin | single_company_mode | already_set | null
+ */
+export async function getMyOrgSignInCode() {
+  try {
+    const { data, error } = await supabase.rpc('get_my_org_sign_in_code')
+    if (error || !data || data.ok !== true) return null
+    return {
+      code: data.sign_in_code || null,
+      slug: data.slug || null,
+      effectiveCode: data.effective_code || null,
+      canSet: data.can_set === true,
+      reason: data.reason || null,
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * A company Admin chooses the company sign-in code, once, after multi-company
+ * mode is on (TEN-9d, org_set_my_sign_in_code). The shape is checked here only
+ * to answer quickly; the server re-checks shape, uniqueness and the once-only rule.
+ */
+export async function setMyOrgSignInCode(code) {
+  const v = String(code ?? '').trim()
+  if (!/^[A-Za-z0-9][A-Za-z0-9-]{1,23}$/.test(v)) {
+    throw toServiceError(null, 'A company code is 2 to 24 letters, digits or hyphens.')
+  }
+  const { data, error } = await supabase.rpc('org_set_my_sign_in_code', { p_code: v })
+  if (error) throw toServiceError(error, 'The company code could not be saved.')
+  return data?.sign_in_code || v
+}

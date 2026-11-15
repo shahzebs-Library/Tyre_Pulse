@@ -7,9 +7,15 @@ const signUp = vi.hoisted(() => vi.fn())
 const signOut = vi.hoisted(() => vi.fn(() => Promise.resolve({})))
 const inv = vi.hoisted(() => ({
   listInvitations: vi.fn(), createInvitation: vi.fn(), revokeInvitation: vi.fn(),
+  getMyOrgSignInCode: vi.fn(), setMyOrgSignInCode: vi.fn(),
 }))
+// The new account's own profile row, read right after sign-up (undefined = not readable).
+const own = vi.hoisted(() => ({ row: undefined }))
+const from = vi.hoisted(() => vi.fn(() => ({
+  select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: own.row, error: null }) }) }),
+})))
 
-vi.mock('../lib/supabase', () => ({ supabase: { auth: { signUp, signOut }, rpc: vi.fn(), from: vi.fn() } }))
+vi.mock('../lib/supabase', () => ({ supabase: { auth: { signUp, signOut }, rpc: vi.fn(), from } }))
 vi.mock('../lib/api/systemConfig', () => ({ getPublicConfig: () => Promise.resolve({ password_min_length: '8' }) }))
 vi.mock('../lib/api/customRoles', () => ({ listAssignableRoles: () => Promise.resolve(['Admin', 'Reporter', 'Driver']) }))
 vi.mock('../lib/api/orgInvitations', async (orig) => {
@@ -37,7 +43,20 @@ beforeEach(() => {
   cleanup()
   preview.mockReset(); signUp.mockReset(); signOut.mockClear()
   Object.values(inv).forEach((f) => f.mockReset())
+  inv.getMyOrgSignInCode.mockResolvedValue(null)
+  own.row = undefined
 })
+
+const OK_PREVIEW = { ok: true, organisation_name: 'Beta', company_code: 'BETA', role: 'Driver', email_required: false }
+
+async function fillAndSubmit({ email } = {}) {
+  await screen.findByTestId('invite-form')
+  fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'ali.k' } })
+  if (email) fireEvent.change(screen.getByLabelText('Email address'), { target: { value: email } })
+  fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'longenough1' } })
+  fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'longenough1' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Create my account' }))
+}
 
 describe('invitation sign-up page', () => {
   it('names the company and role from the preview', async () => {
@@ -79,7 +98,8 @@ describe('invitation sign-up page', () => {
 
   it('signs up with the token and shows what to type at sign-in', async () => {
     preview.mockResolvedValue({ ok: true, organisation_name: 'Beta', company_code: 'BETA', role: 'Driver', email_required: false })
-    signUp.mockResolvedValue({ data: { session: { access_token: 'x' } }, error: null })
+    signUp.mockResolvedValue({ data: { session: { access_token: 'x' }, user: { id: 'u1' } }, error: null })
+    own.row = { org_id: 'beta-org', approved: true }
     openInvite()
     await screen.findByTestId('invite-form')
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'ali.k' } })
@@ -105,6 +125,42 @@ describe('invitation sign-up page', () => {
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'longenough1' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create my account' }))
     expect(await screen.findByText(/already taken/)).toBeTruthy()
+  })
+
+  it('an account that landed outside the company is NOT reported as joined (server dropped the invitation)', async () => {
+    // Production before TEN-9e keeps the account but drops a cancelled invitation:
+    // GoTrue says success, the person's own row is hidden (no company), the link still reads ok.
+    preview.mockResolvedValue(OK_PREVIEW)
+    signUp.mockResolvedValue({ data: { session: { access_token: 'x' }, user: { id: 'u1' } }, error: null })
+    openInvite()
+    await fillAndSubmit()
+    expect(await screen.findByText(/could not be applied/)).toBeTruthy()
+    expect(screen.queryByTestId('invite-done')).toBeNull()
+    expect(signOut).toHaveBeenCalled()
+  })
+
+  it('no session (email confirmation): a link that now reads used counts as joined', async () => {
+    preview.mockResolvedValueOnce(OK_PREVIEW).mockResolvedValueOnce({ ok: false, reason: 'used' })
+    signUp.mockResolvedValue({ data: { session: null, user: { id: 'u1' } }, error: null })
+    openInvite()
+    await fillAndSubmit()
+    expect(await screen.findByTestId('invite-done')).toBeTruthy()
+  })
+
+  it('a refused sign-up whose link was cancelled meanwhile shows the cancelled-link screen', async () => {
+    preview.mockResolvedValueOnce(OK_PREVIEW).mockResolvedValueOnce({ ok: false, reason: 'revoked' })
+    signUp.mockResolvedValue({ data: null, error: { message: 'Database error saving new user' } })
+    openInvite()
+    await fillAndSubmit()
+    expect(await screen.findByTestId('invite-invalid')).toBeTruthy()
+  })
+
+  it('an email-bound invitation refused while the link is still good names both likely causes', async () => {
+    preview.mockResolvedValue({ ...OK_PREVIEW, email_required: true })
+    signUp.mockResolvedValue({ data: null, error: { message: 'Database error saving new user' } })
+    openInvite()
+    await fillAndSubmit({ email: 'someone@example.com' })
+    expect(await screen.findByText(/different email address/)).toBeTruthy()
   })
 })
 
@@ -141,6 +197,40 @@ describe('company invitations panel', () => {
     openPanel()
     await waitFor(() => expect(screen.getAllByRole('alert').length).toBeGreaterThan(0))
     expect(screen.queryByText('No invitations yet.')).toBeNull()
+  })
+
+  it('shows the company code and why it cannot be changed here', async () => {
+    inv.listInvitations.mockResolvedValue([])
+    inv.getMyOrgSignInCode.mockResolvedValue({ code: 'BETA', slug: 'beta', effectiveCode: 'BETA', canSet: false, reason: 'already_set' })
+    openPanel()
+    expect((await screen.findByTestId('org-code-current')).textContent).toMatch('BETA/their-username')
+    expect(screen.getByTestId('org-code-reason').textContent).toMatch(/platform team/)
+    expect(screen.queryByRole('button', { name: 'Save code' })).toBeNull()
+  })
+
+  it('a company Admin chooses the code once multi-company mode allows it', async () => {
+    inv.listInvitations.mockResolvedValue([])
+    inv.getMyOrgSignInCode
+      .mockResolvedValueOnce({ code: null, slug: 'beta-haulage', effectiveCode: 'beta-haulage', canSet: true, reason: null })
+      .mockResolvedValueOnce({ code: 'BETA', slug: 'beta-haulage', effectiveCode: 'BETA', canSet: false, reason: 'already_set' })
+    inv.setMyOrgSignInCode.mockResolvedValue('BETA')
+    openPanel()
+    const input = await screen.findByLabelText(/Choose the code/)
+    fireEvent.change(input, { target: { value: '-bad' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save code' }))
+    expect(await screen.findByText(/2 to 24 letters/, { selector: '[role="alert"]' })).toBeTruthy()
+    expect(inv.setMyOrgSignInCode).not.toHaveBeenCalled()
+    fireEvent.change(input, { target: { value: 'BETA' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save code' }))
+    expect(await screen.findByText('Company code saved.')).toBeTruthy()
+    expect(inv.setMyOrgSignInCode).toHaveBeenCalledWith('BETA')
+  })
+
+  it('no code block when the server function is not there yet', async () => {
+    inv.listInvitations.mockResolvedValue([])
+    openPanel()
+    await screen.findByText('No invitations yet.')
+    expect(screen.queryByTestId('org-code-block')).toBeNull()
   })
 
   it('a non-Admin sees only an explanation', () => {

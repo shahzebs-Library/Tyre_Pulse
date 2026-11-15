@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { supabase } from '../lib/supabase'
 import { toUserMessage } from '../lib/safeError'
-import { normalizeSignInIdentifier } from '../lib/signInIdentifier'
+import { normalizeSignInIdentifier, isMultiCompanyMode } from '../lib/signInIdentifier'
 import { getPublicConfig } from '../lib/api/systemConfig'
 import { signInOptions, signInWithProvider } from '../lib/api/loginShowcase'
 import { loginAttemptStatus, recordLoginFailure, resetLoginAttempts, lockMinutes } from '../lib/api/loginGuard'
@@ -120,6 +120,8 @@ export default function Login() {
   // switches them on, so the page never shows a button that cannot work.
   const [signInOpts, setSignInOpts] = useState({ google: false, microsoft: false, qr: false })
   const [appVersion, setAppVersion] = useState('')
+  // "Company code / username" hint: only once multi-company sign-in is on.
+  const [multiCompany, setMultiCompany] = useState(false)
 
   // Pre-auth read of the registration switch on mount. getPublicConfig never
   // throws (returns {} on failure), so a read miss leaves signup permissively open.
@@ -129,6 +131,7 @@ export default function Login() {
       if (!alive) return
       if (cfg?.registration_open === 'false' || cfg?.allow_signups === 'false') setSignupClosed(true)
       setSignInOpts(signInOptions(cfg))
+      setMultiCompany(isMultiCompanyMode(cfg))
       const v = typeof cfg?.app_version === 'string' ? cfg.app_version.replace(/^"|"$/g, '').trim() : ''
       if (v) setAppVersion(v)
     })
@@ -580,7 +583,7 @@ export default function Login() {
                         type="text"
                         style={inputStyle('id')}
                         aria-invalid={fieldErr.id !== null || undefined}
-                        aria-describedby={fieldErr.id ? 'login-id-err' : (error ? 'login-error login-id-hint' : 'login-id-hint')}
+                        aria-describedby={fieldErr.id ? 'login-id-err' : ([error && 'login-error', multiCompany && 'login-id-hint'].filter(Boolean).join(' ') || undefined)}
                         placeholder={p('idPlaceholder')}
                         value={identifier}
                         onChange={e => { setIdentifier(e.target.value); if (fieldErr.id !== null || fieldErr.pw) setFieldErr({ id: null, pw: null }) }}
@@ -590,7 +593,7 @@ export default function Login() {
                       />
                     </div>
                     {fieldErr.id && <p id="login-id-err" className="tpl-field-err" role="alert">{fieldErr.id}</p>}
-                    {!fieldErr.id && <p id="login-id-hint" style={{ margin:'6px 0 0', fontSize:12, opacity:0.75 }}>{p('idCompanyHint')}</p>}
+                    {!fieldErr.id && multiCompany && <p id="login-id-hint"style={{ margin:'6px 0 0', fontSize:12, opacity:0.75 }}>{p('idCompanyHint')}</p>}
                   </div>
 
                   {/* Password */}

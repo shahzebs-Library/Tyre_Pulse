@@ -74,6 +74,49 @@ export function buildInviteSignUp({ token, preview, form, captchaToken = null })
   }
 }
 
+/**
+ * Did the sign-up actually land in the invited company?
+ *
+ * Production's _signup_context (before TEN-9e) does not abort a sign-up whose
+ * invitation no longer holds: it creates the account with no company and no
+ * approval, so a plain "success" from GoTrue proves nothing. Two signals, best
+ * first:
+ *   profile      - the new account's own row (only readable when signUp
+ *                  returned a session): joined = company set AND approved.
+ *   previewAfter - get_invitation_preview read again after the sign-up: an
+ *                  invitation this person just used reads 'used'; one that
+ *                  still reads ok (or cancelled / expired) was not applied.
+ * Returns true, false, or null when neither signal could be read (the page then
+ * trusts the sign-up; the login screen still refuses an unapproved account).
+ */
+export function inviteJoined({ profile = undefined, previewAfter = undefined } = {}) {
+  if (profile && typeof profile === 'object') return Boolean(profile.org_id && profile.approved === true)
+  if (previewAfter && typeof previewAfter === 'object') {
+    if (previewAfter.ok === true) return false
+    if (previewAfter.reason === 'used') return true
+    if (['invalid', 'revoked', 'expired', 'unavailable'].includes(previewAfter.reason)) return false
+  }
+  return null
+}
+
+/**
+ * After a REFUSED sign-up (TEN-9e aborts it, GoTrue answers "Database error
+ * saving new user"), say why from a fresh preview instead of guessing "the
+ * username is taken". Returns { preview } to show the invalid-link screen, or
+ * { key } for an inline error.
+ */
+export function explainSignUpRefusal(err, previewAfter, { emailRequired = false } = {}) {
+  if (previewAfter && previewAfter.ok === false && previewAfter.reason && previewAfter.reason !== 'error') {
+    return { preview: previewAfter }
+  }
+  const key = inviteSignUpErrorKey(err)
+  if (key === 'errTaken' && emailRequired && previewAfter?.ok === true
+      && /database error/i.test(String(err?.message || ''))) {
+    return { key: 'errTakenOrEmail' }
+  }
+  return { key }
+}
+
 /** Map a sign-up error to an i18n key under auth.invite. */
 export function inviteSignUpErrorKey(err) {
   const msg = String(err?.message || '')

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   normalizeSignInIdentifier, splitSignInIdentifier, hasCompanyCode,
-  isValidCompanyCode, syntheticSignInEmail, signInSlug,
+  isValidCompanyCode, syntheticSignInEmail, signInSlug, isMultiCompanyMode,
 } from '../lib/signInIdentifier'
 
 describe('normalizeSignInIdentifier', () => {
@@ -58,5 +58,29 @@ describe('company code shape and made-up address', () => {
   it('never produces an empty local part', () => {
     expect(signInSlug('***')).toBe('user')
     expect(syntheticSignInEmail('***', '***')).toBe('user@users.tyrepulse.app')
+  })
+})
+
+describe('regressions found in the staging test matrix', () => {
+  it('two usernames that differ only by "_" / "." get different sign-in addresses', () => {
+    expect(syntheticSignInEmail('ali_k', 'BETA')).toBe('ali_k+beta@users.tyrepulse.app')
+    expect(syntheticSignInEmail('ali.k', 'BETA')).toBe('ali.k+beta@users.tyrepulse.app')
+    expect(syntheticSignInEmail('ali-k')).toBe('ali-k@users.tyrepulse.app')
+  })
+  it('the company code keeps its hyphen in the address', () => {
+    expect(syntheticSignInEmail('ali', 'beta-haulage')).toBe('ali+beta-haulage@users.tyrepulse.app')
+  })
+})
+
+describe('isMultiCompanyMode (login hint gate)', () => {
+  it('is on only when single_tenant_mode is explicitly false', () => {
+    expect(isMultiCompanyMode({ single_tenant_mode: 'false' })).toBe(true)
+    expect(isMultiCompanyMode({ single_tenant_mode: '"false"' })).toBe(true)
+    expect(isMultiCompanyMode({ single_tenant_mode: false })).toBe(true)
+  })
+  it('stays off when the key is true, missing or the config could not be read', () => {
+    expect(isMultiCompanyMode({ single_tenant_mode: 'true' })).toBe(false)
+    expect(isMultiCompanyMode({})).toBe(false)
+    expect(isMultiCompanyMode(null)).toBe(false)
   })
 })

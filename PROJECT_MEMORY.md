@@ -5,6 +5,13 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ 2026-11-15 PR #546 (multi-company client) TEST MATRIX ON LOCAL STAGING ONLY. NOTHING applied to production, edge fn NOT deployed.
+- Runner `supabase/tests/multi_company_auth/run_staging.sh` (private copies of `tp_mirror2`): 114 checks pass after the new drafts; on the production shape 2 fail = defect D1 below.
+- DEFECTS found + drafted (pending, NOT applied): **TEN-9d** company Admin could set/rename its sign-in code by a direct UPDATE (`_guard_org_sign_in_code` is SECURITY DEFINER so `current_user` is never 'authenticated'; slug unguarded) + adds `org_set_my_sign_in_code` (once, refused while single_tenant_mode=true). **TEN-9e** a refused invitation sign-up created an orphan account (no company, burned username) and the /invite page said "joined"; now aborted + `get_public_config` returns `single_tenant_mode`. **TEN-9f** lockout keyed on typed text: spacing variants of "code/name" each had 5 tries -> keyed per account now.
+- Client: /invite verifies the account really joined (own row, else preview reads `used`); login company-code hint only when public config says multi-company; sign-in address keeps `_`/`-` (ali_k vs ali.k collided); Admin panel shows/sets the company code.
+- Sign-in edge fn typechecked + run locally with deno against staging (`e2e/multi_company/sign_in_edge_local.mjs`, 11/11). Browser checks with mocked Supabase: `e2e/multi_company/invite_login.mock.cjs` (9/9).
+- ten9c HOLD was applied ONLY on a private staging copy: duplicate usernames work (legacy company wins a bare name, two non-legacy duplicates resolve to nobody, code form exact).
+
 # ⚑ SESSION 2026-11-15/16 (rollout) — ALL PENDING DB CHANGES APPLIED TO PRODUCTION ON OWNER ORDER ("do all database changes"). 44 files, verified.
 - Owner chose: work orders + closure (Group B incl. Step 0), multi-company TEN-1..13 + COM, ERP actions 2-4 (lock lifted by 091000), PDF storage. No backup confirmed, so a full snapshot was taken first: `_bak.rollout_20261115_{fn,pol,cfg,modperm,tbl,con,trg,inv}` (every public function body + ACL, every policy, config, role matrix, triggers, data invariants). That is the restore point.
 - HOW: production fetched each file itself from GitHub raw at commit `5a0471ae` via pg_net into `_bak.rollout_sql`, sha256 checked against the repo (45/45), then executed with `DO ... EXECUTE` (begin/commit lines stripped). No hand transcription. Rehearsed first on local staging `tp_mirror2` the same way (all 44 pass; schema identical to plain psql apply). Order file: `docs/commercial-readiness/rollout_20261115/apply_order.txt`.

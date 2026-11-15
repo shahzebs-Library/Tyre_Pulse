@@ -67,8 +67,12 @@ export function isValidCompanyCode(code) {
 
 /** Lower-case, dot-separated slug used in a made-up address. */
 export function signInSlug(value, fallback = 'user') {
+  // "_" and "-" are kept: a username may contain them (USERNAME_RE), and folding
+  // them to "." made "ali_k" and "ali.k" share one sign-in address, so the
+  // second person's sign-up failed as "already registered".
   const s = String(value ?? '').toLowerCase()
-    .replace(/[^a-z0-9]+/g, '.')
+    .replace(/[^a-z0-9._-]+/g, '.')
+    .replace(/\.{2,}/g, '.')
     .replace(/(^\.+|\.+$)/g, '')
   return s || fallback
 }
@@ -84,4 +88,18 @@ export function syntheticSignInEmail(username, companyCode = null) {
   const user = signInSlug(username)
   const code = companyCode ? signInSlug(companyCode, '') : ''
   return code ? `${user}+${code}@${SIGN_IN_EMAIL_DOMAIN}` : `${user}@${SIGN_IN_EMAIL_DOMAIN}`
+}
+
+/**
+ * True only when the public config says multi-company sign-in is on
+ * (single_tenant_mode explicitly false; get_public_config carries it from
+ * TEN-9e). A missing or unreadable value means single-company: the
+ * "company code / username" hint stays hidden, as it is today. The code form
+ * itself is resolved by the server either way.
+ */
+export function isMultiCompanyMode(cfg) {
+  const raw = cfg?.single_tenant_mode
+  if (raw === false) return true
+  const v = String(raw ?? '').trim().replace(/^"|"$/g, '').trim().toLowerCase()
+  return v === 'false'
 }

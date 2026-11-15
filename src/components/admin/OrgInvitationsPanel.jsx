@@ -19,8 +19,10 @@ import { useLanguage } from '../../contexts/LanguageContext'
 import { toUserMessage } from '../../lib/safeError'
 import {
   INVITE_DAY_OPTIONS, buildInviteUrl, canRevoke, createInvitation,
-  invitationStatus, listInvitations, revokeInvitation,
+  getMyOrgSignInCode, invitationStatus, listInvitations, revokeInvitation,
+  setMyOrgSignInCode,
 } from '../../lib/api/orgInvitations'
+import { isValidCompanyCode } from '../../lib/signInIdentifier'
 import { listAssignableRoles } from '../../lib/api/customRoles'
 import { ACCESS_ROLES } from '../../lib/moduleCatalog'
 
@@ -69,6 +71,33 @@ export default function OrgInvitationsPanel({ canInvite = true }) {
   }, [])
 
   useEffect(() => { if (canInvite) load() }, [canInvite, load])
+
+  // Company sign-in code (TEN-9d). null = the server function is not there yet
+  // or could not be read: the block is then simply not shown.
+  const [codeInfo, setCodeInfo] = useState(null)
+  const [codeDraft, setCodeDraft] = useState('')
+  const [codeBusy, setCodeBusy] = useState(false)
+  const [codeMsg, setCodeMsg] = useState({ tone: '', text: '' })
+
+  const loadCode = useCallback(async () => { setCodeInfo(await getMyOrgSignInCode()) }, [])
+  useEffect(() => { if (canInvite) loadCode() }, [canInvite, loadCode])
+
+  async function handleSaveCode(e) {
+    e.preventDefault()
+    const v = codeDraft.trim()
+    if (!isValidCompanyCode(v)) { setCodeMsg({ tone: 'error', text: k('codeInvalid') }); return }
+    setCodeBusy(true); setCodeMsg({ tone: '', text: '' })
+    try {
+      await setMyOrgSignInCode(v)
+      setCodeDraft('')
+      setCodeMsg({ tone: 'ok', text: k('codeSaved') })
+      await loadCode()
+    } catch (err) {
+      setCodeMsg({ tone: 'error', text: toUserMessage(err, k('codeFailed')) })
+    } finally {
+      setCodeBusy(false)
+    }
+  }
 
   useEffect(() => {
     let alive = true
@@ -133,6 +162,38 @@ export default function OrgInvitationsPanel({ canInvite = true }) {
         <p className="text-sm text-[var(--text-secondary)] mt-1">{k('subtitle')}</p>
         <p className="text-xs text-[var(--text-secondary)] mt-1">{k('signInNote')}</p>
       </div>
+
+      {codeInfo && (
+        <div className="rounded-md border border-[var(--border-bright)] p-3 space-y-2" data-testid="org-code-block">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">{k('codeTitle')}</h3>
+          <p className="text-sm text-[var(--text-secondary)]" data-testid="org-code-current">
+            {codeInfo.effectiveCode ? k('codeCurrent', { code: codeInfo.effectiveCode }) : k('codeNone')}
+          </p>
+          {codeInfo.canSet ? (
+            <form onSubmit={handleSaveCode} className="flex flex-wrap items-end gap-2" noValidate>
+              <label className="block text-sm flex-1 min-w-[10rem]">
+                <span className="block mb-1 text-[var(--text-secondary)]">{k('codeLabel')}</span>
+                <input dir="ltr" autoCapitalize="characters" spellCheck={false} maxLength={24} className={fieldStyle}
+                  value={codeDraft} onChange={(e) => { setCodeDraft(e.target.value); setCodeMsg({ tone: '', text: '' }) }}
+                  aria-describedby="org-code-help" />
+                <span id="org-code-help" className="block mt-1 text-xs text-[var(--text-secondary)]">{k('codeHelp')}</span>
+              </label>
+              <button type="submit" disabled={codeBusy}
+                className="btn-primary inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium min-h-[40px] disabled:opacity-60">
+                {codeBusy ? k('codeSaving') : k('codeSave')}
+              </button>
+            </form>
+          ) : codeInfo.reason ? (
+            <p className="text-xs text-[var(--text-secondary)]" data-testid="org-code-reason">{k(`codeReason.${codeInfo.reason}`)}</p>
+          ) : null}
+          {codeMsg.text && (
+            <p role={codeMsg.tone === 'error' ? 'alert' : 'status'}
+              className={`text-sm ${codeMsg.tone === 'error' ? 'text-[var(--danger,#b91c1c)]' : 'text-[var(--success,#15803d)]'}`}>
+              {codeMsg.text}
+            </p>
+          )}
+        </div>
+      )}
 
       <form onSubmit={handleCreate} className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr_auto] items-end" noValidate>
         <label className="block text-sm">

@@ -19,7 +19,7 @@ import { supabase } from '../lib/supabase'
 import { getPublicConfig } from '../lib/api/systemConfig'
 import { getInvitationPreview } from '../lib/api/orgInvitations'
 import {
-  buildInviteSignUp, inviteSignUpErrorKey, minPasswordLength,
+  buildInviteSignUp, explainSignUpRefusal, inviteJoined, minPasswordLength,
   previewCompanyCode, signInIdFor, validateInviteForm,
 } from '../lib/inviteSignup'
 import TurnstileWidget, { captchaEnabled } from '../components/auth/TurnstileWidget'
@@ -80,11 +80,29 @@ export default function InviteSignup() {
       const req = buildInviteSignUp({ token, preview, form, captchaToken })
       const { data, error: authErr } = await supabase.auth.signUp(req)
       captchaRef.current?.reset()
-      if (authErr) { setError(k(inviteSignUpErrorKey(authErr))); return }
-      // The account was created inside the invited company. Do not keep a
-      // session open from this page: the person signs in normally, which runs
-      // every sign-in check (approval, lock, SSO, 2FA) in one place.
+      if (authErr) {
+        // A refused invitation (TEN-9e) and a taken username both arrive as a
+        // database error. Read the invitation again to say which.
+        const again = await getInvitationPreview(token)
+        const why = explainSignUpRefusal(authErr, again, { emailRequired: preview?.email_required === true })
+        if (why.preview) { setPreview(why.preview); return }
+        setError(k(why.key))
+        return
+      }
+      // A sign-up GoTrue accepted may still have landed outside the company
+      // (the server keeps the account but drops the invitation when it no
+      // longer holds). Check before telling the person they joined.
+      let profile
+      if (data?.session && data?.user?.id) {
+        const { data: prof } = await supabase.from('profiles').select('org_id, approved')
+          .eq('id', data.user.id).maybeSingle().then((r) => r, () => ({ data: undefined }))
+        profile = prof || undefined
+      }
+      const joined = inviteJoined({ profile, previewAfter: profile ? undefined : await getInvitationPreview(token) })
+      // Do not keep a session open from this page: the person signs in
+      // normally, which runs every sign-in check (approval, lock, SSO, 2FA).
       if (data?.session) await supabase.auth.signOut().catch(() => {})
+      if (joined === false) { setError(k('errNotJoined')); return }
       setDone({ signInId: preview?.email_required ? req.email : signInIdFor(form.username, preview), needsConfirm: !data?.session && preview?.email_required === true })
     } catch {
       setError(k('errFailed'))

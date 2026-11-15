@@ -18,8 +18,13 @@ describe('unmeasurable CPK is null, never a flattering 0', () => {
     const [v] = computeVendorPerformance([unpriced()])
     expect(v.avgCpk).toBe(null)
     expect(v.brand).toBe('NoPriceBrand')
-    // score contribution from CPK is 0 (null > 0 is false), never 1/0 = Infinity
-    expect(Number.isFinite(v.score)).toBe(true)
+    // ENG-8 (2026-11-12): this used to expect a finite score (0.3) for a brand with
+    // no price, no km and no rating, which ranked an unmeasured brand as if it had
+    // a perfect record. With nothing measured there is no score and no rank.
+    expect(v.score).toBeNull()
+    expect(v.rank).toBeNull()
+    expect(v.failureRate).toBeNull()
+    expect(v.measured).toBe(false)
   })
 
   it('computeWorkshopPerformance: an unpriced site has avgCpk null', () => {

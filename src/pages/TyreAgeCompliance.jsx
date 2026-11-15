@@ -1,12 +1,14 @@
 /**
- * TyreAgeCompliance (route /tyre-age-compliance) - flags tyres that are too OLD
- * by CALENDAR age, regardless of remaining tread. Rubber degrades with age and
- * in GCC heat an under-worn but aged tyre is a real blow-out and insurance risk.
+ * TyreAgeCompliance (route /tyre-age-compliance, title "Tyre time in service").
  *
- * Age is measured from the best available birth date (DOT or manufacture date
- * when present, else issue date, else fitment date) and classified into a
- * policy ladder: OK, Watch, Replace, Overdue, plus an honest "Date unknown"
- * bucket for tyres with no birth date on record.
+ * The fleet records NO DOT code and NO manufacture date, so this page cannot
+ * measure tyre age. What it measures is TIME IN SERVICE: years since the tyre
+ * was issued or fitted. Every title, tile, chart and export says so. The route
+ * and module key keep their old name on purpose (permissions are keyed on it).
+ *
+ * If a row ever carries a DOT or manufacture date the engine reads it and the
+ * basis note reports how many tyres have one; until then the page states
+ * "manufacture date not recorded" rather than implying age compliance.
  *
  * Runs on `tyre_records` (paged read). Banding and KPI maths live in
  * `src/lib/tyreAgeCompliance.js`; the page-level filters, histogram, action
@@ -31,7 +33,7 @@ import { assessFleet } from '../lib/tyreAgeCompliance'
 import {
   buildAgeView, ageHistogram, dateSourceMix, actionList, ageExportRows,
   AGE_BANDS, AGE_BAND_META, DATE_SOURCE_META, DATE_SOURCES, DEFAULT_AGE_POLICY,
-  serialOf, positionOf, EXPORT_COLS, EXPORT_HEADERS,
+  serialOf, positionOf, EXPORT_COLS, EXPORT_HEADERS, measurementBasis, REPORT_TITLE, REPORT_BASIS_NOTE,
 } from '../lib/tyreAgeComplianceAnalytics'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import { toUserMessage } from '../lib/safeError'
@@ -50,6 +52,9 @@ const BAND_STYLES = {
   overdue: 'bg-red-900/30 text-red-400 border border-red-700/50',
   unknown: 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
 }
+
+// Short form for the PDF header subtitle (the long form goes in the e-mail body).
+const PDF_NOTE = 'Counted from fitment date, not tyre age'
 
 const fmtAge = (y) => (y == null ? 'N/A' : `${y} yr`)
 const dash = (v) => (v == null || v === '' ? 'N/A' : v)
@@ -113,6 +118,7 @@ export default function TyreAgeCompliance() {
   const { counts, kpis, distribution, bySite, byBrand } = summary
   const histogram = useMemo(() => ageHistogram(scope), [scope])
   const sources = useMemo(() => dateSourceMix(scope), [scope])
+  const basis = useMemo(() => measurementBasis(scope), [scope])
   const worklist = useMemo(() => actionList(scope, 10), [scope])
 
   const siteOptions = useMemo(() => [...new Set(assessed.map((r) => r.site).filter(Boolean))].sort(), [assessed])
@@ -122,7 +128,7 @@ export default function TyreAgeCompliance() {
   const exportRows = useMemo(() => ageExportRows(table), [table])
   const fileBase = async () => {
     const { reportFileName, reportDateLabel } = await loadExportUtils()
-    return reportFileName('TyrePulse Tyre Age Compliance', activeCountry !== 'All' ? activeCountry : null, reportDateLabel())
+    return reportFileName('TyrePulse Tyre Time in Service', activeCountry !== 'All' ? activeCountry : null, reportDateLabel())
   }
   const pdfCols = EXPORT_COLS.map((c, i) => ({ key: c, header: EXPORT_HEADERS[i] }))
   const doExcel = async () => {
@@ -134,7 +140,7 @@ export default function TyreAgeCompliance() {
   const doPdf = async () => {
     try {
       const { exportToPdf } = await loadExportUtils()
-      await exportToPdf(exportRows, pdfCols, 'Tyre Age Compliance', await fileBase(), 'landscape')
+      await exportToPdf(exportRows, pdfCols, REPORT_TITLE, await fileBase(), 'landscape', '', { subtitleNote: PDF_NOTE })
     } catch (e) { setActionError(toUserMessage(e, 'Export failed. Please try again.')) }
   }
 
@@ -150,10 +156,10 @@ export default function TyreAgeCompliance() {
     { id: 'size', header: 'Size', accessorFn: (r) => r.size || 'N/A', size: 120 },
     { id: 'position', header: 'Position', accessorFn: (r) => positionOf(r) || 'N/A', size: 100 },
     { id: 'site', header: 'Site', accessorFn: (r) => r.site || 'N/A', size: 120 },
-    { id: 'age', header: 'Age', accessorFn: (r) => r.ageYears, size: 90, meta: { align: 'right' },
+    { id: 'age', header: 'In service', accessorFn: (r) => r.ageYears, size: 90, meta: { align: 'right' },
       sortUndefined: 'last', cell: ({ row }) => <span className="tabular-nums font-semibold">{fmtAge(row.original.ageYears)}</span> },
-    { id: 'birth', header: 'Birth date', accessorFn: (r) => r.birthDate || 'N/A', size: 110 },
-    { id: 'source', header: 'Date source', accessorFn: (r) => DATE_SOURCE_META[r.dateSource]?.label || 'N/A', size: 170,
+    { id: 'birth', header: 'In service since', accessorFn: (r) => r.birthDate || 'N/A', size: 110 },
+    { id: 'source', header: 'Counted from', accessorFn: (r) => DATE_SOURCE_META[r.dateSource]?.label || 'N/A', size: 170,
       cell: ({ row }) => <span className="text-xs text-[var(--text-dim)] whitespace-nowrap">{DATE_SOURCE_META[row.original.dateSource]?.label || 'N/A'}</span> },
     { id: 'band', header: 'Status', accessorFn: (r) => AGE_BAND_META[r.ageBand]?.label || 'N/A', size: 120,
       cell: ({ row }) => <BandBadge band={row.original.ageBand} /> },
@@ -167,7 +173,7 @@ export default function TyreAgeCompliance() {
   const barData = {
     labels: breakdown.map((g) => g.name),
     datasets: [{
-      label: 'Average age (yrs)',
+      label: 'Average time in service (yrs)',
       data: breakdown.map((g) => g.avgAge),
       backgroundColor: breakdown.map((g) => (g.nonCompliant > 0 ? BAND_HEX.replace : withAlpha(colorAt(0), 0.75))),
       borderRadius: 4,
@@ -187,19 +193,19 @@ export default function TyreAgeCompliance() {
   }
 
   const tiles = [
-    { label: 'Tyres assessed', value: loaded ? fmtNum(kpis.totalAssessed) : 'N/A', icon: ShieldCheck, sub: `${fmtNum(kpis.withDate)} with a birth date` },
-    { label: 'Compliance rate', value: loaded && kpis.compliancePct != null ? `${kpis.compliancePct}%` : 'N/A', icon: CheckCircle2, tone: 'accent', sub: `Under ${DEFAULT_AGE_POLICY.replaceYears} years, dated tyres` },
-    { label: 'Non-compliant', value: loaded ? fmtNum(kpis.nonCompliantCount) : 'N/A', icon: ShieldAlert, tone: 'warn', sub: `${DEFAULT_AGE_POLICY.replaceYears} years or older` },
-    { label: 'Overdue', value: loaded ? fmtNum(kpis.overdueCount) : 'N/A', icon: AlertTriangle, tone: 'crit', sub: `Over ${DEFAULT_AGE_POLICY.overdueYears} years, remove now` },
-    { label: 'Average age', value: loaded ? fmtAge(kpis.avgAgeYears) : 'N/A', icon: Gauge, sub: 'Across dated tyres' },
-    { label: 'Unknown birth date', value: loaded ? fmtNum(kpis.unknownDate) : 'N/A', icon: CalendarX, sub: kpis.unknownDatePct == null ? 'Data quality' : `${kpis.unknownDatePct}% of scope` },
+    { label: 'Tyres assessed', value: loaded ? fmtNum(kpis.totalAssessed) : 'N/A', icon: ShieldCheck, sub: `${fmtNum(kpis.withDate)} with a fitment date` },
+    { label: 'Within service limit', value: loaded && kpis.compliancePct != null ? `${kpis.compliancePct}%` : 'N/A', icon: CheckCircle2, tone: 'accent', sub: `Under ${DEFAULT_AGE_POLICY.replaceYears} years since fitment` },
+    { label: 'Past service limit', value: loaded ? fmtNum(kpis.nonCompliantCount) : 'N/A', icon: ShieldAlert, tone: 'warn', sub: `${DEFAULT_AGE_POLICY.replaceYears} years or more since fitment` },
+    { label: 'Overdue', value: loaded ? fmtNum(kpis.overdueCount) : 'N/A', icon: AlertTriangle, tone: 'crit', sub: `Over ${DEFAULT_AGE_POLICY.overdueYears} years since fitment` },
+    { label: 'Average time in service', value: loaded ? fmtAge(kpis.avgAgeYears) : 'N/A', icon: Gauge, sub: 'Since fitment, dated tyres' },
+    { label: 'No fitment date', value: loaded ? fmtNum(kpis.unknownDate) : 'N/A', icon: CalendarX, sub: kpis.unknownDatePct == null ? 'Data quality' : `${kpis.unknownDatePct}% of scope` },
   ]
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Tyre Age Compliance"
-        subtitle="Calendar age scan across the fleet. Old tyres are flagged regardless of tread, because rubber degrades with age in GCC heat."
+        title="Tyre time in service"
+        subtitle="Years each tyre has been in service, counted from its fitment date. This is not tyre age: the manufacture date is not recorded."
         icon={ShieldCheck}
         onRefresh={load}
         refreshing={refreshing}
@@ -219,10 +225,10 @@ export default function TyreAgeCompliance() {
                 const { exportToPdf } = await loadExportUtils()
                 const name = await fileBase()
                 return {
-                  base64: await exportToPdf(exportRows, pdfCols, 'Tyre Age Compliance', name, 'landscape', '', { returnBase64: true }),
+                  base64: await exportToPdf(exportRows, pdfCols, REPORT_TITLE, name, 'landscape', '', { returnBase64: true, subtitleNote: PDF_NOTE }),
                   filename: `${name}.pdf`,
-                  subject: 'Tyre Age Compliance',
-                  bodyHtml: '<p>Attached is the Tyre Age Compliance report.</p>',
+                  subject: REPORT_TITLE,
+                  bodyHtml: `<p>Attached is the Tyre Time in Service report.</p><p>${REPORT_BASIS_NOTE}</p>`,
                 }
               }}
             />
@@ -245,10 +251,24 @@ export default function TyreAgeCompliance() {
         </div>
       )}
 
+      {loaded && (
+        <div className="card border border-amber-700/40 flex items-start gap-3" role="note">
+          <Info size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-[var(--text-primary)]">
+              {basis.manufactureRecorded ? 'Manufacture date is recorded on part of this scope' : 'Manufacture date not recorded'}
+            </p>
+            <p className="text-sm text-[var(--text-muted)] mt-1">
+              {basis.note || 'No tyres in this scope.'} A tyre that sat in stock before fitting is older than the figure shown here, so this page cannot confirm tyre age compliance.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Policy legend and band tiles (click to filter; the tiles hold out the band filter) */}
       <div className="card space-y-3">
-        <p className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--text-secondary)]"><Info size={13} aria-hidden="true" /> Age policy and band counts. Select a band to filter the register.</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2" role="group" aria-label="Filter by age band">
+        <p className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--text-secondary)]"><Info size={13} aria-hidden="true" /> Time in service limits and band counts, counted from the fitment date. Select a band to filter the register.</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2" role="group" aria-label="Filter by time in service band">
           <button type="button" onClick={() => setBandFilter('all')} aria-pressed={bandFilter === 'all'}
             className={`text-left rounded-lg border px-3 py-2 min-h-[44px] ${bandFilter === 'all' ? 'border-[var(--accent)] bg-[var(--input-bg)]' : 'border-[var(--input-border)]'}`}>
             <p className="text-[11px] text-[var(--text-muted)]">All bands</p>
@@ -258,7 +278,7 @@ export default function TyreAgeCompliance() {
             const range = b === 'ok' ? `Under ${DEFAULT_AGE_POLICY.watchYears} yr`
               : b === 'watch' ? `${DEFAULT_AGE_POLICY.watchYears} to ${DEFAULT_AGE_POLICY.replaceYears} yr`
                 : b === 'replace' ? `${DEFAULT_AGE_POLICY.replaceYears} to ${DEFAULT_AGE_POLICY.overdueYears} yr`
-                  : b === 'overdue' ? `Over ${DEFAULT_AGE_POLICY.overdueYears} yr` : 'No birth date'
+                  : b === 'overdue' ? `Over ${DEFAULT_AGE_POLICY.overdueYears} yr` : 'No fitment date'
             return (
               <button type="button" key={b} onClick={() => setBandFilter(bandFilter === b ? 'all' : b)} aria-pressed={bandFilter === b}
                 className={`text-left rounded-lg border px-3 py-2 min-h-[44px] ${bandFilter === b ? 'border-[var(--accent)] bg-[var(--input-bg)]' : 'border-[var(--input-border)]'}`}
@@ -282,8 +302,8 @@ export default function TyreAgeCompliance() {
 
       {oldest && (
         <div className="card border border-red-800/40 flex flex-wrap items-center gap-x-6 gap-y-2">
-          <div className="inline-flex items-center gap-2 text-red-400 font-medium"><CalendarClock size={16} aria-hidden="true" /> Oldest tyre in scope</div>
-          {[['Age', fmtAge(oldest.ageYears)], ['Serial', dash(oldest.serial)], ['Asset', dash(oldest.asset_no)], ['Site', dash(oldest.site)], ['Brand', dash(oldest.brand)]].map(([l, v]) => (
+          <div className="inline-flex items-center gap-2 text-red-400 font-medium"><CalendarClock size={16} aria-hidden="true" /> Longest in service in scope</div>
+          {[['In service', fmtAge(oldest.ageYears)], ['Serial', dash(oldest.serial)], ['Asset', dash(oldest.asset_no)], ['Site', dash(oldest.site)], ['Brand', dash(oldest.brand)]].map(([l, v]) => (
             <div key={l} className="text-sm"><span className="text-[var(--text-muted)] text-xs">{l}: </span><span className="text-[var(--text-primary)] font-medium">{v}</span></div>
           ))}
         </div>
@@ -291,16 +311,16 @@ export default function TyreAgeCompliance() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="card">
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Age band distribution</h2>
-          <div className="h-64" role="img" aria-label="Tyres by age band">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Time in service bands</h2>
+          <div className="h-64" role="img" aria-label="Tyres by time in service band">
             {!loaded ? <div className="h-full bg-[var(--input-bg)] rounded animate-pulse" />
               : scope.length ? <Doughnut data={donutData} options={DONUT_OPTS} />
                 : <p className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No tyres in this scope.</p>}
           </div>
         </div>
         <div className="card">
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Age profile (years)</h2>
-          <div className="h-64" role="img" aria-label="Number of tyres per year of age">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Years in service, from fitment date</h2>
+          <div className="h-64" role="img" aria-label="Number of tyres per year in service">
             {!loaded ? <div className="h-full bg-[var(--input-bg)] rounded animate-pulse" />
               : scope.length ? <Bar data={histData} options={BAR_OPTS} />
                 : <p className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No tyres in this scope.</p>}
@@ -308,7 +328,7 @@ export default function TyreAgeCompliance() {
         </div>
         <div className="card">
           <div className="flex items-center justify-between gap-2 mb-3">
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Average age by {breakdownDim}</h2>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Average time in service by {breakdownDim}</h2>
             <div className="inline-flex rounded-lg border border-[var(--input-border)] overflow-hidden text-xs" role="group" aria-label="Break down by">
               {['site', 'brand'].map((d) => (
                 <button type="button" key={d} onClick={() => setBreakdownDim(d)} aria-pressed={breakdownDim === d}
@@ -316,7 +336,7 @@ export default function TyreAgeCompliance() {
               ))}
             </div>
           </div>
-          <div className="h-64" role="img" aria-label={`Average tyre age by ${breakdownDim}, top 10; orange bars hold non-compliant tyres`}>
+          <div className="h-64" role="img" aria-label={`Average time in service by ${breakdownDim}, top 10; orange bars hold tyres past the service limit`}>
             {!loaded ? <div className="h-full bg-[var(--input-bg)] rounded animate-pulse" />
               : breakdown.length ? <Bar data={barData} options={BAR_OPTS} />
                 : <p className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No dated tyres to break down.</p>}
@@ -326,7 +346,7 @@ export default function TyreAgeCompliance() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="card">
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2"><ShieldAlert size={15} aria-hidden="true" /> Removal worklist (oldest non-compliant)</h2>
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2"><ShieldAlert size={15} aria-hidden="true" /> Removal worklist (longest in service, past limit)</h2>
           {!loaded ? <div className="h-24 bg-[var(--input-bg)] rounded animate-pulse" />
             : worklist.length === 0 ? <p className="text-sm text-[var(--text-muted)]">No tyre in this scope is past the replace threshold.</p>
               : (
@@ -341,8 +361,8 @@ export default function TyreAgeCompliance() {
               )}
         </div>
         <div className="card">
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-1 flex items-center gap-2"><Database size={15} aria-hidden="true" /> How birth dates were established</h2>
-          <p className="text-xs text-[var(--text-muted)] mb-3">Issue and fitment dates are estimates: a tyre can be older than the day it was fitted. Record DOT codes to firm these up.</p>
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-1 flex items-center gap-2"><Database size={15} aria-hidden="true" /> What the time is counted from</h2>
+          <p className="text-xs text-[var(--text-muted)] mb-3">Issue and fitment dates give time in service only. A tyre can be older than the day it was fitted. Tyre age needs a DOT code or manufacture date, which is not captured today.</p>
           {!loaded ? <div className="h-24 bg-[var(--input-bg)] rounded animate-pulse" />
             : !sources.length ? <p className="text-sm text-[var(--text-muted)]">No tyres in this scope.</p>
               : (
@@ -393,7 +413,7 @@ export default function TyreAgeCompliance() {
             </select>
           </div>
           <div>
-            <label htmlFor="age-source" className="label">Date source</label>
+            <label htmlFor="age-source" className="label">Counted from</label>
             <select id="age-source" className={FIELD} value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
               <option value="">All sources</option>
               {DATE_SOURCES.map((s) => <option key={s} value={s}>{DATE_SOURCE_META[s].label}</option>)}

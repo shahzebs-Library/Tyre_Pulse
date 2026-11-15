@@ -1,5 +1,7 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react'
 import PageHeader from '../components/ui/PageHeader'
+import ViewSwitch from '../components/ui/ViewSwitch'
+import { initialTabFromUrl } from '../lib/urlTab'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -26,14 +28,15 @@ import { loadAutoTable } from '../lib/pdfEngine'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import EmailPdfButton from '../components/EmailPdfButton'
 import {
-  LEGAL_MIN_TREAD, FLEET_MIN_TREAD, PRESSURE_MIN_PSI, PRESSURE_MAX_PSI,
+  LEGAL_MIN_TREAD, FLEET_MIN_TREAD,
   INSPECTION_MAX_DAYS, INSPECTION_DUE_DAYS, AREA_WEIGHTS, INSPECTION_LABEL, BAND_LABEL,
-  treadStats as buildTreadStats, pressureStats as buildPressureStats, inspectionCompliance,
+  treadStats as buildTreadStats, inspectionCompliance,
   overallScore as buildOverallScore, scoreBand, criticalCount as countCritical,
   fullyCompliantVehicles as countFullyCompliant, monthlyTreadTrend, treadDistribution,
-  treadBySite as buildTreadBySite, pressureBySite as buildPressureBySite, inspectionBySite,
-  nonCompliantTyres as buildNonCompliant, pressureExceptions,
+  treadBySite as buildTreadBySite, inspectionBySite,
+  nonCompliantTyres as buildNonCompliant,
 } from '../lib/complianceDashboardAnalytics'
+import { pressureRule, NOT_RECORDED, PRESSURE_TOLERANCE_PCT, PRESSURE_RULE_TEXT } from '../lib/complianceRules'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -191,7 +194,31 @@ const TABS = [
 ]
 
 // ── Main component ─────────────────────────────────────────────────────────────
+// The safety score view (formerly its own page at /safety-compliance): weighted
+// overall score, radar, risk mix, trends and accident correlation.
+const SafetyScore = lazy(() => import('./SafetyCompliance'))
+const COMPLIANCE_VIEWS = [
+  { key: 'compliance', label: 'Compliance register' },
+  { key: 'safety', label: 'Safety score and trends' },
+]
+
 export default function ComplianceDashboard() {
+  const [view, setView] = useState(() => initialTabFromUrl(COMPLIANCE_VIEWS.map((v) => v.key), 'compliance'))
+  return (
+    <div className="space-y-4">
+      <ViewSwitch views={COMPLIANCE_VIEWS} value={view} onChange={setView} label="Compliance views" />
+      {view === 'safety' ? (
+        <Suspense fallback={<p role="status" className="py-10 text-center text-sm text-[var(--text-secondary)]">Loading...</p>}>
+          <SafetyScore />
+        </Suspense>
+      ) : (
+        <ComplianceRegister />
+      )}
+    </div>
+  )
+}
+
+function ComplianceRegister() {
   const { activeCountry, appSettings } = useSettings()
   const { branding } = useTenant()
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
@@ -227,7 +254,7 @@ export default function ComplianceDashboard() {
         fetchAllPages((from, to) => supabase
           .from('inspections')
           // `country` is selected because the page filters on it.
-          .select('id,asset_no,site,country,scheduled_date,status,inspection_type,findings,inspector')
+          .select('id,asset_no,site,country,scheduled_date,status,inspection_type,findings,inspector,tyre_conditions')
           .order('scheduled_date', { ascending: false })
           .order('id')
           .range(from, to), { max: TYRE_CAP }),
@@ -296,7 +323,25 @@ export default function ComplianceDashboard() {
 
   // ── Engine ──────────────────────────────────────────────────────────────────
   const treadStats = useMemo(() => buildTreadStats(filteredTyres), [filteredTyres])
-  const pressureStats = useMemo(() => buildPressureStats(filteredTyres), [filteredTyres])
+  // Tread is judged only from recorded tread depths. With none in scope every
+  // tread figure reads "Not recorded", never a percentage or a count of failures.
+  const treadOn = treadStats.withData > 0
+  const treadText = (v) => (treadOn ? v : NOT_RECORDED)
+  // Pressure: the ONE shared rule (complianceRules.js / kpiEngine), also used by
+  // the Safety score view: each recorded pressure against its own vehicle median.
+  const pressureStats = useMemo(() => {
+    const p = pressureRule(filteredInspections)
+    return {
+      pct: p.pct,
+      readings: p.readings,
+      compliant: p.compliant ?? 0,
+      anomalies: p.outside ?? 0,
+      measured: p.measuredInspections,
+      notMeasured: p.notMeasuredInspections,
+      bySite: p.bySite,
+      basis: p.basis,
+    }
+  }, [filteredInspections])
   const inspectionStats = useMemo(() => inspectionCompliance(filteredInspections, scopedFleet), [filteredInspections, scopedFleet])
   const overall = useMemo(() => buildOverallScore({ tread: treadStats.pct, pressure: pressureStats.pct, inspection: inspectionStats.pct }), [treadStats, pressureStats, inspectionStats])
   const overallScore = overall.score
@@ -305,10 +350,9 @@ export default function ComplianceDashboard() {
   const fullyCompliantVehicles = useMemo(() => countFullyCompliant(filteredTyres), [filteredTyres])
   const complianceTrend = useMemo(() => monthlyTreadTrend(filteredTyres), [filteredTyres])
   const treadBySite = useMemo(() => buildTreadBySite(filteredTyres), [filteredTyres])
-  const pressureBySite = useMemo(() => buildPressureBySite(filteredTyres), [filteredTyres])
+  const pressureBySite = pressureStats.bySite
   const inspBySite = useMemo(() => inspectionBySite(inspectionStats.rows), [inspectionStats])
   const nonCompliantTyres = useMemo(() => buildNonCompliant(filteredTyres), [filteredTyres])
-  const pressureAnomalies = useMemo(() => pressureExceptions(filteredTyres), [filteredTyres])
   const inspectionRows = useMemo(
     () => (inspStatusFilter ? inspectionStats.rows.filter(r => r.status === inspStatusFilter) : inspectionStats.rows),
     [inspectionStats, inspStatusFilter],
@@ -330,8 +374,8 @@ export default function ComplianceDashboard() {
     datasets: [{ label: 'Tread compliance %', data: treadBySite.map(s => Number(s.pct.toFixed(1))), backgroundColor: treadBySite.map(s => pctColor(s.pct)), borderRadius: 3 }],
   }), [treadBySite])
   const pressureDoughnutData = useMemo(() => ({
-    labels: ['In band', 'Out of band', 'No reading'],
-    datasets: [{ data: [pressureStats.compliant, pressureStats.anomalies, pressureStats.noReading], backgroundColor: ['#22c55e', '#ef4444', '#6b7280'], borderWidth: 1 }],
+    labels: ['Within tolerance', 'Outside tolerance'],
+    datasets: [{ data: [pressureStats.compliant, pressureStats.anomalies], backgroundColor: ['#22c55e', '#ef4444'], borderWidth: 1 }],
   }), [pressureStats])
   const pressureBySiteChart = useMemo(() => ({
     labels: pressureBySite.map(s => s.site),
@@ -377,26 +421,11 @@ export default function ComplianceDashboard() {
   ], [])
 
   const pressureColumns = useMemo(() => [
-    { id: 'asset', header: 'Asset', accessorFn: r => r.asset_no || '' },
-    { id: 'serial', header: 'Serial', accessorFn: r => r.serial_number || '', cell: ({ getValue }) => <span className="font-mono text-[11px]">{getValue() || 'N/A'}</span> },
-    { id: 'brand', header: 'Brand', accessorFn: r => r.brand || '' },
-    { id: 'position', header: 'Position', accessorFn: r => r.position || '' },
-    {
-      id: 'psi', header: 'Pressure', accessorFn: r => Number(r.pressure_reading) || -1, meta: { align: 'right', exportValue: r => (Number(r.pressure_reading) > 0 ? `${Number(r.pressure_reading).toFixed(0)} PSI` : 'N/A') },
-      cell: ({ row }) => Number(row.original.pressure_reading) > 0
-        ? <span className="tabular-nums font-bold text-orange-400">{Number(row.original.pressure_reading).toFixed(0)} PSI</span>
-        : <span className="text-[var(--text-dim)]">N/A</span>,
-    },
-    { id: 'site', header: 'Site', accessorFn: r => r.site || '', meta: { filterVariant: 'select' } },
-    { id: 'risk', header: 'Risk', accessorFn: r => r.risk_level || '', cell: ({ row }) => <RiskBadge risk={row.original.risk_level} /> },
-    {
-      id: 'flag', header: 'Flag', accessorFn: r => r.pressureFlag, meta: { filterVariant: 'select' },
-      cell: ({ row }) => (
-        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${row.original.pressureFlag === 'Anomaly' ? 'bg-orange-500/20 text-orange-300 border border-orange-500/40' : 'bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)]'}`}>
-          {row.original.pressureFlag === 'Anomaly' ? 'Out of band' : 'No reading'}
-        </span>
-      ),
-    },
+    { id: 'site', header: 'Site', accessorFn: r => r.site || '' },
+    { id: 'inspections', header: 'Inspections', accessorFn: r => r.inspections, meta: { align: 'right' } },
+    { id: 'readings', header: 'Pressures recorded', accessorFn: r => r.readings, meta: { align: 'right' } },
+    { id: 'pct', header: 'Within tolerance', accessorFn: r => r.pct, meta: { align: 'right', exportValue: r => `${r.pct.toFixed(1)}%` },
+      cell: ({ row }) => <span className="tabular-nums font-semibold">{row.original.pct.toFixed(1)}%</span> },
   ], [])
 
   const inspectionColumns = useMemo(() => [
@@ -436,12 +465,12 @@ export default function ComplianceDashboard() {
       startY: 33,
       head: [['Metric', 'Value']],
       body: [
-        ['Tread compliance', fmtPct(treadStats.pct)],
+        ['Tread compliance', treadText(fmtPct(treadStats.pct))],
         ['Total tyres', String(treadStats.total)],
         ['Tyres with a tread reading', String(treadStats.withData)],
-        [`At or above fleet minimum (${FLEET_MIN_TREAD} mm)`, String(treadStats.compliant)],
-        [`Below fleet minimum (${FLEET_MIN_TREAD} mm)`, String(treadStats.fleetFail)],
-        [`Below legal minimum (${LEGAL_MIN_TREAD} mm)`, String(treadStats.legalFail)],
+        [`At or above fleet minimum (${FLEET_MIN_TREAD} mm)`, String(treadText(treadStats.compliant))],
+        [`Below fleet minimum (${FLEET_MIN_TREAD} mm)`, String(treadText(treadStats.fleetFail))],
+        [`Below legal minimum (${LEGAL_MIN_TREAD} mm)`, String(treadText(treadStats.legalFail))],
         ['No tread reading', String(treadStats.noData)],
       ],
       columnStyles: { 0: { cellWidth: 90 }, 1: { cellWidth: 50 } },
@@ -501,8 +530,8 @@ export default function ComplianceDashboard() {
       startY: 85,
       head: [['Area', 'Score', 'Status', 'Details']],
       body: [
-        ['Tread depth', fmtPct(treadStats.pct), verdict(treadStats.pct), `${treadStats.compliant}/${treadStats.withData} measured tyres at or above ${FLEET_MIN_TREAD} mm; ${treadStats.noData} not measured`],
-        ['Pressure', fmtPct(pressureStats.pct), verdict(pressureStats.pct), `${pressureStats.compliant} in band (${PRESSURE_MIN_PSI} to ${PRESSURE_MAX_PSI} PSI), ${pressureStats.anomalies} out of band, ${pressureStats.noReading} no reading`],
+        ['Tread depth', treadText(fmtPct(treadStats.pct)), verdict(treadStats.pct), treadOn ? `${treadStats.compliant}/${treadStats.withData} measured tyres at or above ${FLEET_MIN_TREAD} mm; ${treadStats.noData} not measured` : 'No tyre in scope has a tread depth recorded'],
+        ['Pressure', fmtPct(pressureStats.pct), verdict(pressureStats.pct), pressureStats.readings ? `${pressureStats.compliant} of ${pressureStats.readings} recorded pressures within ${PRESSURE_TOLERANCE_PCT}% of the vehicle median; ${pressureStats.notMeasured} inspections without enough readings` : 'No inspection has enough recorded pressures'],
         ['Inspection schedule', fmtPct(inspectionStats.pct), verdict(inspectionStats.pct), `${inspectionStats.compliant}/${inspectionStats.total} vehicles inspected within ${INSPECTION_MAX_DAYS} days`],
         ['Critical risk tyres', criticalCount === 0 ? 'Pass' : 'Fail', criticalCount === 0 ? 'PASS' : 'FAIL', criticalCount === 0 ? 'No critical-risk tyres in scope' : `${criticalCount} critical-risk tyres need immediate action`],
       ],
@@ -546,10 +575,10 @@ export default function ComplianceDashboard() {
     ;[
       `This assessment of fleet tyre compliance was generated on ${dateStr} for: ${scopeLabel}.`,
       `It covers tread depth against the ${FLEET_MIN_TREAD} mm fleet minimum and the ${LEGAL_MIN_TREAD} mm legal minimum,`,
-      `tyre pressure against a ${PRESSURE_MIN_PSI} to ${PRESSURE_MAX_PSI} PSI band, and inspection intervals of ${INSPECTION_MAX_DAYS} days.`,
+      `recorded tyre pressures within ${PRESSURE_TOLERANCE_PCT}% of each vehicle's own median, and inspection intervals of ${INSPECTION_MAX_DAYS} days.`,
       '',
       `Overall score: ${overallScore != null ? `${overallScore}%` : 'N/A'}. Areas measured: ${overall.covered.join(', ') || 'none'}. Not measured: ${overall.missing.join(', ') || 'none'}.`,
-      `Tread ${fmtPct(treadStats.pct)} | Pressure ${fmtPct(pressureStats.pct)} | Inspection ${fmtPct(inspectionStats.pct)} | Tyres assessed ${treadStats.total}`,
+      `Tread ${treadText(fmtPct(treadStats.pct))} | Pressure ${fmtPct(pressureStats.pct)} | Inspection ${fmtPct(inspectionStats.pct)} | Tyres assessed ${treadStats.total}`,
     ].forEach((line, i) => doc.text(line, 14, 28 + i * 7))
     doc.setDrawColor(100, 100, 100)
     doc.line(14, H - 30, 100, H - 30)
@@ -578,12 +607,12 @@ export default function ComplianceDashboard() {
         rows: [
           { metric: 'Overall compliance score', value: overallScore != null ? `${overallScore}%` : 'N/A' },
           { metric: 'Areas in the overall score', value: overall.covered.join(', ') || 'none' },
-          { metric: 'Tread compliance', value: fmtPct(treadStats.pct) },
+          { metric: 'Tread compliance', value: treadText(fmtPct(treadStats.pct)) },
           { metric: 'Pressure compliance', value: fmtPct(pressureStats.pct) },
           { metric: 'Inspection compliance', value: fmtPct(inspectionStats.pct) },
           { metric: 'Critical tyres', value: criticalCount },
           { metric: 'Fully compliant vehicles', value: fullyCompliantVehicles },
-          { metric: `Legal failures (below ${LEGAL_MIN_TREAD} mm)`, value: treadStats.legalFail },
+          { metric: `Legal failures (below ${LEGAL_MIN_TREAD} mm)`, value: treadText(treadStats.legalFail) },
         ],
       },
       {
@@ -599,15 +628,11 @@ export default function ComplianceDashboard() {
         })),
       },
       {
-        name: 'Pressure Exceptions',
-        note: `Tyres outside ${PRESSURE_MIN_PSI} to ${PRESSURE_MAX_PSI} PSI, or with no reading`,
-        columns: ['asset', 'serial', 'position', 'psi', 'site', 'flag'],
-        headers: ['Asset No', 'Serial', 'Position', 'Pressure PSI', 'Site', 'Flag'],
-        rows: pressureAnomalies.map(r => ({
-          asset: r.asset_no || '', serial: r.serial_number || '', position: r.position || '',
-          psi: Number(r.pressure_reading) > 0 ? Number(r.pressure_reading) : 'N/A', site: r.site || '',
-          flag: r.pressureFlag === 'Anomaly' ? 'Out of band' : 'No reading',
-        })),
+        name: 'Pressure By Site',
+        note: PRESSURE_RULE_TEXT,
+        columns: ['site', 'inspections', 'readings', 'pct'],
+        headers: ['Site', 'Inspections', 'Pressures Recorded', 'Within Tolerance %'],
+        rows: pressureBySite.map(r => ({ site: r.site, inspections: r.inspections, readings: r.readings, pct: Number(r.pct.toFixed(1)) })),
       },
       {
         name: 'Inspection Schedule',
@@ -680,7 +705,7 @@ export default function ComplianceDashboard() {
           <div className="flex items-center gap-2 sm:col-span-2 bg-[var(--surface-2)] rounded-lg px-3 py-2">
             <Info size={12} className="text-[var(--text-muted)] shrink-0" aria-hidden="true" />
             <span className="text-xs text-[var(--text-muted)]">
-              Standards: tread at least {FLEET_MIN_TREAD} mm (legal minimum {LEGAL_MIN_TREAD} mm), pressure {PRESSURE_MIN_PSI} to {PRESSURE_MAX_PSI} PSI, inspection every {INSPECTION_MAX_DAYS} days
+              Standards: tread at least {FLEET_MIN_TREAD} mm (legal minimum {LEGAL_MIN_TREAD} mm), pressure within {PRESSURE_TOLERANCE_PCT}% of the vehicle median, inspection every {INSPECTION_MAX_DAYS} days
             </span>
           </div>
         </div>
@@ -737,10 +762,10 @@ export default function ComplianceDashboard() {
 
               <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4 w-full">
                 {[
-                  { key: 'tread', label: 'Tread depth', pct: treadStats.pct, basis: `${treadStats.withData} of ${treadStats.total} tyres measured`, icon: Gauge },
-                  { key: 'pressure', label: 'Pressure', pct: pressureStats.pct, basis: `${pressureStats.withReading} of ${pressureStats.total} tyres with a reading`, icon: AlertCircle },
+                  { key: 'tread', label: 'Tread depth', pct: treadStats.pct, notRecorded: !treadOn, basis: `${treadStats.withData} of ${treadStats.total} tyres measured`, icon: Gauge },
+                  { key: 'pressure', label: 'Pressure', pct: pressureStats.pct, basis: `${pressureStats.readings} recorded pressures in ${pressureStats.measured} inspections`, icon: AlertCircle },
                   { key: 'inspection', label: 'Inspection', pct: inspectionStats.pct, basis: `${inspectionStats.total} vehicles in scope`, icon: ClipboardList },
-                ].map(({ key, label, pct, basis, icon: Icon }) => {
+                ].map(({ key, label, pct, basis, notRecorded, icon: Icon }) => {
                   const b = BAND[scoreBand(pct)]
                   return (
                     <div key={key} className="bg-[var(--surface-2)] rounded-xl p-4 border border-[var(--input-border)]">
@@ -749,7 +774,7 @@ export default function ComplianceDashboard() {
                         <span className="text-xs text-[var(--text-muted)]">{label}</span>
                         <span className="ml-auto text-xs text-[var(--text-dim)]">Weight {Math.round(AREA_WEIGHTS[key] * 100)}%</span>
                       </div>
-                      <p className={`text-2xl font-black tabular-nums ${b.text}`}>{fmtPct(pct)}</p>
+                      <p className={`text-2xl font-black tabular-nums ${b.text}`}>{notRecorded ? NOT_RECORDED : fmtPct(pct)}</p>
                       <div className="mt-2 h-1.5 bg-[var(--input-bg)] rounded-full overflow-hidden" aria-hidden="true">
                         <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct ?? 0}%`, backgroundColor: b.hex }} />
                       </div>
@@ -777,12 +802,12 @@ export default function ComplianceDashboard() {
           </section>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-            <KpiCard title="Tread compliance" value={fmtPct(treadStats.pct)} sub={`${treadStats.compliant} of ${treadStats.withData} measured tyres`} icon={Gauge} tone={BAND[scoreBand(treadStats.pct)].text} />
-            <KpiCard title="Legal failures" value={treadStats.legalFail.toLocaleString()} sub={`below ${LEGAL_MIN_TREAD} mm`} icon={AlertTriangle} tone={treadStats.legalFail > 0 ? 'text-red-400' : 'text-green-400'} />
-            <KpiCard title="Pressure compliance" value={fmtPct(pressureStats.pct)} sub={`${pressureStats.noReading} tyres with no reading`} icon={AlertCircle} tone={BAND[scoreBand(pressureStats.pct)].text} />
+            <KpiCard title="Tread compliance" value={treadText(fmtPct(treadStats.pct))} sub={treadOn ? `${treadStats.compliant} of ${treadStats.withData} measured tyres` : 'No tyre has a tread depth'} icon={Gauge} tone={BAND[scoreBand(treadStats.pct)].text} />
+            <KpiCard title="Legal failures" value={treadText(treadStats.legalFail.toLocaleString())} sub={treadOn ? `below ${LEGAL_MIN_TREAD} mm` : 'Not checked: no tread depth'} icon={AlertTriangle} tone={treadStats.legalFail > 0 ? 'text-red-400' : 'text-green-400'} />
+            <KpiCard title="Pressure compliance" value={fmtPct(pressureStats.pct)} sub={`${pressureStats.notMeasured} inspections without enough readings`} icon={AlertCircle} tone={BAND[scoreBand(pressureStats.pct)].text} />
             <KpiCard title="Inspection compliance" value={fmtPct(inspectionStats.pct)} sub={`${inspectionStats.compliant} of ${inspectionStats.total} vehicles current`} icon={ClipboardList} tone={BAND[scoreBand(inspectionStats.pct)].text} />
             <KpiCard title="Critical-risk tyres" value={criticalCount.toLocaleString()} sub="risk level Critical" icon={HelpCircle} tone={criticalCount > 0 ? 'text-red-400' : 'text-green-400'} />
-            <KpiCard title="Fully compliant vehicles" value={fullyCompliantVehicles.toLocaleString()} sub="every measured tyre passes" icon={CheckCircle} />
+            <KpiCard title="Fully compliant vehicles" value={treadText(fullyCompliantVehicles.toLocaleString())} sub={treadOn ? 'every measured tyre passes' : 'Needs tread depths'} icon={CheckCircle} />
           </div>
 
           <Section icon={TrendingUp} title="Tread compliance trend" right="last 6 months by fitment month; gaps mean no reading that month">
@@ -794,7 +819,7 @@ export default function ComplianceDashboard() {
           <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
             <div role="tablist" aria-label="Compliance areas" className="flex items-center gap-1 p-3 border-b border-[var(--input-border)] overflow-x-auto">
               {TABS.map(t => {
-                const count = t.id === 'tread' ? treadStats.fleetFail : t.id === 'pressure' ? pressureStats.anomalies : overdueCount
+                const count = t.id === 'tread' ? (treadOn ? treadStats.fleetFail : NOT_RECORDED) : t.id === 'pressure' ? pressureStats.anomalies : overdueCount
                 return (
                   <button
                     key={t.id}
@@ -819,9 +844,9 @@ export default function ComplianceDashboard() {
                 <>
                   <StatStrip items={[
                     { label: 'Tyres in scope', val: treadStats.total.toLocaleString() },
-                    { label: `At or above ${FLEET_MIN_TREAD} mm`, val: treadStats.compliant.toLocaleString(), tone: 'text-green-400' },
-                    { label: 'Below fleet minimum', val: treadStats.fleetFail.toLocaleString(), tone: 'text-orange-400' },
-                    { label: `Legal failures (below ${LEGAL_MIN_TREAD} mm)`, val: treadStats.legalFail.toLocaleString(), tone: 'text-red-400' },
+                    { label: `At or above ${FLEET_MIN_TREAD} mm`, val: treadText(treadStats.compliant.toLocaleString()), tone: 'text-green-400' },
+                    { label: 'Below fleet minimum', val: treadText(treadStats.fleetFail.toLocaleString()), tone: 'text-orange-400' },
+                    { label: `Legal failures (below ${LEGAL_MIN_TREAD} mm)`, val: treadText(treadStats.legalFail.toLocaleString()), tone: 'text-red-400' },
                   ]} />
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <Section icon={BarChart3} title="Tread depth distribution" right={`${treadStats.noData} tyres not measured`}>
@@ -863,20 +888,24 @@ export default function ComplianceDashboard() {
               {activeTab === 'pressure' && (
                 <>
                   <StatStrip items={[
-                    { label: 'Tyres in scope', val: pressureStats.total.toLocaleString() },
-                    { label: 'With a reading', val: pressureStats.withReading.toLocaleString() },
-                    { label: `In band (${PRESSURE_MIN_PSI} to ${PRESSURE_MAX_PSI} PSI)`, val: pressureStats.compliant.toLocaleString(), tone: 'text-green-400' },
-                    { label: 'Out of band / no reading', val: `${pressureStats.anomalies} / ${pressureStats.noReading}`, tone: 'text-red-400' },
+                    { label: 'Pressures recorded', val: pressureStats.readings.toLocaleString() },
+                    { label: 'Inspections measured', val: `${pressureStats.measured} of ${pressureStats.measured + pressureStats.notMeasured}` },
+                    { label: `Within ${PRESSURE_TOLERANCE_PCT}% of the vehicle median`, val: pressureStats.readings ? pressureStats.compliant.toLocaleString() : 'N/A', tone: 'text-green-400' },
+                    { label: 'Outside tolerance', val: pressureStats.readings ? pressureStats.anomalies.toLocaleString() : 'N/A', tone: 'text-red-400' },
                   ]} />
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <Section icon={AlertCircle} title="Pressure compliance breakdown">
-                      <div className="h-56" role="img" aria-label={`${pressureStats.compliant} in band, ${pressureStats.anomalies} out of band, ${pressureStats.noReading} with no reading`}>
-                        <Doughnut data={pressureDoughnutData} options={doughnutOpts} />
-                      </div>
+                      {pressureStats.readings === 0 ? (
+                        <div className="flex items-center justify-center h-56 text-[var(--text-muted)] text-sm">No inspection has enough recorded pressures</div>
+                      ) : (
+                        <div className="h-56" role="img" aria-label={`${pressureStats.compliant} within tolerance, ${pressureStats.anomalies} outside tolerance`}>
+                          <Doughnut data={pressureDoughnutData} options={doughnutOpts} />
+                        </div>
+                      )}
                     </Section>
-                    <Section icon={Building2} title="Pressure compliance by site" right="tyres with a reading only">
+                    <Section icon={Building2} title="Pressure compliance by site" right="measured inspections only">
                       {pressureBySite.length === 0 ? (
-                        <div className="flex items-center justify-center h-56 text-[var(--text-muted)] text-sm">No site has a pressure reading</div>
+                        <div className="flex items-center justify-center h-56 text-[var(--text-muted)] text-sm">No site has a measurable inspection</div>
                       ) : (
                         <div className="h-56" role="img" aria-label="Pressure compliance percentage by site">
                           <Bar data={pressureBySiteChart} options={pctAxisOpts(true)} />
@@ -884,16 +913,17 @@ export default function ComplianceDashboard() {
                       )}
                     </Section>
                   </div>
-                  <Section icon={AlertTriangle} title="Pressure exceptions and missing readings" right={`${pressureAnomalies.length.toLocaleString()} tyres`}>
+                  <Section icon={AlertTriangle} title="Pressure by site" right={`${pressureBySite.length.toLocaleString()} sites`}>
+                    <p className="mb-3 text-xs text-[var(--text-muted)]">{PRESSURE_RULE_TEXT}</p>
                     <EnterpriseTable
                       columns={pressureColumns}
-                      data={pressureAnomalies}
-                      getRowId={r => String(r.id)}
-                      searchPlaceholder="Search asset, serial, site"
-                      exportFileName={fileBase('Pressure Exceptions')}
-                      reportMeta={{ title: 'Pressure exceptions', company }}
-                      viewKey="compliance-pressure"
-                      emptyMessage="Every tyre in scope has an in-band pressure reading"
+                      data={pressureBySite}
+                      getRowId={r => String(r.site)}
+                      searchPlaceholder="Search site"
+                      exportFileName={fileBase('Pressure By Site')}
+                      reportMeta={{ title: 'Pressure by site', company }}
+                      viewKey="compliance-pressure-site"
+                      emptyMessage="No inspection in scope has enough recorded pressures to be judged"
                     />
                   </Section>
                 </>

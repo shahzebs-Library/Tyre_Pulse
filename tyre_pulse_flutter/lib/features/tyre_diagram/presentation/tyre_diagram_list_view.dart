@@ -131,7 +131,7 @@ class _TyreDiagramListRow extends StatelessWidget {
           Container(
             width: 10,
             height: 10,
-            margin: const EdgeInsets.only(right: TpSpace.md),
+            margin: const EdgeInsetsDirectional.only(end: TpSpace.md),
             decoration: BoxDecoration(
               color: colors.base,
               shape: BoxShape.circle,

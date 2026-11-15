@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   TrendingUp, BarChart2, Calendar, MapPin,
@@ -16,7 +16,10 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
-import SectionTabs, { ANALYTICS_TABS } from '../components/ui/SectionTabs'
+import { initialTabFromUrl } from '../lib/urlTab'
+import { loadGovernedCostSplit, loadGovernedTyreByAsset, COST_SPLIT_TTL_MS } from '../lib/api/governedCost'
+import CostValue from '../components/cost/CostValue'
+import { governedWindow, governedWindowLabel, GRID_BREAKDOWN_NOTE } from '../lib/governedWindow'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { fetchAllPages } from '../lib/fetchAll'
 import { formatCurrencyCompact } from '../lib/formatters'
@@ -25,7 +28,7 @@ import useLatestRequest from '../lib/useLatestRequest'
 import {
   DATE_PRESETS, POSITIONS, cutoffDate, filterRecords, uniqueSites as listSites,
   summarizeKpis, buildTrend, buildSeasonal, buildGeo, buildCountry, buildBranch,
-  buildVehicle, buildDriver, buildBrand, buildFailure, heatColor,
+  buildVehicle, buildBrand, buildFailure, heatColor, applyGridAssetCost,
 } from '../lib/advancedAnalyticsAnalytics'
 
 ChartJS.register(
@@ -33,19 +36,27 @@ ChartJS.register(
   PointElement, ArcElement, Title, Tooltip, Legend, Filler
 )
 
+// The former /analytics page, loaded only when its tab is open.
+const AnalyticsOverview = lazy(() => import('./Analytics'))
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
+// 'overview' is the former /analytics page (governed cost split, exact KPI cards,
+// monthly trend, site and brand tables). It keeps its own period filter.
 const TABS = [
+  { id: 'overview', label: 'Overview',             icon: BarChart2 },
   { id: 'trend',    label: 'Trend Analysis',       icon: TrendingUp },
   { id: 'seasonal', label: 'Seasonal Analysis',    icon: Calendar },
   { id: 'geo',      label: 'Geographic Analysis',  icon: MapPin },
   { id: 'country',  label: 'Country Comparison',   icon: Globe },
   { id: 'branch',   label: 'Branch Comparison',    icon: Building2 },
   { id: 'vehicle',  label: 'Vehicle Comparison',   icon: Truck },
-  { id: 'driver',   label: 'Driver Comparison',    icon: User },
   { id: 'brand',    label: 'Brand Comparison',     icon: Tag },
   { id: 'failure',  label: 'Failure Patterns',     icon: AlertTriangle },
 ]
+
+// Tabs whose money columns are tyre record breakdowns the expense grid cannot attribute.
+const COST_BREAKDOWN_TABS = ['seasonal', 'geo', 'country', 'brand']
 
 const PALETTE = [
   '#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6',
@@ -221,7 +232,7 @@ export default function AdvancedAnalytics() {
   const [error,          setError]          = useState(null)
   const [exportError,    setExportError]    = useState(null)
   const [capped,         setCapped]         = useState(false)
-  const [activeTab,      setActiveTab]      = useState('trend')
+  const [activeTab,      setActiveTab]      = useState(() => initialTabFromUrl(TABS.map(x => x.id), 'overview'))
   const [datePreset,     setDatePreset]     = useState('1yr')
   const [siteFilter,     setSiteFilter]     = useState('all')
   const [positionFilter, setPositionFilter] = useState('all')
@@ -233,7 +244,13 @@ export default function AdvancedAnalytics() {
   // under the new one, so every load is sequenced.
   const latestLoad = useLatestRequest()
 
+  // The tyre records behind the analysis tabs are read on the FIRST visit to an
+  // analysis tab, not while only the Overview tab is open.
+  const [analysisOpened, setAnalysisOpened] = useState(activeTab !== 'overview')
+  useEffect(() => { if (activeTab !== 'overview') setAnalysisOpened(true) }, [activeTab])
+
   useEffect(() => {
+    if (!analysisOpened) return
     async function load() {
       const stale = latestLoad.begin()
       setLoading(true)
@@ -264,7 +281,32 @@ export default function AdvancedAnalytics() {
       }
     }
     load()
-  }, [activeCountry, datePreset, latestLoad, t, reloadKey])
+  }, [activeCountry, datePreset, latestLoad, t, reloadKey, analysisOpened])
+
+  // ONE tyre cost source for the analysis tabs: the expense grid, the same
+  // reader the Overview tab uses, for this country and the chosen period.
+  const singleCountry = activeCountry && activeCountry !== 'All'
+  const costWindow = useMemo(() => governedWindow({ from: cutoffDate(datePreset) || undefined }), [datePreset])
+  const [gridCost, setGridCost] = useState({ loading: true, split: null, byAsset: null, failed: false })
+  useEffect(() => {
+    if (!analysisOpened) return
+    let cancelled = false
+    setGridCost({ loading: true, split: null, byAsset: null, failed: false })
+    const country = singleCountry ? activeCountry : undefined
+    Promise.all([
+      loadGovernedCostSplit({ country, from: costWindow.from, to: costWindow.to, maxAgeMs: COST_SPLIT_TTL_MS }),
+      singleCountry
+        ? loadGovernedTyreByAsset({ country, from: costWindow.from, to: costWindow.to })
+        : Promise.resolve({ ok: false }),
+    ]).then(([split, assets]) => {
+      if (cancelled) return
+      setGridCost({ loading: false, split, byAsset: assets?.ok ? assets.map : null, failed: false })
+    }).catch(() => {
+      if (!cancelled) setGridCost({ loading: false, split: null, byAsset: null, failed: true })
+    })
+    return () => { cancelled = true }
+  }, [analysisOpened, activeCountry, singleCountry, costWindow.from, costWindow.to, reloadKey])
+  const gridFromGrid = String(gridCost.split?.source || '').startsWith('governed')
 
   const sites = useMemo(() => listSites(records), [records])
 
@@ -279,8 +321,13 @@ export default function AdvancedAnalytics() {
   const geoData      = useMemo(() => buildGeo(filtered), [filtered])
   const countryData  = useMemo(() => buildCountry(filtered), [filtered])
   const branchData   = useMemo(() => buildBranch(filtered), [filtered])
-  const vehicleData  = useMemo(() => buildVehicle(filtered), [filtered])
-  const driverData   = useMemo(() => buildDriver(filtered, vehicleData), [filtered, vehicleData])
+  // Per-vehicle tyre cost comes from the grid when the view is one country and
+  // not narrowed to a wheel position or a search (the grid prices the whole asset).
+  const vehicleOnGrid = !!gridCost.byAsset && positionFilter === 'all' && search.trim() === ''
+  const vehicleData  = useMemo(
+    () => applyGridAssetCost(buildVehicle(filtered), vehicleOnGrid ? gridCost.byAsset : null),
+    [filtered, vehicleOnGrid, gridCost.byAsset],
+  )
   const brandData    = useMemo(() => buildBrand(filtered), [filtered])
   const failureData  = useMemo(() => buildFailure(filtered), [filtered])
 
@@ -325,15 +372,16 @@ export default function AdvancedAnalytics() {
     }
   }
 
-  const exportDisabled = loading || !!error || filtered.length === 0
+  const isOverview = activeTab === 'overview'
+  // The page export covers the tyre records behind the analysis tabs, not the Overview tab.
+  const exportDisabled = isOverview || loading || !!error || filtered.length === 0
 
   return (
     <div className="text-[var(--text-primary)] space-y-6">
-      <SectionTabs tabs={ANALYTICS_TABS} />
       <div className="px-6 pt-6 pb-4 border-b border-[var(--input-border)]">
         <PageHeader
           title={t('advancedanalytics.title')}
-          subtitle={t('advancedanalytics.subtitle', { records: fmt(filtered.length), sites: sites.length })}
+          subtitle={isOverview ? t('analytics.subtitle') : t('advancedanalytics.subtitle', { records: fmt(filtered.length), sites: sites.length })}
           icon={BarChart2}
           actions={<>
             <button
@@ -366,8 +414,8 @@ export default function AdvancedAnalytics() {
           </>}
         />
 
-        {/* Global Filters */}
-        <div className="flex flex-wrap items-center gap-2 mt-4">
+        {/* Global Filters (the Overview tab carries its own period filter) */}
+        <div className={`flex flex-wrap items-center gap-2 mt-4 ${isOverview ? 'hidden' : ''}`}>
           <div className="flex gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg p-0.5">
             {DATE_PRESETS.map(p => (
               <button
@@ -426,7 +474,7 @@ export default function AdvancedAnalytics() {
         </div>
       </div>
 
-      {capped && (
+      {capped && !isOverview && (
         <div className="mx-6 flex items-start gap-2 rounded-lg border border-amber-800/40 bg-amber-900/20 px-3 py-2 text-xs text-amber-300">
           <AlertTriangle size={13} className="mt-0.5 shrink-0" />
           <span>
@@ -443,10 +491,16 @@ export default function AdvancedAnalytics() {
       )}
 
       {/* KPI strip: figures for the current filter set; unmeasured values read N/A. */}
-      {!loading && !error && (
+      {!loading && !error && !isOverview && (
         <div className="px-6 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
           <MetricTile label="Records" value={fmt(kpis.records)} sub={`${fmt(kpis.vehicles)} vehicles`} />
-          <MetricTile label="Total tyre cost" value={fmtCur(kpis.totalCost, activeCurrency)} sub={presetLabel} />
+          <MetricTile
+            label={gridCost.split && !gridFromGrid ? 'Tyre cost, tyre records' : 'Tyre cost, expense grid'}
+            value={gridCost.loading ? '...' : gridCost.failed || !gridCost.split ? NA : <CostValue split={gridCost.split} mode="tyres" compact />}
+            sub={gridCost.split && !gridFromGrid
+              ? 'No expense grid data for this window'
+              : filtersActive ? `${governedWindowLabel(costWindow)}, whole country: not narrowed by site, position or search` : governedWindowLabel(costWindow)}
+          />
           <MetricTile label="Avg cost per km" value={fmtCpk(kpis.avgCpk, activeCurrency)} sub="Measured tyres only" />
           <MetricTile label="Avg tyre life" value={kpis.avgLife == null ? NA : `${fmt(kpis.avgLife)} km`} sub="Fitment to removal" />
           <MetricTile label="Failure rate" value={fmtPct(kpis.failureRate)} sub={`${fmt(kpis.highRisk)} High or Critical`} />
@@ -480,7 +534,11 @@ export default function AdvancedAnalytics() {
       </div>
 
       <div className="p-6">
-        {loading ? (
+        {isOverview ? (
+          <Suspense fallback={<LoadingOverlay />}>
+            <AnalyticsOverview embedded />
+          </Suspense>
+        ) : loading ? (
           <LoadingOverlay />
         ) : error ? (
           <div role="alert" className="flex flex-col items-center justify-center h-48 gap-3 text-red-400">
@@ -514,13 +572,22 @@ export default function AdvancedAnalytics() {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.18 }}
             >
+              {COST_BREAKDOWN_TABS.includes(activeTab) && (
+                <p className="mb-4 text-xs text-[var(--text-muted)]">{GRID_BREAKDOWN_NOTE}</p>
+              )}
+              {activeTab === 'vehicle' && (
+                <p className="mb-4 text-xs text-[var(--text-muted)]">
+                  {vehicleData?.costBasis === 'grid'
+                    ? `Total Cost per vehicle is its tyre cost in the expense grid for ${governedWindowLabel(costWindow)}. N/A means the grid holds no tyre line for that vehicle in the window.`
+                    : GRID_BREAKDOWN_NOTE}
+                </p>
+              )}
               {activeTab === 'trend'    && <TrendTab    data={trendData}    currency={activeCurrency} />}
               {activeTab === 'seasonal' && <SeasonalTab data={seasonalData} currency={activeCurrency} exportBase={exportBase} />}
               {activeTab === 'geo'      && <GeoTab      data={geoData}      currency={activeCurrency} exportBase={exportBase} />}
               {activeTab === 'country'  && <CountryTab  data={countryData}  currency={activeCurrency} exportBase={exportBase} />}
               {activeTab === 'branch'   && <BranchTab   data={branchData}   currency={activeCurrency} exportBase={exportBase} />}
               {activeTab === 'vehicle'  && <VehicleTab  data={vehicleData}  currency={activeCurrency} exportBase={exportBase} />}
-              {activeTab === 'driver'   && <DriverTab   data={driverData}   currency={activeCurrency} exportBase={exportBase} />}
               {activeTab === 'brand'    && <BrandTab    data={brandData}    currency={activeCurrency} exportBase={exportBase} />}
               {activeTab === 'failure'  && <FailureTab  data={failureData}  exportBase={exportBase} />}
             </motion.div>
@@ -934,8 +1001,7 @@ function BranchTab({ data, currency, exportBase }) {
     numCol('compositeScore', 'Score', r => r.compositeScore,
       v => <span className="px-1.5 py-0.5 bg-blue-900/40 text-blue-400 rounded text-xs font-bold">{v}</span>),
     numCol('count', 'Records', r => r.count, v => fmt(v)),
-    numCol('totalCost', 'Total Cost', r => r.totalCost, v => fmtCur(v, currency)),
-    numCol('avgCost', 'Avg Cost', r => r.avgCost, v => fmtCur(v, currency)),
+    // Cost per site lives on the Geographic Analysis tab (same site rows); not repeated here.
     numCol('avgCpk', 'Avg CPK', r => r.avgCpk, v => fmtCpk(v, currency)),
     numCol('avgLife', 'Avg Life (km)', r => r.avgLife, v => fmt(v)),
     numCol('failRate', 'Failure %', r => r.failRate,
@@ -974,7 +1040,6 @@ function BranchTab({ data, currency, exportBase }) {
               <div><span className="text-xs text-[var(--text-muted)]">Score</span><div className="text-sm font-bold text-blue-400">{b.compositeScore}</div></div>
               <div><span className="text-xs text-[var(--text-muted)]">Records</span><div className="text-sm font-semibold text-[var(--text-secondary)]">{fmt(b.count)}</div></div>
               <div><span className="text-xs text-[var(--text-muted)]">Fail %</span><div className={`text-sm font-semibold ${rateTone(b.failRate, 15, 15)}`}>{fmtPct(b.failRate)}</div></div>
-              <div><span className="text-xs text-[var(--text-muted)]">Cost</span><div className="text-sm font-semibold text-[var(--text-secondary)]">{fmtCur(b.totalCost, currency)}</div></div>
             </div>
           </Card>
         ))}
@@ -1103,93 +1168,8 @@ function VehicleTab({ data, currency, exportBase }) {
   )
 }
 
-// ── Tab 7: Driver Comparison ───────────────────────────────────────────────────
-function DriverTab({ data, currency, exportBase }) {
-  const columns = useMemo(() => [
-    numCol('rank', 'Rank', r => r.rank, v => <span className="text-red-400 font-bold">{v}</span>, { size: 60 }),
-    textCol('assetNo', 'Asset No', r => r.assetNo),
-    numCol('count', 'Records', r => r.count, v => fmt(v)),
-    numCol('totalCost', 'Total Cost', r => r.totalCost,
-      v => <span className="font-semibold text-red-400">{fmtCur(v, currency)}</span>),
-    numCol('highRiskCount', 'Fail Count', r => r.highRiskCount, v => fmt(v)),
-    textCol('sites', 'Sites', r => (r.sites || []).slice(0, 2).join(', ')),
-    textCol('categories', 'Categories', r => (r.categories || []).slice(0, 2).join(', ')),
-  ], [currency])
-
-  if (!data) return <EmptyState />
-  const { worst10, best10, hasDriverData } = data
-
-  const worstBar = {
-    labels: worst10.map(v => v.assetNo),
-    datasets: [{
-      label: `Total Cost (${currency})`,
-      data: worst10.map(v => v.totalCost),
-      backgroundColor: 'rgba(239,68,68,0.75)', borderColor: '#ef4444', borderWidth: 1, borderRadius: 4,
-    }],
-  }
-
-  const bestBar = {
-    labels: best10.map(v => v.assetNo),
-    datasets: [{
-      label: `Total Cost (${currency})`,
-      data: best10.map(v => v.totalCost),
-      backgroundColor: 'rgba(16,185,129,0.75)', borderColor: '#10b981', borderWidth: 1, borderRadius: 4,
-    }],
-  }
-
-  return (
-    <div className="space-y-5">
-      <div className="flex items-start gap-2 bg-blue-900/20 border border-blue-800/40 rounded-xl px-4 py-3">
-        <Info size={15} className="text-blue-400 mt-0.5 shrink-0" />
-        <p className="text-xs text-blue-300">
-          {hasDriverData
-            ? 'Driver name patterns detected in findings. Analysis reflects both driver assignments and vehicle-level tyre consumption.'
-            : 'Driver data is not available as a direct column. This analysis uses vehicle asset numbers as a proxy for driver performance, reflecting vehicle-level tyre consumption.'}
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <MetricTile label="Vehicles Analyzed" value={fmt(worst10.length + best10.length)} sub="sample shown" />
-        <MetricTile label="Highest Cost Vehicle" value={worst10[0]?.assetNo ?? NA} sub={fmtCur(worst10[0]?.totalCost, currency)} />
-        <MetricTile label="Lowest Cost Vehicle" value={best10[0]?.assetNo ?? NA} sub={fmtCur(best10[0]?.totalCost, currency)} />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
-            <span className="text-sm font-semibold text-[var(--text-secondary)]">Top 10 Worst Performing Vehicles</span>
-          </div>
-          <ChartBox height={260}>
-            <Bar data={worstBar} options={H_BAR_OPTS} />
-          </ChartBox>
-        </div>
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-            <span className="text-sm font-semibold text-[var(--text-secondary)]">Top 10 Best Performing Vehicles</span>
-          </div>
-          <ChartBox height={260}>
-            <Bar data={bestBar} options={H_BAR_OPTS} />
-          </ChartBox>
-        </div>
-      </div>
-
-      <Card>
-        <SectionTitle>Worst Performing Vehicle Details</SectionTitle>
-        <EnterpriseTable
-          {...SUB_TABLE}
-          columns={columns}
-          data={worst10}
-          getRowId={r => r.assetNo}
-          enableGlobalFilter={false}
-          exportFileName={reportFileName(exportBase, 'Worst Vehicles')}
-          emptyMessage="No vehicle data for these filters."
-        />
-      </Card>
-    </div>
-  )
-}
+// (Tab 7, Driver Comparison, was removed: it had no driver data and only re-ranked the
+// Vehicle Comparison rows by cost. The vehicle table sorts by cost in either direction.)
 
 // ── Tab 8: Brand Comparison ────────────────────────────────────────────────────
 function BrandTab({ data, currency, exportBase }) {

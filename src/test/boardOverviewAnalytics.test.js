@@ -42,7 +42,10 @@ describe('boardOverviewAnalytics', () => {
 
   it('shapes CPK type rows without inventing a CPK or a distance', () => {
     const rows = cpkTypeRows([
-      { vehicle_type: 'TR-MIXER', country: 'KSA', currency: 'SAR', unit: 'km', distance_or_hours: 1200, cpk_total: 0.42 },
+      // ENG-1 (2026-11-12): a km row is shown by its tyre spend ratio (cpk_tyre).
+      // This fixture used to carry only cpk_total, the withheld total over tyre km;
+      // the 9.9 below must never surface.
+      { vehicle_type: 'TR-MIXER', country: 'KSA', currency: 'SAR', unit: 'km', distance_or_hours: 1200, cpk_tyre: 0.42, cpk_total: 9.9 },
       { vehicle_type: null, country: 'UAE', unit: 'engine_hours', distance_or_hours: null, cpk_total: null },
     ])
     expect(rows[0]).toMatchObject({ vehicle_type: 'TR-MIXER', currency: 'SAR', distance: 1200, cpk: 0.42, rank: 1 })

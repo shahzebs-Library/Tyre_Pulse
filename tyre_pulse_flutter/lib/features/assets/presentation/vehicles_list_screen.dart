@@ -469,210 +469,260 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
         .toList(growable: false)
       ..sort();
 
-    return Column(
-      children: <Widget>[
-        if (truncated) _TruncatedNotice(message: l10n.vehiclesTruncatedNotice),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            TpSpace.lg,
-            TpSpace.md,
-            TpSpace.lg,
-            TpSpace.xs,
-          ),
-          child: Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  l10n.loginScopeFleetAssets,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _hasAnyStatus(assets)
-                      ? l10n.fleetMockActiveAssets(_activeCount(assets))
-                      : l10n.vehiclesCount(assets.length),
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: TpPalette.of(context).textSecondary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                ),
-              ],
-            ),
-          ),
+    // Everything above the list. On a normal phone it stays pinned and only
+    // the list scrolls. With large text, or a short window (landscape, split
+    // screen), the pinned block alone is taller than the screen - measured at
+    // 360x640 with text scale 2.0 it overflowed by 162 px and left the list
+    // no room at all - so there the header scrolls WITH the list instead.
+    final List<Widget> header = <Widget>[
+      if (truncated) _TruncatedNotice(message: l10n.vehiclesTruncatedNotice),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(
+          TpSpace.lg,
+          TpSpace.md,
+          TpSpace.lg,
+          TpSpace.xs,
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            TpSpace.lg,
-            TpSpace.md,
-            TpSpace.lg,
-            TpSpace.xs,
-          ),
-          child: Row(
+        child: Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Expanded(
-                child: KeyedSubtree(
-                  key: VehiclesListScreenKeys.search,
-                  child: TpSearchField(
-                    controller: _searchController,
-                    hint: l10n.vehiclesSearchHint,
-                    onChanged: (String value) =>
-                        setState(() => _searchTerm = value),
-                  ),
-                ),
+              Text(
+                l10n.loginScopeFleetAssets,
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                _hasAnyStatus(assets)
+                    ? l10n.fleetMockActiveAssets(_activeCount(assets))
+                    : l10n.vehiclesCount(assets.length),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: TpPalette.of(context).textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
               ),
             ],
           ),
         ),
-        _GroupTabs(
-          key: VehiclesListScreenKeys.groupTabs,
-          selected: _group,
-          // A search covers the whole fleet and bypasses the group, so while
-          // one is typed no tab may look selected (see the filter above).
-          searching: _searchTerm.trim().isNotEmpty,
-          onSelect: (FleetClassGroup? g) => setState(() => _group = g),
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(
+          TpSpace.lg,
+          TpSpace.md,
+          TpSpace.lg,
+          TpSpace.xs,
         ),
-        const SizedBox(height: TpSpace.sm),
-        _VehicleTypeChipsRow(
-          key: VehiclesListScreenKeys.classFilters,
-          selected: _vehicleTypeFilter,
-          vehicleTypes: vehicleTypes,
-          allLabel: '${l10n.vehiclesAllFilter} (${assets.length})',
-          onSelect: _selectVehicleType,
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: KeyedSubtree(
+                key: VehiclesListScreenKeys.search,
+                child: TpSearchField(
+                  controller: _searchController,
+                  hint: l10n.vehiclesSearchHint,
+                  onChanged: (String value) =>
+                      setState(() => _searchTerm = value),
+                ),
+              ),
+            ),
+          ],
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            TpSpace.lg,
-            TpSpace.sm,
-            TpSpace.lg,
-            TpSpace.sm,
-          ),
-          // Four controls do not fit one row on a 360dp phone: the two menus
-          // were squeezed below their icon + arrow width and overflowed.
-          // Narrow screens put the menus on one row and the toggles below.
-          child: LayoutBuilder(
-            builder: (BuildContext context, BoxConstraints constraints) {
-              final Widget site = Expanded(
-                child: _FleetFilterMenu(
-                  icon: Icons.location_on_outlined,
-                  label: _siteFilter == null
-                      ? '${l10n.vehiclesFieldSite}: ${l10n.vehiclesAllFilter}'
-                      : _siteFilter!,
-                  values: sites,
-                  allLabel: l10n.vehiclesAllFilter,
-                  onSelect: (String? value) =>
-                      setState(() => _siteFilter = value),
-                ),
-              );
-              final Widget status = Expanded(
-                child: _FleetFilterMenu(
-                  icon: Icons.tune_rounded,
-                  label: _statusFilter == null
-                      ? '${l10n.washStatusLabel}: ${l10n.vehiclesAllFilter}'
-                      : _statusFilter!,
-                  values: statuses,
-                  allLabel: l10n.vehiclesAllFilter,
-                  onSelect: (String? value) =>
-                      setState(() => _statusFilter = value),
-                ),
-              );
-              final Widget dueSoon = _DueSoonToggle(
-                key: VehiclesListScreenKeys.dueSoon,
-                label: l10n.fleetListDueSoon,
-                unavailableLabel: l10n.fleetListDueSoonUnavailable,
-                selected: _dueSoonOnly,
-                // Loading or unavailable: the filter cannot answer, so it is
-                // disabled rather than returning an empty "nothing due" list.
-                available: signals != null,
-                onChanged: (bool on) => setState(() => _dueSoonOnly = on),
-              );
-              final Widget filter = _FilterButton(
-                key: VehiclesListScreenKeys.filter,
-                count: _activeFilterCount,
-                label: l10n.fleetListFiltersActive(_activeFilterCount),
-                onPressed: () => _openFilterSheet(
-                  context,
-                  l10n,
-                  vehicleTypes: vehicleTypes,
-                  dueSoonAvailable: signals != null,
-                ),
-              );
-              const Widget gap = SizedBox(width: TpSpace.sm);
-              if (constraints.maxWidth >= 480) {
-                return Row(
-                  children: <Widget>[
-                    site,
-                    gap,
-                    status,
-                    gap,
-                    dueSoon,
-                    gap,
-                    filter,
-                  ],
-                );
-              }
-              return Column(
+      ),
+      _GroupTabs(
+        key: VehiclesListScreenKeys.groupTabs,
+        selected: _group,
+        // A search covers the whole fleet and bypasses the group, so while
+        // one is typed no tab may look selected (see the filter above).
+        searching: _searchTerm.trim().isNotEmpty,
+        onSelect: (FleetClassGroup? g) => setState(() => _group = g),
+      ),
+      const SizedBox(height: TpSpace.sm),
+      _VehicleTypeChipsRow(
+        key: VehiclesListScreenKeys.classFilters,
+        selected: _vehicleTypeFilter,
+        vehicleTypes: vehicleTypes,
+        allLabel: '${l10n.vehiclesAllFilter} (${assets.length})',
+        onSelect: _selectVehicleType,
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(
+          TpSpace.lg,
+          TpSpace.sm,
+          TpSpace.lg,
+          TpSpace.sm,
+        ),
+        // Four controls do not fit one row on a 360dp phone: the two menus
+        // were squeezed below their icon + arrow width and overflowed.
+        // Narrow screens put the menus on one row and the toggles below.
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final Widget site = Expanded(
+              child: _FleetFilterMenu(
+                icon: Icons.location_on_outlined,
+                label: _siteFilter == null
+                    ? '${l10n.vehiclesFieldSite}: ${l10n.vehiclesAllFilter}'
+                    : _siteFilter!,
+                values: sites,
+                allLabel: l10n.vehiclesAllFilter,
+                onSelect: (String? value) =>
+                    setState(() => _siteFilter = value),
+              ),
+            );
+            final Widget status = Expanded(
+              child: _FleetFilterMenu(
+                icon: Icons.tune_rounded,
+                label: _statusFilter == null
+                    ? '${l10n.washStatusLabel}: ${l10n.vehiclesAllFilter}'
+                    : _statusFilter!,
+                values: statuses,
+                allLabel: l10n.vehiclesAllFilter,
+                onSelect: (String? value) =>
+                    setState(() => _statusFilter = value),
+              ),
+            );
+            final Widget dueSoon = _DueSoonToggle(
+              key: VehiclesListScreenKeys.dueSoon,
+              label: l10n.fleetListDueSoon,
+              unavailableLabel: l10n.fleetListDueSoonUnavailable,
+              selected: _dueSoonOnly,
+              // Loading or unavailable: the filter cannot answer, so it is
+              // disabled rather than returning an empty "nothing due" list.
+              available: signals != null,
+              onChanged: (bool on) => setState(() => _dueSoonOnly = on),
+            );
+            final Widget filter = _FilterButton(
+              key: VehiclesListScreenKeys.filter,
+              count: _activeFilterCount,
+              label: l10n.fleetListFiltersActive(_activeFilterCount),
+              onPressed: () => _openFilterSheet(
+                context,
+                l10n,
+                vehicleTypes: vehicleTypes,
+                dueSoonAvailable: signals != null,
+              ),
+            );
+            const Widget gap = SizedBox(width: TpSpace.sm);
+            if (constraints.maxWidth >= 480) {
+              return Row(
                 children: <Widget>[
-                  Row(children: <Widget>[site, gap, status]),
-                  const SizedBox(height: TpSpace.sm),
-                  Row(
-                    children: <Widget>[Expanded(child: dueSoon), gap, filter],
-                  ),
+                  site,
+                  gap,
+                  status,
+                  gap,
+                  dueSoon,
+                  gap,
+                  filter,
                 ],
               );
-            },
+            }
+            return Column(
+              children: <Widget>[
+                Row(children: <Widget>[site, gap, status]),
+                const SizedBox(height: TpSpace.sm),
+                Row(
+                  children: <Widget>[Expanded(child: dueSoon), gap, filter],
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+      _ScopeLine(
+        key: VehiclesListScreenKeys.scope,
+        country: ref.watch(activeCountryProvider),
+        site: _siteFilter,
+        sort: _sort,
+        // Sorting by a signal that could not be read would order the list
+        // by nothing; only the register order is offered then.
+        signalsAvailable: signals != null,
+        onSort: (FleetSortOrder order) => setState(() => _sort = order),
+      ),
+    ];
+
+    const EdgeInsets listPadding = EdgeInsets.fromLTRB(
+      TpSpace.lg,
+      TpSpace.xs,
+      TpSpace.lg,
+      TpSpace.xxl,
+    );
+    final Widget emptyState = TpEmptyState(
+      title: l10n.vehiclesEmptyTitle,
+      message: _searchTerm.trim().isNotEmpty
+          ? l10n.vehiclesEmptySearchMessage
+          : null,
+    );
+    Widget assetCard(BuildContext context, int index) {
+      final VehicleAsset asset = filtered[index];
+      return _FleetAssetCard(
+        key: VehiclesListScreenKeys.asset(asset.id),
+        asset: asset,
+        signal: signalById[asset.id],
+        unknownAssetLabel: l10n.vehiclesUnknownAsset,
+        onTap: asset.hasNavigableAssetNo
+            ? () => _openDetail(asset.assetNo!)
+            : null,
+      );
+    }
+
+    Widget separator(BuildContext context, int index) =>
+        const SizedBox(height: TpSpace.sm);
+    final Widget scanBar = _ScanBar(
+      key: VehiclesListScreenKeys.scanner,
+      label: l10n.fleetMockScanAssetQr,
+      onTap: () => context.push(const ScannerRoute().location),
+    );
+
+    final double textScale = MediaQuery.textScalerOf(context).scale(100) / 100;
+    final bool headerScrolls =
+        textScale > 1.3 || MediaQuery.sizeOf(context).height < 560;
+    if (headerScrolls) {
+      return Column(
+        children: <Widget>[
+          Expanded(
+            child: CustomScrollView(
+              slivers: <Widget>[
+                SliverToBoxAdapter(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: header,
+                  ),
+                ),
+                if (filtered.isEmpty)
+                  SliverToBoxAdapter(child: emptyState)
+                else
+                  SliverPadding(
+                    padding: listPadding,
+                    sliver: SliverList.separated(
+                      itemCount: filtered.length,
+                      separatorBuilder: separator,
+                      itemBuilder: assetCard,
+                    ),
+                  ),
+              ],
+            ),
           ),
-        ),
-        _ScopeLine(
-          key: VehiclesListScreenKeys.scope,
-          country: ref.watch(activeCountryProvider),
-          site: _siteFilter,
-          sort: _sort,
-          // Sorting by a signal that could not be read would order the list
-          // by nothing; only the register order is offered then.
-          signalsAvailable: signals != null,
-          onSort: (FleetSortOrder order) => setState(() => _sort = order),
-        ),
+          scanBar,
+        ],
+      );
+    }
+
+    return Column(
+      children: <Widget>[
+        ...header,
         Expanded(
           child: filtered.isEmpty
-              ? TpEmptyState(
-                  title: l10n.vehiclesEmptyTitle,
-                  message: _searchTerm.trim().isNotEmpty
-                      ? l10n.vehiclesEmptySearchMessage
-                      : null,
-                )
+              ? emptyState
               : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(
-                    TpSpace.lg,
-                    TpSpace.xs,
-                    TpSpace.lg,
-                    TpSpace.xxl,
-                  ),
+                  padding: listPadding,
                   itemCount: filtered.length,
-                  separatorBuilder: (BuildContext context, int index) =>
-                      const SizedBox(height: TpSpace.sm),
-                  itemBuilder: (BuildContext context, int index) {
-                    final VehicleAsset asset = filtered[index];
-                    return _FleetAssetCard(
-                      key: VehiclesListScreenKeys.asset(asset.id),
-                      asset: asset,
-                      signal: signalById[asset.id],
-                      unknownAssetLabel: l10n.vehiclesUnknownAsset,
-                      onTap: asset.hasNavigableAssetNo
-                          ? () => _openDetail(asset.assetNo!)
-                          : null,
-                    );
-                  },
+                  separatorBuilder: separator,
+                  itemBuilder: assetCard,
                 ),
         ),
-        _ScanBar(
-          key: VehiclesListScreenKeys.scanner,
-          label: l10n.fleetMockScanAssetQr,
-          onTap: () => context.push(const ScannerRoute().location),
-        ),
+        scanBar,
       ],
     );
   }

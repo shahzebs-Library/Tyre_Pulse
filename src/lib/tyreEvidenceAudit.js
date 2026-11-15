@@ -8,6 +8,30 @@
 
 export const TRUSTED_FROM = '2025-01-01'
 
+/**
+ * Evidence scope of a KPI (ENG-12, audit case C26). OPT IN.
+ *   'all'    (default) every fitment, as rule T20 says: fitments before the
+ *            trusted date are LEGACY but are kept and used for lifetime km and
+ *            cost where valid. This is what every engine does today.
+ *   'modern' only fitments dated on or after the trusted date. An undated
+ *            fitment is not modern (its date is unknown, so it cannot be shown
+ *            to belong to the trusted period).
+ * The two answers differ, so a screen that uses 'modern' must say so beside the
+ * figure. Making 'modern' the default is an owner decision (it contradicts T20
+ * as written) and is NOT made here.
+ *
+ * @param {Object[]} records fitment rows (issue_date or fitment_date)
+ * @param {{ scope?: 'all'|'modern', trustedFrom?: string }} [opts]
+ */
+export function evidenceScopeRows(records = [], { scope = 'all', trustedFrom = TRUSTED_FROM } = {}) {
+  const rows = Array.isArray(records) ? records : []
+  if (scope !== 'modern') return rows
+  return rows.filter((r) => {
+    const d = String(r?.issue_date ?? r?.fitment_date ?? '').slice(0, 10)
+    return /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= trustedFrom
+  })
+}
+
 export const EVIDENCE_CLASSES = [
   { id: 'VERIFIED', label: 'Verified', tone: '#16a34a', note: 'Real serial, job card found, readings and price evidenced, no conflict.' },
   { id: 'PARTIALLY_VERIFIED', label: 'Partially verified', tone: '#2563eb', note: 'Real fitment with a gap: serial not verified, job card not found, a missing reading or a missing price.' },

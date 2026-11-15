@@ -43,6 +43,14 @@ describe('Workshop Supervisor', () => {
     expect(isChecklistOnlyRole('Workshop Supervisor')).toBe(true)
   })
 
+  it('reaches corrective actions only once the module is switched on for the role', () => {
+    // Before draft 20261116102000 there is no matrix row: same as today, redirected to Checklists.
+    expect(isChecklistPathAllowed('/actions')).toBe(false)
+    expect(isChecklistPathAllowed('/actions', () => false)).toBe(false)
+    expect(isChecklistPathAllowed('/actions', (k) => k === 'corrective_actions')).toBe(true)
+    expect(isChecklistPathAllowed('/checklists', () => false)).toBe(true)
+  })
+
   it('can reach the approvals queue, or the role does nothing', () => {
     expect(isChecklistPathAllowed('/approvals')).toBe(true)
   })

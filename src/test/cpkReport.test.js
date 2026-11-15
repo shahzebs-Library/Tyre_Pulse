@@ -75,10 +75,12 @@ describe('worst / best exclude nulls and order correctly', () => {
     expect(worst.map((r) => r.asset_no)).toEqual(['TM03', 'TM01', 'TM02'])
     expect(worst.find((r) => r.asset_no === 'GN01')).toBeUndefined()
   })
-  it('best = lowest cpk_total first, nulls never ranked best', () => {
+  it('best = lowest rate first, nulls never ranked best', () => {
+    // ENG-1 (2026-11-12): km rows rank by the tyre spend ratio (cpk_tyre), not by
+    // the withheld total over tyre km. Same order on this fixture: 1.6, 0.5, 0.2.
     const best = rankByCpkTotal(perVehicle, 'asc', 10)
     expect(best[0].asset_no).toBe('TM02')
-    expect(best.some((r) => r.cpk_total == null)).toBe(false)
+    expect(best.some((r) => r.cpk_tyre == null)).toBe(false)
   })
   it('topN limits the subset', () => {
     const rep = buildCpkReport({ perVehicle, byType, fleet, sections: ['worst_cpk'], topN: 2 })
@@ -121,11 +123,16 @@ describe('cpkReportExportRows shape', () => {
     const rep = buildCpkReport({ perVehicle, byType, fleet, sections: ['fleet_summary', 'per_vehicle'], columns: { perVehicle: ['asset_no', 'cpk_total'] } })
     const rows = cpkReportExportRows(rep)
     expect(rows.every((r) => 'section' in r)).toBe(true)
-    const kpi = rows.find((r) => r.metric === 'Fleet CPK (tyre)')
+    // ENG-1: the tile is named from the metric glossary. "Fleet CPK (tyre)" let a
+    // period spend over lifetime tyre km pass as a tyre CPK.
+    const kpi = rows.find((r) => r.metric === 'Tyre spend ratio')
     expect(kpi.section).toBe('Fleet summary')
     const tableRow = rows.find((r) => r.asset_no === 'TM01')
     expect(tableRow.section).toBe('Per vehicle')
-    expect(tableRow.cpk_total).toBe(0.7)
+    // A km asset has no total rate: 0.7 was (tyres + spares + oil) over tyre km.
+    expect(tableRow.cpk_total).toBe('N/A')
+    const pv = buildCpkReport({ perVehicle, byType, fleet, sections: ['per_vehicle'] })
+    expect(cpkReportExportRows(pv).find((r) => r.asset_no === 'TM01').cpk_tyre).toBe(0.5)
   })
   it('table export keeps N/A for null cpk and rounds money', () => {
     const rep = buildCpkReport({ perVehicle, byType, fleet, sections: ['by_type'] })

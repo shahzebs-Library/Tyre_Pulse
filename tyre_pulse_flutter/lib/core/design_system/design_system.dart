@@ -22,4 +22,5 @@ export 'package:tyre_pulse/core/design_system/tp_stat_card.dart';
 export 'package:tyre_pulse/core/design_system/tp_states.dart';
 export 'package:tyre_pulse/core/design_system/tp_status_chip.dart';
 export 'package:tyre_pulse/core/design_system/tp_sync_status.dart';
+export 'package:tyre_pulse/core/design_system/tp_text_scale.dart';
 export 'package:tyre_pulse/core/design_system/tp_tyre_chip.dart';

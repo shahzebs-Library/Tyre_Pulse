@@ -8,6 +8,7 @@
 import { supabase, unwrap, applyCountry, fetchAllPages, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 import { submissionDay } from '../checklistMonthly'
+import { attachAckFaultStates } from './closureReview'
 
 // name_i18n / description_i18n / option_sets carry the template's translations:
 // the checklist is read on the floor by mechanics who read Arabic, Hindi or
@@ -311,12 +312,13 @@ export async function listSubmissions({ country, templateId, assetNo, from, to, 
     return q.order('created_at', { ascending: false }).order('id')
   }
   // Callers requesting the latest single sheet retain their bounded read.
-  if (limit != null) return unwrap(await query().limit(limit)) || []
+  if (limit != null) return attachAckFaultStates(unwrap(await query().limit(limit)) || [])
   const result = await fetchAllPages((start, end) => query().range(start, end),
     { pageSize: 500, max: 10000, concurrency: 4 })
   const rows = unwrap(result) || []
   if (result.truncated) throw new Error('Checklist history exceeds the display limit. Narrow the filters.')
-  return rows
+  // An acknowledged sheet reads "Action Required" only while one of its faults is still open.
+  return attachAckFaultStates(rows)
 }
 
 /** Offline sheets may arrive months after their recorded checklist date. */
@@ -382,6 +384,7 @@ export async function getSubmission(id) {
   if (row && row.photos && typeof row.photos === 'object') {
     try { row.photos = await signPhotosMap(row.photos) } catch { /* leave as-is */ }
   }
+  if (row && row.approval_status === 'acknowledged') return (await attachAckFaultStates([row]))[0]
   return row
 }
 

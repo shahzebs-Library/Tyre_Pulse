@@ -99,7 +99,7 @@ export function evaluateErpCandidate({ inspection, finding, workOrder, fitments 
   for (const f of sameJobFitments) {
     const cmp = layoutConflict
       ? { match: null, status: POSITION_STATUS.INCONSISTENT, reason: 'inspection_layout_differs_from_asset' }
-      : comparePositions(layout, observed, f.position || f.tyre_position)
+      : comparePositions(layout, observed, f.tyre_position || f.position)
     const row = { fitment: f, cmp, isSerial: strongSerial && key(f.serial_no) === serial, dated: dated(f) }
     if (cmp.match === true) same.push(row)
     else if (cmp.match === false) different.push(row)
@@ -144,12 +144,17 @@ export function evaluateErpCandidate({ inspection, finding, workOrder, fitments 
       : tyreEvidence ? 'offered_for_review'
         : pending.length ? 'pending_manual_review'
           : same.length ? 'no_dated_movement' : 'different_wheel'
+  // Only job cards that bear on this tyre are shown: a tyre movement on or after the
+  // inspection (whatever wheel it turned out to be, so a pending or conflicting one is
+  // still visible), or a tyre-related job that follows it. Old workshop history is not.
+  const tyreJob = /TYRE|TIRE|PUNCTURE|WHEEL/.test(description)
+  const relevant = sameJobFitments.some(dated) || (delta != null && delta >= 0 && tyreJob)
   const status = conflicts.length ? 'conflict'
     : sufficient ? 'review'
       : positionState === 'pending_manual_review' ? 'manual_review' : 'insufficient'
   return {
     workOrder, fitments: sameJobFitments, expenses: related,
-    status, reasons, conflicts, notes, eligibleToConfirm: sufficient,
+    status, reasons, conflicts, notes, relevant, eligibleToConfirm: sufficient,
     positionState,
     evidenceSummary: {
       tyreRows: sameJobFitments.length, expenseRows: related.length,
@@ -163,6 +168,7 @@ export function matchObservationToErp(input) {
   const { inspection, finding, workOrders = [], fitments = [], expenses = [], layoutContext = {} } = input
   return workOrders.filter(wo => sameErpIdentity(inspection, wo))
     .map(workOrder => evaluateErpCandidate({ inspection, finding, workOrder, fitments, expenses, layoutContext }))
+    .filter(candidate => candidate.relevant || candidate.eligibleToConfirm)
     .sort((a,b) => Number(b.eligibleToConfirm)-Number(a.eligibleToConfirm)
       || b.reasons.length-a.reasons.length || key(a.workOrder.work_order_no).localeCompare(key(b.workOrder.work_order_no)))
 }

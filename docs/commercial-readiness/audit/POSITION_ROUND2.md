@@ -145,3 +145,41 @@ JS pinned together. A new tenant with other ERP spellings gets "pending" rather 
    serials only)?
 3. Should the tyre bay rename `LHRCO` to `LHCO` on mixers, or keep the ERP spelling as stored?
 4. Is a layout history table wanted before admins start editing layouts?
+
+## Integration of #522 (Codex, `fix/observation-erp-focused-lookup-20261115`)
+
+Merged into this branch so there is one result.
+
+Kept from #522:
+- Focused loading in `src/lib/api/observationErpEvidence.js`: only tyre movements on or after the
+  inspection date, job cards taken from those movements, then tyre related job cards opened after the
+  inspection. No whole asset history scan. `evidenceLimited` flag kept.
+- The redesigned panel (`ObservationErpEvidence.jsx`): automatic lookup, review / evidence / exception
+  states, per candidate reason box, and the inspection photo shown before the ERP evidence.
+- Suppression of unrelated job cards (`relevant`). Widened by one case: a job card with any tyre movement
+  after the inspection stays visible even when its wheel is pending or different, so a reviewer can see why.
+- Its three new matcher tests, unchanged, all passing.
+- From its SQL: `tyre_position` is read before `position` (now in the draft and the JS).
+
+Replaced, and why:
+- `displayPositionCode` + `positionKey` in the matcher: replaced by `tyrePositionService.comparePositions`.
+  The display helper keeps unplaced text as it is stored, so two unknown tokens could compare equal as text.
+- The SQL `CASE` table in `supabase/migrations`: not kept. It substitutes text, lets an unknown slot fall
+  through as raw text, treats every non mixer as "R1 is rear axle 1", and ignores the asset's registered
+  build. The service based draft in `supabase/pending_migrations` stays the only SQL. The file does not
+  exist in `supabase/migrations`.
+- Its "empty position raises PT409" guard: already covered. An empty or unknown position evaluates to
+  pending manual review and Confirm is refused with PT409.
+- "Needs more evidence" for an unresolved wheel: now shows "Pending manual review" with the reason.
+
+Not set up yet (the feature is on main while its tables are not in production):
+- `getObservationErpReviewState` reports `provisioned: false` on 42P01, PGRST205, PGRST202, 42883
+  (`isNotProvisioned`). The panel shows "ERP evidence review is not set up yet", the evidence lookup still
+  runs (it reads existing tables only), Confirm and Reject are not offered. Any other failure is still an
+  error. The observation PDF prints "Not confirmed" instead of "lookup unavailable" in that case.
+
+Tests after integration: 46 vitest files, 773 passed (20 new: service 12, panel 5, plus Codex's 3);
+mirror 4 of 4; staging 105 passed; eslint 0 errors (1 hook dependency warning that came with #522);
+`vite build` clean.
+
+Could not preserve from #522: nothing functional. Its SQL change is intentionally dropped.

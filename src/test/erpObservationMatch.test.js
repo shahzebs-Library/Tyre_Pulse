@@ -41,6 +41,24 @@ describe('ERP to inspection evidence matcher', () => {
   it('leaves ambiguous job dates unconfirmed', () => {
     expect(evaluate({ workOrder: { ...workOrder, opened_at: null, completed_at: null } }).eligibleToConfirm).toBe(false)
   })
+  it('does not expose unrelated historic work orders as observation candidates', () => {
+    const earlier = { ...workOrder, id: 'historical', opened_at: '2024-12-01', description: 'Front bumper repair' }
+    const results = matchObservationToErp({ inspection, finding, workOrders: [earlier],
+      fitments: [], expenses: [{ ...expense, work_order_no: earlier.work_order_no }] })
+    expect(results).toEqual([])
+  })
+  it('resolves the inspection slot to the ERP position with the real vehicle layout', () => {
+    const pump = { ...inspection, vehicle_type: 'PUMPS' }
+    const result = evaluateErpCandidate({ inspection: pump, finding: { rawPosition: 'R1Li' },
+      workOrder, fitments: [{ ...fitment, position: 'LHR1-I', serial_no: 'NEW-1' }], expenses: [] })
+    expect(result.eligibleToConfirm).toBe(true)
+  })
+  it('resolves mixer first-rear positions to the centre axle, not pump positions', () => {
+    const mixer = { ...inspection, vehicle_type: 'TR-MIXER' }
+    const result = evaluateErpCandidate({ inspection: mixer, finding: { rawPosition: 'R1Li' },
+      workOrder, fitments: [{ ...fitment, position: 'LHCI', serial_no: 'NEW-2' }], expenses: [] })
+    expect(result.eligibleToConfirm).toBe(true)
+  })
   it('filters unrelated assets and keeps distinct job cards', () => {
     const matches = matchObservationToErp({ inspection, finding,
       workOrders: [{ ...workOrder, id: 'j2', asset_no: 'MP108' }, workOrder],

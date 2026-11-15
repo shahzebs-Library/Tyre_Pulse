@@ -245,7 +245,7 @@ begin
   v_strong := public.tyre_serial_is_strong(v_serial);
 
   for r in
-    select coalesce(nullif(btrim(t.position), ''), nullif(btrim(t.tyre_position), ''), '') as pos,
+    select coalesce(nullif(btrim(t.tyre_position), ''), nullif(btrim(t.position), ''), '') as pos,
            t.serial_no, t.issue_date, t.removal_date
     from public.tyre_records t
     where t.organisation_id = v_org and t.country = v_country

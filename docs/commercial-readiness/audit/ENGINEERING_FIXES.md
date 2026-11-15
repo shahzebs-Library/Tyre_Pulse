@@ -202,3 +202,156 @@ SQL only and resolves when draft 122000 is applied. C22 (not run before) passes 
 - Drafts 121000 to 124000 ran on PGlite against transcribed live bodies, not on Postgres 15 with production data. The before and after counts in 3.2 come from read only replica queries of the same logic.
 - Arabic strings for the relabelled downtime and pressure keys were written but not reviewed by a native reader.
 - The metric registry statements in draft 120000 were not run (PGlite has no registry tables).
+
+---
+
+# Round 2 (2026-11-15): drafts executed on staging, golden fixture, JS against SQL
+
+Production stayed read only (SELECT of aggregates and function text only). Every draft is still
+NOT applied to production. Everything below marked "staging" ran on the local staging database:
+PostgreSQL 16, the production schema (497 tables, 1,127 functions), synthetic companies Alpha, Beta
+and Gamma. The function text the drafts patch is byte identical to production for six of seven
+functions (md5 read from production on 2026-11-15); `calc_cpk` differs only in line ends (CRLF).
+
+## R2.1 Drafts executed in order
+
+`supabase/tests/staging/eng_apply_drafts.sh` rebuilds database `tp_eng` from the baseline and runs
+120000, 121000, 122000, 123000, 124000, 125000 with `ON_ERROR_STOP`, each in one transaction.
+All six ran with no error. No draft file needed a correction to run.
+
+Changes made to drafts in round 2:
+- 124000: `get_tyre_spend_breakdown` groups by currency instead of `max(currency)`, so two
+  currencies inside one country could never be merged into one row.
+- 125000: new (see R2.4, defect R2-D1).
+- All: a "ROUND 2" status paragraph in the header.
+
+## R2.2 What is proven, and where
+
+| Claim | Status | Evidence (staging unless said) |
+|---|---|---|
+| ENG-1 SQL, draft 120000: `get_fleet_cpk` km `cpk_total` is null, old value kept as `legacy_total_per_tyre_km`, `cpk_tyre` unchanged, hour rows unchanged | Verified Fixed on staging; Blocked on production until applied | `eng_round2_staging.mjs` tests 5, 18 (seeded company, 3 countries, every row) |
+| ENG-1 SQL: `get_cost_cpk_overview` gains `cpk_tyre`, `cpk_maintenance`, split adds up to the unchanged total, cpk is round(spend / km, 3) | Verified Fixed on staging | tests 6, 17. Golden: 4,012 + 800 = 4,812 over 267,000 km = 0.018 / 0.015 / 0.003 |
+| Old callers | Verified on staging | Every key an old caller reads is still present. Only changed values: km `cpk_total` (null). Nothing outside the `cpk` block of the overview changes. Running life returns the same tyres and keys |
+| No existing row changes | Verified on staging | md5 of every row of every public table (over 480; registry tables aside) identical before and after; 31 tables carry rows. Registry: `fleet_cpk` renamed, 4 metrics added, 1 version added |
+| Currency never blended | Verified on staging | All countries call returns one row per country in SAR, AED, EGP and no fleet scalar; overview currency is null when more than one country is in scope; golden KSA and UAE stay apart; breakdown is per country and currency |
+| NULL, not 0, when unmeasurable | Verified on staging | Window with no reading: cpk, cpk_tyre, cpk_maintenance null. Pump with spend and no hour span: rate null. Placeholder tyre: km run and remaining km null. `v_tyre_master.cpk` null for a placeholder fitment |
+| C29 `calc_cpk(1800, 1, 184300)` | Verified Fixed on staging (0.0098 before, null after, also through `v_tyre_master`); Blocked on production | tests 11, 23 |
+| C20b road vehicles with a plant word | Verified Fixed on staging through `get_fleet_cpk` and `get_tyre_running_life` on stored rows (engine_hours and no rate before; km and 0.05 / 0.125 / 0.05 after); Blocked on production | tests 12, 22 |
+| C23b WARRENTY | Verified Fixed on staging (function, line kind, and the price back fill dry run: comparable 1,850 before, warranty 0 after); Blocked on production | test 13 |
+| C22 replacement linkage | Verified Fixed on staging through the real import path `tyre_import_reconcile` as a signed in Admin with all triggers on: dry run writes nothing; real run closes the old tyre (removed 1 Jun, 62,000 km, life 22,000, one log row); same day lower meter is held for review; undo restores | test 21. Not Tested on production, by rule (it writes) |
+| ENG-2 baseline, draft 121000 | Verified Fixed on staging (33,364 before, 26,020 after; factory zero tyre gains a km run) | test 15 |
+| Double active wheel | Verified on staging | stored pair is flagged by `v_tyre_fitment_evidence`; a second active tyre from a signed in user is refused (23505) |
+| One price per tyre | Verified on staging | trigger stores the refit with no price and keeps the offered price as a note; lifetime view and JS both count 1,800 once |
+| Metric registry statements of draft 120000 | Verified on staging | test 4 |
+
+Test counts (2026-11-15):
+- `node --test supabase/tests/staging/eng_round2_staging.mjs`: 23 of 23 (staging).
+- `src/test/engGoldenFixture.test.js`: 110 of 110 (JS only, runs in CI).
+- `src/test/engGoldenSqlParity.test.js`: 14 of 14 (JS against live staging SQL; skipped when no cluster).
+- PGlite `supabase/tests/eng_calculation_cases.test.mjs`: 10 of 10.
+- Related vitest files after merging main: 35 files, 546 tests, all passed. ESLint on changed files: 0 errors. `vite build`: clean.
+- Mutation checks: raising the JS mixer cap to 90,000 fails 10 tests; removing "warrenty" from the JS word list fails 6. Both restored.
+
+## R2.3 Golden fixture
+
+`supabase/tests/fixtures/eng_golden_fixture.json`: 28 synthetic fitments, 9 expense lines, 6 assets,
+5 hour readings, 3 life targets, 6 job cards, with answers worked by hand. Loaded into the empty
+company Gamma inside a rolled back transaction. The JS engines and the SQL RPCs both run on it.
+
+| Topic | Hand answer | JS | SQL (staging) |
+|---|---|---|---|
+| Tyre CPK lifetime, KSA | 12,500 / 258,200 = 0.048412 (6 of 13 retired tyres measurable) | pass | pass |
+| Not the mean of fitment CPKs | mean of 7 ratios is 0.077105 | pass | pass |
+| Placeholder fitment km (1) | km unknown, no CPK | pass | pass (after 122000 for `calc_cpk`) |
+| Factory fitment (0) | 38,200 km, 0.049738 | pass | pass |
+| Km caps by class | mixer 80,000, pump 56,000, loader 15,000, other 100,000, inclusive | pass | pass |
+| Overlapping refit | 15,000 km not added, coverage partial | pass | pass |
+| One price per tyre | 1,800 once, status DISPUTED when stored twice | pass | pass |
+| Row of two tyres, no serial | 2 x 1,000 over 2 x 20,000 | pass | pass |
+| Warranty zero | price 0, source warranty | pass | pass (after 124000) |
+| Repair is not a price | tyre with only a repair line stays unpriced | pass | pass |
+| Purchase line of two tyres | 3,600 / 2 = 1,800 each | pass | pass |
+| Running life, km | healthy 17%, mid life 67%, due soon 4,000 km left, overdue 117%, placeholder unknown | pass | pass |
+| Running life, hours | due soon at 200 h left of 5,000; healthy at 56% | pass | pass |
+| Two budgets | pump judged on distance (93%) ahead of hours (20%) | pass | pass |
+| Measured baseline | 26,020 km from 10 removed tyres | n/a | pass (after 121000) |
+| Double active wheel | both tyres flagged; second insert refused | n/a (JS only labels the SQL flag) | pass |
+| Downtime | 12 h and 24 h cards measured; year 0025, reversed, over 720 h and open cards refused; event with no card is null with a named assumption of 4 h or 2 h | pass | n/a (no SQL function measures downtime) |
+| Two countries | KSA 0.048412 SAR, UAE 0.03 AED, no blended figure | pass | pass |
+
+JS against SQL, compared directly (`engGoldenSqlParity.test.js`): km rule on 3,960 combinations,
+fitment CPK on 108, unit rule on 59 type names, warranty / repair / line kind on 60+ descriptions,
+real serial test on 30 shapes, every golden tyre, the due set on the seeded company in three
+countries, lifetime CPK of the seeded company (1,058 fitments) in three countries, and the web
+gate `sanitizeFleetCpk` over the unpatched function against the patched function. Mismatches: 0.
+
+## R2.4 Defects found by the golden fixture
+
+| Id | Defect | Engines | Status |
+|---|---|---|---|
+| R2-D1 | `fleet_km_by_asset` reads the placeholder odometer 1 as a real reading, so a vehicle's distance becomes its whole odometer. It is the denominator of every cost per vehicle km. Production, 2025-11-01 to 2026-10-31 (read only aggregates): KSA 16,165,110 km now, 15,411,576 without placeholders (66 placeholder readings on 23 assets, 4.7% overstated); UAE 8,016,606 to 7,442,153 (7.2%); Egypt 415,159 to 415,158. | SQL only (JS has no vehicle km engine) | Fixed in draft 125000. Verified Fixed on staging (golden: 94,999 before, 85,000 after). Blocked on production |
+| R2-D2 | The life cap matches the word LOADER anywhere, so a LOW LOADER TRAILER (a road trailer, km by draft 123000) gets the 15,000 km wheel loader cap and loses every longer tyre life. | JS and SQL agree, both wrong | Open. Not fixed: the cap table is an owner rule. No such vehicle type exists in production today (32 types checked), so current impact is none. Pinned by a test so the fix cannot be forgotten |
+| R2-D3 | `calc_cpk(cost, km_fit, km_rem)` has no vehicle type, so it applies the general 100,000 km cap. A mixer tyre at 85,000 km is refused by the lifetime engine and JS, but `v_tyre_master` and `get_country_kpi` still give it a row CPK (golden rows 5 and 7: 0.0235, 0.0281). | SQL differs from JS by design of the signature | Open. Needs a fourth argument and both readers changed; not small |
+
+Not a defect, recorded: the import trigger on `tyre_records` swaps a reversed fitment and removal
+odometer and turns an inserted 0 into null, so a factory fitment at 0 km can only be stored with
+that trigger off. The golden fixture loads with triggers off for that reason.
+
+## R2.5 Production checks the owner can run (read only), before and after apply
+
+```sql
+-- A. C29 (draft 122000). Before: 0.0098, {"KSA":90,"UAE":16}. After: null, null (no rows).
+select public.calc_cpk(1800, 1, 184300) as c29,
+       (select jsonb_object_agg(country, n) from (select country, count(*) n from public.v_tyre_master
+          where cpk is not null and km_at_fitment = 1 group by 1) x) as placeholder_rows_with_cpk;
+
+-- B. C20b (draft 123000). Before: engine_hours x3. After: km x3. The md5 must NOT change
+--    (it was 54db03beb39ffeab6614b1256d7ced62 over 32 types on 2026-11-15): no live type changes unit.
+select public.cpk_unit_for_asset_type('WATER TANKER') a, public.cpk_unit_for_asset_type('LOW LOADER TRAILER') b,
+       public.cpk_unit_for_asset_type('CONCRETE MIXER TRUCK') c,
+       (select md5(string_agg(vt || '=' || public.cpk_unit_for_asset_type(vt), ',' order by vt)) from (
+          select distinct upper(btrim(vehicle_type)) vt from public.vehicle_fleet where coalesce(btrim(vehicle_type),'') <> ''
+          union select distinct upper(btrim(vehicle_type)) from public.tyre_records where coalesce(btrim(vehicle_type),'') <> ''
+          union select distinct upper(btrim(asset_type)) from public.parts_consumption where coalesce(btrim(asset_type),'') <> '') t) as unit_map_md5;
+
+-- C. C23b (draft 124000). Before: false, KSA 2 lines, already_warranty 0, amount 0. After: true, 2, 2, 0.
+select public.tyre_price_is_warranty('TIRE -WARRENTY -315/80 R 22.5') as c23b,
+       (select jsonb_agg(x) from (select country, count(*) lines,
+            count(*) filter (where public.tyre_price_is_warranty(item_description)) already_warranty,
+            sum(coalesce(tyre_cost, 0)) tyre_bucket_amount
+          from public.parts_consumption
+         where item_description ~* '\y(warrenty|waranty|warenty|warrantie|gaurantee|guaranty|free issue)\y' group by 1) x) as lines;
+
+-- D. ENG-1 (draft 120000), as a signed in Manager. After: cpk_total null, legacy_total_per_tyre_km = the
+--    old cpk_total, cpk_tyre unchanged; overview spend_matched = spend_matched_tyre + spend_matched_maintenance.
+select j->'fleet'->0->'km' from (select public.get_fleet_cpk('KSA','2025-11-01','2026-10-31') j) x;
+select o->'cpk'->'current' from (select public.get_cost_cpk_overview('KSA',null,'2025-11-01','2026-10-31') o) x;
+
+-- E. R2-D1 (draft 125000). Before (2026-11-15): KSA 353 / 16,165,110, UAE 160 / 8,016,606, Egypt 18 / 415,159.
+--    After: KSA 348 / 15,411,576, UAE 151 / 7,442,153, Egypt 17 / 415,158.
+select country, count(*) assets, sum(km_run) km
+  from public.fleet_km_by_asset('00000000-0000-0000-0000-000000000001'::uuid, null, '2025-11-01', '2026-10-31')
+ group by 1 order by 1;
+```
+
+## R2.6 Callers that need a change after apply
+
+- AI orchestrator edge function, fleet CPK tool: its description still says "total cost / total km".
+  After 120000 it receives `cpk_total` null on km rows. The description should name the tyre spend
+  ratio. Edge functions are outside this stream and cannot be deployed from here.
+- `get_tyre_spend_breakdown` has no reader yet. The JS split (`splitTyreSpend`) is tested against it;
+  a screen has to call it before anyone sees the split.
+- `get_data_trust_overview` and `_cost_cpk` read `fleet_km_by_asset`; their km and coverage figures
+  fall by the R2-D1 amount after 125000. No client change needed.
+- Web: none. The gate in `cpkMetrics.js` already returns what the patched function returns (proven
+  row by row on staging).
+- Flutter and Expo: no reader of any changed function.
+
+## R2.7 Still not verified
+
+- Nothing ran on production. Staging data is synthetic: it proves the logic and the schema fit, not
+  production scale (staging has 1,058 fitments; timing was not measured).
+- No browser was used.
+- Draft 125000 anchors were counted once each on the production function text, and the before
+  figures were reproduced on production by a read only query of the same logic. The after figures
+  come from that query with the corrected comparison, not from the patched function on production data.

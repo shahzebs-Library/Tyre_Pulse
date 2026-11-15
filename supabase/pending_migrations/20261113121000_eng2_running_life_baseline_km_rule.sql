@@ -5,6 +5,11 @@
 --         with pg_get_functiondef (SELECT only). Each anchor was counted on the
 --         live text on 2026-11-12 and occurs exactly once.
 --
+-- ROUND 2 (2026-11-15): EXECUTED ON LOCAL STAGING ONLY (PostgreSQL 16, production
+--         schema, synthetic companies; database tp_eng), in order with drafts
+--         120000 to 125000. Proven by supabase/tests/staging/eng_round2_staging.mjs
+--         and src/test/engGoldenSqlParity.test.js. Still NOT applied to production.
+--
 -- WHY. The "measured" expected life of an active tyre is the average life of
 -- the tyres already taken off (same size, same vehicle type when 3 or more).
 -- That average read the stored total_km column directly, filtered only to

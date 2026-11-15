@@ -111,3 +111,19 @@ Tests: `node --test supabase/tests/tyre_position_service.test.mjs` (PGlite) and
 - `20261117101000_atr_carbon_offsets_blank_is_null.sql` - `carbon_offsets.aed_cost` and `trees_equivalent`
   become nullable with no default, so a blank is stored as "not recorded" and not 0. Contains `drop default` /
   `drop not null` (unavoidable), so the apply prompt needs the owner. No dependency. Tested on local staging.
+
+## Engineering accuracy drafts (PR #513) - executed on local staging, NOT applied to production
+
+Apply in this order. Each saves the definition it replaces to `_bak.fn_defs_eng_20261113` and aborts if an
+anchor is not found exactly once. No draft changes a stored business row (hash proven on staging); 120000
+writes metric registry text only. Staging proof: `supabase/tests/staging/eng_round2_staging.mjs` (23 tests).
+
+1. `20261113120000_eng1_cost_per_km_named_metrics.sql` - named cost per km metrics; km total withheld.
+2. `20261113121000_eng2_running_life_baseline_km_rule.sql` - expected life baseline by the km rule.
+3. `20261113122000_eng3_calc_cpk_km_rule.sql` - `calc_cpk` refuses placeholder fitments (needs nothing else).
+4. `20261113123000_eng4_unit_rule_road_vehicles.sql` - road vehicles with a plant word are km.
+5. `20261113124000_eng5_warranty_spelling_and_tyre_spend_kinds.sql` - warranty spellings, tyre spend by kind.
+6. `20261113125000_eng6_vehicle_km_ignores_placeholder_odometer.sql` - vehicle km ignores the placeholder
+   odometer 1 (round 2 defect R2-D1). Raises cost per vehicle km about 5% KSA and 8% UAE: tell users first.
+
+120000 and 125000 both change what "cost per vehicle km" shows; apply them together.

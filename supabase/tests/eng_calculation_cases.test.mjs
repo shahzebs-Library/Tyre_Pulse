@@ -14,11 +14,11 @@ import { PGlite } from '@electric-sql/pglite'
 // Case ids are the ones in docs/commercial-readiness/audit/calculation_test_cases.md.
 // C22 is the case the audit could not run (it needs a write); it runs here.
 //
-// NOT covered here: draft 20261113120000 (get_fleet_cpk / get_cost_cpk_overview).
-// Those two functions read a dozen tables and helper RPCs; their anchors were
-// counted on the live text (each exactly once) but the patched bodies have not
-// been executed anywhere. The JS half of that change is covered by
-// src/test/cpkMetrics.test.js.
+// Draft 20261113120000 (get_fleet_cpk / get_cost_cpk_overview) and draft 125000
+// (fleet_km_by_asset) are not covered here: those functions read a dozen tables.
+// They are EXECUTED on the local staging database (real PostgreSQL, production
+// schema, synthetic companies) by supabase/tests/staging/eng_round2_staging.mjs,
+// which also re-runs every case in this file on Postgres 16.
 
 const read = (rel) => readFileSync(new URL(rel, import.meta.url), 'utf8')
 const LIVE = read('./fixtures/eng_live_functions.sql')

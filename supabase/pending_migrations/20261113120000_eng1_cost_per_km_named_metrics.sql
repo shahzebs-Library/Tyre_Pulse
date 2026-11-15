@@ -8,6 +8,11 @@
 --         2026-11-12 and occurs exactly once. A DB-authorised session applies
 --         this, runs VERIFY, then flips this header to "APPLIED LIVE <date>".
 --
+-- ROUND 2 (2026-11-15): EXECUTED ON LOCAL STAGING ONLY (PostgreSQL 16, production
+--         schema, synthetic companies; database tp_eng), in order with drafts
+--         120000 to 125000. Proven by supabase/tests/staging/eng_round2_staging.mjs
+--         and src/test/engGoldenSqlParity.test.js. Still NOT applied to production.
+--
 -- WHY. Two screens printed a "cost per km" for the same country and year that
 -- differed 12.6 times (KSA, 2025-11-01 to 2026-10-31: 0.0235 against 0.296 SAR).
 -- The arithmetic of each was right. They were different measurements with one

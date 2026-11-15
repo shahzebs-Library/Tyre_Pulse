@@ -4,6 +4,11 @@
 --         public.calc_cpk(numeric,numeric,numeric) (SELECT only). The anchor
 --         occurs exactly once on the live text.
 --
+-- ROUND 2 (2026-11-15): EXECUTED ON LOCAL STAGING ONLY (PostgreSQL 16, production
+--         schema, synthetic companies; database tp_eng), in order with drafts
+--         120000 to 125000. Proven by supabase/tests/staging/eng_round2_staging.mjs
+--         and src/test/engGoldenSqlParity.test.js. Still NOT applied to production.
+--
 -- WHY. calc_cpk(cost, km_fit, km_rem) divided by km_rem - km_fit whenever
 -- km_rem > km_fit. A tyre fitted at the placeholder odometer "1" therefore got
 -- the whole machine odometer as its life and a CPK far too low, and no cap

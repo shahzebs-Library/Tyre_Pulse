@@ -4,6 +4,11 @@
 --         public.tyre_price_is_warranty(text) (SELECT only). The anchor occurs
 --         exactly once on the live text.
 --
+-- ROUND 2 (2026-11-15): EXECUTED ON LOCAL STAGING ONLY (PostgreSQL 16, production
+--         schema, synthetic companies; database tp_eng), in order with drafts
+--         120000 to 125000. Proven by supabase/tests/staging/eng_round2_staging.mjs
+--         and src/test/engGoldenSqlParity.test.js. Still NOT applied to production.
+--
 -- ENG-6 WHY. Two live KSA lines read "TIRE -WARRENTY -315/80 R 22.5". The
 -- warranty rule matched none of the ERP's spellings, so a warranty replacement
 -- could be priced from a comparable tyre instead of being a confirmed zero.
@@ -76,7 +81,7 @@ as $function$
            'country', country, 'currency', currency, 'kind', kind,
            'lines', lines, 'amount', amount) order by country, amount desc), '[]'::jsonb)
   from (
-    select pc.country, max(pc.currency) as currency,
+    select pc.country, pc.currency,
            public.tyre_cost_line_kind(pc.item_description) as kind,
            count(*) as lines, round(sum(pc.tyre_cost), 2) as amount
       from public.parts_consumption pc
@@ -84,7 +89,8 @@ as $function$
        and (p_country is null or pc.country = p_country)
        and (p_from is null or pc.event_date >= p_from)
        and (p_to   is null or pc.event_date <= p_to)
-     group by pc.country, public.tyre_cost_line_kind(pc.item_description)
+     -- currency is a grouping key, never max(): two currencies in one country stay two rows
+     group by pc.country, pc.currency, public.tyre_cost_line_kind(pc.item_description)
   ) s
 $function$;
 

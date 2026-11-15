@@ -1,4 +1,4 @@
--- Role matrix for the work order permission drafts (WO-1, WO-2, WO-3), run on a private copy of the
+-- Role matrix for the work order permission drafts (WO-1 to WO-4), run on a private copy of the
 -- LOCAL staging database only (synthetic companies Alpha, Beta, Gamma). Never run on production.
 -- Driver: supabase/tests/staging_work_order_permissions.sh
 --
@@ -25,7 +25,8 @@ from (values
   ('aaaaaaaa-0000-4000-8000-000000000007', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Manager',                           '{KSA}', '{ALL}',               true, false, false, 'Synthetic Revoked Manager'),
   ('aaaaaaaa-0000-4000-8000-000000000008', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Workshop Supervisor',               '{KSA}', '{ALL}',               true, true,  false, 'Synthetic Locked Supervisor'),
   ('aaaaaaaa-0000-4000-8000-000000000009', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Store Keeper',                      '{KSA}', '{ALL}',               true, false, false, 'Synthetic Granted Store Keeper'),
-  ('aaaaaaaa-0000-4000-8000-000000000010', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Electrician',                       '{KSA}', '{ALL}',               true, false, false, 'Synthetic Electrician')
+  ('aaaaaaaa-0000-4000-8000-000000000010', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Electrician',                       '{KSA}', '{ALL}',               true, false, false, 'Synthetic Electrician'),
+  ('aaaaaaaa-0000-4000-8000-000000000011', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Welder',                            '{KSA}', '{ALL}',               true, false, false, 'Synthetic Granted Welder')
 ) v(id, org, org2, role, country, sites, approved, locked, sup, full_name);
 set local session_replication_role = origin;
 
@@ -33,13 +34,20 @@ set local session_replication_role = origin;
 update public.organisations
    set settings = jsonb_set(coalesce(settings, '{}'::jsonb), '{app_settings}',
          coalesce(settings -> 'app_settings', '{}'::jsonb) || jsonb_build_object('permission_overrides',
-           '{"version":1,"overrides":{"Tyre Data Collector":{"work_orders":{"create":true,"edit":true}},"Tyre Man":{"work_orders":{"create":false,"edit":false}}}}'))
+           '{"version":1,"overrides":{"Tyre Data Collector":{"work_orders":{"create":true,"edit":true,"export":true,"approve":true}},"Tyre Man":{"work_orders":{"create":false,"edit":false}}}}'))
  where id = '00000000-0000-0000-0000-000000000001';
+
+-- Production holds the Work Orders menu switch for the collector role; staging does not.
+insert into public.module_permissions (role, module_key, org_id, enabled)
+select 'Tyre Data Collector', 'work_orders', null, true
+ where not exists (select 1 from public.module_permissions
+                    where org_id is null and role = 'Tyre Data Collector' and module_key = 'work_orders');
 
 insert into public.user_access_grants (user_id, module_key, capability, effect, org_id)
 select v.uid::uuid, 'work_orders', v.cap, v.effect, '00000000-0000-0000-0000-000000000001'
   from (values ('aaaaaaaa-0000-4000-8000-000000000007', 'edit', 'revoke'),
-               ('aaaaaaaa-0000-4000-8000-000000000009', 'edit', 'grant')) v(uid, cap, effect);
+               ('aaaaaaaa-0000-4000-8000-000000000009', 'edit', 'grant'),
+               ('aaaaaaaa-0000-4000-8000-000000000011', 'edit', 'grant')) v(uid, cap, effect);
 
 -- Beta switches assigning OFF for its Managers with a company rule row.
 insert into public.work_order_role_rules (organisation_id, role, actions, scope, note)
@@ -62,7 +70,8 @@ insert into actor values
   ('maint_sup', 'aaaaaaaa-0000-4000-8000-000000000003'), ('area_mgr',  'aaaaaaaa-0000-4000-8000-000000000004'),
   ('mechanic',  'aaaaaaaa-0000-4000-8000-000000000005'), ('collector', 'aaaaaaaa-0000-4000-8000-000000000006'),
   ('revoked',   'aaaaaaaa-0000-4000-8000-000000000007'), ('locked',    'aaaaaaaa-0000-4000-8000-000000000008'),
-  ('granted',   'aaaaaaaa-0000-4000-8000-000000000009'), ('electrician', 'aaaaaaaa-0000-4000-8000-000000000010');
+  ('granted',   'aaaaaaaa-0000-4000-8000-000000000009'), ('electrician', 'aaaaaaaa-0000-4000-8000-000000000010'),
+  ('granted_tech', 'aaaaaaaa-0000-4000-8000-000000000011');
 -- The seeded engineer works in the UAE; give the seeded Tyre Man and Manager the whole of KSA.
 
 create temp table wo (name text primary key, id uuid) on commit drop;
@@ -75,7 +84,7 @@ insert into wo select 'tyre_uae', id from public.work_orders where organisation_
 insert into wo select 'approved_north', id from public.work_orders where organisation_id = '00000000-0000-0000-0000-000000000001' and country = 'KSA' and site = 'ALPHA NORTH PLANT' and status <> 'Completed' order by id desc limit 1;
 insert into wo select 'open_beta', id from public.work_orders where organisation_id = 'bbbbbbbb-0000-4000-8000-000000000002' and country = 'KSA' and status <> 'Completed' order by id limit 1;
 do $$ begin
-  if (select count(*) from wo) <> 8 or (select count(*) from actor) <> 19
+  if (select count(*) from wo) <> 8 or (select count(*) from actor) <> 20
      or (select count(distinct id) from wo) <> 8 then
     raise exception 'fixture incomplete: % work orders, % actors', (select count(*) from wo), (select count(*) from actor);
   end if;
@@ -92,6 +101,10 @@ update public.work_orders set execution_approval_id = 'aaaaaaaa-0000-4000-8000-0
 insert into public.wo_assignments (job_id, user_id, role, active, organisation_id, country, site)
 select (select id from wo where name = 'open_north'), (select id from actor where name = 'tyreman'), 'primary', true,
        '00000000-0000-0000-0000-000000000001', 'KSA', 'ALPHA NORTH PLANT';
+-- The collector is assigned to the East plant job (and to nothing else).
+insert into public.wo_assignments (job_id, user_id, role, active, organisation_id, country, site)
+select (select id from wo where name = 'open_east'), 'aaaaaaaa-0000-4000-8000-000000000006', 'primary', true,
+       '00000000-0000-0000-0000-000000000001', 'KSA', 'ALPHA EAST PLANT';
 insert into public.wo_tasks (id, job_id, title, status, assignee_user_id, organisation_id, country, site)
 values ('aaaaaaaa-0000-4000-8000-0000000000f1', (select id from wo where name = 'open_north2'), 'Synthetic task', 'pending',
         'aaaaaaaa-0000-4000-8000-000000000010', '00000000-0000-0000-0000-000000000001', 'KSA', 'ALPHA NORTH PLANT');
@@ -140,6 +153,9 @@ create function pg_temp.sql_for(p_what text, p_actor text) returns text language
     when p_what like 'edit:%'     then format('update public.work_orders set description = ''t'' where id = %L', pg_temp.id(split_part(p_what, ':', 2)))
     when p_what like 'progress:%' then format('update public.work_orders set status = ''Waiting for Parts'', notes = ''t'' where id = %L', pg_temp.id(split_part(p_what, ':', 2)))
     when p_what like 'complete:%' then format('update public.work_orders set status = ''Completed'', completed_at = now() where id = %L', pg_temp.id(split_part(p_what, ':', 2)))
+    when p_what like 'toqc:%'     then format('update public.work_orders set status = ''Quality Inspection'' where id = %L', pg_temp.id(split_part(p_what, ':', 2)))
+    when p_what like 'close:%'    then format('update public.work_orders set status = ''Closed'' where id = %L', pg_temp.id(split_part(p_what, ':', 2)))
+    when p_what like 'qcpass:%'   then format('update public.work_orders set status = ''Completed'', qc_status = ''passed'' where id = %L', pg_temp.id(split_part(p_what, ':', 2)))
     when p_what like 'cancel:%'   then format('update public.work_orders set status = ''Cancelled'' where id = %L', pg_temp.id(split_part(p_what, ':', 2)))
     when p_what like 'owner:%'    then format('update public.work_orders set assigned_owner_id = %L, status = ''Assigned'' where id = %L', pg_temp.who('mechanic'), pg_temp.id(split_part(p_what, ':', 2)))
     when p_what like 'qc:%'       then format('update public.work_orders set qc_status = ''passed'' where id = %L', pg_temp.id(split_part(p_what, ':', 2)))
@@ -220,9 +236,10 @@ select pg_temp.expect('engineer', c, w) from (values
   ('create:uae_tyre', 'ok'), ('create:uae', 'no'), ('edit:tyre_uae', 'ok'), ('assign:tyre_uae', 'ok'), ('qc:tyre_uae', 'ok'),
   ('edit:open_uae', 'no'), ('assign:open_uae', 'no'), ('edit:open_north', 'no'), ('delete:tyre_uae', 'no')) t(c, w);
 
--- Tyremen and technicians: their ASSIGNED job only; progress, completion and evidence; nothing else.
+-- Tyremen and technicians: their ASSIGNED job only; progress and evidence; no final closure.
 select pg_temp.expect('tyreman', c, w) from (values
-  ('progress:open_north', 'ok'), ('complete:open_north', 'ok'), ('event:open_north', 'ok'), ('checkin', 'ok'),
+  ('progress:open_north', 'ok'), ('toqc:open_north', 'ok'), ('event:open_north', 'ok'), ('checkin', 'ok'),
+  ('complete:open_north', 'err'), ('close:open_north', 'err'), ('qcpass:open_north', 'err'),
   ('edit:open_north', 'err'), ('cost:open_north', 'err'), ('owner:open_north', 'err'), ('qc:open_north', 'err'),
   ('cancel:open_north', 'err'), ('move:open_north', 'err'),
   ('progress:open_east', 'no'), ('event:open_east', 'no'), ('create:north', 'no'), ('assign:open_north', 'no'),
@@ -230,12 +247,28 @@ select pg_temp.expect('tyreman', c, w) from (values
 select pg_temp.expect('mechanic', c, w) from (values
   ('progress:open_north', 'no'), ('event:open_north', 'no'), ('create:north', 'no'), ('checkin', 'ok'), ('task_status', 'no')) t(c, w);
 select pg_temp.expect('electrician', c, w) from (values
-  ('task_status', 'ok'), ('task_title', 'err'), ('progress:open_north2', 'ok'), ('progress:open_north', 'no')) t(c, w);
+  ('task_status', 'ok'), ('task_title', 'err'), ('progress:open_north2', 'ok'), ('progress:open_north', 'no'),
+  ('toqc:open_north2', 'ok'), ('complete:open_north2', 'err'), ('edit:open_north2', 'err'), ('cost:open_north2', 'err'),
+  ('event:open_north2', 'ok'), ('event:open_north', 'no'), ('delete:open_north2', 'no')) t(c, w);
+-- A per-user edit grant for a technician adds edit and progress, never the quality check or closure.
+select pg_temp.expect('granted_tech', c, w) from (values
+  ('edit:open_north', 'ok'), ('progress:open_north', 'ok'), ('qc:open_north', 'err'), ('complete:open_north', 'err'),
+  ('owner:open_north', 'err'), ('assign:open_north', 'no'), ('create:north', 'no'), ('delete:open_north', 'no')) t(c, w);
 
--- Access Control keeps working for roles with no rule, and per person.
+-- Tyre Data Collector (owner decision round 2): create, update and document anywhere in their walls;
+-- quality check on ASSIGNED work orders only; no assigning, no final closure, no approved cost,
+-- no closed work order, no delete. (open_east is assigned to the collector, open_north is not.)
 select pg_temp.expect('collector', c, w) from (values
-  ('create:north', 'ok'), ('edit:open_north', 'ok'), ('progress:open_north', 'ok'), ('qc:open_north', 'ok'),
-  ('owner:open_north', 'err'), ('assign:open_north', 'no'), ('edit:closed_north', 'err'), ('delete:open_north', 'no')) t(c, w);
+  ('create:north', 'ok'), ('create:east', 'ok'), ('edit:open_north', 'ok'), ('progress:open_north', 'ok'),
+  ('toqc:open_north', 'ok'), ('cost:open_north', 'ok'), ('event:open_north', 'ok'),
+  ('qc:open_east', 'ok'), ('qc:open_north', 'err'),
+  ('complete:open_north', 'err'), ('complete:open_east', 'err'), ('close:open_east', 'err'), ('cancel:open_east', 'err'),
+  ('qcpass:open_east', 'err'), ('qcpass:open_north', 'err'),
+  ('owner:open_north', 'err'), ('assign:open_north', 'no'), ('assign:open_east', 'no'), ('task_create', 'no'),
+  ('edit:closed_north', 'err'), ('cost:closed_north', 'err'), ('cost:approved_north', 'err'), ('edit:approved_north', 'ok'),
+  ('create:uae', 'no'), ('create:beta', 'no'), ('edit:open_beta', 'no'), ('rehome:open_north', 'no'),
+  ('delete:open_north', 'no'), ('delete:open_east', 'no'), ('delete:closed_north', 'no')) t(c, w);
+-- Access Control keeps working for roles with no rule, and per person.
 select pg_temp.expect('granted', c, w) from (values
   ('edit:open_north', 'ok'), ('create:north', 'no'), ('assign:open_north', 'no'), ('edit:closed_north', 'err')) t(c, w);
 select pg_temp.expect('revoked', c, w) from (values
@@ -300,11 +333,14 @@ insert into result (actor, what, want, got)
 select a, 'my_access ' || want_json, 'ok',
        case when pg_temp.access(a) @> want_json::jsonb then 'ok:1' else 'mismatch ' || pg_temp.access(a)::text end
 from (values
-  ('manager',      '{"admin":false,"create":"all","edit":"all","assign":"all","progress":"all","qc":"all"}'),
+  ('manager',      '{"admin":false,"create":"all","edit":"all","assign":"all","progress":"all","qc":"all","close":"all"}'),
   ('sup_north',    '{"admin":false,"create":"all","assign":"all","all_sites":false}'),
-  ('engineer',     '{"create":"tyre","edit":"tyre","assign":"tyre","progress":"tyre","qc":"tyre"}'),
-  ('tyreman',      '{"create":null,"edit":null,"assign":null,"progress":"assigned","qc":null}'),
-  ('collector',    '{"create":"all","edit":"all","assign":null,"progress":"all","qc":"all"}'),
+  ('engineer',     '{"create":"tyre","edit":"tyre","assign":"tyre","progress":"tyre","qc":"tyre","close":"tyre"}'),
+  ('tyreman',      '{"create":null,"edit":null,"assign":null,"progress":"assigned","qc":null,"close":null}'),
+  ('electrician',  '{"create":null,"edit":null,"assign":null,"progress":"assigned","qc":null,"close":null}'),
+  ('collector',    '{"admin":false,"create":"all","edit":"all","assign":null,"progress":"all","qc":"assigned","close":null}'),
+  ('granted',      '{"create":null,"edit":"all","assign":null,"progress":"all","qc":"all","close":"all"}'),
+  ('granted_tech', '{"create":null,"edit":"all","assign":null,"progress":"all","qc":null,"close":null}'),
   ('revoked',      '{"create":"all","edit":null,"assign":null,"progress":null}'),
   ('beta_manager', '{"create":"all","edit":"all","assign":null,"progress":"all","qc":null}'),
   ('inspector',    '{"create":null,"edit":null,"assign":null,"progress":null,"qc":null}'),
@@ -352,7 +388,8 @@ select 'manager', 'edit that resends created_by keeps the stored creator', 'ok',
          $q$with u as (update public.work_orders set description = 't', created_by = %L where id = %L returning created_by)
             select 1 / (case when (select created_by from u) is distinct from %L::uuid then 1 else 0 end)$q$,
          pg_temp.who('manager'), pg_temp.id('open_north'), pg_temp.who('manager')));
--- Quality check pass in one write (status Completed + result): a supervisor may; a collector may; a technician may not.
+-- Quality check pass in one write (status Completed + result): a supervisor may; a technician may not
+-- (the collector cases are in the matrix above).
 insert into result (actor, what, want, got) values
   ('sup_all', 'qc pass in one write', 'ok', pg_temp.try('sup_all', format(
      'update public.work_orders set status = ''Completed'', qc_status = ''passed'' where id = %L', pg_temp.id('open_north')))),
@@ -372,6 +409,44 @@ insert into result (actor, what, want, got) values
      pg_temp.try('sup_all', format('select public.zz_test_definer_delete(%L)', pg_temp.id('open_north')))),
   ('admin', 'definer delete of a closed work order', 'ok',
      pg_temp.try('admin', format('select public.zz_test_definer_delete(%L)', pg_temp.id('closed_north'))));
+
+-- Hand-deleting through a definer function is refused for a collector too.
+insert into result (actor, what, want, got) values
+  ('collector', 'definer delete of an open work order', 'err',
+     pg_temp.try('collector', format('select public.zz_test_definer_delete(%L)', pg_temp.id('open_east'))));
+
+-- Cost approval (WO-4): a collector is not an eligible approver of a work order; a supervisor is;
+-- the collector's eligibility for checklists is not changed by this draft.
+insert into result (actor, what, want, got)
+select v.who, v.what, 'ok',
+       case when approval_private.person_eligible(pg_temp.who(v.who), '00000000-0000-0000-0000-000000000001', v.typ, 'KSA', null) = v.want
+            then 'ok:1' else 'eligible=' || (not v.want)::text end
+from (values ('collector', 'approver of a work order: not eligible', 'work_order', false),
+             ('sup_all',   'approver of a work order: eligible', 'work_order', true)) v(who, what, typ, want);
+
+insert into result (actor, what, want, got)
+select '(catalog)', 'approver list for other record types still names the collector', 'ok',
+       case when position($s$ELSE ARRAY['Admin','Maintenance Supervisor','Workshop Supervisor','PMV Manager','Workshop Area Manager','Workshop Maintenance Area Manager','Tyre Data Collector'] END$s$ in p.prosrc) > 0
+             and position($s$WHEN p_type='inspection' THEN ARRAY['Admin','PMV Manager','Workshop Area Manager','Workshop Maintenance Area Manager','Tyre Data Collector']$s$ in p.prosrc) > 0
+            then 'ok:1' else 'changed' end
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'approval_private' and p.proname = 'person_eligible';
+
+-- Menu switches (WO-3): technicians and supervisors can open Work Orders; technicians not Live Control.
+insert into result (actor, what, want, got)
+select v.role, 'module ' || v.key || ' = ' || v.want, 'ok',
+       case when coalesce((select m.enabled from public.module_permissions m
+                            where m.org_id is null and m.role = v.role and m.module_key = v.key), false) = v.want
+            then 'ok:1' else 'wrong' end
+from (values ('Tyre Man', 'work_orders', true), ('Mechanic', 'work_orders', true), ('Helper PMV', 'work_orders', true),
+             ('Tyre Man', 'workshop_live', false), ('Mechanic', 'workshop_live', false),
+             ('Workshop Supervisor', 'work_orders', true), ('Workshop Supervisor', 'workshop_live', true)) v(role, key, want);
+
+-- Stored costs and approvals are not rewritten by anything above (the driver also hashes work_orders).
+insert into result (actor, what, want, got)
+select '(fixture)', 'approval request row unchanged', 'ok',
+       case when (select approval_status || '/' || status from public.approval_execution_requests
+                   where id = 'aaaaaaaa-0000-4000-8000-0000000000e1') = 'approved/executed' then 'ok:1' else 'changed' end;
 
 -- ── report ───────────────────────────────────────────────────────────────────────────────────────
 select 'FAIL  ' || actor || '  ' || what || '  want=' || want || '  got=' || got

@@ -53,3 +53,44 @@ export async function listMyAssignedJobIds(userId) {
   }
   return ids
 }
+
+const MY_JOB_COLS =
+  'id,work_order_no,asset_no,description,status,priority,work_type,site,country,opened_at,started_at,' +
+  'target_completion,assigned_owner_id,qc_status,vor'
+const MY_TASK_COLS = 'id,job_id,seq,title,status,assignee_user_id,est_minutes'
+const OPEN_FILTER = '("Completed","Closed","Cancelled","completed","closed","cancelled")'
+
+/**
+ * The open work orders assigned to this person (as owner, by an active assignment
+ * or through a task), with the tasks that are theirs. Used by the My Jobs screen.
+ * Throws on a failed read so the screen can say so instead of showing "no jobs".
+ *
+ * @param {string} userId
+ * @returns {Promise<{jobs: object[], tasks: object[]}>}
+ */
+export async function listMyJobs(userId) {
+  if (!userId) return { jobs: [], tasks: [] }
+  const ids = [...(await listMyAssignedJobIds(userId))].slice(0, 200)
+  const byId = new Map()
+  const owned = await supabase.from('work_orders').select(MY_JOB_COLS)
+    .eq('assigned_owner_id', userId).not('status', 'in', OPEN_FILTER)
+    .order('opened_at', { ascending: false }).order('id').limit(200)
+  if (owned.error) throw owned.error
+  for (const r of owned.data || []) byId.set(r.id, r)
+  if (ids.length) {
+    const linked = await supabase.from('work_orders').select(MY_JOB_COLS)
+      .in('id', ids).not('status', 'in', OPEN_FILTER)
+      .order('opened_at', { ascending: false }).order('id').limit(200)
+    if (linked.error) throw linked.error
+    for (const r of linked.data || []) byId.set(r.id, r)
+  }
+  const jobs = [...byId.values()]
+  let tasks = []
+  if (jobs.length) {
+    const t = await supabase.from('wo_tasks').select(MY_TASK_COLS)
+      .eq('assignee_user_id', userId).in('job_id', jobs.map((j) => j.id))
+      .order('seq', { ascending: true, nullsFirst: true }).order('id').limit(500)
+    if (!t.error) tasks = t.data || []
+  }
+  return { jobs, tasks }
+}

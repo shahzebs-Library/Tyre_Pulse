@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { getWorkOrderAccess, listMyAssignedJobIds } from '../lib/api/workOrderAccess'
-import { canWorkOrder, checkWorkOrderChange, workOrderRefusalReason } from '../lib/workOrderAccess'
+import {
+  canWorkOrder, checkWorkOrderChange, workOrderRefusalReason, statusMoveRefusalReason, isAssignedOnlyAccess,
+} from '../lib/workOrderAccess'
 
 /**
  * Work order rights for the signed-in person, for disabling controls with the
@@ -16,6 +18,9 @@ import { canWorkOrder, checkWorkOrderChange, workOrderRefusalReason } from '../l
  *   can: (action:string, row?:object) => boolean,
  *   reason: (action:string, row?:object) => string,
  *   check: (row:object, changedKeys:string[], opts?:{newStatus?:string}) => {ok:boolean|null, reason:string},
+ *   statusReason: (newStatus:string, row:object) => string,   why a status move is refused ('' = allowed or unknown)
+ *   assignedOnly: boolean,   a technician: own assigned jobs only (known from the server)
+ *   userId: string|null, assignedJobIds: Set<string>|null,
  * }}
  */
 export function useWorkOrderAccess() {
@@ -34,7 +39,7 @@ export function useWorkOrderAccess() {
       if (!live) return
       setAccess(a)
       setLoading(false)
-      const scoped = ['edit', 'assign', 'progress', 'qc'].some((k) => a?.[k] === 'assigned')
+      const scoped = ['edit', 'assign', 'progress', 'qc', 'close'].some((k) => a?.[k] === 'assigned')
       if (scoped) {
         const ids = await listMyAssignedJobIds(userId)
         if (live) setAssignedJobIds(ids)
@@ -50,5 +55,13 @@ export function useWorkOrderAccess() {
     (row, changedKeys, opts = {}) => checkWorkOrderChange(access, row, changedKeys, { ...opts, ctx }),
     [access, ctx],
   )
-  return useMemo(() => ({ access, loading, can, reason, check }), [access, loading, can, reason, check])
+  const statusReason = useCallback(
+    (newStatus, row) => statusMoveRefusalReason(newStatus, access, row, ctx),
+    [access, ctx],
+  )
+  const assignedOnly = isAssignedOnlyAccess(access)
+  return useMemo(
+    () => ({ access, loading, can, reason, check, statusReason, assignedOnly, userId, assignedJobIds }),
+    [access, loading, can, reason, check, statusReason, assignedOnly, userId, assignedJobIds],
+  )
 }

@@ -7,7 +7,7 @@
 --
 -- DEPENDS ON (in this order):
 --   20261113130000_cur_work_orders_manager_director_default.sql
---   20261115160000_wo_permission_resolver.sql
+--   20261115140000_wo_permission_resolver.sql
 --
 -- NO REMOVAL STATEMENT IS USED. Every existing policy is changed in place with ALTER POLICY; the
 --   new triggers are created with CREATE OR REPLACE. Nothing in this file rewrites a stored work
@@ -44,7 +44,8 @@
 --                          quality check result              qc
 --                          status, started, completed, notes, hours, odometer, off road, parts used
 --                                                            progress (or edit)
---                          setting status Cancelled, or any other column   edit
+--                          setting status Completed, Closed or Cancelled (final closure)   close
+--                          setting status Cancelled (as well), or any other column   edit
 --   work_orders DELETE   Admin only (unchanged policy) plus trigger wo_delete_guard, so a definer
 --                        function run by a non-admin cannot remove one either
 --   wo_assignments, wo_tasks (write)   work_order_can_job('assign', job)
@@ -60,9 +61,14 @@
 --     Manager 3 (create and edit arrive with 20261113130000; assign they already had).
 --   Gain the same for tyre work only: Tire Planning Engineer 1.
 --   Gain "record progress on my assigned job": Tyre Man 17 and 38 workshop trade accounts.
---   Lose: Tyre Data Collector 7 and Data Monitor Officer 1 keep create, edit, progress and qc on
---     open work orders but can no longer change a closed work order, the assigned owner, or the
---     cost of an approved one. Manager 3 and Director 0 lose nothing they could do (they could not
+--   Gain "record progress on my assigned job": see above. Technicians cannot set Completed, Closed
+--     or Cancelled; they move the job to Quality Inspection and a supervisor closes it.
+--   Lose: Tyre Data Collector 7 keep create, edit and progress on open work orders in their walls,
+--     and the quality check on work orders assigned to them. They can no longer change a closed
+--     work order, the assigned owner or the cost of an approved one, record a quality check on a
+--     job that is not theirs, or set a work order to Completed, Closed or Cancelled (owner decision
+--     2026-11-15 round 2). Data Monitor Officer 1 keeps create, edit, progress, qc and closing but
+--     loses closed work orders, the assigned owner and approved costs. Manager 3 and Director 0 lose nothing they could do (they could not
 --     write the job at all). Admin 2: unchanged.
 --   Stored rows changed: none.
 --
@@ -157,6 +163,7 @@ declare
   c_progress constant text[] := array['status', 'started_at', 'completed_at', 'notes', 'labour_hours', 'manpower_hours',
                                       'waiting_parts_hours', 'waiting_manpower_hours', 'odometer', 'vor', 'vor_since', 'parts_used'];
   v_need_edit boolean; v_need_assign boolean; v_need_qc boolean; v_need_progress boolean;
+  v_need_close boolean;
   v_status_only_assign boolean := false;
 begin
   -- No signed-in user: service role, a staging pipe loaded from the dashboard, cron. Not judged.
@@ -207,6 +214,9 @@ begin
      where not (k = any (c_progress) or k = any (c_assign) or k = any (c_qc)))
     or ('status' = any (v_keys) and lower(btrim(NEW.status::text)) in ('cancelled', 'canceled'));
 
+  -- Final closure: moving the job to a closed status (Completed, Closed, Cancelled).
+  v_need_close := 'status' = any (v_keys) and public.work_order_is_closed(NEW.status::text);
+
   if v_need_edit and not (
        public.work_order_can('edit', OLD.organisation_id, OLD.country::text, OLD.site::text, v_tyre, OLD.id)
        and public.work_order_can('edit', NEW.organisation_id, NEW.country::text, NEW.site::text, v_tyre_new, NEW.id)) then
@@ -218,6 +228,10 @@ begin
   end if;
   if v_need_qc and not public.work_order_can('qc', OLD.organisation_id, OLD.country::text, OLD.site::text, v_tyre, OLD.id) then
     raise exception 'You are not allowed to record the quality check for this work order.' using errcode = '42501';
+  end if;
+  if v_need_close and not public.work_order_can('close', OLD.organisation_id, OLD.country::text, OLD.site::text, v_tyre, OLD.id) then
+    raise exception 'You cannot close a work order. Move it to Quality Inspection and a supervisor will close it.'
+      using errcode = '42501';
   end if;
   if v_need_progress and not (
        public.work_order_can('progress', OLD.organisation_id, OLD.country::text, OLD.site::text, v_tyre, OLD.id)

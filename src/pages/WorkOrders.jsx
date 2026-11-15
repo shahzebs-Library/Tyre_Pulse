@@ -1086,7 +1086,8 @@ export default function WorkOrders() {
                     <p className="text-[var(--text-secondary)] text-xs mb-2">{t('workorders.detail.transitionTo')}</p>
                     <div className="flex flex-wrap gap-2">
                       {STATUS_FLOW[viewOrder.status].map(ns => (
-                        <button key={ns} onClick={() => transitionStatus(viewOrder, ns)} disabled={wfLocked || transitioning || !woRights.can(ns === 'Cancelled' ? 'edit' : 'progress', viewOrder) || (!executionAllowed && ['In Progress', 'Waiting for Parts', 'Quality Inspection', 'Completed'].includes(ns))}
+                        <button key={ns} onClick={() => transitionStatus(viewOrder, ns)} disabled={wfLocked || transitioning || !!woRights.statusReason(ns, viewOrder) || (!executionAllowed && ['In Progress', 'Waiting for Parts', 'Quality Inspection', 'Completed'].includes(ns))}
+                          title={wfLocked ? 'Locked, in approval' : (woRights.statusReason(ns, viewOrder) || undefined)}
                           className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                             ns === 'Cancelled' ? 'border-red-700 text-red-400 hover:bg-red-900/30' :
                             ns === 'Completed' ? 'border-green-700 text-green-400 hover:bg-green-900/30' :
@@ -1181,8 +1182,8 @@ export default function WorkOrders() {
                 <CustomFieldsPanel data={viewOrder.custom_data} title={t('workorders.detail.customFields')} defaultOpen />
 
                 <div className="flex gap-3 pt-2">
-                  <button onClick={() => { setViewOrder(null); openEdit(viewOrder) }} disabled={wfLocked || !woRights.can('edit', viewOrder)} title={woRights.reason('edit', viewOrder) || undefined}
-                    title={wfLocked ? 'Locked, in approval' : undefined}
+                  <button onClick={() => { setViewOrder(null); openEdit(viewOrder) }} disabled={wfLocked || !woRights.can('edit', viewOrder)}
+                    title={wfLocked ? 'Locked, in approval' : (woRights.reason('edit', viewOrder) || undefined)}
                     className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600">
                     {wfLocked ? <Lock size={15} /> : <Edit2 size={15} />}{t('workorders.detail.edit')}
                   </button>

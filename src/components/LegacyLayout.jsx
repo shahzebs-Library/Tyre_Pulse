@@ -477,16 +477,20 @@ function roleBadgeClass(role) {
 const TYRE_MAN_TABS = [
   { to: '/inspections', tk: 'inspect', label: 'Inspect',   icon: ClipboardCheck, end: false },
   { to: '/tyres',       tk: 'records', label: 'Records',   icon: Layers },
-  { to: '/work-orders', tk: 'work',    label: 'Work',      icon: Wrench },
+  // The person's own assigned jobs. Shown only when Work Orders is switched on for them, so the
+  // tab never leads to Access Restricted.
+  { to: '/my-jobs',     tk: 'work',    label: 'Work',      icon: Wrench, moduleKey: 'work_orders' },
   { to: '/scan',        tk: 'scan',    label: 'Scan',      icon: ScanLine },
   { to: '/settings',    tk: 'profile', label: 'Profile',   icon: User },
 ]
 
 function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
   const hasCustomIcon = Boolean(customAppIcon)
-  const { signOut, profile } = useAuth()
+  const { signOut, profile, hasPermission } = useAuth()
   const { t } = useLanguage()
   const location = useLocation()
+  const tabs = TYRE_MAN_TABS.filter((tab) => !tab.moduleKey
+    || (typeof hasPermission === 'function' && hasPermission(tab.moduleKey) === true))
   const { acquire: acquireWakeLock, release: releaseWakeLock } = useWakeLock()
   const [pendingCount, setPendingCount] = useState(0)
   const [failedCount, setFailedCount]   = useState(0)
@@ -665,7 +669,7 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
         }}
       >
         <div className="flex items-stretch h-[54px]">
-          {TYRE_MAN_TABS.map(({ to, label, tk, icon: Icon, end }) => (
+          {tabs.map(({ to, label, tk, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}

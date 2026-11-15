@@ -1,7 +1,8 @@
 // The work order rights the screen applies (src/lib/workOrderAccess.js) must be the same rules the
 // database drafts enforce. This test READS the SQL drafts and fails when the two drift:
-//   supabase/pending_migrations/20261115160000_wo_permission_resolver.sql
-//   supabase/pending_migrations/20261115160500_wo_policies_and_guards.sql
+//   supabase/pending_migrations/20261115140000_wo_permission_resolver.sql
+//   supabase/pending_migrations/20261115140500_wo_policies_and_guards.sql
+//   supabase/pending_migrations/20261115141000_wo_supervisor_module_visibility.sql
 // The behaviour cases below are the same ones the staging role matrix proves on the database
 // (supabase/tests/staging_work_order_permissions.sql).
 import { describe, it, expect } from 'vitest'
@@ -12,6 +13,7 @@ import {
   DEFAULT_ROLE_RULES, WO_REFUSAL, isTyreWorkOrder, isClosedWorkOrder, defaultScopeForRole,
   legacyWorkOrderAccess, serverWorkOrderAccess, canWorkOrder, requiredActionsForChange,
   checkWorkOrderChange, workOrderRefusalReason, workOrderRefusalFromError, creatableWorkTypes,
+  CLOSING_STATUS_KEYS, TECHNICIAN_ROLES, isAssignedOnlyAccess, actionsForStatusMove, statusMoveRefusalReason,
 } from '../lib/workOrderAccess'
 import {
   isChecklistPathAllowed, supervisorWorkModuleKey, SUPERVISOR_WORK_PATHS,
@@ -24,8 +26,9 @@ const read = (name) => {
   if (!dir) throw new Error(`draft ${name} not found`)
   return readFileSync(resolve(process.cwd(), dir, name), 'utf8').replace(/\r\n/g, '\n')
 }
-const resolver = read('20261115160000_wo_permission_resolver.sql')
-const guards = read('20261115160500_wo_policies_and_guards.sql')
+const resolver = read('20261115140000_wo_permission_resolver.sql')
+const guards = read('20261115140500_wo_policies_and_guards.sql')
+const menu = read('20261115141000_wo_supervisor_module_visibility.sql')
 
 const quoted = (text) => [...text.matchAll(/'([^']*)'/g)].map((m) => m[1])
 const sqlArray = (sql, name) => {
@@ -41,11 +44,29 @@ const body = (sql, fn) => {
 
 describe('constants mirror the SQL drafts', () => {
   it('seed rules are the same rows, in the same order', () => {
-    const seed = resolver.slice(resolver.indexOf('from (values'), resolver.indexOf(') as v(role, actions, scope)'))
-    const rows = [...seed.matchAll(/\('([^']+)',\s+array\[([^\]]*)\],\s*'(all|tyre|assigned)'\)/g)]
-      .map((m) => ({ role: m[1], actions: quoted(m[2]), scope: m[3] }))
-    expect(rows.length).toBe(30)
-    expect(rows).toEqual(DEFAULT_ROLE_RULES.map((r) => ({ role: r.role, actions: [...r.actions], scope: r.scope })))
+    const seed = resolver.slice(resolver.indexOf('from (values'), resolver.indexOf(') as v(role, actions, scope, qc_scope)'))
+    const rows = [...seed.matchAll(/\('([^']+)',\s+array\[([^\]]*)\],\s*'(all|tyre|assigned)',\s*(null|'(?:all|tyre|assigned)')\)/g)]
+      .map((m) => ({ role: m[1], actions: quoted(m[2]), scope: m[3], qcScope: m[4] === 'null' ? null : m[4].slice(1, -1) }))
+    expect(rows.length).toBe(31)
+    expect(rows).toEqual(DEFAULT_ROLE_RULES.map((r) => ({ role: r.role, actions: [...r.actions], scope: r.scope, qcScope: r.qcScope })))
+  })
+
+  it('the technician roles that get the Work Orders menu switch are the seeded technicians', () => {
+    expect(TECHNICIAN_ROLES.length).toBe(22)
+    const rows = [...menu.matchAll(/\('([^']+)', 'work_orders', null, true\)/g)].map((m) => m[1])
+    expect(rows.filter((r) => !['Workshop Supervisor', 'Maintenance Supervisor'].includes(r))).toEqual([...TECHNICIAN_ROLES])
+    // Technicians are never given Workshop Live Control.
+    const live = [...menu.matchAll(/\('([^']+)', 'workshop_live', null, true\)/g)].map((m) => m[1])
+    for (const r of TECHNICIAN_ROLES) expect(live).not.toContain(r)
+  })
+
+  it('final closure: the closing statuses are the closed statuses, and the guard asks for close', () => {
+    expect([...CLOSING_STATUS_KEYS]).toEqual([...CLOSED_STATUS_KEYS])
+    const g = body(guards, 'wo_write_guard')
+    expect(g).toContain("v_need_close := 'status' = any (v_keys) and public.work_order_is_closed(NEW.status::text);")
+    expect(g).toContain("public.work_order_can('close', OLD.organisation_id")
+    // A per-user grant never adds the quality check, assigning or closing.
+    expect(body(resolver, 'work_order_scope')).toContain("if v_action in ('create', 'edit', 'progress') and exists (")
   })
 
   it('actions, scopes and the Admin-only actions', () => {
@@ -92,11 +113,11 @@ describe('constants mirror the SQL drafts', () => {
 
 // ── behaviour: the same cases the staging matrix proves on the database ─────────────────────────
 const A = (o) => serverWorkOrderAccess(o)
-const ALL = { create: 'all', edit: 'all', assign: 'all', progress: 'all', qc: 'all' }
+const ALL = { create: 'all', edit: 'all', assign: 'all', progress: 'all', qc: 'all', close: 'all' }
 const manager = A(ALL)
-const engineer = A({ create: 'tyre', edit: 'tyre', assign: 'tyre', progress: 'tyre', qc: 'tyre' })
+const engineer = A({ create: 'tyre', edit: 'tyre', assign: 'tyre', progress: 'tyre', qc: 'tyre', close: 'tyre' })
 const technician = A({ progress: 'assigned' })
-const collector = A({ create: 'all', edit: 'all', progress: 'all', qc: 'all' })
+const collector = A({ create: 'all', edit: 'all', progress: 'all', qc: 'assigned' })
 const nobody = A({})
 const admin = A({ admin: true, ...ALL })
 const open = { id: 'w1', status: 'In Progress', work_type: 'Repair' }
@@ -109,7 +130,7 @@ const ctx = { userId: 'me', assignedJobIds: new Set(['w6']) }
 describe('canWorkOrder', () => {
   it('manager and supervisor: everything on an open job, nothing on a closed one, never delete', () => {
     for (const a of WO_ACTIONS) expect(canWorkOrder(a, manager, open)).toBe(true)
-    for (const a of ['edit', 'assign', 'progress', 'qc']) {
+    for (const a of ['edit', 'assign', 'progress', 'qc', 'close']) {
       expect(canWorkOrder(a, manager, closed)).toBe(false)
       expect(canWorkOrder(a, manager, legacyClosed)).toBe(false)
     }
@@ -134,14 +155,28 @@ describe('canWorkOrder', () => {
     expect(canWorkOrder('progress', technician, mine, ctx)).toBe(true)
     expect(canWorkOrder('progress', technician, { id: 'w6', status: 'New' }, ctx)).toBe(true)
     expect(canWorkOrder('progress', technician, open, ctx)).toBe(false)
-    for (const a of ['create', 'edit', 'assign', 'qc', 'delete']) expect(canWorkOrder(a, technician, mine, ctx)).toBe(false)
+    for (const a of ['create', 'edit', 'assign', 'qc', 'close', 'delete']) expect(canWorkOrder(a, technician, mine, ctx)).toBe(false)
     expect(canWorkOrder('progress', technician, { ...mine, status: 'Completed' }, ctx)).toBe(false)
   })
 
-  it('a role with no rule keeps what Access Control gives: no assigning', () => {
+  it('Tyre Data Collector: create and update anywhere, quality check on assigned jobs, no assign, close or delete', () => {
+    expect(canWorkOrder('create', collector)).toBe(true)
     expect(canWorkOrder('edit', collector, open)).toBe(true)
     expect(canWorkOrder('progress', collector, open)).toBe(true)
     expect(canWorkOrder('assign', collector, open)).toBe(false)
+    expect(canWorkOrder('qc', collector, open, ctx)).toBe(false)
+    expect(canWorkOrder('qc', collector, mine, ctx)).toBe(true)
+    expect(canWorkOrder('close', collector, mine, ctx)).toBe(false)
+    expect(canWorkOrder('delete', collector, mine, ctx)).toBe(false)
+    expect(canWorkOrder('approved_cost', collector, mine, ctx)).toBe(false)
+    expect(checkWorkOrderChange(collector, mine, ['status', 'qc_status'], { newStatus: 'Completed', ctx }))
+      .toEqual({ ok: false, reason: WO_REFUSAL.close })
+    expect(checkWorkOrderChange(collector, mine, ['qc_status'], { ctx }).ok).toBe(true)
+    expect(checkWorkOrderChange(collector, open, ['qc_status'], { ctx })).toEqual({ ok: false, reason: WO_REFUSAL.qcAssignedOnly })
+    expect(checkWorkOrderChange(collector, open, ['status'], { newStatus: 'Cancelled', ctx }).ok).toBe(false)
+    expect(checkWorkOrderChange(collector, open, ['status'], { newStatus: 'Quality Inspection', ctx }).ok).toBe(true)
+    expect(defaultScopeForRole('Tyre Data Collector', 'qc')).toBe('assigned')
+    expect(defaultScopeForRole('Tyre Data Collector', 'close')).toBe(null)
     for (const a of WO_ACTIONS) expect(canWorkOrder(a, nobody, open)).toBe(false)
   })
 
@@ -178,12 +213,15 @@ describe('what a change needs', () => {
     expect(requiredActionsForChange(['assigned_owner_id', 'status'], { newStatus: 'In Progress' }))
       .toMatchObject({ assign: true, progress: true })
     expect(requiredActionsForChange(['qc_status', 'status'], { newStatus: 'Completed' }))
-      .toMatchObject({ qc: true, progress: true, edit: false })
+      .toMatchObject({ qc: true, progress: true, edit: false, close: true })
+    expect(requiredActionsForChange(['status'], { newStatus: 'Closed' })).toMatchObject({ close: true, edit: false })
+    expect(requiredActionsForChange(['status'], { newStatus: 'Cancelled' })).toMatchObject({ close: true, edit: true })
+    expect(requiredActionsForChange(['status'], { newStatus: 'Quality Inspection' })).toMatchObject({ close: false, progress: true })
     expect(requiredActionsForChange(['parts_cost'])).toMatchObject({ cost: true, edit: true })
     expect(requiredActionsForChange(['priority', 'site'])).toMatchObject({ edit: true })
     expect(requiredActionsForChange(['organisation_id'])).toMatchObject({ adminOnly: true })
     expect(requiredActionsForChange(['updated_at', 'created_by', 'total_cost']))
-      .toEqual({ adminOnly: false, cost: false, edit: false, assign: false, qc: false, progress: false })
+      .toEqual({ adminOnly: false, cost: false, edit: false, assign: false, qc: false, progress: false, close: false })
   })
 
   it('checks a whole change with a plain reason', () => {
@@ -192,7 +230,9 @@ describe('what a change needs', () => {
       .toEqual({ ok: false, reason: WO_REFUSAL.approvedCost })
     expect(checkWorkOrderChange(manager, { ...open, execution_approval_id: 'e1' }, ['description']).ok).toBe(true)
     expect(checkWorkOrderChange(manager, open, ['parts_cost']).ok).toBe(true)
-    expect(checkWorkOrderChange(technician, mine, ['status', 'notes'], { newStatus: 'Completed', ctx }).ok).toBe(true)
+    expect(checkWorkOrderChange(technician, mine, ['status', 'notes'], { newStatus: 'Quality Inspection', ctx }).ok).toBe(true)
+    expect(checkWorkOrderChange(technician, mine, ['status', 'notes'], { newStatus: 'Completed', ctx }))
+      .toEqual({ ok: false, reason: WO_REFUSAL.close })
     expect(checkWorkOrderChange(technician, mine, ['priority'], { ctx }).ok).toBe(false)
     expect(checkWorkOrderChange(technician, mine, ['assigned_owner_id'], { ctx })).toEqual({ ok: false, reason: WO_REFUSAL.assign })
     expect(checkWorkOrderChange(collector, open, ['assigned_owner_id']).ok).toBe(false)
@@ -208,6 +248,32 @@ describe('what a change needs', () => {
     expect(workOrderRefusalReason('progress', technician, open, ctx)).toBe(WO_REFUSAL.assignedOnly)
     expect(workOrderRefusalReason('create', nobody)).toBe(WO_REFUSAL.create)
     expect(workOrderRefusalReason('assign', collector, open)).toBe(WO_REFUSAL.assign)
+    // W8: a technician on somebody else's job is told it is not theirs, not "you can record progress".
+    expect(workOrderRefusalReason('edit', technician, open, ctx)).toBe(WO_REFUSAL.assignedOnly)
+    expect(workOrderRefusalReason('edit', technician, mine, ctx)).toBe(WO_REFUSAL.edit)
+    expect(workOrderRefusalReason('qc', collector, open, ctx)).toBe(WO_REFUSAL.qcAssignedOnly)
+  })
+
+  it('status moves: which rights, and the reason shown on a disabled button', () => {
+    expect(actionsForStatusMove('In Progress')).toEqual(['progress'])
+    expect(actionsForStatusMove('Completed')).toEqual(['progress', 'close'])
+    expect(actionsForStatusMove('Cancelled')).toEqual(['edit', 'close'])
+    expect(statusMoveRefusalReason('In Progress', technician, mine, ctx)).toBe('')
+    expect(statusMoveRefusalReason('Completed', technician, mine, ctx)).toBe(WO_REFUSAL.close)
+    expect(statusMoveRefusalReason('In Progress', technician, open, ctx)).toBe(WO_REFUSAL.assignedOnly)
+    expect(statusMoveRefusalReason('Completed', manager, open)).toBe('')
+    expect(statusMoveRefusalReason('Completed', collector, open)).toBe(WO_REFUSAL.close)
+    expect(statusMoveRefusalReason('Completed', null, open)).toBe('')
+  })
+
+  it('assigned-only people are recognised only from a server answer', () => {
+    expect(isAssignedOnlyAccess(technician)).toBe(true)
+    expect(isAssignedOnlyAccess(collector)).toBe(false)
+    expect(isAssignedOnlyAccess(manager)).toBe(false)
+    expect(isAssignedOnlyAccess(admin)).toBe(false)
+    expect(isAssignedOnlyAccess(nobody)).toBe(false)
+    expect(isAssignedOnlyAccess(null)).toBe(false)
+    expect(isAssignedOnlyAccess(legacyWorkOrderAccess({ role: 'Tyre Man', serverCaps: { create: false, edit: false } }))).toBe(false)
   })
 
   it('only our own sentences pass through from a database error', () => {
@@ -238,13 +304,14 @@ describe('helpers', () => {
     expect(defaultScopeForRole('Tire Planning Engineer', 'edit')).toBe('tyre')
     expect(defaultScopeForRole('Tyre Man', 'progress')).toBe('assigned')
     expect(defaultScopeForRole('Tyre Man', 'create')).toBe(null)
-    expect(defaultScopeForRole('Tyre Data Collector', 'edit')).toBe(null)
+    expect(defaultScopeForRole('Tyre Data Collector', 'edit')).toBe('all')
+    expect(defaultScopeForRole('Data Monitor Officer', 'edit')).toBe(null)
     expect(defaultScopeForRole('Driver', 'progress')).toBe(null)
   })
 
   it('server answer is normalised, junk scopes become not allowed', () => {
     expect(serverWorkOrderAccess({ admin: true, create: 'all', edit: 'everything', all_sites: true }))
-      .toEqual({ provisioned: true, admin: true, create: 'all', edit: null, assign: null, progress: null, qc: null, all_sites: true })
+      .toEqual({ provisioned: true, admin: true, create: 'all', edit: null, assign: null, progress: null, qc: null, close: null, all_sites: true })
   })
 })
 

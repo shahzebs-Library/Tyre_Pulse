@@ -205,6 +205,13 @@ Inventory and test record: `docs/commercial-readiness/audit/BY_NUMBER_JOIN_AUDIT
   text to `_bak.by_number_org_joins_defs`, re-run is a no-op. No destructive keyword. Outputs
   byte-identical on staging while numbers do not overlap. Rollback:
   `20261117110000_by_number_org_joins_ROLLBACK.sql` (restores the saved definitions).
+- `20261117112000_complaints_missing_in_date_reject.sql` - APPLY AFTER `20261117110000`.
+  `process_stg_complaints` skips a row with a blank or unreadable Vehicle In Date and records it
+  in `expense_import_rejects` (`complaint_missing_vehicle_in_date` /
+  `complaint_unreadable_vehicle_in_date`) instead of aborting the whole batch on the NOT NULL
+  `opened_at`. Aborts if the by-number marker is missing. Rollback:
+  `20261117112000_complaints_missing_in_date_reject_ROLLBACK.sql`, run it BEFORE the by-number
+  rollback. Test: `supabase/tests/staging_complaints_in_date.sh` (local staging copy only).
 - `20261117111000_drop_tyre_status_marks_bridge.sql` - removes the temporary
   `tyre_status_marks_serial_mark_type_bridge` index. OWNER APPROVAL ONLY, after the production
   web build carries #541. Contains `drop`, so the apply prompt needs the owner. Rollback in the

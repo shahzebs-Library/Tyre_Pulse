@@ -225,6 +225,7 @@ export default function ErpIntake() {
             footer: res.footerRows || 0,
             blank: res.blankRows || 0,
             unparsedDates: res.unparsedDates || 0,
+            skippedDates: (res.rejectedRows || []).length,
           }
           found.push({
             sheetName: sheet.name || '',
@@ -234,6 +235,7 @@ export default function ErpIntake() {
             label: meta.label,
             rows,
             tyreRows: res.tyreRows || [], // combined export: tyre_records loaded alongside
+            rejectedRows: res.rejectedRows || [], // skipped with a row-level reason (never imported)
             dropped: res.dropped || 0,
             accounting,
             summary: null,
@@ -573,6 +575,11 @@ export default function ErpIntake() {
                         + {num(d.accounting.noKey)} without an ID (review)
                       </span>
                     )}
+                    {d.accounting.skippedDates > 0 && (
+                      <span className="text-[var(--warning,#f59e0b)]">
+                        + {num(d.accounting.skippedDates)} skipped: no readable Vehicle In Date
+                      </span>
+                    )}
                     <span className="text-[var(--text-tertiary)]">
                       | {num(d.accounting.footer)} footer + {num(d.accounting.blank)} blank dropped
                     </span>
@@ -696,6 +703,7 @@ export default function ErpIntake() {
             <p className="text-sm text-[var(--text-secondary)]">
               {num(recon.read)} rows read = {num(recon.mapped)} mapped
               {recon.noKey > 0 ? ` + ${num(recon.noKey)} without an ID (review below)` : ''}
+              {recon.skippedDates > 0 ? ` + ${num(recon.skippedDates)} skipped with a reason (below)` : ''}
               {(recon.footer + recon.blank) > 0
                 ? `, plus ${num(recon.footer)} footer and ${num(recon.blank)} blank rows dropped`
                 : ''}.
@@ -706,6 +714,22 @@ export default function ErpIntake() {
                 {num(recon.noKey)} row(s) had data but no serial / work order / item to key on and will be skipped.
                 Check the source file if these should import.
               </p>
+            )}
+            {recon.skippedDates > 0 && (
+              <div className="text-xs text-[var(--warning,#f59e0b)] space-y-1">
+                <p className="inline-flex items-start gap-1">
+                  <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                  {num(recon.skippedDates)} complaint row(s) have no readable Vehicle In Date and will not be imported.
+                  The other rows still import. Fix the date in the source file and upload again to bring them in.
+                </p>
+                <ul className="pl-5 list-disc text-[var(--text-secondary)]">
+                  {detected.flatMap((d) => d.rejectedRows || []).slice(0, 20).map((r, i) => (
+                    <li key={`${r.work_order_no || r.asset_no || 'row'}-${i}`}>
+                      {r.work_order_no || 'No job card'}{r.asset_no ? ` (${r.asset_no})` : ''}: {r.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
             {recon.unparsedDates > 0 && (
               <p className="text-xs text-[var(--warning,#f59e0b)] inline-flex items-start gap-1">

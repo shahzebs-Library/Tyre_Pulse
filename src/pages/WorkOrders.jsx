@@ -532,8 +532,16 @@ export default function WorkOrders() {
       const payload = toPayload(formData)
 
       // Parts cost is DERIVED from the parts lines, so it is not a form field.
-      payload.parts_cost = partsTotal(formData.parts_used)
-      payload.parts_used = formData.parts_used || []
+      // An imported job card carries a parts cost with NO parts lines typed
+      // in the app. Deriving the cost from an empty list would overwrite the
+      // stored figure with 0, so the two columns are only written when there
+      // are lines now, or there were lines before (the user removed them).
+      const partsLines = formData.parts_used || []
+      const hadPartsLines = Array.isArray(editOrder?.parts_used) && editOrder.parts_used.length > 0
+      if (!editOrder || partsLines.length > 0 || hadPartsLines) {
+        payload.parts_cost = partsTotal(partsLines)
+        payload.parts_used = partsLines
+      }
       // Labour cost follows hours x rate unless the user typed an override.
       const derivedLabour = parseFloat(formData.labour_hours || 0) * parseFloat(formData.labour_rate || 0)
       payload.labour_cost = derivedLabour || parseFloat(formData.labour_cost || 0) || 0

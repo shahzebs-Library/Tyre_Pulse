@@ -31,7 +31,7 @@ const WHO: CardProps[] = [
 const WHERE = [
   ["Web application", "For managers, supervisors, stores and the office.", "available"],
   ["Android app", "The field app, on Google Play.", "available"],
-  ["iOS app", IOS_STATEMENT, "planned"],
+  ["iPhone app", IOS_STATEMENT, "in-review"],
 ] as const;
 
 export default function AboutPage() {

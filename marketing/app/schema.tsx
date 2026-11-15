@@ -29,9 +29,9 @@ export const PLAY_STORE_URL = `https://play.google.com/store/apps/details?id=${A
  * operatingSystem, a MobileApplication entry for the iOS app, and the platform
  * wording in llms.txt and llms-full.txt all branch on it.
  *
- * It stays null until that URL is supplied. There is no iOS submit config, no
- * iOS workflow and no App Store reference anywhere in this repository, so
- * claiming an iOS app today would be a fabrication.
+ * It stays null until that URL is supplied. The iPhone app has been submitted
+ * and is in App Store review, but it has no listing yet, so claiming it can be
+ * installed from the App Store today would be a fabrication.
  */
 export const APP_STORE_URL: string | null = null;
 export const IOS_APP_NAME = "Tyre Pulse Inspector";

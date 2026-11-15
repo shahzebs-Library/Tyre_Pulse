@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { APP_STORE_URL } from "@/app/schema";
-import { APP_URL, CONTACT_EMAIL, IOS_STATEMENT, IOS_STATUS, LEGAL_LINKS, WHATSAPP_URL } from "@/lib/site";
+import { APP_URL, CONTACT_EMAIL, IOS_STATEMENT, IOS_STATEMENT_AR, IOS_STATUS, LEGAL_LINKS, WHATSAPP_URL } from "@/lib/site";
 import { StatusBadge } from "./ui/StatusBadge";
 import { MENU_GROUPS, menuHref } from "@/lib/nav";
 import { Logo } from "./Logo";
@@ -10,7 +10,7 @@ const COPY = {
   en: {
     about: "One operational workspace for plant, machinery and vehicles: assets, workshop, field teams and stores.",
     mobile: "Mobile app",
-    mobileText: "Inspections, meter readings and job cards from the yard, online or offline. On Android today.",
+    mobileText: "Inspections, meter readings and job cards from the yard, online or offline. On Android today. The iPhone app is in App Store review.",
     access: "Access",
     login: "Customer login",
     whatsapp: "WhatsApp sales",
@@ -22,7 +22,7 @@ const COPY = {
   ar: {
     about: "مساحة عمل تشغيلية واحدة للمعدات والآليات والمركبات: الأصول والورشة والفرق الميدانية والمستودعات.",
     mobile: "تطبيق الجوال",
-    mobileText: "الفحوصات وقراءات العدادات وبطاقات العمل من الموقع، مع الاتصال أو بدونه.",
+    mobileText: "الفحوصات وقراءات العدادات وبطاقات العمل من الموقع، مع الاتصال أو بدونه. متاح اليوم على أندرويد، وتطبيق آيفون قيد المراجعة لدى App Store.",
     access: "الدخول",
     login: "دخول العملاء",
     whatsapp: "المبيعات عبر واتساب",
@@ -51,7 +51,7 @@ export function Footer({ locale = "en" }: { locale?: "en" | "ar" }) {
             <p className="footer-heading">{c.mobile}</p>
             <p className="footer-text">{c.mobileText}</p>
             <StoreBadges tone="dark" appStoreUrl={APP_STORE_URL} showIos={IOS_STATUS === "available"} />
-            {IOS_STATUS === "planned" && <p className="footer-ios"><StatusBadge status="planned" /> <span lang="en" dir="ltr">{IOS_STATEMENT}</span></p>}
+            {IOS_STATUS === "in-review" && <p className="footer-ios"><StatusBadge status="in-review" locale={locale} /> <span>{ar ? IOS_STATEMENT_AR : IOS_STATEMENT}</span></p>}
           </div>
           {MENU_GROUPS.map((g) => (
             <nav key={g.id} aria-label={ar ? g.labelAr : g.label}>

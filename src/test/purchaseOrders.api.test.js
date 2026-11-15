@@ -65,18 +65,43 @@ describe('service layer - purchaseOrders', () => {
     await expect(purchaseOrders.generatePoNumber()).rejects.toBeInstanceOf(ServiceError)
   })
 
-  it('listReplenishmentStock reads `stock` with NULL-inclusive country scoping', async () => {
-    h.state.result = { data: [{ id: 's1' }], error: null }
+  it('listReplenishmentStock reads `stock_records` (the table the Stock module writes), not the unused `stock`', async () => {
+    h.state.result = { data: [{ id: 's1', site: 'ALPHA-1', brand: ' BrandA ', tyre_size: '315/80R22.5', stock_qty: 7, unit_cost: 900, country: 'KSA' }], error: null }
     const rows = await purchaseOrders.listReplenishmentStock({ country: 'KSA' })
-    expect(h.state.last._table).toBe('stock')
+    expect(h.state.last._table).toBe('stock_records')
     expect(h.state.last._calls.or).toContain('country.eq.KSA,country.is.null')
-    expect(rows).toEqual([{ id: 's1' }])
+    // Mapped to the names the replenishment engine reads.
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ id: 's1', site: 'ALPHA-1', brand: 'BrandA', size: '315/80R22.5', quantity: 7, unit_cost: 900 })
+  })
+
+  it('listReplenishmentStock keeps a blank brand or size as null instead of guessing one', async () => {
+    h.state.result = { data: [{ id: 's2', site: 'ALPHA-1', brand: '', tyre_size: null, description: 'Mixed tyres', stock_qty: 3 }], error: null }
+    const [row] = await purchaseOrders.listReplenishmentStock()
+    expect(row.brand).toBeNull()
+    expect(row.size).toBeNull()
+    expect(row.quantity).toBe(3)
+    expect(row.unit_cost).toBeNull()
   })
 
   it('listReplenishmentStock applies no country filter for "All"', async () => {
     await purchaseOrders.listReplenishmentStock({ country: 'All' })
-    expect(h.state.last._table).toBe('stock')
+    expect(h.state.last._table).toBe('stock_records')
     expect(h.state.last._calls.or).toHaveLength(0)
+  })
+
+  it('listReplenishmentStock throws on a failed read so the page never shows "no stock"', async () => {
+    h.state.result = { data: null, error: { message: 'permission denied', code: '42501' } }
+    await expect(purchaseOrders.listReplenishmentStock()).rejects.toBeInstanceOf(ServiceError)
+  })
+
+  it('stock_records rows flow through the replenishment engine with real quantities', async () => {
+    const { buildMatrix } = await import('../lib/stockReplenishmentAnalytics')
+    h.state.result = { data: [{ id: 's3', site: 'ALPHA-1', brand: 'BrandA', tyre_size: '12R24', stock_qty: 11 }], error: null }
+    const rows = await purchaseOrders.listReplenishmentStock()
+    const [line] = buildMatrix(rows, {}, {}, 7)
+    expect(line.qtyInStock).toBe(11)
+    expect(line.size).toBe('12R24')
   })
 
   it('listReplenishmentTyreRecords reads tyre_records with the date + country filters and pages', async () => {

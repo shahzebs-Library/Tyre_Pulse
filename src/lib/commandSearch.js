@@ -10,7 +10,7 @@
 
 import { sanitizeSearchTerm } from './searchFilter'
 import { NAV_MODULE_KEY, governingModuleKey, ALWAYS_ALLOWED_PATHS, isPathSwitchedOff } from './navAccess'
-import { isChecklistOnlyRole, isChecklistPathAllowed } from './checklistAccess'
+import { isChecklistOnlyRole, isChecklistPathAllowed, isChecklistNavVisible, canAuthorChecklists, CHECKLIST_AUTHOR_ROLES } from './checklistAccess'
 import { REPORT_BUILDER_ROUTES, canUseReportBuilder } from './reportBuilderAccess'
 import { ACCESS_ROLES } from './moduleCatalog'
 
@@ -181,7 +181,7 @@ export const NAV_COMMANDS = [
   { id: 'service-requests', label: 'Service Requests', path: '/service-requests', icon: 'LifeBuoy', adminOnly: true },
   { id: 'breakdowns', label: 'Breakdown Callouts', path: '/breakdowns', icon: 'PhoneCall', adminOnly: true },
   { id: 'bay-scheduling', label: 'Bay Scheduling', path: '/bay-scheduling', icon: 'CalendarRange', adminOnly: true },
-  { id: 'tyre-pool', label: 'Tyre Pool', path: '/tyre-pool', icon: 'PackageCheck' },
+  { id: 'tyre-pool', label: 'Tyre Pool', path: '/tyre-pool', icon: 'PackageCheck', roles: ANALYTICS_ROLES },
   { id: 'parts-catalog', label: 'Parts Catalog', path: '/parts-catalog', icon: 'Boxes' },
   { id: 'requisitions', label: 'Requisitions', path: '/requisitions', icon: 'ClipboardList' },
   { id: 'goods-receipt', label: 'Goods Receipt', path: '/goods-receipt', icon: 'PackageCheck', keywords: ['grn', 'goods received note', 'delivery note', 'receiving'] },
@@ -204,7 +204,7 @@ export const NAV_COMMANDS = [
   { id: 'my-checklists', label: 'My Checklists', path: '/my-checklists', icon: 'ClipboardList' },
   { id: 'checklist-schedules', label: 'Checklist Schedules', path: '/checklist-schedules', icon: 'Calendar', adminOnly: true },
   { id: 'checklist-insights', label: 'Checklist Insights', path: '/checklist-insights', icon: 'ClipboardCheck', adminOnly: true },
-  { id: 'checklist-audit', label: 'Checklist Audit Pack', path: '/checklist-audit', icon: 'ClipboardCheck', adminOnly: true, keywords: ['iso', 'audit', 'internal audit', 'external audit', 'certification', 'evidence', 'form register'] },
+  { id: 'checklist-audit', label: 'Checklist Audit Pack', path: '/checklist-audit', icon: 'ClipboardCheck', roles: CHECKLIST_AUTHOR_ROLES, keywords: ['iso', 'audit', 'internal audit', 'external audit', 'certification', 'evidence', 'form register'] },
   { id: 'alert-thresholds', label: 'Alert Thresholds', path: '/alert-thresholds', icon: 'BellRing', moduleKey: 'alerts', adminOnly: true },
   { id: 'driver-safety', label: 'Driver Safety', path: '/driver-safety', icon: 'ShieldAlert', adminOnly: true },
   { id: 'video-telematics', label: 'Video Telematics', path: '/video-telematics', icon: 'Video', adminOnly: true },
@@ -309,7 +309,7 @@ export function isCommandVisible(cmd, profile, hasPermission, grantedModules, is
 
   // Restricted single-purpose roles (same as the sidebar).
   if (role === 'Inspector') return path === '/inspections' || path === '/settings' || path === '/request-access'
-  if (isChecklistOnlyRole(role)) return isChecklistPathAllowed(path)
+  if (isChecklistOnlyRole(role)) return isChecklistPathAllowed(path) && isChecklistNavVisible(path, role, isSuperAdmin)
 
   // Report builders are Admin-only, and deliberately checked BEFORE the per-user
   // grant below: the owner's instruction is that nobody else gets access, so a
@@ -335,6 +335,9 @@ export function isCommandVisible(cmd, profile, hasPermission, grantedModules, is
     if (ALWAYS_ALLOWED_PATHS.has(path)) return true
     return perm ? perm(cmd.moduleKey || governingModuleKey(path)) === true : false
   }
+
+  // Audit Pack: the route admits CHECKLIST_AUTHOR_ROLES and super admins only.
+  if (path === '/checklist-audit') return canAuthorChecklists(role, isSuperAdmin)
 
   // Built-in roles: role gate AND module gate must both pass.
   if (cmd.adminOnly && !(role === 'Admin' || isSuperAdmin === true)) return false

@@ -10,6 +10,7 @@ import { toUserMessage } from '../lib/safeError'
 import { useAuth } from '../contexts/AuthContext'
 import { formatDistanceToNow } from 'date-fns'
 import Modal from '../components/ui/Modal'
+import { selectableMetrics } from '../lib/alertThresholdMetrics'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -35,6 +36,12 @@ const PRESETS = [
   { name: 'Tyre Overdue Inspection',   metric: 'inspection_overdue_days', operator: 'gt',  threshold: 30,   notify_email: false, notify_in_app: true },
   { name: 'Ageing Tyres',             metric: 'tyre_age_days',           operator: 'gt',  threshold: 1095, notify_email: false, notify_in_app: true },
 ]
+
+// What a NEW rule may use. The hourly job cannot evaluate every metric in the
+// catalog above (see lib/alertThresholdMetrics.js); the full lists stay so an
+// existing rule still shows its label and the metric filter still finds it.
+const NEW_RULE_METRICS = selectableMetrics(METRICS)
+const NEW_RULE_PRESETS = selectableMetrics(PRESETS)
 
 const METRIC_BORDER = {
   tread_depth:             'border-orange-500',
@@ -105,7 +112,7 @@ function EmptyState({ onNew, onPreset }) {
       <div className="w-full max-w-3xl">
         <p className="text-[var(--text-muted)] text-xs font-semibold uppercase tracking-widest mb-3">Suggested presets</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {PRESETS.map(p => {
+          {NEW_RULE_PRESETS.map(p => {
             const meta = metaFor(p.metric)
             const Icon = meta.icon
             return (
@@ -288,7 +295,7 @@ function ThresholdCard({ threshold, onEdit, onDelete, onToggle }) {
 
 const EMPTY_FORM = {
   name: '',
-  metric: 'tread_depth',
+  metric: NEW_RULE_METRICS[0]?.value || 'pressure',
   operator: 'lt',
   threshold: '',
   site_filter: '',
@@ -385,7 +392,7 @@ function ThresholdModal({ mode, initial, onSave, onClose, saving }) {
                 onChange={e => set('metric', e.target.value)}
                 className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2.5 text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all appearance-none cursor-pointer"
               >
-                {METRICS.map(m => (
+                {METRICS.filter(m => NEW_RULE_METRICS.includes(m) || m.value === form.metric).map(m => (
                   <option key={m.value} value={m.value}>{m.label}</option>
                 ))}
               </select>
@@ -736,7 +743,7 @@ export default function AlertThresholds() {
           <div className="mt-10">
             <p className="text-[var(--text-muted)] text-xs font-semibold uppercase tracking-widest mb-3">Suggested presets</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {PRESETS.map(p => {
+              {NEW_RULE_PRESETS.map(p => {
                 const meta = metaFor(p.metric)
                 const Icon = meta.icon
                 return (

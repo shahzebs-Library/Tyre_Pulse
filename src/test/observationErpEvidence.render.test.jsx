@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   listObservationErpDecisions: vi.fn(),
   getObservationErpReviewState: vi.fn(),
   isErpReviewNotProvisioned: vi.fn((e) => e?.code === 'PGRST202'),
+  ERP_DECISIONS_UNAVAILABLE_MESSAGE: 'ERP confirmation is not available yet. Evidence can be reviewed, but a decision cannot be recorded until the database update is approved.',
   erpDecisionMessage: vi.fn(() => 'The server found no tyre movement on this job card for the inspected wheel. The job card was not linked.'),
 }))
 vi.mock('../lib/api/observationErpEvidence', () => api)
@@ -27,13 +28,14 @@ const candidate = (over = {}) => ({
   evidenceSummary: { tyreRows: 1, expenseRows: 0, canonicalPosition: 'RHCO' }, ...over,
 })
 const ready = (c) => ({ candidates: [c], orphanTyreJobCards: [], evidenceLimited: false, totals: {} })
+const OK = { available: true, reason: 'ok', canReview: true, canRequestException: true, canApproveException: false }
 const show = () => render(<MemoryRouter><ObservationErpEvidence observation={observation} /></MemoryRouter>)
 
 beforeEach(() => {
-  Object.values(api).forEach((f) => f.mockReset?.())
+  Object.values(api).forEach((f) => f?.mockReset?.())
   api.isErpReviewNotProvisioned.mockImplementation((e) => e?.code === 'PGRST202')
   api.erpDecisionMessage.mockImplementation(() => 'The server found no tyre movement on this job card for the inspected wheel. The job card was not linked.')
-  api.getObservationErpReviewState.mockResolvedValue({ provisioned: true, link: null, history: [] })
+  api.getObservationErpReviewState.mockResolvedValue({ provisioned: true, link: null, history: [], decisions: OK })
   api.findObservationErpEvidence.mockResolvedValue(ready(candidate()))
 })
 
@@ -61,7 +63,7 @@ describe('ERP evidence panel', () => {
   })
 
   it('says review is not set up, still shows the evidence, and offers no Confirm or Reject', async () => {
-    api.getObservationErpReviewState.mockResolvedValue({ provisioned: false, link: null, history: [] })
+    api.getObservationErpReviewState.mockResolvedValue({ provisioned: false, link: null, history: [], decisions: OK })
     show()
     expect(await screen.findByText(/ERP evidence review is not set up yet/)).toBeTruthy()
     expect(await screen.findByText('JC-1')).toBeTruthy()
@@ -94,10 +96,66 @@ describe('ERP evidence panel', () => {
     expect(api.getObservationErpLink).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ['old database', { available: false, reason: 'old_database' }],
+    ['version mismatch', { available: false, reason: 'version_mismatch', databaseVersion: 'position-service-1' }],
+    ['availability unknown', { available: false, reason: 'unknown' }],
+  ])('%s: evidence is shown, the agreed message is shown, no Confirm or Reject is offered', async (_n, decisions) => {
+    api.getObservationErpReviewState.mockResolvedValue({ provisioned: true, link: null, history: [], decisions })
+    show()
+    expect(await screen.findByText('ERP confirmation is not available yet. Evidence can be reviewed, but a decision cannot be recorded until the database update is approved.')).toBeTruthy()
+    expect(await screen.findByText('JC-1')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Review and link job card' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Confirm this job card' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Reject with reason' })).toBeNull()
+  })
+
+  it('no decision is offered while the availability is still being checked', async () => {
+    api.getObservationErpReviewState.mockReturnValue(new Promise(() => {}))
+    show()
+    expect(await screen.findByText('JC-1')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Review and link job card' })).toBeNull()
+  })
+
+  it('serial only evidence shows that a serial alone does not confirm, with no Confirm', async () => {
+    api.findObservationErpEvidence.mockResolvedValue(ready(candidate({
+      status: 'manual_review', eligibleToConfirm: false, serialExceptionPossible: true,
+      evidenceSummary: { tyreRows: 1, expenseRows: 0, canonicalPosition: null, serialOnly: true },
+    })))
+    show()
+    fireEvent.click(await screen.findByText(/Items needing investigation/))
+    expect(await screen.findByText(/A serial alone does not confirm the work/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Review and link job card' })).toBeNull()
+  })
+
   it('a link state that cannot be read for another reason blocks confirmation and says so', async () => {
     api.getObservationErpReviewState.mockRejectedValue({ code: '42501' })
     show()
     expect(await screen.findByText(/could not be checked, so confirmation is unavailable/)).toBeTruthy()
     expect(screen.queryByText(/not set up yet/)).toBeNull()
+  })
+
+  it('production today (interim lock, rules function missing): plain status note, evidence still shown, no decision buttons', async () => {
+    api.getObservationErpReviewState.mockResolvedValue({ provisioned: true, link: null, history: [],
+      decisions: { available: false, reason: 'old_database', canReview: false, canRequestException: false, canApproveException: false } })
+    show()
+    expect(await screen.findByText(api.ERP_DECISIONS_UNAVAILABLE_MESSAGE)).toBeTruthy()
+    expect(await screen.findByText('JC-1')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Review and link job card' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Confirm this job card' })).toBeNull()
+    expect(screen.queryByText(/permission denied|42501|PGRST202/i)).toBeNull()
+  })
+
+  it('a confirm refused with 42501 (EXECUTE withheld) turns into the plain status note, never a raw error', async () => {
+    api.confirmObservationErpLink.mockRejectedValue({ code: '42501', message: 'permission denied for function observation_erp_decide' })
+    api.erpDecisionMessage.mockImplementation(() => api.ERP_DECISIONS_UNAVAILABLE_MESSAGE)
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Review and link job card' }))
+    fireEvent.change(screen.getByLabelText(/Why does this job card resolve/), { target: { value: 'Same wheel, reviewed' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm this job card' }))
+    expect(await screen.findByText(api.ERP_DECISIONS_UNAVAILABLE_MESSAGE)).toBeTruthy()
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Confirm this job card' })).toBeNull())
+    expect(screen.queryByText(/permission denied|42501/i)).toBeNull()
+    expect(api.getObservationErpLink).not.toHaveBeenCalled()
   })
 })

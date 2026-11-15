@@ -12,6 +12,19 @@ const WO_FIELDS = 'id,work_order_no,asset_no,country,site,description,notes,stat
 const TYRE_FIELDS = 'id,asset_no,country,serial_no,position,tyre_position,job_card,issue_date,removal_date,status'
 const EXPENSE_FIELDS = 'id,country,asset_code,work_order_no,txn_date,issue_number,item_code,item_description,qty,tyre_amount,spare_parts_amount,oil_amount,total_amount,value_amount,source_row'
 
+/**
+ * The company that owns the inspection. Taken from the row when the caller
+ * already has it, otherwise read once by id. A failed read is an error (it is
+ * not treated as "no company", which would widen the evidence search).
+ */
+async function inspectionOrg(inspection) {
+  if (inspection.organisation_id) return inspection.organisation_id
+  const { data, error } = await supabase.from('inspections')
+    .select('organisation_id').eq('id', inspection.id).maybeSingle()
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not read the inspection.'))
+  return data?.organisation_id ?? null
+}
+
 export async function findObservationErpEvidence({ inspection, finding }) {
   if (!inspection?.id || !inspection?.asset_no || !inspection?.country || !finding?.rawPosition) {
     throw new ServiceError('A saved inspection, vehicle, country and wheel position are required.')
@@ -21,10 +34,16 @@ export async function findObservationErpEvidence({ inspection, finding }) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(inspectionDate)) {
     throw new ServiceError('Inspection date missing. Job cards cannot be reliably reconciled.')
   }
+  // Job card numbers and asset codes are unique per COMPANY, not globally
+  // (TEN-1b). Every evidence read is pinned to the inspection's own company, so
+  // a super admin (whose reads span companies) never matches another company's
+  // job card that happens to carry the same number.
+  const org = await inspectionOrg(inspection)
+  const scoped = (q) => (org ? q.eq('organisation_id', org) : q)
   // Never scan the entire historic asset history for a recent finding. The
   // evidence must postdate the observation; old job cards belong in ERP history.
-  const tyreQuery = supabase.from('tyre_records').select(TYRE_FIELDS)
-    .eq('country', country).eq('asset_no', asset)
+  const tyreQuery = scoped(supabase.from('tyre_records').select(TYRE_FIELDS)
+    .eq('country', country).eq('asset_no', asset))
     .or(`issue_date.gte.${inspectionDate},removal_date.gte.${inspectionDate}`)
     .order('issue_date', { ascending: false }).limit(200)
   const tyreResult = await tyreQuery
@@ -34,16 +53,16 @@ export async function findObservationErpEvidence({ inspection, finding }) {
   let limited = fitments.length >= 200
   // Prioritise exact ERP job-card keys from actual tyre movements.
   for (let i = 0; i < jobNumbers.length; i += 25) {
-    const rows = unwrap(await supabase.from('work_orders').select(WO_FIELDS)
-      .eq('country', country).eq('asset_no', asset)
+    const rows = unwrap(await scoped(supabase.from('work_orders').select(WO_FIELDS)
+      .eq('country', country).eq('asset_no', asset))
       .in('work_order_no', jobNumbers.slice(i, i + 25)).limit(100)) || []
     workOrders.push(...rows)
     if (rows.length >= 100) limited = true
   }
   // Then consider post-inspection tyre-specific job cards whose consumption
   // has not been imported yet. Do not display non-tyre workshop history.
-  const recent = unwrap(await supabase.from('work_orders').select(WO_FIELDS)
-    .eq('country', country).eq('asset_no', asset)
+  const recent = unwrap(await scoped(supabase.from('work_orders').select(WO_FIELDS)
+    .eq('country', country).eq('asset_no', asset))
     .gte('opened_at', `${inspectionDate}T00:00:00`)
     .or('description.ilike.*tyre*,description.ilike.*tire*,description.ilike.*puncture*,notes.ilike.*tyre*,notes.ilike.*tire*')
     .order('opened_at', { ascending: false }).limit(100)) || []
@@ -55,8 +74,8 @@ export async function findObservationErpEvidence({ inspection, finding }) {
   const relevantJobNumbers = [...new Set(workOrders.map(w => w.work_order_no).filter(Boolean))]
   const expenses = []
   for (let i = 0; i < relevantJobNumbers.length; i += 25) {
-    const rows = unwrap(await supabase.from('parts_consumption').select(EXPENSE_FIELDS)
-      .eq('country', country).eq('asset_code', asset)
+    const rows = unwrap(await scoped(supabase.from('parts_consumption').select(EXPENSE_FIELDS)
+      .eq('country', country).eq('asset_code', asset))
       .in('work_order_no', relevantJobNumbers.slice(i, i + 25)).limit(250)) || []
     if (rows.length >= 250) limited = true
     expenses.push(...rows)
@@ -64,7 +83,7 @@ export async function findObservationErpEvidence({ inspection, finding }) {
   // The asset's OWN registered build decides the wheel layout both sides are read on
   // (tyrePositionService). Registered twice in one country: no layout is assumed.
   const [fleet, customLayouts, layoutHistory, positionMappings] = await Promise.all([
-    supabase.from('vehicle_fleet').select('vehicle_type,axle_count').eq('country', country).eq('asset_no', asset).limit(2),
+    scoped(supabase.from('vehicle_fleet').select('vehicle_type,axle_count').eq('country', country).eq('asset_no', asset)).limit(2),
     getCustomLayoutMap(),
     optionalRows(supabase.from('vehicle_diagram_config_versions')
       .select('vehicle_type,config,active,valid_from,valid_to,basis').order('valid_from', { ascending: true }).limit(500)),

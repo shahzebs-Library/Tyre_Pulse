@@ -156,7 +156,7 @@ describe('insertTyreRecords - replacement on the wheel', () => {
   it('chains same-wheel fitments in one file and only sends the latest to the check', async () => {
     const calls = []
     const orig = h.supabase.rpc
-    h.supabase.rpc = async (name, args) => { calls.push({ name, args }); return orig(name, args) }
+    h.supabase.rpc = async (name, args) => { if (name !== 'app_current_org') calls.push({ name, args }); return orig(name, args) }
     try {
       const res = await intake.insertTyreRecords([
         row({ serial_no: 'OLD11111', issue_date: '2026-01-01', km_at_fitment: 1000 }),

@@ -126,7 +126,10 @@ void main() {
     ]);
     await _pump(tester, source);
 
-    expect(source.lastScope, (assetNo: 'MP045', country: 'KSA'));
+    expect(
+      source.lastScope,
+      (assetNo: 'MP045', country: 'KSA', organisationId: null),
+    );
     expect(find.byKey(AssetFinancialReportKeys.kpis), findsOneWidget);
     expect(find.text('SAR 1,000'), findsOneWidget); // total incl. labour
     expect(find.text('SAR 400'), findsOneWidget); // maintenance
@@ -201,6 +204,25 @@ void main() {
     );
     expect(find.byKey(AssetFinancialReportKeys.mixed), findsOneWidget);
     expect(find.byKey(AssetFinancialReportKeys.kpis), findsNothing);
+  });
+
+  test(
+      'the asset scope pins the fleet row company (asset codes are per company)',
+      () {
+    const VehicleAsset owned = VehicleAsset(
+      id: 'v',
+      assetNo: 'MP045',
+      country: 'KSA',
+      organisationId: '00000000-0000-0000-0000-00000000000a',
+    );
+    expect(
+      assetScopeFor(owned, 'UAE'),
+      (
+        assetNo: 'MP045',
+        country: 'KSA',
+        organisationId: '00000000-0000-0000-0000-00000000000a',
+      ),
+    );
   });
 
   test('Last 12 months is twelve calendar months starting on the 1st', () {

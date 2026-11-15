@@ -10,6 +10,7 @@
  */
 import { supabase, fetchAllPages, toServiceError, isNotProvisioned } from './_client'
 import { escapeLike } from '../searchFilter'
+import { currentOrgId } from './companyScope'
 
 /** Shared return / write-off marks (serial + mark_type). */
 export function listTyreStatusMarks() {
@@ -110,10 +111,16 @@ export async function updateScrapReason(serial, reason) {
 export async function getScrapMark(serial) {
   const s = String(serial || '').trim()
   if (!s) return null
-  const { data, error } = await supabase.from('tyre_status_marks')
-    .select('serial,reason,created_at').eq('serial', s).eq('mark_type', 'scrap').maybeSingle()
+  // Marks are keyed per company (organisation_id, serial, mark_type). A super
+  // admin's read spans companies, and two rows made maybeSingle() fail and
+  // read as "not scrapped": read the caller's company's mark only.
+  const org = await currentOrgId()
+  let q = supabase.from('tyre_status_marks')
+    .select('serial,reason,created_at').eq('serial', s).eq('mark_type', 'scrap')
+  if (org) q = q.eq('organisation_id', org)
+  const { data, error } = await q.order('created_at', { ascending: false }).limit(1)
   if (error && error.code !== 'PGRST116') throw toServiceError(error)
-  return data || null
+  return (Array.isArray(data) ? data[0] : data) || null
 }
 
 /**
@@ -170,12 +177,18 @@ export async function listScrapMarks() {
 export async function findTyreBySerial(serial) {
   const s = String(serial || '').trim()
   if (!s) return null
-  const { data, error } = await supabase.from('tyre_records')
+  // Scrapping acts on the caller's company (scrap_tyre_by_serial), so the
+  // confirmation shows the caller's company's tyre, never another company's
+  // tyre that happens to carry the same serial.
+  const org = await currentOrgId()
+  let q = supabase.from('tyre_records')
     .select('serial_no,asset_no,tyre_position,brand,size,site,country,status,cost_per_tyre,issue_date')
     // Case-insensitive EXACT match: escaped so a typed % or _ cannot turn one
     // tyre's lookup into a match-all scan. Split-case serials (k507.. vs K507..)
     // resolve to the same tyre, matching scrap_tyre_by_serial (V604).
     .ilike('serial_no', escapeLike(s))
+  if (org) q = q.eq('organisation_id', org)
+  const { data, error } = await q
     .order('issue_date', { ascending: false, nullsFirst: false })
     .limit(1)
   if (error) throw toServiceError(error)

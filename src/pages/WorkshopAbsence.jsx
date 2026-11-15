@@ -159,7 +159,8 @@ export default function WorkshopAbsence() {
     }
   }, [filters.from, filters.to, filters.site, activeCountry, latestLoad])
 
-  useEffect(() => { setLoading(true); load() }, [load])
+  // A role that cannot view the report never reads the roster at all.
+  useEffect(() => { if (!canView) return; setLoading(true); load() }, [load, canView])
 
   // Resolve attendance user_id -> person name, then summarise (single pure pass).
   const enriched = useMemo(

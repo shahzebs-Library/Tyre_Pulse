@@ -1,0 +1,37 @@
+-- =============================================================================
+-- 20261117111000_drop_tyre_status_marks_bridge.sql
+-- STATUS: AUTHORED, NOT APPLIED. Apply ONLY on the owner's explicit approval.
+--
+-- WHY
+--   PR #541 night: COM-4b replaced the (serial, mark_type) key on
+--   tyre_status_marks with (organisation_id, serial, mark_type). Vercel was
+--   rate-limited, so the deployed web build still sent
+--   onConflict 'serial,mark_type' from Tyre Exchange. A TEMPORARY unique index
+--   tyre_status_marks_serial_mark_type_bridge (serial, mark_type) was added so
+--   that old build kept working. It must go before a second company records a
+--   mark: being unique on (serial, mark_type) WITHOUT the company, it refuses
+--   company B's mark whenever company A already marked the same serial.
+--
+-- PRE-CHECK (read-only; all must hold before applying)
+--   1. The production web build carries #541 (src/lib/api/tyreExchange.js uses
+--      onConflict 'organisation_id,serial,mark_type'). Confirm the newest
+--      target:production Vercel deployment is on a sha that contains #541.
+--   2. No database function upserts on (serial, mark_type) alone:
+--        select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+--        where n.nspname = 'public' and p.prokind = 'f'
+--          and pg_get_functiondef(p.oid) ~* 'conflict\s*\(\s*serial\s*,\s*mark_type';
+--      expect 0 rows (2026-11-15: scrap_tyre_by_serial uses the company key).
+--   3. The company key exists (the replacement this index bridges to):
+--        select indexdef from pg_indexes where tablename = 'tyre_status_marks'
+--          and indexdef ilike '%(organisation_id, serial, mark_type)%';
+--
+-- ROLLBACK (re-creates exactly what production carries on 2026-11-15)
+--   create unique index if not exists tyre_status_marks_serial_mark_type_bridge
+--     on public.tyre_status_marks using btree (serial, mark_type);
+--   (succeeds only while no two companies hold the same serial + mark_type.)
+-- =============================================================================
+
+drop index if exists public.tyre_status_marks_serial_mark_type_bridge;
+
+-- VERIFY: expect 0 rows.
+--   select 1 from pg_indexes where indexname = 'tyre_status_marks_serial_mark_type_bridge';

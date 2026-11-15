@@ -88,6 +88,33 @@ describe('focused evidence lookup', () => {
   })
 })
 
+describe('evidence stays inside the inspection company (TEN-1b: numbers are per company)', () => {
+  const ORG = '00000000-0000-0000-0000-000000000001'
+  const EVIDENCE_TABLES = ['tyre_records', 'work_orders', 'parts_consumption', 'vehicle_fleet']
+
+  it('pins every evidence read to the company read from the inspection', async () => {
+    h.state.tables.inspections = [{ organisation_id: ORG }]
+    await api.findObservationErpEvidence({ inspection, finding: { rawPosition: 'R1Ro' } })
+    const reads = h.state.calls.filter((c) => EVIDENCE_TABLES.includes(c.table))
+    expect(new Set(reads.map((c) => c.table))).toEqual(new Set(EVIDENCE_TABLES))
+    for (const call of reads) expect(call.filters).toContainEqual(['eq', 'organisation_id', ORG])
+  })
+
+  it('uses the company already on the inspection row without reading it again', async () => {
+    await api.findObservationErpEvidence({ inspection: { ...inspection, organisation_id: ORG }, finding: { rawPosition: 'R1Ro' } })
+    expect(h.state.calls.some((c) => c.table === 'inspections')).toBe(false)
+    const wo = h.state.calls.filter((c) => c.table === 'work_orders')
+    expect(wo.length).toBeGreaterThan(0)
+    for (const call of wo) expect(call.filters).toContainEqual(['eq', 'organisation_id', ORG])
+  })
+
+  it('a failed company read is an error, never a wider search', async () => {
+    h.state.errors.inspections = { code: '42501', message: 'permission denied for table inspections' }
+    await expect(api.findObservationErpEvidence({ inspection, finding: { rawPosition: 'R1Ro' } })).rejects.toBeTruthy()
+    expect(h.state.calls.some((c) => c.table === 'work_orders')).toBe(false)
+  })
+})
+
 describe('review tables not in the database yet', () => {
   it.each(['42P01', 'PGRST205', 'PGRST202', '42883'])('code %s reads as not set up, not as "no link" and not as an error', async (code) => {
     h.state.errors.observation_erp_links = { ...MISSING_TABLE, code }

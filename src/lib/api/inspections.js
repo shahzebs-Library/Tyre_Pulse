@@ -5,6 +5,7 @@
  */
 import { supabase, unwrap, applyCountry, fetchAllPages, ServiceError } from './_client'
 import { expectRows } from './writeGuard'
+import { firstForCallerCompany } from './companyScope'
 import { toUserMessage } from '../safeError'
 
 const COLS =
@@ -332,10 +333,11 @@ export async function listInspectionVehicles({ country } = {}) {
  * asset number can exist per country (V348), so limit(1) keeps this single-row-safe
  * for a super-admin; RLS scopes a country-restricted user to their own row. */
 export async function findVehicleByAsset(assetNo, country) {
-  let q = supabase.from('vehicle_fleet').select('vehicle_type,asset_no,site,country').eq('asset_no', assetNo)
+  let q = supabase.from('vehicle_fleet').select('vehicle_type,asset_no,site,country,organisation_id').eq('asset_no', assetNo)
   if (country && country !== 'All') q = q.eq('country', country)
-  const rows = unwrap(await q.order('country', { ascending: true }).limit(1))
-  return Array.isArray(rows) ? rows[0] || null : rows || null
+  // The same code can also exist in another company; the caller's company wins.
+  const rows = unwrap(await q.order('country', { ascending: true }).order('id').limit(20))
+  return Array.isArray(rows) ? firstForCallerCompany(rows) : rows || null
 }
 
 /**

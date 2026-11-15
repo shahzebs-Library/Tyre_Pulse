@@ -58,9 +58,10 @@ export function reconcile(detected = []) {
       acc.footer += n(a.footer)
       acc.blank += n(a.blank)
       acc.unparsedDates += n(a.unparsedDates)
+      acc.skippedDates += n(a.skippedDates)
       return acc
     },
-    { read: 0, mapped: 0, noKey: 0, footer: 0, blank: 0, unparsedDates: 0 },
+    { read: 0, mapped: 0, noKey: 0, footer: 0, blank: 0, unparsedDates: 0, skippedDates: 0 },
   )
 }
 

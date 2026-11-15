@@ -85,6 +85,57 @@ export function checkInMinutes(checkIn) {
   return null
 }
 
+/**
+ * Site time zone for a country. Roster start_time is a LOCAL wall-clock time,
+ * while a check-in is written as a UTC instant (new Date().toISOString()), so
+ * the two must be compared on the same clock. An unknown country stays on UTC
+ * (no shift is moved), which is the pre-fix behaviour.
+ */
+const COUNTRY_TIME_ZONE = {
+  ksa: 'Asia/Riyadh', 'saudi arabia': 'Asia/Riyadh',
+  uae: 'Asia/Dubai', 'united arab emirates': 'Asia/Dubai',
+  egypt: 'Africa/Cairo',
+}
+export function timeZoneForCountry(country) {
+  if (country == null) return 'UTC'
+  return COUNTRY_TIME_ZONE[String(country).trim().toLowerCase()] || 'UTC'
+}
+
+const HAS_ZONE = /([zZ]|[+-]\d{2}:?\d{2})$/
+
+/**
+ * Local calendar date + minutes-since-midnight of a timestamp in a time zone.
+ * A value that carries an offset (Z / +03:00) is converted to the zone; a naive
+ * value ('2026-07-14 09:05') is already a wall-clock time and is read as written.
+ * @returns {{date:string, minutes:(number|null)}}
+ */
+export function localClock(value, timeZone = 'UTC') {
+  if (!value) return { date: '', minutes: null }
+  const s = String(value).trim()
+  if (HAS_ZONE.test(s)) {
+    const d = new Date(s)
+    if (!Number.isNaN(d.getTime())) {
+      try {
+        const parts = new Intl.DateTimeFormat('en-CA', {
+          timeZone: timeZone || 'UTC', year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+        }).formatToParts(d)
+        const get = (t) => parts.find((p) => p.type === t)?.value
+        const h = Number(get('hour')) % 24
+        return { date: `${get('year')}-${get('month')}-${get('day')}`, minutes: h * 60 + Number(get('minute')) }
+      } catch { /* unknown zone: fall through to the literal reading */ }
+    }
+  }
+  return { date: dateOf(s), minutes: checkInMinutes(s) }
+}
+
+/** 'HH:MM' local check-in time for display, or null. */
+export function localCheckInTime(value, timeZone = 'UTC') {
+  const { minutes } = localClock(value, timeZone)
+  if (minutes == null) return null
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+}
+
 function isLeaveStatus(status) {
   if (status == null) return false
   return LEAVE_STATUSES.has(String(status).trim().toLowerCase())
@@ -115,7 +166,7 @@ export function indexAttendance(attendance) {
       if (!cur || (!cur.check_in && a.check_in)) byShift.set(key, a)
     }
     const pk = personKey(a.person_name)
-    const d = dateOf(a.check_in) || dateOf(a.shift_date) || dateOf(a.created_at)
+    const d = localClock(a.check_in, timeZoneForCountry(a.country)).date || dateOf(a.shift_date) || dateOf(a.created_at)
     if (pk && d) {
       const key = `${pk}|${d}`
       const cur = byPersonDate.get(key)
@@ -153,18 +204,24 @@ export function attendanceForShift(shift, index) {
  * @param {{now?: Date}} [opts]
  * @returns {'present'|'late'|'absent'|'scheduled'|'cancelled'}
  */
-export function classifyShift(shift, attendanceForPersonDate, { now = new Date() } = {}) {
+export function classifyShift(shift, attendanceForPersonDate, { now = new Date(), timeZone } = {}) {
   if (!shift) return 'scheduled'
   const status = shift.status != null ? String(shift.status).trim().toLowerCase() : ''
   if (status === 'cancelled') return 'cancelled'
+  // The roster start_time is the site's wall clock: read every instant there.
+  const tz = timeZone || timeZoneForCountry(shift.country)
 
   const att = attendanceForPersonDate
   const hasCheckIn = !!(att && att.check_in)
 
   if (hasCheckIn) {
     const startMin = clockMinutes(shift.start_time)
-    const inMin = checkInMinutes(att.check_in)
-    if (startMin != null && inMin != null && inMin > startMin) return 'late'
+    const local = localClock(att.check_in, tz)
+    const inMin = local.minutes
+    // A check-in on a LATER local day than the shift is late whatever the clock says.
+    const shiftDate = dateOf(shift.shift_date)
+    if (shiftDate && local.date && local.date > shiftDate) return 'late'
+    if (startMin != null && inMin != null && (!shiftDate || !local.date || local.date === shiftDate) && inMin > startMin) return 'late'
     return 'present'
   }
 
@@ -173,7 +230,9 @@ export function classifyShift(shift, attendanceForPersonDate, { now = new Date()
 
   const anchor = now instanceof Date && !Number.isNaN(now.getTime()) ? now : new Date()
   const shiftDate = dateOf(shift.shift_date)
-  const todayStr = dateOf(anchor.toISOString())
+  // "Today" and "now" are the SITE's, not UTC's: a KSA 08:00 shift has started at 05:00 UTC.
+  const nowLocal = localClock(anchor.toISOString(), tz)
+  const todayStr = nowLocal.date
 
   if (!shiftDate) return 'scheduled' // undated roster row: cannot assert absence
   if (shiftDate > todayStr) return 'scheduled' // future shift, not yet due
@@ -182,8 +241,7 @@ export function classifyShift(shift, attendanceForPersonDate, { now = new Date()
   // Today: absent only once the shift start has passed.
   const startMin = clockMinutes(shift.start_time)
   if (startMin == null) return 'scheduled' // cannot prove it started yet
-  const nowMin = anchor.getUTCHours() * 60 + anchor.getUTCMinutes()
-  return nowMin >= startMin ? 'absent' : 'scheduled'
+  return nowLocal.minutes >= startMin ? 'absent' : 'scheduled'
 }
 
 // ── bucketing helpers ───────────────────────────────────────────────────────
@@ -240,7 +298,7 @@ export function bucketByPerson(classified) {
     if (cls === 'present' || cls === 'late') b.present += 1
     if (cls === 'late') b.late += 1
     if (cls === 'absent') b.absent += 1
-    const seen = att && att.check_in ? dateOf(att.check_in) : ''
+    const seen = att && att.check_in ? localClock(att.check_in, timeZoneForCountry(shift.country)).date : ''
     if (seen && (!b.lastSeen || seen > b.lastSeen)) b.lastSeen = seen
     map.set(person, b)
   }
@@ -287,7 +345,7 @@ export function filterShiftsByRange(shifts, { from, to } = {}) {
  *   detail:{shift:object, cls:string, att:(object|null)}[]
  * }}
  */
-export function summarizeAttendance({ shifts, attendance, from, to, now = new Date() } = {}) {
+export function summarizeAttendance({ shifts, attendance, from, to, now = new Date(), timeZone } = {}) {
   const inRange = filterShiftsByRange(shifts, { from, to })
   const index = indexAttendance(attendance)
 
@@ -307,7 +365,7 @@ export function summarizeAttendance({ shifts, attendance, from, to, now = new Da
       continue
     }
     const att = attendanceForShift(shift, index)
-    const cls = classifyShift(shift, att, { now })
+    const cls = classifyShift(shift, att, { now, timeZone })
     classified.push({ shift, cls, att })
     if (cls === 'present' || cls === 'late') present += 1
     if (cls === 'late') late += 1
@@ -363,7 +421,7 @@ export function attendanceDetailRows(detail) {
       date: dateOf(shift.shift_date) || null,
       site: shift.site && String(shift.site).trim() ? String(shift.site).trim() : null,
       rostered: [shift.start_time, shift.end_time].filter(Boolean).join(' to ') || null,
-      checkIn: att && att.check_in ? String(att.check_in).slice(11, 16) || null : null,
+      checkIn: att && att.check_in ? localCheckInTime(att.check_in, timeZoneForCountry(shift.country)) : null,
       status: cls,
       statusLabel: ATTENDANCE_STATUS_LABEL[cls] || cls || null,
     }))

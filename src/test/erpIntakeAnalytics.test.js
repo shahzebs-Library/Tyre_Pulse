@@ -42,7 +42,7 @@ describe('erpIntakeAnalytics', () => {
       { accounting: { read: 12, mapped: 9, noKey: 1, footer: 1, blank: 1, unparsedDates: 2 } },
       { accounting: { read: 3, mapped: 3 } },
     ]
-    expect(reconcile(d)).toEqual({ read: 15, mapped: 12, noKey: 1, footer: 1, blank: 1, unparsedDates: 2 })
+    expect(reconcile(d)).toEqual({ read: 15, mapped: 12, noKey: 1, footer: 1, blank: 1, unparsedDates: 2, skippedDates: 0 })
   })
 
   it('reports fresh/existing only when every sheet was checked', () => {

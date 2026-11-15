@@ -5,6 +5,7 @@
 import { supabase, unwrap, applyCountry, ServiceError, fetchAllPages, fetchAllRpcPages } from './_client'
 import { toUserMessage } from '../safeError'
 import { growthPct } from '../commandCenter'
+import { firstForCallerCompany } from './companyScope'
 
 // Fleet Master extras (type list, bulk edit, last service, PM due, utilisation)
 // live in their own module and are re-exported so the page reaches them
@@ -32,7 +33,7 @@ export {
 // EXPORTED so callers reuse this ONE list rather than drifting from it.
 export const COLS =
   'id,asset_no,fleet_number,make,model,vehicle_type,year,registration_no,chassis_no,serial_no,site,country,status,is_active,'
-  + 'department,operator_name,current_km,tyre_size,capacity,engine_no,ops_status,ops_status_note,ops_status_at,created_at'
+  + 'department,operator_name,current_km,tyre_size,capacity,engine_no,ops_status,ops_status_note,ops_status_at,created_at,organisation_id'
 
 /**
  * List fleet assets, newest first. Country-scoped (null-safe) and optionally
@@ -139,8 +140,13 @@ export async function getAssetMatches(assetNo, country) {
         .limit(20),
     ) || []
   const scoped = country && country !== 'All' ? rows.filter((r) => r.country === country) : rows
+  // The same code can also exist in ANOTHER COMPANY (identity is per company),
+  // and a super admin's read spans companies: the caller's company wins; a
+  // code held by one company only resolves to it; two other companies' rows
+  // are never picked between on the reader's behalf.
+  const row = await firstForCallerCompany(scoped)
   return {
-    row: scoped[0] || null,
+    row,
     rows,
     countries: [...new Set(rows.map((r) => r.country).filter(Boolean))],
     ambiguous: rows.length > 1,

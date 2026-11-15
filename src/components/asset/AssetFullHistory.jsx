@@ -512,7 +512,7 @@ function TimelineRow({ event, chain, currency }) {
   const [open, setOpen] = useState(false)
   const meta = historySource(event.source)
   const expandable = event.source === 'job_card' && Boolean(chain)
-  const entry = expandable ? chainForCard(chain, event.ref) : null
+  const entry = expandable ? chainForCard(chain, event.ref, event.row?.organisation_id) : null
 
   return (
     <div className="border-b border-[var(--input-border)] last:border-0 py-2.5">

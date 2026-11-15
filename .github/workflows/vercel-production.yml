@@ -3,6 +3,10 @@ name: Deploy Tyre Pulse to Vercel
 on:
   push:
     branches: [main]
+    # Docs-only merges must not spend the Vercel free-plan daily deploy allowance.
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
   workflow_dispatch:
 
 permissions:

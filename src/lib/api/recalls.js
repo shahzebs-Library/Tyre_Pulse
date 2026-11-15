@@ -4,12 +4,13 @@
  * Explicit least-privilege column list (no SELECT *); consistent ServiceError
  * handling via unwrap. Mirrors correctiveActions.js / assets.js style.
  *
- * Scoping note: the RecallTracker page loads recalls with no country filter
- * (RLS handles tenant/country isolation server-side), so list/get here apply no
- * country predicate - behaviour-preserving. `country` is still written on
+ * Scoping note: RLS is the tenant/country boundary. On top of it the register
+ * follows the working-context country picker the same null-safe way as the rest
+ * of the app (applyCountry): "All" applies no filter, a single country shows
+ * that country's rows plus the country-less ones. `country` is still written on
  * create/update via the caller-supplied row.
  */
-import { supabase, unwrap, fetchAllPages } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages, fetchAllOrThrow, ServiceError } from './_client'
 import { normaliseRecallCountry } from '../recallCountry'
 
 // Least-privilege columns: every recall field the RecallTracker page reads
@@ -25,13 +26,16 @@ const TYRE_COLS =
   'id, asset_no, serial_number:serial_no, brand, size, position, site, country, tread_depth, risk_level, issue_date, km_at_fitment, km_at_removal'
 
 /**
- * List recalls, newest first. No country filter (matches the page's prior
- * `.select('*').order('created_at', desc)` behaviour; RLS scopes rows).
+ * List recalls, newest first, optionally scoped to the active country (null-safe,
+ * see applyCountry). Paged past the 1,000-row server cap with an id tiebreak so a
+ * page boundary inside a run of equal created_at values neither drops nor repeats
+ * a row. Omitting the country (or passing 'All') keeps the unfiltered read.
  */
-export async function listRecalls() {
-  return unwrap(
-    await supabase.from('recalls').select(COLS).order('created_at', { ascending: false }),
-  )
+export async function listRecalls({ country } = {}) {
+  return fetchAllOrThrow((from, to) => applyCountry(supabase.from('recalls').select(COLS), country)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: true })
+    .range(from, to), { max: 20000 })
 }
 
 /** Get one recall by id (or null if not found). */
@@ -55,10 +59,18 @@ export async function createRecall(values) {
   return unwrap(await supabase.from('recalls').insert(values).select(COLS).single())
 }
 
-/** Update a recall by id. */
+/**
+ * Update a recall by id. Row level security turns a refused UPDATE into
+ * "0 rows changed" with no error, which used to look like a successful save.
+ * The changed ids are read back and an empty result is reported as refused.
+ */
 export async function updateRecall(id, patch) {
   patch = withSingleCountry(patch)
-  return unwrap(await supabase.from('recalls').update(patch).eq('id', id))
+  const data = unwrap(await supabase.from('recalls').update(patch).eq('id', id).select('id'))
+  if (Array.isArray(data) && data.length === 0) {
+    throw new ServiceError('This recall could not be changed. It may have been removed, or it belongs to a country you cannot edit.', '42501')
+  }
+  return data
 }
 
 /** Delete a recall by id. */
@@ -68,12 +80,12 @@ export async function deleteRecall(id) {
 
 /**
  * Load all tyre records (paged) with the columns the recall matcher/detector
- * needs. Read-only helper local to recalls since the shape differs from the
+ * needs, optionally scoped to the active country (null-safe). Read-only helper local to recalls since the shape differs from the
  * shared tyres service. Returns `{ data, error }` from fetchAllPages unchanged
  * so the page keeps its existing non-throwing load semantics.
  */
-export function listRecallTyres() {
+export function listRecallTyres({ country } = {}) {
   return fetchAllPages((from, to) =>
-    supabase.from('tyre_records').select(TYRE_COLS).order('id', { ascending: true }).range(from, to),
+    applyCountry(supabase.from('tyre_records').select(TYRE_COLS), country).order('id', { ascending: true }).range(from, to),
   )
 }

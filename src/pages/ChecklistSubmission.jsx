@@ -19,6 +19,7 @@ import MarkChip from '../components/checklist/MarkChip'
 import SignatureView from '../components/checklist/SignatureView'
 import ChecklistApprovalLadder from '../components/checklist/ChecklistApprovalLadder'
 import ChecklistDecisionPanel from '../components/checklist/ChecklistDecisionPanel'
+import ChecklistFaultPanel from '../components/checklist/ChecklistFaultPanel'
 import BlockingMarksNotice from '../components/checklist/BlockingMarksNotice'
 import { renderChecklistPdf } from '../lib/checklistPdf'
 import { CHECKLIST_LANGS } from '../lib/checklist/checklistI18n'
@@ -504,6 +505,7 @@ export default function ChecklistSubmission() {
                   does not have to go and find the same sheet in a queue. It
                   renders nothing unless the sheet is waiting on this reader. */}
               <ChecklistDecisionPanel submission={sub} onDecided={load} />
+              <ChecklistFaultPanel submission={sub} onChanged={load} />
             </div>
 
             <EntityApprovalPanel

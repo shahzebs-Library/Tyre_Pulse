@@ -155,6 +155,10 @@ export function statusSummary(template, submission) {
   const st = String(submission?.approval_status ?? '')
   if (st === 'approved') return { tone: 'good', text: 'Closed' }
   if (st === 'rejected') return { tone: 'bad', text: 'Sent back' }
+  // Signed with a fault still recorded (draft 20261116101000). Not 'Closed': the sheet is
+  // compliant only once the fault is resolved or covered by a documented exception.
+  // MOBILE FOLLOW-UP: mobile/lib/checklistApproval.ts statusSummary needs the same branch.
+  if (st === 'acknowledged') return { tone: 'warn', text: 'Acknowledged with a recorded fault' }
   if (st === 'pending_area_manager') return { tone: 'warn', text: 'Waiting for the area manager' }
   if (st === 'pending') return { tone: 'warn', text: isTwoStage(template) ? 'Waiting for a supervisor' : 'Waiting for approval' }
   return { tone: 'muted', text: 'No approval needed' }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { evaluateErpCandidate, matchObservationToErp } from '../lib/erpObservationMatch'
+import { evaluateErpCandidate, matchObservationToErp, detectConfirmedErpDrift } from '../lib/erpObservationMatch'
 
 const inspection = { id: 'i1', asset_no: 'MP107', country: 'KSA', inspection_date: '2026-11-10' }
 const finding = { rawPosition: 'LHR1-O', serial: 'OLD-123' }
@@ -42,5 +42,18 @@ describe('ERP to inspection evidence matcher', () => {
       workOrders: [{ ...workOrder, id: 'j2', asset_no: 'MP108' }, workOrder],
       fitments: [fitment], expenses: [expense] })
     expect(matches.map(m => m.workOrder.id)).toEqual(['j1'])
+  })
+})
+
+describe('ERP evidence audit drift', () => {
+  it('retains a clean review for an unchanged job card', () => {
+    expect(detectConfirmedErpDrift(workOrder, { ...workOrder })).toEqual([])
+  })
+  it('flags ERP status or work description changes after confirmation', () => {
+    expect(detectConfirmedErpDrift(workOrder, { ...workOrder, status: 'Completed', description: 'Different job' }))
+      .toEqual(['status', 'description'])
+  })
+  it('requires re-verification if the originally confirmed job card disappears', () => {
+    expect(detectConfirmedErpDrift(workOrder, null)).toContain('Confirmed ERP job card is unavailable')
   })
 })

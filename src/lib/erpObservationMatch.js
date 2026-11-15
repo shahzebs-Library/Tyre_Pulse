@@ -55,3 +55,14 @@ export function matchObservationToErp(input) {
     .sort((a,b) => Number(b.eligibleToConfirm)-Number(a.eligibleToConfirm)
       || b.reasons.length-a.reasons.length || key(a.workOrder.work_order_no).localeCompare(key(b.workOrder.work_order_no)))
 }
+
+/**
+ * A confirmed link is not permanently trusted: a later ERP re-import can
+ * revise the original job card. Callers must show the changed fields for
+ * manual re-verification, not silently declare the work still approved.
+ */
+export function detectConfirmedErpDrift(snapshot, current) {
+  if (!snapshot || !current) return ['Confirmed ERP job card is unavailable']
+  const fields = ['work_order_no','asset_no','country','status','description','notes','opened_at','completed_at']
+  return fields.filter(field => String(snapshot[field] ?? '').slice(0, 19) !== String(current[field] ?? '').slice(0, 19))
+}

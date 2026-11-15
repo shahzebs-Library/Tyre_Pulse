@@ -1,19 +1,15 @@
--- ROLLBACK of STEP 0: puts every anum_reader_* policy back exactly as snapshotted.
--- Contains "drop": the MCP confirm prompt appears.
+-- ROLLBACK of STEP 0 (narrow): removes exactly the 8 policies step 0 added, nothing else.
+-- Run only after every later step has been rolled back (order 9..1, then 0). Steps 2, 6 and 8 recreate
+-- these same 8 policies through apply_reader_policies(); rolling back step 0 while they are applied
+-- would bring the drift back.
+-- Contains the words d-r-o-p and d-e-l-e-t-e: the MCP confirm prompt appears; the owner must be present.
 begin;
-do $do$
-declare p record; s record;
-begin
-  for p in select schemaname, tablename, policyname from pg_policies where policyname like 'anum_reader_%' loop
-    execute format('drop policy %I on %I.%I', p.policyname, p.schemaname, p.tablename);
-  end loop;
-  for s in select * from _bak.rb519_reader_policies_snapshot loop
-    execute format('create policy %I on %I.%I as %s for %s to %s %s %s',
-      s.policyname, s.schemaname, s.tablename, s.permissive, s.cmd,
-      (select string_agg(quote_ident(r), ', ') from unnest(s.roles) r),
-      case when s.qual is not null then 'using (' || s.qual || ')' else '' end,
-      case when s.with_check is not null then 'with check (' || s.with_check || ')' else '' end);
-  end loop;
-end
-$do$;
+drop policy anum_reader_select_scope on public.observation_erp_links;
+drop policy anum_reader_no_insert    on public.observation_erp_links;
+drop policy anum_reader_no_update    on public.observation_erp_links;
+drop policy anum_reader_no_delete    on public.observation_erp_links;
+drop policy anum_reader_select_scope on public.observation_erp_link_events;
+drop policy anum_reader_no_insert    on public.observation_erp_link_events;
+drop policy anum_reader_no_update    on public.observation_erp_link_events;
+drop policy anum_reader_no_delete    on public.observation_erp_link_events;
 commit;

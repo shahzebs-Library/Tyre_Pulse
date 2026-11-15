@@ -12,7 +12,7 @@ For every step: preflight, apply, verify, rollback, fingerprint compared with th
 
 | Step | Draft | Apply | Verify and probes | Rollback restores fingerprint | Invariants | Fingerprint before (md5 prefix, lines) |
 |---|---|---|---|---|---|---|
-| 0 | `Reader-policy normalisation (only if drift > 0)` | OK | OK | OK | unchanged by apply and by rollback | `81dbb3118eba`, 18733 |
+| 0 | `Reader-policy normalisation, narrow (2 tables, 8 policies)` | OK | OK | OK (all 4,620 policy lines identical, md5 `5030c84317ce`) | ERP lock unchanged | re-rehearsed on tp_step0, see Step 0 section (the global version was `81dbb3118eba`, 18733) |
 | 1 | `20261113130000_cur_work_orders_manager_director_default` | OK | OK | OK | unchanged by apply and by rollback | `c979a0e044dd`, 18741 |
 | 2 | `20261115140000_wo_permission_resolver` | OK | OK | OK | unchanged by apply and by rollback | `5f8097844cf7`, 18742 |
 | 3 | `20261115140500_wo_policies_and_guards` | OK | OK | OK | unchanged by apply and by rollback | `c2c64832cf0b`, 18778 |
@@ -27,7 +27,7 @@ Full chain: after all nine steps (plus step 0) were applied, the ten rollback fi
 
 Not tested in this rehearsal: the PostgREST HTTP path (all probes ran in SQL as the `authenticated` role with `request.jwt.claims` set); the refusal probes of steps 7 and 8 against a real corrective action or checklist (the staging copy holds none, so the writers refuse with "does not exist or is outside your company"; the 76 closure cases on #520 cover real rows); browser behaviour (rounds 2 and 3 cover it on the PR branches); production-sized timing.
 
-One rehearsal finding that changes the plan: `anum_integration.apply_reader_policies()`, which steps 2, 6 and 8 call at the end, rewrites the `anum_reader_*` policies of EVERY RLS table, not only the new ones. On the staging copy 30 tables drifted from `reader_tables` (including `observation_erp_links` and `observation_erp_link_events`, created by `20261115120000`, which does not call it), so step 2 initially did not roll back cleanly. Hence step 0: measure the drift on production first; if it is not 0, normalise it as its own reversible step before step 1. After step 0 the drift stayed 0 through all nine steps.
+One rehearsal finding that changes the plan: `anum_integration.apply_reader_policies()`, which steps 2, 6 and 8 call at the end, rewrites the `anum_reader_*` policies of EVERY RLS table, not only the new ones. On the staging copy 30 tables drifted from `reader_tables` (including `observation_erp_links` and `observation_erp_link_events`, created by `20261115120000`, which does not call it), so step 2 initially did not roll back cleanly. Hence step 0: measure the drift on production first; if it is not 0, normalise it as its own reversible step before step 1. Production measured 2026-11-15: drift = 2 (`observation_erp_links`, `observation_erp_link_events`), so step 0 is now narrowed to those two tables only (see "Step 0 exact change"). After step 0 the drift stayed 0 through all nine steps.
 
 ## Order and timing
 
@@ -49,27 +49,89 @@ Placeholders in the probes: `<MANAGER_ID>` an approved Manager of Company A with
 
 Before step 0, run and save `runbook_519_520/invariants.sql` and `runbook_519_520/schema_fingerprint.sql` on production (read only). Run both again after every apply and every rollback. After an apply only the objects of that step may differ; after a rollback the fingerprint must equal the saved one exactly.
 
-## Step 0: Reader-policy normalisation (only if drift > 0)
+## Step 0: Reader-policy normalisation (narrow, two tables only)
 
 - PR: #519. Apply file: `runbook_519_520/step0_reader_policy_normalise.sql`. Rollback file: `runbook_519_520/step0_reader_policy_normalise_ROLLBACK.sql`.
-- Contains drop/delete text (MCP confirm gate): yes (comment text).
-- What users see / owner go-no-go: No user-visible change. Affects only the read-only reporting bot (anum_integration readers).
-- Rehearsal: apply OK, verify OK, rollback restored the fingerprint (`81dbb3118eba`), invariants unchanged.
+- Contains drop/delete text (MCP confirm gate): yes. The apply contains "delete" (policy name `anum_reader_no_delete` and `for delete`); the rollback contains "drop" and "delete". The owner must be present for both.
+- What users see / owner go-no-go: No user-visible change. Only the read-only reporting bot (a user listed in `anum_integration.readers`) stops seeing the two ERP decision tables.
+- Replaces the earlier global step 0 (which called `apply_reader_policies()` on every table). Production drift measured 2026-11-15 = exactly `observation_erp_links` and `observation_erp_link_events`, so the global call is not needed.
 
-Preflight (all `ok` must be `t`; record the listed values):
+### Step 0 exact change
+
+Affected objects: `public.observation_erp_links` and `public.observation_erp_link_events`. Nothing else. No grant, no revoke, no function, no other table, no call to `apply_reader_policies()` (the apply file names it only in comments).
+
+Affected roles: `authenticated` only. Every new policy is `RESTRICTIVE ... TO authenticated` with the expression `not (select anum_integration.is_reader())`. `is_reader()` is true only when `auth.uid()` is a row of `anum_integration.readers`, so the only identity whose access changes is the reporting reader. For every other signed-in user the expression is true and the result is unchanged. `anon` has no grant on either table (unchanged). `service_role` bypasses RLS (unchanged).
+
+| Table | Policy | Kind | Command | Before | After |
+|---|---|---|---|---|---|
+| observation_erp_links | observation_erp_links_org | RESTRICTIVE | ALL | present | unchanged |
+| observation_erp_links | observation_erp_links_country | RESTRICTIVE | SELECT | present | unchanged |
+| observation_erp_links | observation_erp_links_read | PERMISSIVE | SELECT | present | unchanged |
+| observation_erp_links | anum_reader_select_scope | RESTRICTIVE | SELECT | absent | using `not (select anum_integration.is_reader())` |
+| observation_erp_links | anum_reader_no_insert | RESTRICTIVE | INSERT | absent | with check same expression |
+| observation_erp_links | anum_reader_no_update | RESTRICTIVE | UPDATE | absent | using and with check same expression |
+| observation_erp_links | anum_reader_no_delete | RESTRICTIVE | DELETE | absent | using same expression |
+| observation_erp_link_events | observation_erp_events_org | RESTRICTIVE | SELECT | present | unchanged |
+| observation_erp_link_events | observation_erp_events_country | RESTRICTIVE | SELECT | present | unchanged |
+| observation_erp_link_events | observation_erp_events_read | PERMISSIVE | SELECT | present | unchanged |
+| observation_erp_link_events | anum_reader_select_scope / _no_insert / _no_update / _no_delete | RESTRICTIVE | as above | absent | as above |
+
+Why it cannot widen access: a RESTRICTIVE policy is ANDed with the existing policies, so it can only remove rows, never add them. No PERMISSIVE policy is added (the verify file checks the table still has exactly 2 permissive policies, both `*_read`). No grant changes (the verify file compares both ACLs to `{postgres=arwdDxt/postgres,service_role=arwdDxt/postgres,authenticated=r/postgres}`). Authenticated users still hold SELECT only, so INSERT, UPDATE and DELETE stay refused by privilege; the three write policies are defence in depth.
+
+Tenant isolation: the org and country policies are not touched (policy list compared before and after; the rehearsal diff over all 4,620 policy lines of the copy shows exactly 8 added lines and 0 changed or removed).
+
+ERP interim lock untouched: `grep -cE "observation_erp_decide|confirm_observation_erp_link|reject_observation_erp_link"` returns 0 for both step 0 files. Verify re-checks that `authenticated` and `anon` cannot execute any of the three functions; rehearsal ACL before and after: `{postgres=X/postgres,service_role=X/postgres}`.
+
+Preflight guard (inside the apply, same transaction): aborts unless both tables exist with RLS on, neither has any `anum_reader_*` policy, neither is in `anum_integration.reader_tables`, and the drift set is exactly `{observation_erp_link_events, observation_erp_links}`. Running the apply twice is refused ("8 anum_reader_* policies already exist").
+
+Policy text equals what `apply_reader_policies()` writes for a table not in `reader_tables`, so the later calls are a no-op for these 8 policies. Note: the call appears in steps 2, 6, 7 and 8 (step 7, `20261116100000`, also ends with `select anum_integration.apply_reader_policies();`).
+
+Rollback: drops exactly the 8 policies by name (no `if exists`, so a missing policy fails loudly). Run only after steps 9 to 1 are rolled back.
+
+### Step 0 rehearsal (local copy tp_step0, 2026-11-15)
+
+Setup: copy of `tyrepulse_staging`; `apply_reader_policies()` run once to clear the copy's own drift; migration `20261115120000` applied; EXECUTE on the three ERP functions revoked from authenticated, public and anon (production interim lock). Result: drift = 2 with exactly the two production table names, the same 6 policies, the same ACLs, RLS on and FORCE off. Fixture rows (seeded with triggers off, test only): 4 links and 4 events (org A KSA x2, org A UAE x1, org B KSA x1); a reader identity = an approved org A KSA profile listed in `anum_integration.readers`. Probes ran as `authenticated` with `request.jwt.claims` set, and as `service_role`; every write was undone inside its own savepoint.
+
+| Identity | Table | Read before | Read after | Insert / update / delete before and after |
+|---|---|---|---|---|
+| (a) org A Manager (KSA) | links | 2 | 2 | refused 42501 / 42501 / 42501 (both) |
+| (a) org A Manager (KSA) | events | 2 | 2 | refused 42501 / 42501 / 42501 (both) |
+| (b) org B Manager (KSA) | links | 1 | 1 | refused 42501 / 42501 / 42501 (both) |
+| (b) org B Manager (KSA) | events | 1 | 1 | refused 42501 / 42501 / 42501 (both) |
+| (c) reporting reader (org A, KSA) | links | 2 | **0** | refused 42501 / 42501 / 42501 (both) |
+| (c) reporting reader (org A, KSA) | events | 2 | **0** | refused 42501 / 42501 / 42501 (both) |
+| (d) service_role | links | 4 | 4 | insert 23503 (fixture FK, no real action) / update ok 4 / delete ok 4 (both) |
+| (d) service_role | events | 4 | 4 | insert ok / update P0001 / delete P0001 (append-only trigger) (both) |
+
+The only difference between the before and after probe outputs is the two reader read lines (diff = 2 lines).
+
+| Check | Result |
+|---|---|
+| Preflight | drift 2 (the two tables), anum_reader_* on them 0, in reader_tables 0 |
+| Apply | 8 CREATE POLICY, COMMIT |
+| verify_step0.sql | drift 0; 8 policies exact; total 14; 2 permissive; grants unchanged; ERP lock untouched: all t |
+| Re-apply | refused by the guard |
+| All policies after apply vs before | +8 lines, 0 changed, 0 removed |
+| `apply_reader_policies()` after step 0 (rolled back) | 0 changed lines over all policies (md5 c28bd6d25586 both) |
+| Steps 1 to 9 applied after step 0 | the 8 policies byte-identical after every step; drift 0 after every step |
+| ERP functions authenticated / anon EXECUTE | f / f before, after apply and after rollback |
+| Rollback | 8 DROP POLICY, COMMIT; two-table policy list identical to the start; all 4,620 policy lines identical (md5 5030c84317ce); drift back to 2; probe output identical to before |
+
+Not tested: the PostgREST HTTP path (SQL probes only); production-sized data; a reader identity on production (none exists in the copy, the fixture one was created for the test). `tp_step0` dropped after the run.
+
+Preflight (record every output):
 
 ```sql
-\i runbook_519_520/preflight_reader_policy_drift.sql
+\i runbook_519_520/preflight_step0.sql
 ```
 
-Verify after apply (all `ok` must be `t`; the lines marked "expect ERROR" must raise 42501 or the refusal message):
+Verify after apply (every `ok` must be `t`, drift must be 0):
 
 ```sql
-\i runbook_519_520/preflight_reader_policy_drift.sql
-select 'ver0 snapshot rows' k, count(*) from _bak.rb519_reader_policies_snapshot;
+\i runbook_519_520/verify_step0.sql
 ```
 
-Then run `invariants.sql`: every line must equal the saved baseline.
+Then run `invariants.sql`: every line must equal the saved baseline, except the 8 new policies if the fingerprint lists policies.
 
 ## Step 1: 20261113130000_cur_work_orders_manager_director_default
 

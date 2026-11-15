@@ -82,6 +82,11 @@ export function recallHasNoWritableCountry(profile) {
  * Decide the country for a recall being saved.
  * Order: what the form holds, the active country (when not "All"), the only allowed country.
  * Returns { country, needsChoice }. needsChoice is true when the user must pick one.
+ *
+ * A form that already NAMES a country the user cannot save under (editing a recall
+ * filed under another country) is never quietly moved to the user's own country:
+ * it returns needsChoice with `outOfScope` set to that country, so the page can say
+ * so. Only an EMPTY form value falls back to the active / only country.
  */
 export function resolveRecallCountry({ formCountry, activeCountry, choices = [] } = {}) {
   const pick = (v) => {
@@ -90,6 +95,8 @@ export function resolveRecallCountry({ formCountry, activeCountry, choices = [] 
     if (!choices.length) return c
     return choices.find(x => x.toLowerCase() === c.toLowerCase()) ?? null
   }
+  const named = normaliseRecallCountry(formCountry)
+  if (named && !pick(named)) return { country: null, needsChoice: true, outOfScope: named }
   const country = pick(formCountry) ?? pick(activeCountry) ?? (choices.length === 1 ? choices[0] : null)
   return { country, needsChoice: !country }
 }

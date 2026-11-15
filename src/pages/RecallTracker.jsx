@@ -210,7 +210,8 @@ export default function RecallTracker() {
     setRecallsLoading(true)
     try {
       setRecallsError('')
-      const data = await recallsApi.listRecalls()
+      // The register follows the working-context country (null-safe, like every other register).
+      const data = await recallsApi.listRecalls({ country: activeCountry })
       setRecalls(data ?? [])
     } catch (e) {
       setRecallsError(toUserMessage(e, 'Could not load recall records. Please retry.'))
@@ -218,13 +219,13 @@ export default function RecallTracker() {
     } finally {
       setRecallsLoading(false)
     }
-  }, [])
+  }, [activeCountry])
 
   const loadTyres = useCallback(async () => {
     setLoading(true)
     setTyresError('')
     try {
-      const res = await recallsApi.listRecallTyres()
+      const res = await recallsApi.listRecallTyres({ country: activeCountry })
       if (res?.error) throw res.error
       setTyres(res?.data ?? [])
       setTyresTruncated(Boolean(res?.truncated))
@@ -236,7 +237,7 @@ export default function RecallTracker() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [activeCountry])
 
   useEffect(() => { loadRecalls() }, [loadRecalls])
   useEffect(() => { loadTyres() }, [loadTyres])
@@ -435,7 +436,8 @@ export default function RecallTracker() {
 
     if (noWritableCountry) { setFormError('Your account has no country assigned. Ask an administrator to set your country before filing a recall.'); return }
     // recalls.country holds ONE country. Never the profile's country list.
-    const { country: recallCountry, needsChoice } = resolveRecallCountry({ formCountry: form.country, choices: countryChoices })
+    const { country: recallCountry, needsChoice, outOfScope } = resolveRecallCountry({ formCountry: form.country, choices: countryChoices })
+    if (outOfScope) { setFormError(`This recall is filed under ${outOfScope}, which you cannot save under. Choose one of your own countries to move it, or ask an administrator.`); return }
     if (needsChoice) { setFormError('Choose the country this recall applies to'); return }
 
     setSaving(true)
@@ -1348,6 +1350,10 @@ export default function RecallTracker() {
                 <label htmlFor="rc-country" className="block text-xs text-[var(--text-muted)] mb-1">Country *</label>
                 <select id="rc-country" value={form.country ?? ''} onChange={e => setForm(f => ({ ...f, country: e.target.value }))} className={inputCls}>
                   <option value="">Choose a country</option>
+                  {/* A recall filed under a country this user cannot save under still shows it, instead of a blank select. */}
+                  {form.country && !countryChoices.some(c => c.toLowerCase() === String(form.country).toLowerCase()) && (
+                    <option value={form.country} disabled>{form.country} (not one of your countries)</option>
+                  )}
                   {countryChoices.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>

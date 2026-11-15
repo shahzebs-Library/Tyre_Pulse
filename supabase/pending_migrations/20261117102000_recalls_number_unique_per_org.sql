@@ -23,8 +23,12 @@
 --   country-less recall number is policed too. The client maps 23505 to "Recall number already
 --   exists" already (src/pages/RecallTracker.jsx), so no client change is needed.
 --
--- RISK TO THE CURRENT COMPANY: NONE. The table is empty and the new key is narrower than the old
---   one for any existing pair of rows (any data the old key accepted, the new key accepts).
+-- RISK TO THE CURRENT COMPANY: NONE. The table is empty. Note the new key is NOT strictly looser:
+--   across companies it is looser, but inside one company two COUNTRY-LESS recalls with the same
+--   number were accepted by the old key (NULLs distinct) and are refused by the new one (NULLS NOT
+--   DISTINCT). Re-check `select organisation_id, recall_number, count(*) from public.recalls
+--   where country is null group by 1,2 having count(*) > 1` returns no rows before applying.
+--   The app does not depend on this migration: no client code names either constraint.
 
 begin;
 

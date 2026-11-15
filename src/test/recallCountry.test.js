@@ -43,9 +43,12 @@ describe('resolveRecallCountry', () => {
   it('the profile country ARRAY (the old defect) is never accepted as a value', () => {
     expect(resolveRecallCountry({ formCountry: ['KSA', 'UAE', 'Egypt'], activeCountry: 'All', choices })).toEqual({ country: null, needsChoice: true })
   })
-  it('a country outside the user scope is not accepted', () => {
-    expect(resolveRecallCountry({ formCountry: 'Egypt', choices: ['KSA'] }).country).toBe('KSA')
-    expect(resolveRecallCountry({ formCountry: 'Egypt', choices: ['KSA', 'UAE'] }).needsChoice).toBe(true)
+  it('a country outside the user scope is not accepted, and is never silently swapped for another', () => {
+    // Editing a recall filed under Egypt as a KSA-only user must NOT quietly move it to KSA.
+    expect(resolveRecallCountry({ formCountry: 'Egypt', choices: ['KSA'] })).toEqual({ country: null, needsChoice: true, outOfScope: 'Egypt' })
+    expect(resolveRecallCountry({ formCountry: 'Egypt', choices: ['KSA', 'UAE'] })).toMatchObject({ needsChoice: true, outOfScope: 'Egypt' })
+    // An empty form still falls back to the only country.
+    expect(resolveRecallCountry({ formCountry: '', choices: ['KSA'] })).toEqual({ country: 'KSA', needsChoice: false })
   })
 })
 

@@ -27,6 +27,7 @@ import {
   workspaceSections, submissionFindings, workspaceKpis, listTabCounts, filterWorkspaceList,
   recentFindings, findingsBySection, submissionTrend, submissionPhotos, submissionHistory,
 } from '../../lib/checklistWorkspaceView'
+import { acknowledgedLabel } from '../../lib/closureWorkflow'
 import './checklistWorkspace.css'
 
 const PAGE_SIZE = 8
@@ -51,7 +52,9 @@ function TemplateGlyph({ template }) {
 
 function BucketPill({ sub }) {
   const b = WORKSPACE_BUCKETS[workspaceBucket(sub)]
-  return <span className={`cc-pill ${b.tone}`} title={b.title}>{b.label}</span>
+  // An acknowledged sheet says exactly how its fault stands (resolved, or by exception).
+  const ack = acknowledgedLabel(sub)
+  return <span className={`cc-pill ${b.tone}`} title={b.title}>{ack ? ack.text : b.label}</span>
 }
 
 function StatusPill({ status }) {
@@ -214,6 +217,7 @@ export default function ChecklistWorkspace({
             { key: 'all', label: 'All', count: counts.all },
             { key: 'today', label: 'Today', count: counts.today },
             { key: 'pending', label: 'Pending', count: counts.pending },
+            ...(counts.action ? [{ key: 'action', label: 'Action required', count: counts.action, countTone: 'red' }] : []),
             { key: 'rejected', label: 'Rejected', count: counts.rejected, countTone: counts.rejected ? 'red' : '' },
           ]} />
           <CardState state={listState} empty={!loading && !error && !list.length

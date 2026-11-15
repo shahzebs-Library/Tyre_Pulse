@@ -29,6 +29,7 @@ import { statusBucket } from './checklistsAnalytics'
 import { submissionSections, templateFromSubmission } from './checklistView'
 import { submissionTarget } from './checklistMonthly'
 import { approvalProgress } from './checklist/checklistApproval'
+import { acknowledgedLabel, ACK_ACTION_REQUIRED } from './closureWorkflow'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -47,6 +48,9 @@ export const WORKSPACE_BUCKETS = {
   approved: { key: 'approved', label: 'Approved', tone: 'good' },
   completed: { key: 'completed', label: 'Completed', tone: 'good', title: 'No approval required' },
   pending: { key: 'pending', label: 'Pending approval', tone: 'warn' },
+  // Signed with a fault on record. Not pending (nobody is asked to sign) and not approved.
+  ack_action: { key: 'ack_action', label: ACK_ACTION_REQUIRED, tone: 'warn', title: 'Signed with a fault still open. The fault is closed through its corrective action.' },
+  ack_settled: { key: 'ack_settled', label: 'Acknowledged, faults resolved', tone: 'good', title: 'Signed with a fault that has since been resolved or covered by a documented exception.' },
   rejected: { key: 'rejected', label: 'Rejected', tone: 'bad' },
   draft: { key: 'draft', label: 'Draft', tone: 'muted' },
   other: { key: 'other', label: 'Submitted', tone: 'info' },
@@ -67,6 +71,7 @@ export function workspaceBucket(sub) {
   if (a === 'approved') return 'approved'
   if (a === 'rejected') return 'rejected'
   if (a === 'pending' || a === 'pending_area_manager' || a === 'pending_approval') return 'pending'
+  if (a === 'acknowledged') return acknowledgedLabel(sub)?.actionRequired === false ? 'ack_settled' : 'ack_action'
   if (a === 'not_required') return 'completed'
   const b = statusBucket(sub?.status)
   if (b === 'approved' || b === 'rejected' || b === 'pending' || b === 'draft') return b
@@ -156,7 +161,7 @@ export function submissionFindings(sub, template = null) {
 
 /** Headline figures for the KPI strip. `findingsBySub` is a Map id -> findings[]. */
 export function workspaceKpis(subs = [], findingsBySub = new Map()) {
-  const counts = { approved: 0, completed: 0, pending: 0, rejected: 0, draft: 0, other: 0 }
+  const counts = { approved: 0, completed: 0, pending: 0, ack_action: 0, ack_settled: 0, rejected: 0, draft: 0, other: 0 }
   let failedItems = 0
   let withFindings = 0
   for (const s of subs || []) {
@@ -166,12 +171,14 @@ export function workspaceKpis(subs = [], findingsBySub = new Map()) {
     if (f.length) withFindings += 1
   }
   const total = (subs || []).length
-  const done = counts.approved + counts.completed
+  // A sheet acknowledged with a fault counts as done only once that fault is settled.
+  const done = counts.approved + counts.completed + counts.ack_settled
   return {
     total,
     done,
     donePct: total > 0 ? Math.round((done / total) * 1000) / 10 : null,
     pending: counts.pending,
+    actionRequired: counts.ack_action,
     rejected: counts.rejected,
     draft: counts.draft,
     failedItems,
@@ -183,14 +190,15 @@ export function workspaceKpis(subs = [], findingsBySub = new Map()) {
 /** Tab membership for the submissions list. */
 export function listTabCounts(subs = [], now = Date.now()) {
   const today = localDayKey(now)
-  let todayN = 0; let pending = 0; let rejected = 0
+  let todayN = 0; let pending = 0; let rejected = 0; let action = 0
   for (const s of subs || []) {
     if (localDayKey(receivedAt(s)) === today) todayN += 1
     const b = workspaceBucket(s)
     if (b === 'pending') pending += 1
     if (b === 'rejected') rejected += 1
+    if (b === 'ack_action') action += 1
   }
-  return { all: (subs || []).length, today: todayN, pending, rejected }
+  return { all: (subs || []).length, today: todayN, pending, rejected, action }
 }
 
 /** Narrow the list by tab ('all'|'today'|'pending'|'rejected') and free text. */
@@ -201,6 +209,7 @@ export function filterWorkspaceList(subs = [], { tab = 'all', query = '', now = 
     if (tab === 'today' && localDayKey(receivedAt(s)) !== today) return false
     if (tab === 'pending' && workspaceBucket(s) !== 'pending') return false
     if (tab === 'rejected' && workspaceBucket(s) !== 'rejected') return false
+    if (tab === 'action' && workspaceBucket(s) !== 'ack_action') return false
     if (!q) return true
     const tpl = (templates || []).find((t) => String(t?.id) === String(s?.template_id))
     const target = submissionTarget(s, tpl?.fields)
@@ -265,7 +274,7 @@ export function submissionTrend(subs = [], now = Date.now(), days = 30) {
     const row = index.get(localDayKey(receivedAt(s)))
     if (!row) continue
     const b = workspaceBucket(s)
-    if (b === 'approved' || b === 'completed') row.done += 1
+    if (b === 'approved' || b === 'completed' || b === 'ack_settled') row.done += 1
     else if (b === 'pending') row.pending += 1
     else if (b === 'rejected') row.rejected += 1
   }
@@ -313,6 +322,12 @@ export function submissionHistory(sub, template = null) {
       name: rung.name || null,
       at: rung.at || null,
       state: rung.done ? 'done' : rung.current ? 'current' : 'waiting',
+    })
+  }
+  if (a === 'acknowledged') {
+    events.push({
+      key: 'acknowledged', label: acknowledgedLabel(sub).text, name: sub.acknowledged_name || null, at: sub.acknowledged_at || null,
+      state: acknowledgedLabel(sub).actionRequired ? 'current' : 'done', note: sub.acknowledgement_note || null,
     })
   }
   if (a === 'rejected') {

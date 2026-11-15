@@ -44,6 +44,27 @@ ever wanted. The reconcile is therefore closed by deletion, not re-application.
   a removal of stored data, so it is not applied unattended. It frees disk only; no
   measured query gets faster from it.
 
+## Closure workflow drafts (2026-11-15, owner decisions; NOT applied)
+
+Apply in this order, each after a rolled-back check on production. Test: `supabase/tests/closure/run_staging.sh`
+(local staging only). Report: `docs/commercial-readiness/audit/CLOSURE_ROUND2.md`.
+
+- `20261116100000_clo_corrective_action_review.sql` - per-company review settings (`closure_review_config`),
+  review columns on `corrective_actions` (status vocabulary unchanged), append-only
+  `corrective_action_review_events`, the submit / review writers, the exception REQUEST and DECISION
+  writers (the person who asks can never decide; no company switch relaxes that) and the guard trigger.
+  Round 3 (owner, 2026-11-15): a Tire Planning Engineer may ask for an exception with optional
+  evidence (`exception_evidence`, request writer now `(uuid, text, jsonb)`) only inside their company,
+  country and sites; whoever ever asked for an exception on an action can never decide it or close
+  the action (review approval or direct close), read from the append-only history. Staging T01-T11.
+- `20261116101000_clo_checklist_acknowledge_exception.sql` - depends on the file above. Adds the
+  `acknowledged` checklist outcome, `acknowledge_checklist_faults()`, `v_checklist_fault_compliance`,
+  append-only `checklist_decision_events`, and per-company extra final signer roles. Contains one
+  `drop constraint` + `add constraint` pair (a CHECK cannot be widened in place), so the MCP confirm
+  prompt will appear. The blocking-mark rule (`guard_checklist_approval_stages`) is not touched.
+- `20261116102000_clo_supervisor_actions_visibility.sql` - depends on `20261116100000`. Switches the
+  `corrective_actions` module on for Workshop Supervisor and Maintenance Supervisor so a default
+  reviewer can open the review screen (browser test defect C1). Two rows, no rights change.
 ## Work order permissions (draft PR #519, owner decisions 2026-11-15)
 
 AUTHORED, NOT APPLIED. Proven only on a private copy of the local staging database (synthetic

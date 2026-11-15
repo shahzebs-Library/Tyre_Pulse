@@ -68,11 +68,17 @@ export function supervisorWorkModuleKey(pathname) {
  *   module check. When given, a supervisor work path is allowed if its module is
  *   on for them. Omitted: checklist paths only (the rule before 2026-11-15).
  */
+// Paths outside the checklist area that open ONLY when the role's module is on:
+// the supervisor work paths above plus corrective actions (draft 20261116102000).
+export const CHECKLIST_MODULE_GATED_PATHS = Object.freeze({ ...SUPERVISOR_WORK_PATHS, '/actions': 'corrective_actions' })
+
+const under = (p, x) => p === x || p.startsWith(`${x}/`)
+
 export function isChecklistPathAllowed(pathname, hasPermission) {
   const p = String(pathname || '')
-  if (CHECKLIST_PATH_PREFIXES.some((x) => p === x || p.startsWith(`${x}/`))) return true
-  const key = supervisorWorkModuleKey(p)
-  return !!key && typeof hasPermission === 'function' && hasPermission(key) === true
+  if (CHECKLIST_PATH_PREFIXES.some((x) => under(p, x))) return true
+  if (typeof hasPermission !== 'function') return false
+  return Object.entries(CHECKLIST_MODULE_GATED_PATHS).some(([x, key]) => under(p, x) && hasPermission(key) === true)
 }
 
 // Roles allowed to author checklists (build / schedule / insights). Includes the

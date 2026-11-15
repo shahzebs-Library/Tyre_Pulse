@@ -46,18 +46,36 @@ export async function createCorrectiveAction(values) {
   return unwrap(await supabase.from('corrective_actions').insert(values).select(COLS).single())
 }
 
+/** Update a corrective action by id. */
 /**
- * Update a corrective action by id.
- *
- * Asks for the changed id back. Row security refuses an update by matching zero
- * rows without raising, so without this a status change by someone the policy
- * does not admit (anyone other than Manager, Admin or a holder of the edit
- * capability) used to report success and change nothing. Zero rows now throws
- * a WriteRefusedError the page shows.
+ * Plain sentences the closure status guard (draft 20261116100000) raises when a
+ * direct edit of an action is refused. They carry PT409 or 42501, which the
+ * generic mapper would turn into "This record changed since you opened it" or a
+ * bare permission line; these are fixed, schema-free sentences written for the
+ * reader, so they are passed through as they are. Anything else stays sanitised.
  */
+export const CLOSURE_STATUS_REFUSALS = Object.freeze([
+  'An exception has been requested on this action. Approve or refuse the exception first.',
+  'Closing an action needs a reviewer. Submit your completion evidence and a reviewer will close it.',
+  'Close this action through review: submit completion evidence, then approve it.',
+  'You submitted this action, so another reviewer has to close it.',
+  'You asked for an exception on this action, so another authorised person has to close it.',
+  'Only a reviewer can reopen a closed action.',
+  'Review details are recorded by the review steps and cannot be edited directly.',
+])
+
+/** A refused corrective action write as a ServiceError the screen can show. */
+export function actionWriteError(error) {
+  const raw = String(error?.message ?? '').trim()
+  if (CLOSURE_STATUS_REFUSALS.includes(raw)) return new ServiceError(raw, undefined, error)
+  return new ServiceError(toUserMessage(error), error?.code, error)
+}
+
 export async function updateCorrectiveAction(id, patch) {
+  const res = await supabase.from('corrective_actions').update(patch).eq('id', id).select('id')
+  if (res.error) throw actionWriteError(res.error)
   return expectRows(
-    await supabase.from('corrective_actions').update(patch).eq('id', id).select('id'),
+    res,
     'This action was not updated. Only a Manager or an Admin can change a corrective action, or it no longer exists.',
   )
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertCircle, CheckCircle2, ChevronDown, ClipboardCheck, FileSearch, Link2, RefreshCw } from 'lucide-react'
+import { AlertCircle, CheckCircle2, ChevronDown, ClipboardCheck, FileSearch, RefreshCw } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
   findObservationErpEvidence, confirmObservationErpLink, rejectObservationErpSuggestion,

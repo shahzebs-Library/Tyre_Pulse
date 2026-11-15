@@ -1,4 +1,4 @@
--- Role matrix for the work order permission drafts (WO-1 to WO-4), run on a private copy of the
+-- Role matrix for the work order permission drafts (WO-1 to WO-5), run on a private copy of the
 -- LOCAL staging database only (synthetic companies Alpha, Beta, Gamma). Never run on production.
 -- Driver: supabase/tests/staging_work_order_permissions.sh
 --
@@ -26,7 +26,8 @@ from (values
   ('aaaaaaaa-0000-4000-8000-000000000008', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Workshop Supervisor',               '{KSA}', '{ALL}',               true, true,  false, 'Synthetic Locked Supervisor'),
   ('aaaaaaaa-0000-4000-8000-000000000009', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Store Keeper',                      '{KSA}', '{ALL}',               true, false, false, 'Synthetic Granted Store Keeper'),
   ('aaaaaaaa-0000-4000-8000-000000000010', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Electrician',                       '{KSA}', '{ALL}',               true, false, false, 'Synthetic Electrician'),
-  ('aaaaaaaa-0000-4000-8000-000000000011', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Welder',                            '{KSA}', '{ALL}',               true, false, false, 'Synthetic Granted Welder')
+  ('aaaaaaaa-0000-4000-8000-000000000011', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Welder',                            '{KSA}', '{ALL}',               true, false, false, 'Synthetic Granted Welder'),
+  ('aaaaaaaa-0000-4000-8000-000000000012', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Data Monitor Officer',              '{KSA}', '{ALL}',               true, false, false, 'Synthetic Monitor Officer')
 ) v(id, org, org2, role, country, sites, approved, locked, sup, full_name);
 set local session_replication_role = origin;
 
@@ -34,7 +35,7 @@ set local session_replication_role = origin;
 update public.organisations
    set settings = jsonb_set(coalesce(settings, '{}'::jsonb), '{app_settings}',
          coalesce(settings -> 'app_settings', '{}'::jsonb) || jsonb_build_object('permission_overrides',
-           '{"version":1,"overrides":{"Tyre Data Collector":{"work_orders":{"create":true,"edit":true,"export":true,"approve":true}},"Tyre Man":{"work_orders":{"create":false,"edit":false}}}}'))
+           '{"version":1,"overrides":{"Tyre Data Collector":{"work_orders":{"create":true,"edit":true,"export":true,"approve":true}},"Data Monitor Officer":{"work_orders":{"create":true,"edit":true,"delete":true,"export":true,"approve":true}},"Tyre Man":{"work_orders":{"create":false,"edit":false}}}}'))
  where id = '00000000-0000-0000-0000-000000000001';
 
 -- Production holds the Work Orders menu switch for the collector role; staging does not.
@@ -71,7 +72,7 @@ insert into actor values
   ('mechanic',  'aaaaaaaa-0000-4000-8000-000000000005'), ('collector', 'aaaaaaaa-0000-4000-8000-000000000006'),
   ('revoked',   'aaaaaaaa-0000-4000-8000-000000000007'), ('locked',    'aaaaaaaa-0000-4000-8000-000000000008'),
   ('granted',   'aaaaaaaa-0000-4000-8000-000000000009'), ('electrician', 'aaaaaaaa-0000-4000-8000-000000000010'),
-  ('granted_tech', 'aaaaaaaa-0000-4000-8000-000000000011');
+  ('granted_tech', 'aaaaaaaa-0000-4000-8000-000000000011'), ('monitor', 'aaaaaaaa-0000-4000-8000-000000000012');
 -- The seeded engineer works in the UAE; give the seeded Tyre Man and Manager the whole of KSA.
 
 create temp table wo (name text primary key, id uuid) on commit drop;
@@ -84,7 +85,7 @@ insert into wo select 'tyre_uae', id from public.work_orders where organisation_
 insert into wo select 'approved_north', id from public.work_orders where organisation_id = '00000000-0000-0000-0000-000000000001' and country = 'KSA' and site = 'ALPHA NORTH PLANT' and status <> 'Completed' order by id desc limit 1;
 insert into wo select 'open_beta', id from public.work_orders where organisation_id = 'bbbbbbbb-0000-4000-8000-000000000002' and country = 'KSA' and status <> 'Completed' order by id limit 1;
 do $$ begin
-  if (select count(*) from wo) <> 8 or (select count(*) from actor) <> 20
+  if (select count(*) from wo) <> 8 or (select count(*) from actor) <> 21
      or (select count(distinct id) from wo) <> 8 then
     raise exception 'fixture incomplete: % work orders, % actors', (select count(*) from wo), (select count(*) from actor);
   end if;
@@ -96,7 +97,7 @@ update public.work_orders set work_type = 'Tyre Change' where id = (select id fr
 insert into public.approval_execution_requests (id, organisation_id, entity_type, work_order_id, asset_no, title, payload, source_snapshot, operation_id, submitted_by, approval_status, status)
 values ('aaaaaaaa-0000-4000-8000-0000000000e1', '00000000-0000-0000-0000-000000000001', 'work_order', (select id from wo where name = 'approved_north'), 'TST1', 'Synthetic approved scope',
         '{}'::jsonb, '{}'::jsonb, gen_random_uuid(), (select id from actor where name = 'admin'), 'approved', 'executed');
-update public.work_orders set execution_approval_id = 'aaaaaaaa-0000-4000-8000-0000000000e1', parts_cost = 100
+update public.work_orders set execution_approval_id = 'aaaaaaaa-0000-4000-8000-0000000000e1', parts_cost = 100, work_order_no = 'SYN/NOLINES/0001'
  where id = (select id from wo where name = 'approved_north');
 insert into public.wo_assignments (job_id, user_id, role, active, organisation_id, country, site)
 select (select id from wo where name = 'open_north'), (select id from actor where name = 'tyreman'), 'primary', true,
@@ -108,6 +109,27 @@ select (select id from wo where name = 'open_east'), 'aaaaaaaa-0000-4000-8000-00
 insert into public.wo_tasks (id, job_id, title, status, assignee_user_id, organisation_id, country, site)
 values ('aaaaaaaa-0000-4000-8000-0000000000f1', (select id from wo where name = 'open_north2'), 'Synthetic task', 'pending',
         'aaaaaaaa-0000-4000-8000-000000000010', '00000000-0000-0000-0000-000000000001', 'KSA', 'ALPHA NORTH PLANT');
+-- Cost ledger fixture (WO-5): entries in each state, and ERP line detail naming item SYN-1 on open_north.
+insert into public.work_order_cost_entries (id, organisation_id, country, site, work_order_id, entry_kind, description, amount, currency, source, reason, status, reconciliation, created_by, decided_by)
+select v.id::uuid, w.organisation_id, w.country, w.site, w.id, v.kind, 'Synthetic cost', v.amount, 'SAR', 'manual', 'synthetic', v.status, v.recon,
+       (select id from actor where name = v.author), case when v.status in ('approved', 'reversed') then (select id from actor where name = 'manager') end
+  from (values
+    ('aaaaaaaa-0000-4000-8000-0000000000c1', 'open_east',      'additional', 50,  'draft',                  'cannot_tell',   'collector'),
+    ('aaaaaaaa-0000-4000-8000-0000000000c2', 'open_north',     'additional', 30,  'pending_approval',       'not_in_import', 'sup_all'),
+    ('aaaaaaaa-0000-4000-8000-0000000000c3', 'open_north',     'additional', 31,  'pending_reconciliation', 'cannot_tell',   'sup_all'),
+    ('aaaaaaaa-0000-4000-8000-0000000000c4', 'open_north',     'additional', 32,  'pending_approval',       'not_in_import', 'manager'),
+    ('aaaaaaaa-0000-4000-8000-0000000000c5', 'approved_north', 'additional', 20,  'approved',               'not_in_import', 'sup_all'),
+    ('aaaaaaaa-0000-4000-8000-0000000000c6', 'approved_north', 'refund',     5,   'approved',               'not_in_import', 'sup_all'),
+    ('aaaaaaaa-0000-4000-8000-0000000000c7', 'approved_north', 'adjustment', -3,  'approved',               'not_in_import', 'sup_all'),
+    ('aaaaaaaa-0000-4000-8000-0000000000c8', 'approved_north', 'additional', 500, 'draft',                  'cannot_tell',   'sup_all'),
+    ('aaaaaaaa-0000-4000-8000-0000000000c9', 'approved_north', 'additional', 700, 'rejected',               'cannot_tell',   'sup_all'),
+    ('aaaaaaaa-0000-4000-8000-0000000000ca', 'approved_north', 'additional', 400, 'reversed',               'not_in_import', 'sup_all'),
+    ('aaaaaaaa-0000-4000-8000-0000000000cb', 'approved_north', 'additional', 900, 'pending_reconciliation', 'possible_duplicate', 'sup_all')
+  ) v(id, wo, kind, amount, status, recon, author)
+  join wo x on x.name = v.wo join public.work_orders w on w.id = x.id;
+insert into public.parts_consumption (organisation_id, country, work_order_no, item_code, item_description, line_cost, currency)
+select w.organisation_id, w.country, w.work_order_no, 'SYN-1', 'Synthetic imported part', 999999, 'SAR'
+  from public.work_orders w where w.id = (select id from wo where name = 'open_north');
 set local session_replication_role = origin;
 
 -- ── harness ──────────────────────────────────────────────────────────────────────────────────
@@ -160,6 +182,20 @@ create function pg_temp.sql_for(p_what text, p_actor text) returns text language
     when p_what like 'owner:%'    then format('update public.work_orders set assigned_owner_id = %L, status = ''Assigned'' where id = %L', pg_temp.who('mechanic'), pg_temp.id(split_part(p_what, ':', 2)))
     when p_what like 'qc:%'       then format('update public.work_orders set qc_status = ''passed'' where id = %L', pg_temp.id(split_part(p_what, ':', 2)))
     when p_what like 'cost:%'     then format('update public.work_orders set parts_cost = 55 where id = %L', pg_temp.id(split_part(p_what, ':', 2)))
+    when p_what like 'costadd:%'  then format(
+      $q$select public.work_order_cost_add(%L, 'additional', 'parts', 'SYN-NEW', 'Synthetic part', 1, 20, null, 'manual', null, 'fitted on site')$q$,
+      pg_temp.id(split_part(p_what, ':', 2)))
+    when p_what like 'costsubmit:%'   then format('select public.work_order_cost_submit(%L)', ('aaaaaaaa-0000-4000-8000-0000000000' || split_part(p_what, ':', 2))::uuid)
+    when p_what like 'costapprove:%'  then format('select public.work_order_cost_decide(%L, ''approved'', ''checked against the import'')', ('aaaaaaaa-0000-4000-8000-0000000000' || split_part(p_what, ':', 2))::uuid)
+    when p_what like 'costapprove0:%' then format('select public.work_order_cost_decide(%L, ''approved'', null)', ('aaaaaaaa-0000-4000-8000-0000000000' || split_part(p_what, ':', 2))::uuid)
+    when p_what like 'costreject0:%'  then format('select public.work_order_cost_decide(%L, ''rejected'', null)', ('aaaaaaaa-0000-4000-8000-0000000000' || split_part(p_what, ':', 2))::uuid)
+    when p_what like 'costreverse:%'  then format('select public.work_order_cost_reverse(%L, ''entered twice'')', ('aaaaaaaa-0000-4000-8000-0000000000' || split_part(p_what, ':', 2))::uuid)
+    when p_what like 'costwithdraw:%' then format('select public.work_order_cost_withdraw(%L, null)', ('aaaaaaaa-0000-4000-8000-0000000000' || split_part(p_what, ':', 2))::uuid)
+    when p_what = 'cost_direct_insert' then format(
+      $q$insert into public.work_order_cost_entries (organisation_id, work_order_id, description, amount, currency, source, reason, status, created_by)
+         values ('00000000-0000-0000-0000-000000000001', %L, 'x', 1, 'SAR', 'manual', 'x', 'approved', %L)$q$, pg_temp.id('open_north'), pg_temp.who(p_actor))
+    when p_what = 'cost_direct_update' then 'update public.work_order_cost_entries set status = ''approved'' where id = ''aaaaaaaa-0000-4000-8000-0000000000c2'''
+    when p_what = 'cost_direct_delete' then 'delete from public.work_order_cost_entries where id = ''aaaaaaaa-0000-4000-8000-0000000000c2'''
     when p_what like 'move:%'     then format('update public.work_orders set site = ''ALPHA EAST PLANT'' where id = %L', pg_temp.id(split_part(p_what, ':', 2)))
     when p_what like 'rehome:%'   then format('update public.work_orders set organisation_id = ''bbbbbbbb-0000-4000-8000-000000000002'' where id = %L', pg_temp.id(split_part(p_what, ':', 2)))
     when p_what like 'delete:%'   then format('delete from public.work_orders where id = %L', pg_temp.id(split_part(p_what, ':', 2)))
@@ -199,6 +235,8 @@ create function pg_temp.verdict(p_want text, p_got text) returns boolean languag
     when 'ok'  then p_got = 'ok:1'
     when 'no'  then p_got in ('ok:0', 'err:42501')
     when 'err' then p_got = 'err:42501'
+    when 'bad' then p_got = 'err:22023'      -- refused: something required is missing
+    when 'stale' then p_got = 'err:PT409'    -- refused: already decided
   end $f$;
 
 -- ── the matrix ─────────────────────────────────────────────────────────────────────────────────
@@ -206,7 +244,7 @@ create function pg_temp.verdict(p_want text, p_got text) returns boolean languag
 select pg_temp.expect('manager', c, w) from (values
   ('create:north', 'ok'), ('create:uae', 'no'), ('create:beta', 'no'), ('edit:open_north', 'ok'), ('progress:open_north', 'ok'),
   ('complete:open_north', 'ok'), ('cancel:open_north', 'ok'), ('owner:open_north', 'ok'), ('assign:open_north', 'ok'),
-  ('qc:open_north', 'ok'), ('cost:open_north', 'ok'), ('move:open_north', 'ok'), ('task_create', 'ok'), ('event_other', 'ok'),
+  ('qc:open_north', 'ok'), ('cost:open_north', 'err'), ('move:open_north', 'ok'), ('task_create', 'ok'), ('event_other', 'ok'),
   ('edit:open_uae', 'no'), ('edit:open_beta', 'no'), ('assign:open_beta', 'no'),
   ('edit:closed_north', 'err'), ('cost:closed_north', 'err'), ('cost:approved_north', 'err'), ('edit:approved_north', 'ok'),
   ('rehome:open_north', 'no'), ('delete:open_north', 'no'), ('delete:closed_north', 'no')) t(c, w);
@@ -260,7 +298,7 @@ select pg_temp.expect('granted_tech', c, w) from (values
 -- no closed work order, no delete. (open_east is assigned to the collector, open_north is not.)
 select pg_temp.expect('collector', c, w) from (values
   ('create:north', 'ok'), ('create:east', 'ok'), ('edit:open_north', 'ok'), ('progress:open_north', 'ok'),
-  ('toqc:open_north', 'ok'), ('cost:open_north', 'ok'), ('event:open_north', 'ok'),
+  ('toqc:open_north', 'ok'), ('cost:open_north', 'err'), ('event:open_north', 'ok'),
   ('qc:open_east', 'ok'), ('qc:open_north', 'err'),
   ('complete:open_north', 'err'), ('complete:open_east', 'err'), ('close:open_east', 'err'), ('cancel:open_east', 'err'),
   ('qcpass:open_east', 'err'), ('qcpass:open_north', 'err'),
@@ -268,6 +306,64 @@ select pg_temp.expect('collector', c, w) from (values
   ('edit:closed_north', 'err'), ('cost:closed_north', 'err'), ('cost:approved_north', 'err'), ('edit:approved_north', 'ok'),
   ('create:uae', 'no'), ('create:beta', 'no'), ('edit:open_beta', 'no'), ('rehome:open_north', 'no'),
   ('delete:open_north', 'no'), ('delete:open_east', 'no'), ('delete:closed_north', 'no')) t(c, w);
+-- Data Monitor Officer (round 4): monitors and reconciles. The Access Control switches (create, edit,
+-- delete, approve all on) no longer give final closure, cost approval, assigning or deleting.
+select pg_temp.expect('monitor', c, w) from (values
+  ('create:north', 'ok'), ('edit:open_north', 'ok'), ('progress:open_north', 'ok'), ('toqc:open_north', 'ok'), ('qc:open_north', 'ok'),
+  ('complete:open_north', 'err'), ('close:open_north', 'err'), ('cancel:open_north', 'err'), ('qcpass:open_north', 'err'),
+  ('owner:open_north', 'err'), ('assign:open_north', 'no'), ('cost:open_north', 'err'), ('edit:closed_north', 'err'),
+  ('delete:open_north', 'no'), ('costadd:open_north', 'ok'), ('costapprove:c2', 'err'), ('costreverse:c5', 'err')) t(c, w);
+-- An explicit company rule from an Admin gives the officer closing, inside the same walls.
+insert into public.work_order_role_rules (organisation_id, role, actions, scope, note)
+values ('bbbbbbbb-0000-4000-8000-000000000002', 'Data Monitor Officer', array['edit', 'progress', 'close'], 'all', 'test: explicit grant in Beta only');
+
+-- Cost ledger (WO-5). Draft entry needs the cost right on that job; approval needs cost_approve and
+-- a different person; nothing is written to the table directly; nothing is ever removed.
+select pg_temp.expect('collector', c, w) from (values
+  ('costadd:open_east', 'ok'), ('costadd:open_north', 'err'), ('costsubmit:c1', 'ok'), ('costwithdraw:c1', 'ok'),
+  ('costapprove:c2', 'err'), ('costreverse:c5', 'err'), ('costwithdraw:c2', 'err'),
+  ('cost_direct_insert', 'no'), ('cost_direct_update', 'no'), ('cost_direct_delete', 'no')) t(c, w);
+select pg_temp.expect('tyreman', c, w) from (values ('costadd:open_north', 'err'), ('costapprove:c2', 'err')) t(c, w);
+select pg_temp.expect('sup_all', c, w) from (values
+  ('costadd:open_north', 'ok'), ('costadd:closed_north', 'ok'), ('costapprove:c2', 'err'), ('costwithdraw:c3', 'ok'), ('costreverse:c5', 'err')) t(c, w);
+select pg_temp.expect('manager', c, w) from (values
+  ('costadd:open_north', 'ok'), ('costadd:open_uae', 'err'), ('costadd:open_beta', 'err'),
+  ('costapprove:c2', 'ok'), ('costreject0:c2', 'bad'), ('costapprove0:c3', 'bad'), ('costapprove:c3', 'ok'), ('costapprove:cb', 'ok'),
+  ('costapprove:c4', 'err'), ('costapprove:c5', 'stale'), ('costapprove:c9', 'stale'), ('costapprove:c1', 'stale'),
+  ('costreverse:c5', 'ok'), ('costreverse:c2', 'stale'), ('costsubmit:c2', 'stale'),
+  ('cost_direct_insert', 'no'), ('cost_direct_update', 'no'), ('cost_direct_delete', 'no')) t(c, w);
+select pg_temp.expect('beta_manager', c, w) from (values ('costapprove:c2', 'err'), ('costadd:open_north', 'err')) t(c, w);
+select pg_temp.expect('admin', c, w) from (values
+  ('costapprove:c2', 'ok'), ('costapprove:c4', 'ok'), ('cost_direct_delete', 'no'), ('cost_direct_update', 'no'), ('cost:open_north', 'ok')) t(c, w);
+
+-- Duplicate check: never a guess.
+insert into result (actor, what, want, got)
+select '(check)', 'reconcile ' || v.what, 'ok',
+       case when public.work_order_cost_reconcile(pg_temp.id(v.wo), v.code) = v.want then 'ok:1'
+            else 'got ' || public.work_order_cost_reconcile(pg_temp.id(v.wo), v.code) end
+from (values
+  ('item named in the ERP lines of the job card',          'open_north',     'syn-1 ',  'possible_duplicate'),
+  ('lines account for the stored cost, item not in them',  'open_north',     'OTHER-9', 'not_in_import'),
+  ('lines exist but the entry has no item code',           'open_north',     null,      'cannot_tell'),
+  ('imported cost with no line detail',                    'approved_north', 'OTHER-9', 'cannot_tell')) v(what, wo, code, want);
+-- The four figures: imported stays as stored; only approved entries count; unapproved shown apart.
+insert into result (actor, what, want, got)
+select '(check)', 'totals: imported ' || t.imported_parts_cost || ' kept, calculated = imported total + 20 - 3 - 5, unapproved 1400 apart', 'ok',
+       case when t.imported_parts_cost = w.parts_cost and t.additional_approved = 20 and t.adjustments_approved = -3
+                 and t.refunds_approved = 5 and t.calculated_total = w.total_cost + 12
+                 and t.unapproved_amount = 1400 and t.unapproved_count = 2 and t.currency = 'SAR'
+            then 'ok:1' else 'wrong ' || row_to_json(t)::text end
+  from public.v_work_order_cost_totals t join public.work_orders w on w.id = t.work_order_id
+ where t.work_order_id = pg_temp.id('approved_north');
+-- A submitted draft with no proof it is new waits for reconciliation; an entry takes the work order's currency.
+insert into result (actor, what, want, got)
+select 'sup_all', 'entry on an imported cost with no lines is submitted to pending_reconciliation, in SAR', 'ok',
+       pg_temp.try('sup_all', format(
+         $q$with a as (select public.work_order_cost_add(%L, 'additional', 'parts', 'NEW-1', 'Synthetic part', 1, 20, null, 'manual', null, 'fitted') j),
+                 b as (select public.work_order_cost_submit((j ->> 'id')::uuid) s, j from a)
+            select 1 / (case when s ->> 'status' = 'pending_reconciliation' and j ->> 'currency' = 'SAR' and j ->> 'status' = 'draft' then 1 else 0 end) from b$q$,
+         pg_temp.id('approved_north')));
+
 -- Access Control keeps working for roles with no rule, and per person.
 select pg_temp.expect('granted', c, w) from (values
   ('edit:open_north', 'ok'), ('create:north', 'no'), ('assign:open_north', 'no'), ('edit:closed_north', 'err')) t(c, w);
@@ -333,13 +429,15 @@ insert into result (actor, what, want, got)
 select a, 'my_access ' || want_json, 'ok',
        case when pg_temp.access(a) @> want_json::jsonb then 'ok:1' else 'mismatch ' || pg_temp.access(a)::text end
 from (values
-  ('manager',      '{"admin":false,"create":"all","edit":"all","assign":"all","progress":"all","qc":"all","close":"all"}'),
+  ('manager',      '{"admin":false,"create":"all","edit":"all","assign":"all","progress":"all","qc":"all","close":"all","cost":"all","cost_approve":"all"}'),
   ('sup_north',    '{"admin":false,"create":"all","assign":"all","all_sites":false}'),
   ('engineer',     '{"create":"tyre","edit":"tyre","assign":"tyre","progress":"tyre","qc":"tyre","close":"tyre"}'),
   ('tyreman',      '{"create":null,"edit":null,"assign":null,"progress":"assigned","qc":null,"close":null}'),
   ('electrician',  '{"create":null,"edit":null,"assign":null,"progress":"assigned","qc":null,"close":null}'),
-  ('collector',    '{"admin":false,"create":"all","edit":"all","assign":null,"progress":"all","qc":"assigned","close":null}'),
-  ('granted',      '{"create":null,"edit":"all","assign":null,"progress":"all","qc":"all","close":"all"}'),
+  ('collector',    '{"admin":false,"create":"all","edit":"all","assign":null,"progress":"all","qc":"assigned","close":null,"cost":"assigned","cost_approve":null}'),
+  ('granted',      '{"create":null,"edit":"all","assign":null,"progress":"all","qc":"all","close":null,"cost":"all","cost_approve":null}'),
+  ('monitor',      '{"admin":false,"create":"all","edit":"all","assign":null,"progress":"all","qc":"all","close":null,"cost":"all","cost_approve":null}'),
+  ('sup_all',      '{"close":"all","cost":"all","cost_approve":null}'),
   ('granted_tech', '{"create":null,"edit":"all","assign":null,"progress":"all","qc":null,"close":null}'),
   ('revoked',      '{"create":"all","edit":null,"assign":null,"progress":null}'),
   ('beta_manager', '{"create":"all","edit":"all","assign":null,"progress":"all","qc":null}'),

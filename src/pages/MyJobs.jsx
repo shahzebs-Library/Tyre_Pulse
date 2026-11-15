@@ -115,6 +115,11 @@ export default function MyJobs() {
       t(eventType === 'report_problem' ? 'workorders.myJobs.problemSent' : 'workorders.myJobs.workSent'),
     )
     if (ok) setNotes((n) => ({ ...n, [job.id]: '' }))
+    // "Work completed" is submitted for review: the job moves to Quality Inspection. It is not
+    // final closure; a supervisor, manager or tyre engineer approves and closes it.
+    if (ok && eventType === 'complete_task' && normalizeWoStatus(job.status) !== 'Quality Inspection') {
+      await moveStatus(job, 'Quality Inspection')
+    }
   }
 
   const label = { color: 'var(--text-secondary)' }

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Work order permission drafts (WO-1 to WO-4) on a private copy of the LOCAL staging database.
+# Work order permission drafts (WO-1 to WO-5) on a private copy of the LOCAL staging database.
 # Synthetic companies only. Refuses anything that is not 127.0.0.1. Nothing here touches production.
 #
 #   supabase/tests/staging_work_order_permissions.sh            # copy, apply, run the matrix
@@ -24,7 +24,8 @@ for f in 20261113130000_cur_work_orders_manager_director_default.sql \
          20261115140000_wo_permission_resolver.sql \
          20261115140500_wo_policies_and_guards.sql \
          20261115141000_wo_supervisor_module_visibility.sql \
-         20261115141500_wo_cost_approval_not_collector.sql; do
+         20261115141500_wo_cost_approval_not_collector.sql \
+         20261115142000_wo_cost_entries_ledger.sql; do
   if out="$(q -f "$PENDING/$f" 2>&1 >/dev/null)"; then echo "applied: $f"
   else echo "FAILED: $f"; echo "$out" | grep -m3 -E 'ERROR|FATAL'; exit 1; fi
 done

@@ -44,11 +44,11 @@ const body = (sql, fn) => {
 
 describe('constants mirror the SQL drafts', () => {
   it('seed rules are the same rows, in the same order', () => {
-    const seed = resolver.slice(resolver.indexOf('from (values'), resolver.indexOf(') as v(role, actions, scope, qc_scope)'))
-    const rows = [...seed.matchAll(/\('([^']+)',\s+array\[([^\]]*)\],\s*'(all|tyre|assigned)',\s*(null|'(?:all|tyre|assigned)')\)/g)]
-      .map((m) => ({ role: m[1], actions: quoted(m[2]), scope: m[3], qcScope: m[4] === 'null' ? null : m[4].slice(1, -1) }))
+    const seed = resolver.slice(resolver.indexOf('from (values'), resolver.indexOf(') as v(role, actions, scope, qc_scope, cost_scope)'))
+    const rows = [...seed.matchAll(/\('([^']+)',\s+array\[([^\]]*)\],\s*'(all|tyre|assigned)',\s*(null|'(?:all|tyre|assigned)'),\s*(null|'(?:all|tyre|assigned)')\)/g)]
+      .map((m) => ({ role: m[1], actions: quoted(m[2]), scope: m[3], qcScope: m[4] === 'null' ? null : m[4].slice(1, -1), costScope: m[5] === 'null' ? null : m[5].slice(1, -1) }))
     expect(rows.length).toBe(31)
-    expect(rows).toEqual(DEFAULT_ROLE_RULES.map((r) => ({ role: r.role, actions: [...r.actions], scope: r.scope, qcScope: r.qcScope })))
+    expect(rows).toEqual(DEFAULT_ROLE_RULES.map((r) => ({ role: r.role, actions: [...r.actions], scope: r.scope, qcScope: r.qcScope, costScope: r.costScope })))
   })
 
   it('the technician roles that get the Work Orders menu switch are the seeded technicians', () => {
@@ -88,6 +88,7 @@ describe('constants mirror the SQL drafts', () => {
   it('column classes of the write guard', () => {
     expect(sqlArray(guards, 'c_ignore')).toEqual(WO_COLUMN_CLASS.ignore)
     expect(sqlArray(guards, 'c_admin')).toEqual(WO_COLUMN_CLASS.admin)
+    expect(sqlArray(guards, 'c_baseline')).toEqual(WO_COLUMN_CLASS.baseline)
     expect(sqlArray(guards, 'c_cost')).toEqual(WO_COLUMN_CLASS.cost)
     expect(sqlArray(guards, 'c_assign')).toEqual(WO_COLUMN_CLASS.assign)
     expect(sqlArray(guards, 'c_qc')).toEqual(WO_COLUMN_CLASS.qc)
@@ -113,11 +114,11 @@ describe('constants mirror the SQL drafts', () => {
 
 // ── behaviour: the same cases the staging matrix proves on the database ─────────────────────────
 const A = (o) => serverWorkOrderAccess(o)
-const ALL = { create: 'all', edit: 'all', assign: 'all', progress: 'all', qc: 'all', close: 'all' }
+const ALL = { create: 'all', edit: 'all', assign: 'all', progress: 'all', qc: 'all', close: 'all', cost: 'all', cost_approve: 'all' }
 const manager = A(ALL)
 const engineer = A({ create: 'tyre', edit: 'tyre', assign: 'tyre', progress: 'tyre', qc: 'tyre', close: 'tyre' })
 const technician = A({ progress: 'assigned' })
-const collector = A({ create: 'all', edit: 'all', progress: 'all', qc: 'assigned' })
+const collector = A({ create: 'all', edit: 'all', progress: 'all', qc: 'assigned', cost: 'assigned' })
 const nobody = A({})
 const admin = A({ admin: true, ...ALL })
 const open = { id: 'w1', status: 'In Progress', work_type: 'Repair' }
@@ -130,6 +131,8 @@ const ctx = { userId: 'me', assignedJobIds: new Set(['w6']) }
 describe('canWorkOrder', () => {
   it('manager and supervisor: everything on an open job, nothing on a closed one, never delete', () => {
     for (const a of WO_ACTIONS) expect(canWorkOrder(a, manager, open)).toBe(true)
+    // The cost ledger stays open on a closed job; everything else is locked.
+    expect(canWorkOrder('cost', manager, closed)).toBe(true)
     for (const a of ['edit', 'assign', 'progress', 'qc', 'close']) {
       expect(canWorkOrder(a, manager, closed)).toBe(false)
       expect(canWorkOrder(a, manager, legacyClosed)).toBe(false)
@@ -177,6 +180,25 @@ describe('canWorkOrder', () => {
     expect(checkWorkOrderChange(collector, open, ['status'], { newStatus: 'Quality Inspection', ctx }).ok).toBe(true)
     expect(defaultScopeForRole('Tyre Data Collector', 'qc')).toBe('assigned')
     expect(defaultScopeForRole('Tyre Data Collector', 'close')).toBe(null)
+    // Costs: draft entries on assigned work only; never approval; never the stored parts cost.
+    expect(canWorkOrder('cost', collector, mine, ctx)).toBe(true)
+    expect(canWorkOrder('cost', collector, open, ctx)).toBe(false)
+    expect(canWorkOrder('cost_approve', collector, mine, ctx)).toBe(false)
+    expect(defaultScopeForRole('Tyre Data Collector', 'cost')).toBe('assigned')
+    expect(defaultScopeForRole('Workshop Supervisor', 'cost_approve')).toBe(null)
+    expect(defaultScopeForRole('Manager', 'cost_approve')).toBe('all')
+    expect(checkWorkOrderChange(manager, open, ['parts_cost'])).toEqual({ ok: false, reason: WO_REFUSAL.baseline })
+  })
+
+  it('closure, cost approval and assigning never come from the generic Access Control switches', () => {
+    const scope = body(resolver, 'work_order_scope')
+    expect(scope).toContain("if v_action in ('create', 'edit', 'progress') and exists (")
+    expect(scope).toContain("if v_action in ('create', 'edit', 'progress', 'qc', 'cost') and public.app_user_can('work_orders', v_cap) then")
+    // Before the drafts are applied there is no ledger: nobody has a cost right from the old rules.
+    const old = legacyWorkOrderAccess({ role: 'Manager', serverCaps: { create: true, edit: true } })
+    expect(old.cost).toBe(null)
+    expect(old.cost_approve).toBe(null)
+    expect(canWorkOrder('cost', old, open)).toBe(false)
     for (const a of WO_ACTIONS) expect(canWorkOrder(a, nobody, open)).toBe(false)
   })
 
@@ -221,15 +243,15 @@ describe('what a change needs', () => {
     expect(requiredActionsForChange(['priority', 'site'])).toMatchObject({ edit: true })
     expect(requiredActionsForChange(['organisation_id'])).toMatchObject({ adminOnly: true })
     expect(requiredActionsForChange(['updated_at', 'created_by', 'total_cost']))
-      .toEqual({ adminOnly: false, cost: false, edit: false, assign: false, qc: false, progress: false, close: false })
+      .toEqual({ adminOnly: false, baseline: false, cost: false, edit: false, assign: false, qc: false, progress: false, close: false })
   })
 
   it('checks a whole change with a plain reason', () => {
     expect(checkWorkOrderChange(manager, closed, ['notes'])).toEqual({ ok: false, reason: WO_REFUSAL.closed })
-    expect(checkWorkOrderChange(manager, { ...open, execution_approval_id: 'e1' }, ['parts_cost']))
+    expect(checkWorkOrderChange(manager, { ...open, execution_approval_id: 'e1' }, ['labour_cost']))
       .toEqual({ ok: false, reason: WO_REFUSAL.approvedCost })
     expect(checkWorkOrderChange(manager, { ...open, execution_approval_id: 'e1' }, ['description']).ok).toBe(true)
-    expect(checkWorkOrderChange(manager, open, ['parts_cost']).ok).toBe(true)
+    expect(checkWorkOrderChange(manager, open, ['labour_cost']).ok).toBe(true)
     expect(checkWorkOrderChange(technician, mine, ['status', 'notes'], { newStatus: 'Quality Inspection', ctx }).ok).toBe(true)
     expect(checkWorkOrderChange(technician, mine, ['status', 'notes'], { newStatus: 'Completed', ctx }))
       .toEqual({ ok: false, reason: WO_REFUSAL.close })
@@ -311,7 +333,7 @@ describe('helpers', () => {
 
   it('server answer is normalised, junk scopes become not allowed', () => {
     expect(serverWorkOrderAccess({ admin: true, create: 'all', edit: 'everything', all_sites: true }))
-      .toEqual({ provisioned: true, admin: true, create: 'all', edit: null, assign: null, progress: null, qc: null, close: null, all_sites: true })
+      .toEqual({ provisioned: true, admin: true, create: 'all', edit: null, assign: null, progress: null, qc: null, close: null, cost: null, cost_approve: null, all_sites: true })
   })
 })
 

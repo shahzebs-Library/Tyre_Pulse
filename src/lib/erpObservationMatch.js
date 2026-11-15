@@ -42,6 +42,7 @@ export const POSITION_REASON_TEXT = {
   axle_not_specified: 'The ERP position does not say which axle',
   inner_outer_not_specified: 'The ERP position does not say inner or outer',
   numbering_scheme_differs: 'The ERP numbers the axles differently from this vehicle layout',
+  erp_spelling_not_verified: 'This ERP wheel spelling has not been verified for this vehicle layout',
   spare_not_on_layout: 'This vehicle layout has no spare wheel',
   spare_not_specified: 'The record does not say which spare wheel',
   slot_and_code_disagree: 'The recorded position reads as two different wheels',
@@ -52,7 +53,8 @@ export const positionReasonText = (reason) => POSITION_REASON_TEXT[reason] || 'T
 
 /**
  * The asset's wheel layout for a matching run.
- * `layoutContext`: { vehicleType (fleet register), axleCount, customLayouts }.
+ * `layoutContext`: { vehicleType (fleet register), axleCount, customLayouts,
+ *   layoutHistory (stored layout versions), positionMappings (verified per-layout spellings) }.
  * The inspection's own vehicle_type is used only when the register has none.
  */
 export function layoutForObservation(inspection, layoutContext = {}) {
@@ -64,6 +66,8 @@ export function layoutForObservation(inspection, layoutContext = {}) {
     country: inspection?.country,
     axleCount: layoutContext.axleCount ?? null,
     customLayouts: layoutContext.customLayouts || null,
+    layoutHistory: layoutContext.layoutHistory || null,
+    positionMappings: layoutContext.positionMappings || null,
     asOf: dateOnly(inspection?.inspection_date || inspection?.completed_date || inspection?.created_at),
   }
   const layout = resolveLayout(asset)
@@ -117,6 +121,10 @@ export function evaluateErpCandidate({ inspection, finding, workOrder, fitments 
 
   if (sameDated.length) reasons.push('Tyre movement on the same wheel after the inspection')
   if (serialRows.length) reasons.push('Observed tyre serial is on this job card')
+  // Serial supports the evidence; it never stands in for the wheel. With the wheel
+  // unresolved, a decision needs a separately authorised, documented exception.
+  const serialOnly = !sameDated.length && serialPendingDated.length > 0 && !serialOtherWheel.length && !layoutConflict
+  if (serialOnly) notes.push('The observed serial is on this job card, but the wheel could not be matched. A serial alone does not allow confirmation')
   if (serial && !strongSerial) notes.push('The recorded serial is not a usable tyre serial, so it was not used as evidence')
   if (strongSerial && sameJobFitments.length && !serialRows.length) {
     notes.push('The observed serial is not on this job card. A replacement tyre carries its own serial')
@@ -134,10 +142,9 @@ export function evaluateErpCandidate({ inspection, finding, workOrder, fitments 
   const description = key([workOrder.description, workOrder.notes].filter(Boolean).join(' '))
   if (/TYRE|TIRE|PUNCTURE|WHEEL/.test(description)) reasons.push('Tyre-related job description')
 
-  // A job card alone or a cost line alone is insufficient to call a tyre repaired.
-  // Same wheel with a dated movement, or the observed real serial leaving on this
-  // job card while the wheel itself could not be established.
-  const tyreEvidence = sameDated.length > 0 || serialPendingDated.length > 0
+  // A job card alone, a cost line alone or a serial alone is insufficient to call a tyre
+  // repaired: it takes a dated movement on the SAME resolved wheel.
+  const tyreEvidence = sameDated.length > 0
   const sufficient = tyreEvidence && !!job && conflicts.length === 0 && delta != null && delta >= 0
   const positionState = !sameJobFitments.length ? 'no_tyre_movement'
     : (layoutConflict || serialOtherWheel.length) ? 'inconsistent'
@@ -155,12 +162,13 @@ export function evaluateErpCandidate({ inspection, finding, workOrder, fitments 
   return {
     workOrder, fitments: sameJobFitments, expenses: related,
     status, reasons, conflicts, notes, relevant, eligibleToConfirm: sufficient,
+    serialExceptionPossible: serialOnly && !!job && conflicts.length === 0 && delta != null && delta >= 0,
     positionState,
     evidenceSummary: {
       tyreRows: sameJobFitments.length, expenseRows: related.length,
       positionMatched: same.length > 0, positionPending: pending.length, positionDifferent: different.length,
       canonicalPosition: same[0]?.cmp.canonical || null, layoutKey: layout.key || null,
-      serialMatched: serialRows.length > 0, workDayGap: delta,
+      serialMatched: serialRows.length > 0, serialOnly, workDayGap: delta,
     },
   }
 }

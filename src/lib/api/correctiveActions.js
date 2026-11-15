@@ -6,6 +6,7 @@
  */
 import { supabase, unwrap, fetchAllPages, ServiceError, toServiceError } from './_client'
 import { toUserMessage } from '../safeError'
+import { expectRows } from './writeGuard'
 import { actionRowsForInspection, applyPlanToRow } from '../inspectionTyreFlags'
 import { sanitizeSearchTerm } from '../searchFilter'
 import { ensureActionItem, updateActionItem } from './actionCenter'
@@ -71,9 +72,12 @@ export function actionWriteError(error) {
 }
 
 export async function updateCorrectiveAction(id, patch) {
-  const { data, error } = await supabase.from('corrective_actions').update(patch).eq('id', id)
-  if (error) throw actionWriteError(error)
-  return data
+  const res = await supabase.from('corrective_actions').update(patch).eq('id', id).select('id')
+  if (res.error) throw actionWriteError(res.error)
+  return expectRows(
+    res,
+    'This action was not updated. Only a Manager or an Admin can change a corrective action, or it no longer exists.',
+  )
 }
 
 /**

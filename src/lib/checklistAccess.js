@@ -42,12 +42,35 @@ export const CHECKLIST_PATH_PREFIXES = [
   '/my-problems',
 ]
 
-// Paths outside the checklist area that open ONLY when the role's module is
-// switched on in the access matrix. Corrective actions: a supervisor is a default
-// reviewer of the closure workflow, so the review screen has to be reachable once
-// the company enables it (draft 20261116102000). Until that row exists the path
-// behaves exactly as before: not in the sidebar, and redirected to Checklists.
-export const CHECKLIST_MODULE_GATED_PATHS = { '/actions': 'corrective_actions' }
+// Workshop work a supervisor role may also reach (owner decision 2026-11-15:
+// workshop supervisors create and manage work orders and use Workshop Live
+// Control inside their sites). These are NOT open by default: each path is
+// reachable only when the role's module is switched on in Access Control
+// (module_permissions), so nothing changes for a company that has not enabled
+// it. The database decides every write (work_order_can).
+export const SUPERVISOR_WORK_PATHS = Object.freeze({
+  '/work-orders': 'work_orders',
+  '/workshop-live': 'workshop_live',
+})
+
+/** The module key that opens a supervisor work path, or null when it is not one. */
+export function supervisorWorkModuleKey(pathname) {
+  const p = String(pathname || '')
+  for (const [prefix, key] of Object.entries(SUPERVISOR_WORK_PATHS)) {
+    if (p === prefix || p.startsWith(`${prefix}/`)) return key
+  }
+  return null
+}
+
+/**
+ * @param {string} pathname
+ * @param {(moduleKey:string)=>boolean} [hasPermission]  the signed-in person's
+ *   module check. When given, a supervisor work path is allowed if its module is
+ *   on for them. Omitted: checklist paths only (the rule before 2026-11-15).
+ */
+// Paths outside the checklist area that open ONLY when the role's module is on:
+// the supervisor work paths above plus corrective actions (draft 20261116102000).
+export const CHECKLIST_MODULE_GATED_PATHS = Object.freeze({ ...SUPERVISOR_WORK_PATHS, '/actions': 'corrective_actions' })
 
 const under = (p, x) => p === x || p.startsWith(`${x}/`)
 
@@ -63,3 +86,30 @@ export function isChecklistPathAllowed(pathname, hasPermission) {
 // Deliberately WITHOUT Workshop Supervisor: they sign sheets off, they do not
 // author or schedule them. Adding them here would hand over the builder too.
 export const CHECKLIST_AUTHOR_ROLES = ['Admin', 'Manager', 'Director', 'Maintenance Supervisor']
+
+// Checklist routes guarded by RoleRoute(CHECKLIST_AUTHOR_ROLES) in App.jsx. A
+// checklist-only role that is NOT an author (Workshop Supervisor) may visit the
+// checklist area, but these pages refuse it, so the sidebar and command search
+// must not offer them either - otherwise the menu leads straight to Access Denied.
+export const CHECKLIST_AUTHOR_PATHS = [
+  '/checklist-builder',
+  '/checklist-schedules',
+  '/checklist-insights',
+  '/checklist-audit',
+]
+
+export function isChecklistAuthorPath(pathname) {
+  const p = String(pathname || '')
+  return CHECKLIST_AUTHOR_PATHS.some((x) => p === x || p.startsWith(`${x}/`))
+}
+
+/** May this person open an author-only checklist page? Super admins always may. */
+export function canAuthorChecklists(role, isSuperAdmin) {
+  return isSuperAdmin === true || CHECKLIST_AUTHOR_ROLES.includes(String(role || '').trim())
+}
+
+/** Should a menu offer this path? True for every non-author checklist path. */
+export function isChecklistNavVisible(pathname, role, isSuperAdmin) {
+  if (!isChecklistAuthorPath(pathname)) return true
+  return canAuthorChecklists(role, isSuperAdmin)
+}

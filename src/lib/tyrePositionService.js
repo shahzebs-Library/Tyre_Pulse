@@ -43,6 +43,14 @@ import {
 } from './vehicleTyreLayout'
 import { positionsFromConfig } from './vehicleDiagram'
 
+/**
+ * The version of the wheel-matching rules this client runs. The database reports its own
+ * (observation_erp_rules / observation_erp_evaluate). A decision is offered only when the two
+ * are the same: a client and a database on different rules can disagree about which wheel a
+ * job card touched. CHANGE BOTH TOGETHER (pinned by observationErpEvidence.api.test.js).
+ */
+export const ERP_RULES_VERSION = 'position-service-3'
+
 export const POSITION_STATUS = Object.freeze({
   RESOLVED: 'resolved', AMBIGUOUS: 'ambiguous', UNKNOWN: 'unknown', INCONSISTENT: 'inconsistent',
 })
@@ -91,37 +99,70 @@ const unresolvedLayout = (reason, extra = {}) => ({
  * @param {number} [a.axleCount]    the machine's recorded axle count; else the registered one
  * @param {object} [a.customLayouts] map of canonical vehicle type -> admin layout
  *        (positionsFromConfig result or a raw config, optionally with updatedAt)
- * @param {Array}  [a.layoutHistory] optional [{ effectiveFrom, vehicleType?, layout }] when a
- *        history of layouts exists. NONE IS STORED TODAY: vehicle_diagram_configs keeps only the
- *        current row and its updated_at. Without history the current layout is used, and a custom
- *        layout edited AFTER `asOf` is reported as changed rather than trusted.
+ * @param {Array}  [a.layoutHistory] the stored versions of admin layouts
+ *        (vehicle_diagram_config_versions): [{ vehicleType, validFrom, validTo, basis, active, config }].
+ *        With `asOf`, the version IN FORCE ON THAT DAY is used, so an old inspection is never
+ *        re-read on a later edit. A version marked basis 'backfill' only says what was in force
+ *        from its start: an earlier record is reported as changed since record, never resolved.
+ *        A layout changed on the very day of the record is also reported, not guessed.
+ * @param {Array}  [a.positionMappings] verified per-layout ERP spellings
+ *        (tyre_layout_position_mappings): [{ layout_key, erp_code, slot }]. Empty by default.
+ *        There is NO built-in guess for a spelling the layout cannot place.
  * @param {string} [a.asOf]         the date of the record being read (YYYY-MM-DD)
  */
 export function resolveLayout(a = {}) {
+  return withMappings(resolveLayoutBase(a), a.positionMappings)
+}
+
+function withMappings(layout, rows) {
+  if (layout.status !== POSITION_STATUS.RESOLVED || !Array.isArray(rows) || !rows.length) return layout
+  const mappings = rows
+    .filter((r) => r && r.active !== false && String(r.layout_key ?? r.layoutKey ?? '') === layout.key)
+    .map((r) => ({ code: up(r.erp_code ?? r.erpCode), slot: String(r.slot ?? '') }))
+    .filter((m) => m.code && m.slot)
+  return mappings.length ? { ...layout, mappings } : layout
+}
+
+function resolveLayoutBase(a) {
   const vt = String(a.vehicleType ?? '').trim()
   const asset = String(a.assetNo ?? '').trim()
   const asOf = dayOf(a.asOf)
   const customKey = canonType(vt)
 
-  // 1. A supplied history wins for a dated record.
-  if (asOf && Array.isArray(a.layoutHistory) && a.layoutHistory.length) {
-    const hit = a.layoutHistory
-      .filter((h) => h && dayOf(h.effectiveFrom) && dayOf(h.effectiveFrom) <= asOf
-        && (!h.vehicleType || canonType(h.vehicleType) === customKey))
-      .sort((x, y) => dayOf(y.effectiveFrom).localeCompare(dayOf(x.effectiveFrom)))[0]
-    if (hit) {
-      const lay = customLayout(hit.layout, customKey)
-      if (lay) return { ...lay, basis: 'historical', version: dayOf(hit.effectiveFrom) }
+  // 1. Stored layout versions decide a dated record.
+  const versions = customKey && Array.isArray(a.layoutHistory)
+    ? a.layoutHistory.filter((h) => h && canonType(h.vehicleType) === customKey && dayOf(h.validFrom))
+      .sort((x, y) => String(x.validFrom).localeCompare(String(y.validFrom)))
+    : []
+  let custom = null
+  let versionChecked = false
+  if (versions.length && asOf) {
+    versionChecked = true
+    const inForce = versions.filter((h) => dayOf(h.validFrom) <= asOf && (!h.validTo || dayOf(h.validTo) > asOf)).pop()
+    const editedThatDay = versions.some((h) => h.validTo && dayOf(h.validTo) === asOf)
+    if (inForce) {
+      if (inForce.active !== false) {
+        const lay = customLayout(inForce, customKey)
+        if (lay) {
+          return { ...lay, basis: 'historical', version: dayOf(inForce.validFrom), ...(editedThatDay ? { changedAfterRecord: true } : {}) }
+        }
+      }
+    } else if (versions[0].basis === 'backfill') {
+      // Nothing is recorded about the layout before this version began.
+      const lay = versions[0].active !== false ? customLayout(versions[0], customKey) : null
+      if (lay) return { ...lay, basis: 'current', changedAfterRecord: true, version: dayOf(versions[0].validFrom) }
     }
+    // Otherwise the admin layout did not exist yet on that day: the built-in layout applies.
   }
 
   // 2. A layout an admin designed for this exact type is an explicit statement
   //    about the machine and wins, as it does on the diagram.
-  const custom = customKey && a.customLayouts ? a.customLayouts[customKey] : null
+  if (!versionChecked) custom = customKey && a.customLayouts ? a.customLayouts[customKey] : null
   if (custom) {
     const lay = customLayout(custom, customKey)
     if (lay) {
       const changed = dayOf(custom.updatedAt || custom.updated_at)
+      // No stored versions were supplied: an edit after the record cannot be ruled out.
       if (asOf && changed && changed > asOf) {
         return { ...lay, basis: 'current', changedAfterRecord: true, version: changed }
       }
@@ -164,19 +205,30 @@ const out = (status, reason, wheel = null) => ({
   canonical: wheel ? wheel.code : null, slot: wheel ? wheel.slot : null, status, reason,
 })
 
-// The ERP's dual-rear spelling: LHRCO / RHRCI = Rear-Centre, LHRRO / RHRRI =
-// Rear-Rear. It is the centre/rear code with a group letter in front, so it is
-// read as LHCO / RHRI. Whether THIS machine names its rear axles centre and
-// rear is still decided by the layout below, never assumed.
+// The ERP's dual-rear spelling: LHRCO / RHRCI ("rear centre"), LHRRO / RHRRI ("rear rear").
+// Which axle that is depends on the machine and has NOT been verified for any layout, so
+// there is no built-in reading of it. It resolves only through a verified mapping recorded
+// for that layout (tyre_layout_position_mappings); until then it is pending.
 const DUAL_REAR_RE = /^(L|R)HR([CR])([IO])$/
-function erpSpelling(token) {
-  const m = up(token).match(DUAL_REAR_RE)
-  return m ? `${m[1]}H${m[2]}${m[3]}` : token
-}
+
+// Concrete pumps: the ERP names the rear wheels of ONE machine three ways at once (numbered
+// "R1", "rear centre" and "rear rear"), so its "R1" is not known to be the first rear axle of
+// the drawing. Until a mapping is verified for the pump layout, NO rear ERP code is read on it,
+// not even one that is spelled exactly like a wheel of the layout. Front codes are unaffected.
+const PUMP_LAYOUT_KEYS = new Set(['Concrete pump', 'Concrete pump 4-axle'])
+const REAR_CODE_RE = /^(L|R)H?[RC]/
 
 /** How a position CODE reads on this layout. */
-function readCode(layout, rawToken) {
-  const token = erpSpelling(rawToken)
+function readCode(layout, token, kind) {
+  const mapped = (layout.mappings || []).find((m) => m.code === up(token))
+  if (mapped) {
+    const wheel = layout.wheels.find((w) => w.slot === mapped.slot)
+    if (wheel) return out(POSITION_STATUS.RESOLVED, 'verified_mapping', wheel)
+  }
+  if (DUAL_REAR_RE.test(up(token))) return out(POSITION_STATUS.AMBIGUOUS, 'erp_spelling_not_verified')
+  if (kind === 'erp' && PUMP_LAYOUT_KEYS.has(layout.key) && REAR_CODE_RE.test(up(token))) {
+    return out(POSITION_STATUS.AMBIGUOUS, 'erp_spelling_not_verified')
+  }
   const parsed = parsePosition(token)
   if (!parsed) return null
   if (parsed.side === null) return out(POSITION_STATUS.UNKNOWN, 'axle_group_not_on_layout')
@@ -251,7 +303,7 @@ export function resolveWheel(layout, token, { kind = 'any' } = {}) {
   if (layout.changedAfterRecord) return out(POSITION_STATUS.AMBIGUOUS, 'layout_changed_since_record')
 
   const asSlot = readSlot(layout, text)
-  const asCode = readCode(layout, text)
+  const asCode = readCode(layout, text, kind)
   const slotOk = asSlot?.status === POSITION_STATUS.RESOLVED
   const codeOk = asCode?.status === POSITION_STATUS.RESOLVED
 

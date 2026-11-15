@@ -13,6 +13,7 @@ import { resolveStorageUrl } from '../../lib/storageRefs'
 import { safeImageSrc } from '../../lib/safeUrl'
 import { TYRE_NOW_META } from '../../lib/observationTracking'
 import { downloadObservationReport, observationReportId, observationRevision } from '../../lib/observationReportPdf'
+import ObservationErpEvidence from './ObservationErpEvidence'
 
 const fmtDay = (d) => {
   if (!d) return 'N/A'
@@ -171,6 +172,8 @@ export default function ObservationDetail({ obs: first, observations = [], onClo
                 </div>
               )}
             </section>
+
+            <ObservationErpEvidence observation={obs} />
 
             <section className="iw-od-block">
               <h4>Photo of this tyre</h4>

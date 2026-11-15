@@ -78,6 +78,9 @@ select pg_temp.ok('A03 worker sees own permissions: may submit, may not review',
   (:'t2') ~ '"can_submit": true'
   and (:'t3') ~ '"can_review": false');
 
+select pg_temp.ok('A03b never-submitted action: the assigned worker may ask for an exception (true, not null)',
+  (:'t2') ~ '"can_request_exception": true');
+
 select pg_temp.try(:coll, $$select public.corrective_action_submit_completion('c4000000-0000-4000-8000-000000000001', '  ')::text$$) as t4 \gset
 select pg_temp.ok('A04 submission without a completion note is refused',
   left(:'t4', 5) = '22023');

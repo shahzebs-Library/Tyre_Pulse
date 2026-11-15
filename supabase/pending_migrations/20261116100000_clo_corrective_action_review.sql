@@ -350,7 +350,7 @@ begin
   v_self := a.submitted_by is not distinct from auth.uid();
   v_closed := a.status = 'Closed';
   v_exc_role := public.is_super_admin() or public.closure_role_in(v_role, c.exception_roles);
-  v_exc_pending := a.review_status = 'exception_requested';
+  v_exc_pending := coalesce(a.review_status = 'exception_requested', false);   -- a never-submitted action has review_status NULL
   -- The person who asked for the exception, or who submitted the completion, never decides it.
   v_exc_self := a.exception_requested_by is not distinct from auth.uid() or a.submitted_by is not distinct from auth.uid();
   v_waiting := coalesce(a.review_status, '') in ('submitted', 'exception_requested');

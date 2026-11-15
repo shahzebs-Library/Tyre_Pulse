@@ -28,7 +28,7 @@ const candidate = (over = {}) => ({
   evidenceSummary: { tyreRows: 1, expenseRows: 0, canonicalPosition: 'RHCO' }, ...over,
 })
 const ready = (c) => ({ candidates: [c], orphanTyreJobCards: [], evidenceLimited: false, totals: {} })
-const OK = { available: true, reason: 'ok', canReview: true, canRecordException: false }
+const OK = { available: true, reason: 'ok', canReview: true, canRequestException: true, canApproveException: false }
 const show = () => render(<MemoryRouter><ObservationErpEvidence observation={observation} /></MemoryRouter>)
 
 beforeEach(() => {

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Staging tests for the follow-up drafts
-  supabase/pending_migrations/20261116084000_observation_erp_confirm_interim_lock.sql
+  supabase/migrations/20261115120856_observation_erp_confirm_interim_lock.sql  (APPLIED to production)
   supabase/pending_migrations/20261116085000_tyre_layout_versions_and_position_mappings.sql
   supabase/pending_migrations/20261116090000_tyre_position_service.sql
   supabase/pending_migrations/20261116091000_observation_erp_decide_on_position_service.sql
@@ -14,6 +14,7 @@ always rolled back.
 
   createdb -h 127.0.0.1 -p 54329 -U postgres -T tyrepulse_staging tp_position
   psql ... -d tp_position -1 -f supabase/migrations/20261115120000_observation_erp_reconciliation.sql
+  psql ... -d tp_position -1 -f supabase/migrations/20261115120856_observation_erp_confirm_interim_lock.sql
   psql ... -d tp_position -1 -f supabase/pending_migrations/20261116085000_tyre_layout_versions_and_position_mappings.sql
   psql ... -d tp_position -1 -f supabase/pending_migrations/20261116090000_tyre_position_service.sql
   psql ... -d tp_position -1 -f supabase/pending_migrations/20261116091000_observation_erp_decide_on_position_service.sql
@@ -22,7 +23,8 @@ always rolled back.
 
 Covers: every layout type (mixer 12, mixer 13 with spare, pump 14, pump 12, 6x4 10, line
 pump 12, loader, pickup 4, tyreless), tenant, country, site, role, position, serial
-(never confirms alone), the separately authorised serial exception, layout versions,
+(never confirms alone), the two-person serial exception (request, independent approval),
+bus, tanker, Canter and trailer layouts, layout versions,
 per-layout verified mappings, the permission matrix, the interim lock, the rollback file,
 dates, append-only history, and "nothing historical is rewritten".
 """
@@ -85,6 +87,8 @@ FLEET = [  # asset, org, country, type, axle_count, site
     ('ZPMX9', ALPHA, 'UAE', 'TR-MIXER', None, 'ALPHA UAE YARD'),
     ('ZPMX1', BETA, 'KSA', 'TR-MIXER', None, 'BETA YARD'),
     ('ZPEAST', ALPHA, 'KSA', 'TR-MIXER', None, 'ALPHA EAST PLANT'),
+    ('ZPCN1', ALPHA, 'KSA', 'CANTER', None, SITE), ('ZPBS1', ALPHA, 'KSA', 'BUS', None, SITE),
+    ('ZPTK1', ALPHA, 'KSA', 'WATER TANKER', None, SITE), ('ZPTR1', ALPHA, 'KSA', 'TRAILER', None, SITE),
 ]
 for a, org, c, vt, ax, site in FLEET:
     cur.execute("""insert into public.vehicle_fleet (id, asset_no, organisation_id, country, vehicle_type, axle_count, site, status)
@@ -138,6 +142,15 @@ C['missing_position'] = make_case('ZPMX1', 'damage:unknown position', [('RHCO', 
 C['erp_position_blank'] = make_case('ZPMX1', 'damage:R1Ro', [('', 'NEWTYRE016', AFTER, None)])
 C['wrong_slot_for_asset'] = make_case('ZPMX1', 'damage:RR', [('RHRO', 'NEWTYRE017', AFTER, None)])
 C['inspection_other_layout'] = make_case('ZPMX1', 'damage:R1Ro', [('RHCO', 'NEWTYRE018', AFTER, None)], insp_type='TRAILER')
+# ---- Canter, bus, tanker (single front, dual rear), trailer (dual, two axles)
+C['canter_dual_inner'] = make_case('ZPCN1', 'damage:RLi', [('LHRI', 'NEWTYRE080', AFTER, None)])
+C['canter_other_side'] = make_case('ZPCN1', 'damage:RLi', [('RHRI', 'NEWTYRE081', AFTER, None)])
+C['bus_front_single'] = make_case('ZPBS1', 'damage:FR', [('RHF1', 'NEWTYRE082', AFTER, None)])
+C['bus_mixer_slot'] = make_case('ZPBS1', 'damage:R2Li', [('LHRI', 'NEWTYRE083', AFTER, None)])
+C['tanker_dual_outer'] = make_case('ZPTK1', 'damage:RRo', [('RHRO', 'NEWTYRE084', AFTER, None)])
+C['tanker_centre_code'] = make_case('ZPTK1', 'damage:RRo', [('RHCO', 'NEWTYRE085', AFTER, None)])
+C['trailer_second_axle'] = make_case('ZPTR1', 'damage:R2Ri', [('RHR2-I', 'NEWTYRE086', AFTER, None)])
+C['trailer_first_axle_moved'] = make_case('ZPTR1', 'damage:R2Ri', [('RHR1-I', 'NEWTYRE087', AFTER, None)])
 # ---- serial evidence
 C['serial_supports'] = make_case('ZPMX2', 'damage:R1Ro', [('', 'OBSERVED9001', BEFORE, AFTER)], serial='OBSERVED9001')
 C['serial_weak'] = make_case('ZPMX2', 'damage:R1Ro', [('', 'DOT18E56', BEFORE, AFTER)], serial='DOT18E56')
@@ -150,6 +163,8 @@ C['pump4_numbered_exact'] = make_case('ZPPU2', 'damage:R1Lo', [('LHR1-O', 'NEWTY
 C['mixer_cr_spelling'] = make_case('ZPMX1', 'damage:R1Lo', [('LHRCO', 'NEWTYRE052', AFTER, None)])
 C['serial_exc_admin'] = make_case('ZPMX2', 'damage:R1Ro', [('', 'OBSERVED9010', BEFORE, AFTER)], serial='OBSERVED9010')
 C['serial_exc_grant'] = make_case('ZPMX2', 'damage:R1Ro', [('', 'OBSERVED9011', BEFORE, AFTER)], serial='OBSERVED9011')
+for _i, _k in enumerate(('refuse', 'withdraw', 'scope', 'stale', 'self', 'super', 'matrix', 'matrix2')):
+    C['serial_exc_' + _k] = make_case('ZPMX2', 'damage:R1Ro', [('', f'OBSERVED902{_i}', BEFORE, AFTER)], serial=f'OBSERVED902{_i}')
 C['perm'] = make_case('ZPMX2', 'damage:R1Ro', [('RHCO', 'NEWTYRE060', AFTER, None)])
 # ---- dates
 C['undated'] = make_case('ZPMX2', 'damage:R1Ro', [('RHCO', 'NEWTYRE020', BEFORE, None)])
@@ -208,6 +223,10 @@ EXPECT = {
     'serial_other_wheel': ('inconsistent', None), 'serial_replaced': ('offered_for_review', 'RHCO'),
     'undated': ('no_dated_movement', 'RHCO'), 'no_tyre_rows': ('no_tyre_movement', None),
     'wo_before_inspection': ('offered_for_review', 'RHCO'),
+    'canter_dual_inner': ('offered_for_review', 'LHRI'), 'canter_other_side': ('different_wheel', None),
+    'bus_front_single': ('offered_for_review', 'RHF1'), 'bus_mixer_slot': ('pending_manual_review', None),
+    'tanker_dual_outer': ('offered_for_review', 'RHRO'), 'tanker_centre_code': ('pending_manual_review', None),
+    'trailer_second_axle': ('offered_for_review', 'RHR2-I'), 'trailer_first_axle_moved': ('different_wheel', None),
 }
 for name, (state, canonical) in EXPECT.items():
     v, code, msg = evaluate(name)
@@ -225,7 +244,7 @@ for name in ('pump_cr_spelling', 'pump_rr_spelling', 'mixer_cr_spelling', 'pump_
     check('A position', f'ERP rear spelling is not read without a verified mapping: {name}',
           v is not None and v['pending_reasons'] == {'erp_spelling_not_verified': 1}, v and v['pending_reasons'] or (code, msg))
 v, code, msg = evaluate('mixer_match')
-check('A position', 'the function reports the rules version the client checks', v is not None and v.get('rules_version') == 'position-service-2', v and v.get('rules_version'))
+check('A position', 'the function reports the rules version the client checks', v is not None and v.get('rules_version') == 'position-service-3', v and v.get('rules_version'))
 
 check('A position', 'evaluating wrote nothing (never auto confirms)', links() == 0 and events() == 0 and fingerprint() == BASE,
       (links(), events()))
@@ -353,13 +372,31 @@ cost = q("select count(*), min(cost_per_tyre), max(cost_per_tyre) from public.ty
 check('E history', 'no tyre cost moved', float(cost[1]) == 1234.5 and float(cost[2]) == 1234.5, cost)
 
 
-# ------------------------------------------------------------------ X: documented serial exception
+# ------------------------------------------------------------------ X: documented serial exception (two people)
 LONG = 'Workshop read the serial off the removed tyre and it is the inspected one'
-def exception(name, user, reason=LONG):
+NOTE = 'Checked the removed tyre in the scrap bay'
+def set_profile(user, **cols):
+    cur.execute("set local session_replication_role = replica")
+    for k, val in cols.items():
+        cur.execute(f"update public.profiles set {k} = %s where id = %s", (val, USER[user]))
+    cur.execute("set local session_replication_role = origin")
+
+def as_user(user, sql, params):
     become(user)
-    out, code, msg = attempt("select public.confirm_observation_erp_link_by_exception(%s, %s, %s)", (*C[name][:2], reason))
+    out, code, msg = attempt(sql, params)
     owner()
     return (out[0][0] if out else None), code, msg
+
+def request(name, user, reason=LONG):
+    return as_user(user, "select public.request_observation_erp_serial_exception(%s, %s, %s)", (*C[name][:2], reason))
+def approve(req, user, note=NOTE):
+    return as_user(user, "select public.approve_observation_erp_serial_exception(%s, %s)", (req, note))
+def close(req, user, outcome, note=NOTE):
+    return as_user(user, "select public.close_observation_erp_serial_exception(%s, %s, %s)", (req, outcome, note))
+def req_row(req):
+    return q("""select status, requested_by::text, decided_by::text, decision_note, request_reason, decided_at is not null
+                from public.observation_erp_exception_requests where id = %s""", (req,))[0]
+def requests(): return q("select count(*) from public.observation_erp_exception_requests")[0][0]
 
 def rules(user):
     become(user)
@@ -368,63 +405,201 @@ def rules(user):
     return out[0][0] if out else {'error': code}
 
 n0 = (links(), events())
-for user in ('alpha.manager', 'alpha.director', 'alpha.tyreman', 'alpha.engineer', 'alpha.driver', 'alpha.inspector', 'beta.admin', 'beta.manager'):
-    v, code, msg = exception('serial_exc_admin', user)
-    check('X exception', f'refused for {user}', v is None and code == '42501', (v, code, msg))
-check('X exception', 'refusals wrote nothing', (links(), events()) == n0, (links(), events()))
+for user in ('alpha.tyreman', 'alpha.engineer', 'alpha.driver', 'alpha.inspector', 'beta.admin', 'beta.manager'):
+    v, code, msg = request('serial_exc_admin', user)
+    check('X exception', f'request refused for {user}', v is None and code == '42501', (v, code, msg))
+check('X exception', 'refused requests wrote nothing', (links(), events(), requests()) == (*n0, 0), (links(), events(), requests()))
 r = rules('alpha.manager')
-check('X exception', 'rules: a Manager may review but may not record an exception',
-      r.get('can_review') is True and r.get('can_record_exception') is False and r.get('rules_version') == 'position-service-2', r)
+check('X exception', 'rules: a Manager may review and ask for an exception but may not approve one',
+      r.get('can_review') is True and r.get('can_request_exception') is True and r.get('can_approve_exception') is False
+      and r.get('rules_version') == 'position-service-3' and r.get('exception_needs_second_person') is True, r)
 r = rules('alpha.admin')
-check('X exception', 'rules: an Admin may record an exception (default)', r.get('can_review') is True and r.get('can_record_exception') is True, r)
+check('X exception', 'rules: an Admin may approve an exception (default)', r.get('can_review') is True and r.get('can_approve_exception') is True, r)
 r = rules('alpha.tyreman')
-check('X exception', 'rules: a Tyre Man may do neither', r.get('can_review') is False and r.get('can_record_exception') is False, r)
-v, code, msg = exception('serial_exc_admin', 'alpha.admin', 'too short')
+check('X exception', 'rules: a Tyre Man may do none of it', r.get('can_review') is False and r.get('can_request_exception') is False and r.get('can_approve_exception') is False, r)
+v, code, msg = request('serial_exc_admin', 'alpha.admin', 'too short')
 check('X exception', 'a short reason is refused (20 characters)', v is None and code == '22023', (v, code, msg))
 for name in ('mixer_other', 'serial_weak', 'serial_other_wheel', 'no_tyre_rows', 'erp_position_blank', 'pump_cr_spelling'):
-    v, code, msg = exception(name, 'alpha.admin')
-    check('X exception', f'an exception does not apply to: {name}', v is None and code == 'PT409', (v, code, msg))
-v, code, msg = exception('serial_exc_admin', 'alpha.admin')
-check('X exception', 'an Admin records the exception with a reason', v is not None and v['ok'] is True and (links(), events()) == (n0[0] + 1, n0[1] + 1), (v, code, msg))
-row = q("""select l.exception_basis, l.reviewed_by::text, l.decision_note, l.reviewed_at is not null,
-                  e.exception_basis, e.reviewer::text, e.reason, e.decision, e.created_at is not null
+    v, code, msg = request(name, 'alpha.admin')
+    check('X exception', f'an exception cannot be requested for: {name}', v is None and code == 'PT409', (v, code, msg))
+
+# one person cannot do both, whatever the role
+v, code, msg = request('serial_exc_self', 'alpha.admin')
+REQ_SELF = v and v['request_id']
+check('X exception', 'an Admin requests: a pending request, nothing linked',
+      v is not None and v['status'] == 'pending' and (links(), events(), requests()) == (*n0, 1), (v, code, msg))
+v, code, msg = request('serial_exc_self', 'alpha.director')
+check('X exception', 'a second request for the same job card while one is pending is refused', v is None and code == 'PT409', (v, code, msg))
+v, code, msg = approve(REQ_SELF, 'alpha.admin')
+check('X exception', 'SAME PERSON: the Admin who requested cannot approve it', v is None and code == '42501' and 'different person' in (msg or ''), (v, code, msg))
+v, code, msg = close(REQ_SELF, 'alpha.admin', 'refused')
+check('X exception', 'SAME PERSON: the requester cannot refuse it either', v is None and code == '42501', (v, code, msg))
+v, code, msg = request('serial_exc_super', 'platform.superadmin')
+REQ_SUPER = v and v['request_id']
+v2, code, msg = approve(REQ_SUPER, 'platform.superadmin')
+check('X exception', 'SAME PERSON: a super admin cannot approve their own request', REQ_SUPER is not None and v2 is None and code == '42501', (v, v2, code, msg))
+check('X exception', 'self-approval attempts linked nothing', (links(), events()) == n0 and req_row(REQ_SELF)[0] == 'pending', (links(), events()))
+become('alpha.admin')
+out, code, msg = attempt("""select public.observation_erp_decide_core(%s, %s, %s, 'confirmed', 'serial_only', %s, 'note here')""", (*C['serial_exc_self'][:2], LONG, REQ_SELF))
+owner()
+check('X exception', 'the one writer cannot be called by a signed-in user', out is None and code == '42501' and 'permission denied' in (msg or ''), (code, msg))
+# the writer itself refuses the requester (defence in depth), tried as the table owner with the requester's identity
+cur.execute("select set_config('request.jwt.claims', %s, true)", (json.dumps({'sub': USER['alpha.admin'], 'role': 'authenticated', 'aal': 'aal1'}),))
+out, code, msg = attempt("""select public.observation_erp_decide_core(%s, %s, %s, 'confirmed', 'serial_only', %s, 'note here')""", (*C['serial_exc_self'][:2], LONG, REQ_SELF))
+check('X exception', 'the one writer refuses the requester even when reached directly', out is None and code == '42501' and 'different person' in (msg or ''), (code, msg))
+out, code, msg = attempt("""select public.observation_erp_decide_core(%s, %s, %s, 'confirmed', 'serial_only', null, null)""", (*C['serial_exc_self'][:2], LONG))
+check('X exception', 'the one writer refuses an exception with no request behind it', out is None and code == 'PT409', (code, msg))
+owner()
+out, code, msg = attempt("update public.observation_erp_exception_requests set status = 'approved', decided_by = requested_by, decided_at = now() where id = %s", (REQ_SELF,))
+check('X exception', 'table constraint and guard: a row cannot be marked approved by its requester', out is None, (code, msg))
+
+# an unauthorised or outside person cannot approve
+v, code, msg = approve(REQ_SELF, 'alpha.manager')
+check('X exception', 'a Manager without the capability cannot approve', v is None and code == '42501', (v, code, msg))
+v, code, msg = approve(REQ_SELF, 'alpha.tyreman')
+check('X exception', 'a Tyre Man cannot approve', v is None and code == '42501', (v, code, msg))
+v, code, msg = approve(REQ_SELF, 'beta.admin')
+check('X exception', "another company's Admin cannot approve (not even see it)", v is None and code == '42501', (v, code, msg))
+become('beta.admin'); seen = q("select count(*) from public.observation_erp_exception_requests")[0][0]; owner()
+check('X exception', 'another company reads no request', seen == 0, seen)
+become('alpha.engineer'); seen = q("select count(*) from public.observation_erp_exception_requests")[0][0]; owner()
+check('X exception', 'a UAE scoped user reads no KSA request', seen == 0, seen)
+become('alpha.manager')
+out, code, msg = attempt("""insert into public.observation_erp_exception_requests (organisation_id, action_id, work_order_id, exception_basis, request_reason, position_evidence, requested_by)
+                            values (%s, %s, %s, 'serial_only', %s, '{}'::jsonb, %s)""", (ALPHA, *C['serial_exc_scope'][:2], LONG, USER['alpha.manager']))
+owner()
+check('X exception', 'a request cannot be inserted directly', out is None and code == '42501', (code, msg))
+
+# independent approval: Manager asks, Admin approves
+v, code, msg = request('serial_exc_admin', 'alpha.manager')
+REQ = v and v['request_id']
+check('X exception', 'a Manager asks for an exception', v is not None and v['status'] == 'pending', (v, code, msg))
+v, code, msg = approve(REQ, 'alpha.admin', 'ok')
+check('X exception', 'an approval needs a note', v is None and code == '22023', (v, code, msg))
+before = (links(), events())
+v, code, msg = approve(REQ, 'alpha.admin')
+check('X exception', 'a DIFFERENT, authorised person approves: one link, one history row',
+      v is not None and v['ok'] is True and (links(), events()) == (before[0] + 1, before[1] + 1), (v, code, msg))
+row = q("""select l.exception_basis, l.reviewed_by::text, l.decision_note, l.exception_request_id::text,
+                  e.exception_basis, e.reviewer::text, e.reason, e.decision, e.exception_request_id::text
            from public.observation_erp_links l join public.observation_erp_link_events e on e.action_id = l.action_id
            where l.action_id = %s""", (C['serial_exc_admin'][0],))
-check('X exception', 'stored on the link and in history: basis, who, when, reason',
-      row == [('serial_only', USER['alpha.admin'], LONG, True, 'serial_only', USER['alpha.admin'], LONG, 'confirmed', True)], row)
+check('X exception', 'link and history: basis, approver, the requester reason, the request id',
+      row == [('serial_only', USER['alpha.admin'], LONG, REQ, 'serial_only', USER['alpha.admin'], LONG, 'confirmed', REQ)], row)
+check('X exception', 'request row: approved, requester and approver are two people, note and time kept',
+      req_row(REQ) == ('approved', USER['alpha.manager'], USER['alpha.admin'], NOTE, LONG, True), req_row(REQ))
+st = q("select status, closed_at from public.corrective_actions where id = %s", (C['serial_exc_admin'][0],))
+check('X exception', 'the corrective action is not closed by an approved exception', st == [('Open', None)], st)
+v, code, msg = approve(REQ, 'platform.superadmin')
+check('X exception', 'a decided request cannot be approved again', v is None and code == 'PT409', (v, code, msg))
+out, code, msg = attempt("update public.observation_erp_exception_requests set decision_note = 'edited' where id = %s", (REQ,))
+check('X exception', 'a decided request cannot be edited', out is None and 'append-only' in (msg or ''), (code, msg))
+out, code, msg = attempt("delete from public.observation_erp_exception_requests where id = %s", (REQ,))
+check('X exception', 'a request cannot be removed', out is None and 'append-only' in (msg or ''), (code, msg))
 out, code, msg = attempt("update public.observation_erp_link_events set reason = 'edited' where action_id = %s", (C['serial_exc_admin'][0],))
 check('X exception', 'the recorded exception cannot be edited afterwards', out is None and 'append-only' in (msg or ''), (code, msg))
-row = q("select exception_basis from public.observation_erp_links where action_id = %s", (C['mixer_match'][0],))
-check('X exception', 'a normal confirm carries no exception basis', row == [(None,)], row)
-# configurable per company: grant the capability to one Manager
+row = q("select exception_basis, exception_request_id from public.observation_erp_links where action_id = %s", (C['mixer_match'][0],))
+check('X exception', 'a normal confirm carries no exception basis', row == [(None, None)], row)
+# a super admin's request approved by an Admin; the Admin's request approved by a super admin
+v, code, msg = approve(REQ_SUPER, 'alpha.admin')
+check('X exception', "a super admin's request is approved by an Admin", v is not None and v['ok'] is True, (v, code, msg))
+v, code, msg = approve(REQ_SELF, 'platform.superadmin')
+check('X exception', "the Admin's request is approved by a super admin", v is not None and v['ok'] is True, (v, code, msg))
+
+# refuse and withdraw: nothing is linked, the record stays
+before = (links(), events())
+v, code, msg = request('serial_exc_refuse', 'alpha.director'); REQ_R = v and v['request_id']
+v, code, msg = close(REQ_R, 'alpha.manager', 'refused')
+check('X exception', 'a Manager without the capability cannot refuse', v is None and code == '42501', (v, code, msg))
+v, code, msg = close(REQ_R, 'alpha.admin', 'refused', 'Serial on the tyre in the bay does not match')
+check('X exception', 'an Admin refuses: recorded, nothing linked',
+      v is not None and req_row(REQ_R)[:4] == ('refused', USER['alpha.director'], USER['alpha.admin'], 'Serial on the tyre in the bay does not match')
+      and (links(), events()) == before, (v, code, msg, req_row(REQ_R)))
+v, code, msg = approve(REQ_R, 'alpha.admin')
+check('X exception', 'a refused request cannot be approved later', v is None and code == 'PT409', (v, code, msg))
+v, code, msg = request('serial_exc_refuse', 'alpha.director')
+check('X exception', 'after a refusal a new request may be made (a new row, the old one stays)',
+      v is not None and q("select count(*) from public.observation_erp_exception_requests where action_id = %s", (C['serial_exc_refuse'][0],))[0][0] == 2, (v, code, msg))
+v, code, msg = request('serial_exc_withdraw', 'alpha.manager'); REQ_W = v and v['request_id']
+v, code, msg = close(REQ_W, 'alpha.director', 'withdrawn')
+check('X exception', 'only the requester can withdraw', v is None and code == '42501', (v, code, msg))
+v, code, msg = close(REQ_W, 'alpha.manager', 'withdrawn', 'Asked by mistake')
+check('X exception', 'the requester withdraws: recorded, nothing linked', v is not None and req_row(REQ_W)[0] == 'withdrawn' and (links(), events()) == before, (v, code, msg))
+
+# the evidence is evaluated again at approval
+v, code, msg = request('serial_exc_stale', 'alpha.manager'); REQ_S = v and v['request_id']
+cur.execute('savepoint stale')
+cur.execute("set local session_replication_role = replica")
+cur.execute("update public.tyre_records set position = 'RHRO' where job_card = %s", (C['serial_exc_stale'][2],))
+cur.execute("set local session_replication_role = origin")
+v, code, msg = approve(REQ_S, 'alpha.admin')
+check('X exception', 'evidence changed since the request (serial now on another wheel): approval refused', v is None and code == 'PT409', (v, code, msg))
+cur.execute('rollback to savepoint stale')
+
+# configurable per company: grant the capability to one Manager; the two-person rule still holds
 cur.execute("""insert into public.user_access_grants (org_id, user_id, module_key, capability, effect, granted_by, note)
                values (%s, %s, 'corrective_actions', 'erp_serial_exception', 'grant', %s, 'Synthetic grant')""",
             (ALPHA, USER['alpha.manager'], USER['alpha.admin']))
 r = rules('alpha.manager')
-check('X exception', 'granting the capability to a person enables it for them', r.get('can_record_exception') is True, r)
-v, code, msg = exception('serial_exc_grant', 'alpha.manager')
-check('X exception', 'the granted Manager records an exception', v is not None and v['ok'] is True, (v, code, msg))
-v, code, msg = exception('serial_supports', 'alpha.director')
+check('X exception', 'granting the capability to a person lets them approve', r.get('can_approve_exception') is True, r)
+v, code, msg = request('serial_exc_grant', 'alpha.manager'); REQ_G = v and v['request_id']
+v, code, msg = approve(REQ_G, 'alpha.manager')
+check('X exception', 'SAME PERSON: the granted Manager still cannot approve their own request', v is None and code == '42501', (v, code, msg))
+v, code, msg = approve(REQ_S, 'alpha.manager')
+check('X exception', 'SAME PERSON: nor the other request they raised', v is None and code == '42501', (v, code, msg))
+v, code, msg = request('serial_supports', 'alpha.director'); REQ_D = v and v['request_id']
+v, code, msg = approve(REQ_D, 'alpha.manager')
+check('X exception', "the granted Manager approves a Director's request", v is not None and v['ok'] is True, (v, code, msg))
+v, code, msg = approve(REQ_G, 'alpha.director')
 check('X exception', 'another reviewer without the grant is still refused', v is None and code == '42501', (v, code, msg))
-r = q("select has_function_privilege('authenticated', 'public.observation_erp_decide_core(uuid,uuid,text,text,text)', 'execute')")[0][0]
+# an approver must have the country and the site in scope
+v, code, msg = request('serial_exc_scope', 'alpha.director'); REQ_C = v and v['request_id']
+cur.execute('savepoint scope'); set_profile('alpha.manager', sites=['ALPHA EAST PLANT'])
+v, code, msg = approve(REQ_C, 'alpha.manager')
+check('X exception', 'an approver whose sites do not include the action site is refused', v is None and code == '42501', (v, code, msg))
+v, code, msg = close(REQ_C, 'alpha.manager', 'refused')
+check('X exception', 'and cannot refuse it either', v is None and code == '42501', (v, code, msg))
+cur.execute('rollback to savepoint scope')
+cur.execute('savepoint scope'); set_profile('alpha.manager', country=['UAE'])
+v, code, msg = approve(REQ_C, 'alpha.manager')
+check('X exception', 'an approver whose countries do not include the action country is refused', v is None and code == '42501', (v, code, msg))
+cur.execute('rollback to savepoint scope')
+cur.execute('savepoint scope'); set_profile('alpha.manager', locked=True)
+v, code, msg = approve(REQ_C, 'alpha.manager')
+check('X exception', 'a locked approver is refused', v is None and code == '42501', (v, code, msg))
+cur.execute('rollback to savepoint scope')
+r = q("select has_function_privilege('authenticated', 'public.observation_erp_decide_core(uuid,uuid,text,text,text,uuid,text)', 'execute')")[0][0]
 check('X exception', 'the writer that accepts an exception basis is closed to signed-in users', r is False, r)
+r = q("""select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+         where n.nspname = 'public' and p.proname in ('request_observation_erp_serial_exception', 'approve_observation_erp_serial_exception', 'close_observation_erp_serial_exception')
+           and (has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('public', p.oid, 'execute'))""")[0][0]
+check('X exception', 'no exception function is callable by anon or PUBLIC', r == 0, r)
+n = q("""select count(*) from public.observation_erp_exception_requests where status in ('approved', 'refused') and decided_by = requested_by""")[0][0]
+check('X exception', 'no stored decision was made by its own requester', n == 0, n)
 
 # ------------------------------------------------------------------ P: permission matrix
 # role x site x country x company x account state, on one offered case (C['perm'], ALPHA / KSA / north plant).
 ROLES = ['admin', 'director', 'manager', 'engineer', 'tyreman', 'driver', 'inspector']
 ELEVATED = {'admin', 'director', 'manager'}
 matrix = {'allowed': 0, 'refused': 0, 'wrong': 0}
-def set_profile(user, **cols):
-    cur.execute("set local session_replication_role = replica")
-    for k, val in cols.items():
-        cur.execute(f"update public.profiles set {k} = %s where id = %s", (val, USER[user]))
-    cur.execute("set local session_replication_role = origin")
-
-def probe(user, expect_ok, label):
-    for kind in ('evaluate', 'confirm', 'reject'):
+# two more calls per cell: ask for a serial exception, and approve one raised by the Director
+v, code, msg = request('serial_exc_matrix', 'alpha.director'); REQ_M = v and v['request_id']
+check('P matrix', 'a pending request by the Director exists for the approval probes', REQ_M is not None, (v, code, msg))
+def probe(user, expect_ok, label, expect_approve=False):
+    for kind in ('evaluate', 'confirm', 'reject', 'request exception', 'approve exception'):
         cur.execute('savepoint probe')
         if kind == 'evaluate':
             v, code, msg = evaluate('perm', user)
+        elif kind == 'request exception':
+            v, code, msg = request('serial_exc_matrix2', user)
+        elif kind == 'approve exception':
+            v, code, msg = approve(REQ_M, user)
+            cur.execute('rollback to savepoint probe')
+            ok = (v is not None) if expect_approve else (v is None and code == '42501')
+            matrix['allowed' if (ok and expect_approve) else 'refused' if ok else 'wrong'] += 1
+            if not ok:
+                check('P matrix', f'{label}: {user} {kind}', False, (v, code, msg))
+            continue
         else:
             v, code, msg = decide('perm', 'confirmed' if kind == 'confirm' else 'rejected', user)
         cur.execute('rollback to savepoint probe')
@@ -447,11 +622,15 @@ for company in ('alpha', 'beta'):
                     # follow the profile for everyone, Admin included.
                     scope_ok = country == 'own' and (site == 'own' or role == 'admin')
                     expect = company == 'alpha' and role in ELEVATED and state == 'active' and scope_ok
-                    probe(user, expect, f'{company}/{role}/country {country}/site {site}/{state}')
+                    # approving needs the separate capability and a different person than the
+                    # requester: Admin by default, plus alpha.manager who was GRANTED it in section X.
+                    # The Director raised the request and has no capability anyway.
+                    probe(user, expect, f'{company}/{role}/country {country}/site {site}/{state}',
+                          expect_approve=expect and role in ('admin', 'manager'))
                     cur.execute('rollback to savepoint cell')
 cells = 2 * len(ROLES) * 2 * 2 * 3
-check('P matrix', f'{cells} cells x 3 calls = {cells * 3} checks: {matrix["allowed"]} allowed, {matrix["refused"]} refused, {matrix["wrong"]} wrong',
-      matrix['wrong'] == 0 and matrix['allowed'] + matrix['refused'] == cells * 3, matrix)
+check('P matrix', f'{cells} cells x 5 calls = {cells * 5} checks: {matrix["allowed"]} allowed, {matrix["refused"]} refused, {matrix["wrong"]} wrong',
+      matrix['wrong'] == 0 and matrix['allowed'] + matrix['refused'] == cells * 5, matrix)
 # a reviewer switched off in Access Control (corrective_actions / approve revoked)
 cur.execute('savepoint capoff')
 cur.execute("""insert into public.user_access_grants (org_id, user_id, module_key, capability, effect, granted_by, note)
@@ -468,7 +647,7 @@ cur.execute("select set_config('request.jwt.claims', '', true)"); cur.execute('s
 out, code, msg = attempt("select public.observation_erp_evaluate(%s, %s)", C['perm'][:2])
 owner()
 check('P matrix', 'not signed in: refused', out is None and code == '42501', (code, msg))
-check('P matrix', 'the matrix left no link and no history behind', (links(), events()) == (n0[0] + 2, n0[1] + 2), (links(), events()))
+check('P matrix', 'the matrix left no link and no history behind', (links(), events()) == (n0[0] + 4, n0[1] + 4), (links(), events()))  # the four approved exceptions of section X
 
 # ------------------------------------------------------------------ F: admin layouts and layout history
 cur.execute('savepoint custom')
@@ -593,7 +772,10 @@ def run_file(name):
     # transaction cannot hold that several times over. It runs the FIRST time a file is applied
     # here (and is checked); repeats of the same file skip only that last line.
     owner()
-    with open(os.path.join(PENDING, name)) as fh:
+    path = os.path.join(PENDING, name)
+    if not os.path.exists(path):
+        path = os.path.join(HERE, '..', '..', 'migrations', name)
+    with open(path) as fh:
         sql = fh.read()
     if name in _reader_done:
         sql = sql.replace(READER_CALL, '')
@@ -606,10 +788,34 @@ def table_print():
       (select md5(coalesce(string_agg(md5(e::text), ',' order by id), '')) from public.observation_erp_link_events e),
       (select count(*) from public.observation_erp_links), (select count(*) from public.observation_erp_link_events)""")[0]
 
+FNS = ['observation_erp_decide(uuid,uuid,text,text)', 'confirm_observation_erp_link(uuid,uuid,text)', 'reject_observation_erp_link(uuid,uuid,text)']
+def fn_md5(sig): return q(f"select md5(pg_get_functiondef('public.{sig}'::regprocedure))")[0][0]
+def acl():
+    # One sorted entry list per function: PostgreSQL appends a re-granted entry at the end, so the
+    # text order can differ while the privileges are identical.
+    return q("""select p.oid::regprocedure::text, (select string_agg(a::text, ',' order by a::text) from unnest(p.proacl) a)
+                from pg_proc p where p.oid = any(%s::regprocedure[]) order by 1""", (['public.' + f for f in FNS],))
+PROD = {FNS[0]: '272f785a2a32256bfe2b83b99d131c1b', FNS[1]: '479f5400cf932e246c748909733be801', FNS[2]: 'f3109e20f4628824f4ecd90bd836e289'}
+PROD_ACL = 'authenticated=X/postgres,postgres=X/postgres,service_role=X/postgres'
+LOCKED_ACL = 'postgres=X/postgres,service_role=X/postgres'
+EXC = ['request_observation_erp_serial_exception(uuid,uuid,text)', 'approve_observation_erp_serial_exception(uuid,text)', 'close_observation_erp_serial_exception(uuid,text,text)']
+def exc_open():
+    return q("select " + ", ".join(f"has_function_privilege('authenticated', 'public.{f}', 'execute')" for f in EXC))[0]
+def unlock_for_test():
+    """TEST ONLY. Production is locked; the earlier function body is exercised here by granting
+    EXECUTE again inside this rolled-back transaction."""
+    for f in FNS:
+        cur.execute(f"grant execute on function public.{f} to authenticated")
+
 run_file('20261116091000_observation_erp_decide_ROLLBACK.sql')
 live_md5 = q("select md5(pg_get_functiondef('public.observation_erp_decide(uuid,uuid,text,text)'::regprocedure))")[0][0]
 check('G live', 'the rollback companion restores the exact production function (md5 272f785a...)',
       live_md5 == '272f785a2a32256bfe2b83b99d131c1b', live_md5)
+check('G live', 'the rollback companion leaves the interim lock in place (no EXECUTE for signed-in users)',
+      all(a_ == LOCKED_ACL for _, a_ in acl()) and exc_open() == (False, False, False), (acl(), exc_open()))
+v, code, msg = decide('mixer_typed')
+check('G live', 'after the rollback file a reviewer is refused by the lock', v is None and code == '42501' and 'permission denied for function' in (msg or ''), (v, code, msg))
+unlock_for_test()
 before_live = (links(), events())
 v, code, msg = decide('mixer_typed')
 check('G live', 'live function: confirms a typed mixer case', v is not None and links() == before_live[0] + 1, (v, code, msg))
@@ -652,17 +858,9 @@ check('G live', 'follow-up refuses what live accepted: wheel not on the register
 # ------------------------------------------------------------------ R: the rollback file, end to end
 # live function -> synthetic links and events -> follow-up -> rollback file: the function is
 # byte-identical to production again and no link or event row changed at any step.
-FNS = ['observation_erp_decide(uuid,uuid,text,text)', 'confirm_observation_erp_link(uuid,uuid,text)', 'reject_observation_erp_link(uuid,uuid,text)']
-def fn_md5(sig): return q(f"select md5(pg_get_functiondef('public.{sig}'::regprocedure))")[0][0]
-def acl():
-    # One sorted entry list per function: PostgreSQL appends a re-granted entry at the end, so the
-    # text order can differ while the privileges are identical.
-    return q("""select p.oid::regprocedure::text, (select string_agg(a::text, ',' order by a::text) from unnest(p.proacl) a)
-                from pg_proc p where p.oid = any(%s::regprocedure[]) order by 1""", (['public.' + f for f in FNS],))
-PROD = {FNS[0]: '272f785a2a32256bfe2b83b99d131c1b', FNS[1]: '479f5400cf932e246c748909733be801', FNS[2]: 'f3109e20f4628824f4ecd90bd836e289'}
-PROD_ACL = 'authenticated=X/postgres,postgres=X/postgres,service_role=X/postgres'
 run_file('20261116091000_observation_erp_decide_ROLLBACK.sql')
 check('R rollback', 'step 1: live function in place', fn_md5(FNS[0]) == PROD[FNS[0]], fn_md5(FNS[0]))
+unlock_for_test()
 cur.execute("set local session_replication_role = replica")
 C['rb1'] = make_case('ZPMX1', 'damage:R2Lo', [('LHRO', 'NEWTYRE070', AFTER, None)], insp_type='TR-MIXER')
 C['rb2'] = make_case('ZPMX1', 'damage:R2Ro', [('LHCO', 'NEWTYRE071', AFTER, None)], insp_type='TR-MIXER')
@@ -677,11 +875,16 @@ check('R rollback', 'step 4: rollback file run, function md5 equals production (
 check('R rollback', 'step 4: link and event rows byte-identical', table_print() == snap, (table_print(), snap))
 check('R rollback', 'step 4: tyre records, work orders, inspections, actions, fleet unchanged', fingerprint() == snap_rows)
 check('R rollback', 'the two wrappers are byte-identical to production throughout', all(fn_md5(f) == PROD[f] for f in FNS[1:]), [fn_md5(f) for f in FNS[1:]])
+check('R rollback', 'step 4: the interim lock is back on all three entry points and the exception functions are closed',
+      all(a_ == LOCKED_ACL for _, a_ in acl()) and exc_open() == (False, False, False), (acl(), exc_open()))
+n = q("select count(*) from public.observation_erp_exception_requests")[0][0]
+check('R rollback', 'step 4: exception request history is kept by the rollback', n > 0, n)
+unlock_for_test()
 v, code, msg = decide('rb1')
 check('R rollback', 'after rollback the live function still honours its link', v is not None and v['already_linked'] is True, (v, code, msg))
 
 # ------------------------------------------------------------------ L: interim lock (on the LIVE function)
-check('L lock', 'before: ACL equals production on all three entry points', all(a_ == PROD_ACL for _, a_ in acl()), acl())
+check('L lock', 'before: ACL as production had it before the lock (granted again here for the test)', all(a_ == PROD_ACL for _, a_ in acl()), acl())
 acl_before = acl(); snap = table_print(); snap_rows = fingerprint()
 LOOKUP = [  # the reads the evidence lookup and the review panel make
     "select count(*) from public.observation_erp_links", "select count(*) from public.observation_erp_link_events",
@@ -692,8 +895,8 @@ LOOKUP = [  # the reads the evidence lookup and the review panel make
 def reads(user):
     become(user); out = [q(x)[0][0] for x in LOOKUP]; owner(); return out
 reads_before = reads('alpha.manager')
-run_file('20261116084000_observation_erp_confirm_interim_lock.sql')
-want = 'postgres=X/postgres,service_role=X/postgres'
+run_file('20261115120856_observation_erp_confirm_interim_lock.sql')
+want = LOCKED_ACL
 check('L lock', 'after: only the owner and service_role keep EXECUTE', all(a_ == want for _, a_ in acl()), acl())
 check('L lock', 'no function body changed', all(fn_md5(f) == PROD[f] for f in FNS), [fn_md5(f) for f in FNS])
 paths = [("select public.observation_erp_decide(%s, %s, %s, 'confirmed')", 'decide confirm'),
@@ -725,13 +928,19 @@ check('L lock', 'rollback (the three grants in the header) restores the same ACL
 v, code, msg = decide('rb1')
 check('L lock', 'after the lock rollback the live path works as before', v is not None and v['already_linked'] is True, (v, code, msg))
 # lock, then the corrected function: it grants again on purpose
-run_file('20261116084000_observation_erp_confirm_interim_lock.sql')
+run_file('20261115120856_observation_erp_confirm_interim_lock.sql')
 run_file('20261116091000_observation_erp_decide_on_position_service.sql')
 check('L lock', 'the corrected function migration grants EXECUTE again on all three', all(a_ == PROD_ACL for _, a_ in acl()), acl())
 before = table_print()
 v, code, msg = decide('perm')
 check('L lock', 'and a reviewer can confirm an offered case on the corrected rules', v is not None and v['ok'] is True, (v, code, msg))
 check('L lock', 'which adds exactly one link and one history row', table_print()[2:] == (before[2] + 1, before[3] + 1), table_print())
+
+# lock -> corrected function -> rollback file: the earlier body AND the lock
+run_file('20261116091000_observation_erp_decide_ROLLBACK.sql')
+check('L lock', 'lock, follow-up, rollback file: md5 equals production and the lock is in place',
+      all(fn_md5(f) == PROD[f] for f in FNS) and all(a_ == LOCKED_ACL for _, a_ in acl()) and exc_open() == (False, False, False),
+      ([fn_md5(f) for f in FNS], acl(), exc_open()))
 
 conn.rollback()
 failed = [r for r in results if not r[2]]

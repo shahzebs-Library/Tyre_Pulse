@@ -49,7 +49,7 @@ import { positionsFromConfig } from './vehicleDiagram'
  * are the same: a client and a database on different rules can disagree about which wheel a
  * job card touched. CHANGE BOTH TOGETHER (pinned by observationErpEvidence.api.test.js).
  */
-export const ERP_RULES_VERSION = 'position-service-2'
+export const ERP_RULES_VERSION = 'position-service-3'
 
 export const POSITION_STATUS = Object.freeze({
   RESOLVED: 'resolved', AMBIGUOUS: 'ambiguous', UNKNOWN: 'unknown', INCONSISTENT: 'inconsistent',

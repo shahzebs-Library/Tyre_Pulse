@@ -6,6 +6,13 @@
 -- verbatim from that file. On 2026-11-15 the function this creates on the staging copy had the
 -- same md5(pg_get_functiondef) as production (see POSITION_ROUND2.md).
 -- It restores the hard-coded slot table; it does not touch a table, a policy or a row.
+--
+-- THE INTERIM LOCK STAYS. Production has had the interim lock since 2026-11-15 (version
+-- 20261115120856): signed-in users have no EXECUTE on this function or the two wrappers. The
+-- follow-up grants EXECUTE again; this rollback therefore ends by taking it away again, so the
+-- earlier function body is back AND cannot be called through the API. It does NOT re-grant.
+-- Expected after this file: md5 272f785a2a32256bfe2b83b99d131c1b, ACL on all three
+-- {postgres=X/postgres,service_role=X/postgres}.
 
 create or replace function public.observation_erp_decide(
   p_action_id uuid, p_work_order_id uuid, p_reason text, p_decision text)
@@ -133,10 +140,19 @@ begin
     'already_linked',(v_existing.id is not null));
 end $$;
 
--- Optional, only if nothing else uses them (they are harmless if left; the live function reads
--- none of them, and the two added nullable columns can stay):
---   drop function if exists public.observation_erp_rules();   -- the web client then reports
---        "ERP confirmation is not available yet" again, which is the intended safe state
---   drop function if exists public.confirm_observation_erp_link_by_exception(uuid,uuid,text);
---   drop function if exists public.observation_erp_decide_core(uuid,uuid,text,text,text);
---   drop function if exists public.observation_erp_evaluate(uuid,uuid);
+-- Back to the interim lock (the state production was in before the follow-up).
+revoke execute on function public.observation_erp_decide(uuid, uuid, text, text) from authenticated;
+revoke execute on function public.confirm_observation_erp_link(uuid, uuid, text) from authenticated;
+revoke execute on function public.reject_observation_erp_link(uuid, uuid, text) from authenticated;
+
+-- Left in place on purpose (harmless: the live function reads none of them; history is kept):
+--   the added nullable columns, the table observation_erp_exception_requests and its rows,
+--   observation_erp_rules() (remove it only if the web client should report "ERP confirmation
+--   is not available yet" again; with the lock in place a decision is refused anyway),
+--   request_ / approve_ / close_observation_erp_serial_exception, observation_erp_decide_core,
+--   observation_erp_evaluate (read only).
+-- The exception functions reach the one writer without going through observation_erp_decide,
+-- so the lock on decide alone would not stop them. EXECUTE on them is taken away as well.
+revoke execute on function public.request_observation_erp_serial_exception(uuid, uuid, text) from authenticated;
+revoke execute on function public.approve_observation_erp_serial_exception(uuid, text) from authenticated;
+revoke execute on function public.close_observation_erp_serial_exception(uuid, text, text) from authenticated;

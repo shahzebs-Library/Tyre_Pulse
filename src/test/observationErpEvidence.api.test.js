@@ -4,7 +4,7 @@
  * are not in the database yet.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ERP_RULES_VERSION } from '../lib/tyrePositionService'
 
@@ -53,7 +53,7 @@ beforeEach(() => {
     observation_erp_link_events: [],
   }
   h.state.errors = {}; h.state.rpcError = null; h.state.calls = []
-  h.state.rules = { data: { rules_version: 'position-service-2', can_review: true, can_record_exception: false }, error: null }
+  h.state.rules = { data: { rules_version: 'position-service-3', can_review: true, can_request_exception: true, can_approve_exception: false }, error: null }
   h.supabase.rpc.mockClear()
 })
 
@@ -172,14 +172,14 @@ describe('a decision is offered only when client and database run the same rules
   it('old database (the rules function does not exist): not available', async () => {
     h.state.rules = { data: null, error: { code: 'PGRST202', message: 'Could not find the function public.observation_erp_rules' } }
     const a = await api.getErpDecisionAvailability()
-    expect(a).toMatchObject({ available: false, reason: 'old_database', canReview: false, canRecordException: false })
+    expect(a).toMatchObject({ available: false, reason: 'old_database', canReview: false, canRequestException: false, canApproveException: false })
   })
   it('new database, same version: available, with what this person may do', async () => {
-    h.state.rules = { data: { rules_version: ERP_RULES_VERSION, can_review: true, can_record_exception: true }, error: null }
-    expect(await api.getErpDecisionAvailability()).toMatchObject({ available: true, reason: 'ok', canReview: true, canRecordException: true })
+    h.state.rules = { data: { rules_version: ERP_RULES_VERSION, can_review: true, can_request_exception: true, can_approve_exception: true }, error: null }
+    expect(await api.getErpDecisionAvailability()).toMatchObject({ available: true, reason: 'ok', canReview: true, canRequestException: true, canApproveException: true })
   })
-  it.each(['position-service-1', 'position-service-3'])('version mismatch (%s): not available, whichever side is ahead', async (v) => {
-    h.state.rules = { data: { rules_version: v, can_review: true, can_record_exception: true }, error: null }
+  it.each(['position-service-2', 'position-service-4'])('version mismatch (%s): not available, whichever side is ahead', async (v) => {
+    h.state.rules = { data: { rules_version: v, can_review: true, can_request_exception: true, can_approve_exception: true }, error: null }
     expect(await api.getErpDecisionAvailability()).toMatchObject({ available: false, reason: 'version_mismatch', databaseVersion: v, canReview: false })
   })
   it('any other failure is not available either, never assumed', async () => {
@@ -210,9 +210,54 @@ describe('a decision is offered only when client and database run the same rules
     const gate = Object.assign(new Error('x'), { cause: { code: '42501', message: 'Not authorised to confirm ERP evidence' } })
     expect(api.erpDecisionMessage(gate)).toBe('Your account is not allowed to record this decision.')
   })
-  it('a serial exception needs a real reason and uses its own function', async () => {
-    await expect(api.confirmObservationErpLinkByException({ actionId: 'a1', workOrderId: 'w1', note: 'too short' })).rejects.toBeTruthy()
-    await api.confirmObservationErpLinkByException({ actionId: 'a1', workOrderId: 'w1', note: 'Serial read off the removed tyre by the workshop' })
-    expect(h.supabase.rpc.mock.calls.at(-1)[0]).toBe('confirm_observation_erp_link_by_exception')
+  it('production today (interim lock applied, follow-up not applied): honest unavailable state, page keeps working', async () => {
+    // observation_erp_rules does not exist yet and EXECUTE on decide is withheld.
+    h.state.rules = { data: null, error: { code: 'PGRST202', message: 'Could not find the function public.observation_erp_rules in the schema cache' } }
+    const s = await api.getObservationErpReviewState('a1')          // must not throw
+    expect(s.decisions).toMatchObject({ available: false, reason: 'old_database', canReview: false, canRequestException: false, canApproveException: false })
+    expect(h.supabase.rpc.mock.calls.filter(([n]) => n === 'observation_erp_rules').length).toBe(1)
+    expect(h.supabase.rpc.mock.calls.filter(([n]) => n !== 'observation_erp_rules')).toEqual([])   // no decision RPC is tried
+    for (const fn of ['observation_erp_decide', 'confirm_observation_erp_link', 'reject_observation_erp_link']) {
+      const locked = Object.assign(new Error('x'), { cause: { code: '42501', message: `permission denied for function ${fn}` } })
+      const text = api.erpDecisionMessage(locked)
+      expect(text).toBe(api.ERP_DECISIONS_UNAVAILABLE_MESSAGE)
+      expect(text).not.toMatch(/permission denied|42501|function/i)
+    }
+  })
+  it('the applied interim lock is the last word in supabase/migrations: nothing after it grants EXECUTE again', () => {
+    const dir = resolve(process.cwd(), 'supabase/migrations')
+    const files = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()
+    const lock = '20261115120856_observation_erp_confirm_interim_lock.sql'
+    expect(files).toContain(lock)
+    const lockSql = readFileSync(resolve(dir, lock), 'utf8')
+    expect(lockSql).toMatch(/STATUS: APPLIED to production 2026-11-15/)
+    expect((lockSql.match(/^revoke execute on function public\.(observation_erp_decide|confirm_observation_erp_link|reject_observation_erp_link)\(/gm) || []).length).toBe(3)
+    expect(lockSql).not.toMatch(/^grant /m)
+    const regrant = /^\s*grant\s+execute[^;]*(observation_erp_decide|confirm_observation_erp_link|reject_observation_erp_link)[^;]*authenticated/im
+    for (const f of files.filter((x) => x > lock)) expect(regrant.test(readFileSync(resolve(dir, f), 'utf8')), f).toBe(false)
+    // the rollback companion of the unapplied follow-up restores the body and keeps the lock
+    const rb = readFileSync(resolve(process.cwd(), 'supabase/pending_migrations/20261116091000_observation_erp_decide_ROLLBACK.sql'), 'utf8')
+    expect(rb).not.toMatch(/^grant /m)
+    expect((rb.match(/^revoke execute on function public\.(observation_erp_decide|confirm_observation_erp_link|reject_observation_erp_link)\(/gm) || []).length).toBe(3)
+  })
+  it('a serial exception is two steps and two functions: request, then approval by somebody else', async () => {
+    await expect(api.requestObservationErpSerialException({ actionId: 'a1', workOrderId: 'w1', note: 'too short' })).rejects.toBeTruthy()
+    await api.requestObservationErpSerialException({ actionId: 'a1', workOrderId: 'w1', note: 'Serial read off the removed tyre by the workshop' })
+    expect(h.supabase.rpc.mock.calls.at(-1)).toEqual(['request_observation_erp_serial_exception',
+      { p_action_id: 'a1', p_work_order_id: 'w1', p_reason: 'Serial read off the removed tyre by the workshop' }])
+    await expect(api.approveObservationErpSerialException({ requestId: 'r1', note: '' })).rejects.toBeTruthy()
+    await api.approveObservationErpSerialException({ requestId: 'r1', note: 'Checked in the bay' })
+    expect(h.supabase.rpc.mock.calls.at(-1)).toEqual(['approve_observation_erp_serial_exception', { p_request_id: 'r1', p_note: 'Checked in the bay' }])
+    await expect(api.closeObservationErpSerialException({ requestId: 'r1', outcome: 'approved', note: 'not a closing outcome' })).rejects.toBeTruthy()
+    await api.closeObservationErpSerialException({ requestId: 'r1', outcome: 'refused', note: 'Serial does not match' })
+    expect(h.supabase.rpc.mock.calls.at(-1)[0]).toBe('close_observation_erp_serial_exception')
+  })
+  it('no single call can both raise and approve an exception', () => {
+    const sql = readFileSync(resolve(process.cwd(), 'supabase/pending_migrations/20261116091000_observation_erp_decide_on_position_service.sql'), 'utf8')
+    expect(sql).not.toMatch(/create or replace function public\.confirm_observation_erp_link_by_exception/)
+    expect(sql).toMatch(/constraint observation_erp_exception_two_person/)
+    expect(api.confirmObservationErpLinkByException).toBeUndefined()
+    const same = Object.assign(new Error('x'), { cause: { code: '42501', message: 'An exception must be approved by a different person than the one who requested it' } })
+    expect(api.erpDecisionMessage(same)).toBe('An exception must be approved by a different person than the one who asked for it.')
   })
 })

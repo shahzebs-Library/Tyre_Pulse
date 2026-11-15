@@ -39,7 +39,7 @@ function Candidate({ candidate, actionId, linked, limited, stale, blocked, onDec
         The wheel could not be matched on this vehicle, so this job card cannot be confirmed here. It stays pending manual review.
       </p>}
       {candidate.serialExceptionPossible && <p className="text-xs text-[var(--text-secondary)]">
-        The observed tyre serial is on this job card. A serial alone does not confirm the work. Only a separately authorised reviewer can record a documented exception.
+        The observed tyre serial is on this job card. A serial alone does not confirm the work. A documented exception needs two people: one reviewer asks for it and a different, separately authorised person approves it.
       </p>}
       {evidence.canonicalPosition && <p className="text-xs text-[var(--text-secondary)]">Wheel on this vehicle: {evidence.canonicalPosition}</p>}
       <div className="flex flex-wrap gap-2 text-xs text-[var(--text-secondary)]">

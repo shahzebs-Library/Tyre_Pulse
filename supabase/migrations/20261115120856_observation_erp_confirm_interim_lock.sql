@@ -2,11 +2,17 @@
 -- Interim restriction: no ERP job card decision can be recorded through the API until the
 -- corrected function is installed
 --
--- STATUS: AUTHORED, NOT APPLIED. Draft for owner review. Tested on the local staging copy
---         only. Nothing here ran on production. Do not apply without the owner's approval.
--- ORDER:  production action 1. Independent of the other drafts. Intended to be applied
---         BEFORE 20261116085000 / 090000 / 091000, and undone by 091000 (which grants again
---         on purpose) or by the ROLLBACK below.
+-- STATUS: APPLIED to production 2026-11-15 with the owner's explicit approval, recorded there as
+--         version 20261115120856 (observation_erp_confirm_interim_lock). The applied text was a
+--         baseline guard block (abort unless the three functions carry the expected ACL and
+--         hashes) followed by exactly the three REVOKE statements below.
+--         Verified on production after the apply (by the lead): ACL on all three functions
+--         {postgres=X/postgres,service_role=X/postgres}; decide / confirm / reject refused with
+--         42501 for a real Manager; reads work; function md5 unchanged (272f785a.., 479f5400..,
+--         f3109e20..); links 0, history 0.
+-- ORDER:  production action 1 (done). The drafts 20261116085000 / 090000 / 091000 are NOT
+--         approved. 091000 grants EXECUTE again on purpose; its ROLLBACK file restores the
+--         function body only and leaves this lock in place.
 --
 -- WHY: the function live in production (observation_erp_decide, md5
 --      272f785a2a32256bfe2b83b99d131c1b) checks company, country and role, but NOT site, and

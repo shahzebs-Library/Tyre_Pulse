@@ -165,11 +165,12 @@ export const ERP_DECISIONS_UNAVAILABLE_MESSAGE =
  * Never assumed available. Evidence lookup does not depend on this.
  *
  * @returns {Promise<{available:boolean, reason:'ok'|'old_database'|'version_mismatch'|'unknown',
- *   canReview:boolean, canRecordException:boolean, databaseVersion:string|null, clientVersion:string}>}
+ *   canReview:boolean, canRequestException:boolean, canApproveException:boolean,
+ *   databaseVersion:string|null, clientVersion:string}>}
  */
 export async function getErpDecisionAvailability() {
   const none = (reason, databaseVersion = null) => ({
-    available: false, reason, canReview: false, canRecordException: false, databaseVersion, clientVersion: ERP_RULES_VERSION,
+    available: false, reason, canReview: false, canRequestException: false, canApproveException: false, databaseVersion, clientVersion: ERP_RULES_VERSION,
   })
   let res
   try { res = await supabase.rpc('observation_erp_rules') } catch { return none('unknown') }
@@ -179,21 +180,54 @@ export async function getErpDecisionAvailability() {
   if (version !== ERP_RULES_VERSION) return none('version_mismatch', version)
   return {
     available: true, reason: 'ok', canReview: res.data.can_review === true,
-    canRecordException: res.data.can_record_exception === true, databaseVersion: version, clientVersion: ERP_RULES_VERSION,
+    canRequestException: res.data.can_request_exception === true,
+    canApproveException: res.data.can_approve_exception === true, databaseVersion: version, clientVersion: ERP_RULES_VERSION,
   }
 }
 
 /**
- * Record a documented serial exception (wheel unresolved, observed serial on the job card).
- * The database decides who may: a separate, narrower permission than normal confirmation.
+ * A documented serial exception (wheel unresolved, observed serial on the job card) always
+ * takes TWO people. A reviewer asks; a different person who holds the separate permission
+ * approves or refuses. The database enforces both the permission and "not the same person";
+ * nothing is linked until the approval.
  */
-export async function confirmObservationErpLinkByException({ actionId, workOrderId, note }) {
+export async function requestObservationErpSerialException({ actionId, workOrderId, note }) {
   if (!actionId || !workOrderId || String(note || '').trim().length < 20) {
     throw new ServiceError('A serial exception needs a written reason of at least 20 characters.')
   }
-  return unwrap(await supabase.rpc('confirm_observation_erp_link_by_exception', {
+  return unwrap(await supabase.rpc('request_observation_erp_serial_exception', {
     p_action_id: actionId, p_work_order_id: workOrderId, p_reason: note.trim(),
   }))
+}
+
+/** Approve a pending exception request raised by somebody else. */
+export async function approveObservationErpSerialException({ requestId, note }) {
+  if (!requestId || String(note || '').trim().length < 5) {
+    throw new ServiceError('Write an approval note of at least five characters.')
+  }
+  return unwrap(await supabase.rpc('approve_observation_erp_serial_exception', {
+    p_request_id: requestId, p_note: note.trim(),
+  }))
+}
+
+/** Refuse (an authorised person other than the requester) or withdraw (the requester). */
+export async function closeObservationErpSerialException({ requestId, outcome, note }) {
+  if (!requestId || !['refused', 'withdrawn'].includes(outcome) || String(note || '').trim().length < 5) {
+    throw new ServiceError('Choose refuse or withdraw and write a note of at least five characters.')
+  }
+  return unwrap(await supabase.rpc('close_observation_erp_serial_exception', {
+    p_request_id: requestId, p_outcome: outcome, p_note: note.trim(),
+  }))
+}
+
+/** Exception requests recorded for one action, newest first. Read only. */
+export async function listObservationErpExceptionRequests(actionId) {
+  if (!actionId) return []
+  const res = await supabase.from('observation_erp_exception_requests')
+    .select('id, action_id, work_order_id, status, request_reason, requested_by, requested_at, decided_by, decided_at, decision_note')
+    .eq('action_id', actionId).order('requested_at', { ascending: false }).limit(50)
+  if (res.error) { if (isNotProvisioned(res.error)) return []; return unwrap(res) }
+  return res.data || []
 }
 
 /** True when a Confirm or Reject failed only because the review functions do not exist yet. */
@@ -219,7 +253,9 @@ const REFUSALS = [
   [/Job card number missing/i, 'This job card has no number, so it cannot be linked.'],
   [/(Country|Site) is outside permitted scope/i, 'This job card is outside the countries or sites you can review.'],
   [/Decision and reason are required/i, 'Write a reason of at least five characters.'],
-  [/Not authorised to (confirm ERP evidence|record a serial exception)/i, 'Your account is not allowed to record this decision.'],
+  [/approved by a different person/i, 'An exception must be approved by a different person than the one who asked for it.'],
+  [/Not authorised to (confirm ERP evidence|approve a serial exception|refuse this exception request)/i, 'Your account is not allowed to record this decision.'],
+  [/exception request (was already decided|for this job card is already waiting)/i, 'This exception request is already waiting for approval or was already decided.'],
   [/serial exception (does not apply|needs a written reason)/i, 'A serial exception cannot be recorded for this job card.'],
 ]
 export function erpDecisionMessage(err) {

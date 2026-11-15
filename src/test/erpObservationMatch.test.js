@@ -4,7 +4,7 @@ import { evaluateErpCandidate, matchObservationToErp, detectConfirmedErpDrift } 
 const inspection = { id: 'i1', asset_no: 'MP107', country: 'KSA', inspection_date: '2026-11-10' }
 const finding = { rawPosition: 'LHR1-O', serial: 'OLD-123' }
 const workOrder = { id: 'j1', work_order_no: 'JC-101', asset_no: 'MP107', country: 'KSA', opened_at: '2026-11-11', description: 'Tyre replacement' }
-const fitment = { asset_no: 'MP107', country: 'KSA', job_card: 'JC-101', position: 'LHR1-O', serial_no: 'OLD-123' }
+const fitment = { asset_no: 'MP107', country: 'KSA', job_card: 'JC-101', position: 'LHR1-O', serial_no: 'OLD-123', removal_date: '2026-11-11' }
 const expense = { asset_code: 'MP107', country: 'KSA', work_order_no: 'JC-101', item_description: 'Tyre', value_amount: 1000 }
 
 describe('ERP to inspection evidence matcher', () => {
@@ -30,6 +30,10 @@ describe('ERP to inspection evidence matcher', () => {
   })
   it('does not match work that predates the inspection', () => {
     expect(evaluate({ workOrder: { ...workOrder, opened_at: '2026-11-09' } }).status).toBe('conflict')
+  })
+  it('requires a dated tyre movement after the observation', () => {
+    expect(evaluate({ fitments: [{ ...fitment, removal_date: '2026-11-09' }] }).eligibleToConfirm).toBe(false)
+    expect(evaluate({ fitments: [{ ...fitment, removal_date: null, issue_date: null }] }).eligibleToConfirm).toBe(false)
   })
   it('does not infer cost from tyre fitment or work order', () => {
     expect(evaluate({ expenses: [] }).evidenceSummary.expenseRows).toBe(0)

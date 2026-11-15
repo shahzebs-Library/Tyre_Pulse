@@ -23,6 +23,13 @@ export function evaluateErpCandidate({ inspection, finding, workOrder, fitments 
   const serial = key(finding?.serial)
   const exactPosition = sameJobFitments.filter(f => key(f.position || f.tyre_position) === position)
   const exactSerial = sameJobFitments.filter(f => key(f.serial_no) === serial)
+  const inspectionDate = inspection.inspection_date || inspection.completed_date || inspection.created_at
+  const datedTyreEvidence = exactPosition.filter(f => {
+    const removalGap = daysBetween(inspectionDate, f.removal_date)
+    const fitmentGap = daysBetween(inspectionDate, f.issue_date)
+    return (removalGap != null && removalGap >= 0) || (fitmentGap != null && fitmentGap >= 0)
+  })
+  if (exactPosition.length && !datedTyreEvidence.length) conflicts.push('Tyre movement date is missing or predates observation')
   if (sameJobFitments.length && position && !exactPosition.length) conflicts.push('ERP tyre positions do not match observation')
   if (serial && sameJobFitments.length && !exactSerial.length) conflicts.push('Recorded tyre serial not found on this job card')
   if (exactPosition.length) reasons.push('Matching wheel position in tyre consumption')
@@ -30,7 +37,6 @@ export function evaluateErpCandidate({ inspection, finding, workOrder, fitments 
   const related = expenses.filter(e => key(e.work_order_no) === job && sameErpIdentity(inspection, e))
   if (related.length) reasons.push('Expense lines found for this job card')
   // Never derive a tyre cost from a work order or a tyre lifecycle record.
-  const inspectionDate = inspection.inspection_date || inspection.completed_date || inspection.created_at
   const start = workOrder.opened_at || workOrder.completed_at
   const delta = daysBetween(inspectionDate, start)
   if (delta != null && delta < 0) conflicts.push('Work order began before the recorded inspection')
@@ -39,7 +45,7 @@ export function evaluateErpCandidate({ inspection, finding, workOrder, fitments 
   const description = key([workOrder.description, workOrder.notes].filter(Boolean).join(' '))
   if (/TYRE|TIRE|PUNCTURE|WHEEL/.test(description)) reasons.push('Tyre-related job description')
   // A job card alone or a cost line alone is insufficient to call a tyre repaired.
-  const sufficient = !!exactPosition.length && !!job && conflicts.length === 0 && delta != null && delta >= 0
+  const sufficient = !!datedTyreEvidence.length && !!job && conflicts.length === 0 && delta != null && delta >= 0
   const status = conflicts.length ? 'conflict' : sufficient ? 'review' : 'insufficient'
   return {
     workOrder, fitments: sameJobFitments, expenses: related,

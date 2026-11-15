@@ -36,7 +36,9 @@ export function uniqueSites(records = []) {
  * 'recordCount' for workshops. Input order (the engine's score order) is kept.
  */
 export function rankByScore(list = [], minRecords = 1, countKey = 'count') {
-  const kept = (list || []).filter((v) => (v[countKey] ?? 0) >= minRecords)
+  // ENG-8: an entry with no measured term has score null. It is not ranked and
+  // not shown as a zero score; it is left out of the ranking.
+  const kept = (list || []).filter((v) => (v[countKey] ?? 0) >= minRecords && v.score !== null)
   const maxScore = Math.max(...kept.map((v) => v.score || 0), 1)
   return kept.map((v, i) => ({
     ...v,

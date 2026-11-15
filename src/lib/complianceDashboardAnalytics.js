@@ -10,14 +10,14 @@
  *   - The overall score re-normalises its 40/30/30 weights over the areas that
  *     WERE measured, and is null when none were. It states which areas it
  *     covers, so a two-area score is never presented as a three-area one.
- *   - A site with no pressure reading is not "0% compliant": it is absent from
- *     the by-site pressure chart, whose denominator is tyres WITH a reading.
+ *   - Pressure compliance comes from complianceRules.js, not from this file.
  */
 
 export const LEGAL_MIN_TREAD = 1.6
 export const FLEET_MIN_TREAD = 3.0
-export const PRESSURE_MIN_PSI = 85
-export const PRESSURE_MAX_PSI = 130
+// Pressure is NOT judged here. The page takes it from src/lib/complianceRules.js
+// (the kpiEngine vehicle-median rule), the one definition shared with the Safety
+// score view. The fixed 85 to 130 PSI band on tyre records was retired.
 export const INSPECTION_MAX_DAYS = 30
 export const INSPECTION_DUE_DAYS = 45
 export const AREA_WEIGHTS = { tread: 0.4, pressure: 0.3, inspection: 0.3 }
@@ -56,13 +56,6 @@ export function treadClass(r) {
   return 'ok'
 }
 
-/** 'OK' | 'Anomaly' | 'No Data' for one tyre's pressure reading. */
-export function pressureFlag(r) {
-  const v = num(r?.pressure_reading)
-  if (v == null || v <= 0) return 'No Data'
-  return v < PRESSURE_MIN_PSI || v > PRESSURE_MAX_PSI ? 'Anomaly' : 'OK'
-}
-
 export function treadStats(tyres = []) {
   const counts = { legal_fail: 0, below_min: 0, ok: 0, no_data: 0 }
   for (const r of tyres) counts[treadClass(r)] += 1
@@ -75,20 +68,6 @@ export function treadStats(tyres = []) {
     fleetFail: counts.legal_fail + counts.below_min,
     noData: counts.no_data,
     pct: withData > 0 ? (counts.ok / withData) * 100 : null,
-  }
-}
-
-export function pressureStats(tyres = []) {
-  const counts = { OK: 0, Anomaly: 0, 'No Data': 0 }
-  for (const r of tyres) counts[pressureFlag(r)] += 1
-  const withReading = counts.OK + counts.Anomaly
-  return {
-    total: tyres.length,
-    withReading,
-    compliant: counts.OK,
-    anomalies: counts.Anomaly,
-    noReading: counts['No Data'],
-    pct: withReading > 0 ? (counts.OK / withReading) * 100 : null,
   }
 }
 
@@ -229,20 +208,6 @@ export function treadBySite(tyres = []) {
   return [...map.values()].map((s) => ({ ...s, pct: (s.ok / s.total) * 100 })).sort((a, b) => b.pct - a.pct || a.site.localeCompare(b.site))
 }
 
-/** Pressure compliance per site over tyres WITH a reading. */
-export function pressureBySite(tyres = []) {
-  const map = new Map()
-  for (const r of tyres) {
-    const f = pressureFlag(r)
-    if (!r.site || f === 'No Data') continue
-    const s = map.get(r.site) || { site: r.site, ok: 0, total: 0 }
-    s.total += 1
-    if (f === 'OK') s.ok += 1
-    map.set(r.site, s)
-  }
-  return [...map.values()].map((s) => ({ ...s, pct: (s.ok / s.total) * 100 })).sort((a, b) => b.pct - a.pct || a.site.localeCompare(b.site))
-}
-
 export function inspectionBySite(rows = []) {
   const map = new Map()
   for (const r of rows) {
@@ -262,10 +227,3 @@ export function nonCompliantTyres(tyres = [], now = new Date()) {
     .sort((a, b) => (treadOf(a) ?? -1) - (treadOf(b) ?? -1))
 }
 
-/** Tyres with an out-of-band reading or no reading, anomalies first. */
-export function pressureExceptions(tyres = []) {
-  return tyres
-    .map((r) => ({ ...r, pressureFlag: pressureFlag(r) }))
-    .filter((r) => r.pressureFlag !== 'OK')
-    .sort((a, b) => (a.pressureFlag === 'Anomaly' ? 0 : 1) - (b.pressureFlag === 'Anomaly' ? 0 : 1))
-}

@@ -134,3 +134,35 @@ describe('advancedAnalyticsAnalytics', () => {
     expect(heatColor(100, 0, 10)).toBe(heatColor(10, 0, 10))
   })
 })
+
+describe('applyGridAssetCost (one tyre cost source per vehicle)', () => {
+  const base = {
+    vehicles: [
+      { assetNo: 'TM1', totalCost: 100, avgCpk: 0.01 },
+      { assetNo: 'tm2 ', totalCost: 900, avgCpk: 0.02 },
+      { assetNo: 'TM3', totalCost: 500, avgCpk: null },
+    ],
+    top20Cost: [],
+  }
+  it('takes each vehicle cost from the grid map and rebuilds the ranking', async () => {
+    const { applyGridAssetCost } = await import('../lib/advancedAnalyticsAnalytics')
+    const map = new Map([['TM1', { amount: 700, currency: 'SAR' }], ['TM2', { amount: 50, currency: 'SAR' }]])
+    const out = applyGridAssetCost(base, map)
+    expect(out.costBasis).toBe('grid')
+    expect(out.vehicles.map((v) => v.totalCost)).toEqual([700, 50, null])
+    expect(out.top20Cost.map((v) => v.assetNo)).toEqual(['TM1', 'tm2 '])
+    // CPK is not a cost total and stays on the per-fitment rule.
+    expect(out.vehicles[0].avgCpk).toBe(0.01)
+  })
+  it('a vehicle with no grid line reads null, never 0', async () => {
+    const { applyGridAssetCost } = await import('../lib/advancedAnalyticsAnalytics')
+    expect(applyGridAssetCost(base, new Map()).vehicles.every((v) => v.totalCost === null)).toBe(true)
+  })
+  it('keeps tyre record prices, and says so, when there is no grid map', async () => {
+    const { applyGridAssetCost } = await import('../lib/advancedAnalyticsAnalytics')
+    const out = applyGridAssetCost(base, null)
+    expect(out.costBasis).toBe('tyre_records')
+    expect(out.vehicles[1].totalCost).toBe(900)
+    expect(applyGridAssetCost(null, new Map())).toBeNull()
+  })
+})

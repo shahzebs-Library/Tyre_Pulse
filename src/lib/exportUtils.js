@@ -2266,6 +2266,8 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
         } catch { embedded = false }
       }
       if (!embedded) {
+        // Reported to the caller only (no drawing): a copy with a missing photo must not be stored for reuse.
+        if (Array.isArray(opts.warnings)) opts.warnings.push('photo_unavailable')
         doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
         doc.text('Image unavailable', x + boxW / 2, rowTop + imgH / 2, { align: 'center' })
       }

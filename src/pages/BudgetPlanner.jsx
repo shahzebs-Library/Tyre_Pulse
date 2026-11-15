@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useWriteAccess } from '../hooks/useWriteAccess'
 import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme, reportFileName } from '../lib/exportUtils'
@@ -97,7 +98,13 @@ export default function BudgetPlanner() {
   const { branding } = useTenant()
   const { t } = useLanguage()
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
-  const isAdmin = profile?.role === 'Admin'
+  // Named isAdmin for history; it is "may write budgets": Admin, or a role or
+  // person an Admin gave the budgets create and edit rights to. Asked of the
+  // server (same rule as the Budgets page) so the two editors always agree.
+  const budgetAccess = useWriteAccess('budgets')
+  // `known` is required: budget editing stays closed while the server answer is
+  // loading or could not be read, as it was before for every non-Admin.
+  const isAdmin = budgetAccess.known && budgetAccess.create && budgetAccess.edit
 
   const now = useMemo(() => new Date(), [])
   const currentYear = now.getFullYear()

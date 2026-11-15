@@ -284,7 +284,7 @@ export default function CpkScenarioStudioPanel({
     if (!rows.length) return
     const name = reportFileName('TyrePulse CPK Scenario Studio', countryLabel, reportDateLabel())
     const colKeys = ['name', 'km', 'km_cpk', 'hours', 'hours_cpk', 'note']
-    const headers = ['Scenario', 'Km', `Cost per km (${cur})`, 'Hours', `Cost per hour (${cur})`, 'Note']
+    const headers = ['Scenario', 'Tyre km', `Modelled cost per tyre km, what-if (${cur})`, 'Hours', `Cost per engine hour (${cur})`, 'Note']
     if (kind === 'excel') {
       exportToExcel(rows, colKeys, headers, name, 'CPK Scenarios')
     } else {
@@ -312,7 +312,7 @@ export default function CpkScenarioStudioPanel({
     if (!rows.length) return
     const name = reportFileName('TyrePulse CPK By Branch', countryLabel, reportDateLabel())
     const colKeys = ['site', 'region', 'assets', 'km', 'km_cpk', 'hours', 'hours_cpk']
-    const headers = ['Branch', 'Region', 'Assets', 'Km', `Cost per km (${cur})`, 'Hours', `Cost per hour (${cur})`]
+    const headers = ['Branch', 'Region', 'Assets', 'Tyre km', `Modelled cost per tyre km, what-if (${cur})`, 'Hours', `Cost per engine hour (${cur})`]
     if (kind === 'excel') {
       exportToExcel(rows, colKeys, headers, name, 'CPK By Branch')
     } else {
@@ -340,10 +340,20 @@ export default function CpkScenarioStudioPanel({
         <div className="text-sm">
           <div className="font-semibold mb-1">Scenario Studio</div>
           <p style={{ color: 'var(--text-secondary)' }}>
-            Type a manual km total (or hours total) and watch fleet Cost-Per-Km recompute live. Scale
+            Type a manual km total (or hours total) and watch the modelled rate recompute live. Scale
             tyre, maintenance and tyre-price cost, add a flat extra cost, or exclude assets, then save
-            named scenarios to compare side by side. CPK = total cost / km (or hours); a null
-            denominator reads N/A. Money is per country in {cur} and is never blended.
+            named scenarios to compare side by side. A null denominator reads N/A. Money is per country
+            in {cur} and is never blended.
+          </p>
+          <p className="mt-2 flex items-start gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-xs" role="note" style={{ color: 'var(--text-secondary)' }}>
+            <Info size={12} className="mt-0.5 shrink-0" />
+            <span>
+              This is a what-if model, not a measured cost per km. The measured km here is tyre km (the
+              lifetime km of tyres taken off in the period), so a modelled rate that includes spares and oil
+              is not a tyre CPK and not a cost per vehicle km. Type the fleet&apos;s real vehicle km as the
+              manual km total to model an operating cost per vehicle km. Measured figures: Tyre CPK (lifetime)
+              on the Overview tab, operating cost per vehicle km on Expenses and CPK.
+            </span>
           </p>
         </div>
       </div>
@@ -386,13 +396,13 @@ export default function CpkScenarioStudioPanel({
             icon={Truck}
             title="Km-measured (road)"
             value={fmtInt(totals.kmSideKm)}
-            note={`${fmtInt(totals.kmAssets)} assets - this is CPK's km denominator`}
+            note={`${fmtInt(totals.kmAssets)} assets, tyre km (the tyre spend ratio denominator)`}
           />
           <TotalTile
             icon={Factory}
             title="Hours-measured plant km"
             value={fmtInt(totals.plantKm)}
-            note={`${fmtInt(totals.hoursAssets)} assets - real km, but costed per engine-hour, so NOT in the km CPK`}
+            note={`${fmtInt(totals.hoursAssets)} assets, tyre km of plant that is costed per engine hour, so not in the km side`}
           />
           <TotalTile
             icon={Gauge}
@@ -442,8 +452,8 @@ export default function CpkScenarioStudioPanel({
                 </span>
               </div>
               <p className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                If hours are removed, everything is costed per km: Cost/km = {fmtCpk(kmOnlyCpk)} over{' '}
-                {fmtInt(totals.totalKm)} km (total cost {fmtMoney(totals.totalCost, cur)}).
+                If hours are removed, everything is modelled per tyre km: {fmtCpk(kmOnlyCpk)} over{' '}
+                {fmtInt(totals.totalKm)} tyre km (total cost {fmtMoney(totals.totalCost, cur)}). A model, not a measured cost per km.
               </p>
             </div>
           )}
@@ -624,7 +634,7 @@ export default function CpkScenarioStudioPanel({
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <ResultCard
               icon={Truck}
-              title="Km side (cost per km)"
+              title="Km side (modelled cost per tyre km, what-if)"
               side={result?.km}
               delta={result?.delta?.km}
               base={result?.base?.km}
@@ -646,7 +656,7 @@ export default function CpkScenarioStudioPanel({
             <Info size={12} className="mt-0.5 shrink-0" />
             <span>
               The delta compares the scenario to the measured baseline. A "up" delta means cost per
-              unit rose. A null CPK (no km/hours) reads N/A. Money is per country in {cur}.
+              unit rose. A rate with no km or hours reads N/A. Money is per country in {cur}.
             </span>
           </p>
         </section>
@@ -711,7 +721,7 @@ export default function CpkScenarioStudioPanel({
               <tr>
                 <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>Scenario</th>
                 <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>Km</th>
-                <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>Cost per km ({cur})</th>
+                <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>Modelled cost per tyre km ({cur})</th>
                 <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>Hours</th>
                 <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>Cost per hour ({cur})</th>
                 <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>Actions</th>
@@ -828,7 +838,7 @@ export default function CpkScenarioStudioPanel({
                 <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>Branch</th>
                 <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>Assets</th>
                 <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>Km</th>
-                <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>Cost per km ({cur})</th>
+                <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>Modelled cost per tyre km ({cur})</th>
                 <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>Hours</th>
                 <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>Cost per hour ({cur})</th>
               </tr>
@@ -923,8 +933,8 @@ export default function CpkScenarioStudioPanel({
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               <TotalTile title="Moved assets" value={fmtInt(impact.movedAssets)} />
               <TotalTile title="Moved km" value={fmtInt(impact.movedKm)} />
-              <TotalTile title={`Current ${cur}/km`} value={fmtCpk(impact.currentCpk)} />
-              <TotalTile title={`${toSite} ${cur}/km`} value={fmtCpk(impact.targetCpk)} />
+              <TotalTile title={`Current modelled ${cur} per tyre km`} value={fmtCpk(impact.currentCpk)} />
+              <TotalTile title={`${toSite} modelled ${cur} per tyre km`} value={fmtCpk(impact.targetCpk)} />
               <TotalTile title="Projected cost" value={fmtMoney(impact.projectedCost, cur)} />
               <TotalTile title="Cost delta" value={fmtMoney(impact.costDelta, cur)} note={fmtPct(impact.costDeltaPct)} />
             </div>
@@ -933,7 +943,7 @@ export default function CpkScenarioStudioPanel({
               <span>
                 {impact.targetCpk == null ? (
                   <>Moving {fmtInt(impact.movedAssets)} assets from {fromSite} to {toSite}: N/A -{' '}
-                  {toSite} has no measured Cost/km to project against.</>
+                  {toSite} has no tyre km to project against.</>
                 ) : (
                   <>Moving {fmtInt(impact.movedAssets)} assets from {fromSite} to {toSite}&apos;s cost rate
                   changes cost by {fmtMoney(impact.costDelta, cur)} ({fmtPct(impact.costDeltaPct)}).</>
@@ -1038,9 +1048,9 @@ function ResultCard({ icon: Icon, title, side, delta, base, unitWord, cur }) {
       </div>
 
       <div className="mt-2 space-y-1">
-        <Line label={unitWord === 'km' ? 'Km' : 'Hours'} value={fmtInt(distance)} />
+        <Line label={unitWord === 'km' ? 'Tyre km (or manual km)' : 'Hours'} value={fmtInt(distance)} />
         <Line label="Total cost" value={fmtMoney(totalCost, cur)} />
-        <Line label="CPK tyre" value={fmtCpk(cpkTyre)} />
+        <Line label={unitWord === 'km' ? 'Tyre spend ratio' : 'Tyre cost per engine hour'} value={fmtCpk(cpkTyre)} />
       </div>
     </div>
   )

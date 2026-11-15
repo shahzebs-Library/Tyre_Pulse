@@ -37,6 +37,7 @@ import {
   serviceRows, disposalRows, linkedAssets, costRows, currencyOf, photoUrls, STATUS_OPTIONS,
 } from '../lib/tyreRecordsView'
 import { useAuth } from '../contexts/AuthContext'
+import { useWriteAccess } from '../hooks/useWriteAccess'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { ALL_CATEGORY_LABELS } from '../lib/tyreClassifier'
@@ -99,12 +100,17 @@ const NA = <span className="cc-na">N/A</span>
 
 export default function TyreRecords() {
   const { profile } = useAuth()
+  // What the database lets this role do on tyre_records (mirrors the live
+  // policies). Controls the role cannot use are disabled with the reason; the
+  // save paths below still report a refusal if the database says no.
+  const access = useWriteAccess('tyre_records')
   const { activeCountry, activeCurrency } = useSettings()
   const { t } = useLanguage()
   const invalidate = useInvalidate()
 
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState('')
+  const [bulkError, setBulkError] = useState('')
   const [records, setRecords]         = useState([])
   const [total, setTotal]             = useState(0)
   const [page, setPage]               = useState(0)
@@ -338,11 +344,27 @@ export default function TyreRecords() {
 
     if (Object.keys(patch).length === 0) { setSaving(false); setShowBulkEdit(false); return }
 
+    // Count what the database actually changed. A refused update matches zero
+    // rows without raising, so "no error" is not proof of a save.
     const ids = [...selected]
     const BATCH = 200
+    let updated = 0
+    let failure = null
     for (let i = 0; i < ids.length; i += BATCH) {
-      await tyreRecordsApi.updateRecordsByIds(ids.slice(i, i + BATCH), patch)
+      const res = await tyreRecordsApi.updateRecordsByIds(ids.slice(i, i + BATCH), patch)
+      if (res?.error) { failure = res.error; break }
+      updated += res?.updated ?? 0
     }
+    if (failure || updated < ids.length) {
+      const missed = ids.length - updated
+      setBulkError(failure
+        ? `${toUserMessage(failure, 'The bulk edit could not be saved.')} ${updated} of ${ids.length} records were updated.`
+        : `${missed} of ${ids.length} records were not updated. ${access.reason('edit')}`)
+      if (updated > 0) refreshAll()
+      setSaving(false)
+      return
+    }
+    setBulkError('')
     setShowBulkEdit(false)
     setBulkForm(EMPTY_BULK)
     clear()
@@ -448,18 +470,22 @@ export default function TyreRecords() {
     }
 
     // serial-less rows keep the old behaviour, because nothing else is possible
+    let noSerialMarked = 0
     if (noSerial.length) {
       const ids = noSerial.map(r => r.id)
       const BATCH = 200
       for (let i = 0; i < ids.length; i += BATCH) {
-        await tyreRecordsApi.updateRecordsByIds(ids.slice(i, i + BATCH), { status: 'Scrapped' })
+        const res = await tyreRecordsApi.updateRecordsByIds(ids.slice(i, i + BATCH), { status: 'Scrapped' })
+        noSerialMarked += res?.error ? 0 : (res?.updated ?? 0)
       }
     }
+    const noSerialRefused = noSerial.length - noSerialMarked
 
     if (failed.length || noSerial.length) {
       window.alert([
         failed.length ? `${failed.length} could not be scrapped: ${failed.slice(0, 5).join(', ')}${failed.length > 5 ? '...' : ''}` : '',
-        noSerial.length ? `${noSerial.length} row${noSerial.length === 1 ? '' : 's'} had no serial number, so they were marked scrapped without a traceable record.` : '',
+        noSerialMarked ? `${noSerialMarked} row${noSerialMarked === 1 ? '' : 's'} had no serial number, so they were marked scrapped without a traceable record.` : '',
+        noSerialRefused ? `${noSerialRefused} row${noSerialRefused === 1 ? '' : 's'} with no serial number could not be marked scrapped. ${access.reason('edit')}` : '',
       ].filter(Boolean).join('\n'))
     }
 
@@ -569,7 +595,7 @@ export default function TyreRecords() {
       cell: (r) => (
         <span className="tr-actions" onClick={(e) => e.stopPropagation()}>
           <button type="button" className="cc-icon-btn" aria-label="View tyre details" title="View details" onClick={() => showInDetail(r)}><Eye size={14} /></button>
-          <button type="button" className="cc-icon-btn" aria-label="Edit tyre record" title="Edit" onClick={() => openEdit(r)}><Edit2 size={14} /></button>
+          <button type="button" className="cc-icon-btn" aria-label="Edit tyre record" title={access.edit ? 'Edit' : access.reason('edit')} disabled={!access.edit} onClick={() => openEdit(r)}><Edit2 size={14} /></button>
           <button type="button" className="cc-icon-btn" aria-label="Full record and more actions" title="Full record" onClick={() => setDetailRecord(r)}><MoreVertical size={14} /></button>
         </span>
       ),
@@ -591,7 +617,7 @@ export default function TyreRecords() {
 
       <div className="tr-toolbar">
         {counts.error && <span className="tr-note" role="alert">Counts could not be loaded. <button type="button" className="cc-link cc-link-btn" onClick={counts.retry}>Retry</button></span>}
-        <button type="button" className="cc-btn-primary" onClick={openAdd}><Plus size={15} aria-hidden="true" /> Add Tyre Record</button>
+        <button type="button" className="cc-btn-primary" onClick={openAdd} disabled={!access.create} title={access.create ? undefined : access.reason('create')}><Plus size={15} aria-hidden="true" /> Add Tyre Record</button>
       </div>
 
       {exportError && (
@@ -690,7 +716,7 @@ export default function TyreRecords() {
         {showBulk && (
           <div className="cc-bulk">
             <span className="cc-bulk-count">{bulkCount ? `${fmtInt(bulkCount)} selected` : 'Select tyres in the table to act on them'}</span>
-            <button type="button" className="cc-btn-ghost" disabled={!bulkCount} onClick={() => { setBulkForm(EMPTY_BULK); setShowBulkEdit(true) }}><Edit2 size={14} aria-hidden="true" /> {t('records.bulk.bulkEdit')}</button>
+            <button type="button" className="cc-btn-ghost" disabled={!bulkCount || !access.edit} title={access.edit ? undefined : access.reason('edit')} onClick={() => { setBulkForm(EMPTY_BULK); setBulkError(''); setShowBulkEdit(true) }}><Edit2 size={14} aria-hidden="true" /> {t('records.bulk.bulkEdit')}</button>
             <button type="button" className="cc-btn-ghost" disabled={!bulkCount} onClick={() => handleBulkExport(selectedRows)}><Download size={14} aria-hidden="true" /> {t('records.bulk.exportSelected')}</button>
             <button type="button" className="cc-btn-ghost" disabled={!bulkCount} onClick={() => handleBulkScrap(selectedRows)}><Recycle size={14} aria-hidden="true" /> {t('records.bulk.markScrapped')}</button>
             <button type="button" className="cc-btn-ghost tr-danger" disabled={!bulkCount} onClick={() => setShowDeleteConfirm(true)}><Trash2 size={14} aria-hidden="true" /> {t('records.bulk.delete')}</button>
@@ -730,7 +756,7 @@ export default function TyreRecords() {
           ? <TyreDetail key={selectedRec.id} record={selectedRec} fleetRow={fleetFor(fleetMap, selectedRec)}
               vehicleInspection={inspMap?.get(String(selectedRec.asset_no || '').trim().toUpperCase()) || null}
               country={activeCountry} activeCurrency={activeCurrency}
-              onEdit={() => openEdit(selectedRec)} onFull={() => setDetailRecord(selectedRec)} />
+              onEdit={() => openEdit(selectedRec)} canEdit={access.edit} editReason={access.reason('edit')} onFull={() => setDetailRecord(selectedRec)} />
           : !loading && !loadError && records.length > 0 && <Card title="Tyre details"><div className="cc-empty">Select a tyre in the register to see its details.</div></Card>}
       </div>
 
@@ -757,7 +783,7 @@ export default function TyreRecords() {
             <CustomFieldsPanel data={detailRecord.extra_fields} title={t('records.detail.customFields')} />
           </div>
           <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-[var(--border-dim)]">
-            <button onClick={() => { openEdit(detailRecord); setDetailRecord(null) }} className="btn-secondary flex items-center gap-2 text-sm">
+            <button onClick={() => { openEdit(detailRecord); setDetailRecord(null) }} disabled={!access.edit} title={access.edit ? undefined : access.reason('edit')} className="btn-secondary flex items-center gap-2 text-sm disabled:opacity-50">
               <Edit2 size={14} /> {t('records.detail.editRecord')}
             </button>
             {serialOf(detailRecord) && (
@@ -848,6 +874,7 @@ export default function TyreRecords() {
       {showBulkEdit && (
         <Modal title={t('records.bulkEdit.title', { count: bulkCount })} onClose={() => setShowBulkEdit(false)} busy={saving}>
           <p className="text-sm text-muted mb-4">{t('records.bulkEdit.hint')}</p>
+          {bulkError && <p role="alert" className="text-sm text-red-400 mb-3">{bulkError}</p>}
           <form onSubmit={saveBulkEdit} className="space-y-3">
             <div>
               <label className="label">{t('records.bulkEdit.changeSite')}</label>
@@ -969,7 +996,7 @@ const DETAIL_TABS = [
   { key: 'cost', label: 'Cost history', icon: Receipt },
 ]
 
-function TyreDetail({ record, fleetRow, vehicleInspection, country, activeCurrency, onEdit, onFull }) {
+function TyreDetail({ record, fleetRow, vehicleInspection, country, activeCurrency, onEdit, onFull, canEdit = true, editReason = '' }) {
   const [tab, setTab] = useState('details')
   const serial = serialOf(record)
   const active = String(record.status || '').toLowerCase() === 'active'
@@ -1048,7 +1075,7 @@ function TyreDetail({ record, fleetRow, vehicleInspection, country, activeCurren
         </Card>
       ) : (
         <div className="tr-detail-grid">
-          <Card title="Tyre details" className="tr-a-details" action={<button type="button" className="cc-link cc-link-btn" onClick={onEdit}><Edit2 size={13} aria-hidden="true" /> Edit</button>}>
+          <Card title="Tyre details" className="tr-a-details" action={<button type="button" className="cc-link cc-link-btn" onClick={onEdit} disabled={!canEdit} title={canEdit ? undefined : editReason}><Edit2 size={13} aria-hidden="true" /> Edit</button>}>
             <div className="tr-details">
               <span className="tr-tyre-big" aria-hidden="true"><CircleDot size={56} /></span>
               <div className="tr-kv-head">

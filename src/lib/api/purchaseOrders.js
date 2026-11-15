@@ -9,7 +9,7 @@
  *   - stock + tyre_records use NULL-inclusive country scoping (`.or(...)`).
  *   - createPurchaseOrder receives a whitelisted payload built by the caller.
  */
-import { supabase, unwrap, fetchAllPages } from './_client'
+import { supabase, unwrap, fetchAllPages, toServiceError } from './_client'
 
 // Least-privilege insert column set for the Stock Replenishment PO flow. Only
 // the columns the page actually writes; omits organisation_id (RLS-managed),
@@ -40,16 +40,48 @@ export async function generatePoNumber() {
   return unwrap(await supabase.rpc('generate_po_number'))
 }
 
+/** Columns the replenishment planner needs from `stock_records`. */
+export const REPLENISHMENT_STOCK_COLS =
+  'id,site,brand,tyre_size,description,stock_qty,unit_cost,min_level,reorder_qty,country,updated_at'
+
 /**
- * List replenishment stock levels. Replicates the page's read exactly:
- * SELECT * from `stock`, NULL-inclusive country scoping, no ordering.
- * Throws ServiceError on failure.
+ * Shape one `stock_records` row the way the replenishment engine reads stock
+ * (`size`, `quantity`). A blank brand or size stays null: the planner then
+ * shows the line without usage rather than guessing a size from the
+ * description.
+ */
+export function toReplenishmentStockRow(r = {}) {
+  const text = (v) => { const t = v == null ? '' : String(v).trim(); return t || null }
+  return {
+    id: r.id,
+    site: text(r.site),
+    brand: text(r.brand),
+    size: text(r.tyre_size),
+    description: text(r.description),
+    quantity: r.stock_qty == null ? null : r.stock_qty,
+    unit_cost: r.unit_cost == null ? null : r.unit_cost,
+    min_level: r.min_level == null ? null : r.min_level,
+    reorder_qty: r.reorder_qty == null ? null : r.reorder_qty,
+    country: text(r.country),
+    updated_at: r.updated_at || null,
+  }
+}
+
+/**
+ * List replenishment stock levels from `stock_records`, the table the Stock
+ * module writes. It used to read `stock`, which nothing writes, so stock on
+ * hand was always empty. NULL-inclusive country scoping, paged (stable order
+ * with an id tiebreak). Throws ServiceError on failure.
  * @param {{country?:string}} [opts]
  */
 export async function listReplenishmentStock({ country } = {}) {
-  let q = supabase.from('stock').select('*')
-  if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
-  return unwrap(await q)
+  const { data, error } = await fetchAllPages((from, to) => {
+    let q = supabase.from('stock_records').select(REPLENISHMENT_STOCK_COLS)
+    if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
+    return q.order('site', { ascending: true }).order('id', { ascending: true }).range(from, to)
+  }, { max: 20000 })
+  if (error) throw toServiceError(error)
+  return (data || []).map(toReplenishmentStockRow)
 }
 
 /**

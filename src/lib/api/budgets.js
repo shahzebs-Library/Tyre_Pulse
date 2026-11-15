@@ -7,11 +7,13 @@
  * analytics loads via `.data`), so `listBudgets` and `listBudgetTyreRecords`
  * return the raw Supabase / fetchAllPages result the page consumes via `.data`
  * rather than throwing. The upsert/update helpers used at explicit user-driven
- * save points; `updateBudgetStatus` throws ServiceError via `unwrap`, while the
+ * save points; `updateBudgetStatus` throws ServiceError (or a refusal when no
+ * row changed), while the
  * upserts stay non-throwing to match the page's prior fire-and-forget saves
  * (`save` reads `.error` directly; `savePlannerEdits` ignored the result).
  */
-import { supabase, unwrap, fetchAllPages } from './_client'
+import { supabase, fetchAllPages } from './_client'
+import { expectRows } from './writeGuard'
 
 // Least-privilege column set for budgets. Live columns:
 // id,site,region,monthly_budget,year,month,created_by,created_at,country,status,
@@ -66,7 +68,12 @@ export async function upsertBudgets(rows) {
 
 /** Update a budget's status by id. Throws ServiceError on failure. */
 export async function updateBudgetStatus(id, status) {
-  return unwrap(await supabase.from('budgets').update({ status }).eq('id', id))
+  // Ask for the changed id back: a refused update matches zero rows and would
+  // otherwise look like a successful status change.
+  return expectRows(
+    await supabase.from('budgets').update({ status }).eq('id', id).select('id'),
+    'The budget status was not changed. Only an Admin, or someone given the budget edit right, can change a budget.',
+  )
 }
 
 /**

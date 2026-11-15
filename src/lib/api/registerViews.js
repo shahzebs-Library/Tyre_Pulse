@@ -23,6 +23,31 @@ import { normalizeView, emptyView } from '../registerViews'
 const TABLE = 'user_view_prefs'
 const COLS = 'id, module_key, name, is_default, view, updated_at'
 
+/**
+ * Remember, for this browser session, that the table is not there.
+ *
+ * Every register asks for its saved view on mount. While the table is not
+ * provisioned each of those requests is a 404 in the network log and a wasted
+ * round trip, on every page, for every user. After the FIRST definite "no such
+ * table" answer no further request is sent until the page is reloaded.
+ *
+ * Only a definite answer by CODE counts (42P01 from Postgres, PGRST205 from the
+ * API schema cache). A permission or network failure does not set it, so a
+ * transient fault never switches saved views off for the session.
+ */
+let tableMissing = false
+const isTableMissing = (error) => {
+  const code = String(error?.code || error?.cause?.code || '')
+  return code === '42P01' || code === 'PGRST205'
+}
+const noteMissing = (error) => { if (isTableMissing(error)) tableMissing = true }
+
+/** True once this session has learned the saved-views table is not provisioned. */
+export function savedViewsUnavailable() { return tableMissing }
+
+/** Test seam: forget the remembered state. */
+export function resetSavedViewsAvailability() { tableMissing = false }
+
 /** The unnamed "current arrangement" every operator gets without naming anything. */
 export const CURRENT_VIEW_NAME = ''
 
@@ -32,6 +57,7 @@ export const CURRENT_VIEW_NAME = ''
  */
 export async function listSavedViews(moduleKey) {
   if (!moduleKey) return []
+  if (tableMissing) return []
   try {
     const { data, error } = await supabase
       .from(TABLE)
@@ -41,7 +67,7 @@ export async function listSavedViews(moduleKey) {
       .order('name', { ascending: true })
     if (error) {
       // Not provisioned yet is a normal state, not a fault.
-      if (isMissingRelation(error)) return []
+      noteMissing(error)
       return []
     }
     return Array.isArray(data) ? data : []
@@ -76,6 +102,7 @@ export async function loadView(moduleKey, catalog) {
  */
 export async function saveView(moduleKey, view, { name = CURRENT_VIEW_NAME, isDefault = false } = {}) {
   if (!moduleKey) return { ok: false, reason: 'no-module' }
+  if (tableMissing) return { ok: false, reason: 'not-provisioned' }
   try {
     const payload = {
       module_key: moduleKey,
@@ -88,6 +115,7 @@ export async function saveView(moduleKey, view, { name = CURRENT_VIEW_NAME, isDe
       .from(TABLE)
       .upsert(payload, { onConflict: 'user_id,module_key,name' })
     if (error) {
+      noteMissing(error)
       if (isMissingRelation(error)) return { ok: false, reason: 'not-provisioned' }
       return { ok: false, reason: 'save-failed' }
     }
@@ -100,6 +128,7 @@ export async function saveView(moduleKey, view, { name = CURRENT_VIEW_NAME, isDe
 /** deleteView — remove one saved view by id. Same non-throwing contract. */
 export async function deleteView(id) {
   if (!id) return { ok: false, reason: 'no-id' }
+  if (tableMissing) return { ok: false, reason: 'not-provisioned' }
   try {
     const { error } = await supabase.from(TABLE).delete().eq('id', id)
     if (error) return { ok: false, reason: isMissingRelation(error) ? 'not-provisioned' : 'delete-failed' }
@@ -117,12 +146,14 @@ export async function deleteView(id) {
  */
 export async function setDefaultView(moduleKey, id) {
   if (!moduleKey || !id) return { ok: false, reason: 'no-id' }
+  if (tableMissing) return { ok: false, reason: 'not-provisioned' }
   try {
     const cleared = await supabase
       .from(TABLE)
       .update({ is_default: false })
       .eq('module_key', moduleKey)
       .eq('is_default', true)
+    if (cleared.error) noteMissing(cleared.error)
     if (cleared.error && isMissingRelation(cleared.error)) return { ok: false, reason: 'not-provisioned' }
 
     const { error } = await supabase.from(TABLE).update({ is_default: true }).eq('id', id)

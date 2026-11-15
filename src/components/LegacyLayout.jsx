@@ -27,7 +27,7 @@ import useAppShellScrollLock from '../hooks/useAppShellScrollLock'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
-import { isChecklistOnlyRole, isChecklistPathAllowed, CHECKLIST_ONLY_ROLES } from '../lib/checklistAccess'
+import { isChecklistOnlyRole, isChecklistPathAllowed, CHECKLIST_AUTHOR_ROLES, isChecklistNavVisible, canAuthorChecklists, CHECKLIST_ONLY_ROLES } from '../lib/checklistAccess'
 import { navItemAllowedForCustomRole, NAV_MODULE_KEY, governingModuleKey, isPathSwitchedOff } from '../lib/navAccess'
 import { ACCESS_ROLES } from '../lib/moduleCatalog'
 import { applyNavLayout } from '../lib/navLayout'
@@ -123,6 +123,15 @@ const AUDIT_ROLES = ['Admin', 'Integration Admin']
 
 // Eight operational workspaces (directive Phase 5) + Overview. Every route is
 // unchanged - pages are only regrouped and no journey is removed.
+// The single "Executive" entry stands for two pages that keep their own access
+// rules. It is shown to exactly the people who saw either of the old entries:
+// each member below is the old nav item, judged by shouldShowNavItem unchanged.
+// (Written without a label on purpose: these are rules, not sidebar items.)
+const EXECUTIVE_MEMBERS = [
+  { to: '/executive-report', adminOnly: A },
+  { to: '/executive-analytics', roles: ANALYTICS_ROLES },
+]
+
 const NAV_GROUPS = [
   {
     label: 'Overview',
@@ -135,7 +144,6 @@ const NAV_GROUPS = [
     label: 'Operations',
     items: [
       { to: '/fleet-master',        label: 'Fleet Master',       icon: TruckIc },
-      { to: '/asset-management',    label: 'Asset Management',   icon: LayoutGrid },
       { to: '/asset-disposals',     label: 'Asset Disposal',     icon: Recycle, roles: ANALYTICS_ROLES },
       { to: '/asset-breakdowns',    label: 'Breakdown Register', icon: Wrench, roles: ANALYTICS_ROLES },
       { to: '/sites',               label: 'Site Management',    icon: MapPin },
@@ -183,15 +191,11 @@ const NAV_GROUPS = [
   {
     label: 'Tyre Performance',
     items: [
-      { to: '/analytics',    label: 'Analytics',          icon: BarChart2,      roles: ANALYTICS_ROLES },
       { to: '/brand-perf',   label: 'Brand Performance',  icon: Shield,         roles: ANALYTICS_ROLES },
       { to: '/site-comp',    label: 'Site Comparison',    icon: Layers,         roles: ANALYTICS_ROLES },
       { to: '/fleet',        label: 'Fleet Analytics',    icon: GitBranch,      roles: ANALYTICS_ROLES },
       { to: '/kpi',          label: 'KPI Center',         icon: ClipboardCheck, roles: ANALYTICS_ROLES },
-      { to: '/kpi-engine',   label: 'Engineering KPI',    icon: Gauge,          roles: ANALYTICS_ROLES },
-      { to: '/kpi-command',  label: 'KPI Command Center', icon: Target,         roles: ANALYTICS_ROLES },
       { to: '/country-comp', label: 'Country Comparison', icon: Globe,          roles: ANALYTICS_ROLES },
-      { to: '/comparison',   label: 'Comparison',         icon: GitCompare,     roles: ANALYTICS_ROLES },
       { to: '/position-intelligence',  label: 'Position Intelligence',  icon: MapPin, adminOnly: A },
       { to: '/pressure-intel',         label: 'Pressure Intelligence',  icon: PsiGaugeIc, adminOnly: A },
       { to: '/predictive-maintenance', label: 'Predictive Maintenance', icon: ServiceCalendarIc, adminOnly: A },
@@ -200,7 +204,7 @@ const NAV_GROUPS = [
       { to: '/tyre-lifecycle',         label: 'Tyre Lifecycle',         icon: RefreshCw, adminOnly: A },
       { to: '/tyre-exchange',          label: 'Tyre Exchange',          icon: TyreSwapIc, adminOnly: A },
       { to: '/tyre-specs',             label: 'Tyre Specifications',    icon: PlyRatingIc, adminOnly: A },
-      { to: '/tyre-age-compliance',    label: 'Tyre Age Compliance',    icon: ShieldCheck, roles: ANALYTICS_ROLES },
+      { to: '/tyre-age-compliance',    label: 'Tyre Time in Service',    icon: ShieldCheck, roles: ANALYTICS_ROLES },
       { to: '/tyre-passport',          label: 'Tyre Passport',          icon: ScanLine },
       { to: '/fleet-risk-score',       label: 'Fleet Risk Score',       icon: ShieldAlert, roles: ANALYTICS_ROLES },
       { to: '/rotation-optimizer',     label: 'Rotation Optimizer',     icon: RotateCcw, roles: ANALYTICS_ROLES },
@@ -225,7 +229,6 @@ const NAV_GROUPS = [
       { to: '/workshop-settings', label: 'Workshop Settings', icon: SlidersHorizontal, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/parts-requests', label: 'Parts Requests', icon: Boxes, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/gate-pass',       label: 'Gate Pass',          icon: GatePassIc },
-      { to: '/workshop',        label: 'Workshop Management', icon: WorkshopIc, adminOnly: A },
       { to: '/technician-scorecard', label: 'Technician Scorecard', icon: Award, adminOnly: A },
       { to: '/pm-programs',     label: 'Preventive Maintenance', icon: CalendarClock, adminOnly: A },
       { to: '/vehicle-washing', label: 'Vehicle Washing',    icon: Droplet },
@@ -246,7 +249,7 @@ const NAV_GROUPS = [
       { to: '/stock',               label: 'Stock',               icon: StockBoxIc },
       { to: '/stock-replenishment', label: 'Stock Replenishment', icon: PackagePlus },
       { to: '/scrap',               label: 'Scrap Management',    icon: ScrapBinIc },
-      { to: '/tyre-pool',           label: 'Tyre Pool',           icon: PackageCheck },
+      { to: '/tyre-pool',           label: 'Tyre Pool',           icon: PackageCheck, roles: ANALYTICS_ROLES },
       { to: '/parts-catalog',       label: 'Parts Catalog',       icon: Boxes },
       { to: '/requisitions',        label: 'Requisitions',        icon: ClipboardList },
       { to: '/goods-receipt',       label: 'Goods Receipt',       icon: PackageCheck },
@@ -281,10 +284,9 @@ const NAV_GROUPS = [
       { to: '/my-checklists',          label: 'My Checklists',       icon: ClipboardList },
       { to: '/checklist-schedules',    label: 'Checklist Schedules', icon: Calendar, adminOnly: A },
       { to: '/checklist-insights',     label: 'Checklist Insights',  icon: ClipboardCheck, adminOnly: A },
-      { to: '/checklist-audit',        label: 'Audit Pack',          icon: ClipboardCheck, adminOnly: A },
+      { to: '/checklist-audit',        label: 'Audit Pack',          icon: ClipboardCheck, roles: CHECKLIST_AUTHOR_ROLES },
       { to: '/inspection-planner',     label: 'Inspection Planner',  icon: CalendarClock },
       { to: '/inspection-intelligence', label: 'Inspection Intelligence', icon: Activity, adminOnly: A },
-      { to: '/safety-compliance',      label: 'Safety & Compliance', icon: ShieldCheck, adminOnly: A },
       { to: '/compliance',             label: 'Compliance Dashboard', icon: Shield, adminOnly: A },
       { to: '/alerts',                 label: 'Alerts',              icon: Bell, adminOnly: A },
       { to: '/alert-thresholds',       label: 'Alert Thresholds',    icon: BellRing, adminOnly: A },
@@ -319,7 +321,6 @@ const NAV_GROUPS = [
     label: 'Reports & Executive',
     items: [
       { to: '/board-overview',    label: 'Board Overview',    icon: BarChartBig, roles: ANALYTICS_ROLES },
-      { to: '/tyre-failure-cpk',  label: 'Tyre Failure & CPK', icon: AlertTriangle, roles: ANALYTICS_ROLES },
       { to: '/maintenance-cost-board', label: 'Maintenance Cost & Tasks', icon: Wrench, roles: ANALYTICS_ROLES },
       { to: '/expense-report',    label: 'Expenses & CPK',    icon: Wallet, roles: ANALYTICS_ROLES },
       { to: '/expense-trends',    label: 'Expense Trends',    icon: TrendingUp, roles: ANALYTICS_ROLES },
@@ -332,7 +333,7 @@ const NAV_GROUPS = [
       { to: '/reports',           label: 'Reports',           icon: FileText },
       { to: '/dashboard-builder', label: 'Dashboard Builder', icon: LayoutGrid },
       { to: '/scheduled-reports', label: 'Scheduled Reports', icon: CalendarCheck2 },
-      { to: '/executive-report',  label: 'Executive Report',  icon: BookOpen, adminOnly: A },
+      { to: '/executive',  label: 'Executive', icon: BookOpen, anyOf: EXECUTIVE_MEMBERS },
       { to: '/roi-calculator',    label: 'ROI Calculator',    icon: DollarSign, roles: ANALYTICS_ROLES },
       { to: '/fleet-renewal',     label: 'Fleet Renewal',     icon: Truck, roles: ANALYTICS_ROLES },
       { to: '/tco-calculator',    label: 'TCO Calculator',    icon: Calculator, roles: ANALYTICS_ROLES },
@@ -345,7 +346,6 @@ const NAV_GROUPS = [
       { to: '/knowledge-base',    label: 'Knowledge Base',    icon: Brain, adminOnly: A },
       { to: '/ai-cost-monitor',   label: 'AI Cost Monitor',   icon: BarChart, adminOnly: A },
       { to: '/continuous-improvement', label: 'Continuous Improvement', icon: Zap, adminOnly: A },
-      { to: '/executive-analytics', label: 'Executive Analytics', icon: TrendingUp, roles: ANALYTICS_ROLES },
       { to: '/report-center',     label: 'Report Center',     icon: ScrollText, roles: ANALYTICS_ROLES },
     ],
   },
@@ -366,9 +366,6 @@ const NAV_GROUPS = [
       { to: '/cleaning',         label: 'Data Cleaning',      icon: Wand2, roles: CLEANING_ROLES },
       { to: '/data-reconciliation', label: 'Data Reconciliation', icon: GitCompare, adminOnly: true },
       { to: '/data-intake',      label: 'Data Intake Center', icon: Database },
-      { to: '/erp-import',       label: 'ERP Data Import',    icon: Upload, roles: ANALYTICS_ROLES },
-      { to: '/erp-intake',       label: 'Data Intake (ERP)', icon: Layers, roles: ANALYTICS_ROLES },
-      { to: '/expense-import',   label: 'Expense Import',     icon: Receipt, roles: ANALYTICS_ROLES },
       { to: '/upload-approvals', label: 'Upload Approvals',   icon: ClipboardList, roles: UPLOAD_ROLES },
       { to: '/custom-data',      label: 'Custom Data',        icon: Database },
       { to: '/audit',            label: 'Audit Trail',        icon: ClipboardList, roles: AUDIT_ROLES },
@@ -400,7 +397,14 @@ function shouldShowGroup(group, profile) {
   return group.groupRoles.includes(profile?.role)
 }
 
-function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin) {
+function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, moduleStatus) {
+  // A grouped entry (one menu item for several pages that keep their own access
+  // rules): shown when the user would have seen at least one member, each judged
+  // by the unchanged rules below, and that member is not switched Off.
+  if (Array.isArray(item.anyOf)) {
+    return item.anyOf.some((m) => shouldShowNavItem(m, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, moduleStatus)
+      && !(moduleStatus && isPathSwitchedOff(m.to, moduleStatus)))
+  }
   // Feature-flag gate first: a disabled capability is hidden entirely, so its
   // nav item never renders (not just redirected at the route).
   if (item.flag && isFlagEnabled && !isFlagEnabled(item.flag)) return false
@@ -432,8 +436,11 @@ function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedM
   }
   // Checklist-only role (Maintenance Supervisor): sidebar shows only checklists.
   if (isChecklistOnlyRole(profile?.role)) {
-    return isChecklistPathAllowed(item.to)
+    return isChecklistPathAllowed(item.to, hasPermission) && isChecklistNavVisible(item.to, profile?.role, isSuperAdmin)
   }
+  // The Audit Pack route admits CHECKLIST_AUTHOR_ROLES (and super admins), so the
+  // sidebar follows exactly that list.
+  if (item.to === '/checklist-audit') return canAuthorChecklists(profile?.role, isSuperAdmin)
   // If this nav item maps to a module, its visibility follows the access matrix +
   // per-user grants/revokes via hasPermission - so an admin turning a module OFF for
   // a role (or revoking a user) actually HIDES it from the sidebar, and turning it
@@ -473,16 +480,20 @@ function roleBadgeClass(role) {
 const TYRE_MAN_TABS = [
   { to: '/inspections', tk: 'inspect', label: 'Inspect',   icon: ClipboardCheck, end: false },
   { to: '/tyres',       tk: 'records', label: 'Records',   icon: Layers },
-  { to: '/work-orders', tk: 'work',    label: 'Work',      icon: Wrench },
+  // The person's own assigned jobs. Shown only when Work Orders is switched on for them, so the
+  // tab never leads to Access Restricted.
+  { to: '/my-jobs',     tk: 'work',    label: 'Work',      icon: Wrench, moduleKey: 'work_orders' },
   { to: '/scan',        tk: 'scan',    label: 'Scan',      icon: ScanLine },
   { to: '/settings',    tk: 'profile', label: 'Profile',   icon: User },
 ]
 
 function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
   const hasCustomIcon = Boolean(customAppIcon)
-  const { signOut, profile } = useAuth()
+  const { signOut, profile, hasPermission } = useAuth()
   const { t } = useLanguage()
   const location = useLocation()
+  const tabs = TYRE_MAN_TABS.filter((tab) => !tab.moduleKey
+    || (typeof hasPermission === 'function' && hasPermission(tab.moduleKey) === true))
   const { acquire: acquireWakeLock, release: releaseWakeLock } = useWakeLock()
   const [pendingCount, setPendingCount] = useState(0)
   const [failedCount, setFailedCount]   = useState(0)
@@ -661,7 +672,7 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
         }}
       >
         <div className="flex items-stretch h-[54px]">
-          {TYRE_MAN_TABS.map(({ to, label, tk, icon: Icon, end }) => (
+          {tabs.map(({ to, label, tk, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
@@ -1051,7 +1062,7 @@ export default function LegacyLayout({ children }) {
             // React key, collapse state, and translation lookup.
             const groupId = group.key || group.label
             if (!shouldShowGroup(group, profile)) return null
-            const visibleItems = items.filter(item => shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin) && !isPathSwitchedOff(item.to, moduleStatus))
+            const visibleItems = items.filter(item => shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, moduleStatus) && !isPathSwitchedOff(item.to, moduleStatus))
             if (visibleItems.length === 0) return null
             const isCollapsed = collapsedGroups.has(groupId)
             const _grpKey = `nav.groups.${groupId}`

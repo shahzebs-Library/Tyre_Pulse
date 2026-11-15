@@ -15,11 +15,21 @@
  * A CPK is NULL when its denominator (km or hours) is 0 - the UI renders "N/A",
  * never a fabricated 0.
  *
+ * NAMING (ENG-1, src/lib/cpkMetrics.js). The km side divides by TYRE km (the
+ * lifetime km of tyres taken off in the period), so:
+ *   - km `cpk_tyre` is the "tyre spend ratio", not a tyre CPK;
+ *   - km `cpk_total` (spares and oil over tyre km) is not a measurement and is
+ *     returned as null with `cpk_total_withheld: true`;
+ *   - the hours side is per machine engine hour and is valid as is.
+ * Each row also carries `rate` / `rate_metric`: the one figure it may be
+ * ranked or charted by.
+ *
  * This service is INTENTIONALLY forgiving: a missing relation/function (org not
  * migrated), an empty result, or any RPC error degrades to an empty-but-shaped
  * object so the page shows an honest empty state - it never throws to the UI.
  */
 import { supabase, toServiceError } from './_client'
+import { sanitizeFleetCpk } from '../cpkMetrics'
 
 /** The empty, correctly-shaped result used for every degrade path. */
 function emptyResult() {
@@ -185,11 +195,14 @@ export async function getFleetCpk({ country, from, to, site, strict = false } = 
       if (strict) throw new Error(data?.reason === 'forbidden' ? 'You do not have access to this site or country.' : 'Fleet CPK returned no response.')
       return emptyResult()
     }
-    return {
+    // ENG-1: every payload passes the metric gate. On km rows the server's
+    // cpk_total (tyres + spares + oil over TYRE km) is withheld and cpk_tyre is
+    // named for what it is, the tyre spend ratio. See src/lib/cpkMetrics.js.
+    return sanitizeFleetCpk({
       perVehicle: Array.isArray(data.per_vehicle) ? data.per_vehicle : [],
       byType: Array.isArray(data.by_type) ? data.by_type : [],
       fleet: Array.isArray(data.fleet) ? data.fleet : [],
-    }
+    })
   } catch (error) {
     if (strict) throw toServiceError(error)
     return emptyResult()

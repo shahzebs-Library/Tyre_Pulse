@@ -19,7 +19,7 @@
     "medianCpk": "الوسيط - التكلفة/كم",
     "fleetAvgTyreLife": "متوسط عمر الإطار بالأسطول",
     "inspectionCompliance": "الالتزام بالفحص",
-    "pressureCompliance": "الالتزام بالضغط",
+    "pressureCompliance": "اتساق ضغط الإطارات",
     "failureRate": "معدل الأعطال",
     "criticalRate": "معدل الحالات الحرجة",
     "scrapRate": "معدل الخردة",

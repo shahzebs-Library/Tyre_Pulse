@@ -1,0 +1,219 @@
+{
+  "_about": "Engineering golden fixture. 100% synthetic (serials GL*, assets G*). Every expected value below was worked by hand, not produced by either engine. The JS engines (src/test/engGoldenFixture.test.js) and the SQL RPCs (supabase/tests/staging/eng_round2_staging.mjs) both run on these same rows and must both return these answers. Loaded into the EMPTY synthetic company 'Gamma New Fleet' on the local staging database inside a transaction that is always rolled back.",
+  "org": "cccccccc-0000-4000-8000-000000000003",
+  "user": "fac31cd3-66a9-595c-9725-0b00beaa4f2d",
+  "window": { "from": "2025-01-01", "to": "2025-12-31" },
+  "fleet": [
+    { "asset_no": "GTM01", "country": "KSA", "vehicle_type": "TR-MIXER", "current_km": 100000 },
+    { "asset_no": "GTM02", "country": "KSA", "vehicle_type": "TR-MIXER", "current_km": 38000 },
+    { "asset_no": "GTR01", "country": "KSA", "vehicle_type": "TRAILER", "current_km": null },
+    { "asset_no": "GMP01", "country": "KSA", "vehicle_type": "PUMPS", "current_km": 50000 },
+    { "asset_no": "GWL01", "country": "KSA", "vehicle_type": "WHEEL LOADER", "current_km": null },
+    { "asset_no": "GTM03", "country": "UAE", "vehicle_type": "TR-MIXER", "current_km": null }
+  ],
+  "engine_hours": [
+    { "asset_no": "GWL01", "country": "KSA", "reading_date": "2025-01-01", "engine_hours": 1000 },
+    { "asset_no": "GWL01", "country": "KSA", "reading_date": "2025-06-01", "engine_hours": 3000 },
+    { "asset_no": "GWL01", "country": "KSA", "reading_date": "2026-10-01", "engine_hours": 5800 },
+    { "asset_no": "GMP01", "country": "KSA", "reading_date": "2025-03-01", "engine_hours": 2000 },
+    { "asset_no": "GMP01", "country": "KSA", "reading_date": "2026-10-01", "engine_hours": 3000 }
+  ],
+  "targets": [
+    { "country": "KSA", "size": "12.00R24", "vehicle_type": "TR-MIXER", "target_km": 60000, "target_hours": null },
+    { "country": "KSA", "size": "23.5R25", "vehicle_type": "WHEEL LOADER", "target_km": null, "target_hours": 5000 },
+    { "country": "KSA", "size": "385/65R22.5", "vehicle_type": "PUMPS", "target_km": 30000, "target_hours": 5000 }
+  ],
+  "fitments": [
+    { "n": 1, "tag": "R1 refit tyre, first fitment", "serial_no": "GLD10001", "country": "KSA", "asset_no": "GTM01", "tyre_position": "LHF1", "vehicle_type": "TR-MIXER", "size": "315/80R22.5", "brand": "GOLDBRAND", "issue_date": "2025-01-10", "removal_date": "2025-06-10", "km_at_fitment": 10000, "km_at_removal": 40000, "total_km": 30000, "status": "Removed", "cost_per_tyre": 1800, "qty": 1, "expect": { "km": 30000, "fitment_cpk": 0.06 } },
+    { "n": 2, "tag": "R2 same tyre refitted, price repeated", "serial_no": "GLD10001", "country": "KSA", "asset_no": "GTM02", "tyre_position": "RHF1", "vehicle_type": "TR-MIXER", "size": "315/80R22.5", "brand": "GOLDBRAND", "issue_date": "2025-06-15", "removal_date": "2025-12-01", "km_at_fitment": 50000, "km_at_removal": 70000, "total_km": 20000, "status": "Removed", "cost_per_tyre": 1800, "qty": 1, "expect": { "km": 20000, "fitment_cpk": 0.09 } },
+    { "n": 3, "tag": "R3 placeholder fitment odometer 1", "serial_no": "GLD10002", "country": "KSA", "asset_no": "GTM01", "tyre_position": "LHR1", "vehicle_type": "TR-MIXER", "size": "315/80R22.5", "brand": "GOLDBRAND", "issue_date": "2025-02-01", "removal_date": "2025-09-01", "km_at_fitment": 1, "km_at_removal": 60000, "total_km": 59999, "status": "Removed", "cost_per_tyre": 1500, "qty": 1, "expect": { "km": null, "fitment_cpk": null } },
+    { "n": 4, "tag": "R4 factory fitment odometer 0", "serial_no": "GLD10003", "country": "KSA", "asset_no": "GTM02", "tyre_position": "LHF1", "vehicle_type": "TR-MIXER", "size": "315/80R22.5", "brand": "GOLDBRAND", "issue_date": "2025-01-05", "removal_date": "2025-08-05", "km_at_fitment": 0, "km_at_removal": 38200, "total_km": null, "status": "Removed", "cost_per_tyre": 1900, "qty": 1, "expect": { "km": 38200, "fitment_cpk": 0.049738 } },
+    { "n": 5, "tag": "R5 over the 80,000 km mixer cap", "serial_no": "GLD10004", "country": "KSA", "asset_no": "GTM01", "tyre_position": "RHR1", "vehicle_type": "TR-MIXER", "size": "315/80R22.5", "brand": "GOLDBRAND", "issue_date": "2025-01-15", "removal_date": "2025-11-15", "km_at_fitment": 10000, "km_at_removal": 95000, "total_km": 85000, "status": "Removed", "cost_per_tyre": 2000, "qty": 1, "expect": { "km": null, "fitment_cpk": null } },
+    { "n": 6, "tag": "R6 same 85,000 km on a trailer (cap 100,000)", "serial_no": "GLD10005", "country": "KSA", "asset_no": "GTR01", "tyre_position": "LHA1", "vehicle_type": "TRAILER", "size": "385/65R22.5", "brand": "GOLDBRAND", "issue_date": "2025-01-20", "removal_date": "2025-12-20", "km_at_fitment": 10000, "km_at_removal": 95000, "total_km": 85000, "status": "Removed", "cost_per_tyre": 1700, "qty": 1, "expect": { "km": 85000, "fitment_cpk": 0.02 } },
+    { "n": 7, "tag": "R7 over the 56,000 km pump cap", "serial_no": "GLD10006", "country": "KSA", "asset_no": "GMP01", "tyre_position": "LHF1", "vehicle_type": "PUMPS", "size": "385/65R22.5", "brand": "GOLDBRAND", "issue_date": "2025-02-10", "removal_date": "2025-10-10", "km_at_fitment": 20000, "km_at_removal": 77000, "total_km": 57000, "status": "Removed", "cost_per_tyre": 1600, "qty": 1, "expect": { "km": null, "fitment_cpk": null } },
+    { "n": 8, "tag": "R8 loader exactly at its 15,000 km cap, total only", "serial_no": "GLD10007", "country": "KSA", "asset_no": "GWL01", "tyre_position": "LHF1", "vehicle_type": "WHEEL LOADER", "size": "23.5R25", "brand": "GOLDBRAND", "issue_date": "2025-03-01", "removal_date": "2025-09-01", "km_at_fitment": null, "km_at_removal": null, "total_km": 15000, "status": "Removed", "cost_per_tyre": 3000, "qty": 1, "expect": { "km": 15000, "fitment_cpk": 0.2 } },
+    { "n": 9, "tag": "R9 warranty replacement, no price, job card GJC-W1", "serial_no": "GLD10008", "country": "KSA", "asset_no": "GTM01", "tyre_position": "RHF1", "vehicle_type": "TR-MIXER", "size": "315/80R22.5", "brand": "GOLDBRAND", "issue_date": "2025-03-10", "removal_date": "2025-10-10", "km_at_fitment": 20000, "km_at_removal": 50000, "total_km": 30000, "status": "Removed", "cost_per_tyre": null, "qty": 1, "job_card": "GJC-W1", "expect": { "km": 30000, "fitment_cpk": null } },
+    { "n": 10, "tag": "R10 only a repair line on its job card GJC-R1, no brand", "serial_no": "GLD10009", "country": "KSA", "asset_no": "GTM02", "tyre_position": "RHR1", "vehicle_type": "TR-MIXER", "size": "315/80R22.5", "brand": null, "issue_date": "2025-04-01", "removal_date": "2025-11-01", "km_at_fitment": 40000, "km_at_removal": 70000, "total_km": 30000, "status": "Removed", "cost_per_tyre": null, "qty": 1, "job_card": "GJC-R1", "expect": { "km": 30000, "fitment_cpk": null } },
+    { "n": 11, "tag": "R11 tyre with an overlapping second fitment, first", "serial_no": "GLD10010", "country": "KSA", "asset_no": "GTM01", "tyre_position": "LHR2", "vehicle_type": "TR-MIXER", "size": "315/80R22.5", "brand": "GOLDBRAND", "issue_date": "2025-01-01", "removal_date": "2025-08-01", "km_at_fitment": 10000, "km_at_removal": 40000, "total_km": 30000, "status": "Removed", "cost_per_tyre": 2100, "qty": 1, "expect": { "km": 30000, "fitment_cpk": 0.07 } },
+    { "n": 12, "tag": "R12 second fitment starts before the first ended: km not added", "serial_no": "GLD10010", "country": "KSA", "asset_no": "GTM02", "tyre_position": "LHR2", "vehicle_type": "TR-MIXER", "size": "315/80R22.5", "brand": "GOLDBRAND", "issue_date": "2025-05-01", "removal_date": "2025-09-15", "km_at_fitment": 45000, "km_at_removal": 60000, "total_km": 15000, "status": "Removed", "cost_per_tyre": null, "qty": 1, "expect": { "km": 15000, "fitment_cpk": null } },
+    { "n": 13, "tag": "R13 no real serial, a row of two tyres", "serial_no": "NO SERIAL", "country": "KSA", "asset_no": "GTM01", "tyre_position": "RHR2", "vehicle_type": "TR-MIXER", "size": "315/80R22.5", "brand": "GOLDBRAND", "issue_date": "2025-02-15", "removal_date": "2025-07-15", "km_at_fitment": 10000, "km_at_removal": 30000, "total_km": 20000, "status": "Removed", "cost_per_tyre": 1000, "qty": 2, "expect": { "km": 20000, "fitment_cpk": 0.05 } },
+    { "n": 14, "tag": "R14 unpriced, purchase line of two tyres on job card GJC-P1", "serial_no": "GLD10011", "country": "KSA", "asset_no": "GTM02", "tyre_position": "RHF2", "vehicle_type": "TR-MIXER", "size": "315/80R22.5", "brand": "GOLDBRAND", "issue_date": "2025-05-10", "removal_date": "2025-12-10", "km_at_fitment": 30000, "km_at_removal": 55000, "total_km": 25000, "status": "Removed", "cost_per_tyre": null, "qty": 1, "job_card": "GJC-P1", "expect": { "km": 25000, "fitment_cpk": null } },
+    { "n": 15, "tag": "R15 the second tyre on GJC-P1", "serial_no": "GLD10012", "country": "KSA", "asset_no": "GTM02", "tyre_position": "LHF2", "vehicle_type": "TR-MIXER", "size": "315/80R22.5", "brand": "GOLDBRAND", "issue_date": "2025-05-10", "removal_date": "2025-12-10", "km_at_fitment": 30000, "km_at_removal": 52000, "total_km": 22000, "status": "Removed", "cost_per_tyre": null, "qty": 1, "job_card": "GJC-P1", "expect": { "km": 22000, "fitment_cpk": null } },
+    { "n": 16, "tag": "U1 the only UAE tyre (AED)", "serial_no": "GLU20001", "country": "UAE", "asset_no": "GTM03", "tyre_position": "LHF1", "vehicle_type": "TR-MIXER", "size": "315/80R22.5", "brand": "GOLDBRAND", "issue_date": "2025-01-10", "removal_date": "2025-07-10", "km_at_fitment": 5000, "km_at_removal": 35000, "total_km": 30000, "status": "Removed", "cost_per_tyre": 900, "qty": 1, "expect": { "km": 30000, "fitment_cpk": 0.03 } },
+
+    { "n": 21, "tag": "A1 active, 17% used", "serial_no": "GLA30001", "country": "KSA", "asset_no": "GTM01", "tyre_position": "LHC1", "vehicle_type": "TR-MIXER", "size": "12.00R24", "brand": "GOLDBRAND", "issue_date": "2026-03-01", "removal_date": null, "km_at_fitment": 90000, "km_at_removal": null, "total_km": null, "status": "Active", "cost_per_tyre": 1500, "qty": 1 },
+    { "n": 22, "tag": "A2 active, 67% used", "serial_no": "GLA30002", "country": "KSA", "asset_no": "GTM01", "tyre_position": "RHC1", "vehicle_type": "TR-MIXER", "size": "12.00R24", "brand": "GOLDBRAND", "issue_date": "2026-03-01", "removal_date": null, "km_at_fitment": 60000, "km_at_removal": null, "total_km": null, "status": "Active", "cost_per_tyre": 1500, "qty": 1 },
+    { "n": 23, "tag": "A3 active, 4,000 km left of 60,000", "serial_no": "GLA30003", "country": "KSA", "asset_no": "GTM01", "tyre_position": "LHC2", "vehicle_type": "TR-MIXER", "size": "12.00R24", "brand": "GOLDBRAND", "issue_date": "2026-03-01", "removal_date": null, "km_at_fitment": 44000, "km_at_removal": null, "total_km": null, "status": "Active", "cost_per_tyre": 1500, "qty": 1 },
+    { "n": 24, "tag": "A4 active, past its life", "serial_no": "GLA30004", "country": "KSA", "asset_no": "GTM01", "tyre_position": "RHC2", "vehicle_type": "TR-MIXER", "size": "12.00R24", "brand": "GOLDBRAND", "issue_date": "2026-03-01", "removal_date": null, "km_at_fitment": 30000, "km_at_removal": null, "total_km": null, "status": "Active", "cost_per_tyre": 1500, "qty": 1 },
+    { "n": 25, "tag": "A5 active, placeholder fitment odometer", "serial_no": "GLA30005", "country": "KSA", "asset_no": "GTM01", "tyre_position": "LHC3", "vehicle_type": "TR-MIXER", "size": "12.00R24", "brand": "GOLDBRAND", "issue_date": "2026-03-01", "removal_date": null, "km_at_fitment": 1, "km_at_removal": null, "total_km": null, "status": "Active", "cost_per_tyre": 1500, "qty": 1 },
+    { "n": 26, "tag": "A6 active, factory fitment at 0 km", "serial_no": "GLA30006", "country": "KSA", "asset_no": "GTM02", "tyre_position": "LHC1", "vehicle_type": "TR-MIXER", "size": "12.00R24", "brand": "GOLDBRAND", "issue_date": "2026-03-01", "removal_date": null, "km_at_fitment": 0, "km_at_removal": null, "total_km": null, "status": "Active", "cost_per_tyre": 1500, "qty": 1 },
+    { "n": 27, "tag": "A7 active, no target: expected life is the measured fleet baseline", "serial_no": "GLA30007", "country": "KSA", "asset_no": "GTM02", "tyre_position": "RHC1", "vehicle_type": "TR-MIXER", "size": "315/80R22.5", "brand": "GOLDBRAND", "issue_date": "2026-03-01", "removal_date": null, "km_at_fitment": 20000, "km_at_removal": null, "total_km": null, "status": "Active", "cost_per_tyre": 1500, "qty": 1 },
+    { "n": 28, "tag": "H1 loader tyre, hours budget nearly spent", "serial_no": "GLH40001", "country": "KSA", "asset_no": "GWL01", "tyre_position": "RHF1", "vehicle_type": "WHEEL LOADER", "size": "23.5R25", "brand": "GOLDBRAND", "issue_date": "2025-01-05", "removal_date": null, "km_at_fitment": null, "km_at_removal": null, "total_km": null, "status": "Active", "cost_per_tyre": 1500, "qty": 1 },
+    { "n": 29, "tag": "H2 loader tyre, 56% of hours used", "serial_no": "GLH40002", "country": "KSA", "asset_no": "GWL01", "tyre_position": "LHR1", "vehicle_type": "WHEEL LOADER", "size": "23.5R25", "brand": "GOLDBRAND", "issue_date": "2025-06-02", "removal_date": null, "km_at_fitment": null, "km_at_removal": null, "total_km": null, "status": "Active", "cost_per_tyre": 1500, "qty": 1 },
+    { "n": 30, "tag": "P1 pump tyre with two budgets: distance runs out first", "serial_no": "GLP50001", "country": "KSA", "asset_no": "GMP01", "tyre_position": "RHF1", "vehicle_type": "PUMPS", "size": "385/65R22.5", "brand": "GOLDBRAND", "issue_date": "2025-03-02", "removal_date": null, "km_at_fitment": 22000, "km_at_removal": null, "total_km": null, "status": "Active", "cost_per_tyre": 1500, "qty": 1 },
+    { "n": 31, "tag": "D1 first of two active tyres on one wheel", "serial_no": "GLD60001", "country": "KSA", "asset_no": "GTM02", "tyre_position": "RHR3", "vehicle_type": "TR-MIXER", "size": "12.00R24", "brand": "GOLDBRAND", "issue_date": "2026-01-01", "removal_date": null, "km_at_fitment": 36000, "km_at_removal": null, "total_km": null, "status": "Active", "cost_per_tyre": 1500, "qty": 1 },
+    { "n": 32, "tag": "D2 second active tyre on the same wheel", "serial_no": "GLD60002", "country": "KSA", "asset_no": "GTM02", "tyre_position": "RHR3", "vehicle_type": "TR-MIXER", "size": "12.00R24", "brand": "GOLDBRAND", "issue_date": "2026-02-01", "removal_date": null, "km_at_fitment": 37000, "km_at_removal": null, "total_km": null, "status": "Active", "cost_per_tyre": 1500, "qty": 1 }
+  ],
+  "expense_lines": [
+    { "n": 1, "country": "KSA", "currency": "SAR", "work_order_no": "GJC-W1", "asset_code": "GTM01", "event_date": "2025-03-10", "item_description": "TYRE 315/80R22.5 WARRENTY REPLACEMENT", "qty": "1", "tyre_cost": 0, "spare_cost": 0, "oil_cost": 0, "line_cost": 0, "expect_kind": "warranty" },
+    { "n": 2, "country": "KSA", "currency": "SAR", "work_order_no": "GJC-R1", "asset_code": "GTM02", "event_date": "2025-04-01", "item_description": "TYRE REPAIR 315/80R22.5 PUNCTURE", "qty": "1", "tyre_cost": 150, "spare_cost": 0, "oil_cost": 0, "line_cost": 150, "expect_kind": "repair" },
+    { "n": 3, "country": "KSA", "currency": "SAR", "work_order_no": "GJC-P1", "asset_code": "GTM02", "event_date": "2025-05-10", "item_description": "TYRE 315/80R22.5 GOLDBRAND", "qty": "2", "tyre_cost": 3600, "spare_cost": 0, "oil_cost": 0, "line_cost": 3600, "expect_kind": "tyre" },
+    { "n": 4, "country": "KSA", "currency": "SAR", "work_order_no": "GJC-T1", "asset_code": "GTR01", "event_date": "2025-06-01", "item_description": "INNER TUBE 12.00R24", "qty": "1", "tyre_cost": 62, "spare_cost": 0, "oil_cost": 0, "line_cost": 62, "expect_kind": "tube" },
+    { "n": 5, "country": "KSA", "currency": "SAR", "work_order_no": "GJC-S1", "asset_code": "GMP01", "event_date": "2025-06-15", "item_description": "WHEEL ALIGNMENT SERVICE", "qty": "1", "tyre_cost": 200, "spare_cost": 0, "oil_cost": 0, "line_cost": 200, "expect_kind": "service" },
+    { "n": 6, "country": "KSA", "currency": "SAR", "work_order_no": "GJC-B1", "asset_code": "GTM01", "event_date": "2025-07-01", "item_description": "BRAKE PAD SET", "qty": "1", "tyre_cost": 0, "spare_cost": 500, "oil_cost": 0, "line_cost": 500, "expect_kind": "other" },
+    { "n": 7, "country": "KSA", "currency": "SAR", "work_order_no": "GJC-O1", "asset_code": "GTM02", "event_date": "2025-07-10", "item_description": "ENGINE OIL 15W40", "qty": "20", "tyre_cost": 0, "spare_cost": 0, "oil_cost": 300, "line_cost": 300, "expect_kind": "other" },
+    { "n": 8, "country": "KSA", "currency": "SAR", "work_order_no": "GJC-L1", "asset_code": "GWL01", "event_date": "2025-08-01", "item_description": "BUCKET TEETH", "qty": "4", "tyre_cost": 0, "spare_cost": 1000, "oil_cost": 0, "line_cost": 1000, "expect_kind": "other" },
+    { "n": 9, "country": "UAE", "currency": "AED", "work_order_no": "GJC-U1", "asset_code": "GTM03", "event_date": "2025-01-10", "item_description": "TYRE 315/80R22.5 GOLDBRAND", "qty": "1", "tyre_cost": 900, "spare_cost": 0, "oil_cost": 0, "line_cost": 900, "expect_kind": "tyre" }
+  ],
+  "expected": {
+    "lifetime": {
+      "_how": "Tyres no longer fitted, price once, validated km, weighted. KSA measurable: GLD10001 1800 over 30000+20000; GLD10003 1900 over 38200; GLD10005 1700 over 85000; GLD10007 3000 over 15000; GLD10010 2100 over 30000 (overlapping 15000 not added); the NO SERIAL row of two 2x1000 over 2x20000. 12500 / 258200.",
+      "KSA": { "final_tyres": 13, "measurable": 6, "purchase_cost": 12500, "km": 258200, "cpk_purchase": 0.048412 },
+      "UAE": { "final_tyres": 1, "measurable": 1, "purchase_cost": 900, "km": 30000, "cpk_purchase": 0.03 },
+      "per_tyre": {
+        "KSA|GLD10001": { "cost": 1800, "km": 50000, "fitments": 2, "status": "DISPUTED", "coverage": "complete" },
+        "KSA|GLD10002": { "cost": 1500, "km": null, "fitments": 1, "status": "ACTUAL", "coverage": "none" },
+        "KSA|GLD10003": { "cost": 1900, "km": 38200, "fitments": 1, "status": "ACTUAL", "coverage": "complete" },
+        "KSA|GLD10004": { "cost": 2000, "km": null, "fitments": 1, "status": "ACTUAL", "coverage": "none" },
+        "KSA|GLD10005": { "cost": 1700, "km": 85000, "fitments": 1, "status": "ACTUAL", "coverage": "complete" },
+        "KSA|GLD10006": { "cost": 1600, "km": null, "fitments": 1, "status": "ACTUAL", "coverage": "none" },
+        "KSA|GLD10007": { "cost": 3000, "km": 15000, "fitments": 1, "status": "ACTUAL", "coverage": "complete" },
+        "KSA|GLD10008": { "cost": null, "km": 30000, "fitments": 1, "status": "MISSING", "coverage": "complete" },
+        "KSA|GLD10010": { "cost": 2100, "km": 30000, "fitments": 2, "status": "ACTUAL", "coverage": "partial" }
+      },
+      "mean_of_fitment_ratios_KSA": 0.077105,
+      "_mean_note": "Unweighted mean of the 7 per-fitment CPKs in KSA (0.06, 0.09, 0.049738, 0.02, 0.2, 0.07, 0.05). It is NOT the fleet figure; the test asserts the lifetime figure differs from it."
+    },
+    "running_life": {
+      "_how": "expected life: target where one exists (12.00R24 mixer 60000 km; 23.5R25 loader 5000 h; 385/65R22.5 pump 30000 km and 5000 h). A7 has no target: baseline = mean validated life of removed KSA TR-MIXER 315/80R22.5 fitments = (30000+20000+38200+30000+30000+30000+15000+20000+25000+22000)/10 = 26020. The placeholder row (59999) and the over-cap row (85000) are outside it. Before draft 121000 the baseline is (30000+20000+59999+85000+30000+30000+30000+15000+20000+25000+22000)/11 = 33364 and the factory zero row is left out.",
+      "baseline_before_draft": 33364,
+      "rows": {
+        "GLA30001": { "km_run": 10000, "expected_life_km": 60000, "remaining_km": 50000, "life_used_pct": 17, "band": "healthy", "due": false },
+        "GLA30002": { "km_run": 40000, "expected_life_km": 60000, "remaining_km": 20000, "life_used_pct": 67, "band": "mid-life", "due": false },
+        "GLA30003": { "km_run": 56000, "expected_life_km": 60000, "remaining_km": 4000, "life_used_pct": 93, "band": "due-soon", "due": true },
+        "GLA30004": { "km_run": 70000, "expected_life_km": 60000, "remaining_km": 0, "life_used_pct": 117, "band": "overdue", "due": true },
+        "GLA30005": { "km_run": null, "expected_life_km": 60000, "remaining_km": null, "life_used_pct": null, "band": "unknown", "due": false },
+        "GLA30006": { "km_run": 38000, "expected_life_km": 60000, "remaining_km": 22000, "life_used_pct": 63, "band": "mid-life", "due": false },
+        "GLA30007": { "km_run": 18000, "expected_life_km": 26020, "remaining_km": 8020, "life_used_pct": 69, "band": "mid-life", "due": false, "life_basis": "measured_type", "life_sample": 10 },
+        "GLH40001": { "km_run": null, "hours_run": 4800, "expected_life_hours": 5000, "remaining_hours": 200, "hours_used_pct": 96, "band": "due-soon", "due": true, "unit": "engine_hours" },
+        "GLH40002": { "km_run": null, "hours_run": 2800, "expected_life_hours": 5000, "remaining_hours": 2200, "hours_used_pct": 56, "band": "healthy", "due": false, "unit": "engine_hours" },
+        "GLP50001": { "km_run": 28000, "expected_life_km": 30000, "remaining_km": 2000, "life_used_pct": 93, "hours_run": 1000, "expected_life_hours": 5000, "remaining_hours": 4000, "hours_used_pct": 20, "band": "due-soon", "due": true, "unit": "engine_hours", "leading": "km" },
+        "GLD60001": { "km_run": 2000, "expected_life_km": 60000, "remaining_km": 58000, "life_used_pct": 3, "band": "healthy", "due": false },
+        "GLD60002": { "km_run": 1000, "expected_life_km": 60000, "remaining_km": 59000, "life_used_pct": 2, "band": "healthy", "due": false }
+      },
+      "due_serials": ["GLA30003", "GLA30004", "GLH40001", "GLP50001"]
+    },
+    "double_active": { "serials": ["GLD60001", "GLD60002"] },
+    "price_backfill_dry_run_KSA": {
+      "_how": "Dry run only. GLD10008: its job card carries a warranty line (misspelt WARRENTY) so the price is 0, source warranty. GLD10011 and GLD10012 share a purchase line of 3600 for 2 tyres: 1800 each. GLD10009 has only a repair line and no brand: stays unpriced. GLD10010's second fitment is a refit of a priced tyre: stays unpriced.",
+      "rows": 3,
+      "by_serial": {
+        "GLD10008": { "new_cost": 0, "source": "warranty" },
+        "GLD10011": { "new_cost": 1800, "source": "own_jobcard" },
+        "GLD10012": { "new_cost": 1800, "source": "own_jobcard" }
+      },
+      "not_filled": ["GLD10009", "GLD10010"],
+      "before_draft_GLD10008": { "new_cost": 1850, "source": "comparable" }
+    },
+    "tyre_spend_breakdown": {
+      "KSA": { "currency": "SAR", "tyre": 3600, "repair": 150, "tube": 62, "service": 200 },
+      "UAE": { "currency": "AED", "tyre": 900 }
+    },
+    "vehicle_km_cost": {
+      "_how": "Window 2025. Vehicle km = odometer span of each asset from fitment and removal readings in the window. HONEST spans: GTM01 95000-10000 = 85000; GTM02 70000-30000 = 40000; GTR01 85000; GMP01 77000-20000 = 57000; total 267000. The live fleet_km_by_asset accepts the placeholder odometer 1 as a reading, so GTM01 reads 94999 and the total 276999 (defect R2-D1, draft 125000 corrects it). Matched spend (assets with a span): tyre bucket 150+3600+62+200 = 4012; spare and oil 500+300 = 800; total 4812. GWL01 (1000) has no span.",
+      "km_honest": 267000,
+      "km_live_with_placeholder": 276999,
+      "spend_total": 5812,
+      "spend_matched": 4812,
+      "spend_matched_tyre": 4012,
+      "spend_matched_maintenance": 800,
+      "cpk_honest": 0.018,
+      "cpk_tyre_honest": 0.015,
+      "cpk_maintenance_honest": 0.003,
+      "cpk_live": 0.017,
+      "cpk_tyre_live": 0.014,
+      "cpk_maintenance_live": 0.003
+    },
+    "fleet_cpk": {
+      "_how": "Window 2025, KSA. Tyre km = validated lifetime km of tyres removed in the window, on km assets: GTM01 30000+30000+30000+20000x2 = 130000 (placeholder and over-cap rows add nothing; the NO SERIAL row stands for two tyres); GTM02 20000+38200+30000+15000+25000+22000 = 150200; GTR01 85000. Tyre spend on those assets 0 + 3750 + 62. Loader GWL01 is hour measured: 3000-1000 = 2000 h, spend 1000.",
+      "km_cpk_total_after_draft": null,
+      "hours_total": 2000,
+      "hours_cpk_total": 0.5
+    }
+  },
+  "pure": {
+    "km_life": [
+      { "id": "C01", "fit": 52000, "rem": 96500, "total": null, "type": "TR-MIXER", "km": 44500 },
+      { "id": "C02 placeholder", "fit": 1, "rem": 184300, "total": 184299, "type": "TR-MIXER", "km": null },
+      { "id": "C03 factory", "fit": 0, "rem": 38200, "total": null, "type": "TR-MIXER", "km": 38200 },
+      { "id": "C04 mixer cap", "fit": 10000, "rem": 95000, "total": null, "type": "TR-MIXER", "km": null },
+      { "id": "C04b mixer cap inclusive", "fit": 10000, "rem": 90000, "total": null, "type": "TR-MIXER", "km": 80000 },
+      { "id": "C05 trailer", "fit": 10000, "rem": 95000, "total": null, "type": "TRAILER", "km": 85000 },
+      { "id": "C06 pump cap", "fit": 20000, "rem": 77000, "total": null, "type": "PUMPS", "km": null },
+      { "id": "C06b pump cap inclusive", "fit": 20000, "rem": 76000, "total": null, "type": "PUMPS", "km": 56000 },
+      { "id": "C07 loader cap inclusive", "fit": null, "rem": null, "total": 15000, "type": "WHEEL LOADER", "km": 15000 },
+      { "id": "C07b loader over", "fit": null, "rem": null, "total": 15001, "type": "WHEEL LOADER", "km": null },
+      { "id": "C08 no class", "fit": 10000, "rem": 95000, "total": null, "type": null, "km": 85000 },
+      { "id": "C08b default cap", "fit": 10000, "rem": 110001, "total": null, "type": "BUS", "km": null },
+      { "id": "C09 nothing", "fit": null, "rem": null, "total": null, "type": null, "km": null },
+      { "id": "C10 reversed", "fit": 90000, "rem": 60000, "total": null, "type": "TRAILER", "km": null },
+      { "id": "C10b reversed with total", "fit": 90000, "rem": 60000, "total": 30000, "type": "TRAILER", "km": 30000 }
+    ],
+    "calc_cpk": [
+      { "id": "C11", "cost": 1800, "fit": 10000, "rem": 40000, "cpk": 0.06 },
+      { "id": "C29 placeholder", "cost": 1800, "fit": 1, "rem": 184300, "cpk": null },
+      { "id": "factory zero", "cost": 1900, "fit": 0, "rem": 38200, "cpk": 0.0497 },
+      { "id": "no price", "cost": null, "fit": 10000, "rem": 40000, "cpk": null },
+      { "id": "zero price", "cost": 0, "fit": 10000, "rem": 40000, "cpk": null },
+      { "id": "over the default cap", "cost": 1800, "fit": 10000, "rem": 120000, "cpk": null }
+    ],
+    "unit": [
+      { "type": "TR-MIXER", "unit": "km" },
+      { "type": "PUMPS", "unit": "engine_hours" },
+      { "type": "WHEEL LOADER", "unit": "engine_hours" },
+      { "type": "GENERATOR", "unit": "engine_hours" },
+      { "type": "TRAILER", "unit": "km" },
+      { "type": "WATER TANKER", "unit": "km" },
+      { "type": "LOW LOADER TRAILER", "unit": "km" },
+      { "type": "CONCRETE MIXER TRUCK", "unit": "km" },
+      { "type": "CONCRETE PUMP TRUCK", "unit": "engine_hours" },
+      { "type": "GENERATOR TRAILER", "unit": "engine_hours" },
+      { "type": "PICKUP", "unit": "km" },
+      { "type": null, "unit": "km" }
+    ],
+    "lines": [
+      { "text": "TYRE 315/80R22.5 GOLDBRAND", "warranty": false, "repair": false },
+      { "text": "TYRE 315/80R22.5 WARRANTY REPLACEMENT", "warranty": true, "repair": false },
+      { "text": "TYRE 315/80R22.5 WARRENTY REPLACEMENT", "warranty": true, "repair": false },
+      { "text": "TIRE -WARRENTY -315/80 R 22.5", "warranty": true, "repair": false },
+      { "text": "TYRE FREE OF CHARGE", "warranty": true, "repair": false },
+      { "text": "TYRE REPAIR 315/80R22.5 PUNCTURE", "warranty": false, "repair": true },
+      { "text": "Repair TIRE 385/65/R22.5", "warranty": false, "repair": true },
+      { "text": "TYRE VULCANIZING", "warranty": false, "repair": true },
+      { "text": "BRAKE PAD SET", "warranty": false, "repair": false }
+    ],
+    "unit_price": [
+      { "value": 3600, "qty": 2, "unit": 1800 },
+      { "value": 1800, "qty": 1, "unit": 1800 },
+      { "value": 3600, "qty": 0, "unit": null },
+      { "value": null, "qty": 2, "unit": null }
+    ]
+  },
+  "downtime": {
+    "_how": "JS only. No SQL function measures downtime; the web engine reads job card timestamps. Measured hours come only from a job card with two plausible timestamps; an event with no such card has hours null and a NAMED assumption beside it.",
+    "now": "2026-11-15T00:00:00Z",
+    "work_orders": [
+      { "asset_no": "GTM01", "opened_at": "2025-05-01T08:00:00Z", "completed_at": "2025-05-01T20:00:00Z", "hours": 12 },
+      { "asset_no": "GTM01", "opened_at": "2025-06-01T08:00:00Z", "completed_at": "2025-06-02T08:00:00Z", "hours": 24 },
+      { "asset_no": "GTM01", "opened_at": "0025-05-01T08:00:00Z", "completed_at": "0025-05-02T08:00:00Z", "hours": null },
+      { "asset_no": "GTM01", "opened_at": "2025-07-02T08:00:00Z", "completed_at": "2025-07-01T08:00:00Z", "hours": null },
+      { "asset_no": "GTM01", "opened_at": "2025-01-01T00:00:00Z", "completed_at": "2025-03-01T00:00:00Z", "hours": null },
+      { "asset_no": "GTM02", "opened_at": "2025-05-01T08:00:00Z", "completed_at": null, "hours": null }
+    ],
+    "events": [
+      { "asset_no": "GTM01", "risk_level": "High", "hours": 18, "actual": true, "assumedHours": null },
+      { "asset_no": "GTM02", "risk_level": "Critical", "hours": null, "actual": false, "assumedHours": 4 },
+      { "asset_no": "GTR01", "risk_level": "Low", "hours": null, "actual": false, "assumedHours": 2 }
+    ]
+  }
+}

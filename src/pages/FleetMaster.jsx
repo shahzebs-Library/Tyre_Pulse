@@ -1,11 +1,13 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import ViewSwitch from '../components/ui/ViewSwitch'
 import { useFilterState } from '../hooks/useFilterState'
 import { useScrollRestore } from '../hooks/useScrollRestore'
 import { toUserMessage } from '../lib/safeError'
 import { assets } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
+import { useWriteAccess } from '../hooks/useWriteAccess'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel } from '../lib/exportUtils'
@@ -242,7 +244,36 @@ function Insight({ icon: Icon, tone, num, text, fallback, sub, onClick, to }) {
   return <button type="button" className="cc-insight" onClick={onClick}>{body}</button>
 }
 
+// Asset analysis (formerly its own page at /asset-management): health matrix,
+// fleet composition, utilisation trend, operational status and PDF export.
+// Same access rule as this page (the fleet_master module). Loaded when opened.
+const AssetAnalysis = lazy(() => import('./AssetManagement'))
+const FLEET_VIEWS = [
+  { key: 'register', label: 'Asset register' },
+  { key: 'analysis', label: 'Asset analysis' },
+]
+
 export default function FleetMaster() {
+  const [params, setParams] = useSearchParams()
+  const view = params.get('tab') === 'analysis' ? 'analysis' : 'register'
+  // Both views keep their filters in the address bar under the same names
+  // (search, site, status, page), so switching view starts the other one clean.
+  const changeView = (next) => setParams(next === 'analysis' ? { tab: 'analysis' } : {})
+  return (
+    <div className="space-y-4">
+      <ViewSwitch views={FLEET_VIEWS} value={view} onChange={changeView} label="Asset views" />
+      {view === 'analysis' ? (
+        <Suspense fallback={<p role="status" className="py-10 text-center text-sm text-[var(--text-secondary)]">Loading...</p>}>
+          <AssetAnalysis />
+        </Suspense>
+      ) : (
+        <FleetRegister />
+      )}
+    </div>
+  )
+}
+
+function FleetRegister() {
   const navigate = useNavigate()
   const { profile, isSuperAdmin } = useAuth()
   const { activeCountry, activeCurrency } = useSettings()
@@ -316,10 +347,14 @@ export default function FleetMaster() {
   // ── permissions ──────────────────────────────────────────────────────────────
   const role = String(profile?.role || '').toLowerCase()
   const isAdmin = role === 'admin' || isSuperAdmin === true
-  const canDelete = profile?.role === 'Admin' || profile?.role === 'Manager' || isSuperAdmin === true
-  // Bulk edits go through RLS, which decides what each user may write; this only
-  // hides controls from roles that could never use them.
-  const canEdit = isAdmin || role === 'manager' || role === 'director'
+  // The fleet register is written through the fleet_master capability only
+  // (Admin, plus any role or person an Admin has given it to in Access Control);
+  // deleting is Admin only. The answer comes from the server function the row
+  // policies themselves call, so a control shown here is one the save will accept.
+  const access = useWriteAccess('vehicle_fleet')
+  const canDelete = access.delete
+  const canEdit = access.edit
+  const canAdd = access.create
 
   // ── selection (persists across pages) ────────────────────────────────────────
   // id -> row, so a bulk export or action still knows a row selected on page 1
@@ -843,7 +878,7 @@ export default function FleetMaster() {
               <>
                 <MenuItem icon={Eye} onClick={() => { close(); openVehicle(r) }}>View</MenuItem>
                 <MenuItem icon={ClipboardCheck} onClick={() => { close(); navigate(`/inspections?asset=${encodeURIComponent(r.asset_no)}`) }}>{t('fleetmaster.table.startChecklist')}</MenuItem>
-                <MenuItem icon={Edit2} onClick={() => { close(); openEdit(r) }}>{t('fleetmaster.table.edit')}</MenuItem>
+                {canEdit && <MenuItem icon={Edit2} onClick={() => { close(); openEdit(r) }}>{t('fleetmaster.table.edit')}</MenuItem>}
                 {canDelete && <MenuItem icon={Trash2} danger onClick={() => { close(); confirmDelete(r) }}>{t('fleetmaster.table.delete')}</MenuItem>}
               </>
             )}
@@ -994,7 +1029,7 @@ export default function FleetMaster() {
                 ))}
               </Menu>
               <button type="button" className="cc-btn-ghost" onClick={handleExport}><Download size={15} aria-hidden="true" /> Export</button>
-              <button type="button" className="cc-btn-primary" onClick={openAdd}><Plus size={15} aria-hidden="true" /> {t('fleetmaster.actions.addVehicle')}</button>
+              <button type="button" className="cc-btn-primary" onClick={openAdd} disabled={!canAdd} title={canAdd ? undefined : access.reason('create')}><Plus size={15} aria-hidden="true" /> {t('fleetmaster.actions.addVehicle')}</button>
             </div>
           </div>
 
@@ -1011,7 +1046,7 @@ export default function FleetMaster() {
               )}
             </Menu>
             <button type="button" className="cc-btn-ghost" disabled={none || !canEdit} onClick={() => openBulk('policy')}
-              title={canEdit ? 'Set the tyre-change policy on every selected vehicle' : 'Your role cannot change vehicle policy'}>
+              title={canEdit ? 'Set the tyre-change policy on every selected vehicle' : access.reason('edit')}>
               <ShieldCheck size={15} aria-hidden="true" /> Assign Policy
             </button>
             <button type="button" className="cc-btn-ghost" disabled={none || !isAdmin}
@@ -1020,7 +1055,7 @@ export default function FleetMaster() {
               <CalendarClock size={15} aria-hidden="true" /> Schedule Service
             </button>
             <button type="button" className="cc-btn-ghost" disabled={none || !canEdit} onClick={() => openBulk('status')}
-              title={canEdit ? 'Change the register status of every selected vehicle' : 'Your role cannot change vehicle status'}>
+              title={canEdit ? 'Change the register status of every selected vehicle' : access.reason('edit')}>
               <Activity size={15} aria-hidden="true" /> Change Status
             </button>
             <Menu label="More actions" disabled={none} triggerClass="cc-icon-btn" trigger={<MoreHorizontal size={16} aria-hidden="true" />}>
@@ -1138,7 +1173,7 @@ export default function FleetMaster() {
 
           <Card title="Quick Actions">
             <div className="cc-quick">
-              <button type="button" onClick={openAdd}><Plus size={20} aria-hidden="true" />Add Vehicle</button>
+              <button type="button" onClick={openAdd} disabled={!canAdd} title={canAdd ? undefined : access.reason('create')}><Plus size={20} aria-hidden="true" />Add Vehicle</button>
               <Link to="/data-intake"><Upload size={20} aria-hidden="true" />Import Fleet</Link>
               <button type="button" onClick={handleExport}><FileText size={20} aria-hidden="true" />Export List</button>
               <Link to="/reports"><BarChart3 size={20} aria-hidden="true" />View Reports</Link>

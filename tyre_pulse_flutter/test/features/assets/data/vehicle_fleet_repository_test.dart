@@ -606,9 +606,12 @@ void main() {
 
     test('one company keeps the first row, whoever asks', () {
       expect(
-          firstRowForCompany(
-              <Map<String, dynamic>>[twoCompanies.first], orgA)?['id'],
-          'b');
+        firstRowForCompany(
+          <Map<String, dynamic>>[twoCompanies.first],
+          orgA,
+        )?['id'],
+        'b',
+      );
     });
 
     test('byAssetNo passes the caller company to the source', () async {

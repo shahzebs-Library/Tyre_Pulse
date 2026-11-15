@@ -35,7 +35,8 @@ let browser
 async function signIn(username, { register = true } = {}) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block', acceptDownloads: true })
   const page = await context.newPage()
-  const log = { uploads: 0, signs: 0, http: [], errors: [], pdfRpc: 0 }
+  const log = { uploads: 0, signs: 0, http: [], errors: [], pdfRpc: 0, storageCalls: 0 }
+  page.on('request', (r) => { if (/\/storage\/v1\//.test(r.url())) log.storageCalls += 1 })
   page.on('pageerror', (e) => log.errors.push(String(e.message).slice(0, 200)))
   page.on('response', (r) => {
     const u = r.url().replace(/^https?:\/\/[^/]+/, '')
@@ -77,7 +78,7 @@ async function unprovisioned() {
     await s.page.waitForTimeout(800)
     const alerts = (await s.page.locator('[role=alert]').allInnerTexts()).filter((t) => t.trim())
     ok(alerts.length === 0 && s.log.errors.length === 0, `${user}: no error is shown and no page error is raised`, JSON.stringify([alerts, s.log.errors]))
-    ok(s.log.uploads === 0 && s.log.signs === 0, `${user}: nothing is uploaded or signed`)
+    ok(s.log.uploads === 0 && s.log.signs === 0 && s.log.storageCalls === 0, `${user}: nothing is uploaded or signed, no Storage API request at all`, s.log.storageCalls)
     ok(await s.page.locator('section[aria-label="Stored PDF"]').count() === 0 && await s.page.getByText('Stored PDF settings').count() === 0, `${user}: no stored-PDF panel or settings are shown`)
     // bulk ZIP without any server path
     await s.page.locator('input[aria-label="Select row"]').nth(0).check(); await s.page.locator('input[aria-label="Select row"]').nth(1).check()

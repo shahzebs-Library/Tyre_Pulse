@@ -112,3 +112,44 @@ Drafts applied (copy only):
 - `e2e/pdf-storage/specs/browser.cjs`: 20 of 20. First download 1.3 to 2.7 s (generated and stored),
   repeat 0.16 to 0.28 s (signed link, no generation). The Tyre Man part is checked with his own session against
   the server: on the web he is kept on checklist capture and does not see the register's download buttons.
+
+## 8. Authenticated storage integration, round 2 (2026-11-15)
+
+What was tested: the exact tree that would ship (this branch, which already contains `main` at `f11e18f2`;
+merge conflict-free), as a production build, against a LOCAL Supabase Storage API (supabase/storage v1.11.13
+built from source, file backend), real PostgREST 12 and a local sign-in gateway that issues signed-in JWTs.
+This is NOT the hosted Supabase project: hosted Storage is not reachable from the test machine, so behaviour of
+the hosted service itself is Not Tested. Database: a copy of the synthetic staging database (`tp_pdf6`) with the
+drafts 20261117090000, 091000 and 093000 applied, and a second copy (`tp_pdf6_nodraft`) with none of them.
+Production was not touched; no Supabase MCP call; both copies were dropped afterwards.
+
+Every storage request in the browser was checked: it carried the person's own JWT (role `authenticated`,
+`sub` = that person), never the service key. The only Storage API requests without that header are the browser
+opening a signed URL, which carries its own short-lived token. API checks used JWTs from the gateway sign-in.
+
+Specs: `e2e/pdf-storage/specs/round2.cjs` (60 of 60), `browser.cjs` provisioned (20 of 20),
+`storage_api.mjs` (64 of 64), `browser.cjs` unprovisioned (16 of 16; one earlier run timed out waiting for the
+bulk ZIP download event, the rerun passed).
+
+| # | Case | Role | Expected | Observed | Evidence | Label |
+|---|---|---|---|---|---|---|
+| 1 | First inspection PDF download | Manager | Generated in the browser, stored privately once | Generated (blob), one upload, row sha256 = downloaded bytes, approved copy locked. 3.2 to 3.9 s (134 kB) | round2 case 1 | Verified Fixed |
+| 1 | Repeat download | Manager | Served from storage via a short-lived signed URL, no generation | Same bytes through `/object/sign/...`, no second upload, signed URL valid 120 s. 133 to 187 ms | round2 case 1 | Verified Fixed |
+| 1 | First / repeat download | Admin | As above | First 1.0 to 1.1 s (267 kB, stored once), repeat 115 to 152 ms via signed URL | round2 case 1 | Verified Fixed |
+| 2 | Object path | any | Company-scoped | `<company id>/tyre_inspection/<record id>/<key>.pdf` | round2 case 2 | Verified Fixed |
+| 2 | Other company reads Alpha report | Beta Manager, Beta Admin | 403/404 or refusal on object, signed URL step, cache row | Storage API download 400, sign 400; `pdf_cache_lookup` not_available; `report_pdf_files` and `report_pdf_events` return 0 rows; write into Alpha folder 400 | round2 case 2 | Verified Fixed |
+| 2 | Anonymous | none | Nothing | Download, sign and public URL 400; lookup and table read 401; folder listing empty | round2 case 2 | Verified Fixed |
+| 3 | Own site | Tyre Man (ALPHA EAST PLANT) | Allowed | Download 200, signed URL 200, rows only of his site | round2 case 3 | Verified Fixed |
+| 3 | Other site | Tyre Man | Refused at database and storage | Lookup not_available; Storage API download 400, sign 400, overwrite 400 | round2 case 3 | Verified Fixed |
+| 4 | Overwrite approved object | Manager, Admin | Refused by storage policy | PUT 400, POST upsert 400, remove removes 0; object unchanged byte for byte | round2 case 4 | Verified Fixed |
+| 4 | Regenerate approved | Manager (not authorised), Admin | Needs authorised role and reason, keeps original, audit row | Manager: approved_needs_authorisation; Admin without reason: reason_required; Admin with reason: new revision on `.g2.pdf`, original kept byte for byte, `regenerate_requested` event by the admin, revision records who, why, from which file | round2 case 4 | Verified Fixed |
+| 5 | Bulk 50 / 51 | Admin, Manager | 50 allowed, 51 refused by the server | Admin: 50 accepted (50 returned), 51 over_limit. Manager: 50 accepted, only his 22 KSA records returned (28 refused as out of scope), 51 over_limit | round2 case 5 | Verified Fixed |
+| 5 | Configurable limit | Admin sets 10 | Honoured; manager cannot change it | 10 accepted, 11 over_limit; manager update refused (admin_only); every request logged with its outcome | round2 case 5 | Verified Fixed |
+| 6 | Retention, dry run in a rolled-back transaction | cron (no user) | Never approved, never younger than 90 days | Of a working copy superseded 200 days ago, one superseded 30 days ago and the approved original backdated 400 days, only the 200-day copy was marked; rollback left nothing marked. A signed-in admin cannot start the job (permission denied); the Storage API removes neither the unmarked copy nor the approved original | round2 case 6 | Verified Fixed |
+| 7 | Observation PDF, browser | Manager | First generated and stored, repeat from storage | First 0.9 s (15 kB, one upload, under `<company>/tyre_observation/`), repeat 119 to 216 ms via signed URL, same bytes and file name, no error; refused to another company (400) | round2 case 7 | Verified Fixed |
+| 8 | Drafts NOT applied | Manager, Admin | Downloads work as on main, no storage call, no error | Generated in the browser (blob), second record and bulk ZIP work, no error, no stored-PDF panel, zero Storage API requests, nothing created in the database | browser.cjs unprovisioned | Verified Fixed |
+
+Timings are from one local machine and only show the shape (generated vs served); they are not a production
+measurement. Not Tested: the hosted Supabase Storage service and its policies as deployed (local Storage API
+only); GoTrue (sign-in is the local shim, the JWT shape and claims match); the retention purge for real (dry
+run only, by design).

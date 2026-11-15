@@ -6,13 +6,11 @@
 --         version 20261115120856 (observation_erp_confirm_interim_lock). The applied text was a
 --         baseline guard block (abort unless the three functions carry the expected ACL and
 --         hashes) followed by exactly the three REVOKE statements below.
---         The guard block in this file is the replayable part of that guard: it aborts unless
---         the three functions exist with these exact signatures and neither anon nor PUBLIC can
---         execute them. Production's guard also compared the function md5 values, the ACL and
---         the row counts with the reviewed 2026-11-15 baseline; those values only hold on
---         production, so they are recorded here as comments, not replayed. The exact applied
---         text is stored on production in supabase_migrations.schema_migrations; it was NOT
---         re-read for this file (production is read-only for this work).
+--         The executable text below is BYTE FOR BYTE the text production recorded in
+--         supabase_migrations.schema_migrations for this version (read-only check 2026-11-15:
+--         one statement, md5 01d5a77f60aac04bf505831078d0bab8). Its guard only holds against the
+--         reviewed production baseline (function hashes, ACL, zero rows), so on any other
+--         database it aborts by design. Do not replay it; it is the record of what ran.
 --         Baseline md5(pg_get_functiondef) the production guard compared: decide
 --         272f785a2a32256bfe2b83b99d131c1b, confirm 479f5400cf932e246c748909733be801, reject
 --         f3109e20f4628824f4ecd90bd836e289.
@@ -80,29 +78,24 @@
 
 -- Guard (replayable part, see STATUS): stop before the revokes unless the reviewed functions are
 -- the ones being locked.
-do $guard$
-declare
-  v_sig text;
-  v_oid regprocedure;
+-- Interim restriction (repo draft 20261116084000_observation_erp_confirm_interim_lock.sql).
+-- Owner approved 2026-11-15. Guard aborts unless production still matches the reviewed baseline.
+do $$
+declare bad text := '';
 begin
-  foreach v_sig in array array[
-    'public.observation_erp_decide(uuid, uuid, text, text)',
-    'public.confirm_observation_erp_link(uuid, uuid, text)',
-    'public.reject_observation_erp_link(uuid, uuid, text)'] loop
-    v_oid := to_regprocedure(v_sig);
-    if v_oid is null then
-      raise exception 'Interim lock guard: % does not exist', v_sig;
-    end if;
-    if has_function_privilege('anon', v_oid, 'EXECUTE') then
-      raise exception 'Interim lock guard: anon can execute %, review before locking', v_sig;
-    end if;
-    if exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
-                where p.oid = v_oid and a.grantee = 0 and a.privilege_type = 'EXECUTE') then
-      raise exception 'Interim lock guard: PUBLIC can execute %, review before locking', v_sig;
-    end if;
-  end loop;
-end
-$guard$;
+  if md5(pg_get_functiondef('public.observation_erp_decide(uuid,uuid,text,text)'::regprocedure)) <> '272f785a2a32256bfe2b83b99d131c1b' then bad := bad || ' decide_hash'; end if;
+  if md5(pg_get_functiondef('public.confirm_observation_erp_link(uuid,uuid,text)'::regprocedure)) <> '479f5400cf932e246c748909733be801' then bad := bad || ' confirm_hash'; end if;
+  if md5(pg_get_functiondef('public.reject_observation_erp_link(uuid,uuid,text)'::regprocedure)) <> 'f3109e20f4628824f4ecd90bd836e289' then bad := bad || ' reject_hash'; end if;
+  if exists (select 1 from pg_proc p where p.oid in ('public.observation_erp_decide(uuid,uuid,text,text)'::regprocedure,'public.confirm_observation_erp_link(uuid,uuid,text)'::regprocedure,'public.reject_observation_erp_link(uuid,uuid,text)'::regprocedure)
+             and p.proacl::text <> '{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}') then bad := bad || ' acl_baseline'; end if;
+  if has_function_privilege('anon','public.observation_erp_decide(uuid,uuid,text,text)'::regprocedure,'EXECUTE') then bad := bad || ' anon_exec'; end if;
+  if (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where p.prosrc ~* 'observation_erp_decide|confirm_observation_erp_link|reject_observation_erp_link') <> 2 then bad := bad || ' unexpected_caller'; end if;
+  if (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public'
+       and p.proname in ('observation_erp_decide','confirm_observation_erp_link','reject_observation_erp_link')) <> 3 then bad := bad || ' overloads'; end if;
+  if (select count(*) from public.observation_erp_links) <> 0 or (select count(*) from public.observation_erp_link_events) <> 0 then bad := bad || ' row_counts'; end if;
+  if bad <> '' then raise exception 'interim lock aborted, baseline changed:%', bad; end if;
+end $$;
 
 revoke execute on function public.observation_erp_decide(uuid, uuid, text, text) from authenticated;
 revoke execute on function public.confirm_observation_erp_link(uuid, uuid, text) from authenticated;

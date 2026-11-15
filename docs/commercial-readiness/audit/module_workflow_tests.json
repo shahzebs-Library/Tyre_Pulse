@@ -1,0 +1,1235 @@
+{
+ "summary": {
+  "generated": "2026-11-15",
+  "stack": "local: PostgreSQL 16 copy of staging + PostgREST 12.2.3 + local sign-in shim + production build in headless Chromium (Playwright)",
+  "counts": {
+   "Verified Passed": 29,
+   "Verified Failed": 1,
+   "Not Tested": 1,
+   "Blocked": 0
+  },
+  "safe_to_restore": [
+   "batteries",
+   "bay_scheduling",
+   "breakdowns",
+   "certifications",
+   "combinations",
+   "driver_documents",
+   "driver_training",
+   "dvir",
+   "equipment",
+   "fleet_groups",
+   "goods_receipt",
+   "insurance_claims",
+   "materials",
+   "parts_catalog",
+   "parts_requests",
+   "pm_programs",
+   "policies",
+   "repair_requests",
+   "requisitions",
+   "reservations",
+   "retread",
+   "retread_claims",
+   "rotation",
+   "service_requests",
+   "shifts",
+   "tyre_pool",
+   "tyre_service_events",
+   "vehicle_checkinout",
+   "warranty"
+  ],
+  "not_safe": [
+   "recall_tracker"
+  ],
+  "not_tested": [
+   "workshop_absence"
+  ]
+ },
+ "defects": [
+  {
+   "id": "D1",
+   "severity": "High",
+   "module": "recall_tracker",
+   "title": "An Admin cannot save a recall",
+   "seen": "Alpha Admin filled Add recall and pressed Save recall. The API answered 403 and the page said \"You do not have permission to do that.\" No row was written.",
+   "cause": "src/pages/RecallTracker.jsx line 444 sends country: form.country || profile?.country. profiles.country is an array, recalls.country is a single text value, so the row fails the country write policy (recalls_country_write). The same insert with country null succeeds for the same user (checked in SQL). In production today only a super admin passes because that policy lets super admins through.",
+   "file": "src/pages/RecallTracker.jsx"
+  },
+  {
+   "id": "D2",
+   "severity": "Medium",
+   "module": "breakdowns, driver_training, dvir, equipment, retread_claims, rotation, service_requests, shifts, tyre_pool, warranty",
+   "title": "Saved table views call a table that is not in the database",
+   "seen": "Every page that uses saved views requests /rest/v1/user_view_prefs and gets 404, with a console error. The page still works; saved views do not.",
+   "cause": "supabase/migrations/20260921090000_user_view_prefs.sql exists in the repository but the table is absent from the staging schema, which was copied from the production catalog. The migration appears not to be applied.",
+   "file": "supabase/migrations/20260921090000_user_view_prefs.sql"
+  },
+  {
+   "id": "D3",
+   "severity": "Medium",
+   "module": "repair_requests",
+   "title": "Request numbers carry another company's prefix",
+   "seen": "Alpha Readymix received request number GC/RFR/0001/1126.",
+   "cause": "Database function next_rfr_no falls back to the fixed prefix GC when the company has no row in repair_request_number_config. A new customer has no row.",
+   "file": "database function public.next_rfr_no"
+  },
+  {
+   "id": "D4",
+   "severity": "Low",
+   "module": "warranty",
+   "title": "Country on a warranty claim is free text and a wrong value reads as a permission error",
+   "seen": "With a Country value that is not one of the user's countries the save answered 403 and \"You do not have permission to do that.\" With KSA the same claim saved.",
+   "cause": "The Country field in the Add Claim form is a text box; the country write policy refuses unknown values and the message does not say which field is wrong.",
+   "file": "src/pages/WarrantyTracker.jsx"
+  },
+  {
+   "id": "D5",
+   "severity": "Low",
+   "module": "tyre_pool, warranty",
+   "title": "No role guard on two routes",
+   "seen": "Alpha Tyre Man opened /tyre-pool and /warranty and saw the page with its Add button. Whether a Tyre Man can save there was not tested.",
+   "cause": "These two routes have no RoleRoute in src/App.jsx. This may be intended; it should be a decision, not an accident.",
+   "file": "src/App.jsx"
+  },
+  {
+   "id": "D6",
+   "severity": "Info",
+   "module": "19 of the 31 routes",
+   "title": "Most restored modules are Admin only",
+   "seen": "Alpha Manager got Access Restricted on 19 routes. Restoring the module switch alone gives managers nothing on those pages.",
+   "cause": "RoleRoute allowed={[\"Admin\"]} in src/App.jsx.",
+   "file": "src/App.jsx"
+  }
+ ],
+ "modules": [
+  {
+   "id": "batteries",
+   "name": "Battery Lifecycle",
+   "route": "/batteries",
+   "routeRoles": [
+    "Admin"
+   ],
+   "crudActor": "alpha.admin",
+   "table": "batteries",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha admin: heading \"Battery Lifecycle Management\"",
+    "Roles: Manager refused (Access Restricted); Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in batteries with the Alpha company id (marker E2EVZR5A); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused with: \"Enter an asset number or a serial number.\"; no row written",
+    "Tenant: beta admin opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [
+    "D6"
+   ],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/batteries.png",
+    "dbCheck": "select count(*) from public.batteries t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2EVZR5A%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "bay_scheduling",
+   "name": "Bay Scheduling",
+   "route": "/bay-scheduling",
+   "routeRoles": [
+    "Admin"
+   ],
+   "crudActor": "alpha.admin",
+   "table": "bay_schedules",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha admin: heading \"Bay Scheduling\"",
+    "Roles: Manager refused (Access Restricted); Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in bay_schedules with the Alpha company id (marker E2EETD22); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused with: \"A bay name is required.\"; no row written",
+    "Tenant: beta admin opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [
+    "D6"
+   ],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/bay_scheduling.png",
+    "dbCheck": "select count(*) from public.bay_schedules t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2EETD22%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "breakdowns",
+   "name": "Breakdown Callouts",
+   "route": "/breakdowns",
+   "routeRoles": [
+    "Admin"
+   ],
+   "crudActor": "alpha.admin",
+   "table": "breakdown_callouts",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha admin: heading \"Breakdown Callouts\"",
+    "Roles: Manager refused (Access Restricted); Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in breakdown_callouts with the Alpha company id (marker E2EKFZID); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused by the browser required-field prompt on the first required field; form stayed open; no row written",
+    "Tenant: beta admin opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [
+    "D2",
+    "D6"
+   ],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/breakdowns.png",
+    "dbCheck": "select count(*) from public.breakdown_callouts t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2EKFZID%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "certifications",
+   "name": "Certifications",
+   "route": "/certifications",
+   "routeRoles": [
+    "Admin",
+    "Manager",
+    "Director"
+   ],
+   "crudActor": "alpha.manager",
+   "table": "certifications",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha manager: heading \"Certifications\"",
+    "Roles: Manager opens; Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in certifications with the Alpha company id (marker E2E9P24A); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused with: \"Subject name is required.\"; no row written",
+    "Tenant: beta manager opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/certifications.png",
+    "dbCheck": "select count(*) from public.certifications t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2E9P24A%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "combinations",
+   "name": "Combinations",
+   "route": "/combinations",
+   "routeRoles": [
+    "Admin"
+   ],
+   "crudActor": "alpha.admin",
+   "table": "asset_combinations",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha admin: heading \"Combination Manager\"",
+    "Roles: Manager refused (Access Restricted); Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in asset_combinations with the Alpha company id (marker E2E4AYBO); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused with: \"browser validation: Please fill out this field.\"; no row written",
+    "Tenant: beta admin opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [
+    "D6"
+   ],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/combinations.png",
+    "dbCheck": "select count(*) from public.asset_combinations t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2E4AYBO%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "driver_documents",
+   "name": "Driver Documents",
+   "route": "/driver-documents",
+   "routeRoles": [
+    "Admin"
+   ],
+   "crudActor": "alpha.admin",
+   "table": "driver_documents",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha admin: heading \"Driver Documents\"",
+    "Roles: Manager refused (Access Restricted); Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in driver_documents with the Alpha company id (marker E2EI6KA9); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused with: \"Driver name is required.\"; no row written",
+    "Tenant: beta admin opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [
+    "D6"
+   ],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/driver_documents.png",
+    "dbCheck": "select count(*) from public.driver_documents t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2EI6KA9%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "driver_training",
+   "name": "Driver Training",
+   "route": "/driver-training",
+   "routeRoles": [
+    "Admin"
+   ],
+   "crudActor": "alpha.admin",
+   "table": "driver_training",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha admin: heading \"Driver Training Records\"",
+    "Roles: Manager refused (Access Restricted); Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in driver_training with the Alpha company id (marker E2EMCDCV); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused with: \"A driver name is required.\"; no row written",
+    "Tenant: beta admin opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [
+    "D2",
+    "D6"
+   ],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/driver_training.png",
+    "dbCheck": "select count(*) from public.driver_training t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2EMCDCV%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "dvir",
+   "name": "DVIR Reports",
+   "route": "/dvir",
+   "routeRoles": [
+    "Admin"
+   ],
+   "crudActor": "alpha.admin",
+   "table": "dvir_reports",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha admin: heading \"DVIR Reports\"",
+    "Roles: Manager refused (Access Restricted); Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in dvir_reports with the Alpha company id (marker E2ES0CRB); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused with: \"An asset number is required.\"; no row written",
+    "Tenant: beta admin opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [
+    "D2",
+    "D6"
+   ],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/dvir.png",
+    "dbCheck": "select count(*) from public.dvir_reports t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2ES0CRB%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "equipment",
+   "name": "Tool and Equipment",
+   "route": "/equipment",
+   "routeRoles": [
+    "Admin"
+   ],
+   "crudActor": "alpha.admin",
+   "table": "equipment",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha admin: heading \"Tool & Equipment Registry\"",
+    "Roles: Manager refused (Access Restricted); Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in equipment with the Alpha company id (marker E2EPWBVE); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused with: \"Please enter an equipment name.\"; no row written",
+    "Tenant: beta admin opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [
+    "D2",
+    "D6"
+   ],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/equipment.png",
+    "dbCheck": "select count(*) from public.equipment t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2EPWBVE%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "fleet_groups",
+   "name": "Fleet Groups",
+   "route": "/fleet-groups",
+   "routeRoles": [
+    "Admin"
+   ],
+   "crudActor": "alpha.admin",
+   "table": "fleet_groups",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha admin: heading \"Fleet Groups\"",
+    "Roles: Manager refused (Access Restricted); Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in fleet_groups with the Alpha company id (marker E2E1JJD2); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused with: \"A group name is required.\"; no row written",
+    "Tenant: beta admin opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [
+    "D6"
+   ],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/fleet_groups.png",
+    "dbCheck": "select count(*) from public.fleet_groups t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2E1JJD2%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "goods_receipt",
+   "name": "Goods Receipt",
+   "route": "/goods-receipt",
+   "routeRoles": [
+    "Admin",
+    "Manager",
+    "Director"
+   ],
+   "crudActor": "alpha.manager",
+   "table": "goods_receipts",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha manager: heading \"Goods Receipt\"",
+    "Roles: Manager opens; Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in goods_receipts with the Alpha company id (marker E2EGTAS4); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused with: \"No goods receipts have been recorded yet. Every figure on this page is therefore zero because nothing has been entered, not because there is nothing to report. Receipts appear once stock is received against a purchase order.\"; no row written",
+    "Tenant: beta manager opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/goods_receipt.png",
+    "dbCheck": "select count(*) from public.goods_receipts t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2EGTAS4%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "insurance_claims",
+   "name": "Insurance Claims",
+   "route": "/insurance-claims",
+   "routeRoles": [
+    "Admin",
+    "Manager",
+    "Director"
+   ],
+   "crudActor": "alpha.manager",
+   "table": "insurance_claims",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha manager: heading \"Insurance Claims\"",
+    "Roles: Manager opens; Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in insurance_claims with the Alpha company id (marker E2EE73RU); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused with: \"Provide an insurer or an asset number.\"; no row written",
+    "Tenant: beta manager opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/insurance_claims.png",
+    "dbCheck": "select count(*) from public.insurance_claims t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2EE73RU%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "materials",
+   "name": "Materials",
+   "route": "/materials",
+   "routeRoles": [
+    "Admin"
+   ],
+   "crudActor": "alpha.admin",
+   "table": "materials",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha admin: heading \"Materials Management\"",
+    "Roles: Manager refused (Access Restricted); Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in materials with the Alpha company id (marker E2EQA0YY); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused by the browser required-field prompt on the first required field; form stayed open; no row written",
+    "Tenant: beta admin opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [
+    "D6"
+   ],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/materials.png",
+    "dbCheck": "select count(*) from public.materials t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2EQA0YY%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "parts_catalog",
+   "name": "Parts Catalog",
+   "route": "/parts-catalog",
+   "routeRoles": [
+    "Admin",
+    "Manager",
+    "Director"
+   ],
+   "crudActor": "alpha.manager",
+   "table": "parts_catalog",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha manager: heading \"Parts Catalog\"",
+    "Roles: Manager opens; Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in parts_catalog with the Alpha company id (marker E2EM2KIE); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused with: \"A part number is required.\"; no row written",
+    "Tenant: beta manager opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/parts_catalog.png",
+    "dbCheck": "select count(*) from public.parts_catalog t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2EM2KIE%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "parts_requests",
+   "name": "Parts Requests",
+   "route": "/parts-requests",
+   "routeRoles": [
+    "Admin",
+    "Manager",
+    "Director"
+   ],
+   "crudActor": "alpha.manager",
+   "table": "parts_requests",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha manager: heading \"Parts Requests\"",
+    "Roles: Manager opens; Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in parts_requests with the Alpha company id (marker E2ETMYER); still listed after reload",
+    "Update: workflow action: Approve, status requested to approved in the database",
+    "Empty form refused with: \"Select a part or enter a part name.\"; no row written",
+    "Tenant: beta manager opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/parts_requests.png",
+    "dbCheck": "select count(*) from public.parts_requests t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2ETMYER%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "pm_programs",
+   "name": "Preventive Maintenance",
+   "route": "/pm-programs",
+   "routeRoles": [
+    "Admin",
+    "Manager",
+    "Director"
+   ],
+   "crudActor": "alpha.manager",
+   "table": "pm_programs",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha manager: heading \"Preventive Maintenance\"",
+    "Roles: Manager opens; Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in pm_programs with the Alpha company id (marker E2EDEFGN); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused with: \"Program name is required.\"; no row written",
+    "Tenant: beta manager opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/pm_programs.png",
+    "dbCheck": "select count(*) from public.pm_programs t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2EDEFGN%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "policies",
+   "name": "Policy Management",
+   "route": "/policies",
+   "routeRoles": [
+    "Admin"
+   ],
+   "crudActor": "alpha.admin",
+   "table": "policies",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha admin: heading \"Policy Management\"",
+    "Roles: Manager refused (Access Restricted); Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in policies with the Alpha company id (marker E2EFSXPF); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused with: \"A policy title is required.\"; no row written",
+    "Tenant: beta admin opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [
+    "D6"
+   ],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/policies.png",
+    "dbCheck": "select count(*) from public.policies t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2EFSXPF%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "recall_tracker",
+   "name": "Recall Tracker",
+   "route": "/recall-tracker",
+   "routeRoles": [
+    "Admin"
+   ],
+   "crudActor": "alpha.admin",
+   "table": "recalls",
+   "status": "Verified Failed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Failed",
+    "update": "Not Tested",
+    "error": "Verified Passed",
+    "tenant": "Not Tested"
+   },
+   "notes": [
+    "Opened as alpha admin: heading \"Tyre Recall & Batch Quality Tracker\"",
+    "Roles: Manager refused (Access Restricted); Admin opens; Tyre Man refused (Access Restricted)",
+    "Create did not save: You do not have permission to do that. ; 403 POST /rest/v1/recalls?select=id%2Crecall_number%2Cbrand%2Caffected_sizes%2Caffected_serial_prefix%2Cissue_date%2Cseverity%2Cdescription%2Caction_required%2Csource%2Cstatus%2Ccountry%2Ccreated_by%2Ccreated_at%2Cclosed_at",
+    "Update not reached because create failed",
+    "Empty form refused with: \"Recall number required\"; no row written",
+    "Tenant: beta admin opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [
+    "D6",
+    "D1"
+   ],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/recall_tracker.png",
+    "dbCheck": "select count(*) from public.recalls t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2EDBE6B%' -> 0; other companies -> 0"
+   }
+  },
+  {
+   "id": "repair_requests",
+   "name": "Repair Requests (RFR)",
+   "route": "/repair-requests",
+   "routeRoles": [
+    "Admin",
+    "Manager",
+    "Director"
+   ],
+   "crudActor": "alpha.manager",
+   "table": "repair_requests",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha manager: heading \"Repair Requests (RFR)\"",
+    "Roles: Manager opens; Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in repair_requests with the Alpha company id (marker E2E1S0VF), shown in the list as GC/RFR/0003/1126; still listed after reload",
+    "Update: workflow action: Acknowledge, status submitted to acknowledged in the database",
+    "Empty form refused by the browser required-field prompt on the first required field; form stayed open; no row written",
+    "Tenant: beta manager opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [
+    "D3"
+   ],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/repair_requests.png",
+    "dbCheck": "select count(*) from public.repair_requests t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2E1S0VF%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "requisitions",
+   "name": "Requisitions",
+   "route": "/requisitions",
+   "routeRoles": [
+    "Admin",
+    "Manager",
+    "Director"
+   ],
+   "crudActor": "alpha.manager",
+   "table": "requisitions",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha manager: heading \"Requisitions\"",
+    "Roles: Manager opens; Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in requisitions with the Alpha company id (marker E2EDOMLC); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused with: \"Please enter the item being requested.\"; no row written",
+    "Tenant: beta manager opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/requisitions.png",
+    "dbCheck": "select count(*) from public.requisitions t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2EDOMLC%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "reservations",
+   "name": "Vehicle Reservations",
+   "route": "/reservations",
+   "routeRoles": [
+    "Admin"
+   ],
+   "crudActor": "alpha.admin",
+   "table": "vehicle_reservations",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha admin: heading \"Vehicle Reservations\"",
+    "Roles: Manager refused (Access Restricted); Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in vehicle_reservations with the Alpha company id (marker E2E94QD6); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused with: \"An asset number is required.\"; no row written",
+    "Tenant: beta admin opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [
+    "D6"
+   ],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/reservations.png",
+    "dbCheck": "select count(*) from public.vehicle_reservations t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2E94QD6%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "retread",
+   "name": "Retread Management",
+   "route": "/retread",
+   "routeRoles": [
+    "Admin"
+   ],
+   "crudActor": "alpha.admin",
+   "table": "retread_jobs",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha admin: heading \"Retread Management\"",
+    "Roles: Manager refused (Access Restricted); Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in retread_jobs with the Alpha company id (marker E2E9DKYJ); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused with: \"No retread records have been recorded yet. Every figure on this page is therefore zero because nothing has been entered, not because there is nothing to report. Records appear once a tyre record is categorised as a retread.\"; no row written",
+    "Tenant: beta admin opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [
+    "D6"
+   ],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/retread.png",
+    "dbCheck": "select count(*) from public.retread_jobs t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2E9DKYJ%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "retread_claims",
+   "name": "Retread Claims",
+   "route": "/retread-claims",
+   "routeRoles": [
+    "Admin"
+   ],
+   "crudActor": "alpha.admin",
+   "table": "retread_claims",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha admin: heading \"Retread Claims\"",
+    "Roles: Manager refused (Access Restricted); Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in retread_claims with the Alpha company id (marker E2E4PY58); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused with: \"No retread claims have been recorded yet. Every figure on this page is therefore zero because nothing has been entered, not because there is nothing to report. Claims appear once one is raised with a retread supplier.\"; no row written",
+    "Tenant: beta admin opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [
+    "D2",
+    "D6"
+   ],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/retread_claims.png",
+    "dbCheck": "select count(*) from public.retread_claims t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2E4PY58%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "rotation",
+   "name": "Rotation Schedule",
+   "route": "/rotation",
+   "routeRoles": [
+    "Admin"
+   ],
+   "crudActor": "alpha.admin",
+   "table": "tyre_rotations",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha admin: heading \"Rotation Schedule\"",
+    "Roles: Manager refused (Access Restricted); Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in tyre_rotations with the Alpha company id (marker E2ET1UEP); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused with: \"No tyre rotations have been recorded yet. Every figure on this page is therefore zero because nothing has been entered, not because there is nothing to report. Rotations appear once one is planned or recorded.\"; no row written",
+    "Tenant: beta admin opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [
+    "D2",
+    "D6"
+   ],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/rotation.png",
+    "dbCheck": "select count(*) from public.tyre_rotations t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2ET1UEP%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "service_requests",
+   "name": "Service Requests",
+   "route": "/service-requests",
+   "routeRoles": [
+    "Admin"
+   ],
+   "crudActor": "alpha.admin",
+   "table": "service_requests",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha admin: heading \"Service Requests\"",
+    "Roles: Manager refused (Access Restricted); Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in service_requests with the Alpha company id (marker E2EU7VRU); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused by the browser required-field prompt on the first required field; form stayed open; no row written",
+    "Tenant: beta admin opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [
+    "D2",
+    "D6"
+   ],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/service_requests.png",
+    "dbCheck": "select count(*) from public.service_requests t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2EU7VRU%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "shifts",
+   "name": "Shift Scheduling",
+   "route": "/shifts",
+   "routeRoles": [
+    "Admin"
+   ],
+   "crudActor": "alpha.admin",
+   "table": "shifts",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha admin: heading \"Shift Scheduling\"",
+    "Roles: Manager refused (Access Restricted); Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in shifts with the Alpha company id (marker E2ERJFPK); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused by the browser required-field prompt on the first required field; form stayed open; no row written",
+    "Tenant: beta admin opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [
+    "D2",
+    "D6"
+   ],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/shifts.png",
+    "dbCheck": "select count(*) from public.shifts t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2ERJFPK%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "tyre_pool",
+   "name": "Tyre Pool",
+   "route": "/tyre-pool",
+   "routeRoles": [
+    "any signed-in role"
+   ],
+   "crudActor": "alpha.manager",
+   "table": "tyre_pool",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha manager: heading \"Tyre Pool\"",
+    "Roles: Manager opens; Admin opens; Tyre Man OPENS the page (route has no role guard)",
+    "Created through the form, row found in tyre_pool with the Alpha company id (marker E2EMF660); still listed after reload",
+    "Update: workflow action: Deploy, status available to deployed in the database",
+    "Empty form refused with: \"A tyre serial is required.\"; no row written",
+    "Tenant: beta manager opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [
+    "D2",
+    "D5"
+   ],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/tyre_pool.png",
+    "dbCheck": "select count(*) from public.tyre_pool t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2EMF660%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "tyre_service_events",
+   "name": "Tyre Service Events",
+   "route": "/tyre-service-events",
+   "routeRoles": [
+    "Admin",
+    "Manager",
+    "Director"
+   ],
+   "crudActor": "alpha.manager",
+   "table": "tyre_service_events",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha manager: heading \"Tyre Service Events\"",
+    "Roles: Manager opens; Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in tyre_service_events with the Alpha company id (marker E2EVWCHU); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused with: \"Provide a tyre serial or an asset number.\"; no row written",
+    "Tenant: beta manager opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/tyre_service_events.png",
+    "dbCheck": "select count(*) from public.tyre_service_events t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2EVWCHU%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "vehicle_checkinout",
+   "name": "Vehicle Check In/Out",
+   "route": "/vehicle-checkinout",
+   "routeRoles": [
+    "Admin"
+   ],
+   "crudActor": "alpha.admin",
+   "table": "vehicle_checkinout",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha admin: heading \"Vehicle Check In / Out\"",
+    "Roles: Manager refused (Access Restricted); Admin opens; Tyre Man refused (Access Restricted)",
+    "Created through the form, row found in vehicle_checkinout with the Alpha company id (marker E2ETT13N); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused with: \"An asset number is required.\"; no row written",
+    "Tenant: beta admin opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [
+    "D6"
+   ],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/vehicle_checkinout.png",
+    "dbCheck": "select count(*) from public.vehicle_checkinout t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2ETT13N%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "warranty",
+   "name": "Warranty Tracker",
+   "route": "/warranty",
+   "routeRoles": [
+    "any signed-in role"
+   ],
+   "crudActor": "alpha.manager",
+   "table": "warranty_claims",
+   "status": "Verified Passed",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Verified Passed",
+    "update": "Verified Passed",
+    "error": "Verified Passed",
+    "tenant": "Verified Passed"
+   },
+   "notes": [
+    "Opened as alpha manager: heading \"Warranty & Claims Tracker\"",
+    "Roles: Manager opens; Admin opens; Tyre Man OPENS the page (route has no role guard)",
+    "Created through the form, row found in warranty_claims with the Alpha company id (marker E2EL1467); still listed after reload",
+    "Update: edited a text field and saved, new value found in the database",
+    "Empty form refused with: \"No warranty claims have been recorded yet. Every figure on this page is therefore zero because nothing has been entered, not because there is nothing to report. Claims appear once one is raised against a tyre.\"; no row written",
+    "Tenant: beta manager opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [
+    "D2",
+    "D5",
+    "D4"
+   ],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/warranty.png",
+    "dbCheck": "select count(*) from public.warranty_claims t where organisation_id = <Alpha> and row_to_json(t)::text like '%E2EL1467%' -> 1; other companies -> 0"
+   }
+  },
+  {
+   "id": "workshop_absence",
+   "name": "Absence and Attendance",
+   "route": "/workshop-absence",
+   "routeRoles": [
+    "Admin",
+    "Manager",
+    "Director"
+   ],
+   "crudActor": "alpha.manager",
+   "table": null,
+   "status": "Not Tested",
+   "checks": {
+    "open": "Verified Passed",
+    "role": "Verified Passed",
+    "empty": "Verified Passed",
+    "create": "Not Tested",
+    "update": "Not Tested",
+    "error": "Not Tested",
+    "tenant": "Not Tested"
+   },
+   "notes": [
+    "Opened as alpha manager: heading \"Absence & Attendance\"",
+    "Roles: Manager opens; Admin opens; Tyre Man refused (Access Restricted)",
+    "Read-only report: no create or update action on the page. The attendance data path (roster plus check-in) was not exercised.",
+    "Tenant: beta manager opens the page and does not see the Alpha record; Gamma admin sees an empty page, 0 rows in the database for Gamma, no errors"
+   ],
+   "defects": [],
+   "evidence": {
+    "spec": "e2e/staging/specs/module_workflow.cjs",
+    "screenshot": "e2e/staging/evidence/workshop_absence.png",
+    "dbCheck": null
+   }
+  }
+ ]
+}

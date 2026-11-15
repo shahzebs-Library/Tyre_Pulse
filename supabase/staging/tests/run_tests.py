@@ -20,6 +20,25 @@ Exit code 1 when an isolation check in A to D fails. Section T never fails the r
 import argparse, json, sys, contextlib
 import psycopg2
 
+def _read(path):
+    with open(path) as fh:
+        return fh.read()
+
+
+def _load(path):
+    with open(path) as fh:
+        return json.load(fh)
+
+
+def _dump(obj, path, **kw):
+    with open(path, 'w') as fh:
+        json.dump(obj, fh, **kw)
+
+
+def _write(path, text):
+    with open(path, 'w') as fh:
+        fh.write(text)
+
 ap = argparse.ArgumentParser()
 ap.add_argument('--dsn', required=True); ap.add_argument('--json'); ap.add_argument('--label', default='run')
 a = ap.parse_args()
@@ -394,5 +413,5 @@ tens = [r for r in results if r['section'] == 'T']
 print('--- isolation checks: %d passed, %d failed. Tenancy findings: %s'
       % (sum(1 for r in iso if r['ok']), fails, ', '.join('%s=%s' % (r['name'].split(' ')[0], r['state']) for r in tens)))
 if a.json:
-    json.dump({'label': a.label, 'results': results}, open(a.json, 'w'), indent=1)
+    _dump({'label': a.label, 'results': results}, a.json, indent=1)
 sys.exit(1 if fails else 0)

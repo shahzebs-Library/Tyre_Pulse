@@ -9,8 +9,27 @@ value is replaced by a staging placeholder below.
 Usage: build_reference_seed.py <raw_dir> <seed_dir>
 """
 import json, os, sys, collections
+
+def _read(path):
+    with open(path) as fh:
+        return fh.read()
+
+
+def _load(path):
+    with open(path) as fh:
+        return json.load(fh)
+
+
+def _dump(obj, path, **kw):
+    with open(path, 'w') as fh:
+        json.dump(obj, fh, **kw)
+
+
+def _write(path, text):
+    with open(path, 'w') as fh:
+        fh.write(text)
 RAW, OUT = sys.argv[1], sys.argv[2]
-rows = json.load(open(os.path.join(RAW, 'ref.json')))
+rows = _load(os.path.join(RAW, 'ref.json'))
 by = collections.OrderedDict()
 for r in rows:
     by.setdefault(r['t'], []).append(r['r'])
@@ -54,5 +73,5 @@ BUCKETS = [('accident-photos', 20971520), ('driver-fine-evidence', 5242880), ('i
 out.append("INSERT INTO storage.buckets (id, name, public, file_size_limit) VALUES\n" +
            ',\n'.join("  ('%s', '%s', false, %d)" % (b, b, n) for b, n in BUCKETS) + "\nON CONFLICT (id) DO NOTHING;")
 out.append('COMMIT;')
-open(os.path.join(OUT, '00_reference.sql'), 'w').write('\n'.join(out) + '\n')
+_write(os.path.join(OUT, '00_reference.sql'), '\n'.join(out) + '\n')
 print({t: len(v) for t, v in by.items()}, 'system_config', len(cfg))

@@ -45,7 +45,7 @@ export function listStockMovements() {
 export function upsertTyreStatusMark(serial, markType) {
   return supabase
     .from('tyre_status_marks')
-    .upsert({ serial, mark_type: markType }, { onConflict: 'serial,mark_type' })
+    .upsert({ serial, mark_type: markType }, { onConflict: 'organisation_id,serial,mark_type' })
 }
 
 /**

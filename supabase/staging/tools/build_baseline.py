@@ -10,8 +10,27 @@ one by one; to psql that line is an ordinary comment.
 """
 import json, os, re, sys, collections
 
+def _read(path):
+    with open(path) as fh:
+        return fh.read()
+
+
+def _load(path):
+    with open(path) as fh:
+        return json.load(fh)
+
+
+def _dump(obj, path, **kw):
+    with open(path, 'w') as fh:
+        json.dump(obj, fh, **kw)
+
+
+def _write(path, text):
+    with open(path, 'w') as fh:
+        fh.write(text)
+
 RAW, OUT = sys.argv[1], sys.argv[2]
-DEFER = set(json.load(open(sys.argv[3]))) if len(sys.argv) > 3 and os.path.exists(sys.argv[3]) else set()
+DEFER = set(_load(sys.argv[3])) if len(sys.argv) > 3 and os.path.exists(sys.argv[3]) else set()
 PROD_REF = 'jhssdmeruxtrlqnwfksc'
 STAGING_REF = 'staging-project-ref'
 SEP = '\n-- @@\n'
@@ -20,7 +39,7 @@ SCHEMAS = ['approval_private', 'private', 'workforce_internal', 'ai_tyre_private
            'administration_imports', 'backups', 'erp_promote_bak']
 
 def load(name):
-    return json.load(open(os.path.join(RAW, name + '.json')))
+    return _load(os.path.join(RAW, name + '.json'))
 
 def scrub(s):
     return s.replace(PROD_REF, STAGING_REF)
@@ -226,13 +245,12 @@ for r in by['rolcfg']:
                 st.append("ALTER ROLE authenticator SET pgrst.db_pre_request = '%s';" % line.split('=', 1)[1])
 write('14_misc.sql', 'sequence ownership, realtime publication members, PostgREST pre-request hook', st)
 
-json.dump({'files': counts,
+_dump({'files': counts,
            'expected': {'tables': len(tables), 'functions': sum(1 for r in funcs if r['k'] in 'fp'),
                         'policies': len(pols), 'policies_app': sum(1 for r in pols if r['s'] != 'storage'),
                         'constraints': len(by['con']), 'indexes_non_constraint': len(by['idx']),
                         'views': len(by['view']), 'triggers': len(by['trg']),
                         'sequences_standalone': sum(1 for r in by['seq'] if not (r['x'] or '').startswith('i:')),
                         'sequences_total': len(by['seq']),
-                        'rls_enabled_tables': sum(1 for r in tables if r['rls'])}},
-          open(os.path.join(OUT, 'MANIFEST.json'), 'w'), indent=1)
+                        'rls_enabled_tables': sum(1 for r in tables if r['rls'])}}, os.path.join(OUT, 'MANIFEST.json'), indent=1)
 print(json.dumps(counts))

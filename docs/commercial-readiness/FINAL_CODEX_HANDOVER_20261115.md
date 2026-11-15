@@ -371,3 +371,41 @@ across all branches is the deliberate pair `20261116091000` (apply file and its 
 6. #526: fold `claude/wip-526-erp-7rxp2t` in; keep the lock; actions 2 to 4 only on owner approval.
 7. Retarget #505, #506, #508 to #511, #513, #517 to main one at a time; #510 keeps its marketing copy.
 8. Flutter #507 and #523 real-device pass; no store step without the owner.
+
+## 14. Round 3 completion, 2026-11-15 13:00 to 14:10 UTC (nothing merged, nothing deployed, no production change)
+
+Production re-checked read-only at 14:08 UTC: latest migration `20261115120856`, 1,091 migrations, ERP lock ACL
+`{postgres,service_role}` on all three functions, 0 links, `single_tenant_mode` true.
+
+### Merge-ready decisions (owner approval required for every merge; no migration is applied by a merge)
+| PR | Head | Decision | Evidence | Remaining risk | Deploy dependency |
+|---|---|---|---|---|---|
+| #519 (contains #528 and #511) | `d7f12edb` | READY for owner review | Browser round 3: 17 of 17 ledger/closure cases; round 2 work orders 9 roles 28 Verified Fixed, 1 Verified Failed (D3, now fixed in `d7f12edb`). Staging 305 of 305. 237 related web tests. CI green on `1427a801`. | Changes rights for current users once its drafts are applied; before that the ledger says "not available" and the form never changes `parts_cost`. Cost approvers are Admin and Manager; Workshop Supervisor closes jobs but does not approve costs (as drafted). | Merge, deploy web, then apply `20261113130000`, `20261115140000`, `140500`, `141000`, `141500`, `142000` in order. Close #528 and #511 as superseded when #519 merges. |
+| #520 | `21fb8a1a` | READY for owner review after CI | D1 fixed (exception never offered on a never-submitted action) with regression case A03b; staging 76 of 76; browser actions 23 + checklists 12 Verified Fixed; safe-degrade test 28 cases. | D4 wording: closing while an exception is pending says "This record changed since you opened it" (database correctly refuses). Approve-exception path not browser-tested (was blocked by D1). | Merge AFTER #519; resolve `src/lib/checklistAccess.js` exactly as in `claude/round3-integration-7rxp2t` (one list of module-gated paths). Then apply `20261116100000`, `101000`, `102000`. |
+| #524 | `f34ed341` | READY | 6 defects Verified Fixed with tests; 347 tests; CI green. Safe before its two drafts. | Arabic screens not browser-checked. | Text conflicts only with #519 (drafts README, `vercel.json`). |
+| #526 web part | `6e9584fc` | READY (web only) | Lock file now byte-identical to production (md5 `01d5a77f60aac04bf505831078d0bab8`, read-only check); vitest 208, staging 312 + 840 permission checks, PGlite 315; CI green. | Panel not browser-tested; PostgREST HTTP not tested. | ERP actions 2 to 4 stay unapplied until the owner approves the approval pack. |
+| #527 | `89a88986` | READY | No-draft gate: 26 tests + 16 browser checks. With drafts on a local copy: 157 SQL, 64 storage API, 20 browser checks. Repeat download 0.16 to 0.28 s vs first 1.3 to 2.7 s (local). CI green. | Observation PDF browser path and mobile not tested. | Drafts `20261117090000`, `091000` after owner approval; no paid service. |
+| #523 | `e58b8014` | READY (code) | 12 new small-phone tests en/ar/ur; analyze clean; CI green. | One Linux-only golden noise (1.48%). | Real-device pass before any store step. |
+| #507 | `claude/flutter-fixes-main-7rxp2t` `829ee103` | READY (code) | Rebuilt on main; 3,665 Flutter tests pass; 18 goldens are font noise (identical with the change removed). | Two drift tests need `mobile/` (CI runs them). | Real-device pass. Open a PR from the rebuilt branch, close #507. |
+| #505 | `claude/console-main-7rxp2t` `875d5d1e` | READY for review | 380 console tests, lint, build. | | Open PR from rebuilt branch. |
+| #506 | `claude/tenancy-main-7rxp2t` `f805b168` | READY for review (tests + doc only) | PGlite 372; its 13 drafts are byte-identical to main. | | |
+| #508 | `claude/staging-main-7rxp2t` `239a59ad` | READY for review (tooling) | Syntax only; stack needs PostgreSQL 16. | | |
+| #509 | `claude/prodb-main-7rxp2t` `db2ae914` | READY for review | Lint, build, 55 vitest, 32 ops tests. | Changes the `send-scheduled-reports` edge function source (deploy is manual). | Full `test:database` not run. |
+| #510 | `claude/commercial-main-7rxp2t` `27fa89d8` | NEEDS OWNER | Lint, build, marketing 45 tests, commercial PGlite 22. | Marketing says "An iOS app is planned" although iOS is in review: wording decision. | |
+| #511 | | SUPERSEDED by #519 | #519 contains its commit. | | Close when #519 merges. |
+| #513 | | LEAVE FOR CODEX | Depends on #504's page refactors (`urlTab.js`, compliance and CPK pages). | | Decide #504 first. |
+| #517 | `claude/workflow-main-7rxp2t` `9d5dc112` | READY for review (tests only) | Syntax only. | | |
+| #504 | | NEEDS OWNER / REVIEW | Not browser-tested; carries this handover. | | |
+
+### Defects still open (from browser round 3, `docs/commercial-readiness/audit/ROUND3_BROWSER_TESTS.md` on `claude/round3-integration-7rxp2t`)
+- D2 (P3, already on main): `src/hooks/useRealtimeAlerts.js:295` two components open the same channel name `tp-db-notifications`; the second throws a page error. Fix: unique channel name per subscriber.
+- D4 (P3, #520): wrong wording when closing with a pending exception.
+- D5 (P3, accessibility): "Draw a new signature" link in `SignatureField.jsx` is 16 px tall at 390 px.
+- Not tested: exception approval and "compliant by exception" in a browser; checklist viewer drawer label; Audit Pack tile with an author role; responsive reviewer panel.
+
+### Recommended release order (each step needs the owner's go)
+1. #524, #527 (web only), #526 web part: independent, safe without drafts.
+2. #519 (closes #528 and #511), deploy, then its six drafts one at a time with rolled-back verification.
+3. #520 with the `checklistAccess.js` resolution, then its three drafts.
+4. #505, #506, #508, #509, #517 from their rebuilt branches.
+5. #523 and #507 after a real-device pass. #510 after the wording decision. #513 after #504.

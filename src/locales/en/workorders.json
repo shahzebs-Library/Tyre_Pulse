@@ -178,5 +178,45 @@
     "saveEdit": "Save job card",
     "saveNew": "Create job card"
   },
-  "exportTruncated": "The export was capped. Narrow the filters to get the full set."
+  "exportTruncated": "The export was capped. Narrow the filters to get the full set.",
+  "myJobs": {
+    "title": "My Jobs",
+    "subtitle": "Work orders assigned to you",
+    "loading": "Loading your jobs...",
+    "loadFailed": "Your jobs could not be loaded. Check your connection and try again.",
+    "retry": "Try again",
+    "empty": "No work order is assigned to you right now.",
+    "emptyHint": "When a supervisor assigns a job to you it appears here.",
+    "noMatch": "No job matches your search.",
+    "search": "Search by job number, asset or description",
+    "allStatuses": "All statuses",
+    "count": "{shown} of {total} jobs",
+    "asset": "Asset",
+    "site": "Site",
+    "type": "Type",
+    "opened": "Opened",
+    "offRoad": "Vehicle off road",
+    "moveTo": "Move this job to",
+    "tasks": "Your tasks on this job",
+    "taskStatus": "Task status",
+    "note": "What was done, or what is wrong",
+    "notePlaceholder": "Write what you did or what you found. Your supervisor sees this.",
+    "submitWork": "Submit work done",
+    "reportProblem": "Report a problem",
+    "noteNeeded": "Write a short note first.",
+    "statusSaved": "Status updated.",
+    "taskSaved": "Task updated.",
+    "workSent": "Sent. Your supervisor will confirm it.",
+    "problemSent": "Problem reported to your supervisor.",
+    "saveFailed": "Not saved: {msg}",
+    "closeHint": "You cannot close a job. When the work is finished, move it to Quality Inspection and a supervisor closes it.",
+    "photosHint": "Photographs are added from the phone app.",
+    "taskStatuses": {
+      "pending": "Not started",
+      "in_progress": "In progress",
+      "blocked": "Blocked",
+      "done": "Done",
+      "qc": "Ready for check"
+    }
+  }
 }

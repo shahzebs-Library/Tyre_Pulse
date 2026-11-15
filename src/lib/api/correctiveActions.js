@@ -6,6 +6,7 @@
  */
 import { supabase, unwrap, fetchAllPages, ServiceError, toServiceError } from './_client'
 import { toUserMessage } from '../safeError'
+import { expectRows } from './writeGuard'
 import { actionRowsForInspection, applyPlanToRow } from '../inspectionTyreFlags'
 import { sanitizeSearchTerm } from '../searchFilter'
 import { ensureActionItem, updateActionItem } from './actionCenter'
@@ -45,9 +46,20 @@ export async function createCorrectiveAction(values) {
   return unwrap(await supabase.from('corrective_actions').insert(values).select(COLS).single())
 }
 
-/** Update a corrective action by id. */
+/**
+ * Update a corrective action by id.
+ *
+ * Asks for the changed id back. Row security refuses an update by matching zero
+ * rows without raising, so without this a status change by someone the policy
+ * does not admit (anyone other than Manager, Admin or a holder of the edit
+ * capability) used to report success and change nothing. Zero rows now throws
+ * a WriteRefusedError the page shows.
+ */
 export async function updateCorrectiveAction(id, patch) {
-  return unwrap(await supabase.from('corrective_actions').update(patch).eq('id', id))
+  return expectRows(
+    await supabase.from('corrective_actions').update(patch).eq('id', id).select('id'),
+    'This action was not updated. Only a Manager or an Admin can change a corrective action, or it no longer exists.',
+  )
 }
 
 /**

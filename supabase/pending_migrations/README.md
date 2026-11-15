@@ -44,6 +44,25 @@ ever wanted. The reconcile is therefore closed by deletion, not re-application.
   a removal of stored data, so it is not applied unattended. It frees disk only; no
   measured query gets faster from it.
 
+## Work order permissions (draft PR #519, owner decisions 2026-11-15)
+
+AUTHORED, NOT APPLIED. Proven only on a private copy of the local staging database (synthetic
+companies) by `supabase/tests/staging_work_order_permissions.sh`. Renumbered on 2026-11-15 from
+`20261115160000 / 160500 / 161000` so they no longer share a number with the tenant drafts of PR #518.
+Apply in this order, after the web build that carries the matching screens is live:
+
+1. `20261113130000_cur_work_orders_manager_director_default.sql` (PR #511; needed first)
+2. `20261115140000_wo_permission_resolver.sql` - rule table `work_order_role_rules` (31 built-in rows),
+   `work_order_can`, `work_order_scope`, `work_order_my_access`. Changes no behaviour alone.
+3. `20261115140500_wo_policies_and_guards.sql` - policies and guards read the resolver: site and
+   assignment scoped rights, closed and approved-cost locks, final closure needs the `close` right.
+4. `20261115141000_wo_supervisor_module_visibility.sql` - menu switches: Work Orders and Live Control
+   for the supervisor roles, Work Orders (the My Jobs screen) for Tyre Man and the trade roles.
+5. `20261115141500_wo_cost_approval_not_collector.sql` - a Tyre Data Collector is no longer an
+   eligible approver of work order scope and cost in the approval engine.
+
+None of them rewrites a stored work order, cost or approval. Rollback is in each file's header.
+
 ## Multi-company drafts gathered for the full sequence (2026-11-15, stream COMMERCIAL2)
 
 NOT applied. Order, dependencies, the check after each step and the point of no easy return are in

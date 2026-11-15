@@ -76,6 +76,7 @@ export default function JobCardForm({
   assetLookup,       // async (assetNo) => fleet row | null
   siteOptions,
   currency = '',
+  workTypes,         // optional: the job types this person may pick (tyre-only roles)
 }) {
   const { t } = useLanguage()
   const tx = useCallback((key, fallback, vars) => {
@@ -112,11 +113,17 @@ export default function JobCardForm({
         const asset = await assetLookup(code)
         if (!asset) { setAssetMaster(null); return }   // not in the register is legitimate
         setAssetMaster(asset)
+        // Editing an existing card: the register is shown for reference only.
+        // Blank fields are filled only when the user picked a different asset,
+        // so a save never writes columns the user did not touch.
+        if (mode === 'edit' && code === String(row?.asset_no || '').trim()) return
         const fill = {
           plate_no: asset.registration_no || asset.plate_no,
           asset_category: asset.vehicle_type,
           asset_description: asset.model,
           site: asset.site,
+          // A card raised on the All countries view still belongs to the asset's country.
+          country: asset.country,
         }
         for (const [k, v] of Object.entries(fill)) {
           const current = value?.[k]
@@ -214,7 +221,7 @@ export default function JobCardForm({
       control = (
         <select {...common} value={inputValue(raw)} onChange={e => setField(f.key, e.target.value)}>
           <option value="">{tx('workorders.jobcard.selectBlank', 'Select...')}</option>
-          {(f.options || []).map(o => <option key={o} value={o}>{o}</option>)}
+          {(f.key === 'work_type' && Array.isArray(workTypes) ? workTypes : (f.options || [])).map(o => <option key={o} value={o}>{o}</option>)}
         </select>
       )
     } else if (f.type === 'datetime') {

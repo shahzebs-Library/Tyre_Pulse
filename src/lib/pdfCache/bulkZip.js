@@ -15,6 +15,7 @@
 import { fetchVerifiedPdf } from './service'
 import { sha256HexOfBytes } from './cacheKey'
 import { REPORT_LABELS } from './templates'
+import { csvCell } from '../csvSafe.js'
 
 export const BULK_LIMITS = Object.freeze([10, 50, 100])
 export const DEFAULT_BULK_LIMIT = 50
@@ -38,12 +39,6 @@ export function uniqueName(name, used) {
     const next = `${clean.slice(0, dot)} (${i})${clean.slice(dot)}`
     if (!used.has(next.toLowerCase())) { used.add(next.toLowerCase()); return next }
   }
-}
-
-const csvCell = (v) => {
-  let s = v == null ? '' : String(v)
-  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`          // never let a spreadsheet run a cell as a formula
-  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
 export const MANIFEST_COLUMNS = Object.freeze(['record', 'source_id', 'status', 'file_name', 'reason', 'revision',

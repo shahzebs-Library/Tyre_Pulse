@@ -30,8 +30,12 @@ export async function findObservationErpEvidence({ inspection, finding }) {
     expenses.push(...(unwrap(rows) || []))
   }
   const candidates = matchObservationToErp({ inspection, finding, workOrders, fitments, expenses })
+  const existingJobCards = new Set(workOrders.map(w => String(w.work_order_no || '').trim().toUpperCase()))
+  const orphanTyreJobCards = [...new Set(fitments.map(t => String(t.job_card || '').trim()).filter(Boolean))]
+    .filter(number => !existingJobCards.has(number.toUpperCase()))
+    .slice(0, 30)
   const evidenceLimited = workOrders.length === 100 || fitments.length === 400 || expenses.length >= 500
-  return { candidates, evidenceLimited, totals: { workOrders: workOrders.length, fitments: fitments.length, expenses: expenses.length } }
+  return { candidates, orphanTyreJobCards, evidenceLimited, totals: { workOrders: workOrders.length, fitments: fitments.length, expenses: expenses.length } }
 }
 
 /**

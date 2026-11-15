@@ -54,6 +54,7 @@ export default function RaiseActionDialog({ open, onClose, inspection, defects, 
 
   const set = (key, patch) => setPlans((p) => ({ ...p, [key]: { ...p[key], ...patch } }))
   const chosen = useMemo(() => defects.filter((d) => plans[d.key]?.include), [defects, plans])
+  const selectAll = (include) => setPlans((p) => Object.fromEntries(Object.entries(p).map(([k, v]) => [k, { ...v, include }])))
   const assignAll = (person) => setPlans((p) => Object.fromEntries(
     Object.entries(p).map(([k, v]) => [k, { ...v, assignee: person }]),
   ))
@@ -62,6 +63,11 @@ export default function RaiseActionDialog({ open, onClose, inspection, defects, 
     setBusy(true); setError('')
     try {
       const res = await raiseActionsForInspection(inspection, chosen, { plans })
+      if (res.failed?.length || res.notifyFailed?.length) {
+        setError(`${res.created?.length || 0} created; ${res.failed?.length || 0} failed; ${res.notifyFailed?.length || 0} assignment notifications failed. Review these before retrying.`)
+        onDone(res)
+        return
+      }
       onDone(res)
       onClose()
     } catch (e) {
@@ -123,6 +129,13 @@ export default function RaiseActionDialog({ open, onClose, inspection, defects, 
         </ul>
       </section>
 
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <p className="text-sm text-[var(--text-secondary)]">{chosen.length} of {defects.length} inspection findings selected</p>
+        <div className="flex gap-2">
+          <button type="button" className="btn-secondary min-h-[36px]" onClick={() => selectAll(true)}>Select all</button>
+          <button type="button" className="btn-secondary min-h-[36px]" onClick={() => selectAll(false)}>Clear</button>
+        </div>
+      </div>
       <div className="space-y-3">
         {defects.map((d) => {
           const plan = plans[d.key]

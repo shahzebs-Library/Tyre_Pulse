@@ -53,8 +53,8 @@ const STEPS = [
 
 export default function ArabicPage() {
   return <div className={`rtl ar-page ${arabic.variable}`} lang="ar" dir="rtl">
-    {/* Sets <html lang> before first paint; LocaleSync keeps it right after navigation. */}
-    <script dangerouslySetInnerHTML={{ __html: "document.documentElement.lang='ar'" }} />
+    {/* Sets <html lang> and <html dir> before first paint; LocaleSync keeps it right after navigation. */}
+    <script dangerouslySetInnerHTML={{ __html: "document.documentElement.lang='ar';document.documentElement.dir='rtl'" }} />
     <Header locale="ar" />
     <main id="main-content" tabIndex={-1}>
       <section className="home-hero" aria-label="تاير بالس">
@@ -66,9 +66,10 @@ export default function ArabicPage() {
                 <h1 className="hero-h1">تحكم كامل في عمليات أسطولك.</h1>
                 <p className="hero-lead">اربط الأصول والورشة والفرق الميدانية والمستودعات في مساحة عمل تشغيلية واحدة.</p>
                 <div className="hero-cta">
-                  <Link className="btn btn-primary" href="/contact">احجز عرضاً <ArrowLeft size={18} aria-hidden="true" /></Link>
+                  <Link className="btn btn-primary" href="/contact" hrefLang="en">احجز عرضاً <ArrowLeft size={18} aria-hidden="true" /></Link>
                   <Link className="btn-text" href="/platform" hrefLang="en">تعرّف على المنصة<span className="sr-only">، الصفحة باللغة الإنجليزية</span> <ArrowLeft size={17} aria-hidden="true" /></Link>
                 </div>
+                <p className="ar-en-note">نموذج حجز العرض وصفحات تفاصيل المنصة متاحة حالياً باللغة الإنجليزية.</p>
               </div>
               <div className="hc-visual">
                 <div className="hc-photo"><Photo name="riyadh" position="30% 100%" alt="محمل بعجلات أمام أفق مدينة الرياض ليلاً" sizes="(max-width: 900px) 100vw, 640px" priority /></div>
@@ -121,7 +122,7 @@ export default function ArabicPage() {
         </div>
       </section>
     </main>
-    <CtaBand title="شاهد كيف يناسب تاير بالس أسطولك." text="عرض مبني على مواقعك وأصولك وتسلسل الموافقات لديك." button="احجز عرضاً" />
+    <CtaBand title="شاهد كيف يناسب تاير بالس أسطولك." text="عرض مبني على مواقعك وأصولك وتسلسل الموافقات لديك." button="احجز عرضاً (الصفحة بالإنجليزية)" />
     <Footer locale="ar" />
   </div>;
 }

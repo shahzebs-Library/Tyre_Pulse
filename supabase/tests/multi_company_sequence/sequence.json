@@ -1,0 +1,33 @@
+{
+  "note": "Order for going multi-company. Every file is a draft in supabase/pending_migrations. Nothing here is applied to production.",
+  "steps": [
+    {"file": "20261113100000_ten1_job_card_conflict_org_guard.sql", "needs": [], "what": "job card import cannot overwrite another company's work order"},
+    {"file": "20261113100500_ten1b_work_orders_per_org_key.sql", "needs": ["ten1"], "what": "work order number unique per company"},
+    {"file": "20261113101000_ten2_raw_upload_tables_org_wall.sql", "needs": [], "what": "raw upload tables walled per company"},
+    {"file": "20261113102000_ten3_platform_tables_super_admin_write.sql", "needs": [], "what": "platform tables writable by super admin only"},
+    {"file": "20261113103000_ten4_admin_rpcs_same_org.sql", "needs": [], "what": "admin RPCs act inside the caller's company"},
+    {"file": "20261113104000_ten5_subscription_and_plan_write_guard.sql", "needs": [], "what": "a customer cannot write its own plan"},
+    {"file": "20261113110000_ten6_entitlement_enforcement.sql", "needs": ["ten5"], "what": "entitlement path, switch inserted OFF, every existing company gets an internal plan row"},
+    {"file": "20261113111000_ten7_per_tenant_configuration.sql", "needs": ["ten6"], "what": "per-company configuration; names the legacy company"},
+    {"file": "20261113112000_ten8_company_a_fallback_resolver.sql", "needs": ["ten7"], "what": "hard-coded company id replaced by resolvers"},
+    {"file": "20261113113000_ten9_tenant_lifecycle.sql", "needs": ["ten8"], "what": "provisioning, invitations, suspension, per-company unique keys (additive)"},
+    {"file": "20261113114000_ten4b_module_permissions_same_org.sql", "needs": ["ten7"], "what": "another user's permission map only inside the company"},
+    {"file": "20261113114500_ten5b_organisation_plan_columns_trigger.sql", "needs": ["ten5"], "what": "organisation plan columns guarded"},
+    {"file": "20261113115000_ten7b_accident_mailbox_keys_legacy_org_only.sql", "needs": ["ten7"], "what": "accident mailbox keys visible to the legacy company only"},
+    {"file": "20261113150000_com_organisation_settings_foundation.sql", "needs": [], "what": "per-company settings store"},
+    {"file": "20261113151000_com_accident_mail_per_organisation.sql", "needs": ["com150000"], "what": "accident mail routing per company"},
+    {"file": "20261113152000_com_notify_elevated_users_org_scope.sql", "needs": [], "what": "elevated-user notifications stay inside the company"},
+    {"file": "20261113153000_com_alert_thresholds_org_scope.sql", "needs": [], "what": "alert thresholds per company"},
+    {"file": "20261113154000_com_scrap_mark_org_guard.sql", "needs": [], "what": "scrap marks guarded per company"},
+    {"file": "20261113154500_com_tyre_status_marks_per_org_key.sql", "needs": ["com154000"], "what": "scrap mark key per company (ships with client line src/lib/api/tyreExchange.js:48)"},
+    {"file": "20261113155000_com_warranty_claim_no_per_org.sql", "needs": [], "what": "warranty claim number per company"},
+    {"file": "20261113156000_com_tenant_settings_resolvers.sql", "needs": ["com150000"], "what": "settings resolvers"},
+    {"file": "20261115160000_ten6b_entitlement_switch_preflight.sql", "needs": ["ten6", "ten7"], "what": "preflight and guarded switch for enforcement"},
+    {"file": "20261115161000_ten7c_role_matrix_own_company_read.sql", "needs": ["ten7"], "what": "role matrix readable only by the company it applies to"},
+    {"file": "20261115162000_ten8b_invitation_company_code_signup.sql", "needs": ["ten9"], "what": "invitation preview, company code, code never grants membership"},
+    {"file": "20261115163000_ten9b_sign_in_company_code.sql", "needs": ["ten8b", "ten7"], "what": "sign-in resolver that can tell companies apart"}
+  ],
+  "hold": [
+    {"file": "20261115169000_ten9c_HOLD_per_company_usernames.sql", "needs": ["ten9b"], "what": "POINT OF NO EASY RETURN: removes the global username and employee id keys"}
+  ]
+}

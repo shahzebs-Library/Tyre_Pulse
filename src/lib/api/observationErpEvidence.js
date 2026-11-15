@@ -54,3 +54,11 @@ export async function getObservationErpLink(actionId) {
   if (!actionId) return null
   return unwrap(await supabase.from('observation_erp_links').select('id,action_id,work_order_id,reviewed_by,reviewed_at,decision_note,status,source_job_card').eq('action_id',actionId).maybeSingle())
 }
+
+/** Append-only human decisions, with reviewer/date and exact ERP job card. */
+export async function listObservationErpDecisions(actionId) {
+  if (!actionId) return []
+  return unwrap(await supabase.from('observation_erp_link_events')
+    .select('id,decision,reason,source_job_card,reviewer,created_at')
+    .eq('action_id', actionId).order('created_at', { ascending: false }).limit(50)) || []
+}

@@ -238,7 +238,8 @@ async function runUser(username) {
   return res
 }
 
-;(async () => {
+module.exports = { USERS, wo, row, findRow, btnState, saveForm, closeDialogs, editCase, statusCase, liveCase }
+if (require.main === module) (async () => {
   snapshot()
   const names = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(USERS)
   const all = []

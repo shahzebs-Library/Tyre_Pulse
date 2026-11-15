@@ -114,7 +114,8 @@ async function as(username, fn) {
   try { return await fn(s) } catch (e) { return { error: String(e.message).slice(0, 400) } } finally { await s.context.close() }
 }
 
-;(async () => {
+module.exports = { openView, closeAll, addCost, decide, statusButton, as, dbAs }
+if (require.main === module) (async () => {
   snapshot(); reset()
   const res = { cases: {} }
   const parts = wo('PARTS'); const qc = wo('QC'); const asg = wo('ASSIGNED')

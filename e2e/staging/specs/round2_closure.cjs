@@ -322,21 +322,35 @@ async function checklists() {
   const LBL = 'Acknowledged, Action Required'
   out.k1_list = { label: list.text.includes(LBL), pendingApprovalNearRow: /Pending approval/i.test(out.after_ack_list), rawWord: /\backnowledged\b/.test(list.text),
     tiles: (list.text.match(/(Pending approval|Action Required|Acknowledged)[^\n]*\n[^\n]*/gi) || []).map((t) => t.replace(/\s+/g, ' ')).slice(0, 8) }
-  const rowBtn = e.page.locator('tr, li, article, [role=row]').filter({ hasText: 'Synthetic Single Sign' }).filter({ hasText: LBL }).first()
-  if (await rowBtn.isVisible().catch(() => false)) {
-    await rowBtn.click().catch(() => {}); await e.page.waitForTimeout(1500)
-    const dlg = e.page.locator('[role=dialog]').last()
-    const dt = ((await dlg.innerText().catch(() => '')) || '').replace(/\s+/g, ' ')
-    out.k1_viewer = { opened: dt.length > 0, label: dt.includes(LBL), text: dt.slice(0, 400) }
-    await e.page.keyboard.press('Escape').catch(() => {})
-  } else out.k1_viewer = { opened: false }
-  const ap = await R.openRoute(e.page, '/checklist-audit', e.log); await e.page.waitForTimeout(2500)
-  let apText = await R.bodyText(e.page)
-  out.k1_audit_pack = { url: ap.url, denied: ap.accessDenied, tile: (apText.match(/Acknowledged, Action Required\s*\d+/) || [''])[0] }
-  const recTab = e.page.getByRole('tab', { name: /record/i }).first()
-  if (await recTab.isVisible().catch(() => false)) { await recTab.click(); await e.page.waitForTimeout(1200); apText = await R.bodyText(e.page)
-    out.k1_audit_pack.recordsLabel = apText.includes(LBL); out.k1_audit_pack.rawWord = /\backnowledged\b/.test(apText)
-    out.k1_audit_pack.row = (apText.match(/[^|]{0,80}Acknowledged, Action Required[^|]{0,80}/g) || []).slice(-1)[0] || '' }
+  // The workspace row is a selector button (it fills the detail card); the drawer opens from "Open viewer".
+  const rowBtn = e.page.locator('button.clw-row').filter({ hasText: 'Synthetic Single Sign' }).filter({ hasText: 'TM007' }).first()
+  out.k1_viewer = { rowFound: await rowBtn.isVisible().catch(() => false), rowText: ((await rowBtn.innerText().catch(() => '')) || '').replace(/\s+/g, ' ') }
+  if (out.k1_viewer.rowFound) {
+    await rowBtn.click(); await e.page.waitForTimeout(1000)
+    const ov = e.page.getByRole('button', { name: 'Open viewer' }).first()
+    out.k1_viewer.viewerButton = await ov.isVisible().catch(() => false)
+    if (out.k1_viewer.viewerButton) {
+      await ov.click(); await e.page.waitForTimeout(2000)
+      const dlg = e.page.locator('[role=dialog][aria-label="Checklist"]').last()
+      const dt = ((await dlg.innerText().catch(() => '')) || '').replace(/\s+/g, ' ')
+      out.k1_viewer = { ...out.k1_viewer, opened: dt.length > 0, label: dt.includes(LBL), rawWord: /\backnowledged\b/.test(dt), text: dt.slice(0, 400) }
+      await e.page.keyboard.press('Escape').catch(() => {})
+    }
+  }
+  // The Audit Pack is an author surface (CHECKLIST_AUTHOR_ROLES): a Workshop Supervisor is refused, a Manager reads it.
+  const apSup = await R.openRoute(e.page, '/checklist-audit', e.log); await e.page.waitForTimeout(1500)
+  out.k1_audit_pack_non_author = { role: 'Workshop Supervisor', url: apSup.url, denied: apSup.accessDenied, text: (await R.bodyText(e.page)).slice(0, 200) }
+  const mg = await R.session('alpha.manager')
+  const ap = await R.openRoute(mg.page, '/checklist-audit', mg.log); await mg.page.waitForTimeout(3000)
+  let apText = await R.bodyText(mg.page)
+  out.k1_audit_pack = { role: 'Manager', url: ap.url, denied: ap.accessDenied, tile: (apText.match(/Acknowledged, Action Required\s*\d+/) || [''])[0], head: apText.slice(0, 300) }
+  const recTab = mg.page.getByRole('tab', { name: /record/i }).first()
+  out.k1_audit_pack.recordsTab = await recTab.isVisible().catch(() => false)
+  if (out.k1_audit_pack.recordsTab) { await recTab.click(); await mg.page.waitForTimeout(1500); apText = await R.bodyText(mg.page) }
+  out.k1_audit_pack.recordsLabel = apText.includes(LBL); out.k1_audit_pack.rawWord = /\backnowledged\b/.test(apText)
+  out.k1_audit_pack.row = (apText.match(/.{0,100}Acknowledged, Action Required.{0,100}/g) || []).slice(-1)[0] || ''
+  out.k1_audit_pack.failed = mg.log.failed; out.k1_audit_pack.pageErrors = mg.log.pageErrors
+  await mg.context.close()
   out.sup_east_failed = e.log.failed; out.sup_east_page_errors = e.log.pageErrors
   await e.context.close()
 

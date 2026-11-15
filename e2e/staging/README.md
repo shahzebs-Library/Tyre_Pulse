@@ -53,3 +53,28 @@ to `$E2E_RUN`, outside the repository. One screenshot per module is kept in `e2e
 - No storage, edge functions or realtime: photo upload, emails, push and live updates are not exercised.
 - The form filler is generic. Where it could not drive a form, the step is recorded as not exercised, not as passed.
 - The onboarding tour is dismissed with its own Skip button after sign-in.
+
+## Round 2 specs (draft work: recall fix, work order rights, closure review)
+
+These test draft SQL that is NOT applied anywhere else. They need the round 2 branches merged into the build and
+the drafts applied to the database copy only.
+
+```
+e2e/staging/start.sh                      # creates the copy and builds the app
+e2e/staging/round2_setup.sh               # closure fixture, the six drafts in order, extra synthetic people (once per copy)
+export E2E_ACCOUNTS_FILE="$E2E_RUN/accounts_r2.txt"
+source e2e/staging/env.sh && cd e2e/staging
+node specs/round2_recall.cjs              # Recall Tracker: one country view, All view, /recalls/:id
+node specs/round2_work_orders.cjs         # eight roles: sidebar, create, edit, cost, closed, status, delete, Live Control
+node specs/round2_closure.cjs actions     # worker, reviewer, return and resubmit, self-review, exception, history
+node specs/round2_closure.cjs checklists  # acknowledge with a fault, who is refused, compliance, exception
+node specs/round2_responsive.cjs          # the two new panels at 390 px, English and Arabic (reads only)
+```
+
+- `round2_harness.sql` adds invented people (a Tire Planning Engineer, a Mechanic, a Workshop Supervisor) and gives the
+  closure fixture people a per-run password. It also marks eight work orders (`R2-...`) and gives the synthetic checklist
+  templates the `options_ref` shape real templates have (the screen needs it to see a fault; the database rule does not).
+- Each spec keeps a snapshot in schema `_r2` of the rows it changes and restores them, so a run can be repeated.
+- Results are written to `$E2E_RUN/results_r2/*.json`. Report: `docs/commercial-readiness/audit/ROUND2_BROWSER_TESTS.md`.
+- Use your own database name and ports when another stream is using the default ones
+  (`E2E_DB`, `E2E_RUN`, `PGRST_PORT`, `GATEWAY_PORT`, `WEB_PORT`).

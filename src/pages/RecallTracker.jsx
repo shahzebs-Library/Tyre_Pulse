@@ -25,7 +25,8 @@ import {
   GitBranch, Star, Loader2, Flag, Pencil, Trash2, ArrowRight, Info,
 } from 'lucide-react'
 import * as recallsApi from '../lib/api/recalls'
-import { useSettings } from '../contexts/SettingsContext'
+import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
+import { recallCountryChoices, resolveRecallCountry, normaliseRecallCountry } from '../lib/recallCountry'
 import { useAuth } from '../contexts/AuthContext'
 import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme, reportFileName } from '../lib/exportUtils'
@@ -166,7 +167,10 @@ const EMPTY_FORM = {
 export default function RecallTracker() {
   const navigate = useNavigate()
   const { profile, isSuperAdmin } = useAuth()
-  const { appSettings } = useSettings()
+  const { appSettings, activeCountry, allowedContext } = useSettings()
+  const countryChoices = useMemo(() => recallCountryChoices(allowedContext, COUNTRIES), [allowedContext])
+  // The country a new recall starts with: the active country, or the only one the user has. Empty on the All view.
+  const defaultCountry = resolveRecallCountry({ activeCountry, choices: countryChoices }).country ?? ''
   const { branding } = useTenant()
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
   const isAdmin = profile?.role === 'Admin' || isSuperAdmin === true
@@ -391,7 +395,7 @@ export default function RecallTracker() {
 
   // ── Form helpers ──────────────────────────────────────────────────────────
   function openAdd() {
-    setForm(EMPTY_FORM)
+    setForm({ ...EMPTY_FORM, country: defaultCountry })
     setSizeInput('')
     setFormError('')
     setEditRecall(null)
@@ -399,7 +403,7 @@ export default function RecallTracker() {
   }
 
   function openEdit(r) {
-    setForm({ ...EMPTY_FORM, ...r, affected_sizes: r.affected_sizes ?? [], affected_serial_prefix: r.affected_serial_prefix ?? '', description: r.description ?? '', action_required: r.action_required ?? '' })
+    setForm({ ...EMPTY_FORM, ...r, country: normaliseRecallCountry(r.country) ?? defaultCountry, affected_sizes: r.affected_sizes ?? [], affected_serial_prefix: r.affected_serial_prefix ?? '', description: r.description ?? '', action_required: r.action_required ?? '' })
     setSizeInput('')
     setFormError('')
     setEditRecall(r.id)
@@ -427,6 +431,10 @@ export default function RecallTracker() {
     if (!form.issue_date) { setFormError('Issue date required'); return }
     if (form.affected_sizes.length === 0) { setFormError('At least one affected size required'); return }
 
+    // recalls.country holds ONE country. Never the profile's country list.
+    const { country: recallCountry, needsChoice } = resolveRecallCountry({ formCountry: form.country, choices: countryChoices })
+    if (needsChoice) { setFormError('Choose the country this recall applies to'); return }
+
     setSaving(true)
     setFormError('')
     try {
@@ -441,7 +449,7 @@ export default function RecallTracker() {
         action_required: form.action_required || null,
         source: form.source || 'Manufacturer',
         status: form.status || 'Active',
-        country: form.country || profile?.country || null,
+        country: recallCountry,
         closed_at: form.status === 'Closed' ? new Date().toISOString() : null,
       }
       if (editRecall) {
@@ -824,6 +832,7 @@ export default function RecallTracker() {
             onClick={() => {
               setForm({
                 ...EMPTY_FORM,
+                country: defaultCountry,
                 brand: b.brand,
                 affected_serial_prefix: b.prefix,
                 severity: b.rate >= 60 ? 'Critical' : 'High',
@@ -843,7 +852,7 @@ export default function RecallTracker() {
         )
       },
     },
-  ], [isAdmin])
+  ], [isAdmin, defaultCountry])
 
   // ── Render ────────────────────────────────────────────────────────────────
   const activeRecalls = useMemo(() => recalls.filter(r => r.status === 'Active'), [recalls])
@@ -1329,6 +1338,13 @@ export default function RecallTracker() {
                   onChange={e => setForm(f => ({ ...f, issue_date: e.target.value }))}
                   className={inputCls}
                 />
+              </div>
+              <div>
+                <label htmlFor="rc-country" className="block text-xs text-[var(--text-muted)] mb-1">Country *</label>
+                <select id="rc-country" value={form.country ?? ''} onChange={e => setForm(f => ({ ...f, country: e.target.value }))} className={inputCls}>
+                  <option value="">Choose a country</option>
+                  {countryChoices.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
               </div>
               <div>
                 <label htmlFor="rc-sev" className="block text-xs text-[var(--text-muted)] mb-1">Severity</label>

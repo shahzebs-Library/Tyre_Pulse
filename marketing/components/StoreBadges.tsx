@@ -6,7 +6,7 @@
  *    it as "Tyre Pulse Inspector", which is the spelling used in any visible
  *    label here. The build-time name in mobile/app.json differs and is not what
  *    a visitor lands on.
- *  - There is NO iOS app and no App Store listing. iOS therefore renders as
+ *  - The iPhone app is in App Store review and has no listing yet. iOS therefore renders as
  *    plain, non-interactive text. It is deliberately not a link, not a button
  *    and not a disabled control, because every one of those invites a click that
  *    can only fail.
@@ -112,7 +112,7 @@ const css = `
 
 /*
  * The pending state is not a control. Cursor and pointer events say so, and the
- * dashed border plus the word "Coming soon" carry the meaning without relying
+ * dashed border plus the words "In App Store review" carry the meaning without relying
  * on colour alone.
  */
 .store-badge-pending {
@@ -126,8 +126,8 @@ export type StoreBadgesProps = {
   /** Set to false to leave the iOS row out completely rather than show it as pending. */
   showIos?: boolean;
   /**
-   * The App Store listing, once one exists. Null renders the honest "coming
-   * soon" state; a real URL renders a working link that is a peer of the Google
+   * The App Store listing, once one exists. Null renders the honest "in App Store
+   * review" state; a real URL renders a working link that is a peer of the Google
    * Play button. Pass the APP_STORE_URL constant from app/schema.tsx so turning
    * iOS on is a single edit in one place.
    */
@@ -137,7 +137,7 @@ export type StoreBadgesProps = {
 
 /**
  * Only an absolute https URL is treated as a live listing. An empty string, a
- * placeholder or a relative path renders as "coming soon" instead of shipping a
+ * placeholder or a relative path renders as "in App Store review" instead of shipping a
  * link that cannot work, which is the failure this component exists to avoid.
  */
 function isLiveListing(url: string | null | undefined): url is string {
@@ -230,14 +230,14 @@ export function StoreBadges({ tone = "dark", showIos = true, appStoreUrl = null,
             only fail invites a click and then refuses it. Plain text states the
             position honestly and is read as text.
 
-            The dashed border, the muted treatment and the words "Coming soon"
+            The dashed border, the muted treatment and the words "Not on the App Store yet"
             each carry the meaning on their own, so nothing rests on colour.
           */
           <p className="store-badge store-badge-pending">
             <DeviceGlyph />
             <span className="store-badge-text">
-              <span className="store-badge-kicker">Coming soon</span>
-              <span className="store-badge-name">iOS app</span>
+              <span className="store-badge-kicker">Not on the App Store yet</span>
+              <span className="store-badge-name">iPhone app</span>
             </span>
           </p>
         ))}

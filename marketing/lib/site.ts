@@ -60,9 +60,12 @@ export const LEGAL_LINKS = [
 
 /**
  * Mobile app availability, stated once. Android is released on Google Play.
- * An iOS app is planned and has no App Store listing, so nothing on the site
- * may link to one or imply it can be downloaded. The footer badge, llms.txt,
- * llms-full.txt and the structured data all read these two lines.
+ * The iPhone app has been submitted to Apple and is in App Store review. It has
+ * no App Store listing yet, so nothing on the site may link to one or imply it
+ * can be downloaded. The footer, llms.txt, llms-full.txt and the structured
+ * data all read these lines. When the listing is live, set IOS_STATUS to
+ * "available" and APP_STORE_URL in app/schema.tsx.
  */
-export const IOS_STATUS: "available" | "planned" = "planned";
-export const IOS_STATEMENT = "An iOS app is planned. It is not on the App Store yet.";
+export const IOS_STATUS: "available" | "in-review" = "in-review";
+export const IOS_STATEMENT = "The iPhone app is not on the App Store yet.";
+export const IOS_STATEMENT_AR = "تطبيق آيفون غير متاح على App Store بعد.";

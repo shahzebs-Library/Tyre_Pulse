@@ -28,12 +28,12 @@ export const metadata: Metadata = {
  */
 const INDUSTRIES: CardProps[] = [
   { photo: { name: "mixer" }, title: "Ready-mix concrete", text: "Transit mixers, pumps and batching plants, where load, site access, downtime and tyre failure decide the day.", note: "In production today", href: "/solutions/ready-mix-fleet", linkLabel: "Read the use case" },
-  { photo: { name: "loaderSite" }, title: "Construction fleets", text: "Heavy vehicles and equipment across projects and remote sites, measured by engine hour where there is no odometer." },
-  { photo: { name: "loader", position: "30% 60%" }, title: "Heavy equipment", text: "Loaders, excavators and generators with service by hours, off-road tyre sizes and their own inspection checklists." },
-  { title: "Workshop networks", text: "Open jobs, technicians, parts delays and repair quality across more than one workshop." },
-  { title: "Transport and logistics", text: "High-mileage trucks and trailers: tyre life, cost per km, inspections and availability by depot." },
+  { photo: { name: "loaderSite" }, title: "Construction fleets", text: "Heavy vehicles and equipment across projects and remote sites, measured by engine hour where there is no odometer.", note: "Configured with you" },
+  { photo: { name: "loader", position: "30% 60%" }, title: "Heavy equipment", text: "Loaders, excavators and generators with service by hours, off-road tyre sizes and their own inspection checklists.", note: "Configured with you" },
+  { title: "Workshop networks", text: "Open jobs, technicians and parts delays across more than one workshop.", note: "Configured with you" },
+  { title: "Transport and logistics", text: "High-mileage trucks and trailers: tyre life, cost per km, inspections and availability by depot.", note: "Configured with you" },
   { title: "Buses and commercial vehicles", text: "Daily pre-trip checks, tyre condition by wheel position and service by kilometres or date.", note: "Configured on request" },
-  { title: "Multi-site and multi-country operations", text: "Each site and country sees its own records in its own currency, and the head office sees them all." },
+  { title: "Multi-site and multi-country operations", text: "Each country sees its own records in its own currency, and the head office sees them all. Site scoping is available.", note: "In production today" },
   { title: "Heavy equipment rental", text: "Customer assignments, operating hours and handover inspections.", note: "Configured on request" },
   { title: "Government and enterprise fleets", text: "Strict access by location, approval limits and a full audit history.", note: "Configured on request" },
 ];
@@ -41,7 +41,7 @@ const INDUSTRIES: CardProps[] = [
 export default function IndustriesPage() {
   return <PageFrame>
     <JsonLd data={pageBreadcrumb("Industries", "/industries")} />
-    <PageTop photo="fleetLineup" crumbs={[{ href: "/", label: "Home" }, { label: "Industries" }]} title="Configured for the way your operation works." lead="Built inside a ready-mix concrete operation running mixers, pumps and batching plants across Saudi Arabia, the UAE and Egypt. The same platform is configured for each model below." />
+    <PageTop photo="fleetLineup" crumbs={[{ href: "/", label: "Home" }, { label: "Industries" }]} title="Configured for the way your operation works." lead="Built inside a ready-mix concrete operation running mixers, pumps and batching plants across Saudi Arabia, the UAE and Egypt. Ready-mix is the operation it runs today. The other models below are configured with you and have not yet run in production." />
     <section className="section-pad tight" aria-label="Industries"><div className="site-shell">
       <CardGrid cols={3}>
         {INDUSTRIES.map((c) => <Card key={c.title} titleAs="h2" {...c} />)}

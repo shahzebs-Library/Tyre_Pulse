@@ -31,7 +31,7 @@ const WHO: CardProps[] = [
 const WHERE = [
   ["Web application", "For managers, supervisors, stores and the office.", "available"],
   ["Android app", "The field app, on Google Play.", "available"],
-  ["iOS app", IOS_STATEMENT, "planned"],
+  ["iPhone app", IOS_STATEMENT, "in-review"],
 ] as const;
 
 export default function AboutPage() {
@@ -48,7 +48,7 @@ export default function AboutPage() {
           <div className="tp-prose">
             <p>It is a hosted platform with a web application and a field app. It holds the asset register, tyre records, inspections, workshop job cards, stores and costs of a fleet in one place.</p>
             <p>It was built inside a working ready-mix concrete operation that runs mixers, pumps and batching plants in Saudi Arabia, the UAE and Egypt, and it carries that operation&apos;s daily work today.</p>
-            <p>The same platform is configured for other fleets by asset type, site structure, roles and approval steps.</p>
+            <p>For another fleet, our team configures asset types, site structure, roles and sign-off steps with you during onboarding. There is no self sign-up.</p>
           </div>
           <CapabilityList items={WHERE} />
         </div>

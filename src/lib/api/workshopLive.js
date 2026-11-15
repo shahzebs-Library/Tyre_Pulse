@@ -334,6 +334,19 @@ export async function setQcStatus(jobId, status) {
   return updateJobRow(jobId, { qc_status: status })
 }
 
+/**
+ * Record a quality check result together with the status it moves the job to,
+ * in ONE write. Two writes (status, then result) break once a closed work order
+ * can only be changed by an Admin: a pass closes the job first and the result
+ * would then be refused. Returns the updated row.
+ */
+export async function setQcOutcome(jobId, { status, qc_status } = {}) {
+  if (!jobId) throw new ServiceError('A job is required.')
+  if (!QC_STATUSES.includes(qc_status)) throw new ServiceError('Unknown QC status.')
+  if (!status) throw new ServiceError('A status is required.')
+  return updateJobRow(jobId, { status, qc_status })
+}
+
 // ── Tasks (wo_tasks) ─────────────────────────────────────────────────────────
 
 /** List a job's tasks (by seq asc). []-degrades. */

@@ -37,7 +37,8 @@ import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme, reportFileName, r
 import { useLanguage } from '../contexts/LanguageContext'
 import { formatCurrency as _fmtCurrencyBase, formatDate, formatDateTime } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
-import { useWriteAccess } from '../hooks/useWriteAccess'
+import { useWorkOrderAccess } from '../hooks/useWorkOrderAccess'
+import { creatableWorkTypes, workOrderRefusalFromError } from '../lib/workOrderAccess'
 import { WO_STATUSES, normalizeWoStatus } from '../lib/workOrderStatus'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import {
@@ -45,7 +46,7 @@ import {
   totalPages as totalPagesOf, selectionFromIds, mergeSelection, activeFilterCount,
 } from '../lib/workOrdersAnalytics'
 import { categorical } from '../lib/reportColors'
-import { editableFields, toPayload, readField } from '../lib/jobCard'
+import { editableFields, toPayload, readField, JOB_CARD_WORK_TYPES } from '../lib/jobCard'
 import JobCardForm from '../components/workorders/JobCardForm'
 import JobCardDetail from '../components/workorders/JobCardDetail'
 import { getAssetByNo } from '../lib/api/assets'
@@ -165,10 +166,11 @@ export default function WorkOrders() {
   const isAdmin = isSuperAdmin || (profile?.role || '').toLowerCase() === 'admin'
   // The sidebar offered Workshop Management to administrators only; the view keeps that rule.
   const canSeeAnalytics = isAdmin
-  // What the database lets this account do to work_orders, asked of the same
-  // server function the row policies call (app_user_can). Create and edit are a
-  // capability, so a role only has them when its Access Control setting says so.
-  const woAccess = useWriteAccess('work_orders')
+  // What the database lets this account do with work orders: a scope per action
+  // (create, edit, assign, progress, quality check) asked of the server, applied
+  // to each row here so a control the database would refuse is disabled with the
+  // reason. Closed work orders, approved costs and deleting are Admin only.
+  const woRights = useWorkOrderAccess()
   const [view, setView] = useState(() => (canSeeAnalytics ? initialTabFromUrl(['jobs', 'analytics'], 'jobs') : 'jobs'))
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleteError, setDeleteError] = useState('')
@@ -445,7 +447,7 @@ export default function WorkOrders() {
         return (
           <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
             <button type="button" onClick={() => setViewOrder(order)} aria-label={`View work order ${label}`} title="View" className={btn}><Eye size={14} aria-hidden="true" /></button>
-            <button type="button" onClick={() => openEdit(order)} disabled={!woAccess.edit} aria-label={`Edit work order ${label}`} title={woAccess.edit ? 'Edit' : woAccess.reason('edit')} className={`${btn} disabled:opacity-40`}><Edit2 size={14} aria-hidden="true" /></button>
+            <button type="button" onClick={() => openEdit(order)} disabled={!woRights.can('edit', order)} aria-label={`Edit work order ${label}`} title={woRights.reason('edit', order) || 'Edit'} className={`${btn} disabled:opacity-40`}><Edit2 size={14} aria-hidden="true" /></button>
             {isAdmin && (
               <button type="button" onClick={() => { setDeleteTarget(order); setDeleteError('') }} aria-label={`Delete work order ${label}`} title="Delete work order (Admin only)"
                 className={`${btn} hover:text-red-400`}><Trash2 size={14} aria-hidden="true" /></button>
@@ -550,7 +552,6 @@ export default function WorkOrders() {
       const derivedLabour = parseFloat(formData.labour_hours || 0) * parseFloat(formData.labour_rate || 0)
       payload.labour_cost = derivedLabour || parseFloat(formData.labour_cost || 0) || 0
       payload.opened_at = payload.opened_at || new Date().toISOString()
-      payload.created_by = user?.id || null
 
       if (editOrder) {
         const committed = await workOrders.updateWorkOrderById(editOrder.id, payload)
@@ -561,6 +562,8 @@ export default function WorkOrders() {
         // The job card number is now an editable field, so only generate one
         // when the user did not supply the real ERP number. Overwriting a typed
         // number would silently discard the reference the workshop files by.
+        // The creator is stamped once, on create. An edit must not overwrite it.
+        payload.created_by = user?.id || null
         if (!payload.work_order_no) {
           const woNo = await workOrders.generateWorkOrderNo()
           payload.work_order_no = woNo || `WO-${Date.now()}`
@@ -573,7 +576,7 @@ export default function WorkOrders() {
       await load()
       setShowForm(false)
     } catch (e) {
-      alert(t('workorders.form.saveFailed', { msg: toUserMessage(e) }))
+      alert(t('workorders.form.saveFailed', { msg: workOrderRefusalFromError(e) || toUserMessage(e) }))
     } finally {
       setSaving(false)
     }
@@ -595,7 +598,7 @@ export default function WorkOrders() {
       setViewOrder(current => current?.id === order.id ? committed : current)
       setApprovalRevision(value => value + 1)
       await load()
-    } catch (err) { setTransitionError(t('workorders.form.updateFailed', { msg: toUserMessage(err) })) }
+    } catch (err) { setTransitionError(t('workorders.form.updateFailed', { msg: workOrderRefusalFromError(err) || toUserMessage(err) })) }
     finally { transitionLock.current = false; setTransitioning(false) }
   }
 
@@ -766,7 +769,7 @@ export default function WorkOrders() {
             <button type="button" onClick={() => exportRegister('pdf')} disabled={exporting || total === 0} className="btn-secondary flex items-center gap-2 text-xs px-3 min-h-[40px] disabled:opacity-40">
               <FileText size={14} aria-hidden="true" /> PDF
             </button>
-            <button type="button" onClick={openNew} disabled={!woAccess.create} title={woAccess.create ? undefined : woAccess.reason('create')} className="btn-primary flex items-center gap-2 text-sm px-4 min-h-[40px] disabled:opacity-50">
+            <button type="button" onClick={openNew} disabled={!woRights.can('create')} title={woRights.reason('create') || undefined} className="btn-primary flex items-center gap-2 text-sm px-4 min-h-[40px] disabled:opacity-50">
               <Plus size={15} aria-hidden="true" /> {t('workorders.actions.newWorkOrder')}
             </button>
           </div>
@@ -957,7 +960,7 @@ export default function WorkOrders() {
           />
           {!loading && total === 0 && !error && (
             <div className="text-center pb-4">
-              <button type="button" onClick={openNew} disabled={!woAccess.create} title={woAccess.create ? undefined : woAccess.reason('create')} className="mt-1 text-blue-400 hover:text-blue-300 text-sm min-h-[40px] disabled:opacity-50">{t('workorders.states.createFirst')}</button>
+              <button type="button" onClick={openNew} disabled={!woRights.can('create')} title={woRights.reason('create') || undefined} className="mt-1 text-blue-400 hover:text-blue-300 text-sm min-h-[40px] disabled:opacity-50">{t('workorders.states.createFirst')}</button>
             </div>
           )}
         </div>
@@ -988,6 +991,7 @@ export default function WorkOrders() {
           assetLookup={lookupAsset}
           siteOptions={siteOptions}
           currency={activeCurrency}
+          workTypes={editOrder ? undefined : creatableWorkTypes(woRights.access, JOB_CARD_WORK_TYPES)}
         />
       </Modal>
 
@@ -1082,7 +1086,7 @@ export default function WorkOrders() {
                     <p className="text-[var(--text-secondary)] text-xs mb-2">{t('workorders.detail.transitionTo')}</p>
                     <div className="flex flex-wrap gap-2">
                       {STATUS_FLOW[viewOrder.status].map(ns => (
-                        <button key={ns} onClick={() => transitionStatus(viewOrder, ns)} disabled={wfLocked || transitioning || !woAccess.edit || (!executionAllowed && ['In Progress', 'Waiting for Parts', 'Quality Inspection', 'Completed'].includes(ns))}
+                        <button key={ns} onClick={() => transitionStatus(viewOrder, ns)} disabled={wfLocked || transitioning || !woRights.can(ns === 'Cancelled' ? 'edit' : 'progress', viewOrder) || (!executionAllowed && ['In Progress', 'Waiting for Parts', 'Quality Inspection', 'Completed'].includes(ns))}
                           className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                             ns === 'Cancelled' ? 'border-red-700 text-red-400 hover:bg-red-900/30' :
                             ns === 'Completed' ? 'border-green-700 text-green-400 hover:bg-green-900/30' :
@@ -1125,7 +1129,7 @@ export default function WorkOrders() {
                   row={viewOrder}
                   now={nowTick}
                   currency={activeCurrency}
-                  canEdit={!wfLocked && woAccess.edit}
+                  canEdit={!wfLocked && woRights.can('edit', viewOrder)}
                   onEdit={() => { setViewOrder(null); openEdit(viewOrder) }}
                 />
 
@@ -1177,7 +1181,7 @@ export default function WorkOrders() {
                 <CustomFieldsPanel data={viewOrder.custom_data} title={t('workorders.detail.customFields')} defaultOpen />
 
                 <div className="flex gap-3 pt-2">
-                  <button onClick={() => { setViewOrder(null); openEdit(viewOrder) }} disabled={wfLocked || !woAccess.edit} title={woAccess.edit ? undefined : woAccess.reason('edit')}
+                  <button onClick={() => { setViewOrder(null); openEdit(viewOrder) }} disabled={wfLocked || !woRights.can('edit', viewOrder)} title={woRights.reason('edit', viewOrder) || undefined}
                     title={wfLocked ? 'Locked, in approval' : undefined}
                     className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600">
                     {wfLocked ? <Lock size={15} /> : <Edit2 size={15} />}{t('workorders.detail.edit')}

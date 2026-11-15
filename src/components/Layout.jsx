@@ -463,7 +463,7 @@ function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedM
   }
   // Checklist-only role (Maintenance Supervisor): sidebar shows only checklists.
   if (isChecklistOnlyRole(profile?.role)) {
-    return isChecklistPathAllowed(item.to)
+    return isChecklistPathAllowed(item.to, hasPermission)
   }
   // If this nav item maps to a module, its visibility follows the access matrix +
   // per-user grants/revokes via hasPermission - so an admin turning a module OFF for

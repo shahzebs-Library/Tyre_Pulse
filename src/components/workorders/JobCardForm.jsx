@@ -76,6 +76,7 @@ export default function JobCardForm({
   assetLookup,       // async (assetNo) => fleet row | null
   siteOptions,
   currency = '',
+  workTypes,         // optional: the job types this person may pick (tyre-only roles)
 }) {
   const { t } = useLanguage()
   const tx = useCallback((key, fallback, vars) => {
@@ -214,7 +215,7 @@ export default function JobCardForm({
       control = (
         <select {...common} value={inputValue(raw)} onChange={e => setField(f.key, e.target.value)}>
           <option value="">{tx('workorders.jobcard.selectBlank', 'Select...')}</option>
-          {(f.options || []).map(o => <option key={o} value={o}>{o}</option>)}
+          {(f.key === 'work_type' && Array.isArray(workTypes) ? workTypes : (f.options || [])).map(o => <option key={o} value={o}>{o}</option>)}
         </select>
       )
     } else if (f.type === 'datetime') {

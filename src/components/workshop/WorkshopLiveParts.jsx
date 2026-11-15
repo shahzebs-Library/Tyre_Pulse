@@ -91,9 +91,18 @@ export function JobCard({
   // itself (status, priority, Vehicle Off Road, QC). Assigning technicians and
   // managing tasks are separate tables with their own rule and stay enabled.
   canEditJob = true, editJobReason = '',
+  // Per-action rights for this job from the work order resolver: which of
+  // assign / progress / edit / qc this person has on THIS work order, and the
+  // sentence to show when one is refused. When omitted the older single
+  // canEditJob switch applies to everything and assigning stays enabled.
+  jobRights = null,
 }) {
-  const jobLocked = busy || !canEditJob
-  const lockTitle = canEditJob ? undefined : editJobReason
+  const right = (action) => (jobRights ? jobRights[action] !== false : (action === 'assign' ? true : canEditJob))
+  const whyNot = (action) => (right(action) ? undefined : (jobRights?.reason?.(action) || editJobReason || undefined))
+  const jobLocked = busy || !right('progress')
+  const lockTitle = whyNot('progress')
+  const editLocked = busy || !right('edit')
+  const assignLocked = busy || !right('assign')
   const canonicalStatus = normalizeWoStatus(job.status)
   const tgt = toTs(job.target_completion)
   const overdue = canonicalStatus !== 'Completed' && canonicalStatus !== 'Cancelled' && Number.isFinite(tgt) && tgt < now
@@ -155,7 +164,8 @@ export function JobCard({
       <div className="grid grid-cols-2 gap-1.5">
         <select
           aria-label="Assign technician"
-          disabled={busy}
+          disabled={assignLocked}
+          title={whyNot('assign')}
           value={job.assigned_owner_id || ''}
           onChange={(e) => {
             const to = e.target.value
@@ -186,8 +196,8 @@ export function JobCard({
 
         <select
           aria-label="Set priority"
-          disabled={jobLocked}
-          title={lockTitle}
+          disabled={editLocked}
+          title={whyNot('edit')}
           value={PRIORITY_OPTS.find((p) => normStatus(p) === prio) || ''}
           onChange={(e) => e.target.value && onPriority(job.id, e.target.value)}
           className="text-[11px] rounded-lg px-1.5 py-1 border truncate"
@@ -222,7 +232,7 @@ export function JobCard({
       <div className="flex items-center gap-1.5 flex-wrap">
         <button
           type="button"
-          disabled={busy}
+          disabled={assignLocked}
           onClick={() => onSmartAssign(job)}
           className="text-[11px] rounded-lg px-2 py-1 border font-medium inline-flex items-center gap-1 disabled:opacity-40"
           style={{ background: withAlpha(TONE_COLOR.green, 0.12), borderColor: withAlpha(TONE_COLOR.green, 0.4), color: TONE_COLOR.green }}
@@ -242,7 +252,7 @@ export function JobCard({
         </button>
         <button
           type="button"
-          disabled={busy}
+          disabled={assignLocked}
           onClick={() => onManageTasks(job)}
           className="text-[11px] rounded-lg px-2 py-1 border font-medium inline-flex items-center gap-1 disabled:opacity-40"
           style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
@@ -296,21 +306,21 @@ export function JobCard({
           <div className="flex items-center gap-1.5">
             <button
               type="button"
-              disabled={jobLocked}
+              disabled={jobLocked || !right('qc')}
               onClick={() => onQcPass(job)}
               className="text-[11px] rounded-lg px-2.5 py-1 border font-semibold inline-flex items-center gap-1 disabled:opacity-40"
               style={{ background: withAlpha(TONE_COLOR.green, 0.16), borderColor: withAlpha(TONE_COLOR.green, 0.4), color: TONE_COLOR.green }}
-              title={lockTitle || 'QC pass: complete the job'}
+              title={whyNot('qc') || lockTitle || 'QC pass: complete the job'}
             >
               <CheckCircle2 className="w-3 h-3" /> QC Pass
             </button>
             <button
               type="button"
-              disabled={jobLocked}
+              disabled={jobLocked || !right('qc')}
               onClick={() => onQcFail(job)}
               className="text-[11px] rounded-lg px-2.5 py-1 border font-semibold inline-flex items-center gap-1 disabled:opacity-40"
               style={{ background: withAlpha(TONE_COLOR.red, 0.16), borderColor: withAlpha(TONE_COLOR.red, 0.4), color: TONE_COLOR.red }}
-              title={lockTitle || 'QC fail: send back for rework'}
+              title={whyNot('qc') || lockTitle || 'QC fail: send back for rework'}
             >
               <XCircle className="w-3 h-3" /> QC Fail
             </button>

@@ -15,6 +15,7 @@ export default function ObservationErpEvidence({ observation }) {
   const [note, setNote] = useState('')
   const [working, setWorking] = useState('')
   const [notice, setNotice] = useState('')
+  const [dataChanged, setDataChanged] = useState(false)
   const inspection = observation?.row
   const actionId = observation?.actionRecord?.id
 
@@ -28,11 +29,22 @@ export default function ObservationErpEvidence({ observation }) {
     return () => { live = false }
   }, [observation?.key, actionId])
 
+  useEffect(() => {
+    const onImport = event => {
+      const changedCountry = event.detail?.country
+      if (changedCountry && String(changedCountry).toUpperCase() !== String(inspection?.country || '').toUpperCase()) return
+      if (state.status === 'ready') setDataChanged(true)
+    }
+    window.addEventListener('tyrepulse:data-changed', onImport)
+    return () => window.removeEventListener('tyrepulse:data-changed', onImport)
+  }, [inspection?.country, state.status])
+
   if (!inspection?.country || !observation?.rawPosition) return (
     <p className="iw-od-muted">ERP matching requires a saved inspection with a country and tyre position.</p>
   )
 
   async function lookup() {
+    setDataChanged(false)
     setState({ status: 'loading', candidates: [], orphanTyreJobCards: [], evidenceLimited: false, error: '' })
     try {
       const result = await findObservationErpEvidence({ inspection, finding: observation })
@@ -70,6 +82,7 @@ export default function ObservationErpEvidence({ observation }) {
         <p>Confirmed {linked.reviewed_at ? new Date(linked.reviewed_at).toLocaleString() : ''}. This does not close the corrective action.</p>
         <Link to="/actions" className="cc-link">Review corrective action</Link>
       </div>}
+      {dataChanged && <p role="status" className="text-xs text-amber-500">New ERP data was imported. Refresh evidence before confirming a job card.</p>}
       <button type="button" className="cc-btn" onClick={lookup} disabled={state.status === 'loading'}>
         {state.status === 'loading' ? 'Checking ERP evidence...' : state.status === 'ready' ? 'Refresh ERP evidence' : 'Find matching ERP job cards'}
       </button>
@@ -111,7 +124,7 @@ export default function ObservationErpEvidence({ observation }) {
                       </label>
                       <div className="flex flex-wrap gap-2">
                         <button type="button" className="cc-btn-primary"
-                          disabled={!!working || state.evidenceLimited || !c.eligibleToConfirm || note.trim().length < 5}
+                          disabled={!!working || dataChanged || state.evidenceLimited || !c.eligibleToConfirm || note.trim().length < 5}
                           onClick={() => decide(c, 'confirm')}>Confirm job card</button>
                         <button type="button" className="cc-btn" disabled={!!working || note.trim().length < 5}
                           onClick={() => decide(c, 'reject')}>Reject match</button>

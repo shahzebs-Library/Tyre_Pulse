@@ -13,6 +13,8 @@ import { resolveStorageUrl } from '../../lib/storageRefs'
 import { safeImageSrc } from '../../lib/safeUrl'
 import { TYRE_NOW_META } from '../../lib/observationTracking'
 import { downloadObservationReport, observationReportId, observationRevision } from '../../lib/observationReportPdf'
+import ObservationErpEvidence from './ObservationErpEvidence'
+import { getObservationErpLink, isErpReviewNotProvisioned } from '../../lib/api/observationErpEvidence'
 
 const fmtDay = (d) => {
   if (!d) return 'N/A'
@@ -74,7 +76,21 @@ export default function ObservationDetail({ obs: first, observations = [], onClo
         <div className="cc iw-od-foot">
           <button type="button" className="cc-btn" disabled={pdfBusy} onClick={async () => {
             setPdfBusy(true); setPdfError('')
-            try { await downloadObservationReport(obs.row, findings, { svgEl: diagramRef.current?.querySelector('svg[data-tyre-map]') || diagramRef.current?.querySelector('svg') }) }
+            try {
+              const links = {}
+              let unreadable = false
+              const actionIds = [...new Set(findings.map(f => f.actionRecord?.id).filter(Boolean))]
+              await Promise.all(actionIds.map(async id => {
+                try { links[id] = await getObservationErpLink(id) }
+                // Review not set up in the database yet: there is no link to read, which is
+                // "not confirmed", not an unreadable record.
+                catch (e) { if (!isErpReviewNotProvisioned(e)) unreadable = true }
+              }))
+              await downloadObservationReport(obs.row, findings, {
+                svgEl: diagramRef.current?.querySelector('svg[data-tyre-map]') || diagramRef.current?.querySelector('svg'),
+                erpLinks: links, erpUnreadable: unreadable,
+              })
+            }
             catch (e) { setPdfError(e?.message || 'Could not download the observation report.') }
             finally { setPdfBusy(false) }
           }}><Download size={14} aria-hidden="true" /> {pdfBusy ? 'Preparing PDF...' : 'Download observation PDF'}</button>
@@ -173,9 +189,11 @@ export default function ObservationDetail({ obs: first, observations = [], onClo
             </section>
 
             <section className="iw-od-block">
-              <h4>Photo of this tyre</h4>
+              <h4>Inspection photo</h4>
               <Photo refValue={obs.photo} />
             </section>
+
+            <ObservationErpEvidence observation={obs} />
           </>
         )}
 

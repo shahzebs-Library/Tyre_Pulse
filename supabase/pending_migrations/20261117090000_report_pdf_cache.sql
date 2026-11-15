@@ -47,7 +47,7 @@
 --   select public.pdf_sha256_hex('abc');   -- ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
 --   rollback;
 --
--- ROLLBACK (removal statements; only the objects this file created; run by hand)
+-- ROLLBACK: the block below is SUPERSEDED (wrong drop order, misses two functions and the bucket). Use 20261117090000_report_pdf_cache_ROLLBACK.sql instead.
 --   Stored files, if any, must be removed through the Storage API first.
 --   drop policy if exists report_pdfs_read on storage.objects;
 --   drop policy if exists report_pdfs_upload on storage.objects;

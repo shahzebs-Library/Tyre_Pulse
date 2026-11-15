@@ -174,6 +174,24 @@ ERP
 - Layout versions so history is not reinterpreted. Reporting bot policies on new tables.
 - Keep #522's focused loading and review panel.
 
+Work order costs and closure (owner, final, 2026-11-15)
+- A genuinely additional part increases the job card total (imported 1,775.82 + verified 20.00 = 1,795.82),
+  but the imported ERP baseline is never replaced or overwritten.
+- Four separate things: imported cost, additional costs, approved adjustments, calculated total.
+- Every cost entry has source, currency, amount, approval status, who, when and why.
+- An unapproved cost is not approved expenditure and does not enter approved totals, CPK or cost reports.
+- If the schema cannot tell whether a new part is already inside the imported amount, the entry stays
+  PENDING RECONCILIATION. No guessing. Reports never count the same part twice.
+- Technicians and Tyre Men mark assigned work "Work Completed / Submitted for Review". That is not final
+  closure. A Supervisor, Manager or Tyre Engineer with company and site rights approves final closure.
+  The two are separate events with timestamps, evidence and responsible users.
+- Data Monitor Officer: no unrestricted closure. Monitoring, verification, reconciliation, reporting only.
+- A generic Access Control grant never bypasses mandatory financial approval or closure controls.
+- Tyre Data Collector: draft costs and supporting information on assigned work only. No cost approval,
+  no change to locked approved records, no final posting.
+- RELEASE RULE: the cost ledger must be reliable before #528 and the work order permissions (#519) are
+  released. They go out together, not #528 alone. #519 now contains #528 and must merge after it.
+
 PDF
 - Continue #527. Approved versions immutable. Managers regenerate only with explicit authorisation;
   original version, audit trail and signatures preserved.
@@ -266,8 +284,8 @@ Other open items
 ## 11. Recommended next steps, in order
 
 1. Done: interim ERP lock applied and verified (section 4).
-2. Release review of #528 once its hardening and browser regression are green. It fixes a live bug and needs no SQL.
-3. #520 and #519 after their defects above are closed and the renumbering is done. Apply their drafts only after #528 is live.
+2. #528 and #519 together, only after the work order cost ledger (in progress on #519) is built and tested and the round 3 browser regression is green. Order: merge #528, merge #519, deploy web, then apply `20261113130000`, `20261115140000`, `140500`, `141000`, `141500` and the ledger drafts (`1420xx`).
+3. #520: web build first (works without drafts), then `20261116100000`, `101000`, `102000`.
 4. #526 actions 2 to 4 after the owner's approval of the approval pack.
 5. #527 after a test against real storage (needs hosted staging).
 6. Retarget #505 to #511, #513 and #517 from the #504 branch to main, one at a time.
@@ -285,3 +303,4 @@ Other open items
 - 2026-11-15. #520 (`7a0298be`): exception is now request + independent decision (`corrective_action_request_exception`, `corrective_action_decide_exception`); "Acknowledged, Action Required" everywhere; new `closure` dictionary en + ar (140 keys); staging 75 of 75; 1,077 related tests pass. Phone apps do not yet know `exception_requested` or `acknowledged`. Write-up: `docs/commercial-readiness/audit/CLOSURE_ROUND2.md` on that branch.
 - 2026-11-15. Browser regression for #519, #520, #528 started on the #525 branch; results will be `docs/commercial-readiness/audit/ROUND3_BROWSER_TESTS.md` there, including the merge conflicts met when the three branches are combined.
 - Open owner questions added this round: supervisor always closes a job (built that way)? Data Monitor Officer same limits as the collector? Collector may enter costs on a job with no approval? Workshop Supervisor a final checklist signer by default? Bar the person who raised an action from deciding its exception? Switch off direct closing once phones are updated?
+- 2026-11-15. Owner's final work order decisions recorded (section 5). Work order agent resumed on #519: cost ledger first, then technician completion vs final closure, Data Monitor Officer limits, collector draft costs. ERP lock re-verified active: migration `20261115120856` still latest, ACL `{postgres,service_role}` on all three functions, hashes unchanged, 0 links, `single_tenant_mode` true.

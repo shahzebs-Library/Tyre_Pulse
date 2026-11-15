@@ -4541,6 +4541,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginCreateAccount => 'Create an account';
 
   @override
+  String get loginCompanyCodeHelp =>
+      'Joined another company through an invitation? Sign in with its company code, a slash and your username, for example ACME/ali.';
+
+  @override
   String get accAssessmentLoadFailed => 'The assessment could not be loaded';
 
   @override

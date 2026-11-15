@@ -31,11 +31,6 @@ export const CHECKLIST_PATH_PREFIXES = [
   // decide_checklist_approval, which re-resolves the rung server-side and
   // refuses anything this person cannot give.
   '/approvals',
-  // Corrective actions: a supervisor is a default reviewer of the closure
-  // workflow, so the review screen has to be reachable. The route is still
-  // behind the corrective_actions module switch, and every decision goes
-  // through the review RPCs, which re-check the reviewer server-side.
-  '/actions',
   // Just-in-time access requests (V116 request_elevation). A checklist-only
   // person who needs one module for an hour must be able to ask for it; the
   // request is decided by a super admin, so reaching the page grants nothing.
@@ -47,9 +42,20 @@ export const CHECKLIST_PATH_PREFIXES = [
   '/my-problems',
 ]
 
-export function isChecklistPathAllowed(pathname) {
+// Paths outside the checklist area that open ONLY when the role's module is
+// switched on in the access matrix. Corrective actions: a supervisor is a default
+// reviewer of the closure workflow, so the review screen has to be reachable once
+// the company enables it (draft 20261116102000). Until that row exists the path
+// behaves exactly as before: not in the sidebar, and redirected to Checklists.
+export const CHECKLIST_MODULE_GATED_PATHS = { '/actions': 'corrective_actions' }
+
+const under = (p, x) => p === x || p.startsWith(`${x}/`)
+
+export function isChecklistPathAllowed(pathname, hasPermission) {
   const p = String(pathname || '')
-  return CHECKLIST_PATH_PREFIXES.some((x) => p === x || p.startsWith(`${x}/`))
+  if (CHECKLIST_PATH_PREFIXES.some((x) => under(p, x))) return true
+  if (typeof hasPermission !== 'function') return false
+  return Object.entries(CHECKLIST_MODULE_GATED_PATHS).some(([x, key]) => under(p, x) && hasPermission(key) === true)
 }
 
 // Roles allowed to author checklists (build / schedule / insights). Includes the

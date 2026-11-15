@@ -16,7 +16,8 @@
 // Industry-standard patterns. 'Front to Rear' is stored as token 'standard' and 'Forward Cross' as 'cross'
 // (their original tokens), so older rows keep their meaning. Legacy labels 'Standard'/'Cross' still map.
 import { layoutSlotsFor, layoutForAsset, resolveLayoutKey } from './vehicleTyreLayout'
-import { legacyPositionCode, describePosition } from './tyrePositions'
+import { describePosition } from './tyrePositions'
+import { slotCode } from './tyrePositionService'
 
 export const ROTATION_TYPES = ['Front to Rear', 'Forward Cross', 'Rearward Cross', 'Side to Side', 'X Pattern', 'Custom']
 
@@ -64,7 +65,7 @@ export const POSITION_LABEL = CORNER_LABEL
 export function positionOptionsFor(vehicleType, assetNo, country) {
   if (!vehicleType && !assetNo) return []
   const key = layoutForAsset(resolveLayoutKey(vehicleType, assetNo), assetNo, country)
-  return layoutSlotsFor(vehicleType, assetNo, country).map((id) => legacyPositionCode(key, id))
+  return layoutSlotsFor(vehicleType, assetNo, country).map((id) => slotCode(key, id))
 }
 
 /** A readable name for any stored position (GCC code or legacy corner). */

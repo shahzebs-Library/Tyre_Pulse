@@ -350,6 +350,15 @@ export default function ErpIntake() {
         setResults([...out])
       }
       setPhase('done')
+      // Notify open observation reviewers that new ERP evidence is available.
+      // This does not trigger automatic linking or modify corrective actions.
+      if (out.some(result => (Number(result.inserted) || 0) + (Number(result.updated) || 0)
+        + (Number(result.tyresInserted) || 0) + (Number(result.tyresUpdated) || 0) > 0)
+        && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('tyrepulse:data-changed', {
+          detail: { source: 'erp-intake', country, targets: out.map(result => result.target).filter(Boolean) },
+        }))
+      }
     } catch (err) {
       setError(toUserMessage(err, 'Import failed. Please try again.'))
       setPhase('preview')

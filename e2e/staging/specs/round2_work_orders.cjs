@@ -13,7 +13,6 @@ const USERS = {
   'r2.mechanic':   { label: 'Mechanic (technician)', site: 'north', technician: true },
   'clo.collector': { label: 'Tyre Data Collector', site: 'all' },
 }
-const MARKS = ['GENERAL', 'TYRE', 'ASSIGNED', 'EAST', 'CLOSED', 'APPROVED', 'PARTS', 'QC']
 const wo = (mark) => {
   const [id, no] = R.sql(`select id, work_order_no from public.work_orders where description like 'R2-${mark} %'`).split('\t')
   return { id, no }

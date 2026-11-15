@@ -43,6 +43,10 @@ describe('Workshop Supervisor', () => {
     expect(isChecklistOnlyRole('Workshop Supervisor')).toBe(true)
   })
 
+  it('can reach corrective actions, where a supervisor reviews closures', () => {
+    expect(isChecklistPathAllowed('/actions')).toBe(true)
+  })
+
   it('can reach the approvals queue, or the role does nothing', () => {
     expect(isChecklistPathAllowed('/approvals')).toBe(true)
   })

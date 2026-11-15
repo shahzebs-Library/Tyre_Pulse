@@ -57,3 +57,6 @@ Apply in this order, each after a rolled-back check on production. Test: `supaba
   append-only `checklist_decision_events`, and per-company extra final signer roles. Contains one
   `drop constraint` + `add constraint` pair (a CHECK cannot be widened in place), so the MCP confirm
   prompt will appear. The blocking-mark rule (`guard_checklist_approval_stages`) is not touched.
+- `20261116102000_clo_supervisor_actions_visibility.sql` - depends on `20261116100000`. Switches the
+  `corrective_actions` module on for Workshop Supervisor and Maintenance Supervisor so a default
+  reviewer can open the review screen (browser test defect C1). Two rows, no rights change.

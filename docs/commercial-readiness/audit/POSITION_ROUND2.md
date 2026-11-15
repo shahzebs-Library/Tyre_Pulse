@@ -233,3 +233,18 @@ including: the rollback companion restores the exact production md5; links and h
 live function are byte-identical after the follow-up; the six live policies are unchanged and eight
 reader policies appear; a link made by the live function is still honoured. vitest 46 files, 782 passed;
 mirror 4 of 4; eslint 0 errors; `vite build` clean. Production: read only, nothing applied.
+
+## Version 2 of the follow-up (2026-11-15, owner decisions)
+
+The approval to apply was withdrawn before anything was applied. The draft was revised; details,
+test counts and md5s are in `ERP_FOLLOWUP_APPROVAL_PACK.md`.
+
+- No universal rear centre / rear rear reading. `LHRCO`-type spellings are pending on every
+  layout, and on concrete pump layouts no rear ERP code is read, until a mapping is verified and
+  recorded for that layout (`tyre_layout_position_mappings`, empty by default).
+- A matching serial never confirms. A documented exception needs a separate permission.
+- Layout versions exist before any admin edit can reinterpret history; the resolver takes a date.
+- The client offers a decision only when the database reports the same rules version.
+- An interim restriction is drafted separately (084000).
+- Focused loading and the panel from #522 are unchanged.
+

@@ -458,6 +458,12 @@ export default function WorkshopAnalytics() {
               <CardBody style={{ height: Math.max(180, delayCostRows.length * 42) }}>
                 {delayCostRows.length ? <EChart option={delayCostOption} ariaLabel="Delay cost by cause" /> : <EmptyChart hint="No blocked time recorded in this range." />}
               </CardBody>
+              {delayCostRows.length > 0 && analytics.summary?.labourRateSource === 'default' && (
+                <p className="px-4 pb-3 text-xs text-amber-400" role="note">
+                  Estimate only. No labour rate is set in Workshop Settings and the job cards carry none, so lost hours
+                  are priced at a default of {analytics.summary.labourRate} per hour. Set your own rate to make this figure yours.
+                </p>
+              )}
             </Card>
             <Card>
               <CardHeader title="First time fix" icon={Gauge} level={2} />

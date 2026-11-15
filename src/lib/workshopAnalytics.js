@@ -19,7 +19,7 @@
  * no completed jobs, target-vs-actual with no timed jobs) and empty ranges yield
  * empty arrays - never zero-filled invented data.
  */
-import { rollupTechnician, delayBreakdown, buildBoard, computeKpis } from './workshopLive'
+import { rollupTechnician, delayBreakdown, buildBoard, computeKpis, labourRateBasis } from './workshopLive'
 
 const MIN = 60_000
 const DAY_MS = 86_400_000
@@ -308,6 +308,9 @@ export function computeWorkshopAnalytics({
     .filter(({ roll }) => roll.blockedByReason && Object.keys(roll.blockedByReason).length)
     .map(({ userId, roll }) => ({ blockedByReason: roll.blockedByReason, currentJobId: userId }))
   const delayByReason = delayBreakdown(delayBoard, { labourRate, jobs })
+  // Which rate the delay cost is priced at, so the page can say when it is the
+  // built-in default and not a rate the company set.
+  const rateBasis = labourRateBasis({ labourRate, jobs })
   const delayTrend = delayByReason.map((r) => ({
     reason: r.reason, hoursLost: r.hoursLost, affectedJobs: r.affectedJobs,
   }))
@@ -377,6 +380,8 @@ export function computeWorkshopAnalytics({
     totalUnassignedHours: round1(totalUnassigned / 60),
     totalBreakHours: round1(totalBreak / 60),
     totalDelayCost: delayByReason.reduce((s, r) => s + num(r.costImpact), 0),
+    labourRate: rateBasis.rate,
+    labourRateSource: rateBasis.source,
     jobsCompleted: totalJobsCompleted,
     firstTimeFixRate: firstTimeFix.rate,
     avgTaskDurationMin,

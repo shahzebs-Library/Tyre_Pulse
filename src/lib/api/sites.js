@@ -251,9 +251,14 @@ export async function upsertSite(site) {
     .select('id').ilike('country', country).ilike('name', name).maybeSingle()
 
   if (existing?.id) {
-    const { error } = await supabase.from('sites')
-      .update(payload).eq('id', existing.id)
+    // Ask for the changed id back: a refused update matches zero rows without
+    // raising, which would otherwise read as a successful save.
+    const { data: changed, error } = await supabase.from('sites')
+      .update(payload).eq('id', existing.id).select('id')
     if (error) throw new ServiceError(toUserMessage(error), error.code, error)
+    if (!Array.isArray(changed) || changed.length === 0) {
+      throw new ServiceError('This site was not updated. Only an Admin or a Manager can change the site register.')
+    }
     return existing.id
   }
   const { data: ins, error } = await supabase.from('sites')

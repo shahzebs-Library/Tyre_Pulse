@@ -57,6 +57,8 @@ import {
 } from '../components/workshop/WorkshopLiveParts'
 import { safeImageSrc } from '../lib/safeUrl'
 import { toUserMessage } from '../lib/safeError'
+import { useWorkOrderAccess } from '../hooks/useWorkOrderAccess'
+import { workOrderRefusalFromError } from '../lib/workOrderAccess'
 import {
   fmtMins, relTime, pct, siteOptions as buildSiteOptions,
   filterBoard, filterJobs, bucketJobs, boardExportRows, BOARD_EXPORT_KEYS, BOARD_EXPORT_HEADERS,
@@ -162,6 +164,10 @@ function TechTile({ tech, now, highlight, onOpen, onViewJob }) {
 
 export default function WorkshopLive() {
   const { activeCountry } = useSettings()
+  // What the database lets this account do to work_orders, asked of the same
+  // server function the row policies call. Controls it would refuse are
+  // disabled with the reason; any refusal that still happens is shown as one.
+  const woRights = useWorkOrderAccess()
   const loadId = useRef(0)
   const [raw, setRaw] = useState(null)
   const [cfg, setCfg] = useState(null)
@@ -476,7 +482,7 @@ export default function WorkshopLive() {
       setFlash({ type: 'ok', msg: okMsg })
       scheduleReload()
     } catch (e) {
-      setFlash({ type: 'err', msg: toUserMessage(e) })
+      setFlash({ type: 'err', msg: workOrderRefusalFromError(e) || toUserMessage(e) })
     } finally {
       setBusy(false)
       if (flashTimer.current) clearTimeout(flashTimer.current)
@@ -495,7 +501,7 @@ export default function WorkshopLive() {
   const onQcPass = (job) => {
     const t = qcOutcome('pass') // { status:'Completed', qc_status:'passed' }
     mutate(
-      workshop.setJobStatus(job.id, t.status).then(() => workshop.setQcStatus(job.id, t.qc_status)),
+      workshop.setQcOutcome(job.id, t),
       'QC passed. Job completed.',
     )
   }
@@ -503,8 +509,7 @@ export default function WorkshopLive() {
     const t = qcOutcome('fail') // { status:'In Progress', qc_status:'failed', rework:true, note }
     // Record a rework signal against the job (attributed to its owner when known)
     // so first-time-fix analytics stay honest - a QC failure is not a clean fix.
-    const run = workshop.setJobStatus(job.id, t.status)
-      .then(() => workshop.setQcStatus(job.id, t.qc_status))
+    const run = workshop.setQcOutcome(job.id, t)
       .then(() => workshop.recordEvent({
         user_id: job.assigned_owner_id || undefined,
         job_id: job.id,
@@ -661,7 +666,7 @@ export default function WorkshopLive() {
           <select className="cc-select" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Filter by site" disabled={siteOptions.length <= 1}>
             {siteOptions.map((s) => <option key={s} value={s}>{s === 'All' ? 'All sites' : s}</option>)}
           </select>
-          <button type="button" className="cc-btn-primary wl-new" onClick={() => setNewJobOpen(true)}>
+          <button type="button" className="cc-btn-primary wl-new" onClick={() => setNewJobOpen(true)} disabled={!woRights.can('create')} title={woRights.reason('create') || undefined}>
             <Plus size={16} aria-hidden="true" /> New Job
           </button>
         </div>
@@ -896,6 +901,13 @@ export default function WorkshopLive() {
                               technicians={board}
                               techById={techById}
                               busy={busy}
+                              jobRights={{
+                                assign: woRights.can('assign', job),
+                                progress: woRights.can('progress', job),
+                                edit: woRights.can('edit', job),
+                                qc: woRights.can('qc', job),
+                                reason: (action) => woRights.reason(action, job),
+                              }}
                               onAssign={onAssign}
                               onReassign={onReassign}
                               onStatus={onStatus}

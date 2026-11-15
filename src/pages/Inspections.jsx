@@ -844,20 +844,26 @@ export default function Inspections() {
     setSaving(false)
   }
 
+  // A refused write is shown, never swallowed: both of these used to discard
+  // any error and reload, so a role the database refuses saw nothing happen.
   async function markDone(id) {
     try {
       await inspectionsApi.patchInspection(id, {
         status: 'Done',
         completed_date: new Date().toISOString().split('T')[0],
       })
-    } catch { /* mirror prior fire-and-forget: proceed to reload regardless */ }
+    } catch (e) {
+      setActionNotice({ tone: 'error', text: toUserMessage(e, 'The inspection could not be marked done.') })
+    }
     await load()
   }
 
   async function confirmDelete() {
     try {
       await inspectionsApi.deleteInspection(deleteId)
-    } catch { /* mirror prior fire-and-forget: proceed to reload regardless */ }
+    } catch (e) {
+      setActionNotice({ tone: 'error', text: toUserMessage(e, 'The inspection could not be deleted.') })
+    }
     setDeleteId(null)
     await load()
   }

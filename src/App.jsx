@@ -421,7 +421,7 @@ function ChecklistOnlyGate({ children }) {
   const { profile, hasPermission } = useAuth()
   const loc = useLocation()
   if (loc.pathname === '/odometer-logs' && hasPermission?.('odometer_logs') === true) return children
-  if (isChecklistOnlyRole(profile?.role) && !isChecklistPathAllowed(loc.pathname)) {
+  if (isChecklistOnlyRole(profile?.role) && !isChecklistPathAllowed(loc.pathname, hasPermission)) {
     return <Navigate to="/checklists" replace />
   }
   return children
@@ -678,7 +678,7 @@ function MainApp() {
                       <Route path="/gate-pass"            element={<Safe><ModuleRoute moduleKey="gate_pass"><GatePass /></ModuleRoute></Safe>} />
                       <Route path="/serial-tracker"       element={<Safe><RoleRoute allowed={['Admin']} moduleKey="serial_tracker"><ModuleRoute moduleKey="serial_tracker"><SerialTracker /></ModuleRoute></RoleRoute></Safe>} />
                       <Route path="/work-orders"          element={<Safe><ModuleRoute moduleKey="work_orders"><WorkOrders /></ModuleRoute></Safe>} />
-                      <Route path="/workshop-live"        element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><ModuleRoute moduleKey="workshop_live"><WorkshopLive /></ModuleRoute></RoleRoute></Safe>} />
+                      <Route path="/workshop-live"        element={<Safe><RoleRoute allowed={['Admin','Manager','Director','Maintenance Supervisor']}><ModuleRoute moduleKey="workshop_live"><WorkshopLive /></ModuleRoute></RoleRoute></Safe>} />
                       <Route path="/workshop-absence"     element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><WorkshopAbsence /></RoleRoute></Safe>} />
                       <Route path="/workshop-analytics"   element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><WorkshopAnalytics /></RoleRoute></Safe>} />
                       <Route path="/workshop-settings"    element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><WorkshopSettings /></RoleRoute></Safe>} />

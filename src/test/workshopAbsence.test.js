@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   classifyShift, summarizeAttendance, indexAttendance, attendanceForShift,
   clockMinutes, checkInMinutes, personKey, filterShiftsByRange,
   bucketByDay, bucketBySite, bucketByPerson,
+  localClock, timeZoneForCountry, localCheckInTime,
 } from '../lib/workshopAbsence'
 
 const NOW = new Date('2026-07-14T10:00:00Z') // a Tuesday, 10:00 UTC
@@ -170,5 +171,79 @@ describe('bucket helpers are directly usable', () => {
   it('bucketByPerson tracks lastSeen', () => {
     const a = bucketByPerson(classified).find((p) => p.person === 'A')
     expect(a.lastSeen).toBe('2026-07-14')
+  })
+})
+
+describe('site clock (check-ins are UTC instants, rosters are local wall-clock)', () => {
+  it('localClock converts a zoned instant to the site day and minutes', () => {
+    expect(timeZoneForCountry('KSA')).toBe('Asia/Riyadh')
+    expect(timeZoneForCountry(' uae ')).toBe('Asia/Dubai')
+    expect(timeZoneForCountry(null)).toBe('UTC')
+    expect(localClock('2026-07-14T05:35:00Z', 'Asia/Riyadh')).toEqual({ date: '2026-07-14', minutes: 515 })
+    // 22:30 UTC is already the next day in Riyadh.
+    expect(localClock('2026-07-13T22:30:00Z', 'Asia/Riyadh').date).toBe('2026-07-14')
+    // A naive value is read as written.
+    expect(localClock('2026-07-14 09:05', 'Asia/Riyadh')).toEqual({ date: '2026-07-14', minutes: 545 })
+    expect(localCheckInTime('2026-07-14T05:35:00+00:00', 'Asia/Riyadh')).toBe('08:35')
+  })
+
+  it('a KSA check-in 35 minutes late reads as late, not on time', () => {
+    const shift = { id: 'k1', person_name: 'B', shift_date: '2026-07-14', start_time: '08:00', country: 'KSA' }
+    expect(classifyShift(shift, { check_in: '2026-07-14T05:35:00Z' }, { now: NOW })).toBe('late')
+    expect(classifyShift(shift, { check_in: '2026-07-14T04:55:00Z' }, { now: NOW })).toBe('present')
+  })
+
+  it('today in KSA: an 08:00 shift with no check-in is absent at 09:00 local (06:00 UTC)', () => {
+    const shift = { id: 'k2', person_name: 'C', shift_date: '2026-07-14', start_time: '08:00', country: 'KSA' }
+    expect(classifyShift(shift, null, { now: new Date('2026-07-14T06:00:00Z') })).toBe('absent')
+    expect(classifyShift(shift, null, { now: new Date('2026-07-14T04:00:00Z') })).toBe('scheduled')
+  })
+
+  it('a check-in on a later local day than the shift is late', () => {
+    const shift = { id: 'k3', person_name: 'D', shift_date: '2026-07-13', start_time: '22:00', country: 'KSA' }
+    expect(classifyShift(shift, { check_in: '2026-07-13T22:10:00Z' }, { now: NOW })).toBe('late')
+  })
+
+  it('an explicit timeZone option overrides the country', () => {
+    const shift = { id: 'k4', person_name: 'E', shift_date: '2026-07-14', start_time: '08:00', country: 'KSA' }
+    expect(classifyShift(shift, { check_in: '2026-07-14T07:30:00Z' }, { now: NOW, timeZone: 'UTC' })).toBe('present')
+  })
+})
+
+describe('absence loader', () => {
+  it('shiftDay does UTC day arithmetic', async () => {
+    const { shiftDay } = await import('../lib/api/workshopAbsence')
+    expect(shiftDay('2026-07-01', -1)).toBe('2026-06-30')
+    expect(shiftDay('2026-12-31', 2)).toBe('2027-01-02')
+    expect(shiftDay('', 1)).toBeNull()
+    expect(shiftDay('nope', 1)).toBeNull()
+  })
+
+  it('pages the roster past the 1,000-row server cap with an id tiebreak', async () => {
+    const calls = []
+    vi.resetModules()
+    vi.doMock('../lib/supabase', () => {
+      const from = (table) => {
+        const rec = { table, order: [] }
+        calls.push(rec)
+        const b = {
+          select: () => b, eq: () => b, gte: () => b, lte: () => b, lt: () => b, or: () => b, is: () => b,
+          order: (c) => { rec.order.push(c); return b },
+          range: (a) => {
+            const n = table === 'shifts' && a === 0 ? 1000 : table === 'shifts' && a === 1000 ? 5 : 0
+            return Promise.resolve({ data: Array.from({ length: n }, (_, i) => ({ id: `${a + i}` })), error: null })
+          },
+        }
+        return b
+      }
+      return { supabase: { from } }
+    })
+    const { loadAbsenceData } = await import('../lib/api/workshopAbsence')
+    const res = await loadAbsenceData({ from: '2026-07-01', to: '2026-07-31', country: 'KSA' })
+    expect(res.shifts).toHaveLength(1005)
+    const shiftCalls = calls.filter((c) => c.table === 'shifts')
+    expect(shiftCalls.length).toBeGreaterThanOrEqual(2)
+    expect(shiftCalls[0].order).toEqual(['shift_date', 'id'])
+    vi.doUnmock('../lib/supabase')
   })
 })

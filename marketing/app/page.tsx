@@ -30,13 +30,13 @@ export const metadata: Metadata = {
 /* Eight capability areas. Status says what is in the product today and what is set up per customer. */
 const MODULES: CardProps[] = [
   { icon: CircleDot, title: "Tyre lifecycle", text: "Every tyre by serial and wheel position, from fitment to removal, with cost per km or engine hour.", href: "/platform/tyre-lifecycle", status: "available", photo: { name: "loaderTyre", position: "50% 40%" }, className: "is-wide" },
-  { icon: ClipboardCheck, title: "Inspections", text: "Checklists, photos, readings and signatures on the phone, with or without signal.", href: "/platform/inspections", status: "available" },
+  { icon: ClipboardCheck, title: "Inspections", text: "Checklists, photos, readings and signatures on the Android app, with or without signal.", href: "/platform/inspections", status: "available" },
   { icon: Truck, title: "Fleet and assets", text: "One record per machine: meters, documents, history and cost.", href: "/platform/fleet-assets", status: "available" },
-  { icon: Wrench, title: "Workshop and maintenance", text: "Job cards, preventive plans, technicians and parts in one queue.", href: "/platform/maintenance", status: "available", variant: "dark" },
-  { icon: Box, title: "Stores and procurement", text: "Stock by site, parts issued to the job, purchase requests with approval.", href: "/platform/inventory", status: "available" },
+  { icon: Wrench, title: "Workshop and maintenance", text: "Job cards, technicians and parts in one queue. Preventive plans are set up on request.", href: "/platform/maintenance", status: "available", variant: "dark" },
+  { icon: Box, title: "Stores and parts", text: "Stock by site and parts issued against the job card. Purchase requests are set up on request.", href: "/platform/inventory", status: "available" },
   { icon: BarChart3, title: "Reports and dashboards", text: "Dashboards, scheduled reports and shareable boards for a screen or a manager.", href: "/platform/reports", status: "available" },
   { icon: ShieldAlert, title: "Accidents and claims", text: "Accident cases with photos, damage, root cause and claim documents.", href: "/contact", linkLabel: "Ask in a demo", status: "available" },
-  { icon: Sparkles, title: "AI-assisted photo analysis", text: "Flags possible tyre defects from inspection photos for your team to check.", href: "/platform/tyre-lifecycle#ai", status: "available" },
+  { icon: Sparkles, title: "AI-assisted photo review (pilot)", text: "Suggests possible tyre defects from inspection photos to assist a human reviewer. Accuracy is still being validated.", href: "/platform/tyre-lifecycle#ai", status: "on-request" },
 ];
 
 export default function HomePage() {
@@ -56,7 +56,7 @@ export default function HomePage() {
               </div>
               <ul className="tp-chips" aria-label="Where it runs">
                 <li>Web and Android</li>
-                <li>Works offline in the field</li>
+                <li>Android app works offline</li>
                 <li>English and Arabic</li>
               </ul>
             </div>
@@ -95,7 +95,7 @@ export default function HomePage() {
         <Section id="rollout" tone="soft" title="Start from the files you already keep.">
           <ol className="next-steps tp-steps-row">
             <li><b>Send what you already export.</b><span>An asset list, a month of job cards and your tyre records, as your ERP and Excel produce them.</span></li>
-            <li><b>We load and check it with you.</b><span>Columns are mapped, duplicates are caught and every row is tied to a machine, a site and a country.</span></li>
+            <li><b>We load and check it with you.</b><span>Columns are mapped with you, repeated rows are checked and each row is tied to a machine, a site and a country.</span></li>
             <li><b>Teams work on their own records.</b><span>Tyre fitters inspect on the phone, the workshop runs its queue and managers read cost per machine.</span></li>
           </ol>
           <p className="tp-more"><Link className="btn-text" href="/faq">Read the questions fleet teams ask <ArrowRight size={16} aria-hidden="true" /></Link></p>

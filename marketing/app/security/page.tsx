@@ -15,11 +15,11 @@ const TITLE = "Security and data protection";
 export const metadata: Metadata = {
   title: TITLE,
   description:
-    "How Tyre Pulse protects fleet data: company and country isolation enforced in the database, role-based access, an audit trail and private file storage.",
+    "How Tyre Pulse protects fleet data: country isolation enforced in the database, role-based access, an audit trail and private file storage.",
   alternates: alternatesFor("/security"),
   openGraph: { images: OG_IMAGES,
     title: `${TITLE} | Tyre Pulse`,
-    description: "Company and country data isolation enforced in the database, role-based access, an audit trail and private file storage.",
+    description: "Country data isolation enforced in the database, role-based access, an audit trail and private file storage.",
     url: "/security",
     type: "website",
   },
@@ -27,8 +27,8 @@ export const metadata: Metadata = {
 
 /* Only controls that exist in the product today. Nothing here is a certification. */
 const CONTROLS: CardProps[] = [
-  { icon: Database, title: "Company and country isolation", text: "Every query is limited to your company, then to the countries and sites a user is assigned. The database enforces it, so a hidden button is never the only guard.", status: "available" },
-  { icon: KeyRound, title: "Role-based access", text: "Roles and per-user grants decide which modules a person can open and what they can create, edit, approve or export.", status: "available" },
+  { icon: Database, title: "Country isolation in the database", text: "Each user is limited to the countries they are assigned. The database enforces it, so a hidden button is never the only guard. Site scoping is available, and each customer is set up by our team as its own company.", status: "available" },
+  { icon: KeyRound, title: "Role-based access", text: "Roles and per-user grants decide which modules a person can open. Create, edit and approve rights are enforced in the database on the core registers, and export is controlled in the app.", status: "available" },
   { icon: Fingerprint, title: "Multi-factor sign-in", text: "A second sign-in factor is available for administrator accounts.", status: "available" },
   { icon: ScrollText, title: "Audit trail", text: "Sign-ins, access changes, approvals and record changes are written to a log that administrators can review.", status: "available" },
   { icon: FileLock2, title: "Private file storage", text: "Inspection photos, signatures and documents are stored privately and opened through links that expire.", status: "available" },
@@ -36,13 +36,13 @@ const CONTROLS: CardProps[] = [
 ];
 
 const LAYERS = [
-  ["The database checks every read.", "Row-level rules limit each query to your company, then your country and sites."],
-  ["The app checks every action.", "Roles and per-user grants decide who can create, edit, approve or export, and money stays in each country's own currency."],
+  ["The database checks every read.", "Row-level rules limit each query to your company and the countries you are assigned. Site scoping is available."],
+  ["The app checks every action.", "Roles and per-user grants decide which modules a person can open and who can approve, and money stays in each country's own currency."],
   ["The log keeps the evidence.", "Sign-ins, access changes and approvals are written to an audit trail administrators can review."],
 ] as const;
 
 const MORE = [
-  ["API keys", "Scoped keys for the public API, with rate limits and rotation.", "available"],
+  ["API keys", "Scoped keys for the public API, with rate limits. Set up on request with your first integration.", "on-request"],
   ["Shared report links", "Read-only board links with an optional password and expiry date.", "available"],
   ["Single sign-on", "Connected to your identity provider when you ask for it.", "on-request"],
   ["Customer-specific integrations", "ERP or telematics connections scoped with you before they are built.", "on-request"],
@@ -54,7 +54,7 @@ export default function SecurityPage() {
   return <PageFrame>
     <JsonLd data={faqSchema(SEC_FAQ, "/security")} />
     <JsonLd data={pageBreadcrumb(TITLE, "/security")} />
-    <PageTop photo="engineer" photoPosition="35% 20%" crumbs={[{ href: "/", label: "Home" }, { label: TITLE }]} title="Your fleet data stays inside your company, country and site." lead="Access is decided by company, country, site and role, and the database enforces it on every query. This page lists the controls that are in the product today." />
+    <PageTop photo="engineer" photoPosition="35% 20%" crumbs={[{ href: "/", label: "Home" }, { label: TITLE }]} title="Your fleet data stays inside your company and country." lead="Access is decided by role and country, and the database enforces country scope on every query. Site scoping is available. This page lists the controls that are in the product today." />
     <Section id="controls-h" title="Controls in the product today.">
       <CardGrid cols={3}>{CONTROLS.map((c) => <Card key={c.title} {...c} />)}</CardGrid>
     </Section>

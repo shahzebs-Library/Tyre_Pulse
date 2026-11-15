@@ -111,8 +111,8 @@ function buildIntents(lang: Lang, wa: string | null): Intent[] {
       label: ar ? "الأسعار" : "Pricing",
       keywords: ["price", "pricing", "cost", "quote", "plan", "plans", "how much", "subscription", "سعر", "الأسعار", "تكلفة", "عرض سعر", "اشتراك", "باقة"],
       answer: ar
-        ? "لا توجد أسعار منشورة، لأن الأساطيل تختلف في عدد المعدات والمواقع والدول والتكاملات. يُبنى السعر على حجم الأسطول وعدد المستخدمين والوحدات والدول. أرسل حجم أسطولك ونرد عليك برقم. ويمكنك البدء بموقع واحد أو وحدة واحدة."
-        : "There is no published price, because fleets differ by machine count, sites, countries and integrations. Pricing is based on fleet size, users, modules, countries and integrations. Send your fleet size and we reply with a figure. You can also start small, with one site or one module.",
+        ? "لا توجد أسعار منشورة، لأن الأساطيل تختلف في عدد المعدات والمواقع والدول والتكاملات. يُبنى السعر على حجم الأسطول وعدد المستخدمين والوحدات والدول. أرسل حجم أسطولك ونرد عليك برقم. ويمكنك البدء بموقع واحد ومجال عمل واحد. يتولى فريقنا إعداد كل عميل، ولا يوجد تسجيل ذاتي."
+        : "There is no published price, because fleets differ by machine count, sites, countries and integrations. Pricing is based on fleet size, users, modules, countries and integrations. Send your fleet size and we reply with a figure. You can also start small, with one site and one area of work. Our team sets up each customer; there is no self sign-up.",
       links: [{ href: "/pricing", label: ar ? "صفحة الأسعار" : "See pricing" }, contact],
     },
     {
@@ -120,8 +120,8 @@ function buildIntents(lang: Lang, wa: string | null): Intent[] {
       label: ar ? "هل يعمل دون اتصال؟" : "Does it work offline?",
       keywords: ["offline", "signal", "internet", "network", "connection", "no coverage", "sync", "اتصال", "إنترنت", "انترنت", "تغطية", "إشارة", "شبكة", "مزامنة"],
       answer: ar
-        ? "نعم. الفحوصات والصور وقراءات العدادات والتوقيعات تُحفظ على الهاتف وتُزامن عند عودة الاتصال، لذلك تعمل المواقع ذات الإشارة الضعيفة دون انقطاع."
-        : "Yes. Inspections, photos, meter readings and signatures save on the phone and sync when the connection returns, so sites with weak signal keep working.",
+        ? "نعم، على تطبيق أندرويد. الفحوصات والصور وقراءات العدادات والتوقيعات تُحفظ على الهاتف وتُزامن عند عودة الاتصال، لذلك تعمل المواقع ذات الإشارة الضعيفة دون انقطاع."
+        : "Yes, on the Android app. Inspections, photos, meter readings and signatures save on the phone and sync when the connection returns, so sites with weak signal keep working.",
       links: [{ href: "/platform/inspections", label: ar ? "الفحوصات" : "See inspections" }],
     },
     {
@@ -129,8 +129,8 @@ function buildIntents(lang: Lang, wa: string | null): Intent[] {
       label: ar ? "الاستيراد من ERP أو Excel" : "Can I import from ERP or Excel?",
       keywords: ["import", "erp", "excel", "spreadsheet", "csv", "upload", "migrate", "migration", "data", "استيراد", "إكسل", "اكسل", "ملف", "ترحيل", "بيانات", "رفع"],
       answer: ar
-        ? "نعم. أوامر العمل والمصروفات وسجلات الإطارات وقوائم الأصول تُستورد من الملفات التي تصدرها بالفعل من نظام ERP أو Excel، ويتم فحص التكرار قبل إدخالها، وربط كل سطر بمعدة وموقع ودولة."
-        : "Yes. Job cards, expenses, tyre records and asset lists import from the files you already export, with duplicates checked before they land, and every row is tied to a machine, a site and a country.",
+        ? "نعم. أوامر العمل والمصروفات وسجلات الإطارات وقوائم الأصول تُستورد من الملفات التي تصدرها بالفعل من نظام ERP أو Excel. يطابق فريقنا الأعمدة معك، وتُفحص الصفوف المكررة قبل حفظها، ويُربط كل سطر بمعدة وموقع ودولة."
+        : "Yes. Job cards, expenses, tyre records and asset lists import from the files you already export. Our team maps the columns with you, repeated rows are checked before they are saved, and each row is tied to a machine, a site and a country.",
       links: [contact],
     },
     {
@@ -138,8 +138,8 @@ function buildIntents(lang: Lang, wa: string | null): Intent[] {
       label: ar ? "الدول واللغة العربية" : "Which countries / Arabic?",
       keywords: ["country", "countries", "arabic", "english", "language", "currency", "ksa", "saudi", "uae", "egypt", "multi", "دولة", "دول", "عربي", "العربية", "لغة", "عملة", "السعودية", "الإمارات", "مصر"],
       answer: ar
-        ? "يعمل Tyre Pulse عبر عدة دول، وكل دولة وموقع يرى سجلاته فقط وبعملته الخاصة، ويُطبَّق ذلك في قاعدة البيانات. العربية والإنجليزية مدعومتان، على الويب وعلى الهاتف."
-        : "Tyre Pulse runs across more than one country. Each country and site sees only its own records, in its own currency, enforced in the database. Arabic and English are both supported, on the web and on the phone.",
+        ? "يعمل Tyre Pulse عبر عدة دول، وكل دولة ترى سجلاتها فقط وبعملتها الخاصة، ويُطبَّق ذلك في قاعدة البيانات، مع إمكانية التقييد حسب الموقع. العربية والإنجليزية مدعومتان، على الويب وعلى الهاتف."
+        : "Tyre Pulse runs across more than one country. Each country sees only its own records, in its own currency, enforced in the database. Site scoping is available. Arabic and English are both supported, on the web and on the phone.",
       links: [{ href: "/industries", label: ar ? "القطاعات" : "See industries" }],
     },
     {
@@ -147,8 +147,8 @@ function buildIntents(lang: Lang, wa: string | null): Intent[] {
       label: ar ? "الأمان" : "Security",
       keywords: ["security", "secure", "privacy", "access", "permission", "mfa", "sso", "audit", "safe", "أمان", "الأمان", "خصوصية", "صلاحيات", "صلاحية", "تدقيق", "حماية"],
       answer: ar
-        ? "قاعدة البيانات تفحص كل قراءة، فلا يرى المستخدم إلا شركته ودوله ومواقعه المسموح بها. الأدوار والصلاحيات تحدد من ينشئ أو يعدّل أو يعتمد أو يصدّر، وسجل التدقيق يحفظ تسجيلات الدخول والاعتمادات والتصدير. المسؤولون يسجلون الدخول بعامل ثانٍ."
-        : "The database checks every read, so a user sees only their company and the countries and sites they are assigned. Roles and per-user grants decide who can create, edit, approve or export, and an audit trail records sign-ins, approvals and exports. Administrators sign in with a second factor.",
+        ? "قاعدة البيانات تفحص كل قراءة، فلا يرى المستخدم إلا الدول المسموح له بها، مع إمكانية التقييد حسب الموقع. الأدوار والصلاحيات تحدد الوحدات التي يفتحها كل مستخدم ومن يعتمد، وسجل التدقيق يحفظ تسجيلات الدخول والاعتمادات والتصدير. المسؤولون يسجلون الدخول بعامل ثانٍ."
+        : "The database checks every read, so a user sees only the countries they are assigned, and site scoping is available. Roles and per-user grants decide which modules a person can open and who can approve, and an audit trail records sign-ins, approvals and exports. Administrators sign in with a second factor.",
       links: [{ href: "/security", label: ar ? "صفحة الأمان" : "See security" }],
     },
   ];

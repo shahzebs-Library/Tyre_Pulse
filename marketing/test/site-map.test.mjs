@@ -56,9 +56,11 @@ test('the app host is defined once and is the host that serves the app', () => {
   }
 });
 
-test('iOS is stated one way: planned, with no App Store link', () => {
+test('iOS is stated one way: in App Store review, with no App Store link', () => {
   const site = load('lib/site.ts');
-  assert.equal(site.IOS_STATUS, 'planned');
+  assert.equal(site.IOS_STATUS, 'in-review');
+  assert.match(site.IOS_STATEMENT, /App Store review/);
+  assert.doesNotMatch(site.IOS_STATEMENT + site.IOS_STATEMENT_AR, /planned|coming soon/i);
   assert.match(read('app/schema.tsx'), /APP_STORE_URL: string \| null = null/);
   assert.doesNotMatch(read('components/StoreBadges.tsx') + read('components/Footer.tsx'), /apps\.apple\.com/);
   for (const file of ['app/llms.txt/route.ts', 'app/llms-full.txt/route.ts', 'app/schema.tsx', 'components/Footer.tsx', 'app/about/page.tsx']) {

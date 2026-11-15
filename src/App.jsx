@@ -20,6 +20,7 @@ import { isSystemConfigLoaded, shouldUseNewShell, NEW_SHELL_KEY } from './lib/ap
 const LegacyLayout = lazy(() => import('./components/LegacyLayout'))
 import LoadingSpinner from './components/LoadingSpinner'
 import PwaUpdatePrompt from './components/PwaUpdatePrompt'
+import PdfExportTray from './components/pdf/PdfExportTray'
 import ErrorBoundary from './components/ErrorBoundary'
 import SubscriptionGate from './components/SubscriptionGate'
 import { useFeatureGate } from './hooks/useFeatureFlags'
@@ -575,6 +576,8 @@ function MainApp() {
       <TenantProvider>
       <CommandPaletteProvider>
         <PwaUpdatePrompt />
+        {/* bulk PDF downloads keep running across pages */}
+        <PdfExportTray />
         <Suspense fallback={<LoadingSpinner />}>
           <Routes>
             <Route path="/login"          element={<Login />} />

@@ -62,3 +62,17 @@ but the local staging copy:
 
 Tests: `node --test supabase/tests/tyre_position_service.test.mjs` (PGlite) and
 `python3 supabase/tests/staging/observation_erp_position_tests.py` (local staging copy).
+
+## Stored report PDFs (2026-11-15)
+
+Drafts for the PDF cache service (`docs/pdf/PDF_ARCHITECTURE_AUDIT.md`, `docs/pdf/PDF_ROLLOUT.md`). None applied
+anywhere but the local staging copy. Apply in this order, only on the owner's go-ahead:
+
+- `20261117090000_report_pdf_cache.sql` : private bucket `report-pdfs`, `report_pdf_files`, `report_pdf_events`,
+  the `pdf_cache_*` functions and the storage policies. Changes no existing object. Contains `drop policy if
+  exists` guards for its own policies, so it needs the SQL editor or the owner present to approve the MCP prompt.
+- `20261117091000_report_pdf_autoqueue.sql` : `report_pdf_queue` and an AFTER trigger on `inspections` that
+  records a request when a record is completed or approved. Reads only; can never block a save.
+- `20261117092000_report_export_jobs_DESIGN.sql` : DESIGN ONLY for a later server ZIP worker. Do not apply.
+
+Tests: `supabase/tests/staging/report_pdf_cache_tests.sh` (local staging), `supabase/tests/report_pdf_cache_key.test.mjs` (PGlite).

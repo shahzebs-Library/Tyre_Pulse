@@ -300,6 +300,7 @@ language plpgsql
 stable
 security definer
 set search_path = public, pg_temp
+set timezone = 'UTC'          -- timestamps are hashed as text: the hash must not depend on the session's time zone
 as $$
 declare
   v_ins public.inspections%rowtype;

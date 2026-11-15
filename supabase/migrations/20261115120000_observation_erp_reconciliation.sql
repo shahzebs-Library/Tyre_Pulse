@@ -8,6 +8,7 @@ create table if not exists public.observation_erp_links (
   action_id uuid not null unique references public.corrective_actions(id) on delete restrict,
   work_order_id uuid not null references public.work_orders(id) on delete restrict,
   source_job_card text not null,
+  work_order_snapshot jsonb not null default '{}'::jsonb,
   status text not null default 'confirmed' check (status = 'confirmed'),
   decision_note text not null check (length(btrim(decision_note)) between 5 and 2000),
   reviewed_by uuid not null,
@@ -40,6 +41,7 @@ create table if not exists public.observation_erp_link_events (
   action_id uuid not null,
   work_order_id uuid not null,
   source_job_card text not null,
+  work_order_snapshot jsonb not null default '{}'::jsonb,
   decision text not null check (decision in ('confirmed','rejected')),
   reason text not null,
   reviewer uuid not null,
@@ -79,6 +81,7 @@ declare
   v_country text;
   v_position text;
   v_verified_tyre boolean;
+  v_snapshot jsonb;
 begin
   if auth.uid() is null or v_org is null or not public.app_is_active()
      or not public.app_is_elevated() then
@@ -129,6 +132,11 @@ begin
   if p_decision = 'confirmed' and not v_verified_tyre then
     raise exception 'No ERP tyre movement matches the action position or serial' using errcode = 'PT409';
   end if;
+  v_snapshot := jsonb_build_object(
+    'work_order_no', v_work.work_order_no, 'asset_no', v_work.asset_no,
+    'country', v_work.country, 'status', v_work.status, 'description', v_work.description,
+    'notes', v_work.notes, 'opened_at', v_work.opened_at,
+    'completed_at', v_work.completed_at);
   select * into v_existing from public.observation_erp_links where action_id=p_action_id for update;
   if p_decision='confirmed' then
     if v_existing.id is not null and v_existing.work_order_id <> p_work_order_id then
@@ -139,14 +147,14 @@ begin
     end if;
     if v_existing.id is null then
       insert into public.observation_erp_links
-        (organisation_id,country,action_id,work_order_id,source_job_card,decision_note,reviewed_by)
-      values (v_org,v_country,p_action_id,p_work_order_id,v_work.work_order_no,p_reason,auth.uid());
+        (organisation_id,country,action_id,work_order_id,source_job_card,work_order_snapshot,decision_note,reviewed_by)
+      values (v_org,v_country,p_action_id,p_work_order_id,v_work.work_order_no,v_snapshot,p_reason,auth.uid());
       update public.corrective_actions set work_order_id=p_work_order_id where id=p_action_id;
     end if;
   end if;
   insert into public.observation_erp_link_events
-    (organisation_id,country,action_id,work_order_id,source_job_card,decision,reason,reviewer)
-  values(v_org,v_country,p_action_id,p_work_order_id,v_work.work_order_no,p_decision,p_reason,auth.uid());
+    (organisation_id,country,action_id,work_order_id,source_job_card,work_order_snapshot,decision,reason,reviewer)
+  values(v_org,v_country,p_action_id,p_work_order_id,v_work.work_order_no,v_snapshot,p_decision,p_reason,auth.uid());
   return jsonb_build_object('ok',true,'decision',p_decision,
     'action_id',p_action_id,'work_order_id',p_work_order_id,
     'already_linked',(v_existing.id is not null));

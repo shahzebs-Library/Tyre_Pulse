@@ -43,3 +43,54 @@ ever wanted. The reconcile is therefore closed by deletion, not re-application.
   456 MB). The next nightly run after applying removes 16 nights of snapshots, which is
   a removal of stored data, so it is not applied unattended. It frees disk only; no
   measured query gets faster from it.
+
+## Tenant isolation drafts TEN-1 to TEN-5 (authored 2026-11-12, NOT applied)
+
+Source: `docs/commercial-readiness/audit/TENANCY_SECURITY.md`. Each file was built from the LIVE
+definition (anchored replacement that aborts unless its anchor is found exactly once) and is covered
+by a PGlite test that reproduces the exploit on a faithful copy of the live object, then proves the
+refusal and the unchanged Company A path:
+`node --test --test-concurrency=1 supabase/tests/tenant_isolation_ten*.test.mjs`.
+PGlite is not production: every file carries rolled-back VERIFY steps for a DB-authorised session,
+and the refusals need a plain Admin in a second organisation, which production does not have, so
+confirm them on a branch database.
+
+- `20261113100000_ten1_job_card_conflict_org_guard.sql`: organisation guard on the job card
+  conflict update. Safe to apply alone; no confirm-gate words in the file.
+- `20261113100500_ten1b_work_orders_per_org_key.sql`: HELD, owner decision. Per-organisation
+  work order key. By-number joins to work_orders were not audited; contains one DROP CONSTRAINT.
+- `20261113101000_ten2_raw_upload_tables_org_wall.sql`: organisation column and RESTRICTIVE policy on
+  the three raw KSA/UAE upload tables and on pending_uploads. Four definer readers of the KSA staging
+  table are NOT rewritten.
+- `20261113102000_ten3_platform_tables_super_admin_write.sql`: ALTER POLICY on 13 platform tables.
+- `20261113103000_ten4_admin_rpcs_same_org.sql`: same-organisation check in two admin RPCs.
+- `20261113104000_ten5_subscription_and_plan_write_guard.sql`: OWNER DECISION inside (a customer
+  Admin can no longer self-downgrade to trial or free from the Billing page). The file contains the
+  word DELETE (trigger event), so the MCP confirm gate will prompt.
+
+Suggested order: ten3, ten4, ten1, ten2, ten5, then ten1b after its join audit.
+
+## SaaS foundation drafts TEN-6 to TEN-9 (authored 2026-11-12, NOT applied)
+
+Source: `docs/commercial-readiness/audit/TENANCY_SECURITY.md` (TEN-6 to TEN-9, section 5) and
+`COMMERCIAL_FOUNDATION.md` (CF-01 to CF-08). Plan and client work:
+`docs/commercial-readiness/audit/SAAS_IMPLEMENTATION_ROADMAP.md`. Same method as TEN-1 to TEN-5
+(anchored replacement on the live body, abort unless the anchor count matches). Tests share
+`supabase/tests/fixtures/tenant_saas_harness.mjs`, which holds verbatim copies of 20 live bodies.
+These four MUST be applied in file-name order, after TEN-1 to TEN-5:
+
+- `20261113110000_ten6_entitlement_enforcement.sql`: `internal` plan and an explicit subscription
+  row for every existing organisation FIRST, then `org_entitled()` consumed by `app_user_can`,
+  `enforce_plan_limit` and a seat limit. Ships behind `system_config.entitlement_enforcement = 'off'`.
+- `20261113111000_ten7_per_tenant_configuration.sql`: global matrix, alias and settings rows become
+  the configuration of the organisation named in `system_config.legacy_config_org` (Company A);
+  other tenants get `org_alias_overrides`, own matrix rows and `org_config()`.
+- `20261113112000_ten8_company_a_fallback_resolver.sql`: the Company A id leaves all 20 functions
+  and the `profiles.org_id` default; PT409 instead of a default when `single_tenant_mode` is off.
+  Does NOT flip `single_tenant_mode`.
+- `20261113113000_ten9_tenant_lifecycle.sql`: provisioning RPC, invitations, suspension enforced in
+  `app_is_active()`, per-organisation identity indexes (global keys kept), purge DRAFT (dry run by
+  default, service_role only). Contains a runtime `delete from`, so the MCP confirm gate will prompt.
+
+Not proven by PGlite: the combined run of TEN-1..TEN-9 on one database, RLS cost under load, and the
+15 functions that are stand-ins in the harness. Confirm on a branch database first.

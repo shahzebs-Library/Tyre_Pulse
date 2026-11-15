@@ -62,7 +62,7 @@ async function vehicleDiagramData(svgEl) {
   } catch { return null }
 }
 
-export async function downloadObservationReport(inspection, findings = [], { svgEl = null, branding = null, company = '' } = {}) {
+export async function downloadObservationReport(inspection, findings = [], { svgEl = null, branding = null, company = '', erpLinks = {}, erpUnreadable = false } = {}) {
   if (!inspection?.id) throw new Error('A saved inspection is required.')
   const allowed = applyExportPolicy(findings, 'Observation PDF ' + observationReportId(inspection))
   if (allowed.length !== findings.length) throw new Error('Export limit would omit inspection findings.')
@@ -173,6 +173,17 @@ export async function downloadObservationReport(inspection, findings = [], { svg
     }
     detail('Remarks', f.remarks || 'No remarks')
     detail('Action', f.actionRecord ? f.actionRecord.id + ' (' + f.actionRecord.status + ')' : 'No action linked')
+    if (f.actionRecord) {
+      const erp = erpLinks[f.actionRecord.id]
+      detail('ERP Job Card', erpUnreadable ? 'Evidence lookup unavailable at export time'
+        : erp?.source_job_card || 'Not confirmed')
+      if (erp) {
+        detail('ERP Reviewed', erp.reviewed_at || 'Not recorded')
+        detail('Reviewer', erp.reviewed_by || 'Not recorded')
+        detail('Evidence Snapshot', erp.work_order_snapshot?.status || 'No ERP work status recorded')
+        detail('Review Decision', erp.decision_note || 'No decision note recorded')
+      }
+    }
     y += 6
   }
   // As in the inspection PDF, photographs are grouped AFTER detailed readings.

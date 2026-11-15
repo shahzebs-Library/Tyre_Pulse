@@ -66,6 +66,15 @@ const nextConfig: NextConfig = {
       // own isolated console authentication and MFA on the app origin.
       { source: "/console", destination: `${APP_URL}/console`, permanent: false },
       { source: "/console/:path*", destination: `${APP_URL}/console/:path*`, permanent: false },
+      // Legal pages live in the application. The store listings (Google Play
+      // privacy policy and account deletion links) were registered on this
+      // host before it moved to the marketing site, so they must keep working.
+      { source: "/privacy", destination: `${APP_URL}/privacy`, permanent: false },
+      { source: "/privacy-policy", destination: `${APP_URL}/privacy`, permanent: false },
+      { source: "/terms", destination: `${APP_URL}/terms`, permanent: false },
+      { source: "/terms-of-service", destination: `${APP_URL}/terms`, permanent: false },
+      { source: "/data-deletion", destination: `${APP_URL}/data-deletion`, permanent: false },
+      { source: "/delete-account", destination: `${APP_URL}/data-deletion`, permanent: false },
       // /product was replaced by the platform section on 2026-09-28.
       { source: "/product", destination: "/platform", permanent: true },
       {

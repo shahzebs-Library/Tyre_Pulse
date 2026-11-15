@@ -64,8 +64,11 @@ describe('Observations module', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: /Observations\s*All findings/i }))
     const table = screen.getByRole('table', { name: 'Observations' })
-    expect(within(table).getByText('Puncture')).toBeInTheDocument()
-    expect(within(table).getByText('1 tyre damage')).toBeInTheDocument()
+    // One row per inspection since the grouping change: every finding of the
+    // inspection is listed on that row, position first.
+    const findings = within(table).getByText(/LHF1: Puncture/)
+    expect(findings).toBeInTheDocument()
+    expect(findings.textContent).toContain('1 tyre damage')
     fireEvent.click(within(table).getAllByRole('button', { name: /Open/ })[0])
     // Open shows that ONE finding first, with the way into the full sheet.
     expect(await screen.findByText('Is it fixed?')).toBeInTheDocument()

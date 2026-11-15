@@ -8,7 +8,7 @@ import { toUserMessage } from '../../lib/safeError'
  * Candidate confirmation is an explicit, elevated RPC action with a review note.
  */
 export default function ObservationErpEvidence({ observation }) {
-  const [state, setState] = useState({ status: 'idle', candidates: [], evidenceLimited: false, error: '' })
+  const [state, setState] = useState({ status: 'idle', candidates: [], orphanTyreJobCards: [], evidenceLimited: false, error: '' })
   const [linked, setLinked] = useState(null)
   const [history, setHistory] = useState([])
   const [linkError, setLinkError] = useState('')
@@ -33,12 +33,12 @@ export default function ObservationErpEvidence({ observation }) {
   )
 
   async function lookup() {
-    setState({ status: 'loading', candidates: [], evidenceLimited: false, error: '' })
+    setState({ status: 'loading', candidates: [], orphanTyreJobCards: [], evidenceLimited: false, error: '' })
     try {
       const result = await findObservationErpEvidence({ inspection, finding: observation })
       setState({ status: 'ready', ...result, error: '' })
     } catch (error) {
-      setState({ status: 'error', candidates: [], evidenceLimited: false, error: toUserMessage(error) })
+      setState({ status: 'error', candidates: [], orphanTyreJobCards: [], evidenceLimited: false, error: toUserMessage(error) })
     }
   }
 
@@ -77,6 +77,11 @@ export default function ObservationErpEvidence({ observation }) {
       {state.status === 'ready' && (
         <>
           {state.evidenceLimited && <p role="alert" className="text-sm text-amber-500">ERP result limit reached. This search may be incomplete. Do not confirm from a truncated evidence set.</p>}
+          {!!state.orphanTyreJobCards?.length && <div className="rounded-lg border border-amber-500/40 p-2" role="status">
+            <p className="text-xs font-semibold">ERP intake exception: tyre records mention job cards not found in imported work orders</p>
+            <p className="text-xs">{state.orphanTyreJobCards.join(', ')}</p>
+            <p className="text-xs text-[var(--text-secondary)]">Check job-card intake before confirming these movements.</p>
+          </div>}
           {!state.candidates.length && <p className="iw-od-muted">No imported job cards found for this asset and country. Check intake history or review another work date.</p>}
           {state.candidates.length > 0 && (
             <div className="space-y-3 mt-3">
@@ -84,7 +89,17 @@ export default function ObservationErpEvidence({ observation }) {
                 <div key={c.workOrder.id} className="rounded-xl border border-[var(--border)] p-3 space-y-2">
                   <strong>{c.workOrder.work_order_no}</strong>
                   <p className="text-sm text-[var(--text-secondary)]">{c.workOrder.description || 'No ERP work description'} | {c.workOrder.status || 'No status'}</p>
+                  <p className="text-xs">Job card ID: {c.workOrder.id}</p>
                   <p className="text-xs">{c.evidenceSummary.tyreRows} tyre records, {c.evidenceSummary.expenseRows} expense lines, {c.evidenceSummary.workDayGap ?? 'Unknown'} days from inspection</p>
+                  {c.fitments?.length > 0 && <div className="text-xs text-[var(--text-secondary)]">
+                    {c.fitments.map(t => <p key={t.id}>Tyre: {t.serial_no || 'serial missing'}, {t.position || t.tyre_position || 'position missing'} | ERP record {t.id}</p>)}
+                  </div>}
+                  {c.expenses?.length > 0 && <details className="text-xs">
+                    <summary>Expense line evidence ({c.expenses.length}). Tyre, tube and spare part costs remain separate.</summary>
+                    {c.expenses.map(e => <p key={e.id} className="py-1">
+                      {e.item_description || 'Unclassified'} | Qty {e.qty ?? 'N/A'} | Tyre {e.tyre_amount ?? 'N/A'} | Parts {e.spare_parts_amount ?? 'N/A'} | Oil {e.oil_amount ?? 'N/A'} | Source {e.issue_number || e.id}
+                    </p>)}
+                  </details>}
                   {c.reasons.map(r => <p key={r} className="text-xs text-[var(--text-secondary)]">Evidence: {r}</p>)}
                   {c.conflicts.map(r => <p key={r} className="text-xs text-red-500">Conflict: {r}</p>)}
                   {c.status === 'insufficient' && <p className="text-xs text-amber-500">Insufficient evidence for confirmation.</p>}

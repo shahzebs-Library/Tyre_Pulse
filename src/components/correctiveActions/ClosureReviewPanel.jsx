@@ -81,9 +81,11 @@ export default function ClosureReviewPanel({ action, onChanged }) {
   const [reason, setReason] = useState('')
   const [decisionNote, setDecisionNote] = useState('')
   const [showException, setShowException] = useState(false)
+  const [excPhotos, setExcPhotos] = useState([])
   const [busy, setBusy] = useState(null)
   const [feedback, setFeedback] = useState(null)
   const fileRef = useRef(null)
+  const excFileRef = useRef(null)
   const id = action?.id
   const say = useCallback((err, fallbackKey) => closureText(t, toUserMessage(err, t(fallbackKey))), [t])
 
@@ -129,7 +131,7 @@ export default function ClosureReviewPanel({ action, onChanged }) {
     try {
       await fn()
       setFeedback({ ok: true, text: done })
-      setNote(''); setPhotos([]); setComment(''); setReason(''); setDecisionNote(''); setShowException(false)
+      setNote(''); setPhotos([]); setComment(''); setReason(''); setDecisionNote(''); setShowException(false); setExcPhotos([])
       await load()
       onChanged?.()
     } catch (err) {
@@ -137,12 +139,12 @@ export default function ClosureReviewPanel({ action, onChanged }) {
     } finally { setBusy(null) }
   }
 
-  async function addPhotos(e) {
-    const files = [...(e.target.files || [])].slice(0, MAX_PHOTOS - photos.length)
+  async function addPhotos(e, current = photos, setList = setPhotos) {
+    const files = [...(e.target.files || [])].slice(0, MAX_PHOTOS - current.length)
     e.target.value = ''
     try {
       const shrunk = await Promise.all(files.map((f) => shrinkPhoto(f)))
-      setPhotos((p) => [...p, ...shrunk].slice(0, MAX_PHOTOS))
+      setList((p) => [...p, ...shrunk].slice(0, MAX_PHOTOS))
     } catch (err) { setFeedback({ ok: false, text: say(err, 'closure.review.photoFailed') }) }
   }
 
@@ -175,6 +177,12 @@ export default function ClosureReviewPanel({ action, onChanged }) {
       {merged.review_status === 'exception_requested' && merged.exception_reason && (
         <p className="text-sm text-amber-300">
           <span className="font-medium">{t('closure.review.exceptionRequestedOn', { date: merged.exception_requested_at ? formatDate(merged.exception_requested_at) : '' })}</span> {merged.exception_reason}
+          {Array.isArray(merged.exception_evidence) && merged.exception_evidence.length > 0 && (
+            <span className="block mt-2" data-testid="exception-evidence">
+              <span className="block text-xs text-[var(--text-muted)] mb-1">{t('closure.review.exceptionEvidence')}</span>
+              <Photos list={merged.exception_evidence} t={t} />
+            </span>
+          )}
         </p>
       )}
       {merged.review_status === 'exception' && merged.review_comment && (
@@ -229,6 +237,14 @@ export default function ClosureReviewPanel({ action, onChanged }) {
         </div>
       )}
 
+      {access.closeBlockedExceptionRequester && (
+        <p className="text-sm text-amber-400" data-testid="exception-requester-close-blocked">{t('closure.review.closeBlockedExceptionRequester')}</p>
+      )}
+
+      {access.exceptionRequestedByMe && !access.exceptionSelfBlocked && (
+        <p className="text-sm text-amber-400" data-testid="exception-requested-by-me">{t('closure.review.exceptionRequestedByMe')}</p>
+      )}
+
       {access.exceptionSelfBlocked && (
         <p className="text-sm text-amber-400" data-testid="exception-self-blocked">{t('closure.review.exceptionSelfBlocked')}</p>
       )}
@@ -256,10 +272,17 @@ export default function ClosureReviewPanel({ action, onChanged }) {
           <div className="space-y-2">
             <label className="block text-xs text-[var(--text-secondary)]" htmlFor="ca-exception-reason">{t('closure.review.requestReasonLabel')}</label>
             <textarea id="ca-exception-reason" rows={2} className={area} value={reason} onChange={(e) => setReason(e.target.value)} />
-            <div className="flex gap-2">
-              <button type="button" className={`${btn} border-[var(--border)] text-[var(--text-secondary)]`} onClick={() => setShowException(false)}>{t('closure.review.cancel')}</button>
+            <p className="text-xs text-[var(--text-secondary)]">{t('closure.review.exceptionEvidenceLabel')}</p>
+            <Photos list={excPhotos} t={t} onRemove={(i) => setExcPhotos((p) => p.filter((_, x) => x !== i))} />
+            <div className="flex gap-2 flex-wrap">
+              <input ref={excFileRef} type="file" accept="image/*" multiple className="hidden" data-testid="exception-evidence-input"
+                onChange={(e) => addPhotos(e, excPhotos, setExcPhotos)} />
+              <button type="button" className={`${btn} border-[var(--border)] text-[var(--text-secondary)]`} disabled={excPhotos.length >= MAX_PHOTOS} onClick={() => excFileRef.current?.click()}>
+                <Camera size={14} aria-hidden="true" /> {t('closure.review.addPhoto')}
+              </button>
+              <button type="button" className={`${btn} border-[var(--border)] text-[var(--text-secondary)]`} onClick={() => { setShowException(false); setExcPhotos([]) }}>{t('closure.review.cancel')}</button>
               <button type="button" className={`${btn} border-amber-600/60 text-amber-300`} disabled={!!busy || reason.trim().length < 10}
-                onClick={() => run('exception', () => requestException(id, reason), t('closure.review.done.exceptionRequested'))}>
+                onClick={() => run('exception', () => requestException(id, reason, excPhotos), t('closure.review.done.exceptionRequested'))}>
                 {spin('exception', FileWarning)} {t('closure.review.requestBtn')}
               </button>
             </div>

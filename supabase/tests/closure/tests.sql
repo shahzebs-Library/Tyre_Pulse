@@ -31,6 +31,8 @@ $$;
 \set supe   '''c1000000-0000-4000-8000-000000000004'''
 \set am     '''c1000000-0000-4000-8000-000000000005'''
 \set bsup   '''c1000000-0000-4000-8000-000000000007'''
+\set tpen   '''c1000000-0000-4000-8000-000000000008'''
+\set tpek   '''c1000000-0000-4000-8000-000000000009'''
 \set admin  '''af52a86f-2c24-5ce2-a00d-7ac6ca5d715f'''
 \set mgr    '''63e831d7-f511-5432-976d-439af4ccaf18'''
 \set eng    '''2092b3bc-43f1-5167-b49d-b1fd7dc47fd8'''
@@ -59,7 +61,7 @@ $$;
 select pg_temp.ok('A01 anon cannot execute any closure writer',
   not has_function_privilege('anon', 'public.corrective_action_review(uuid,text,text)', 'execute')
   and not has_function_privilege('anon', 'public.corrective_action_submit_completion(uuid,text,jsonb)', 'execute')
-  and not has_function_privilege('anon', 'public.corrective_action_request_exception(uuid,text)', 'execute')
+  and not has_function_privilege('anon', 'public.corrective_action_request_exception(uuid,text,jsonb)', 'execute')
   and not has_function_privilege('anon', 'public.corrective_action_decide_exception(uuid,text,text)', 'execute')
   and to_regprocedure('public.corrective_action_record_exception(uuid,text)') is null
   and not has_function_privilege('anon', 'public.acknowledge_checklist_faults(uuid,text,text)', 'execute')
@@ -334,7 +336,7 @@ select pg_temp.try(:mgr, $$select public.corrective_action_decide_exception((sel
 select pg_temp.try(:admin, $$select public.save_closure_review_config('{"ca_allow_self_review":false}')::text$$) as t64g \gset
 select pg_temp.ok('B14b the person who asked can never approve or close their own exception, even when self review is switched on',
   left(:'t64b', 5) = '42501' and :'t64b' like '%You asked for this exception%'
-  and left(:'t64c', 5) = 'PT409'
+  and left(:'t64c', 5) = '42501' and :'t64c' like '%You asked for an exception on this action%'
   and (:'t64d')::text like '%"can_decide_exception": false%' and (:'t64d')::text like '%"exception_self_blocked": true%'
   and left(:'t64e', 3) = 'ok:' and left(:'t64f', 5) = '42501' and left(:'t64g', 3) = 'ok:'
   and (select status <> 'Closed' and review_status = 'exception_requested' from public.corrective_actions where source_id = :s3 and source_detail = 'Mirrors'));
@@ -500,4 +502,101 @@ select pg_temp.ok('C07 no existing action or sheet outcome was changed by any of
      from public.corrective_actions where id = :a3)
   and (select bool_and(approval_status = 'approved') from public.checklist_submissions
         where id in ('c3000000-0000-4000-8000-000000000004', 'c3000000-0000-4000-8000-000000000005')));
+
+-- ============================== T. Tire Planning Engineer: ask for an exception ==============================
+-- Owner decision 2026-11-15: a TPE may ask, inside their own company, country and sites, with
+-- evidence. They never decide or close it. Independent approval is mandatory, in the database.
+select pg_temp.try(:tpen, $$select public.corrective_action_my_permissions('c4000000-0000-4000-8000-000000000021')::text$$) as tp1 \gset
+select pg_temp.try(:tpen, $$select public.corrective_action_request_exception('c4000000-0000-4000-8000-000000000021', 'Tyre retained for warranty inspection by the supplier', '["data:image/jpeg;base64,TPE1","tp-storage://evidence/supplier-letter.jpg"]')::text$$) as tp2 \gset
+select pg_temp.ok('T01 TPE in scope may ask for an exception with evidence; the action stays open',
+  (:'tp1') ~ '"can_request_exception": true'
+  and left(:'tp2', 3) = 'ok:'
+  and (select status = 'In Progress' and review_status = 'exception_requested' and exception_requested_by = :tpen
+            and jsonb_array_length(exception_evidence) = 2 and closed_at is null
+         from public.corrective_actions where id = 'c4000000-0000-4000-8000-000000000021')
+  and (select count(*) = 1 from public.corrective_action_review_events
+        where action_id = 'c4000000-0000-4000-8000-000000000021' and event_type = 'exception_requested'
+          and actor_id = :tpen and actor_role = 'Tire Planning Engineer' and jsonb_array_length(evidence) = 2));
+
+select pg_temp.try(:tpek, $$select public.corrective_action_request_exception('c4000000-0000-4000-8000-000000000024', 'Asset is parked in another country')::text$$) as tp3 \gset
+select pg_temp.try(:tpek, $$select public.corrective_action_my_permissions('c4000000-0000-4000-8000-000000000024')::text$$) as tp3b \gset
+select pg_temp.ok('T02 TPE cannot ask for an exception outside their country (refused, nothing written)',
+  left(:'tp3', 5) = '42501' and (:'tp3b') ~ '"ok": false'
+  and (select review_status is null and exception_requested_by is null from public.corrective_actions where id = 'c4000000-0000-4000-8000-000000000024'));
+
+select pg_temp.try(:tpen, $$select public.corrective_action_request_exception('c4000000-0000-4000-8000-000000000023', 'Not my site but trying anyway')::text$$) as tp4 \gset
+select pg_temp.try(:tpen, $$select public.corrective_action_my_permissions('c4000000-0000-4000-8000-000000000023')::text$$) as tp4b \gset
+select pg_temp.try(:tpek, $$select public.corrective_action_my_permissions('c4000000-0000-4000-8000-000000000023')::text$$) as tp4c \gset
+select pg_temp.ok('T03 TPE cannot ask for an exception outside their sites; the same role with every site may',
+  left(:'tp4', 5) = '42501' and (:'tp4b') ~ '"ok": false'
+  and (:'tp4c') ~ '"can_request_exception": true'
+  and (select review_status is null from public.corrective_actions where id = 'c4000000-0000-4000-8000-000000000023'));
+
+select pg_temp.try(:tpek, $$select public.corrective_action_request_exception('c4000000-0000-4000-8000-000000000025', 'Another company action here')::text$$) as tp5 \gset
+select pg_temp.ok('T04 TPE cannot ask for an exception in another company',
+  left(:'tp5', 5) = '42501'
+  and (select review_status is null from public.corrective_actions where id = 'c4000000-0000-4000-8000-000000000025'));
+
+select pg_temp.try(:tpen, $$select public.corrective_action_request_exception('c4000000-0000-4000-8000-000000000021', 'short', '[]')::text$$) as tp5b \gset
+select pg_temp.try(:tpek, $$select public.corrective_action_request_exception('c4000000-0000-4000-8000-000000000022', 'too short')::text$$) as tp5c \gset
+select pg_temp.ok('T04b a second request while one is pending is refused; a reason under 10 characters is refused',
+  left(:'tp5b', 5) = 'PT409' and left(:'tp5c', 5) = '22023');
+
+-- deciding: a TPE is not an exception role by default; even when an administrator adds it, the requester never decides
+select pg_temp.try(:tpek, $$select public.corrective_action_decide_exception('c4000000-0000-4000-8000-000000000021', 'approve')::text$$) as tp6 \gset
+select pg_temp.try(:admin, $$select public.save_closure_review_config('{"exception_roles":["Admin","Director","Manager","PMV Manager","Workshop Area Manager","Workshop Maintenance Area Manager","Tire Planning Engineer"]}')::text$$) as tp7 \gset
+select pg_temp.try(:tpen, $$select public.corrective_action_decide_exception('c4000000-0000-4000-8000-000000000021', 'approve', 'my own')::text$$) as tp8 \gset
+select pg_temp.try(:tpen, $$select public.corrective_action_decide_exception('c4000000-0000-4000-8000-000000000021', 'refuse', 'refusing my own')::text$$) as tp8b \gset
+select pg_temp.try(:tpen, $$select public.corrective_action_my_permissions('c4000000-0000-4000-8000-000000000021')::text$$) as tp9 \gset
+select pg_temp.try(:admin, $$select public.save_closure_review_config('{"exception_roles":["Admin","Director","Manager","PMV Manager","Workshop Area Manager","Workshop Maintenance Area Manager"]}')::text$$) as tp10 \gset
+select pg_temp.ok('T05 TPE cannot decide (approve or refuse) their own exception, even when the company makes TPE an exception role',
+  left(:'tp6', 5) = '42501' and left(:'tp7', 3) = 'ok:'
+  and left(:'tp8', 5) = '42501' and :'tp8' like '%You asked for this exception%'
+  and left(:'tp8b', 5) = '42501'
+  and (:'tp9') ~ '"can_decide_exception": false' and (:'tp9') ~ '"exception_requested_by_me": true'
+  and left(:'tp10', 3) = 'ok:'
+  and (select review_status = 'exception_requested' from public.corrective_actions where id = 'c4000000-0000-4000-8000-000000000021'));
+
+select pg_temp.try(:tpen, $$update public.corrective_actions set status = 'Closed' where id = 'c4000000-0000-4000-8000-000000000021'$$) as tp11 \gset
+select pg_temp.ok('T06 TPE cannot close the action carrying their exception through the status field (row policy matches no row, or refused)',
+  (:'tp11' = 'ok:0' or (left(:'tp11', 5) = '42501' and :'tp11' like '%You asked for an exception on this action%'))
+  and (select status <> 'Closed' from public.corrective_actions where id = 'c4000000-0000-4000-8000-000000000021'));
+
+select pg_temp.try(:am, $$select public.corrective_action_decide_exception('c4000000-0000-4000-8000-000000000021', 'approve', 'Supplier letter checked')::text$$) as tp12 \gset
+select pg_temp.ok('T07 an independent authorised person approves; the action closes as an exception',
+  left(:'tp12', 3) = 'ok:'
+  and (select status = 'Closed' and review_status = 'exception' and reviewed_by = :am and closed_by = :am
+            and exception_requested_by = :tpen
+         from public.corrective_actions where id = 'c4000000-0000-4000-8000-000000000021'));
+select pg_temp.ok('T08 history keeps both the requester and the independent decider',
+  (select string_agg(event_type || ':' || actor_id::text, ',' order by id) =
+          'exception_requested:' || :tpen || ',exception:' || :am
+     from public.corrective_action_review_events where action_id = 'c4000000-0000-4000-8000-000000000021'));
+
+-- refused, then later work: the person who asked still never closes the action
+select pg_temp.try(:tpen, $$select public.corrective_action_request_exception('c4000000-0000-4000-8000-000000000022', 'Waiting for a replacement casing from stores')::text$$) as tp13 \gset
+select pg_temp.try(:am, $$select public.corrective_action_decide_exception('c4000000-0000-4000-8000-000000000022', 'refuse', 'Casing is in stock, fit it')::text$$) as tp14 \gset
+select pg_temp.try(:coll, $$select public.corrective_action_submit_completion('c4000000-0000-4000-8000-000000000022', 'Casing fitted from stock')::text$$) as tp15 \gset
+select pg_temp.try(:tpen, $$select public.corrective_action_my_permissions('c4000000-0000-4000-8000-000000000022')::text$$) as tp16 \gset
+select pg_temp.try(:tpen, $$select public.corrective_action_review('c4000000-0000-4000-8000-000000000022', 'approve', 'looks fine')::text$$) as tp17 \gset
+select pg_temp.try(:tpen, $$update public.corrective_actions set status = 'Closed' where id = 'c4000000-0000-4000-8000-000000000022'$$) as tp18 \gset
+select pg_temp.ok('T09 after a refused exception, the TPE who asked cannot approve the later completion or close directly',
+  left(:'tp13', 3) = 'ok:' and left(:'tp14', 3) = 'ok:' and left(:'tp15', 3) = 'ok:'
+  and (:'tp16') ~ '"can_review": false' and (:'tp16') ~ '"close_blocked_exception_requester": true'
+  and left(:'tp17', 5) = '42501' and :'tp17' like '%You asked for an exception on this action%'
+  and (:'tp18' = 'ok:0' or left(:'tp18', 5) = '42501')
+  and (select status = 'In Progress' and review_status = 'submitted' from public.corrective_actions where id = 'c4000000-0000-4000-8000-000000000022'));
+select pg_temp.try(:tpek, $$select public.corrective_action_review('c4000000-0000-4000-8000-000000000022', 'approve', 'Verified the casing')::text$$) as tp19 \gset
+select pg_temp.ok('T10 another reviewer (a second TPE) closes it on review; history keeps every step',
+  left(:'tp19', 3) = 'ok:'
+  and (select status = 'Closed' and review_status = 'approved' and reviewed_by = :tpek from public.corrective_actions where id = 'c4000000-0000-4000-8000-000000000022')
+  and (select string_agg(event_type, ',' order by id) = 'exception_requested,exception_refused,submitted,approved'
+         from public.corrective_action_review_events where action_id = 'c4000000-0000-4000-8000-000000000022'));
+
+select pg_temp.try(:mgr, $$update public.corrective_actions set exception_evidence = '[]' where id = 'c4000000-0000-4000-8000-000000000021'$$) as tp20 \gset
+select pg_temp.ok('T11 exception evidence cannot be edited directly; the requester check is not callable from the browser',
+  left(:'tp20', 5) = '42501'
+  and not has_function_privilege('authenticated', 'public._ca_is_exception_requester(uuid,uuid)', 'execute')
+  and not has_function_privilege('anon', 'public.corrective_action_request_exception(uuid,text,jsonb)', 'execute')
+  and to_regprocedure('public.corrective_action_request_exception(uuid,text)') is null);
 rollback;

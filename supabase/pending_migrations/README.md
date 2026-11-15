@@ -53,6 +53,10 @@ Apply in this order, each after a rolled-back check on production. Test: `supaba
   review columns on `corrective_actions` (status vocabulary unchanged), append-only
   `corrective_action_review_events`, the submit / review writers, the exception REQUEST and DECISION
   writers (the person who asks can never decide; no company switch relaxes that) and the guard trigger.
+  Round 3 (owner, 2026-11-15): a Tire Planning Engineer may ask for an exception with optional
+  evidence (`exception_evidence`, request writer now `(uuid, text, jsonb)`) only inside their company,
+  country and sites; whoever ever asked for an exception on an action can never decide it or close
+  the action (review approval or direct close), read from the append-only history. Staging T01-T11.
 - `20261116101000_clo_checklist_acknowledge_exception.sql` - depends on the file above. Adds the
   `acknowledged` checklist outcome, `acknowledge_checklist_faults()`, `v_checklist_fault_compliance`,
   append-only `checklist_decision_events`, and per-company extra final signer roles. Contains one

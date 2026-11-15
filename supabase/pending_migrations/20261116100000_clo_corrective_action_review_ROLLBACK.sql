@@ -28,7 +28,7 @@ drop function if exists public.corrective_action_review_guard();
 drop function if exists public.corrective_action_worker_update(uuid, text, jsonb);
 drop function if exists public.corrective_action_submit_completion(uuid, text, jsonb);
 drop function if exists public.corrective_action_review(uuid, text, text);
-drop function if exists public.corrective_action_request_exception(uuid, text);
+drop function if exists public.corrective_action_request_exception(uuid, text, jsonb);
 drop function if exists public.corrective_action_decide_exception(uuid, text, text);
 drop function if exists public.corrective_action_my_permissions(uuid);
 drop function if exists public.get_closure_review_config();
@@ -37,6 +37,7 @@ drop function if exists public.closure_review_settings(uuid);
 drop function if exists public.corrective_action_is_assignee(uuid, uuid);
 drop function if exists public._ca_review_event(public.corrective_actions, text, text, jsonb);
 drop function if exists public._ca_review_load(uuid);
+drop function if exists public._ca_is_exception_requester(uuid, uuid);
 drop function if exists public._ca_clean_photos(jsonb);
 drop table if exists public.corrective_action_review_events;
 drop function if exists public.closure_events_immutable();
@@ -55,6 +56,7 @@ alter table public.corrective_actions
   drop column if exists review_comment,
   drop column if exists exception_requested_by,
   drop column if exists exception_requested_at,
-  drop column if exists exception_reason;
+  drop column if exists exception_reason,
+  drop column if exists exception_evidence;
 
 commit;

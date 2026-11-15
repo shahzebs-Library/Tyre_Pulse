@@ -10,11 +10,11 @@
  */
 import { supabase, unwrap, isMissingColumn, isMissingRelation, ServiceError, toServiceError } from './_client'
 import {
-  accessFromServer, withDefaults, completionProblem, reviewProblem, exceptionProblem, exceptionDecisionProblem,
+  accessFromServer, withDefaults, completionProblem, reviewProblem, exceptionProblem, exceptionDecisionProblem, evidenceProblem,
   CHECKLIST_ACKNOWLEDGED,
 } from '../closureWorkflow'
 
-const REVIEW_COLS = 'id,review_status,submitted_by,submitted_at,completion_note,completion_photos,reviewed_by,reviewed_at,review_comment,exception_requested_by,exception_requested_at,exception_reason'
+const REVIEW_COLS = 'id,review_status,submitted_by,submitted_at,completion_note,completion_photos,reviewed_by,reviewed_at,review_comment,exception_requested_by,exception_requested_at,exception_reason,exception_evidence'
 const EVENT_COLS = 'id,action_id,event_type,actor_id,actor_role,actor_name,note,evidence,linked,created_at'
 const NOT_ON = 'Closure review is not switched on for this system yet.'
 
@@ -114,12 +114,16 @@ export async function reviewAction(actionId, decision, comment = '') {
 
 /**
  * Ask for a documented exception. This does NOT close the action: a different
- * authorised person approves or refuses the request.
+ * authorised person approves or refuses the request. Optional supporting evidence
+ * (photographs, at most 6) is stored with the request. The database checks the
+ * caller's company, country and sites, and the person who asks never decides or
+ * closes the action.
  */
-export async function requestException(actionId, reason) {
-  const problem = exceptionProblem(reason)
+export async function requestException(actionId, reason, evidence = []) {
+  const problem = exceptionProblem(reason) || evidenceProblem(evidence)
   if (problem) throw new ServiceError(problem)
-  return call('corrective_action_request_exception', { p_id: actionId, p_reason: String(reason).trim() },
+  return call('corrective_action_request_exception',
+    { p_id: actionId, p_reason: String(reason).trim(), p_evidence: Array.isArray(evidence) ? evidence : [] },
     'Could not record the exception request.')
 }
 

@@ -34,6 +34,8 @@ export const MESSAGE_KEYS = Object.freeze({
   'You submitted this action, so another reviewer has to decide it.': 'selfReview',
   'You submitted this action, so another reviewer has to close it.': 'selfClose',
   'You asked for this exception, so another authorised person has to decide it.': 'selfExceptionAsked',
+  'You asked for an exception on this action, so another authorised person has to close it.': 'selfExceptionClose',
+  'Photographs must be a list.': 'photosList',
   'You submitted this action, so another authorised person has to decide its exception.': 'selfExceptionSubmitted',
   'Only the person this action is assigned to can update it.': 'onlyAssigneeUpdate',
   'Only the person this action is assigned to can submit it for review.': 'onlyAssigneeSubmit',

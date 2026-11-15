@@ -59,7 +59,11 @@
       "exception": "Closed by documented exception",
       "direct_closed": "Closed directly by a reviewer",
       "reopened": "Reopened"
-    }
+    },
+    "exceptionRequestedByMe": "You asked for this exception. Another authorised person decides it and closes the action.",
+    "closeBlockedExceptionRequester": "You asked for an exception on this action, so another reviewer has to approve the completion.",
+    "exceptionEvidenceLabel": "Supporting evidence (optional)",
+    "exceptionEvidence": "Evidence attached to the request"
   },
   "fault": {
     "title": "Recorded faults ({count})",
@@ -152,6 +156,8 @@
     "ackException": "Acknowledged, compliant by exception",
     "ackResolved": "Acknowledged, faults resolved",
     "notPhoto": "That file is not a photograph.",
-    "exceptionPendingClose": "An exception has been requested on this action. Approve or refuse the exception first."
+    "exceptionPendingClose": "An exception has been requested on this action. Approve or refuse the exception first.",
+    "selfExceptionClose": "You asked for an exception on this action, so another authorised person has to close it.",
+    "photosList": "Photographs must be a list."
   }
 }

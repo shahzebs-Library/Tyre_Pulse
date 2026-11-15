@@ -93,6 +93,14 @@ export function exceptionProblem(reason) {
     : null
 }
 
+/** Why exception evidence cannot be sent, or null when it can (optional, at most 6 photographs). */
+export function evidenceProblem(evidence) {
+  if (evidence == null) return null
+  if (!Array.isArray(evidence)) return 'Photographs must be a list.'
+  if (evidence.length > 6) return 'Attach at most 6 photographs.'
+  return null
+}
+
 /** Why an exception decision cannot be sent, or null when it can. */
 export function exceptionDecisionProblem(decision, comment) {
   if (decision !== 'approve' && decision !== 'refuse') return 'Choose approve or refuse.'
@@ -119,13 +127,18 @@ export function actionAccess(action, { userId, role, isSuperAdmin = false, isAss
   // The person who asked for the exception, or who submitted the completion, never decides it.
   // No company setting relaxes this, and it applies to a super admin too.
   const excSelf = !!userId && (action?.exception_requested_by === userId || action?.submitted_by === userId)
+  // Independent approval: whoever asked for an exception on this action never closes it.
+  // (The database also reads its history; this mirror only sees the latest request.)
+  const excAsker = !!userId && action?.exception_requested_by === userId
   return {
     isAssignee: !!isAssignee,
     isReviewer: reviewer,
     canUpdate: !closed && !waiting && (!!isAssignee || reviewer),
     canSubmit: !closed && !waiting && (!!isAssignee || reviewer),
-    canReview: !closed && inReview && reviewer && (!self || cfg.ca_allow_self_review),
+    canReview: !closed && inReview && reviewer && (!self || cfg.ca_allow_self_review) && !excAsker,
     selfReviewBlocked: inReview && reviewer && self && !cfg.ca_allow_self_review,
+    closeBlockedExceptionRequester: !closed && inReview && reviewer && excAsker,
+    exceptionRequestedByMe: !closed && excPending && excAsker,
     canRequestException: !closed && !excPending && (!!isAssignee || reviewer || exceptionRole),
     canDecideException: !closed && excPending && exceptionRole && !excSelf,
     exceptionSelfBlocked: !closed && excPending && exceptionRole && excSelf,
@@ -145,6 +158,8 @@ export function accessFromServer(payload) {
     canSubmit: p.can_submit === true,
     canReview: p.can_review === true,
     selfReviewBlocked: p.self_review_blocked === true,
+    closeBlockedExceptionRequester: p.close_blocked_exception_requester === true,
+    exceptionRequestedByMe: p.exception_requested_by_me === true,
     canRequestException: p.can_request_exception === true,
     canDecideException: p.can_decide_exception === true,
     exceptionSelfBlocked: p.exception_self_blocked === true,
@@ -156,7 +171,8 @@ export function accessFromServer(payload) {
 /** True when the panel has nothing this person can do on the action. */
 export function hasNoAction(access) {
   const a = access || {}
-  return !(a.canSubmit || a.canReview || a.selfReviewBlocked || a.canRequestException || a.canDecideException || a.exceptionSelfBlocked)
+  return !(a.canSubmit || a.canReview || a.selfReviewBlocked || a.canRequestException || a.canDecideException
+    || a.exceptionSelfBlocked || a.closeBlockedExceptionRequester)
 }
 
 export const DEFAULT_CONFIG = Object.freeze({

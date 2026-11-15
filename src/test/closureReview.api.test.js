@@ -83,7 +83,7 @@ describe('writes go through the database functions only', () => {
     await expect(requestException('a1', 'short')).rejects.toThrow(/10 characters/)
     h.rpc.mockResolvedValue({ data: { ok: true, review_status: 'exception_requested' }, error: null })
     await requestException('a1', 'Vehicle sold on 1 December')
-    expect(h.rpc).toHaveBeenCalledWith('corrective_action_request_exception', { p_id: 'a1', p_reason: 'Vehicle sold on 1 December' })
+    expect(h.rpc).toHaveBeenCalledWith('corrective_action_request_exception', { p_id: 'a1', p_reason: 'Vehicle sold on 1 December', p_evidence: [] })
     expect(h.rpc.mock.calls.some((c) => /record_exception/.test(c[0]))).toBe(false)
     expect(h.from).not.toHaveBeenCalled()
   })

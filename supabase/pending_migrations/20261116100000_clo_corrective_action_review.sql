@@ -18,6 +18,16 @@
 --      exception) or refuses (action returns to the worker). The person who asked, and the
 --      person who submitted the completion, can never decide it. This rule has NO company
 --      switch: ca_allow_self_review does not apply to exceptions, and it binds super admins too.
+--   2c. ASK FOR EXCEPTION BY A TIRE PLANNING ENGINEER (owner decision 2026-11-15, round 3).
+--      A Tire Planning Engineer (a reviewer role) may ask for an exception and attach supporting
+--      evidence (photographs or stored file references in exception_evidence, the same format as
+--      completion photographs; the written reason is itself evidence). Only on actions inside
+--      their own company, country scope and site scope ('ALL' sentinel respected): the request
+--      writer loads the action through _ca_review_load, which applies the three walls. They
+--      can never decide that exception, and a person who has EVER asked for an exception on an
+--      action can never close that action (review approval or direct close), whatever their
+--      role and whatever the company settings. Independent approval is mandatory. This is
+--      read from the append-only history, so a later request by someone else does not clear it.
 --   3. corrective_action_review_events: append-only history. Reviewer, time, evidence,
 --      comment and a snapshot of the linked asset, tyre, inspection/checklist and job card.
 --      UPDATE and DELETE are refused for everyone, including definer functions.
@@ -51,7 +61,7 @@
 --   \i this file
 --   select count(*), md5(string_agg((to_jsonb(c) - array['review_status','submitted_by','submitted_at',
 --     'completion_note','completion_photos','reviewed_by','reviewed_at','review_comment',
---     'exception_requested_by','exception_requested_at','exception_reason'])::text, '' order by id))
+--     'exception_requested_by','exception_requested_at','exception_reason','exception_evidence'])::text, '' order by id))
 --     from public.corrective_actions c;                                                                      -- same
 --   select has_function_privilege('anon', 'public.corrective_action_review(uuid,text,text)', 'execute');    -- f
 --   rollback;
@@ -60,18 +70,18 @@
 --   drop trigger if exists trg_ca_review_guard on public.corrective_actions;
 --   drop function if exists public.corrective_action_review_guard(), public.corrective_action_worker_update(uuid,text,jsonb),
 --     public.corrective_action_submit_completion(uuid,text,jsonb), public.corrective_action_review(uuid,text,text),
---     public.corrective_action_request_exception(uuid,text), public.corrective_action_decide_exception(uuid,text,text),
+--     public.corrective_action_request_exception(uuid,text,jsonb), public.corrective_action_decide_exception(uuid,text,text),
 --     public.corrective_action_my_permissions(uuid),
 --     public.get_closure_review_config(), public.save_closure_review_config(jsonb), public.closure_review_settings(uuid),
 --     public.closure_role_in(text,text[]), public.corrective_action_is_assignee(uuid, uuid),
 --     public._ca_review_event(public.corrective_actions,text,text,jsonb), public._ca_review_load(uuid),
---     public._ca_clean_photos(jsonb), public.closure_events_immutable();
+--     public._ca_clean_photos(jsonb), public._ca_is_exception_requester(uuid,uuid), public.closure_events_immutable();
 --   drop table if exists public.corrective_action_review_events, public.closure_review_config;
 --   alter table public.corrective_actions drop column if exists review_status, drop column if exists submitted_by,
 --     drop column if exists submitted_at, drop column if exists completion_note, drop column if exists completion_photos,
 --     drop column if exists reviewed_by, drop column if exists reviewed_at, drop column if exists review_comment,
 --     drop column if exists exception_requested_by, drop column if exists exception_requested_at,
---     drop column if exists exception_reason;
+--     drop column if exists exception_reason, drop column if exists exception_evidence;
 -- =====================================================================================
 
 -- ---------------------------------------------------------------- 1. per-company config
@@ -203,7 +213,8 @@ alter table public.corrective_actions
   add column if not exists review_comment    text,
   add column if not exists exception_requested_by uuid,
   add column if not exists exception_requested_at timestamptz,
-  add column if not exists exception_reason       text;
+  add column if not exists exception_reason       text,
+  add column if not exists exception_evidence     jsonb;
 alter table public.corrective_actions
   add constraint corrective_actions_review_status_chk
   check (review_status is null or review_status in ('submitted','returned','approved','exception_requested','exception'));
@@ -266,6 +277,19 @@ begin
 end $$;
 revoke all on function public._ca_review_event(public.corrective_actions, text, text, jsonb) from public;
 revoke all on function public._ca_review_event(public.corrective_actions, text, text, jsonb) from anon, authenticated;
+
+-- Has this person ever asked for an exception on this action? Read from the append-only
+-- history (and the live column), so no later write can erase it. Such a person never closes
+-- the action and never decides its exception: independent approval is mandatory.
+create or replace function public._ca_is_exception_requester(p_action uuid, p_user uuid)
+returns boolean language sql stable security definer set search_path to 'public' as $$
+  select p_user is not null and (
+    exists (select 1 from public.corrective_actions a where a.id = p_action and a.exception_requested_by = p_user)
+    or exists (select 1 from public.corrective_action_review_events e
+                where e.action_id = p_action and e.event_type = 'exception_requested' and e.actor_id = p_user));
+$$;
+revoke all on function public._ca_is_exception_requester(uuid, uuid) from public;
+revoke all on function public._ca_is_exception_requester(uuid, uuid) from anon, authenticated;
 
 -- ---------------------------------------------------------------- 4. who is the assigned worker
 -- The person the Action Center mirror is assigned to (the only place a user id is stored for
@@ -335,7 +359,7 @@ create or replace function public.corrective_action_my_permissions(p_id uuid)
 returns jsonb language plpgsql stable security definer set search_path to 'public' as $$
 declare a public.corrective_actions; c public.closure_review_config; v_role text := public.get_my_role();
   v_assignee boolean; v_reviewer boolean; v_self boolean; v_closed boolean;
-  v_exc_role boolean; v_exc_pending boolean; v_exc_self boolean; v_waiting boolean;
+  v_exc_role boolean; v_exc_pending boolean; v_exc_self boolean; v_waiting boolean; v_exc_asker boolean;
 begin
   if auth.uid() is null or public.app_is_active() is not true then
     return jsonb_build_object('ok', false);
@@ -354,14 +378,19 @@ begin
   -- The person who asked for the exception, or who submitted the completion, never decides it.
   v_exc_self := a.exception_requested_by is not distinct from auth.uid() or a.submitted_by is not distinct from auth.uid();
   v_waiting := coalesce(a.review_status, '') in ('submitted', 'exception_requested');
+  -- Anyone who ever asked for an exception on this action never closes it.
+  v_exc_asker := public._ca_is_exception_requester(a.id, auth.uid());
   return jsonb_build_object(
     'ok', true,
     'is_assignee', v_assignee,
     'is_reviewer', v_reviewer,
     'can_update', not v_closed and not v_waiting and (v_assignee or v_reviewer),
     'can_submit', not v_closed and not v_waiting and (v_assignee or v_reviewer),
-    'can_review', not v_closed and a.review_status = 'submitted' and v_reviewer and (not v_self or c.ca_allow_self_review),
+    'can_review', not v_closed and a.review_status = 'submitted' and v_reviewer and (not v_self or c.ca_allow_self_review)
+                  and not v_exc_asker,
     'self_review_blocked', a.review_status = 'submitted' and v_reviewer and v_self and not c.ca_allow_self_review,
+    'close_blocked_exception_requester', not v_closed and a.review_status = 'submitted' and v_reviewer and v_exc_asker,
+    'exception_requested_by_me', not v_closed and v_exc_pending and a.exception_requested_by is not distinct from auth.uid(),
     'can_request_exception', not v_closed and not v_exc_pending and (v_assignee or v_reviewer or v_exc_role),
     'can_decide_exception', not v_closed and v_exc_pending and v_exc_role and not v_exc_self,
     'exception_self_blocked', not v_closed and v_exc_pending and v_exc_role and v_exc_self,
@@ -469,6 +498,9 @@ begin
   if a.submitted_by = auth.uid() and not c.ca_allow_self_review then
     raise exception 'You submitted this action, so another reviewer has to decide it.' using errcode = '42501';
   end if;
+  if v_decision = 'approve' and public._ca_is_exception_requester(a.id, auth.uid()) then
+    raise exception 'You asked for an exception on this action, so another authorised person has to close it.' using errcode = '42501';
+  end if;
   if v_decision = 'return' and length(btrim(coalesce(p_comment, ''))) < 5 then
     raise exception 'Say what has to be corrected before returning the action.' using errcode = '22023';
   end if;
@@ -498,9 +530,13 @@ revoke all on function public.corrective_action_review(uuid, text, text) from an
 grant execute on function public.corrective_action_review(uuid, text, text) to authenticated;
 
 -- An exception is a REQUEST. Asking never closes the action.
-create or replace function public.corrective_action_request_exception(p_id uuid, p_reason text)
+-- The caller supplies a written reason (at least 10 characters) and, optionally, supporting
+-- evidence: photographs or stored file references, cleaned exactly like completion photographs.
+-- _ca_review_load applies the company, country and site walls before anything else.
+create or replace function public.corrective_action_request_exception(p_id uuid, p_reason text, p_evidence jsonb default '[]'::jsonb)
 returns jsonb language plpgsql security definer set search_path to 'public' as $$
 declare a public.corrective_actions; c public.closure_review_config; v_role text := public.get_my_role();
+  v_evidence jsonb;
 begin
   a := public._ca_review_load(p_id);
   c := public.closure_review_settings(a.organisation_id);
@@ -515,20 +551,23 @@ begin
   if length(btrim(coalesce(p_reason, ''))) < 10 then
     raise exception 'An exception needs a written reason of at least 10 characters.' using errcode = '22023';
   end if;
+  v_evidence := public._ca_clean_photos(p_evidence);
   perform set_config('tp.ca_review', 'on', true);
   update public.corrective_actions
      set status = case when status = 'Open' then 'In Progress' else status end,
          review_status = 'exception_requested',
          exception_requested_by = auth.uid(), exception_requested_at = now(), exception_reason = btrim(p_reason),
+         exception_evidence = v_evidence,
          reviewed_by = null, reviewed_at = null, review_comment = null
    where id = a.id;
   perform set_config('tp.ca_review', '', true);
-  perform public._ca_review_event(a, 'exception_requested', p_reason, coalesce(a.completion_photos, '[]'::jsonb));
+  perform public._ca_review_event(a, 'exception_requested', p_reason,
+    case when jsonb_array_length(v_evidence) > 0 then v_evidence else coalesce(a.completion_photos, '[]'::jsonb) end);
   return jsonb_build_object('ok', true, 'review_status', 'exception_requested');
 end $$;
-revoke all on function public.corrective_action_request_exception(uuid, text) from public;
-revoke all on function public.corrective_action_request_exception(uuid, text) from anon;
-grant execute on function public.corrective_action_request_exception(uuid, text) to authenticated;
+revoke all on function public.corrective_action_request_exception(uuid, text, jsonb) from public;
+revoke all on function public.corrective_action_request_exception(uuid, text, jsonb) from anon;
+grant execute on function public.corrective_action_request_exception(uuid, text, jsonb) to authenticated;
 
 -- Deciding an exception. The person who asked for it, and the person who submitted the
 -- completion, can NEVER decide it. No company setting relaxes this and it binds super admins.
@@ -594,11 +633,11 @@ begin
   -- Review columns belong to the writers.
   if (new.review_status, new.submitted_by, new.submitted_at, new.completion_note, new.completion_photos,
       new.reviewed_by, new.reviewed_at, new.review_comment,
-      new.exception_requested_by, new.exception_requested_at, new.exception_reason)
+      new.exception_requested_by, new.exception_requested_at, new.exception_reason, new.exception_evidence)
      is distinct from
      (old.review_status, old.submitted_by, old.submitted_at, old.completion_note, old.completion_photos,
       old.reviewed_by, old.reviewed_at, old.review_comment,
-      old.exception_requested_by, old.exception_requested_at, old.exception_reason) then
+      old.exception_requested_by, old.exception_requested_at, old.exception_reason, old.exception_evidence) then
     raise exception 'Review details are recorded by the review steps and cannot be edited directly.' using errcode = '42501';
   end if;
 
@@ -615,6 +654,10 @@ begin
     end if;
     if not c.ca_allow_direct_close then
       raise exception 'Close this action through review: submit completion evidence, then approve it.' using errcode = '42501';
+    end if;
+    -- Independent approval: a person who asked for an exception on this action never closes it.
+    if public._ca_is_exception_requester(old.id, auth.uid()) then
+      raise exception 'You asked for an exception on this action, so another authorised person has to close it.' using errcode = '42501';
     end if;
     -- A requested exception is decided by the exception step only, never through the status field.
     if old.review_status = 'exception_requested' then

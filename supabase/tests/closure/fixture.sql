@@ -6,7 +6,7 @@ begin;
 insert into public.custom_roles (organisation_id, name, description, active)
 select o, r, 'Synthetic role for closure tests', true
   from (values ('00000000-0000-0000-0000-000000000001'::uuid), ('bbbbbbbb-0000-4000-8000-000000000002'::uuid)) org(o),
-       (values ('Tyre Data Collector'), ('Workshop Supervisor'), ('Workshop Maintenance Area Manager')) role(r)
+       (values ('Tyre Data Collector'), ('Workshop Supervisor'), ('Workshop Maintenance Area Manager'), ('Tire Planning Engineer')) role(r)
  where not exists (select 1 from public.custom_roles c where c.name = r and c.organisation_id = o);
 
 create temp table clo_users (id uuid, username text, role text, org uuid, country text, sites text[]) on commit drop;
@@ -17,7 +17,10 @@ insert into clo_users values
  ('c1000000-0000-4000-8000-000000000004','clo.sup.east','Workshop Supervisor','00000000-0000-0000-0000-000000000001','KSA','{ALPHA EAST PLANT}'),
  ('c1000000-0000-4000-8000-000000000005','clo.areamgr','Workshop Maintenance Area Manager','00000000-0000-0000-0000-000000000001','KSA','{ALL}'),
  ('c1000000-0000-4000-8000-000000000006','clo.sup.uae','Workshop Supervisor','00000000-0000-0000-0000-000000000001','UAE','{ALL}'),
- ('c1000000-0000-4000-8000-000000000007','clo.beta.sup','Workshop Supervisor','bbbbbbbb-0000-4000-8000-000000000002','KSA','{ALL}');
+ ('c1000000-0000-4000-8000-000000000007','clo.beta.sup','Workshop Supervisor','bbbbbbbb-0000-4000-8000-000000000002','KSA','{ALL}'),
+ -- Tire Planning Engineers: one scoped to one KSA site, one to every KSA site
+ ('c1000000-0000-4000-8000-000000000008','clo.tpe.north','Tire Planning Engineer','00000000-0000-0000-0000-000000000001','KSA','{ALPHA NORTH PLANT}'),
+ ('c1000000-0000-4000-8000-000000000009','clo.tpe.ksa','Tire Planning Engineer','00000000-0000-0000-0000-000000000001','KSA','{ALL}');
 
 insert into auth.users (id, instance_id, aud, role, email, created_at, updated_at)
 select id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
@@ -83,11 +86,18 @@ values
  ('c4000000-0000-4000-8000-000000000003','00000000-0000-0000-0000-000000000001','Synthetic: closed long ago','Low','Closed','ALPHA NORTH PLANT','KSA','KSA','TM004',null,'af52a86f-2c24-5ce2-a00d-7ac6ca5d715f','af52a86f-2c24-5ce2-a00d-7ac6ca5d715f',now() - interval '40 days','manual'),
  ('c4000000-0000-4000-8000-000000000004','00000000-0000-0000-0000-000000000001','Synthetic: UAE action','Medium','Open','ALPHA COAST PLANT','UAE','UAE','TM002',null,'af52a86f-2c24-5ce2-a00d-7ac6ca5d715f',null,null,'manual'),
  ('c4000000-0000-4000-8000-000000000005','bbbbbbbb-0000-4000-8000-000000000002','Synthetic: Beta action','Medium','Open','BETA DEPOT ONE','KSA','KSA','BT001',null,'9c149942-c3b2-54c6-a6e8-c34b2933bb3c',null,null,'manual'),
- ('c4000000-0000-4000-8000-000000000006','00000000-0000-0000-0000-000000000001','Synthetic: second north action','Medium','Open','ALPHA NORTH PLANT','KSA','KSA','TM004',null,'af52a86f-2c24-5ce2-a00d-7ac6ca5d715f',null,null,'manual');
+ ('c4000000-0000-4000-8000-000000000006','00000000-0000-0000-0000-000000000001','Synthetic: second north action','Medium','Open','ALPHA NORTH PLANT','KSA','KSA','TM004',null,'af52a86f-2c24-5ce2-a00d-7ac6ca5d715f',null,null,'manual'),
+ -- Tire Planning Engineer exception cases
+ ('c4000000-0000-4000-8000-000000000021','00000000-0000-0000-0000-000000000001','Synthetic: TPE north A','Medium','Open','ALPHA NORTH PLANT','KSA','KSA','TM001','SYN-0021','af52a86f-2c24-5ce2-a00d-7ac6ca5d715f',null,null,'manual'),
+ ('c4000000-0000-4000-8000-000000000022','00000000-0000-0000-0000-000000000001','Synthetic: TPE north B','Medium','Open','ALPHA NORTH PLANT','KSA','KSA','TM004',null,'af52a86f-2c24-5ce2-a00d-7ac6ca5d715f',null,null,'manual'),
+ ('c4000000-0000-4000-8000-000000000023','00000000-0000-0000-0000-000000000001','Synthetic: TPE east','Medium','Open','ALPHA EAST PLANT','KSA','KSA','TM007',null,'af52a86f-2c24-5ce2-a00d-7ac6ca5d715f',null,null,'manual'),
+ ('c4000000-0000-4000-8000-000000000024','00000000-0000-0000-0000-000000000001','Synthetic: TPE UAE','Medium','Open','ALPHA COAST PLANT','UAE','UAE','TM002',null,'af52a86f-2c24-5ce2-a00d-7ac6ca5d715f',null,null,'manual'),
+ ('c4000000-0000-4000-8000-000000000025','bbbbbbbb-0000-4000-8000-000000000002','Synthetic: TPE Beta','Medium','Open','BETA DEPOT ONE','KSA','KSA','BT001',null,'9c149942-c3b2-54c6-a6e8-c34b2933bb3c',null,null,'manual');
 
 -- Assign through the Action Center mirror, as the product does.
 update public.action_items set assigned_user_id = 'c1000000-0000-4000-8000-000000000001', assigned_to = 'Test clo.collector'
- where source in ('corrective:c4000000-0000-4000-8000-000000000001','corrective:c4000000-0000-4000-8000-000000000004','corrective:c4000000-0000-4000-8000-000000000005');
+ where source in ('corrective:c4000000-0000-4000-8000-000000000001','corrective:c4000000-0000-4000-8000-000000000004','corrective:c4000000-0000-4000-8000-000000000005',
+                 'corrective:c4000000-0000-4000-8000-000000000021','corrective:c4000000-0000-4000-8000-000000000022');
 update public.action_items set assigned_user_id = 'c1000000-0000-4000-8000-000000000003', assigned_to = 'Test clo.sup.north'
  where source = 'corrective:c4000000-0000-4000-8000-000000000006';
 commit;

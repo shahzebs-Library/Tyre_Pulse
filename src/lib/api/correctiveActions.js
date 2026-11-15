@@ -58,6 +58,7 @@ export const CLOSURE_STATUS_REFUSALS = Object.freeze([
   'Closing an action needs a reviewer. Submit your completion evidence and a reviewer will close it.',
   'Close this action through review: submit completion evidence, then approve it.',
   'You submitted this action, so another reviewer has to close it.',
+  'You asked for an exception on this action, so another authorised person has to close it.',
   'Only a reviewer can reopen a closed action.',
   'Review details are recorded by the review steps and cannot be edited directly.',
 ])

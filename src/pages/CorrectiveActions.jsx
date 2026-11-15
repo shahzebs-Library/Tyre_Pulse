@@ -17,8 +17,12 @@ import { formatDate } from '../lib/formatters'
 import { RISK_BADGE_DARK } from '../lib/formatters'
 import { useLanguage } from '../contexts/LanguageContext'
 import { toUserMessage } from '../lib/safeError'
+import { closureText } from '../lib/closureText'
 import { compareValues } from '../lib/consoleTable'
 import { colorAt } from '../lib/reportColors'
+import ClosureReviewPanel from '../components/correctiveActions/ClosureReviewPanel'
+import ClosureReviewSettings from '../components/correctiveActions/ClosureReviewSettings'
+import { listReviewQueue } from '../lib/api/closureReview'
 import {
   overdueDays, daysOpen, avgDaysToClose as avgDaysToCloseAt, matchesSearch, overdueRate,
   rootCauseDistribution, siteBreakdown, sortActions, actionRows, actionExportRows,
@@ -230,6 +234,10 @@ export default function CorrectiveActions() {
   const [priorityFilter, setPriorityFilter] = useState('')
   const [siteFilter, setSiteFilter]       = useState('')
   const [overdueOnly, setOverdueOnly]     = useState(false)
+  // Actions whose completion has been submitted and is waiting for a reviewer.
+  // `null` until the review drafts exist in the database: the control is then not offered.
+  const [reviewIds, setReviewIds]         = useState(null)
+  const [reviewOnly, setReviewOnly]       = useState(false)
   const [sortBy, setSortBy]               = useState('created_at')
 
   // UI
@@ -253,6 +261,11 @@ export default function CorrectiveActions() {
       const data = await correctiveActions.listCorrectiveActions({ country: activeCountry })
       setActions(data ?? [])
       setLoadError(null)
+      // The queue is extra information: a failure to read it never hides the register.
+      try {
+        const q = await listReviewQueue({ country: activeCountry })
+        setReviewIds(q.provisioned ? new Set(q.rows.map(r => r.id)) : null)
+      } catch { setReviewIds(null) }
     } catch (err) {
       setLoadError(toUserMessage(err, 'Could not load corrective actions.'))
       if (!quiet) setActions([])
@@ -287,8 +300,12 @@ export default function CorrectiveActions() {
     if (siteFilter) out = out.filter(a => a.site === siteFilter)
     if (skip !== 'overdue' && overdueOnly) out = out.filter(a => overdueDays(a.due_date, a.status, now) !== null)
     if (search) out = out.filter(a => matchesSearch(a, search))
+    if (skip !== 'review' && reviewOnly && reviewIds) out = out.filter(a => reviewIds.has(a.id))
     return out
-  }, [statusFilter, priorityFilter, siteFilter, overdueOnly, search, now])
+  }, [statusFilter, priorityFilter, siteFilter, overdueOnly, search, now, reviewOnly, reviewIds])
+  const reviewCount = useMemo(() =>
+    (reviewIds ? narrow(actions, 'review').filter(a => reviewIds.has(a.id)).length : 0),
+    [actions, narrow, reviewIds])
 
   // The status tiles hold out the status filter; their denominator is the same
   // base, so the breakdown bar's percentages add up to what the tiles show.
@@ -320,8 +337,8 @@ export default function CorrectiveActions() {
   const tableRows = useMemo(() => actionRows(filtered, now), [filtered, now])
   const actionsPager = usePagedRows(filtered)
 
-  const hasFilters = !!(search || statusFilter || priorityFilter || siteFilter || overdueOnly)
-  function clearAll() { setSearch(''); setStatusFilter(''); setPriorityFilter(''); setSiteFilter(''); setOverdueOnly(false) }
+  const hasFilters = !!(search || statusFilter || priorityFilter || siteFilter || overdueOnly || reviewOnly)
+  function clearAll() { setSearch(''); setStatusFilter(''); setPriorityFilter(''); setSiteFilter(''); setOverdueOnly(false); setReviewOnly(false) }
 
   // ── Mutations ─────────────────────────────────────────────────────────────────
   function startAdd() {
@@ -366,7 +383,7 @@ export default function CorrectiveActions() {
     try {
       if (editId) await correctiveActions.updateCorrectiveAction(editId, payload)
       else await correctiveActions.createCorrectiveAction(payload)
-    } catch (err) { setFormError(toUserMessage(err, 'Something went wrong. Please try again.')); setSaving(false); return }
+    } catch (err) { setFormError(closureText(t, toUserMessage(err, 'Something went wrong. Please try again.'))); setSaving(false); return }
     setShowForm(false)
     load(true)
     setSaving(false)
@@ -382,7 +399,7 @@ export default function CorrectiveActions() {
           : { closed_by: null, closed_at: null }),
       })
     } catch (err) {
-      setActionError(toUserMessage(err, 'The status could not be changed.'))
+      setActionError(closureText(t, toUserMessage(err, 'The status could not be changed.')))
     }
     load(true)
   }
@@ -598,6 +615,14 @@ export default function CorrectiveActions() {
           ))}
         </div>
 
+        {reviewIds && (
+          <button type="button" onClick={() => setReviewOnly(v => !v)} aria-pressed={reviewOnly}
+            className={`px-3 rounded text-xs font-medium border transition-colors ${ctrlCls} ${
+              reviewOnly ? 'bg-amber-500/10 border-amber-500/40 text-amber-400 ring-1 ring-[var(--accent)]' : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border)] hover:text-[var(--text-primary)]'
+            }`}
+          >{t('closure.review.waitingFilter')} ({reviewCount})</button>
+        )}
+
         {sites.length > 0 && (
           <label>
             <span className="sr-only">Site</span>
@@ -649,6 +674,8 @@ export default function CorrectiveActions() {
             <FileText size={14} aria-hidden="true" /> {t('correctiveactions.toolbar.pdf')}
           </button>
 
+          <ClosureReviewSettings canEdit={profile?.role === 'Admin' || !!profile?.is_super_admin} />
+
           <button onClick={startAdd} className={`btn-primary inline-flex items-center gap-2 text-sm ${ctrlCls}`}>
             <Plus size={16} aria-hidden="true" /> {t('correctiveactions.toolbar.newAction')}
           </button>
@@ -663,6 +690,7 @@ export default function CorrectiveActions() {
           {priorityFilter && <Chip label={priorityFilter} onRemove={() => setPriorityFilter('')} />}
           {siteFilter     && <Chip label={siteFilter}     onRemove={() => setSiteFilter('')} />}
           {overdueOnly    && <Chip label={t('correctiveactions.filtersBar.overdueOnly')} onRemove={() => setOverdueOnly(false)} />}
+          {reviewOnly     && <Chip label={t('closure.review.waitingFilter')} onRemove={() => setReviewOnly(false)} />}
           {search         && <Chip label={`"${search}"`}  onRemove={() => setSearch('')} />}
           <button onClick={clearAll} className={`text-[var(--text-muted)] hover:text-red-400 transition-colors ml-1 min-h-[32px] px-1 ${FOCUS}`}>
             {t('correctiveactions.filtersBar.clearAll')}
@@ -800,6 +828,13 @@ export default function CorrectiveActions() {
       >
         {formError && (
           <div role="alert" className="bg-red-500/10 border border-red-500/40 text-red-400 rounded-lg px-4 py-2.5 mb-4 text-sm">{formError}</div>
+        )}
+        {editId && (
+          <ClosureReviewPanel
+            key={editId}
+            action={actions.find(x => x.id === editId) || { id: editId }}
+            onChanged={() => load(true)}
+          />
         )}
         <form id="ca-form" onSubmit={save} className="space-y-3">
           <div>

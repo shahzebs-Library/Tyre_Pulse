@@ -27,7 +27,7 @@
     "tyre_life": { "label": "Avg Tyre Life", "description": "Average km per tyre before removal", "short": "Tyre Life" },
     "failure_rate": { "label": "Failure Rate", "description": "High + Critical risk removals", "short": "Failure Rate" },
     "scrap_rate": { "label": "Scrap Rate", "description": "Scrapped vs total tyres removed", "short": "Scrap Rate" },
-    "pressure_compliance": { "label": "Pressure Compliance", "description": "Inspections within ±10% spec", "short": "Pressure" },
+    "pressure_compliance": { "label": "Pressure Consistency", "description": "Readings within 15% of the vehicle median. Not compliance with a target pressure", "short": "Pressure" },
     "inspection_compliance": { "label": "Inspection Compliance", "description": "On-time inspection completion", "short": "Inspection" }
   },
   "ratings": {

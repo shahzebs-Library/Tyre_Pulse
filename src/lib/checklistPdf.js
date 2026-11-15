@@ -21,6 +21,7 @@
  */
 
 import { loadPdf } from './pdfEngine'
+import { acknowledgedText } from './closureWorkflow'
 import {
   resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme, PDF_COLORS, pdfInspectionKit,
 } from './exportUtils'
@@ -319,7 +320,8 @@ export async function renderChecklistPdf({
   }
   if (sub.approval_status && sub.approval_status !== 'not_required') {
     const ap = String(sub.approval_status).replace(/_/g, ' ')
-    meta.push(['Approval', ap.charAt(0).toUpperCase() + ap.slice(1)])
+    // An acknowledged sheet is not an approved one: say what it still needs.
+    meta.push(['Approval', acknowledgedText(sub) || (ap.charAt(0).toUpperCase() + ap.slice(1))])
   }
   // The row already carries the site, and the sheet nearly always asks for it as
   // a field too ("Location"). Printing both put DIRIYAH-G1 on the page twice

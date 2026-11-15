@@ -16,6 +16,8 @@
  * MIRROR: mobile/lib/checklistApproval.ts, pinned by src/test/checklistApproval.test.js.
  */
 
+import { acknowledgedLabel } from '../closureWorkflow'
+
 export const STAGE_SUPERVISOR = 'supervisor'
 export const STAGE_AREA_MANAGER = 'area_manager'
 
@@ -155,6 +157,13 @@ export function statusSummary(template, submission) {
   const st = String(submission?.approval_status ?? '')
   if (st === 'approved') return { tone: 'good', text: 'Closed' }
   if (st === 'rejected') return { tone: 'bad', text: 'Sent back' }
+  // Signed with a fault still recorded (draft 20261116101000). Not 'Closed': the sheet is
+  // compliant only once the fault is resolved or covered by a documented exception.
+  // MOBILE FOLLOW-UP: mobile/lib/checklistApproval.ts statusSummary needs the same branch.
+  if (st === 'acknowledged') {
+    const ack = acknowledgedLabel(submission)
+    return { tone: ack.tone, text: ack.text }
+  }
   if (st === 'pending_area_manager') return { tone: 'warn', text: 'Waiting for the area manager' }
   if (st === 'pending') return { tone: 'warn', text: isTwoStage(template) ? 'Waiting for a supervisor' : 'Waiting for approval' }
   return { tone: 'muted', text: 'No approval needed' }

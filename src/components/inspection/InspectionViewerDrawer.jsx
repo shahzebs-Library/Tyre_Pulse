@@ -23,9 +23,10 @@ import InspectionAnswers from './InspectionAnswers'
  * @param {Function} [props.onEdit]      called with the loaded row to open the editor
  * @param {Function} [props.onDownload]  called with the loaded row to export the PDF
  * @param {boolean}  [props.downloading] true while the caller is building the PDF
+ * @param {Function} [props.extra]       render prop (row) => node shown above the record (the stored-PDF panel)
  */
 export default function InspectionViewerDrawer({
-  inspectionId, onClose, onEdit, onDownload, downloading = false,
+  inspectionId, onClose, onEdit, onDownload, downloading = false, extra = null,
 }) {
   const [row, setRow] = useState(null)
   const panelRef = useRef(null)
@@ -143,6 +144,7 @@ export default function InspectionViewerDrawer({
               meters, signatures. Mounting the media separately here would mean
               any other surface that forgets to do the same silently loses the
               evidence, which is the defect this drawer was built to fix. */}
+          {row && typeof extra === 'function' && <div className="mb-4">{extra(row)}</div>}
           <InspectionAnswers inspectionId={inspectionId} onLoaded={setRow} />
         </div>
       </div>

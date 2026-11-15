@@ -10,6 +10,7 @@ import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import EmailPdfButton from '../components/EmailPdfButton'
 import { toUserMessage } from '../lib/safeError'
+import { resolveWriteAccess, writeRefusalReason } from '../lib/writeAccessRules'
 import { formatCurrency as _fmtCurrencyBase } from '../lib/formatters'
 import { compareValues } from '../lib/consoleTable'
 import { colorAt, withAlpha } from '../lib/reportColors'
@@ -88,6 +89,8 @@ export default function KpiScorecard() {
   const [truncated, setTruncated]     = useState(false)
   const [saving, setSaving]           = useState(false)
   const [saveError, setSaveError]     = useState('')
+  // Mirrors the kpi_targets policies: Manager and Admin may set targets.
+  const canEditTargets = resolveWriteAccess('kpi_targets', { role: profile?.role }).edit
   const [exportError, setExportError] = useState('')
   const [yearFilter, setYearFilter]   = useState(new Date().getFullYear())
   const [countryChip, setCountryChip] = useState('All')
@@ -264,9 +267,11 @@ export default function KpiScorecard() {
       created_by: profile?.id ?? null,
       updated_at: new Date().toISOString(),
     }))
-    // Under RLS a blocked UPDATE affects zero rows silently, so a refusal must be
-    // shown rather than the new values presented as saved.
-    const { error: saveErr } = await kpiTargets.upsertKpiTargets(upserts) || {}
+    // saveKpiTargets updates the stored target or inserts a new one, and returns
+    // a refusal as an error when the database changed nothing (a blocked UPDATE
+    // affects zero rows silently), so the new values are never shown as saved
+    // when they were not.
+    const { error: saveErr } = await kpiTargets.saveKpiTargets(upserts) || {}
     if (saveErr) {
       setSaveError(toUserMessage(saveErr, 'Could not save the targets.'))
       setSaving(false)
@@ -420,7 +425,7 @@ export default function KpiScorecard() {
               })}
             />
             {!editing
-              ? <button type="button" onClick={() => setEditing(true)} className={`btn-secondary text-sm px-3 ${TOUCH}`}>{t('kpiscorecard.actions.editTargets')}</button>
+              ? <button type="button" onClick={() => setEditing(true)} disabled={!canEditTargets} title={canEditTargets ? undefined : writeRefusalReason('kpi_targets', 'edit')} className={`btn-secondary text-sm px-3 ${TOUCH} disabled:opacity-50`}>{t('kpiscorecard.actions.editTargets')}</button>
               : (
                 <div className="flex gap-2">
                   <button type="button" onClick={() => { setEditing(false); setDraftTargets(targets); setSaveError('') }} className={`btn-secondary text-sm px-3 ${TOUCH}`}>{t('kpiscorecard.actions.cancel')}</button>

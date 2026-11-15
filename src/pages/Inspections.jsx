@@ -5,15 +5,14 @@ import useInspectionRegister from '../hooks/useInspectionRegister'
 import { useScrollRestore } from '../hooks/useScrollRestore'
 import { supabase } from '../lib/supabase'
 import * as inspectionsApi from '../lib/api/inspections'
-import { readInspectionAnalysis } from '../lib/api/aiTyreInspection'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import { exportSheetsToExcel, exportToPdf, exportInspectionDetailPdf } from '../lib/exportUtils'
+import { exportSheetsToExcel, exportToPdf, applyExportPolicy, reportDateLabel } from '../lib/exportUtils'
 import { useTenant } from '../contexts/TenantContext'
 import {
   Download, FileText, ClipboardList, Eye, GraduationCap, CheckSquare, X, Share2, ExternalLink,
-  Trash2, AlertTriangle, ChevronDown, Plus, RefreshCw, PenLine,
+  Trash2, AlertTriangle, ChevronDown, Plus, RefreshCw, PenLine, FileArchive,
 } from 'lucide-react'
 import SignaturePad from '../components/SignaturePad'
 import StatusBadge from '../components/ui/StatusBadge'
@@ -26,7 +25,6 @@ import EnterpriseTable from '../components/ui/EnterpriseTable'
 // The shared dialog shell: focus trap, Escape, scroll lock, sized from the viewport.
 import SharedModal from '../components/ui/Modal'
 import { legacyPositionCode } from '../lib/tyrePositions'
-import { displayPositionCode, inspectionTypeHint } from '../lib/tyreBay'
 import { LAYOUT_SLOTS, layoutSlotsFor, resolveLayoutKey, isTyrelessEquipment, layoutForAsset } from '../lib/vehicleTyreLayout'
 import { loadAxleCounts } from '../lib/api/vehicleAxles'
 import { useWakeLock, vibrate } from '../hooks/useWakeLock'
@@ -36,22 +34,28 @@ import { toUserMessage } from '../lib/safeError'
 import * as userSignatureApi from '../lib/api/userSignature'
 import { normaliseSignature } from '../lib/savedSignature'
 import { canSignInspection } from '../lib/inspectionApproval'
-import { resolveStorageUrl } from '../lib/storageRefs'
 import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
-import { resolveInspectionSigners } from '../lib/api/profileDirectory'
 import { shapeRunningLife } from '../lib/tyreRunningLife'
 import { buildAssetFlagMap, inspectionOverview, focusMatches, focusSummary, scopeInspections, vehicleTypesIn, SIGNOFF_FILTERS } from '../lib/inspectionTyreFlags'
-import { positionLabelMap, affectedTyresSummary, affectedTyreRowsForExport } from '../lib/inspectionView'
+import { affectedTyresSummary, affectedTyreRowsForExport } from '../lib/inspectionView'
 import { tyreCompleteness, pendingCodes } from '../lib/tyreCompleteness'
 import { listSites, siteRegionMap, regionForSite, regionsIn } from '../lib/api/sites'
 import { trackingLink } from '../lib/tyreChangeTracking'
-import { getDiagramBg } from '../lib/api/brandLogo'
 import InspectionViewerDrawer from '../components/inspection/InspectionViewerDrawer'
-import { vehiclePhoto } from '../lib/vehiclePhoto'
 import InspectionDiagram from '../components/inspection/InspectionDiagram'
+import { useInspectionPdfRenderer } from '../components/inspections/useInspectionPdfRenderer'
+import StoredPdfPanel from '../components/pdf/StoredPdfPanel'
+import PdfSettingsPanel from '../components/pdf/PdfSettingsPanel'
+import { getOrCreatePdf, deliverPdf, saveBlob, authorizeBulk, sweepPdfRetention } from '../lib/pdfCache/service'
+import { inspectionPdfRequest } from '../lib/pdfCache/reportRequests'
+import { REPORT_TYPES } from '../lib/pdfCache/templates'
+import { buildPdfZip, resolveBulkLimit, DEFAULT_BULK_LIMIT } from '../lib/pdfCache/bulkZip'
+import { startExportTask } from '../lib/pdfCache/exportTasks'
+import { listPendingPdfRequests, closePdfRequest, recordPdfDownload, getPdfSettings } from '../lib/api/pdfCache'
+import { configNum } from '../lib/api/systemConfig'
 import { buildApprovalEmailHtml } from '../lib/inspectionApprovalEmail'
 import { readFunctionError } from '../lib/emailService'
-import { brandingForPdf, buildChecklistReportPdf, checklistReportFileName } from '../lib/inspectionChecklistReport'
+import { buildChecklistReportPdf, checklistReportFileName } from '../lib/inspectionChecklistReport'
 import {
   toList, fromList, deriveRegisterRows, tabCounts, rowsForTab, registerKpis,
   dbInspectionType, inferVehicleTypeFromAsset,
@@ -122,6 +126,7 @@ export default function Inspections() {
   const [searchParams, setSearchParams] = useSearchParams()
   const isTyreMan = profile?.role === 'Tyre Man'
   const isAdmin = isSuperAdmin || (profile?.role || '').toLowerCase() === 'admin'
+  const isElevatedRole = isAdmin || ['manager', 'director'].includes((profile?.role || '').toLowerCase())
   /**
    * WHO MAY SIGN OFF AN INSPECTION.
    *
@@ -352,10 +357,9 @@ export default function Inspections() {
   // diagram) is replaced by the saved-confirmation view.
   const checklistPdfDiagramRef = useRef(null)
   const [clSelectedPos, setClSelectedPos] = useState(null)
-  // Row PDF export: render the live diagram offscreen, then capture its SVG.
-  const [pdfRow, setPdfRow] = useState(null)
-  const pdfDiagramRef = useRef(null)
-  const pdfBoardRef = useRef(null)
+  // Row PDF export. The report is drawn by useInspectionPdfRenderer (off-screen live
+  // diagram + board, same generator as before) and stored once by the PDF cache.
+  const { render: renderInspectionPdf, hosts: pdfHosts, canRender: canRenderPdf } = useInspectionPdfRenderer({ branding, company })
   // Read a record in place. Holds an id, not a row: the drawer loads the full
   // record (signatures included, which the register list no longer carries).
   const [viewId, setViewId] = useState(null)
@@ -367,104 +371,72 @@ export default function Inspections() {
   }, [searchParams])
   const [pdfBusyId, setPdfBusyId] = useState(null)
   const [pdfError, setPdfError] = useState('')
+  // A plain note about the copy just handed over (for example: not saved for reuse).
+  const [pdfNote, setPdfNote] = useState('')
+  // Bumped after a download or regenerate so the stored-PDF panel re-reads its state.
+  const [pdfRev, setPdfRev] = useState(0)
   // An export failure is reported on its own line, not through the approval modal's message slot.
   const [exportError, setExportError] = useState('')
 
   /**
-   * Export one inspection's report.
+   * The stored PDF of one inspection: returned at once when the current revision is
+   * already stored, otherwise generated here (once), stored and returned.
    *
-   * Takes the id, not the list row, because the register list deliberately
-   * omits the signature columns and this report prints both signatures. Fetching
-   * the one row here is what keeps them off the list read.
+   * Takes the list row or an id. Generation always re-reads the ONE full row, because
+   * the register list deliberately omits the signature columns and the report prints
+   * both signatures.
    */
+  const ensureInspectionPdf = useCallback(async (rowOrId, opts = {}) => {
+    const id = typeof rowOrId === 'string' ? rowOrId : rowOrId?.id
+    let full = null
+    const loadFull = async () => {
+      if (!full) full = await inspectionsApi.getInspectionForPage(id)
+      if (!full) throw new Error('The inspection is no longer available. Refresh the register and retry.')
+      return full
+    }
+    const hint = typeof rowOrId === 'object' && rowOrId ? rowOrId : await loadFull()
+    const req = await inspectionPdfRequest(hint, { branding, company })
+    return getOrCreatePdf({ ...req, ...opts, canGenerate: canRenderPdf, generate: async () => renderInspectionPdf(await loadFull()) })
+  }, [branding, company, renderInspectionPdf, canRenderPdf])
+
   const exportRowPdf = useCallback(async (rowOrId) => {
     const id = typeof rowOrId === 'string' ? rowOrId : rowOrId?.id
     if (!id || pdfBusyId) return
-    setPdfBusyId(id); setPdfError('')
+    setPdfBusyId(id); setPdfError(''); setPdfNote('')
     try {
-      const full = await inspectionsApi.getInspectionForPage(id)
-      if (!full) throw new Error('The inspection is no longer available. Refresh the register and retry.')
-      setPdfRow(full)
+      const result = await ensureInspectionPdf(rowOrId)
+      // A stored copy skips the generator, so the export switch and the export audit are applied here.
+      if (result.cached) applyExportPolicy([], String(result.fileName || 'Inspection report').replace(/\.pdf$/i, ''))
+      await deliverPdf(result)
+      if (result.note) setPdfNote(result.note)
+      setPdfRev((n) => n + 1)
     } catch (err) {
-      setPdfError(toUserMessage(err, 'Could not load the full inspection. Retry the download.'))
-      setPdfBusyId(null)
-    }
-  }, [pdfBusyId])
+      setPdfError(toUserMessage(err, 'Could not create the inspection PDF. Retry the download.'))
+    } finally { setPdfBusyId(null) }
+  }, [pdfBusyId, ensureInspectionPdf])
 
+  // Requests left by the database when an inspection was completed or approved somewhere
+  // this browser was not (phone, import): prepare up to three in the background, quietly.
   useEffect(() => {
-    if (!pdfRow) return
+    if (authLoading || !profile?.id) return undefined
     let cancelled = false
-    const t = setTimeout(async () => {
-      try {
-        // Photos captured during the inspection: per-position tp-storage refs
-        // (mobile) + the row-level photo, resolved to signed URLs. Best-effort -
-        // an unresolvable photo is skipped, never a blocked report.
-        const photoRefs = []
-        // The SAME labels the on-screen photo grid prints (positionLabelMap),
-        // so the downloaded copy and the record on screen cannot name one wheel
-        // two different ways.
-        const pdfPosLabels = positionLabelMap(pdfRow)
-        // Array-shaped tyre_conditions (web checklist) key by index; use the
-        // entry's own position so a photo is never captioned "0", "1"...
-        const tcEntries = Array.isArray(pdfRow.tyre_conditions)
-          ? pdfRow.tyre_conditions.map((d) => [d && (d.position || d.label) ? String(d.position || d.label) : '', d])
-          : Object.entries(pdfRow.tyre_conditions || {})
-        for (const [pos, d] of tcEntries) {
-          const ref = d && typeof d === 'object' ? (d.photo_url || d.photo_uri) : null
-          if (ref) photoRefs.push({ label: pdfPosLabels[pos] || displayPositionCode(inspectionTypeHint(pdfRow), pos) || pos || 'Tyre photo', ref })
-        }
-        if (pdfRow.photo_data) photoRefs.push({ label: 'Inspection photo', ref: pdfRow.photo_data })
-        const photos = (await Promise.all(photoRefs.map(async (p) => {
-          try { const url = await resolveStorageUrl(p.ref); return url ? { label: p.label, url } : null }
-          catch { return null }
-        }))).filter(Boolean)
-
-        // Expected life for this asset's fitted tyres (best-effort). Asked for
-        // BY ASSET (V526) - this used to pull all 3,595 rows / 2.2 MB on every
-        // single row export just to filter down to that asset's dozen.
-        // With no asset on the record there is nothing to look up, so we do not
-        // ask (an empty asset would read as "no filter" and pull the fleet).
-        let lifeRows = []
-        if (pdfRow.asset_no) {
-          try {
-            const payload = await getTyreRunningLife({
-              country: pdfRow.country, maxAgeMs: RUNNING_LIFE_TTL_MS, asset: pdfRow.asset_no,
-            })
-            lifeRows = shapeRunningLife(payload).rows
-          } catch { lifeRows = [] }
-        }
-
-        // The ACTUAL app diagram (colored per condition + PSI marked), rendered
-        // offscreen below - captured so the report embeds the same SVG the
-        // operator sees. Falls back to the programmatic map when absent.
-        const svgEl = pdfDiagramRef.current?.querySelector('svg[data-tyre-map]') || null
-        // The Vehicle Overview board (photo + wheel cards), the same view the
-        // inspection workspace shows. The report redraws it natively.
-        const boardEl = pdfBoardRef.current?.querySelector('.tb') || null
-        const diagramBg = (await getDiagramBg().catch(() => '')) || '#000000'
-        const aiJobs = await readInspectionAnalysis([pdfRow.id]).catch(() => [])
-        // Counted on inspection_date only; a row without one gets no ordinal
-        // (a fallback date would not line up with how history is counted).
-        const inspectionNo = await inspectionsApi.countAssetInspections(pdfRow.asset_no, {
-          country: pdfRow.country, upTo: pdfRow.inspection_date,
-        })
-        // Resolve the signer identities to "Full Name (EMP-ID)" from the SAME
-        // profiles read the app uses everywhere, so the report never prints the
-        // approver's login email or a raw user id. Best-effort: on any failure the
-        // export falls back to the row fields through signerDisplay (still no leak).
-        const signers = await resolveInspectionSigners({
-          approvedBy: pdfRow.approved_by, createdBy: pdfRow.created_by,
-        }).catch(() => undefined)
-        await exportInspectionDetailPdf(pdfRow, {
-          branding: await brandingForPdf(branding), company, photos, lifeRows, svgEl, boardEl, diagramBg, inspectionNo,
-          vehiclePhotoUrl: vehiclePhoto(pdfRow), aiFindings: aiJobs.filter(j => j.status === 'completed'),
-          signers,
-        })
-      } catch (err) { if (!cancelled) setPdfError(toUserMessage(err, 'Could not create the inspection PDF. Retry the download.')) }
-      finally { if (!cancelled) { setPdfRow(null); setPdfBusyId(null) } }
-    }, 80)
-    return () => { cancelled = true; clearTimeout(t) }
-  }, [pdfRow, branding, company])
+    const timer = setTimeout(async () => {
+      if (cancelled || document.hidden || navigator.connection?.saveData) return
+      const pending = await listPendingPdfRequests(REPORT_TYPES.INSPECTION, 3)
+      for (const req of pending) {
+        if (cancelled) return
+        try {
+          await ensureInspectionPdf(req.source_id, { interactive: false })
+          await closePdfRequest(REPORT_TYPES.INSPECTION, req.source_id)
+        } catch { /* left queued: bounded retries are recorded on the job */ }
+      }
+      // Retention housekeeping: only an administrator's browser is allowed to remove marked copies.
+      if (!cancelled && isAdmin) await sweepPdfRetention(20)
+    }, 6000)
+    return () => { cancelled = true; clearTimeout(timer) }
+  // once per page visit
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, profile?.id])
 
   // PWA - Screen Wake Lock during inspection
   const { acquire: acquireWakeLock, release: releaseWakeLock } = useWakeLock()
@@ -844,20 +816,26 @@ export default function Inspections() {
     setSaving(false)
   }
 
+  // A refused write is shown, never swallowed: both of these used to discard
+  // any error and reload, so a role the database refuses saw nothing happen.
   async function markDone(id) {
     try {
       await inspectionsApi.patchInspection(id, {
         status: 'Done',
         completed_date: new Date().toISOString().split('T')[0],
       })
-    } catch { /* mirror prior fire-and-forget: proceed to reload regardless */ }
+    } catch (e) {
+      setActionNotice({ tone: 'error', text: toUserMessage(e, 'The inspection could not be marked done.') })
+    }
     await load()
   }
 
   async function confirmDelete() {
     try {
       await inspectionsApi.deleteInspection(deleteId)
-    } catch { /* mirror prior fire-and-forget: proceed to reload regardless */ }
+    } catch (e) {
+      setActionNotice({ tone: 'error', text: toUserMessage(e, 'The inspection could not be deleted.') })
+    }
     setDeleteId(null)
     await load()
   }
@@ -889,6 +867,46 @@ export default function Inspections() {
       else pageIds.forEach(id => next.add(id))
       return next
     })
+  }
+
+  // Bulk PDF download: stored reports are zipped as they are; missing ones are prepared
+  // (two at a time) and stored. The task keeps running if the person opens another page;
+  // reports that still needed drawing at that point are listed as missing in the manifest.
+  // The limit is a company setting (initially 50). The server enforces it again when the download starts.
+  const [pdfSettings, setPdfSettings] = useState(null)
+  useEffect(() => {
+    if (authLoading || !profile?.id) return undefined
+    let live = true
+    getPdfSettings().then((s) => { if (live) setPdfSettings(s) })
+    return () => { live = false }
+  }, [authLoading, profile?.id])
+  const bulkPdfLimit = resolveBulkLimit(pdfSettings?.bulk_limit ?? configNum('pdf_bulk_limit', DEFAULT_BULK_LIMIT))
+  function downloadSelectedPdfs() {
+    const byId = new Map(filtered.map((r) => [String(r.id), r]))
+    const items = [...selectedIds].map((id) => {
+      const row = byId.get(String(id))
+      return { sourceId: id, row: row || String(id), label: row ? [row.asset_no, row.site, row.inspection_date].filter(Boolean).join(' ') : String(id) }
+    })
+    if (!items.length || items.length > bulkPdfLimit) return
+    try { applyExportPolicy(items, `Inspection PDFs bulk download (${items.length})`) }
+    catch (err) { setPdfError(toUserMessage(err, 'Exports are not available.')); return }
+    startExportTask(`Inspection PDFs (${items.length})`, async ({ report, isCancelled }) => {
+      // The server checks the limit and answers with the records this account may see.
+      const gate = await authorizeBulk(REPORT_TYPES.INSPECTION, items.map((i) => i.sourceId), bulkPdfLimit)
+      const out = await buildPdfZip({
+        type: REPORT_TYPES.INSPECTION, items, limit: gate.limit || bulkPdfLimit, allowed: gate.allowed, isCancelled,
+        onProgress: (p) => report(p),
+        ensure: async (item) => {
+          const r = await ensureInspectionPdf(item.row, { waitMs: 30000 })
+          if (r.file?.id) recordPdfDownload(r.file.id, 'bulk')
+          return r
+        },
+      })
+      const fileName = `Tyre Inspection Reports ${reportDateLabel()} (${out.included} of ${items.length}).zip`
+      saveBlob(out.blob, fileName)
+      return { blob: out.blob, fileName, included: out.included, missing: out.missing }
+    })
+    setSelectedIds(new Set())
   }
 
   async function confirmBulkDelete() {
@@ -1285,6 +1303,7 @@ export default function Inspections() {
   return (
     <div className="space-y-6">
       {pdfError && <p role="alert" className="card text-red-500">{pdfError}</p>}
+      {pdfNote && <p role="status" className="card text-sm" style={{ color: '#b45309' }}>{pdfNote}</p>}
       {actionNotice && (
         <div role={actionNotice.tone === 'error' ? 'alert' : 'status'} className="card flex items-center justify-between gap-3 text-sm"
           style={{ color: actionNotice.tone === 'error' ? '#ef4444' : actionNotice.tone === 'warn' ? '#b45309' : 'var(--text-primary)' }}>
@@ -1658,6 +1677,10 @@ export default function Inspections() {
                       // server decided, including who it attributed the sign-off to.
                       await refreshApproveTarget({ approval_status: 'approved', approver_signature: approverSig })
                       load()
+                      // Prepare and store the approved report now, in the background. Never
+                      // blocks or fails the approval: it has already been saved.
+                      ensureInspectionPdf(approveTarget.id, { interactive: false })
+                        .then(() => setPdfRev((n) => n + 1)).catch(() => {})
                     } catch (err) {
                       if (err?.alreadyDecided) await refreshApproveTarget()
                       setApproveMsg({ type: 'err', text: toUserMessage(err, 'Could not save the approval. The inspection is unchanged.') })
@@ -1937,6 +1960,19 @@ export default function Inspections() {
         }}
         onDownload={(row) => exportRowPdf(row)}
         downloading={Boolean(pdfBusyId)}
+        extra={(row) => (
+          <StoredPdfPanel
+            refreshKey={`${row.id}:${pdfRev}`}
+            buildRequest={() => inspectionPdfRequest(row, { branding, company })}
+            canRegenerate={isElevatedRole}
+            isAdmin={isAdmin}
+            onRegenerate={async ({ reason }) => {
+              const result = await ensureInspectionPdf(row.id, { regenerate: true, reason })
+              if (result.note) setPdfNote(result.note)
+              setPdfRev((n) => n + 1)
+            }}
+          />
+        )}
       />
       <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by status">
         {[['all', t('inspections.filters.status.all'), 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'],
@@ -2100,7 +2136,7 @@ export default function Inspections() {
       })()}
 
       {/* Bulk selection bar (Admin only) */}
-      {isAdmin && selectedIds.size > 0 && (
+      {selectedIds.size > 0 && (
         <div role="status" className="flex flex-wrap items-center justify-between gap-3 border rounded-xl px-4 py-2.5" style={{ borderColor: 'rgba(37,99,235,0.4)', background: 'rgba(37,99,235,0.08)' }}>
           <span className="text-sm text-[var(--text-primary)]">{selectedIds.size} selected</span>
           <div className="flex items-center gap-2">
@@ -2110,13 +2146,25 @@ export default function Inspections() {
               </button>
             )}
             <button type="button" onClick={() => setSelectedIds(new Set())} className="text-xs min-h-[36px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] px-2 py-1">Clear</button>
-            <button type="button" onClick={() => { setBulkError(''); setBulkDeleteOpen(true) }}
-              className="flex items-center gap-1.5 px-3 min-h-[36px] py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors">
-              <Trash2 size={14} /> Delete {selectedIds.size}
+            <button type="button" onClick={downloadSelectedPdfs} disabled={selectedIds.size > bulkPdfLimit}
+              title={selectedIds.size > bulkPdfLimit ? `Select up to ${bulkPdfLimit} records for one download` : 'Download the report of every selected record as one ZIP file'}
+              className="btn-secondary flex items-center gap-1.5 px-3 min-h-[36px] py-1.5 text-sm font-medium disabled:opacity-50">
+              <FileArchive size={14} aria-hidden /> Download {selectedIds.size} PDFs
             </button>
+            {selectedIds.size > bulkPdfLimit && (
+              <span className="text-xs" style={{ color: '#b45309' }}>Up to {bulkPdfLimit} per download</span>
+            )}
+            {isAdmin && (
+              <button type="button" onClick={() => { setBulkError(''); setBulkDeleteOpen(true) }}
+                className="flex items-center gap-1.5 px-3 min-h-[36px] py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors">
+                <Trash2 size={14} /> Delete {selectedIds.size}
+              </button>
+            )}
           </div>
         </div>
       )}
+
+      {isAdmin && <PdfSettingsPanel onChange={(next) => setPdfSettings((prev) => ({ ...(prev || {}), ...next }))} />}
 
       {/* The register. EnterpriseTable pages and sorts the FULL filtered set;
           the row opens the record in place. */}
@@ -2131,9 +2179,9 @@ export default function Inspections() {
           enableGlobalFilter={false}
           enableColumnFilters={false}
           enableExport={false}
-          enableRowSelection={isAdmin}
-          rowSelection={isAdmin ? rowSelection : undefined}
-          onRowSelectionChange={isAdmin ? onRowSelectionChange : undefined}
+          enableRowSelection
+          rowSelection={rowSelection}
+          onRowSelectionChange={onRowSelectionChange}
           onRowClick={(r) => setViewId(r.id)}
           pageSizeOptions={[25, 50, 100]}
           initialPageSize={50}
@@ -2227,31 +2275,8 @@ export default function Inspections() {
         </SharedModal>
       )}
 
-      {/* Offscreen live diagram for row PDF export (captured as SVG) */}
-      {pdfRow && (
-        <div
-          ref={pdfDiagramRef}
-          aria-hidden
-          style={{ position: 'fixed', left: -9999, top: 0, width: 360, opacity: 0, pointerEvents: 'none' }}
-        >
-          <InspectionDiagram
-            inspection={pdfRow}
-            showReadings={false}
-            width={340}
-          />
-        </div>
-      )}
-      {pdfRow && (
-        <div
-          ref={pdfBoardRef}
-          aria-hidden
-          style={{ position: 'fixed', left: -9999, top: 0, width: 520, opacity: 0, pointerEvents: 'none' }}
-        >
-          {/* 440px: the narrowest width that keeps twin wheels side by side, so the
-              vehicle picture stays a supporting element, not the biggest thing. */}
-          <InspectionDiagram inspection={pdfRow} showReadings={false} width={440} variant="board" />
-        </div>
-      )}
+      {/* Off-screen live diagram + overview board for each report being drawn */}
+      {pdfHosts}
 
       {/* Offscreen copy of the checklist diagram for the "Daily Tyre Inspection
           Report" PDF — always mounted once saved (the on-screen form diagram is

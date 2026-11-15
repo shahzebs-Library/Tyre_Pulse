@@ -56,9 +56,17 @@ export function updateProfile(id, patch) {
   return supabase.from('profiles').update(patch).eq('id', id)
 }
 
-/** Bulk-upsert KPI target rows (onConflict: metric,year,month,site). */
-export function upsertKpiTargets(rows) {
-  return supabase.from('kpi_targets').upsert(rows, { onConflict: 'metric,year,month,site' })
+/**
+ * Save KPI target rows. Delegates to the ONE KPI target writer
+ * (kpiTargets.saveKpiTargets), which updates the stored target or inserts a
+ * new one. The upsert that used to live here could never save a target a
+ * second time (its conflict target does not match blank month and site).
+ */
+export async function upsertKpiTargets(rows) {
+  // Loaded on use so the Settings service does not pull the KPI service (and
+  // its dependencies) into every screen that reads a setting.
+  const { saveKpiTargets } = await import('./kpiTargets')
+  return saveKpiTargets(rows)
 }
 
 /** All report schedules, oldest first, with the columns the section renders. */

@@ -8502,4 +8502,193 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get mfaVerifyUnavailable =>
       'کوڈ ابھی چیک نہیں ہو سکا۔ کنکشن چیک کریں اور دوبارہ کوشش کریں۔';
+
+  @override
+  String get wfOfflineNote =>
+      'آف لائن: محفوظ کام دکھائے جا رہے ہیں۔ آپ کی تبدیلیاں محفوظ رہیں گی اور کنکشن بحال ہونے پر بھیج دی جائیں گی۔';
+
+  @override
+  String get wfPendingSync =>
+      'مطابقت باقی ہے: آن لائن ہونے پر بھیج دیا جائے گا۔';
+
+  @override
+  String get wfSignInRequired => 'کام اپ ڈیٹ کرنے کے لیے سائن اِن کریں۔';
+
+  @override
+  String get wfUpdated => 'اپ ڈیٹ ہو گیا۔';
+
+  @override
+  String get wfSavedOffline =>
+      'اس آلے پر محفوظ ہو گیا۔ آن لائن ہونے پر بھیج دیا جائے گا۔';
+
+  @override
+  String get wfUpdateUnavailable =>
+      'یہ تبدیلی اس کام کے لیے فی الحال دستیاب نہیں۔';
+
+  @override
+  String wfNotAccepted(String action) {
+    return 'قبول نہیں ہوا: $action';
+  }
+
+  @override
+  String get wfDismiss => 'ہٹائیں';
+
+  @override
+  String get wfActionAccept => 'قبول کریں';
+
+  @override
+  String get wfActionStart => 'شروع کریں';
+
+  @override
+  String get wfActionBlock => 'روکیں';
+
+  @override
+  String get wfActionResume => 'دوبارہ شروع کریں';
+
+  @override
+  String get wfActionComplete => 'مکمل کریں';
+
+  @override
+  String get teamActionTitle => 'آپ کو سونپا گیا فالو اَپ';
+
+  @override
+  String get teamActionFallbackTitle => 'کارروائی';
+
+  @override
+  String teamActionStatusDue(String status, String due) {
+    return 'حالت: $status · آخری تاریخ: $due';
+  }
+
+  @override
+  String get teamActionDueNotSet => 'مقرر نہیں';
+
+  @override
+  String get teamActionBlockReason => 'رکاوٹ کی وجہ';
+
+  @override
+  String get teamActionCompletionDetails => 'تکمیل کی تفصیل';
+
+  @override
+  String teamActionEvidenceCount(int count) {
+    return 'ثبوت ($count)';
+  }
+
+  @override
+  String get teamActionEvidenceFallback => 'ثبوت';
+
+  @override
+  String teamActionResolution(String text) {
+    return 'حل: $text';
+  }
+
+  @override
+  String get teamActionUploading => 'اپ لوڈ ہو رہا ہے...';
+
+  @override
+  String get teamActionSelectPhoto => 'تصویر شامل کریں';
+
+  @override
+  String get teamActionAttachFile => 'PDF یا فائل منسلک کریں';
+
+  @override
+  String get teamActionStartWork => 'کام شروع کریں';
+
+  @override
+  String get teamActionBlocked => 'رکا ہوا';
+
+  @override
+  String get teamActionStatusOpen => 'کھلا';
+
+  @override
+  String get teamActionStatusAcknowledged => 'قبول شدہ';
+
+  @override
+  String get teamActionStatusInProgress => 'جاری';
+
+  @override
+  String get teamActionStatusEscalated => 'اوپر بھیجا گیا';
+
+  @override
+  String get teamActionStatusPendingApproval => 'منظوری کا منتظر';
+
+  @override
+  String get teamActionStatusResolved => 'مکمل';
+
+  @override
+  String get teamActionStatusDismissed => 'خارج کیا گیا';
+
+  @override
+  String get teamActionSignIn => 'یہ کام دیکھنے کے لیے سائن اِن کریں۔';
+
+  @override
+  String get teamActionNotYours =>
+      'یہ کارروائی آپ کے اکاؤنٹ کو نہیں سونپی گئی۔';
+
+  @override
+  String get teamActionBlockTooShort =>
+      'رکاوٹ کی وضاحت میں کم از کم پانچ حروف لکھیں۔';
+
+  @override
+  String get teamActionResolutionTooShort =>
+      'مکمل کیے گئے کام کی وضاحت کم از کم دس حروف میں کریں۔';
+
+  @override
+  String get teamActionPhotoTooLarge => 'تصویر 10 MB سے چھوٹی ہونی چاہیے۔';
+
+  @override
+  String get teamActionFileType =>
+      'صرف PDF، JPG، PNG یا WEBP فائلیں منسلک کی جا سکتی ہیں۔';
+
+  @override
+  String get teamActionFileSize => 'فائل 10 MB یا اس سے چھوٹی ہونی چاہیے۔';
+
+  @override
+  String get teamActionPhotoUploaded => 'تصویر اپ لوڈ ہو گئی۔';
+
+  @override
+  String get teamActionOpenFailed => 'منسلکہ نہیں کھل سکا۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get teamActionLoadFailed =>
+      'یہ کام لوڈ نہیں ہو سکا۔ کنکشن چیک کر کے دوبارہ کوشش کریں۔';
+
+  @override
+  String get teamActionSaveFailed =>
+      'تبدیلی محفوظ نہیں ہوئی۔ کنکشن چیک کر کے دوبارہ کوشش کریں۔';
+
+  @override
+  String get teamActionUploadFailed =>
+      'فائل اپ لوڈ نہیں ہو سکی۔ کنکشن چیک کر کے دوبارہ کوشش کریں۔';
+
+  @override
+  String get teamMessageTitle => 'ٹیم کا پیغام';
+
+  @override
+  String get teamMessageSignIn => 'یہ پیغام دیکھنے کے لیے سائن اِن کریں۔';
+
+  @override
+  String get teamMessageUnavailable => 'یہ پیغام اس اکاؤنٹ کے لیے دستیاب نہیں۔';
+
+  @override
+  String get teamMessageLoadFailed =>
+      'یہ پیغام لوڈ نہیں ہو سکا۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get teamMessageActionFailed =>
+      'یہ عمل مکمل نہیں ہوا۔ کنکشن چیک کر کے دوبارہ کوشش کریں۔';
+
+  @override
+  String get teamMessageAcknowledged => 'وصولی کی تصدیق ہو گئی';
+
+  @override
+  String get teamMessageAckRequired => 'وصولی کی تصدیق درکار ہے';
+
+  @override
+  String get teamMessageAcknowledge => 'تصدیق کریں';
+
+  @override
+  String get teamMessageReplyLabel => 'ٹیم کو جواب';
+
+  @override
+  String get teamMessageSend => 'جواب بھیجیں';
 }

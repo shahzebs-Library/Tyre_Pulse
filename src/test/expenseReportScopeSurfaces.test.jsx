@@ -77,7 +77,9 @@ const h = vi.hoisted(() => {
     // cannot be split per country.
     fleetCpk: {
       perVehicle: [],
-      byType: [{ vehicle_type: 'TR-MIXER', unit: 'km', cpk_total: 1.234 }],
+      // ENG-1 (2026-11-12): a km type is charted by its tyre spend ratio (cpk_tyre).
+      // The old fixture carried only cpk_total, the withheld total over tyre km.
+      byType: [{ vehicle_type: 'TR-MIXER', unit: 'km', cpk_tyre: 1.234, cpk_total: 9.9 }],
       fleet: [{ country: 'KSA', currency: 'SAR', unit: 'km', cpk_total: 1.1, cpk_tyre: 0.5 }],
     },
     scope: {},
@@ -227,7 +229,7 @@ describe('Chart Builder on a multi-country scope', () => {
     // another country's currency label.
     render(<ExpenseReport />)
     await screen.findByRole('combobox', { name: 'Chart data for' })
-    expect(document.body.textContent).not.toContain('CPK per km by type')
+    expect(document.body.textContent).not.toContain('Tyre spend ratio by type')
 
     // Narrowed to one country, the read named that country, so the same source
     // is attributable and IS offered - the omission is a real rule, not a
@@ -235,7 +237,8 @@ describe('Chart Builder on a multi-country scope', () => {
     cleanup()
     h.scope = { reportingScope: { countries: ['KSA'] }, allowed: ['KSA', 'UAE', 'Egypt'] }
     render(<ExpenseReport />)
-    await waitFor(() => expect(document.body.textContent).toContain('CPK per km by type'))
+    // (source renamed by ENG-1: it is a spend ratio over tyre km, not a CPK per vehicle km)
+    await waitFor(() => expect(document.body.textContent).toContain('Tyre spend ratio by type'))
   })
 
   it('drops the picker and the notes on a single-country scope', async () => {
@@ -316,8 +319,10 @@ describe('buildStudioCatalog - one country, one currency', () => {
       tyreAgg: { bySite: [], bySize: [], byBrand: [], avgCostByBrand: [], avgKmByBrand: [], cpkSite: [{ label: 'NHC', value: 0.5 }], monthLabels: [], monthQty: [], removalBySite: [], remMonthLabels: [], remMonthQty: [] },
     })
     const km = cat.find((s) => s.key === 'cpk_km')
-    expect(km.unitLabel).toBe('AED/km')
-    expect(km.format(1.234)).toBe('AED 1.234/km')
+    // ENG-1: the unit names the denominator. "/km" read as vehicle km.
+    expect(km.unitLabel).toBe('AED per tyre km')
+    expect(km.format(1.234)).toBe('AED 1.2340 per tyre km')
+    expect(km.rows).toEqual([{ label: 'TR-MIXER', value: 1.234 }]) // never the 9.9 total
     expect(cat.find((s) => s.key === 'tyre_cpk_site').unitLabel).toBe('AED/km')
   })
 

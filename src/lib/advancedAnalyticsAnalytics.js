@@ -403,3 +403,28 @@ export function heatColor(value, min, max) {
   const b = Math.round(68 * t + 246 * (1 - t))
   return `rgba(${r},${g},${b},${0.2 + t * 0.65})`
 }
+
+/**
+ * Replace each vehicle's tyre cost with the expense grid figure for that asset.
+ *
+ * buildVehicle prices a vehicle from tyre record prices. The authoritative
+ * tyre cost is the expense grid, so when the per-asset grid map is available
+ * the vehicle rows take their cost from it and the cost ranking is rebuilt.
+ * A vehicle with no grid line in the window reads null (shown as N/A), never 0:
+ * the grid simply holds no tyre purchase for it in that window.
+ *
+ * Returns the input unchanged (basis 'tyre_records') when there is no map.
+ * CPK and tyre life are untouched: they stay on the per-fitment rule.
+ */
+export function applyGridAssetCost(vehicleData, gridMap) {
+  if (!vehicleData) return vehicleData
+  if (!(gridMap instanceof Map)) return { ...vehicleData, costBasis: 'tyre_records' }
+  const vehicles = (vehicleData.vehicles || []).map((v) => {
+    const hit = gridMap.get(String(v.assetNo || '').trim().toUpperCase())
+    const amount = hit == null ? null : Number(typeof hit === 'object' ? hit.amount : hit)
+    return { ...v, totalCost: Number.isFinite(amount) ? amount : null }
+  })
+  const top20Cost = vehicles.filter((v) => v.totalCost != null)
+    .sort((a, b) => b.totalCost - a.totalCost).slice(0, 20)
+  return { ...vehicleData, vehicles, top20Cost, costBasis: 'grid' }
+}

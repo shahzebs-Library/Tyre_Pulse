@@ -23,6 +23,24 @@ const posOrNull = (x) => {
 const M3_KEYWORDS = ['pump', 'water', 'treatment', 'concrete', 'batching', 'plaster', 'grout', 'slurry']
 const HOUR_KEYWORDS = ['generator', 'genset', 'gen set', 'compressor', 'excavator', 'loader', 'crane', 'forklift', 'dozer', 'grader', 'roller']
 
+// ROAD VEHICLE WORDS (ENG-4, audit case C20b). The keyword lists above match by
+// substring, so WATER TANKER, LOW LOADER TRAILER, CONCRETE MIXER TRUCK, CRANE
+// TRUCK and ROLLER SHUTTER VAN were all measured in engine hours: road vehicles
+// with no hour meter, which then showed no CPK at all. A type that names a road
+// vehicle as a whole word is measured in km, unless it also names a machine that
+// genuinely runs on an hour meter (a truck mounted concrete pump, a generator
+// trailer). Verified read-only against every vehicle type in the live fleet,
+// tyre and expense tables on 2026-11-12: no existing type changes unit.
+// MIRROR of the SQL draft 20261113123000 (cpk_unit_for_asset_type). Change both.
+const ROAD_VEHICLE_RE = /(^|[^a-z0-9_])(tanker|trailer|truck|lorry|van|bus|pickup|pick up|pick-up|car|suv|mixer|prime mover|tractor head)([^a-z0-9_]|$)/
+const HOUR_MACHINE_RE = /(^|[^a-z0-9_])(pump|pumps|generator|genset|gen set|compressor|excavator|forklift|dozer|grader)([^a-z0-9_]|$)/
+
+/** True when the type names a road vehicle and no hour-metered machine. */
+export function isRoadVehicleType(type) {
+  const s = String(type || '').toLowerCase()
+  return ROAD_VEHICLE_RE.test(s) && !HOUR_MACHINE_RE.test(s)
+}
+
 /**
  * The running unit that best expresses cost for an asset type.
  * @param {string} type  a vehicle / asset type label (any casing)
@@ -30,6 +48,7 @@ const HOUR_KEYWORDS = ['generator', 'genset', 'gen set', 'compressor', 'excavato
  */
 export function runningUnitForAssetType(type) {
   const s = String(type || '').toLowerCase()
+  if (isRoadVehicleType(s)) return 'km'
   if (M3_KEYWORDS.some((k) => s.includes(k))) return 'm3'
   if (HOUR_KEYWORDS.some((k) => s.includes(k))) return 'engine_hours'
   return 'km'
@@ -49,9 +68,14 @@ export const UNIT_META = {
  * because there is no reliable per-asset m3 series to divide by. This reuses the
  * keyword map in runningUnitForAssetType so there is ONE keyword truth in JS.
  *
- * MIRROR: this MUST stay byte-equivalent to the SQL public.cpk_unit_for_asset_type()
+ * MIRROR: this MUST stay equivalent to the SQL public.cpk_unit_for_asset_type()
  * used by get_fleet_cpk (V433). Change BOTH together, and keep the SQL similar-to
  * keyword list = M3_KEYWORDS + HOUR_KEYWORDS above.
+ * KNOWN GAP UNTIL DRAFT 20261113123000 IS APPLIED: the road vehicle override
+ * (isRoadVehicleType) exists here and in that draft, not yet in the live SQL.
+ * No vehicle type in the live data is affected (measured 2026-11-12), so the
+ * two sides agree on every existing row; they differ only for type names a new
+ * tenant might use (WATER TANKER, LOW LOADER TRAILER, CONCRETE MIXER TRUCK).
  *
  * @param {string} type asset / vehicle type label (any casing)
  * @returns {'km'|'engine_hours'}

@@ -23,7 +23,12 @@ describe('downtimeTrackerAnalytics', () => {
     expect(m[11]).toBe('2026-09')
   })
 
-  it('prefers actual work-order hours and falls back to severity estimates', () => {
+  // ENG-7 (2026-11-12). These four tests used to pin an ASSUMED 2 to 4 hours per
+  // tyre event as "the downtime hours" and a made-up default rate as its cost.
+  // The assumption is still available, but only under its own name: measured
+  // hours come from job card timestamps, anything else is null (N/A) with the
+  // assumed figure reported beside it.
+  it('measures from job card timestamps and reports the assumption separately', () => {
     expect(workOrderHours({ opened_at: '2026-09-01T00:00:00Z', completed_at: '2026-09-01T06:00:00Z' })).toBe(6)
     expect(workOrderHours({ opened_at: '2026-09-01' })).toBeNull()
     const act = actualHoursByAsset([
@@ -31,8 +36,14 @@ describe('downtimeTrackerAnalytics', () => {
       { asset_no: 'TM1', opened_at: '2026-09-02T00:00:00Z', completed_at: '2026-09-02T02:00:00Z' },
     ])
     expect(act.get('TM1')).toBe(6)
-    expect(downtimeHours(events[0], act)).toEqual({ hours: 6, actual: true })
-    expect(downtimeHours(events[2], act)).toEqual({ hours: 2, actual: false })
+    expect(downtimeHours(events[0], act)).toEqual({ hours: 6, actual: true, assumedHours: null, modelHours: 6 })
+    // no job card for TM2: measured hours unknown, the 2 h is an assumption
+    expect(downtimeHours(events[2], act)).toEqual({ hours: null, actual: false, assumedHours: 2, modelHours: 2 })
+    // implausible timestamps are never a measurement: a year-0026 date, a
+    // five month "repair", and a job closed before it opened
+    expect(workOrderHours({ opened_at: '0026-09-01T00:00:00Z', completed_at: '2026-09-01T06:00:00Z' })).toBeNull()
+    expect(workOrderHours({ opened_at: '2026-01-01', completed_at: '2026-06-01' })).toBeNull()
+    expect(workOrderHours({ opened_at: '2026-09-02', completed_at: '2026-09-01' })).toBeNull()
   })
 
   it('labels causes and filters', () => {
@@ -48,11 +59,29 @@ describe('downtimeTrackerAnalytics', () => {
   it('reports honest KPIs', () => {
     const k = downtimeKpis(events, { cutoff: null, now: NOW })
     expect(k.totalEvents).toBe(4)
-    expect(k.totalHours).toBe(10)
+    // No job card at all: nothing was measured. The old 10 h was 4 + 2 + 2 + 2 assumed.
+    expect(k.totalHours).toBeNull()
+    expect(k.measuredHours).toBeNull()
+    expect(k.availability).toBeNull()
+    expect(k.totalCost).toBeNull()
+    expect(k.assumedHours).toBe(10)
+    expect(k.unmeasuredEvents).toBe(4)
+    expect(k.availabilityAssumed).toBeGreaterThan(0)
+    expect(k.rateConfigured).toBe(false)
     expect(k.uniqueVehicles).toBe(3)
     expect(k.mtbeHours).toBe(240)
-    expect(k.availability).toBeGreaterThan(0)
     expect(k.unplannedPct).toBe(25)
+    // With job cards for TM1 and a configured rate: 2 events measured at 6 h each.
+    const act = actualHoursByAsset([
+      { asset_no: 'TM1', opened_at: '2026-09-01T00:00:00Z', completed_at: '2026-09-01T10:00:00Z' },
+      { asset_no: 'TM1', opened_at: '2026-09-02T00:00:00Z', completed_at: '2026-09-02T02:00:00Z' },
+    ], { now: NOW })
+    const m = downtimeKpis(events, { cutoff: null, now: NOW, actualByAsset: act, rate: 100 })
+    expect(m.measuredHours).toBe(12)
+    expect(m.totalCost).toBe(1200) // measured hours only
+    expect(m.assumedHours).toBe(4)
+    expect(m.modelledCost).toBe(1600)
+    expect(m.availability).toBeNull() // two events are still unmeasured
     const empty = downtimeKpis([], { now: NOW })
     expect(empty.availability).toBeNull()
     expect(empty.mtbeHours).toBeNull()
@@ -72,7 +101,9 @@ describe('downtimeTrackerAnalytics', () => {
     expect(mc[11]).toMatchObject({ month: '2026-09', unplanned: 400, planned: 200 })
     expect(mc[11].cumulative).toBe(1000)
     const v = vehicleRows(events, { now: NOW })
-    expect(v[0]).toMatchObject({ asset: 'TM1', eventCount: 2, avgBetween: 10, basis: 'Estimated' })
+    expect(v[0]).toMatchObject({ asset: 'TM1', eventCount: 2, avgBetween: 10, basis: 'Assumed', measuredHours: null, assumedHours: 6, totalCost: null })
+    // without a configured rate there is no cost, not a default one
+    expect(monthlyCost(events, { now: NOW })[11]).toMatchObject({ planned: null, unplanned: null, cumulative: null })
     expect(v.find((x) => x.asset === 'TM2').avgBetween).toBeNull()
     expect(heatmap(events, { now: NOW }).rows[0].asset).toBe('TM1')
   })
@@ -85,6 +116,8 @@ describe('downtimeTrackerAnalytics', () => {
     expect(recommendations([], [], {})).toEqual([])
     const x = eventExportRows(events, { rate: 100 })
     expect(x[3].risk_level).toBe('Not rated')
-    expect(x[0].data_source).toBe('Estimated (severity)')
+    expect(x[0].data_source).toBe('Assumed (no job card with valid timestamps)')
+    expect(x[0].downtime_hours).toBe('N/A')
+    expect(x[0].assumed_hours).toBe(4)
   })
 })

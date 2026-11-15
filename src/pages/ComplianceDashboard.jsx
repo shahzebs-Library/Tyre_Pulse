@@ -379,7 +379,7 @@ function ComplianceRegister() {
   }), [pressureStats])
   const pressureBySiteChart = useMemo(() => ({
     labels: pressureBySite.map(s => s.site),
-    datasets: [{ label: 'Pressure compliance %', data: pressureBySite.map(s => Number(s.pct.toFixed(1))), backgroundColor: pressureBySite.map(s => pctColor(s.pct)), borderRadius: 3 }],
+    datasets: [{ label: 'Pressure consistency %', data: pressureBySite.map(s => Number(s.pct.toFixed(1))), backgroundColor: pressureBySite.map(s => pctColor(s.pct)), borderRadius: 3 }],
   }), [pressureBySite])
   const inspBySiteChart = useMemo(() => ({
     labels: inspBySite.map(s => s.site),
@@ -608,7 +608,7 @@ function ComplianceRegister() {
           { metric: 'Overall compliance score', value: overallScore != null ? `${overallScore}%` : 'N/A' },
           { metric: 'Areas in the overall score', value: overall.covered.join(', ') || 'none' },
           { metric: 'Tread compliance', value: treadText(fmtPct(treadStats.pct)) },
-          { metric: 'Pressure compliance', value: fmtPct(pressureStats.pct) },
+          { metric: 'Pressure consistency', value: fmtPct(pressureStats.pct) },
           { metric: 'Inspection compliance', value: fmtPct(inspectionStats.pct) },
           { metric: 'Critical tyres', value: criticalCount },
           { metric: 'Fully compliant vehicles', value: fullyCompliantVehicles },
@@ -804,7 +804,7 @@ function ComplianceRegister() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
             <KpiCard title="Tread compliance" value={treadText(fmtPct(treadStats.pct))} sub={treadOn ? `${treadStats.compliant} of ${treadStats.withData} measured tyres` : 'No tyre has a tread depth'} icon={Gauge} tone={BAND[scoreBand(treadStats.pct)].text} />
             <KpiCard title="Legal failures" value={treadText(treadStats.legalFail.toLocaleString())} sub={treadOn ? `below ${LEGAL_MIN_TREAD} mm` : 'Not checked: no tread depth'} icon={AlertTriangle} tone={treadStats.legalFail > 0 ? 'text-red-400' : 'text-green-400'} />
-            <KpiCard title="Pressure compliance" value={fmtPct(pressureStats.pct)} sub={`${pressureStats.notMeasured} inspections without enough readings`} icon={AlertCircle} tone={BAND[scoreBand(pressureStats.pct)].text} />
+            <KpiCard title="Pressure consistency" value={fmtPct(pressureStats.pct)} sub={`${pressureStats.notMeasured} inspections without enough readings`} icon={AlertCircle} tone={BAND[scoreBand(pressureStats.pct)].text} />
             <KpiCard title="Inspection compliance" value={fmtPct(inspectionStats.pct)} sub={`${inspectionStats.compliant} of ${inspectionStats.total} vehicles current`} icon={ClipboardList} tone={BAND[scoreBand(inspectionStats.pct)].text} />
             <KpiCard title="Critical-risk tyres" value={criticalCount.toLocaleString()} sub="risk level Critical" icon={HelpCircle} tone={criticalCount > 0 ? 'text-red-400' : 'text-green-400'} />
             <KpiCard title="Fully compliant vehicles" value={treadText(fullyCompliantVehicles.toLocaleString())} sub={treadOn ? 'every measured tyre passes' : 'Needs tread depths'} icon={CheckCircle} />
@@ -894,7 +894,7 @@ function ComplianceRegister() {
                     { label: 'Outside tolerance', val: pressureStats.readings ? pressureStats.anomalies.toLocaleString() : 'N/A', tone: 'text-red-400' },
                   ]} />
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <Section icon={AlertCircle} title="Pressure compliance breakdown">
+                    <Section icon={AlertCircle} title="Pressure consistency breakdown">
                       {pressureStats.readings === 0 ? (
                         <div className="flex items-center justify-center h-56 text-[var(--text-muted)] text-sm">No inspection has enough recorded pressures</div>
                       ) : (
@@ -903,11 +903,11 @@ function ComplianceRegister() {
                         </div>
                       )}
                     </Section>
-                    <Section icon={Building2} title="Pressure compliance by site" right="measured inspections only">
+                    <Section icon={Building2} title="Pressure consistency by site" right="measured inspections only">
                       {pressureBySite.length === 0 ? (
                         <div className="flex items-center justify-center h-56 text-[var(--text-muted)] text-sm">No site has a measurable inspection</div>
                       ) : (
-                        <div className="h-56" role="img" aria-label="Pressure compliance percentage by site">
+                        <div className="h-56" role="img" aria-label="Pressure consistency percentage by site">
                           <Bar data={pressureBySiteChart} options={pctAxisOpts(true)} />
                         </div>
                       )}

@@ -20,7 +20,7 @@ import { pressureRule, hasPressureReading, PRESSURE_TOLERANCE_PCT, NOT_RECORDED 
 /** Minimum legal tread depth by functional position (mm). */
 export const LEGAL_TREAD = { steer: 3, drive: 3, trailer: 3, default: 2 }
 /**
- * Permitted pressure deviation, in percent. Pressure compliance on this view is
+ * Permitted pressure deviation, in percent. Pressure consistency on this view is
  * the shared rule in complianceRules.js (kpiEngine: each reading against its own
  * vehicle median), the same rule the Compliance register view uses.
  */
@@ -292,7 +292,7 @@ export function complianceSummaryRows(c) {
   const noTread = !c.treadMeasured
   return [
     { metric: 'Tread depth compliance', score: noTread ? NOT_RECORDED : f(c.treadCompliance), status: noTread ? NOT_RECORDED : band(c.treadCompliance), basis: `${c.treadMeasured} of ${c.total} tyres measured` },
-    { metric: 'Pressure compliance', score: f(c.pressureCompliance), status: band(c.pressureCompliance), basis: c.pressureBasis },
+    { metric: 'Pressure consistency', score: f(c.pressureCompliance), status: band(c.pressureCompliance), basis: c.pressureBasis },
     { metric: 'Inspection coverage', score: f(c.inspectionCompliance), status: band(c.inspectionCompliance), basis: `${c.inspectedAssets} of ${c.tyreAssets} assets inspected` },
     { metric: 'Risk level score', score: f(c.riskScore), status: band(c.riskScore), basis: `${c.criticalCount} critical of ${c.ratedCount} rated tyres` },
     { metric: 'Accident tyre correlation', score: f(c.accidentCorrelation), status: c.accidentCorrelation == null ? 'Not measured' : c.accidentCorrelation < 30 ? 'Low' : 'Review', basis: `${c.accidents} accidents in period` },

@@ -144,7 +144,10 @@ describe('safetyComplianceAnalytics', () => {
   it('summary rows print N/A for unmeasured metrics', () => {
     const c = computeSafetyCompliance({ tyreRecords: [{ id: 1 }], now: NOW })
     const rows = complianceSummaryRows(c)
-    expect(rows.find((r) => r.metric === 'Pressure compliance').score).toBe('N/A')
+    // ENG-9 (2026-11-12): the measure is consistency around each vehicle's own
+    // median, not compliance with a required pressure, and is now named that.
+    expect(rows.find((r) => r.metric === 'Pressure consistency').score).toBe('N/A')
+    expect(rows.find((r) => r.metric === 'Pressure compliance')).toBeUndefined()
     // No tyre has a tread depth: the row says so instead of N/A or a percentage.
     expect(rows.find((r) => r.metric === 'Tread depth compliance').score).toBe('Not recorded')
     expect(complianceSummaryRows(null)).toEqual([])

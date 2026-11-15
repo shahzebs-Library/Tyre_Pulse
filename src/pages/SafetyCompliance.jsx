@@ -556,7 +556,7 @@ export default function SafetyCompliance() {
             {activeTab === 'pressure' && (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <StatTile label="Pressure compliance" value={fmtPct(compliance.pressureCompliance)} icon={Gauge} sub={scoreBand(compliance.pressureCompliance).label} />
+                  <StatTile label="Pressure consistency" value={fmtPct(compliance.pressureCompliance)} icon={Gauge} sub={scoreBand(compliance.pressureCompliance).label} />
                   <StatTile label="Pressures checked" value={compliance.pressureChecked} icon={ClipboardCheck} tone="info" sub={`${compliance.pressureInspectionsMeasured} inspections measured, ${compliance.pressureInspectionsNotMeasured} without enough readings`} />
                   <StatTile label="Out of tolerance" value={compliance.pressureChecked ? compliance.pressureFails : NA} icon={AlertTriangle} tone="crit" sub={`more than ${PRESSURE_TOLERANCE}% from the vehicle median`} />
                 </div>

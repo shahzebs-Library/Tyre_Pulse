@@ -24,7 +24,12 @@ export const REPAIR_STEMS = ['vulcaniz', 'vulcanis']
 /** A replacement that cost nothing. The answer is zero, not unknown. */
 export const WARRANTY_WORDS = [
   'warranty', 'warrantee', 'guarantee',
-  'free of charge', 'no charge', 'zero charge',
+  // The spellings the ERP actually uses (ENG-6, audit case C23b). Two live KSA
+  // lines read "TIRE -WARRENTY -315/80 R 22.5"; the rule matched none of them,
+  // so a warranty replacement could be priced from a comparable tyre instead of
+  // being a confirmed zero. Whole words, listed, never a stem.
+  'warrenty', 'waranty', 'warenty', 'warrantie', 'gaurantee', 'guaranty',
+  'free of charge', 'free issue', 'no charge', 'zero charge',
   'foc', 'f.o.c',
   'replacement claim', 'under claim',
 ]
@@ -61,10 +66,10 @@ export function isTyreRepair(description) {
 /**
  * Was this replaced under warranty?
  *
- * HONEST NOTE: no warranty wording exists anywhere in the live expense grid
- * today - the probe returns zero rows in all three countries. The rule is here
- * for when that data arrives, and every surface reports the count so it never
- * looks like it did something it did not.
+ * The live expense grid carries warranty wording only under the ERP's own
+ * spelling ("WARRENTY", 2 KSA lines measured 2026-11-12), which is why the
+ * misspellings are in WARRANTY_WORDS. Every surface reports the count so the
+ * rule never looks like it did something it did not.
  */
 export function isTyreWarranty(description) {
   const t = String(description || '')

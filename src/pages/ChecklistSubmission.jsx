@@ -340,7 +340,7 @@ export default function ChecklistSubmission() {
           {/* What is still outstanding, named line by line. The database refuses
               a close either way; this is so nobody discovers that only after
               signing. */}
-          <BlockingMarksNotice template={template} answers={submissionAnswers(sub)} />
+          <BlockingMarksNotice template={template} answers={submissionAnswers(sub)} submission={sub} />
 
           <div className="card space-y-4">
             <h2 className="text-sm font-semibold text-[var(--text-primary)]">Responses</h2>

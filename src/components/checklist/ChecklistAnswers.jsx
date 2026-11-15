@@ -185,7 +185,7 @@ export default function ChecklistAnswers({
           offered an approve button. The database refuses it either way; this is
           so the refusal is not the first anyone hears of it. */}
       {showApproval && (
-        <BlockingMarksNotice template={template} answers={submissionAnswers(sub)} className="mt-5" />
+        <BlockingMarksNotice template={template} answers={submissionAnswers(sub)} submission={sub} className="mt-5" />
       )}
 
       {/* Who has signed, in the order the rules require. */}

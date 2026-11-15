@@ -1,5 +1,24 @@
 import { AlertTriangle } from 'lucide-react'
 import { canClose } from '../../lib/checklist/checklistMarks'
+import { acknowledgedLabel } from '../../lib/closureWorkflow'
+
+export const HINT_OPEN = 'Correct the fault and have the line re-marked, or send the sheet back for correction.'
+export const HINT_ACKNOWLEDGED = 'Acknowledged. The fault is tracked as a corrective action.'
+export const HINT_RESOLVED = 'Acknowledged. The fault was resolved through its corrective action.'
+export const HINT_EXCEPTION = 'Closed by an approved exception.'
+
+/**
+ * The closing sentence under the fault list. An acknowledged sheet has already
+ * been signed with the fault recorded, so telling the reader to correct it or
+ * send it back is wrong advice: say where the fault now lives instead.
+ */
+export function blockingHint(submission) {
+  const ack = submission ? acknowledgedLabel(submission) : null
+  if (!ack) return HINT_OPEN
+  if (ack.key === 'ack_exception') return HINT_EXCEPTION
+  if (ack.key === 'ack_resolved') return HINT_RESOLVED
+  return HINT_ACKNOWLEDGED
+}
 
 /**
  * What is still stopping this sheet being closed, named line by line.
@@ -16,7 +35,7 @@ import { canClose } from '../../lib/checklist/checklistMarks'
  *
  * Renders nothing when there is nothing outstanding.
  */
-export default function BlockingMarksNotice({ template, answers, className = '' }) {
+export default function BlockingMarksNotice({ template, answers, submission = null, className = '' }) {
   const { ok, blocking } = canClose(template, answers || {})
   if (ok) return null
 
@@ -41,7 +60,7 @@ export default function BlockingMarksNotice({ template, answers, className = '' 
             ))}
           </ul>
           <p className="text-xs text-[var(--text-muted)] mt-2">
-            Correct the fault and have the line re-marked, or send the sheet back for correction.
+            {blockingHint(submission)}
           </p>
         </div>
       </div>

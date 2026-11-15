@@ -1,0 +1,5109 @@
+{
+ "generated": "2026-11-12",
+ "scope": "Inventory & Procurement, Accidents & Claims, Finance & Commercial, Analytics & Reports, Automation, Administration",
+ "cross_cutting": {
+  "MODC-01": {
+   "severity": "P0",
+   "evidence": "DB functions consume_event_accident_notify and consume_event_accident_case_notify read system_config keys accident_email_to / accident_email_cc (global table, no organisation column); system_config.accident_emails_enabled = true",
+   "summary": "Accident emails for every organisation go to ONE global mailbox list. A second company filing an accident would email its case details to the current company mailbox. VERIFIED (function source + config)."
+  },
+  "MODC-02": {
+   "severity": "P1",
+   "evidence": "get_report_snapshot, get_workshop_snapshot, get_report_tyre_maintenance read public.settings key company_name and system_config key company_logo (both global)",
+   "summary": "Public share boards and TV links print one global company name and logo for every organisation. VERIFIED."
+  },
+  "MODC-03": {
+   "severity": "P1",
+   "evidence": "src/lib/api/kpiTargets.js:44 and src/lib/api/settings.js:61 upsert onConflict metric,year,month,site; live index kpi_targets_scope_uidx (metric, year, COALESCE(month,0), COALESCE(site,''), lower(country)) has no organisation column; src/pages/KpiScorecard.jsx:262 and src/pages/Settings.jsx:516 send month and site as NULL",
+   "summary": "KPI targets cannot be re-saved: NULL month/site never match the conflict target, so the second save is an INSERT that hits the scope unique index (23505). The same index also blocks any second organisation from saving the same metric and year. Existing 7 rows were last written 2026-06-08. VERIFIED statically (code + catalog), not executed."
+  },
+  "MODC-04": {
+   "severity": "P1",
+   "evidence": "unique index budgets_site_region_year_month_key (site, region, year, month) has no organisation column; src/lib/api/budgets.js:54,64 and src/pages/BudgetPlanner.jsx:425 upsert on it; budgets INSERT/UPDATE policies allow role Admin (or an explicit capability grant) only; src/pages/Budgets.jsx has no role gate",
+   "summary": "Two companies with the same site name and month collide on one global key. Inside the current company a Manager or Director sees the editor on /budgets and the save is refused by RLS. VERIFIED (catalog + code)."
+  },
+  "MODC-05": {
+   "severity": "P1",
+   "evidence": "supabase/functions/send-scheduled-reports/index.ts:1197-1202 (systemCurrency reads system_config.default_currency = SAR), :249-253 report_exec_digest; DB function report_exec_digest sums cost_per_tyre*qty across all countries of the org; :119-193 fixed Riyadh time",
+   "summary": "Scheduled executive emails add SAR + AED + EGP into one figure and label it with one global currency; spend comes from tyre_records.cost_per_tyre, not the expense grid used on screen; send times are fixed to Riyadh. VERIFIED."
+  },
+  "MODC-06": {
+   "severity": "P1",
+   "evidence": "src/lib/accidentVocab.js:48,50,142,161,162 (NAJM/TAQDEER options, INTERNAL_WORKSHOPS = GCC Workshop, LIABLE_PARTY_OPTS = GCC / Other Party, PAYER_OPTS = GCC / Insurance / Recovery Claim)",
+   "summary": "The accident form hard-codes the current company abbreviation (GCC) as liable party and payer, plus Saudi-only Najm and Taqdeer fields. VERIFIED."
+  },
+  "MODC-07": {
+   "severity": "P1",
+   "evidence": "public.modules has no organisation column; policy modules ALL PERMISSIVE: is_super_admin() OR get_my_role() = Admin",
+   "summary": "Module Control status is one global switch for every organisation and any organisation Admin passes the write policy. See the module-restore agent report; listed here because every route guard in this report depends on it. VERIFIED (catalog)."
+  },
+  "MODC-08": {
+   "severity": "P2",
+   "evidence": "unique indexes without organisation: supplier_ratings_brand_country_key, recall_number_country_uniq, purchase_orders_po_number_key, work_orders_work_order_no_key; generate_po_number and generate_work_order_no use one global sequence",
+   "summary": "Document numbers and brand ratings share one namespace across companies: cross-tenant save collisions (ratings, recalls) and shared PO / work order number sequences. VERIFIED (catalog)."
+  },
+  "MODC-09": {
+   "severity": "P2",
+   "evidence": "INSERT/UPDATE policies equal to auth.uid() IS NOT NULL on goods_receipts, incident_reports, materials, requisitions, sla_records, ocr_scans, onboarding_tasks, fleet_optimizer_scenarios, suppliers",
+   "summary": "Route guards restrict these pages to Admin or Admin/Manager/Director, but the database lets any signed-in user of the organisation insert and update rows through the API. Organisation isolation still holds. VERIFIED (catalog)."
+  },
+  "MODC-10": {
+   "severity": "P2",
+   "evidence": "trigger function normalize_site(): upper-cases, applies global site_aliases, strips a trailing -ST or _ST",
+   "summary": "Site names are rewritten by rules built for the current company (store suffix -ST) for every tenant. VERIFIED (function source)."
+  },
+  "MODC-11": {
+   "severity": "P2",
+   "evidence": "report_schedules policies: INSERT/UPDATE WITH CHECK allow org_id IS NULL; SELECT allows org_id IS NULL rows for everyone; no restrictive organisation policy",
+   "summary": "A schedule saved with no organisation (possible through the API) is visible, editable and deletable by managers of every organisation, including its recipient list. The client and the edge function now refuse null organisation; the policy does not. VERIFIED (catalog)."
+  },
+  "MODC-12": {
+   "severity": "P2",
+   "evidence": "workflow_definitions 25 rows, departments 12, accident_routing_rules 7, accident_email_templates and approval_policies 3: all belong to one organisation; no seeding function found for a new organisation",
+   "summary": "A new company starts with no approval workflows, no accident departments, routing rules or email templates. Pages open empty and the related automation does nothing until an admin builds each from scratch. VERIFIED counts; absence of seeding is PLAUSIBLE (searched pages and RPC names only)."
+  },
+  "MODC-13": {
+   "severity": "P2",
+   "evidence": "column defaults KSA / SAR on budgets, kpi_targets, stock_records, insurance_policies, insurance_claim_register, sany_delay_penalties (rate_per_hour 43); src/contexts/SettingsContext.jsx:21-22 COUNTRIES = KSA, UAE, Egypt and COUNTRY_CURRENCY",
+   "summary": "Country list, currency map and several column defaults are fixed to the current company footprint. A company outside these three countries gets KSA defaults on rows where the client omits country. VERIFIED."
+  },
+  "MODC-14": {
+   "severity": "P3",
+   "evidence": "report_shares: 2 active rows, password_hash null, expires_at null, view_count 230 and 25",
+   "summary": "Live public report links have no password and no expiry. Optional by design; flagged for the current company. VERIFIED."
+  }
+ },
+ "modules": [
+  {
+   "group": "Inventory & Procurement",
+   "label": "Stock",
+   "route": "/stock",
+   "module_key": "stock",
+   "guard": "<ModuleRoute moduleKey=\"stock\"><StockManagement /></ModuleRoute>",
+   "page": "src/pages/StockManagement.jsx",
+   "services": [
+    "api",
+    "api/sites",
+    "api/stockQuickEntry",
+    "sites",
+    "stockLedger",
+    "stockManagementAnalytics",
+    "stockQuickEntry",
+    "useLatestRequest"
+   ],
+   "tables": [
+    "sites",
+    "vehicle_fleet"
+   ],
+   "rpcs": [
+    "reference_site_options",
+    "stock_item_suggestions"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Stock register on stock_records with quick entry, transfer, issue and count through post_stock_movement, movement ledger, tyre issue timeline, Excel/PDF export. Paged reads with id tiebreak.",
+   "empty_account_behaviour": "Empty table with a clear first action (add stock item). Min and critical levels can be set; status is derived by trigger.",
+   "defects": [
+    {
+     "id": "MODC-13",
+     "severity": "P2",
+     "evidence": "column defaults KSA / SAR on budgets, kpi_targets, stock_records, insurance_policies, insurance_claim_register, sany_delay_penalties (rate_per_hour 43); src/contexts/SettingsContext.jsx:21-22 COUNTRIES = KSA, UAE, Egypt and COUNTRY_CURRENCY",
+     "summary": "Country list, currency map and several column defaults are fixed to the current company footprint. A company outside these three countries gets KSA defaults on rows where the client omits country. VERIFIED."
+    },
+    {
+     "id": "MODC-10",
+     "severity": "P2",
+     "evidence": "trigger function normalize_site(): upper-cases, applies global site_aliases, strips a trailing -ST or _ST",
+     "summary": "Site names are rewritten by rules built for the current company (store suffix -ST) for every tenant. VERIFIED (function source)."
+    },
+    {
+     "id": "MODC-20",
+     "severity": "P3",
+     "evidence": "stock_movements policy ALL: auth.role() = authenticated",
+     "summary": "Any signed-in user of the organisation can write movement rows directly; the RPC is the intended path."
+    }
+   ],
+   "remediation": "Keep. Make country default follow the user country instead of KSA; tighten stock_movements writes to the RPC.",
+   "priority": "P2",
+   "area": "DB",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "aiCostMonitor.render.test.jsx",
+     "aiTyreInspection.render.test.jsx",
+     "api.test.js",
+     "approvalPolicies.page.test.jsx",
+     "costCenterPage.render.test.jsx",
+     "dataCleaning.page.test.jsx",
+     "dataReconciliationPage.render.test.jsx",
+     "erpReliability.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Inventory & Procurement",
+   "label": "Stock Replenishment",
+   "route": "/stock-replenishment",
+   "module_key": "stock_replenishment",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><StockReplenishment /></RoleRoute>",
+   "page": "src/pages/StockReplenishment.jsx",
+   "services": [
+    "api/purchaseOrders",
+    "purchaseOrders",
+    "rootCauseEngineAnalytics",
+    "stockReplenishmentAnalytics"
+   ],
+   "tables": [
+    "purchase_orders",
+    "stock",
+    "tyre_records"
+   ],
+   "rpcs": [
+    "generate_po_number"
+   ],
+   "internal_status": "broken",
+   "commercial_class": 3,
+   "module_control": "disabled",
+   "what_it_does": "Replenishment planner: stock on hand vs 90-day tyre issues, suggested order quantity, raise PO.",
+   "empty_account_behaviour": "Shows no stock for every company, new or existing.",
+   "defects": [
+    {
+     "id": "MODC-21",
+     "severity": "P1",
+     "evidence": "src/lib/api/purchaseOrders.js:50 reads table stock (0 rows, legacy) while the Stock module writes stock_records (36 rows)",
+     "summary": "The planner reads a table nothing writes to, so stock on hand is always empty and every suggestion is computed against zero stock. VERIFIED. Module is switched off today."
+    }
+   ],
+   "remediation": "Repoint the read to stock_records (brand, tyre_size, stock_qty, unit_cost) and add a test against the real column set. Risk to current company: none while switched off.",
+   "priority": "P1",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "purchaseOrders.api.test.js",
+     "rootCauseEngineAnalytics.lifetime.test.js",
+     "rootCauseEngineAnalytics.test.js",
+     "stockReplenishmentAnalytics.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Inventory & Procurement",
+   "label": "Parts Catalog",
+   "route": "/parts-catalog",
+   "module_key": "parts_catalog",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><PartsCatalog /></RoleRoute>",
+   "page": "src/pages/PartsCatalog.jsx",
+   "services": [
+    "_client",
+    "api/_client",
+    "api/partsCatalog",
+    "partsCatalog",
+    "partsCatalogAnalytics"
+   ],
+   "tables": [
+    "parts_catalog"
+   ],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "disabled",
+   "what_it_does": "Parts master CRUD (part number, cost, on hand, reorder level) with analytics and export. Service validates status against the CHECK list.",
+   "empty_account_behaviour": "Honest empty state; first action is add part. Read is capped at 1000 rows with no truncation notice.",
+   "defects": [
+    {
+     "id": "MODC-22",
+     "severity": "P3",
+     "evidence": "src/lib/api/partsCatalog.js listParts limit 1000",
+     "summary": "Silent cap on a catalogue that can exceed 1000 parts."
+    }
+   ],
+   "remediation": "Page the read. Decide whether it is the same thing as Materials and material_master (three item masters).",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [
+     "partsCostClaimsUtilPages.render.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "accessGrantsEdit.test.js",
+     "accessPolicies.test.js",
+     "accidentReportTemplates.api.test.js",
+     "accidentsPage.api.test.js",
+     "administrationImports.api.test.js",
+     "aiOrchestratorClient.test.js",
+     "aiTyreInspectionFilters.test.js",
+     "alertThresholds.api.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Inventory & Procurement",
+   "label": "Materials",
+   "route": "/materials",
+   "module_key": "materials",
+   "guard": "<RoleRoute allowed={['Admin']}><Materials /></RoleRoute>",
+   "page": "src/pages/Materials.jsx",
+   "services": [
+    "_client",
+    "api/_client",
+    "api/materials",
+    "geofencingAnalytics",
+    "materials",
+    "materialsAnalytics"
+   ],
+   "tables": [
+    "materials"
+   ],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 5,
+   "module_control": "disabled",
+   "what_it_does": "Consumables master CRUD (oil, filter, valve) with reorder point.",
+   "empty_account_behaviour": "Honest empty state. Admin only route.",
+   "defects": [
+    {
+     "id": "MODC-09",
+     "severity": "P2",
+     "evidence": "INSERT/UPDATE policies equal to auth.uid() IS NOT NULL on goods_receipts, incident_reports, materials, requisitions, sla_records, ocr_scans, onboarding_tasks, fleet_optimizer_scenarios, suppliers",
+     "summary": "Route guards restrict these pages to Admin or Admin/Manager/Director, but the database lets any signed-in user of the organisation insert and update rows through the API. Organisation isolation still holds. VERIFIED (catalog)."
+    },
+    {
+     "id": "MODC-23",
+     "severity": "P2",
+     "evidence": "tables parts_catalog, materials and material_master are three separate item masters; stock_records is a fourth quantity store",
+     "summary": "Duplicate item masters with no link between them."
+    }
+   ],
+   "remediation": "Consolidate into one item master before selling inventory.",
+   "priority": "P2",
+   "area": "web, DB",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "accessGrantsEdit.test.js",
+     "accessPolicies.test.js",
+     "accidentReportTemplates.api.test.js",
+     "accidentsPage.api.test.js",
+     "administrationImports.api.test.js",
+     "aiOrchestratorClient.test.js",
+     "aiTyreInspectionFilters.test.js",
+     "alertThresholds.api.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Inventory & Procurement",
+   "label": "Goods Receipt",
+   "route": "/goods-receipt",
+   "module_key": "goods_receipt",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><GoodsReceipt /></RoleRoute>",
+   "page": "src/pages/GoodsReceipt.jsx",
+   "services": [
+    "_client",
+    "api/_client",
+    "api/goodsReceipts",
+    "geofencingAnalytics",
+    "goodsReceiptAnalytics",
+    "goodsReceipts"
+   ],
+   "tables": [
+    "goods_receipts"
+   ],
+   "rpcs": [],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "module_control": "disabled",
+   "what_it_does": "Goods received note register (GRN number, PO reference as free text, quantities, status).",
+   "empty_account_behaviour": "Honest empty state; first action is add receipt.",
+   "defects": [
+    {
+     "id": "MODC-09",
+     "severity": "P2",
+     "evidence": "INSERT/UPDATE policies equal to auth.uid() IS NOT NULL on goods_receipts, incident_reports, materials, requisitions, sla_records, ocr_scans, onboarding_tasks, fleet_optimizer_scenarios, suppliers",
+     "summary": "Route guards restrict these pages to Admin or Admin/Manager/Director, but the database lets any signed-in user of the organisation insert and update rows through the API. Organisation isolation still holds. VERIFIED (catalog)."
+    },
+    {
+     "id": "MODC-24",
+     "severity": "P2",
+     "evidence": "src/lib/api/goodsReceipts.js createGoodsReceipt writes goods_receipts only; no reference to stock_records or purchase_orders in page or service",
+     "summary": "Receiving goods does not increase stock and does not update the purchase order. PO reference is typed text. The chain requisition, PO, receipt, stock is four unlinked registers. VERIFIED."
+    }
+   ],
+   "remediation": "Link GRN lines to a PO and post a stock receipt movement. Additive; no risk to current data (0 rows).",
+   "priority": "P2",
+   "area": "web, DB",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "accessGrantsEdit.test.js",
+     "accessPolicies.test.js",
+     "accidentReportTemplates.api.test.js",
+     "accidentsPage.api.test.js",
+     "administrationImports.api.test.js",
+     "aiOrchestratorClient.test.js",
+     "aiTyreInspectionFilters.test.js",
+     "alertThresholds.api.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Inventory & Procurement",
+   "label": "Material Issue (MIS)",
+   "route": "/store-material-issue",
+   "module_key": "store_material_issue",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']} moduleKey=\"store_material_issue\"><StoreMaterialIssue /></RoleRoute>",
+   "page": "src/pages/StoreMaterialIssue.jsx",
+   "services": [
+    "api/materialIssue",
+    "api/materialMaster",
+    "governedCost",
+    "materialIssue",
+    "materialMaster",
+    "storeMaterialIssueAnalytics"
+   ],
+   "tables": [
+    "material_issue_lines",
+    "material_issues",
+    "material_master",
+    "parts_consumption",
+    "work_orders"
+   ],
+   "rpcs": [
+    "get_material_issue_summary",
+    "material_master_coverage",
+    "material_master_derive",
+    "material_master_set",
+    "material_master_set_bulk"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "module_control": "live or not listed",
+   "what_it_does": "Material issue slip register built from parts_consumption.issue_number (historical ERP slips), returns view, in-app raise of a slip (material_issues), analytics. Money per country.",
+   "empty_account_behaviour": "A new company with no imported expense grid sees an empty register and can raise in-app slips, but there is no on-hand balance (the page says so).",
+   "defects": [
+    {
+     "id": "MODC-25",
+     "severity": "P2",
+     "evidence": "src/pages/StoreMaterialIssue.jsx header and Raise tab: no live on-hand balance; main value is the imported ERP history",
+     "summary": "Depends on the current company ERP export; issuing does not decrement stock_records."
+    }
+   ],
+   "remediation": "Position as customer-data dependent; link issues to stock for new tenants.",
+   "priority": "P2",
+   "area": "web, DB",
+   "tests": {
+    "page_tests": [
+     "materialIssue.test.js",
+     "materialIssue.history.render.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "brandPerformance.render.test.jsx",
+     "consoleServiceReads.test.js",
+     "costCenterPage.render.test.jsx",
+     "executiveReportIntake.render.test.jsx",
+     "governedCost.test.js",
+     "materialIssue.history.api.test.js",
+     "materialIssue.history.render.test.jsx",
+     "materialIssue.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Inventory & Procurement",
+   "label": "Procurement",
+   "route": "/procurement",
+   "module_key": "stock",
+   "guard": "<ModuleRoute moduleKey=\"stock\"><Procurement /></ModuleRoute>",
+   "page": "src/pages/Procurement.jsx",
+   "services": [
+    "api/procurement",
+    "procurement",
+    "procurementAnalytics"
+   ],
+   "tables": [
+    "purchase_orders"
+   ],
+   "rpcs": [
+    "generate_po_number"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Purchase orders with line items, status timeline, PDF, approval panel.",
+   "empty_account_behaviour": "TableNotInUse notice then empty table; first action is create PO.",
+   "defects": [
+    {
+     "id": "MODC-08",
+     "severity": "P2",
+     "evidence": "unique indexes without organisation: supplier_ratings_brand_country_key, recall_number_country_uniq, purchase_orders_po_number_key, work_orders_work_order_no_key; generate_po_number and generate_work_order_no use one global sequence",
+     "summary": "Document numbers and brand ratings share one namespace across companies: cross-tenant save collisions (ratings, recalls) and shared PO / work order number sequences. VERIFIED (catalog)."
+    },
+    {
+     "id": "MODC-26",
+     "severity": "P3",
+     "evidence": "purchase_orders UPDATE policy: creator or role Admin only",
+     "summary": "A Manager cannot progress a PO raised by someone else."
+    },
+    {
+     "id": "MODC-27",
+     "severity": "P3",
+     "evidence": "src/pages/Procurement.jsx:401 fallback PO number from Date.now() when the RPC fails",
+     "summary": "Fallback number is not guaranteed unique."
+    }
+   ],
+   "remediation": "Per-organisation PO numbering; align update policy with the approval roles.",
+   "priority": "P2",
+   "area": "DB",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "navTreeParity.test.js",
+     "procurement.api.test.js",
+     "procurementAnalytics.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Inventory & Procurement",
+   "label": "Requisitions",
+   "route": "/requisitions",
+   "module_key": "requisitions",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><Requisitions /></RoleRoute>",
+   "page": "src/pages/Requisitions.jsx",
+   "services": [
+    "_client",
+    "api/_client",
+    "api/requisitions",
+    "requisitions",
+    "requisitionsAnalytics"
+   ],
+   "tables": [
+    "requisitions"
+   ],
+   "rpcs": [],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "module_control": "disabled",
+   "what_it_does": "Internal purchase request register with status and export.",
+   "empty_account_behaviour": "Honest empty state; first action is new requisition.",
+   "defects": [
+    {
+     "id": "MODC-09",
+     "severity": "P2",
+     "evidence": "INSERT/UPDATE policies equal to auth.uid() IS NOT NULL on goods_receipts, incident_reports, materials, requisitions, sla_records, ocr_scans, onboarding_tasks, fleet_optimizer_scenarios, suppliers",
+     "summary": "Route guards restrict these pages to Admin or Admin/Manager/Director, but the database lets any signed-in user of the organisation insert and update rows through the API. Organisation isolation still holds. VERIFIED (catalog)."
+    },
+    {
+     "id": "MODC-28",
+     "severity": "P2",
+     "evidence": "src/pages/Requisitions.jsx: po_ref is free text; no conversion to purchase_orders",
+     "summary": "Approved requisitions do not become purchase orders."
+    }
+   ],
+   "remediation": "Add convert-to-PO or merge into Procurement.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "accessGrantsEdit.test.js",
+     "accessPolicies.test.js",
+     "accidentReportTemplates.api.test.js",
+     "accidentsPage.api.test.js",
+     "administrationImports.api.test.js",
+     "aiOrchestratorClient.test.js",
+     "aiTyreInspectionFilters.test.js",
+     "alertThresholds.api.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Inventory & Procurement",
+   "label": "Supplier Management",
+   "route": "/suppliers",
+   "module_key": "stock",
+   "guard": "<ModuleRoute moduleKey=\"stock\"><SupplierManagement /></ModuleRoute>",
+   "page": "src/pages/SupplierManagement.jsx",
+   "services": [
+    "analytics/supplierScorecard",
+    "api/supplierManagementApi",
+    "supplierManagementAnalytics",
+    "supplierManagementApi",
+    "tyreLifetime",
+    "validation/schemas"
+   ],
+   "tables": [
+    "purchase_orders",
+    "supplier_contracts",
+    "supplier_ratings",
+    "tyre_records",
+    "warranty_claims"
+   ],
+   "rpcs": [],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "module_control": "live or not listed",
+   "what_it_does": "Supplier scorecard and spend derived from tyre brand, plus ratings and supplier contracts.",
+   "empty_account_behaviour": "NotInUseNotice; a new company has no way to add a supplier here because the directory is derived from tyre brands.",
+   "defects": [
+    {
+     "id": "MODC-29",
+     "severity": "P2",
+     "evidence": "src/lib/api/supplierManagementApi.js:18-25 and src/pages/SupplierManagement.jsx:484-487 (supplier falls back to brand); the suppliers table (0 rows) is never read or written by this page",
+     "summary": "Supplier Management treats the tyre brand as the supplier. The real supplier master (suppliers) is only reachable through Data Intake. VERIFIED."
+    },
+    {
+     "id": "MODC-08",
+     "severity": "P2",
+     "evidence": "unique indexes without organisation: supplier_ratings_brand_country_key, recall_number_country_uniq, purchase_orders_po_number_key, work_orders_work_order_no_key; generate_po_number and generate_work_order_no use one global sequence",
+     "summary": "Document numbers and brand ratings share one namespace across companies: cross-tenant save collisions (ratings, recalls) and shared PO / work order number sequences. VERIFIED (catalog)."
+    }
+   ],
+   "remediation": "Read and write the suppliers table; keep brand view as a tab. No risk to current data.",
+   "priority": "P2",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "analyticsEngine.lifetime.test.js",
+     "costCenterAnalytics.lifetime.test.js",
+     "fitmentCpk.test.js",
+     "fleetIntelligenceAnalytics.lifetime.test.js",
+     "fleetRisk.lifetime.test.js",
+     "kpiEngine.lifetime.test.js",
+     "mobileTyrePurchaseMirror.test.js",
+     "retreadManagementAnalytics.lifetime.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Inventory & Procurement",
+   "label": "Vendor Intelligence",
+   "route": "/vendor-intelligence",
+   "module_key": "vendor_intelligence",
+   "guard": "<ModuleRoute moduleKey=\"vendor_intelligence\"><VendorIntelligence /></ModuleRoute>",
+   "page": "src/pages/VendorIntelligence.jsx",
+   "services": [
+    "api/governedCost",
+    "countryFilter",
+    "governedCost",
+    "kpiEngine",
+    "tyrePositions",
+    "vendorIntelligenceAnalytics"
+   ],
+   "tables": [
+    "corrective_actions",
+    "tyre_records"
+   ],
+   "rpcs": [
+    "get_cost_cpk_overview",
+    "get_expense_by_country",
+    "get_tyre_cost_by_asset"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "module_control": "disabled",
+   "what_it_does": "Vendor and workshop ranking from tyre records and expense grid; N/A when unmeasurable.",
+   "empty_account_behaviour": "Empty states with thresholds; needs tyre records with brand and cost.",
+   "defects": [
+    {
+     "id": "MODC-30",
+     "severity": "P2",
+     "evidence": "PROJECT_MEMORY data notes: tyre_records.supplier populated on 0 rows; vendor = brand",
+     "summary": "Vendor ranking is brand ranking; see ENGINEERING_CALCULATIONS for the cost maths."
+    }
+   ],
+   "remediation": "Rename to brand ranking or feed real supplier data.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [
+     "sizeVendorDriverPages.render.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "brandPerformance.render.test.jsx",
+     "complianceRules.test.js",
+     "costCenterPage.render.test.jsx",
+     "engineeringKpiAnalytics.test.js",
+     "executiveReportIntake.render.test.jsx",
+     "governedCost.test.js",
+     "kpiEngine.lifetime.test.js",
+     "kpiEngineCore.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Inventory & Procurement",
+   "label": "Supplier Marketplace",
+   "route": "/marketplace",
+   "module_key": "marketplace",
+   "guard": "<RoleRoute allowed={['Admin']}><SupplierMarketplace /></RoleRoute>",
+   "page": "src/pages/SupplierMarketplace.jsx",
+   "services": [
+    "_client",
+    "api/_client",
+    "api/marketplace",
+    "marketplace",
+    "supplierMarketplaceAnalytics",
+    "supplierMarketplaceView"
+   ],
+   "tables": [
+    "marketplace_listings",
+    "marketplace_rfqs"
+   ],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 4,
+   "module_control": "disabled",
+   "what_it_does": "Internal register of supplier listings and RFQs with comparison and funnel.",
+   "empty_account_behaviour": "Honest empty state; first action is add listing.",
+   "defects": [
+    {
+     "id": "MODC-31",
+     "severity": "P2",
+     "evidence": "src/pages/SupplierMarketplace.jsx header: runs on marketplace_listings / marketplace_rfqs entered by the tenant itself",
+     "summary": "Named Supplier Marketplace but there are no external suppliers, no quoting by suppliers and no ordering. It is a private price list."
+    }
+   ],
+   "remediation": "Do not market as a marketplace. Rename to supplier price list or leave off.",
+   "priority": "P2",
+   "area": "marketing, web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "accessGrantsEdit.test.js",
+     "accessPolicies.test.js",
+     "accidentReportTemplates.api.test.js",
+     "accidentsPage.api.test.js",
+     "administrationImports.api.test.js",
+     "aiOrchestratorClient.test.js",
+     "aiTyreInspectionFilters.test.js",
+     "alertThresholds.api.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Inventory & Procurement",
+   "label": "Contracts",
+   "route": "/contracts",
+   "module_key": "contracts",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><Contracts /></RoleRoute>",
+   "page": "src/pages/Contracts.jsx",
+   "services": [
+    "api/contracts",
+    "contracts",
+    "contractsAnalytics"
+   ],
+   "tables": [
+    "contracts"
+   ],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Contract register (vendor, type, dates, value, currency, status) with renewal pipeline.",
+   "empty_account_behaviour": "Honest empty state or not-provisioned state; first action is add contract.",
+   "defects": [
+    {
+     "id": "MODC-32",
+     "severity": "P3",
+     "evidence": "tables contracts and supplier_contracts both store supplier agreements",
+     "summary": "Two contract registers (this page and the Suppliers contracts tab)."
+    }
+   ],
+   "remediation": "Merge the two contract stores.",
+   "priority": "P3",
+   "area": "web, DB",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "contracts.test.js",
+     "contractsRegister.test.js",
+     "navTreeParity.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Accidents & Claims",
+   "label": "Accidents",
+   "route": "/accidents",
+   "module_key": "accidents",
+   "guard": "<FlagRoute flag=\"accidents_module\"><Accidents /></FlagRoute>",
+   "page": "src/pages/Accidents.jsx",
+   "services": [
+    "accidentAnalytics",
+    "accidentCaseVocab",
+    "accidentFormVisibility",
+    "accidentReport",
+    "accidentReportTemplates",
+    "accidentStages",
+    "accidentVocab",
+    "accidentWorkflow",
+    "accidents",
+    "api/accidentReportTemplates",
+    "api/accidentWorkflow",
+    "api/accidents",
+    "api/assets",
+    "api/scheduledReports",
+    "api/sites",
+    "assets",
+    "auditLogger",
+    "brand/vehicleArt",
+    "chartCapture",
+    "claimsAnalytics",
+    "emailService",
+    "scheduledReports",
+    "sites",
+    "storageRefs"
+   ],
+   "tables": [
+    "accident_email_templates",
+    "accident_report_templates",
+    "accident_routing_rules",
+    "accidents",
+    "departments",
+    "profiles",
+    "report_schedules",
+    "sites",
+    "system_config",
+    "vehicle_fleet"
+   ],
+   "rpcs": [
+    "reference_asset_options",
+    "reference_site_options"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "module_control": "live or not listed",
+   "what_it_does": "Accident register and inline create/edit form, analytics, report builder, claims export; staged workflow, case timeline, team workstreams. Detail routes /accidents/:id and /accidents/:id/timeline.",
+   "empty_account_behaviour": "Empty register with create action. Departments, routing rules and email templates are empty for a new company, so notifications route to nobody except the global mailbox.",
+   "defects": [
+    {
+     "id": "MODC-01",
+     "severity": "P0",
+     "evidence": "DB functions consume_event_accident_notify and consume_event_accident_case_notify read system_config keys accident_email_to / accident_email_cc (global table, no organisation column); system_config.accident_emails_enabled = true",
+     "summary": "Accident emails for every organisation go to ONE global mailbox list. A second company filing an accident would email its case details to the current company mailbox. VERIFIED (function source + config)."
+    },
+    {
+     "id": "MODC-06",
+     "severity": "P1",
+     "evidence": "src/lib/accidentVocab.js:48,50,142,161,162 (NAJM/TAQDEER options, INTERNAL_WORKSHOPS = GCC Workshop, LIABLE_PARTY_OPTS = GCC / Other Party, PAYER_OPTS = GCC / Insurance / Recovery Claim)",
+     "summary": "The accident form hard-codes the current company abbreviation (GCC) as liable party and payer, plus Saudi-only Najm and Taqdeer fields. VERIFIED."
+    },
+    {
+     "id": "MODC-12",
+     "severity": "P2",
+     "evidence": "workflow_definitions 25 rows, departments 12, accident_routing_rules 7, accident_email_templates and approval_policies 3: all belong to one organisation; no seeding function found for a new organisation",
+     "summary": "A new company starts with no approval workflows, no accident departments, routing rules or email templates. Pages open empty and the related automation does nothing until an admin builds each from scratch. VERIFIED counts; absence of seeding is PLAUSIBLE (searched pages and RPC names only)."
+    },
+    {
+     "id": "MODC-33",
+     "severity": "P2",
+     "evidence": "route guard is FlagRoute accidents_module only (src/App.jsx:656); no ModuleRoute, so Module Control status for accidents is not enforced on the route",
+     "summary": "Module switch does not gate the accident routes."
+    }
+   ],
+   "remediation": "Move mailbox, liable-party labels and internal workshop name into per-organisation configuration; seed defaults for a new organisation; keep current values for the existing tenant. Risk to current company: low if the existing values are copied into its configuration first.",
+   "priority": "P0",
+   "area": "DB, web",
+   "tests": {
+    "page_tests": [
+     "accidentIdentifyAsset.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "accidentAnalytics.test.js",
+     "accidentCase.test.js",
+     "accidentCaseVocab.test.js",
+     "accidentDetailPage.test.jsx",
+     "accidentDetailResilientLoad.test.jsx",
+     "accidentDispatch.test.js",
+     "accidentFormVisibility.test.js",
+     "accidentIdentifyAsset.test.jsx"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Accidents & Claims",
+   "label": "Accident Cases",
+   "route": "/accident-cases",
+   "module_key": "accident_cases",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><AccidentCases /></RoleRoute>",
+   "page": "src/pages/AccidentCases.jsx",
+   "services": [
+    "accidentCaseAnalytics",
+    "accidentCaseBoard",
+    "api/accidentCaseBoard"
+   ],
+   "tables": [
+    "accident_case_tasks",
+    "accident_case_workstreams",
+    "accidents"
+   ],
+   "rpcs": [
+    "get_accident_case_kpis",
+    "get_accident_case_status_breakdown",
+    "get_accident_workstream_bottleneck"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "module_control": "live or not listed",
+   "what_it_does": "Case analytics board and team inbox over accident_case_workstreams with server KPIs.",
+   "empty_account_behaviour": "Empty board; depends on accidents existing.",
+   "defects": [
+    {
+     "id": "MODC-12",
+     "severity": "P2",
+     "evidence": "workflow_definitions 25 rows, departments 12, accident_routing_rules 7, accident_email_templates and approval_policies 3: all belong to one organisation; no seeding function found for a new organisation",
+     "summary": "A new company starts with no approval workflows, no accident departments, routing rules or email templates. Pages open empty and the related automation does nothing until an admin builds each from scratch. VERIFIED counts; absence of seeding is PLAUSIBLE (searched pages and RPC names only)."
+    }
+   ],
+   "remediation": "Follows the accidents fixes.",
+   "priority": "P2",
+   "area": "DB",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "accidentCaseAnalytics.test.js",
+     "accidentCaseBoard.api.test.js",
+     "accidentCaseRegister.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Accidents & Claims",
+   "label": "Incident Reports",
+   "route": "/incidents",
+   "module_key": "incidents",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><IncidentReports /></RoleRoute>",
+   "page": "src/pages/IncidentReports.jsx",
+   "services": [
+    "_client",
+    "api/_client",
+    "api/incidents",
+    "incidentReportsAnalytics",
+    "incidents"
+   ],
+   "tables": [
+    "incident_reports"
+   ],
+   "rpcs": [],
+   "internal_status": "at risk",
+   "commercial_class": 5,
+   "module_control": "live or not listed",
+   "what_it_does": "Separate incident register (near miss, damage, breakdown, safety, theft) with analytics.",
+   "empty_account_behaviour": "Honest empty state; first action is add incident.",
+   "defects": [
+    {
+     "id": "MODC-09",
+     "severity": "P2",
+     "evidence": "INSERT/UPDATE policies equal to auth.uid() IS NOT NULL on goods_receipts, incident_reports, materials, requisitions, sla_records, ocr_scans, onboarding_tasks, fleet_optimizer_scenarios, suppliers",
+     "summary": "Route guards restrict these pages to Admin or Admin/Manager/Director, but the database lets any signed-in user of the organisation insert and update rows through the API. Organisation isolation still holds. VERIFIED (catalog)."
+    },
+    {
+     "id": "MODC-34",
+     "severity": "P2",
+     "evidence": "incident_reports is a second incident store beside accidents; 4 rows live",
+     "summary": "Duplicate of Accidents for damage and breakdown events; no link to accident cases or corrective actions."
+    }
+   ],
+   "remediation": "Controlled consolidation into Accidents (near-miss type) or a clear scope split.",
+   "priority": "P3",
+   "area": "web, DB",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "accessGrantsEdit.test.js",
+     "accessPolicies.test.js",
+     "accidentReportTemplates.api.test.js",
+     "accidentsPage.api.test.js",
+     "administrationImports.api.test.js",
+     "aiOrchestratorClient.test.js",
+     "aiTyreInspectionFilters.test.js",
+     "alertThresholds.api.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Accidents & Claims",
+   "label": "Claims Summary",
+   "route": "/claims-summary",
+   "module_key": "claims_summary",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><FlagRoute flag=\"accidents_module\"><ClaimsSummary /></FlagRoute></RoleRoute>",
+   "page": "src/pages/ClaimsSummary.jsx",
+   "services": [
+    "accidents",
+    "api/accidents",
+    "claimsAnalytics",
+    "claimsSummaryAnalytics"
+   ],
+   "tables": [
+    "accidents",
+    "vehicle_fleet"
+   ],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Claims dashboard over claim fields on accidents (single engine claimsAnalytics), PDF/Excel.",
+   "empty_account_behaviour": "Honest empty charts until accidents with claims exist.",
+   "defects": [
+    {
+     "id": "MODC-35",
+     "severity": "P3",
+     "evidence": "src/pages/ClaimsSummary.jsx: one SAR literal fallback",
+     "summary": "Minor currency fallback."
+    }
+   ],
+   "remediation": "Keep.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [
+     "partsCostClaimsUtilPages.render.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "accidentDetailPage.test.jsx",
+     "accidentsOpenClaimsFilter.test.js",
+     "accidentsPage.api.test.js",
+     "checklistAccess.test.js",
+     "checklistOnlyNav.test.js",
+     "claimsAnalytics.test.js",
+     "claimsSummaryAnalytics.test.js",
+     "commandSearch.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Accidents & Claims",
+   "label": "Insurance Claims",
+   "route": "/insurance-claims",
+   "module_key": "insurance_claims",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><InsuranceClaims /></RoleRoute>",
+   "page": "src/pages/InsuranceClaims.jsx",
+   "services": [
+    "_client",
+    "api/_client",
+    "api/insuranceClaims",
+    "insuranceClaims",
+    "insuranceClaimsAnalytics"
+   ],
+   "tables": [
+    "insurance_claims"
+   ],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 5,
+   "module_control": "disabled",
+   "what_it_does": "Manual claim ledger on insurance_claims.",
+   "empty_account_behaviour": "Honest empty state.",
+   "defects": [
+    {
+     "id": "MODC-36",
+     "severity": "P2",
+     "evidence": "three claim stores: claim columns on accidents, insurance_claims (0 rows), insurance_claim_register (59 rows, insurer import)",
+     "summary": "Duplicate claim registers; this one is switched off."
+    }
+   ],
+   "remediation": "Retire or merge into the accident claim record.",
+   "priority": "P3",
+   "area": "web, DB",
+   "tests": {
+    "page_tests": [
+     "serviceAndClaimsPages.render.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "accessGrantsEdit.test.js",
+     "accessPolicies.test.js",
+     "accidentReportTemplates.api.test.js",
+     "accidentsPage.api.test.js",
+     "administrationImports.api.test.js",
+     "aiOrchestratorClient.test.js",
+     "aiTyreInspectionFilters.test.js",
+     "alertThresholds.api.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Accidents & Claims",
+   "label": "Insurance Policies",
+   "route": "/insurance-policies",
+   "module_key": "insurance_policies",
+   "guard": "<RoleRoute allowed={['Admin']}><InsurancePolicies /></RoleRoute>",
+   "page": "src/pages/InsurancePolicies.jsx",
+   "services": [
+    "api/insurancePolicies",
+    "api/insurancePortfolio",
+    "api/sites",
+    "insuranceCorrespondence",
+    "insuranceEmailAnalysis",
+    "insuranceKnowledge",
+    "insurancePolicies",
+    "insurancePortfolio",
+    "sites"
+   ],
+   "tables": [
+    "insurance_claim_register",
+    "insurance_policies",
+    "insurance_policy_conditions",
+    "sites",
+    "vehicle_fleet"
+   ],
+   "rpcs": [
+    "reference_site_options"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "module_control": "live or not listed",
+   "what_it_does": "Policy knowledge base, conditions, claim scenario checker, correspondence generator, insurer email analysis, portfolio and coverage tabs. Admin only in route and RLS.",
+   "empty_account_behaviour": "Empty list; admin adds or imports a policy PDF. Coverage matching needs chassis or plate on fleet rows.",
+   "defects": [
+    {
+     "id": "MODC-13",
+     "severity": "P2",
+     "evidence": "column defaults KSA / SAR on budgets, kpi_targets, stock_records, insurance_policies, insurance_claim_register, sany_delay_penalties (rate_per_hour 43); src/contexts/SettingsContext.jsx:21-22 COUNTRIES = KSA, UAE, Egypt and COUNTRY_CURRENCY",
+     "summary": "Country list, currency map and several column defaults are fixed to the current company footprint. A company outside these three countries gets KSA defaults on rows where the client omits country. VERIFIED."
+    },
+    {
+     "id": "MODC-37",
+     "severity": "P2",
+     "evidence": "src/pages/InsurancePolicies.jsx:278 currency fallback SAR; parser and conditions built from the current company insurer documents (PROJECT_MEMORY V466, V526)",
+     "summary": "Policy import and clause model are shaped by two Saudi insurers."
+    },
+    {
+     "id": "MODC-38",
+     "severity": "P3",
+     "evidence": "insurance_claim_register stores driver identity fields; elevated read only",
+     "summary": "PII handling needs a decision before opening beyond Admin."
+    }
+   ],
+   "remediation": "Generalise the PDF parser or mark import as manual entry for other insurers.",
+   "priority": "P2",
+   "area": "web",
+   "tests": {
+    "page_tests": [
+     "insurancePolicies.render.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "aiTyreInspection.render.test.jsx",
+     "approvalPolicies.page.test.jsx",
+     "componentsRound2Honesty.render.test.jsx",
+     "insuranceCorrespondence.test.js",
+     "insuranceEmailAnalysis.test.js",
+     "insuranceKnowledge.test.js",
+     "insurancePolicies.render.test.jsx",
+     "insuranceSurfaces.test.jsx"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Accidents & Claims",
+   "label": "Recall Tracker",
+   "route": "/recall-tracker",
+   "module_key": "recall_tracker",
+   "guard": "<RoleRoute allowed={['Admin']}><RecallTracker /></RoleRoute>",
+   "page": "src/pages/RecallTracker.jsx",
+   "services": [
+    "api/recalls",
+    "recallDetailAnalytics",
+    "recallTrackerAnalytics",
+    "recalls"
+   ],
+   "tables": [
+    "recalls",
+    "tyre_records"
+   ],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "disabled",
+   "what_it_does": "Tyre recall register matched against fleet tyres by brand and serial prefix; detail route /recalls/:id.",
+   "empty_account_behaviour": "Honest empty state; first action is add recall.",
+   "defects": [
+    {
+     "id": "MODC-08",
+     "severity": "P2",
+     "evidence": "unique indexes without organisation: supplier_ratings_brand_country_key, recall_number_country_uniq, purchase_orders_po_number_key, work_orders_work_order_no_key; generate_po_number and generate_work_order_no use one global sequence",
+     "summary": "Document numbers and brand ratings share one namespace across companies: cross-tenant save collisions (ratings, recalls) and shared PO / work order number sequences. VERIFIED (catalog)."
+    }
+   ],
+   "remediation": "Add organisation to the recall unique key.",
+   "priority": "P3",
+   "area": "DB",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "recallDetailAnalytics.test.js",
+     "recallTrackerAnalytics.test.js",
+     "recalls.api.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Accidents & Claims",
+   "label": "Accident Workflow",
+   "route": "/accident-workflow-settings",
+   "module_key": "accident_workflow_settings",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><AccidentWorkflowSettings /></RoleRoute>",
+   "page": "src/pages/AccidentWorkflowSettings.jsx",
+   "services": [
+    "accidentWorkflow",
+    "accidentWorkflowSettingsAnalytics",
+    "api/accidentWorkflow"
+   ],
+   "tables": [
+    "accident_email_templates",
+    "accident_routing_rules",
+    "accidents",
+    "departments",
+    "profiles",
+    "system_config"
+   ],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "module_control": "live or not listed",
+   "what_it_does": "Departments, routing rules, email templates and email delivery switch for accident notifications.",
+   "empty_account_behaviour": "All three lists empty for a new company; admin must build them. The delivery switch and mailbox are global.",
+   "defects": [
+    {
+     "id": "MODC-01",
+     "severity": "P0",
+     "evidence": "DB functions consume_event_accident_notify and consume_event_accident_case_notify read system_config keys accident_email_to / accident_email_cc (global table, no organisation column); system_config.accident_emails_enabled = true",
+     "summary": "Accident emails for every organisation go to ONE global mailbox list. A second company filing an accident would email its case details to the current company mailbox. VERIFIED (function source + config)."
+    },
+    {
+     "id": "MODC-12",
+     "severity": "P2",
+     "evidence": "workflow_definitions 25 rows, departments 12, accident_routing_rules 7, accident_email_templates and approval_policies 3: all belong to one organisation; no seeding function found for a new organisation",
+     "summary": "A new company starts with no approval workflows, no accident departments, routing rules or email templates. Pages open empty and the related automation does nothing until an admin builds each from scratch. VERIFIED counts; absence of seeding is PLAUSIBLE (searched pages and RPC names only)."
+    },
+    {
+     "id": "MODC-39",
+     "severity": "P1",
+     "evidence": "accident_emails_enabled, accident_email_to, accident_email_cc and accident_email_subject_prefix live in global system_config, writable by super admin only",
+     "summary": "A tenant Admin cannot set its own mailbox; whoever can, sets it for all tenants."
+    }
+   ],
+   "remediation": "Per-organisation accident mail settings. Risk to current company: low (copy current values).",
+   "priority": "P0",
+   "area": "DB, web",
+   "tests": {
+    "page_tests": [
+     "accidentWorkflowSettings.page.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "accidentCase.test.js",
+     "accidentStages.test.js",
+     "accidentWorkflow.test.js",
+     "accidentWorkflowSettings.page.test.jsx",
+     "accidentWorkflowSettingsAnalytics.test.js",
+     "serviceTiebreakSweep.test.js",
+     "workshopAssessmentPanel.render.test.jsx"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Finance & Commercial",
+   "label": "Cost Center",
+   "route": "/cost-center",
+   "module_key": "budgets",
+   "guard": "<ModuleRoute moduleKey=\"budgets\"><CostCenter /></ModuleRoute>",
+   "page": "src/pages/CostCenter.jsx",
+   "services": [
+    "api",
+    "api/governedCost",
+    "api/production",
+    "costCenterAnalytics",
+    "costIntelligence",
+    "costSources",
+    "erpImport",
+    "governedCost",
+    "import",
+    "production",
+    "useLatestRequest"
+   ],
+   "tables": [
+    "production_logs"
+   ],
+   "rpcs": [
+    "get_cost_cpk_overview",
+    "get_expense_by_country",
+    "get_tyre_cost_by_asset"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Cost analysis from the expense grid with tyre vs maintenance switch, cost per unit (km, hour, m3). See ENGINEERING_CALCULATIONS for the maths.",
+   "empty_account_behaviour": "N/A and empty charts until expense lines and tyre records exist. First action is import in Data Intake.",
+   "defects": [
+    {
+     "id": "MODC-40",
+     "severity": "P2",
+     "evidence": "src/pages/CostCenter.jsx: 62 references to m3 / production; module key budgets shared with Budgets and Budget Planner",
+     "summary": "Concrete m3 unit is built in; one module key for three pages."
+    }
+   ],
+   "remediation": "Hide m3 unit unless production logging is enabled for the tenant.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [
+     "costCenterPage.render.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "accidentAdapter.test.js",
+     "adapters.test.js",
+     "aiCostMonitor.render.test.jsx",
+     "aliases.test.js",
+     "api.test.js",
+     "brandPerformance.render.test.jsx",
+     "costCenterAnalytics.lifetime.test.js",
+     "costCenterAnalytics.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Finance & Commercial",
+   "label": "Budgets & Cost",
+   "route": "/budgets",
+   "module_key": "budgets",
+   "guard": "<ModuleRoute moduleKey=\"budgets\"><Budgets /></ModuleRoute>",
+   "page": "src/pages/Budgets.jsx",
+   "services": [
+    "api/budgets",
+    "budgets",
+    "budgetsAnalytics"
+   ],
+   "tables": [
+    "budgets",
+    "tyre_records"
+   ],
+   "rpcs": [],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "module_control": "live or not listed",
+   "what_it_does": "Monthly budget vs tyre spend per site and a 12-month planner grid.",
+   "empty_account_behaviour": "Empty; first action is set a budget for a site. Site list comes from data.",
+   "defects": [
+    {
+     "id": "MODC-04",
+     "severity": "P1",
+     "evidence": "unique index budgets_site_region_year_month_key (site, region, year, month) has no organisation column; src/lib/api/budgets.js:54,64 and src/pages/BudgetPlanner.jsx:425 upsert on it; budgets INSERT/UPDATE policies allow role Admin (or an explicit capability grant) only; src/pages/Budgets.jsx has no role gate",
+     "summary": "Two companies with the same site name and month collide on one global key. Inside the current company a Manager or Director sees the editor on /budgets and the save is refused by RLS. VERIFIED (catalog + code)."
+    },
+    {
+     "id": "MODC-13",
+     "severity": "P2",
+     "evidence": "column defaults KSA / SAR on budgets, kpi_targets, stock_records, insurance_policies, insurance_claim_register, sany_delay_penalties (rate_per_hour 43); src/contexts/SettingsContext.jsx:21-22 COUNTRIES = KSA, UAE, Egypt and COUNTRY_CURRENCY",
+     "summary": "Country list, currency map and several column defaults are fixed to the current company footprint. A company outside these three countries gets KSA defaults on rows where the client omits country. VERIFIED."
+    },
+    {
+     "id": "MODC-41",
+     "severity": "P3",
+     "evidence": "src/pages/Budgets.jsx:171-175 writes region from profile.region with KSA fallback while BudgetPlanner writes its own region",
+     "summary": "Same site can hold two budget rows under different regions."
+    }
+   ],
+   "remediation": "Add organisation to the unique key (backfill is trivial, 12 rows) and gate the editor by role. Risk to current company: low.",
+   "priority": "P1",
+   "area": "DB, web",
+   "tests": {
+    "page_tests": [
+     "financeWorkspace.render.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "alertEngine.test.js",
+     "budgets.api.test.js",
+     "budgetsAnalytics.test.js",
+     "financeWorkspace.render.test.jsx",
+     "navFavoritesUi.test.jsx",
+     "navTreeParity.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Finance & Commercial",
+   "label": "Budget Planner",
+   "route": "/budget-planner",
+   "module_key": "budgets",
+   "guard": "<ModuleRoute moduleKey=\"budgets\"><BudgetPlanner /></ModuleRoute>",
+   "page": "src/pages/BudgetPlanner.jsx",
+   "services": [
+    "api/costSummary",
+    "budgetPlannerAnalytics",
+    "costSummary",
+    "useLatestRequest"
+   ],
+   "tables": [
+    "budgets",
+    "pm_service_records",
+    "tyre_records",
+    "work_orders"
+   ],
+   "rpcs": [
+    "get_maint_tyre_split",
+    "get_parts_expense_snapshot",
+    "get_tyre_cost_by_asset"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "module_control": "live or not listed",
+   "what_it_does": "Annual budget planning with spend history; Admin edit.",
+   "empty_account_behaviour": "Empty until tyre or expense data exists.",
+   "defects": [
+    {
+     "id": "MODC-04",
+     "severity": "P1",
+     "evidence": "unique index budgets_site_region_year_month_key (site, region, year, month) has no organisation column; src/lib/api/budgets.js:54,64 and src/pages/BudgetPlanner.jsx:425 upsert on it; budgets INSERT/UPDATE policies allow role Admin (or an explicit capability grant) only; src/pages/Budgets.jsx has no role gate",
+     "summary": "Two companies with the same site name and month collide on one global key. Inside the current company a Manager or Director sees the editor on /budgets and the save is refused by RLS. VERIFIED (catalog + code)."
+    }
+   ],
+   "remediation": "Same fix as Budgets; consider merging the two pages.",
+   "priority": "P1",
+   "area": "DB, web",
+   "tests": {
+    "page_tests": [
+     "financeWorkspace.render.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "assetDetailHistoryTab.test.jsx",
+     "budgetPlannerAnalytics.lifetime.test.js",
+     "budgetPlannerAnalytics.test.js",
+     "budgetPlannerGridSpend.test.js",
+     "costSummaryGridByAsset.test.js",
+     "tollTripTyrePoolPages.render.test.jsx",
+     "useLatestRequest.test.jsx"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Finance & Commercial",
+   "label": "Expenses & CPK",
+   "route": "/expense-report",
+   "module_key": "expense_report",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><ExpenseReport /></RoleRoute>",
+   "page": "src/pages/ExpenseReport.jsx",
+   "services": [
+    "api/costVariance",
+    "api/expenseTrends",
+    "api/fleetCpk",
+    "api/latestActivity",
+    "api/partsConsumption",
+    "api/storeSiteExpense",
+    "api/tyreRecords",
+    "boardScope",
+    "costCpk",
+    "costVariance",
+    "defaultPeriod",
+    "expenseReportAnalytics",
+    "expenseTrends",
+    "fleetCpk",
+    "fleetCpkView",
+    "latestActivity",
+    "partsConsumption",
+    "reportingScope",
+    "reportingScopeQuery",
+    "storeSiteExpense",
+    "tyreDemandForecast",
+    "tyreRecords",
+    "useLatestRequest"
+   ],
+   "tables": [
+    "inspections",
+    "odometer_logs",
+    "parts_consumption",
+    "sites",
+    "tyre_records",
+    "vehicle_fleet"
+   ],
+   "rpcs": [
+    "expense_import_count",
+    "get_cost_cpk_overview",
+    "get_cost_variance",
+    "get_cpk_hours_source",
+    "get_cpk_km_intelligence",
+    "get_cpk_km_source",
+    "get_cpk_unit_audit",
+    "get_expense_by_country",
+    "get_expense_by_site",
+    "get_expense_period_trend",
+    "get_fleet_area_map",
+    "get_fleet_cpk",
+    "get_parts_expense_snapshot",
+    "get_tyre_filter_options",
+    "set_store_site_map",
+    "tyre_move"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Expenses and CPK from the expense grid: period bar, comparison, cost per km, what moved, certainty, by site, tyre forecast, row export. Single country deep report; per-country comparison on wider scope.",
+   "empty_account_behaviour": "Honest empty state linking to the import. A new company must import an expense grid first.",
+   "defects": [
+    {
+     "id": "MODC-42",
+     "severity": "P2",
+     "evidence": "classifier and intake are built on the current ERP export shape (PROJECT_MEMORY V335-V373: item code ranges 310xxx, TI-GE, OL-; job card prefixes AFKR, GCKR, RM, EG)",
+     "summary": "Classification rules encode one company ERP coding; another company lands mostly in the default bucket until it reviews its item master."
+    }
+   ],
+   "remediation": "Make code ranges and job card prefixes per-organisation configuration. See ENGINEERING_CALCULATIONS.",
+   "priority": "P2",
+   "area": "DB",
+   "tests": {
+    "page_tests": [
+     "expenseReportScopeSurfaces.test.jsx",
+     "expenseReportCountryScope.test.js",
+     "expenseReportAllScope.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "administrationImports.api.test.js",
+     "aiProposals.api.test.js",
+     "componentsRound2Honesty.render.test.jsx",
+     "costCpk.test.js",
+     "costVariance.test.js",
+     "cpkIntelligence.render.test.jsx",
+     "cpkKmIntelligencePanel.render.test.jsx",
+     "cpkPanels.render.test.jsx"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Finance & Commercial",
+   "label": "Expense Trends",
+   "route": "/expense-trends",
+   "module_key": "expense_trends",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><ExpenseTrends /></RoleRoute>",
+   "page": "src/pages/ExpenseTrends.jsx",
+   "services": [
+    "api/expenseTrends",
+    "expenseTrends",
+    "expenseTrendsAnalytics",
+    "reportingScope",
+    "reportingScopeQuery",
+    "useLatestRequest"
+   ],
+   "tables": [],
+   "rpcs": [
+    "get_expense_period_trend"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Multi-year expense trend and forecast per country, reporting scope aware.",
+   "empty_account_behaviour": "Honest empty state.",
+   "defects": [],
+   "remediation": "Keep.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [
+     "reportingScopeMount.test.jsx",
+     "reportingScopeUrl.test.jsx",
+     "expenseTrendsScopeFetch.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "expenseReportAllScope.test.jsx",
+     "expenseReportScopeSurfaces.test.jsx",
+     "expenseTrends.test.js",
+     "expenseTrendsAnalytics.test.js",
+     "expenseTrendsScopeFetch.test.jsx",
+     "reportingScope.test.js",
+     "reportingScopeMount.test.jsx",
+     "reportingScopeUrl.test.jsx"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Finance & Commercial",
+   "label": "Cost Scenario Planner",
+   "route": "/cost-scenario-planner",
+   "module_key": "cost_scenario_planner",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><CostScenarioPlanner /></RoleRoute>",
+   "page": "src/pages/CostScenarioPlanner.jsx",
+   "services": [
+    "costScenario",
+    "costScenarioAnalytics"
+   ],
+   "tables": [],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 1,
+   "module_control": "live or not listed",
+   "what_it_does": "Client-side what-if model of tyre strategies; user supplies all inputs.",
+   "empty_account_behaviour": "Works with no data; all numbers are user inputs and labelled as a model.",
+   "defects": [],
+   "remediation": "Keep. State clearly that outputs are a model.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [
+     "deepenedPages.render.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "costScenario.test.js",
+     "costScenarioAnalytics.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Finance & Commercial",
+   "label": "Cost per M3",
+   "route": "/cost-per-m3",
+   "module_key": "cost_per_m3",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><CostPerM3 /></RoleRoute>",
+   "page": "src/pages/CostPerM3.jsx",
+   "services": [
+    "api/costPerM3",
+    "costPerM3",
+    "costPerM3Analytics",
+    "cpkModule"
+   ],
+   "tables": [
+    "import_batches",
+    "import_files",
+    "production_logs",
+    "production_station_map",
+    "sany_invoice_lines",
+    "sany_invoices",
+    "sco_costs",
+    "site_match_keywords",
+    "sites"
+   ],
+   "rpcs": [
+    "apply_production_station_map",
+    "apply_station_proposals",
+    "get_cost_per_m3",
+    "get_cost_per_m3_trend",
+    "get_costm3_ledger_monthly",
+    "get_production_monthly",
+    "get_production_reasons",
+    "get_production_rejections",
+    "get_production_stations",
+    "propose_production_station_sites"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 6,
+   "module_control": "live or not listed",
+   "what_it_does": "Cost per cubic metre of concrete: internal ERP cost + SCO + SANY divided by approved production, by region Central / Western.",
+   "empty_account_behaviour": "Empty with N/A; only meaningful for a ready-mix operator that uploads batching, SCO and SANY files.",
+   "defects": [
+    {
+     "id": "MODC-43",
+     "severity": "P1",
+     "evidence": "src/pages/CostPerM3.jsx:466 (tag each site Central or Western), src/lib/costPerM3.js:347-383 (SCO issue grid bj_griddetails, SANY proforma, batching export headers); RPC get_cost_per_m3 names sco_costs and sany_invoices",
+     "summary": "Built for one company: named vendors (SANY, SCO), two Saudi regions, one batching plant export and one ERP grid. VERIFIED."
+    }
+   ],
+   "remediation": "Keep for the current tenant behind a per-organisation feature flag; generalise to named cost sources before selling to ready-mix customers.",
+   "priority": "P1",
+   "area": "web, DB",
+   "tests": {
+    "page_tests": [
+     "partsCostClaimsUtilPages.render.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "costPerM3.test.js",
+     "costPerM3Analytics.test.js",
+     "costPerM3Guard.test.js",
+     "cpkModule.test.js",
+     "partsCostClaimsUtilPages.render.test.jsx",
+     "summaryFromMonthly.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Finance & Commercial",
+   "label": "Production (M3)",
+   "route": "/production-m3",
+   "module_key": "production_m3",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><ProductionM3 /></RoleRoute>",
+   "page": "src/pages/ProductionM3.jsx",
+   "services": [
+    "api/costPerM3",
+    "costPerM3"
+   ],
+   "tables": [
+    "import_batches",
+    "import_files",
+    "production_logs",
+    "production_station_map",
+    "sany_invoice_lines",
+    "sany_invoices",
+    "sco_costs",
+    "site_match_keywords",
+    "sites"
+   ],
+   "rpcs": [
+    "apply_production_station_map",
+    "apply_station_proposals",
+    "get_cost_per_m3",
+    "get_cost_per_m3_trend",
+    "get_costm3_ledger_monthly",
+    "get_production_monthly",
+    "get_production_reasons",
+    "get_production_rejections",
+    "get_production_stations",
+    "propose_production_station_sites"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 6,
+   "module_control": "live or not listed",
+   "what_it_does": "Production ledger (batching export) with rejections; summary first.",
+   "empty_account_behaviour": "Empty; requires the specific batching export or manual entry.",
+   "defects": [
+    {
+     "id": "MODC-10",
+     "severity": "P2",
+     "evidence": "trigger function normalize_site(): upper-cases, applies global site_aliases, strips a trailing -ST or _ST",
+     "summary": "Site names are rewritten by rules built for the current company (store suffix -ST) for every tenant. VERIFIED (function source)."
+    },
+    {
+     "id": "MODC-44",
+     "severity": "P2",
+     "evidence": "src/lib/costPerM3.js:377-383 batching export header map",
+     "summary": "Import format is one plant system export."
+    }
+   ],
+   "remediation": "Per-organisation flag; generic template.",
+   "priority": "P2",
+   "area": "web",
+   "tests": {
+    "page_tests": [
+     "executiveReportIntake.render.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "costPerM3.test.js",
+     "costPerM3Guard.test.js",
+     "partsCostClaimsUtilPages.render.test.jsx",
+     "summaryFromMonthly.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Finance & Commercial",
+   "label": "SCO Cost",
+   "route": "/sco-costs",
+   "module_key": "sco_costs",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><ScoCosts /></RoleRoute>",
+   "page": "src/pages/ScoCosts.jsx",
+   "services": [
+    "api/costPerM3",
+    "costPerM3"
+   ],
+   "tables": [
+    "import_batches",
+    "import_files",
+    "production_logs",
+    "production_station_map",
+    "sany_invoice_lines",
+    "sany_invoices",
+    "sco_costs",
+    "site_match_keywords",
+    "sites"
+   ],
+   "rpcs": [
+    "apply_production_station_map",
+    "apply_station_proposals",
+    "get_cost_per_m3",
+    "get_cost_per_m3_trend",
+    "get_costm3_ledger_monthly",
+    "get_production_monthly",
+    "get_production_reasons",
+    "get_production_rejections",
+    "get_production_stations",
+    "propose_production_station_sites"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 6,
+   "module_control": "live or not listed",
+   "what_it_does": "SCO cost ledger import and summary.",
+   "empty_account_behaviour": "Empty; not meaningful to another company.",
+   "defects": [
+    {
+     "id": "MODC-45",
+     "severity": "P2",
+     "evidence": "table sco_costs, country NOT NULL, page name and import are specific to one outsourced contract",
+     "summary": "Company specific."
+    }
+   ],
+   "remediation": "Hide for other tenants.",
+   "priority": "P2",
+   "area": "web",
+   "tests": {
+    "page_tests": [
+     "executiveReportIntake.render.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "costPerM3.test.js",
+     "costPerM3Guard.test.js",
+     "partsCostClaimsUtilPages.render.test.jsx",
+     "summaryFromMonthly.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Finance & Commercial",
+   "label": "SANY Invoices",
+   "route": "/sany-invoices",
+   "module_key": "sany_invoices",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><SanyInvoices /></RoleRoute>",
+   "page": "src/pages/SanyInvoices.jsx",
+   "services": [
+    "api/costPerM3",
+    "costPerM3"
+   ],
+   "tables": [
+    "import_batches",
+    "import_files",
+    "production_logs",
+    "production_station_map",
+    "sany_invoice_lines",
+    "sany_invoices",
+    "sco_costs",
+    "site_match_keywords",
+    "sites"
+   ],
+   "rpcs": [
+    "apply_production_station_map",
+    "apply_station_proposals",
+    "get_cost_per_m3",
+    "get_cost_per_m3_trend",
+    "get_costm3_ledger_monthly",
+    "get_production_monthly",
+    "get_production_reasons",
+    "get_production_rejections",
+    "get_production_stations",
+    "propose_production_station_sites"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 6,
+   "module_control": "live or not listed",
+   "what_it_does": "SANY service invoice import (proforma PDF parser, USD to SAR at 3.75) with line items.",
+   "empty_account_behaviour": "Empty; not meaningful to another company.",
+   "defects": [
+    {
+     "id": "MODC-46",
+     "severity": "P2",
+     "evidence": "src/lib/import/parsePdf.js parseSanyProformaPdf; fixed 3.75 rate (PROJECT_MEMORY V464, V525)",
+     "summary": "One vendor invoice format and a fixed exchange rate."
+    }
+   ],
+   "remediation": "Hide for other tenants.",
+   "priority": "P2",
+   "area": "web",
+   "tests": {
+    "page_tests": [
+     "executiveReportIntake.render.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "costPerM3.test.js",
+     "costPerM3Guard.test.js",
+     "partsCostClaimsUtilPages.render.test.jsx",
+     "summaryFromMonthly.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Finance & Commercial",
+   "label": "SANY Delay Penalty",
+   "route": "/sany-delay-penalty",
+   "module_key": "sany_delay_penalty",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><SanyDelayPenalty /></RoleRoute>",
+   "page": "src/pages/SanyDelayPenalty.jsx",
+   "services": [
+    "api/sanyDelayPenalty",
+    "sanyDelayPenalty",
+    "sanyDelayPenaltyAnalytics"
+   ],
+   "tables": [
+    "sany_delay_penalties"
+   ],
+   "rpcs": [
+    "get_sany_delay_candidates"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 6,
+   "module_control": "live or not listed",
+   "what_it_does": "Repair delay penalty ledger: 43 SAR per hour over 5 days, deducted from the SANY invoice.",
+   "empty_account_behaviour": "Empty; rule is one company contract.",
+   "defects": [
+    {
+     "id": "MODC-47",
+     "severity": "P2",
+     "evidence": "src/lib/api/sanyDelayPenalty.js:17 DEFAULT_RATE_PER_HOUR = 43, currency SAR, country KSA; column defaults the same",
+     "summary": "Contract terms hard-coded."
+    }
+   ],
+   "remediation": "Hide for other tenants or turn into a configurable vendor penalty rule.",
+   "priority": "P2",
+   "area": "web, DB",
+   "tests": {
+    "page_tests": [
+     "deepenedPages.render.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "deepenedPages.render.test.jsx",
+     "sanyDelayPenalty.api.test.js",
+     "sanyDelayPenaltyAnalytics.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Finance & Commercial",
+   "label": "ROI Calculator",
+   "route": "/roi-calculator",
+   "module_key": "roi_calculator",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><RoiCalculator /></RoleRoute>",
+   "page": "src/pages/RoiCalculator.jsx",
+   "services": [
+    "api/fleetCpk",
+    "fleetCpk",
+    "roiScenarios",
+    "tyreRoi"
+   ],
+   "tables": [],
+   "rpcs": [
+    "get_cpk_hours_source",
+    "get_cpk_km_intelligence",
+    "get_cpk_km_source",
+    "get_cpk_unit_audit",
+    "get_fleet_area_map",
+    "get_fleet_cpk"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Client-side ROI model, optionally seeded from measured fleet CPK; scenarios saved on the device.",
+   "empty_account_behaviour": "Works empty with labelled assumptions.",
+   "defects": [
+    {
+     "id": "MODC-48",
+     "severity": "P3",
+     "evidence": "src/lib/roiScenarios.js localStorage",
+     "summary": "Scenarios are not shared or backed up."
+    }
+   ],
+   "remediation": "Keep; label as a model.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "aiProposals.api.test.js",
+     "componentsRound2Honesty.render.test.jsx",
+     "cpkIntelligence.render.test.jsx",
+     "cpkKmIntelligencePanel.render.test.jsx",
+     "cpkPanels.render.test.jsx",
+     "cpkScenarioStudioPanel.render.test.jsx",
+     "cpkSiteFilter.api.test.js",
+     "expenseReportAllScope.test.jsx"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Finance & Commercial",
+   "label": "TCO Calculator",
+   "route": "/tco-calculator",
+   "module_key": "tco_calculator",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><TcoCalculator /></RoleRoute>",
+   "page": "src/pages/TcoCalculator.jsx",
+   "services": [
+    "api/tyreRecords",
+    "kpiEngine",
+    "tco",
+    "tcoCalculatorAnalytics",
+    "tyreLifetime",
+    "tyreRecords"
+   ],
+   "tables": [
+    "inspections",
+    "odometer_logs",
+    "tyre_records",
+    "vehicle_fleet"
+   ],
+   "rpcs": [
+    "get_tyre_filter_options",
+    "tyre_move"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "module_control": "live or not listed",
+   "what_it_does": "Fleet tyre cost per km by asset, benchmark comparison, what-if calculator.",
+   "empty_account_behaviour": "Overview shows N/A, but the savings potential and benchmark tabs still show numbers built from constants.",
+   "defects": [
+    {
+     "id": "MODC-49",
+     "severity": "P2",
+     "evidence": "src/lib/tco.js:195-201 GCC_TCO_BENCHMARKS in AED/km (0.85 to 5.20, whole vehicle) compared at :423-437 with fleet tyre cost per km in the tenant currency",
+     "summary": "Benchmark variance compares tyre-only cost in SAR or EGP with static whole-vehicle AED figures of no stated source. The variance is meaningless. VERIFIED."
+    },
+    {
+     "id": "MODC-50",
+     "severity": "P2",
+     "evidence": "src/lib/tco.js:189-192, 385, 393-397 (avg_tyre_cost 850 AED fallback, 250 km/day, fuel 2.89 AED)",
+     "summary": "Annual savings potential is computed from hard-coded constants and shown as money even with no data. VERIFIED."
+    }
+   ],
+   "remediation": "Remove the benchmark tab or make references tenant-entered; show savings potential only from measured inputs. See ENGINEERING_CALCULATIONS. Risk to current company: none (removes misleading figures).",
+   "priority": "P2",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "analyticsEngine.lifetime.test.js",
+     "complianceRules.test.js",
+     "costCenterAnalytics.lifetime.test.js",
+     "engineeringKpiAnalytics.test.js",
+     "expenseReportAllScope.test.jsx",
+     "expenseReportScopeSurfaces.test.jsx",
+     "fitmentCpk.test.js",
+     "fleetIntelligenceAnalytics.lifetime.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Finance & Commercial",
+   "label": "Tyre-as-a-Service",
+   "route": "/taas",
+   "module_key": "taas",
+   "guard": "<RoleRoute allowed={['Admin']}><Taas /></RoleRoute>",
+   "page": "src/pages/Taas.jsx",
+   "services": [
+    "_client",
+    "api/_client",
+    "api/taas",
+    "taas",
+    "taasAnalytics"
+   ],
+   "tables": [
+    "taas_subscriptions"
+   ],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 4,
+   "module_control": "disabled",
+   "what_it_does": "Manual register of tyre-as-a-service contracts with MRR roll-up.",
+   "empty_account_behaviour": "Honest empty state.",
+   "defects": [
+    {
+     "id": "MODC-51",
+     "severity": "P2",
+     "evidence": "no database function references taas_subscriptions; km and billed amounts are typed by hand",
+     "summary": "No billing, no usage feed from odometer logs. A ledger, not a service."
+    }
+   ],
+   "remediation": "Do not market. Future development.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "accessGrantsEdit.test.js",
+     "accessPolicies.test.js",
+     "accidentReportTemplates.api.test.js",
+     "accidentsPage.api.test.js",
+     "administrationImports.api.test.js",
+     "aiOrchestratorClient.test.js",
+     "aiTyreInspectionFilters.test.js",
+     "alertThresholds.api.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Finance & Commercial",
+   "label": "Customer Portal",
+   "route": "/customer-portal",
+   "module_key": "customer_portal",
+   "guard": "<RoleRoute allowed={['Admin']}><CustomerPortal /></RoleRoute>",
+   "page": "src/pages/CustomerPortal.jsx",
+   "services": [
+    "_client",
+    "api/_client",
+    "api/customerPortal",
+    "customerPortal",
+    "customerPortalAnalytics"
+   ],
+   "tables": [
+    "customer_accounts"
+   ],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 4,
+   "module_control": "disabled",
+   "what_it_does": "Internal list of customer accounts with a portal-enabled flag.",
+   "empty_account_behaviour": "Honest empty state.",
+   "defects": [
+    {
+     "id": "MODC-52",
+     "severity": "P1",
+     "evidence": "src/App.jsx has no customer-facing portal route; customer_accounts.portal_enabled is read by no access path",
+     "summary": "There is no customer portal. The flag grants nothing. VERIFIED (routes)."
+    }
+   ],
+   "remediation": "Must not be marketed. Future development.",
+   "priority": "P2",
+   "area": "marketing",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "accessGrantsEdit.test.js",
+     "accessPolicies.test.js",
+     "accidentReportTemplates.api.test.js",
+     "accidentsPage.api.test.js",
+     "administrationImports.api.test.js",
+     "aiOrchestratorClient.test.js",
+     "aiTyreInspectionFilters.test.js",
+     "alertThresholds.api.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Finance & Commercial",
+   "label": "Billing & Subscription",
+   "route": "/billing",
+   "module_key": "billing",
+   "guard": "<FlagRoute flag=\"billing\"><Billing /></FlagRoute>",
+   "page": "src/pages/Billing.jsx",
+   "services": [
+    "api/billing",
+    "billing",
+    "entitlements"
+   ],
+   "tables": [
+    "invoices",
+    "org_subscriptions",
+    "subscription_plans"
+   ],
+   "rpcs": [
+    "ensure_org_subscription",
+    "get_subscription_overview",
+    "org_can_add"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 4,
+   "module_control": "live or not listed",
+   "what_it_does": "Subscription overview, plan list, invoices. Depth is owned by the billing agent.",
+   "empty_account_behaviour": "ensure_org_subscription creates a 14-day trial row on first open.",
+   "defects": [
+    {
+     "id": "MODC-53",
+     "severity": "P1",
+     "evidence": "org_subscriptions has 0 rows; route guard is FlagRoute billing only (src/App.jsx), nav is Admin only",
+     "summary": "Not in use by the live tenant; any role can open the route by URL when the flag is on. See the billing agent report."
+    }
+   ],
+   "remediation": "See billing and onboarding report.",
+   "priority": "P1",
+   "area": "web, edge fn",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "consolePagesSmoke.render.test.jsx",
+     "consolePlatform.test.js",
+     "entitlements.test.js",
+     "filterStateRestore.test.jsx",
+     "fleetMasterFilters.test.jsx",
+     "navTreeParity.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Board Overview",
+   "route": "/board-overview",
+   "module_key": "board_overview",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><BoardOverview /></RoleRoute>",
+   "page": "src/pages/BoardOverview.jsx",
+   "services": [
+    "accidents",
+    "api/accidents",
+    "api/engineeringKpi",
+    "api/fleetCpk",
+    "api/governedCost",
+    "api/stock",
+    "api/workOrders",
+    "boardOverview",
+    "boardOverviewAnalytics",
+    "boardScope",
+    "costSources",
+    "engineeringKpi",
+    "fleetCpk",
+    "fleetCpkView",
+    "governedCost",
+    "reportingScope",
+    "reportingScopeQuery",
+    "stock",
+    "useLatestRequest",
+    "workOrders"
+   ],
+   "tables": [
+    "accidents",
+    "corrective_actions",
+    "inspections",
+    "stock_movements",
+    "stock_records",
+    "tyre_records",
+    "vehicle_fleet",
+    "work_orders"
+   ],
+   "rpcs": [
+    "generate_work_order_no",
+    "get_cost_cpk_overview",
+    "get_cpk_hours_source",
+    "get_cpk_km_intelligence",
+    "get_cpk_km_source",
+    "get_cpk_unit_audit",
+    "get_expense_by_country",
+    "get_fleet_area_map",
+    "get_fleet_cpk",
+    "get_tyre_cost_by_asset",
+    "get_work_order_stats",
+    "get_work_orders_page",
+    "post_stock_movement"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "One consolidated board report: KPIs, 12-month trends, charts, recommendations, PDF; reporting-scope aware, mixed currency withheld.",
+   "empty_account_behaviour": "N/A tiles and empty charts until data exists.",
+   "defects": [
+    {
+     "id": "MODC-54",
+     "severity": "P2",
+     "evidence": "KPI Center, Engineering KPI (/kpi-engine), KPI Command (/kpi-command), Board Overview, Executive Report, Executive Analytics, Advanced Analytics, Fleet Analytics, Fleet Intelligence, Ops Intelligence all present overlapping fleet KPIs",
+     "summary": "Ten overlapping dashboards. The branch merges some into tabs; main still lists them separately."
+    }
+   ],
+   "remediation": "Keep as the executive report of record.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [
+     "reportingScopeBoard.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "accidentDetailPage.test.jsx",
+     "accidentsPage.api.test.js",
+     "aiProposals.api.test.js",
+     "boardOverview.test.js",
+     "boardOverviewAnalytics.test.js",
+     "brandPerformance.render.test.jsx",
+     "checklistAccess.test.js",
+     "checklistOnlyNav.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Executive",
+   "route": "/executive",
+   "module_key": "executive_report / executive_analytics",
+   "guard": "<ExecutiveLanding /> then page guards",
+   "page": "src/pages/ExecutiveReport.jsx + src/pages/ExecutiveAnalytics.jsx",
+   "services": [],
+   "tables": [],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 5,
+   "module_control": "live or not listed",
+   "what_it_does": "Single menu entry that lands on Executive Report or Executive Analytics by permission.",
+   "empty_account_behaviour": "Follows the two pages.",
+   "defects": [
+    {
+     "id": "MODC-54",
+     "severity": "P2",
+     "evidence": "KPI Center, Engineering KPI (/kpi-engine), KPI Command (/kpi-command), Board Overview, Executive Report, Executive Analytics, Advanced Analytics, Fleet Analytics, Fleet Intelligence, Ops Intelligence all present overlapping fleet KPIs",
+     "summary": "Ten overlapping dashboards. The branch merges some into tabs; main still lists them separately."
+    }
+   ],
+   "remediation": "Branch consolidation is correct; merge after review.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "BRANCH ONLY. Main has two menu items (/executive-report Admin, /executive-analytics Admin/Manager/Director) and no /executive route. Both pages keep their own guards (ModuleRoute executive_report, RoleRoute)."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Advanced Analytics",
+   "route": "/advanced-analytics",
+   "module_key": "analytics",
+   "guard": "<ModuleRoute moduleKey=\"analytics\"><AdvancedAnalytics /></ModuleRoute>",
+   "page": "src/pages/AdvancedAnalytics.jsx",
+   "services": [
+    "advancedAnalyticsAnalytics",
+    "api/governedCost",
+    "governedCost",
+    "governedWindow",
+    "urlTab",
+    "useLatestRequest"
+   ],
+   "tables": [
+    "tyre_records"
+   ],
+   "rpcs": [
+    "get_cost_cpk_overview",
+    "get_expense_by_country",
+    "get_tyre_cost_by_asset"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 5,
+   "module_control": "live or not listed",
+   "what_it_does": "Advanced charts on tyre records and cost; absorbs the old Analytics page as a tab on the branch.",
+   "empty_account_behaviour": "Empty charts.",
+   "defects": [
+    {
+     "id": "MODC-54",
+     "severity": "P2",
+     "evidence": "KPI Center, Engineering KPI (/kpi-engine), KPI Command (/kpi-command), Board Overview, Executive Report, Executive Analytics, Advanced Analytics, Fleet Analytics, Fleet Intelligence, Ops Intelligence all present overlapping fleet KPIs",
+     "summary": "Ten overlapping dashboards. The branch merges some into tabs; main still lists them separately."
+    }
+   ],
+   "remediation": "Consolidate.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "advancedAnalyticsAnalytics.lifetime.test.js",
+     "advancedAnalyticsAnalytics.test.js",
+     "brandPerformance.render.test.jsx",
+     "costCenterPage.render.test.jsx",
+     "executiveReportIntake.render.test.jsx",
+     "governedCost.test.js",
+     "governedWindow.test.js",
+     "mountFetchCost.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "On the branch /analytics redirects here. On main /analytics is its own page with a menu item (ModuleRoute analytics)."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "KPI Center",
+   "route": "/kpi",
+   "module_key": "kpi_scorecard",
+   "guard": "<ModuleRoute moduleKey=\"kpi_scorecard\"><KpiScorecard /></ModuleRoute>",
+   "page": "src/pages/KpiScorecard.jsx",
+   "services": [
+    "api/governedCost",
+    "api/kpiTargets",
+    "api/pmPrograms",
+    "governedCost",
+    "kpiScorecardAnalytics",
+    "kpiTargets",
+    "pmPrograms",
+    "pmSchedule"
+   ],
+   "tables": [
+    "corrective_actions",
+    "engine_hours_logs",
+    "kpi_targets",
+    "odometer_logs",
+    "pm_programs",
+    "pm_service_records",
+    "tyre_records",
+    "vehicle_fleet"
+   ],
+   "rpcs": [
+    "get_cost_cpk_overview",
+    "get_expense_by_country",
+    "get_tyre_cost_by_asset",
+    "record_pm_service"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "module_control": "live or not listed",
+   "what_it_does": "KPI scorecard with targets, PM tiles, year on year.",
+   "empty_account_behaviour": "N/A tiles; targets can be typed.",
+   "defects": [
+    {
+     "id": "MODC-03",
+     "severity": "P1",
+     "evidence": "src/lib/api/kpiTargets.js:44 and src/lib/api/settings.js:61 upsert onConflict metric,year,month,site; live index kpi_targets_scope_uidx (metric, year, COALESCE(month,0), COALESCE(site,''), lower(country)) has no organisation column; src/pages/KpiScorecard.jsx:262 and src/pages/Settings.jsx:516 send month and site as NULL",
+     "summary": "KPI targets cannot be re-saved: NULL month/site never match the conflict target, so the second save is an INSERT that hits the scope unique index (23505). The same index also blocks any second organisation from saving the same metric and year. Existing 7 rows were last written 2026-06-08. VERIFIED statically (code + catalog), not executed."
+    },
+    {
+     "id": "MODC-13",
+     "severity": "P2",
+     "evidence": "column defaults KSA / SAR on budgets, kpi_targets, stock_records, insurance_policies, insurance_claim_register, sany_delay_penalties (rate_per_hour 43); src/contexts/SettingsContext.jsx:21-22 COUNTRIES = KSA, UAE, Egypt and COUNTRY_CURRENCY",
+     "summary": "Country list, currency map and several column defaults are fixed to the current company footprint. A company outside these three countries gets KSA defaults on rows where the client omits country. VERIFIED."
+    },
+    {
+     "id": "MODC-55",
+     "severity": "P2",
+     "evidence": "src/pages/KpiScorecard.jsx:263 region KSA hard-coded on save; kpi_targets INSERT/UPDATE policy Manager and Admin only while the route admits Director",
+     "summary": "Director save is refused by RLS; region is hard-coded."
+    },
+    {
+     "id": "MODC-54",
+     "severity": "P2",
+     "evidence": "KPI Center, Engineering KPI (/kpi-engine), KPI Command (/kpi-command), Board Overview, Executive Report, Executive Analytics, Advanced Analytics, Fleet Analytics, Fleet Intelligence, Ops Intelligence all present overlapping fleet KPIs",
+     "summary": "Ten overlapping dashboards. The branch merges some into tabs; main still lists them separately."
+    }
+   ],
+   "remediation": "Fix the unique key and conflict target (include organisation, coalesce nulls), then role-gate the editor. Risk to current company: low (7 rows).",
+   "priority": "P1",
+   "area": "DB, web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "assetDetailHistoryTab.test.jsx",
+     "brandPerformance.render.test.jsx",
+     "costCenterPage.render.test.jsx",
+     "executiveReportIntake.render.test.jsx",
+     "governedCost.test.js",
+     "kpiScorecardAnalytics.test.js",
+     "kpiTargets.api.test.js",
+     "mountFetchCost.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "On the branch the menu no longer lists /kpi-engine and /kpi-command (routes remain, ModuleRoute kpi_scorecard). On main both have menu items."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Performance Benchmark",
+   "route": "/benchmark",
+   "module_key": "analytics",
+   "guard": "<ModuleRoute moduleKey=\"analytics\"><PerformanceBenchmark /></ModuleRoute>",
+   "page": "src/pages/PerformanceBenchmark.jsx",
+   "services": [
+    "analyticsReads",
+    "api/analyticsReads",
+    "performanceBenchmarkAnalytics",
+    "useLatestRequest"
+   ],
+   "tables": [
+    "accidents",
+    "corrective_actions",
+    "inspections",
+    "tyre_records"
+   ],
+   "rpcs": [
+    "report_asset_metrics",
+    "report_country_metrics",
+    "report_country_trends"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "module_control": "live or not listed",
+   "what_it_does": "Fleet KPIs against a static industry reference; the page states the reference is static.",
+   "empty_account_behaviour": "Not measurable states.",
+   "defects": [
+    {
+     "id": "MODC-56",
+     "severity": "P3",
+     "evidence": "src/pages/PerformanceBenchmark.jsx:364 static industry reference banner",
+     "summary": "Reference values are constants with no source; disclosed on screen."
+    }
+   ],
+   "remediation": "Let tenants enter their own reference or remove.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "performanceBenchmarkAnalytics.test.js",
+     "safetyCompliancePage.render.test.jsx",
+     "useLatestRequest.test.jsx"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "SLA Dashboard",
+   "route": "/sla-dashboard",
+   "module_key": "sla_dashboard",
+   "guard": "<RoleRoute allowed={['Admin']}><SlaDashboard /></RoleRoute>",
+   "page": "src/pages/SlaDashboard.jsx",
+   "services": [
+    "_client",
+    "api/_client",
+    "api/slaRecords",
+    "slaDashboardAnalytics",
+    "slaRecords"
+   ],
+   "tables": [
+    "sla_records"
+   ],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 4,
+   "module_control": "disabled",
+   "what_it_does": "Manual SLA record register with status roll-up.",
+   "empty_account_behaviour": "Honest empty state.",
+   "defects": [
+    {
+     "id": "MODC-09",
+     "severity": "P2",
+     "evidence": "INSERT/UPDATE policies equal to auth.uid() IS NOT NULL on goods_receipts, incident_reports, materials, requisitions, sla_records, ocr_scans, onboarding_tasks, fleet_optimizer_scenarios, suppliers",
+     "summary": "Route guards restrict these pages to Admin or Admin/Manager/Director, but the database lets any signed-in user of the organisation insert and update rows through the API. Organisation isolation still holds. VERIFIED (catalog)."
+    },
+    {
+     "id": "MODC-57",
+     "severity": "P2",
+     "evidence": "no database function or trigger references sla_records",
+     "summary": "SLA rows are typed by hand; nothing measures work orders, breakdowns or approvals against an SLA."
+    }
+   ],
+   "remediation": "Do not market as SLA monitoring. Future development.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "accessGrantsEdit.test.js",
+     "accessPolicies.test.js",
+     "accidentReportTemplates.api.test.js",
+     "accidentsPage.api.test.js",
+     "administrationImports.api.test.js",
+     "aiOrchestratorClient.test.js",
+     "aiTyreInspectionFilters.test.js",
+     "alertThresholds.api.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Site Comparison",
+   "route": "/site-comp",
+   "module_key": "site_comparison",
+   "guard": "<ModuleRoute moduleKey=\"site_comparison\"><SiteComparison /></ModuleRoute>",
+   "page": "src/pages/SiteComparison.jsx",
+   "services": [
+    "analyticsEngine",
+    "siteComparisonAnalytics",
+    "urlTab"
+   ],
+   "tables": [
+    "tyre_records"
+   ],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Site comparison on tyre records; absorbs period Comparison as a tab on the branch.",
+   "empty_account_behaviour": "Empty; needs sites and tyre records.",
+   "defects": [],
+   "remediation": "Keep.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "alertEngine.test.js",
+     "analyticsEngine.lifetime.test.js",
+     "analyticsEngine.test.js",
+     "analyticsMonthlyTrend.test.js",
+     "siteComparisonAnalytics.lifetime.test.js",
+     "siteComparisonAnalytics.test.js",
+     "urlTab.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "On the branch /comparison redirects to /site-comp?tab=periods. On main /comparison is its own page and menu item."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Country Comparison",
+   "route": "/country-comp",
+   "module_key": "country_comparison",
+   "guard": "<ModuleRoute moduleKey=\"country_comparison\"><CountryComparison /></ModuleRoute>",
+   "page": "src/pages/CountryComparison.jsx",
+   "services": [
+    "analyticsEngine",
+    "api/expenseTrends",
+    "countryComparisonAnalytics",
+    "expenseTrends"
+   ],
+   "tables": [
+    "tyre_records"
+   ],
+   "rpcs": [
+    "get_expense_period_trend"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "module_control": "live or not listed",
+   "what_it_does": "Country comparison, each country in its own currency.",
+   "empty_account_behaviour": "Empty; offers KSA, UAE, Egypt only.",
+   "defects": [
+    {
+     "id": "MODC-13",
+     "severity": "P2",
+     "evidence": "column defaults KSA / SAR on budgets, kpi_targets, stock_records, insurance_policies, insurance_claim_register, sany_delay_penalties (rate_per_hour 43); src/contexts/SettingsContext.jsx:21-22 COUNTRIES = KSA, UAE, Egypt and COUNTRY_CURRENCY",
+     "summary": "Country list, currency map and several column defaults are fixed to the current company footprint. A company outside these three countries gets KSA defaults on rows where the client omits country. VERIFIED."
+    }
+   ],
+   "remediation": "Drive the country list from the tenant sites.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "alertEngine.test.js",
+     "analyticsEngine.lifetime.test.js",
+     "analyticsEngine.test.js",
+     "analyticsMonthlyTrend.test.js",
+     "countryComparisonAnalytics.test.js",
+     "expenseReportAllScope.test.jsx",
+     "expenseReportScopeSurfaces.test.jsx",
+     "expenseTrends.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Fleet Analytics",
+   "route": "/fleet",
+   "module_key": "fleet_analytics",
+   "guard": "<ModuleRoute moduleKey=\"fleet_analytics\"><FleetAnalytics /></ModuleRoute>",
+   "page": "src/pages/FleetAnalytics.jsx",
+   "services": [
+    "analyticsEngine",
+    "analyticsReads",
+    "api/analyticsReads",
+    "api/costSummary",
+    "costSummary",
+    "fleetAnalyticsView"
+   ],
+   "tables": [
+    "accidents",
+    "corrective_actions",
+    "inspections",
+    "pm_service_records",
+    "tyre_records",
+    "work_orders"
+   ],
+   "rpcs": [
+    "get_maint_tyre_split",
+    "get_parts_expense_snapshot",
+    "get_tyre_cost_by_asset",
+    "report_asset_metrics",
+    "report_country_metrics",
+    "report_country_trends"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 5,
+   "module_control": "live or not listed",
+   "what_it_does": "Fleet analytics by asset and country from report RPCs.",
+   "empty_account_behaviour": "Empty.",
+   "defects": [
+    {
+     "id": "MODC-54",
+     "severity": "P2",
+     "evidence": "KPI Center, Engineering KPI (/kpi-engine), KPI Command (/kpi-command), Board Overview, Executive Report, Executive Analytics, Advanced Analytics, Fleet Analytics, Fleet Intelligence, Ops Intelligence all present overlapping fleet KPIs",
+     "summary": "Ten overlapping dashboards. The branch merges some into tabs; main still lists them separately."
+    }
+   ],
+   "remediation": "Consolidate.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "alertEngine.test.js",
+     "analyticsEngine.lifetime.test.js",
+     "analyticsEngine.test.js",
+     "analyticsMonthlyTrend.test.js",
+     "assetDetailHistoryTab.test.jsx",
+     "costSummaryGridByAsset.test.js",
+     "fleetAnalyticsView.test.js",
+     "safetyCompliancePage.render.test.jsx"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Fleet Intelligence",
+   "route": "/fleet-intelligence",
+   "module_key": "fleet_intelligence",
+   "guard": "<ModuleRoute moduleKey=\"fleet_intelligence\"><FleetIntelligence /></ModuleRoute>",
+   "page": "src/pages/FleetIntelligence.jsx",
+   "services": [
+    "countryFilter",
+    "fleetIntelligenceAnalytics"
+   ],
+   "tables": [
+    "inspections",
+    "tyre_records",
+    "vehicle_fleet"
+   ],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 5,
+   "module_control": "live or not listed",
+   "what_it_does": "Fleet insight page on tyres, fleet and inspections.",
+   "empty_account_behaviour": "Empty.",
+   "defects": [
+    {
+     "id": "MODC-54",
+     "severity": "P2",
+     "evidence": "KPI Center, Engineering KPI (/kpi-engine), KPI Command (/kpi-command), Board Overview, Executive Report, Executive Analytics, Advanced Analytics, Fleet Analytics, Fleet Intelligence, Ops Intelligence all present overlapping fleet KPIs",
+     "summary": "Ten overlapping dashboards. The branch merges some into tabs; main still lists them separately."
+    }
+   ],
+   "remediation": "Consolidate.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "fleetIntelligenceAnalytics.lifetime.test.js",
+     "fleetIntelligenceAnalytics.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Ops Intelligence",
+   "route": "/ops-intelligence",
+   "module_key": "ops_intelligence",
+   "guard": "<RoleRoute allowed={['Admin']}><OpsIntelligence /></RoleRoute>",
+   "page": "src/pages/OpsIntelligence.jsx",
+   "services": [
+    "api/governedCost",
+    "api/opsIntelligence",
+    "api/pmPrograms",
+    "governedCost",
+    "opsIntelligence",
+    "opsIntelligenceAnalytics",
+    "pmPrograms",
+    "pmSchedule"
+   ],
+   "tables": [
+    "budgets",
+    "engine_hours_logs",
+    "inspections",
+    "odometer_logs",
+    "pm_programs",
+    "pm_service_records",
+    "tyre_records",
+    "vehicle_fleet",
+    "work_orders"
+   ],
+   "rpcs": [
+    "get_cost_cpk_overview",
+    "get_expense_by_country",
+    "get_tyre_cost_by_asset",
+    "record_pm_service"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 5,
+   "module_control": "live or not listed",
+   "what_it_does": "Fleet health pulse, anomaly feed, financials (N/A on mixed currency).",
+   "empty_account_behaviour": "Empty; health score N/A.",
+   "defects": [
+    {
+     "id": "MODC-54",
+     "severity": "P2",
+     "evidence": "KPI Center, Engineering KPI (/kpi-engine), KPI Command (/kpi-command), Board Overview, Executive Report, Executive Analytics, Advanced Analytics, Fleet Analytics, Fleet Intelligence, Ops Intelligence all present overlapping fleet KPIs",
+     "summary": "Ten overlapping dashboards. The branch merges some into tabs; main still lists them separately."
+    }
+   ],
+   "remediation": "Consolidate.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "assetDetailHistoryTab.test.jsx",
+     "brandPerformance.render.test.jsx",
+     "costCenterPage.render.test.jsx",
+     "executiveReportIntake.render.test.jsx",
+     "governedCost.test.js",
+     "mountFetchCost.test.js",
+     "operationalModules.api.test.js",
+     "opsIntelligence.lifetime.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Forecasting Engine",
+   "route": "/forecasting",
+   "module_key": "forecasting",
+   "guard": "<ModuleRoute moduleKey=\"forecasting\"><ForecastingEngine /></ModuleRoute>",
+   "page": "src/pages/ForecastingEngine.jsx",
+   "services": [
+    "forecastPeriod",
+    "forecastingEngineAnalytics",
+    "tyreDemandForecast"
+   ],
+   "tables": [
+    "tyre_records",
+    "vehicle_fleet"
+   ],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Tyre demand and spend forecast by size with stated period and stale-data warning.",
+   "empty_account_behaviour": "Empty until tyre fitment history exists (needs several months).",
+   "defects": [],
+   "remediation": "Keep. See ENGINEERING_CALCULATIONS.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "forecastPeriod.test.js",
+     "forecastingEngineAnalytics.test.js",
+     "tyreDemandForecast.test.js",
+     "tyreHelperLifetimeSwaps.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Fleet Optimizer",
+   "route": "/fleet-optimizer",
+   "module_key": "fleet_optimizer",
+   "guard": "<RoleRoute allowed={['Admin']}><FleetOptimizer /></RoleRoute>",
+   "page": "src/pages/FleetOptimizer.jsx",
+   "services": [
+    "_client",
+    "api/_client",
+    "api/fleetOptimizer",
+    "fleetOptimizer",
+    "fleetOptimizerAnalytics"
+   ],
+   "tables": [
+    "fleet_optimizer_scenarios"
+   ],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 4,
+   "module_control": "disabled",
+   "what_it_does": "Manual scenario register (keep, replace, redeploy, dispose) per asset.",
+   "empty_account_behaviour": "Honest empty state.",
+   "defects": [
+    {
+     "id": "MODC-09",
+     "severity": "P2",
+     "evidence": "INSERT/UPDATE policies equal to auth.uid() IS NOT NULL on goods_receipts, incident_reports, materials, requisitions, sla_records, ocr_scans, onboarding_tasks, fleet_optimizer_scenarios, suppliers",
+     "summary": "Route guards restrict these pages to Admin or Admin/Manager/Director, but the database lets any signed-in user of the organisation insert and update rows through the API. Organisation isolation still holds. VERIFIED (catalog)."
+    },
+    {
+     "id": "MODC-58",
+     "severity": "P2",
+     "evidence": "fleet_optimizer_scenarios rows are typed by the user; no optimisation is computed",
+     "summary": "Named optimizer but performs no optimisation."
+    }
+   ],
+   "remediation": "Do not market. Rename or build.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "accessGrantsEdit.test.js",
+     "accessPolicies.test.js",
+     "accidentReportTemplates.api.test.js",
+     "accidentsPage.api.test.js",
+     "administrationImports.api.test.js",
+     "aiOrchestratorClient.test.js",
+     "aiTyreInspectionFilters.test.js",
+     "alertThresholds.api.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Carbon Tracker",
+   "route": "/carbon-tracker",
+   "module_key": "carbon_tracker",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><CarbonTracker /></RoleRoute>",
+   "page": "src/pages/CarbonTracker.jsx",
+   "services": [
+    "api/carbon",
+    "carbon",
+    "carbonTrackerAnalytics"
+   ],
+   "tables": [
+    "carbon_initiatives",
+    "carbon_offsets",
+    "tyre_records",
+    "vehicle_fleet"
+   ],
+   "rpcs": [],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "module_control": "disabled",
+   "what_it_does": "Lifecycle CO2 estimate from tyre fitments, offsets and initiatives registers.",
+   "empty_account_behaviour": "Estimates appear as soon as tyres exist; offsets empty.",
+   "defects": [
+    {
+     "id": "MODC-59",
+     "severity": "P2",
+     "evidence": "src/lib/api/carbon.js:186 aed_cost defaults to Math.round(tonnes * 90) when the user leaves cost blank",
+     "summary": "A cost the user never entered is stored as fact. VERIFIED."
+    },
+    {
+     "id": "MODC-60",
+     "severity": "P2",
+     "evidence": "src/pages/CarbonTracker.jsx:344 transport to the UAE factor; :545,561 cost shown as AED; column carbon_offsets.aed_cost",
+     "summary": "Emission factors and currency are fixed to the UAE."
+    }
+   ],
+   "remediation": "Store null when cost is blank; make factors and currency configurable. Module is switched off, so no risk today.",
+   "priority": "P2",
+   "area": "web, DB",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "carbon.lifecycle.test.js",
+     "carbon.test.js",
+     "carbonTrackerAnalytics.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Continuous Improvement",
+   "route": "/continuous-improvement",
+   "module_key": "analytics",
+   "guard": "<ModuleRoute moduleKey=\"analytics\"><ContinuousImprovement /></ModuleRoute>",
+   "page": "src/pages/ContinuousImprovement.jsx",
+   "services": [
+    "api/continuousImprovement",
+    "continuousImprovement",
+    "continuousImprovementAnalytics"
+   ],
+   "tables": [
+    "corrective_actions",
+    "inspections",
+    "kpi_targets",
+    "tyre_records"
+   ],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 5,
+   "module_control": "live or not listed",
+   "what_it_does": "Improvement tracking from tyre records, inspections, corrective actions and KPI targets.",
+   "empty_account_behaviour": "Empty.",
+   "defects": [
+    {
+     "id": "MODC-54",
+     "severity": "P2",
+     "evidence": "KPI Center, Engineering KPI (/kpi-engine), KPI Command (/kpi-command), Board Overview, Executive Report, Executive Analytics, Advanced Analytics, Fleet Analytics, Fleet Intelligence, Ops Intelligence all present overlapping fleet KPIs",
+     "summary": "Ten overlapping dashboards. The branch merges some into tabs; main still lists them separately."
+    }
+   ],
+   "remediation": "Consolidate.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "continuousImprovement.api.test.js",
+     "continuousImprovementAnalytics.lifetime.test.js",
+     "continuousImprovementAnalytics.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Reports",
+   "route": "/reports",
+   "module_key": "reports",
+   "guard": "<ModuleRoute moduleKey=\"reports\"><Reports /></ModuleRoute>",
+   "page": "src/pages/Reports.jsx",
+   "services": [
+    "api/pmPrograms",
+    "countryFilter",
+    "pmPrograms",
+    "reportsAnalytics"
+   ],
+   "tables": [
+    "engine_hours_logs",
+    "inspections",
+    "odometer_logs",
+    "pm_programs",
+    "pm_service_records",
+    "tyre_records",
+    "vehicle_fleet"
+   ],
+   "rpcs": [
+    "record_pm_service"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Report wizard: Tyre replacement, cost, risk, vehicle history, inspection, PM reports; column chooser; Excel/PDF; paged reads up to 100000.",
+   "empty_account_behaviour": "Empty result with disabled export.",
+   "defects": [
+    {
+     "id": "MODC-61",
+     "severity": "P3",
+     "evidence": "src/pages/Reports.jsx:178 site suggestions from the first 200 tyre rows, unordered",
+     "summary": "Site suggestion list can be incomplete."
+    },
+    {
+     "id": "MODC-62",
+     "severity": "P3",
+     "evidence": "Risk Summary filters tyre_records.risk_level (PROJECT_MEMORY: populated on 0 rows)",
+     "summary": "Risk report is empty for the current data."
+    }
+   ],
+   "remediation": "Use the site register for suggestions.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "assetDetailHistoryTab.test.jsx",
+     "operationalModules.api.test.js",
+     "pmPrograms.test.js",
+     "reportsAnalytics.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Report Center",
+   "route": "/report-center",
+   "module_key": "reports",
+   "guard": "<ModuleRoute moduleKey=\"reports\"><ReportCenter /></ModuleRoute>",
+   "page": "src/pages/ReportCenter.jsx",
+   "services": [
+    "accidentReportTemplates",
+    "api/accidentReportTemplates",
+    "api/scheduledReports",
+    "auditTrailView",
+    "countryFilter",
+    "reportCenterAnalytics",
+    "reportCenterView",
+    "scheduledReports",
+    "scheduledReportsView"
+   ],
+   "tables": [
+    "accident_report_templates",
+    "audit_log_v2",
+    "corrective_actions",
+    "report_schedules",
+    "report_send_log",
+    "tyre_records"
+   ],
+   "rpcs": [
+    "report_tyre_summary"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Report hub with history of sent reports and quick packs.",
+   "empty_account_behaviour": "Empty history.",
+   "defects": [],
+   "remediation": "Keep.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "accidentReportTemplates.api.test.js",
+     "auditTrailView.test.js",
+     "reportCenterAnalytics.test.js",
+     "reportCenterView.test.js",
+     "resolvePeriod.test.js",
+     "scheduledReports.api.test.js",
+     "scheduledReportsBuilder.test.js",
+     "scheduledReportsView.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Report Sharing",
+   "route": "/report-sharing",
+   "module_key": "report_sharing",
+   "guard": "<RoleRoute allowed={['Admin']}><ReportSharing /></RoleRoute>",
+   "page": "src/pages/ReportSharing.jsx",
+   "services": [
+    "api/reportShares",
+    "reportShareLayout",
+    "reportShares",
+    "reportSharingAnalytics",
+    "reportSharingView"
+   ],
+   "tables": [
+    "report_shares"
+   ],
+   "rpcs": [
+    "create_report_share",
+    "get_report_snapshot",
+    "get_report_tyre_maintenance",
+    "get_workshop_snapshot",
+    "revoke_report_share"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "module_control": "live or not listed",
+   "what_it_does": "Mint and manage public rotating report boards (/report/:token) with custom layouts; anonymous read through token RPCs.",
+   "empty_account_behaviour": "Admin can mint a link; the board shows zeros or N/A with no data.",
+   "defects": [
+    {
+     "id": "MODC-02",
+     "severity": "P1",
+     "evidence": "get_report_snapshot, get_workshop_snapshot, get_report_tyre_maintenance read public.settings key company_name and system_config key company_logo (both global)",
+     "summary": "Public share boards and TV links print one global company name and logo for every organisation. VERIFIED."
+    },
+    {
+     "id": "MODC-14",
+     "severity": "P3",
+     "evidence": "report_shares: 2 active rows, password_hash null, expires_at null, view_count 230 and 25",
+     "summary": "Live public report links have no password and no expiry. Optional by design; flagged for the current company. VERIFIED."
+    },
+    {
+     "id": "MODC-63",
+     "severity": "P2",
+     "evidence": "get_report_snapshot returns cost block from SCO and SANY sources and ops panels (PROJECT_MEMORY V522, V279)",
+     "summary": "Public board content includes company-specific cost sources."
+    }
+   ],
+   "remediation": "Read company name and logo from the token organisation branding (get_org_branding already exists). Risk to current company: low; verify the board still shows its logo.",
+   "priority": "P1",
+   "area": "DB",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "reportSharingAnalytics.test.js",
+     "reportSharingView.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Scheduled Reports",
+   "route": "/scheduled-reports",
+   "module_key": "scheduled_reports",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><FlagRoute flag=\"report_scheduling\"><ScheduledReports /></FlagRoute></RoleRoute>",
+   "page": "src/pages/ScheduledReports.jsx",
+   "services": [
+    "accidentReportTemplates",
+    "api",
+    "api/accidentReportTemplates",
+    "api/scheduledReports",
+    "inspectionCoverage",
+    "scheduledReports",
+    "scheduledReportsAnalytics",
+    "scheduledReportsView"
+   ],
+   "tables": [
+    "accident_report_templates",
+    "report_schedules"
+   ],
+   "rpcs": [],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "module_control": "live or not listed",
+   "what_it_does": "Create schedules (13 types plus saved builder layouts), Generate now PDF/Excel, Send now, delivery log; cron every 15 minutes through the send-scheduled-reports edge function.",
+   "empty_account_behaviour": "Admin can create a schedule; an empty company receives an email of zeros.",
+   "defects": [
+    {
+     "id": "MODC-05",
+     "severity": "P1",
+     "evidence": "supabase/functions/send-scheduled-reports/index.ts:1197-1202 (systemCurrency reads system_config.default_currency = SAR), :249-253 report_exec_digest; DB function report_exec_digest sums cost_per_tyre*qty across all countries of the org; :119-193 fixed Riyadh time",
+     "summary": "Scheduled executive emails add SAR + AED + EGP into one figure and label it with one global currency; spend comes from tyre_records.cost_per_tyre, not the expense grid used on screen; send times are fixed to Riyadh. VERIFIED."
+    },
+    {
+     "id": "MODC-11",
+     "severity": "P2",
+     "evidence": "report_schedules policies: INSERT/UPDATE WITH CHECK allow org_id IS NULL; SELECT allows org_id IS NULL rows for everyone; no restrictive organisation policy",
+     "summary": "A schedule saved with no organisation (possible through the API) is visible, editable and deletable by managers of every organisation, including its recipient list. The client and the edge function now refuse null organisation; the policy does not. VERIFIED (catalog)."
+    },
+    {
+     "id": "MODC-64",
+     "severity": "P2",
+     "evidence": "supabase/functions/send-scheduled-reports/index.ts:1285 FROM_EMAIL default reports@tyrepulse.app, :1039 limit(5000) on a 1000-row capped API (count is exact)",
+     "summary": "One sender for all tenants; digest row lists are capped at 1000."
+    },
+    {
+     "id": "MODC-65",
+     "severity": "P3",
+     "evidence": "report_send_log: 197 sent (latest 2026-11-12), 61 failed (latest 2026-07-11); deployed function body not compared with the repo in this audit",
+     "summary": "Delivery works today for the current tenant; deployed version parity NOT VERIFIED."
+    }
+   ],
+   "remediation": "Per-country sections with their own currency in the digest; per-organisation timezone; add a restrictive organisation policy on report_schedules. Risk to current company: medium for the digest change (numbers in the email will change), none for the policy.",
+   "priority": "P1",
+   "area": "edge fn, DB",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "accidentReportTemplates.api.test.js",
+     "aiCostMonitor.render.test.jsx",
+     "api.test.js",
+     "costCenterPage.render.test.jsx",
+     "dataCleaning.page.test.jsx",
+     "dataReconciliationPage.render.test.jsx",
+     "erpReliability.test.js",
+     "executiveReportIntake.render.test.jsx"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Dashboard Builder",
+   "route": "/dashboard-builder",
+   "module_key": "dashboard_builder",
+   "guard": "<RoleRoute allowed={['Admin']}><DashboardBuilder /></RoleRoute>",
+   "page": "src/pages/DashboardBuilder.jsx",
+   "services": [
+    "api/savedViews",
+    "dashboardBuilder",
+    "dashboardBuilderView",
+    "dashboardWidgets",
+    "savedViews"
+   ],
+   "tables": [],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Widget dashboard builder with global filters; layouts saved per user or in organisation settings.",
+   "empty_account_behaviour": "Widgets show empty states.",
+   "defects": [
+    {
+     "id": "MODC-66",
+     "severity": "P3",
+     "evidence": "src/lib/api/savedViews.js header: falls back to one shared app_settings row when per-user tables are absent",
+     "summary": "Persistence path depends on a migration whose live state was NOT VERIFIED."
+    }
+   ],
+   "remediation": "Verify report_definitions and user_dashboards exist live.",
+   "priority": "P3",
+   "area": "DB",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "dashboardBuilder.test.js",
+     "dashboardBuilderFilters.test.js",
+     "dashboardBuilderView.test.js",
+     "dashboardWidgets.test.js",
+     "savedViews.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "TV Display Mode",
+   "route": "/display",
+   "module_key": "display",
+   "guard": "ProtectedRoute + FlagRoute tv_display (src/App.jsx:613-619), outside the Layout",
+   "page": "src/pages/DisplayDashboard.jsx",
+   "services": [],
+   "tables": [],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Authenticated TV kiosk boards (today, fleet, tyres, accidents, PM, workshop).",
+   "empty_account_behaviour": "Boards render zeros or N/A.",
+   "defects": [],
+   "remediation": "Keep.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Smart Analytics (AI)",
+   "route": "/ai-command-center",
+   "module_key": "ai_command_center",
+   "guard": "<FlagRoute flag=\"ai_tools\"><ModuleRoute moduleKey=\"ai_command_center\"><AiCommandCenter /></ModuleRoute></FlagRoute>",
+   "page": "src/pages/AiCommandCenter.jsx",
+   "services": [
+    "aiCommandCenterView",
+    "aiCoverage",
+    "aiOps",
+    "aiOrchestratorClient",
+    "aiRouter",
+    "api/aiOps"
+   ],
+   "tables": [
+    "ai_models",
+    "ai_token_logs",
+    "ai_usage_log",
+    "alerts",
+    "organisations",
+    "pm_programs",
+    "report_send_log"
+   ],
+   "rpcs": [],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "module_control": "live or not listed",
+   "what_it_does": "AI chat with six agents over loaded context. Depth is owned by the AI agent.",
+   "empty_account_behaviour": "Agents answer with little or no data.",
+   "defects": [
+    {
+     "id": "MODC-67",
+     "severity": "P2",
+     "evidence": "system_config ai_enabled, ai_model, ai_monthly_budget_usd, ai_rate_limit_per_min are global",
+     "summary": "AI budget and switches are platform wide, not per tenant. See AI_READINESS."
+    }
+   ],
+   "remediation": "See AI report.",
+   "priority": "P2",
+   "area": "edge fn",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "aiAgentsRegistry.test.js",
+     "aiCommandCenterView.test.js",
+     "aiOpsAgentOrg.test.js",
+     "aiOrchestratorClient.test.js",
+     "aiRouterAgents.test.js",
+     "consoleServiceReads.test.js",
+     "orchestrator.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Knowledge Base",
+   "route": "/knowledge-base",
+   "module_key": "knowledge_base",
+   "guard": "<FlagRoute flag=\"ai_tools\"><KnowledgeBase /></FlagRoute>",
+   "page": "src/pages/KnowledgeBase.jsx",
+   "services": [
+    "api/knowledgeDocuments",
+    "api/knowledgeIngestion",
+    "embeddingService",
+    "knowledgeBaseAnalytics",
+    "knowledgeBaseView",
+    "knowledgeDocuments",
+    "knowledgeIngest",
+    "knowledgeIngestion",
+    "knowledgeLifecycle"
+   ],
+   "tables": [
+    "knowledge_documents"
+   ],
+   "rpcs": [
+    "kb_approve_document",
+    "kb_withdraw_document"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Document knowledge base with lifecycle (draft, approved, superseded) and embeddings.",
+   "empty_account_behaviour": "Empty (0 documents live); first action is add document.",
+   "defects": [
+    {
+     "id": "MODC-68",
+     "severity": "P3",
+     "evidence": "route guard FlagRoute ai_tools only; write policy Admin and Manager",
+     "summary": "Any role can open the page by URL; writes are refused by RLS for others."
+    }
+   ],
+   "remediation": "Add a role guard.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [
+     "knowledgeBaseLifecycle.render.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "embeddingService.chunking.test.js",
+     "knowledgeBaseAnalytics.test.js",
+     "knowledgeBaseLifecycle.render.test.jsx",
+     "knowledgeBaseLifecycleGroup.test.js",
+     "knowledgeBaseView.test.js",
+     "knowledgeDocuments.api.test.js",
+     "knowledgeIngest.test.js",
+     "knowledgeIngestion.api.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "AI Cost Monitor",
+   "route": "/ai-cost-monitor",
+   "module_key": "ai_cost_monitor",
+   "guard": "<FlagRoute flag=\"ai_tools\"><AiCostMonitor /></FlagRoute>",
+   "page": "src/pages/AiCostMonitor.jsx",
+   "services": [
+    "aiCostMonitorAnalytics",
+    "api"
+   ],
+   "tables": [],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 6,
+   "module_control": "live or not listed",
+   "what_it_does": "AI token usage and cost by model and feature.",
+   "empty_account_behaviour": "Empty.",
+   "defects": [
+    {
+     "id": "MODC-69",
+     "severity": "P3",
+     "evidence": "route guard FlagRoute ai_tools only; ai_token_logs SELECT limited to Admin, Manager, Director",
+     "summary": "Other roles reach an empty page by URL."
+    }
+   ],
+   "remediation": "Internal or platform tool; role guard.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [
+     "aiCostMonitor.render.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "aiCostMonitor.render.test.jsx",
+     "aiCostMonitorAnalytics.test.js",
+     "api.test.js",
+     "costCenterPage.render.test.jsx",
+     "dataCleaning.page.test.jsx",
+     "dataReconciliationPage.render.test.jsx",
+     "erpReliability.test.js",
+     "executiveReportIntake.render.test.jsx"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Automation",
+   "label": "Event Stream",
+   "route": "/events",
+   "module_key": "events",
+   "guard": "<FlagRoute flag=\"automation_platform\"><EventStream /></FlagRoute>",
+   "page": "src/pages/EventStream.jsx",
+   "services": [
+    "api/domainEvents",
+    "domainEvents",
+    "eventStreamAnalytics",
+    "useLatestRequest"
+   ],
+   "tables": [
+    "domain_events",
+    "event_consumers"
+   ],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 6,
+   "module_control": "live or not listed",
+   "what_it_does": "Domain event stream viewer (latest 500) with consumer list.",
+   "empty_account_behaviour": "Empty for a new company.",
+   "defects": [
+    {
+     "id": "MODC-70",
+     "severity": "P3",
+     "evidence": "route guard FlagRoute automation_platform only; event_consumers is a global table readable by elevated users",
+     "summary": "Platform internals are shown to tenant managers."
+    }
+   ],
+   "remediation": "Keep as an admin diagnostic.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "domainEvents.api.test.js",
+     "eventStreamAnalytics.test.js",
+     "useLatestRequest.test.jsx"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Automation",
+   "label": "Approval Workflows",
+   "route": "/workflow-settings",
+   "module_key": "workflow_settings",
+   "guard": "<FlagRoute flag=\"automation_platform\"><WorkflowSettings /></FlagRoute>",
+   "page": "src/pages/WorkflowSettings.jsx",
+   "services": [
+    "api/workflows",
+    "workflow/starterTemplates",
+    "workflowSettingsAnalytics",
+    "workflows"
+   ],
+   "tables": [
+    "approval_delegations",
+    "workflow_definitions",
+    "workflow_instances",
+    "workflow_step_events"
+   ],
+   "rpcs": [
+    "approval_dashboard",
+    "my_pending_approvals",
+    "start_workflow",
+    "workflow_act",
+    "workflow_cancel"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Approval workflow definitions with builder and starter templates, runs and decisions.",
+   "empty_account_behaviour": "No definitions for a new company; starter templates can be used to create them.",
+   "defects": [
+    {
+     "id": "MODC-12",
+     "severity": "P2",
+     "evidence": "workflow_definitions 25 rows, departments 12, accident_routing_rules 7, accident_email_templates and approval_policies 3: all belong to one organisation; no seeding function found for a new organisation",
+     "summary": "A new company starts with no approval workflows, no accident departments, routing rules or email templates. Pages open empty and the related automation does nothing until an admin builds each from scratch. VERIFIED counts; absence of seeding is PLAUSIBLE (searched pages and RPC names only)."
+    },
+    {
+     "id": "MODC-71",
+     "severity": "P3",
+     "evidence": "route guard FlagRoute automation_platform only (nav is Admin only); writes need elevated role by RLS",
+     "summary": "Non-admin roles reach the page by URL; saves are refused by RLS."
+    }
+   ],
+   "remediation": "Seed starter workflows on organisation creation.",
+   "priority": "P2",
+   "area": "DB",
+   "tests": {
+    "page_tests": [
+     "deepenedPages.render.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "accidentsWorkflow.test.jsx",
+     "approvalsDashboard.test.jsx",
+     "assetDisposalWorkflow.test.jsx",
+     "deepenedPages.render.test.jsx",
+     "documentWorkflow.test.jsx",
+     "driverViolationWorkflow.test.jsx",
+     "entityWorkflow.test.jsx",
+     "fuelExceptionWorkflow.test.jsx"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Automation",
+   "label": "Approval Delegations",
+   "route": "/approval-delegations",
+   "module_key": "approval_delegations",
+   "guard": "<FlagRoute flag=\"automation_platform\"><ApprovalDelegations /></FlagRoute>",
+   "page": "src/pages/ApprovalDelegations.jsx",
+   "services": [
+    "_client",
+    "api/_client",
+    "api/approvalDelegations",
+    "api/profileDirectory",
+    "approvalDelegations",
+    "approvalDelegationsAnalytics",
+    "profileDirectory"
+   ],
+   "tables": [
+    "approval_delegations"
+   ],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Delegate approvals for a date window.",
+   "empty_account_behaviour": "Empty; first action is add delegation.",
+   "defects": [],
+   "remediation": "Keep.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "accessGrantsEdit.test.js",
+     "accessPolicies.test.js",
+     "accidentReportTemplates.api.test.js",
+     "accidentsPage.api.test.js",
+     "administrationImports.api.test.js",
+     "aiOrchestratorClient.test.js",
+     "aiTyreInspectionFilters.test.js",
+     "alertThresholds.api.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Automation",
+   "label": "Approval Matrix",
+   "route": "/approval-matrix",
+   "module_key": "approval_matrix",
+   "guard": "<RoleRoute allowed={['Admin']}><ApprovalMatrix /></RoleRoute>",
+   "page": "src/pages/ApprovalMatrix.jsx",
+   "services": [
+    "api/approvalMatrix",
+    "api/sites",
+    "approvalCoverageAnalytics",
+    "approvalMatrix",
+    "approvalMatrixAnalytics",
+    "approvalPolicyCopy",
+    "sites"
+   ],
+   "tables": [
+    "approval_policies",
+    "approval_policy_events",
+    "custom_roles",
+    "sites",
+    "vehicle_fleet"
+   ],
+   "rpcs": [
+    "approval_region_coverage",
+    "reference_site_options"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Approval policies (who signs what) with coverage check; governed versions.",
+   "empty_account_behaviour": "Empty; admin must publish policies. 3 policies exist for the current company.",
+   "defects": [
+    {
+     "id": "MODC-12",
+     "severity": "P2",
+     "evidence": "workflow_definitions 25 rows, departments 12, accident_routing_rules 7, accident_email_templates and approval_policies 3: all belong to one organisation; no seeding function found for a new organisation",
+     "summary": "A new company starts with no approval workflows, no accident departments, routing rules or email templates. Pages open empty and the related automation does nothing until an admin builds each from scratch. VERIFIED counts; absence of seeding is PLAUSIBLE (searched pages and RPC names only)."
+    },
+    {
+     "id": "MODC-72",
+     "severity": "P2",
+     "evidence": "two approval engines in use: workflow_definitions (Approval Workflows) and approval_policies (Approval Matrix)",
+     "summary": "A buyer sees two places to configure approvals."
+    }
+   ],
+   "remediation": "Document which engine governs which approval, or merge.",
+   "priority": "P2",
+   "area": "web",
+   "tests": {
+    "page_tests": [
+     "approvalPolicies.page.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "aiTyreInspection.render.test.jsx",
+     "approvalCoverageAnalytics.test.js",
+     "approvalMatrixAnalytics.test.js",
+     "approvalPolicies.api.test.js",
+     "approvalPolicies.page.test.jsx",
+     "moduleCatalog.test.js",
+     "navTreeParity.test.js",
+     "sites.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Automation",
+   "label": "Automation Rules",
+   "route": "/automation-rules",
+   "module_key": "automation_rules",
+   "guard": "<FlagRoute flag=\"automation_platform\"><AutomationRules /></FlagRoute>",
+   "page": "src/pages/AutomationRules.jsx",
+   "services": [
+    "api/businessRules",
+    "automationRulesAnalytics",
+    "businessRules"
+   ],
+   "tables": [
+    "business_rules",
+    "rule_executions"
+   ],
+   "rpcs": [],
+   "internal_status": "at risk",
+   "commercial_class": 4,
+   "module_control": "live or not listed",
+   "what_it_does": "Event rules (if event and conditions then action) with builder.",
+   "empty_account_behaviour": "Empty; first action is create rule.",
+   "defects": [
+    {
+     "id": "MODC-73",
+     "severity": "P2",
+     "evidence": "rule_executions has 0 rows; business_rules has 1 row; SELECT policy shows organisation_id IS NULL rules to every tenant",
+     "summary": "No rule has ever executed in production; the engine is unproven. Null-organisation rules would be shared."
+    }
+   ],
+   "remediation": "Prove with an end to end test before marketing.",
+   "priority": "P2",
+   "area": "DB",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "automationRulesAnalytics.test.js",
+     "businessRules.api.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Automation",
+   "label": "API & Webhooks",
+   "route": "/integrations",
+   "module_key": "integrations",
+   "guard": "<FlagRoute flag=\"automation_platform\"><Integrations /></FlagRoute>",
+   "page": "src/pages/Integrations.jsx",
+   "services": [
+    "api/billing",
+    "api/integrations",
+    "billing",
+    "integrations",
+    "integrationsAnalytics"
+   ],
+   "tables": [
+    "api_keys",
+    "invoices",
+    "org_subscriptions",
+    "subscription_plans",
+    "webhook_deliveries",
+    "webhook_subscriptions"
+   ],
+   "rpcs": [
+    "create_api_key",
+    "ensure_org_subscription",
+    "get_subscription_overview",
+    "org_can_add",
+    "revoke_api_key"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 4,
+   "module_control": "live or not listed",
+   "what_it_does": "API keys and outbound webhooks (webhook_subscriptions delivered by pg_net cron).",
+   "empty_account_behaviour": "Empty; admin can create a key or webhook.",
+   "defects": [
+    {
+     "id": "MODC-74",
+     "severity": "P1",
+     "evidence": "webhook_deliveries: 9 pending since 2026-07-14, 3 failed, 0 delivered; 0 of 2 subscriptions active; api_keys 0 rows",
+     "summary": "Outbound webhooks have never delivered successfully and no API key has been issued in production. VERIFIED counts; cause not investigated."
+    },
+    {
+     "id": "MODC-75",
+     "severity": "P2",
+     "evidence": "src/pages/DeveloperPortal.jsx uses webhook_endpoints, which no delivery function reads; Integrations uses webhook_subscriptions",
+     "summary": "Two webhook registries; the Developer Portal one delivers nothing."
+    }
+   ],
+   "remediation": "Fix or retire one registry; prove delivery end to end. See API_SECURITY_MATRIX.",
+   "priority": "P1",
+   "area": "DB, edge fn",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "consolePagesSmoke.render.test.jsx",
+     "consolePlatform.test.js",
+     "filterStateRestore.test.jsx",
+     "fleetMasterFilters.test.jsx",
+     "integrations.api.test.js",
+     "integrationsAnalytics.test.js",
+     "navTreeParity.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Administration",
+   "label": "Data Intake Center",
+   "route": "/data-intake",
+   "module_key": "data_intake",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><FlagRoute flag=\"data_intake\"><DataIntakeCenter /></FlagRoute></RoleRoute>",
+   "page": "src/pages/DataIntakeCenter.jsx",
+   "services": [
+    "api/importDiagnostics",
+    "api/importHistory",
+    "api/imports",
+    "api/systemConfig",
+    "dataIntakeCenterAnalytics",
+    "import",
+    "import/diagnostics",
+    "importCostPreview",
+    "importDiagnostics",
+    "importHistory",
+    "imports",
+    "systemConfig"
+   ],
+   "tables": [
+    "alerts",
+    "corrective_actions",
+    "currency_rates",
+    "custom_field_catalog",
+    "import_attachment_matches",
+    "import_batch_sheets",
+    "import_batches",
+    "import_files",
+    "import_mapping_profiles",
+    "import_mapping_rules",
+    "import_master_aliases",
+    "import_row_issues",
+    "import_rows",
+    "profiles",
+    "system_config"
+   ],
+   "rpcs": [
+    "admin_check_import_fingerprint",
+    "admin_import_history",
+    "admin_unlogged_imports",
+    "cost_apply_actual_budgets",
+    "cost_budget_overview",
+    "cost_clear_value",
+    "cost_convert_line_totals",
+    "cost_set_monthly_budget",
+    "data_completeness",
+    "data_link_audit",
+    "data_link_create_missing_assets",
+    "get_public_config",
+    "import_commit_batch",
+    "import_enrich_batch",
+    "import_existing_keys",
+    "import_reprocess_row",
+    "import_reverse_batch",
+    "import_verify_landing"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "module_control": "live or not listed",
+   "what_it_does": "Import centre: generic staged import for 10 modules with mapping memory, validation, approval, commit and reversal; plus ERP report auto-detect, expense grid, templates, production, SCO and SANY tabs.",
+   "empty_account_behaviour": "A new company can import fleet, tyres, stock and more from Excel with reversible batches. This is the main first action.",
+   "defects": [
+    {
+     "id": "MODC-76",
+     "severity": "P1",
+     "evidence": "trigger stamp_import_default_org with system_config.single_tenant_mode = true; src/pages/DataIntakeCenter.jsx:1089-1095 tabs for ERP reports, production, SCO Cost, SANY Invoices; src/lib/erpIntake.js Ramco detection",
+     "summary": "Null-organisation imports are stamped to the current company while single tenant mode is on; company-specific tabs are shown to every tenant."
+    },
+    {
+     "id": "MODC-10",
+     "severity": "P2",
+     "evidence": "trigger function normalize_site(): upper-cases, applies global site_aliases, strips a trailing -ST or _ST",
+     "summary": "Site names are rewritten by rules built for the current company (store suffix -ST) for every tenant. VERIFIED (function source)."
+    }
+   ],
+   "remediation": "Per-organisation flag for the ERP specific tabs; switch off single tenant mode before a second tenant. Risk to current company: medium (dashboard CSV loads rely on the stamp).",
+   "priority": "P1",
+   "area": "DB, web",
+   "tests": {
+    "page_tests": [
+     "executiveReportIntake.render.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "accessOverview.test.js",
+     "accidentAdapter.test.js",
+     "adapters.test.js",
+     "aiTyreMonthlyBudget.test.js",
+     "aliases.test.js",
+     "coldStartConfigCache.test.js",
+     "componentsTableModalSweep.render.test.jsx",
+     "consoleDataGaps.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "On the branch /erp-intake, /expense-import and /erp-import redirect here as tabs. On main they are three separate pages with menu items."
+  },
+  {
+   "group": "Administration",
+   "label": "Upload Approvals",
+   "route": "/upload-approvals",
+   "module_key": "upload_approvals",
+   "guard": "<FlagRoute flag=\"data_intake\"><UploadApprovals /></FlagRoute>",
+   "page": "src/pages/UploadApprovals.jsx",
+   "services": [
+    "api/imports",
+    "api/pendingUploadDecisions",
+    "imports",
+    "pendingUploadDecisions",
+    "uploadApprovalsAnalytics"
+   ],
+   "tables": [
+    "alerts",
+    "corrective_actions",
+    "currency_rates",
+    "custom_field_catalog",
+    "import_attachment_matches",
+    "import_batch_sheets",
+    "import_batches",
+    "import_files",
+    "import_mapping_profiles",
+    "import_mapping_rules",
+    "import_master_aliases",
+    "import_row_issues",
+    "import_rows",
+    "pending_uploads",
+    "profiles"
+   ],
+   "rpcs": [
+    "cost_apply_actual_budgets",
+    "cost_budget_overview",
+    "cost_clear_value",
+    "cost_convert_line_totals",
+    "cost_set_monthly_budget",
+    "data_completeness",
+    "data_link_audit",
+    "data_link_create_missing_assets",
+    "import_commit_batch",
+    "import_enrich_batch",
+    "import_existing_keys",
+    "import_reprocess_row",
+    "import_reverse_batch",
+    "import_verify_landing"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 5,
+   "module_control": "disabled",
+   "what_it_does": "Approver desk for import batches and legacy pending uploads.",
+   "empty_account_behaviour": "Empty queues.",
+   "defects": [
+    {
+     "id": "MODC-77",
+     "severity": "P3",
+     "evidence": "two queues: import_batches and legacy pending_uploads",
+     "summary": "Legacy path kept beside the new one."
+    }
+   ],
+   "remediation": "Retire pending_uploads when mobile no longer writes it.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "administrationImports.api.test.js",
+     "componentsTableModalSweep.render.test.jsx",
+     "customData.page.test.jsx",
+     "executiveReportIntake.render.test.jsx",
+     "imports.automation.test.js",
+     "imports.control.test.js",
+     "imports.verification.test.js",
+     "importsExistingRecords.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Administration",
+   "label": "Data Cleaning",
+   "route": "/cleaning",
+   "module_key": "data_cleaning",
+   "guard": "<ModuleRoute moduleKey=\"data_cleaning\"><DataCleaning /></ModuleRoute>",
+   "page": "src/pages/DataCleaning.jsx",
+   "services": [
+    "api",
+    "dataCleaningAnalytics",
+    "tyreClassifier",
+    "useLatestRequest"
+   ],
+   "tables": [],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Data cleaning scans over tyre records with paged reads.",
+   "empty_account_behaviour": "Nothing to clean.",
+   "defects": [],
+   "remediation": "Keep.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [
+     "dataCleaning.page.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "aiCostMonitor.render.test.jsx",
+     "api.test.js",
+     "costCenterPage.render.test.jsx",
+     "dataCleaning.page.test.jsx",
+     "dataCleaningAnalytics.test.js",
+     "dataReconciliationPage.render.test.jsx",
+     "erpReliability.test.js",
+     "executiveReportIntake.render.test.jsx"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Administration",
+   "label": "Data Reconciliation",
+   "route": "/data-reconciliation",
+   "module_key": "data_reconciliation",
+   "guard": "<RoleRoute allowed={['Admin','Manager','Director']}><DataReconciliation /></RoleRoute>",
+   "page": "src/pages/DataReconciliation.jsx",
+   "services": [
+    "api",
+    "dataReconciliationAnalytics"
+   ],
+   "tables": [],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "module_control": "live or not listed",
+   "what_it_does": "Data quality hub: orphans, duplicates, brand gaps, job card dates, trust scores, tyre price and evidence sections.",
+   "empty_account_behaviour": "Empty sections.",
+   "defects": [
+    {
+     "id": "MODC-78",
+     "severity": "P2",
+     "evidence": "nav is Admin only but the route admits Manager and Director; several sections are built on the current company data history (KSA master upload, job card date repair)",
+     "summary": "Guard mismatch; company-specific sections."
+    }
+   ],
+   "remediation": "Align guard; hide master-upload sections for other tenants.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [
+     "dataReconciliationPage.render.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "aiCostMonitor.render.test.jsx",
+     "api.test.js",
+     "costCenterPage.render.test.jsx",
+     "dataCleaning.page.test.jsx",
+     "dataReconciliationAnalytics.test.js",
+     "dataReconciliationPage.render.test.jsx",
+     "erpReliability.test.js",
+     "executiveReportIntake.render.test.jsx"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Administration",
+   "label": "Custom Data",
+   "route": "/custom-data",
+   "module_key": "custom_data",
+   "guard": "<ModuleRoute moduleKey=\"custom_data\"><CustomData /></ModuleRoute>",
+   "page": "src/pages/CustomData.jsx",
+   "services": [
+    "api/auditTrailOverview",
+    "api/customData",
+    "api/imports",
+    "auditTrailOverview",
+    "customData",
+    "customDataAnalytics",
+    "customDataView",
+    "imports"
+   ],
+   "tables": [
+    "alerts",
+    "audit_event_reviews",
+    "corrective_actions",
+    "currency_rates",
+    "custom_field_catalog",
+    "field_synonyms",
+    "import_attachment_matches",
+    "import_batch_sheets",
+    "import_batches",
+    "import_files",
+    "import_mapping_profiles",
+    "import_mapping_rules",
+    "import_master_aliases",
+    "import_row_issues",
+    "import_rows",
+    "profiles",
+    "tyre_records"
+   ],
+   "rpcs": [
+    "cost_apply_actual_budgets",
+    "cost_budget_overview",
+    "cost_clear_value",
+    "cost_convert_line_totals",
+    "cost_set_monthly_budget",
+    "data_completeness",
+    "data_link_audit",
+    "data_link_create_missing_assets",
+    "get_extra_field_stats",
+    "import_commit_batch",
+    "import_enrich_batch",
+    "import_existing_keys",
+    "import_reprocess_row",
+    "import_reverse_batch",
+    "import_verify_landing"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Custom field manager for unmapped import columns and synonyms.",
+   "empty_account_behaviour": "Empty.",
+   "defects": [],
+   "remediation": "Keep.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [
+     "customData.page.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "auditTrail.page.test.jsx",
+     "componentsTableModalSweep.render.test.jsx",
+     "customData.api.test.js",
+     "customData.page.test.jsx",
+     "customDataAnalytics.test.js",
+     "customDataView.test.js",
+     "executiveReportIntake.render.test.jsx",
+     "imports.automation.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Administration",
+   "label": "ERP Sync",
+   "route": "/erp-sync",
+   "module_key": "erp_sync",
+   "guard": "<FlagRoute flag=\"erp_sync\"><ModuleRoute moduleKey=\"erp_sync\"><ErpSync /></ModuleRoute></FlagRoute>",
+   "page": "src/pages/ErpSync.jsx",
+   "services": [],
+   "tables": [],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 4,
+   "module_control": "live or not listed",
+   "what_it_does": "Statement that no ERP connector is provisioned, with target systems listed as not configured and a link to Data Intake.",
+   "empty_account_behaviour": "Same for every company.",
+   "defects": [
+    {
+     "id": "MODC-79",
+     "severity": "P1",
+     "evidence": "src/pages/ErpSync.jsx:13-18 no ERP connector is provisioned",
+     "summary": "There is no ERP sync. The page is honest about it."
+    }
+   ],
+   "remediation": "Must not be marketed as ERP integration. Hide from the menu.",
+   "priority": "P2",
+   "area": "marketing, web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Administration",
+   "label": "OCR Scanner",
+   "route": "/ocr-scanner",
+   "module_key": "ocr_scanner",
+   "guard": "<RoleRoute allowed={['Admin']}><OcrScanner /></RoleRoute>",
+   "page": "src/pages/OcrScanner.jsx",
+   "services": [
+    "_client",
+    "api/_client",
+    "api/ocrScanner",
+    "ocrScanner",
+    "ocrScannerAnalytics"
+   ],
+   "tables": [
+    "ocr_scans"
+   ],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 4,
+   "module_control": "disabled",
+   "what_it_does": "Scan record and review queue; no OCR provider is connected (stated on the page).",
+   "empty_account_behaviour": "Empty.",
+   "defects": [
+    {
+     "id": "MODC-09",
+     "severity": "P2",
+     "evidence": "INSERT/UPDATE policies equal to auth.uid() IS NOT NULL on goods_receipts, incident_reports, materials, requisitions, sla_records, ocr_scans, onboarding_tasks, fleet_optimizer_scenarios, suppliers",
+     "summary": "Route guards restrict these pages to Admin or Admin/Manager/Director, but the database lets any signed-in user of the organisation insert and update rows through the API. Organisation isolation still holds. VERIFIED (catalog)."
+    },
+    {
+     "id": "MODC-80",
+     "severity": "P1",
+     "evidence": "src/pages/OcrScanner.jsx header: extraction provider NOT connected",
+     "summary": "No OCR happens."
+    }
+   ],
+   "remediation": "Must not be marketed.",
+   "priority": "P3",
+   "area": "marketing",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "accessGrantsEdit.test.js",
+     "accessPolicies.test.js",
+     "accidentReportTemplates.api.test.js",
+     "accidentsPage.api.test.js",
+     "administrationImports.api.test.js",
+     "aiOrchestratorClient.test.js",
+     "aiTyreInspectionFilters.test.js",
+     "alertThresholds.api.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Administration",
+   "label": "Advanced Search",
+   "route": "/advanced-search",
+   "module_key": "advanced_search",
+   "guard": "<RoleRoute allowed={['Admin', 'Manager', 'Director']}><AdvancedSearch /></RoleRoute>",
+   "page": "src/pages/AdvancedSearch.jsx",
+   "services": [
+    "_client",
+    "advancedSearch",
+    "advancedSearchAnalytics",
+    "api/_client",
+    "api/advancedSearch"
+   ],
+   "tables": [
+    "saved_searches"
+   ],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Cross-entity search (assets, tyres, work orders, inspections) and saved searches.",
+   "empty_account_behaviour": "No results.",
+   "defects": [],
+   "remediation": "Keep.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "accessGrantsEdit.test.js",
+     "accessPolicies.test.js",
+     "accidentReportTemplates.api.test.js",
+     "accidentsPage.api.test.js",
+     "administrationImports.api.test.js",
+     "advancedSearch.api.test.js",
+     "advancedSearch.test.js",
+     "advancedSearchAnalytics.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Administration",
+   "label": "Brand Assets",
+   "route": "/brand-assets",
+   "module_key": "brand_assets",
+   "guard": "<RoleRoute allowed={['Admin']}><BrandAssets /></RoleRoute>",
+   "page": "src/pages/BrandAssets.jsx",
+   "services": [
+    "api/brandAssetRegistry",
+    "api/brandLogo",
+    "api/branding",
+    "brand/library",
+    "brandAssetRegistry",
+    "brandAssetsView",
+    "brandLogo",
+    "branding"
+   ],
+   "tables": [
+    "brand_asset_registry",
+    "system_config"
+   ],
+   "rpcs": [
+    "get_org_branding",
+    "set_org_branding"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "module_control": "live or not listed",
+   "what_it_does": "Brand gallery, tenant logo placements and governance.",
+   "empty_account_behaviour": "Shipped library only.",
+   "defects": [
+    {
+     "id": "MODC-02",
+     "severity": "P1",
+     "evidence": "get_report_snapshot, get_workshop_snapshot, get_report_tyre_maintenance read public.settings key company_name and system_config key company_logo (both global)",
+     "summary": "Public share boards and TV links print one global company name and logo for every organisation. VERIFIED."
+    },
+    {
+     "id": "MODC-81",
+     "severity": "P2",
+     "evidence": "src/pages/BrandAssets.jsx header: reads system_config company_logo (global, super admin write) beside per-organisation branding",
+     "summary": "A tenant Admin cannot change the report logo used by PDFs and public boards."
+    }
+   ],
+   "remediation": "Use organisation branding everywhere.",
+   "priority": "P2",
+   "area": "DB, web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "brandAssetsView.test.js",
+     "brandLibrary.test.js",
+     "branding.api.test.js",
+     "coldStartConfigCache.test.js",
+     "consoleConfigPages.render.test.jsx",
+     "navFavoritesUi.test.jsx",
+     "washReportPdf.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Administration",
+   "label": "Onboarding Wizard",
+   "route": "/onboarding-wizard",
+   "module_key": "onboarding_wizard",
+   "guard": "<RoleRoute allowed={['Admin']}><OnboardingWizard /></RoleRoute>",
+   "page": "src/pages/OnboardingWizard.jsx",
+   "services": [
+    "_client",
+    "api/_client",
+    "api/onboarding",
+    "api/onboardingReadiness",
+    "onboarding",
+    "onboardingReadiness",
+    "onboardingReadinessView"
+   ],
+   "tables": [
+    "module_permissions",
+    "onboarding_tasks",
+    "profiles"
+   ],
+   "rpcs": [
+    "create_workspace_owner"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "module_control": "live or not listed",
+   "what_it_does": "Go-live readiness measured from live data plus a hand-kept task checklist.",
+   "empty_account_behaviour": "Readiness shows fails with next steps; checklist empty (0 rows, no default tasks).",
+   "defects": [
+    {
+     "id": "MODC-09",
+     "severity": "P2",
+     "evidence": "INSERT/UPDATE policies equal to auth.uid() IS NOT NULL on goods_receipts, incident_reports, materials, requisitions, sla_records, ocr_scans, onboarding_tasks, fleet_optimizer_scenarios, suppliers",
+     "summary": "Route guards restrict these pages to Admin or Admin/Manager/Director, but the database lets any signed-in user of the organisation insert and update rows through the API. Organisation isolation still holds. VERIFIED (catalog)."
+    },
+    {
+     "id": "MODC-82",
+     "severity": "P1",
+     "evidence": "RPC create_workspace_owner: authenticated has no EXECUTE (catalog); src/lib/api/onboarding.js:223 calls it",
+     "summary": "Self-serve workspace creation is not available. See the onboarding agent report."
+    }
+   ],
+   "remediation": "See onboarding report.",
+   "priority": "P1",
+   "area": "DB",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "accessGrantsEdit.test.js",
+     "accessPolicies.test.js",
+     "accidentReportTemplates.api.test.js",
+     "accidentsPage.api.test.js",
+     "administrationImports.api.test.js",
+     "aiOrchestratorClient.test.js",
+     "aiTyreInspectionFilters.test.js",
+     "alertThresholds.api.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Administration",
+   "label": "Audit Trail",
+   "route": "/audit",
+   "module_key": "audit_trail",
+   "guard": "<ModuleRoute moduleKey=\"audit_trail\"><AuditTrail /></ModuleRoute>",
+   "page": "src/pages/AuditTrail.jsx",
+   "services": [
+    "api/auditTrail",
+    "api/auditTrailOverview",
+    "auditSeverity",
+    "auditTrail",
+    "auditTrailAnalytics",
+    "auditTrailDevice",
+    "auditTrailOverview",
+    "auditTrailView",
+    "customDataView",
+    "useLatestRequest"
+   ],
+   "tables": [
+    "access_audit",
+    "audit_event_reviews",
+    "audit_log_v2",
+    "console_sessions",
+    "import_batches",
+    "profiles",
+    "upload_history"
+   ],
+   "rpcs": [
+    "reverse_legacy_upload"
+   ],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Audit trail with device, severity, uploads, exports tabs and Excel export.",
+   "empty_account_behaviour": "Empty.",
+   "defects": [],
+   "remediation": "Keep.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [
+     "auditTrail.page.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "auditActor.test.js",
+     "auditSeverity.test.js",
+     "auditTrail.api.test.js",
+     "auditTrail.page.test.jsx",
+     "auditTrailAnalytics.test.js",
+     "auditTrailDevice.test.js",
+     "auditTrailView.test.js",
+     "customData.page.test.jsx"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Administration",
+   "label": "System Health",
+   "route": "/system-health",
+   "module_key": "system_health",
+   "guard": "<RoleRoute allowed={['Admin']}><SystemHealth /></RoleRoute>",
+   "page": "src/pages/SystemHealth.jsx",
+   "services": [
+    "cn",
+    "systemHealth",
+    "systemHealthAnalytics"
+   ],
+   "tables": [],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 6,
+   "module_control": "live or not listed",
+   "what_it_does": "Subsystem reachability board (database, tables, buckets, edge functions, auth).",
+   "empty_account_behaviour": "Same for every company.",
+   "defects": [
+    {
+     "id": "MODC-83",
+     "severity": "P3",
+     "evidence": "src/pages/SystemHealth.jsx header: internal admin-only health board",
+     "summary": "Platform internals shown to a tenant Admin."
+    }
+   ],
+   "remediation": "Move to the platform console only.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "consoleOpsPages.render.test.jsx",
+     "systemHealth.test.js",
+     "systemHealthAnalytics.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Administration",
+   "label": "Usage & Adoption",
+   "route": "/tenant-health",
+   "module_key": "tenant_health",
+   "guard": "<RoleRoute allowed={['Admin']}><TenantHealth /></RoleRoute>",
+   "page": "src/pages/TenantHealth.jsx",
+   "services": [
+    "tenantHealth",
+    "tenantHealthAnalytics"
+   ],
+   "tables": [],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Usage and adoption from profiles, audit log and AI logs.",
+   "empty_account_behaviour": "Low numbers.",
+   "defects": [],
+   "remediation": "Keep.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "tenantHealth.test.js",
+     "tenantHealthAnalytics.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Administration",
+   "label": "Developer Portal",
+   "route": "/developer-portal",
+   "module_key": "developer_portal",
+   "guard": "<RoleRoute allowed={['Admin','Manager','Director','Integration Admin']}><DeveloperPortal /></RoleRoute>",
+   "page": "src/pages/DeveloperPortal.jsx",
+   "services": [
+    "_client",
+    "api/_client",
+    "api/developerPortal",
+    "developerPortal",
+    "developerPortalAnalytics"
+   ],
+   "tables": [
+    "api_keys",
+    "webhook_endpoints"
+   ],
+   "rpcs": [
+    "create_api_key",
+    "revoke_api_key"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 4,
+   "module_control": "live or not listed",
+   "what_it_does": "API keys (canonical api_keys) and a webhook endpoint register.",
+   "empty_account_behaviour": "Empty.",
+   "defects": [
+    {
+     "id": "MODC-75",
+     "severity": "P2",
+     "evidence": "src/lib/api/developerPortal.js:129-200 webhook_endpoints; no delivery function reads that table",
+     "summary": "Webhooks registered here are never delivered. Duplicate of API and Webhooks."
+    }
+   ],
+   "remediation": "Merge with API and Webhooks.",
+   "priority": "P2",
+   "area": "web",
+   "tests": {
+    "page_tests": [
+     "developerPortalCanonicalKeys.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "accessGrantsEdit.test.js",
+     "accessPolicies.test.js",
+     "accidentReportTemplates.api.test.js",
+     "accidentsPage.api.test.js",
+     "administrationImports.api.test.js",
+     "aiOrchestratorClient.test.js",
+     "aiTyreInspectionFilters.test.js",
+     "alertThresholds.api.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Administration",
+   "label": "Settings",
+   "route": "/settings",
+   "module_key": "settings",
+   "guard": "<Settings />",
+   "page": "src/pages/Settings.jsx",
+   "services": [
+    "accountDeletion",
+    "accountRecovery",
+    "api/accountDeletion",
+    "api/notificationPreferences",
+    "api/settings",
+    "emailService",
+    "notificationPreferences",
+    "notificationPrefs",
+    "settings",
+    "settingsAnalytics"
+   ],
+   "tables": [
+    "account_deletion_requests",
+    "kpi_targets",
+    "notification_preferences",
+    "profiles",
+    "report_schedules",
+    "upload_history"
+   ],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Profile, notifications, organisation settings (per organisation through RPC), KPI targets, feature flags, account deletion.",
+   "empty_account_behaviour": "Defaults; admin sets company name and currency.",
+   "defects": [
+    {
+     "id": "MODC-03",
+     "severity": "P1",
+     "evidence": "src/lib/api/kpiTargets.js:44 and src/lib/api/settings.js:61 upsert onConflict metric,year,month,site; live index kpi_targets_scope_uidx (metric, year, COALESCE(month,0), COALESCE(site,''), lower(country)) has no organisation column; src/pages/KpiScorecard.jsx:262 and src/pages/Settings.jsx:516 send month and site as NULL",
+     "summary": "KPI targets cannot be re-saved: NULL month/site never match the conflict target, so the second save is an INSERT that hits the scope unique index (23505). The same index also blocks any second organisation from saving the same metric and year. Existing 7 rows were last written 2026-06-08. VERIFIED statically (code + catalog), not executed."
+    },
+    {
+     "id": "MODC-84",
+     "severity": "P2",
+     "evidence": "public.settings (global, 7 keys incl. company_name, currency_KSA) still exists beside per-organisation configuration and is read by public report RPCs",
+     "summary": "Two sources of company name."
+    }
+   ],
+   "remediation": "Retire the global settings table after repointing the RPCs.",
+   "priority": "P2",
+   "area": "DB",
+   "tests": {
+    "page_tests": [
+     "settings.configuration.page.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "accountRecovery.test.js",
+     "checklistAccess.test.js",
+     "commandSearch.test.js",
+     "customRolesAccess.test.js",
+     "moduleStatusGate.test.js",
+     "navFavorites.test.js",
+     "navFavoritesUi.test.jsx",
+     "navTreeParity.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Administration",
+   "label": "Request Access",
+   "route": "/request-access",
+   "module_key": "request_access",
+   "guard": "<RequestAccess />",
+   "page": "src/pages/RequestAccess.jsx",
+   "services": [
+    "api/jitElevation",
+    "jitElevation",
+    "moduleCatalog",
+    "requestAccess",
+    "requestAccessAnalytics"
+   ],
+   "tables": [
+    "profiles"
+   ],
+   "rpcs": [
+    "admin_decide_elevation",
+    "admin_grant_elevation",
+    "admin_list_elevations",
+    "admin_revoke_elevation",
+    "cancel_elevation",
+    "my_elevation_requests",
+    "request_elevation"
+   ],
+   "internal_status": "at risk",
+   "commercial_class": 3,
+   "module_control": "live or not listed",
+   "what_it_does": "User requests a temporary capability; a super admin decides in the platform console.",
+   "empty_account_behaviour": "Works; request waits.",
+   "defects": [
+    {
+     "id": "MODC-85",
+     "severity": "P2",
+     "evidence": "src/pages/RequestAccess.jsx header: a super admin approves in /console/jit-elevation",
+     "summary": "A customer Admin cannot approve requests from their own users; only the platform owner can."
+    }
+   ],
+   "remediation": "Let organisation Admins decide for their own organisation.",
+   "priority": "P2",
+   "area": "DB, console",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [
+     "consoleConfigPages.render.test.jsx",
+     "consoleJitElevation.render.test.jsx",
+     "consoleModuleCoverage.test.js",
+     "jitElevation.test.js",
+     "moduleCatalog.test.js",
+     "requestAccess.test.js",
+     "requestAccessAnalytics.test.js",
+     "workshopStatusPermissions.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Administration",
+   "label": "Help & Support",
+   "route": "/help",
+   "module_key": "help",
+   "guard": "<HelpCenter />",
+   "page": "src/pages/HelpCenter.jsx",
+   "services": [
+    "_client",
+    "api/_client",
+    "api/support",
+    "help/faqs",
+    "helpCenterAnalytics",
+    "helpHub",
+    "support"
+   ],
+   "tables": [
+    "support_tickets"
+   ],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "module_control": "live or not listed",
+   "what_it_does": "FAQs, raise a ticket, my tickets, triage for organisation admins.",
+   "empty_account_behaviour": "FAQs; no tickets.",
+   "defects": [
+    {
+     "id": "MODC-86",
+     "severity": "P2",
+     "evidence": "src/pages/HelpCenter.jsx header: tickets land with the organisation administrators; support_tickets is organisation isolated",
+     "summary": "Customer tickets do not reach the vendor support team. PLAUSIBLE (console issue inbox not traced)."
+    }
+   ],
+   "remediation": "Route a copy to vendor support.",
+   "priority": "P2",
+   "area": "web, console",
+   "tests": {
+    "page_tests": [
+     "helpCenter.render.test.jsx"
+    ],
+    "service_or_engine_tests": [
+     "accessGrantsEdit.test.js",
+     "accessPolicies.test.js",
+     "accidentReportTemplates.api.test.js",
+     "accidentsPage.api.test.js",
+     "administrationImports.api.test.js",
+     "aiOrchestratorClient.test.js",
+     "aiTyreInspectionFilters.test.js",
+     "alertThresholds.api.test.js"
+    ],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main and on the branch."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Public report board (no menu)",
+   "route": "/report/:token",
+   "module_key": null,
+   "guard": "none (anonymous, token RPC)",
+   "page": "src/pages/ReportShare.jsx",
+   "services": [],
+   "tables": [],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "module_control": "live or not listed",
+   "what_it_does": "Anonymous rotating board for a share token.",
+   "empty_account_behaviour": "Zeros or N/A.",
+   "defects": [
+    {
+     "id": "MODC-02",
+     "severity": "P1",
+     "evidence": "get_report_snapshot, get_workshop_snapshot, get_report_tyre_maintenance read public.settings key company_name and system_config key company_logo (both global)",
+     "summary": "Public share boards and TV links print one global company name and logo for every organisation. VERIFIED."
+    },
+    {
+     "id": "MODC-14",
+     "severity": "P3",
+     "evidence": "report_shares: 2 active rows, password_hash null, expires_at null, view_count 230 and 25",
+     "summary": "Live public report links have no password and no expiry. Optional by design; flagged for the current company. VERIFIED."
+    }
+   ],
+   "remediation": "See Report Sharing.",
+   "priority": "P1",
+   "area": "DB",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main."
+  },
+  {
+   "group": "Accidents & Claims",
+   "label": "Insurer case portal (no menu)",
+   "route": "/accident-portal/:token",
+   "module_key": null,
+   "guard": "none (anonymous, token RPC)",
+   "page": "src/pages/AccidentPortalView.jsx",
+   "services": [],
+   "tables": [],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "PII-lean read-only view of one accident case for an insurer.",
+   "empty_account_behaviour": "Invalid token state.",
+   "defects": [],
+   "remediation": "Keep.",
+   "priority": "P3",
+   "area": "DB",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main."
+  },
+  {
+   "group": "Accidents & Claims",
+   "label": "Accident detail and timeline (no menu)",
+   "route": "/accidents/:id",
+   "module_key": null,
+   "guard": "FlagRoute accidents_module",
+   "page": "src/pages/AccidentDetail.jsx, AccidentCaseTimeline.jsx",
+   "services": [],
+   "tables": [],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 3,
+   "module_control": "live or not listed",
+   "what_it_does": "Case page with tabs per workstream.",
+   "empty_account_behaviour": "Not found state.",
+   "defects": [
+    {
+     "id": "MODC-06",
+     "severity": "P1",
+     "evidence": "src/lib/accidentVocab.js:48,50,142,161,162 (NAJM/TAQDEER options, INTERNAL_WORKSHOPS = GCC Workshop, LIABLE_PARTY_OPTS = GCC / Other Party, PAYER_OPTS = GCC / Insurance / Recovery Claim)",
+     "summary": "The accident form hard-codes the current company abbreviation (GCC) as liable party and payer, plus Saudi-only Najm and Taqdeer fields. VERIFIED."
+    }
+   ],
+   "remediation": "See Accidents.",
+   "priority": "P1",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Report Builder (no menu)",
+   "route": "/report-builder",
+   "module_key": null,
+   "guard": "RoleRoute ['Admin']",
+   "page": "src/pages/ReportBuilder.jsx",
+   "services": [],
+   "tables": [],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Multi-block report builder over datasets, saved per user.",
+   "empty_account_behaviour": "Empty preview.",
+   "defects": [],
+   "remediation": "Add a menu entry or fold into Reports.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main (no menu item on either)."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Engineering KPI and KPI Command (menu on main only)",
+   "route": "/kpi-engine",
+   "module_key": null,
+   "guard": "ModuleRoute kpi_scorecard",
+   "page": "src/pages/EngineeringKpi.jsx, KpiCommandCenter.jsx",
+   "services": [],
+   "tables": [],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 5,
+   "module_control": "live or not listed",
+   "what_it_does": "Engineering KPI home and KPI command centre. See ENGINEERING_CALCULATIONS.",
+   "empty_account_behaviour": "N/A.",
+   "defects": [
+    {
+     "id": "MODC-54",
+     "severity": "P2",
+     "evidence": "KPI Center, Engineering KPI (/kpi-engine), KPI Command (/kpi-command), Board Overview, Executive Report, Executive Analytics, Advanced Analytics, Fleet Analytics, Fleet Intelligence, Ops Intelligence all present overlapping fleet KPIs",
+     "summary": "Ten overlapping dashboards. The branch merges some into tabs; main still lists them separately."
+    }
+   ],
+   "remediation": "Controlled consolidation into KPI Center.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Main: two menu items. Branch: routes kept, menu items removed."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Executive Report and Executive Analytics",
+   "route": "/executive-report",
+   "module_key": null,
+   "guard": "ModuleRoute executive_report; RoleRoute Admin/Manager/Director",
+   "page": "src/pages/ExecutiveReport.jsx, ExecutiveAnalytics.jsx",
+   "services": [],
+   "tables": [],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 5,
+   "module_control": "live or not listed",
+   "what_it_does": "Customisable executive report with PDF/PPTX/Excel; chart-rich executive analytics.",
+   "empty_account_behaviour": "N/A.",
+   "defects": [
+    {
+     "id": "MODC-54",
+     "severity": "P2",
+     "evidence": "KPI Center, Engineering KPI (/kpi-engine), KPI Command (/kpi-command), Board Overview, Executive Report, Executive Analytics, Advanced Analytics, Fleet Analytics, Fleet Intelligence, Ops Intelligence all present overlapping fleet KPIs",
+     "summary": "Ten overlapping dashboards. The branch merges some into tabs; main still lists them separately."
+    },
+    {
+     "id": "MODC-87",
+     "severity": "P2",
+     "evidence": "PROJECT_MEMORY 2026-07-24: ExecutiveReport totalSpend sums cost_per_tyre while the cost panel uses the grid",
+     "summary": "Two spend sources on one report. NOT re-verified in this audit; see ENGINEERING_CALCULATIONS."
+    }
+   ],
+   "remediation": "Consolidate.",
+   "priority": "P2",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Main: two menu items. Branch: one Executive entry."
+  },
+  {
+   "group": "Analytics & Reports",
+   "label": "Analytics, Comparison (merged on branch)",
+   "route": "/analytics",
+   "module_key": null,
+   "guard": "main: ModuleRoute analytics; branch: Navigate redirect",
+   "page": "src/pages/Analytics.jsx, Comparison.jsx",
+   "services": [],
+   "tables": [],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 5,
+   "module_control": "live or not listed",
+   "what_it_does": "Older analytics and period comparison pages.",
+   "empty_account_behaviour": "Empty charts.",
+   "defects": [
+    {
+     "id": "MODC-54",
+     "severity": "P2",
+     "evidence": "KPI Center, Engineering KPI (/kpi-engine), KPI Command (/kpi-command), Board Overview, Executive Report, Executive Analytics, Advanced Analytics, Fleet Analytics, Fleet Intelligence, Ops Intelligence all present overlapping fleet KPIs",
+     "summary": "Ten overlapping dashboards. The branch merges some into tabs; main still lists them separately."
+    }
+   ],
+   "remediation": "Branch consolidation is correct.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Main: live pages with menu items. Branch: /analytics redirects to /advanced-analytics, /comparison to /site-comp?tab=periods."
+  },
+  {
+   "group": "Administration",
+   "label": "ERP Intake, Expense Import, ERP Data Import (merged on branch)",
+   "route": "/erp-intake",
+   "module_key": null,
+   "guard": "main: RoleRoute Admin/Manager/Director; branch: Navigate redirect",
+   "page": "src/pages/ErpIntake.jsx, ExpenseImport.jsx, ErpImport.jsx",
+   "services": [],
+   "tables": [],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 6,
+   "module_control": "live or not listed",
+   "what_it_does": "Importers for the current company ERP exports (Ramco report auto-detect, expense grid, staging templates).",
+   "empty_account_behaviour": "A new company without that ERP has nothing to load here.",
+   "defects": [
+    {
+     "id": "MODC-88",
+     "severity": "P2",
+     "evidence": "src/lib/erpIntake.js:4 customer ERP (Ramco) report detection; PROJECT_MEMORY V404: erp_*_import staging tables have no promotion until V415",
+     "summary": "Company-specific import formats."
+    }
+   ],
+   "remediation": "Keep for the current tenant behind a flag.",
+   "priority": "P2",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Main: three pages and three menu items. Branch: tabs of /data-intake (reports, expenses, templates)."
+  },
+  {
+   "group": "Administration",
+   "label": "Legacy Upload Data (no menu)",
+   "route": "/upload",
+   "module_key": null,
+   "guard": "FlagRoute data_intake",
+   "page": "src/pages/UploadData.jsx",
+   "services": [],
+   "tables": [],
+   "rpcs": [],
+   "internal_status": "at risk",
+   "commercial_class": 6,
+   "module_control": "live or not listed",
+   "what_it_does": "Legacy upload page kept reachable by URL.",
+   "empty_account_behaviour": "Upload form.",
+   "defects": [
+    {
+     "id": "MODC-89",
+     "severity": "P2",
+     "evidence": "src/App.jsx:762 route with flag guard only; upload_history.organisation_id has no default",
+     "summary": "Legacy import path without the staged, reversible pipeline; any role can open it by URL."
+    }
+   ],
+   "remediation": "Retire or role-guard.",
+   "priority": "P2",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main."
+  },
+  {
+   "group": "Inventory & Procurement",
+   "label": "Supplier detail, Recall detail, workflow and rule builders (no menu)",
+   "route": "/suppliers/:supplierId",
+   "module_key": null,
+   "guard": "ModuleRoute stock; RoleRoute Admin; FlagRoute automation_platform",
+   "page": "src/pages/SupplierDetail.jsx, RecallDetail.jsx",
+   "services": [],
+   "tables": [],
+   "rpcs": [],
+   "internal_status": "ready",
+   "commercial_class": 2,
+   "module_control": "live or not listed",
+   "what_it_does": "Drill-down and builder pages reached from their parents.",
+   "empty_account_behaviour": "Not found or empty builder.",
+   "defects": [],
+   "remediation": "Keep.",
+   "priority": "P3",
+   "area": "web",
+   "tests": {
+    "page_tests": [],
+    "service_or_engine_tests": [],
+    "note": "Unit and render tests run against a mocked Supabase client; none exercises live constraints, unique indexes or RLS."
+   },
+   "branch_vs_main": "Same on main."
+  }
+ ]
+}

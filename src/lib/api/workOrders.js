@@ -4,6 +4,7 @@
  * assets.js / tyres.js.
  */
 import { supabase, unwrap, applyCountry, applyCountries, countryList, fetchAllPages, ServiceError } from './_client'
+import { expectRows } from './writeGuard'
 import { toUserMessage } from '../safeError'
 
 /**
@@ -90,9 +91,20 @@ export async function createWorkOrder(values) {
 
 /** Update a work order by id; returns the updated row. */
 export async function updateWorkOrder(id, patch) {
-  return unwrap(
-    await supabase.from('work_orders').update(patch).eq('id', id).select(COLS).single(),
-  )
+  return updatedRow(await supabase.from('work_orders').update(patch).eq('id', id).select(COLS))
+}
+
+export const WORK_ORDER_WRITE_REFUSED =
+  'This work order was not changed. Your account is not allowed to change work orders, or it no longer exists.'
+
+/**
+ * The updated row from an update that asked for its rows back as a LIST.
+ * Row security refuses an update by matching zero rows; with `.single()` that
+ * surfaced as "Not found.", which is not what happened. Zero rows is reported
+ * as a refused change.
+ */
+function updatedRow(result) {
+  return expectRows(result, WORK_ORDER_WRITE_REFUSED)[0]
 }
 
 /**
@@ -263,7 +275,7 @@ export async function insertWorkOrder(values) {
 
 /** Return the committed row, including any approval-gated status changes. */
 export async function updateWorkOrderById(id, patch) {
-  return unwrap(await supabase.from('work_orders').update(patch).eq('id', id).select(PAGE_COLS).single())
+  return updatedRow(await supabase.from('work_orders').update(patch).eq('id', id).select(PAGE_COLS))
 }
 
 /** Generate the next sequential work-order number via the DB RPC. */

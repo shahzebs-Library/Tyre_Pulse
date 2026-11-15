@@ -54,7 +54,7 @@ describe('Audit Pack visibility follows the route guard', () => {
       const src = read(file)
       expect(src).toMatch(/to: '\/checklist-audit',[^}]*roles: CHECKLIST_AUTHOR_ROLES/)
       expect(src).toContain("if (item.to === '/checklist-audit') return canAuthorChecklists(profile?.role, isSuperAdmin)")
-      expect(src).toContain('isChecklistPathAllowed(item.to) && isChecklistNavVisible(item.to, profile?.role, isSuperAdmin)')
+      expect(src).toContain('isChecklistPathAllowed(item.to, hasPermission) && isChecklistNavVisible(item.to, profile?.role, isSuperAdmin)')
     })
   }
 })

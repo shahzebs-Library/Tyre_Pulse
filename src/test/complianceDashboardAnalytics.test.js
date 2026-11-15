@@ -1,10 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import {
-  daysSince, inspectionStatus, treadClass, pressureFlag, treadStats, pressureStats,
+  daysSince, inspectionStatus, treadClass, treadStats,
   inspectionCompliance, overallScore, scoreBand, criticalCount, fullyCompliantVehicles,
-  monthlyTreadTrend, treadDistribution, treadBySite, pressureBySite, inspectionBySite,
-  nonCompliantTyres, pressureExceptions,
+  monthlyTreadTrend, treadDistribution, treadBySite, inspectionBySite,
+  nonCompliantTyres,
 } from '../lib/complianceDashboardAnalytics'
+import * as dashboardEngine from '../lib/complianceDashboardAnalytics'
+
+// Pressure is no longer judged in this engine. The fixed PSI band on tyre records
+// was retired so the Compliance register and the Safety score share ONE pressure
+// rule (src/lib/complianceRules.js, covered by complianceRules.test.js).
 
 const NOW = new Date('2026-09-15T12:00:00Z')
 
@@ -17,9 +22,8 @@ const tyres = [
 ]
 
 describe('per-tyre classification', () => {
-  it('tread and pressure classes', () => {
+  it('tread classes', () => {
     expect(tyres.map(treadClass)).toEqual(['legal_fail', 'ok', 'below_min', 'no_data', 'ok'])
-    expect(tyres.map(pressureFlag)).toEqual(['OK', 'Anomaly', 'No Data', 'No Data', 'OK'])
   })
   it('inspection status bands', () => {
     expect(inspectionStatus(null)).toBe('no_data')
@@ -37,14 +41,13 @@ describe('area statistics', () => {
     expect(s).toMatchObject({ total: 5, withData: 4, compliant: 2, legalFail: 1, fleetFail: 2, noData: 1 })
     expect(s.pct).toBeCloseTo(50)
   })
-  it('pressure stats over tyres with a reading', () => {
-    const s = pressureStats(tyres)
-    expect(s).toMatchObject({ withReading: 3, compliant: 2, anomalies: 1, noReading: 2 })
-    expect(s.pct).toBeCloseTo(66.667, 2)
+  it('carries no second pressure definition', () => {
+    for (const name of ['pressureFlag', 'pressureStats', 'pressureBySite', 'pressureExceptions', 'PRESSURE_MIN_PSI', 'PRESSURE_MAX_PSI']) {
+      expect(dashboardEngine[name], `${name} must stay retired`).toBeUndefined()
+    }
   })
   it('nothing measured is null, never 0', () => {
     expect(treadStats([{ tread_depth: null }]).pct).toBeNull()
-    expect(pressureStats([{}]).pct).toBeNull()
     expect(inspectionCompliance([], [], NOW).pct).toBeNull()
   })
   it('inspection compliance against the scoped register', () => {
@@ -97,15 +100,11 @@ describe('breakdowns', () => {
   it('distribution and by-site denominators exclude unmeasured tyres', () => {
     expect(treadDistribution(tyres).map(b => b.count)).toEqual([1, 1, 0, 1, 1])
     expect(treadBySite(tyres).find(s => s.site === 'JED')).toMatchObject({ ok: 1, total: 2 })
-    const p = pressureBySite(tyres)
-    expect(p.find(s => s.site === 'JED')).toMatchObject({ ok: 1, total: 1 })
-    expect(pressureBySite([{ site: 'X', pressure_reading: null }])).toEqual([])
   })
   it('exception lists', () => {
     const nc = nonCompliantTyres(tyres, NOW)
     expect(nc.map(r => r.id)).toEqual([4, 1, 3])
     expect(nc.find(r => r.id === 1).days_in_service).toBe(14)
-    expect(pressureExceptions(tyres).map(r => r.pressureFlag)).toEqual(['Anomaly', 'No Data', 'No Data'])
     expect(inspectionBySite([{ site: 'N', status: 'overdue' }, { site: 'N', status: 'compliant' }, { site: null, status: 'overdue' }]))
       .toEqual([{ site: 'N', compliant: 1, due_soon: 0, overdue: 1, no_data: 0 }])
   })

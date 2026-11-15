@@ -4,6 +4,7 @@
  * assets.js / tyres.js.
  */
 import { supabase, unwrap, applyCountry, fetchAllPages, ServiceError } from './_client'
+import { expectRows } from './writeGuard'
 import { toUserMessage } from '../safeError'
 
 const COLS =
@@ -205,11 +206,18 @@ export async function getInspectionForPage(id) {
 }
 
 /**
- * Patch an inspection by id, fire-and-check-error style (no returning select).
- * The page checks only the thrown error; it never reads a returned row here.
+ * Patch an inspection by id.
+ *
+ * Asks for the changed id back: row security refuses an update by matching zero
+ * rows without raising, so a role the update policy does not admit used to see
+ * "saved" for a change that never happened. Zero rows now throws a
+ * WriteRefusedError. Callers still only check for a thrown error.
  */
 export async function patchInspection(id, patch) {
-  return unwrap(await supabase.from('inspections').update(patch).eq('id', id))
+  return expectRows(
+    await supabase.from('inspections').update(patch).eq('id', id).select('id'),
+    'This inspection was not updated. Your role is not allowed to change it, or it no longer exists.',
+  )
 }
 
 /**
@@ -278,9 +286,16 @@ export async function insertInspectionReturning(values) {
   return unwrap(await supabase.from('inspections').insert(values).select().single())
 }
 
-/** Delete an inspection by id. */
+/**
+ * Delete an inspection by id. Asks for the deleted id back so a delete the
+ * database refused (deleting is Admin only) is reported instead of looking
+ * like it worked.
+ */
 export async function deleteInspection(id) {
-  return unwrap(await supabase.from('inspections').delete().eq('id', id))
+  return expectRows(
+    await supabase.from('inspections').delete().eq('id', id).select('id'),
+    'This inspection was not deleted. Only an Admin can delete an inspection, or it no longer exists.',
+  )
 }
 
 // ── vehicle_fleet lookups used by the Inspections page ───────────────────────

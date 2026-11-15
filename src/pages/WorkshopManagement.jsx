@@ -238,7 +238,7 @@ const TABS = [
 ]
 
 // ── Main Component ─────────────────────────────────────────────────────────────
-export default function WorkshopManagement() {
+export default function WorkshopManagement({ embedded = false }) {
   const { activeCurrency, activeCountry } = useSettings()
   const navigate = useNavigate()
 
@@ -585,11 +585,9 @@ export default function WorkshopManagement() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Workshop Management"
-        subtitle="Track workshop productivity, repairs, and turnaround time"
-        icon={Wrench}
-        actions={
+      {/* Embedded as the Workshop analytics view of Work Orders: that page owns the title. */}
+      {embedded ? (
+        <div className="flex justify-end">
           <div className="flex items-center gap-2 flex-wrap">
             <button type="button" onClick={fetchData} disabled={loading} className={btnCls}>
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
@@ -604,8 +602,30 @@ export default function WorkshopManagement() {
               Excel
             </button>
           </div>
-        }
-      />
+        </div>
+      ) : (
+        <PageHeader
+          title="Workshop Management"
+          subtitle="Track workshop productivity, repairs, and turnaround time"
+          icon={Wrench}
+          actions={
+            <div className="flex items-center gap-2 flex-wrap">
+              <button type="button" onClick={fetchData} disabled={loading} className={btnCls}>
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
+                Refresh
+              </button>
+              <button type="button" onClick={handlePdfExport} disabled={loading || sitePerf.length === 0} className={btnCls}>
+                <FileText className="w-4 h-4 text-red-400" aria-hidden="true" />
+                PDF
+              </button>
+              <button type="button" onClick={handleExcelExport} disabled={loading || filteredOrders.length === 0} className={btnCls}>
+                <FileSpreadsheet className="w-4 h-4 text-green-400" aria-hidden="true" />
+                Excel
+              </button>
+            </div>
+          }
+        />
+      )}
 
       <div className="space-y-6">
         {/* Filters */}

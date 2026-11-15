@@ -95,7 +95,7 @@ const hasChartData = (cd) => !!(cd && Array.isArray(cd.labels) && cd.labels.leng
 
 const kpiLabel = (label, sub) => <>{label}{sub && <small className="tf-kpi-sub">{sub}</small>}</>
 
-export default function TyreFailureCpkBoard() {
+export default function TyreFailureCpkBoard({ embedded = false }) {
   const { activeCountry, appSettings, activeCurrency } = useSettings()
   const [records, setRecords] = useState(null)
   const [grid, setGrid] = useState(null)
@@ -328,12 +328,17 @@ export default function TyreFailureCpkBoard() {
     <div className="cc tf-page">
       <header className="tf-head">
         <div className="tf-head-copy">
-          <nav className="tf-crumb" aria-label="Breadcrumb">
-            <Link to="/tyre-records">Tyre management</Link>
-            <ChevronRight size={13} aria-hidden="true" />
-            <span aria-current="page">Failure and CPK</span>
-          </nav>
-          <h1>Tyre Failure &amp; CPK</h1>
+          {/* Embedded as a tab of CPK Intelligence: that page owns the title. */}
+          {!embedded && (
+            <>
+              <nav className="tf-crumb" aria-label="Breadcrumb">
+                <Link to="/tyre-records">Tyre management</Link>
+                <ChevronRight size={13} aria-hidden="true" />
+                <span aria-current="page">Failure and CPK</span>
+              </nav>
+              <h1>Tyre Failure &amp; CPK</h1>
+            </>
+          )}
           <p>Analyse removals, failure reasons, tyre life and cost per kilometre across the fleet.</p>
         </div>
         <div className="tf-head-actions">

@@ -16,7 +16,7 @@ host other than 127.0.0.1 / localhost. Usage:
 
 Needs psql on PATH and a Python with psycopg2.
 """
-import argparse, contextlib, hashlib, json, os, subprocess, sys
+import argparse, contextlib, json, os, subprocess, sys
 import psycopg2
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -160,7 +160,8 @@ def rec(section, name, ok, evidence=''):
 
 # ----------------------------------------------------------------------------------------------
 load_users()
-seq = json.load(open(os.path.join(HERE, 'sequence.json')))
+with open(os.path.join(HERE, 'sequence.json')) as _f:
+    seq = json.load(_f)
 base = snapshot()
 print('baseline snapshot: %d facts about the current company' % len(base))
 steps = []
@@ -460,5 +461,6 @@ failed = [t for t in results if not t['ok']]
 print('\nSUMMARY  steps applied %d of %d | steps that changed the current company: %d | tests %d passed, %d failed | snapshot facts %d'
       % (len(steps) - len(bad_steps), len(steps), len(changed), len(results) - len(failed), len(failed), len(base)))
 if args.out:
-    json.dump(report, open(args.out, 'w'), indent=1, default=str)
+    with open(args.out, 'w') as _f:
+        json.dump(report, _f, indent=1, default=str)
 sys.exit(1 if (bad_steps or changed or failed) else 0)

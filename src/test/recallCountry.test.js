@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { normaliseRecallCountry, recallCountryChoices, resolveRecallCountry } from '../lib/recallCountry'
+import { normaliseRecallCountry, recallCountryChoices, resolveRecallCountry, recallWritableCountries, recallHasNoWritableCountry } from '../lib/recallCountry'
 
 describe('normaliseRecallCountry', () => {
   it('keeps one clean country name', () => {
@@ -80,5 +80,73 @@ describe('RecallTracker page source', () => {
     expect(src).toMatch(/country:\s*recallCountry,/)
     expect(src).toMatch(/id="rc-country"/)
     expect(src).toMatch(/Choose the country this recall applies to/)
+  })
+})
+
+describe('recallWritableCountries mirrors the recalls_country_write policy', () => {
+  it('super admin and the all sentinel may write every country', () => {
+    expect(recallWritableCountries({ is_super_admin: true, country: null })).toEqual({ all: true, countries: [] })
+    expect(recallWritableCountries({ role: 'Manager', country: ['KSA', ' ALL '] })).toEqual({ all: true, countries: [] })
+  })
+  it('a plain Admin is NOT exempt: only their own countries (the D1 retest case)', () => {
+    expect(recallWritableCountries({ role: 'Admin', is_super_admin: false, country: ['KSA'] })).toEqual({ all: false, countries: ['KSA'] })
+  })
+  it('dedupes case-insensitively and skips blanks', () => {
+    expect(recallWritableCountries({ country: ['KSA', 'ksa', '', null, 'UAE'] }).countries).toEqual(['KSA', 'UAE'])
+  })
+  it('no profile yet means unknown, not refused', () => {
+    expect(recallWritableCountries(null)).toBeNull()
+    expect(recallHasNoWritableCountry(null)).toBe(false)
+  })
+  it('a non-super profile with no country can write no country', () => {
+    expect(recallHasNoWritableCountry({ role: 'Admin', country: null })).toBe(true)
+    expect(recallHasNoWritableCountry({ role: 'Admin', country: [] })).toBe(true)
+    expect(recallHasNoWritableCountry({ is_super_admin: true, country: null })).toBe(false)
+  })
+})
+
+describe('recallCountryChoices narrows to what the database accepts', () => {
+  const all = [{ country: 'Egypt' }, { country: 'KSA' }, { country: 'UAE' }]
+  it('plain Admin with KSA is offered KSA only, even though the context lists every country', () => {
+    expect(recallCountryChoices(all, ['KSA', 'UAE', 'Egypt'], { role: 'Admin', country: ['KSA'] })).toEqual(['KSA'])
+  })
+  it('super admin keeps every country', () => {
+    expect(recallCountryChoices(all, [], { is_super_admin: true })).toEqual(['Egypt', 'KSA', 'UAE'])
+  })
+  it('falls back to the profile spelling when the register does not name the country', () => {
+    expect(recallCountryChoices(all, [], { country: ['Saudi Arabia'] })).toEqual(['Saudi Arabia'])
+  })
+  it('a one-country admin never has to choose on the All view', () => {
+    const choices = recallCountryChoices(all, [], { role: 'Admin', country: ['UAE'] })
+    expect(resolveRecallCountry({ activeCountry: 'All', choices })).toEqual({ country: 'UAE', needsChoice: false })
+  })
+})
+
+describe('updateRecall reports a silently refused update', () => {
+  it('throws 42501 when RLS changed zero rows, passes when a row changed', async () => {
+    let rows = []
+    vi.resetModules()
+    vi.doMock('../lib/supabase', () => {
+      const b = {
+        update: () => b, eq: () => b, select: () => b,
+        then: (f, r) => Promise.resolve({ data: rows, error: null }).then(f, r),
+      }
+      return { supabase: { from: () => b } }
+    })
+    const api = await import('../lib/api/recalls')
+    await expect(api.updateRecall('x', { status: 'Closed' })).rejects.toMatchObject({ code: '42501' })
+    rows = [{ id: 'x' }]
+    await expect(api.updateRecall('x', { status: 'Closed' })).resolves.toEqual([{ id: 'x' }])
+    vi.doUnmock('../lib/supabase')
+  })
+})
+
+describe('RecallTracker page narrows countries by profile and names refusals', () => {
+  it('passes the profile to the choices and maps 42501', async () => {
+    const { readFileSync } = await import('node:fs')
+    const src = readFileSync('src/pages/RecallTracker.jsx', 'utf8').replace(/\r/g, '')
+    expect(src).toMatch(/recallCountryChoices\(allowedContext, COUNTRIES, profile\)/)
+    expect(src).toMatch(/e\?\.code === '42501'/)
+    expect(src).toMatch(/recallHasNoWritableCountry\(profile\)/)
   })
 })

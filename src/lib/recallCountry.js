@@ -22,13 +22,60 @@ export function normaliseRecallCountry(value) {
   return v
 }
 
-/** Countries the user may file a recall under: their allowed context, else the full list. */
-export function recallCountryChoices(allowedContext, allCountries = []) {
+/**
+ * Which countries this profile may WRITE a recall under. Mirrors the database
+ * write policy `recalls_country_write` exactly:
+ *   - a super admin passes for every country;
+ *   - a country list holding the 'all' sentinel passes for every country;
+ *   - otherwise only the countries in profiles.country (compared lower + trimmed).
+ * A plain Admin is NOT exempt in the database, so it is not exempt here either.
+ * (The working-context picker treats a plain Admin as seeing every country, which
+ * is why it offered countries the save then refused with a 403.)
+ *
+ * Returns { all: true } or { all: false, countries: [...] }. Returns null when
+ * the profile has not loaded yet, so callers keep the old behaviour meanwhile.
+ */
+export function recallWritableCountries(profile) {
+  if (!profile) return null
+  if (profile.is_super_admin === true) return { all: true, countries: [] }
+  const raw = Array.isArray(profile.country) ? profile.country : [profile.country]
+  const seen = new Set()
+  const countries = []
+  for (const v of raw) {
+    if (typeof v !== 'string') continue
+    const t = v.trim()
+    if (!t) continue
+    if (t.toLowerCase() === 'all') return { all: true, countries: [] }
+    if (seen.has(t.toLowerCase())) continue
+    seen.add(t.toLowerCase())
+    countries.push(t)
+  }
+  return { all: false, countries }
+}
+
+/**
+ * Countries the user may file a recall under: their allowed context, else the
+ * full list, then narrowed to what the database will accept for this profile.
+ * Without a profile the narrowing is skipped (backwards compatible).
+ */
+export function recallCountryChoices(allowedContext, allCountries = [], profile) {
   const fromContext = (Array.isArray(allowedContext) ? allowedContext : [])
     .map(n => normaliseRecallCountry(n?.country))
     .filter(Boolean)
-  const list = fromContext.length ? fromContext : allCountries.map(normaliseRecallCountry).filter(Boolean)
-  return [...new Set(list)]
+  const list = [...new Set(fromContext.length ? fromContext : allCountries.map(normaliseRecallCountry).filter(Boolean))]
+  const writable = recallWritableCountries(profile)
+  if (!writable || writable.all) return list
+  const allowed = new Set(writable.countries.map(c => c.toLowerCase()))
+  const narrowed = list.filter(c => allowed.has(c.toLowerCase()))
+  if (narrowed.length) return narrowed
+  // The register does not name the user's countries: offer the profile's own.
+  return writable.countries.map(normaliseRecallCountry).filter(Boolean)
+}
+
+/** True when a signed-in, non-super profile holds no country, so no recall country can be saved. */
+export function recallHasNoWritableCountry(profile) {
+  const w = recallWritableCountries(profile)
+  return !!w && !w.all && w.countries.length === 0
 }
 
 /**

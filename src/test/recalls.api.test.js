@@ -49,6 +49,7 @@ describe('service layer - recalls', () => {
   })
 
   it('updateRecall patches by id', async () => {
+    h.state.result = { data: [{ id: 'r1' }], error: null }
     await recalls.updateRecall('r1', { status: 'Closed' })
     expect(h.state.last._table).toBe('recalls')
     expect(h.state.last._calls.update).toEqual({ status: 'Closed' })

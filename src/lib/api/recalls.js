@@ -9,7 +9,7 @@
  * country predicate - behaviour-preserving. `country` is still written on
  * create/update via the caller-supplied row.
  */
-import { supabase, unwrap, fetchAllPages } from './_client'
+import { supabase, unwrap, fetchAllPages, ServiceError } from './_client'
 import { normaliseRecallCountry } from '../recallCountry'
 
 // Least-privilege columns: every recall field the RecallTracker page reads
@@ -55,10 +55,18 @@ export async function createRecall(values) {
   return unwrap(await supabase.from('recalls').insert(values).select(COLS).single())
 }
 
-/** Update a recall by id. */
+/**
+ * Update a recall by id. Row level security turns a refused UPDATE into
+ * "0 rows changed" with no error, which used to look like a successful save.
+ * The changed ids are read back and an empty result is reported as refused.
+ */
 export async function updateRecall(id, patch) {
   patch = withSingleCountry(patch)
-  return unwrap(await supabase.from('recalls').update(patch).eq('id', id))
+  const data = unwrap(await supabase.from('recalls').update(patch).eq('id', id).select('id'))
+  if (Array.isArray(data) && data.length === 0) {
+    throw new ServiceError('This recall could not be changed. It may have been removed, or it belongs to a country you cannot edit.', '42501')
+  }
+  return data
 }
 
 /** Delete a recall by id. */

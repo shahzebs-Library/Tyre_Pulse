@@ -26,7 +26,7 @@ import {
 } from 'lucide-react'
 import * as recallsApi from '../lib/api/recalls'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
-import { recallCountryChoices, resolveRecallCountry, normaliseRecallCountry } from '../lib/recallCountry'
+import { recallCountryChoices, resolveRecallCountry, normaliseRecallCountry, recallHasNoWritableCountry } from '../lib/recallCountry'
 import { useAuth } from '../contexts/AuthContext'
 import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme, reportFileName } from '../lib/exportUtils'
@@ -168,7 +168,9 @@ export default function RecallTracker() {
   const navigate = useNavigate()
   const { profile, isSuperAdmin } = useAuth()
   const { appSettings, activeCountry, allowedContext } = useSettings()
-  const countryChoices = useMemo(() => recallCountryChoices(allowedContext, COUNTRIES), [allowedContext])
+  const countryChoices = useMemo(() => recallCountryChoices(allowedContext, COUNTRIES, profile), [allowedContext, profile])
+  // A non-super account with no country can only write country-less rows; say so instead of a 403.
+  const noWritableCountry = recallHasNoWritableCountry(profile)
   // The country a new recall starts with: the active country, or the only one the user has. Empty on the All view.
   const defaultCountry = resolveRecallCountry({ activeCountry, choices: countryChoices }).country ?? ''
   const { branding } = useTenant()
@@ -431,6 +433,7 @@ export default function RecallTracker() {
     if (!form.issue_date) { setFormError('Issue date required'); return }
     if (form.affected_sizes.length === 0) { setFormError('At least one affected size required'); return }
 
+    if (noWritableCountry) { setFormError('Your account has no country assigned. Ask an administrator to set your country before filing a recall.'); return }
     // recalls.country holds ONE country. Never the profile's country list.
     const { country: recallCountry, needsChoice } = resolveRecallCountry({ formCountry: form.country, choices: countryChoices })
     if (needsChoice) { setFormError('Choose the country this recall applies to'); return }
@@ -462,6 +465,8 @@ export default function RecallTracker() {
     } catch (e) {
       // 23505 = unique_violation on (recall_number, country)
       if (e?.code === '23505') { setFormError('Recall number already exists'); setSaving(false); return }
+      // 42501 = refused by the country write rule: name the field instead of a bare permission error.
+      if (e?.code === '42501') { setFormError(`You cannot save a recall for ${recallCountry}. Choose one of your own countries.`); setSaving(false); return }
       setFormError(toUserMessage(e, 'Could not save the recall. Please retry.'))
     } finally {
       setSaving(false)

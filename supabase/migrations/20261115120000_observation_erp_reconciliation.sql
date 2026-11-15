@@ -119,13 +119,46 @@ begin
       or v_work.opened_at::date < coalesce(v_inspection.inspection_date,v_inspection.created_at::date)) then
     raise exception 'Job card predates the inspection. Manual investigation required' using errcode = 'PT409';
   end if;
-  v_position := upper(regexp_replace(substr(v_action.source_detail,8),'[^A-Za-z0-9]','','g'));
+  -- Inspection slots are not ERP wheel names. Resolve using the exact
+  -- vehicle layout, not a direct string comparison (R1Li != LHR1-I).
+  -- Mixer first-rear slots denote the centre axle; pump slots denote rear axle 1.
+  v_position := upper(regexp_replace(
+    case
+      when upper(coalesce(v_inspection.vehicle_type,'')) like '%MIXER%' then
+        case substr(v_action.source_detail,8)
+          when 'R1Lo' then 'LHCO' when 'R1Li' then 'LHCI'
+          when 'R1Ri' then 'RHCI' when 'R1Ro' then 'RHCO'
+          when 'R2Lo' then 'LHRO' when 'R2Li' then 'LHRI'
+          when 'R2Ri' then 'RHRI' when 'R2Ro' then 'RHRO'
+          when 'F1L' then 'LHF1' when 'F1R' then 'RHF1'
+          when 'F2L' then 'LHF2' when 'F2R' then 'RHF2'
+          else substr(v_action.source_detail,8)
+        end
+      else
+        case substr(v_action.source_detail,8)
+          when 'R1Lo' then 'LHR1-O' when 'R1Li' then 'LHR1-I'
+          when 'R1Ri' then 'RHR1-I' when 'R1Ro' then 'RHR1-O'
+          when 'R2Lo' then 'LHR2-O' when 'R2Li' then 'LHR2-I'
+          when 'R2Ri' then 'RHR2-I' when 'R2Ro' then 'RHR2-O'
+          when 'R3Lo' then 'LHR3-O' when 'R3Li' then 'LHR3-I'
+          when 'R3Ri' then 'RHR3-I' when 'R3Ro' then 'RHR3-O'
+          when 'FL' then 'LHF1' when 'FR' then 'RHF1'
+          when 'F1L' then 'LHF1' when 'F1R' then 'RHF1'
+          when 'F2L' then 'LHF2' when 'F2R' then 'RHF2'
+          when 'F3L' then 'LHF3' when 'F3R' then 'RHF3'
+          when 'RL' then 'LHR1' when 'RR' then 'RHR1'
+          else substr(v_action.source_detail,8)
+        end
+    end, '[^A-Za-z0-9]', '', 'g'));
+  if v_position is null or v_position = '' then
+    raise exception 'Unknown inspection tyre position' using errcode = 'PT409';
+  end if;
   select exists (
     select 1 from public.tyre_records t
     where t.organisation_id = v_org and t.country = v_country
       and upper(btrim(t.asset_no)) = upper(btrim(v_work.asset_no))
       and upper(btrim(t.job_card)) = upper(btrim(v_work.work_order_no))
-      and upper(regexp_replace(coalesce(t.position,t.tyre_position,''),'[^A-Za-z0-9]','','g')) = v_position
+      and upper(regexp_replace(coalesce(t.tyre_position,t.position,''),'[^A-Za-z0-9]','','g')) = v_position
       and (t.removal_date::date >= coalesce(v_inspection.inspection_date,v_inspection.created_at::date)
         or t.issue_date::date >= coalesce(v_inspection.inspection_date,v_inspection.created_at::date))
       and (nullif(btrim(coalesce(v_action.tyre_serial,'')),'') is null

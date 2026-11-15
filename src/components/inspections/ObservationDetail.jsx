@@ -186,12 +186,12 @@ export default function ObservationDetail({ obs: first, observations = [], onClo
               )}
             </section>
 
-            <ObservationErpEvidence observation={obs} />
-
             <section className="iw-od-block">
-              <h4>Photo of this tyre</h4>
+              <h4>Inspection photo</h4>
               <Photo refValue={obs.photo} />
             </section>
+
+            <ObservationErpEvidence observation={obs} />
           </>
         )}
 

@@ -3,6 +3,9 @@
  * Never establishes a verified link or marks work complete.
  * Country, asset, tyre identity, and chronology are independently checked.
  */
+import { displayPositionCode } from './tyreBay'
+import { positionKey } from './tyreChangeTracking'
+
 const key = (v) => String(v ?? '').trim().toUpperCase().replace(/\s+/g, '')
 const dateOnly = (v) => String(v || '').slice(0, 10)
 const daysBetween = (before, after) => {
@@ -19,10 +22,11 @@ export function evaluateErpCandidate({ inspection, finding, workOrder, fitments 
   const job = key(workOrder?.work_order_no)
   if (!job) conflicts.push('ERP work order has no job card number')
   const sameJobFitments = fitments.filter(f => key(f.job_card) === job && sameErpIdentity(inspection, f))
-  const position = key(finding?.rawPosition || finding?.position)
+  const hint = inspection.vehicle_type || inspection.asset_no
+  const position = positionKey(displayPositionCode(hint, finding?.rawPosition || finding?.position))
   const serial = key(finding?.serial)
-  const exactPosition = sameJobFitments.filter(f => key(f.position || f.tyre_position) === position)
-  const exactSerial = sameJobFitments.filter(f => key(f.serial_no) === serial)
+  const exactPosition = sameJobFitments.filter(f => positionKey(displayPositionCode(hint, f.tyre_position || f.position)) === position)
+  const exactSerial = serial ? sameJobFitments.filter(f => key(f.serial_no) === serial) : []
   const inspectionDate = inspection.inspection_date || inspection.completed_date || inspection.created_at
   const datedTyreEvidence = exactPosition.filter(f => {
     const removalGap = daysBetween(inspectionDate, f.removal_date)
@@ -46,10 +50,11 @@ export function evaluateErpCandidate({ inspection, finding, workOrder, fitments 
   if (/TYRE|TIRE|PUNCTURE|WHEEL/.test(description)) reasons.push('Tyre-related job description')
   // A job card alone or a cost line alone is insufficient to call a tyre repaired.
   const sufficient = !!datedTyreEvidence.length && !!job && conflicts.length === 0 && delta != null && delta >= 0
+  const relevant = !!datedTyreEvidence.length || (delta != null && delta >= 0 && /TYRE|TIRE|PUNCTURE|WHEEL/.test(description))
   const status = conflicts.length ? 'conflict' : sufficient ? 'review' : 'insufficient'
   return {
     workOrder, fitments: sameJobFitments, expenses: related,
-    status, reasons, conflicts, eligibleToConfirm: sufficient,
+    status, reasons, conflicts, relevant, eligibleToConfirm: sufficient,
     evidenceSummary: { tyreRows: sameJobFitments.length, expenseRows: related.length, positionMatched: exactPosition.length > 0,
       serialMatched: !!serial && exactSerial.length > 0, workDayGap: delta },
   }
@@ -58,6 +63,7 @@ export function matchObservationToErp(input) {
   const { inspection, finding, workOrders = [], fitments = [], expenses = [] } = input
   return workOrders.filter(wo => sameErpIdentity(inspection, wo))
     .map(workOrder => evaluateErpCandidate({ inspection, finding, workOrder, fitments, expenses }))
+    .filter(candidate => candidate.relevant || candidate.eligibleToConfirm)
     .sort((a,b) => Number(b.eligibleToConfirm)-Number(a.eligibleToConfirm)
       || b.reasons.length-a.reasons.length || key(a.workOrder.work_order_no).localeCompare(key(b.workOrder.work_order_no)))
 }

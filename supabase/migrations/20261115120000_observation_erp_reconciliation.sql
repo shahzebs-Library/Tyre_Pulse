@@ -126,6 +126,8 @@ begin
       and upper(btrim(t.asset_no)) = upper(btrim(v_work.asset_no))
       and upper(btrim(t.job_card)) = upper(btrim(v_work.work_order_no))
       and upper(regexp_replace(coalesce(t.position,t.tyre_position,''),'[^A-Za-z0-9]','','g')) = v_position
+      and (t.removal_date::date >= coalesce(v_inspection.inspection_date,v_inspection.created_at::date)
+        or t.issue_date::date >= coalesce(v_inspection.inspection_date,v_inspection.created_at::date))
       and (nullif(btrim(coalesce(v_action.tyre_serial,'')),'') is null
            or upper(btrim(t.serial_no)) = upper(btrim(v_action.tyre_serial)))
   ) into v_verified_tyre;

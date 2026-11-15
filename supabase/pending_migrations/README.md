@@ -44,6 +44,46 @@ ever wanted. The reconcile is therefore closed by deletion, not re-application.
   a removal of stored data, so it is not applied unattended. It frees disk only; no
   measured query gets faster from it.
 
+## Closure workflow drafts (2026-11-15, owner decisions; NOT applied)
+
+Apply in this order, each after a rolled-back check on production. Test: `supabase/tests/closure/run_staging.sh`
+(local staging only). Report: `docs/commercial-readiness/audit/CLOSURE_ROUND2.md`.
+
+- `20261116100000_clo_corrective_action_review.sql` - per-company review settings (`closure_review_config`),
+  review columns on `corrective_actions` (status vocabulary unchanged), append-only
+  `corrective_action_review_events`, the submit / review writers, the exception REQUEST and DECISION
+  writers (the person who asks can never decide; no company switch relaxes that) and the guard trigger.
+  Round 3 (owner, 2026-11-15): a Tire Planning Engineer may ask for an exception with optional
+  evidence (`exception_evidence`, request writer now `(uuid, text, jsonb)`) only inside their company,
+  country and sites; whoever ever asked for an exception on an action can never decide it or close
+  the action (review approval or direct close), read from the append-only history. Staging T01-T11.
+- `20261116101000_clo_checklist_acknowledge_exception.sql` - depends on the file above. Adds the
+  `acknowledged` checklist outcome, `acknowledge_checklist_faults()`, `v_checklist_fault_compliance`,
+  append-only `checklist_decision_events`, and per-company extra final signer roles. Contains one
+  `drop constraint` + `add constraint` pair (a CHECK cannot be widened in place), so the MCP confirm
+  prompt will appear. The blocking-mark rule (`guard_checklist_approval_stages`) is not touched.
+- `20261116102000_clo_supervisor_actions_visibility.sql` - depends on `20261116100000`. Switches the
+  `corrective_actions` module on for Workshop Supervisor and Maintenance Supervisor so a default
+  reviewer can open the review screen (browser test defect C1). Two rows, no rights change.
+## Work order permissions (draft PR #519, owner decisions 2026-11-15)
+
+AUTHORED, NOT APPLIED. Proven only on a private copy of the local staging database (synthetic
+companies) by `supabase/tests/staging_work_order_permissions.sh`. Renumbered on 2026-11-15 from
+`20261115160000 / 160500 / 161000` so they no longer share a number with the tenant drafts of PR #518.
+Apply in this order, after the web build that carries the matching screens is live:
+
+1. `20261113130000_cur_work_orders_manager_director_default.sql` (PR #511; needed first)
+2. `20261115140000_wo_permission_resolver.sql` - rule table `work_order_role_rules` (31 built-in rows),
+   `work_order_can`, `work_order_scope`, `work_order_my_access`. Changes no behaviour alone.
+3. `20261115140500_wo_policies_and_guards.sql` - policies and guards read the resolver: site and
+   assignment scoped rights, closed and approved-cost locks, final closure needs the `close` right.
+4. `20261115141000_wo_supervisor_module_visibility.sql` - menu switches: Work Orders and Live Control
+   for the supervisor roles, Work Orders (the My Jobs screen) for Tyre Man and the trade roles.
+5. `20261115141500_wo_cost_approval_not_collector.sql` - a Tyre Data Collector is no longer an
+   eligible approver of work order scope and cost in the approval engine.
+
+None of them rewrites a stored work order, cost or approval. Rollback is in each file's header.
+
 ## Multi-company drafts gathered for the full sequence (2026-11-15, stream COMMERCIAL2)
 
 NOT applied. Order, dependencies, the check after each step and the point of no easy return are in
@@ -102,6 +142,33 @@ but the local staging copy:
 
 Tests: `node --test supabase/tests/tyre_position_service.test.mjs` (PGlite) and
 `python3 supabase/tests/staging/observation_erp_position_tests.py` (local staging copy).
+
+<<<<<<< HEAD
+## Current production fixes B drafts OPS-1 to OPS-3 (authored 2026-11-12, NOT applied)
+
+Source: `docs/commercial-readiness/audit/CURRENT_PRODUCTION_FIXES_B.md`. PGlite tests:
+`supabase/tests/ops_*.test.mjs`.
+
+- `20261113140000_ops_report_exec_money_by_country.sql`: OPS-1, per-country money in the scheduled
+  executive e-mail (`report_exec_digest`). Ships with the `send-scheduled-reports` edge function change.
+- `20261113141000_ops_webhook_reliable_delivery.sql`: OPS-2, reliable outbound webhook delivery.
+- `20261113142000_ops_backup_coverage_restore_test_health.sql`: OPS-3, wider row snapshots, a restore
+  test over every snapshotted table, and a health answer for an outside uptime monitor.
+=======
+## Stored report PDFs (2026-11-15)
+
+Drafts for the PDF cache service (`docs/pdf/PDF_ARCHITECTURE_AUDIT.md`, `docs/pdf/PDF_ROLLOUT.md`). None applied
+anywhere but the local staging copy. Apply in this order, only on the owner's go-ahead:
+
+- `20261117090000_report_pdf_cache.sql` : private bucket `report-pdfs`, `report_pdf_files`, `report_pdf_events`,
+  the `pdf_cache_*` functions and the storage policies. Changes no existing object. Contains `drop policy if
+  exists` guards for its own policies, so it needs the SQL editor or the owner present to approve the MCP prompt.
+- `20261117091000_report_pdf_autoqueue.sql` : `report_pdf_queue` and an AFTER trigger on `inspections` that
+  records a request when a record is completed or approved. Reads only; can never block a save.
+- `20261117092000_report_export_jobs_DESIGN.sql` : DESIGN ONLY for a later server ZIP worker. Do not apply.
+
+Tests: `supabase/tests/staging/report_pdf_cache_tests.sh` (local staging), `supabase/tests/report_pdf_cache_key.test.mjs` (PGlite).
+>>>>>>> origin/main
 
 ## At-risk module fixes, round 2 (ATR, 2026-11-15) - NOT APPLIED
 

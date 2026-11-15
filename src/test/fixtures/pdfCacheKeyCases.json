@@ -1,0 +1,151 @@
+{
+  "note": "Shared by src/test/pdfCacheKey.test.js (JS) and supabase/tests/report_pdf_cache_key.test.mjs (SQL). Synthetic values only.",
+  "json": [
+    {
+      "id": "null",
+      "json": "null",
+      "canonical": "null",
+      "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+    },
+    {
+      "id": "true",
+      "json": "true",
+      "canonical": "true",
+      "sha256": "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b"
+    },
+    {
+      "id": "empty object",
+      "json": "{}",
+      "canonical": "{}",
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "empty array",
+      "json": "[]",
+      "canonical": "[]",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "id": "key order",
+      "json": "{\"b\":1,\"a\":2,\"B\":3,\"aa\":4,\"_\":5}",
+      "canonical": "{\"B\":3,\"_\":5,\"a\":2,\"aa\":4,\"b\":1}",
+      "sha256": "b6792348f36ffdeeaf23bf4c59ef4c9677dfc8fd00f5b216b8312686919fd33b"
+    },
+    {
+      "id": "nested",
+      "json": "{\"z\":{\"y\":[3,2,1,{\"b\":null,\"a\":false}]},\"a\":\"x\"}",
+      "canonical": "{\"a\":\"x\",\"z\":{\"y\":[3,2,1,{\"a\":false,\"b\":null}]}}",
+      "sha256": "7b87cb2c342901262c749df5d9ba24ff00d8f9abdb015118513663b5697a6708"
+    },
+    {
+      "id": "trailing zeros",
+      "json": "{\"pressure_psi\":32.50,\"odometer_km\":120000.0,\"tread\":7.25}",
+      "canonical": "{\"odometer_km\":120000,\"pressure_psi\":32.5,\"tread\":7.25}",
+      "sha256": "776d8548c0223d3577f02f51564de0643641b36d80739a466bf26f25631fcf5a"
+    },
+    {
+      "id": "integers and negatives",
+      "json": "[0,-1,42,-3.5,1000000]",
+      "canonical": "[0,-1,42,-3.5,1000000]",
+      "sha256": "2a4b3bf8e28482c46d15299a77f9bc9efbf3c153a52d4722514f94fb704971bb"
+    },
+    {
+      "id": "big and small",
+      "json": "[1e21,1.5e-7,123456789012,0.000001]",
+      "canonical": "[1000000000000000000000,0.00000015,123456789012,0.000001]",
+      "sha256": "37eb379e7d9db47cd01d8333917865f94b8c45690581ddc138483d1eae3cbaf2"
+    },
+    {
+      "id": "strings",
+      "json": "{\"s\":\"He said \\\"go\\\"\",\"path\":\"a/b\\\\c\",\"tab\":\"a\\tb\",\"nl\":\"line1\\nline2\",\"ctl\":\"\\u0001x\"}",
+      "canonical": "{\"ctl\":\"\\u0001x\",\"nl\":\"line1\\nline2\",\"path\":\"a/b\\\\c\",\"s\":\"He said \\\"go\\\"\",\"tab\":\"a\\tb\"}",
+      "sha256": "5991f7c4228d3b06b837c6497d4cea5e6f37e01ec594e1cfc2eadf59a9b6ea6c"
+    },
+    {
+      "id": "unicode",
+      "json": "{\"ar\":\"\\u0625\\u0637\\u0627\\u0631\",\"emoji\":\"\\ud83d\\ude9a\",\"mixed\":\"TM400 \\u2013 ok\"}",
+      "canonical": "{\"ar\":\"إطار\",\"emoji\":\"🚚\",\"mixed\":\"TM400 – ok\"}",
+      "sha256": "717b1b30ff3fbc0895436d118d7651b8f840a465b3d1f29b5698b24212c59eda"
+    },
+    {
+      "id": "tyre conditions",
+      "json": "{\"LHF1\":{\"checked\":true,\"position\":\"LHF1\",\"condition\":\"Good\",\"pressure_psi\":108,\"photo_url\":\"tp-storage://tyre-photos/o/a/lhf1.jpg\"},\"RHR1\":{\"condition\":\"Damaged\",\"pressure_psi\":95.0,\"tread_mm\":null}}",
+      "canonical": "{\"LHF1\":{\"checked\":true,\"condition\":\"Good\",\"photo_url\":\"tp-storage://tyre-photos/o/a/lhf1.jpg\",\"position\":\"LHF1\",\"pressure_psi\":108},\"RHR1\":{\"condition\":\"Damaged\",\"pressure_psi\":95,\"tread_mm\":null}}",
+      "sha256": "3346c9b42c31cc371b18135c0ac3c392bb0c8bd207957ca578c8976ad0bfb004"
+    }
+  ],
+  "keys": [
+    {
+      "id": "base",
+      "type": "tyre_inspection",
+      "sourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "evidenceRev": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "template": "ins-2026.11.1",
+      "branding": "b-0123456789abcdef01234567",
+      "clientRev": "",
+      "org": "00000000-0000-0000-0000-0000000000AA",
+      "sourceId": "11111111-2222-4333-8444-5555555555FF",
+      "key": "5b9fa4519a370c3375b6d8413e076681775e0650bfa518829beee04a49c141bc"
+    },
+    {
+      "id": "observation",
+      "type": "tyre_observation",
+      "sourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "evidenceRev": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "template": "obs-1.0",
+      "branding": "b-0123456789abcdef01234567",
+      "clientRev": "c-0123456789abcdef01234567",
+      "org": "00000000-0000-0000-0000-0000000000AA",
+      "sourceId": "11111111-2222-4333-8444-5555555555FF",
+      "key": "869c6bedbfaf4eb0afa014fbaf02de68a1917246de9cc462e8eb6d308258cc54"
+    },
+    {
+      "id": "template bump",
+      "type": "tyre_inspection",
+      "sourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "evidenceRev": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "template": "ins-2026.12.1",
+      "branding": "b-0123456789abcdef01234567",
+      "clientRev": "",
+      "org": "00000000-0000-0000-0000-0000000000AA",
+      "sourceId": "11111111-2222-4333-8444-5555555555FF",
+      "key": "0be9b6a7a5c3e53e8a62a1413fee9a4b8937f013c03503dbf2935120799aeb51"
+    },
+    {
+      "id": "branding change",
+      "type": "tyre_inspection",
+      "sourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "evidenceRev": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "template": "ins-2026.11.1",
+      "branding": "b-ffffffffffffffffffffffff",
+      "clientRev": "",
+      "org": "00000000-0000-0000-0000-0000000000AA",
+      "sourceId": "11111111-2222-4333-8444-5555555555FF",
+      "key": "f56946bae377e42b560784cd33325d6ea08af5397e81dc8fc2f439935f911f2e"
+    },
+    {
+      "id": "evidence change",
+      "type": "tyre_inspection",
+      "sourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "evidenceRev": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "template": "ins-2026.11.1",
+      "branding": "b-0123456789abcdef01234567",
+      "clientRev": "",
+      "org": "00000000-0000-0000-0000-0000000000AA",
+      "sourceId": "11111111-2222-4333-8444-5555555555FF",
+      "key": "ee299c3485195b35ddaf92816bf19da21029284f3f9f5607333853ab8da50494"
+    },
+    {
+      "id": "no evidence",
+      "type": "tyre_inspection",
+      "sourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "evidenceRev": "",
+      "template": "ins-2026.11.1",
+      "branding": "b-0123456789abcdef01234567",
+      "clientRev": "",
+      "org": "00000000-0000-0000-0000-0000000000AA",
+      "sourceId": "11111111-2222-4333-8444-5555555555FF",
+      "key": "1052ebfd12a0c46f0e0f42a8a6bcd4803ae286df69f1fda65ed7a3db35b5a410"
+    }
+  ]
+}

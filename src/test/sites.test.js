@@ -151,3 +151,16 @@ describe('regionsIn', () => {
     expect(regionsIn(m, [])).toEqual([])
   })
 })
+
+// The `sites` table has no `updated_by` column (live columns: id, name, country, region,
+// city, active, notes, created_by, created_at, updated_at, organisation_id, site_code,
+// site_type). PostgREST refuses the whole update on an unknown column, so writing it made
+// every edit of an existing site fail. A mocked service test cannot see that, so pin it.
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+describe('sites service writes only real columns', () => {
+  it('never sends updated_by to the sites table', () => {
+    const src = readFileSync(resolve(__dirname, '../lib/api/sites.js'), 'utf8')
+    expect(src).not.toMatch(/updated_by/)
+  })
+})

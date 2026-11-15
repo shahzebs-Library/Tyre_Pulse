@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { X, ExternalLink, Download, Loader2 } from 'lucide-react'
 import ChecklistAnswers from './ChecklistAnswers'
 import ChecklistDecisionPanel from './ChecklistDecisionPanel'
+import ChecklistFaultPanel from './ChecklistFaultPanel'
 import { renderChecklistPdf } from '../../lib/checklistPdf'
 import { useTenant } from '../../contexts/TenantContext'
 import { toUserMessage } from '../../lib/safeError'
@@ -136,6 +137,9 @@ export default function ChecklistViewerDrawer({ submissionId, onClose, onOpenFul
                 submission={sub}
                 onDecided={() => { setSub(null); onClose?.() }}
               />
+              <div className="mt-4">
+                <ChecklistFaultPanel submission={sub} onChanged={() => { setSub(null); onClose?.() }} />
+              </div>
             </div>
           )}
         </div>

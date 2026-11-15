@@ -138,7 +138,7 @@ describe('KPIs, tabs and list', () => {
     expect(workspaceKpis([], new Map()).donePct).toBeNull()
   })
   it('tab counts and filtering, newest first', () => {
-    expect(listTabCounts(subs, NOW)).toEqual({ all: 4, today: 2, pending: 1, rejected: 1 })
+    expect(listTabCounts(subs, NOW)).toEqual({ all: 4, today: 2, pending: 1, rejected: 1, action: 0 })
     expect(filterWorkspaceList(subs, { tab: 'today', now: NOW }).map((s) => s.id)).toEqual(['c', 'a'])
     expect(filterWorkspaceList(subs, { query: 'mp093', now: NOW }).map((s) => s.id)).toEqual(['c'])
     expect(filterWorkspaceList(subs, { tab: 'rejected', now: NOW }).map((s) => s.id)).toEqual(['d'])

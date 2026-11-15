@@ -6,6 +6,7 @@
  */
 import { supabase, unwrap, fetchAllPages, ServiceError, toServiceError } from './_client'
 import { toUserMessage } from '../safeError'
+import { expectRows } from './writeGuard'
 import { actionRowsForInspection, applyPlanToRow } from '../inspectionTyreFlags'
 import { sanitizeSearchTerm } from '../searchFilter'
 import { ensureActionItem, updateActionItem } from './actionCenter'
@@ -46,8 +47,37 @@ export async function createCorrectiveAction(values) {
 }
 
 /** Update a corrective action by id. */
+/**
+ * Plain sentences the closure status guard (draft 20261116100000) raises when a
+ * direct edit of an action is refused. They carry PT409 or 42501, which the
+ * generic mapper would turn into "This record changed since you opened it" or a
+ * bare permission line; these are fixed, schema-free sentences written for the
+ * reader, so they are passed through as they are. Anything else stays sanitised.
+ */
+export const CLOSURE_STATUS_REFUSALS = Object.freeze([
+  'An exception has been requested on this action. Approve or refuse the exception first.',
+  'Closing an action needs a reviewer. Submit your completion evidence and a reviewer will close it.',
+  'Close this action through review: submit completion evidence, then approve it.',
+  'You submitted this action, so another reviewer has to close it.',
+  'You asked for an exception on this action, so another authorised person has to close it.',
+  'Only a reviewer can reopen a closed action.',
+  'Review details are recorded by the review steps and cannot be edited directly.',
+])
+
+/** A refused corrective action write as a ServiceError the screen can show. */
+export function actionWriteError(error) {
+  const raw = String(error?.message ?? '').trim()
+  if (CLOSURE_STATUS_REFUSALS.includes(raw)) return new ServiceError(raw, undefined, error)
+  return new ServiceError(toUserMessage(error), error?.code, error)
+}
+
 export async function updateCorrectiveAction(id, patch) {
-  return unwrap(await supabase.from('corrective_actions').update(patch).eq('id', id))
+  const res = await supabase.from('corrective_actions').update(patch).eq('id', id).select('id')
+  if (res.error) throw actionWriteError(res.error)
+  return expectRows(
+    res,
+    'This action was not updated. Only a Manager or an Admin can change a corrective action, or it no longer exists.',
+  )
 }
 
 /**

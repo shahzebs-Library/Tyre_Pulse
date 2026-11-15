@@ -12,6 +12,7 @@ import { supabase, applyCountry, ServiceError, toServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 import { listInspectionApprovals, listChecklistApprovals } from './approvalsQueue'
 import { isClosedWorkOrder } from '../myQueueAnalytics'
+import { attachAckFaultStates } from './closureReview'
 
 export const QUEUE_LIST_LIMIT = 200
 const RECENT_LIMIT = 25
@@ -94,7 +95,7 @@ async function myChecklists(profileId, country, signal) {
     country,
   ).abortSignal(signal)
   if (res.error) throw new ServiceError(toUserMessage(res.error), res.error.code, res.error)
-  return { rows: res.data || [], total: res.count ?? (res.data || []).length }
+  return { rows: await attachAckFaultStates(res.data || []), total: res.count ?? (res.data || []).length }
 }
 
 /**

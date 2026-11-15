@@ -51,6 +51,7 @@ import {
   grantKeysForScope, computeRoleViewChanges,
 } from '../../../lib/api/accessGrants'
 import { toUserMessage } from '../../../lib/safeError'
+import { governingModuleKey } from '../../../lib/navAccess'
 import { Btn, EmptyState, ErrorState, LoadingState, Modal, Note, Panel } from '../../components/ui'
 
 // Capabilities beyond `view` (the Advanced row). view is the big ON/OFF toggle.
@@ -319,7 +320,17 @@ export default function AccessManager() {
   const [scopeDraft, setScopeDraft] = useState({})
 
   // UI
-  const [search, setSearch] = useState('')
+  // Opened from the Platform Map as ?module=<route or key>: start with that one
+  // area in view. Only when it names a real area here, so a link can never
+  // open on an empty "no modules match" list.
+  const [search, setSearch] = useState(() => {
+    try {
+      const m = new URLSearchParams(window.location.search).get('module')
+      if (!m) return ''
+      const key = m.startsWith('/') ? governingModuleKey(m) : m
+      return MODULE_GROUPS.some((g) => g.modules.some((x) => x.key === key)) ? key : ''
+    } catch { return '' }
+  })
   const [uSearch, setUSearch] = useState('')
   const [uRoleFilter, setURoleFilter] = useState('all')
   const [collapsedGroups, setCollapsedGroups] = useState(() => new Set())

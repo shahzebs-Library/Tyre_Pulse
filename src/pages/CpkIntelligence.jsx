@@ -52,6 +52,7 @@ import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import CpkDataTable from '../components/cpk/CpkDataTable'
 import { toUserMessage } from '../lib/safeError'
 import { currencyForCountryCode } from '../lib/expenseReportAnalytics'
+import { getTyreLifetimeCpk } from '../lib/api/tyreLifetimeCpk'
 import {
   CPK_METRIC, metricDef, metricShort, TOTAL_PER_TYRE_KM_WITHHELD, TYRE_SPEND_RATIO_BASIS,
 } from '../lib/cpkMetrics'

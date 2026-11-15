@@ -122,6 +122,8 @@ export default function JobCardForm({
           asset_category: asset.vehicle_type,
           asset_description: asset.model,
           site: asset.site,
+          // A card raised on the All countries view still belongs to the asset's country.
+          country: asset.country,
         }
         for (const [k, v] of Object.entries(fill)) {
           const current = value?.[k]

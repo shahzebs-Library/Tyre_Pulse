@@ -126,6 +126,7 @@
   ],
   "git": {
     "deploymentEnabled": {
+      "claude/fix-observation-test-7rxp2t": false,
       "claude/tyrepulse-inspector-build-7rxp2t": false,
       "claude/tyre-lifecycle-hardening-20261109": false,
       "claude/tyre-lifetime-cpk-phase1": false,

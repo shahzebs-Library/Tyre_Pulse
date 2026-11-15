@@ -12,6 +12,7 @@
 /// that rule.
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
@@ -124,7 +125,12 @@ class TpUpdateRequiredScreen extends ConsumerWidget {
         icon: Icons.system_update,
         tone: TpStatus.info,
         title: l10n.updateRequiredTitle,
-        message: l10n.updateRequiredMessage,
+        // With no store button on an iPhone (no App Store link configured)
+        // the screen must still say where the update comes from.
+        message: actions.onOpenStore == null &&
+                defaultTargetPlatform == TargetPlatform.iOS
+            ? l10n.updateRequiredMessageAppStore
+            : l10n.updateRequiredMessage,
         primaryActionLabel:
             actions.onOpenStore == null ? null : l10n.actionOpenStore,
         onPrimaryAction: actions.onOpenStore,

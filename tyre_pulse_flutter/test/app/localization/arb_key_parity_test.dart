@@ -634,10 +634,14 @@ void main() {
     // code field label, the verify button, the incomplete-code message, the
     // refused-code message and the could-not-check message
     // (mfaTitle ... mfaVerifyUnavailable). Sign out reuses actionSignOut.
-    test('en, ar and ur each carry exactly 2458 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2458);
-      expect(_translatableKeys(ar).length, 2458);
-      expect(_translatableKeys(ur).length, 2458);
+    // 2458 + 1 = 2459. The update-required screen on an iPhone with no store
+    // button (no App Store id configured): the sentence that tells the user
+    // to update from the App Store (updateRequiredMessageAppStore). The
+    // screen never points an iPhone at Google Play.
+    test('en, ar and ur each carry exactly 2459 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2459);
+      expect(_translatableKeys(ar).length, 2459);
+      expect(_translatableKeys(ur).length, 2459);
     });
   });
 

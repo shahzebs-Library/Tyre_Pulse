@@ -169,6 +169,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'This version of Tyre Pulse is too old to keep using. Install the update to carry on.';
 
   @override
+  String get updateRequiredMessageAppStore =>
+      'This version of Tyre Pulse is too old to keep using. Update Tyre Pulse from the App Store to carry on.';
+
+  @override
   String get profileUnavailableTitle => 'We could not load your profile';
 
   @override
@@ -2768,7 +2772,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get loginSecurityCopyCatalog =>
-      'secure=Secure company workspace · %country%~forgot=Forgot password?~access=Need access? Contact your administrator~or=or~biometric=Use device biometrics~authorized=Authorized PMV personnel only~audited=Activity is audited~version=Version %version%~biometricReason=Confirm your identity to sign in to Tyre Pulse~biometricUnavailable=Device biometrics are unavailable or not enrolled.~biometricLocked=Device biometrics are temporarily locked. Use your password.~biometricFailed=Device verification could not be completed.~credentialsRequired=Enter your email or employee ID and password before using device biometrics.~helpTitle=Sign-in help~forgotHelp=Password resets are managed by your Tyre Pulse administrator. Contact your administrator to restore access.~accessHelp=Your Tyre Pulse administrator manages mobile access and account approval.';
+      'secure=Secure company workspace · %country%~forgot=Forgot password?~access=Need access? Contact your administrator~or=or~biometric=Use device biometrics~authorized=Sign in with the account your company gave you~audited=Activity is audited~version=Version %version%~biometricReason=Confirm your identity to sign in to Tyre Pulse~biometricUnavailable=Device biometrics are unavailable or not enrolled.~biometricLocked=Device biometrics are temporarily locked. Use your password.~biometricFailed=Device verification could not be completed.~credentialsRequired=Enter your email or employee ID and password before using device biometrics.~helpTitle=Sign-in help~forgotHelp=Password resets are managed by your Tyre Pulse administrator. Contact your administrator to restore access.~accessHelp=Your Tyre Pulse administrator manages mobile access and account approval.';
 
   @override
   String get profileNavTitle => 'Profile';

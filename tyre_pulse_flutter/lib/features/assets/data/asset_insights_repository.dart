@@ -44,7 +44,16 @@ const String partsConsumptionTable = 'parts_consumption';
 
 /// Which asset, in which country. A record so Riverpod families compare it
 /// by value.
-typedef AssetScope = ({String assetNo, String? country});
+/// The machine a per-asset read is about. Identity is (company, country,
+/// asset_no): the same code in another company or country is another machine,
+/// and a super admin's reads span companies, so [organisationId] (the fleet
+/// row's own company) pins every read. Null = no company known (cached row):
+/// RLS alone decides, which for an ordinary user is already one company.
+typedef AssetScope = ({
+  String assetNo,
+  String? country,
+  String? organisationId
+});
 
 /// The raw reads, behind an interface so the orchestration is testable with
 /// a plain fake.
@@ -107,6 +116,9 @@ final class SupabaseAssetInsightsSource
             .gte('event_date', fromIso)
             .lte('event_date', toIso);
         if (scope.country != null) q = q.eq('country', scope.country!);
+        if (scope.organisationId != null) {
+          q = q.eq('organisation_id', scope.organisationId!);
+        }
         return q.order('event_date').order('id').range(from, to);
       }),
       maxRows: maxRows,
@@ -133,6 +145,9 @@ final class SupabaseAssetInsightsSource
             .gte('opened_at', fromIso)
             .lte('opened_at', '${toIso}T23:59:59');
         if (scope.country != null) q = q.eq('country', scope.country!);
+        if (scope.organisationId != null) {
+          q = q.eq('organisation_id', scope.organisationId!);
+        }
         return q.order('opened_at').order('id').range(from, to);
       }),
       maxRows: maxRows,
@@ -159,6 +174,9 @@ final class SupabaseAssetInsightsSource
           .gte('reading_date', fromIso)
           .lte('reading_date', toIso);
       if (scope.country != null) q = q.eq('country', scope.country!);
+      if (scope.organisationId != null) {
+        q = q.eq('organisation_id', scope.organisationId!);
+      }
       return q.order('reading_date').order('id').limit(1000);
     });
   }
@@ -210,6 +228,9 @@ final class SupabaseAssetInsightsSource
           : q.gte(dateColumn, fromIso);
       if (scope.country != null) {
         q = q.or('country.eq.${scope.country},country.is.null');
+      }
+      if (scope.organisationId != null) {
+        q = q.eq('organisation_id', scope.organisationId!);
       }
       return q
           .order(dateColumn, ascending: false)

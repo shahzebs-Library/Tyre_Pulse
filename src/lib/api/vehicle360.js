@@ -7,6 +7,7 @@
 import { supabase, unwrap, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 import { escapeLike } from '../searchFilter'
+import { firstForCallerCompany } from './companyScope'
 
 const BUCKET = 'vehicle-photos'
 
@@ -127,9 +128,10 @@ async function vehicleOrgId(assetNo, country) {
     .ilike('asset_no', escapeLike(String(assetNo ?? '').trim()))
   const c = scopedCountry(country)
   if (c) q = q.eq('country', c)
-  const { data, error } = await q.order('id').limit(1).maybeSingle()
+  // One machine per company can carry this code; prefer the caller's company.
+  const { data, error } = await q.order('id').limit(20)
   if (error) return null
-  return data?.organisation_id ?? null
+  return (await firstForCallerCompany(data || []))?.organisation_id ?? null
 }
 
 /**

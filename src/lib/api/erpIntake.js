@@ -22,6 +22,7 @@
  */
 import { supabase, toServiceError, isNotProvisioned } from './_client'
 import { chainFitmentsPerWheel, summariseReconcile } from '../tyreReplacement'
+import { currentOrgId } from './companyScope'
 
 const CHUNK = 200
 // Chunks in flight at once. This path is latency-bound - a 50,000 row load was
@@ -158,15 +159,25 @@ async function pagedExistenceSet(buildPageQuery, addRow) {
   return keys
 }
 
+/**
+ * The caller's company, as the database sees it (app_current_org). Job card
+ * numbers are unique per company, not globally (TEN-1b), so a merge keyed on the
+ * number must stay inside one company. Best effort: an ordinary user is already
+ * limited to their company by RLS, so an unreadable answer (null) keeps that
+ * behaviour rather than blocking the import. Shared helper: ./companyScope.js.
+ */
+const callerOrg = currentOrgId
+
 /** Existing values of a column (paged) as a lowercase Set, for merge dedup. When a
  * country is given, only rows of THAT country are considered, so the same asset/WO
  * number can exist independently in different countries. Fails fast (see
  * pagedExistenceSet): a transient read error THROWS; a missing table returns []. */
-async function existingKeys(table, column, country) {
+async function existingKeys(table, column, country, { org } = {}) {
   return pagedExistenceSet(
     (from, size, after) => {
       let q = supabase.from(table).select(column === 'id' ? 'id' : `${column},id`).not(column, 'is', null)
       if (country) q = q.eq('country', country)
+      if (org) q = q.eq('organisation_id', org)
       if (after != null) q = q.gt('id', after)
       // Stable order on the primary key: PostgREST does NOT guarantee row order
       // across .range() pages without an ORDER BY, so a row can be dropped or
@@ -201,11 +212,12 @@ function tyreLifecycleKey(row) {
 
 /** Existing tyre lifecycle keys for this country, paged. Fails fast (see
  * pagedExistenceSet): a transient read error THROWS; a missing table returns []. */
-async function existingTyreKeys(country) {
+async function existingTyreKeys(country, { org } = {}) {
   return pagedExistenceSet(
     (from, size, after) => {
       let q = supabase.from('tyre_records').select('serial_no,asset_no,position,issue_date,id')
       if (country) q = q.eq('country', country)
+      if (org) q = q.eq('organisation_id', org)
       if (after != null) q = q.gt('id', after)
       // Stable order on the primary key so paging never drops/repeats a row at a
       // page boundary (PostgREST does not guarantee order across .range() pages
@@ -226,13 +238,14 @@ const NORM = (v) => String(v ?? '').trim().toLowerCase()
  * the server-side match is case-exact; the caller indexes results by normalised
  * key. Chunked to keep the .in() list short; country-scoped when given.
  */
-async function fetchRowsByIn(table, column, values, { country } = {}) {
+async function fetchRowsByIn(table, column, values, { country, org } = {}) {
   const uniq = [...new Set((values || []).filter((v) => v != null && String(v).trim() !== ''))]
   const out = []
   for (let i = 0; i < uniq.length; i += 200) {
     const chunk = uniq.slice(i, i + 200)
     let q = supabase.from(table).select('*').in(column, chunk)
     if (country) q = q.eq('country', country)
+    if (org) q = q.eq('organisation_id', org)
     const { data, error } = await q
     if (error) throw toServiceError(error)
     if (data) out.push(...data)
@@ -374,9 +387,14 @@ async function mergeRows(table, collapsed, seen, loadExisting, onProgress) {
  */
 export async function insertTyreRecords(rows = [], { onProgress, country } = {}) {
   const usable = rows.filter((r) => String(r.serial_no ?? '').trim() || String(r.asset_no ?? '').trim())
+  // Serials and asset codes are not global: the same serial or asset code can sit
+  // in another company. The merge reads and refreshes the caller's company only,
+  // so a super admin import never patches another company's tyre (null company
+  // keeps the RLS-only behaviour of an ordinary user).
+  const org = await callerOrg()
   // Abort BEFORE any insert if the existence read failed: a silently-empty set
   // treats every row as new and aborts the whole batch on a duplicate-key insert.
-  const seen = await existingTyreKeys(country)
+  const seen = await existingTyreKeys(country, { org })
   const { collapsed } = collapseByKey(usable, tyreLifecycleKey)
 
   // Replacement: a new fitment replaces the tyre already on that wheel. Earlier
@@ -425,10 +443,10 @@ export async function insertTyreRecords(rows = [], { onProgress, country } = {})
     const assets = overlapRows.map((r) => r.asset_no)
     const found = []
     if (serials.some((v) => String(v ?? '').trim())) {
-      found.push(...await fetchRowsByIn('tyre_records', 'serial_no', serials, { country }))
+      found.push(...await fetchRowsByIn('tyre_records', 'serial_no', serials, { country, org }))
     }
     if (assets.some((v) => String(v ?? '').trim())) {
-      found.push(...await fetchRowsByIn('tyre_records', 'asset_no', assets, { country }))
+      found.push(...await fetchRowsByIn('tyre_records', 'asset_no', assets, { country, org }))
     }
     const map = new Map()
     for (const er of found) { const k = tyreLifecycleKey(er); if (!map.has(k)) map.set(k, er) }
@@ -445,19 +463,22 @@ export async function insertTyreRecords(rows = [], { onProgress, country } = {})
 
 /**
  * Complaints/repair rows -> work_orders. Skips a work_order_no already stored (merge).
- * Dedupe is GLOBAL, not country-scoped: work_orders.work_order_no is globally unique
- * (the number's prefix encodes the country 1:1 — AFKR/GCKR=KSA, RM=UAE, EG=Egypt — so a
- * number can never legitimately belong to two countries). A country-scoped check let a
- * number already stored under another country slip through and abort the whole batch on
- * the global unique (23505). `country` is still accepted for signature compatibility.
+ * Dedupe is per COMPANY and across all of that company's countries:
+ * work_orders is unique on (organisation_id, work_order_no) since TEN-1b, so a number
+ * already stored under another country of the same company would still abort the batch
+ * (23505), while the SAME number held by ANOTHER company is a different job card and
+ * must never be merged into (that would overwrite another tenant's row). RLS already
+ * limits an ordinary user to their company; the explicit company filter matters for a
+ * super admin, whose reads span companies. `country` is kept for signature compatibility.
  */
 export async function insertWorkOrders(rows = [], { onProgress, country } = {}) {
+  const org = await callerOrg()
   // Fail fast if the existence read fails (see existingKeys): proceeding with an
-  // empty set would re-insert every work order and abort on the global unique.
-  const seen = await existingKeys('work_orders', 'work_order_no')
+  // empty set would re-insert every work order and abort on the unique key.
+  const seen = await existingKeys('work_orders', 'work_order_no', null, { org })
   const { collapsed, noKey } = collapseByKey(rows, (r) => (r.work_order_no ? NORM(r.work_order_no) : ''))
   const loadExisting = async (overlapRows) => {
-    const found = await fetchRowsByIn('work_orders', 'work_order_no', overlapRows.map((r) => r.work_order_no))
+    const found = await fetchRowsByIn('work_orders', 'work_order_no', overlapRows.map((r) => r.work_order_no), { org })
     const map = new Map()
     for (const er of found) map.set(NORM(er.work_order_no), er)
     return map
@@ -499,15 +520,17 @@ export async function replaceOpenWorkOrders(rows = [], { onProgress, country } =
 /** Asset master rows -> vehicle_fleet. Inserts new assets and REFRESHES an already
  * stored asset with any changed/newly-provided fields (odometer, insurance dates,
  * etc.), but never blanks a curated value the file leaves empty. Merge key is
- * (org, country, asset_no) - the same asset code in another country is a different
- * machine, so the check is country-scoped. */
+ * (org, country, asset_no) - the same asset code in another country, or in another
+ * company, is a different machine, so the check is scoped to the caller's company
+ * and the country. A super admin import never refreshes another company's asset. */
 export async function insertVehicleFleet(rows = [], { onProgress, country } = {}) {
+  const org = await callerOrg()
   // Fail fast if the existence read fails (see existingKeys): proceeding with an
   // empty set would re-insert every asset and abort on the (org, country, asset_no) unique.
-  const seen = await existingKeys('vehicle_fleet', 'asset_no', country)
+  const seen = await existingKeys('vehicle_fleet', 'asset_no', country, { org })
   const { collapsed, noKey } = collapseByKey(rows, (r) => (r.asset_no ? NORM(r.asset_no) : ''))
   const loadExisting = async (overlapRows) => {
-    const found = await fetchRowsByIn('vehicle_fleet', 'asset_no', overlapRows.map((r) => r.asset_no), { country })
+    const found = await fetchRowsByIn('vehicle_fleet', 'asset_no', overlapRows.map((r) => r.asset_no), { country, org })
     const map = new Map()
     for (const er of found) map.set(NORM(er.asset_no), er)
     return map
@@ -534,10 +557,13 @@ const KEY_COL = {
  */
 export async function countExistingRows(target, rows = [], { country } = {}) {
   const total = rows.length
+  // The preview must count what the merge will do: same company, and for job
+  // cards every country of that company (see insertWorkOrders).
+  const org = KEY_COL[target] ? await callerOrg() : null
   if (target === 'tyre_records') {
     // Let a read failure PROPAGATE so the page records dup: null ("could not
     // check") instead of a false all-new preview from a swallowed empty set.
-    const seen = await existingTyreKeys(country)
+    const seen = await existingTyreKeys(country, { org })
     let existing = 0
     const inFile = new Set()
     for (const r of rows) {
@@ -551,7 +577,7 @@ export async function countExistingRows(target, rows = [], { country } = {}) {
   const col = KEY_COL[target]
   if (!col) return { total, existing: 0, fresh: total, keyed: false }
   // Let a read failure PROPAGATE so the page records dup: null ("could not check").
-  const seen = await existingKeys(target, col, country)
+  const seen = await existingKeys(target, col, target === 'work_orders' ? null : country, { org })
   let existing = 0
   const inFile = new Set()
   for (const r of rows) {

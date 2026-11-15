@@ -84,14 +84,29 @@ describe('a blank date must not abort the whole batch', () => {
     ['TM101', 'R. Ali', 'NHC', 'JC-2', 'Tyre wear', 'Rotated', 'OK', '', ''],
   ]
 
-  it('omits opened_at entirely when the date is blank', () => {
+  it('skips the blank-date complaint row with a reason and keeps the rest (no invented date)', () => {
+    // Same rule as the staging pipe draft 20261117112000: a complaint with no
+    // Vehicle In Date is not given today's date; it is skipped and reported.
     const res = intakeSheet(COMPLAINTS, 'KSA')
     const wos = res.workOrders || res.rows || []
-    const blank = wos.find((w) => w.work_order_no === 'JC-2')
-    expect(blank).toBeTruthy()
-    // The key must be ABSENT, not present-and-null. Present-and-null is what
-    // defeats the column default.
-    expect(Object.prototype.hasOwnProperty.call(blank, 'opened_at')).toBe(false)
+    expect(wos.map((w) => w.work_order_no)).toEqual(['JC-1'])
+    expect(res.rejectedRows).toEqual([{
+      work_order_no: 'JC-2', asset_no: 'TM101',
+      reason: 'complaint_missing_vehicle_in_date', message: 'Vehicle In Date is blank',
+    }])
+    // Every content row is still accounted for: the skipped one is not "no key".
+    expect(res.read).toBe(wos.length + res.noKey + res.rejectedRows.length)
+    expect(res.noKey).toBe(0)
+  })
+
+  it('reports an unreadable Vehicle In Date with the value it could not read', () => {
+    const rows = [COMPLAINTS[0], ['TM102', 'S. Omar', 'NHC', 'JC-3', 'Leak', 'Seal', 'OK', 'not a date', '']]
+    const res = intakeSheet(rows, 'KSA')
+    expect(res.rows).toHaveLength(0)
+    expect(res.rejectedRows[0]).toMatchObject({
+      work_order_no: 'JC-3', reason: 'complaint_unreadable_vehicle_in_date',
+      message: 'Vehicle In Date "not a date" could not be read',
+    })
   })
 
   it('still sends opened_at when the date is there', () => {

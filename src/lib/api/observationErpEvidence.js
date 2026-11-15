@@ -2,8 +2,10 @@
  * Scoped, bounded, read-only job-card evidence lookup. A query failure is NOT
  * treated as an empty match. Existing ERP records are the only data source.
  */
-import { supabase, unwrap, ServiceError } from './_client'
+import { supabase, unwrap, ServiceError, isNotProvisioned } from './_client'
 import { matchObservationToErp } from '../erpObservationMatch'
+import { getCustomLayoutMap } from './vehicleDiagrams'
+import { toUserMessage } from '../safeError'
 
 const WO_FIELDS = 'id,work_order_no,asset_no,country,site,description,notes,status,opened_at,completed_at'
 const TYRE_FIELDS = 'id,asset_no,country,serial_no,position,tyre_position,job_card,issue_date,removal_date,status'
@@ -58,7 +60,20 @@ export async function findObservationErpEvidence({ inspection, finding }) {
     if (rows.length >= 250) limited = true
     expenses.push(...rows)
   }
-  const candidates = matchObservationToErp({ inspection, finding, workOrders, fitments, expenses })
+  // The asset's OWN registered build decides the wheel layout both sides are read on
+  // (tyrePositionService). Registered twice in one country: no layout is assumed.
+  const [fleet, customLayouts] = await Promise.all([
+    supabase.from('vehicle_fleet').select('vehicle_type,axle_count').eq('country', country).eq('asset_no', asset).limit(2),
+    getCustomLayoutMap(),
+  ])
+  const fleetRows = unwrap(fleet) || []
+  const machine = fleetRows.length === 1 ? fleetRows[0] : null
+  const layoutContext = {
+    vehicleType: machine?.vehicle_type || '',
+    axleCount: machine?.axle_count ?? null,
+    customLayouts,
+  }
+  const candidates = matchObservationToErp({ inspection, finding, workOrders, fitments, expenses, layoutContext })
   const existingJobs = new Set(workOrders.map(w => String(w.work_order_no || '').trim().toUpperCase()))
   const orphanTyreJobCards = jobNumbers.filter(number => !existingJobs.has(number.toUpperCase()))
   return {
@@ -94,4 +109,54 @@ export async function listObservationErpDecisions(actionId) {
   return unwrap(await supabase.from('observation_erp_link_events')
     .select('id,decision,reason,source_job_card,work_order_snapshot,reviewer,created_at')
     .eq('action_id', actionId).order('created_at', { ascending: false }).limit(50)) || []
+}
+
+/**
+ * The saved review state of one action: the confirmed link and the decision history.
+ *
+ * The review tables and functions ship in a database change that may not be applied yet.
+ * That is reported as `provisioned: false`, NOT as "no link" and not as an error: the
+ * evidence lookup above reads only existing ERP tables and still works, while Confirm and
+ * Reject cannot. Any other failure is thrown, so a permission problem is never shown as
+ * "not set up".
+ */
+export async function getObservationErpReviewState(actionId) {
+  if (!actionId) return { provisioned: true, link: null, history: [] }
+  try {
+    const [link, history] = await Promise.all([getObservationErpLink(actionId), listObservationErpDecisions(actionId)])
+    return { provisioned: true, link, history }
+  } catch (err) {
+    if (isNotProvisioned(err)) return { provisioned: false, link: null, history: [] }
+    throw err
+  }
+}
+
+/** True when a Confirm or Reject failed only because the review functions do not exist yet. */
+export const isErpReviewNotProvisioned = (err) => isNotProvisioned(err)
+
+/**
+ * Plain words for a Confirm or Reject the server refused.
+ *
+ * The server is the authority and can refuse a job card this screen offered: today the live
+ * function finds the wheel with its own table, which differs from the position service in a
+ * few cases (see POSITION_ROUND2.md). Those refusals arrive with code PT409, which the general
+ * error text reads as "this record changed, refresh", which is wrong here. Only the server's
+ * own known refusals are translated; anything else goes through toUserMessage unchanged, so
+ * no database text reaches the screen.
+ */
+const REFUSALS = [
+  [/predates the inspection/i, 'This job card was opened before the inspection, so it cannot be linked. It needs manual investigation.'],
+  [/could not be matched on this vehicle|Unknown inspection tyre position/i, 'The server could not place the inspected wheel on this vehicle. The job card was not linked and stays pending manual review.'],
+  [/No ERP tyre movement matches/i, 'The server found no tyre movement on this job card for the inspected wheel. The job card was not linked.'],
+  [/already linked to (another|a different)/i, 'This action is already linked to a different job card.'],
+  [/must match inspection tenant, country and asset/i, 'This job card does not belong to the same vehicle and country as the inspection.'],
+  [/Only own inspection tyre actions/i, 'Only tyre damage actions raised from an inspection can be linked to a job card.'],
+  [/Job card number missing/i, 'This job card has no number, so it cannot be linked.'],
+  [/(Country|Site) is outside permitted scope/i, 'This job card is outside the countries or sites you can review.'],
+  [/Decision and reason are required/i, 'Write a reason of at least five characters.'],
+]
+export function erpDecisionMessage(err) {
+  const raw = String(err?.cause?.message || err?.message || '')
+  const hit = REFUSALS.find(([re]) => re.test(raw))
+  return hit ? hit[1] : toUserMessage(err, 'The job card could not be linked. Please try again.')
 }

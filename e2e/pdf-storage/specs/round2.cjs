@@ -21,7 +21,6 @@ const RUN = process.env.PDF_E2E_RUN
 const DB = process.env.PDF_E2E_DB
 const BUCKET = 'report-pdfs'
 const ALPHA = '00000000-0000-0000-0000-000000000001'
-const BETA = 'bbbbbbbb-0000-4000-8000-000000000002'
 const ANON = fs.readFileSync(`${RUN}/anon_key`, 'utf8').trim()
 const SERVICE = fs.readFileSync(`${RUN}/service_key`, 'utf8').trim()
 const sql = (q) => execFileSync('psql', ['-X', '-q', '-At', '-h', '127.0.0.1', '-p', process.env.PGPORT_E2E || '54329', '-U', 'postgres', '-d', DB, '-c', q], { encoding: 'utf8' }).trim()

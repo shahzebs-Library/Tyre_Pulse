@@ -102,7 +102,7 @@ export default function ChecklistAnswers({
             // template with no prefix has none, and the tile is dropped rather
             // than printing a placeholder somebody would go on to quote.
             ...(documentNo(sub) ? [['Document no', documentNo(sub)]] : []),
-            ['Status', prettyStatus(sub.approval_status || sub.status)],
+            ['Status', prettyStatus(sub.approval_status || sub.status, sub)],
             ['Points recorded', summary.points],
             ['With a photo', summary.withPhotos],
             ['Score', summary.score == null ? 'Not scored' : `${summary.score}%`],

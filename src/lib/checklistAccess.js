@@ -42,22 +42,30 @@ export const CHECKLIST_PATH_PREFIXES = [
   '/my-problems',
 ]
 
-// Workshop work a supervisor role may also reach (owner decision 2026-11-15:
-// workshop supervisors create and manage work orders and use Workshop Live
-// Control inside their sites). These are NOT open by default: each path is
-// reachable only when the role's module is switched on in Access Control
-// (module_permissions), so nothing changes for a company that has not enabled
-// it. The database decides every write (work_order_can).
+// Paths outside the checklist area that a checklist-only role reaches ONLY when
+// the role's module is switched on in Access Control (module_permissions). Nothing
+// changes for a company that has not enabled the module; the database decides
+// every write.
+//   Work orders and Workshop Live Control: workshop supervisors create and manage
+//   work orders inside their sites (owner decision 2026-11-15; work_order_can).
+//   Corrective actions: a supervisor is a default reviewer of the closure workflow
+//   (draft 20261116102000). Until that row exists the path is hidden and redirects.
 export const SUPERVISOR_WORK_PATHS = Object.freeze({
   '/work-orders': 'work_orders',
   '/workshop-live': 'workshop_live',
 })
+export const CHECKLIST_MODULE_GATED_PATHS = Object.freeze({
+  ...SUPERVISOR_WORK_PATHS,
+  '/actions': 'corrective_actions',
+})
+
+const under = (p, x) => p === x || p.startsWith(`${x}/`)
 
 /** The module key that opens a supervisor work path, or null when it is not one. */
 export function supervisorWorkModuleKey(pathname) {
   const p = String(pathname || '')
   for (const [prefix, key] of Object.entries(SUPERVISOR_WORK_PATHS)) {
-    if (p === prefix || p.startsWith(`${prefix}/`)) return key
+    if (under(p, prefix)) return key
   }
   return null
 }
@@ -65,14 +73,14 @@ export function supervisorWorkModuleKey(pathname) {
 /**
  * @param {string} pathname
  * @param {(moduleKey:string)=>boolean} [hasPermission]  the signed-in person's
- *   module check. When given, a supervisor work path is allowed if its module is
- *   on for them. Omitted: checklist paths only (the rule before 2026-11-15).
+ *   module check. When given, a module-gated path is allowed if its module is on
+ *   for them. Omitted: checklist paths only.
  */
 export function isChecklistPathAllowed(pathname, hasPermission) {
   const p = String(pathname || '')
-  if (CHECKLIST_PATH_PREFIXES.some((x) => p === x || p.startsWith(`${x}/`))) return true
-  const key = supervisorWorkModuleKey(p)
-  return !!key && typeof hasPermission === 'function' && hasPermission(key) === true
+  if (CHECKLIST_PATH_PREFIXES.some((x) => under(p, x))) return true
+  if (typeof hasPermission !== 'function') return false
+  return Object.entries(CHECKLIST_MODULE_GATED_PATHS).some(([x, key]) => under(p, x) && hasPermission(key) === true)
 }
 
 // Roles allowed to author checklists (build / schedule / insights). Includes the

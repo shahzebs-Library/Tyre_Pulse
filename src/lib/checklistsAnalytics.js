@@ -14,6 +14,7 @@
  */
 import { submissionTarget, submissionDate } from './checklistMonthly'
 import { isValueField } from './checklist/fieldTypes'
+import { acknowledgedText } from './closureWorkflow'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -167,7 +168,7 @@ export function submissionExportRows(submissions = [], templates = []) {
       asset: target.assetNo || '',
       site: target.site || '',
       country: s?.country || '',
-      status: prettyStatus(s?.status),
+      status: acknowledgedText(s) || prettyStatus(s?.status),
       evidence: evidenceLabel(s?.template_snapshot_status),
       checklist_date: submissionDay(s, templates) || '',
       received: received ? String(received).slice(0, 10) : '',

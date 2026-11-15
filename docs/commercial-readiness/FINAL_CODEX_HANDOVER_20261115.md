@@ -304,3 +304,70 @@ Other open items
 - 2026-11-15. Browser regression for #519, #520, #528 started on the #525 branch; results will be `docs/commercial-readiness/audit/ROUND3_BROWSER_TESTS.md` there, including the merge conflicts met when the three branches are combined.
 - Open owner questions added this round: supervisor always closes a job (built that way)? Data Monitor Officer same limits as the collector? Collector may enter costs on a job with no approval? Workshop Supervisor a final checklist signer by default? Bar the person who raised an action from deciding its exception? Switch off direct closing once phones are updated?
 - 2026-11-15. Owner's final work order decisions recorded (section 5). Work order agent resumed on #519: cost ledger first, then technician completion vs final closure, Data Monitor Officer limits, collector draft costs. ERP lock re-verified active: migration `20261115120856` still latest, ACL `{postgres,service_role}` on all three functions, hashes unchanged, 0 links, `single_tenant_mode` true.
+
+## 13. Merge round, 2026-11-15 12:20 to 13:00 UTC (owner authorised merging completed, verified PRs)
+
+### Merged to main
+| PR | Squash commit | What | Checks |
+|---|---|---|---|
+| #518 | `f11e18f26e021e14a9f918994b709f4b14e07442` | Recall Tracker sends ONE country (the profile's country list was refused by the database). Tenancy and leak drafts TEN-6 to TEN-13 added to `supabase/pending_migrations/` only. | All 7 CI jobs green on head `8f5eddc9` (web lint + tests + database tests + build, mobile, marketing, report engine, analytics, CodeQL js + python). Staging: 30 of 30 drafts applied, 0 of 191 current-company facts changed, 180 of 180 tests; isolation 35 of 35. |
+
+Nothing else was merged. After the owner's later instruction ("prepare merge-ready reports, do not merge
+automatically") no further PR is merged without a fresh owner decision.
+
+### Deployed
+- Vercel production workflow run `43714327126` deployed `f11e18f2` (success). Web only.
+- The Recall Tracker module is still switched off in production, so no user sees the fix until it is turned on.
+
+### Production database after the merge (verified read-only)
+- Latest migration still `20261115120856 observation_erp_confirm_interim_lock`; 1,091 migrations (unchanged).
+- ERP lock active: `observation_erp_decide`, `confirm_observation_erp_link`, `reject_observation_erp_link`
+  ACL `{postgres,service_role}`, hashes unchanged; 0 links; `single_tenant_mode` = true.
+- Evidence that a merge cannot apply migrations: repo files such as `20261115120000` and
+  `20261112198000` have been on main for days and their versions are not in
+  `supabase_migrations.schema_migrations` (production records MCP-applied timestamps only). No workflow runs
+  `supabase db push`; `deploy-edge-functions.yml` is manual.
+
+### PRs updated this round (still open, not merged)
+| PR | New head | State | Why not merged |
+|---|---|---|---|
+| #519 | `1427a801` | Contains #528. Cost ledger finished: imported `parts_cost` never changed by a form; added parts become ledger entries (draft, reconciliation, independent approval, immutable, refunds only of approved costs). Without draft `20261115142000` the ledger says "not available" and writes nothing. Staging: all 6 work order drafts applied, 305 of 305 cases, stored work orders md5 unchanged. Web: 307 related tests, lint, build clean. Conflict-free with main. | Behaviour change for current users (closure rights, My Jobs, ledger) needs the owner's go; the owner rule is #528 and #519 together and only after the round 3 browser regression, which did not finish. Not browser-tested. |
+| #528 | `2efd49d8` | Green CI, conflict-free. | Owner rule: release together with #519. #519 already contains it; merging #519 merges #528. |
+| #520 | `b29f2572` | Merged main twice (conflicts resolved). New `closureSafeDegrade.test.js` (28 cases) proves screens work with drafts unapplied. 626 of 627 related tests (the one failure is `checklistIcons`, needs `mobile/node_modules`, passes in CI). Lint 0 errors, build clean. Conflict-free with main. | Not browser-tested this round; owner questions open (section 12). Wait for CI on `b29f2572`. |
+| #524 | `6562f42b` | Conflicts with main in drafts README and `vercel.json`. | Readiness check interrupted (usage limit). |
+| #526 | `094f2c1b` | Clean vs main. | ERP actions 2 to 4 not approved; completion work interrupted. |
+| #527 | `015bafdd` | Clean vs main. | Real-storage test not done; round 2 interrupted. |
+| #523, #507 | unchanged | Flutter. | Real-device pass not done; no store step without the owner. |
+| #525 | `9375c338` | Evidence branch; conflicts with main. | Round 3 browser regression interrupted. |
+| #504 | this branch | Parked; conflicts with main in drafts README only. | Readiness check interrupted; not browser-tested. |
+| #505, #506, #508 to #511, #513, #517 | unchanged | Based on the #504 branch. | Need retargeting to main one at a time. |
+
+### Unfinished agent work saved (UNVERIFIED, do not merge as-is)
+All background agents stopped on a model usage limit. Their uncommitted changes were committed and pushed so
+nothing is lost. Each is a work-in-progress commit on top of the PR head; review, test and fold into the PR.
+| Branch | Head | Contents |
+|---|---|---|
+| `claude/wip-526-erp-7rxp2t` | `ed3efe24` | Moves the applied lock file to `supabase/migrations/20261115120856_...` with an APPLIED header; evidence panel and position service edits; drafts 091000 edits. |
+| `claude/wip-527-pdf-7rxp2t` | `73bf40da` | Real-storage browser harness `e2e/pdf-storage/` (not run). |
+| `claude/wip-525-browser-tests-7rxp2t` | `25cb432d` | Round 3 browser specs (closure), setup edits; 11 unpushed commits included. |
+| `claude/wip-523-ios-7rxp2t` | `fb1f61c2` | Small-phone cases in two Flutter tests. |
+| `claude/wip-519-work-orders-7rxp2t`, `claude/wip-520-closure-7rxp2t` | | Superseded: their content is now in #519 and #520. Can be deleted. |
+
+### Pending database migrations (none applied this round)
+Order unchanged from section 6, plus `20261115142000_wo_cost_entries_ledger.sql` (after `141500`) and the
+TEN-10 to TEN-13 drafts now on main (`20261115164000` to `167000`, HOLD `169000` last). The only shared number
+across all branches is the deliberate pair `20261116091000` (apply file and its ROLLBACK file).
+
+### Exact remaining tasks for Codex, in order
+1. Wait for CI on #519 `1427a801` and #520 `b29f2572`; fix anything red.
+2. Run the round 3 browser regression (`claude/wip-525-browser-tests-7rxp2t` specs) for #519 (contains #528)
+   and #520: Admin, Manager, Workshop Supervisor, technician, Tyre Data Collector, Data Monitor Officer;
+   imported card with stored parts cost; add a part; self-approval refused; Arabic.
+3. Bring the results to the owner with a merge-ready report. Release order if approved: merge #519 (carries
+   #528), deploy web, then apply `20261113130000`, `20261115140000`, `140500`, `141000`, `141500`,
+   `142000` one at a time with rolled-back verification. Then #520, then its three drafts.
+4. #524: merge main (README, `vercel.json`), finish the readiness review, prove safe without drafts.
+5. #527: run `e2e/pdf-storage` against hosted staging storage; keep the client fallback.
+6. #526: fold `claude/wip-526-erp-7rxp2t` in; keep the lock; actions 2 to 4 only on owner approval.
+7. Retarget #505, #506, #508 to #511, #513, #517 to main one at a time; #510 keeps its marketing copy.
+8. Flutter #507 and #523 real-device pass; no store step without the owner.

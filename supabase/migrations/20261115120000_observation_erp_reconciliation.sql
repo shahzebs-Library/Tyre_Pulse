@@ -112,7 +112,8 @@ begin
   if nullif(btrim(coalesce(v_work.work_order_no,'')), '') is null then
     raise exception 'Job card number missing' using errcode = 'PT409';
   end if;
-  if v_work.opened_at::date < coalesce(v_inspection.inspection_date,v_inspection.created_at::date) then
+  if p_decision = 'confirmed' and (v_work.opened_at is null
+      or v_work.opened_at::date < coalesce(v_inspection.inspection_date,v_inspection.created_at::date)) then
     raise exception 'Job card predates the inspection. Manual investigation required' using errcode = 'PT409';
   end if;
   v_position := upper(regexp_replace(substr(v_action.source_detail,8),'[^A-Za-z0-9]','','g'));
@@ -121,11 +122,9 @@ begin
     where t.organisation_id = v_org and t.country = v_country
       and upper(btrim(t.asset_no)) = upper(btrim(v_work.asset_no))
       and upper(btrim(t.job_card)) = upper(btrim(v_work.work_order_no))
-      and (
-        upper(regexp_replace(coalesce(t.position,t.tyre_position,''),'[^A-Za-z0-9]','','g')) = v_position
-        or (nullif(btrim(coalesce(v_action.tyre_serial,'')),'') is not null
-            and upper(btrim(t.serial_no)) = upper(btrim(v_action.tyre_serial)))
-      )
+      and upper(regexp_replace(coalesce(t.position,t.tyre_position,''),'[^A-Za-z0-9]','','g')) = v_position
+      and (nullif(btrim(coalesce(v_action.tyre_serial,'')),'') is null
+           or upper(btrim(t.serial_no)) = upper(btrim(v_action.tyre_serial)))
   ) into v_verified_tyre;
   if p_decision = 'confirmed' and not v_verified_tyre then
     raise exception 'No ERP tyre movement matches the action position or serial' using errcode = 'PT409';

@@ -86,10 +86,8 @@
   <rect x="68" y="44" width="64" height="4" rx="2" fill="#001f5b" opacity="0.5" />
   <rect x="68" y="52" width="64" height="4" rx="2" fill="#001f5b" opacity="0.5" />
 
-  <!-- TATA logo on hood -->
+  <!-- Hood badge plate (no brand mark) -->
   <rect x="84" y="40" width="32" height="14" rx="3" fill="#001f5b" opacity="0.85" />
-  <text x="100" y="50" text-anchor="middle" font-size="8" font-weight="900"
-    fill="#ffffff" letter-spacing="1px">TATA</text>
 
   <!-- Windshield -->
   <path d="M 61,67 L 139,67 L 135,85 L 65,85 Z" fill="url(#glassGrad)" />
@@ -107,7 +105,7 @@
   <!-- Blue stripe on cab bottom -->
   <rect x="57" y="120" width="86" height="9" fill="url(#tataStripe)" />
   <text x="100" y="126.5" text-anchor="middle" font-size="4" font-weight="800"
-    fill="#ffffff" letter-spacing="0.4px">TATA PRIMA &#183; HEAVY DUTY</text>
+    fill="#ffffff" letter-spacing="0.4px">HEAVY DUTY</text>
 
   <!-- Chassis -->
   <rect x="67" y="129" width="11" height="158" fill="#334155" />

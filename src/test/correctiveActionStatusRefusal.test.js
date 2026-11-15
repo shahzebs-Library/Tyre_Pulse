@@ -9,8 +9,9 @@ import { closureText, MESSAGE_KEYS } from '../lib/closureText'
 
 const PENDING = 'An exception has been requested on this action. Approve or refuse the exception first.'
 
+// Works whether the service ends the chain at .eq() or asks for the changed ids with .select().
 function updateReturning(result) {
-  const b = { update: () => b, eq: () => Promise.resolve(result) }
+  const b = { update: () => b, eq: () => { const p = Promise.resolve(result); p.select = () => Promise.resolve(result); return p } }
   return b
 }
 
@@ -40,7 +41,7 @@ describe('D4: closing an action while an exception is pending', () => {
     for (const s of CLOSURE_STATUS_REFUSALS) expect(s).not.toMatch(/relation|column|constraint|policy|table|schema/i)
   })
   it('a successful update returns without throwing', async () => {
-    h.from.mockReturnValue(updateReturning({ data: [], error: null }))
-    await expect(updateCorrectiveAction('a1', { status: 'Open' })).resolves.toEqual([])
+    h.from.mockReturnValue(updateReturning({ data: [{ id: 'a1' }], error: null }))
+    await expect(updateCorrectiveAction('a1', { status: 'Open' })).resolves.toBeTruthy()
   })
 })

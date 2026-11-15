@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { findObservationErpEvidence, confirmObservationErpLink, rejectObservationErpSuggestion, getObservationErpLink, listObservationErpDecisions } from '../../lib/api/observationErpEvidence'
 import { toUserMessage } from '../../lib/safeError'
+import { detectConfirmedErpDrift } from '../../lib/erpObservationMatch'
 
 /**
  * Evidence lookup is user-triggered, read-only and scoped to one tyre.
@@ -95,6 +96,14 @@ export default function ObservationErpEvidence({ observation }) {
             <p className="text-xs">{state.orphanTyreJobCards.join(', ')}</p>
             <p className="text-xs text-[var(--text-secondary)]">Check job-card intake before confirming these movements.</p>
           </div>}
+          {linked && (() => {
+            const current = state.candidates.find(c => c.workOrder.id === linked.work_order_id)?.workOrder
+            const changes = detectConfirmedErpDrift(linked.work_order_snapshot, current)
+            return changes.length > 0 ? <div role="alert" className="rounded-lg border border-amber-500/40 p-2 text-sm">
+              <strong>Previously confirmed ERP evidence needs re-verification</strong>
+              <p className="text-xs">Changed or unavailable: {changes.join(', ')}. The earlier approval is retained for audit; do not assume the updated job card is verified.</p>
+            </div> : <p className="text-xs text-green-600">Confirmed ERP job-card details still match the reviewed snapshot.</p>
+          })()}
           {!state.candidates.length && <p className="iw-od-muted">No imported job cards found for this asset and country. Check intake history or review another work date.</p>}
           {state.candidates.length > 0 && (
             <div className="space-y-3 mt-3">

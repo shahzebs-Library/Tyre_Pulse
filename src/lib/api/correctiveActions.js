@@ -55,15 +55,35 @@ export async function updateCorrectiveAction(id, patch) {
  * submission). Degrades to [] rather than throwing, so a failure to read the
  * existing actions can never block the page that shows the defects.
  */
-export async function listActionsForSource(sourceType, sourceId) {
+export async function listActionsForSource(sourceType, sourceId, { strict = false } = {}) {
   if (!sourceType || !sourceId) return []
   try {
     return await unwrap(await supabase.from('corrective_actions').select(COLS)
       .eq('source_type', sourceType).eq('source_id', sourceId)
       .order('created_at', { ascending: false }))
-  } catch {
+  } catch (error) {
+    if (strict) throw toServiceError(error, 'Could not verify existing corrective actions.')
     return []
   }
+}
+
+/**
+ * Read actions for inspection observation boards in bounded batches. Unlike
+ * listActionsForSource, a read error must be visible to the caller: an unreadable
+ * action must never look as if it has not been raised.
+ */
+export async function listActionsForInspectionIds(ids = []) {
+  const unique = [...new Set(ids.filter(Boolean))]
+  const rows = []
+  for (let i = 0; i < unique.length; i += 100) {
+    const batch = unique.slice(i, i + 100)
+    const found = await unwrap(await fetchAllPages((from, to) => supabase
+      .from('corrective_actions').select(COLS)
+      .eq('source_type', 'inspection').in('source_id', batch)
+      .order('created_at', { ascending: false }).range(from, to)))
+    rows.push(...found)
+  }
+  return rows
 }
 
 /**

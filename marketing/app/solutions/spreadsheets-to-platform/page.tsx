@@ -7,7 +7,7 @@ import { OG_IMAGES } from "@/lib/site";
 import { FaqBlock, Modules, Problem, StartList, Steps, type Faq } from "../SolutionParts";
 
 const PATH = "/solutions/spreadsheets-to-platform";
-const TITLE = "Fleet spreadsheets vs maintenance software vs Tyre Pulse";
+const TITLE = "Fleet spreadsheets vs maintenance software";
 const DESCRIPTION = "A factual comparison of running a fleet on spreadsheets, on a generic maintenance tool, or on Tyre Pulse, and how to move your files across.";
 
 export const metadata: Metadata = {

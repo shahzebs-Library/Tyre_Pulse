@@ -14,20 +14,16 @@
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.tyrepulse.app").replace(/\/$/, "");
 
 /**
- * Where "Login" sends a visitor.
+ * Where "Log in", the customer login link and the legal pages send a visitor.
  *
- * This default is the host that serves the application TODAY, verified against
- * the live Vercel project: tyrepulse.app and www.tyrepulse.app both resolve to
- * the operational app, and they are the only domains configured on it. There is
- * no app.tyrepulse.app and no admin.tyrepulse.app. The previous default pointed
- * at app.tyrepulse.app, so the Login button in the header and the customer
- * login link in the footer were dead on every page of the site.
- *
- * README.md describes the intended split, in which this marketing site takes
- * www and the application moves to app.tyrepulse.app. On the day that happens,
- * set NEXT_PUBLIC_APP_URL=https://app.tyrepulse.app and nothing else changes.
+ * The operational app is served at app.tyrepulse.app, which is the production
+ * domain of the app's Vercel project. This is the one place that host is
+ * written. The header, footer, legal links, structured data, llms.txt and the
+ * /console redirect all read APP_URL, and NEXT_PUBLIC_APP_URL overrides it
+ * without a code change.
  */
-export const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://app.tyrepulse.app").replace(/\/$/, "");
+export const DEFAULT_APP_URL = "https://app.tyrepulse.app";
+export const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || DEFAULT_APP_URL).replace(/\/$/, "");
 
 /**
  * Sales WhatsApp number in international format, digits only. Supplied by the
@@ -39,9 +35,15 @@ export const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://app.tyrepuls
 export const WHATSAPP_NUMBER: string | null =
   (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "971566726276").replace(/\D/g, "") || null;
 
-export const WHATSAPP_URL = WHATSAPP_NUMBER
-  ? `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("Hello Tyre Pulse, I would like a demo.")}`
-  : null;
+/**
+ * A wa.me link carrying one prefilled message. Always build WhatsApp links with
+ * this: appending a second "?text=" to WHATSAPP_URL produced a malformed link.
+ */
+export function whatsappLink(text: string, number: string | null = WHATSAPP_NUMBER): string | null {
+  return number ? `https://wa.me/${number}?text=${encodeURIComponent(text)}` : null;
+}
+
+export const WHATSAPP_URL = whatsappLink("Hello Tyre Pulse, I would like a demo.");
 
 /** Share-preview image (WhatsApp, LinkedIn, X, Slack). Every page's openGraph must carry it. */
 export const OG_IMAGES = [{ url: "/og-image.jpg", width: 1200, height: 630, alt: "Tyre Pulse: complete control of your PMV operations" }];
@@ -55,3 +57,12 @@ export const LEGAL_LINKS = [
   { href: `${APP_URL}/terms`, label: "Terms of service", labelAr: "شروط الخدمة" },
   { href: `${APP_URL}/data-deletion`, label: "Delete your data", labelAr: "حذف بياناتك" },
 ] as const;
+
+/**
+ * Mobile app availability, stated once. Android is released on Google Play.
+ * An iOS app is planned and has no App Store listing, so nothing on the site
+ * may link to one or imply it can be downloaded. The footer badge, llms.txt,
+ * llms-full.txt and the structured data all read these two lines.
+ */
+export const IOS_STATUS: "available" | "planned" = "planned";
+export const IOS_STATEMENT = "An iOS app is planned. It is not on the App Store yet.";

@@ -342,6 +342,22 @@ export function observationRegister(rows) {
 }
 
 /**
+ * One register row per saved inspection. Its full set of tyre findings stays
+ * available inside the row; filtering remains finding-level before grouping.
+ */
+export function groupObservationsByInspection(findings = []) {
+  const byInspection = new Map()
+  for (const finding of findings) {
+    if (!finding?.inspectionId) continue
+    if (!byInspection.has(finding.inspectionId)) {
+      byInspection.set(finding.inspectionId, { ...finding, findings: [] })
+    }
+    byInspection.get(finding.inspectionId).findings.push(finding)
+  }
+  return [...byInspection.values()]
+}
+
+/**
  * What the observation says, as one filter value: the recorded tyre condition
  * (Puncture, Worn, Damaged...) title-cased so "WORN" and "Worn" are one choice,
  * "Inspector note" for notes and "Site observation" for site records.

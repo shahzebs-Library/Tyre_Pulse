@@ -246,7 +246,7 @@ const NAV_GROUPS = [
       { to: '/stock',               label: 'Stock',               icon: StockBoxIc },
       { to: '/stock-replenishment', label: 'Stock Replenishment', icon: PackagePlus },
       { to: '/scrap',               label: 'Scrap Management',    icon: ScrapBinIc },
-      { to: '/tyre-pool',           label: 'Tyre Pool',           icon: PackageCheck },
+      { to: '/tyre-pool',           label: 'Tyre Pool',           icon: PackageCheck, roles: ANALYTICS_ROLES },
       { to: '/parts-catalog',       label: 'Parts Catalog',       icon: Boxes },
       { to: '/requisitions',        label: 'Requisitions',        icon: ClipboardList },
       { to: '/goods-receipt',       label: 'Goods Receipt',       icon: PackageCheck },

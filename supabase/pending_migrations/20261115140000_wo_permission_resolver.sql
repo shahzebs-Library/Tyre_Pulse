@@ -7,7 +7,7 @@
 --         NEEDS THE OWNER'S YES before it goes anywhere near production.
 --
 -- DEPENDS ON: 20261113130000_cur_work_orders_manager_director_default.sql (apply that first).
--- FOLLOWED BY: 20261115160500_wo_policies_and_guards.sql (this file alone changes NO behaviour:
+-- FOLLOWED BY: 20261115140500_wo_policies_and_guards.sql (this file alone changes NO behaviour:
 --         it adds a table, seed rows and functions that nothing calls yet).
 --
 -- WHAT THIS IS
@@ -15,7 +15,10 @@
 --     work_order_role_rules(organisation_id, role, actions[], scope)
 --   organisation_id NULL = the built-in default every company starts from. A company row for the
 --   same role replaces the default for that company (an empty actions list switches the role off).
---   actions: create | edit | assign | progress | qc
+--   actions: create | edit | assign | progress | qc | close
+--            close = final closure: moving a work order to Completed or Closed (owner decision
+--            2026-11-15, round 2: technicians and Tyre Data Collectors have no final closure).
+--   qc_scope: optional narrower scope for the quality check only (Tyre Data Collector: assigned).
 --   scope:   all      every work order inside the person's company, country and site walls
 --            tyre     tyre work only (work_order_is_tyre)
 --            assigned only work orders the person is assigned to (work_order_is_assigned)
@@ -28,30 +31,37 @@
 --     5. country wall (app_can_see_country) and site wall (app_can_see_site; a work order with no
 --        site needs all-sites access): no when outside.
 --     6. a per-user revoke in Access Control (work_orders create / edit): no.
---     7. a per-user grant in Access Control (work_orders create -> create; edit -> edit, progress,
---        qc): yes, scope all.
+--     7. a per-user grant in Access Control (work_orders create -> create; edit -> edit,
+--        progress): yes, scope all. A per-user grant never gives assign, quality check or final
+--        closure to a role that has a rule: those come from the rule only.
 --     8. the role has a rule (company row, else built-in default): the rule decides, nothing else.
 --        This table is then the ONE place that role's work order rights are set; the Access
 --        Control matrix switches for work_orders create / edit no longer decide for that role.
 --     9. the role has no rule: Access Control decides as it does today (app_user_can work_orders
---        create -> create; edit -> edit, progress, qc), scope all. This keeps Tyre Data Collector
---        and Data Monitor Officer exactly where their stored matrix puts them.
+--        create -> create; edit -> edit, progress, qc, close), scope all. This keeps Data Monitor
+--        Officer exactly where its stored matrix puts it.
 --    10. otherwise no.
 --
 -- SEED (built-in defaults). Role names are profiles.role values as they exist on production
 --   (read 2026-11-15; counts are approved accounts):
---     Manager (3), Director (0)                                   all five actions, scope all
+--     Manager (3), Director (0)                                   all six actions, scope all
 --     Workshop Supervisor (7), Maintenance Supervisor (1),
---     Workshop Area Manager (0), Workshop Maintenance Area Manager (1)   all five, scope all
---     Tire Planning Engineer (1), Tyre Engineer (0, staging name)        all five, scope tyre
+--     Workshop Area Manager (0), Workshop Maintenance Area Manager (1)   all six, scope all
+--     Tire Planning Engineer (1), Tyre Engineer (0, staging name)        all six, scope tyre
+--     Tyre Data Collector (7)   create, edit, progress on every work order in their walls; quality
+--       check on work orders ASSIGNED to them only; no assign, no final closure. (Owner decision
+--       2026-11-15 round 2. Before this row the role was decided by Access Control, whose stored
+--       switches for it are create, edit, export, approve = on in every company.)
 --     Tyre Man (17), Mechanic (0), Electrician (0) and the workshop trades that already have the
 --     mobile workshop module on production (Diesel Mechanic 2, Plant Mechanic 2, Assistant Plant
 --     Mechanic 1, Hydraulic Mechanic 0 approved, Auto Electrician 1, Plant Electrician 3, Senior
 --     Technician 1, Senior Plant Technician 1, Senior Plant & Chiller Technician 1, Ice Plant
 --     Technician 3, Welder 3, Welder Cum Fabricator 1, Painter 1, Denter 1, Concrete Breaker 1,
 --     Helper Workshop 5, Helper Plant 5, Helper PMV 5, Helper Ice Plant 1)   progress, scope assigned
+--     Technicians hold progress only: they move the status of their own job (never to Completed,
+--     Closed or Cancelled) and record activity and evidence against it.
 --   Not seeded (not in the owner's decision): PMV Manager, Fleet Supervisor, Store Keeper,
---   Inspector, Reporter, Driver, Tyre Data Collector, Data Monitor Officer.
+--   Inspector, Reporter, Driver, Data Monitor Officer.
 --
 -- SECURITY
 --   Every function is SECURITY DEFINER with search_path pinned, re-checks the company itself, and is
@@ -60,17 +70,18 @@
 --
 -- VERIFY (rolled back, after applying)
 --   begin;
---   select count(*) from public.work_order_role_rules where organisation_id is null;      -- 30
+--   select count(*) from public.work_order_role_rules where organisation_id is null;      -- 31
 --   select has_function_privilege('anon','public.work_order_can(text,uuid,text,text,boolean,uuid)','EXECUTE'); -- f
 --   select public.work_order_is_tyre('Tyre Change', null, null),                           -- t
 --          public.work_order_is_tyre('Repair', null, null),                                -- f
 --          public.work_order_is_tyre('Repair', 'S1', null);                                -- t
 --   -- as a Manager (set request.jwt.claims sub; set local role authenticated):
---   --   select public.work_order_my_access();   -- scopes create/edit/assign/progress/qc = all
+--   --   select public.work_order_my_access();   -- scopes create/edit/assign/progress/qc/close = all
 --   -- as a Tyre Man: progress = assigned, everything else null.
+--   -- as a Tyre Data Collector: create/edit/progress = all, qc = assigned, assign and close null.
 --   rollback;
 --
--- ROLLBACK (only after 20261115160500 has been rolled back, which is what calls these)
+-- ROLLBACK (only after 20261115140500 has been rolled back, which is what calls these)
 --   The functions and the table are unused once the policies are restored. Removing them is a
 --   removal statement and is left to a person: remove the functions work_order_can,
 --   work_order_can_job, work_order_scope, work_order_my_access, work_order_is_assigned,
@@ -85,14 +96,17 @@ create table if not exists public.work_order_role_rules (
   role            text not null,
   actions         text[] not null default '{}',
   scope           text not null default 'all',
+  qc_scope        text,
   active          boolean not null default true,
   note            text,
   updated_by      uuid default auth.uid(),
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now(),
   constraint work_order_role_rules_scope_chk check (scope in ('all', 'tyre', 'assigned')),
+  constraint work_order_role_rules_qc_scope_chk
+    check (qc_scope is null or qc_scope in ('all', 'tyre', 'assigned')),
   constraint work_order_role_rules_actions_chk
-    check (actions <@ array['create', 'edit', 'assign', 'progress', 'qc']::text[]),
+    check (actions <@ array['create', 'edit', 'assign', 'progress', 'qc', 'close']::text[]),
   constraint work_order_role_rules_role_chk check (btrim(role) <> '')
 );
 
@@ -102,7 +116,8 @@ create unique index if not exists work_order_role_rules_org_role_uidx
 
 comment on table public.work_order_role_rules is
   'WO-1: which work order actions a role has, per company (organisation_id null = built-in default). '
-  'Read by work_order_scope(). Actions: create, edit, assign, progress, qc. Scope: all, tyre, assigned.';
+  'Read by work_order_scope(). Actions: create, edit, assign, progress, qc, close. Scope: all, tyre, '
+  'assigned. qc_scope narrows the quality check only.';
 
 alter table public.work_order_role_rules enable row level security;
 
@@ -135,40 +150,41 @@ revoke all on public.work_order_role_rules from anon;
 grant select, insert, update on public.work_order_role_rules to authenticated;
 
 -- 2. Seed: the owner's decision of 2026-11-15 as built-in defaults ------------------------------
-insert into public.work_order_role_rules (organisation_id, role, actions, scope, note)
-select null, v.role, v.actions, v.scope, 'Built-in default (owner decision 2026-11-15)'
+insert into public.work_order_role_rules (organisation_id, role, actions, scope, qc_scope, note)
+select null, v.role, v.actions, v.scope, v.qc_scope, 'Built-in default (owner decision 2026-11-15)'
 from (values
-  ('Manager',                            array['create','edit','assign','progress','qc'], 'all'),
-  ('Director',                           array['create','edit','assign','progress','qc'], 'all'),
-  ('Workshop Supervisor',                array['create','edit','assign','progress','qc'], 'all'),
-  ('Maintenance Supervisor',             array['create','edit','assign','progress','qc'], 'all'),
-  ('Workshop Area Manager',              array['create','edit','assign','progress','qc'], 'all'),
-  ('Workshop Maintenance Area Manager',  array['create','edit','assign','progress','qc'], 'all'),
-  ('Tire Planning Engineer',             array['create','edit','assign','progress','qc'], 'tyre'),
-  ('Tyre Engineer',                      array['create','edit','assign','progress','qc'], 'tyre'),
-  ('Tyre Man',                           array['progress'], 'assigned'),
-  ('Mechanic',                           array['progress'], 'assigned'),
-  ('Electrician',                        array['progress'], 'assigned'),
-  ('Diesel Mechanic',                    array['progress'], 'assigned'),
-  ('Plant Mechanic',                     array['progress'], 'assigned'),
-  ('Assistant Plant Mechanic',           array['progress'], 'assigned'),
-  ('Hydraulic Mechanic',                 array['progress'], 'assigned'),
-  ('Auto Electrician',                   array['progress'], 'assigned'),
-  ('Plant Electrician',                  array['progress'], 'assigned'),
-  ('Senior Technician',                  array['progress'], 'assigned'),
-  ('Senior Plant Technician',            array['progress'], 'assigned'),
-  ('Senior Plant & Chiller Technician',  array['progress'], 'assigned'),
-  ('Ice Plant Technician',               array['progress'], 'assigned'),
-  ('Welder',                             array['progress'], 'assigned'),
-  ('Welder Cum Fabricator',              array['progress'], 'assigned'),
-  ('Painter',                            array['progress'], 'assigned'),
-  ('Denter',                             array['progress'], 'assigned'),
-  ('Concrete Breaker',                   array['progress'], 'assigned'),
-  ('Helper Workshop',                    array['progress'], 'assigned'),
-  ('Helper Plant',                       array['progress'], 'assigned'),
-  ('Helper PMV',                         array['progress'], 'assigned'),
-  ('Helper Ice Plant',                   array['progress'], 'assigned')
-) as v(role, actions, scope)
+  ('Manager',                            array['create','edit','assign','progress','qc','close'], 'all', null),
+  ('Director',                           array['create','edit','assign','progress','qc','close'], 'all', null),
+  ('Workshop Supervisor',                array['create','edit','assign','progress','qc','close'], 'all', null),
+  ('Maintenance Supervisor',             array['create','edit','assign','progress','qc','close'], 'all', null),
+  ('Workshop Area Manager',              array['create','edit','assign','progress','qc','close'], 'all', null),
+  ('Workshop Maintenance Area Manager',  array['create','edit','assign','progress','qc','close'], 'all', null),
+  ('Tire Planning Engineer',             array['create','edit','assign','progress','qc','close'], 'tyre', null),
+  ('Tyre Engineer',                      array['create','edit','assign','progress','qc','close'], 'tyre', null),
+  ('Tyre Data Collector',                array['create','edit','progress','qc'], 'all', 'assigned'),
+  ('Tyre Man',                           array['progress'], 'assigned', null),
+  ('Mechanic',                           array['progress'], 'assigned', null),
+  ('Electrician',                        array['progress'], 'assigned', null),
+  ('Diesel Mechanic',                    array['progress'], 'assigned', null),
+  ('Plant Mechanic',                     array['progress'], 'assigned', null),
+  ('Assistant Plant Mechanic',           array['progress'], 'assigned', null),
+  ('Hydraulic Mechanic',                 array['progress'], 'assigned', null),
+  ('Auto Electrician',                   array['progress'], 'assigned', null),
+  ('Plant Electrician',                  array['progress'], 'assigned', null),
+  ('Senior Technician',                  array['progress'], 'assigned', null),
+  ('Senior Plant Technician',            array['progress'], 'assigned', null),
+  ('Senior Plant & Chiller Technician',  array['progress'], 'assigned', null),
+  ('Ice Plant Technician',               array['progress'], 'assigned', null),
+  ('Welder',                             array['progress'], 'assigned', null),
+  ('Welder Cum Fabricator',              array['progress'], 'assigned', null),
+  ('Painter',                            array['progress'], 'assigned', null),
+  ('Denter',                             array['progress'], 'assigned', null),
+  ('Concrete Breaker',                   array['progress'], 'assigned', null),
+  ('Helper Workshop',                    array['progress'], 'assigned', null),
+  ('Helper Plant',                       array['progress'], 'assigned', null),
+  ('Helper PMV',                         array['progress'], 'assigned', null),
+  ('Helper Ice Plant',                   array['progress'], 'assigned', null)
+) as v(role, actions, scope, qc_scope)
 where not exists (
   select 1 from public.work_order_role_rules r
    where r.organisation_id is null and lower(btrim(r.role)) = lower(btrim(v.role)));
@@ -242,7 +258,7 @@ begin
    where id = v_uid and coalesce(approved, false) = true and coalesce(locked, false) = false;
   if not found then return null; end if;
   if v_super or v_role = 'Admin' then return 'all'; end if;
-  if v_action not in ('create', 'edit', 'assign', 'progress', 'qc') then return null; end if;
+  if v_action not in ('create', 'edit', 'assign', 'progress', 'qc', 'close') then return null; end if;
 
   v_cap := case when v_action = 'create' then 'create' else 'edit' end;
   if exists (
@@ -251,15 +267,17 @@ begin
        and g.effect = 'revoke' and (g.expires_at is null or g.expires_at > now())
   ) then return null; end if;
 
-  -- A per-user grant in Access Control adds the job-level rights for that one person.
-  if v_action <> 'assign' and exists (
+  -- A per-user grant in Access Control adds create, edit and progress for that one person. It never
+  -- adds assigning, the quality check or final closure: for a role with a rule those come from the
+  -- rule alone (a role with no rule falls through to Access Control below, as before).
+  if v_action in ('create', 'edit', 'progress') and exists (
     select 1 from public.user_access_grants g
      where g.user_id = v_uid and g.module_key = 'work_orders' and g.capability = v_cap
        and g.effect = 'grant' and (g.expires_at is null or g.expires_at > now())
   ) then return 'all'; end if;
 
   -- A role with a rule is decided by its rule alone (company row first, else built-in default).
-  select r.actions, r.scope into v_rule
+  select r.actions, r.scope, r.qc_scope into v_rule
     from public.work_order_role_rules r
    where r.active is true
      and lower(btrim(r.role)) = lower(btrim(v_role))
@@ -267,12 +285,15 @@ begin
    order by (r.organisation_id is not null) desc
    limit 1;
   if found then
-    if v_action = any (v_rule.actions) then return v_rule.scope; end if;
+    if v_action = any (v_rule.actions) then
+      if v_action = 'qc' then return coalesce(v_rule.qc_scope, v_rule.scope); end if;
+      return v_rule.scope;
+    end if;
     return null;
   end if;
 
   -- A role with no rule: Access Control decides, as it does today.
-  if v_action in ('create', 'edit', 'progress', 'qc') and public.app_user_can('work_orders', v_cap) then
+  if v_action in ('create', 'edit', 'progress', 'qc', 'close') and public.app_user_can('work_orders', v_cap) then
     return 'all';
   end if;
   return null;
@@ -280,7 +301,7 @@ end;
 $function$;
 
 -- 5. The whole answer for one work order ------------------------------------------------------
--- p_action: create | edit | assign | progress | qc | delete | override_closed | approved_cost
+-- p_action: create | edit | assign | progress | qc | close | delete | override_closed | approved_cost
 create or replace function public.work_order_can(
   p_action text, p_org uuid, p_country text, p_site text, p_is_tyre boolean, p_job_id uuid)
 returns boolean
@@ -350,6 +371,7 @@ as $function$
     'assign',   public.work_order_scope('assign'),
     'progress', public.work_order_scope('progress'),
     'qc',       public.work_order_scope('qc'),
+    'close',    public.work_order_scope('close'),
     'all_sites', public.app_sees_all_sites());
 $function$;
 

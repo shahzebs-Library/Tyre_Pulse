@@ -10,6 +10,8 @@ import { SettingsProvider, useSettings } from './contexts/SettingsContext'
 import { TenantProvider } from './contexts/TenantContext'
 import { CommandPaletteProvider } from './contexts/CommandPaletteContext'
 import ProtectedRoute, { RoleRoute, ModuleRoute, RouteLoading, ModuleStatusGate } from './components/ProtectedRoute'
+import { useWorkOrderAccess } from './hooks/useWorkOrderAccess'
+import { TECHNICIAN_ROLES } from './lib/workOrderAccess'
 import { useAuth } from './contexts/AuthContext'
 import Layout from './components/Layout'
 import { isSystemConfigLoaded, shouldUseNewShell, NEW_SHELL_KEY } from './lib/api/systemConfig'
@@ -280,6 +282,7 @@ const ForecastingEngine      = lazy(() => import('./pages/ForecastingEngine'))
 const ContinuousImprovement  = lazy(() => import('./pages/ContinuousImprovement'))
 const ErpSync                = lazy(() => import('./pages/ErpSync'))
 const WorkOrders             = lazy(() => import('./pages/WorkOrders'))
+const MyJobs                 = lazy(() => import('./pages/MyJobs'))
 const RepairRequests         = lazy(() => import('./pages/RepairRequests'))
 const WorkshopLive           = lazy(() => import('./pages/WorkshopLive'))
 const WorkshopAbsence        = lazy(() => import('./pages/WorkshopAbsence'))
@@ -417,6 +420,24 @@ function PublicRootRoute() {
 
 // ── Checklist-only access gate ────────────────────────────────────────────────
 // Checklist roles stay within checklists unless Meter Logs access is granted.
+// Technicians (Tyre Man and the workshop trades) work on their own assigned jobs. Once the work
+// order resolver is on the database and answers "assigned jobs only", /work-orders sends them to
+// My Jobs. Every other role renders the register at once, with no extra wait. Not a boundary: the
+// database decides every write.
+const TECHNICIAN_ROLE_KEYS = new Set(TECHNICIAN_ROLES.map((r) => r.toLowerCase()))
+function TechnicianJobsRedirect({ children }) {
+  const { loading, assignedOnly } = useWorkOrderAccess()
+  if (loading) return <RouteLoading />
+  if (assignedOnly) return <Navigate to="/my-jobs" replace />
+  return children
+}
+function WorkOrdersEntry({ children }) {
+  const { profile } = useAuth()
+  const role = String(profile?.role || '').trim().toLowerCase()
+  if (!TECHNICIAN_ROLE_KEYS.has(role)) return children
+  return <TechnicianJobsRedirect>{children}</TechnicianJobsRedirect>
+}
+
 function ChecklistOnlyGate({ children }) {
   const { profile, hasPermission } = useAuth()
   const loc = useLocation()
@@ -677,7 +698,8 @@ function MainApp() {
                       <Route path="/ai-administration"    element={<LegacyRedirect to="/console/ai-admin" />} />
                       <Route path="/gate-pass"            element={<Safe><ModuleRoute moduleKey="gate_pass"><GatePass /></ModuleRoute></Safe>} />
                       <Route path="/serial-tracker"       element={<Safe><RoleRoute allowed={['Admin']} moduleKey="serial_tracker"><ModuleRoute moduleKey="serial_tracker"><SerialTracker /></ModuleRoute></RoleRoute></Safe>} />
-                      <Route path="/work-orders"          element={<Safe><ModuleRoute moduleKey="work_orders"><WorkOrders /></ModuleRoute></Safe>} />
+                      <Route path="/work-orders"          element={<Safe><ModuleRoute moduleKey="work_orders"><WorkOrdersEntry><WorkOrders /></WorkOrdersEntry></ModuleRoute></Safe>} />
+                      <Route path="/my-jobs"              element={<Safe><ModuleRoute moduleKey="work_orders"><MyJobs /></ModuleRoute></Safe>} />
                       <Route path="/workshop-live"        element={<Safe><RoleRoute allowed={['Admin','Manager','Director','Maintenance Supervisor']}><ModuleRoute moduleKey="workshop_live"><WorkshopLive /></ModuleRoute></RoleRoute></Safe>} />
                       <Route path="/workshop-absence"     element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><WorkshopAbsence /></RoleRoute></Safe>} />
                       <Route path="/workshop-analytics"   element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><WorkshopAnalytics /></RoleRoute></Safe>} />

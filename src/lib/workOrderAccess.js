@@ -2,8 +2,9 @@
  * Work order rights, as the screen needs them.
  *
  * This is the MIRROR of the database resolver drafted in
- *   supabase/pending_migrations/20261115160000_wo_permission_resolver.sql   (work_order_can, seed)
- *   supabase/pending_migrations/20261115160500_wo_policies_and_guards.sql   (wo_write_guard)
+ *   supabase/pending_migrations/20261115140000_wo_permission_resolver.sql   (work_order_can, seed)
+ *   supabase/pending_migrations/20261115140500_wo_policies_and_guards.sql   (wo_write_guard)
+ *   supabase/pending_migrations/20261115141000_wo_supervisor_module_visibility.sql (menu switches)
  * It exists so a control the database is going to refuse is disabled with the
  * reason beside it. It is NOT a security boundary: the policies and the guard
  * are. Change the SQL and this file together; src/test/workOrderAccessMirror.test.js
@@ -18,7 +19,14 @@
  */
 
 /** Actions a company can give a role. */
-export const WO_ACTIONS = Object.freeze(['create', 'edit', 'assign', 'progress', 'qc'])
+export const WO_ACTIONS = Object.freeze(['create', 'edit', 'assign', 'progress', 'qc', 'close'])
+
+/**
+ * Statuses a work order ends in. Moving a job to one of them is final closure and
+ * needs the `close` right (owner decision 2026-11-15, round 2: technicians and
+ * Tyre Data Collectors do not close work orders).
+ */
+export const CLOSING_STATUS_KEYS = Object.freeze(['completed', 'closed', 'cancelled', 'canceled'])
 
 /** Never configurable: Admin and super admin only. */
 export const WO_ADMIN_ONLY_ACTIONS = Object.freeze(['delete', 'override_closed', 'approved_cost'])
@@ -46,24 +54,28 @@ export const WO_COLUMN_CLASS = Object.freeze({
     'waiting_parts_hours', 'waiting_manpower_hours', 'odometer', 'vor', 'vor_since', 'parts_used'],
 })
 
-const ALL_FIVE = ['create', 'edit', 'assign', 'progress', 'qc']
+const ALL_SIX = ['create', 'edit', 'assign', 'progress', 'qc', 'close']
 const TECH = ['progress']
-const rule = (role, actions, scope) => Object.freeze({ role, actions: Object.freeze(actions), scope })
+const rule = (role, actions, scope, qcScope = null) =>
+  Object.freeze({ role, actions: Object.freeze(actions), scope, qcScope })
 
 /**
  * The built-in defaults every company starts from (owner decision 2026-11-15).
- * MIRROR of the seed in 20261115160000. A company can replace any row for
+ * MIRROR of the seed in 20261115140000. A company can replace any row for
  * itself in work_order_role_rules; the server answer always wins over this list.
  */
 export const DEFAULT_ROLE_RULES = Object.freeze([
-  rule('Manager', ALL_FIVE, 'all'),
-  rule('Director', ALL_FIVE, 'all'),
-  rule('Workshop Supervisor', ALL_FIVE, 'all'),
-  rule('Maintenance Supervisor', ALL_FIVE, 'all'),
-  rule('Workshop Area Manager', ALL_FIVE, 'all'),
-  rule('Workshop Maintenance Area Manager', ALL_FIVE, 'all'),
-  rule('Tire Planning Engineer', ALL_FIVE, 'tyre'),
-  rule('Tyre Engineer', ALL_FIVE, 'tyre'),
+  rule('Manager', ALL_SIX, 'all'),
+  rule('Director', ALL_SIX, 'all'),
+  rule('Workshop Supervisor', ALL_SIX, 'all'),
+  rule('Maintenance Supervisor', ALL_SIX, 'all'),
+  rule('Workshop Area Manager', ALL_SIX, 'all'),
+  rule('Workshop Maintenance Area Manager', ALL_SIX, 'all'),
+  rule('Tire Planning Engineer', ALL_SIX, 'tyre'),
+  rule('Tyre Engineer', ALL_SIX, 'tyre'),
+  // Create, update and document anywhere in their walls; quality check on assigned
+  // work orders only; no assigning and no final closure.
+  rule('Tyre Data Collector', ['create', 'edit', 'progress', 'qc'], 'all', 'assigned'),
   rule('Tyre Man', TECH, 'assigned'),
   rule('Mechanic', TECH, 'assigned'),
   rule('Electrician', TECH, 'assigned'),
@@ -98,6 +110,12 @@ export function isTyreWorkOrder(row) {
     || !blank(row.tyre_serial) || !blank(row.tyre_position)
 }
 
+/** The technician roles: progress on their own assigned job, nothing else. */
+export const TECHNICIAN_ROLES = Object.freeze(
+  DEFAULT_ROLE_RULES.filter((r) => r.scope === 'assigned' && r.actions.length === 1 && r.actions[0] === 'progress')
+    .map((r) => r.role),
+)
+
 /** A closed work order (Completed, Closed, Cancelled). */
 export function isClosedWorkOrder(row) {
   return !!row && CLOSED_STATUS_KEYS.includes(norm(row.status))
@@ -107,7 +125,18 @@ export function isClosedWorkOrder(row) {
 export function defaultScopeForRole(role, action, rules = DEFAULT_ROLE_RULES) {
   const r = rules.find((x) => norm(x.role) === norm(role))
   if (!r) return null
-  return r.actions.includes(action) ? r.scope : null
+  if (!r.actions.includes(action)) return null
+  return action === 'qc' ? (r.qcScope || r.scope) : r.scope
+}
+
+/**
+ * Is this person limited to their own assigned jobs (a technician)? True only
+ * when the server answered and the single right is progress on assigned work.
+ * Such a person gets the My Jobs screen instead of the full work order register.
+ */
+export function isAssignedOnlyAccess(access) {
+  if (!access || access.admin || access.provisioned !== true) return false
+  return access.progress === 'assigned' && !access.create && !access.edit && !access.assign && !access.qc
 }
 
 /**
@@ -136,6 +165,7 @@ export function legacyWorkOrderAccess({ role, isSuperAdmin = false, serverCaps =
     edit,
     progress: edit,
     qc: edit,
+    close: edit,
     assign: admin || r === 'manager' || r === 'director' ? 'all' : null,
     all_sites: true,
   }
@@ -152,6 +182,7 @@ export function serverWorkOrderAccess(json) {
     assign: scope(json?.assign),
     progress: scope(json?.progress),
     qc: scope(json?.qc),
+    close: scope(json?.close),
     all_sites: json?.all_sites === true,
   }
 }
@@ -170,7 +201,7 @@ function scopeAllows(scope, row, ctx) {
 /**
  * May this person do `action` on `row`?
  *
- * @param {string} action  create | edit | assign | progress | qc | delete | override_closed | approved_cost
+ * @param {string} action  create | edit | assign | progress | qc | close | delete | override_closed | approved_cost
  * @param {object|null} access  from serverWorkOrderAccess / legacyWorkOrderAccess; null = not loaded
  * @param {object} [row]  the work order (omit for "may I create at all")
  * @param {{userId?:string, assignedJobIds?:Set<string>}} [ctx]
@@ -195,7 +226,7 @@ export function canWorkOrder(action, access, row, ctx) {
  *
  * @param {string[]} changedKeys
  * @param {{newStatus?:string}} [opts]
- * @returns {{adminOnly:boolean, cost:boolean, edit:boolean, assign:boolean, qc:boolean, progress:boolean}}
+ * @returns {{adminOnly:boolean, cost:boolean, edit:boolean, assign:boolean, qc:boolean, progress:boolean, close:boolean}}
  */
 export function requiredActionsForChange(changedKeys, { newStatus } = {}) {
   const C = WO_COLUMN_CLASS
@@ -208,7 +239,8 @@ export function requiredActionsForChange(changedKeys, { newStatus } = {}) {
   const progress = keys.some((k) => C.progress.includes(k) && !(k === 'status' && statusIsAssigning))
   const edit = keys.some((k) => !C.progress.includes(k) && !C.assign.includes(k) && !C.qc.includes(k))
     || (keys.includes('status') && ['cancelled', 'canceled'].includes(statusKey))
-  return { adminOnly: has(C.admin), cost: has(C.cost), edit, assign, qc: has(C.qc), progress }
+  const close = keys.includes('status') && CLOSING_STATUS_KEYS.includes(statusKey)
+  return { adminOnly: has(C.admin), cost: has(C.cost), edit, assign, qc: has(C.qc), progress, close }
 }
 
 export const WO_REFUSAL = Object.freeze({
@@ -222,6 +254,8 @@ export const WO_REFUSAL = Object.freeze({
   assign: 'You are not allowed to assign this work order.',
   qc: 'You are not allowed to record the quality check for this work order.',
   progress: 'You are not allowed to record progress on this work order.',
+  close: 'You cannot close a work order. Move it to Quality Inspection and a supervisor will close it.',
+  qcAssignedOnly: 'You can record the quality check on work orders assigned to you only.',
   tyreOnly: 'Your role manages tyre work orders only.',
   assignedOnly: 'You can update work orders assigned to you only.',
   taskStatusOnly: 'You can update the status of your task only. Ask a supervisor to change the task itself.',
@@ -236,7 +270,12 @@ export function workOrderRefusalReason(action, access, row, ctx) {
   if (access?.provisioned && action !== 'create' && isClosedWorkOrder(row)) return WO_REFUSAL.closed
   const scope = action === 'progress' ? (access?.progress || access?.edit) : access?.[action]
   if (scope === 'tyre') return action === 'create' ? WO_REFUSAL.createTyreOnly : WO_REFUSAL.tyreOnly
-  if (scope === 'assigned') return WO_REFUSAL.assignedOnly
+  if (scope === 'assigned') return action === 'qc' ? WO_REFUSAL.qcAssignedOnly : WO_REFUSAL.assignedOnly
+  // "You can record progress but not change details" is only true when progress is allowed here.
+  // A technician looking at somebody else's job is told the real reason instead.
+  if (action === 'edit' && canWorkOrder('progress', access, row, ctx) === false) {
+    return access?.progress === 'assigned' ? WO_REFUSAL.assignedOnly : WO_REFUSAL.progress
+  }
   return WO_REFUSAL[action] || WO_REFUSAL.edit
 }
 
@@ -255,13 +294,34 @@ export function checkWorkOrderChange(access, row, changedKeys, { newStatus, ctx 
     if (need.cost && row?.execution_approval_id) return { ok: false, reason: WO_REFUSAL.approvedCost }
   }
   let unknown = false
-  for (const action of ['edit', 'assign', 'qc', 'progress']) {
+  for (const action of ['edit', 'assign', 'qc', 'close', 'progress']) {
     if (!need[action]) continue
     const ok = canWorkOrder(action, access, row, ctx)
     if (ok === false) return { ok: false, reason: workOrderRefusalReason(action, access, row, ctx) }
     if (ok === null) unknown = true
   }
   return { ok: unknown ? null : true, reason: '' }
+}
+
+/**
+ * The right a move to `newStatus` needs: Cancelled needs edit and close, Completed
+ * and Closed need close, any other status needs progress.
+ * @returns {string[]}
+ */
+export function actionsForStatusMove(newStatus) {
+  const k = norm(newStatus)
+  if (k === 'cancelled' || k === 'canceled') return ['edit', 'close']
+  if (CLOSING_STATUS_KEYS.includes(k)) return ['progress', 'close']
+  return ['progress']
+}
+
+/** Why a move to `newStatus` is refused for this person ('' when allowed or unknown). */
+export function statusMoveRefusalReason(newStatus, access, row, ctx) {
+  for (const action of actionsForStatusMove(newStatus)) {
+    const why = workOrderRefusalReason(action, access, row, ctx)
+    if (why) return why
+  }
+  return ''
 }
 
 /** Job types the person may pick when creating (tyre scope narrows the list). */

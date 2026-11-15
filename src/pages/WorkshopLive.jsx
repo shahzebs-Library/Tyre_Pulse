@@ -500,6 +500,12 @@ export default function WorkshopLive() {
   // ── QC sign-off (pure transition from workshopTasks.qcOutcome) ────────────────
   const onQcPass = (job) => {
     const t = qcOutcome('pass') // { status:'Completed', qc_status:'passed' }
+    // A person who may record the quality check but not close a work order (a Tyre Data
+    // Collector on a job assigned to them) records the result only; a supervisor closes it.
+    if (!woRights.can('close', job)) {
+      mutate(workshop.setQcStatus(job.id, t.qc_status), 'Quality check recorded. A supervisor closes the work order.')
+      return
+    }
     mutate(
       workshop.setQcOutcome(job.id, t),
       'QC passed. Job completed.',

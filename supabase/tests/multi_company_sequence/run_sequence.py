@@ -27,6 +27,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument('--host', default='127.0.0.1'); ap.add_argument('--port', default='54329')
 ap.add_argument('--template', default='tyrepulse_staging'); ap.add_argument('--db', default='tp_commercial2')
 ap.add_argument('--out'); ap.add_argument('--keep', action='store_true', help='reuse the database instead of recreating it')
+ap.add_argument('--only-isolation', action='store_true', help='with --keep: run only the company isolation tests on an already migrated copy')
 args = ap.parse_args()
 if args.host not in ('127.0.0.1', 'localhost'):
     sys.exit('Refusing: this runner only talks to a local database.')
@@ -178,6 +179,8 @@ def apply(step, kind):
           'unchanged' if not changed else 'CHANGED ' + '; '.join(changed[:6])))
     return ok
 
+if args.only_isolation and not args.keep:
+    sys.exit('--only-isolation needs --keep')
 if not args.keep:
     for s in seq['steps']:
         if not apply(s, 'sequence'): break
@@ -198,6 +201,13 @@ def tx():
     conn.rollback()
     try: yield
     finally: conn.rollback()
+
+import isolation_tests
+if args.only_isolation:
+    isolation_tests.run(sys.modules[__name__])
+    failed = [t for t in results if not t['ok']]
+    print('\nISOLATION ONLY  tests %d passed, %d failed' % (len(results) - len(failed), len(failed)))
+    sys.exit(1 if failed else 0)
 
 print('\nTEN-6b plan limits and the enforcement switch')
 with tx():
@@ -424,6 +434,9 @@ with tx():
     s = signup({'username': 'alpha.driver', 'employee_id': 'ZZ9A', 'invite_token': tok}, 'alpha.driver+beta@users.tyrepulse.app')
     rec('TEN-9b', 'BEFORE the hold step: a second company cannot take a username the current company uses (refused, lands nowhere)',
         isinstance(s, str) and s.startswith('ERROR'), s)
+
+# ------------------------------------------------- company isolation, on the sequence as it would ship
+isolation_tests.run(sys.modules[__name__])
 
 hold_steps = []
 print('\nHOLD step (point of no easy return)')

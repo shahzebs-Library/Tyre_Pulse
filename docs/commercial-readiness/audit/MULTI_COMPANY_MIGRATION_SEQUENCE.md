@@ -46,13 +46,18 @@ role names, 0 per-company role rows, 0 repeated usernames, 765 of 781 accounts o
 | 23 | 20261115161000 ten7c role matrix readable by own company only (new) | 8 | pass | unchanged |
 | 24 | 20261115162000 ten8b invitation preview, company code (new) | 10 | pass | unchanged |
 | 25 | 20261115163000 ten9b sign-in resolver with company code (new) | 24, 8 | pass | unchanged |
+| 26 | 20261115164000 ten10 company file folders (new) | none | pass | unchanged |
+| 27 | 20261115165000 ten11 AI spend and budget per company (new) | 8 | pass | unchanged |
+| 28 | 20261115166000 ten12 company administration record (new) | 10, 14 | pass | unchanged |
+| 29 | 20261115167000 ten13 company export of own data (new) | 28 | pass | unchanged |
 | HOLD | 20261115169000 ten9c per-company usernames (new) | 25 and client work | pass | unchanged |
 
 Steps 14 to 21 (the COM group) were also applied alone on a fresh copy, 8 of 8 pass, so they do not depend on
 the TEN group and can ship before it.
 
-26 of 26 applied, 0 failed. 0 steps changed any of the 191 current-company facts.
-Round 2 draft tests: 87 of 87 pass. Isolation suite (`supabase/staging/tests/run_tests.py`, sections A to D)
+30 of 30 applied (29 steps and the HOLD step), 0 failed. 0 steps changed any of the 191 current-company facts.
+Round 2 draft tests: 87 of 87 pass. Company isolation and first-use tests (steps 26 to 29 and the whole
+sequence): 93 of 93 pass. Status per finding: `TENANCY_STATUS.md`. Isolation suite (`supabase/staging/tests/run_tests.py`, sections A to D)
 on the final database: 35 of 35 pass; findings TEN-1 to TEN-5 and TEN-9 not reproduced, TEN-6, TEN-7 and
 TEN-8 open only on the two switches that ship off. All of this is synthetic data only.
 
@@ -103,6 +108,10 @@ that exists elsewhere (the sign-up is refused and lands nowhere).
 | 23 ten7c | `alter policy module_permissions_own_company_read on public.module_permissions using (true);` |
 | 24 ten8b | re-run the `_signup_context` body from step 10; revoke `get_invitation_preview` from anon |
 | 25 ten9b | re-create the two functions from `public._fn_backup_ten9b` |
+| 26 ten10 | `alter policy storage_company_folder_wall on storage.objects using (true) with check (true);` |
+| 27 ten11 | the reverse replacement block in its header |
+| 28 ten12 | disable the six `trg_org_audit_*` triggers |
+| 29 ten13 | revoke execute on the two functions from authenticated |
 | HOLD | the five statements in its header, only while no cross-company duplicate exists |
 
 ## Not verified

@@ -62,8 +62,19 @@ NOT applied. Order, dependencies, the check after each step and the point of no 
   company code, and a code that never grants membership.
 - `20261115163000_ten9b_sign_in_company_code.sql` — new. One sign-in resolver; "company code/name";
   the current company keeps signing in with a bare name.
+- `20261115164000_ten10_storage_company_folders.sql` : new. A file path that starts with a company id can be
+  used only by that company (restrictive policy on `storage.objects`; legacy paths untouched).
+- `20261115165000_ten11_ai_spend_per_company.sql` : new. AI month spend and budget per company in
+  `ai_orchestrator_reserve_budget`; the current company never gets a company cap. Patches the live function
+  body by three anchored replacements. Edge functions chat-ai and ai-tyre-inspection are NOT covered.
+- `20261115166000_ten12_company_admin_audit.sql` : new. `org_admin_events` (append-only, written by triggers)
+  and `get_org_admin_audit()` for the company Admin. Creates a table, ends with the reader policies call.
+- `20261115167000_ten13_company_export_own_data.sql` : new. `org_export_manifest()` and `org_export_page()`:
+  a company Admin reads the company's own rows of the export list. Reads only. Purge stays HOLD.
 - `20261115169000_ten9c_HOLD_per_company_usernames.sql` — new, HOLD. Removes the global username and
   employee id keys. Contains `drop`. Point of no easy return; not part of the sequence proper.
+
+Status per finding (TEN-1 to TEN-13): `docs/commercial-readiness/audit/TENANCY_STATUS.md`.
 
 ## Tyre position service and ERP observation follow-up (2026-11-15)
 

@@ -15,7 +15,8 @@ PR #508) running on port 54329, `psql`, and a Python with `psycopg2` (`/usr/bin/
 |---|---|
 | `sequence.json` | The ordered list of drafts, what each needs, and the HOLD step |
 | `prepare_production_shape.sql` | Makes the copy resemble production: current company with no subscription row and above the trial caps, a custom role stored as global matrix rows, made-up sign-in addresses |
-| `run_sequence.py` | Copy, prepare, snapshot, apply each draft, re-snapshot and compare, run the round 2 tests, apply the HOLD step, test again |
+| `run_sequence.py` | Copy, prepare, snapshot, apply each draft, re-snapshot and compare, run the round 2 tests and the isolation tests, apply the HOLD step, test again |
+| `isolation_tests.py` | Company isolation on the migrated copy: files and photos, accident notifications, AI usage and budgets, invitations and employee identity, plan and limits, export and offboarding, administration record, and first use of the empty company |
 
 The "current company" snapshot is 191 facts: for each of its 9 synthetic users the md5 of
 `get_user_module_permissions()`, the md5 of `app_user_can` over every module and six capabilities, the
@@ -24,5 +25,12 @@ can add a vehicle; what every username and employee id resolves to at sign-in; w
 invitation and a service load with no session land; and count and checksum of stored business data per
 company (so a draft that rewrites history is caught).
 
-Result of the run on 2026-11-15 is recorded in
-`docs/commercial-readiness/audit/MULTI_COMPANY_MIGRATION_SEQUENCE.md`.
+To re-run only the isolation tests on a copy that is already migrated:
+
+```
+/usr/bin/python3 supabase/tests/multi_company_sequence/run_sequence.py --db tp_saas2 --keep --only-isolation
+```
+
+Result of the run on 2026-11-15: 30 of 30 drafts applied, 0 steps changed the current company, 180 of 180
+tests pass. Order and switches are in `docs/commercial-readiness/audit/MULTI_COMPANY_MIGRATION_SEQUENCE.md`;
+status per finding is in `docs/commercial-readiness/audit/TENANCY_STATUS.md`.

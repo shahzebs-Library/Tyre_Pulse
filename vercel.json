@@ -136,6 +136,7 @@
   ],
   "git": {
     "deploymentEnabled": {
+      "claude/ops-docs-only-skip-7rxp2t": false,
       "claude/workflow-main-7rxp2t": false,
       "claude/prodb-main-7rxp2t": false,
       "claude/console-main-7rxp2t": false,

@@ -9,7 +9,7 @@
  *
  * `canonicalToSlotId` is the INVERSE of `legacyPositionCode` in
  * src/lib/tyrePositions.js: the diagram relabels each slot id to its canonical
- * code via `legacyPositionCode(layoutKey, slotId)`, so inverting that mapping
+ * code via the legacyPositionCode table, so inverting that mapping
  * over the layout's slot set turns a stored position back into the slot id the
  * diagram hit-tests on. Returns null when no slot matches so callers degrade
  * gracefully (render the diagram without lighting that wheel).
@@ -17,8 +17,8 @@
  * Everything here is deterministic (inject `now` for date math) and safe for
  * vitest / Node.
  */
-import { legacyPositionCode, canonicalCode } from './tyrePositions'
 import { resolveLayoutKey, isTyrelessEquipment, LAYOUT_SLOTS, layoutForAsset } from './vehicleTyreLayout'
+import { slotForPosition, slotCode } from './tyrePositionService'
 import { toLifetimeTyres, withOnePricePerTyre, tyreKey, lifetimeCpk, CPK_KIND, CPK_KIND_LABEL } from './tyreLifetime'
 
 /** Serial across the three storage columns (mirrors tyrePassport.serialOfRecord). */
@@ -212,7 +212,7 @@ export function vehicleTypeIsKnown(vt) {
 
 /** The canonical GCC code a layout slot displays (LHF1, LHCO, RHR1-O ...). */
 export function slotDisplayCode(layoutKey, slot) {
-  return canonicalCode(legacyPositionCode(layoutKey, slot)) || slot
+  return slotCode(layoutKey, slot)
 }
 
 /**
@@ -284,22 +284,9 @@ export function displayPositionCode(vehicleTypeHint, position) {
 export function canonicalToSlotId(vehicleTypeKey, positionCode) {
   if (!positionCode) return null
   const layoutKey = resolveLayoutKey(vehicleTypeKey)
-  const slots = BUILTIN_LAYOUT_SLOTS[layoutKey] || BUILTIN_LAYOUT_SLOTS.Pickup
-  // A stored slot id that is already one of this layout's slots wins outright. Without this,
-  // the 4-wheel layouts' 'RR' (rear right) was re-read as the canonical code 'RHR' (the parser
-  // takes R+R for side+axle), never matched 'RHR1', and was printed as 'RR' on reports.
-  const rawU = String(positionCode).trim().toUpperCase()
-  const exact = slots.find((slot) => slot.toUpperCase() === rawU)
-  if (exact) return exact
-  const target = canonicalCode(String(positionCode).trim())
-  if (!target) return null
-  const targetU = String(target).toUpperCase()
-  for (const slot of slots) {
-    // Already a slot id? (e.g. inspection-stored internal id)
-    if (slot.toUpperCase() === targetU) return slot
-    const label = legacyPositionCode(layoutKey, slot)
-    const canon = canonicalCode(label)
-    if (canon && String(canon).toUpperCase() === targetU) return slot
-  }
-  return null
+  // One resolver for the whole app (tyrePositionService). This keeps the
+  // display contract it always had: an exact slot of the layout wins (so the
+  // 4-wheel layouts' 'RR' is rear right, not the code 'RHR'), else an exact
+  // canonical code, else null and the caller keeps the stored text.
+  return slotForPosition(BUILTIN_LAYOUT_SLOTS[layoutKey] ? layoutKey : 'Pickup', positionCode)
 }

@@ -124,6 +124,9 @@ export default function ObservationErpEvidence({ observation }) {
                   </details>}
                   {c.reasons.map(r => <p key={r} className="text-xs text-[var(--text-secondary)]">Evidence: {r}</p>)}
                   {c.conflicts.map(r => <p key={r} className="text-xs text-red-500">Conflict: {r}</p>)}
+                  {(c.notes || []).map(r => <p key={r} className="text-xs text-[var(--text-secondary)]">Note: {r}</p>)}
+                  {c.evidenceSummary.canonicalPosition && <p className="text-xs text-[var(--text-secondary)]">Wheel on this vehicle: {c.evidenceSummary.canonicalPosition}</p>}
+                  {c.status === 'manual_review' && <p className="text-xs text-amber-500">Pending manual review. The wheel could not be matched on this vehicle, so this job card cannot be confirmed here.</p>}
                   {c.status === 'insufficient' && <p className="text-xs text-amber-500">Insufficient evidence for confirmation.</p>}
                   {actionId && !linked && !linkError && (
                     <div className="space-y-2">

@@ -189,6 +189,15 @@ export function resolveLayoutKey(vehicleType, assetNo) {
   return resolveOne(vehicleType) ?? resolveOne(assetNo) ?? 'Pickup'
 }
 
+/**
+ * The same resolution WITHOUT the pickup fallback: null when neither the type
+ * nor the asset number identifies a machine. Position matching (see
+ * tyrePositionService) must not place a wheel on a layout nobody established.
+ */
+export function resolveLayoutKeyStrict(vehicleType, assetNo) {
+  return resolveOne(vehicleType) ?? resolveOne(assetNo) ?? null
+}
+
 // ── Per-machine axle counts ──────────────────────────────────────────────────
 // Some types come in more than one build (4- and 5-axle concrete pumps), so the
 // type alone cannot pick the layout. The fleet register records axle_count per

@@ -4,6 +4,7 @@
  */
 import { supabase, unwrap, ServiceError } from './_client'
 import { matchObservationToErp } from '../erpObservationMatch'
+import { getCustomLayoutMap } from './vehicleDiagrams'
 
 const WO_FIELDS = 'id,work_order_no,asset_no,country,site,description,notes,status,opened_at,completed_at'
 const TYRE_FIELDS = 'id,asset_no,country,serial_no,position,tyre_position,job_card,issue_date,removal_date,status'
@@ -14,13 +15,24 @@ export async function findObservationErpEvidence({ inspection, finding }) {
     throw new ServiceError('Saved inspection, country, asset, and tyre position are required for ERP matching.')
   }
   const country = inspection.country, asset = inspection.asset_no
-  const [wo, tyre] = await Promise.all([
+  const [wo, tyre, fleet, customLayouts] = await Promise.all([
     supabase.from('work_orders').select(WO_FIELDS).eq('country', country).eq('asset_no', asset)
       .order('opened_at', { ascending: false }).limit(100),
     supabase.from('tyre_records').select(TYRE_FIELDS).eq('country', country).eq('asset_no', asset)
       .order('issue_date', { ascending: false }).limit(400),
+    // The asset's OWN registered build decides the wheel layout both sides are read on.
+    supabase.from('vehicle_fleet').select('vehicle_type,axle_count').eq('country', country).eq('asset_no', asset).limit(2),
+    getCustomLayoutMap(),
   ])
   const workOrders = unwrap(wo) || [], fitments = unwrap(tyre) || []
+  const fleetRows = unwrap(fleet) || []
+  // Registered twice in one country: which machine is not known, so no layout is assumed.
+  const machine = fleetRows.length === 1 ? fleetRows[0] : null
+  const layoutContext = {
+    vehicleType: machine?.vehicle_type || '',
+    axleCount: machine?.axle_count ?? null,
+    customLayouts,
+  }
   const jobNumbers = [...new Set(workOrders.map(w => w.work_order_no).filter(Boolean))].slice(0, 100)
   const expenses = []
   for (let i = 0; i < jobNumbers.length; i += 30) {
@@ -29,7 +41,7 @@ export async function findObservationErpEvidence({ inspection, finding }) {
       .eq('country', country).eq('asset_code', asset).in('work_order_no', chunk).limit(500)
     expenses.push(...(unwrap(rows) || []))
   }
-  const candidates = matchObservationToErp({ inspection, finding, workOrders, fitments, expenses })
+  const candidates = matchObservationToErp({ inspection, finding, workOrders, fitments, expenses, layoutContext })
   const existingJobCards = new Set(workOrders.map(w => String(w.work_order_no || '').trim().toUpperCase()))
   const orphanTyreJobCards = [...new Set(fitments.map(t => String(t.job_card || '').trim()).filter(Boolean))]
     .filter(number => !existingJobCards.has(number.toUpperCase()))

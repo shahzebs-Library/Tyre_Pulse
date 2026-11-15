@@ -502,13 +502,45 @@ export function pressureReadings(inspection) {
  * median and is counted in NEITHER the numerator nor the denominator. When
  * nothing is measurable the result is null - never a flattering percentage.
  *
+ * WHAT THIS NUMBER IS CALLED (ENG-9, audit case C31b). With no target pressure
+ * it is PRESSURE CONSISTENCY: four tyres all at 60 psi on a vehicle that needs
+ * 120 score 100% consistent, and that must never be read as "100% compliant".
+ * So the result carries `metric: 'consistency'`, `label: 'Pressure consistency'`
+ * and `consistencyPct`; `compliancePct` is kept as the SAME consistency value
+ * for existing callers and every screen labels it from `label`.
+ * TRUE compliance needs a target: pass `opts.targetPsiFor(inspection)` (psi or
+ * null). `targetCompliancePct` is then the share of readings within
+ * PRESSURE_TOLERANCE of the target, over inspections that have one; with no
+ * target it is null (not measured), never a flattering percentage.
+ *
  * @param {Object[]} inspections rows INCLUDING tyre_conditions
  * @param {number}   [targetPct=90]
- * @returns {{ compliancePct:(number|null), compliantCount, totalCount, measuredInspections,
+ * @param {{ targetPsiFor?: (inspection:Object) => (number|null) }} [opts]
+ * @returns {{ compliancePct:(number|null), consistencyPct:(number|null), targetCompliancePct:(number|null),
+ *             metric, label, compliantCount, totalCount, measuredInspections,
  *             notMeasuredInspections, readings, basis, targetPct, bySite }}
  */
-export function computePressureCompliance(inspections = [], targetPct = 90) {
+export function computePressureCompliance(inspections = [], targetPct = 90, opts = {}) {
   const nonCancelled = inspections.filter(i => i.status !== 'Cancelled')
+
+  // Compliance against a real target pressure, when the caller has one.
+  const targetPsiFor = typeof opts?.targetPsiFor === 'function' ? opts.targetPsiFor : null
+  let targetReadings = 0
+  let targetCompliant = 0
+  let targetInspections = 0
+  if (targetPsiFor) {
+    for (const i of nonCancelled) {
+      const target = Number(targetPsiFor(i))
+      if (!Number.isFinite(target) || target <= 0) continue
+      const ps = pressureReadings(i)
+      if (!ps.length) continue
+      targetInspections += 1
+      for (const p of ps) {
+        targetReadings += 1
+        if (Math.abs((p - target) / target) <= PRESSURE_TOLERANCE) targetCompliant += 1
+      }
+    }
+  }
 
   // one entry per inspection that carries a usable median
   const measure = (rows) => {
@@ -543,14 +575,22 @@ export function computePressureCompliance(inspections = [], targetPct = 90) {
     .sort((a, b) => (a.compliancePct ?? Infinity) - (b.compliancePct ?? Infinity))
 
   return {
+    // Consistency around each vehicle's own median. NOT compliance with a spec.
+    metric:                 'consistency',
+    label:                  'Pressure consistency',
+    consistencyPct:         all.compliancePct,
     compliancePct:          all.compliancePct,
+    // Compliance against a target pressure; null when no target was supplied.
+    targetCompliancePct:    targetReadings > 0 ? (targetCompliant / targetReadings) * 100 : null,
+    targetReadings,
+    targetInspections,
     compliantCount:         all.readings > 0 ? all.compliant : null,
     totalCount:             all.readings,
     measuredInspections:    all.measured,
     notMeasuredInspections: nonCancelled.length - all.measured,
     readings:               all.readings,
     basis: all.readings > 0
-      ? `${all.readings} recorded pressures across ${all.measured} of ${nonCancelled.length} inspections, each compared to its own vehicle median`
+      ? `${all.readings} recorded pressures across ${all.measured} of ${nonCancelled.length} inspections, each compared to its own vehicle median (consistency, not compliance with a target pressure)`
       : 'no pressure readings recorded',
     targetPct,
     bySite,
@@ -730,29 +770,53 @@ export function computeScrapRate(records = [], scrapKmPct = 20, defaultCost = 0)
 
 /**
  * Vehicle downtime impact from tyre replacements.
+ *
+ * NOTHING HERE IS MEASURED (ENG-7, audit case C30c). A tyre record carries no
+ * downtime. The old result multiplied the fitment row count by 2 hours and
+ * returned it as `totalDowntimeHours`, which read as a measurement. Now:
+ *   totalDowntimeHours / avgDowntimePerVehicle  -> null (not measured)
+ *   assumedDowntimeHours / assumedAvgPerVehicle -> rows x the stated assumption
+ *   basis 'assumed', measured false, assumption in words
+ * A screen may show the assumed figure only with the word "assumed" beside it.
+ * Measured downtime comes from job card timestamps (downtimeTrackerAnalytics,
+ * get_daily_job_cards).
+ *
  * @param {Object[]} records
- * @param {number}   [hoursPerReplacement=2]
- * @returns {{ totalDowntimeHours, avgDowntimePerVehicle, worstAssets }}
+ * @param {number}   [hoursPerReplacement=2] the ASSUMPTION, hours per fitment row
+ * @returns {{ totalDowntimeHours:null, avgDowntimePerVehicle:null, assumedDowntimeHours:number,
+ *             assumedAvgPerVehicle:(number|null), assumedHoursPerReplacement:number,
+ *             basis:'assumed', measured:false, assumption:string, worstAssets:Array }}
  */
 export function computeVehicleDowntimeImpact(records = [], hoursPerReplacement = 2) {
   const byAsset = _groupBy(records.filter(r => r.asset_no), r => r.asset_no)
 
   const assetDowntime = Object.entries(byAsset).map(([assetNo, rows]) => ({
     assetNo,
-    replacements: rows.length,
-    downtime:     rows.length * hoursPerReplacement,
+    replacements:    rows.length,
+    downtime:        null,                              // not measured
+    assumedDowntime: rows.length * hoursPerReplacement, // assumption, labelled
   }))
 
-  const totalDowntimeHours    = assetDowntime.reduce((s, a) => s + a.downtime, 0)
-  const avgDowntimePerVehicle = assetDowntime.length > 0
-    ? totalDowntimeHours / assetDowntime.length
-    : 0
+  const assumedDowntimeHours = assetDowntime.reduce((s, a) => s + a.assumedDowntime, 0)
+  const assumedAvgPerVehicle = assetDowntime.length > 0
+    ? assumedDowntimeHours / assetDowntime.length
+    : null
 
   const worstAssets = [...assetDowntime]
-    .sort((a, b) => b.downtime - a.downtime)
+    .sort((a, b) => b.replacements - a.replacements)
     .slice(0, 10)
 
-  return { totalDowntimeHours, avgDowntimePerVehicle, worstAssets }
+  return {
+    totalDowntimeHours:    null,
+    avgDowntimePerVehicle: null,
+    assumedDowntimeHours,
+    assumedAvgPerVehicle,
+    assumedHoursPerReplacement: hoursPerReplacement,
+    basis:      'assumed',
+    measured:   false,
+    assumption: `${hoursPerReplacement} hours assumed per tyre fitment record; no downtime is recorded on a tyre record`,
+    worstAssets,
+  }
 }
 
 /**
@@ -864,33 +928,47 @@ export function computeVendorPerformance(records = []) {
     // The score math below reads `avgCpk > 0`, which is false for null exactly as for 0.
     const avgCpk      = cpkBlock.avgCpk
     const lifeTyres   = tyres.filter(t => Number(t._life_km) > 0)
-    const avgLife     = lifeTyres.length > 0 ? _mean(lifeTyres.map(_lifeKm)) : 0
-    const failureCount = rows.filter(r => r.risk_level === 'High' || r.risk_level === 'Critical').length
-    const failureRate  = rows.length > 0 ? failureCount / rows.length : 0
+    // HONEST NULL (ENG-8, audit case C30b): a brand with no measurable life has
+    // an unknown life, and a brand with no risk rating has an unknown failure
+    // rate. Both used to read 0, and 0% failures scored as PERFECT quality, so
+    // an unrated, unmeasured brand ranked first with a score of 0.3.
+    const avgLife     = lifeTyres.length > 0 ? _mean(lifeTyres.map(_lifeKm)) : null
+    const ratedRows    = rows.filter(r => r.risk_level != null && String(r.risk_level).trim() !== '')
+    const failureCount = ratedRows.filter(r => r.risk_level === 'High' || r.risk_level === 'Critical').length
+    const failureRate  = ratedRows.length > 0 ? failureCount / ratedRows.length : null
     // Same scrap tag as computeScrapRate: live scraps carry status 'Scrapped'
     // (category is never set by the scrap action), so category alone read 0%.
     const scrapCount   = rows.filter(_isScrapTagged).length
     const scrapRate    = rows.length > 0 ? scrapCount / rows.length : 0
     const totalCost    = validRows.reduce((s, t) => s + t._cost * (t._qty || 1), 0)
 
-    // Composite score: lower CPK is better, lower failureRate is better, longer life is better
+    // Composite score: lower CPK is better, lower failureRate is better, longer life is better.
+    // An UNKNOWN term earns nothing (it is not a perfect score). A brand with no
+    // measured term at all has no score and no rank.
     const cpkScore     = avgCpk > 0 ? 1 / avgCpk : 0
-    const qualityScore = 1 - failureRate
+    const qualityScore = failureRate == null ? 0 : 1 - failureRate
     const lifeScore    = avgLife > 0 ? avgLife / 100000 : 0
-    const score        = cpkScore * 0.4 + qualityScore * 0.3 + lifeScore * 0.3
+    const measured     = avgCpk > 0 || failureRate != null || avgLife > 0
+    const score        = measured ? cpkScore * 0.4 + qualityScore * 0.3 + lifeScore * 0.3 : null
 
     return {
       brand, ...cpkBlock, avgCpk, failureRate, avgLife, scrapRate, totalCost,
       count: _qtySum(tyres),          // physical tyres
       fitmentCount: rows.length,      // fitment rows (event basis of failure/scrap rate)
+      ratedCount: ratedRows.length,   // rows carrying a risk rating (failure rate basis)
       validCount: validRows.length,
+      measured,
       score,
     }
   })
 
-  return brandStats
-    .sort((a, b) => b.score - a.score)
-    .map((b, i) => ({ ...b, rank: i + 1 }))
+  // Ranked brands first (best score first); unmeasured brands last with no rank.
+  const ranked   = brandStats.filter(b => b.score != null).sort((a, b) => b.score - a.score)
+  const unranked = brandStats.filter(b => b.score == null).sort((a, b) => String(a.brand).localeCompare(String(b.brand)))
+  return [
+    ...ranked.map((b, i) => ({ ...b, rank: i + 1 })),
+    ...unranked.map((b) => ({ ...b, rank: null })),
+  ]
 }
 
 /**

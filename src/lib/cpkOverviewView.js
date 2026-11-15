@@ -9,6 +9,7 @@
  */
 import { fleetSideFor, mobilityOfUnit } from './cpkModule'
 import { decomposeDrivers, waterfallSteps } from './cpkDrivers'
+import { rowRate } from './cpkMetrics'
 
 const fin = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v))
 const num = (v) => fin(v) ?? 0
@@ -61,7 +62,9 @@ export function overviewKpis(cur, prev) {
   return {
     currency: cur?.currency || cur?.country || null,
     cpkTyre: { value: fin(mv?.cpkTyre), trend: pctChange(mv?.cpkTyre, pmv?.cpkTyre) },
-    cpkTotal: { value: fin(mv?.cpkTotal), trend: pctChange(mv?.cpkTotal, pmv?.cpkTotal) },
+    // ENG-1: there is no total cost per km on the tyre-km basis. Always null;
+    // kept as a key so an older caller renders N/A rather than undefined.
+    cpkTotal: { value: null, trend: null, withheld: true },
     distance: { value: mv ? num(mv.distance) : null, trend: pctChange(mv?.distance, pmv?.distance) },
     coverage: { value: fin(mv?.coveragePct), trend: pointChange(mv?.coveragePct, pmv?.coveragePct) },
     cph: { value: fin(nm?.cpkTotal), trend: pctChange(nm?.cpkTotal, pnm?.cpkTotal) },
@@ -105,7 +108,9 @@ export function assetTypeRows(byType = [], perVehicle = []) {
       maintenance_cost: fin(r.maintenance_cost),
       total_cost: num(r.total_cost),
       cpk_tyre: fin(r.cpk_tyre),
-      cpk_total: fin(r.cpk_total),
+      cpk_total: mobility === 'movable' ? null : fin(r.cpk_total),
+      // the one rate this type is ranked and charted by (cpkMetrics.rowRate)
+      rate: rowRate({ unit: r.unit, cpk_tyre: r.cpk_tyre, cpk_total: r.cpk_total }),
       coverage: a && a.cost > 0 ? (a.measuredCost / a.cost) * 100 : null,
     }
   })
@@ -113,19 +118,22 @@ export function assetTypeRows(byType = [], perVehicle = []) {
 }
 
 /**
- * Bars for one mobility, worst (highest) total cost per unit first. Types with no
+ * Bars for one mobility, worst (highest) rate first. The rate is the operating
+ * cost per engine hour for plant and the tyre spend ratio for km assets (a total
+ * over tyre km does not exist, ENG-1). Types with no
  * measured denominator have no rate; they are counted in `unmeasured` and named
  * in a note instead of being drawn as a zero bar.
  */
 export function rateBars(rows = [], mobility, limit = 8) {
   const mine = rows.filter((r) => r.mobility === mobility)
-  const measured = mine.filter((r) => r.cpk_total != null).sort((a, b) => b.cpk_total - a.cpk_total)
+  const rateOf = (r) => (r.rate !== undefined ? r.rate : rowRate(r))
+  const measured = mine.filter((r) => rateOf(r) != null).sort((a, b) => rateOf(b) - rateOf(a))
   const shown = measured.slice(0, limit)
-  const max = shown.reduce((m, r) => Math.max(m, r.cpk_total), 0)
+  const max = shown.reduce((m, r) => Math.max(m, rateOf(r)), 0)
   return {
-    bars: shown.map((r) => ({ key: r.key, label: r.vehicle_type, value: r.cpk_total, share: max > 0 ? r.cpk_total / max : 0, row: r })),
+    bars: shown.map((r) => ({ key: r.key, label: r.vehicle_type, value: rateOf(r), share: max > 0 ? rateOf(r) / max : 0, row: r })),
     hidden: Math.max(0, measured.length - shown.length),
-    unmeasured: mine.filter((r) => r.cpk_total == null).map((r) => r.vehicle_type),
+    unmeasured: mine.filter((r) => rateOf(r) == null).map((r) => r.vehicle_type),
   }
 }
 
@@ -159,10 +167,10 @@ export function lineageFacts(k) {
   const mv = k?.movable
   const nm = k?.nonMovable
   if (mv) {
-    out.push(`Cost per km uses only cost that has a measured distance: ${mv.coveragePct == null ? 'coverage not reported' : `${Math.round(mv.coveragePct)}% of movable cost is covered`}.`)
+    out.push(`The tyre spend ratio uses only cost on assets that have tyre km: ${mv.coveragePct == null ? 'coverage not reported' : `${Math.round(mv.coveragePct)}% of movable cost is covered`}.`)
     if (num(mv.unregisteredCost) > 0) out.push(`${Math.round(num(mv.unregisteredCost)).toLocaleString('en-US')} ${k.currency || ''} of movable spend sits on assets missing from the fleet register and is left out of the rate.`.replace('  ', ' '))
   } else {
-    out.push('No movable cost or distance was recorded for this period, so cost per km is not available.')
+    out.push('No movable cost or tyre km was recorded for this period, so the tyre spend ratio is not available.')
   }
   if (nm) {
     out.push(`Cost per hour uses engine-hour spans: ${nm.coveragePct == null ? 'coverage not reported' : `${Math.round(nm.coveragePct)}% of non-movable cost is covered`}.`)

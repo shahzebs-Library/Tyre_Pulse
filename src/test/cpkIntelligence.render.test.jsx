@@ -37,6 +37,10 @@ vi.mock('../lib/api/fleetCpk', () => ({
   getCpkKmIntelligence: () => Promise.resolve({ ok: false }),
   getFleetAreaMap: () => Promise.resolve([]),
 }))
+// The headline Tyre CPK (lifetime) comes from its own RPC (ENG-1).
+vi.mock('../lib/api/tyreLifetimeCpk', () => ({
+  getTyreLifetimeCpk: ({ country }) => Promise.resolve({ ok: true, countries: [{ country, currency: 'SAR', final: { tyres: 40, measurable: 12, cpkPurchase: 0.0287 } }] }),
+}))
 vi.mock('../lib/api/cpkDrivers', () => ({ getCpkDrivers: () => Promise.resolve({ ok: false, windows: null, segments: [] }) }))
 vi.mock('../lib/api/brandSizeCpk', () => ({ getBrandSizeCpk: () => Promise.resolve([]) }))
 
@@ -48,9 +52,18 @@ describe('CpkIntelligence renders every tab without crashing', () => {
   it('overview shows the mockup KPIs, both rate charts and the asset-type table from real rows', async () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByText('TR-MIXER').length).toBeGreaterThan(0))
-    expect(screen.getByText(/Fleet CPK, tyre/)).toBeTruthy()
-    expect(screen.getByText(/Non-movable CPH/)).toBeTruthy()
-    expect(screen.getByText('Movable assets: cost per km')).toBeTruthy()
+    // ENG-1 (2026-11-12): this test pinned "Fleet CPK, tyre", "Non-movable CPH" and
+    // "Movable assets: cost per km". Those names put three different divisions
+    // under one word. Each tile now carries its glossary name, the headline is
+    // the lifetime Tyre CPK from its own source, and no km total is shown.
+    await waitFor(() => expect(screen.getByText('0.0287')).toBeTruthy())
+    expect(screen.getAllByText(/Tyre CPK/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Tyre spend ratio/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Operating cost per hour/).length).toBeGreaterThan(0)
+    expect(screen.getByText('Movable assets: tyre spend ratio')).toBeTruthy()
+    expect(document.body.textContent).not.toMatch(/Fleet CPK, total|Total cost per km/i)
+    // 0.0144 was (tyres + spares + oil) over tyre km in the fixture: never rendered
+    expect(document.body.textContent).not.toContain('0.0144')
     expect(screen.getAllByText('GENERATOR').length).toBeGreaterThan(0)
     expect(screen.getByText('68%')).toBeTruthy()
     // the drivers mock is empty, so the card says so instead of inventing drivers

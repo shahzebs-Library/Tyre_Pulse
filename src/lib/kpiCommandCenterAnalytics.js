@@ -49,9 +49,9 @@ export function makeBenchmarks(currency = '') {
       format: pct, description: 'Scrapped vs total tyres removed',
     },
     pressure_compliance: {
-      key: 'pressure_compliance', label: 'Pressure Compliance', unit: '%',
+      key: 'pressure_compliance', label: 'Pressure Consistency', unit: '%',
       world_class: 97, good: 92, average: 85, poor: 70, higherIsBetter: true,
-      format: pct, description: 'Readings within 15% of the vehicle median',
+      format: pct, description: 'Readings within 15% of the vehicle median (consistency, not compliance with a target pressure)',
     },
     inspection_compliance: {
       key: 'inspection_compliance', label: 'Inspection Compliance', unit: '%',

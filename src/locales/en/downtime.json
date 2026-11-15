@@ -5,12 +5,12 @@
   },
   "title": "Fleet Downtime & Availability",
   "subtitle": {
-    "actual": "Actual work-order durations where available, otherwise estimated from tyre removal events",
-    "estimated": "Estimated from tyre removal events"
+    "actual": "Measured from job card durations where a valid one exists. Every other figure is an assumption and is named as one",
+    "estimated": "Nothing measured in this view. Figures marked assumed are a model, not a record"
   },
   "badge": {
-    "actualEstimated": "ACTUAL + ESTIMATED",
-    "estimated": "ESTIMATED"
+    "actualEstimated": "MEASURED + ASSUMED",
+    "estimated": "ASSUMED"
   },
   "actions": {
     "refresh": "Refresh",
@@ -39,22 +39,22 @@
     "low": "Low"
   },
   "banner": {
-    "title": "Estimated figures.",
-    "bodyActual": "Downtime hours are taken from actual work-order durations (opened → completed) where a matching work order exists, and otherwise estimated per severity - Critical 4h, High 3h, Medium/Low 2h per tyre-removal event. Downtime cost is modelled at {rate}/hr {basis}, assuming {shiftHours} productive hours per shift-day. These are planning estimates, not invoiced downtime.",
-    "bodyEstimated": "Downtime hours are estimated per severity - Critical 4h, High 3h, Medium/Low 2h per tyre-removal event. Downtime cost is modelled at {rate}/hr {basis}, assuming {shiftHours} productive hours per shift-day. These are planning estimates, not invoiced downtime.",
-    "basisConfigured": "(configured via settings)",
-    "basisDefault": "(default assumption - set a \"downtime_rate\" key in Settings to override)"
+    "title": "Measured and assumed figures are shown separately.",
+    "bodyActual": "Measured hours come only from job cards with a valid opened and completed time (under 720 hours, dated from 2000, not in the future), averaged per asset. A tyre event on an asset with no such job card has no measured downtime; the model assumes Critical 4h, High 3h, otherwise 2h for it. The headline tiles show measured values only and N/A where nothing was measured. Charts and the vehicle table use the assumed model and say so. Hourly rate: {rate} {basis}. A shift day is {shiftHours} hours.",
+    "bodyEstimated": "No job card with a valid opened and completed time matches these events, so nothing is measured and the headline tiles read N/A. The model assumes Critical 4h, High 3h, otherwise 2h per tyre event; charts and the vehicle table use that model and say so. Hourly rate: {rate} {basis}. A shift day is {shiftHours} hours.",
+    "basisConfigured": "(configured in Settings)",
+    "basisDefault": "(no rate is set, so cost is not shown; add a \"downtime_rate\" key in Settings)"
   },
   "kpi": {
-    "availability": "Fleet Availability (Est.)",
+    "availability": "Fleet Availability (measured)",
     "availabilityAbove": "Above {pct}% target",
     "availabilityBelow": "Below {pct}% benchmark",
     "events": "Downtime Events",
     "eventsSub": "{count} vehicles affected",
-    "hours": "Total Downtime Hours (Est.)",
+    "hours": "Downtime Hours (measured)",
     "hoursSubActual": "{days} shift-days · actual + severity est.",
     "hoursSubEstimate": "{days} shift-days · severity estimate",
-    "cost": "Downtime Cost (Est.)",
+    "cost": "Downtime Cost (measured hours)",
     "costSub": "@ {rate}/hr · {basis}",
     "costBasisConfigured": "configured",
     "costBasisAssumed": "assumed",
@@ -62,16 +62,16 @@
     "mttrSub": "Mean time between tyre events per vehicle"
   },
   "charts": {
-    "availabilityTrend": "Fleet Availability Trend - Last 12 Months",
+    "availabilityTrend": "Fleet Availability Trend, Last 12 Months (assumed model)",
     "availabilityLegend": "Availability",
     "targetLegend": "{pct}% Target",
     "availabilitySeries": "Fleet Availability %",
     "targetSeries": "Target {pct}%",
     "byCause": "Downtime by Cause",
-    "bySite": "Downtime by Site (hours)",
+    "bySite": "Downtime by Site (hours, includes assumed)",
     "unplannedHours": "Unplanned (h)",
     "plannedHours": "Planned (h)",
-    "monthlyCost": "Monthly Downtime Cost Analysis",
+    "monthlyCost": "Monthly Downtime Cost (includes assumed hours)",
     "unplannedCost": "Unplanned Cost",
     "plannedCost": "Planned Cost",
     "cumulative": "Cumulative",
@@ -89,7 +89,7 @@
     "unknown": "Unknown"
   },
   "heatmap": {
-    "heading": "Downtime Heatmap - Top 10 Vehicles × Last 12 Months",
+    "heading": "Downtime Heatmap, Top 10 Vehicles, Last 12 Months (includes assumed hours)",
     "empty": "No vehicle data available",
     "hoursLabel": "Hours:"
   },
@@ -100,8 +100,8 @@
       "asset": "Asset",
       "site": "Site",
       "events": "Events",
-      "totalHours": "Total Hours",
-      "totalCost": "Total Cost",
+      "totalHours": "Hours (see basis)",
+      "totalCost": "Cost",
       "avgBetweenEvents": "Avg Between Events",
       "riskScore": "Risk Score"
     },

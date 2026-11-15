@@ -46,7 +46,9 @@ describe('CpkPanel refuses to show a comparison the data cannot support', () => 
   it('shows the coverage that makes the figure readable', () => {
     render(<CpkPanel snap={SNAP} money={money} />)
     expect(screen.getByText('68.6%')).toBeTruthy()
-    expect(screen.getByText('0.225 SAR/km')).toBeTruthy()
+    // ENG-1: the unit names the denominator (vehicle km), because the same page
+    // also shows a ratio over tyre km and "SAR/km" fitted both.
+    expect(screen.getByText('0.225 SAR per vehicle km')).toBeTruthy()
   })
 
   it('renders an unmeasured period as N/A, never as zero cost per km', () => {

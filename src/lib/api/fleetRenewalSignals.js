@@ -13,7 +13,7 @@ import { listAssetBreakdowns } from './assetBreakdowns'
 const MAX_ROWS = 20000
 
 export const RENEWAL_FLEET_COLS =
-  'id,asset_no,fleet_number,registration_no,make,model,vehicle_type,site,country,model_year,current_km,status,ops_status'
+  'id,asset_no,fleet_number,registration_no,make,model,vehicle_type,site,country,model_year,current_km,status,ops_status,purchase_value,useful_life'
 
 /** Fleet register for the scope. Throws on failure: without it there is no candidate list. */
 export async function loadRenewalFleet({ country } = {}) {

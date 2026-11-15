@@ -7,6 +7,9 @@ import * as sigApi from '../../lib/api/userSignature'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { toUserMessage } from '../../lib/safeError'
 
+/** Every control here is at least 44x44 px (WCAG 2.5.5) and keeps a visible keyboard focus ring. */
+export const TOUCH_TARGET = 'min-h-[44px] min-w-[44px] px-2 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent,#16a34a)]'
+
 /**
  * A signature on an approval screen, with the person's own saved mark already in it.
  *
@@ -126,7 +129,7 @@ export default function SignatureField({ onChange, label = 'Sign here', height =
           <button
             type="button"
             onClick={startDrawing}
-            className="mt-2 text-xs underline text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+            className={`mt-1 -ml-2 inline-flex items-center text-xs underline text-[var(--text-secondary)] hover:text-[var(--text-primary)] ${TOUCH_TARGET}`}
           >
             {t('signature.field.drawNew')}
           </button>
@@ -134,12 +137,12 @@ export default function SignatureField({ onChange, label = 'Sign here', height =
       ) : (
         <div>
           <SignatureCapture label={label} height={height} onChange={handleDrawn} />
-          <label className="flex items-start gap-2 mt-2 text-xs text-[var(--text-secondary)] cursor-pointer">
+          <label className="flex items-center gap-2 mt-2 min-h-[44px] text-xs text-[var(--text-secondary)] cursor-pointer">
             <input
               type="checkbox"
               checked={remember}
               onChange={(e) => setRemember(e.target.checked)}
-              className="mt-0.5"
+              className="w-5 h-5 shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent,#16a34a)]"
             />
             <span>
               {t('signature.field.remember')}
@@ -150,7 +153,7 @@ export default function SignatureField({ onChange, label = 'Sign here', height =
             <button
               type="button"
               onClick={useSavedAgain}
-              className="mt-2 text-xs underline text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              className={`mt-1 -ml-2 inline-flex items-center text-xs underline text-[var(--text-secondary)] hover:text-[var(--text-primary)] ${TOUCH_TARGET}`}
             >
               {t('signature.field.useSaved')}
             </button>

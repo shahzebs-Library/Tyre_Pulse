@@ -485,6 +485,90 @@ export function toPayload(values) {
   return out
 }
 
+// ---------------------------------------------------------------------------
+// Editing an existing card: send only what the user changed
+// ---------------------------------------------------------------------------
+
+/** Sum of the parts lines: unit cost x quantity (a blank quantity counts as 1). */
+export function partsLinesTotal(lines) {
+  return (Array.isArray(lines) ? lines : [])
+    .reduce((s, p) => s + (parseFloat(p?.unit_cost) || 0) * (parseInt(p?.quantity) || 1), 0)
+}
+
+/** The form values an existing row opens with. Blank is '' (never 0, never null). */
+export function jobCardFormValues(row) {
+  const out = {}
+  for (const f of editableFields()) {
+    const v = readField(row, f.key)
+    out[f.key] = v === null ? '' : v
+  }
+  out.parts_used = Array.isArray(row?.parts_used) ? row.parts_used : []
+  return out
+}
+
+const round2 = n => Math.round(n * 100) / 100
+
+/**
+ * The update patch for an EDIT: only the columns whose value the user changed,
+ * compared against what the stored row opened the form with.
+ *
+ * WHY. The form used to send every field on every save. That rewrote stored
+ * values nobody touched: an imported parts cost became 0 (no parts lines typed
+ * in the app), a stored labour cost was replaced by hours x rate, status "Open"
+ * became "New", and created_by became the editor. A stored cost, an approved
+ * cost included, must only move when the user changes the input that drives it.
+ *
+ * Cost rules:
+ *  - parts_used / parts_cost are never sent on an edit (owner decision
+ *    2026-11-15). The stored parts cost is the imported baseline. Lines added
+ *    in the form are returned by jobCardAddedPartLines and saved as draft cost
+ *    ledger entries; removing a stored line in the form changes nothing.
+ *  - labour_cost is sent only when labour hours or rate changed (hours x rate,
+ *    when that is above zero) or the user typed a different labour cost.
+ *  - opened_at is never blanked or defaulted on an edit.
+ *
+ * An empty object means nothing changed: do not write.
+ */
+export function jobCardEditPatch(row, values) {
+  const before = toPayload(jobCardFormValues(row))
+  const after = toPayload(values)
+  const patch = {}
+  for (const key of Object.keys(after)) {
+    if (after[key] !== before[key]) patch[key] = after[key]
+  }
+  if (patch.opened_at === null) delete patch.opened_at
+
+  const hoursOrRateChanged = 'labour_hours' in patch || 'labour_rate' in patch
+  const derivedLabour = (after.labour_hours || 0) * (after.labour_rate || 0)
+  if (hoursOrRateChanged && derivedLabour > 0) patch.labour_cost = round2(derivedLabour)
+  else if (patch.labour_cost === null) patch.labour_cost = 0
+
+  // parts_cost and parts_used are NEVER part of an edit patch. The stored parts cost is the
+  // imported baseline; a part typed in the form becomes a cost ledger entry (jobCardAddedPartLines)
+  // that counts only once it is approved.
+  delete patch.parts_cost
+  delete patch.parts_used
+  return patch
+}
+
+/**
+ * The parts lines the user ADDED in the form, compared with the stored lines
+ * (a multiset difference, so typing the same part twice yields two lines).
+ * These become draft cost ledger entries; they are never added to parts_cost.
+ */
+export function jobCardAddedPartLines(row, values) {
+  const key = p => JSON.stringify([String(p?.part_name ?? '').trim(), parseInt(p?.quantity) || 1, parseFloat(p?.unit_cost) || 0])
+  const stored = new Map()
+  for (const p of (Array.isArray(row?.parts_used) ? row.parts_used : [])) stored.set(key(p), (stored.get(key(p)) || 0) + 1)
+  const added = []
+  for (const p of (Array.isArray(values?.parts_used) ? values.parts_used : [])) {
+    const k = key(p)
+    if (stored.get(k) > 0) { stored.set(k, stored.get(k) - 1); continue }
+    if (String(p?.part_name ?? '').trim()) added.push(p)
+  }
+  return added
+}
+
 /** How many catalog fields a row actually carries: the completeness read. */
 export function jobCardCompleteness(row) {
   const fields = JOB_CARD_FIELDS.filter(f => !f.computed)

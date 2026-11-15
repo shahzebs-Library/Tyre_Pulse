@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { evaluateErpCandidate, matchObservationToErp, detectConfirmedErpDrift } from '../lib/erpObservationMatch'
 
-const inspection = { id: 'i1', asset_no: 'MP107', country: 'KSA', inspection_date: '2026-11-10' }
+// A 6x4 truck: its rear wheels are numbered the same way in the app and in the ERP. (The asset
+// code alone would read as a pump, where no rear ERP code is trusted without a verified mapping.)
+const inspection = { id: 'i1', asset_no: 'MP107', country: 'KSA', inspection_date: '2026-11-10', vehicle_type: 'TRUCK 6X4' }
 const finding = { rawPosition: 'LHR1-O', serial: 'OLD-123' }
 const workOrder = { id: 'j1', work_order_no: 'JC-101', asset_no: 'MP107', country: 'KSA', opened_at: '2026-11-11', description: 'Tyre replacement' }
 const fitment = { asset_no: 'MP107', country: 'KSA', job_card: 'JC-101', position: 'LHR1-O', serial_no: 'OLD-123', removal_date: '2026-11-11' }
@@ -47,10 +49,21 @@ describe('ERP to inspection evidence matcher', () => {
       fitments: [], expenses: [{ ...expense, work_order_no: earlier.work_order_no }] })
     expect(results).toEqual([])
   })
-  it('resolves the inspection slot to the ERP position with the real vehicle layout', () => {
+  it('a pump rear wheel is never matched on an ERP code alone, even an identically spelled one', () => {
     const pump = { ...inspection, vehicle_type: 'PUMPS' }
-    const result = evaluateErpCandidate({ inspection: pump, finding: { rawPosition: 'R1Li' },
-      workOrder, fitments: [{ ...fitment, position: 'LHR1-I', serial_no: 'NEW-1' }], expenses: [] })
+    const args = { inspection: pump, finding: { rawPosition: 'R1Li' },
+      workOrder, fitments: [{ ...fitment, position: 'LHR1-I', serial_no: 'NEW-1' }], expenses: [] }
+    const result = evaluateErpCandidate(args)
+    expect(result.eligibleToConfirm).toBe(false)
+    expect(result.status).toBe('manual_review')
+    const verified = evaluateErpCandidate({ ...args, layoutContext: { vehicleType: 'PUMPS',
+      positionMappings: [{ layout_key: 'Concrete pump', erp_code: 'LHR1-I', slot: 'R1Li' }] } })
+    expect(verified.eligibleToConfirm).toBe(true)
+  })
+  it('a pump FRONT wheel is matched on its code', () => {
+    const pump = { ...inspection, vehicle_type: 'PUMPS' }
+    const result = evaluateErpCandidate({ inspection: pump, finding: { rawPosition: 'F2L' },
+      workOrder, fitments: [{ ...fitment, position: 'LHF2', serial_no: 'NEW-1' }], expenses: [] })
     expect(result.eligibleToConfirm).toBe(true)
   })
   it('resolves mixer first-rear positions to the centre axle, not pump positions', () => {
@@ -119,11 +132,28 @@ describe('wheel position goes through the shared position service', () => {
     expect(r.positionState).toBe('inconsistent')
     expect(r.status).toBe('conflict')
   })
-  it('a real serial leaving on the job card is evidence when the wheel cannot be read', () => {
+  it('a matching serial SUPPORTS but never confirms when the wheel cannot be read', () => {
     const r = run({ rawPosition: 'R1Ro', serial: 'OBS-900100' },
       [row({ position: '', serial_no: 'obs-900100', issue_date: '2026-08-01', removal_date: '2026-11-12' })])
-    expect(r.eligibleToConfirm).toBe(true)
+    expect(r.eligibleToConfirm).toBe(false)
+    expect(r.status).toBe('manual_review')
+    expect(r.positionState).toBe('pending_manual_review')
     expect(r.evidenceSummary.serialMatched).toBe(true)
+    expect(r.evidenceSummary.serialOnly).toBe(true)
+    expect(r.serialExceptionPossible).toBe(true)
+    expect(r.notes.join(' ')).toMatch(/serial alone does not allow confirmation/)
+  })
+  it('a serial exception is never possible for a different wheel, a weak serial or a matched wheel', () => {
+    expect(run({ rawPosition: 'R1Ro', serial: 'OBS-900100' }, [row({ position: 'RHRO', serial_no: 'OBS-900100' })]).serialExceptionPossible).toBe(false)
+    expect(run({ rawPosition: 'R1Ro', serial: 'DOT18E56' }, [row({ position: '', serial_no: 'DOT18E56', removal_date: '2026-11-12' })]).serialExceptionPossible).toBe(false)
+    expect(run({ rawPosition: 'R1Ro', serial: 'OBS-900100' }, [row({ serial_no: 'OBS-900100' })]).serialExceptionPossible).toBe(false)
+  })
+  it('the ERP dual-rear spelling is pending on every layout until a mapping is verified for it', () => {
+    const pending = run({ rawPosition: 'R1Lo' }, [row({ position: 'LHRCO' })])
+    expect(pending.status).toBe('manual_review')
+    const mapped = run({ rawPosition: 'R1Lo' }, [row({ position: 'LHRCO' })],
+      { layoutContext: { vehicleType: 'TR-MIXER', positionMappings: [{ layout_key: 'Tri-mixer', erp_code: 'LHRCO', slot: 'R1Lo' }] } })
+    expect(mapped.eligibleToConfirm).toBe(true)
   })
   it('a placeholder serial is not evidence', () => {
     const r = run({ rawPosition: 'R1Ro', serial: 'DOT18E56' },

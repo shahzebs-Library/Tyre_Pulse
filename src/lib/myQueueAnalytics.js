@@ -12,6 +12,8 @@
  * so "nothing waiting" and "we could not look" stay different statements.
  */
 
+import { acknowledgedText } from './closureWorkflow'
+
 const DAY = 86400000
 export const DUE_SOON_DAYS = 3
 
@@ -141,7 +143,7 @@ export function buildMyQueue(src = {}, now = Date.now()) {
       kind: 'my_checklist', id: `mc:${r.id}`,
       title: r.document_no || r.template_name || 'Checklist',
       subtitle: [r.asset_no, r.site].filter(Boolean).join(' | '),
-      status: r.approval_status || r.status || 'Not recorded', priority: null,
+      status: acknowledgedText(r) || r.approval_status || r.status || 'Not recorded', priority: null,
       due: null, dueDays: null, dueState: 'none',
       age: ageDays(r.submitted_at, now), link: `/checklists/submission/${r.id}`,
     })

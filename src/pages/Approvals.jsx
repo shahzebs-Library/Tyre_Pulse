@@ -589,7 +589,7 @@ function LegacySimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
           </h3>
           <ChecklistApprovalLadder template={template} submission={subject} compact />
           {loadedSub && wouldClose && (
-            <BlockingMarksNotice template={template} answers={submissionAnswers(loadedSub)} />
+            <BlockingMarksNotice template={template} answers={submissionAnswers(loadedSub)} submission={loadedSub} />
           )}
         </section>
       )}

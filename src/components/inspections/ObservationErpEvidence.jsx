@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import {
   findObservationErpEvidence, confirmObservationErpLink, rejectObservationErpSuggestion,
   getObservationErpLink, listObservationErpDecisions, getObservationErpReviewState, isErpReviewNotProvisioned,
-  erpDecisionMessage,
+  erpDecisionMessage, ERP_DECISIONS_UNAVAILABLE_MESSAGE,
 } from '../../lib/api/observationErpEvidence'
 import { toUserMessage } from '../../lib/safeError'
 import { detectConfirmedErpDrift } from '../../lib/erpObservationMatch'
@@ -37,6 +37,9 @@ function Candidate({ candidate, actionId, linked, limited, stale, blocked, onDec
       <p className="text-sm leading-relaxed">{wo.description || 'Work description not recorded'}</p>
       {manual && <p className="text-xs text-amber-600" role="status">
         The wheel could not be matched on this vehicle, so this job card cannot be confirmed here. It stays pending manual review.
+      </p>}
+      {candidate.serialExceptionPossible && <p className="text-xs text-[var(--text-secondary)]">
+        The observed tyre serial is on this job card. A serial alone does not confirm the work. A documented exception needs two people: one reviewer asks for it and a different, separately authorised person approves it.
       </p>}
       {evidence.canonicalPosition && <p className="text-xs text-[var(--text-secondary)]">Wheel on this vehicle: {evidence.canonicalPosition}</p>}
       <div className="flex flex-wrap gap-2 text-xs text-[var(--text-secondary)]">
@@ -92,6 +95,9 @@ export default function ObservationErpEvidence({ observation }) {
   const [linkError, setLinkError] = useState('')
   // False when the review tables and functions are not in the database yet.
   const [provisioned, setProvisioned] = useState(true)
+  // Whether the database runs the same validated matching rules as this screen. Until that
+  // is known to be true, no decision is offered.
+  const [decisions, setDecisions] = useState({ available: false, reason: 'checking' })
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState('')
   const [stale, setStale] = useState(false)
@@ -118,9 +124,10 @@ export default function ObservationErpEvidence({ observation }) {
   useEffect(() => {
     let active = true
     setLinked(null); setHistory([]); setMessage(''); setLinkError(''); setProvisioned(true)
-    if (actionId) getObservationErpReviewState(actionId)
-      .then((state) => { if (active) { setProvisioned(state.provisioned); setLinked(state.link); setHistory(state.history) } })
-      .catch(() => { if (active) setLinkError('Existing job card links could not be checked, so confirmation is unavailable. You can still review ERP evidence.') })
+    setDecisions({ available: false, reason: 'checking' })
+    getObservationErpReviewState(actionId)
+      .then((state) => { if (active) { setProvisioned(state.provisioned); setLinked(state.link); setHistory(state.history); setDecisions(state.decisions || { available: false, reason: 'unknown' }) } })
+      .catch(() => { if (active) { setDecisions({ available: false, reason: 'unknown' }); setLinkError('Existing job card links could not be checked, so confirmation is unavailable. You can still review ERP evidence.') } })
     return () => { active = false }
   }, [actionId])
 
@@ -134,7 +141,7 @@ export default function ObservationErpEvidence({ observation }) {
   }, [inspection?.country])
 
   async function decide(candidate, decision, reason) {
-    if (!actionId || reason.trim().length < 5 || stale || !provisioned) return
+    if (!actionId || reason.trim().length < 5 || stale || !provisioned || !decisions.available) return
     setBusy(candidate.workOrder.id); setMessage('')
     try {
       if (decision === 'confirm') {
@@ -149,7 +156,12 @@ export default function ObservationErpEvidence({ observation }) {
     } catch (e) {
       if (isErpReviewNotProvisioned(e)) { setProvisioned(false); setMessage('') }
       // The server decides. A refusal is shown in its own plain words, never as a link.
-      else setMessage(erpDecisionMessage(e))
+      else {
+        const text = erpDecisionMessage(e)
+        // EXECUTE withheld (interim lock): stop offering decisions and show the plain status note.
+        if (text === ERP_DECISIONS_UNAVAILABLE_MESSAGE) { setDecisions((d) => ({ ...d, available: false, reason: 'locked' })); setMessage('') }
+        else setMessage(text)
+      }
     }
     finally { setBusy('') }
   }
@@ -181,6 +193,9 @@ export default function ObservationErpEvidence({ observation }) {
       {!provisioned && <p role="status" className="rounded-lg border border-[var(--border)] p-3 text-sm text-[var(--text-secondary)]">
         ERP evidence review is not set up yet. You can still look at the ERP evidence below. Confirming or rejecting a job card will be available once it is set up.
       </p>}
+      {provisioned && !decisions.available && decisions.reason !== 'checking' && <p role="status" className="rounded-lg border border-[var(--border)] p-3 text-sm text-[var(--text-secondary)]">
+        {ERP_DECISIONS_UNAVAILABLE_MESSAGE}
+      </p>}
       {result.status === 'loading' && <p role="status" className="text-sm text-[var(--text-secondary)] flex items-center gap-2"><FileSearch size={16} /> Checking recent tyre and job-card evidence...</p>}
       {result.status === 'error' && <p role="alert" className="text-sm text-amber-600">ERP records could not be checked. {result.error}</p>}
       {result.status === 'ready' && <>
@@ -190,7 +205,7 @@ export default function ObservationErpEvidence({ observation }) {
         {eligible.length > 0 && <div className="space-y-2">
           <h5 className="text-sm font-semibold flex items-center gap-2"><ClipboardCheck size={16} /> Possible tyre work ({eligible.length})</h5>
           {eligible.map(c => <Candidate key={c.workOrder.id} candidate={c} actionId={actionId} linked={linked}
-            limited={result.evidenceLimited} stale={stale} blocked={!!linkError || !provisioned} busy={busy} onDecide={decide} />)}
+            limited={result.evidenceLimited} stale={stale} blocked={!!linkError || !provisioned || !decisions.available} busy={busy} onDecide={decide} />)}
         </div>}
         {!eligible.length && <div className="rounded-xl border border-[var(--border)] p-4 space-y-2">
           <div className="flex items-center gap-2 font-semibold text-sm"><FileSearch size={17} /> No verified replacement evidence found</div>
@@ -204,7 +219,7 @@ export default function ObservationErpEvidence({ observation }) {
             <summary className="cursor-pointer inline-flex items-center gap-2 font-medium"><AlertCircle size={15} /> Items needing investigation ({pending.length + (result.orphanTyreJobCards?.length || 0)})</summary>
             <div className="space-y-3 mt-3">
               {pending.map(c => <Candidate key={c.workOrder.id} candidate={c} actionId={actionId} linked={linked}
-                limited={result.evidenceLimited} stale={stale} blocked={!!linkError || !provisioned} busy={busy} onDecide={decide} />)}
+                limited={result.evidenceLimited} stale={stale} blocked={!!linkError || !provisioned || !decisions.available} busy={busy} onDecide={decide} />)}
               {!!result.orphanTyreJobCards?.length && <p className="text-xs text-[var(--text-secondary)]">
                 Tyre consumption references job cards not present in the imported work-order records:
                 {' '}{result.orphanTyreJobCards.join(', ')}. Review ERP intake before linking.

@@ -4,6 +4,9 @@
  * are not in the database yet.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { readFileSync, readdirSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { ERP_RULES_VERSION } from '../lib/tyrePositionService'
 
 const h = vi.hoisted(() => {
   const state = { tables: {}, errors: {}, rpcError: null, calls: [] }
@@ -26,7 +29,10 @@ const h = vi.hoisted(() => {
     }
     return b
   }
-  const rpc = vi.fn(() => Promise.resolve(state.rpcError ? { data: null, error: state.rpcError } : { data: { ok: true }, error: null }))
+  const rpc = vi.fn((name) => {
+    if (name === 'observation_erp_rules') return Promise.resolve(state.rules)
+    return Promise.resolve(state.rpcError ? { data: null, error: state.rpcError } : { data: { ok: true }, error: null })
+  })
   return { state, supabase: { from, rpc } }
 })
 vi.mock('../lib/supabase', () => ({ supabase: h.supabase }))
@@ -47,6 +53,7 @@ beforeEach(() => {
     observation_erp_link_events: [],
   }
   h.state.errors = {}; h.state.rpcError = null; h.state.calls = []
+  h.state.rules = { data: { rules_version: 'position-service-3', can_review: true, can_request_exception: true, can_approve_exception: false }, error: null }
   h.supabase.rpc.mockClear()
 })
 
@@ -85,7 +92,7 @@ describe('review tables not in the database yet', () => {
   it.each(['42P01', 'PGRST205', 'PGRST202', '42883'])('code %s reads as not set up, not as "no link" and not as an error', async (code) => {
     h.state.errors.observation_erp_links = { ...MISSING_TABLE, code }
     h.state.errors.observation_erp_link_events = { ...MISSING_TABLE, code }
-    await expect(api.getObservationErpReviewState('a1')).resolves.toEqual({ provisioned: false, link: null, history: [] })
+    await expect(api.getObservationErpReviewState('a1')).resolves.toMatchObject({ provisioned: false, link: null, history: [] })
   })
 
   it('a permission failure is NOT reported as "not set up"', async () => {
@@ -108,6 +115,15 @@ describe('review tables not in the database yet', () => {
     const r = await api.findObservationErpEvidence({ inspection, finding: { rawPosition: 'R1Ro' } })
     expect(r.candidates).toHaveLength(1)
     expect(h.state.calls.some((c) => c.table.startsWith('observation_erp'))).toBe(false)
+  })
+
+  it('layout versions and verified mappings are optional: missing tables read as none, other failures are errors', async () => {
+    h.state.errors.vehicle_diagram_config_versions = { code: 'PGRST205', message: 'not found' }
+    h.state.errors.tyre_layout_position_mappings = { code: '42P01', message: 'missing' }
+    const r = await api.findObservationErpEvidence({ inspection, finding: { rawPosition: 'R1Ro' } })
+    expect(r.candidates[0].eligibleToConfirm).toBe(true)
+    h.state.errors.tyre_layout_position_mappings = { code: '42501', message: 'permission denied' }
+    await expect(api.findObservationErpEvidence({ inspection, finding: { rawPosition: 'R1Ro' } })).rejects.toBeTruthy()
   })
 
   it('a confirm that fails because the function is missing is recognised', async () => {
@@ -145,9 +161,103 @@ describe('a decision the server refused is explained in plain words', () => {
   it('works on the live function and on the follow-up: same RPC names and arguments', async () => {
     await api.confirmObservationErpLink({ actionId: 'a1', workOrderId: 'w1', note: ' Reviewed ' })
     await api.rejectObservationErpSuggestion({ actionId: 'a1', workOrderId: 'w1', note: 'Wrong wheel' })
-    expect(h.supabase.rpc.mock.calls).toEqual([
+    expect(h.supabase.rpc.mock.calls.filter(([n]) => n !== 'observation_erp_rules')).toEqual([
       ['confirm_observation_erp_link', { p_action_id: 'a1', p_work_order_id: 'w1', p_reason: 'Reviewed' }],
       ['reject_observation_erp_link', { p_action_id: 'a1', p_work_order_id: 'w1', p_reason: 'Wrong wheel' }],
     ])
+  })
+})
+
+describe('a decision is offered only when client and database run the same rules', () => {
+  it('old database (the rules function does not exist): not available', async () => {
+    h.state.rules = { data: null, error: { code: 'PGRST202', message: 'Could not find the function public.observation_erp_rules' } }
+    const a = await api.getErpDecisionAvailability()
+    expect(a).toMatchObject({ available: false, reason: 'old_database', canReview: false, canRequestException: false, canApproveException: false })
+  })
+  it('new database, same version: available, with what this person may do', async () => {
+    h.state.rules = { data: { rules_version: ERP_RULES_VERSION, can_review: true, can_request_exception: true, can_approve_exception: true }, error: null }
+    expect(await api.getErpDecisionAvailability()).toMatchObject({ available: true, reason: 'ok', canReview: true, canRequestException: true, canApproveException: true })
+  })
+  it.each(['position-service-2', 'position-service-4'])('version mismatch (%s): not available, whichever side is ahead', async (v) => {
+    h.state.rules = { data: { rules_version: v, can_review: true, can_request_exception: true, can_approve_exception: true }, error: null }
+    expect(await api.getErpDecisionAvailability()).toMatchObject({ available: false, reason: 'version_mismatch', databaseVersion: v, canReview: false })
+  })
+  it('any other failure is not available either, never assumed', async () => {
+    h.state.rules = { data: null, error: { code: '57014', message: 'timeout' } }
+    expect(await api.getErpDecisionAvailability()).toMatchObject({ available: false, reason: 'unknown' })
+    h.state.rules = { data: {}, error: null }
+    expect((await api.getErpDecisionAvailability()).available).toBe(false)
+  })
+  it('the review state carries the availability', async () => {
+    h.state.rules = { data: null, error: { code: '42883', message: 'function does not exist' } }
+    const s = await api.getObservationErpReviewState('a1')
+    expect(s.provisioned).toBe(true)
+    expect(s.decisions.available).toBe(false)
+  })
+  it('the client version is the one written in the database draft', () => {
+    const sql = readFileSync(resolve(process.cwd(), 'supabase/pending_migrations/20261116091000_observation_erp_decide_on_position_service.sql'), 'utf8')
+    const found = [...sql.matchAll(/'rules_version', '([^']+)'/g)].map((m) => m[1])
+    expect(found.length).toBe(2)
+    expect(new Set(found)).toEqual(new Set([ERP_RULES_VERSION]))
+  })
+  it('the message is the agreed wording', () => {
+    expect(api.ERP_DECISIONS_UNAVAILABLE_MESSAGE).toBe('ERP confirmation is not available yet. Evidence can be reviewed, but a decision cannot be recorded until the database update is approved.')
+  })
+  it('a withheld or missing decision function reads as not available, never a raw error', () => {
+    const revoked = Object.assign(new Error('x'), { cause: { code: '42501', message: 'permission denied for function observation_erp_decide' } })
+    expect(api.erpDecisionMessage(revoked)).toBe(api.ERP_DECISIONS_UNAVAILABLE_MESSAGE)
+    expect(api.erpDecisionMessage({ code: 'PGRST202', message: 'Could not find the function public.confirm_observation_erp_link' })).toBe(api.ERP_DECISIONS_UNAVAILABLE_MESSAGE)
+    const gate = Object.assign(new Error('x'), { cause: { code: '42501', message: 'Not authorised to confirm ERP evidence' } })
+    expect(api.erpDecisionMessage(gate)).toBe('Your account is not allowed to record this decision.')
+  })
+  it('production today (interim lock applied, follow-up not applied): honest unavailable state, page keeps working', async () => {
+    // observation_erp_rules does not exist yet and EXECUTE on decide is withheld.
+    h.state.rules = { data: null, error: { code: 'PGRST202', message: 'Could not find the function public.observation_erp_rules in the schema cache' } }
+    const s = await api.getObservationErpReviewState('a1')          // must not throw
+    expect(s.decisions).toMatchObject({ available: false, reason: 'old_database', canReview: false, canRequestException: false, canApproveException: false })
+    expect(h.supabase.rpc.mock.calls.filter(([n]) => n === 'observation_erp_rules').length).toBe(1)
+    expect(h.supabase.rpc.mock.calls.filter(([n]) => n !== 'observation_erp_rules')).toEqual([])   // no decision RPC is tried
+    for (const fn of ['observation_erp_decide', 'confirm_observation_erp_link', 'reject_observation_erp_link']) {
+      const locked = Object.assign(new Error('x'), { cause: { code: '42501', message: `permission denied for function ${fn}` } })
+      const text = api.erpDecisionMessage(locked)
+      expect(text).toBe(api.ERP_DECISIONS_UNAVAILABLE_MESSAGE)
+      expect(text).not.toMatch(/permission denied|42501|function/i)
+    }
+  })
+  it('the applied interim lock is the last word in supabase/migrations: nothing after it grants EXECUTE again', () => {
+    const dir = resolve(process.cwd(), 'supabase/migrations')
+    const files = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()
+    const lock = '20261115120856_observation_erp_confirm_interim_lock.sql'
+    expect(files).toContain(lock)
+    const lockSql = readFileSync(resolve(dir, lock), 'utf8')
+    expect(lockSql).toMatch(/STATUS: APPLIED to production 2026-11-15/)
+    expect((lockSql.match(/^revoke execute on function public\.(observation_erp_decide|confirm_observation_erp_link|reject_observation_erp_link)\(/gm) || []).length).toBe(3)
+    expect(lockSql).not.toMatch(/^grant /m)
+    const regrant = /^\s*grant\s+execute[^;]*(observation_erp_decide|confirm_observation_erp_link|reject_observation_erp_link)[^;]*authenticated/im
+    for (const f of files.filter((x) => x > lock)) expect(regrant.test(readFileSync(resolve(dir, f), 'utf8')), f).toBe(false)
+    // the rollback companion of the unapplied follow-up restores the body and keeps the lock
+    const rb = readFileSync(resolve(process.cwd(), 'supabase/pending_migrations/20261116091000_observation_erp_decide_ROLLBACK.sql'), 'utf8')
+    expect(rb).not.toMatch(/^grant /m)
+    expect((rb.match(/^revoke execute on function public\.(observation_erp_decide|confirm_observation_erp_link|reject_observation_erp_link)\(/gm) || []).length).toBe(3)
+  })
+  it('a serial exception is two steps and two functions: request, then approval by somebody else', async () => {
+    await expect(api.requestObservationErpSerialException({ actionId: 'a1', workOrderId: 'w1', note: 'too short' })).rejects.toBeTruthy()
+    await api.requestObservationErpSerialException({ actionId: 'a1', workOrderId: 'w1', note: 'Serial read off the removed tyre by the workshop' })
+    expect(h.supabase.rpc.mock.calls.at(-1)).toEqual(['request_observation_erp_serial_exception',
+      { p_action_id: 'a1', p_work_order_id: 'w1', p_reason: 'Serial read off the removed tyre by the workshop' }])
+    await expect(api.approveObservationErpSerialException({ requestId: 'r1', note: '' })).rejects.toBeTruthy()
+    await api.approveObservationErpSerialException({ requestId: 'r1', note: 'Checked in the bay' })
+    expect(h.supabase.rpc.mock.calls.at(-1)).toEqual(['approve_observation_erp_serial_exception', { p_request_id: 'r1', p_note: 'Checked in the bay' }])
+    await expect(api.closeObservationErpSerialException({ requestId: 'r1', outcome: 'approved', note: 'not a closing outcome' })).rejects.toBeTruthy()
+    await api.closeObservationErpSerialException({ requestId: 'r1', outcome: 'refused', note: 'Serial does not match' })
+    expect(h.supabase.rpc.mock.calls.at(-1)[0]).toBe('close_observation_erp_serial_exception')
+  })
+  it('no single call can both raise and approve an exception', () => {
+    const sql = readFileSync(resolve(process.cwd(), 'supabase/pending_migrations/20261116091000_observation_erp_decide_on_position_service.sql'), 'utf8')
+    expect(sql).not.toMatch(/create or replace function public\.confirm_observation_erp_link_by_exception/)
+    expect(sql).toMatch(/constraint observation_erp_exception_two_person/)
+    expect(api.confirmObservationErpLinkByException).toBeUndefined()
+    const same = Object.assign(new Error('x'), { cause: { code: '42501', message: 'An exception must be approved by a different person than the one who requested it' } })
+    expect(api.erpDecisionMessage(same)).toBe('An exception must be approved by a different person than the one who asked for it.')
   })
 })

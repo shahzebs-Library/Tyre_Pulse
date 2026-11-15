@@ -198,6 +198,8 @@ describe('service layer - correctiveActions', () => {
   })
 
   it('updateCorrectiveAction patches by id', async () => {
+    // The write asks for the changed id back; a row coming back is a real save.
+    h.state.result = { data: [{ id: 'ca1' }], error: null }
     await correctiveActions.updateCorrectiveAction('ca1', { status: 'Closed' })
     expect(h.state.last._calls.update).toEqual({ status: 'Closed' })
     expect(h.state.last._calls.eq).toContainEqual(['id', 'ca1'])

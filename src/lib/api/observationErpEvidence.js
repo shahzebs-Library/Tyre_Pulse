@@ -6,6 +6,7 @@ import { supabase, unwrap, ServiceError, isNotProvisioned } from './_client'
 import { matchObservationToErp } from '../erpObservationMatch'
 import { getCustomLayoutMap } from './vehicleDiagrams'
 import { toUserMessage } from '../safeError'
+import { ERP_RULES_VERSION } from '../tyrePositionService'
 
 const WO_FIELDS = 'id,work_order_no,asset_no,country,site,description,notes,status,opened_at,completed_at'
 const TYRE_FIELDS = 'id,asset_no,country,serial_no,position,tyre_position,job_card,issue_date,removal_date,status'
@@ -62,9 +63,13 @@ export async function findObservationErpEvidence({ inspection, finding }) {
   }
   // The asset's OWN registered build decides the wheel layout both sides are read on
   // (tyrePositionService). Registered twice in one country: no layout is assumed.
-  const [fleet, customLayouts] = await Promise.all([
+  const [fleet, customLayouts, layoutHistory, positionMappings] = await Promise.all([
     supabase.from('vehicle_fleet').select('vehicle_type,axle_count').eq('country', country).eq('asset_no', asset).limit(2),
     getCustomLayoutMap(),
+    optionalRows(supabase.from('vehicle_diagram_config_versions')
+      .select('vehicle_type,config,active,valid_from,valid_to,basis').order('valid_from', { ascending: true }).limit(500)),
+    optionalRows(supabase.from('tyre_layout_position_mappings')
+      .select('layout_key,erp_code,slot,active').eq('active', true).limit(500)),
   ])
   const fleetRows = unwrap(fleet) || []
   const machine = fleetRows.length === 1 ? fleetRows[0] : null
@@ -72,6 +77,11 @@ export async function findObservationErpEvidence({ inspection, finding }) {
     vehicleType: machine?.vehicle_type || '',
     axleCount: machine?.axle_count ?? null,
     customLayouts,
+    // The layout in force on the inspection day, and verified per-layout ERP spellings.
+    layoutHistory: layoutHistory.map((v) => ({
+      vehicleType: v.vehicle_type, config: v.config, active: v.active, validFrom: v.valid_from, validTo: v.valid_to, basis: v.basis,
+    })),
+    positionMappings,
   }
   const candidates = matchObservationToErp({ inspection, finding, workOrders, fitments, expenses, layoutContext })
   const existingJobs = new Set(workOrders.map(w => String(w.work_order_no || '').trim().toUpperCase()))
@@ -80,6 +90,14 @@ export async function findObservationErpEvidence({ inspection, finding }) {
     candidates, orphanTyreJobCards, evidenceLimited: limited,
     totals: { workOrders: workOrders.length, fitments: fitments.length, expenses: expenses.length },
   }
+}
+
+// Rows of a table that may not exist yet (its database change is not applied): none.
+// Any other failure is a real error and is thrown.
+async function optionalRows(query) {
+  const res = await query
+  if (res?.error) { if (isNotProvisioned(res.error)) return []; unwrap(res) }
+  return res?.data || []
 }
 
 /**
@@ -121,14 +139,95 @@ export async function listObservationErpDecisions(actionId) {
  * "not set up".
  */
 export async function getObservationErpReviewState(actionId) {
-  if (!actionId) return { provisioned: true, link: null, history: [] }
+  const decisions = await getErpDecisionAvailability()
+  if (!actionId) return { provisioned: true, link: null, history: [], decisions }
   try {
     const [link, history] = await Promise.all([getObservationErpLink(actionId), listObservationErpDecisions(actionId)])
-    return { provisioned: true, link, history }
+    return { provisioned: true, link, history, decisions }
   } catch (err) {
-    if (isNotProvisioned(err)) return { provisioned: false, link: null, history: [] }
+    if (isNotProvisioned(err)) return { provisioned: false, link: null, history: [], decisions }
     throw err
   }
+}
+
+/** Shown whenever a decision cannot be recorded because the database is not on the client's rules. */
+export const ERP_DECISIONS_UNAVAILABLE_MESSAGE =
+  'ERP confirmation is not available yet. Evidence can be reviewed, but a decision cannot be recorded until the database update is approved.'
+
+/**
+ * Can a Confirm or Reject be recorded right now?
+ *
+ * Only when the database runs the SAME validated wheel-matching rules as this client. The
+ * database says which rules it runs through the read-only observation_erp_rules function:
+ *   - function missing (the database is still on the earlier function)  -> not available
+ *   - a different rules version (either side is ahead)                 -> not available
+ *   - the call failed for any other reason                             -> not available (unknown)
+ * Never assumed available. Evidence lookup does not depend on this.
+ *
+ * @returns {Promise<{available:boolean, reason:'ok'|'old_database'|'version_mismatch'|'unknown',
+ *   canReview:boolean, canRequestException:boolean, canApproveException:boolean,
+ *   databaseVersion:string|null, clientVersion:string}>}
+ */
+export async function getErpDecisionAvailability() {
+  const none = (reason, databaseVersion = null) => ({
+    available: false, reason, canReview: false, canRequestException: false, canApproveException: false, databaseVersion, clientVersion: ERP_RULES_VERSION,
+  })
+  let res
+  try { res = await supabase.rpc('observation_erp_rules') } catch { return none('unknown') }
+  if (res?.error) return none(isNotProvisioned(res.error) ? 'old_database' : 'unknown')
+  const version = res?.data?.rules_version || null
+  if (!version) return none('old_database')
+  if (version !== ERP_RULES_VERSION) return none('version_mismatch', version)
+  return {
+    available: true, reason: 'ok', canReview: res.data.can_review === true,
+    canRequestException: res.data.can_request_exception === true,
+    canApproveException: res.data.can_approve_exception === true, databaseVersion: version, clientVersion: ERP_RULES_VERSION,
+  }
+}
+
+/**
+ * A documented serial exception (wheel unresolved, observed serial on the job card) always
+ * takes TWO people. A reviewer asks; a different person who holds the separate permission
+ * approves or refuses. The database enforces both the permission and "not the same person";
+ * nothing is linked until the approval.
+ */
+export async function requestObservationErpSerialException({ actionId, workOrderId, note }) {
+  if (!actionId || !workOrderId || String(note || '').trim().length < 20) {
+    throw new ServiceError('A serial exception needs a written reason of at least 20 characters.')
+  }
+  return unwrap(await supabase.rpc('request_observation_erp_serial_exception', {
+    p_action_id: actionId, p_work_order_id: workOrderId, p_reason: note.trim(),
+  }))
+}
+
+/** Approve a pending exception request raised by somebody else. */
+export async function approveObservationErpSerialException({ requestId, note }) {
+  if (!requestId || String(note || '').trim().length < 5) {
+    throw new ServiceError('Write an approval note of at least five characters.')
+  }
+  return unwrap(await supabase.rpc('approve_observation_erp_serial_exception', {
+    p_request_id: requestId, p_note: note.trim(),
+  }))
+}
+
+/** Refuse (an authorised person other than the requester) or withdraw (the requester). */
+export async function closeObservationErpSerialException({ requestId, outcome, note }) {
+  if (!requestId || !['refused', 'withdrawn'].includes(outcome) || String(note || '').trim().length < 5) {
+    throw new ServiceError('Choose refuse or withdraw and write a note of at least five characters.')
+  }
+  return unwrap(await supabase.rpc('close_observation_erp_serial_exception', {
+    p_request_id: requestId, p_outcome: outcome, p_note: note.trim(),
+  }))
+}
+
+/** Exception requests recorded for one action, newest first. Read only. */
+export async function listObservationErpExceptionRequests(actionId) {
+  if (!actionId) return []
+  const res = await supabase.from('observation_erp_exception_requests')
+    .select('id, action_id, work_order_id, status, request_reason, requested_by, requested_at, decided_by, decided_at, decision_note')
+    .eq('action_id', actionId).order('requested_at', { ascending: false }).limit(50)
+  if (res.error) { if (isNotProvisioned(res.error)) return []; return unwrap(res) }
+  return res.data || []
 }
 
 /** True when a Confirm or Reject failed only because the review functions do not exist yet. */
@@ -154,9 +253,16 @@ const REFUSALS = [
   [/Job card number missing/i, 'This job card has no number, so it cannot be linked.'],
   [/(Country|Site) is outside permitted scope/i, 'This job card is outside the countries or sites you can review.'],
   [/Decision and reason are required/i, 'Write a reason of at least five characters.'],
+  [/approved by a different person/i, 'An exception must be approved by a different person than the one who asked for it.'],
+  [/Not authorised to (confirm ERP evidence|approve a serial exception|refuse this exception request)/i, 'Your account is not allowed to record this decision.'],
+  [/exception request (was already decided|for this job card is already waiting)/i, 'This exception request is already waiting for approval or was already decided.'],
+  [/serial exception (does not apply|needs a written reason)/i, 'A serial exception cannot be recorded for this job card.'],
 ]
 export function erpDecisionMessage(err) {
   const raw = String(err?.cause?.message || err?.message || '')
+  // The database does not let this client record a decision (function not installed, or its
+  // EXECUTE is withheld until the corrected rules are approved): say so, never a raw error.
+  if (isNotProvisioned(err?.cause || err) || /permission denied for function/i.test(raw)) return ERP_DECISIONS_UNAVAILABLE_MESSAGE
   const hit = REFUSALS.find(([re]) => re.test(raw))
   return hit ? hit[1] : toUserMessage(err, 'The job card could not be linked. Please try again.')
 }

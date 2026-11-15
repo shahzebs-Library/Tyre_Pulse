@@ -12,6 +12,7 @@
  * and the 200-row batch loops; these functions relocate only the queries.
  */
 import { supabase, applyCountry, fetchAllPages, ServiceError } from './_client'
+import { refuseEmpty } from './writeGuard'
 import { toUserMessage } from '../safeError'
 import { sanitizeSearchTerm } from '../searchFilter'
 import { createServiceEvent } from './tyreServiceEvents'
@@ -235,9 +236,20 @@ export function listTcoFleet() {
   )
 }
 
-/** Update a single tyre record by id. */
-export function updateRecord(id, payload) {
-  return supabase.from('tyre_records').update(payload).eq('id', id)
+const TYRE_UPDATE_REFUSED =
+  'This tyre record was not updated. Only a Manager, an Admin or someone given the edit right can change a tyre record, or it no longer exists.'
+
+/**
+ * Update a single tyre record by id. Resolves to `{ data, error }` (never
+ * throws). Asks for the changed id back: row security refuses an update by
+ * matching zero rows without raising, so a zero-row answer comes back as an
+ * `error` (WriteRefusedError) instead of looking like a save.
+ */
+export async function updateRecord(id, payload) {
+  return refuseEmpty(
+    await supabase.from('tyre_records').update(payload).eq('id', id).select('id'),
+    TYRE_UPDATE_REFUSED,
+  )
 }
 
 /** Insert a single tyre record. */
@@ -335,9 +347,19 @@ export async function removeTyre({ tyre, reason, km, date } = {}) {
   return { error: null }
 }
 
-/** Update a batch of tyre records by id (page loops in 200-id chunks). */
-export function updateRecordsByIds(ids, patch) {
-  return supabase.from('tyre_records').update(patch).in('id', ids)
+/**
+ * Update a batch of tyre records by id (page loops in 200-id chunks).
+ * Resolves to `{ data, error, updated, refused }`. The changed ids are asked
+ * back so the caller can count them: row security refuses an update by leaving
+ * the row untouched, with no error, and `refused` is how many of the requested
+ * ids the database did not change.
+ */
+export async function updateRecordsByIds(ids, patch) {
+  const list = [...new Set((ids || []).filter(Boolean))]
+  if (!list.length) return { data: [], error: null, updated: 0, refused: 0 }
+  const { data, error } = await supabase.from('tyre_records').update(patch).in('id', list).select('id')
+  const updated = error ? 0 : (data || []).length
+  return { data: data || [], error: error || null, updated, refused: list.length - updated }
 }
 
 /**

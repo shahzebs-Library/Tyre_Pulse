@@ -108,7 +108,9 @@ describe('service layer - tyreRecords', () => {
   })
 
   it('updateRecord / insertRecord target tyre_records', async () => {
-    await tyreRecords.updateRecord('r1', { site: 'X' })
+    h.state.result = { data: [{ id: 'r1' }], error: null }
+    const saved = await tyreRecords.updateRecord('r1', { site: 'X' })
+    expect(saved.error).toBeNull()
     expect(h.state.last._calls.update).toEqual({ site: 'X' })
     expect(h.state.last._calls.eq).toContainEqual(['id', 'r1'])
 

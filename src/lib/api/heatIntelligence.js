@@ -24,6 +24,11 @@ const STATUSES = new Set(['normal', 'elevated', 'high', 'critical'])
 /** True when the failure is "table does not exist yet" (pre-migration). */
 function isMissingRelation(err) {
   const code = err?.code || err?.cause?.code
+  // 42703 is "column does not exist": the table is there and the QUERY is wrong.
+  // Its text also says "does not exist", so it must be ruled out before the
+  // text sniff below or a bad column list reads as an unprovisioned table and
+  // the page shows an empty fleet instead of the fault.
+  if (code === '42703') return false
   const msg = String((err?.cause?.message ?? err?.message) || '').toLowerCase()
   return (
     code === '42P01' || code === 'PGRST205' ||
@@ -89,10 +94,14 @@ export async function getTemperatureReading(id) {
  * the canonical operational table `tyre_records` (same source the Tyre Passport
  * reads) — the heat engine scores these installed tyres against the current
  * desert-heat condition. No new table is introduced.
+ *
+ * Every name here must be a real `tyre_records` column: PostgREST rejects the
+ * whole request on one unknown column. `current_status` was listed and does not
+ * exist, so this read failed for every user; the engine reads `status`.
  */
 export const TYRE_RISK_COLS =
   'id,serial_no,serial_number,tyre_serial,brand,size,asset_no,asset_number,site,country,' +
-  'position,tyre_position,status,current_status,tread_depth,pressure_reading,cost_per_tyre,' +
+  'position,tyre_position,status,tread_depth,pressure_reading,cost_per_tyre,' +
   'total_km,fitment_date,issue_date,removal_date'
 
 /**

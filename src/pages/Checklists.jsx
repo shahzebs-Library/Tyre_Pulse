@@ -30,6 +30,7 @@ import {
   filterTemplates, filterSubmissions, summarizeTemplates, summarizeSubmissions, submissionDay,
   submissionExportRows, SUBMISSION_EXPORT_COLUMNS,
 } from '../lib/checklistsAnalytics'
+import { acknowledgedText, acknowledgedLabel } from '../lib/closureWorkflow'
 
 /** Column sorting through the shared console comparator (blanks sort last). */
 const sortable = (fn) => ({
@@ -272,12 +273,14 @@ export default function Checklists() {
           </div>
         )
       } },
-    { id: 'status', header: 'Status', ...sortable((s) => prettyStatus(s.status)), size: 190,
+    { id: 'status', header: 'Status', ...sortable((s) => acknowledgedText(s) || prettyStatus(s.status)), size: 190,
       cell: ({ row }) => {
         const s = row.original
         return (
           <div>
-            <span className={`badge text-xs ${statusBadge(s.status)}`}>{prettyStatus(s.status)}</span>
+            {acknowledgedText(s)
+              ? <span className={`badge text-xs ${statusBadge(acknowledgedLabel(s).actionRequired ? 'pending' : 'approved')}`}>{acknowledgedText(s)}</span>
+              : <span className={`badge text-xs ${statusBadge(s.status)}`}>{prettyStatus(s.status)}</span>}
             <div className={`text-[11px] mt-1 ${s.template_snapshot_status === 'exact' ? 'text-green-500' : 'text-amber-500'}`}>
               {evidenceLabel(s.template_snapshot_status)}
             </div>

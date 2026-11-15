@@ -14,6 +14,7 @@
  */
 
 import { isLayoutField } from './checklist/fieldTypes'
+import { acknowledgedText, ACK_ACTION_REQUIRED } from './closureWorkflow'
 import { fieldLabel, optionLabel, templateName } from './checklist/checklistI18n'
 import { fieldOptionSet, markMeta, blockingMarks } from './checklist/checklistMarks'
 
@@ -65,7 +66,10 @@ export function submissionRows(sub, opts = {}) {
 }
 
 /** Human-readable status. */
-export function prettyStatus(s) {
+export function prettyStatus(s, sub = null) {
+  // An acknowledged sheet carries a fault: its status says whether action is still required.
+  const ack = sub ? acknowledgedText(sub) : (s === 'acknowledged' ? ACK_ACTION_REQUIRED : null)
+  if (ack) return ack
   return String(s || 'submitted').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 

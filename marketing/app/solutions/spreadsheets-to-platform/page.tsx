@@ -7,7 +7,7 @@ import { OG_IMAGES } from "@/lib/site";
 import { FaqBlock, Modules, Problem, StartList, Steps, type Faq } from "../SolutionParts";
 
 const PATH = "/solutions/spreadsheets-to-platform";
-const TITLE = "Fleet spreadsheets vs maintenance software vs Tyre Pulse";
+const TITLE = "Fleet spreadsheets vs maintenance software";
 const DESCRIPTION = "A factual comparison of running a fleet on spreadsheets, on a generic maintenance tool, or on Tyre Pulse, and how to move your files across.";
 
 export const metadata: Metadata = {
@@ -30,14 +30,14 @@ const ROWS = [
   ["Field capture with no signal", "No. Shared files need a connection to update.", "Varies by product. Many mobile apps need a connection.", "The Android app works offline and syncs when the signal returns."],
   ["Defect to job card", "Manual: someone copies the defect into the workshop sheet.", "Often supported where inspections and work orders are in the same product.", "A defect on an inspection raises a tracked action or work order."],
   ["Several countries and currencies", "Separate files or tabs, with totals mixed by hand.", "Varies by product.", "Each country reports in its own currency, and totals are never blended."],
-  ["Who can see what", "File sharing settings, usually all or nothing per file.", "Role-based access is common. Site-level limits vary.", "Access by company, country, site and role, enforced in the database."],
+  ["Who can see what", "File sharing settings, usually all or nothing per file.", "Role-based access is common. Site-level limits vary.", "Access by role and country, enforced in the database, with site scoping available."],
   ["Change history", "Limited to the file's version history, if enabled.", "Usually an audit log on records.", "Sign-ins, approvals, access changes and exports are written to an audit trail."],
   ["Setup effort", "Lowest. Anyone can start a sheet today.", "Moderate. Configuration and data loading are needed.", "Moderate. We import your asset list, job cards and tyre files during onboarding."],
 ] as const;
 
 const STEPS = [
   ["Send us your files as they are.", "Asset lists, tyre sheets, job card and expense exports. Columns do not need renaming first."],
-  ["We map and check them.", "Columns are matched to the right fields, duplicates are flagged before import, and every upload is logged."],
+  ["We map and check them.", "Columns are matched to the right fields with you, repeated rows are flagged before import, and uploads made through the import screen are logged."],
   ["Your teams work in one place.", "The field captures on the phone, the office works on the web, and the spreadsheets become exports instead of the record."],
 ] as const;
 
@@ -56,7 +56,7 @@ const START = [
 
 const FAQ: Faq = [
   ["When is a spreadsheet still the right tool?", "When one person owns the fleet record, the fleet is small, and nobody in the field needs to update it. Once several sites, roles or countries edit the same data, the copies start to disagree."],
-  ["Will we lose our historical data?", "No. Historical tyre, job card and expense records are imported, and duplicates are checked before anything is saved. Your original files stay with you."],
+  ["Will we lose our historical data?", "No. Historical tyre, job card and expense records are imported with you, row counts and totals are checked against your files, and your original files stay with you."],
   ["Can we still export to Excel?", "Yes. Every register exports to Excel and PDF, so existing reports and habits can carry on."],
 ] as const;
 
@@ -66,7 +66,7 @@ export default function SpreadsheetsToPlatformPage() {
       <JsonLd data={breadcrumbSchema([{ name: "Home", path: "/" }, { name: "Solutions", path: "/solutions" }, { name: "Spreadsheets to platform", path: PATH }])} />
       <PageTop photo="engineer" photoPosition="35% 20%"
         crumbs={[{ href: "/", label: "Home" }, { href: "/solutions", label: "Solutions" }, { label: "Spreadsheets to platform" }]}
-        title="Move your fleet off spreadsheets without losing a row."
+        title="Move your fleet off spreadsheets, with every import checked against your files."
         lead="A factual comparison of spreadsheets, generic maintenance software and Tyre Pulse, and what moving your files across involves."
       />
       <Problem id="sp-problem" title="Spreadsheets break when more people need the same fleet record." text="A spreadsheet is fast to start and flexible. The cost appears when sites, workshops and finance each keep their own copy and the field cannot update it from where the work happens." pains={PAINS} />

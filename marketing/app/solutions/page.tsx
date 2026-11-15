@@ -11,15 +11,15 @@ import "./solutions.css";
 const DESCRIPTION = "Tyre Pulse by use case: tyre management for GCC fleets, ready-mix fleet maintenance and moving a fleet off spreadsheets.";
 
 export const metadata: Metadata = {
-  title: "Solutions",
+  title: "Solutions by use case",
   description: DESCRIPTION,
   alternates: alternatesFor("/solutions"),
-  openGraph: { images: OG_IMAGES, title: "Solutions | Tyre Pulse", description: DESCRIPTION, url: "/solutions", type: "website" },
+  openGraph: { images: OG_IMAGES, title: "Solutions by use case | Tyre Pulse", description: DESCRIPTION, url: "/solutions", type: "website" },
 };
 
 const CARDS = [
-  { href: "/solutions/tyre-management", title: "Tyre management", text: "Cost per km by brand and size, removal forecasts, an RFID or serial passport per tyre, and TPMS alerts through telematics." },
-  { href: "/solutions/ready-mix-fleet", title: "Ready-mix fleet", text: "Preventive maintenance for mixers, pumps and plant, breakdown downtime split into waiting and repair, and cost per m3." },
+  { href: "/solutions/tyre-management", title: "Tyre management", text: "Cost per km by brand and size, tyre life forecasts from kilometres and hours run, and a history per serial. Live TPMS alerts are planned." },
+  { href: "/solutions/ready-mix-fleet", title: "Ready-mix fleet", text: "Breakdown downtime split into waiting and repair, cost per m3, and service plans on request for mixers, pumps and plant." },
   { href: "/solutions/spreadsheets-to-platform", title: "Spreadsheets to platform", text: "A factual comparison with spreadsheets and generic maintenance tools, and what moving your files involves." },
 ] as const;
 
@@ -50,7 +50,7 @@ export default function SolutionsPage() {
       <section className="section-pad soft-bg" aria-labelledby="sol-more">
         <div className="site-shell">
           <h2 className="sec-h" id="sol-more">Looking by industry or by module?</h2>
-          <p className="panel-text">The industries page covers construction, transport, rental, workshop networks and government fleets. The platform pages describe each module in detail.</p>
+          <p className="panel-text">The industries page covers ready-mix, construction, heavy equipment, transport, buses and workshop networks. The platform pages describe each module in detail.</p>
           <p><Link className="btn-text" href="/industries">Browse industries <ArrowRight size={16} aria-hidden="true" /></Link> <Link className="btn-text" href="/platform">Browse the platform <ArrowRight size={16} aria-hidden="true" /></Link></p>
         </div>
       </section>

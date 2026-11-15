@@ -15,7 +15,7 @@
  * several modules already import SITE_URL from this one.
  */
 export { SITE_URL, APP_URL } from "@/lib/site";
-import { SITE_URL, APP_URL, WHATSAPP_URL } from "@/lib/site";
+import { SITE_URL, APP_URL, IOS_STATEMENT, WHATSAPP_URL } from "@/lib/site";
 import type { Faq } from "@/lib/faqs";
 
 export const ANDROID_PACKAGE = "com.shahzebrahman.tyrepulseinspector";
@@ -44,25 +44,24 @@ export const OPERATING_SYSTEMS = HAS_IOS_APP ? "Web, Android, iOS" : "Web, Andro
 /** Prose form of the same fact, for the plain-text files. */
 export const PLATFORM_SENTENCE = HAS_IOS_APP
   ? "It is available as a web application, an Android app and an iOS app."
-  : "It is available as a web application and as an Android app. There is no iOS app.";
+  : `It is available as a web application and as an Android app. ${IOS_STATEMENT}`;
 
 export const BRAND_NAME = "Tyre Pulse";
-export const BRAND_TAGLINE = "Smarter Wheels. Stronger Fleet.";
 export const BRAND_COLOR = "#161616";
 
 export const PRODUCT_DESCRIPTION =
-  "Tyre Pulse is a PMV (plant, machinery and vehicles) operations platform. It connects asset records, preventive maintenance, workshop job cards, field inspections, tyre lifecycle, stores and procurement, costs, approvals and reporting in one system for multi-site and multi-country operations.";
+  "Tyre Pulse is a PMV (plant, machinery and vehicles) operations platform. It connects asset records, workshop job cards, field inspections, tyre lifecycle, stores, costs, sign-off and reporting in one system for multi-site and multi-country operations.";
 
 /** The eight capability groups the product page describes. */
 export const MODULES: ReadonlyArray<{ name: string; description: string }> = [
-  { name: "Tyre and fleet lifecycle", description: "Assets, tyre identity, fitment, pressure, tread, damage, repair, warranty, transfer, replacement and disposal with complete history." },
-  { name: "Maintenance and workshop", description: "Preventive plans, job cards, labour and parts, downtime, technician workload, bay utilization and repair quality." },
+  { name: "Tyre and fleet lifecycle", description: "Assets, tyre identity, fitment, pressure, damage, removal, scrap and disposal with complete history. Warranty claims are set up on request." },
+  { name: "Maintenance and workshop", description: "Job cards, labour and parts, downtime and technician workload. Preventive plans are set up on request." },
   { name: "Digital inspections", description: "Role-based inspection flows with photos, readings, defects, drafts, signatures, offline work, approval and corrective action." },
-  { name: "Inventory and procurement", description: "Tyre and spare-parts stock with issues, returns, transfers, requests, quotation comparison, purchasing and vendor performance." },
-  { name: "Approvals and organization", description: "Approvers resolved by company, country, site, department, role, risk and financial authority, with delegation and audit history." },
+  { name: "Inventory and stores", description: "Tyre and spare-parts stock by site, with parts issued against job cards. Purchase requests are set up on request." },
+  { name: "Sign-off and approvals", description: "Sign-off by role on inspections, checklists and accident closure, with a signature and an audit history." },
   { name: "Reports and executive intelligence", description: "KPI dashboards, scheduled reports, live TV displays, secure links and white-layout PDF, PPTX and Excel outputs." },
-  { name: "Access and tenant control", description: "Organizations kept separate, with users restricted by role, location, record, field, device and approval authority." },
-  { name: "AI and automation", description: "Concise data-backed findings, root causes and recommended actions, with model, cost, token and background job tracking." },
+  { name: "Access control", description: "Access by role and country, with country scope enforced in the database and site scoping available. Each customer is set up by the Tyre Pulse team." },
+  { name: "AI-assisted photo review (pilot)", description: "A pilot that suggests possible tyre defects from inspection photos to assist a human reviewer. Its accuracy is still being validated and no accuracy is claimed." },
 ];
 
 type Json = Record<string, unknown>;
@@ -83,7 +82,6 @@ export function organizationSchema(): Json {
     "@id": `${SITE_URL}/#organization`,
     name: BRAND_NAME,
     alternateName: "TyrePulse",
-    slogan: BRAND_TAGLINE,
     url: SITE_URL,
     logo: {
       "@type": "ImageObject",
@@ -148,7 +146,7 @@ export function mobileApplicationSchema(): Json {
     downloadUrl: PLAY_STORE_URL,
     url: PLAY_STORE_URL,
     description:
-      "The Tyre Pulse field app for Android. Tyre inspections with photos, tread and pressure capture, barcode and QR asset scanning, meter and engine-hour logging, vehicle washing logs, and offline work that syncs when the device is back online.",
+      "The Tyre Pulse field app for Android. Tyre inspections with photos and pressure capture, barcode and QR asset scanning, meter and engine-hour logging, vehicle washing logs, and offline work that syncs when the device is back online.",
     isAccessibleForFree: false,
     publisher: { "@id": `${SITE_URL}/#organization` },
   };
@@ -171,7 +169,7 @@ export function iosApplicationSchema(): Json | null {
     downloadUrl: APP_STORE_URL,
     url: APP_STORE_URL,
     description:
-      "The Tyre Pulse field app for iOS. Tyre inspections with photos, tread and pressure capture, asset scanning, meter logging and offline work that syncs when the device is back online.",
+      "The Tyre Pulse field app for iOS. Tyre inspections with photos and pressure capture, asset scanning, meter logging and offline work that syncs when the device is back online.",
     isAccessibleForFree: false,
     publisher: { "@id": `${SITE_URL}/#organization` },
   };

@@ -9,9 +9,9 @@ import { PRICING_FAQ as PRICE_FAQ } from "@/lib/faqs";
 import { OG_IMAGES } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Pricing",
+  title: "Pricing: packages quoted on your fleet size",
   description:
-    "Tyre Pulse plans for solo owners, teams, professional operators and enterprises. Quoted on request by fleet size, users, modules, countries and integrations.",
+    "Indicative Tyre Pulse packages for solo owners, teams, professional operators and enterprises. Quoted on request by fleet size, users, modules, countries and integrations.",
   alternates: alternatesFor("/pricing"),
   openGraph: { images: OG_IMAGES,
     title: "Pricing | Tyre Pulse",
@@ -24,15 +24,15 @@ export const metadata: Metadata = {
 const plans = [
   ["Solo", "For an owner managing a small fleet", ["Core asset and tyre records", "Inspections", "Basic dashboards", "Standard exports"]],
   ["Team", "For growing site and workshop teams", ["Multiple users and sites", "Approvals", "Maintenance and inventory", "PDF and Excel reports"]],
-  ["Professional", "For established fleet operations", ["Advanced analytics", "Scheduled reports", "TV dashboards", "API and automation options"]],
-  ["Enterprise", "For large and multi-country groups", ["Custom users and assets", "SSO and security controls", "Data migration and integrations", "SLA and priority support"]],
+  ["Professional", "For established fleet operations", ["Advanced analytics", "Scheduled reports", "TV dashboards", "API access, on request"]],
+  ["Enterprise", "For large and multi-country groups", ["Custom users and assets", "Single sign-on, on request", "Data migration and integrations", "Support terms agreed on request"]],
 ];
 
 const INCLUDED = [
-  "Phone app for the field that works offline",
+  "Android app for the field that works offline",
   "Arabic and English, each country in its own currency",
   "Import from your ERP exports and Excel files",
-  "Access by company, country, site and role",
+  "Access by role and country, with site scoping available",
   "Excel and PDF exports on every register",
   "Onboarding on your own asset list",
 ];
@@ -41,11 +41,11 @@ export default function PricingPage() {
   return <PageFrame>
     <JsonLd data={faqSchema(PRICE_FAQ, "/pricing")} />
     <JsonLd data={pageBreadcrumb("Pricing", "/pricing")} />
-    <PageTop crumbs={[{ href: "/", label: "Home" }, { label: "Pricing" }]} title="Start with the control you need. Expand when you are ready." lead="Pricing is based on fleet size, users, modules, countries and integrations. Send your fleet size and we reply with a figure." cta={false} />
+    <PageTop crumbs={[{ href: "/", label: "Home" }, { label: "Pricing" }]} title="Start with the control you need. Expand when you are ready." lead="Pricing is based on fleet size, users, modules, countries and integrations. Send your fleet size and we reply with a figure. The packages below are indicative, and our team sets up each customer. There is no self sign-up." cta={false} />
     <section className="section-pad tight"><div className="site-shell">
       <div className="price-grid">
         {plans.map(([name, text, features], i) => (
-          <article className={`card price-card ${i === 2 ? "featured" : ""}`} key={String(name)} aria-label={i === 2 ? `${name}, most flexible` : String(name)}>
+          <article className={`price-card tp-priced ${i === 2 ? "featured" : ""}`} key={String(name)} aria-label={i === 2 ? `${name}, most flexible` : String(name)}>
             {i === 2 && <span className="eyebrow">Most flexible</span>}
             <h2 className="h2 price-name">{String(name)}</h2>
             <p className="muted price-for">{String(text)}</p>
@@ -57,7 +57,7 @@ export default function PricingPage() {
     </div></section>
     <section className="section-pad soft-bg" aria-labelledby="incl-h"><div className="site-shell split split-top">
       <div>
-        <h2 className="sec-h" id="incl-h">Included in every plan.</h2>
+        <h2 className="sec-h" id="incl-h">Included in every package.</h2>
         <p className="panel-text">The parts a fleet cannot run without are never an add-on.</p>
       </div>
       <ul className="tick-list incl-list">{INCLUDED.map((t) => <li key={t}><CheckCircle2 size={18} aria-hidden="true" />{t}</li>)}</ul>

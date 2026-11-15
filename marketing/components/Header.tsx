@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BadgeDollarSign, Box, Building2, ChevronDown, CircleDot, ClipboardCheck, FileSpreadsheet, LayoutGrid, Mail, PlayCircle, ShieldCheck, Truck, Wrench } from "lucide-react";
+import { BadgeDollarSign, BarChart3, Box, Building2, ChevronDown, CircleDot, ClipboardCheck, FileSpreadsheet, HelpCircle, Info, LayoutGrid, Mail, PlayCircle, ShieldCheck, Truck, Wrench } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { APP_URL } from "@/lib/site";
 import { MENU_GROUPS, menuHref } from "@/lib/nav";
@@ -14,7 +14,7 @@ const MENUS = MENU_GROUPS;
 /** One icon per menu entry, keyed by its link. */
 const ICONS: Record<string, typeof Truck> = {
   "/platform": LayoutGrid, "/platform/fleet-assets": Truck, "/platform/maintenance": Wrench, "/platform/inspections": ClipboardCheck,
-  "/platform/inventory": Box, "/solutions/tyre-management": CircleDot, "/solutions/ready-mix-fleet": Truck, "/solutions/spreadsheets-to-platform": FileSpreadsheet, "/industries": Building2, "/pricing": BadgeDollarSign, "/platform#tours": PlayCircle, "/security": ShieldCheck, "/contact": Mail,
+  "/platform/inventory": Box, "/platform/tyre-lifecycle": CircleDot, "/platform/reports": BarChart3, "/faq": HelpCircle, "/about": Info, "/solutions/tyre-management": CircleDot, "/solutions/ready-mix-fleet": Truck, "/solutions/spreadsheets-to-platform": FileSpreadsheet, "/industries": Building2, "/pricing": BadgeDollarSign, "/platform#tours": PlayCircle, "/security": ShieldCheck, "/contact": Mail,
 };
 
 /** Header copy per locale. The Arabic page links to the English pages, which are the only other locale. */
@@ -77,16 +77,47 @@ export function Header({ locale = "en" }: { locale?: "en" | "ar" }) {
     return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("mousedown", onDown); };
   }, [menu, mobile, closeAll]);
 
+  // The mobile sheet is taller than a phone screen. While it is open the page behind it
+  // must not scroll (the sheet scrolls instead, see .mobile-panel) and Tab must stay
+  // inside the bar, so a keyboard user cannot wander into content hidden under the sheet.
+  useEffect(() => {
+    if (!mobile) return;
+    const root = document.documentElement;
+    root.classList.add("tp-menu-open");
+    const onTab = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || !barRef.current) return;
+      const items = Array.from(barRef.current.querySelectorAll<HTMLElement>("a[href], button:not([disabled])")).filter((el) => el.offsetParent !== null);
+      if (!items.length) return;
+      const first = items[0], last = items[items.length - 1];
+      const here = document.activeElement as HTMLElement | null;
+      if (e.shiftKey && here === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && here === last) { e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", onTab);
+    // A phone rotated or a window widened past the breakpoint must not stay locked.
+    const mq = window.matchMedia("(min-width: 1081px)");
+    const onWide = () => { if (mq.matches) setMobile(false); };
+    mq.addEventListener("change", onWide);
+    return () => { root.classList.remove("tp-menu-open"); document.removeEventListener("keydown", onTab); mq.removeEventListener("change", onWide); };
+  }, [mobile]);
+
   return (
     <>
     <div className="topbar-sentinel" ref={sentinelRef} aria-hidden="true" />
-    <div className={`topbar${scrolled ? " is-scrolled" : ""}`} ref={barRef}>
+    <header className={`topbar${scrolled ? " is-scrolled" : ""}`} ref={barRef}>
       <A11yStyles />
       <div className="site-shell topbar-inner">
         <Link className="topbar-logo" href="/" aria-label={c.home}><Logo /></Link>
         <nav className="topnav" aria-label={c.main}>
           {MENUS.map((m) => (
-            <div className="topnav-item" key={m.id} onPointerEnter={() => hoverOpen(m.id)} onPointerLeave={hoverClose}>
+            <div
+              className="topnav-item"
+              key={m.id}
+              onPointerEnter={() => hoverOpen(m.id)}
+              onPointerLeave={hoverClose}
+              // Keyboard: once focus leaves this item, its panel must not stay open over the page.
+              onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setMenu((cur) => (cur === m.id ? null : cur)); }}
+            >
               <button
                 id={`menu-btn-${m.id}`}
                 type="button"
@@ -103,7 +134,7 @@ export function Header({ locale = "en" }: { locale?: "en" | "ar" }) {
                     {m.items.map((it) => {
                       const Icon = ICONS[it.href] ?? LayoutGrid;
                       return (
-                        <Link key={it.href} href={menuHref(it.href)} onClick={closeAll} aria-current={pathname === it.href ? "page" : undefined}>
+                        <Link key={it.href} href={menuHref(it.href)} prefetch={false} onClick={closeAll} aria-current={pathname === it.href ? "page" : undefined}>
                           <i className="dd-ic" aria-hidden="true"><Icon size={18} /></i>
                           <span className="dd-t"><b>{ar ? it.labelAr : it.label}</b><span>{ar ? it.textAr : it.text}</span></span>
                         </Link>
@@ -142,7 +173,7 @@ export function Header({ locale = "en" }: { locale?: "en" | "ar" }) {
             {MENUS.map((m, gi) => (
               <div key={m.id} className="mobile-group" style={{ "--rv-delay": `${gi * 60}ms` } as React.CSSProperties}>
                 <span className="mobile-group-h">{ar ? m.labelAr : m.label}</span>
-                {m.items.map((it) => <Link key={it.href} href={menuHref(it.href)} onClick={closeAll} aria-current={pathname === it.href ? "page" : undefined}>{ar ? it.labelAr : it.label}</Link>)}
+                {m.items.map((it) => <Link key={it.href} href={menuHref(it.href)} prefetch={false} onClick={closeAll} aria-current={pathname === it.href ? "page" : undefined}>{ar ? it.labelAr : it.label}</Link>)}
               </div>
             ))}
             <div className="mobile-group" style={{ "--rv-delay": `${MENUS.length * 60}ms` } as React.CSSProperties}>
@@ -155,7 +186,7 @@ export function Header({ locale = "en" }: { locale?: "en" | "ar" }) {
           </div>
         </nav>
       )}
-    </div>
+    </header>
     </>
   );
 }

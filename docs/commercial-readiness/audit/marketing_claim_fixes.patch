@@ -1,0 +1,1001 @@
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/app/about/page.tsx b/marketing/app/about/page.tsx
+--- a/marketing/app/about/page.tsx	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/app/about/page.tsx	2026-11-12 10:23:10.000000000 +0000
+@@ -48,7 +48,7 @@
+           <div className="tp-prose">
+             <p>It is a hosted platform with a web application and a field app. It holds the asset register, tyre records, inspections, workshop job cards, stores and costs of a fleet in one place.</p>
+             <p>It was built inside a working ready-mix concrete operation that runs mixers, pumps and batching plants in Saudi Arabia, the UAE and Egypt, and it carries that operation&apos;s daily work today.</p>
+-            <p>The same platform is configured for other fleets by asset type, site structure, roles and approval steps.</p>
++            <p>For another fleet, our team configures asset types, site structure, roles and sign-off steps with you during onboarding. There is no self sign-up.</p>
+           </div>
+           <CapabilityList items={WHERE} />
+         </div>
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/app/ar/page.tsx b/marketing/app/ar/page.tsx
+--- a/marketing/app/ar/page.tsx	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/app/ar/page.tsx	2026-11-12 10:23:10.000000000 +0000
+@@ -35,13 +35,13 @@
+ /* Mirrors the English home page modules, so both languages describe the same product. */
+ const MODULES = [
+   [Truck, "دورة حياة الأسطول والأصول", "تتبع المعدات والآليات والمركبات من الشراء حتى الاستبعاد."],
+-  [Wrench, "الصيانة الوقائية", "خطط صيانة حسب الساعات أو الكيلومترات أو التاريخ لتبقى الأصول جاهزة."],
++  [Wrench, "الصيانة الوقائية (عند الطلب)", "خطط صيانة حسب الساعات أو الكيلومترات أو التاريخ، تُعَدّ عند الطلب وفق فترات الخدمة لديك."],
+   [Settings, "الورشة وبطاقات العمل", "إدارة الأعمال والعمالة وقطع الغيار وخدمات الموردين الخارجيين."],
+-  [CircleDot, "دورة حياة الإطارات", "الفحص والتركيب والتدوير والتكلفة لكل كيلومتر أو ساعة تشغيل."],
+-  [ClipboardCheck, "الفحوصات والسلامة", "قوائم فحص على الجوال بالصور والقراءات والتوقيع، مع العمل دون اتصال."],
++  [CircleDot, "دورة حياة الإطارات", "الفحص والتركيب والإزالة والتكلفة لكل كيلومتر أو ساعة تشغيل."],
++  [ClipboardCheck, "الفحوصات والسلامة", "قوائم فحص على تطبيق أندرويد بالصور والقراءات والتوقيع، مع العمل دون اتصال."],
+   [ShieldCheck, "الحوادث والتأمين", "تسجيل الحوادث وإدارة المطالبات ومتابعة بيانات التأمين."],
+-  [Box, "المستودعات والمشتريات", "مخزون كل موقع وصرف القطع على بطاقة العمل وطلبات شراء بموافقة."],
+-  [Fuel, "الوقود وتكاليف التشغيل", "تكاليف التشغيل حسب الأصل أو الموقع أو المشروع."],
++  [Box, "المستودعات وقطع الغيار", "مخزون كل موقع وصرف القطع على بطاقة العمل. طلبات الشراء تُفعَّل عند الطلب."],
++  [Fuel, "تكاليف التشغيل", "تكاليف التشغيل حسب الأصل والموقع. سجلات الوقود تُفعَّل عند الطلب."],
+ ] as const;
+ 
+ const STEPS = [
+@@ -110,11 +110,11 @@
+         <div className="site-shell ar-split">
+           <div>
+             <h2 className="sec-h" id="ar-cost">أرقام واضحة لكل موقع.</h2>
+-            <p className="lead">تكلفة التشغيل والصيانة والجاهزية لكل أصل وموقع ومشروع، بعملة كل دولة ودون خلط بين العملات.</p>
++            <p className="lead">تكلفة التشغيل والصيانة والجاهزية لكل أصل وموقع، بعملة كل دولة ودون خلط بين العملات.</p>
+             <ul className="ar-points">
+               <li><FileCheck2 size={18} aria-hidden="true" /> تقارير PDF وExcel وPowerPoint</li>
+               <li><BarChart3 size={18} aria-hidden="true" /> لوحات عرض مباشرة للإدارة والشاشات</li>
+-              <li><ShieldCheck size={18} aria-hidden="true" /> صلاحيات حسب الشركة والدولة والموقع والدور</li>
++              <li><ShieldCheck size={18} aria-hidden="true" /> صلاحيات حسب الدور والدولة، مع إمكانية التقييد حسب الموقع</li>
+             </ul>
+           </div>
+           {/* The product ships in English and Arabic; this sample screen is the English interface. */}
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/app/industries/page.tsx b/marketing/app/industries/page.tsx
+--- a/marketing/app/industries/page.tsx	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/app/industries/page.tsx	2026-11-12 10:23:10.000000000 +0000
+@@ -28,12 +28,12 @@
+  */
+ const INDUSTRIES: CardProps[] = [
+   { photo: { name: "mixer" }, title: "Ready-mix concrete", text: "Transit mixers, pumps and batching plants, where load, site access, downtime and tyre failure decide the day.", note: "In production today", href: "/solutions/ready-mix-fleet", linkLabel: "Read the use case" },
+-  { photo: { name: "loaderSite" }, title: "Construction fleets", text: "Heavy vehicles and equipment across projects and remote sites, measured by engine hour where there is no odometer." },
+-  { photo: { name: "loader", position: "30% 60%" }, title: "Heavy equipment", text: "Loaders, excavators and generators with service by hours, off-road tyre sizes and their own inspection checklists." },
+-  { title: "Workshop networks", text: "Open jobs, technicians, parts delays and repair quality across more than one workshop." },
+-  { title: "Transport and logistics", text: "High-mileage trucks and trailers: tyre life, cost per km, inspections and availability by depot." },
++  { photo: { name: "loaderSite" }, title: "Construction fleets", text: "Heavy vehicles and equipment across projects and remote sites, measured by engine hour where there is no odometer.", note: "Configured with you" },
++  { photo: { name: "loader", position: "30% 60%" }, title: "Heavy equipment", text: "Loaders, excavators and generators with service by hours, off-road tyre sizes and their own inspection checklists.", note: "Configured with you" },
++  { title: "Workshop networks", text: "Open jobs, technicians and parts delays across more than one workshop.", note: "Configured with you" },
++  { title: "Transport and logistics", text: "High-mileage trucks and trailers: tyre life, cost per km, inspections and availability by depot.", note: "Configured with you" },
+   { title: "Buses and commercial vehicles", text: "Daily pre-trip checks, tyre condition by wheel position and service by kilometres or date.", note: "Configured on request" },
+-  { title: "Multi-site and multi-country operations", text: "Each site and country sees its own records in its own currency, and the head office sees them all." },
++  { title: "Multi-site and multi-country operations", text: "Each country sees its own records in its own currency, and the head office sees them all. Site scoping is available.", note: "In production today" },
+   { title: "Heavy equipment rental", text: "Customer assignments, operating hours and handover inspections.", note: "Configured on request" },
+   { title: "Government and enterprise fleets", text: "Strict access by location, approval limits and a full audit history.", note: "Configured on request" },
+ ];
+@@ -41,7 +41,7 @@
+ export default function IndustriesPage() {
+   return <PageFrame>
+     <JsonLd data={pageBreadcrumb("Industries", "/industries")} />
+-    <PageTop photo="fleetLineup" crumbs={[{ href: "/", label: "Home" }, { label: "Industries" }]} title="Configured for the way your operation works." lead="Built inside a ready-mix concrete operation running mixers, pumps and batching plants across Saudi Arabia, the UAE and Egypt. The same platform is configured for each model below." />
++    <PageTop photo="fleetLineup" crumbs={[{ href: "/", label: "Home" }, { label: "Industries" }]} title="Configured for the way your operation works." lead="Built inside a ready-mix concrete operation running mixers, pumps and batching plants across Saudi Arabia, the UAE and Egypt. Ready-mix is the operation it runs today. The other models below are configured with you and have not yet run in production." />
+     <section className="section-pad tight" aria-label="Industries"><div className="site-shell">
+       <CardGrid cols={3}>
+         {INDUSTRIES.map((c) => <Card key={c.title} titleAs="h2" {...c} />)}
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/app/llms-full.txt/route.ts b/marketing/app/llms-full.txt/route.ts
+--- a/marketing/app/llms-full.txt/route.ts	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/app/llms-full.txt/route.ts	2026-11-12 10:23:10.000000000 +0000
+@@ -20,7 +20,7 @@
+ 
+ const body = `# Tyre Pulse
+ 
+-> Tyre Pulse is a PMV (plant, machinery and vehicles) operations platform. It connects asset records, preventive maintenance, workshop job cards, field inspections, tyre lifecycle, stores and procurement, costs, approvals and reporting in one system for multi-site and multi-country operations.
++> Tyre Pulse is a PMV (plant, machinery and vehicles) operations platform. It connects asset records, workshop job cards, field inspections, tyre lifecycle, stores, costs, sign-off and reporting in one system for multi-site and multi-country operations.
+ 
+ This file is the long form reference for language models and AI assistants. It is written so an assistant can answer questions about Tyre Pulse directly, without guessing.
+ 
+@@ -28,17 +28,19 @@
+ 
+ Tyre Pulse is an operations platform for organisations that run vehicles and heavy equipment. Instead of spreading tyre records, job cards, inspections, stock, approvals and management reports across spreadsheets and disconnected tools, it keeps them in one structured system where each record carries its own responsibility, evidence, time, cost and approval history.
+ 
+-The product is aimed at two audiences at once. Field teams, meaning inspectors, tyre technicians, workshop staff and drivers, capture work as it happens. Management, meaning fleet managers, workshop managers, finance and executives, read the same data back as KPIs, variance against target, root cause and recommended action.
++The product is aimed at two audiences at once. Field teams, meaning inspectors, tyre technicians, workshop staff and drivers, capture work as it happens. Management, meaning fleet managers, workshop managers, finance and executives, read the same data back as KPIs, cost per machine and reports.
+ 
+ ## Who it is for
+ 
++Ready-mix concrete across several sites and countries is the operation in production today. The other fleet types below are configured with the customer and have not yet run in production.
++
+ - Construction fleets running heavy vehicles and equipment across projects, remote sites and multiple countries.
+ - Transport and logistics operators tracking tyre life, maintenance, inspections, availability and operating cost on high-mileage fleets.
+ - Ready-mix concrete operations running mixers, pumps and support vehicles where load, off-road conditions, downtime and tyre failure matter.
+ - Heavy equipment fleets (loaders, excavators, generators) serviced by engine hours. Equipment rental is configured on request.
+ - Bus and commercial vehicle fleets, configured on request: daily pre-trip checks, tyre condition by wheel position and service by kilometres or date.
+-- Multi-site and multi-country operations where each site and country sees its own records in its own currency.
+-- Workshop networks controlling open jobs, bays, technicians, parts delays, repair quality and customer reporting across locations.
++- Multi-site and multi-country operations where each country sees its own records in its own currency, with site scoping available.
++- Workshop networks, configured with the customer: open jobs, technicians and parts delays across locations.
+ - Government and enterprise fleets, configured on request: strict access by location, approval limits and audit history.
+ 
+ ## Capability groups
+@@ -48,7 +50,7 @@
+ ## How the work flows
+ 
+ 1. Capture. An inspection, job card, tyre event, accident or request is raised, in the field or in the office.
+-2. Route. The right person is assigned by location, role and authority, rather than by a hardcoded name.
++2. Route. Sign-off goes to the approver roles set up for the company, for inspections, checklists and accident closure.
+ 3. Control. Progress, blockers, cost, service level and approval are tracked against that record.
+ 4. Understand. Results become KPIs, risks and actions, using the same controlled calculations that power the screens, the exports and the executive displays.
+ 
+@@ -56,9 +58,9 @@
+ 
+ These pages on the site describe Tyre Pulse by the problem it solves.
+ 
+-- Tyre management (${SITE_URL}/solutions/tyre-management). Every tyre is recorded by serial number, wheel position and odometer at fitment, removal and scrap, with the reason and who recorded it. Cost per kilometre is reported by brand and size, or per engine hour for plant. Tyre life is forecast from the kilometres and hours each tyre has run against the expected life for its size and vehicle type. RFID tags are optional; a read opens the tyre's history across vehicles. Live TPMS pressure arrives through the customer's existing telematics connection, and a tyre losing pressure raises an alert to the tyre team.
+-- Ready-mix fleet (${SITE_URL}/solutions/ready-mix-fleet). Service plans for mixers, pumps, loaders, generators and plant by engine hours, kilometres or calendar. Job cards carry production out, workshop in, workshop out and production in times, so waiting time and repair time are reported separately. Cost per cubic metre divides maintenance, tyre and service-contract cost by the approved cubic metres the plants delivered, by region and month. Production volumes must be supplied for that figure.
+-- Spreadsheets to platform (${SITE_URL}/solutions/spreadsheets-to-platform). A comparison of spreadsheets, generic maintenance tools and Tyre Pulse on tyre history, cost per kilometre, offline field capture, defect to job card, multi-currency reporting, access control, change history and setup effort. Existing spreadsheets and ERP exports are imported as they are, mapped to fields and checked for duplicates before saving.
++- Tyre management (${SITE_URL}/solutions/tyre-management). Every tyre is recorded by serial number, wheel position and odometer at fitment, removal and scrap, with the reason and who recorded it. Cost per kilometre is reported by brand and size, or per engine hour for plant. Tyre life is forecast from the kilometres and hours each tyre has run against the expected life for its size and vehicle type. A scanned or typed serial opens the tyre's history across vehicles; RFID reads are set up on request. Pressure is recorded at each inspection. Live TPMS pressure is planned and is not available today.
++- Ready-mix fleet (${SITE_URL}/solutions/ready-mix-fleet). Service plans for mixers, pumps, loaders, generators and plant by engine hours, kilometres or calendar are set up on request. Job cards carry production out, workshop in, workshop out and production in times, so waiting time and repair time are reported separately. Cost per cubic metre divides maintenance, tyre and service-contract cost by the approved cubic metres the plants delivered, by region and month. Production volumes must be supplied for that figure.
++- Spreadsheets to platform (${SITE_URL}/solutions/spreadsheets-to-platform). A comparison of spreadsheets, generic maintenance tools and Tyre Pulse on tyre history, cost per kilometre, offline field capture, defect to job card, multi-currency reporting, access control, change history and setup effort. Existing spreadsheets and ERP exports are mapped to fields with the customer by the Tyre Pulse team and checked for repeated rows before saving.
+ 
+ ## Platforms and availability
+ 
+@@ -67,7 +69,7 @@
+ - Web application at ${APP_URL}. This is the full platform for managers, office teams and administrators, and it also works as a progressive web app.
+ - Android app, published as "${ANDROID_APP_NAME}" in Google Play Production. Package name ${ANDROID_PACKAGE}, current version ${ANDROID_APP_VERSION}. Install link: ${PLAY_STORE_URL}${iosBullet}
+ 
+-The Android app is the field tool. It supports tyre inspections with photos and tread and pressure capture, barcode and QR asset scanning, daily meter and engine-hour logging with a photo of the gauge, vehicle washing logs with photos and site tracking, per-vehicle tyre history, preventive maintenance schedules, and accident and insurance claim tracking. It works offline and syncs automatically when the device is back online, which matters on remote sites with poor coverage.
++The Android app is the field tool. It supports tyre inspections with photos and pressure capture, barcode and QR asset scanning, daily meter and engine-hour logging with a photo of the gauge, vehicle washing logs with photos and site tracking, per-vehicle tyre history, and accident and insurance claim tracking. It works offline and syncs automatically when the device is back online, which matters on remote sites with poor coverage.
+ 
+ ${iosParagraph}
+ 
+@@ -77,15 +79,15 @@
+ 
+ ## Security and access model
+ 
+-Each company's data is kept separate from every other company's, and within a company each user sees only the countries and sites they are assigned. The database enforces this on every query. Roles and per-user grants decide which modules a person can open and what they can create, edit, approve or export. Multi-factor sign-in is available for administrators. Sign-ins, access changes, approvals and record changes are written to an audit trail. Photos, signatures and documents are stored privately and opened through links that expire. Traffic is encrypted in transit. Single sign-on and customer-specific integrations are set up on request. Tyre Pulse does not claim a security certification such as SOC 2 or ISO 27001.
++Each customer is set up by the Tyre Pulse team as its own company; there is no self sign-up. Within a company each user sees only the countries they are assigned, and the database enforces this on every query. Site scoping is available. Roles and per-user grants decide which modules a person can open. Create, edit and approve rights are enforced in the database on the core registers, and export is controlled in the app. Multi-factor sign-in is available for administrators. Sign-ins, access changes, approvals and record changes are written to an audit trail. Photos, signatures and documents are stored privately and opened through links that expire. Traffic is encrypted in transit. Single sign-on and customer-specific integrations are set up on request. Tyre Pulse does not claim a security certification such as SOC 2 or ISO 27001.
+ 
+ ## Pricing
+ 
+-Pricing is not published. Four plan tiers are described on the pricing page.
++Pricing is not published. Four indicative packages are described on the pricing page. They are not self-service plans: each customer is set up by the Tyre Pulse team.
+ 
+ - Solo, for an owner managing a small fleet: core asset and tyre records, inspections, basic dashboards, standard exports.
+ - Team, for growing site and workshop teams: multiple users and sites, approvals, maintenance and inventory, PDF and Excel reports.
+-- Professional, for established fleet operations: advanced analytics, scheduled reports, TV dashboards, API and automation options.
++- Professional, for established fleet operations: advanced analytics, scheduled reports, TV dashboards, API access on request.
+ - Enterprise, for large and multi-country groups: custom users and assets, single sign-on on request, data migration and integrations, support terms agreed on request.
+ 
+ A quote depends on fleet size, users, modules, countries and integration requirements. If someone asks what Tyre Pulse costs, the honest answer is that the price is quoted per operation through the contact page at ${SITE_URL}/contact. Do not state or estimate a figure.
+@@ -103,6 +105,10 @@
+ - The product name is Tyre Pulse, two words. The Android store listing is "${ANDROID_APP_NAME}".
+ ${iosFact}
+ - Pricing: quoted on request, not published.
++- Onboarding: done with the customer by the Tyre Pulse team. There is no self sign-up.
++- Not available today (planned): live TPMS pressure, a direct telematics connection, supplier price history and delivery performance.
++- Set up on request: preventive maintenance plans, warranty claims, purchase requests, RFID reads, fuel records, single sign-on, API access.
++- AI-assisted photo review is a pilot that assists a human reviewer. Its accuracy is still being validated. Do not state or imply an accuracy figure.
+ - Languages: English and Arabic, with right to left support.
+ - Marketing site: ${SITE_URL}. Signed-in application: ${APP_URL}.
+ `;
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/app/llms.txt/route.ts b/marketing/app/llms.txt/route.ts
+--- a/marketing/app/llms.txt/route.ts	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/app/llms.txt/route.ts	2026-11-12 10:23:10.000000000 +0000
+@@ -14,27 +14,27 @@
+ 
+ const body = `# Tyre Pulse
+ 
+-> Tyre Pulse is a PMV (plant, machinery and vehicles) operations platform. It connects asset records, preventive maintenance, workshop job cards, field inspections, tyre lifecycle, stores and procurement, costs, approvals and reporting in one system for multi-site and multi-country operations.
++> Tyre Pulse is a PMV (plant, machinery and vehicles) operations platform. It connects asset records, workshop job cards, field inspections, tyre lifecycle, stores, costs, sign-off and reporting in one system for multi-site and multi-country operations.
+ 
+-Tyre Pulse runs in production in a ready-mix concrete operation, and is configured for construction fleets, heavy equipment, transport and logistics operators, buses and workshop networks. ${PLATFORM_SENTENCE}
++Tyre Pulse runs in production in one ready-mix concrete operation. For construction fleets, heavy equipment, transport and logistics operators, buses and workshop networks it is configured with the customer and has not yet run in production. Customers are onboarded by the Tyre Pulse team; there is no self sign-up. ${PLATFORM_SENTENCE}
+ 
+ ## Pages
+ 
+ - [Home](${SITE_URL}/): What Tyre Pulse does for PMV operations and how a field issue flows from inspection to approval, repair and a closed job.
+-- [Platform](${SITE_URL}/platform): Overview of every module: fleet and assets, maintenance and workshop, inspections and safety, tyre lifecycle, accidents and insurance, stores and procurement, fuel, costs and reporting, approvals, integrations.
++- [Platform](${SITE_URL}/platform): Overview of every module: fleet and assets, maintenance and workshop, inspections and safety, tyre lifecycle, accidents and claims, stores, costs and reporting, sign-off, and what is set up on request (fuel records, integrations).
+ - [Fleet and asset management](${SITE_URL}/platform/fleet-assets): Asset records, meter readings and utilisation, service history, documents with expiry reminders, lifecycle from acquisition to disposal.
+-- [Maintenance and workshop](${SITE_URL}/platform/maintenance): Work orders, preventive maintenance by hours, kilometres or date, job cards, technician allocation, parts and labour.
++- [Maintenance and workshop](${SITE_URL}/platform/maintenance): Work orders, job cards, technician allocation, parts and labour. Preventive maintenance by hours, kilometres or date is set up on request.
+ - [Field inspections and safety](${SITE_URL}/platform/inspections): Configurable checklists on the phone, photos and defects, meter readings, actions and work orders, offline mode, digital signatures.
+-- [Tyre lifecycle and serial tracking](${SITE_URL}/platform/tyre-lifecycle): Each tyre tracked by serial and wheel position from fitment to removal, cost per kilometre or engine hour, tyre life against expected life, warranty claims, root cause, and AI-assisted analysis of inspection photos. Live TPMS pressure and RFID reads are set up on request.
+-- [Inventory and procurement](${SITE_URL}/platform/inventory): Stock by site with reorder levels, purchase requests with approval, suppliers, and cost by machine.
++- [Tyre lifecycle and serial tracking](${SITE_URL}/platform/tyre-lifecycle): Each tyre tracked by serial and wheel position from fitment to removal, cost per kilometre or engine hour, tyre life against expected life and root cause. Warranty claims and RFID reads are set up on request. AI-assisted photo review is a pilot that assists a human reviewer; its accuracy is still being validated and no accuracy is claimed. Live TPMS pressure is planned and is not available today.
++- [Inventory and procurement](${SITE_URL}/platform/inventory): Stock by site with reorder levels, parts issued against job cards and cost by machine. Purchase requests and supplier records are set up on request.
+ - [Reports and dashboards](${SITE_URL}/platform/reports): Dashboards, scheduled email reports, shareable read-only boards, and Excel, PDF and PowerPoint exports.
+ - [Solutions](${SITE_URL}/solutions): Tyre Pulse organised by use case, linking to the three pages below.
+-- [Tyre management](${SITE_URL}/solutions/tyre-management): Tyre management for GCC fleets. Each tyre tracked by serial and wheel position, cost per kilometre (or per engine hour for plant) by brand and size, tyre life forecast from kilometres and hours run, an RFID or serial passport per tyre, and live TPMS pressure alerts received through the customer's telematics connection.
+-- [Ready-mix fleet](${SITE_URL}/solutions/ready-mix-fleet): Maintenance for mixers, pumps and plant. Preventive service by engine hours, kilometres or calendar, breakdown downtime split into waiting time and repair time from job card timestamps, and cost per cubic metre against approved plant volumes.
+-- [Spreadsheets to platform](${SITE_URL}/solutions/spreadsheets-to-platform): A factual comparison of spreadsheets, generic maintenance tools and Tyre Pulse, with how existing files are imported and checked for duplicates.
+-- [Industries](${SITE_URL}/industries): How the platform is configured for construction, transport and logistics, ready-mix concrete, heavy equipment, buses, workshop networks and multi-site operations. Equipment rental and government fleets are configured on request.
+-- [Pricing](${SITE_URL}/pricing): Four plan tiers, Solo, Team, Professional and Enterprise. Pricing is quoted on request and is based on fleet size, users, modules, countries and integration requirements. No public price list is published.
+-- [Security and data protection](${SITE_URL}/security): Company and country data isolation enforced in the database, role-based access, multi-factor sign-in available for administrators, an audit trail, private file storage and how to request data deletion. No security certification is claimed.
++- [Tyre management](${SITE_URL}/solutions/tyre-management): Tyre management for GCC fleets. Each tyre tracked by serial and wheel position, cost per kilometre (or per engine hour for plant) by brand and size, tyre life forecast from kilometres and hours run, and a history per serial, with RFID reads set up on request. Pressure is recorded at each inspection. Live TPMS pressure alerts are planned and are not available today.
++- [Ready-mix fleet](${SITE_URL}/solutions/ready-mix-fleet): Maintenance for mixers, pumps and plant. Breakdown downtime split into waiting time and repair time from job card timestamps, and cost per cubic metre against approved plant volumes. Service plans by engine hours, kilometres or calendar are set up on request.
++- [Spreadsheets to platform](${SITE_URL}/solutions/spreadsheets-to-platform): A factual comparison of spreadsheets, generic maintenance tools and Tyre Pulse, with how existing files are mapped with the customer, imported and checked for repeated rows.
++- [Industries](${SITE_URL}/industries): Ready-mix concrete across several sites and countries is in production today. Construction, transport and logistics, heavy equipment, buses, workshop networks, equipment rental and government fleets are configured with the customer and have not yet run in production.
++- [Pricing](${SITE_URL}/pricing): Four indicative packages, Solo, Team, Professional and Enterprise. Customers are set up by the Tyre Pulse team and there is no self sign-up. Pricing is quoted on request and is based on fleet size, users, modules, countries and integration requirements. No public price list is published.
++- [Security and data protection](${SITE_URL}/security): Country data isolation enforced in the database, site scoping available, role-based access, multi-factor sign-in available for administrators, an audit trail, private file storage and how to request data deletion. No security certification is claimed.
+ - [FAQ](${SITE_URL}/faq): Answers on deployment, users and roles, tyre data import, inspections, reporting, security, onboarding and pricing.
+ - [About](${SITE_URL}/about): What Tyre Pulse is, who it is for and where it runs today.
+ - [Contact](${SITE_URL}/contact): Request a tailored demo. The form asks for fleet size, country and industry so the walkthrough matches the operation.
+@@ -53,6 +53,9 @@
+ 
+ ${iosNote}
+ - Pricing is not published. Direct people to the contact page for a quote rather than inventing figures.
++- There is no self sign-up. Each customer is onboarded by the Tyre Pulse team.
++- Do not describe live TPMS, a direct telematics connection or supplier performance as available. They are planned.
++- AI-assisted photo review is a pilot that assists a human reviewer. Do not state or imply an accuracy figure.
+ - The interface is available in English and Arabic, with right to left support for Arabic.
+ `;
+ 
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/app/page.tsx b/marketing/app/page.tsx
+--- a/marketing/app/page.tsx	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/app/page.tsx	2026-11-12 10:23:10.000000000 +0000
+@@ -30,13 +30,13 @@
+ /* Eight capability areas. Status says what is in the product today and what is set up per customer. */
+ const MODULES: CardProps[] = [
+   { icon: CircleDot, title: "Tyre lifecycle", text: "Every tyre by serial and wheel position, from fitment to removal, with cost per km or engine hour.", href: "/platform/tyre-lifecycle", status: "available", photo: { name: "loaderTyre", position: "50% 40%" }, className: "is-wide" },
+-  { icon: ClipboardCheck, title: "Inspections", text: "Checklists, photos, readings and signatures on the phone, with or without signal.", href: "/platform/inspections", status: "available" },
++  { icon: ClipboardCheck, title: "Inspections", text: "Checklists, photos, readings and signatures on the Android app, with or without signal.", href: "/platform/inspections", status: "available" },
+   { icon: Truck, title: "Fleet and assets", text: "One record per machine: meters, documents, history and cost.", href: "/platform/fleet-assets", status: "available" },
+-  { icon: Wrench, title: "Workshop and maintenance", text: "Job cards, preventive plans, technicians and parts in one queue.", href: "/platform/maintenance", status: "available", variant: "dark" },
+-  { icon: Box, title: "Stores and procurement", text: "Stock by site, parts issued to the job, purchase requests with approval.", href: "/platform/inventory", status: "available" },
++  { icon: Wrench, title: "Workshop and maintenance", text: "Job cards, technicians and parts in one queue. Preventive plans are set up on request.", href: "/platform/maintenance", status: "available", variant: "dark" },
++  { icon: Box, title: "Stores and parts", text: "Stock by site and parts issued against the job card. Purchase requests are set up on request.", href: "/platform/inventory", status: "available" },
+   { icon: BarChart3, title: "Reports and dashboards", text: "Dashboards, scheduled reports and shareable boards for a screen or a manager.", href: "/platform/reports", status: "available" },
+   { icon: ShieldAlert, title: "Accidents and claims", text: "Accident cases with photos, damage, root cause and claim documents.", href: "/contact", linkLabel: "Ask in a demo", status: "available" },
+-  { icon: Sparkles, title: "AI-assisted photo analysis", text: "Flags possible tyre defects from inspection photos for your team to check.", href: "/platform/tyre-lifecycle#ai", status: "available" },
++  { icon: Sparkles, title: "AI-assisted photo review (pilot)", text: "Suggests possible tyre defects from inspection photos to assist a human reviewer. Accuracy is still being validated.", href: "/platform/tyre-lifecycle#ai", status: "on-request" },
+ ];
+ 
+ export default function HomePage() {
+@@ -56,7 +56,7 @@
+               </div>
+               <ul className="tp-chips" aria-label="Where it runs">
+                 <li>Web and Android</li>
+-                <li>Works offline in the field</li>
++                <li>Android app works offline</li>
+                 <li>English and Arabic</li>
+               </ul>
+             </div>
+@@ -95,7 +95,7 @@
+         <Section id="rollout" tone="soft" title="Start from the files you already keep.">
+           <ol className="next-steps tp-steps-row">
+             <li><b>Send what you already export.</b><span>An asset list, a month of job cards and your tyre records, as your ERP and Excel produce them.</span></li>
+-            <li><b>We load and check it with you.</b><span>Columns are mapped, duplicates are caught and every row is tied to a machine, a site and a country.</span></li>
++            <li><b>We load and check it with you.</b><span>Columns are mapped with you, repeated rows are checked and each row is tied to a machine, a site and a country.</span></li>
+             <li><b>Teams work on their own records.</b><span>Tyre fitters inspect on the phone, the workshop runs its queue and managers read cost per machine.</span></li>
+           </ol>
+           <p className="tp-more"><Link className="btn-text" href="/faq">Read the questions fleet teams ask <ArrowRight size={16} aria-hidden="true" /></Link></p>
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/app/platform/fleet-assets/page.tsx b/marketing/app/platform/fleet-assets/page.tsx
+--- a/marketing/app/platform/fleet-assets/page.tsx	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/app/platform/fleet-assets/page.tsx	2026-11-12 10:23:10.000000000 +0000
+@@ -43,7 +43,7 @@
+           <div>
+             <h2 className="sec-h" id="util-h">Meters that keep themselves current.</h2>
+             <ul className="tick-list">
+-              {["Hour and kilometre readings from inspections, job cards and telematics", "Readings that go backwards are flagged, never silently accepted", "Preventive schedules driven by the real meter"].map((t) => <li key={t}><CheckCircle2 size={18} aria-hidden="true" />{t}</li>)}
++              {["Hour and kilometre readings from inspections, job cards and telematics export files", "Readings that go backwards are flagged, never silently accepted", "Preventive schedules driven by the real meter, on request"].map((t) => <li key={t}><CheckCircle2 size={18} aria-hidden="true" />{t}</li>)}
+             </ul>
+           </div>
+           <Photo name="fleetLineup" className="art art-frame" fit="contain" />
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/app/platform/inventory/page.tsx b/marketing/app/platform/inventory/page.tsx
+--- a/marketing/app/platform/inventory/page.tsx	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/app/platform/inventory/page.tsx	2026-11-12 10:23:10.000000000 +0000
+@@ -9,7 +9,7 @@
+ 
+ export const metadata: Metadata = {
+   title: "Inventory, procurement and reporting",
+-  description: "Control inventory, manage purchase requests and suppliers, and get clear visibility of costs, availability and performance across your fleet.",
++  description: "Control stock by site, see which parts each job consumed and what every machine costs to run. Purchase requests and supplier records are set up on request.",
+   alternates: alternatesFor("/platform/inventory"),
+   openGraph: { images: OG_IMAGES, title: "Inventory, procurement and reporting | Tyre Pulse", description: "Control costs. Keep your fleet moving.", url: "/platform/inventory", type: "website" },
+ };
+@@ -31,8 +31,8 @@
+             <div id="purchasing" className="anchor-sec">
+               <PurchaseRequest />
+               <div id="suppliers" className="anchor-sec panel stack-gap">
+-                <div className="panel-head"><strong>Suppliers</strong></div>
+-                <p className="panel-text">Keep supplier details, price history and delivery performance next to every purchase, so the next request goes to the supplier that actually delivered.</p>
++                <div className="panel-head"><strong>Purchasing and suppliers, on request</strong></div>
++                <p className="panel-text">Purchase requests with approval and a supplier list are set up with you on request. Supplier price history and delivery performance are planned.</p>
+               </div>
+             </div>
+             <div id="costs" className="anchor-sec"><div id="dashboards" className="anchor-sec"><FleetCostPanel /></div></div>
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/app/platform/maintenance/page.tsx b/marketing/app/platform/maintenance/page.tsx
+--- a/marketing/app/platform/maintenance/page.tsx	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/app/platform/maintenance/page.tsx	2026-11-12 10:23:10.000000000 +0000
+@@ -11,7 +11,7 @@
+ 
+ export const metadata: Metadata = {
+   title: "Maintenance and workshop",
+-  description: "Plan, schedule and manage all maintenance: work orders, preventive maintenance, job cards, technician allocation, service history and parts and labour.",
++  description: "Run the workshop from one queue: work orders, job cards, technician allocation, service history and parts and labour. Preventive maintenance plans are set up on request.",
+   alternates: alternatesFor("/platform/maintenance"),
+   openGraph: { images: OG_IMAGES, title: "Maintenance and workshop | Tyre Pulse", description: "Keep your workshop, teams and spare parts in sync.", url: "/platform/maintenance", type: "website" },
+ };
+@@ -39,9 +39,9 @@
+       <section className="section-pad soft-bg anchor-sec" id="preventive" aria-labelledby="pm-h">
+         <div className="site-shell split">
+           <div>
+-            <h2 className="sec-h" id="pm-h">Preventive maintenance that follows the meter.</h2>
++            <h2 className="sec-h" id="pm-h">Preventive maintenance that follows the meter, set up on request.</h2>
+             <ul className="tick-list">
+-              {["Service plans by engine hours, kilometres or calendar", "Overdue work surfaced before it becomes a breakdown", "Recording a service sets the next due date automatically"].map((t) => <li key={t}><CheckCircle2 size={18} aria-hidden="true" />{t}</li>)}
++              {["Service plans by engine hours, kilometres or calendar, set up with your intervals", "Overdue work surfaced before it becomes a breakdown", "Recording a service sets the next due date automatically"].map((t) => <li key={t}><CheckCircle2 size={18} aria-hidden="true" />{t}</li>)}
+             </ul>
+           </div>
+           <Photo name="technicianGenerator" position="45% 40%" />
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/app/platform/page.tsx b/marketing/app/platform/page.tsx
+--- a/marketing/app/platform/page.tsx	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/app/platform/page.tsx	2026-11-12 10:23:10.000000000 +0000
+@@ -18,7 +18,7 @@
+ export const metadata: Metadata = {
+   title: "PMV management platform",
+   description:
+-    "PMV management platform: fleet and assets, maintenance, inspections, tyres, accidents, stores, fuel, costs and approvals in one connected system.",
++    "PMV management platform: fleet and assets, maintenance, inspections, tyres, accidents, stores, costs and sign-off in one connected system.",
+   alternates: alternatesFor("/platform"),
+   openGraph: { images: OG_IMAGES, title: "PMV management platform | Tyre Pulse", description: "One record per machine, shared by the field, workshop, stores and finance.", url: "/platform", type: "website" },
+ };
+@@ -27,27 +27,27 @@
+ const AREAS = [
+   { id: "fleet", icon: Truck, label: "Fleet and assets", title: "Fleet and asset management", text: "Track all your plant, machinery and vehicles. Keep asset data, history, documents and costs in one place.",
+     points: ["Meter readings and utilisation, kept current", "Service history, costs and documents per machine", "Site, ownership and cost centre on every record"], href: "/platform/fleet-assets", cta: "Explore fleet and assets", screen: <AssetsWindow /> },
+-  { id: "maint", icon: Wrench, label: "Maintenance and workshop", title: "Maintenance and workshop", text: "Breakdowns and preventive work land in one queue, with technicians, parts and outside repairs on each job card.",
+-    points: ["Work orders by priority, site and status", "Preventive plans by hours, kilometres or date", "Labour, parts and outside services on the job"], href: "/platform/maintenance", cta: "Explore maintenance", screen: <WorkOrdersTable /> },
++  { id: "maint", icon: Wrench, label: "Maintenance and workshop", title: "Maintenance and workshop", text: "Breakdowns and planned work land in one queue, with technicians, parts and outside repairs on each job card.",
++    points: ["Work orders by priority, site and status", "Preventive plans by hours, kilometres or date, on request", "Labour, parts and outside services on the job"], href: "/platform/maintenance", cta: "Explore maintenance", screen: <WorkOrdersTable /> },
+   { id: "insp", icon: ClipboardCheck, label: "Inspections and safety", title: "Inspections and safety", text: "Daily walk-round checks on the phone, offline, with photos, meter readings and a supervisor signature.",
+     points: ["Checklists configured by asset type", "Defects raise actions and work orders", "Signed off on the phone"], href: "/platform/inspections", cta: "Explore inspections", screen: <OfflineInspectionPhone withConditions /> },
+   { id: "tyres", icon: CircleDot, label: "Tyre lifecycle", title: "Tyre lifecycle", text: "Every tyre from fitment to scrap, by serial and wheel position, with its cost per kilometre or engine hour.",
+     points: ["Fitment and removal by serial and position", "Scrap reasons recorded with who and when", "Cost per km or hour by brand and size"], href: "/platform/tyre-lifecycle", cta: "Explore tyre lifecycle", screen: <ConditionCard /> },
+-  { id: "stores", icon: Box, label: "Stores and procurement", title: "Stores and procurement", text: "Parts are issued against the job card and the machine, and purchase requests are approved before an order is placed.",
+-    points: ["Stock and reorder level by site", "Parts issued against the job and asset", "Purchase requests with approval"], href: "/platform/inventory", cta: "Explore stores", screen: <InventoryTable /> },
++  { id: "stores", icon: Box, label: "Stores and parts", title: "Stores and parts", text: "Parts are issued against the job card and the machine, so every job shows what it consumed. Purchase requests with approval are set up on request.",
++    points: ["Stock and reorder level by site", "Parts issued against the job and asset", "Purchase requests with approval, on request"], href: "/platform/inventory", cta: "Explore stores", screen: <InventoryTable /> },
+   { id: "costs", icon: BarChart3, label: "Costs and reporting", title: "Costs and reporting", text: "Tyres, parts, oil and repairs roll up by machine, site and month, each country in its own currency.",
+     points: ["Cost by asset, site and category", "Availability and downtime", "Scheduled reports and exports"], href: "/platform/reports", cta: "Explore reports", screen: <FleetCostPanel /> },
+ ];
+ 
+ const ECO: CardProps[] = [
+   { icon: Truck, title: "Fleet and assets", text: "Asset records, lifecycle, meters and documents.", href: "/platform/fleet-assets", status: "available" },
+-  { icon: Wrench, title: "Maintenance and workshop", text: "Work orders, preventive plans, technicians and parts.", href: "/platform/maintenance", status: "available" },
++  { icon: Wrench, title: "Maintenance and workshop", text: "Work orders, technicians and parts. Preventive plans on request.", href: "/platform/maintenance", status: "available" },
+   { icon: ClipboardCheck, title: "Inspections and safety", text: "Checklists on the phone, defects, actions and sign-off.", href: "/platform/inspections", status: "available" },
+   { icon: CircleDot, title: "Tyre lifecycle", text: "Serial tracking, fitment to removal, cost per km and tyre life.", href: "/platform/tyre-lifecycle", status: "available" },
+-  { icon: Box, title: "Stores and procurement", text: "Stock by site, issues to job cards, purchase requests.", href: "/platform/inventory", status: "available" },
++  { icon: Box, title: "Stores and parts", text: "Stock by site and issues to job cards. Purchase requests on request.", href: "/platform/inventory", status: "available" },
+   { icon: BarChart3, title: "Reports and dashboards", text: "Dashboards, scheduled reports and shareable boards.", href: "/platform/reports", status: "available" },
+   { icon: ShieldAlert, title: "Accidents and claims", text: "Accident cases, damage, root cause and claim documents.", href: "/contact", linkLabel: "Ask in a demo", status: "available" },
+-  { icon: FileCheck2, title: "Roles and approvals", text: "Access by company, country, site and role, with sign-off steps.", href: "/security", linkLabel: "See access control", status: "available" },
++  { icon: FileCheck2, title: "Roles and sign-off", text: "Access by role and country, with sign-off on inspections, checklists and accident closure.", href: "/security", linkLabel: "See access control", status: "available" },
+   { icon: Fuel, title: "Fuel records", text: "Fuel use recorded against the asset, set up with your data source.", href: "/contact", linkLabel: "Ask in a demo", status: "on-request" },
+   { icon: Plug, title: "Integrations and API", text: "ERP file imports are built in. Direct connections are scoped with you.", href: "/contact", linkLabel: "Ask in a demo", status: "on-request" },
+ ];
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/app/platform/tyre-lifecycle/page.tsx b/marketing/app/platform/tyre-lifecycle/page.tsx
+--- a/marketing/app/platform/tyre-lifecycle/page.tsx	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/app/platform/tyre-lifecycle/page.tsx	2026-11-12 10:23:10.000000000 +0000
+@@ -15,7 +15,7 @@
+ 
+ const PATH = "/platform/tyre-lifecycle";
+ const TITLE = "Tyre lifecycle and serial tracking";
+-const DESCRIPTION = "Track every tyre by serial and wheel position from fitment to removal, with cost per km or engine hour, tyre life, warranty and root cause on one record.";
++const DESCRIPTION = "Track every tyre by serial and wheel position from fitment to removal, with cost per km or engine hour, tyre life and root cause on one record.";
+ 
+ export const metadata: Metadata = {
+   title: TITLE,
+@@ -29,20 +29,20 @@
+   { icon: CircleDot, title: "Fitment to removal", text: "Fitted and removed by wheel position with the odometer or hour meter, the removal reason and who recorded it. One active tyre per wheel.", status: "available" },
+   { icon: Gauge, title: "Cost per km or engine hour", text: "The price paid over the distance the tyre ran, by brand and size. Plant that works by the hour is measured per engine hour.", status: "available" },
+   { icon: TrendingDown, title: "Tyre life and forecast", text: "Kilometres or hours run against the expected life for that tyre size and vehicle type, with the tyres due next listed first.", status: "available" },
+-  { icon: ShieldCheck, title: "Warranty claims", text: "Early failures become a warranty claim with the supplier, tracked from submission to credit.", status: "available" },
++  { icon: ShieldCheck, title: "Warranty claims", text: "Early failures can be raised as a warranty claim with the supplier and tracked from submission to credit. Set up on request.", status: "on-request" },
+   { icon: Search, title: "Root cause analysis", text: "A failure is recorded with its cause and a corrective action assigned to a person.", status: "available" },
+ ];
+ 
+ const MORE = [
+   ["Scrap register", "Scrapped tyres with the reason, who marked them and when, and an undo for administrators.", "available"],
+-  ["Tyre data import", "Serials, fitment dates and kilometres from your Excel or ERP export, checked for duplicates.", "available"],
+-  ["Live TPMS pressure", "Pressure readings received through your telematics connection.", "on-request"],
++  ["Tyre data import", "Serials, fitment dates and kilometres from your Excel or ERP export, mapped with you and checked for repeated rows.", "available"],
++  ["Live TPMS pressure", "Live readings from TPMS sensors are not in the product today. Pressure is recorded at each inspection.", "planned"],
+   ["RFID reads", "Tag reads as a faster way to open a tyre record. Serials work without tags.", "on-request"],
+ ] as const;
+ 
+ const FAQ: ReadonlyArray<Faq> = [
+   ["What does the forecast use?", "The kilometres or engine hours a tyre has run, against the expected life for that size and vehicle type. Expected life comes from your own removed tyres, or from a target you set."],
+-  ["Do we need RFID tags or TPMS sensors?", "No. Tyres are tracked by serial number and wheel position. TPMS pressure through telematics and RFID reads are set up on request."],
++  ["Do we need RFID tags or TPMS sensors?", "No. Tyres are tracked by serial number and wheel position, and pressure is recorded at each inspection. RFID reads are set up on request. Live TPMS pressure is planned."],
+   ["What if we do not know what a tyre cost?", "It stays marked as cost pending. Cost per km is reported only for tyres with a known price, and the report says how many that covers."],
+ ];
+ 
+@@ -76,12 +76,12 @@
+           <div className="tp-feature-media"><StoryScreen step={5} /></div>
+         </div>
+       </Section>
+-      <Section id="ai" title="AI-assisted inspection.">
++      <Section id="ai" title="AI-assisted photo review, in pilot.">
+         <div className="tp-feature is-flip">
+           <div>
+-            <h3><Sparkles size={20} aria-hidden="true" /> A second look at every tyre photo.</h3>
+-            <p>Photos taken during a tyre inspection are analysed for visible defects such as cuts, bulges and uneven wear. The result is there for your team to review alongside the inspector&apos;s own finding.</p>
+-            <p>It supports the inspection. The inspector&apos;s reading and the supervisor&apos;s approval remain the record.</p>
++            <h3><Sparkles size={20} aria-hidden="true" /> A second look at tyre photos, for your reviewer.</h3>
++            <p>In the pilot, photos taken during a tyre inspection can be analysed for visible defects such as cuts, bulges and uneven wear. The suggestion is shown to a human reviewer alongside the inspector&apos;s own finding.</p>
++            <p>It assists the reviewer and is not a safety check. Its accuracy is still being validated, so we make no accuracy claim. The inspector&apos;s reading and the supervisor&apos;s approval remain the record.</p>
+           </div>
+           <div className="tp-feature-media"><StoryScreen step={1} /></div>
+         </div>
+@@ -90,8 +90,8 @@
+         <div className="tp-two">
+           <CapabilityList items={MORE} />
+           <div className="tp-prose">
+-            <p><Radio size={16} aria-hidden="true" /> Live TPMS pressure reaches Tyre Pulse through your telematics provider, so it depends on the sensors and the connection you already run.</p>
+-            <p>Without it, pressure is recorded at each inspection and compared with the other tyres on the same vehicle.</p>
++            <p><Radio size={16} aria-hidden="true" /> Live TPMS pressure is planned and is not in the product today.</p>
++            <p>Today, pressure is recorded at each inspection and compared with the other tyres on the same vehicle.</p>
+           </div>
+         </div>
+       </Section>
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/app/pricing/page.tsx b/marketing/app/pricing/page.tsx
+--- a/marketing/app/pricing/page.tsx	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/app/pricing/page.tsx	2026-11-12 10:23:10.000000000 +0000
+@@ -9,9 +9,9 @@
+ import { OG_IMAGES } from "@/lib/site";
+ 
+ export const metadata: Metadata = {
+-  title: "Pricing: plans quoted on your fleet size",
++  title: "Pricing: packages quoted on your fleet size",
+   description:
+-    "Tyre Pulse plans for solo owners, teams, professional operators and enterprises. Quoted on request by fleet size, users, modules, countries and integrations.",
++    "Indicative Tyre Pulse packages for solo owners, teams, professional operators and enterprises. Quoted on request by fleet size, users, modules, countries and integrations.",
+   alternates: alternatesFor("/pricing"),
+   openGraph: { images: OG_IMAGES,
+     title: "Pricing | Tyre Pulse",
+@@ -24,15 +24,15 @@
+ const plans = [
+   ["Solo", "For an owner managing a small fleet", ["Core asset and tyre records", "Inspections", "Basic dashboards", "Standard exports"]],
+   ["Team", "For growing site and workshop teams", ["Multiple users and sites", "Approvals", "Maintenance and inventory", "PDF and Excel reports"]],
+-  ["Professional", "For established fleet operations", ["Advanced analytics", "Scheduled reports", "TV dashboards", "API and automation options"]],
++  ["Professional", "For established fleet operations", ["Advanced analytics", "Scheduled reports", "TV dashboards", "API access, on request"]],
+   ["Enterprise", "For large and multi-country groups", ["Custom users and assets", "Single sign-on, on request", "Data migration and integrations", "Support terms agreed on request"]],
+ ];
+ 
+ const INCLUDED = [
+-  "Phone app for the field that works offline",
++  "Android app for the field that works offline",
+   "Arabic and English, each country in its own currency",
+   "Import from your ERP exports and Excel files",
+-  "Access by company, country, site and role",
++  "Access by role and country, with site scoping available",
+   "Excel and PDF exports on every register",
+   "Onboarding on your own asset list",
+ ];
+@@ -41,7 +41,7 @@
+   return <PageFrame>
+     <JsonLd data={faqSchema(PRICE_FAQ, "/pricing")} />
+     <JsonLd data={pageBreadcrumb("Pricing", "/pricing")} />
+-    <PageTop crumbs={[{ href: "/", label: "Home" }, { label: "Pricing" }]} title="Start with the control you need. Expand when you are ready." lead="Pricing is based on fleet size, users, modules, countries and integrations. Send your fleet size and we reply with a figure." cta={false} />
++    <PageTop crumbs={[{ href: "/", label: "Home" }, { label: "Pricing" }]} title="Start with the control you need. Expand when you are ready." lead="Pricing is based on fleet size, users, modules, countries and integrations. Send your fleet size and we reply with a figure. The packages below are indicative, and our team sets up each customer. There is no self sign-up." cta={false} />
+     <section className="section-pad tight"><div className="site-shell">
+       <div className="price-grid">
+         {plans.map(([name, text, features], i) => (
+@@ -57,7 +57,7 @@
+     </div></section>
+     <section className="section-pad soft-bg" aria-labelledby="incl-h"><div className="site-shell split split-top">
+       <div>
+-        <h2 className="sec-h" id="incl-h">Included in every plan.</h2>
++        <h2 className="sec-h" id="incl-h">Included in every package.</h2>
+         <p className="panel-text">The parts a fleet cannot run without are never an add-on.</p>
+       </div>
+       <ul className="tick-list incl-list">{INCLUDED.map((t) => <li key={t}><CheckCircle2 size={18} aria-hidden="true" />{t}</li>)}</ul>
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/app/schema.tsx b/marketing/app/schema.tsx
+--- a/marketing/app/schema.tsx	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/app/schema.tsx	2026-11-12 10:23:10.000000000 +0000
+@@ -50,18 +50,18 @@
+ export const BRAND_COLOR = "#161616";
+ 
+ export const PRODUCT_DESCRIPTION =
+-  "Tyre Pulse is a PMV (plant, machinery and vehicles) operations platform. It connects asset records, preventive maintenance, workshop job cards, field inspections, tyre lifecycle, stores and procurement, costs, approvals and reporting in one system for multi-site and multi-country operations.";
++  "Tyre Pulse is a PMV (plant, machinery and vehicles) operations platform. It connects asset records, workshop job cards, field inspections, tyre lifecycle, stores, costs, sign-off and reporting in one system for multi-site and multi-country operations.";
+ 
+ /** The eight capability groups the product page describes. */
+ export const MODULES: ReadonlyArray<{ name: string; description: string }> = [
+-  { name: "Tyre and fleet lifecycle", description: "Assets, tyre identity, fitment, pressure, tread, damage, repair, warranty, transfer, replacement and disposal with complete history." },
+-  { name: "Maintenance and workshop", description: "Preventive plans, job cards, labour and parts, downtime, technician workload, bay utilization and repair quality." },
++  { name: "Tyre and fleet lifecycle", description: "Assets, tyre identity, fitment, pressure, damage, removal, scrap and disposal with complete history. Warranty claims are set up on request." },
++  { name: "Maintenance and workshop", description: "Job cards, labour and parts, downtime and technician workload. Preventive plans are set up on request." },
+   { name: "Digital inspections", description: "Role-based inspection flows with photos, readings, defects, drafts, signatures, offline work, approval and corrective action." },
+-  { name: "Inventory and procurement", description: "Tyre and spare-parts stock with issues, returns, transfers, requests, quotation comparison, purchasing and vendor performance." },
+-  { name: "Approvals and organization", description: "Approvers resolved by company, country, site, department, role, risk and financial authority, with delegation and audit history." },
++  { name: "Inventory and stores", description: "Tyre and spare-parts stock by site, with parts issued against job cards. Purchase requests are set up on request." },
++  { name: "Sign-off and approvals", description: "Sign-off by role on inspections, checklists and accident closure, with a signature and an audit history." },
+   { name: "Reports and executive intelligence", description: "KPI dashboards, scheduled reports, live TV displays, secure links and white-layout PDF, PPTX and Excel outputs." },
+-  { name: "Access and tenant control", description: "Organizations kept separate, with users restricted by role, location, record, field, device and approval authority." },
+-  { name: "AI and automation", description: "Concise data-backed findings, root causes and recommended actions, with model, cost, token and background job tracking." },
++  { name: "Access control", description: "Access by role and country, with country scope enforced in the database and site scoping available. Each customer is set up by the Tyre Pulse team." },
++  { name: "AI-assisted photo review (pilot)", description: "A pilot that suggests possible tyre defects from inspection photos to assist a human reviewer. Its accuracy is still being validated and no accuracy is claimed." },
+ ];
+ 
+ type Json = Record<string, unknown>;
+@@ -146,7 +146,7 @@
+     downloadUrl: PLAY_STORE_URL,
+     url: PLAY_STORE_URL,
+     description:
+-      "The Tyre Pulse field app for Android. Tyre inspections with photos, tread and pressure capture, barcode and QR asset scanning, meter and engine-hour logging, vehicle washing logs, and offline work that syncs when the device is back online.",
++      "The Tyre Pulse field app for Android. Tyre inspections with photos and pressure capture, barcode and QR asset scanning, meter and engine-hour logging, vehicle washing logs, and offline work that syncs when the device is back online.",
+     isAccessibleForFree: false,
+     publisher: { "@id": `${SITE_URL}/#organization` },
+   };
+@@ -169,7 +169,7 @@
+     downloadUrl: APP_STORE_URL,
+     url: APP_STORE_URL,
+     description:
+-      "The Tyre Pulse field app for iOS. Tyre inspections with photos, tread and pressure capture, asset scanning, meter logging and offline work that syncs when the device is back online.",
++      "The Tyre Pulse field app for iOS. Tyre inspections with photos and pressure capture, asset scanning, meter logging and offline work that syncs when the device is back online.",
+     isAccessibleForFree: false,
+     publisher: { "@id": `${SITE_URL}/#organization` },
+   };
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/app/security/page.tsx b/marketing/app/security/page.tsx
+--- a/marketing/app/security/page.tsx	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/app/security/page.tsx	2026-11-12 10:23:10.000000000 +0000
+@@ -15,11 +15,11 @@
+ export const metadata: Metadata = {
+   title: TITLE,
+   description:
+-    "How Tyre Pulse protects fleet data: company and country isolation enforced in the database, role-based access, an audit trail and private file storage.",
++    "How Tyre Pulse protects fleet data: country isolation enforced in the database, role-based access, an audit trail and private file storage.",
+   alternates: alternatesFor("/security"),
+   openGraph: { images: OG_IMAGES,
+     title: `${TITLE} | Tyre Pulse`,
+-    description: "Company and country data isolation enforced in the database, role-based access, an audit trail and private file storage.",
++    description: "Country data isolation enforced in the database, role-based access, an audit trail and private file storage.",
+     url: "/security",
+     type: "website",
+   },
+@@ -27,8 +27,8 @@
+ 
+ /* Only controls that exist in the product today. Nothing here is a certification. */
+ const CONTROLS: CardProps[] = [
+-  { icon: Database, title: "Company and country isolation", text: "Every query is limited to your company, then to the countries and sites a user is assigned. The database enforces it, so a hidden button is never the only guard.", status: "available" },
+-  { icon: KeyRound, title: "Role-based access", text: "Roles and per-user grants decide which modules a person can open and what they can create, edit, approve or export.", status: "available" },
++  { icon: Database, title: "Country isolation in the database", text: "Each user is limited to the countries they are assigned. The database enforces it, so a hidden button is never the only guard. Site scoping is available, and each customer is set up by our team as its own company.", status: "available" },
++  { icon: KeyRound, title: "Role-based access", text: "Roles and per-user grants decide which modules a person can open. Create, edit and approve rights are enforced in the database on the core registers, and export is controlled in the app.", status: "available" },
+   { icon: Fingerprint, title: "Multi-factor sign-in", text: "A second sign-in factor is available for administrator accounts.", status: "available" },
+   { icon: ScrollText, title: "Audit trail", text: "Sign-ins, access changes, approvals and record changes are written to a log that administrators can review.", status: "available" },
+   { icon: FileLock2, title: "Private file storage", text: "Inspection photos, signatures and documents are stored privately and opened through links that expire.", status: "available" },
+@@ -36,13 +36,13 @@
+ ];
+ 
+ const LAYERS = [
+-  ["The database checks every read.", "Row-level rules limit each query to your company, then your country and sites."],
+-  ["The app checks every action.", "Roles and per-user grants decide who can create, edit, approve or export, and money stays in each country's own currency."],
++  ["The database checks every read.", "Row-level rules limit each query to your company and the countries you are assigned. Site scoping is available."],
++  ["The app checks every action.", "Roles and per-user grants decide which modules a person can open and who can approve, and money stays in each country's own currency."],
+   ["The log keeps the evidence.", "Sign-ins, access changes and approvals are written to an audit trail administrators can review."],
+ ] as const;
+ 
+ const MORE = [
+-  ["API keys", "Scoped keys for the public API, with rate limits and rotation.", "available"],
++  ["API keys", "Scoped keys for the public API, with rate limits. Set up on request with your first integration.", "on-request"],
+   ["Shared report links", "Read-only board links with an optional password and expiry date.", "available"],
+   ["Single sign-on", "Connected to your identity provider when you ask for it.", "on-request"],
+   ["Customer-specific integrations", "ERP or telematics connections scoped with you before they are built.", "on-request"],
+@@ -54,7 +54,7 @@
+   return <PageFrame>
+     <JsonLd data={faqSchema(SEC_FAQ, "/security")} />
+     <JsonLd data={pageBreadcrumb(TITLE, "/security")} />
+-    <PageTop photo="engineer" photoPosition="35% 20%" crumbs={[{ href: "/", label: "Home" }, { label: TITLE }]} title="Your fleet data stays inside your company, country and site." lead="Access is decided by company, country, site and role, and the database enforces it on every query. This page lists the controls that are in the product today." />
++    <PageTop photo="engineer" photoPosition="35% 20%" crumbs={[{ href: "/", label: "Home" }, { label: TITLE }]} title="Your fleet data stays inside your company and country." lead="Access is decided by role and country, and the database enforces country scope on every query. Site scoping is available. This page lists the controls that are in the product today." />
+     <Section id="controls-h" title="Controls in the product today.">
+       <CardGrid cols={3}>{CONTROLS.map((c) => <Card key={c.title} {...c} />)}</CardGrid>
+     </Section>
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/app/solutions/page.tsx b/marketing/app/solutions/page.tsx
+--- a/marketing/app/solutions/page.tsx	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/app/solutions/page.tsx	2026-11-12 10:23:10.000000000 +0000
+@@ -18,8 +18,8 @@
+ };
+ 
+ const CARDS = [
+-  { href: "/solutions/tyre-management", title: "Tyre management", text: "Cost per km by brand and size, tyre life forecasts from kilometres and hours run, a history per serial, and TPMS alerts through telematics." },
+-  { href: "/solutions/ready-mix-fleet", title: "Ready-mix fleet", text: "Preventive maintenance for mixers, pumps and plant, breakdown downtime split into waiting and repair, and cost per m3." },
++  { href: "/solutions/tyre-management", title: "Tyre management", text: "Cost per km by brand and size, tyre life forecasts from kilometres and hours run, and a history per serial. Live TPMS alerts are planned." },
++  { href: "/solutions/ready-mix-fleet", title: "Ready-mix fleet", text: "Breakdown downtime split into waiting and repair, cost per m3, and service plans on request for mixers, pumps and plant." },
+   { href: "/solutions/spreadsheets-to-platform", title: "Spreadsheets to platform", text: "A factual comparison with spreadsheets and generic maintenance tools, and what moving your files involves." },
+ ] as const;
+ 
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/app/solutions/ready-mix-fleet/page.tsx b/marketing/app/solutions/ready-mix-fleet/page.tsx
+--- a/marketing/app/solutions/ready-mix-fleet/page.tsx	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/app/solutions/ready-mix-fleet/page.tsx	2026-11-12 10:23:10.000000000 +0000
+@@ -10,7 +10,7 @@
+ 
+ const PATH = "/solutions/ready-mix-fleet";
+ const TITLE = "Ready-mix fleet maintenance software";
+-const DESCRIPTION = "Preventive maintenance by engine hours, breakdown downtime split into waiting and repair time, and cost per m3 for mixers, pumps and plant.";
++const DESCRIPTION = "Breakdown downtime split into waiting and repair time, cost per m3 for mixers, pumps and plant, and service plans by engine hours set up on request.";
+ 
+ export const metadata: Metadata = {
+   title: TITLE,
+@@ -26,17 +26,17 @@
+ ] as const;
+ 
+ const STEPS = [
+-  ["Plan service on the meter.", "Mixers, pumps, loaders and generators get service plans by engine hours, kilometres or calendar. Overdue work shows before it turns into a breakdown."],
++  ["Plan service on the meter.", "Mixers, pumps, loaders and generators can follow service plans by engine hours, kilometres or calendar. Service plans are set up on request, with your own intervals."],
+   ["Time every breakdown.", "Job cards record when the machine left production, entered and left the workshop, and returned. Waiting time and repair time are reported separately."],
+   ["Divide cost by concrete.", "Workshop, tyre and service-contract cost is divided by the approved cubic metres your plants delivered, by region and month."],
+ ] as const;
+ 
+ const MODULES = [
+-  { href: "/platform/maintenance", label: "Maintenance and workshop", text: "Preventive plans, job cards, technicians and parts for every machine type." },
++  { href: "/platform/maintenance", label: "Maintenance and workshop", text: "Job cards, technicians and parts for every machine type, with preventive plans on request." },
+   { href: "/platform/fleet-assets", label: "Fleet and assets", text: "One record per mixer, pump and plant item, with hours, kilometres and site." },
+   { href: "/platform/inspections", label: "Inspections and safety", text: "Daily walk-round checks on the phone, with defects raised as job cards." },
+   { href: "/platform/inspections#tyres", label: "Tyre lifecycle", text: "Tyre life and cost per km or per engine hour for mixers and pumps." },
+-  { href: "/platform/inventory", label: "Inventory and reporting", text: "Spare parts by store, purchase approval and cost per machine and per m3." },
++  { href: "/platform/inventory", label: "Inventory and reporting", text: "Spare parts by store, and cost per machine and per m3." },
+   { href: "/industries", label: "Industries", text: "How the same platform is configured for ready-mix and other operations.", cta: "See industries" },
+ ] as const;
+ 
+@@ -46,11 +46,11 @@
+   { need: false, label: "Service intervals", text: "Your current PM schedule by hours or kilometres. We can start from manufacturer intervals if none is written down." },
+   { need: false, label: "Daily production volumes", text: "Approved cubic metres per plant per day, needed for cost per m3." },
+   { need: false, label: "Expense lines", text: "Parts, oil and tyre issues from your ERP, classified so cost per machine is complete." },
+-  { need: false, label: "Telematics or meter photos", text: "Engine hours from telematics, or drivers log the meter with a photo each day." },
++  { need: false, label: "Meter photos or a telematics export", text: "Drivers log the meter with a photo each day, or we load a file exported from your telematics system." },
+ ] as const;
+ 
+ const FAQ: Faq = [
+-  ["Can it handle mixers, pumps and batching plant together?", "Yes. Each machine type gets its own checklist, service plan and meter, hours for plant and pumps or kilometres for trucks, in the same register."],
++  ["Can it handle mixers, pumps and batching plant together?", "Yes. Each machine type gets its own checklist and meter, hours for plant and pumps or kilometres for trucks, in the same register. Service plans are set up on request."],
+   ["How is cost per m3 calculated?", "Maintenance, tyre and service-contract cost for the period, divided by the approved cubic metres your plants delivered in that period. It is reported by region and month."],
+   ["Does it replace our ERP?", "No. Tyre Pulse imports job cards and expense lines from your ERP exports and adds the field, workshop and cost views the ERP does not give you."],
+ ] as const;
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/app/solutions/spreadsheets-to-platform/page.tsx b/marketing/app/solutions/spreadsheets-to-platform/page.tsx
+--- a/marketing/app/solutions/spreadsheets-to-platform/page.tsx	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/app/solutions/spreadsheets-to-platform/page.tsx	2026-11-12 10:23:10.000000000 +0000
+@@ -30,14 +30,14 @@
+   ["Field capture with no signal", "No. Shared files need a connection to update.", "Varies by product. Many mobile apps need a connection.", "The Android app works offline and syncs when the signal returns."],
+   ["Defect to job card", "Manual: someone copies the defect into the workshop sheet.", "Often supported where inspections and work orders are in the same product.", "A defect on an inspection raises a tracked action or work order."],
+   ["Several countries and currencies", "Separate files or tabs, with totals mixed by hand.", "Varies by product.", "Each country reports in its own currency, and totals are never blended."],
+-  ["Who can see what", "File sharing settings, usually all or nothing per file.", "Role-based access is common. Site-level limits vary.", "Access by company, country, site and role, enforced in the database."],
++  ["Who can see what", "File sharing settings, usually all or nothing per file.", "Role-based access is common. Site-level limits vary.", "Access by role and country, enforced in the database, with site scoping available."],
+   ["Change history", "Limited to the file's version history, if enabled.", "Usually an audit log on records.", "Sign-ins, approvals, access changes and exports are written to an audit trail."],
+   ["Setup effort", "Lowest. Anyone can start a sheet today.", "Moderate. Configuration and data loading are needed.", "Moderate. We import your asset list, job cards and tyre files during onboarding."],
+ ] as const;
+ 
+ const STEPS = [
+   ["Send us your files as they are.", "Asset lists, tyre sheets, job card and expense exports. Columns do not need renaming first."],
+-  ["We map and check them.", "Columns are matched to the right fields, duplicates are flagged before import, and every upload is logged."],
++  ["We map and check them.", "Columns are matched to the right fields with you, repeated rows are flagged before import, and uploads made through the import screen are logged."],
+   ["Your teams work in one place.", "The field captures on the phone, the office works on the web, and the spreadsheets become exports instead of the record."],
+ ] as const;
+ 
+@@ -56,7 +56,7 @@
+ 
+ const FAQ: Faq = [
+   ["When is a spreadsheet still the right tool?", "When one person owns the fleet record, the fleet is small, and nobody in the field needs to update it. Once several sites, roles or countries edit the same data, the copies start to disagree."],
+-  ["Will we lose our historical data?", "No. Historical tyre, job card and expense records are imported, and duplicates are checked before anything is saved. Your original files stay with you."],
++  ["Will we lose our historical data?", "No. Historical tyre, job card and expense records are imported with you, row counts and totals are checked against your files, and your original files stay with you."],
+   ["Can we still export to Excel?", "Yes. Every register exports to Excel and PDF, so existing reports and habits can carry on."],
+ ] as const;
+ 
+@@ -66,7 +66,7 @@
+       <JsonLd data={breadcrumbSchema([{ name: "Home", path: "/" }, { name: "Solutions", path: "/solutions" }, { name: "Spreadsheets to platform", path: PATH }])} />
+       <PageTop photo="engineer" photoPosition="35% 20%"
+         crumbs={[{ href: "/", label: "Home" }, { href: "/solutions", label: "Solutions" }, { label: "Spreadsheets to platform" }]}
+-        title="Move your fleet off spreadsheets without losing a row."
++        title="Move your fleet off spreadsheets, with every import checked against your files."
+         lead="A factual comparison of spreadsheets, generic maintenance software and Tyre Pulse, and what moving your files across involves."
+       />
+       <Problem id="sp-problem" title="Spreadsheets break when more people need the same fleet record." text="A spreadsheet is fast to start and flexible. The cost appears when sites, workshops and finance each keep their own copy and the field cannot update it from where the work happens." pains={PAINS} />
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/app/solutions/tyre-management/page.tsx b/marketing/app/solutions/tyre-management/page.tsx
+--- a/marketing/app/solutions/tyre-management/page.tsx	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/app/solutions/tyre-management/page.tsx	2026-11-12 10:23:10.000000000 +0000
+@@ -9,7 +9,7 @@
+ 
+ const PATH = "/solutions/tyre-management";
+ const TITLE = "Tyre management software for GCC fleets";
+-const DESCRIPTION = "Track every tyre by serial and wheel position, see cost per km by brand and size, forecast tyre life and get TPMS alerts through your telematics.";
++const DESCRIPTION = "Track every tyre by serial and wheel position, see cost per km by brand and size, forecast tyre life and check pressure at every inspection.";
+ 
+ export const metadata: Metadata = {
+   title: TITLE,
+@@ -25,8 +25,8 @@
+ ] as const;
+ 
+ const STEPS = [
+-  ["Record each tyre once.", "Fit by serial, wheel position and odometer from the phone. An RFID read or a typed serial opens the tyre's history."],
+-  ["Watch it while it runs.", "Inspections log condition and pressure, and live TPMS pressure arrives through your telematics connection. A leaking tyre raises an alert."],
++  ["Record each tyre once.", "Fit by serial, wheel position and odometer from the phone. A scanned or typed serial opens the tyre's history. RFID reads are set up on request."],
++  ["Watch it while it runs.", "Inspections log condition and pressure on every walk-round, and a tyre reading low against the others on the same vehicle is flagged in the inspection report. Live TPMS alerts are planned."],
+   ["Decide with the numbers.", "Tyre life is forecast from the kilometres and hours each tyre has run, and cost per km by brand and size shows which tyre is worth buying again."],
+ ] as const;
+ 
+@@ -43,15 +43,15 @@
+   { need: true, label: "Your asset list", text: "Vehicle and machine codes, types and sites. An Excel export is enough." },
+   { need: true, label: "Wheel layouts per vehicle type", text: "We set up axles and positions for your mixers, pumps and trucks before go-live." },
+   { need: false, label: "Existing tyre records", text: "Serials, fitment dates and kilometres from a spreadsheet or ERP export, if you have them." },
+-  { need: false, label: "A telematics connection", text: "Needed only for live TPMS alerts and automatic odometer readings. Without it, drivers log meters with a photo." },
++  { need: false, label: "Odometer readings", text: "Drivers log meters with a photo, or we load a file exported from your telematics system. A direct telematics connection is planned." },
+   { need: false, label: "RFID tags", text: "Useful when serials wear off. Typed or scanned serials work without tags." },
+   { need: false, label: "Tyre purchase lines", text: "Your ERP expense export turns kilometres into cost per km by brand and size." },
+ ] as const;
+ 
+ const FAQ: Faq = [
+   ["Do we need RFID tags to start?", "No. Each tyre is tracked by its serial number and wheel position. RFID makes the read faster where serials are hard to see, and you can add tags later."],
+-  ["How does live TPMS pressure reach Tyre Pulse?", "Through your existing telematics connection. Pressure readings arrive with the vehicle data, and a tyre losing pressure raises an alert to the tyre team."],
+-  ["How is cost per kilometre calculated?", "Tyre cost divided by the kilometres the tyre ran between fitment and removal, from your odometer or telematics readings. Plant measured in hours uses cost per engine hour instead."],
++  ["Does Tyre Pulse read live TPMS pressure?", "Not today. Live TPMS is planned. Pressure is recorded at each inspection, and a tyre reading low against the others on the same vehicle is flagged in the inspection report."],
++  ["How is cost per kilometre calculated?", "Tyre cost divided by the kilometres the tyre ran between fitment and removal, from your odometer readings. Plant measured in hours uses cost per engine hour instead."],
+ ] as const;
+ 
+ export default function TyreManagementPage() {
+@@ -61,7 +61,7 @@
+       <PageTop photo="loader" photoPosition="30% 60%"
+         crumbs={[{ href: "/", label: "Home" }, { href: "/solutions", label: "Solutions" }, { label: "Tyre management" }]}
+         title="Know what every tyre costs per kilometre."
+-        lead="Tyre management for GCC fleets: each tyre tracked by serial and wheel position, tyre life forecast from kilometres and hours run, and TPMS alerts through your telematics."
++        lead="Tyre management for GCC fleets: each tyre tracked by serial and wheel position, tyre life forecast from kilometres and hours run, and pressure checked at every inspection."
+       />
+       <Problem id="tm-problem" title="Tyres are a top running cost with the least data behind them." text="In heat, heavy loads and off-road site access, tyres wear fast and fail without much warning. Most fleets know what they spent on tyres last year, but not which tyre, on which wheel, ran how far." pains={PAINS} />
+       <Steps id="tm-how" title="How tyre management works in Tyre Pulse." lead="The tyre man, the workshop and the fleet manager read and write the same tyre record." steps={STEPS} />
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/components/AssistantWidget.tsx b/marketing/components/AssistantWidget.tsx
+--- a/marketing/components/AssistantWidget.tsx	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/components/AssistantWidget.tsx	2026-11-12 10:23:10.000000000 +0000
+@@ -111,8 +111,8 @@
+       label: ar ? "الأسعار" : "Pricing",
+       keywords: ["price", "pricing", "cost", "quote", "plan", "plans", "how much", "subscription", "سعر", "الأسعار", "تكلفة", "عرض سعر", "اشتراك", "باقة"],
+       answer: ar
+-        ? "لا توجد أسعار منشورة، لأن الأساطيل تختلف في عدد المعدات والمواقع والدول والتكاملات. يُبنى السعر على حجم الأسطول وعدد المستخدمين والوحدات والدول. أرسل حجم أسطولك ونرد عليك برقم. ويمكنك البدء بموقع واحد أو وحدة واحدة."
+-        : "There is no published price, because fleets differ by machine count, sites, countries and integrations. Pricing is based on fleet size, users, modules, countries and integrations. Send your fleet size and we reply with a figure. You can also start small, with one site or one module.",
++        ? "لا توجد أسعار منشورة، لأن الأساطيل تختلف في عدد المعدات والمواقع والدول والتكاملات. يُبنى السعر على حجم الأسطول وعدد المستخدمين والوحدات والدول. أرسل حجم أسطولك ونرد عليك برقم. ويمكنك البدء بموقع واحد ومجال عمل واحد. يتولى فريقنا إعداد كل عميل، ولا يوجد تسجيل ذاتي."
++        : "There is no published price, because fleets differ by machine count, sites, countries and integrations. Pricing is based on fleet size, users, modules, countries and integrations. Send your fleet size and we reply with a figure. You can also start small, with one site and one area of work. Our team sets up each customer; there is no self sign-up.",
+       links: [{ href: "/pricing", label: ar ? "صفحة الأسعار" : "See pricing" }, contact],
+     },
+     {
+@@ -120,8 +120,8 @@
+       label: ar ? "هل يعمل دون اتصال؟" : "Does it work offline?",
+       keywords: ["offline", "signal", "internet", "network", "connection", "no coverage", "sync", "اتصال", "إنترنت", "انترنت", "تغطية", "إشارة", "شبكة", "مزامنة"],
+       answer: ar
+-        ? "نعم. الفحوصات والصور وقراءات العدادات والتوقيعات تُحفظ على الهاتف وتُزامن عند عودة الاتصال، لذلك تعمل المواقع ذات الإشارة الضعيفة دون انقطاع."
+-        : "Yes. Inspections, photos, meter readings and signatures save on the phone and sync when the connection returns, so sites with weak signal keep working.",
++        ? "نعم، على تطبيق أندرويد. الفحوصات والصور وقراءات العدادات والتوقيعات تُحفظ على الهاتف وتُزامن عند عودة الاتصال، لذلك تعمل المواقع ذات الإشارة الضعيفة دون انقطاع."
++        : "Yes, on the Android app. Inspections, photos, meter readings and signatures save on the phone and sync when the connection returns, so sites with weak signal keep working.",
+       links: [{ href: "/platform/inspections", label: ar ? "الفحوصات" : "See inspections" }],
+     },
+     {
+@@ -129,8 +129,8 @@
+       label: ar ? "الاستيراد من ERP أو Excel" : "Can I import from ERP or Excel?",
+       keywords: ["import", "erp", "excel", "spreadsheet", "csv", "upload", "migrate", "migration", "data", "استيراد", "إكسل", "اكسل", "ملف", "ترحيل", "بيانات", "رفع"],
+       answer: ar
+-        ? "نعم. أوامر العمل والمصروفات وسجلات الإطارات وقوائم الأصول تُستورد من الملفات التي تصدرها بالفعل من نظام ERP أو Excel، ويتم فحص التكرار قبل إدخالها، وربط كل سطر بمعدة وموقع ودولة."
+-        : "Yes. Job cards, expenses, tyre records and asset lists import from the files you already export, with duplicates checked before they land, and every row is tied to a machine, a site and a country.",
++        ? "نعم. أوامر العمل والمصروفات وسجلات الإطارات وقوائم الأصول تُستورد من الملفات التي تصدرها بالفعل من نظام ERP أو Excel. يطابق فريقنا الأعمدة معك، وتُفحص الصفوف المكررة قبل حفظها، ويُربط كل سطر بمعدة وموقع ودولة."
++        : "Yes. Job cards, expenses, tyre records and asset lists import from the files you already export. Our team maps the columns with you, repeated rows are checked before they are saved, and each row is tied to a machine, a site and a country.",
+       links: [contact],
+     },
+     {
+@@ -138,8 +138,8 @@
+       label: ar ? "الدول واللغة العربية" : "Which countries / Arabic?",
+       keywords: ["country", "countries", "arabic", "english", "language", "currency", "ksa", "saudi", "uae", "egypt", "multi", "دولة", "دول", "عربي", "العربية", "لغة", "عملة", "السعودية", "الإمارات", "مصر"],
+       answer: ar
+-        ? "يعمل Tyre Pulse عبر عدة دول، وكل دولة وموقع يرى سجلاته فقط وبعملته الخاصة، ويُطبَّق ذلك في قاعدة البيانات. العربية والإنجليزية مدعومتان، على الويب وعلى الهاتف."
+-        : "Tyre Pulse runs across more than one country. Each country and site sees only its own records, in its own currency, enforced in the database. Arabic and English are both supported, on the web and on the phone.",
++        ? "يعمل Tyre Pulse عبر عدة دول، وكل دولة ترى سجلاتها فقط وبعملتها الخاصة، ويُطبَّق ذلك في قاعدة البيانات، مع إمكانية التقييد حسب الموقع. العربية والإنجليزية مدعومتان، على الويب وعلى الهاتف."
++        : "Tyre Pulse runs across more than one country. Each country sees only its own records, in its own currency, enforced in the database. Site scoping is available. Arabic and English are both supported, on the web and on the phone.",
+       links: [{ href: "/industries", label: ar ? "القطاعات" : "See industries" }],
+     },
+     {
+@@ -147,8 +147,8 @@
+       label: ar ? "الأمان" : "Security",
+       keywords: ["security", "secure", "privacy", "access", "permission", "mfa", "sso", "audit", "safe", "أمان", "الأمان", "خصوصية", "صلاحيات", "صلاحية", "تدقيق", "حماية"],
+       answer: ar
+-        ? "قاعدة البيانات تفحص كل قراءة، فلا يرى المستخدم إلا شركته ودوله ومواقعه المسموح بها. الأدوار والصلاحيات تحدد من ينشئ أو يعدّل أو يعتمد أو يصدّر، وسجل التدقيق يحفظ تسجيلات الدخول والاعتمادات والتصدير. المسؤولون يسجلون الدخول بعامل ثانٍ."
+-        : "The database checks every read, so a user sees only their company and the countries and sites they are assigned. Roles and per-user grants decide who can create, edit, approve or export, and an audit trail records sign-ins, approvals and exports. Administrators sign in with a second factor.",
++        ? "قاعدة البيانات تفحص كل قراءة، فلا يرى المستخدم إلا الدول المسموح له بها، مع إمكانية التقييد حسب الموقع. الأدوار والصلاحيات تحدد الوحدات التي يفتحها كل مستخدم ومن يعتمد، وسجل التدقيق يحفظ تسجيلات الدخول والاعتمادات والتصدير. المسؤولون يسجلون الدخول بعامل ثانٍ."
++        : "The database checks every read, so a user sees only the countries they are assigned, and site scoping is available. Roles and per-user grants decide which modules a person can open and who can approve, and an audit trail records sign-ins, approvals and exports. Administrators sign in with a second factor.",
+       links: [{ href: "/security", label: ar ? "صفحة الأمان" : "See security" }],
+     },
+   ];
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/components/motion/walkthrough/cost.tsx b/marketing/components/motion/walkthrough/cost.tsx
+--- a/marketing/components/motion/walkthrough/cost.tsx	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/components/motion/walkthrough/cost.tsx	2026-11-12 10:23:10.000000000 +0000
+@@ -56,7 +56,7 @@
+           <tbody>
+             <tr className="sel"><td>MX-214</td><td>184,220 km</td><td>+212 km</td><td>Driver, with photo</td></tr>
+             <tr><td>GN-305</td><td>6,240 h</td><td>+11 h</td><td>PM service</td></tr>
+-            <tr><td>PT-118</td><td>97,410 km</td><td>+180 km</td><td>Telematics</td></tr>
++            <tr><td>PT-118</td><td>97,410 km</td><td>+180 km</td><td>Telematics file</td></tr>
+           </tbody>
+         </table>
+         <div className="idemo-live"><i />A reading lower than the last one is flagged, never silently saved</div>
+@@ -71,7 +71,7 @@
+             <tr><td>Engine oil 15W-40, 20 L</td><td>JC-2026-1004</td><td>SAR 310</td><td><span className="pill pill-blue">Oil</span></td></tr>
+           </tbody>
+         </table>
+-        <div className="idemo-live ok"><i />Uploading the same file twice adds nothing: repeats are caught</div>
++        <div className="idemo-live ok"><i />A repeated upload is checked against what is already stored</div>
+       </Pane>
+       <Pane on={step === "asset"} className="web">
+         <div className="idemo-web-h"><b>Cost per km by asset</b><span className="muted-xs">Click a bar</span></div>
+@@ -112,7 +112,7 @@
+   site: "All sites · KSA",
+   defaultSel: "mx308",
+   steps: [
+-    { id: "meter", icon: Gauge, title: "Meters come in daily", text: "Drivers log the odometer with a photo, or it arrives from telematics.", url: "app.tyrepulse.app/odometer-logs", nav: "Assets" },
++    { id: "meter", icon: Gauge, title: "Meters come in daily", text: "Drivers log the odometer with a photo, or it is loaded from a telematics export file.", url: "app.tyrepulse.app/odometer-logs", nav: "Assets" },
+     { id: "lines", icon: Receipt, title: "Expenses sort themselves", text: "Every ERP line is filed as tyre, spare or oil by what the item is.", url: "app.tyrepulse.app/expense-report", nav: "Costs" },
+     { id: "asset", icon: BarChart3, title: "Spot the costly machine", text: "Cost per km by asset, worst first. Click a bar to see where the money goes.", url: "app.tyrepulse.app/cpk-intelligence", nav: "Costs", bell: true },
+     { id: "trend", icon: TrendingDown, title: "See why it changed", text: "The month-on-month change split into price, volume and new machines.", url: "app.tyrepulse.app/expense-trends", nav: "Costs" },
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/components/motion/walkthrough/maintenance.tsx b/marketing/components/motion/walkthrough/maintenance.tsx
+--- a/marketing/components/motion/walkthrough/maintenance.tsx	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/components/motion/walkthrough/maintenance.tsx	2026-11-12 10:23:24.000000000 +0000
+@@ -112,7 +112,7 @@
+   id: "maintenance",
+   label: "Preventive maintenance",
+   icon: CalendarClock,
+-  pitch: "Service every machine on time, by hours or by km, and watch breakdowns fall as compliance rises.",
++  pitch: "Set up on request with your service intervals: service every machine on time, by hours or by km, and see overdue work before it becomes a breakdown.",
+   appTitle: "My services",
+   site: "Riyadh",
+   defaultSel: "gn305",
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/components/motion/walkthrough/tyreIntel.tsx b/marketing/components/motion/walkthrough/tyreIntel.tsx
+--- a/marketing/components/motion/walkthrough/tyreIntel.tsx	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/components/motion/walkthrough/tyreIntel.tsx	2026-11-12 10:23:10.000000000 +0000
+@@ -35,8 +35,8 @@
+   const top = (v: number) => ((hi - v) / (hi - lo)) * 100;
+   const left = (i: number) => 3 + i * (94 / (PSI.length - 1));
+   return (
+-    <figure className="idemo-chart" aria-label="Live TPMS pressure on LHR1 over the last 6 hours, falling from 118 to 94 psi, alert level 105 psi">
+-      <figcaption><span>LHR1 live pressure, last 6 hours</span><b>94 psi</b><em className="warn">Slow leak detected</em></figcaption>
++    <figure className="idemo-chart" aria-label="Illustration of a planned feature: TPMS pressure on LHR1 over 6 hours, falling from 118 to 94 psi, alert level 105 psi">
++      <figcaption><span>Planned feature · LHR1 pressure, 6 hours</span><b>94 psi</b><em className="warn">Slow leak detected</em></figcaption>
+       <div className="idemo-line" aria-hidden="true">
+         <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+           <line x1="0" x2="100" y1={top(lim)} y2={top(lim)} className="limit" vectorEffect="non-scaling-stroke" />
+@@ -62,14 +62,14 @@
+           <span className="idemo-qr"><Nfc size={30} /></span><i className="idemo-beam" />
+         </div>
+         <div className="idemo-asset">
+-          <b>Tag read · DX-4471-208</b>
++          <b>Serial scan · DX-4471-208</b>
+           <span>315/80R22.5 · Brand A · DOT 2025</span>
+           <span>3 vehicles · 82,700 km so far</span>
+         </div>
+       </Pane>
+       <Pane on={step === "tpms"}>
+-        <Notice title="TPMS alert" body="MX-214 LHR1 at 94 psi, losing pressure" when="now" />
+-        <div className="idemo-asset"><b>MX-214 · live TPMS</b><span>Via telematics, every wheel</span></div>
++        <Notice title="TPMS alert (planned feature)" body="MX-214 LHR1 at 94 psi, losing pressure" when="now" />
++        <div className="idemo-asset"><b>MX-214 · TPMS, planned</b><span>Illustration, not in the product today</span></div>
+         <div className="idemo-reading bad"><b>LHR1</b><span>94 psi · 19% low</span><em>Flagged</em></div>
+         <div className="idemo-reading good"><b>RHR1</b><span>117 psi</span><em>Normal</em></div>
+       </Pane>
+@@ -166,13 +166,13 @@
+   id: "tyres",
+   label: "Tyre intelligence",
+   icon: Radar,
+-  pitch: "Serial scans, live TPMS through your telematics connection and every inspection feed one tyre record, so you know which tyres are due next and which brand is worth the money.",
++  pitch: "Serial scans and every inspection feed one tyre record, so you know which tyres are due next and which brand is worth the money. Live TPMS is planned.",
+   appTitle: "Tyres",
+   site: "Riyadh",
+   defaultSel: "lhr1",
+   steps: [
+-    { id: "rfid", icon: Nfc, title: "Scan the tyre", text: "A serial scan, or an optional RFID read, opens the tyre's passport: every vehicle, wheel and km it has run.", url: "app.tyrepulse.app/tyre-passport/DX-4471-208", nav: "Tyres" },
+-    { id: "tpms", icon: Activity, title: "Live TPMS catches the leak", text: "TPMS pressure arrives live through your telematics connection. A tyre losing pressure raises an alert to the tyre team before it fails.", url: "app.tyrepulse.app/tpms", nav: "Tyres", bell: true },
++    { id: "rfid", icon: Nfc, title: "Scan the tyre", text: "A serial scan opens the tyre's passport: every vehicle, wheel and km it has run. RFID reads are set up on request.", url: "app.tyrepulse.app/tyre-passport/DX-4471-208", nav: "Tyres" },
++    { id: "tpms", icon: Activity, title: "Planned: live TPMS alerts", text: "Planned, not in the product today: pressure received from TPMS sensors, with an alert when a tyre loses pressure. Today, pressure is recorded at each inspection.", url: "app.tyrepulse.app/tpms", nav: "Tyres", bell: true },
+     { id: "predict", icon: TrendingDown, title: "Forecast the removal", text: "Kilometres and hours run against expected life show when each tyre is due. Click a tyre to see its date.", url: "app.tyrepulse.app/predictive-maintenance", nav: "Tyres" },
+     { id: "anomaly", icon: AlertOctagon, title: "Anomalies flagged", text: "Meter rollbacks, duplicate expenses and odd pressures are found for you. Click one.", url: "app.tyrepulse.app/ops-intelligence", nav: "Overview", bell: true },
+     { id: "value", icon: BadgeDollarSign, title: "Buy the right brand", text: "Cost per km by brand and fleet tyre health show where the money and the risk are.", url: "app.tyrepulse.app/cpk-intelligence", nav: "Costs" },
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/lib/faqs.ts b/marketing/lib/faqs.ts
+--- a/marketing/lib/faqs.ts	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/lib/faqs.ts	2026-11-12 10:23:10.000000000 +0000
+@@ -11,22 +11,22 @@
+ 
+ /** Home page: "What fleet teams ask before a demo." */
+ export const HOME_FAQ: ReadonlyArray<Faq> = [
+-  ["Our sites have weak signal.", "Inspections, photos, meter readings and signatures save on the phone and sync when the connection returns."],
+-  ["Our data is in the ERP and in Excel.", "Job cards, expenses, tyre records and asset lists import from the files you already export, with duplicates checked before they land."],
+-  ["We run more than one country.", "Each country and site sees only its own records, in its own currency, enforced in the database. Arabic and English are both supported."],
++  ["Our sites have weak signal.", "On the Android app, inspections, photos, meter readings and signatures save on the phone and sync when the connection returns."],
++  ["Our data is in the ERP and in Excel.", "Job cards, expenses, tyre records and asset lists import from the files you already export. Our team maps the columns with you, and repeated rows are checked before they are saved."],
++  ["We run more than one country.", "Each country sees only its own records, in its own currency, enforced in the database. Site scoping is available. Arabic and English are both supported."],
+ ];
+ 
+ /** Pricing page: "Questions before a quote." */
+ export const PRICING_FAQ: ReadonlyArray<Faq> = [
+   ["Why is there no published price?", "Fleets differ by machine count, sites, countries and integrations. A quote on your numbers is cheaper than a list price padded to cover everyone."],
+-  ["Can we start small?", "Yes. Start with one site or one module, such as tyres or inspections, and add the rest when it earns its place."],
++  ["Can we start small?", "Yes. Most fleets start with one site and one area of work, such as tyres or inspections, and add the rest when it earns its place."],
+   ["What do you need from us to quote?", "Fleet size, number of users, the countries you run in and the systems you want connected. A short message is enough."],
+ ];
+ 
+ /** Security page: "What security teams ask." */
+ export const SECURITY_FAQ: ReadonlyArray<Faq> = [
+-  ["Who can see our data?", "Only users in your organisation, and only for the countries and sites they are assigned. The database enforces it on every query."],
+-  ["Can a site user see another country?", "No. Country and site scope are applied in the database, so a direct request returns nothing outside the user's scope."],
++  ["Who can see our data?", "Only the accounts our team sets up for your company, and only for the countries each user is assigned. The database enforces country scope on every query, and site scoping is available."],
++  ["Can a site user see another country?", "No. Country scope is applied in the database, so a direct request returns nothing outside the user's countries. Site scoping is set up with you."],
+   ["Do you support MFA and single sign-on?", "Multi-factor sign-in is available for administrators. Single sign-on is set up on request, once your identity provider is connected."],
+ ];
+ 
+@@ -36,24 +36,24 @@
+  */
+ export const FAQ_GROUPS: ReadonlyArray<{ id: string; title: string; items: ReadonlyArray<Faq> }> = [
+   { id: "getting-started", title: "Getting started", items: [
+-    ["How is Tyre Pulse deployed?", "It is a hosted web application with an Android app for field teams. There is nothing to install on your own servers. Your company gets its own workspace, and your users sign in to it."],
++    ["How is Tyre Pulse deployed?", "It is a hosted web application with an Android app for field teams. There is nothing to install on your own servers. Our team sets it up for your company during onboarding and creates your users with you. There is no self sign-up."],
+     ["How long does onboarding take?", "It depends on how clean your asset list is. We load your asset list and a sample of job cards and tyre records first, check them with you, then switch on one site or one module at a time."],
+     ...HOME_FAQ,
+   ] },
+   { id: "users-roles", title: "Users and roles", items: [
+     ["Which roles are built in?", "Drivers, technicians, tyre fitters, storekeepers, supervisors, HSE and insurance staff, and fleet managers each open the app to their own queue. Custom roles can be configured for your company."],
+-    ["Can we limit a user to one site or one country?", "Yes. Each user is assigned countries and sites, and the database returns only records inside that scope."],
++    ["Can we limit a user to one site or one country?", "Yes. Each user is assigned countries, and the database returns only records inside them. Site scoping is available and is set up with you during onboarding."],
+     ["Does it work in Arabic?", "Yes. The web application and the field app run in English and Arabic, with right to left layout for Arabic."],
+   ] },
+   { id: "tyre-data", title: "Tyre data and import", items: [
+-    ["Can we import our existing tyre records?", "Yes. Serials, fitment dates, positions and kilometres import from an Excel or ERP export. Rows are checked for duplicates before they land."],
+-    ["Do we need RFID tags or TPMS sensors?", "No. Every tyre is tracked by serial number and wheel position. Live TPMS pressure can be received through your telematics connection, and RFID reads are optional."],
++    ["Can we import our existing tyre records?", "Yes. Serials, fitment dates, positions and kilometres import from an Excel or ERP export. Our team maps your file with you, and repeated rows are checked before they are saved."],
++    ["Do we need RFID tags or TPMS sensors?", "No. Every tyre is tracked by serial number and wheel position, and pressure is recorded at each inspection. RFID reads are set up on request. Live TPMS pressure is planned and is not in the product today."],
+     ["How is cost per kilometre calculated?", "Tyre cost divided by the kilometres the tyre ran between fitment and removal. Plant that works by the hour uses cost per engine hour instead."],
+   ] },
+   { id: "inspections", title: "Inspections", items: [
+-    ["Can inspections be done without signal?", "Yes. Checklists, photos, readings and signatures are saved on the phone and sync when the connection returns."],
++    ["Can inspections be done without signal?", "Yes, on the Android app. Checklists, photos, readings and signatures are saved on the phone and sync when the connection returns."],
+     ["Can we build our own checklists?", "Yes. Checklists are configured per asset type, and a failed item can raise a corrective action or a work order."],
+-    ["Does the app analyse tyre photos?", "AI-assisted photo analysis flags possible tyre defects from inspection photos for your team to check. It supports the inspector and does not replace the inspection."],
++    ["Does the app analyse tyre photos?", "A pilot does. It suggests possible tyre defects from inspection photos to assist a human reviewer. Its accuracy is still being validated, so we make no accuracy claim, and it does not replace the inspection."],
+   ] },
+   { id: "reporting", title: "Reporting", items: [
+     ["Which report formats are supported?", "Registers export to Excel and PDF. Management reports can also be produced as PowerPoint."],
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/lib/nav.ts b/marketing/lib/nav.ts
+--- a/marketing/lib/nav.ts	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/lib/nav.ts	2026-11-12 10:23:10.000000000 +0000
+@@ -5,16 +5,16 @@
+   { href: "/platform/maintenance", label: "Maintenance and workshop", text: "Work orders, technicians, parts", labelAr: "الصيانة والورشة", textAr: "أوامر العمل والفنيون وقطع الغيار" },
+   { href: "/platform/inspections", label: "Inspections and safety", text: "Checklists, defects, sign-off", labelAr: "الفحوصات والسلامة", textAr: "قوائم الفحص والأعطال والاعتماد" },
+   { href: "/platform/tyre-lifecycle", label: "Tyre lifecycle", text: "Serials, fitment to removal, cost per km", labelAr: "دورة حياة الإطارات", textAr: "الأرقام التسلسلية من التركيب إلى الإزالة والتكلفة لكل كيلومتر" },
+-  { href: "/platform/inventory", label: "Inventory and procurement", text: "Stores, purchasing, suppliers", labelAr: "المخزون والمشتريات", textAr: "المستودعات والمشتريات والموردون" },
++  { href: "/platform/inventory", label: "Inventory and stores", text: "Stock by site, parts issued to jobs", labelAr: "المخزون والمستودعات", textAr: "مخزون كل موقع وصرف القطع على بطاقات العمل" },
+   { href: "/platform/reports", label: "Reports and dashboards", text: "Dashboards, scheduled reports, shared boards", labelAr: "التقارير ولوحات المتابعة", textAr: "لوحات المتابعة والتقارير المجدولة واللوحات المشتركة" },
+ ] as const;
+ 
+ export const SOLUTION_PAGES = [
+-  { href: "/solutions/tyre-management", label: "Tyre management", text: "Cost per km, life forecasts, TPMS via telematics", labelAr: "إدارة الإطارات", textAr: "التكلفة لكل كيلومتر وتوقع العمر وضغط الإطارات عبر أنظمة التتبع" },
++  { href: "/solutions/tyre-management", label: "Tyre management", text: "Cost per km, life forecasts, serial history", labelAr: "إدارة الإطارات", textAr: "التكلفة لكل كيلومتر وتوقع العمر وسجل كل إطار برقمه التسلسلي" },
+   { href: "/solutions/ready-mix-fleet", label: "Ready-mix fleet", text: "Mixers, pumps, downtime, cost per m3", labelAr: "أسطول الخرسانة الجاهزة", textAr: "الخلاطات والمضخات والتوقف والتكلفة لكل متر مكعب" },
+   { href: "/solutions/spreadsheets-to-platform", label: "Spreadsheets to platform", text: "Compare approaches and move your files", labelAr: "من الجداول إلى المنصة", textAr: "قارن الطرق وانقل ملفاتك" },
+   { href: "/industries", label: "Industries", text: "Construction, ready-mix, transport, buses", labelAr: "القطاعات", textAr: "الإنشاءات والخرسانة الجاهزة والنقل والحافلات" },
+-  { href: "/pricing", label: "Pricing", text: "Plans by fleet size and modules", labelAr: "الأسعار", textAr: "خطط حسب حجم الأسطول والوحدات" },
++  { href: "/pricing", label: "Pricing", text: "Packages by fleet size and modules", labelAr: "الأسعار", textAr: "باقات حسب حجم الأسطول والوحدات" },
+ ] as const;
+ 
+ export const RESOURCE_PAGES = [
+diff -ruN -x tsconfig.tsbuildinfo -x next-env.d.ts a/marketing/lib/roles.ts b/marketing/lib/roles.ts
+--- a/marketing/lib/roles.ts	2026-11-12 09:26:38.000000000 +0000
++++ b/marketing/lib/roles.ts	2026-11-12 10:23:24.000000000 +0000
+@@ -9,10 +9,10 @@
+     screen: ["My jobs by priority", "Start, pause for parts, finish", "Tyre fitment by wheel position", "Inspection photos and signature"],
+     kpis: [["Jobs today", "4"], ["Productive time", "6 h 10"]], devices: ["phone"] },
+   { id: "tyre", label: "Tyre fitter", title: "Every wheel, every reading, every serial.", text: "Walk round with the tyre map, scan or type the serial, record the condition and pressure of each wheel, and see which tyres are close to the end of their expected life.",
+-    screen: ["Tyre map per vehicle type", "Serial scan opens the tyre history", "TPMS pressure alerts via telematics", "Tyres due in the next 30 days"],
++    screen: ["Tyre map per vehicle type", "Serial scan opens the tyre history", "Pressure recorded at each inspection", "Tyres due in the next 30 days"],
+     kpis: [["Tyres due in 30 days", "46"], ["Pressure compliance", "96%"]], devices: ["phone", "web"] },
+-  { id: "store", label: "Storekeeper", title: "Issue parts without the paperwork.", text: "See what each job needs, issue stock against the job card, and raise a purchase request when the reorder level is reached.",
+-    screen: ["Parts requested by open jobs", "Issue against the job card", "Stock and reorder level by site", "Purchase requests waiting approval"],
++  { id: "store", label: "Storekeeper", title: "Issue parts without the paperwork.", text: "See what each job needs, issue stock against the job card, and see which items are below their reorder level.",
++    screen: ["Parts requested by open jobs", "Issue against the job card", "Stock and reorder level by site", "Purchase requests, on request"],
+     kpis: [["Requests waiting", "3"], ["Below reorder level", "7 items"]], devices: ["web", "phone"] },
+   { id: "sup", label: "Supervisor", title: "See the day before it starts.", text: "Approve inspections and jobs, assign the right technician, and follow every open job and every machine that is down.",
+     screen: ["Approvals with signature", "Live workshop board", "Machines out of production", "Suggested technician for each job"],
+@@ -20,7 +20,7 @@
+   { id: "claims", label: "HSE and insurance", title: "One case, every document ready.", text: "Accident cases with photos, damage, root cause and the claim documents in one place, so the insurer has less to send back.",
+     screen: ["Accident register by severity", "Root cause and actions", "Claim documents checklist", "Claimed, approved and recovered"],
+     kpis: [["Open cases", "6"], ["Recovered this year", "SAR 184k"]], devices: ["web"] },
+-  { id: "pmv", label: "PMV manager", title: "Availability and cost, asset by asset.", text: "Availability, preventive compliance, cost per km or hour and anomalies across every site and country, each in its own currency.",
++  { id: "pmv", label: "PMV manager", title: "Availability and cost, asset by asset.", text: "Availability, downtime, cost per km or hour and anomalies across every site and country, each in its own currency.",
+     screen: ["Fleet availability and downtime causes", "Cost per km by asset and brand", "Anomalies and data checks", "Repair, replace or move decisions"],
+     kpis: [["Fleet availability", "93%"], ["Cost per km", "SAR 0.93"]], devices: ["web", "tv"] },
+ ];

@@ -56,7 +56,7 @@ function Web({ step, sel, choose }: SceneProps) {
           <tbody>
             <tr className="sel"><td>MX-214</td><td>184,220 km</td><td>+212 km</td><td>Driver, with photo</td></tr>
             <tr><td>GN-305</td><td>6,240 h</td><td>+11 h</td><td>PM service</td></tr>
-            <tr><td>PT-118</td><td>97,410 km</td><td>+180 km</td><td>Telematics</td></tr>
+            <tr><td>PT-118</td><td>97,410 km</td><td>+180 km</td><td>Telematics file</td></tr>
           </tbody>
         </table>
         <div className="idemo-live"><i />A reading lower than the last one is flagged, never silently saved</div>
@@ -71,7 +71,7 @@ function Web({ step, sel, choose }: SceneProps) {
             <tr><td>Engine oil 15W-40, 20 L</td><td>JC-2026-1004</td><td>SAR 310</td><td><span className="pill pill-blue">Oil</span></td></tr>
           </tbody>
         </table>
-        <div className="idemo-live ok"><i />Uploading the same file twice adds nothing: repeats are caught</div>
+        <div className="idemo-live ok"><i />A repeated upload is checked against what is already stored</div>
       </Pane>
       <Pane on={step === "asset"} className="web">
         <div className="idemo-web-h"><b>Cost per km by asset</b><span className="muted-xs">Click a bar</span></div>
@@ -112,7 +112,7 @@ export const cost: Scenario = {
   site: "All sites · KSA",
   defaultSel: "mx308",
   steps: [
-    { id: "meter", icon: Gauge, title: "Meters come in daily", text: "Drivers log the odometer with a photo, or it arrives from telematics.", url: "app.tyrepulse.app/odometer-logs", nav: "Assets" },
+    { id: "meter", icon: Gauge, title: "Meters come in daily", text: "Drivers log the odometer with a photo, or it is loaded from a telematics export file.", url: "app.tyrepulse.app/odometer-logs", nav: "Assets" },
     { id: "lines", icon: Receipt, title: "Expenses sort themselves", text: "Every ERP line is filed as tyre, spare or oil by what the item is.", url: "app.tyrepulse.app/expense-report", nav: "Costs" },
     { id: "asset", icon: BarChart3, title: "Spot the costly machine", text: "Cost per km by asset, worst first. Click a bar to see where the money goes.", url: "app.tyrepulse.app/cpk-intelligence", nav: "Costs", bell: true },
     { id: "trend", icon: TrendingDown, title: "See why it changed", text: "The month-on-month change split into price, volume and new machines.", url: "app.tyrepulse.app/expense-trends", nav: "Costs" },

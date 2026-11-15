@@ -1,0 +1,64 @@
+-- =====================================================================================
+-- Interim restriction: no ERP job card decision can be recorded through the API until the
+-- corrected function is installed
+--
+-- STATUS: AUTHORED, NOT APPLIED. Draft for owner review. Tested on the local staging copy
+--         only. Nothing here ran on production. Do not apply without the owner's approval.
+-- ORDER:  production action 1. Independent of the other drafts. Intended to be applied
+--         BEFORE 20261116085000 / 090000 / 091000, and undone by 091000 (which grants again
+--         on purpose) or by the ROLLBACK below.
+--
+-- WHY: the function live in production (observation_erp_decide, md5
+--      272f785a2a32256bfe2b83b99d131c1b) checks company, country and role, but NOT site, and
+--      matches wheels from a fixed table that is wrong for some vehicles. Hiding the Confirm
+--      button in the web client does not stop a direct, signed-in API call. This closes the
+--      door in the database.
+--
+-- WHAT WAS READ ON PRODUCTION (read-only, 2026-11-15):
+--   observation_erp_decide(uuid,uuid,text,text)        SECURITY DEFINER, owner postgres
+--   confirm_observation_erp_link(uuid,uuid,text)       SECURITY INVOKER, owner postgres
+--   reject_observation_erp_link(uuid,uuid,text)        SECURITY INVOKER, owner postgres
+--   ACL of each, identical:  {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+--   No other function in public calls them. anon and PUBLIC have no EXECUTE.
+--   The two wrappers run as the caller, so they need EXECUTE on observation_erp_decide too:
+--   one revoke on that function already closes all three paths. All three are revoked so the
+--   wrappers answer with the same clean refusal instead of a nested one.
+--
+-- WHAT IT DOES: three REVOKE statements. No function body changes, no table changes, no row
+--   changes, nothing removed. service_role and the owner keep EXECUTE.
+--
+-- WHO LOSES WHAT: every signed-in user loses the ability to record a Confirm or a Reject of
+--   an ERP job card (Reject is included because it goes through the same function). In
+--   practice that is the people who pass the live function's own gate today: approved,
+--   unlocked Admin, Manager or Director accounts and super admins. Nobody else could record
+--   one before. Reading is untouched: the evidence lookup, the review panel and SELECT on
+--   observation_erp_links / observation_erp_link_events keep working.
+--
+-- WHAT THE CLIENT SEES: PostgreSQL answers 42501 "permission denied for function ...";
+--   PostgREST passes that code through (HTTP 403). The web client treats it as
+--   "ERP confirmation is not available yet...", never as a raw error. The current client
+--   already offers no decision, because observation_erp_rules() does not exist yet.
+--
+-- VERIFY (rolled back):
+--   begin;
+--   <the three revoke statements>
+--   select p.oid::regprocedure, p.proacl from pg_proc p
+--    where p.oid in ('public.observation_erp_decide(uuid,uuid,text,text)'::regprocedure,
+--                    'public.confirm_observation_erp_link(uuid,uuid,text)'::regprocedure,
+--                    'public.reject_observation_erp_link(uuid,uuid,text)'::regprocedure);
+--   -- expect {postgres=X/postgres,service_role=X/postgres} on all three
+--   rollback;
+--
+-- ROLLBACK (restores exactly today's ACL):
+--   grant execute on function public.observation_erp_decide(uuid, uuid, text, text) to authenticated;
+--   grant execute on function public.confirm_observation_erp_link(uuid, uuid, text) to authenticated;
+--   grant execute on function public.reject_observation_erp_link(uuid, uuid, text) to authenticated;
+--
+-- LATER: 20261116091000_observation_erp_decide_on_position_service.sql replaces the function
+--   body and then grants EXECUTE to authenticated again on all three, deliberately, in the
+--   same transaction as the corrected rules.
+-- =====================================================================================
+
+revoke execute on function public.observation_erp_decide(uuid, uuid, text, text) from authenticated;
+revoke execute on function public.confirm_observation_erp_link(uuid, uuid, text) from authenticated;
+revoke execute on function public.reject_observation_erp_link(uuid, uuid, text) from authenticated;

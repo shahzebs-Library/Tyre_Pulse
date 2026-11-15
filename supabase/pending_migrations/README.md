@@ -50,6 +50,14 @@ ever wanted. The reconcile is therefore closed by deletion, not re-application.
 20261115090615). These are FOLLOW-UP drafts on top of it, apply in this order, neither applied anywhere
 but the local staging copy:
 
+- `20261116084000_observation_erp_confirm_interim_lock.sql` : interim restriction. Three REVOKE
+  statements so no signed-in user can record an ERP job card decision until the corrected function
+  is installed. Independent; reversible by three GRANT statements (in its header).
+- `20261116085000_tyre_layout_versions_and_position_mappings.sql` : layout history
+  (`vehicle_diagram_config_versions`, written by a trigger, append-only) and verified per-layout
+  ERP spellings (`tyre_layout_position_mappings`, ships empty). Apply before 090000.
+- Order: 084000 (alone, first), then 085000, 090000, 091000 together. Owner's approval pack:
+  `docs/commercial-readiness/audit/ERP_FOLLOWUP_APPROVAL_PACK.md`.
 - `20261116090000_tyre_position_service.sql` : pure functions that resolve an inspection slot id or an
   ERP position code to one canonical wheel on the asset's own layout (SQL mirror of
   `src/lib/tyrePositionService.js`, pinned by `src/test/fixtures/tyrePositionCases.json`). No table.

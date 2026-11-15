@@ -4,8 +4,10 @@
 -- STATUS: AUTHORED, NOT APPLIED. Draft for owner review. Tested on the local staging copy
 --         (tp_position: main's applied migration first, then the two follow-up files).
 --         Nothing here ran on production.
--- AFTER:  20261115120000_observation_erp_reconciliation.sql (applied to production as
---         version 20261115090615) and 20261116090000_tyre_position_service.sql.
+--         Do not apply without the owner's approval (withdrawn 2026-11-15 pending this revision).
+-- ORDER:  3 of 3. After 20261115120000_observation_erp_reconciliation.sql (applied to production
+--         as version 20261115090615), 20261116085000_tyre_layout_versions_and_position_mappings.sql
+--         and 20261116090000_tyre_position_service.sql.
 --
 -- LIVE STATE THIS BUILDS ON (read from production, SELECT only, 2026-11-15):
 --   tables observation_erp_links, observation_erp_link_events (RLS on, 3 policies each, 0 rows,
@@ -25,16 +27,31 @@
 --      pending manual review. The CASE table keyed the layout on the words in the inspection's
 --      vehicle type, treated every non mixer as "R1 is rear axle 1", and let an unknown slot
 --      fall through as raw text.
---   2. Serial is evidence, not a filter. Live requires the ERP row to carry the observed serial,
---      which a replacement tyre never does. Now: a real (strong) observed serial leaving on the
---      job card supports the match; the observed serial on a DIFFERENT wheel blocks it.
+--   2. Serial SUPPORTS, it never confirms on its own (owner decision 2026-11-15). Live requires
+--      the ERP row to carry the observed serial, which a replacement tyre never does; that
+--      filter is gone. A real (strong) observed serial on the job card is reported as support,
+--      and the observed serial on a DIFFERENT wheel blocks the match. When the wheel position
+--      is unresolved, Confirm is REFUSED even with a matching serial. The only way through is
+--      a documented exception: confirm_observation_erp_link_by_exception, SEPARATELY authorised
+--      (capability corrective_actions / erp_serial_exception: Admin and super admin by default,
+--      grantable per company in Access Control), reason of at least 20 characters, recorded on
+--      the link and in the append-only history as exception_basis = 'serial_only' with who,
+--      when and why. A normal reviewer is refused.
+--   2b. PERMISSIONS are enforced inside the functions, never by the screen: signed in, approved,
+--      not locked, own company, country in scope, site in scope, reviewer role (Admin, Manager,
+--      Director) not switched off in Access Control (corrective_actions / approve revoke).
+--   2c. observation_erp_rules(): tells the client which rules the database runs. The web client
+--      offers Confirm / Reject only when this matches its own version.
 --   3. Site: the reviewer must be able to see the action's, inspection's and job card's site.
+--   3b. The link and history rows gain two nullable columns: position_evidence (what the
+--      service found at decision time) and exception_basis (null, or 'serial_only').
+--      Existing rows are not touched.
 --   4. New read-only helper observation_erp_evaluate(action, job card): the same checks, returns
 --      the evidence and writes nothing. decide calls it, so the two cannot disagree.
 --   5. Reader policies for the two live tables (rule for any new table, missed by the applied
 --      migration): anum_integration.apply_reader_policies().
 --
--- WHAT IT NEVER DOES: create or alter a table, remove anything, touch an existing link or
+-- WHAT IT NEVER DOES: create a table, remove anything, touch an existing link or
 --       history row (tested: byte-identical before and after), change a tyre cost, a tyre
 --       record, a work order or an inspection, close an action or change its status.
 --
@@ -50,17 +67,20 @@
 --   select count(*) from pg_policies where tablename like 'observation_erp_link%' and policyname like 'anum_reader%'; -- 8
 --   rollback;
 --
--- ROLLBACK: run 20261116091000_observation_erp_decide_ROLLBACK.sql (the exact live function).
---       The reader policies and the position service functions may stay; they grant nothing new.
+-- ROLLBACK: run 20261116091000_observation_erp_decide_ROLLBACK.sql (the exact live function;
+--       verified on staging to give md5 272f785a2a32256bfe2b83b99d131c1b, the production value).
+--       The two added columns, the reader policies and the position service functions may
+--       stay: the live function does not read the columns and nothing new is granted.
 -- =====================================================================================
 
 -- -------------------------------------------------------------------------------------
 -- observation_erp_evaluate: READ ONLY. Every guard of the live decide function, then what
 -- the ERP tyre records on one job card say about the observed wheel.
---   state  offered_for_review     dated movement on the SAME canonical wheel, or the observed
---                                 real serial leaving on this job card while the wheel could
---                                 not be established. A person may confirm.
---          pending_manual_review  the wheel could not be established on this machine
+--   state  offered_for_review     dated movement on the SAME canonical wheel. A person may confirm.
+--          pending_manual_review  the wheel could not be established on this machine. A matching
+--                                 serial does NOT change this (serial_supports = true is reported;
+--                                 serial_exception_possible says a documented exception may be
+--                                 recorded by an Admin)
 --          inconsistent           observed serial on a different wheel, or the inspection was
 --                                 recorded against another wheel plan than the asset has
 --          different_wheel        the job card moved other wheels only
@@ -99,8 +119,11 @@ declare
   v_canonical text;
   v_layout_conflict boolean := false;
 begin
+  -- Signed in, approved and not locked, in a company, a reviewer role, and not switched off
+  -- for this person or role (Access Control: corrective_actions / approve, revoke).
   if auth.uid() is null or v_org is null or not public.app_is_active()
-     or not public.app_is_elevated() then
+     or not public.app_is_elevated()
+     or public.app_cap_revoked('corrective_actions', 'approve') then
     raise exception 'Not authorised to confirm ERP evidence' using errcode = '42501';
   end if;
   select * into v_action from public.corrective_actions
@@ -183,19 +206,22 @@ begin
   v_state := case
     when v_rows = 0 then 'no_tyre_movement'
     when v_layout_conflict or v_serial_other_wheel > 0 then 'inconsistent'
-    when v_same_dated > 0 or v_serial_pending_dated > 0 then 'offered_for_review'
+    when v_same_dated > 0 then 'offered_for_review'
     when v_pending > 0 then 'pending_manual_review'
     when v_same > 0 then 'no_dated_movement'
     else 'different_wheel' end;
 
   return jsonb_build_object(
-    'ok', true, 'state', v_state, 'eligible_to_confirm', v_state = 'offered_for_review',
+    'ok', true, 'rules_version', 'position-service-2',
+    'state', v_state, 'eligible_to_confirm', v_state = 'offered_for_review',
     'canonical', v_canonical, 'layout_key', v_layout->>'key', 'layout_status', v_layout->>'status',
     'layout_reason', v_layout->>'reason',
     'observation', public.tyre_position_resolve(v_layout, v_token, 'slot'),
     'tyre_rows', v_rows, 'same_wheel', v_same, 'same_wheel_dated', v_same_dated,
     'pending', v_pending, 'different_wheel', v_different, 'pending_reasons', v_reasons,
     'serial_is_strong', v_strong, 'serial_rows', v_serial_rows, 'serial_other_wheel', v_serial_other_wheel,
+    'serial_supports', (v_serial_rows > 0 and v_serial_other_wheel = 0),
+    'serial_exception_possible', (v_state = 'pending_manual_review' and v_serial_pending_dated > 0),
     'work_order_no', v_work.work_order_no, 'country', v_country,
     'work_opened_before_inspection', (v_work.opened_at is null or v_work.opened_at::date < v_day),
     'snapshot', jsonb_build_object(
@@ -205,21 +231,32 @@ begin
       'completed_at', v_work.completed_at));
 end $$;
 
+-- Two nullable columns on the live tables. No existing row is changed.
+alter table public.observation_erp_links add column if not exists position_evidence jsonb;
+alter table public.observation_erp_links add column if not exists exception_basis text;
+alter table public.observation_erp_link_events add column if not exists position_evidence jsonb;
+alter table public.observation_erp_link_events add column if not exists exception_basis text;
+
 -- -------------------------------------------------------------------------------------
--- observation_erp_decide: same signature and result as live. Only the way the wheel is
--- established changes (see header).
+-- observation_erp_decide_core: the one writer. Not callable by app roles; reached only through
+-- observation_erp_decide (normal) and confirm_observation_erp_link_by_exception (Admin).
+--   p_exception  null, or 'serial_only'
 -- -------------------------------------------------------------------------------------
-create or replace function public.observation_erp_decide(
-  p_action_id uuid, p_work_order_id uuid, p_reason text, p_decision text)
+create or replace function public.observation_erp_decide_core(
+  p_action_id uuid, p_work_order_id uuid, p_reason text, p_decision text, p_exception text)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
   v_org uuid := public.app_current_org();
   v_eval jsonb;
+  v_evidence jsonb;
   v_action public.corrective_actions%rowtype;
   v_existing public.observation_erp_links%rowtype;
 begin
+  -- Signed in, approved and not locked, in a company, a reviewer role, and not switched off
+  -- for this person or role (Access Control: corrective_actions / approve, revoke).
   if auth.uid() is null or v_org is null or not public.app_is_active()
-     or not public.app_is_elevated() then
+     or not public.app_is_elevated()
+     or public.app_cap_revoked('corrective_actions', 'approve') then
     raise exception 'Not authorised to confirm ERP evidence' using errcode = '42501';
   end if;
   if p_decision not in ('confirmed','rejected') or length(btrim(coalesce(p_reason,''))) not between 5 and 2000 then
@@ -234,16 +271,25 @@ begin
 
   -- Tenant, country, site, asset and job card guards, and the wheel evidence.
   v_eval := public.observation_erp_evaluate(p_action_id, p_work_order_id);
+  v_evidence := v_eval - 'snapshot';
 
   if p_decision = 'confirmed' and (v_eval->>'work_opened_before_inspection')::boolean then
     raise exception 'Job card predates the inspection. Manual investigation required' using errcode = 'PT409';
   end if;
-  if p_decision = 'confirmed' and not (v_eval->>'eligible_to_confirm')::boolean then
+  if p_decision = 'confirmed' and p_exception is null and not (v_eval->>'eligible_to_confirm')::boolean then
     if v_eval->>'state' in ('pending_manual_review', 'inconsistent') then
       raise exception 'The inspected wheel could not be matched on this vehicle (%). Pending manual review',
         v_eval->>'state' using errcode = 'PT409';
     end if;
     raise exception 'No ERP tyre movement matches the action position or serial' using errcode = 'PT409';
+  end if;
+  if p_exception is not null then
+    -- A documented exception: only for an unresolved wheel with the observed real serial
+    -- leaving on this job card, never for a different wheel or an inconsistent record.
+    if p_exception <> 'serial_only' or p_decision <> 'confirmed'
+       or not (v_eval->>'serial_exception_possible')::boolean then
+      raise exception 'A serial exception does not apply to this job card' using errcode = 'PT409';
+    end if;
   end if;
 
   select * into v_existing from public.observation_erp_links where action_id=p_action_id for update;
@@ -256,25 +302,82 @@ begin
     end if;
     if v_existing.id is null then
       insert into public.observation_erp_links
-        (organisation_id,country,action_id,work_order_id,source_job_card,work_order_snapshot,decision_note,reviewed_by)
-      values (v_org,v_eval->>'country',p_action_id,p_work_order_id,v_eval->>'work_order_no',v_eval->'snapshot',p_reason,auth.uid());
+        (organisation_id,country,action_id,work_order_id,source_job_card,work_order_snapshot,decision_note,reviewed_by,
+         position_evidence,exception_basis)
+      values (v_org,v_eval->>'country',p_action_id,p_work_order_id,v_eval->>'work_order_no',v_eval->'snapshot',p_reason,auth.uid(),
+         v_evidence,p_exception);
       update public.corrective_actions set work_order_id=p_work_order_id where id=p_action_id;
     end if;
   end if;
   insert into public.observation_erp_link_events
-    (organisation_id,country,action_id,work_order_id,source_job_card,work_order_snapshot,decision,reason,reviewer)
-  values(v_org,v_eval->>'country',p_action_id,p_work_order_id,v_eval->>'work_order_no',v_eval->'snapshot',p_decision,p_reason,auth.uid());
+    (organisation_id,country,action_id,work_order_id,source_job_card,work_order_snapshot,decision,reason,reviewer,
+     position_evidence,exception_basis)
+  values(v_org,v_eval->>'country',p_action_id,p_work_order_id,v_eval->>'work_order_no',v_eval->'snapshot',p_decision,p_reason,auth.uid(),
+     v_evidence,p_exception);
   return jsonb_build_object('ok',true,'decision',p_decision,
     'action_id',p_action_id,'work_order_id',p_work_order_id,
     'already_linked',(v_existing.id is not null));
 end $$;
 
+-- Same signature and five-key result as the live function. No exception path from here.
+create or replace function public.observation_erp_decide(
+  p_action_id uuid, p_work_order_id uuid, p_reason text, p_decision text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+begin
+  return public.observation_erp_decide_core(p_action_id, p_work_order_id, p_reason, p_decision, null);
+end $$;
+
+-- observation_erp_rules: READ ONLY, no arguments, reads no business row. Tells the client
+-- which rules this database runs, so the screen offers a decision only when the database and
+-- the client share the same validated rules. Absent on the old database = not available.
+create or replace function public.observation_erp_rules()
+returns jsonb language sql stable security definer set search_path = '' as $$
+  select jsonb_build_object(
+    'rules_version', 'position-service-2',
+    'can_review', coalesce(auth.uid() is not null and public.app_current_org() is not null
+      and public.app_is_active() and public.app_is_elevated()
+      and not public.app_cap_revoked('corrective_actions', 'approve'), false),
+    'can_record_exception', coalesce(auth.uid() is not null and public.app_is_active()
+      and public.app_is_elevated()
+      and public.app_user_can('corrective_actions', 'erp_serial_exception'), false))
+$$;
+
+-- The documented exception. SEPARATELY authorised: capability corrective_actions /
+-- erp_serial_exception, which only Admin and super admin hold by default and which a company
+-- can grant to a role or a person in Access Control. A normal reviewer is refused. A real
+-- reason is required and is stored, with who and when, on the link and in the history.
+create or replace function public.confirm_observation_erp_link_by_exception(
+  p_action_id uuid, p_work_order_id uuid, p_reason text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+begin
+  if auth.uid() is null or not public.app_is_active()
+     or not public.app_user_can('corrective_actions', 'erp_serial_exception') then
+    raise exception 'Not authorised to record a serial exception' using errcode = '42501';
+  end if;
+  if length(btrim(coalesce(p_reason, ''))) < 20 then
+    raise exception 'A serial exception needs a written reason of at least 20 characters' using errcode = '22023';
+  end if;
+  return public.observation_erp_decide_core(p_action_id, p_work_order_id, btrim(p_reason), 'confirmed', 'serial_only');
+end $$;
+
 revoke all on function public.observation_erp_evaluate(uuid, uuid) from public, anon;
 grant execute on function public.observation_erp_evaluate(uuid, uuid) to authenticated;
--- Grants on observation_erp_decide are unchanged by create or replace; restated so a fresh
--- environment ends in the same state as production.
+revoke all on function public.observation_erp_decide_core(uuid, uuid, text, text, text) from public, anon, authenticated;
+grant execute on function public.observation_erp_decide_core(uuid, uuid, text, text, text) to service_role;
+-- Deliberate re-grant. create or replace keeps whatever ACL is there, and the interim lock
+-- (20261116084000) may have taken EXECUTE away from authenticated. From here the function
+-- runs the corrected rules and checks company, country, site and role itself, so signed-in
+-- users may call it again, directly or through the two wrappers.
 revoke all on function public.observation_erp_decide(uuid, uuid, text, text) from public, anon;
-grant execute on function public.observation_erp_decide(uuid, uuid, text, text) to authenticated;
+grant execute on function public.observation_erp_decide(uuid, uuid, text, text) to authenticated, service_role;
+revoke all on function public.confirm_observation_erp_link(uuid, uuid, text) from public, anon;
+grant execute on function public.confirm_observation_erp_link(uuid, uuid, text) to authenticated, service_role;
+revoke all on function public.reject_observation_erp_link(uuid, uuid, text) from public, anon;
+grant execute on function public.reject_observation_erp_link(uuid, uuid, text) to authenticated, service_role;
+revoke all on function public.observation_erp_rules() from public, anon;
+grant execute on function public.observation_erp_rules() to authenticated;
+revoke all on function public.confirm_observation_erp_link_by_exception(uuid, uuid, text) from public, anon;
+grant execute on function public.confirm_observation_erp_link_by_exception(uuid, uuid, text) to authenticated;
 
 -- The two live tables were created without the read-only reporting role's policies.
 select anum_integration.apply_reader_policies();

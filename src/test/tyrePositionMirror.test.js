@@ -25,6 +25,7 @@ function layoutOf(def) {
     vehicleType: def.vehicleType, assetNo: def.assetNo, axleCount: def.axleCount ?? null,
     customLayouts: def.custom ? { [key]: { config: def.custom, updatedAt: def.customChanged || null } } : null,
     asOf: def.asOf || null,
+    positionMappings: (def.mappings || []).map((m) => ({ ...m, layout_key: def.expect.key })),
   })
 }
 const byId = Object.fromEntries(fixture.layouts.map((l) => [l.id, l]))
@@ -116,18 +117,54 @@ describe('tyre position service', () => {
     expect(same.match).toBe(true)
   })
 
-  it('uses a supplied layout history for a dated record, and says when it had none', () => {
-    const old = { axles: [{ kind: 'steer' }, { kind: 'drive', dual: true }], spare: 0 }
-    const now = { axles: [{ kind: 'steer' }, { kind: 'steer' }, { kind: 'drive', dual: true }], spare: 0 }
-    const base = { vehicleType: 'CUSTOM RIG', customLayouts: { 'CUSTOM RIG': { config: now, updatedAt: '2026-06-01' } } }
-    const withHistory = resolveLayout({ ...base, asOf: '2026-03-01', layoutHistory: [{ effectiveFrom: '2026-01-01', layout: { config: old } }] })
-    expect(withHistory.basis).toBe('historical')
-    expect(withHistory.wheels.length).toBe(6)
-    const none = resolveLayout({ ...base, asOf: '2026-03-01' })
-    expect(none.basis).toBe('current')
+  it('an old inspection resolves on the layout version in force on its date', () => {
+    const v1 = { axles: [{ kind: 'steer' }, { kind: 'drive', dual: true }], spare: 0 }                       // 6 wheels
+    const v2 = { axles: [{ kind: 'steer' }, { kind: 'steer' }, { kind: 'drive', dual: true }], spare: 0 }    // 8 wheels
+    const history = [
+      { vehicleType: 'custom rig', validFrom: '2026-01-10T08:00:00Z', validTo: '2026-06-01T09:00:00Z', basis: 'recorded', active: true, config: v1 },
+      { vehicleType: 'CUSTOM RIG', validFrom: '2026-06-01T09:00:00Z', validTo: null, basis: 'recorded', active: true, config: v2 },
+    ]
+    const base = { vehicleType: 'CUSTOM RIG', layoutHistory: history, customLayouts: { 'CUSTOM RIG': { config: v2, updatedAt: '2026-06-01' } } }
+    const old = resolveLayout({ ...base, asOf: '2026-03-01' })
+    expect(old.basis).toBe('historical')
+    expect(old.wheels.length).toBe(6)
+    expect(resolveWheel(old, 'F2L', { kind: 'slot' }).status).toBe('inconsistent')   // did not exist then
+    expect(resolveWheel(old, 'F1L', { kind: 'slot' }).status).toBe('resolved')
+    const now = resolveLayout({ ...base, asOf: '2026-07-01' })
+    expect(now.wheels.length).toBe(8)
+    expect(resolveWheel(now, 'F2L', { kind: 'slot' }).status).toBe('resolved')
+    // Edited on the record's own day: which layout the inspector saw is not known.
+    const sameDay = resolveLayout({ ...base, asOf: '2026-06-01' })
+    expect(resolveWheel(sameDay, 'F1L', { kind: 'slot' })).toMatchObject({ status: 'ambiguous', reason: 'layout_changed_since_record' })
+    // Before the admin layout existed: nothing custom applies ("CUSTOM RIG" has no built-in layout).
+    expect(resolveLayout({ ...base, asOf: '2025-12-01' }).status).toBe('unknown')
+    // A backfilled first version says nothing about earlier days.
+    const backfilled = resolveLayout({ ...base, asOf: '2025-12-01', layoutHistory: [{ ...history[0], basis: 'backfill' }, history[1]] })
+    expect(resolveWheel(backfilled, 'F1L', { kind: 'slot' })).toMatchObject({ status: 'ambiguous', reason: 'layout_changed_since_record' })
+    // A version switched off means the built-in layout was in force.
+    const off = resolveLayout({ vehicleType: 'TR-MIXER', asOf: '2026-03-01', layoutHistory: [{ vehicleType: 'TR-MIXER', validFrom: '2026-01-01', validTo: null, basis: 'recorded', active: false, config: v1 }] })
+    expect(off.key).toBe('Tri-mixer')
+    // No versions supplied at all: the older safeguard still refuses a layout edited after the record.
+    const none = resolveLayout({ vehicleType: 'CUSTOM RIG', customLayouts: base.customLayouts, asOf: '2026-03-01' })
     expect(none.changedAfterRecord).toBe(true)
-    expect(resolveWheel(none, 'F1L', { kind: 'slot' }).status).toBe('ambiguous')
-    expect(resolveWheel(resolveLayout({ ...base, asOf: '2026-07-01' }), 'F2L', { kind: 'slot' }).status).toBe('resolved')
+  })
+
+  it('there is no built-in reading of the ERP dual-rear spelling; only a verified per-layout mapping resolves it', () => {
+    for (const type of ['PUMPS', 'TR-MIXER', 'TRAILER', 'PICKUP']) {
+      const r = resolveWheel(resolveLayout({ vehicleType: type }), 'LHRCO', { kind: 'erp' })
+      expect(r, type).toMatchObject({ status: 'ambiguous', reason: 'erp_spelling_not_verified', canonical: null })
+    }
+    const mapped = resolveLayout({ vehicleType: 'PUMPS', positionMappings: [
+      { layout_key: 'Concrete pump', erp_code: 'LHRCO', slot: 'R1Lo' },
+      { layout_key: 'Tri-mixer', erp_code: 'RHRCO', slot: 'R1Ro' },               // another layout: not used
+      { layout_key: 'Concrete pump', erp_code: 'RHRRO', slot: 'R2Ro', active: false },  // switched off
+    ] })
+    expect(resolveWheel(mapped, 'LHRCO', { kind: 'erp' })).toMatchObject({ status: 'resolved', reason: 'verified_mapping', slot: 'R1Lo' })
+    expect(resolveWheel(mapped, 'RHRCO', { kind: 'erp' }).status).toBe('ambiguous')
+    expect(resolveWheel(mapped, 'RHRRO', { kind: 'erp' }).status).toBe('ambiguous')
+    // The 4 axle build is a different layout key: the mapping does not leak onto it.
+    const other = resolveLayout({ vehicleType: 'PUMPS', axleCount: 4, positionMappings: [{ layout_key: 'Concrete pump', erp_code: 'LHRCO', slot: 'R1Lo' }] })
+    expect(resolveWheel(other, 'LHRCO', { kind: 'erp' }).status).toBe('ambiguous')
   })
 
   it('the generated matrix in the fixture is current (the SQL mirror replays it)', () => {

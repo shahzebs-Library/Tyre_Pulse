@@ -10,8 +10,9 @@
 --         { canonical, slot, status: resolved | ambiguous | unknown | inconsistent, reason }
 --       Anything but 'resolved' is neither a match nor a mismatch: pending manual review.
 --
--- ORDER: follow-up to the applied migration 20261115120000 (production version 20261115090615).
---       Apply this file, then 20261116091000_observation_erp_decide_on_position_service.sql.
+-- ORDER: 2 of 3. Follow-up to the applied migration 20261115120000 (production version
+--       20261115090615). Apply 20261116085000_tyre_layout_versions_and_position_mappings.sql first,
+--       then this file, then 20261116091000_observation_erp_decide_on_position_service.sql.
 --
 -- WHY:  corrective_actions.source_detail stores the slot id, tyre_records.position stores
 --       the ERP code, and the same slot id is a different wheel on a different machine.
@@ -23,14 +24,23 @@
 --       The built-in wheel table below is GENERATED from the JS layouts; the JS test fails
 --       if it drifts. CHANGE BOTH SIDES TOGETHER.
 --
--- LAYOUT HISTORY: none is stored. vehicle_diagram_configs keeps the current row and its
---       updated_at only. tyre_asset_layout therefore uses the current layout, and reports
---       a custom layout edited AFTER the record date as changed (ambiguous) instead of
---       trusting it. No history table is added by this draft.
+-- LAYOUT HISTORY: read from vehicle_diagram_config_versions (20261116085000). A record is
+--       resolved on the layout version in force on its own date; where that is not recorded
+--       (before a backfilled version, or a layout edited on the record's own day) the result
+--       is "layout changed since record" (pending), never a guess.
+-- ERP SPELLINGS: there is NO built-in reading of the dual-rear spelling (LHRCO, RHRRI) on any
+--       layout (owner decision 2026-11-15). It resolves only through a mapping verified and
+--       recorded for that layout in tyre_layout_position_mappings, which ships empty.
+--       CONCRETE PUMPS: production data (read-only, 2026-11-15) shows the ERP naming the rear
+--       wheels of one 5-axle pump three ways at once (numbered R1, rear centre, rear rear) and
+--       never a third front axle, so its "R1" is not known to be the drawing's first rear axle.
+--       On the pump layouts NO rear ERP code is read without a verified mapping. Front codes are.
+--
+-- STATUS NOTE: do not apply without the owner's approval (withdrawn 2026-11-15 pending these changes).
 --
 -- SAFETY: no table is created, no row is written, no existing object is replaced.
 --       The pure functions are IMMUTABLE and read nothing. tyre_asset_layout / tyre_type_layout read
---       vehicle_fleet and vehicle_diagram_configs for an EXPLICIT organisation, so they are
+--       vehicle_fleet, the layout versions and the verified mappings for an EXPLICIT organisation, so they are
 --       not executable by authenticated or anon (only by definer functions that have
 --       already checked the caller).
 --
@@ -457,12 +467,21 @@ begin
   end if;
 
   -- ---- as a position code
-  -- The ERP's dual-rear spelling (LHRCO = Rear-Centre outer, RHRRI = Rear-Rear inner) is the
-  -- centre/rear code with a group letter in front: read as LHCO / RHRI. Whether THIS machine
-  -- names its rear axles centre and rear is still decided by the layout, never assumed.
-  if u ~ '^(L|R)HR([CR])([IO])$' then
-    v_text := substr(u, 1, 2) || substr(u, 4, 2);
-  end if;
+  -- 1. A mapping VERIFIED for this layout (tyre_layout_position_mappings) wins.
+  select w into v_hit from jsonb_array_elements(coalesce(p_layout->'mappings', '[]'::jsonb)) m
+    join jsonb_array_elements(v_wheels) w on w->>'slot' = m->>'slot'
+    where m->>'code' = u limit 1;
+  if v_hit is not null then
+    v_code := jsonb_build_object('canonical', v_hit->>'code', 'slot', v_hit->>'slot', 'status', 'resolved', 'reason', 'verified_mapping');
+  elsif u ~ '^(L|R)HR([CR])([IO])$'
+     -- Concrete pumps: the ERP names the rear wheels of one machine three ways at once (numbered
+     -- R1, rear centre, rear rear), so no rear ERP code is read on a pump layout until a mapping
+     -- is verified for it, not even one spelled exactly like a wheel of the layout.
+     or (v_kind = 'erp' and p_layout->>'key' in ('Concrete pump', 'Concrete pump 4-axle') and u ~ '^(L|R)H?[RC]') then
+    -- 2. The ERP's dual-rear spelling (LHRCO "rear centre", RHRRI "rear rear"). Which axle that
+    --    is has not been verified for any layout: no built-in reading, pending until mapped.
+    v_code := jsonb_build_object('canonical', null, 'slot', null, 'status', 'ambiguous', 'reason', 'erp_spelling_not_verified');
+  else
   v_parsed := public.tyre_position_parse(v_text);
   if v_parsed is not null then
     if v_parsed->>'side' is null then
@@ -512,6 +531,7 @@ begin
         end if;
       end if;
     end if;
+  end if;
   end if;
 
   -- ---- combine
@@ -563,26 +583,74 @@ begin
     'observation', a, 'erp', b, 'layout_key', p_layout->>'key');
 end $$;
 
--- The layout for one vehicle type in one organisation: the ACTIVE admin designed layout for
--- that exact type when there is one, else the built-in layout. Explicit organisation: NOT
--- callable by app roles.
+-- The layout for one vehicle type in one organisation ON A GIVEN DAY: the admin designed
+-- layout version in force on p_as_of (vehicle_diagram_config_versions) when there is one, else
+-- the built-in layout; plus the verified position mappings recorded for that layout.
+--   p_as_of null            the open (current) version
+--   version covers the day  that version (an old record is never re-read on a later edit)
+--   layout edited that day  flagged changed_after_record (pending), not guessed
+--   before a 'backfill'     flagged changed_after_record: what was in force is not recorded
+--   before a 'recorded' one the admin layout did not exist yet: built-in layout
+-- Explicit organisation: NOT callable by app roles.
 create or replace function public.tyre_type_layout(
   p_org uuid, p_vehicle_type text, p_asset_no text, p_axle_count integer, p_as_of date)
 returns jsonb language plpgsql stable security definer set search_path = '' as $$
 declare
   v_type text := nullif(btrim(coalesce(p_vehicle_type, '')), '');
+  v_key text;
+  v public.vehicle_diagram_config_versions%rowtype;
   v_config jsonb;
   v_changed date;
+  v_layout jsonb;
+  v_mappings jsonb;
 begin
   if v_type is not null then
-    select c.config, c.updated_at::date into v_config, v_changed
-      from public.vehicle_diagram_configs c
-      where c.organisation_id = p_org and c.active
-        and upper(regexp_replace(btrim(c.vehicle_type), '\s+', ' ', 'g')) = upper(regexp_replace(v_type, '\s+', ' ', 'g'))
-      order by c.updated_at desc
-      limit 1;
+    v_key := upper(regexp_replace(v_type, '\s+', ' ', 'g'));
+    if p_as_of is null then
+      select * into v from public.vehicle_diagram_config_versions c
+        where c.organisation_id = p_org and c.valid_to is null
+          and upper(regexp_replace(btrim(c.vehicle_type), '\s+', ' ', 'g')) = v_key
+        order by c.valid_from desc limit 1;
+      if v.id is not null and v.active then v_config := v.config; end if;
+    else
+      select * into v from public.vehicle_diagram_config_versions c
+        where c.organisation_id = p_org
+          and upper(regexp_replace(btrim(c.vehicle_type), '\s+', ' ', 'g')) = v_key
+          and c.valid_from::date <= p_as_of and (c.valid_to is null or c.valid_to::date > p_as_of)
+        order by c.valid_from desc limit 1;
+      if v.id is not null then
+        if v.active then
+          v_config := v.config;
+          if exists (select 1 from public.vehicle_diagram_config_versions c
+                     where c.organisation_id = p_org
+                       and upper(regexp_replace(btrim(c.vehicle_type), '\s+', ' ', 'g')) = v_key
+                       and c.valid_to::date = p_as_of) then
+            v_changed := p_as_of + 1;   -- edited on the record's own day: not trusted
+          end if;
+        end if;
+      else
+        select * into v from public.vehicle_diagram_config_versions c
+          where c.organisation_id = p_org
+            and upper(regexp_replace(btrim(c.vehicle_type), '\s+', ' ', 'g')) = v_key
+          order by c.valid_from asc limit 1;
+        if v.id is not null and v.basis = 'backfill' and v.active then
+          v_config := v.config;
+          v_changed := v.valid_from::date;   -- later than p_as_of by construction
+        end if;
+      end if;
+    end if;
   end if;
-  return public.tyre_layout_for(v_type, p_asset_no, p_axle_count, v_config, v_changed, p_as_of);
+  v_layout := public.tyre_layout_for(v_type, p_asset_no, p_axle_count, v_config, v_changed, p_as_of);
+  if v_layout->>'status' = 'resolved' then
+    select jsonb_agg(jsonb_build_object('code', public.tyre_position_token(m.erp_code), 'slot', m.slot))
+      into v_mappings
+      from public.tyre_layout_position_mappings m
+      where m.organisation_id = p_org and m.active and m.layout_key = v_layout->>'key';
+    if v_mappings is not null then
+      v_layout := v_layout || jsonb_build_object('mappings', v_mappings);
+    end if;
+  end if;
+  return v_layout;
 end $$;
 
 -- The layout of one machine in one organisation and country, from the fleet register and

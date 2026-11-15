@@ -133,5 +133,10 @@ begin
     'already_linked',(v_existing.id is not null));
 end $$;
 
--- Optional, only if nothing else uses it (the position service functions stay harmless if left):
+-- Optional, only if nothing else uses them (they are harmless if left; the live function reads
+-- none of them, and the two added nullable columns can stay):
+--   drop function if exists public.observation_erp_rules();   -- the web client then reports
+--        "ERP confirmation is not available yet" again, which is the intended safe state
+--   drop function if exists public.confirm_observation_erp_link_by_exception(uuid,uuid,text);
+--   drop function if exists public.observation_erp_decide_core(uuid,uuid,text,text,text);
 --   drop function if exists public.observation_erp_evaluate(uuid,uuid);

@@ -27,6 +27,20 @@ export const SEVERITY_COLORS = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+let channelSeq = 0
+
+/**
+ * A realtime channel name unique to one subscription. supabase-js keys channels
+ * by topic, so two mounts of this hook (or a StrictMode double mount, where the
+ * second subscribe runs before the first async removeChannel finishes) reusing a
+ * fixed name collide with "tried to subscribe multiple times".
+ */
+export function uniqueChannelName(base) {
+  channelSeq += 1
+  const rand = Math.random().toString(36).slice(2, 8)
+  return `${base}:${rand}${channelSeq}`
+}
+
 function loadPersisted() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -212,7 +226,7 @@ export function useRealtimeAlerts() {
   useEffect(() => {
     // Build a single channel for both tables
     const channel = supabase
-      .channel('tp-realtime-alerts', {
+      .channel(uniqueChannelName('tp-realtime-alerts'), {
         config: { broadcast: { self: false } },
       })
 
@@ -292,7 +306,7 @@ export function useRealtimeAlerts() {
       }
 
       channel = supabase
-        .channel('tp-db-notifications')
+        .channel(uniqueChannelName('tp-db-notifications'))
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },

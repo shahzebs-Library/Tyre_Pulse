@@ -126,6 +126,7 @@
   ],
   "git": {
     "deploymentEnabled": {
+      "claude/tenancy-main-7rxp2t": false,
       "claude/tyre-position-service-7rxp2t": false,
       "claude/work-order-permissions-7rxp2t": false,
       "claude/closure-workflow-7rxp2t": false,

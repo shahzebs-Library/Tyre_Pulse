@@ -1,23 +1,46 @@
 import { AlertTriangle } from 'lucide-react'
 import { canClose } from '../../lib/checklist/checklistMarks'
 import { acknowledgedLabel } from '../../lib/closureWorkflow'
+import { useLanguage } from '../../contexts/LanguageContext'
 
-export const HINT_OPEN = 'Correct the fault and have the line re-marked, or send the sheet back for correction.'
-export const HINT_ACKNOWLEDGED = 'Acknowledged. The fault is tracked as a corrective action.'
-export const HINT_RESOLVED = 'Acknowledged. The fault was resolved through its corrective action.'
-export const HINT_EXCEPTION = 'Closed by an approved exception.'
+/** Where the sheet stands: still in approval, or signed with the fault recorded. */
+export const STATUS_OPEN = 'open'
+export const STATUS_ACKNOWLEDGED = 'acknowledged'
+export const STATUS_RESOLVED = 'resolved'
+export const STATUS_EXCEPTION = 'exception'
+
+export function blockingStatus(submission) {
+  const ack = submission ? acknowledgedLabel(submission) : null
+  if (!ack) return STATUS_OPEN
+  if (ack.key === 'ack_exception') return STATUS_EXCEPTION
+  if (ack.key === 'ack_resolved') return STATUS_RESOLVED
+  return STATUS_ACKNOWLEDGED
+}
+
+/**
+ * The heading over the fault list. Only a sheet still in approval "cannot be
+ * closed"; an acknowledged or compliant-by-exception sheet has already been
+ * signed, so saying it cannot be closed contradicts the badge beside it.
+ * Literal keys on purpose, so the i18n coverage test can see every one.
+ */
+export function blockingHeading(t, status, n) {
+  const one = n === 1
+  if (status === STATUS_EXCEPTION) return one ? t('closure.blocking.exceptionOne') : t('closure.blocking.exceptionMany', { n })
+  if (status === STATUS_RESOLVED) return one ? t('closure.blocking.resolvedOne') : t('closure.blocking.resolvedMany', { n })
+  if (status === STATUS_ACKNOWLEDGED) return one ? t('closure.blocking.acknowledgedOne') : t('closure.blocking.acknowledgedMany', { n })
+  return one ? t('closure.blocking.openOne') : t('closure.blocking.openMany', { n })
+}
 
 /**
  * The closing sentence under the fault list. An acknowledged sheet has already
  * been signed with the fault recorded, so telling the reader to correct it or
  * send it back is wrong advice: say where the fault now lives instead.
  */
-export function blockingHint(submission) {
-  const ack = submission ? acknowledgedLabel(submission) : null
-  if (!ack) return HINT_OPEN
-  if (ack.key === 'ack_exception') return HINT_EXCEPTION
-  if (ack.key === 'ack_resolved') return HINT_RESOLVED
-  return HINT_ACKNOWLEDGED
+export function blockingHint(t, status) {
+  if (status === STATUS_EXCEPTION) return t('closure.blocking.hintException')
+  if (status === STATUS_RESOLVED) return t('closure.blocking.hintResolved')
+  if (status === STATUS_ACKNOWLEDGED) return t('closure.blocking.hintAcknowledged')
+  return t('closure.blocking.hintOpen')
 }
 
 /**
@@ -36,18 +59,19 @@ export function blockingHint(submission) {
  * Renders nothing when there is nothing outstanding.
  */
 export default function BlockingMarksNotice({ template, answers, submission = null, className = '' }) {
+  const { t } = useLanguage()
   const { ok, blocking } = canClose(template, answers || {})
   if (ok) return null
+  const status = blockingStatus(submission)
+  const open = status === STATUS_OPEN
 
   return (
-    <div className={`rounded-xl border border-red-700/50 bg-red-500/[0.07] p-3 ${className}`}>
+    <div data-status={status} className={`rounded-xl border p-3 ${open ? 'border-red-700/50 bg-red-500/[0.07]' : 'border-amber-700/40 bg-amber-500/[0.06]'} ${className}`}>
       <div className="flex items-start gap-2.5">
-        <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+        <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${open ? 'text-red-400' : 'text-amber-400'}`} aria-hidden="true" />
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-red-300">
-            {blocking.length === 1
-              ? 'One item is still marked as a fault, so this sheet cannot be closed.'
-              : `${blocking.length} items are still marked as a fault, so this sheet cannot be closed.`}
+          <p className={`text-sm font-semibold ${open ? 'text-red-300' : 'text-amber-300'}`}>
+            {blockingHeading(t, status, blocking.length)}
           </p>
           <ul className="mt-2 space-y-1">
             {blocking.map((b) => (
@@ -60,7 +84,7 @@ export default function BlockingMarksNotice({ template, answers, submission = nu
             ))}
           </ul>
           <p className="text-xs text-[var(--text-muted)] mt-2">
-            {blockingHint(submission)}
+            {blockingHint(t, status)}
           </p>
         </div>
       </div>

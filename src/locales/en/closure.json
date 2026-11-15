@@ -159,5 +159,19 @@
     "exceptionPendingClose": "An exception has been requested on this action. Approve or refuse the exception first.",
     "selfExceptionClose": "You asked for an exception on this action, so another authorised person has to close it.",
     "photosList": "Photographs must be a list."
+  },
+  "blocking": {
+    "openOne": "One item is still marked as a fault, so this sheet cannot be closed.",
+    "openMany": "{n} items are still marked as a fault, so this sheet cannot be closed.",
+    "acknowledgedOne": "One item is marked as a fault. The sheet was signed with the fault recorded.",
+    "acknowledgedMany": "{n} items are marked as a fault. The sheet was signed with the faults recorded.",
+    "resolvedOne": "One item was marked as a fault. It has since been resolved.",
+    "resolvedMany": "{n} items were marked as a fault. They have since been resolved.",
+    "exceptionOne": "One item was marked as a fault. The sheet was closed by an approved exception.",
+    "exceptionMany": "{n} items were marked as a fault. The sheet was closed by an approved exception.",
+    "hintOpen": "Correct the fault and have the line re-marked, or send the sheet back for correction.",
+    "hintAcknowledged": "Acknowledged. The fault is tracked as a corrective action.",
+    "hintResolved": "Acknowledged. The fault was resolved through its corrective action.",
+    "hintException": "Closed by an approved exception."
   }
 }

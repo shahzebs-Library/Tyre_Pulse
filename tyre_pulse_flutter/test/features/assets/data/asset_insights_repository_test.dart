@@ -69,7 +69,8 @@ class _Source implements AssetInsightsSource {
   }
 }
 
-const AssetScope _scope = (assetNo: 'MP045', country: 'KSA');
+const AssetScope _scope =
+    (assetNo: 'MP045', country: 'KSA', organisationId: null);
 final AssetCostPeriod _period =
     AssetCostPeriod(from: DateTime(2026), to: DateTime(2026, 8, 28));
 

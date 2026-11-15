@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { loadWorkOrderByRef } from '../lib/api/workOrderLookup'
 import { toUserMessage } from '../lib/safeError'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -27,7 +28,7 @@ import {
 const WO_SELECT =
   'id,work_order_no,asset_no,status,priority,work_type,site,assigned_to:technician_name,' +
   'labour_cost,parts_cost,total_cost,created_at,completed_at,scheduled_date:target_completion,' +
-  'description,parts_used,country,score,quality_score'
+  'description,parts_used,country,score,quality_score,organisation_id'
 
 const HISTORY_COLS = 'id,work_order_no,status,work_type,created_at,completed_at,total_cost'
 const HISTORY_LIMIT = 200
@@ -82,13 +83,13 @@ export default function WorkshopJobDetail() {
       // Fetch by id first; fall back to human-readable work_order_no so links
       // built from either identifier resolve. Country scope keeps the detail
       // page consistent with the directory's active-country filter.
-      const scoped = activeCountry && activeCountry !== 'All' ? activeCountry : null
-      let q = supabase.from('work_orders').select(WO_SELECT).limit(1)
-      q = /^[0-9a-f-]{16,}$/i.test(id) ? q.eq('id', id) : q.eq('work_order_no', id)
-      if (scoped) q = q.eq('country', scoped)
-      const { data, error: err } = await q.maybeSingle()
-      if (err) { setError(toUserMessage(err, 'Could not load the job.')); setJob(null) }
-      else setJob(data || null)
+      // A job card NUMBER is unique per company (TEN-1b), not globally; see
+      // loadWorkOrderByRef for how a super admin's cross-company read resolves.
+      const { job: found, ambiguous } = await loadWorkOrderByRef(id, { select: WO_SELECT, country: activeCountry })
+      if (ambiguous) {
+        setError('This job card number is used by more than one company. Open the job from the Work Orders list instead.')
+        setJob(null)
+      } else setJob(found)
     } catch (e) {
       setError(toUserMessage(e, 'Could not load the job.'))
       setJob(null)
@@ -109,6 +110,8 @@ export default function WorkshopJobDetail() {
     try {
       let q = supabase.from('work_orders').select(HISTORY_COLS).eq('asset_no', job.asset_no)
       if (job.country) q = q.eq('country', job.country)
+      // Same asset code in another company is a different machine.
+      if (job.organisation_id) q = q.eq('organisation_id', job.organisation_id)
       const { data, error: err } = await q
         .order('created_at', { ascending: false })
         .order('id', { ascending: false })
@@ -119,7 +122,7 @@ export default function WorkshopJobDetail() {
       setHistory([])
       setHistoryError(toUserMessage(e, 'Could not load this asset\'s job history.'))
     }
-  }, [job?.asset_no, job?.country])
+  }, [job?.asset_no, job?.country, job?.organisation_id])
   useEffect(() => { if (job) loadHistory() }, [job, loadHistory])
 
   const parts = useMemo(() => parseParts(job), [job])

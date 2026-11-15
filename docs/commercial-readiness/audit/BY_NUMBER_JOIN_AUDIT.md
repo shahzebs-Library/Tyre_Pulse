@@ -1,6 +1,7 @@
 # By-number join audit (job card numbers are per company)
 
 Date: 2026-11-15. Status: audit complete, fixes are DRAFTS (nothing applied to production).
+Round 2 (same day): super-admin cross-company client readers fixed, complaints staging blank-date draft added.
 
 ## Why this exists
 
@@ -77,21 +78,33 @@ pdf-cache / notification helpers. Views `v_jobcard_date_mismatch` (row-local),
 | `src/lib/api/erpIntake.js` `insertWorkOrders` | Merge read existing job cards by number across all companies visible to the caller. For a super admin that meant an import could **update another company's job card**. | Existence set and overlap fetch are filtered to the caller's company (`app_current_org` RPC). Unreadable company keeps the previous RLS-only behaviour. Test: `src/test/erpIntakeOrgScope.test.js`. |
 | `src/lib/api/observationErpEvidence.js` | Evidence reads (tyres, job cards, expense lines, fleet) by asset + number with no company. A super admin reviewing an inspection could be offered another company's job card. | Every read pinned to the inspection's own company (row value, else read once by id; a failed read is an error, never a wider search). Tests added to `src/test/observationErpEvidence.api.test.js`. |
 
-## Client: RLS-bounded, follow-up only (not changed)
+## Client: super-admin cross-company readers (fixed in this branch, round 2)
 
 Ordinary users are limited to their own company by the restrictive `organisation_id`
-policies, so these only matter for a super admin, whose reads span companies:
+policies, so these only mattered for a super admin, whose reads span companies. Each is now
+pinned to one company: the row's own company when the caller already holds the row, else the
+caller's company (`app_current_org()`, shared helper `src/lib/api/companyScope.js`). A number
+or code held only by ONE company still resolves to that company's row; one held by two OTHER
+companies is never picked between (null / "ambiguous"), never an arbitrary row.
 
-- `src/pages/WorkshopJobDetail.jsx` opens a job by number (`.eq('work_order_no', id).limit(1)`)
-  when the URL holds a number, not an id. Two companies with the same number: a super admin
-  sees one of them. Links inside the app use the id.
-- `src/lib/assetHistory.js documentChain` groups expense lines and line items under job cards
-  by number, after reads keyed by asset code. A super admin viewing an asset code that two
-  companies share would see them merged.
-- Flutter: `global_search_repository.dart` (ilike search, read only) and the asset financials
-  / timeline readers (by asset code). Same note.
-- `erpIntake.js` merges for `vehicle_fleet` and `tyre_records` key on asset / serial rather than
-  number and share the same super-admin caveat; worth the same company filter in a later pass.
+| File | Problem | Fix | Test |
+|---|---|---|---|
+| `src/pages/WorkshopJobDetail.jsx` (+ new `src/lib/api/workOrderLookup.js`) | Opening a job by NUMBER took `limit(1)`, any company. Asset job history read by asset code only. | Number lookup prefers the caller's company, else the single holder, else says the number is used by more than one company. History read pinned to the job's own company. | `src/test/workOrderLookupOrgScope.test.js` |
+| `src/lib/api/assetHistory.js` + `src/lib/assetHistory.js documentChain` | Every per-asset source read by asset code; the chain grouped expense lines and line items under job cards by number. | The machine's company is resolved first (`assetCompany`: caller's company when it holds the code, else the single holder); every source, the tyre marks and the register rows are pinned to it. `documentChain` / `chainForCard` / `jobCardWorkAndQc` key on company + number. | `src/test/assetHistoryOrgScope.test.js` |
+| `src/lib/api/erpIntake.js` asset + serial merges | `insertVehicleFleet` and `insertTyreRecords` merged on asset / serial across companies; the preview count did too, and counted job cards per country while the merge is per company. | Existence sets and overlap reads filtered to the caller's company; work-order preview per company, every country. | `src/test/erpIntakeOrgScope.test.js` |
+| `src/lib/api/assets.js getAssetMatches` / `getAssetByNo` | Auto-fill picked the first row of any company for a shared code. | Caller's company wins (`firstForCallerCompany`). | `src/test/companyLookupsOrgScope.test.js` |
+| `src/lib/api/tyreExchange.js getScrapMark`, `findTyreBySerial` | Marks are keyed per company: two rows made `maybeSingle()` fail and read as "not scrapped"; the scrap confirmation could show another company's tyre. | Read the caller's company only (the scrap RPC acts on that company). | same file |
+| `src/lib/api/inspections.js` + `fitmentValidation.js findVehicleByAsset`, `vehicle360.js vehicleOrgId` | First fleet row of any company. | Caller's company wins. | same file |
+| Flutter `vehicle_fleet_repository.dart fetchByAssetNo`, `asset_insights_repository.dart`, `asset_360_repository.dart` | Detail lookup `limit(1)` of any company; financials, timeline, meters, PM plans and tyre actions read by asset code only. | Fleet rows now carry `organisation_id`; lookup prefers the caller's company (`firstRowForCompany`); `AssetScope` carries the fleet row's company and every per-asset read pins it. Reserved wiring files untouched. | `test/features/assets/data/vehicle_fleet_repository_test.dart`, `asset_financial_report_screen_test.dart` |
+
+Still open (lower risk, recorded honestly):
+
+- `src/lib/api/vehicle360.js getVehicle` reads the `vehicles` view, which has no
+  `organisation_id` column, so it cannot be company-pinned without a view change.
+- List-style reads by asset code (fleet master search, gate pass, wash, PM, engine hours,
+  utilization, insurance, `ragService`, `TyreScanCamera`) and Flutter `global_search_repository.dart`
+  return lists the user picks from; a super admin sees both companies' rows side by side. They
+  are not number joins and were left as they are.
 
 ## Drafts
 
@@ -130,6 +143,28 @@ policies, so these only matter for a super admin, whose reads span companies:
    re-applied cleanly.
 5. Bridge draft: index removed; the documented rollback re-created it.
 
-Found while testing, not changed: `process_stg_complaints` still aborts a batch when a row has
-no Vehicle In Date (`work_orders.opened_at` is NOT NULL). Pre-existing, same class as the
-`process_stg_job_cards` fallback fixed earlier.
+Found while testing: `process_stg_complaints` aborted the whole batch when a row had no
+readable Vehicle In Date (`work_orders.opened_at` is NOT NULL). Fixed in a separate draft,
+below.
+
+## Complaints staging: a blank Vehicle In Date no longer aborts the batch
+
+- `supabase/pending_migrations/20261117112000_complaints_missing_in_date_reject.sql` (+
+  `_ROLLBACK.sql`). Apply AFTER the by-number draft (it patches that version and aborts if its
+  marker is missing); roll back BEFORE the by-number rollback. Anchored replace, aborts unless
+  each anchor occurs once, old text saved to `_bak.complaints_in_date_defs`, re-run is a no-op,
+  no destructive keyword.
+- A row whose Vehicle In Date is blank or unreadable is skipped (no date invented) and
+  recorded in `expense_import_rejects` (the ERP intake reject log the ERP Sync load history
+  already reads) with `complaint_missing_vehicle_in_date` or
+  `complaint_unreadable_vehicle_in_date`, the job card number, the importing company and a
+  sentence naming the asset and the value. Every other row lands. A re-upload of a card that
+  already exists is still skipped silently (duplicate check runs first).
+- JS twin (`src/lib/erpIntake.js mapComplaints`, the in-app ERP intake): the same row is
+  skipped with the same reason codes and listed on the intake screen ("Every row accounted
+  for"); it used to land with today's date. The ERP Sync history labels the two codes in plain
+  words (`rejectSummary`).
+- Test: `supabase/tests/staging_complaints_in_date.sh` on a private copy of `tp_mirror2`:
+  before the fix the 3-row batch aborts (23502); after it, 7 of 7 assertions pass; re-run
+  no-op; rollback restores the by-number text byte-identical; re-apply identical. JS:
+  `src/test/erpImportZeroRows.test.js`.

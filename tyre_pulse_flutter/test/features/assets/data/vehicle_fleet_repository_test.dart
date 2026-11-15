@@ -581,6 +581,59 @@ void main() {
   // VehicleFleetRepository.byAssetNo
   // ---------------------------------------------------------------------------
 
+  group('company scope for a lookup by asset code', () {
+    const String orgA = '00000000-0000-0000-0000-00000000000a';
+    const String orgB = '00000000-0000-0000-0000-00000000000b';
+    final List<Map<String, dynamic>> twoCompanies = <Map<String, dynamic>>[
+      <String, dynamic>{'id': 'b', 'organisation_id': orgB},
+      <String, dynamic>{'id': 'a', 'organisation_id': orgA},
+    ];
+
+    test('the caller company row wins when two companies share the code', () {
+      expect(firstRowForCompany(twoCompanies, orgA)?['id'], 'a');
+    });
+
+    test('two other companies are never picked between', () {
+      expect(
+        firstRowForCompany(
+          twoCompanies,
+          '00000000-0000-0000-0000-00000000000c',
+        ),
+        isNull,
+      );
+      expect(firstRowForCompany(twoCompanies, null), isNull);
+    });
+
+    test('one company keeps the first row, whoever asks', () {
+      expect(
+          firstRowForCompany(
+              <Map<String, dynamic>>[twoCompanies.first], orgA)?['id'],
+          'b');
+    });
+
+    test('byAssetNo passes the caller company to the source', () async {
+      final _FakeVehicleFleetSource source = _FakeVehicleFleetSource(
+        detailRow: _row(1),
+      );
+      final VehicleFleetRepository repo = VehicleFleetRepository(source);
+      await repo.byAssetNo(
+        scope: const WorkspaceScopeFilter(workspaceId: orgA, country: 'KSA'),
+        assetNo: 'TM0001',
+        country: 'KSA',
+      );
+      expect(source.lastOrganisationId, orgA);
+    });
+
+    test('the fleet row decodes its company', () {
+      final VehicleAsset asset = VehicleAsset.fromRow(<String, dynamic>{
+        'id': 'v1',
+        'asset_no': 'TM514',
+        'organisation_id': orgA,
+      });
+      expect(asset.organisationId, orgA);
+    });
+  });
+
   group('VehicleFleetRepository.byAssetNo', () {
     test('a successful lookup returns the decoded vehicle', () async {
       final _FakeVehicleFleetSource source = _FakeVehicleFleetSource(
@@ -758,6 +811,7 @@ class _FakeVehicleFleetSource implements VehicleFleetSource {
 
   int fetchPageCalls = 0;
   int fetchByAssetNoCalls = 0;
+  String? lastOrganisationId;
 
   @override
   Future<List<Map<String, dynamic>>> fetchPage({
@@ -780,8 +834,10 @@ class _FakeVehicleFleetSource implements VehicleFleetSource {
   Future<Map<String, dynamic>?> fetchByAssetNo({
     required String assetNo,
     required String? country,
+    String? organisationId,
   }) async {
     fetchByAssetNoCalls++;
+    lastOrganisationId = organisationId;
     if (throwOnDetail != null) {
       throw throwOnDetail!; // ignore: only_throw_errors
     }

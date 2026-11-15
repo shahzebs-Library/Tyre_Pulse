@@ -73,3 +73,36 @@ describe('insertWorkOrders stays inside the caller company', () => {
     expect(eqs.some(([k]) => k === 'organisation_id')).toBe(false)
   })
 })
+
+describe('asset and serial merges stay inside the caller company', () => {
+  // Reads carry filters; the insert calls in this mock record none.
+  const orgEqs = (table) => h.state.calls.filter((c) => c.table === table && c.eqs.length).map((c) => c.eqs)
+
+  it('insertVehicleFleet reads and refreshes the caller company assets only', async () => {
+    h.state.existing = [{ id: 'f1', asset_no: 'TM514', country: 'KSA', site: 'NHC', organisation_id: ORG }]
+    await intake.insertVehicleFleet([
+      { asset_no: 'TM514', country: 'KSA', site: 'JED' },
+      { asset_no: 'TM999', country: 'KSA', site: 'NHC' },
+    ], { country: 'KSA' })
+    const reads = orgEqs('vehicle_fleet')
+    expect(reads.length).toBeGreaterThan(0)
+    for (const eqs of reads) expect(eqs).toContainEqual(['organisation_id', ORG])
+    expect(h.state.inserted.map((r) => r.asset_no)).toEqual(['TM999'])
+  })
+
+  it('insertTyreRecords reads existing fitments for the caller company only', async () => {
+    await intake.insertTyreRecords([
+      { serial_no: 'SER1', asset_no: 'TM514', position: 'LHF1', issue_date: '2026-01-01', removal_date: '2026-02-01', country: 'KSA' },
+    ], { country: 'KSA' })
+    const reads = orgEqs('tyre_records')
+    expect(reads.length).toBeGreaterThan(0)
+    for (const eqs of reads) expect(eqs).toContainEqual(['organisation_id', ORG])
+  })
+
+  it('the preview counts job cards per company across countries, like the merge', async () => {
+    await intake.countExistingRows('work_orders', [{ work_order_no: 'A' }], { country: 'KSA' })
+    const eqs = orgEqs('work_orders').flat()
+    expect(eqs).toContainEqual(['organisation_id', ORG])
+    expect(eqs.some(([k]) => k === 'country')).toBe(false)
+  })
+})

@@ -68,8 +68,9 @@ extension AssetReportPeriodX on AssetReportPeriod {
       };
 }
 
-/// The scope the money is read in: the asset's own country first (the same
-/// code in another country is another machine), else the active country.
+/// The scope the money is read in: the asset's own company and country first
+/// (the same code in another company or country is another machine), else the
+/// active country.
 AssetScope assetScopeFor(VehicleAsset asset, String? activeCountry) {
   final String? own = asset.country?.trim();
   final String? active = activeCountry?.trim();
@@ -78,6 +79,9 @@ AssetScope assetScopeFor(VehicleAsset asset, String? activeCountry) {
     country: (own != null && own.isNotEmpty)
         ? own
         : (active != null && active.isNotEmpty ? active : null),
+    // The fleet row's own company: the same code in another company is
+    // another machine, and a super admin's reads span companies.
+    organisationId: asset.organisationId,
   );
 }
 

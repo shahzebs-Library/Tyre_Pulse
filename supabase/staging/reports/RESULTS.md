@@ -45,3 +45,13 @@ identical. beta.manager went from 4 to 1 visible `accident_email%` keys (the rem
   is read by `src/lib/api/accidentWorkflow.js` (current company elevated users) and the console (super admin).
 - The seed holds only built-in role rows in the global matrix, so "a custom role row of the first company is
   not served to another company" is proven on PGlite (TEN-7 test), not on this database.
+
+## Rebuilt on main (2026-11-15)
+
+Fresh load into a separate local database (`tp_stg_base`), nothing shared touched:
+baseline 14,857 statements, 0 failed; verify 0 mismatches, 0 function bodies failing validation; seed 2 synthetic
+companies (Alpha, Beta) plus the third, 16 users; isolation checks 35 passed, 0 failed (before state reproduces
+TEN-1 to TEN-9 as expected). `apply_pending_and_retest.sh` on a copy with main's drafts: 34 applied, 1 failed
+(`20261116091000_observation_erp_decide_on_position_service.sql` needs `observation_erp_links` from the unmerged
+PR #514 draft, not on main), isolation checks 35 passed, 0 failed, TEN-1 to TEN-5 and TEN-9 not reproduced,
+TEN-6 to TEN-8 open by design hold. The script now skips `_ROLLBACK` and `_DESIGN` files (main added both kinds).

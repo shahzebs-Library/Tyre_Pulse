@@ -15,6 +15,8 @@ ok=0; bad=0
 for f in $(ls "$PENDING"/*.sql | sort); do
   b="$(basename "$f")"
   [ "${b%%_*}" -ge 20261113100000 ] 2>/dev/null || continue
+  # A _ROLLBACK file reverses its sibling and a _DESIGN file is never applied: neither is a forward draft.
+  case "$b" in *_ROLLBACK.sql|*_DESIGN.sql) echo "SKIPPED  $b (rollback or design file)" >> "$OUT"; continue;; esac
   if err="$(psql -X -q -v ON_ERROR_STOP=1 -1 -h 127.0.0.1 -p "$STAGING_PORT" -U postgres -d "$AFTER_DB" -f "$f" 2>&1 >/dev/null)"; then
     echo "APPLIED  $b" >> "$OUT"; ok=$((ok+1))
   else

@@ -5,7 +5,7 @@
  * summaries. Every write reuses an existing audited writer.
  */
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Users, UserCheck, UserX, Hourglass, Lock, Smartphone, Fingerprint, Eye, MoreHorizontal, Download,
   UserPlus, Upload, Bookmark, Plus, Columns, Filter, X, LogOut, MapPin, UserCog, Info,
@@ -72,7 +72,10 @@ export default function PeopleTab({ data, onOpenManage }) {
   const { logAction } = useConsoleAuth()
   const navigate = useNavigate()
   const { people = [], directoryOk, minVersion, orphans, orgs = [], deletions, supportCount } = data
-  const [filters, setFilters] = useState({})
+  // /console/users?role=Manager (the role link on a person's page) opens the
+  // list already narrowed to that role.
+  const [urlParams] = useSearchParams()
+  const [filters, setFilters] = useState(() => { const r = urlParams.get('role'); return r ? { roles: [r] } : {} })
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState('last_sign_in')
   const [density, setDensity] = useState('comfortable')

@@ -24,4 +24,6 @@ OUT="$E2E_RUN/accounts_r2.txt"
 ( umask 077
   cat "$E2E_ACCOUNTS_FILE" > "$OUT"
   psqle -At -F ' | ' -d "$E2E_DB" -c "select 'Alpha Readymix Co', p.role, p.username, u.email, '$PW' from public.profiles p join auth.users u on u.id = p.id where p.username like 'r2.%' or p.username like 'clo.%' order by p.username" >> "$OUT" )
+# The drafts were applied after PostgREST started: reload its schema cache or new functions read as missing.
+psqle -d "$E2E_DB" -c "notify pgrst, 'reload schema'" >/dev/null
 echo "accounts file: $OUT (export E2E_ACCOUNTS_FILE to it before running the round 2 specs)"

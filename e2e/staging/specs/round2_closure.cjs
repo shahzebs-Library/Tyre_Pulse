@@ -41,6 +41,13 @@ const ca = (id) => JSON.parse(R.sql(`select row_to_json(t) from (select status, 
 const events = (id) => R.sql(`select coalesce(string_agg(event_type, ',' order by id), '') from public.corrective_action_review_events where action_id = '${id}'`)
 const sheet = (id) => JSON.parse(R.sql(`select row_to_json(t) from (select approval_status, locked, answers::text as answers, acknowledged_by is not null as acked, acknowledged_name, supervisor_by is not null as sup_signed from public.checklist_submissions where id = '${id}') t`))
 const compliance = (id) => R.sql(`select row_to_json(v) from public.v_checklist_fault_compliance v where v.submission_id = '${id}'`)
+const { execFileSync } = require('child_process')
+// Round 4: run statements as a signed-in person inside a transaction that is always rolled back.
+function dbAs(uid, stmt) {
+  const q = `begin; select set_config('request.jwt.claims', json_build_object('sub','${uid}','role','authenticated')::text, true); set local role authenticated; ${stmt}; rollback;`
+  try { execFileSync('psql', ['-X', '-q', '-At', '-v', 'ON_ERROR_STOP=1', '-h', '127.0.0.1', '-p', process.env.PGPORT_E2E || '54329', '-U', 'postgres', '-d', process.env.E2E_DB, '-c', q], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }); return 'ACCEPTED' }
+  catch (e) { return 'REFUSED: ' + String(e.stderr || e.message).split('\n').find((l) => /ERROR/.test(l)) }
+}
 
 async function openAction(s, title) {
   const p = s.page
@@ -206,6 +213,18 @@ async function actions() {
   out.exception_decider_open = strip(a)
   if (a.canDecideException) out.exception_decided = { message: await decideException(a, 'approve', 'R3: confirmed with the fleet register.'), events: events(A6), db: ca(A6) }
   await ad.context.close()
+  // Round 4: history keeps both people and both times; the action reads as closed by exception.
+  out.exception_history = R.sql(`select string_agg(event_type || ' by ' || actor_name || ' (' || actor_role || ') at ' || to_char(created_at, 'YYYY-MM-DD HH24:MI'), ' | ' order by id) from public.corrective_action_review_events where action_id = '${A6}'`)
+  out.exception_people = R.sql(`select (select username from public.profiles where id = exception_requested_by) || ' asked at ' || exception_requested_at || '; ' || (select username from public.profiles where id = reviewed_by) || ' decided at ' || reviewed_at from public.corrective_actions where id = '${A6}'`)
+  { const ad5 = await R.session('alpha.admin'); out.exception_closed_view = strip(await openAction(ad5, T6)); await ad5.context.close() }
+  // Round 4: an exception asked for and decided by the same person is refused by the database.
+  {
+    const mgr = R.sql(`select id from public.profiles where username = 'alpha.manager'`)
+    const open = R.sql(`select id from public.corrective_actions where title like 'Checklist fault: Mirrors (Synthetic Workshop%' and status = 'Open' and review_status is null and organisation_id = '00000000-0000-0000-0000-000000000001' order by id limit 1`)
+    out.exception_self_decide_db = dbAs(mgr, `select public.corrective_action_request_exception('${open}', 'R4: same person asks and decides.'); select public.corrective_action_decide_exception('${open}', 'approve', 'R4 self')`)
+    out.exception_self_decide_request_alone_db = dbAs(mgr, `select public.corrective_action_request_exception('${open}', 'R4: same person asks and decides.')`)
+    out.exception_self_decide_after = ca(open)
+  }
 
   // 9. Roles that should not get the exception or the page.
   const t = await R.session('r2.tpe')

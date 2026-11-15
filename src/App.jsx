@@ -806,7 +806,7 @@ function MainApp() {
                       <Route path="/fitment-validation"    element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><FitmentValidation /></RoleRoute></Safe>} />
                       <Route path="/technician-scorecard"  element={<Safe><RoleRoute allowed={['Admin']}><TechnicianScorecard /></RoleRoute></Safe>} />
                       <Route path="/tco-calculator"        element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><TcoCalculator /></RoleRoute></Safe>} />
-                      <Route path="/tyre-pool"             element={<Safe><TyrePool /></Safe>} />
+                      <Route path="/tyre-pool"             element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><TyrePool /></RoleRoute></Safe>} />
                       <Route path="/ops-intelligence"      element={<Safe><RoleRoute allowed={['Admin']}><OpsIntelligence /></RoleRoute></Safe>} />
                       <Route path="/fleet-risk-score"      element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><FleetRiskScore /></RoleRoute></Safe>} />
                       <Route path="/rotation-optimizer"    element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><RotationOptimizer /></RoleRoute></Safe>} />

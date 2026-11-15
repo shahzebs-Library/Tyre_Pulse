@@ -136,10 +136,12 @@
   ],
   "git": {
     "deploymentEnabled": {
+      "claude/console-main-7rxp2t": false,
       "claude/tyre-position-service-7rxp2t": false,
       "claude/work-order-permissions-7rxp2t": false,
       "claude/closure-workflow-7rxp2t": false,
       "claude/commercial-blockers-7rxp2t": false,
+      "claude/at-risk-module-fixes-7rxp2t": false,
       "claude/fix-observation-test-7rxp2t": false,
       "claude/legal-links-redirect-7rxp2t": false,
       "claude/tyrepulse-inspector-build-7rxp2t": false,
@@ -163,7 +165,8 @@
       "claude/current-prod-fixes-b-7rxp2t": false,
       "claude/commercial-fixes-7rxp2t": false,
       "claude/module-workflow-tests-7rxp2t": false,
-      "claude/job-card-parts-cost-fix-7rxp2t": false
+      "claude/job-card-parts-cost-fix-7rxp2t": false,
+      "claude/erp-followup-v2-7rxp2t": false
     }
   },
   "ignoreCommand": "node scripts/vercel-ignore-build.mjs"

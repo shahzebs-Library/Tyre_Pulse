@@ -596,15 +596,29 @@ export function delayBreakdown(board, ctx = {}) {
     .sort((a, z) => z.hoursLost - a.hoursLost)
 }
 
-/** Resolve an hourly labour rate from ctx.labourRate, else ctx.jobs, else default. */
-function resolveLabourRate(ctx = {}) {
-  if (Number.isFinite(Number(ctx.labourRate)) && Number(ctx.labourRate) > 0) return Number(ctx.labourRate)
+/**
+ * The hourly labour rate a delay cost is priced at, and where it came from:
+ * 'configured' (ctx.labourRate, i.e. Workshop Settings), 'jobs' (the average
+ * labour rate recorded on the job cards) or 'default' (nothing was set, so the
+ * built-in DEFAULT_LABOUR_RATE is used). A screen that shows a delay cost must
+ * say so when the source is 'default': that figure is not the company's rate.
+ * @returns {{ rate:number, source:'configured'|'jobs'|'default' }}
+ */
+export function labourRateBasis(ctx = {}) {
+  if (Number.isFinite(Number(ctx.labourRate)) && Number(ctx.labourRate) > 0) {
+    return { rate: Number(ctx.labourRate), source: 'configured' }
+  }
   const jobs = arr(ctx.jobs)
   if (jobs.length) {
     const rates = jobs.map((jb) => Number(jb.labour_rate)).filter((r) => Number.isFinite(r) && r > 0)
-    if (rates.length) return rates.reduce((s, r) => s + r, 0) / rates.length
+    if (rates.length) return { rate: rates.reduce((s, r) => s + r, 0) / rates.length, source: 'jobs' }
   }
-  return DEFAULT_LABOUR_RATE
+  return { rate: DEFAULT_LABOUR_RATE, source: 'default' }
+}
+
+/** Resolve an hourly labour rate from ctx.labourRate, else ctx.jobs, else default. */
+function resolveLabourRate(ctx = {}) {
+  return labourRateBasis(ctx).rate
 }
 
 /** Priority band for a delay row from its lost hours + cost impact. */

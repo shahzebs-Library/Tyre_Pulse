@@ -1570,11 +1570,20 @@ html.light .console-root { background-color: #f8fafc !important; color: #0f172a 
 
 /* Sidebar + top bar surfaces (explicit so every opacity variant lands exact). */
 html.light .console-root aside  { background-color: #ffffff !important; }
-html.light .console-root header { background-color: rgba(255,255,255,0.92) !important; }
+/* Only the shell's own top bar (and a dialog's title bar). A bare `header`
+   selector also painted every page and panel <header> white, which showed as
+   white slabs sitting on the grey page. */
+html.light .console-root > div > header { background-color: rgba(255,255,255,0.92) !important; }
 
+/* HOW THE COLOUR RULES BELOW MATCH. Each one targets a class TOKEN: at the
+   start of the attribute, after a space, or its `hover:` form while hovered.
+   A plain [class*="text-blue-4"] also matched `hover:text-blue-400`, so a
+   control that should only turn blue on hover was blue all the time (2FA
+   Security, Sign Out, every hover-tinted card). :where() keeps the hover arm
+   from raising specificity. */
 /* Dark borders → subtle slate hairlines across the console subtree. */
-html.light .console-root [class*="border-gray-800"],
-html.light .console-root [class*="border-gray-700"] { border-color: rgba(15,23,42,0.10) !important; }
+html.light .console-root :is([class^="border-gray-800"], [class*=" border-gray-800"], :where([class*="hover:border-gray-800"]:hover)),
+html.light .console-root :is([class^="border-gray-700"], [class*=" border-gray-700"], :where([class*="hover:border-gray-700"]:hover)) { border-color: rgba(15,23,42,0.10) !important; }
 
 /* Muted labels / secondary text on the light shell. */
 html.light .console-root .text-gray-500 { color: #475569 !important; }
@@ -1583,24 +1592,35 @@ html.light .console-root .text-gray-700 { color: #475569 !important; }
 
 /* Orange ACCENT stays orange — but the light-orange 300 tone is illegible on a
    white ground, so darken it to orange-700/600 while fills keep an orange tint. */
-html.light .console-root [class*="text-orange-300"] { color: #c2410c !important; }
-html.light .console-root [class*="text-orange-200"] { color: #c2410c !important; }
-html.light .console-root [class*="text-orange-400"] { color: #ea580c !important; }
+html.light .console-root :is([class^="text-orange-300"], [class*=" text-orange-300"], :where([class*="hover:text-orange-300"]:hover)) { color: #c2410c !important; }
+html.light .console-root :is([class^="text-orange-200"], [class*=" text-orange-200"], :where([class*="hover:text-orange-200"]:hover)) { color: #c2410c !important; }
+html.light .console-root :is([class^="text-orange-400"], [class*=" text-orange-400"], :where([class*="hover:text-orange-400"]:hover)) { color: #ea580c !important; }
 
 /* Active nav item + accent badges: deep-orange fills → light orange tints. */
-html.light .console-root [class*="bg-orange-950"],
-html.light .console-root [class*="bg-orange-900"]  { background-color: rgba(249,115,22,0.12) !important; }
-html.light .console-root [class*="bg-orange-500/"],
-html.light .console-root [class*="bg-orange-400/"] { background-color: rgba(249,115,22,0.14) !important; }
-html.light .console-root [class*="border-orange-800"] { border-color: rgba(249,115,22,0.30) !important; }
-html.light .console-root [class*="border-orange-500"] { border-color: rgba(249,115,22,0.35) !important; }
+/* Matched as a whole class token (start of the attribute or after a space) so
+   a `hover:bg-orange-950/30` does not tint the element all the time; the
+   hover form gets the same tint only while hovered. Same for blue and red. */
+html.light .console-root [class^="bg-orange-950"], html.light .console-root [class*=" bg-orange-950"],
+html.light .console-root [class^="bg-orange-900"], html.light .console-root [class*=" bg-orange-900"],
+html.light .console-root [class*="hover:bg-orange-950"]:hover,
+html.light .console-root [class*="hover:bg-orange-900"]:hover { background-color: rgba(249,115,22,0.12) !important; }
+html.light .console-root :is([class^="bg-orange-500/"], [class*=" bg-orange-500/"], :where([class*="hover:bg-orange-500/"]:hover)),
+html.light .console-root :is([class^="bg-orange-400/"], [class*=" bg-orange-400/"], :where([class*="hover:bg-orange-400/"]:hover)) { background-color: rgba(249,115,22,0.14) !important; }
+html.light .console-root :is([class^="border-orange-800"], [class*=" border-orange-800"], :where([class*="hover:border-orange-800"]:hover)) { border-color: rgba(249,115,22,0.30) !important; }
+html.light .console-root :is([class^="border-orange-500"], [class*=" border-orange-500"], :where([class*="hover:border-orange-500"]:hover)) { border-color: rgba(249,115,22,0.35) !important; }
 
 /* Other semantic hover/badge tints (2FA blue, sign-out/locked red) on light. */
-html.light .console-root [class*="bg-blue-950"] { background-color: rgba(37,99,235,0.10) !important; }
-html.light .console-root [class*="bg-red-950"],
-html.light .console-root [class*="bg-red-900"]  { background-color: rgba(220,38,38,0.10) !important; }
-html.light .console-root [class*="text-red-300"]    { color: #dc2626 !important; }
-html.light .console-root [class*="border-red-800"]  { border-color: rgba(220,38,38,0.28) !important; }
+html.light .console-root [class^="bg-blue-950"], html.light .console-root [class*=" bg-blue-950"],
+html.light .console-root [class*="hover:bg-blue-950"]:hover { background-color: rgba(37,99,235,0.10) !important; }
+html.light .console-root [class^="bg-red-950"], html.light .console-root [class*=" bg-red-950"],
+html.light .console-root [class^="bg-red-900"], html.light .console-root [class*=" bg-red-900"],
+html.light .console-root [class*="hover:bg-red-950"]:hover,
+html.light .console-root [class*="hover:bg-red-900"]:hover { background-color: rgba(220,38,38,0.10) !important; }
+/* A switch that is OFF: its dark-grey track flips to near-white on the light
+   shell and disappears. Give it a visible slate track. */
+html.light .console-root [role="switch"][aria-checked="false"] { background-color: #cbd5e1 !important; }
+html.light .console-root :is([class^="text-red-300"], [class*=" text-red-300"], :where([class*="hover:text-red-300"]:hover))    { color: #dc2626 !important; }
+html.light .console-root :is([class^="border-red-800"], [class*=" border-red-800"], :where([class*="hover:border-red-800"]:hover))  { border-color: rgba(220,38,38,0.28) !important; }
 
 /* ─── Design System Utility Extensions ─────────────────────────────────────── */
 @layer utilities {
@@ -2040,23 +2060,23 @@ html.light .console-root main h1 { color: #0f172a !important; }
    -900/20 fill) wash out to near-invisible on white, which strips the meaning
    out of every Completed / Failed / Warning badge. Light mode gets the -700
    ink on a soft tint of the same hue. Dark output is untouched. */
-html.light .console-root [class*="bg-green-9"],  html.light .console-root [class*="bg-emerald-9"] { background-color: rgba(5,150,105,0.10) !important; }
-html.light .console-root [class*="bg-yellow-9"], html.light .console-root [class*="bg-amber-9"]   { background-color: rgba(217,119,6,0.10) !important; }
-html.light .console-root [class*="bg-blue-9"]    { background-color: rgba(37,99,235,0.09) !important; }
-html.light .console-root [class*="bg-purple-9"]  { background-color: rgba(147,51,234,0.09) !important; }
-html.light .console-root [class*="text-green-2"],  html.light .console-root [class*="text-green-3"],  html.light .console-root [class*="text-green-4"],
-html.light .console-root [class*="text-emerald-2"],html.light .console-root [class*="text-emerald-3"],html.light .console-root [class*="text-emerald-4"] { color: #047857 !important; }
-html.light .console-root [class*="text-yellow-2"], html.light .console-root [class*="text-yellow-3"], html.light .console-root [class*="text-yellow-4"],
-html.light .console-root [class*="text-amber-2"],  html.light .console-root [class*="text-amber-3"],  html.light .console-root [class*="text-amber-4"]  { color: #b45309 !important; }
-html.light .console-root [class*="text-blue-2"],   html.light .console-root [class*="text-blue-3"],   html.light .console-root [class*="text-blue-4"]   { color: #1d4ed8 !important; }
-html.light .console-root [class*="text-purple-2"], html.light .console-root [class*="text-purple-3"], html.light .console-root [class*="text-purple-4"] { color: #7e22ce !important; }
-html.light .console-root [class*="text-red-2"],    html.light .console-root [class*="text-red-4"]    { color: #b91c1c !important; }
-html.light .console-root [class*="border-green-7"],  html.light .console-root [class*="border-green-8"],
-html.light .console-root [class*="border-emerald-7"],html.light .console-root [class*="border-emerald-8"] { border-color: rgba(5,150,105,0.30) !important; }
-html.light .console-root [class*="border-yellow-7"], html.light .console-root [class*="border-yellow-8"],
-html.light .console-root [class*="border-amber-7"],  html.light .console-root [class*="border-amber-8"]   { border-color: rgba(217,119,6,0.30) !important; }
-html.light .console-root [class*="border-blue-7"],   html.light .console-root [class*="border-blue-8"]    { border-color: rgba(37,99,235,0.28) !important; }
-html.light .console-root [class*="border-purple-7"], html.light .console-root [class*="border-purple-8"]  { border-color: rgba(147,51,234,0.28) !important; }
+html.light .console-root :is([class^="bg-green-9"], [class*=" bg-green-9"], :where([class*="hover:bg-green-9"]:hover)),  html.light .console-root :is([class^="bg-emerald-9"], [class*=" bg-emerald-9"], :where([class*="hover:bg-emerald-9"]:hover)) { background-color: rgba(5,150,105,0.10) !important; }
+html.light .console-root :is([class^="bg-yellow-9"], [class*=" bg-yellow-9"], :where([class*="hover:bg-yellow-9"]:hover)), html.light .console-root :is([class^="bg-amber-9"], [class*=" bg-amber-9"], :where([class*="hover:bg-amber-9"]:hover))   { background-color: rgba(217,119,6,0.10) !important; }
+html.light .console-root :is([class^="bg-blue-9"], [class*=" bg-blue-9"], :where([class*="hover:bg-blue-9"]:hover))    { background-color: rgba(37,99,235,0.09) !important; }
+html.light .console-root :is([class^="bg-purple-9"], [class*=" bg-purple-9"], :where([class*="hover:bg-purple-9"]:hover))  { background-color: rgba(147,51,234,0.09) !important; }
+html.light .console-root :is([class^="text-green-2"], [class*=" text-green-2"], :where([class*="hover:text-green-2"]:hover)),  html.light .console-root :is([class^="text-green-3"], [class*=" text-green-3"], :where([class*="hover:text-green-3"]:hover)),  html.light .console-root :is([class^="text-green-4"], [class*=" text-green-4"], :where([class*="hover:text-green-4"]:hover)),
+html.light .console-root :is([class^="text-emerald-2"], [class*=" text-emerald-2"], :where([class*="hover:text-emerald-2"]:hover)),html.light .console-root :is([class^="text-emerald-3"], [class*=" text-emerald-3"], :where([class*="hover:text-emerald-3"]:hover)),html.light .console-root :is([class^="text-emerald-4"], [class*=" text-emerald-4"], :where([class*="hover:text-emerald-4"]:hover)) { color: #047857 !important; }
+html.light .console-root :is([class^="text-yellow-2"], [class*=" text-yellow-2"], :where([class*="hover:text-yellow-2"]:hover)), html.light .console-root :is([class^="text-yellow-3"], [class*=" text-yellow-3"], :where([class*="hover:text-yellow-3"]:hover)), html.light .console-root :is([class^="text-yellow-4"], [class*=" text-yellow-4"], :where([class*="hover:text-yellow-4"]:hover)),
+html.light .console-root :is([class^="text-amber-2"], [class*=" text-amber-2"], :where([class*="hover:text-amber-2"]:hover)),  html.light .console-root :is([class^="text-amber-3"], [class*=" text-amber-3"], :where([class*="hover:text-amber-3"]:hover)),  html.light .console-root :is([class^="text-amber-4"], [class*=" text-amber-4"], :where([class*="hover:text-amber-4"]:hover))  { color: #b45309 !important; }
+html.light .console-root :is([class^="text-blue-2"], [class*=" text-blue-2"], :where([class*="hover:text-blue-2"]:hover)),   html.light .console-root :is([class^="text-blue-3"], [class*=" text-blue-3"], :where([class*="hover:text-blue-3"]:hover)),   html.light .console-root :is([class^="text-blue-4"], [class*=" text-blue-4"], :where([class*="hover:text-blue-4"]:hover))   { color: #1d4ed8 !important; }
+html.light .console-root :is([class^="text-purple-2"], [class*=" text-purple-2"], :where([class*="hover:text-purple-2"]:hover)), html.light .console-root :is([class^="text-purple-3"], [class*=" text-purple-3"], :where([class*="hover:text-purple-3"]:hover)), html.light .console-root :is([class^="text-purple-4"], [class*=" text-purple-4"], :where([class*="hover:text-purple-4"]:hover)) { color: #7e22ce !important; }
+html.light .console-root :is([class^="text-red-2"], [class*=" text-red-2"], :where([class*="hover:text-red-2"]:hover)),    html.light .console-root :is([class^="text-red-4"], [class*=" text-red-4"], :where([class*="hover:text-red-4"]:hover))    { color: #b91c1c !important; }
+html.light .console-root :is([class^="border-green-7"], [class*=" border-green-7"], :where([class*="hover:border-green-7"]:hover)),  html.light .console-root :is([class^="border-green-8"], [class*=" border-green-8"], :where([class*="hover:border-green-8"]:hover)),
+html.light .console-root :is([class^="border-emerald-7"], [class*=" border-emerald-7"], :where([class*="hover:border-emerald-7"]:hover)),html.light .console-root :is([class^="border-emerald-8"], [class*=" border-emerald-8"], :where([class*="hover:border-emerald-8"]:hover)) { border-color: rgba(5,150,105,0.30) !important; }
+html.light .console-root :is([class^="border-yellow-7"], [class*=" border-yellow-7"], :where([class*="hover:border-yellow-7"]:hover)), html.light .console-root :is([class^="border-yellow-8"], [class*=" border-yellow-8"], :where([class*="hover:border-yellow-8"]:hover)),
+html.light .console-root :is([class^="border-amber-7"], [class*=" border-amber-7"], :where([class*="hover:border-amber-7"]:hover)),  html.light .console-root :is([class^="border-amber-8"], [class*=" border-amber-8"], :where([class*="hover:border-amber-8"]:hover))   { border-color: rgba(217,119,6,0.30) !important; }
+html.light .console-root :is([class^="border-blue-7"], [class*=" border-blue-7"], :where([class*="hover:border-blue-7"]:hover)),   html.light .console-root :is([class^="border-blue-8"], [class*=" border-blue-8"], :where([class*="hover:border-blue-8"]:hover))    { border-color: rgba(37,99,235,0.28) !important; }
+html.light .console-root :is([class^="border-purple-7"], [class*=" border-purple-7"], :where([class*="hover:border-purple-7"]:hover)), html.light .console-root :is([class^="border-purple-8"], [class*=" border-purple-8"], :where([class*="hover:border-purple-8"]:hover))  { border-color: rgba(147,51,234,0.28) !important; }
 
 /* ---------------------------------------------------------------------------
  * Approval Dashboard, light theme.

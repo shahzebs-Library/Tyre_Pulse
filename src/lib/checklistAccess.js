@@ -52,3 +52,30 @@ export function isChecklistPathAllowed(pathname) {
 // Deliberately WITHOUT Workshop Supervisor: they sign sheets off, they do not
 // author or schedule them. Adding them here would hand over the builder too.
 export const CHECKLIST_AUTHOR_ROLES = ['Admin', 'Manager', 'Director', 'Maintenance Supervisor']
+
+// Checklist routes guarded by RoleRoute(CHECKLIST_AUTHOR_ROLES) in App.jsx. A
+// checklist-only role that is NOT an author (Workshop Supervisor) may visit the
+// checklist area, but these pages refuse it, so the sidebar and command search
+// must not offer them either - otherwise the menu leads straight to Access Denied.
+export const CHECKLIST_AUTHOR_PATHS = [
+  '/checklist-builder',
+  '/checklist-schedules',
+  '/checklist-insights',
+  '/checklist-audit',
+]
+
+export function isChecklistAuthorPath(pathname) {
+  const p = String(pathname || '')
+  return CHECKLIST_AUTHOR_PATHS.some((x) => p === x || p.startsWith(`${x}/`))
+}
+
+/** May this person open an author-only checklist page? Super admins always may. */
+export function canAuthorChecklists(role, isSuperAdmin) {
+  return isSuperAdmin === true || CHECKLIST_AUTHOR_ROLES.includes(String(role || '').trim())
+}
+
+/** Should a menu offer this path? True for every non-author checklist path. */
+export function isChecklistNavVisible(pathname, role, isSuperAdmin) {
+  if (!isChecklistAuthorPath(pathname)) return true
+  return canAuthorChecklists(role, isSuperAdmin)
+}

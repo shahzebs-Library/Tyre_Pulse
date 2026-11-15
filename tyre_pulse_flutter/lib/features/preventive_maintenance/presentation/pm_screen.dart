@@ -823,7 +823,8 @@ class _QuickAccessTile extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           child: SizedBox(
-            height: 128,
+            // One label line and a two-line hint grow with the text size.
+            height: tpTextScaledExtent(context, base: 128, textHeight: 42),
             child: Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: TpSpace.xs,

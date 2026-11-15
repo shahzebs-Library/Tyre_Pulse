@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart' show DateFormat;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/notification_routing.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
@@ -481,13 +482,19 @@ class _TeamMessageDialogState extends State<_TeamMessageDialog> {
   String? _error;
   List<Map<String, dynamic>> _thread = <Map<String, dynamic>>[];
 
+  bool _loadStarted = false;
   SupabaseClient get _db => Supabase.instance.client;
   String get _messageId => widget.notification.entityId ?? '';
 
+  // The first load reads the translations, which are not available inside
+  // initState, so it starts here, once.
   @override
-  void initState() {
-    super.initState();
-    unawaited(_load());
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_loadStarted) {
+      _loadStarted = true;
+      unawaited(_load());
+    }
   }
 
   @override
@@ -497,10 +504,11 @@ class _TeamMessageDialogState extends State<_TeamMessageDialog> {
   }
 
   Future<void> _load() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     try {
       final String? uid = _db.auth.currentUser?.id;
       if (uid == null || _messageId.isEmpty) {
-        throw StateError('Sign in to view this message.');
+        throw StateError(l10n.teamMessageSignIn);
       }
       final List<Map<String, dynamic>> receipt = await _db
           .from('broadcast_recipient_receipts')
@@ -509,7 +517,7 @@ class _TeamMessageDialogState extends State<_TeamMessageDialog> {
           .eq('recipient_id', uid)
           .limit(1);
       if (receipt.isEmpty) {
-        throw StateError('Message is not available to this account.');
+        throw StateError(l10n.teamMessageUnavailable);
       }
       if (receipt.first['read_at'] == null) {
         await _db
@@ -539,9 +547,8 @@ class _TeamMessageDialogState extends State<_TeamMessageDialog> {
       // plain sentence, never as a raw exception string.
       if (mounted) {
         setState(
-          () => _error = error is StateError
-              ? error.message
-              : 'Could not load this message. Please try again.',
+          () => _error =
+              error is StateError ? error.message : l10n.teamMessageLoadFailed,
         );
       }
     }
@@ -549,10 +556,11 @@ class _TeamMessageDialogState extends State<_TeamMessageDialog> {
 
   Future<void> _ack() async {
     if (_busy || _acknowledged) return;
+    final AppLocalizations l10n = AppLocalizations.of(context);
     setState(() => _busy = true);
     try {
       final uid = _db.auth.currentUser?.id;
-      if (uid == null) throw StateError('Not signed in.');
+      if (uid == null) throw StateError(l10n.teamMessageSignIn);
       final at = DateTime.now().toUtc().toIso8601String();
       await _db
           .from('broadcast_recipient_receipts')
@@ -561,8 +569,9 @@ class _TeamMessageDialogState extends State<_TeamMessageDialog> {
           .eq('recipient_id', uid)
           .isFilter('acknowledged_at', null);
       if (mounted) setState(() => _acknowledged = true);
-    } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+    } on Object catch (_) {
+      // Never the raw exception text: it can name tables and policies.
+      if (mounted) setState(() => _error = l10n.teamMessageActionFailed);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -571,10 +580,11 @@ class _TeamMessageDialogState extends State<_TeamMessageDialog> {
   Future<void> _send() async {
     final body = _reply.text.trim();
     if (_busy || body.isEmpty || body.length > 4000) return;
+    final AppLocalizations l10n = AppLocalizations.of(context);
     setState(() => _busy = true);
     try {
       final uid = _db.auth.currentUser?.id;
-      if (uid == null) throw StateError('Not signed in.');
+      if (uid == null) throw StateError(l10n.teamMessageSignIn);
       await _db.from('broadcast_replies').insert(<String, dynamic>{
         'broadcast_id': _messageId,
         'author_id': uid,
@@ -582,67 +592,76 @@ class _TeamMessageDialogState extends State<_TeamMessageDialog> {
       });
       _reply.clear();
       await _load();
-    } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+    } on Object catch (_) {
+      if (mounted) setState(() => _error = l10n.teamMessageActionFailed);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-        title: Text(widget.notification.title ?? 'Team message'),
-        content: SizedBox(
-          width: 480,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(widget.notification.body ?? ''),
-                const SizedBox(height: 16),
-                if (_error != null)
-                  Text(
-                    _error!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return AlertDialog(
+      title: Text(widget.notification.title ?? l10n.teamMessageTitle),
+      content: SizedBox(
+        width: 480,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(widget.notification.body ?? ''),
+              const SizedBox(height: 16),
+              if (_error != null)
                 Text(
-                  _acknowledged ? 'Acknowledged' : 'Acknowledgement required',
-                ),
-                const SizedBox(height: 12),
-                for (final row in _thread)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 9),
-                    child: Text(row['body']?.toString() ?? ''),
-                  ),
-                TextField(
-                  controller: _reply,
-                  maxLength: 4000,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Reply to team',
-                    border: OutlineInputBorder(),
+                  _error!,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
                   ),
                 ),
-              ],
-            ),
+              Text(
+                _acknowledged
+                    ? l10n.teamMessageAcknowledged
+                    : l10n.teamMessageAckRequired,
+              ),
+              const SizedBox(height: 12),
+              for (final row in _thread)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 9),
+                  child: Text(row['body']?.toString() ?? ''),
+                ),
+              TextField(
+                controller: _reply,
+                maxLength: 4000,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: l10n.teamMessageReplyLabel,
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+            ],
           ),
         ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.actionClose),
+        ),
+        TextButton(
+          onPressed: _busy || _acknowledged ? null : _ack,
+          child: Text(
+            _acknowledged
+                ? l10n.teamMessageAcknowledged
+                : l10n.teamMessageAcknowledge,
           ),
-          TextButton(
-            onPressed: _busy || _acknowledged ? null : _ack,
-            child: Text(_acknowledged ? 'Acknowledged' : 'Acknowledge'),
-          ),
-          FilledButton(
-            onPressed: _busy ? null : _send,
-            child: const Text('Send reply'),
-          ),
-        ],
-      );
+        ),
+        FilledButton(
+          onPressed: _busy ? null : _send,
+          child: Text(l10n.teamMessageSend),
+        ),
+      ],
+    );
+  }
 }

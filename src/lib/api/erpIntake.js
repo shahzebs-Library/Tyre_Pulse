@@ -158,15 +158,33 @@ async function pagedExistenceSet(buildPageQuery, addRow) {
   return keys
 }
 
+/**
+ * The caller's company, as the database sees it (app_current_org). Job card
+ * numbers are unique per company, not globally (TEN-1b), so a merge keyed on the
+ * number must stay inside one company. Best effort: an ordinary user is already
+ * limited to their company by RLS, so an unreadable answer (null) keeps that
+ * behaviour rather than blocking the import.
+ */
+async function callerOrg() {
+  try {
+    const { data, error } = await supabase.rpc('app_current_org')
+    if (error) return null
+    return typeof data === 'string' && /^[0-9a-f-]{36}$/i.test(data) ? data : null
+  } catch {
+    return null
+  }
+}
+
 /** Existing values of a column (paged) as a lowercase Set, for merge dedup. When a
  * country is given, only rows of THAT country are considered, so the same asset/WO
  * number can exist independently in different countries. Fails fast (see
  * pagedExistenceSet): a transient read error THROWS; a missing table returns []. */
-async function existingKeys(table, column, country) {
+async function existingKeys(table, column, country, { org } = {}) {
   return pagedExistenceSet(
     (from, size, after) => {
       let q = supabase.from(table).select(column === 'id' ? 'id' : `${column},id`).not(column, 'is', null)
       if (country) q = q.eq('country', country)
+      if (org) q = q.eq('organisation_id', org)
       if (after != null) q = q.gt('id', after)
       // Stable order on the primary key: PostgREST does NOT guarantee row order
       // across .range() pages without an ORDER BY, so a row can be dropped or
@@ -226,13 +244,14 @@ const NORM = (v) => String(v ?? '').trim().toLowerCase()
  * the server-side match is case-exact; the caller indexes results by normalised
  * key. Chunked to keep the .in() list short; country-scoped when given.
  */
-async function fetchRowsByIn(table, column, values, { country } = {}) {
+async function fetchRowsByIn(table, column, values, { country, org } = {}) {
   const uniq = [...new Set((values || []).filter((v) => v != null && String(v).trim() !== ''))]
   const out = []
   for (let i = 0; i < uniq.length; i += 200) {
     const chunk = uniq.slice(i, i + 200)
     let q = supabase.from(table).select('*').in(column, chunk)
     if (country) q = q.eq('country', country)
+    if (org) q = q.eq('organisation_id', org)
     const { data, error } = await q
     if (error) throw toServiceError(error)
     if (data) out.push(...data)
@@ -445,19 +464,22 @@ export async function insertTyreRecords(rows = [], { onProgress, country } = {})
 
 /**
  * Complaints/repair rows -> work_orders. Skips a work_order_no already stored (merge).
- * Dedupe is GLOBAL, not country-scoped: work_orders.work_order_no is globally unique
- * (the number's prefix encodes the country 1:1 — AFKR/GCKR=KSA, RM=UAE, EG=Egypt — so a
- * number can never legitimately belong to two countries). A country-scoped check let a
- * number already stored under another country slip through and abort the whole batch on
- * the global unique (23505). `country` is still accepted for signature compatibility.
+ * Dedupe is per COMPANY and across all of that company's countries:
+ * work_orders is unique on (organisation_id, work_order_no) since TEN-1b, so a number
+ * already stored under another country of the same company would still abort the batch
+ * (23505), while the SAME number held by ANOTHER company is a different job card and
+ * must never be merged into (that would overwrite another tenant's row). RLS already
+ * limits an ordinary user to their company; the explicit company filter matters for a
+ * super admin, whose reads span companies. `country` is kept for signature compatibility.
  */
 export async function insertWorkOrders(rows = [], { onProgress, country } = {}) {
+  const org = await callerOrg()
   // Fail fast if the existence read fails (see existingKeys): proceeding with an
-  // empty set would re-insert every work order and abort on the global unique.
-  const seen = await existingKeys('work_orders', 'work_order_no')
+  // empty set would re-insert every work order and abort on the unique key.
+  const seen = await existingKeys('work_orders', 'work_order_no', null, { org })
   const { collapsed, noKey } = collapseByKey(rows, (r) => (r.work_order_no ? NORM(r.work_order_no) : ''))
   const loadExisting = async (overlapRows) => {
-    const found = await fetchRowsByIn('work_orders', 'work_order_no', overlapRows.map((r) => r.work_order_no))
+    const found = await fetchRowsByIn('work_orders', 'work_order_no', overlapRows.map((r) => r.work_order_no), { org })
     const map = new Map()
     for (const er of found) map.set(NORM(er.work_order_no), er)
     return map

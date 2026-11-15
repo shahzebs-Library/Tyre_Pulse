@@ -39,7 +39,7 @@ function Candidate({ candidate, actionId, linked, limited, stale, blocked, onDec
         The wheel could not be matched on this vehicle, so this job card cannot be confirmed here. It stays pending manual review.
       </p>}
       {candidate.serialExceptionPossible && <p className="text-xs text-[var(--text-secondary)]">
-        The observed tyre serial is on this job card. A serial alone does not confirm the work. Only a separately authorised reviewer can record a documented exception.
+        The observed tyre serial is on this job card. A serial alone does not confirm the work. A documented exception needs two people: one reviewer asks for it and a different, separately authorised person approves it.
       </p>}
       {evidence.canonicalPosition && <p className="text-xs text-[var(--text-secondary)]">Wheel on this vehicle: {evidence.canonicalPosition}</p>}
       <div className="flex flex-wrap gap-2 text-xs text-[var(--text-secondary)]">
@@ -156,7 +156,12 @@ export default function ObservationErpEvidence({ observation }) {
     } catch (e) {
       if (isErpReviewNotProvisioned(e)) { setProvisioned(false); setMessage('') }
       // The server decides. A refusal is shown in its own plain words, never as a link.
-      else setMessage(erpDecisionMessage(e))
+      else {
+        const text = erpDecisionMessage(e)
+        // EXECUTE withheld (interim lock): stop offering decisions and show the plain status note.
+        if (text === ERP_DECISIONS_UNAVAILABLE_MESSAGE) { setDecisions((d) => ({ ...d, available: false, reason: 'locked' })); setMessage('') }
+        else setMessage(text)
+      }
     }
     finally { setBusy('') }
   }

@@ -25,7 +25,7 @@ Statuses used below: Verified Fixed, Verified Failed, Not Tested, Blocked.
 
 | # | Action | File | Reversible by |
 |---|---|---|---|
-| 1 | Interim restriction: nobody can record a decision through the API | `20261116084000_observation_erp_confirm_interim_lock.sql` | three GRANT statements (in its header) |
+| 1 | Interim restriction: nobody can record a decision through the API | APPLIED to production 2026-11-15 as `supabase/migrations/20261115120856_observation_erp_confirm_interim_lock.sql` | owner approval only; action 4 re-grants with the corrected rules |
 | 2 | Layout history and per-layout mapping tables | `20261116085000_tyre_layout_versions_and_position_mappings.sql` | header ROLLBACK (only while the tables hold nothing worth keeping) |
 | 3 | Position service (functions only) | `20261116090000_tyre_position_service.sql` | header ROLLBACK |
 | 4 | Corrected decide function, permissions, exception, deliberate re-grant | `20261116091000_observation_erp_decide_on_position_service.sql` | `20261116091000_observation_erp_decide_ROLLBACK.sql` |
@@ -105,18 +105,23 @@ a company id are closed to signed-in users.
   function: signed in, company, approved and unlocked, reviewer role, country, site (action,
   inspection and job card), job card number, dates.
 - `observation_erp_rules()`: read-only; returns the rules version and what the caller may do.
-- `confirm_observation_erp_link_by_exception`: the documented serial exception.
+- `request_` / `approve_` / `close_observation_erp_serial_exception` and table
+  `observation_erp_exception_requests`: the documented serial exception, always two different
+  people (request, then independent approval or refusal).
 - Grants: deliberate re-grant on decide and both wrappers; reader policies.
 
 ## Function md5 as each would be installed (from staging)
 
 | Function | md5 |
 |---|---|
-| `observation_erp_decide(uuid,uuid,text,text)` | `5d9ac6961e717a7615774806a2d39cf4` |
-| `observation_erp_decide_core(uuid,uuid,text,text,text)` | `7d42508945efafe18da1a68842a9ce78` |
-| `observation_erp_evaluate(uuid,uuid)` | `f1c8d66f412c5fe60a119f81fbe4a285` |
-| `observation_erp_rules()` | `3adcc3315e92e1494e2559bdea26cd10` |
-| `confirm_observation_erp_link_by_exception(uuid,uuid,text)` | `ef6edc268f8ed8a4839ef839d018a311` |
+| `observation_erp_decide(uuid,uuid,text,text)` | `10ce51c4b5d0ad96444976bbfca74a79` |
+| `observation_erp_decide_core(uuid,uuid,text,text,text,uuid,text)` | `9f8493a9b0f1614cec650e34e6f9670c` |
+| `observation_erp_evaluate(uuid,uuid)` | `3149ce2d86aa9648656e50ae16ebd120` |
+| `observation_erp_rules()` | `fbd7aa5c668817191f9186c3823cf235` |
+| `request_observation_erp_serial_exception(uuid,uuid,text)` | `099e6dc0dd39b48d849e07d699f331d0` |
+| `approve_observation_erp_serial_exception(uuid,text)` | `8f6d8f0eb7cf8d2142f4cca3abd76406` |
+| `close_observation_erp_serial_exception(uuid,text,text)` | `b32fae1395e84e64c755b95445d05f50` |
+| `observation_erp_exception_requests_guard()` | `2e9f8c6a4c82281a25ad730259e4abc1` |
 | `confirm_observation_erp_link(uuid,uuid,text)` (untouched) | `479f5400cf932e246c748909733be801` |
 | `reject_observation_erp_link(uuid,uuid,text)` (untouched) | `f3109e20f4628824f4ecd90bd836e289` |
 | `tyre_asset_layout(uuid,text,text,text,date)` | `21d7980c703e4cb3baca5b10c0b05f3a` |
@@ -136,28 +141,30 @@ a company id are closed to signed-in users.
 | `vehicle_diagram_config_versions_guard()` | `8f400b33a54a2d1230bb7d3a91f75a45` |
 | `tyre_layout_position_mappings_guard()` | `2487d97967249ede00aa94b93835e1b4` |
 
-After the rollback file: `observation_erp_decide` = `272f785a2a32256bfe2b83b99d131c1b`.
+After the rollback file: `observation_erp_decide` = `272f785a2a32256bfe2b83b99d131c1b` and ACL
+`{postgres=X/postgres,service_role=X/postgres}` (the interim lock stays). Values above re-measured
+on a staging copy on 2026-11-15 (rules version `position-service-3`).
 
 ## Staging tests
 
 `supabase/tests/staging/observation_erp_position_tests.py`, local database only, synthetic data,
-one transaction, always rolled back. **256 checks, 256 pass** (the earlier suite had 125), plus
-504 permission probes counted inside one of them.
+one transaction, always rolled back. **312 checks, 312 pass** (re-run 2026-11-15 on rules version
+`position-service-3`), plus the permission probes counted inside the matrix checks.
 
 | Section | Checks |
 |---|---|
-| Position by layout type, serial, rules version | 45 |
-| Confirm refused unless offered | 23 |
+| Position by layout type, serial, rules version | 53 |
+| Confirm refused unless offered | 27 |
 | Company, country, site, role, grants | 44 |
 | Confirm, reject, history | 16 |
-| Documented serial exception | 27 |
-| Permission matrix | 6 (504 probes) |
+| Documented serial exception (two people) | 65 |
+| Permission matrix | 7 |
 | Layout versions | 17 |
 | Per-layout mappings | 13 |
 | History not rewritten | 3 |
-| Follow-up on top of the live function | 17 |
-| Rollback file end to end | 8 |
-| Interim lock | 37 |
+| Follow-up on top of the live function | 19 |
+| Rollback file end to end | 10 |
+| Interim lock | 38 |
 
 Other tests: SQL and JavaScript mirror on one fixture (10 vitest, 4 PGlite); 272 vitest tests in
 the 13 related files, including the client availability cases.
@@ -165,8 +172,8 @@ the 13 related files, including the client availability cases.
 ## Permission matrix (staging)
 
 2 companies x 7 roles x own/other country x own/other site x active/locked/unapproved = 168
-cells, each tried with evaluate, confirm and reject = **504 probes: 12 allowed, 492 refused, 0
-wrong.** Allowed: own company, Admin / Manager / Director, active, own country, and own site
+cells, each tried with evaluate, confirm, reject, request exception and approve exception = **840
+probes: 19 allowed, 821 refused, 0 wrong** (re-run 2026-11-15). Allowed: own company, Admin / Manager / Director, active, own country, and own site
 (an Admin sees every site of the company by design; countries follow the profile for everyone).
 Also verified: a reviewer switched off in Access Control (corrective_actions / approve) is
 refused; not signed in is refused; a super admin may review.
@@ -178,14 +185,18 @@ person; it cannot add a non-elevated role as a reviewer, so that is not offered.
 ## Documented serial exception
 
 A matching serial never confirms. When the wheel cannot be placed and the observed strong serial
-is on the job card with a dated movement, a **separately authorised** person may record an
-exception: capability `corrective_actions / erp_serial_exception`. **By default only Admin and
-super admin have it.** It can be granted to a role or a person per company in Access Control.
-A reason of at least 20 characters is required. The link and the history row store
-`exception_basis = 'serial_only'`, the reviewer and the time; history is append-only.
-Staging: Manager, Director, Tyre Man and four others refused (42501); Admin accepted; short reason
-refused; six cases where an exception does not apply refused; a granted Manager accepted; the
-stored record cannot be edited. 27 checks.
+is on the job card with a dated movement, a documented exception is possible, and it always takes
+**two different people**. A reviewer requests it with a reason of at least 20 characters; that
+links nothing. A different person who holds the capability `corrective_actions /
+erp_serial_exception` (by default only Admin and super admin; grantable per company in Access
+Control) approves or refuses it. The requester can never approve or refuse their own request,
+whatever their role (checked in the functions, in the one writer and by a table constraint); the
+requester may withdraw it. The evidence is evaluated again at approval for the approver's own
+company, country and site. Request, approval, refusal and withdrawal keep who, when and why in
+`observation_erp_exception_requests`; an approved link and its history row store
+`exception_basis = 'serial_only'` and the request id. Staging: 65 checks, including the same
+person refused as approver for every role tested (Admin, super admin, granted Manager) and an
+approver outside the action's site refused.
 
 ## Reporting bot
 

@@ -2,11 +2,27 @@
 -- Interim restriction: no ERP job card decision can be recorded through the API until the
 -- corrected function is installed
 --
--- STATUS: AUTHORED, NOT APPLIED. Draft for owner review. Tested on the local staging copy
---         only. Nothing here ran on production. Do not apply without the owner's approval.
--- ORDER:  production action 1. Independent of the other drafts. Intended to be applied
---         BEFORE 20261116085000 / 090000 / 091000, and undone by 091000 (which grants again
---         on purpose) or by the ROLLBACK below.
+-- STATUS: APPLIED to production 2026-11-15 with the owner's explicit approval, recorded there as
+--         version 20261115120856 (observation_erp_confirm_interim_lock). The applied text was a
+--         baseline guard block (abort unless the three functions carry the expected ACL and
+--         hashes) followed by exactly the three REVOKE statements below.
+--         The guard block in this file is the replayable part of that guard: it aborts unless
+--         the three functions exist with these exact signatures and neither anon nor PUBLIC can
+--         execute them. Production's guard also compared the function md5 values, the ACL and
+--         the row counts with the reviewed 2026-11-15 baseline; those values only hold on
+--         production, so they are recorded here as comments, not replayed. The exact applied
+--         text is stored on production in supabase_migrations.schema_migrations; it was NOT
+--         re-read for this file (production is read-only for this work).
+--         Baseline md5(pg_get_functiondef) the production guard compared: decide
+--         272f785a2a32256bfe2b83b99d131c1b, confirm 479f5400cf932e246c748909733be801, reject
+--         f3109e20f4628824f4ecd90bd836e289.
+--         Verified on production after the apply (by the lead): ACL on all three functions
+--         {postgres=X/postgres,service_role=X/postgres}; decide / confirm / reject refused with
+--         42501 for a real Manager; reads work; function md5 unchanged (272f785a.., 479f5400..,
+--         f3109e20..); links 0, history 0.
+-- ORDER:  production action 1 (done). The drafts 20261116085000 / 090000 / 091000 are NOT
+--         approved. 091000 grants EXECUTE again on purpose; its ROLLBACK file restores the
+--         function body only and leaves this lock in place.
 --
 -- WHY: the function live in production (observation_erp_decide, md5
 --      272f785a2a32256bfe2b83b99d131c1b) checks company, country and role, but NOT site, and
@@ -49,7 +65,9 @@
 --   -- expect {postgres=X/postgres,service_role=X/postgres} on all three
 --   rollback;
 --
--- ROLLBACK (restores exactly today's ACL):
+-- ROLLBACK (documentation only, never run as part of this file; restores the ACL production had
+-- before 2026-11-15; needs the owner's explicit approval; the approved route is action 4,
+-- 20261116091000, which re-grants together with the corrected rules):
 --   grant execute on function public.observation_erp_decide(uuid, uuid, text, text) to authenticated;
 --   grant execute on function public.confirm_observation_erp_link(uuid, uuid, text) to authenticated;
 --   grant execute on function public.reject_observation_erp_link(uuid, uuid, text) to authenticated;
@@ -58,6 +76,33 @@
 --   body and then grants EXECUTE to authenticated again on all three, deliberately, in the
 --   same transaction as the corrected rules.
 -- =====================================================================================
+
+
+-- Guard (replayable part, see STATUS): stop before the revokes unless the reviewed functions are
+-- the ones being locked.
+do $guard$
+declare
+  v_sig text;
+  v_oid regprocedure;
+begin
+  foreach v_sig in array array[
+    'public.observation_erp_decide(uuid, uuid, text, text)',
+    'public.confirm_observation_erp_link(uuid, uuid, text)',
+    'public.reject_observation_erp_link(uuid, uuid, text)'] loop
+    v_oid := to_regprocedure(v_sig);
+    if v_oid is null then
+      raise exception 'Interim lock guard: % does not exist', v_sig;
+    end if;
+    if has_function_privilege('anon', v_oid, 'EXECUTE') then
+      raise exception 'Interim lock guard: anon can execute %, review before locking', v_sig;
+    end if;
+    if exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                where p.oid = v_oid and a.grantee = 0 and a.privilege_type = 'EXECUTE') then
+      raise exception 'Interim lock guard: PUBLIC can execute %, review before locking', v_sig;
+    end if;
+  end loop;
+end
+$guard$;
 
 revoke execute on function public.observation_erp_decide(uuid, uuid, text, text) from authenticated;
 revoke execute on function public.confirm_observation_erp_link(uuid, uuid, text) from authenticated;

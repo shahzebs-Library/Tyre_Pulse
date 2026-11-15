@@ -28,7 +28,7 @@ const candidate = (over = {}) => ({
   evidenceSummary: { tyreRows: 1, expenseRows: 0, canonicalPosition: 'RHCO' }, ...over,
 })
 const ready = (c) => ({ candidates: [c], orphanTyreJobCards: [], evidenceLimited: false, totals: {} })
-const OK = { available: true, reason: 'ok', canReview: true, canRecordException: false }
+const OK = { available: true, reason: 'ok', canReview: true, canRequestException: true, canApproveException: false }
 const show = () => render(<MemoryRouter><ObservationErpEvidence observation={observation} /></MemoryRouter>)
 
 beforeEach(() => {
@@ -133,5 +133,29 @@ describe('ERP evidence panel', () => {
     show()
     expect(await screen.findByText(/could not be checked, so confirmation is unavailable/)).toBeTruthy()
     expect(screen.queryByText(/not set up yet/)).toBeNull()
+  })
+
+  it('production today (interim lock, rules function missing): plain status note, evidence still shown, no decision buttons', async () => {
+    api.getObservationErpReviewState.mockResolvedValue({ provisioned: true, link: null, history: [],
+      decisions: { available: false, reason: 'old_database', canReview: false, canRequestException: false, canApproveException: false } })
+    show()
+    expect(await screen.findByText(api.ERP_DECISIONS_UNAVAILABLE_MESSAGE)).toBeTruthy()
+    expect(await screen.findByText('JC-1')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Review and link job card' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Confirm this job card' })).toBeNull()
+    expect(screen.queryByText(/permission denied|42501|PGRST202/i)).toBeNull()
+  })
+
+  it('a confirm refused with 42501 (EXECUTE withheld) turns into the plain status note, never a raw error', async () => {
+    api.confirmObservationErpLink.mockRejectedValue({ code: '42501', message: 'permission denied for function observation_erp_decide' })
+    api.erpDecisionMessage.mockImplementation(() => api.ERP_DECISIONS_UNAVAILABLE_MESSAGE)
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Review and link job card' }))
+    fireEvent.change(screen.getByLabelText(/Why does this job card resolve/), { target: { value: 'Same wheel, reviewed' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm this job card' }))
+    expect(await screen.findByText(api.ERP_DECISIONS_UNAVAILABLE_MESSAGE)).toBeTruthy()
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Confirm this job card' })).toBeNull())
+    expect(screen.queryByText(/permission denied|42501/i)).toBeNull()
+    expect(api.getObservationErpLink).not.toHaveBeenCalled()
   })
 })

@@ -1,0 +1,418 @@
+[
+ {
+  "id": "batteries",
+  "name": "Battery Lifecycle",
+  "route": "/batteries",
+  "roles": [
+   "Admin"
+  ],
+  "table": "batteries",
+  "page": "src/pages/Batteries.jsx",
+  "createButton": "Add battery",
+  "submit": null
+ },
+ {
+  "id": "bay_scheduling",
+  "name": "Bay Scheduling",
+  "route": "/bay-scheduling",
+  "roles": [
+   "Admin"
+  ],
+  "table": "bay_schedules",
+  "page": "src/pages/BayScheduling.jsx",
+  "createButton": "Schedule job",
+  "submit": null,
+  "tab": "Job register"
+ },
+ {
+  "id": "breakdowns",
+  "name": "Breakdown Callouts",
+  "route": "/breakdowns",
+  "roles": [
+   "Admin"
+  ],
+  "table": "breakdown_callouts",
+  "page": "src/pages/BreakdownCallouts.jsx",
+  "createButton": "Log callout",
+  "submit": null
+ },
+ {
+  "id": "certifications",
+  "name": "Certifications",
+  "route": "/certifications",
+  "roles": [
+   "Admin",
+   "Manager",
+   "Director"
+  ],
+  "table": "certifications",
+  "page": "src/pages/Certifications.jsx",
+  "createButton": "New certification",
+  "submit": null
+ },
+ {
+  "id": "combinations",
+  "name": "Combinations",
+  "route": "/combinations",
+  "roles": [
+   "Admin"
+  ],
+  "table": "asset_combinations",
+  "page": "src/pages/Combinations.jsx",
+  "createButton": "New Combination",
+  "submit": "Save Combination",
+  "values": {
+   "axle configuration": "6x4 + 3A",
+   "steer tyres": "2",
+   "drive tyres": "8",
+   "trailer tyres": "12",
+   "max load": "40"
+  }
+ },
+ {
+  "id": "driver_documents",
+  "name": "Driver Documents",
+  "route": "/driver-documents",
+  "roles": [
+   "Admin"
+  ],
+  "table": "driver_documents",
+  "page": "src/pages/DriverDocuments.jsx",
+  "createButton": "New document",
+  "submit": null
+ },
+ {
+  "id": "driver_training",
+  "name": "Driver Training",
+  "route": "/driver-training",
+  "roles": [
+   "Admin"
+  ],
+  "table": "driver_training",
+  "page": "src/pages/DriverTraining.jsx",
+  "createButton": "Add record",
+  "submit": null
+ },
+ {
+  "id": "dvir",
+  "name": "DVIR Reports",
+  "route": "/dvir",
+  "roles": [
+   "Admin"
+  ],
+  "table": "dvir_reports",
+  "page": "src/pages/Dvir.jsx",
+  "createButton": "New report",
+  "submit": null
+ },
+ {
+  "id": "equipment",
+  "name": "Tool and Equipment",
+  "route": "/equipment",
+  "roles": [
+   "Admin"
+  ],
+  "table": "equipment",
+  "page": "src/pages/Equipment.jsx",
+  "createButton": "Register",
+  "submit": null
+ },
+ {
+  "id": "fleet_groups",
+  "name": "Fleet Groups",
+  "route": "/fleet-groups",
+  "roles": [
+   "Admin"
+  ],
+  "table": "fleet_groups",
+  "page": "src/pages/FleetGroups.jsx",
+  "createButton": "Create Group",
+  "submit": null
+ },
+ {
+  "id": "goods_receipt",
+  "name": "Goods Receipt",
+  "route": "/goods-receipt",
+  "roles": [
+   "Admin",
+   "Manager",
+   "Director"
+  ],
+  "table": "goods_receipts",
+  "page": "src/pages/GoodsReceipt.jsx",
+  "createButton": "New GRN",
+  "submit": null
+ },
+ {
+  "id": "insurance_claims",
+  "name": "Insurance Claims",
+  "route": "/insurance-claims",
+  "roles": [
+   "Admin",
+   "Manager",
+   "Director"
+  ],
+  "table": "insurance_claims",
+  "page": "src/pages/InsuranceClaims.jsx",
+  "createButton": "New claim",
+  "submit": null,
+  "tab": "Claims register"
+ },
+ {
+  "id": "materials",
+  "name": "Materials",
+  "route": "/materials",
+  "roles": [
+   "Admin"
+  ],
+  "table": "materials",
+  "page": "src/pages/Materials.jsx",
+  "createButton": "Add material",
+  "submit": null
+ },
+ {
+  "id": "parts_catalog",
+  "name": "Parts Catalog",
+  "route": "/parts-catalog",
+  "roles": [
+   "Admin",
+   "Manager",
+   "Director"
+  ],
+  "table": "parts_catalog",
+  "page": "src/pages/PartsCatalog.jsx",
+  "createButton": "Add part",
+  "submit": null
+ },
+ {
+  "id": "parts_requests",
+  "name": "Parts Requests",
+  "route": "/parts-requests",
+  "roles": [
+   "Admin",
+   "Manager",
+   "Director"
+  ],
+  "table": "parts_requests",
+  "page": "src/pages/PartsRequests.jsx",
+  "createButton": "New request",
+  "submit": null,
+  "updateClick": "Approve"
+ },
+ {
+  "id": "pm_programs",
+  "name": "Preventive Maintenance",
+  "route": "/pm-programs",
+  "roles": [
+   "Admin",
+   "Manager",
+   "Director"
+  ],
+  "table": "pm_programs",
+  "page": "src/pages/PmPrograms.jsx",
+  "createButton": "New plan",
+  "submit": null,
+  "postFillClicks": [
+   "Find vehicle"
+  ],
+  "tab": "Plans"
+ },
+ {
+  "id": "policies",
+  "name": "Policy Management",
+  "route": "/policies",
+  "roles": [
+   "Admin"
+  ],
+  "table": "policies",
+  "page": "src/pages/PolicyManagement.jsx",
+  "createButton": "New Policy",
+  "submit": null
+ },
+ {
+  "id": "recall_tracker",
+  "name": "Recall Tracker",
+  "route": "/recall-tracker",
+  "roles": [
+   "Admin"
+  ],
+  "table": "recalls",
+  "page": "src/pages/RecallTracker.jsx",
+  "createButton": "Add recall",
+  "submit": "Save recall"
+ },
+ {
+  "id": "repair_requests",
+  "name": "Repair Requests (RFR)",
+  "route": "/repair-requests",
+  "roles": [
+   "Admin",
+   "Manager",
+   "Director"
+  ],
+  "table": "repair_requests",
+  "page": "src/pages/RepairRequests.jsx",
+  "createButton": "Raise a request",
+  "submit": null,
+  "probeColumn": "rfr_no",
+  "updateClick": "Acknowledge"
+ },
+ {
+  "id": "requisitions",
+  "name": "Requisitions",
+  "route": "/requisitions",
+  "roles": [
+   "Admin",
+   "Manager",
+   "Director"
+  ],
+  "table": "requisitions",
+  "page": "src/pages/Requisitions.jsx",
+  "createButton": "New requisition",
+  "submit": null
+ },
+ {
+  "id": "reservations",
+  "name": "Vehicle Reservations",
+  "route": "/reservations",
+  "roles": [
+   "Admin"
+  ],
+  "table": "vehicle_reservations",
+  "page": "src/pages/VehicleReservations.jsx",
+  "createButton": "New Reservation",
+  "submit": "Create Reservation"
+ },
+ {
+  "id": "retread",
+  "name": "Retread Management",
+  "route": "/retread",
+  "roles": [
+   "Admin"
+  ],
+  "table": "retread_jobs",
+  "page": "src/pages/RetreadManagement.jsx",
+  "createButton": "New retread",
+  "submit": null
+ },
+ {
+  "id": "retread_claims",
+  "name": "Retread Claims",
+  "route": "/retread-claims",
+  "roles": [
+   "Admin"
+  ],
+  "table": "retread_claims",
+  "page": "src/pages/RetreadClaims.jsx",
+  "createButton": "New claim",
+  "submit": null
+ },
+ {
+  "id": "rotation",
+  "name": "Rotation Schedule",
+  "route": "/rotation",
+  "roles": [
+   "Admin"
+  ],
+  "table": "tyre_rotations",
+  "page": "src/pages/RotationSchedule.jsx",
+  "createButton": null,
+  "submit": "Save schedule",
+  "postFillClicks": [
+   "LHF1",
+   "RHF1"
+  ]
+ },
+ {
+  "id": "service_requests",
+  "name": "Service Requests",
+  "route": "/service-requests",
+  "roles": [
+   "Admin"
+  ],
+  "table": "service_requests",
+  "page": "src/pages/ServiceRequests.jsx",
+  "createButton": "New request",
+  "submit": null
+ },
+ {
+  "id": "shifts",
+  "name": "Shift Scheduling",
+  "route": "/shifts",
+  "roles": [
+   "Admin"
+  ],
+  "table": "shifts",
+  "page": "src/pages/ShiftScheduling.jsx",
+  "createButton": "Schedule shift",
+  "submit": null
+ },
+ {
+  "id": "tyre_pool",
+  "name": "Tyre Pool",
+  "route": "/tyre-pool",
+  "roles": [],
+  "table": "tyre_pool",
+  "page": "src/pages/TyrePool.jsx",
+  "createButton": "Add to pool",
+  "submit": null,
+  "updateClick": "Deploy",
+  "values": {
+   "serial": "SYN-ALP-00003"
+  }
+ },
+ {
+  "id": "tyre_service_events",
+  "name": "Tyre Service Events",
+  "route": "/tyre-service-events",
+  "roles": [
+   "Admin",
+   "Manager",
+   "Director"
+  ],
+  "table": "tyre_service_events",
+  "page": "src/pages/TyreServiceEvents.jsx",
+  "createButton": "Log event",
+  "submit": null,
+  "tab": "Event register"
+ },
+ {
+  "id": "vehicle_checkinout",
+  "name": "Vehicle Check In/Out",
+  "route": "/vehicle-checkinout",
+  "roles": [
+   "Admin"
+  ],
+  "table": "vehicle_checkinout",
+  "page": "src/pages/VehicleCheckInOut.jsx",
+  "createButton": "Check Out",
+  "submit": "Record handover"
+ },
+ {
+  "id": "warranty",
+  "name": "Warranty Tracker",
+  "route": "/warranty",
+  "roles": [],
+  "table": "warranty_claims",
+  "page": "src/pages/WarrantyTracker.jsx",
+  "createButton": "Add Claim",
+  "submit": "Save Claim",
+  "values": {
+   "^country": "KSA"
+  }
+ },
+ {
+  "id": "workshop_absence",
+  "name": "Absence and Attendance",
+  "route": "/workshop-absence",
+  "roles": [
+   "Admin",
+   "Manager",
+   "Director"
+  ],
+  "table": null,
+  "page": "src/pages/WorkshopAbsence.jsx",
+  "createButton": null,
+  "submit": null
+ }
+]

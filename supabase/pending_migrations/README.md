@@ -94,3 +94,14 @@ but the local staging copy:
 
 Tests: `node --test supabase/tests/tyre_position_service.test.mjs` (PGlite) and
 `python3 supabase/tests/staging/observation_erp_position_tests.py` (local staging copy).
+
+## Current production fixes B drafts OPS-1 to OPS-3 (authored 2026-11-12, NOT applied)
+
+Source: `docs/commercial-readiness/audit/CURRENT_PRODUCTION_FIXES_B.md`. PGlite tests:
+`supabase/tests/ops_*.test.mjs`.
+
+- `20261113140000_ops_report_exec_money_by_country.sql`: OPS-1, per-country money in the scheduled
+  executive e-mail (`report_exec_digest`). Ships with the `send-scheduled-reports` edge function change.
+- `20261113141000_ops_webhook_reliable_delivery.sql`: OPS-2, reliable outbound webhook delivery.
+- `20261113142000_ops_backup_coverage_restore_test_health.sql`: OPS-3, wider row snapshots, a restore
+  test over every snapshotted table, and a health answer for an outside uptime monitor.

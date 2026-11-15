@@ -136,7 +136,7 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "claude/tenancy-main-7rxp2t": false,
+      "claude/workflow-main-7rxp2t": false,
       "claude/prodb-main-7rxp2t": false,
       "claude/console-main-7rxp2t": false,
       "claude/tyre-position-service-7rxp2t": false,
@@ -169,7 +169,9 @@
       "claude/commercial-fixes-7rxp2t": false,
       "claude/module-workflow-tests-7rxp2t": false,
       "claude/job-card-parts-cost-fix-7rxp2t": false,
-      "claude/erp-followup-v2-7rxp2t": false
+      "claude/erp-followup-v2-7rxp2t": false,
+      "claude/tenancy-main-7rxp2t": false,
+      "claude/staging-main-7rxp2t": false
     }
   },
   "ignoreCommand": "node scripts/vercel-ignore-build.mjs"

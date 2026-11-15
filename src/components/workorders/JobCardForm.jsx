@@ -113,6 +113,10 @@ export default function JobCardForm({
         const asset = await assetLookup(code)
         if (!asset) { setAssetMaster(null); return }   // not in the register is legitimate
         setAssetMaster(asset)
+        // Editing an existing card: the register is shown for reference only.
+        // Blank fields are filled only when the user picked a different asset,
+        // so a save never writes columns the user did not touch.
+        if (mode === 'edit' && code === String(row?.asset_no || '').trim()) return
         const fill = {
           plate_no: asset.registration_no || asset.plate_no,
           asset_category: asset.vehicle_type,

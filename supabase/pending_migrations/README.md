@@ -62,3 +62,22 @@ Apply in this order, after the web build that carries the matching screens is li
    eligible approver of work order scope and cost in the approval engine.
 
 None of them rewrites a stored work order, cost or approval. Rollback is in each file's header.
+
+## Tyre position service and ERP observation follow-up (2026-11-15)
+
+`supabase/migrations/20261115120000_observation_erp_reconciliation.sql` is APPLIED to production (version
+20261115090615). These are FOLLOW-UP drafts on top of it, apply in this order, neither applied anywhere
+but the local staging copy:
+
+- `20261116090000_tyre_position_service.sql` : pure functions that resolve an inspection slot id or an
+  ERP position code to one canonical wheel on the asset's own layout (SQL mirror of
+  `src/lib/tyrePositionService.js`, pinned by `src/test/fixtures/tyrePositionCases.json`). No table.
+  Its built-in wheel table is generated from the JS: regenerate with
+  `UPDATE_POSITION_FIXTURE=1 npx vitest run src/test/tyrePositionMirror.test.js`.
+- `20261116091000_observation_erp_decide_on_position_service.sql` : `create or replace` of the live
+  `observation_erp_decide` (same signature and result) on the position service, a read-only
+  `observation_erp_evaluate`, and the reader policies the applied migration missed. No table, no removal.
+- `20261116091000_observation_erp_decide_ROLLBACK.sql` : the exact live function, to undo the above.
+
+Tests: `node --test supabase/tests/tyre_position_service.test.mjs` (PGlite) and
+`python3 supabase/tests/staging/observation_erp_position_tests.py` (local staging copy).

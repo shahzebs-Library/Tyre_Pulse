@@ -46,7 +46,7 @@ import {
   totalPages as totalPagesOf, selectionFromIds, mergeSelection, activeFilterCount,
 } from '../lib/workOrdersAnalytics'
 import { categorical } from '../lib/reportColors'
-import { editableFields, toPayload, readField, JOB_CARD_WORK_TYPES } from '../lib/jobCard'
+import { editableFields, toPayload, jobCardEditPatch, jobCardFormValues, readField, JOB_CARD_WORK_TYPES } from '../lib/jobCard'
 import JobCardForm from '../components/workorders/JobCardForm'
 import JobCardDetail from '../components/workorders/JobCardDetail'
 import { getAssetByNo } from '../lib/api/assets'
@@ -481,14 +481,9 @@ export default function WorkOrders() {
   function openEdit(order) {
     setEditOrder(order)
     // Hydrate EVERY catalog field, not just the handful the old form knew about.
-    // readField follows the custom_data fallback, so a card loaded before the
-    // V605 promotion still opens with its values in place.
-    const next = { ...EMPTY_FORM }
-    for (const f of editableFields()) {
-      const v = readField(order, f.key)
-      next[f.key] = v === null ? '' : v
-    }
-    next.parts_used = order.parts_used || []
+    // jobCardFormValues is also the baseline the save diffs against, so a field
+    // the user leaves alone is byte-identical on both sides and is not written.
+    const next = { ...EMPTY_FORM, ...jobCardFormValues(order) }
     setFormData(next)
     setPartRow({ part_name: '', quantity: 1, unit_cost: '' })
     setShowForm(true)
@@ -540,25 +535,33 @@ export default function WorkOrders() {
     }
     setSaving(true)
     try {
-      // toPayload walks the field catalog: only editable, non-computed, typed
-      // columns. That is what keeps `total_cost` out of the write - it is a
-      // GENERATED column and Postgres rejects any value sent to it.
-      const payload = toPayload(formData)
-
-      // Parts cost is DERIVED from the parts lines, so it is not a form field.
-      payload.parts_cost = partsTotal(formData.parts_used)
-      payload.parts_used = formData.parts_used || []
-      // Labour cost follows hours x rate unless the user typed an override.
-      const derivedLabour = parseFloat(formData.labour_hours || 0) * parseFloat(formData.labour_rate || 0)
-      payload.labour_cost = derivedLabour || parseFloat(formData.labour_cost || 0) || 0
-      payload.opened_at = payload.opened_at || new Date().toISOString()
-
       if (editOrder) {
-        const committed = await workOrders.updateWorkOrderById(editOrder.id, payload)
-        setViewOrder(current => current?.id === editOrder.id ? committed : current)
-        setApprovalRevision(value => value + 1)
-        logAudit({ action: 'UPDATE', entity: 'work_orders', entityId: editOrder.id, before: editOrder, after: payload })
+        // An edit sends ONLY what the user changed. Stored costs (an imported
+        // or approved parts cost, a labour cost), the status and the opened
+        // date are never rewritten by a save that did not touch them.
+        const patch = jobCardEditPatch(editOrder, formData)
+        if (Object.keys(patch).length > 0) {
+          const committed = await workOrders.updateWorkOrderById(editOrder.id, patch)
+          setViewOrder(current => current?.id === editOrder.id ? committed : current)
+          setApprovalRevision(value => value + 1)
+          logAudit({ action: 'UPDATE', entity: 'work_orders', entityId: editOrder.id, before: editOrder, after: patch })
+          await load()
+        }
       } else {
+        // toPayload walks the field catalog: only editable, non-computed, typed
+        // columns. That is what keeps `total_cost` out of the write - it is a
+        // GENERATED column and Postgres rejects any value sent to it.
+        const payload = toPayload(formData)
+        // Parts cost is DERIVED from the parts lines, so it is not a form field.
+        const partsLines = formData.parts_used || []
+        payload.parts_cost = partsTotal(partsLines)
+        payload.parts_used = partsLines
+        // Labour cost follows hours x rate unless the user typed an override.
+        const derivedLabour = parseFloat(formData.labour_hours || 0) * parseFloat(formData.labour_rate || 0)
+        payload.labour_cost = derivedLabour || parseFloat(formData.labour_cost || 0) || 0
+        payload.opened_at = payload.opened_at || new Date().toISOString()
+        // A card raised while one country is selected belongs to that country.
+        if (!payload.country && activeCountry && activeCountry !== 'All') payload.country = activeCountry
         // The job card number is now an editable field, so only generate one
         // when the user did not supply the real ERP number. Overwriting a typed
         // number would silently discard the reference the workshop files by.
@@ -572,8 +575,8 @@ export default function WorkOrders() {
         setViewOrder(committed)
         logAudit({ action: 'CREATE', entity: 'work_orders', entityId: payload.work_order_no, after: payload })
         publish('workorder.created', { work_order_no: payload.work_order_no, asset_no: payload.asset_no, work_type: payload.work_type, priority: payload.priority })
+        await load()
       }
-      await load()
       setShowForm(false)
     } catch (e) {
       alert(t('workorders.form.saveFailed', { msg: workOrderRefusalFromError(e) || toUserMessage(e) }))

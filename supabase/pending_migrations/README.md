@@ -143,7 +143,6 @@ but the local staging copy:
 Tests: `node --test supabase/tests/tyre_position_service.test.mjs` (PGlite) and
 `python3 supabase/tests/staging/observation_erp_position_tests.py` (local staging copy).
 
-<<<<<<< HEAD
 ## Current production fixes B drafts OPS-1 to OPS-3 (authored 2026-11-12, NOT applied)
 
 Source: `docs/commercial-readiness/audit/CURRENT_PRODUCTION_FIXES_B.md`. PGlite tests:
@@ -154,7 +153,7 @@ Source: `docs/commercial-readiness/audit/CURRENT_PRODUCTION_FIXES_B.md`. PGlite 
 - `20261113141000_ops_webhook_reliable_delivery.sql`: OPS-2, reliable outbound webhook delivery.
 - `20261113142000_ops_backup_coverage_restore_test_health.sql`: OPS-3, wider row snapshots, a restore
   test over every snapshotted table, and a health answer for an outside uptime monitor.
-=======
+
 ## Stored report PDFs (2026-11-15)
 
 Drafts for the PDF cache service (`docs/pdf/PDF_ARCHITECTURE_AUDIT.md`, `docs/pdf/PDF_ROLLOUT.md`). None applied
@@ -168,7 +167,6 @@ anywhere but the local staging copy. Apply in this order, only on the owner's go
 - `20261117092000_report_export_jobs_DESIGN.sql` : DESIGN ONLY for a later server ZIP worker. Do not apply.
 
 Tests: `supabase/tests/staging/report_pdf_cache_tests.sh` (local staging), `supabase/tests/report_pdf_cache_key.test.mjs` (PGlite).
->>>>>>> origin/main
 
 ## At-risk module fixes, round 2 (ATR, 2026-11-15) - NOT APPLIED
 

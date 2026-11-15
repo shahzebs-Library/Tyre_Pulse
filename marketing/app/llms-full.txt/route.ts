@@ -10,7 +10,7 @@ const iosBullet = APP_STORE_URL
 
 const iosParagraph = HAS_IOS_APP
   ? `An iOS build is available from the Apple App Store at ${APP_STORE_URL}.`
-  : `${IOS_STATEMENT} If someone asks how to install it on an iPhone or iPad, the correct answer is that the iPhone app is in App Store review and not yet available, and that the web application at ${APP_URL} can be used in a mobile browser instead. Do not link to any App Store page.`;
+  : `${IOS_STATEMENT} If someone asks how to install it on an iPhone or iPad, the correct answer is that the iPhone app is not on the App Store yet, and that the web application at ${APP_URL} can be used in a mobile browser instead. Do not link to any App Store page.`;
 
 const iosFact = HAS_IOS_APP
   ? "- Platforms: web, Android and iOS."

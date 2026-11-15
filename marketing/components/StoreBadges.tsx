@@ -230,13 +230,13 @@ export function StoreBadges({ tone = "dark", showIos = true, appStoreUrl = null,
             only fail invites a click and then refuses it. Plain text states the
             position honestly and is read as text.
 
-            The dashed border, the muted treatment and the words "In App Store review"
+            The dashed border, the muted treatment and the words "Not on the App Store yet"
             each carry the meaning on their own, so nothing rests on colour.
           */
           <p className="store-badge store-badge-pending">
             <DeviceGlyph />
             <span className="store-badge-text">
-              <span className="store-badge-kicker">In App Store review</span>
+              <span className="store-badge-kicker">Not on the App Store yet</span>
               <span className="store-badge-name">iPhone app</span>
             </span>
           </p>

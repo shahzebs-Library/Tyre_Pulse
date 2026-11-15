@@ -67,5 +67,5 @@ export const LEGAL_LINKS = [
  * "available" and APP_STORE_URL in app/schema.tsx.
  */
 export const IOS_STATUS: "available" | "in-review" = "in-review";
-export const IOS_STATEMENT = "The iPhone app is in App Store review. It is not on the App Store yet.";
-export const IOS_STATEMENT_AR = "تطبيق آيفون قيد المراجعة لدى App Store، ولم يُتح على App Store بعد.";
+export const IOS_STATEMENT = "The iPhone app is not on the App Store yet.";
+export const IOS_STATEMENT_AR = "تطبيق آيفون غير متاح على App Store بعد.";

@@ -16,14 +16,14 @@ export type CapabilityStatus = "available" | "on-request" | "in-review" | "plann
 const LABEL: Record<CapabilityStatus, string> = {
   available: "Available",
   "on-request": "On request",
-  "in-review": "In review",
+  "in-review": "Not yet available",
   planned: "Planned",
 };
 
 const LABEL_AR: Record<CapabilityStatus, string> = {
   available: "متاح",
   "on-request": "عند الطلب",
-  "in-review": "قيد المراجعة",
+  "in-review": "غير متاح بعد",
   planned: "مخطط له",
 };
 

@@ -10,7 +10,7 @@ const COPY = {
   en: {
     about: "One operational workspace for plant, machinery and vehicles: assets, workshop, field teams and stores.",
     mobile: "Mobile app",
-    mobileText: "Inspections, meter readings and job cards from the yard, online or offline. On Android today. The iPhone app is in App Store review.",
+    mobileText: "Inspections, meter readings and job cards from the yard, online or offline. On Android today. The iPhone app is not on the App Store yet.",
     access: "Access",
     login: "Customer login",
     whatsapp: "WhatsApp sales",
@@ -22,7 +22,7 @@ const COPY = {
   ar: {
     about: "مساحة عمل تشغيلية واحدة للمعدات والآليات والمركبات: الأصول والورشة والفرق الميدانية والمستودعات.",
     mobile: "تطبيق الجوال",
-    mobileText: "الفحوصات وقراءات العدادات وبطاقات العمل من الموقع، مع الاتصال أو بدونه. متاح اليوم على أندرويد، وتطبيق آيفون قيد المراجعة لدى App Store.",
+    mobileText: "الفحوصات وقراءات العدادات وبطاقات العمل من الموقع، مع الاتصال أو بدونه. متاح اليوم على أندرويد، وتطبيق آيفون غير متاح على App Store بعد.",
     access: "الدخول",
     login: "دخول العملاء",
     whatsapp: "المبيعات عبر واتساب",

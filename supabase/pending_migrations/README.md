@@ -43,3 +43,24 @@ ever wanted. The reconcile is therefore closed by deletion, not re-application.
   456 MB). The next nightly run after applying removes 16 nights of snapshots, which is
   a removal of stored data, so it is not applied unattended. It frees disk only; no
   measured query gets faster from it.
+
+## Multi-company drafts gathered for the full sequence (2026-11-15, stream COMMERCIAL2)
+
+NOT applied. Order, dependencies, the check after each step and the point of no easy return are in
+`docs/commercial-readiness/audit/MULTI_COMPANY_MIGRATION_SEQUENCE.md`; the local runner is
+`supabase/tests/multi_company_sequence/`.
+
+- `20261113100000` to `20261113115000` (13 files, TEN-1 to TEN-9 with 1b, 4b, 5b, 7b): copied unchanged
+  from PR #506.
+- `20261113150000` to `20261113156000` (8 files, COM): copied unchanged from PR #510. `154500` must ship
+  with the client line `src/lib/api/tyreExchange.js:48`.
+- `20261115160000_ten6b_entitlement_switch_preflight.sql` — new. Preflight report and the only supported
+  way to turn plan enforcement on; refuses when the current company would be limited.
+- `20261115161000_ten7c_role_matrix_own_company_read.sql` — new. A company reads only its own role rows
+  and the built-in defaults; `get_org_role_matrix()`; optional seed of own rows.
+- `20261115162000_ten8b_invitation_company_code_signup.sql` — new. Invitation preview before sign-in,
+  company code, and a code that never grants membership.
+- `20261115163000_ten9b_sign_in_company_code.sql` — new. One sign-in resolver; "company code/name";
+  the current company keeps signing in with a bare name.
+- `20261115169000_ten9c_HOLD_per_company_usernames.sql` — new, HOLD. Removes the global username and
+  employee id keys. Contains `drop`. Point of no easy return; not part of the sequence proper.

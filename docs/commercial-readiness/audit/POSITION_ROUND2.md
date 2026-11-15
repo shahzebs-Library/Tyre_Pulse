@@ -10,7 +10,7 @@ Not pushed, no PR. PR #514 itself was not merged or pushed to. Nothing was appli
   `vehicle_diagram_configs`) and resolves an inspection slot id or an ERP code to one canonical wheel:
   `{ canonical, slot, status: resolved | ambiguous | unknown | inconsistent, reason }`.
   Anything but `resolved` is neither a match nor a mismatch: pending manual review.
-- SQL mirror, draft `supabase/pending_migrations/20261115110000_tyre_position_service.sql`.
+- SQL mirror, draft `supabase/pending_migrations/20261116090000_tyre_position_service.sql`.
 - PR #514 reworked on top of it, draft `supabase/pending_migrations/20261115120000_observation_erp_reconciliation.sql`
   (replaces the #514 migration, which was moved out of `supabase/migrations/`).
 - `src/lib/erpObservationMatch.js` and `src/lib/api/observationErpEvidence.js` now compare wheels through
@@ -98,7 +98,7 @@ the record date as "changed since record" (pending). No history table was added.
 
 ## Migration order, dependencies, rollback
 
-1. `20261115110000_tyre_position_service.sql` (functions only).
+1. `20261116090000_tyre_position_service.sql` (functions only).
 2. `20261115120000_observation_erp_reconciliation.sql` (needs 1, `tyre_serial_is_strong`,
    `app_can_see_site`, `anum_integration.apply_reader_policies`). Its text contains "delete" and "drop"
    (foreign keys, trigger, rollback comment), so the MCP confirm prompt fires.
@@ -183,3 +183,53 @@ mirror 4 of 4; staging 105 passed; eslint 0 errors (1 hook dependency warning th
 `vite build` clean.
 
 Could not preserve from #522: nothing functional. Its SQL change is intentionally dropped.
+
+## State after #522 was applied to production (2026-11-15, later)
+
+PR #522 was squash merged to main (500fd8f6) and its migration applied to production as version
+20261115090615. Read from production (SELECT only): two tables, 0 rows, 6 policies, no reader policies;
+`observation_erp_decide(uuid,uuid,text,text)` carries the hard-coded slot table. The function created by
+main's migration file on the staging copy has the same `md5(pg_get_functiondef)` as production
+(272f785a2a32256bfe2b83b99d131c1b), so staging now starts from the real live state.
+
+What this branch does about it:
+- `supabase/migrations/20261115120000_observation_erp_reconciliation.sql` is applied history, identical to main.
+- The earlier draft that recreated the tables is removed. The SQL is now a FOLLOW-UP:
+  `20261116090000_tyre_position_service.sql` (unchanged functions), then
+  `20261116091000_observation_erp_decide_on_position_service.sql` (same signature and five-key result as live,
+  every live guard and message kept, wheel resolved by the service, site check, serial as evidence, reader
+  policies), with `20261116091000_observation_erp_decide_ROLLBACK.sql` = the exact live function.
+  No table is created or altered, so the position evidence is not stored on the link row.
+- Client: same RPC names and arguments, works on the live function today and on the follow-up later.
+  A server refusal is shown in plain words (`erpDecisionMessage`), not as "record changed". Confirm is never
+  offered for a position the service calls unresolved. The "not set up yet" fallback stays (harmless now).
+
+### Where the live function and the position service disagree today
+
+Screen offers Confirm, live server refuses (safe: plain refusal, nothing linked):
+1. Inspection has no vehicle type and the asset is a transit mixer: live reads it as "not a mixer"
+   (R1Ro becomes RHR1-O), the service uses the registered type (RHCO).
+2. The action carries a tyre serial and the job card fitted a replacement tyre: live demands the observed
+   serial on the ERP row; a replacement has its own.
+3. Evidence is the observed serial leaving on the job card while the ERP position is blank or unreadable.
+4. Canter, bus, tanker (slots RLo, RLi, RRi, RRo): not in the live table at all.
+5. ERP spelling `LHRCO` / `RHRRI` on mixers, and `LHR` / `RHR` on a single rear axle.
+6. A tyre record that stores the slot id itself in the position field.
+
+Live server would accept, screen does not offer Confirm (safe: not offered):
+7. A slot that does not exist on the asset's registered build, for example front axle 3 on a pump registered
+   with 4 axles, when the ERP row carries the matching code.
+8. Inspection type says mixer but the register says another layout (or the reverse).
+9. Unknown or tyreless vehicle types and unknown slots, where live compares raw text.
+10. Any future admin designed layout. None exists today.
+
+Also different: live has no site check; live only accepts `damage:` actions (kept in the follow-up).
+Cases 1, 2, 3 and 7 are reproduced against the live function text in the staging test (section G).
+
+### Tests on this state
+
+Staging copy rebuilt as: main's applied migration, then the two follow-up files. 125 passed, 0 failed,
+including: the rollback companion restores the exact production md5; links and history written by the
+live function are byte-identical after the follow-up; the six live policies are unchanged and eight
+reader policies appear; a link made by the live function is still honoured. vitest 46 files, 782 passed;
+mirror 4 of 4; eslint 0 errors; `vite build` clean. Production: read only, nothing applied.

@@ -119,3 +119,35 @@ describe('review tables not in the database yet', () => {
     expect(api.isErpReviewNotProvisioned({ code: '42501' })).toBe(false)
   })
 })
+
+describe('a decision the server refused is explained in plain words', () => {
+  const refused = (message, code = 'PT409') => {
+    const e = new Error('This record changed since you opened it. Refresh and try again.')
+    e.code = code; e.cause = { code, message }
+    return e
+  }
+  it.each([
+    ['No ERP tyre movement matches the action position or serial', /no tyre movement on this job card/],
+    ['The inspected wheel could not be matched on this vehicle (pending_manual_review). Pending manual review', /pending manual review/],
+    ['Unknown inspection tyre position', /pending manual review/],
+    ['Job card predates the inspection. Manual investigation required', /opened before the inspection/],
+    ['Action already linked to another confirmed job card', /already linked to a different job card/],
+    ['Only own inspection tyre actions may be linked', /Only tyre damage actions/],
+  ])('%s', (serverText, want) => {
+    const text = api.erpDecisionMessage(refused(serverText))
+    expect(text).toMatch(want)
+    expect(text).not.toMatch(/record changed/)
+  })
+  it('an unknown database error never shows its raw text', () => {
+    const text = api.erpDecisionMessage(refused('relation "public.secret_table" violates constraint xyz', '23514'))
+    expect(text).not.toMatch(/secret_table|constraint/)
+  })
+  it('works on the live function and on the follow-up: same RPC names and arguments', async () => {
+    await api.confirmObservationErpLink({ actionId: 'a1', workOrderId: 'w1', note: ' Reviewed ' })
+    await api.rejectObservationErpSuggestion({ actionId: 'a1', workOrderId: 'w1', note: 'Wrong wheel' })
+    expect(h.supabase.rpc.mock.calls).toEqual([
+      ['confirm_observation_erp_link', { p_action_id: 'a1', p_work_order_id: 'w1', p_reason: 'Reviewed' }],
+      ['reject_observation_erp_link', { p_action_id: 'a1', p_work_order_id: 'w1', p_reason: 'Wrong wheel' }],
+    ])
+  })
+})

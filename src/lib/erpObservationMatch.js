@@ -12,7 +12,7 @@
  * known is NEVER a match and never a conflict: it is pending manual review.
  *
  * SQL mirror: observation_erp_evaluate in
- * supabase/pending_migrations/20261115120000_observation_erp_reconciliation.sql.
+ * supabase/pending_migrations/20261116091000_observation_erp_decide_on_position_service.sql.
  */
 import { resolveLayout, comparePositions, POSITION_STATUS } from './tyrePositionService'
 import { isStrongSerial } from './tyreLifetime'

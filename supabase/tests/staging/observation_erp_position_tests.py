@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 """
-Staging tests for the two drafts
-  supabase/pending_migrations/20261115110000_tyre_position_service.sql
-  supabase/pending_migrations/20261115120000_observation_erp_reconciliation.sql
+Staging tests for the follow-up drafts
+  supabase/pending_migrations/20261116090000_tyre_position_service.sql
+  supabase/pending_migrations/20261116091000_observation_erp_decide_on_position_service.sql
+on top of the migration that is live in production
+  supabase/migrations/20261115120000_observation_erp_reconciliation.sql
 
-Runs against a LOCAL staging database copy that already has both drafts applied (never
-production: the script refuses any host but 127.0.0.1 / localhost). All data is invented
-here, inside ONE transaction that is always rolled back.
+Runs against a LOCAL staging database copy (never production: the script refuses any host
+but 127.0.0.1 / localhost). All data is invented here, inside ONE transaction that is
+always rolled back.
 
   createdb -h 127.0.0.1 -p 54329 -U postgres -T tyrepulse_staging tp_position
-  psql ... -d tp_position -1 -f supabase/pending_migrations/20261115110000_tyre_position_service.sql
-  psql ... -d tp_position -1 -f supabase/pending_migrations/20261115120000_observation_erp_reconciliation.sql
+  psql ... -d tp_position -1 -f supabase/migrations/20261115120000_observation_erp_reconciliation.sql
+  psql ... -d tp_position -1 -f supabase/pending_migrations/20261116090000_tyre_position_service.sql
+  psql ... -d tp_position -1 -f supabase/pending_migrations/20261116091000_observation_erp_decide_on_position_service.sql
   python3 supabase/tests/staging/observation_erp_position_tests.py \
       --dsn "host=127.0.0.1 port=54329 dbname=tp_position user=postgres"
 
@@ -18,7 +21,7 @@ Covers: every layout type (mixer 12, mixer 13 with spare, pump 14, pump 12, 6x4 
 pump 12, loader, pickup 4, tyreless), tenant, country, site, role, position, serial,
 dates, append-only history, and "nothing historical is rewritten".
 """
-import argparse, json, sys, uuid
+import argparse, json, os, sys, uuid
 import psycopg2
 
 ap = argparse.ArgumentParser()
@@ -112,14 +115,17 @@ C = {}
 C['mixer_match'] = make_case('ZPMX1', 'damage:R1Ro', [('RHCO', 'NEWTYRE001', AFTER, None)])
 C['mixer_other'] = make_case('ZPMX1', 'damage:R1Ro', [('RHRO', 'NEWTYRE002', AFTER, None)])
 C['mixer_scheme'] = make_case('ZPMX1', 'damage:R1Ro', [('RHR1-O', 'NEWTYRE003', AFTER, None)])
-C['mixer_overdue_key'] = make_case('ZPMX1', 'overdue:R2Li:OLDTYRE777', [('LHRI', 'NEWTYRE004', AFTER, None)])
+C['mixer_second_axle'] = make_case('ZPMX1', 'damage:R2Li', [('LHRI', 'NEWTYRE004', AFTER, None)])
+C['not_damage_action'] = make_case('ZPMX1', 'overdue:R2Li:OLDTYRE777', [('LHRI', 'NEWTYRE044', AFTER, None)])
+C['mixer_typed'] = make_case('ZPMX1', 'damage:R1Li', [('LHCI', 'NEWTYRE045', AFTER, None)], insp_type='TR-MIXER')
+C['mixer_typed_reject'] = make_case('ZPMX1', 'damage:R1Li', [('RHRO', 'NEWTYRE046', AFTER, None)], insp_type='TR-MIXER')
 C['pump14'] = make_case('ZPPU1', 'damage:F3L', [('LHF3', 'NEWTYRE005', AFTER, None)])
 C['pump12_slot_missing'] = make_case('ZPPU2', 'damage:F3L', [('LHF3', 'NEWTYRE006', AFTER, None)])
 C['pump12_match'] = make_case('ZPPU2', 'damage:F2R', [('RHF2', 'NEWTYRE007', AFTER, None)])
 C['six_by_four'] = make_case('ZP6X1', 'damage:R2Li', [('LHR2-I', 'NEWTYRE008', AFTER, None)])
 C['line_pump'] = make_case('ZPLP1', 'damage:R1Lo', [('LHR1-O', 'NEWTYRE009', AFTER, None)])
 C['loader'] = make_case('ZPWL1', 'damage:FL', [('LHF1', 'NEWTYRE010', AFTER, None)])
-C['pickup_bare'] = make_case('ZPPK1', 'RR', [('RHR1', 'NEWTYRE011', AFTER, None)])
+C['pickup_bare'] = make_case('ZPPK1', 'damage:RR', [('RHR1', 'NEWTYRE011', AFTER, None)])
 C['pickup_dual_code'] = make_case('ZPPK1', 'damage:RR', [('RHRO', 'NEWTYRE012', AFTER, None)])
 C['tyreless'] = make_case('ZPGN1', 'damage:FL', [('LHF1', 'NEWTYRE013', AFTER, None)])
 C['unknown_type'] = make_case('ZPXX1', 'damage:FL', [('LHF1', 'NEWTYRE014', AFTER, None)])
@@ -173,7 +179,7 @@ BASE = fingerprint()
 
 # ------------------------------------------------------------------ A: position by layout type
 EXPECT = {
-    'mixer_match': ('offered_for_review', 'RHCO'), 'mixer_overdue_key': ('offered_for_review', 'LHRI'),
+    'mixer_match': ('offered_for_review', 'RHCO'), 'mixer_second_axle': ('offered_for_review', 'LHRI'),
     'pump14': ('offered_for_review', 'LHF3'), 'pump12_match': ('offered_for_review', 'RHF2'),
     'six_by_four': ('offered_for_review', 'LHR2-I'), 'line_pump': ('offered_for_review', 'LHR1-O'),
     'loader': ('offered_for_review', 'LHF1'), 'pickup_bare': ('offered_for_review', 'RHR1'),
@@ -215,6 +221,7 @@ for user, name, want in [
     ('alpha.inspector', 'mixer_match', '42501'),
     ('alpha.manager', 'wo_other_country', 'PT409'),
     ('alpha.manager', 'wo_other_asset', 'PT409'),
+    ('alpha.manager', 'not_damage_action', '42501'),   # live guard kept: damage actions only
 ]:
     v, code, msg = evaluate(name, user)
     check('C scope', f'evaluate refused: {user} on {name}', v is None and code == want, (code, msg))
@@ -272,29 +279,31 @@ v, code, msg = decide('mixer_match', reason='ab')
 check('D decide', 'a reason is required', v is None and code == '22023', (code, msg))
 
 v, code, msg = decide('mixer_match')
-check('D decide', 'confirm on the same canonical wheel', v is not None and v['canonical'] == 'RHCO' and links() == 1 and events() == 2, (v, code, msg))
+check('D decide', 'confirm on the same canonical wheel', v is not None and v['decision'] == 'confirmed' and links() == 1 and events() == 2, (v, code, msg))
+check('D decide', 'result has exactly the five keys the live function returns',
+      v is not None and sorted(v.keys()) == ['action_id', 'already_linked', 'decision', 'ok', 'work_order_id'], v)
 row = q("select status, closed_at, resolved_at, verified_at, work_order_id::text from public.corrective_actions where id = %s", (C['mixer_match'][0],))[0]
 check('D decide', 'confirm links the job card and does NOT close the action',
       row == ('Open', None, None, None, C['mixer_match'][1]), row)
-ev = q("select position_evidence->>'state', position_evidence->>'canonical', reviewed_by::text from public.observation_erp_links where action_id = %s", (C['mixer_match'][0],))[0]
-check('D decide', 'the link keeps the position evidence and the reviewer', ev == ('offered_for_review', 'RHCO', USER['alpha.manager']), ev)
+ev = q("select source_job_card, reviewed_by::text, work_order_snapshot->>'work_order_no' from public.observation_erp_links where action_id = %s", (C['mixer_match'][0],))[0]
+check('D decide', 'the link keeps the job card, its snapshot and the reviewer', ev == (C['mixer_match'][2], USER['alpha.manager'], C['mixer_match'][2]), ev)
 
 v, code, msg = decide('mixer_match')
 check('D decide', 'confirming twice is idempotent', v is not None and v['already_linked'] is True and links() == 1, (v, code, msg))
 become('alpha.manager')
-out, code, msg = attempt("select public.confirm_observation_erp_link(%s, %s, %s)", (C['mixer_match'][0], C['mixer_overdue_key'][1], 'Second job card'))
+out, code, msg = attempt("select public.confirm_observation_erp_link(%s, %s, %s)", (C['mixer_match'][0], C['mixer_second_axle'][1], 'Second job card'))
 owner()
 check('D decide', 'a second job card for a linked action is refused', out is None and code == 'PT409', (code, msg))
 
 v, code, msg = decide('serial_supports')
-check('D decide', 'a real serial leaving on the job card can be confirmed', v is not None and v['state'] == 'offered_for_review', (v, code, msg))
+check('D decide', 'a real serial leaving on the job card can be confirmed', v is not None and v['ok'] is True, (v, code, msg))
 v, code, msg = decide('serial_replaced')
-check('D decide', 'a replacement tyre with its own serial is not blocked', v is not None and v['canonical'] == 'RHCO', (v, code, msg))
+check('D decide', 'a replacement tyre with its own serial is not blocked', v is not None and v['ok'] is True, (v, code, msg))
 
 for stmt in ("update public.observation_erp_link_events set reason = 'edited'",
              "delete from public.observation_erp_link_events"):
     out, code, msg = attempt(stmt)
-    check('D decide', f'history is append-only: {stmt.split()[0]}', out is None and code == 'PT409', (code, msg))
+    check('D decide', f'history is append-only: {stmt.split()[0]}', out is None and 'append-only' in (msg or ''), (code, msg))
 
 become('beta.manager')
 seen = q("select (select count(*) from public.observation_erp_links), (select count(*) from public.observation_erp_link_events)")[0]
@@ -339,6 +348,63 @@ owner()
 check('F layouts', "another tenant's admin layout does not leak into ours (beta still built-in)",
       out is not None and out[0][0]['layout_key'] == 'Tri-mixer', out or (code, msg))
 cur.execute('rollback to savepoint custom')
+
+# ------------------------------------------------------------------ G: on top of the LIVE function
+# Put the live function back (the rollback companion is the exact production text), record
+# decisions with it, then apply the follow-up again: existing rows must be byte-identical.
+HERE = os.path.dirname(os.path.abspath(__file__))
+PENDING = os.path.join(HERE, '..', '..', 'pending_migrations')
+def run_file(name):
+    owner()
+    with open(os.path.join(PENDING, name)) as fh:
+        cur.execute(fh.read())
+
+def table_print():
+    return q("""select
+      (select md5(coalesce(string_agg(md5(l::text), ',' order by id), '')) from public.observation_erp_links l),
+      (select md5(coalesce(string_agg(md5(e::text), ',' order by id), '')) from public.observation_erp_link_events e),
+      (select count(*) from public.observation_erp_links), (select count(*) from public.observation_erp_link_events)""")[0]
+
+run_file('20261116091000_observation_erp_decide_ROLLBACK.sql')
+live_md5 = q("select md5(pg_get_functiondef('public.observation_erp_decide(uuid,uuid,text,text)'::regprocedure))")[0][0]
+check('G live', 'the rollback companion restores the exact production function (md5 272f785a...)',
+      live_md5 == '272f785a2a32256bfe2b83b99d131c1b', live_md5)
+before_live = (links(), events())
+v, code, msg = decide('mixer_typed')
+check('G live', 'live function: confirms a typed mixer case', v is not None and links() == before_live[0] + 1, (v, code, msg))
+v, code, msg = decide('mixer_typed_reject', 'rejected')
+check('G live', 'live function: records a rejection', v is not None and events() == before_live[1] + 2, (v, code, msg))
+# Where the live CASE table and the position service disagree (documented in POSITION_ROUND2.md).
+LIVE_DIFFERS = {
+    'mixer_match': False,           # inspection has no vehicle type: live reads a mixer as "not a mixer"
+    'serial_replaced': False,       # live wants the observed serial on the replacement tyre
+    'serial_supports': False,       # live cannot use the serial when the ERP position is blank
+    'pickup_bare': True,            # agree
+    'pump12_slot_missing': True,    # live accepts front axle 3 on a machine registered with two
+    'inspection_other_layout': False,
+}
+for name, live_accepts in LIVE_DIFFERS.items():
+    cur.execute('savepoint probe')
+    cur.execute("delete from public.observation_erp_links where action_id = %s", (C[name][0],))
+    cur.execute("update public.corrective_actions set work_order_id = null where id = %s", (C[name][0],))
+    v, code, msg = decide(name)
+    check('G live', f'live function {"accepts" if live_accepts else "refuses"}: {name}', (v is not None) == live_accepts, (v, code, msg))
+    cur.execute('rollback to savepoint probe')
+snap_tables = table_print()
+snap_actions = fingerprint()
+run_file('20261116091000_observation_erp_decide_on_position_service.sql')
+check('G live', 'follow-up applied over live rows: links and history byte-identical', table_print() == snap_tables, (table_print(), snap_tables))
+check('G live', 'follow-up applied over live rows: tyre records, costs, work orders, inspections, actions unchanged', fingerprint() == snap_actions)
+new_md5 = q("select md5(pg_get_functiondef('public.observation_erp_decide(uuid,uuid,text,text)'::regprocedure))")[0][0]
+check('G live', 'the follow-up replaced the function body', new_md5 != live_md5, new_md5)
+n = q("select count(*) from pg_policies where schemaname = 'public' and tablename like 'observation_erp_link%%' and policyname like 'anum_reader%%'")[0][0]
+check('G live', 'reader policies exist on both tables', n == 8, n)
+n = q("select count(*) from pg_policies where schemaname = 'public' and tablename like 'observation_erp_link%%' and policyname not like 'anum_reader%%'")[0][0]
+check('G live', 'the six live policies are still there, none added or removed', n == 6, n)
+v, code, msg = decide('mixer_typed')
+check('G live', 'a link made by the live function is still honoured (idempotent confirm)', v is not None and v['already_linked'] is True, (v, code, msg))
+v, code, msg = decide('pump12_slot_missing')
+check('G live', 'follow-up refuses what live accepted: wheel not on the registered build', v is None and code == 'PT409', (code, msg))
 
 conn.rollback()
 failed = [r for r in results if not r[2]]

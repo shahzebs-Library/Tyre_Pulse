@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import {
   findObservationErpEvidence, confirmObservationErpLink, rejectObservationErpSuggestion,
   getObservationErpLink, listObservationErpDecisions, getObservationErpReviewState, isErpReviewNotProvisioned,
+  erpDecisionMessage,
 } from '../../lib/api/observationErpEvidence'
 import { toUserMessage } from '../../lib/safeError'
 import { detectConfirmedErpDrift } from '../../lib/erpObservationMatch'
@@ -147,7 +148,8 @@ export default function ObservationErpEvidence({ observation }) {
       setHistory(await listObservationErpDecisions(actionId))
     } catch (e) {
       if (isErpReviewNotProvisioned(e)) { setProvisioned(false); setMessage('') }
-      else setMessage(toUserMessage(e))
+      // The server decides. A refusal is shown in its own plain words, never as a link.
+      else setMessage(erpDecisionMessage(e))
     }
     finally { setBusy('') }
   }

@@ -5,6 +5,7 @@
 import { supabase, unwrap, ServiceError, isNotProvisioned } from './_client'
 import { matchObservationToErp } from '../erpObservationMatch'
 import { getCustomLayoutMap } from './vehicleDiagrams'
+import { toUserMessage } from '../safeError'
 
 const WO_FIELDS = 'id,work_order_no,asset_no,country,site,description,notes,status,opened_at,completed_at'
 const TYRE_FIELDS = 'id,asset_no,country,serial_no,position,tyre_position,job_card,issue_date,removal_date,status'
@@ -132,3 +133,30 @@ export async function getObservationErpReviewState(actionId) {
 
 /** True when a Confirm or Reject failed only because the review functions do not exist yet. */
 export const isErpReviewNotProvisioned = (err) => isNotProvisioned(err)
+
+/**
+ * Plain words for a Confirm or Reject the server refused.
+ *
+ * The server is the authority and can refuse a job card this screen offered: today the live
+ * function finds the wheel with its own table, which differs from the position service in a
+ * few cases (see POSITION_ROUND2.md). Those refusals arrive with code PT409, which the general
+ * error text reads as "this record changed, refresh", which is wrong here. Only the server's
+ * own known refusals are translated; anything else goes through toUserMessage unchanged, so
+ * no database text reaches the screen.
+ */
+const REFUSALS = [
+  [/predates the inspection/i, 'This job card was opened before the inspection, so it cannot be linked. It needs manual investigation.'],
+  [/could not be matched on this vehicle|Unknown inspection tyre position/i, 'The server could not place the inspected wheel on this vehicle. The job card was not linked and stays pending manual review.'],
+  [/No ERP tyre movement matches/i, 'The server found no tyre movement on this job card for the inspected wheel. The job card was not linked.'],
+  [/already linked to (another|a different)/i, 'This action is already linked to a different job card.'],
+  [/must match inspection tenant, country and asset/i, 'This job card does not belong to the same vehicle and country as the inspection.'],
+  [/Only own inspection tyre actions/i, 'Only tyre damage actions raised from an inspection can be linked to a job card.'],
+  [/Job card number missing/i, 'This job card has no number, so it cannot be linked.'],
+  [/(Country|Site) is outside permitted scope/i, 'This job card is outside the countries or sites you can review.'],
+  [/Decision and reason are required/i, 'Write a reason of at least five characters.'],
+]
+export function erpDecisionMessage(err) {
+  const raw = String(err?.cause?.message || err?.message || '')
+  const hit = REFUSALS.find(([re]) => re.test(raw))
+  return hit ? hit[1] : toUserMessage(err, 'The job card could not be linked. Please try again.')
+}

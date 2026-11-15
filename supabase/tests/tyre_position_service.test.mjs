@@ -8,7 +8,7 @@ import { PGlite } from '@electric-sql/pglite'
 // generated matrix is what the JS returns; this proves the SQL returns the same, row for row.
 // The draft is loaded as written, from supabase/pending_migrations (it is NOT applied anywhere).
 
-const SQL = readFileSync(new URL('../pending_migrations/20261115110000_tyre_position_service.sql', import.meta.url), 'utf8')
+const SQL = readFileSync(new URL('../pending_migrations/20261116090000_tyre_position_service.sql', import.meta.url), 'utf8')
 const fixture = JSON.parse(readFileSync(new URL('../../src/test/fixtures/tyrePositionCases.json', import.meta.url), 'utf8'))
 
 async function createDb () {

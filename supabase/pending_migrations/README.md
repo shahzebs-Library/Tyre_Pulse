@@ -44,18 +44,21 @@ ever wanted. The reconcile is therefore closed by deletion, not re-application.
   a removal of stored data, so it is not applied unattended. It frees disk only; no
   measured query gets faster from it.
 
-## Tyre position service and ERP observation reconciliation (2026-11-15, round 2)
+## Tyre position service and ERP observation follow-up (2026-11-15)
 
-Two drafts, apply in this order, neither applied anywhere but the local staging copy:
+`supabase/migrations/20261115120000_observation_erp_reconciliation.sql` is APPLIED to production (version
+20261115090615). These are FOLLOW-UP drafts on top of it, apply in this order, neither applied anywhere
+but the local staging copy:
 
-- `20261115110000_tyre_position_service.sql` : pure functions that resolve an inspection slot id or an
+- `20261116090000_tyre_position_service.sql` : pure functions that resolve an inspection slot id or an
   ERP position code to one canonical wheel on the asset's own layout (SQL mirror of
   `src/lib/tyrePositionService.js`, pinned by `src/test/fixtures/tyrePositionCases.json`). No table.
   Its built-in wheel table is generated from the JS: regenerate with
   `UPDATE_POSITION_FIXTURE=1 npx vitest run src/test/tyrePositionMirror.test.js`.
-- `20261115120000_observation_erp_reconciliation.sql` : the rework of PR #514 (which must not be
-  merged). Two tables plus evaluate / decide. Needs the file above. Contains the words "delete"
-  and "drop" in foreign keys, a trigger and its rollback comment, so the MCP confirm prompt fires.
+- `20261116091000_observation_erp_decide_on_position_service.sql` : `create or replace` of the live
+  `observation_erp_decide` (same signature and result) on the position service, a read-only
+  `observation_erp_evaluate`, and the reader policies the applied migration missed. No table, no removal.
+- `20261116091000_observation_erp_decide_ROLLBACK.sql` : the exact live function, to undo the above.
 
 Tests: `node --test supabase/tests/tyre_position_service.test.mjs` (PGlite) and
 `python3 supabase/tests/staging/observation_erp_position_tests.py` (local staging copy).

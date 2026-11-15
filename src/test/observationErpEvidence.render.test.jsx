@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   listObservationErpDecisions: vi.fn(),
   getObservationErpReviewState: vi.fn(),
   isErpReviewNotProvisioned: vi.fn((e) => e?.code === 'PGRST202'),
+  erpDecisionMessage: vi.fn(() => 'The server found no tyre movement on this job card for the inspected wheel. The job card was not linked.'),
 }))
 vi.mock('../lib/api/observationErpEvidence', () => api)
 
@@ -31,6 +32,7 @@ const show = () => render(<MemoryRouter><ObservationErpEvidence observation={obs
 beforeEach(() => {
   Object.values(api).forEach((f) => f.mockReset?.())
   api.isErpReviewNotProvisioned.mockImplementation((e) => e?.code === 'PGRST202')
+  api.erpDecisionMessage.mockImplementation(() => 'The server found no tyre movement on this job card for the inspected wheel. The job card was not linked.')
   api.getObservationErpReviewState.mockResolvedValue({ provisioned: true, link: null, history: [] })
   api.findObservationErpEvidence.mockResolvedValue(ready(candidate()))
 })
@@ -78,6 +80,18 @@ describe('ERP evidence panel', () => {
     expect(await screen.findByText(/ERP evidence review is not set up yet/)).toBeTruthy()
     expect(screen.queryByText(/Could not find the function/)).toBeNull()
     expect(screen.queryByRole('button', { name: 'Confirm this job card' })).toBeNull()
+  })
+
+  it('when the server refuses a confirm the screen offered, its plain message is shown and nothing is linked', async () => {
+    api.confirmObservationErpLink.mockRejectedValue({ code: 'PT409', message: 'This record changed since you opened it.' })
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Review and link job card' }))
+    fireEvent.change(screen.getByLabelText(/Why does this job card resolve/), { target: { value: 'Same wheel, reviewed' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm this job card' }))
+    expect(await screen.findByText(/found no tyre movement on this job card/)).toBeTruthy()
+    expect(screen.queryByText(/record changed/)).toBeNull()
+    expect(screen.queryByText(/Linked job card/)).toBeNull()
+    expect(api.getObservationErpLink).not.toHaveBeenCalled()
   })
 
   it('a link state that cannot be read for another reason blocks confirmation and says so', async () => {

@@ -10,6 +10,9 @@
 --         { canonical, slot, status: resolved | ambiguous | unknown | inconsistent, reason }
 --       Anything but 'resolved' is neither a match nor a mismatch: pending manual review.
 --
+-- ORDER: follow-up to the applied migration 20261115120000 (production version 20261115090615).
+--       Apply this file, then 20261116091000_observation_erp_decide_on_position_service.sql.
+--
 -- WHY:  corrective_actions.source_detail stores the slot id, tyre_records.position stores
 --       the ERP code, and the same slot id is a different wheel on a different machine.
 --       Comparing the two as text can never match (0 of 19 open actions on 2026-11-15).
@@ -45,7 +48,7 @@
 --   rollback;
 --
 -- ROLLBACK (the only place this file names a removal; nothing depends on these functions
--- until 20261115120000 is applied):
+-- until 20261116091000 is applied):
 --   drop function if exists public.tyre_asset_layout(uuid,text,text,text,date);
 --   drop function if exists public.tyre_type_layout(uuid,text,text,integer,date);
 --   drop function if exists public.tyre_position_compare(jsonb,text,text);
@@ -536,7 +539,7 @@ begin
 end $$;
 
 -- Mirror of tyrePositionService.comparePositions (without the recorded-type check, which
--- needs a second layout: see observation_erp_position_evidence in 20261115120000).
+-- needs a second layout: see observation_erp_evaluate in 20261116091000).
 -- match: true / false / null. Null means PENDING MANUAL REVIEW, never "no".
 create or replace function public.tyre_position_compare(p_layout jsonb, p_slot_token text, p_erp_token text)
 returns jsonb language plpgsql immutable parallel safe set search_path = '' as $$

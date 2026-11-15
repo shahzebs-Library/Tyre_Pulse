@@ -14,7 +14,7 @@ import { resolveLayout, resolveWheel, comparePositions } from '../lib/tyrePositi
 import { LAYOUT_SLOTS } from '../lib/vehicleTyreLayout'
 
 const FIXTURE = resolve(process.cwd(), 'src/test/fixtures/tyrePositionCases.json')
-const DRAFT = resolve(process.cwd(), 'supabase/pending_migrations/20261115110000_tyre_position_service.sql')
+const DRAFT = resolve(process.cwd(), 'supabase/pending_migrations/20261116090000_tyre_position_service.sql')
 const UPDATE = process.env.UPDATE_POSITION_FIXTURE === '1'
 const fixture = JSON.parse(readFileSync(FIXTURE, 'utf8'))
 const KINDS = ['slot', 'erp', 'any']

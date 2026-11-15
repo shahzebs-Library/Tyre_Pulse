@@ -37,7 +37,7 @@ function png() {
   return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))])
 }
 
-const ca = (id) => JSON.parse(R.sql(`select row_to_json(t) from (select status, review_status, closed_by is not null as has_closed_by, submitted_by is not null as has_submitter, coalesce(jsonb_array_length(completion_photos),0) as photos, left(coalesce(review_comment,''),80) as review_comment from public.corrective_actions where id = '${id}') t`))
+const ca = (id) => JSON.parse(R.sql(`select row_to_json(t) from (select status, review_status, exception_requested_by is not null as exc_requested, closed_by is not null as has_closed_by, submitted_by is not null as has_submitter, coalesce(jsonb_array_length(completion_photos),0) as photos, left(coalesce(review_comment,''),80) as review_comment from public.corrective_actions where id = '${id}') t`))
 const events = (id) => R.sql(`select coalesce(string_agg(event_type, ',' order by id), '') from public.corrective_action_review_events where action_id = '${id}'`)
 const sheet = (id) => JSON.parse(R.sql(`select row_to_json(t) from (select approval_status, locked, answers::text as answers, acknowledged_by is not null as acked, acknowledged_name, supervisor_by is not null as sup_signed from public.checklist_submissions where id = '${id}') t`))
 const compliance = (id) => R.sql(`select row_to_json(v) from public.v_checklist_fault_compliance v where v.submission_id = '${id}'`)
@@ -55,7 +55,10 @@ async function openAction(s, title) {
     label: ((await panel.locator('span.border').first().innerText().catch(() => '')) || '').trim(),
     canSubmit: await has('Submit for review'), canProgress: await has('Save as progress'),
     canApprove: await has('Approve closure'), canReturn: await has('Return for correction'),
-    canException: await panel.getByText('Close with a documented exception instead').isVisible().catch(() => false),
+    canException: await panel.getByText('Ask for a documented exception instead').isVisible().catch(() => false),
+    canDecideException: await panel.locator('[data-testid="exception-decision"]').isVisible().catch(() => false),
+    exceptionSelfBlocked: await panel.locator('[data-testid="exception-self-blocked"]').isVisible().catch(() => false),
+    waitingOn: ((await panel.locator('[data-testid="closure-waiting-on"]').innerText().catch(() => '')) || '').trim(),
     text: ((await panel.innerText().catch(() => '')) || '').replace(/\s+/g, ' ').slice(0, 700), loc: panel }
 }
 const feedback = async (panel) => ((await panel.locator('[role=status], [role=alert]').first().innerText({ timeout: 4000 }).catch(() => '')) || '').trim()
@@ -68,6 +71,20 @@ async function statusSelectClose(s, title, id) {
   await p.getByLabel(`Status of ${title}`).first().selectOption('Closed'); await p.waitForTimeout(2000)
   const msg = (await p.locator('main [role=alert]').allInnerTexts()).join(' | ').replace(/\s+/g, ' ').trim()
   return { message: msg, rawSql: R.rawSql(msg), db: ca(id) }
+}
+
+async function requestException(a, reason) {
+  await a.loc.getByText('Ask for a documented exception instead').click()
+  await a.loc.locator('#ca-exception-reason').fill('short')
+  const shortDisabled = await a.loc.getByRole('button', { name: 'Request exception' }).isDisabled()
+  await a.loc.locator('#ca-exception-reason').fill(reason)
+  await a.loc.getByRole('button', { name: 'Request exception' }).click()
+  return { shortDisabled, message: await feedback(a.loc) }
+}
+async function decideException(a, decision, note) {
+  if (note) await a.loc.locator('#ca-exception-decision').fill(note)
+  await a.loc.getByRole('button', { name: decision === 'approve' ? 'Approve exception' : 'Refuse exception' }).click()
+  return feedback(a.loc)
 }
 
 async function actions() {
@@ -119,12 +136,26 @@ async function actions() {
   await w.context.close()
 
   // 5. Reviewer approves; history.
+  // C1: the North Workshop Supervisor (a default reviewer) reaches /actions and reviews an action at his own site.
+  const sn = await R.session('clo.sup.north')
+  const snLinks = await R.sidebarLinks(sn.page)
+  out.c1_sidebar_actions = snLinks.some((l) => l.href === '/actions')
+  a = await openAction(sn, T1)
+  out.c1_sup_own_site_open = strip(a)
+  if (a.canApprove) {
+    await a.loc.getByRole('button', { name: 'Approve closure' }).click()
+    out.reviewer_approve = { by: 'clo.sup.north', message: await feedback(a.loc), events: events(A1), db: ca(A1) }
+  }
+  out.c1_sup_failed = sn.log.failed.filter((f) => !/user_view_prefs/.test(f)); out.c1_sup_page_errors = sn.log.pageErrors
+  await sn.context.close()
   m = await R.session('alpha.manager')
-  a = await openAction(m, T1)
-  await a.loc.getByRole('button', { name: 'Approve closure' }).click()
-  out.reviewer_approve = { message: await feedback(a.loc), events: events(A1), db: ca(A1) }
-  await m.page.waitForTimeout(800)
-  await closeDialog(m.page)
+  if (!out.reviewer_approve) {
+    a = await openAction(m, T1)
+    await a.loc.getByRole('button', { name: 'Approve closure' }).click()
+    out.reviewer_approve = { by: 'alpha.manager', message: await feedback(a.loc), events: events(A1), db: ca(A1) }
+    await m.page.waitForTimeout(800)
+    await closeDialog(m.page)
+  }
   await m.page.getByLabel('Filter by status').selectOption({ label: 'Closed' }).catch(() => {})
   a = await openAction(m, T1)
   if (a.listed) {
@@ -149,21 +180,31 @@ async function actions() {
   a = await openAction(m, T6)
   out.exception_open = strip(a)
   if (a.canException) {
-    await a.loc.getByText('Close with a documented exception instead').click()
-    await a.loc.locator('#ca-exception-reason').fill('short')
-    out.exception_short_reason_disabled = await a.loc.getByRole('button', { name: 'Record exception' }).isDisabled()
-    await a.loc.locator('#ca-exception-reason').fill('R2: vehicle sold, the fix will not happen.')
-    await a.loc.getByRole('button', { name: 'Record exception' }).click()
-    out.exception_recorded = { message: await feedback(a.loc), events: events(A6), db: ca(A6) }
+    const rq = await requestException(a, 'R3: vehicle sold, the fix will not happen.')
+    out.exception_short_reason_disabled = rq.shortDisabled
+    out.exception_requested = { message: rq.message, events: events(A6), db: ca(A6) }
+    await m.page.waitForTimeout(800); await closeDialog(m.page)
+    out.exception_requester_view = strip(await openAction(m, T6))
+    await closeDialog(m.page)
+    out.exception_requester_close_by_status = await statusSelectClose(m, T6, A6)
   }
   out.manager_failed = m.log.failed.filter((f) => !/user_view_prefs/.test(f)); out.manager_page_errors = m.log.pageErrors
   await m.context.close()
+
+  // C1: the North supervisor on a submitted action at ANOTHER site (East).
+  const sn2 = await R.session('clo.sup.north')
+  out.c1_sup_other_site = strip(await openAction(sn2, T2))
+  out.c1_sup_other_site_db = ca(A2)
+  await sn2.context.close()
 
   // 8. Another reviewer decides the self-submitted one.
   const ad = await R.session('alpha.admin')
   a = await openAction(ad, T2)
   out.other_reviewer_open = strip(a)
   if (a.canApprove) { await a.loc.getByRole('button', { name: 'Approve closure' }).click(); out.other_reviewer_approve = { message: await feedback(a.loc), db: ca(A2) } }
+  a = await openAction(ad, T6)
+  out.exception_decider_open = strip(a)
+  if (a.canDecideException) out.exception_decided = { message: await decideException(a, 'approve', 'R3: confirmed with the fleet register.'), events: events(A6), db: ca(A6) }
   await ad.context.close()
 
   // 9. Roles that should not get the exception or the page.
@@ -173,7 +214,7 @@ async function actions() {
   const c = await R.session('clo.collector')
   out.collector_on_unassigned = strip(await openAction(c, 'Checklist fault: Brakes'))
   await c.context.close()
-  for (const u of ['clo.sup.north', 'alpha.tyreman']) {
+  for (const u of ['clo.sup.north', 'clo.sup.east', 'alpha.tyreman']) {
     const x = await R.session(u); const st = await R.openRoute(x.page, '/actions', x.log)
     out[`route_${u}`] = { url: st.url, heading: st.heading, denied: st.accessDenied }
     await x.context.close()
@@ -189,13 +230,22 @@ async function actions() {
     a = await openAction(m2, T5)
     out.self_exception_offered = a.canException
     if (a.canException) {
-      await a.loc.getByText('Close with a documented exception instead').click()
-      await a.loc.locator('#ca-exception-reason').fill('R2: closing my own submission by exception.')
-      await a.loc.getByRole('button', { name: 'Record exception' }).click()
-      out.self_exception = { message: await feedback(a.loc), events: events(A5), db: ca(A5) }
+      const rq = await requestException(a, 'R3: asking for an exception on my own submission.')
+      out.self_exception_request = { message: rq.message, events: events(A5), db: ca(A5) }
+      await m2.page.waitForTimeout(800); await closeDialog(m2.page)
+      out.self_exception_requester_view = strip(await openAction(m2, T5))
+      await closeDialog(m2.page)
+      out.self_exception_close_by_status = await statusSelectClose(m2, T5, A5)
     }
   }
   await m2.context.close()
+  if (out.self_exception_request) {
+    const ad2 = await R.session('alpha.admin')
+    a = await openAction(ad2, T5)
+    out.self_exception_second_reviewer_open = strip(a)
+    if (a.canDecideException) out.self_exception_refused = { message: await decideException(a, 'refuse', 'R3: fix the seat belt instead.'), events: events(A5), db: ca(A5) }
+    await ad2.context.close()
+  }
   const b = await R.session('beta.manager'); const bs = await R.openRoute(b.page, '/actions', b.log)
   out.other_company_sees = /Synthetic: replace worn tyre/.test(bs.text)
   await b.context.close()
@@ -249,6 +299,25 @@ async function checklists() {
   out.after_ack_page = stripS(await openSheet(e, S6))
   const list = await R.openRoute(e.page, '/checklists', e.log)
   out.after_ack_list = (list.text.match(/[^\n]*Synthetic Single Sign[^\n]*(\n[^\n]*){0,6}/) || [''])[0].replace(/\s+/g, ' ').slice(0, 300)
+  // K1: the acknowledged sheet in the list, the viewer drawer and the Audit Pack.
+  const LBL = 'Acknowledged, Action Required'
+  out.k1_list = { label: list.text.includes(LBL), pendingApprovalNearRow: /Pending approval/i.test(out.after_ack_list), rawWord: /\backnowledged\b/.test(list.text),
+    tiles: (list.text.match(/(Pending approval|Action Required|Acknowledged)[^\n]*\n[^\n]*/gi) || []).map((t) => t.replace(/\s+/g, ' ')).slice(0, 8) }
+  const rowBtn = e.page.locator('tr, li, article, [role=row]').filter({ hasText: 'Synthetic Single Sign' }).filter({ hasText: LBL }).first()
+  if (await rowBtn.isVisible().catch(() => false)) {
+    await rowBtn.click().catch(() => {}); await e.page.waitForTimeout(1500)
+    const dlg = e.page.locator('[role=dialog]').last()
+    const dt = ((await dlg.innerText().catch(() => '')) || '').replace(/\s+/g, ' ')
+    out.k1_viewer = { opened: dt.length > 0, label: dt.includes(LBL), text: dt.slice(0, 400) }
+    await e.page.keyboard.press('Escape').catch(() => {})
+  } else out.k1_viewer = { opened: false }
+  const ap = await R.openRoute(e.page, '/checklist-audit', e.log); await e.page.waitForTimeout(2500)
+  let apText = await R.bodyText(e.page)
+  out.k1_audit_pack = { url: ap.url, denied: ap.accessDenied, tile: (apText.match(/Acknowledged, Action Required\s*\d+/) || [''])[0] }
+  const recTab = e.page.getByRole('tab', { name: /record/i }).first()
+  if (await recTab.isVisible().catch(() => false)) { await recTab.click(); await e.page.waitForTimeout(1200); apText = await R.bodyText(e.page)
+    out.k1_audit_pack.recordsLabel = apText.includes(LBL); out.k1_audit_pack.rawWord = /\backnowledged\b/.test(apText)
+    out.k1_audit_pack.row = (apText.match(/[^|]{0,80}Acknowledged, Action Required[^|]{0,80}/g) || []).slice(-1)[0] || '' }
   out.sup_east_failed = e.log.failed; out.sup_east_page_errors = e.log.pageErrors
   await e.context.close()
 
@@ -291,13 +360,16 @@ async function checklists() {
   const a = await openAction(m, 'Checklist fault: Horn')
   out.exception_action_open = strip(a)
   if (a.canException) {
-    await a.loc.getByText('Close with a documented exception instead').click()
-    await a.loc.locator('#ca-exception-reason').fill('R2: horn unit obsolete, vehicle retired from road use.')
-    await a.loc.getByRole('button', { name: 'Record exception' }).click()
-    out.exception = { message: await feedback(a.loc), compliance: compliance(S6) }
+    const rq = await requestException(a, 'R3: horn unit obsolete, vehicle retired from road use.')
+    out.exception_request = { message: rq.message, compliance: compliance(S6) }
   }
-  out.sheet_after_exception = stripS(await openSheet(m, S6))
+  out.sheet_after_exception_request = stripS(await openSheet(m, S6))
   await m.context.close()
+  const ad3 = await R.session('alpha.admin')
+  const a3 = await openAction(ad3, 'Checklist fault: Horn')
+  if (a3.canDecideException) out.exception = { message: await decideException(a3, 'approve', 'R3: agreed.'), compliance: compliance(S6) }
+  out.sheet_after_exception = stripS(await openSheet(ad3, S6))
+  await ad3.context.close()
   const c2 = await R.session('clo.collector2')
   out.exception_unauthorised_collector = strip(await openAction(c2, 'Checklist fault: Mirrors'))
   await c2.context.close()

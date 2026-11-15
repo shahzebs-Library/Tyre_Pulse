@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Round 2 browser tests: prepare the e2e database COPY (never staging, never production).
 #   1. closure fixture (synthetic sheets, actions, people)   supabase/tests/closure/fixture.sql
-#   2. the drafts each feature needs, in their documented order (work orders, then closure)
+#   2. the eight drafts each feature needs, in their documented order (work orders, then closure)
 #   3. round2_harness.sql (extra synthetic people with a per-run password, marked work orders)
 #   4. an accounts file for the specs, OUTSIDE the repository
 # Run once, right after the database copy is created (start.sh creates it), then start.sh --skip-build.
@@ -11,10 +11,11 @@ PENDING="$REPO_ROOT/supabase/pending_migrations"
 if [ "$(psqle -At -d "$E2E_DB" -c "select count(*) from public.profiles where username like 'clo.%'")" = 0 ]; then
   psqle -At -d "$E2E_DB" -f "$REPO_ROOT/supabase/tests/closure/fixture.sql"
 fi
-for f in 20261113130000_cur_work_orders_manager_director_default 20261115160000_wo_permission_resolver \
-         20261115160500_wo_policies_and_guards 20261115161000_wo_supervisor_module_visibility \
-         20261116100000_clo_corrective_action_review 20261116101000_clo_checklist_acknowledge_exception; do
-  if [ "$(psqle -At -d "$E2E_DB" -c "select to_regprocedure('public.acknowledge_checklist_faults(uuid,text,text)') is not null")" = t ]; then break; fi
+for f in 20261113130000_cur_work_orders_manager_director_default 20261115140000_wo_permission_resolver \
+         20261115140500_wo_policies_and_guards 20261115141000_wo_supervisor_module_visibility \
+         20261115141500_wo_cost_approval_not_collector \
+         20261116100000_clo_corrective_action_review 20261116101000_clo_checklist_acknowledge_exception \
+         20261116102000_clo_supervisor_actions_visibility; do
   psqle -d "$E2E_DB" -1 -f "$PENDING/$f.sql" >/dev/null && echo "applied $f"
 done
 PW="$(head -c 18 /dev/urandom | base64 | tr -d '\n/+=')Aa1"

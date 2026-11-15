@@ -10,6 +10,7 @@
  * create/update via the caller-supplied row.
  */
 import { supabase, unwrap, fetchAllPages } from './_client'
+import { normaliseRecallCountry } from '../recallCountry'
 
 // Least-privilege columns: every recall field the RecallTracker page reads
 // (KPIs, filters, timeline, brand history, analytics, PDF/Excel export) or
@@ -38,13 +39,25 @@ export async function getRecall(id) {
   return unwrap(await supabase.from('recalls').select(COLS).eq('id', id).maybeSingle())
 }
 
+/**
+ * recalls.country is one text value. A caller that passes the profile's country
+ * ARRAY would store a JSON string that no country scope matches (the save is
+ * then refused). Only a single clean country, or null, is ever sent.
+ */
+function withSingleCountry(values) {
+  if (!values || !('country' in values)) return values
+  return { ...values, country: normaliseRecallCountry(values.country) }
+}
+
 /** Create a recall; returns the inserted row. */
 export async function createRecall(values) {
+  values = withSingleCountry(values)
   return unwrap(await supabase.from('recalls').insert(values).select(COLS).single())
 }
 
 /** Update a recall by id. */
 export async function updateRecall(id, patch) {
+  patch = withSingleCountry(patch)
   return unwrap(await supabase.from('recalls').update(patch).eq('id', id))
 }
 

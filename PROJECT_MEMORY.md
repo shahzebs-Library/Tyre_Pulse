@@ -5,6 +5,13 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ 2026-11-16 — AUTH HARDENING ROUND CLOSED. Handover: docs/commercial-readiness/auth/HANDOVER.md. NOTHING LIVE.
+- PR #550 (draft): last code commit 89157871; head = docs only. Web/Console/Flutter Turnstile token, sign-in fn fail-closed + 8 s timeouts + only cf-connecting-ip (forwarding OFF), /captcha-bridge page. Local sign-in test 32/32; Flutter CI Android+iOS pass on a0d8600b (Flutter unchanged since).
+- Expo 1.6.0 OTA: branch ota/mobile-1.6.0-captcha @ 6d70a78b (PR #551 CLOSED on purpose, branch kept, NEVER merge into main). Not published.
+- Production unchanged: CAPTCHA OFF, IP forwarding OFF, single-company ON, sign-in fn v1. TEN-9f lockout live.
+- Release blockers (not run): real phones (Expo bridge, Flutter Android/iOS), real Cloudflare+Supabase, expired/reused/invalid tokens, reset/OTP/MFA/invite, rollback drill. Hosted staging needs a separate free Supabase org.
+- Do NOT revise the CAPTCHA work further; next focus = pending operational releases (#549) and company-isolation fixes (#545/#546).
+
 # ⚑ 2026-11-15 21:10 UTC — POST-ROLLOUT VERIFICATION (owner checklist). No production DB change after the bridge index.
 - #541 IS LIVE: production deploy dpl_FLXv7rJVi6GXpHpR97zRSwW5RdJC READY on aa217b03 (main tip a4bc8ec7 differs only by PROJECT_MEMORY.md). The live chunk tyreExchange-BKl7t9C6.js carries onConflict `organisation_id,serial,mark_type`. 0 runtime errors in the hour after. #530/#541 deploys succeeded between rate-limit refusals; #540/#542 (docs) were refused.
 - Tyre Exchange tested at DB level as real Manager / Reporter / Tyre Data Collector / Tyre Man (all rolled back): save via old and new conflict key OK, read OK, edit reason OK, delete of a mark refused for all non-admins; scrap -> Scrapped, reason edit OK, Collector undo refused ("Only an administrator can undo a scrap"), super-admin undo restores the exact prior status. NOT browser-tested (no test login available to this session).

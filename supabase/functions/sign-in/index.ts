@@ -62,7 +62,8 @@ function cors(req: Request): Record<string, string> {
 // No trustworthy address -> nothing is forwarded (Supabase then limits by the edge's own).
 function clientIp(req: Request): string | null {
   const raw = (req.headers.get('cf-connecting-ip') || '').trim()
-  return /^[0-9a-fA-F:.]{3,45}
+  return /^[0-9a-fA-F:.]{3,45}$/.test(raw) ? raw : null
+}
 
 function escapeLike(s: string): string {
   return s.replace(/[\\%_]/g, (m) => '\\' + m)

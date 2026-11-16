@@ -3515,5 +3515,13 @@
   "teamMessageAckRequired": "الإقرار بالاستلام مطلوب",
   "teamMessageAcknowledge": "إقرار بالاستلام",
   "teamMessageReplyLabel": "الرد على الفريق",
-  "teamMessageSend": "إرسال الرد"
+  "teamMessageSend": "إرسال الرد",
+  "captchaSemanticLabel": "التحقق الأمني",
+  "captchaLoading": "جارٍ تحميل التحقق الأمني...",
+  "captchaPrompt": "أكمل التحقق الأمني للمتابعة.",
+  "captchaSolved": "اكتمل التحقق الأمني.",
+  "captchaExpired": "انتهت صلاحية التحقق الأمني. حاول مرة أخرى.",
+  "captchaLoadFailed": "تعذر تحميل التحقق الأمني. تحقق من اتصالك وحاول مرة أخرى.",
+  "captchaTimedOut": "يستغرق التحقق الأمني وقتًا طويلًا. تحقق من اتصالك وحاول مرة أخرى.",
+  "captchaRefused": "لم يتم قبول التحقق الأمني. أكمله مرة أخرى ثم أعد المحاولة."
 }

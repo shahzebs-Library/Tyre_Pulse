@@ -44,6 +44,7 @@ class AppConfig {
     required this.supabaseAnonKey,
     required this.environment,
     required this.sentryDsn,
+    this.turnstileSiteKey = '',
   });
 
   final String supabaseUrl;
@@ -57,7 +58,23 @@ class AppConfig {
   /// state, not an error - it must not block startup.
   final String sentryDsn;
 
+  /// Cloudflare Turnstile site key for the sign-in CAPTCHA
+  /// (`--dart-define=TURNSTILE_SITE_KEY=...`). Empty means the CAPTCHA is off
+  /// for this build: no widget, no network call, sign-in exactly as before.
+  /// A site key is public by design (it ships in every web bundle too); the
+  /// matching SECRET lives only in Supabase Auth's CAPTCHA settings.
+  final String turnstileSiteKey;
+
   bool get hasTelemetry => sentryDsn.isNotEmpty;
+  bool get hasCaptcha => turnstileSiteKey.isNotEmpty;
+
+  /// The compile-time Turnstile site key, trimmed. Read directly by
+  /// `turnstileSiteKeyProvider` so the login screen does not need the whole
+  /// resolved [AppConfig] threaded through the composition root.
+  static const String turnstileSiteKeyFromEnvironment =
+      String.fromEnvironment(_turnstileKey);
+
+  static const String _turnstileKey = 'TURNSTILE_SITE_KEY';
   bool get isProduction => environment == 'production';
 
   static const String _urlKey = 'SUPABASE_URL';
@@ -90,6 +107,7 @@ class AppConfig {
       supabaseAnonKey: anonKey,
       environment: environment,
       sentryDsn: sentryDsn,
+      turnstileSiteKey: turnstileSiteKeyFromEnvironment,
     );
   }
 
@@ -100,6 +118,7 @@ class AppConfig {
     required String supabaseAnonKey,
     required String environment,
     required String sentryDsn,
+    String turnstileSiteKey = '',
   }) {
     final problems = <String>[];
 
@@ -151,6 +170,7 @@ class AppConfig {
         supabaseAnonKey: supabaseAnonKey.trim(),
         environment: environment,
         sentryDsn: sentryDsn.trim(),
+        turnstileSiteKey: turnstileSiteKey.trim(),
       ),
     );
   }

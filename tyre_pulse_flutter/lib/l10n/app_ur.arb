@@ -3515,5 +3515,13 @@
   "teamMessageAckRequired": "وصولی کی تصدیق درکار ہے",
   "teamMessageAcknowledge": "تصدیق کریں",
   "teamMessageReplyLabel": "ٹیم کو جواب",
-  "teamMessageSend": "جواب بھیجیں"
+  "teamMessageSend": "جواب بھیجیں",
+  "captchaSemanticLabel": "سیکیورٹی چیک",
+  "captchaLoading": "سیکیورٹی چیک لوڈ ہو رہا ہے...",
+  "captchaPrompt": "جاری رکھنے کے لیے سیکیورٹی چیک مکمل کریں۔",
+  "captchaSolved": "سیکیورٹی چیک مکمل ہو گیا۔",
+  "captchaExpired": "سیکیورٹی چیک کی میعاد ختم ہو گئی۔ دوبارہ کوشش کریں۔",
+  "captchaLoadFailed": "سیکیورٹی چیک لوڈ نہیں ہو سکا۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔",
+  "captchaTimedOut": "سیکیورٹی چیک میں بہت زیادہ وقت لگ رہا ہے۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔",
+  "captchaRefused": "سیکیورٹی چیک قبول نہیں ہوا۔ اسے دوبارہ مکمل کریں اور پھر کوشش کریں۔"
 }

@@ -8691,4 +8691,32 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get teamMessageSend => 'جواب بھیجیں';
+
+  @override
+  String get captchaSemanticLabel => 'سیکیورٹی چیک';
+
+  @override
+  String get captchaLoading => 'سیکیورٹی چیک لوڈ ہو رہا ہے...';
+
+  @override
+  String get captchaPrompt => 'جاری رکھنے کے لیے سیکیورٹی چیک مکمل کریں۔';
+
+  @override
+  String get captchaSolved => 'سیکیورٹی چیک مکمل ہو گیا۔';
+
+  @override
+  String get captchaExpired =>
+      'سیکیورٹی چیک کی میعاد ختم ہو گئی۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get captchaLoadFailed =>
+      'سیکیورٹی چیک لوڈ نہیں ہو سکا۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔';
+
+  @override
+  String get captchaTimedOut =>
+      'سیکیورٹی چیک میں بہت زیادہ وقت لگ رہا ہے۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔';
+
+  @override
+  String get captchaRefused =>
+      'سیکیورٹی چیک قبول نہیں ہوا۔ اسے دوبارہ مکمل کریں اور پھر کوشش کریں۔';
 }

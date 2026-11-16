@@ -8684,4 +8684,31 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get teamMessageSend => 'إرسال الرد';
+
+  @override
+  String get captchaSemanticLabel => 'التحقق الأمني';
+
+  @override
+  String get captchaLoading => 'جارٍ تحميل التحقق الأمني...';
+
+  @override
+  String get captchaPrompt => 'أكمل التحقق الأمني للمتابعة.';
+
+  @override
+  String get captchaSolved => 'اكتمل التحقق الأمني.';
+
+  @override
+  String get captchaExpired => 'انتهت صلاحية التحقق الأمني. حاول مرة أخرى.';
+
+  @override
+  String get captchaLoadFailed =>
+      'تعذر تحميل التحقق الأمني. تحقق من اتصالك وحاول مرة أخرى.';
+
+  @override
+  String get captchaTimedOut =>
+      'يستغرق التحقق الأمني وقتًا طويلًا. تحقق من اتصالك وحاول مرة أخرى.';
+
+  @override
+  String get captchaRefused =>
+      'لم يتم قبول التحقق الأمني. أكمله مرة أخرى ثم أعد المحاولة.';
 }

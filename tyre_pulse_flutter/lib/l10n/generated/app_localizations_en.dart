@@ -8675,4 +8675,31 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get teamMessageSend => 'Send reply';
+
+  @override
+  String get captchaSemanticLabel => 'Security check';
+
+  @override
+  String get captchaLoading => 'Loading the security check...';
+
+  @override
+  String get captchaPrompt => 'Complete the security check to continue.';
+
+  @override
+  String get captchaSolved => 'Security check complete.';
+
+  @override
+  String get captchaExpired => 'The security check expired. Try it again.';
+
+  @override
+  String get captchaLoadFailed =>
+      'The security check could not load. Check your connection and try again.';
+
+  @override
+  String get captchaTimedOut =>
+      'The security check is taking too long. Check your connection and try again.';
+
+  @override
+  String get captchaRefused =>
+      'The security check was not accepted. Complete it again and retry.';
 }

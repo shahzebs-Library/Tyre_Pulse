@@ -13,6 +13,9 @@ import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/auth/auth_controller.dart';
 import 'package:tyre_pulse/core/auth/auth_dependency_providers.dart';
+import 'package:tyre_pulse/core/auth/captcha/turnstile_captcha.dart';
+import 'package:tyre_pulse/core/auth/captcha/turnstile_webview.dart';
+import 'package:tyre_pulse/core/auth/captcha/turnstile_widget.dart';
 import 'package:tyre_pulse/core/auth/sign_in_outcome.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/security/device_biometric_authenticator.dart';
@@ -28,6 +31,14 @@ abstract final class LoginBannerKeys {
   static const Key error = Key('login.banner.error');
   static const Key locked = Key('login.banner.locked');
 }
+
+/// Key of the Turnstile security check, present only when this build has a
+/// Turnstile site key.
+@visibleForTesting
+const Key kLoginCaptchaKey = Key('login.captcha');
+
+/// Vertical gap between the security check and the sign-in button.
+const double _kCaptchaGap = 8;
 
 @visibleForTesting
 abstract final class LoginActionKeys {
@@ -90,6 +101,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String? _errorMessage;
   int? _lockoutMinutes;
 
+  /// The single-use Turnstile token, or null. Only meaningful when
+  /// [_captchaSiteKey] is non-empty; with no site key the CAPTCHA is off and
+  /// sign-in behaves exactly as before.
+  String? _captchaToken;
+  final TurnstileController _captcha = TurnstileController();
+
+  String get _captchaSiteKey => ref.read(turnstileSiteKeyProvider);
+
+  void _onCaptchaToken(String? token) {
+    if (!mounted || token == _captchaToken) return;
+    setState(() => _captchaToken = token);
+  }
+
   @override
   void dispose() {
     _identifierController.dispose();
@@ -120,16 +144,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       return;
     }
 
+    if (_captchaSiteKey.isNotEmpty && _captchaToken == null) {
+      setState(() {
+        _errorMessage = l10n.captchaPrompt;
+        _lockoutMinutes = null;
+      });
+      return;
+    }
+
+    final String? captchaToken = _captchaToken;
     setState(() {
       _isSubmitting = true;
       _errorMessage = null;
       _lockoutMinutes = null;
+      // Single use: whatever the outcome, this token is spent.
+      _captchaToken = null;
     });
 
-    final SignInOutcome outcome = await ref
-        .read(authControllerProvider.notifier)
-        .signIn(identifier: identifier, password: password);
+    final SignInOutcome outcome =
+        await ref.read(authControllerProvider.notifier).signIn(
+              identifier: identifier,
+              password: password,
+              captchaToken: captchaToken,
+            );
     if (!mounted) return;
+    // A Turnstile token works once: re-arm the check after every attempt.
+    if (captchaToken != null) _captcha.reset();
 
     switch (outcome) {
       case SignInSucceeded():
@@ -154,8 +194,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           _isSubmitting = false;
           _errorMessage = error.message;
         });
+      case SignInCaptchaFailed():
+        setState(() {
+          _isSubmitting = false;
+          _errorMessage = l10n.captchaRefused;
+        });
     }
   }
+
+  /// The security check for the form, or null when this build has no
+  /// Turnstile site key.
+  Widget? _captchaWidget() {
+    final String siteKey = ref.watch(turnstileSiteKeyProvider);
+    if (siteKey.isEmpty) return null;
+    return TurnstileCaptcha(
+      key: kLoginCaptchaKey,
+      siteKey: siteKey,
+      factory: ref.watch(turnstileViewFactoryProvider),
+      controller: _captcha,
+      onTokenChanged: _onCaptchaToken,
+    );
+  }
+
+  /// Extra height the form needs for the security check (0 when off).
+  double _captchaExtra(BuildContext context, Widget? captcha) => captcha == null
+      ? 0
+      : turnstileBlockHeight(MediaQuery.textScalerOf(context)) + _kCaptchaGap;
 
   Future<void> _authenticateWithBiometrics() async {
     if (_isSubmitting || _isCheckingBiometrics) return;
@@ -326,7 +390,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     required Locale activeLocale,
   }) {
     final bool hasFeedback = _errorMessage != null || _lockoutMinutes != null;
-    final double feedbackExtra = hasFeedback ? 82 : 0;
+    final Widget? captcha = _captchaWidget();
+    final double feedbackExtra =
+        (hasFeedback ? 82 : 0) + _captchaExtra(context, captcha);
     final double canvasWidth =
         constraints.maxWidth > 390 ? 390 : constraints.maxWidth;
     final String configuredVersion = ref.watch(currentAppVersionProvider);
@@ -375,6 +441,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   isBiometricChecking: _isCheckingBiometrics,
                   errorMessage: _errorMessage,
                   lockoutMinutes: _lockoutMinutes,
+                  captcha: captcha,
+                  captchaExtra: _captchaExtra(context, captcha),
+                  awaitingCaptcha: captcha != null && _captchaToken == null,
                   appVersion: visibleVersion,
                   onSelectLocale: (Locale locale) =>
                       ref.read(localeProvider.notifier).setLocale(locale),
@@ -413,6 +482,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         configuredVersion == '999.0.0' || configuredVersion.trim().isEmpty
             ? null
             : configuredVersion;
+    final Widget? captcha = _captchaWidget();
+    final double captchaExtra = _captchaExtra(context, captcha);
     return SingleChildScrollView(
       padding: const EdgeInsets.all(TpSpace.xxl),
       child: Center(
@@ -438,7 +509,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               Expanded(
                 flex: 11,
                 child: SizedBox(
-                  height: 620,
+                  height: 620 + captchaExtra,
                   child: _ExactLoginForm(
                     key: const Key('login.form.card'),
                     curvedTop: false,
@@ -453,6 +524,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     isBiometricChecking: _isCheckingBiometrics,
                     errorMessage: _errorMessage,
                     lockoutMinutes: _lockoutMinutes,
+                    captcha: captcha,
+                    captchaExtra: captchaExtra,
+                    awaitingCaptcha: captcha != null && _captchaToken == null,
                     appVersion: visibleVersion,
                     onSelectLocale: (Locale locale) =>
                         ref.read(localeProvider.notifier).setLocale(locale),
@@ -862,6 +936,9 @@ class _ExactLoginForm extends StatelessWidget {
     required this.errorMessage,
     required this.lockoutMinutes,
     required this.appVersion,
+    this.captcha,
+    this.captchaExtra = 0,
+    this.awaitingCaptcha = false,
     required this.onSelectLocale,
     required this.onIdentifierChanged,
     required this.onPasswordChanged,
@@ -891,6 +968,15 @@ class _ExactLoginForm extends StatelessWidget {
   final String? errorMessage;
   final int? lockoutMinutes;
   final String? appVersion;
+
+  /// The Turnstile security check, or null when the CAPTCHA is off.
+  final Widget? captcha;
+
+  /// Height reserved for [captcha] including its gap (0 when off).
+  final double captchaExtra;
+
+  /// True while the check is on but unsolved: sign-in stays disabled.
+  final bool awaitingCaptcha;
   final ValueChanged<Locale> onSelectLocale;
   final ValueChanged<String> onIdentifierChanged;
   final ValueChanged<String> onPasswordChanged;
@@ -907,7 +993,8 @@ class _ExactLoginForm extends StatelessWidget {
     final LoginSecurityCopy copy = LoginSecurityCopy.of(context);
     final TpPalette palette = TpPalette.of(context);
     final bool hasFeedback = errorMessage != null || lockoutMinutes != null;
-    final double feedbackOffset = hasFeedback ? 82 : 0;
+    final double captchaTop = 316 + (hasFeedback ? 82 : 0);
+    final double feedbackOffset = (hasFeedback ? 82 : 0) + captchaExtra;
     final bool busy = isSubmitting || isBiometricChecking;
     final Key? footerKey = countryControlKey;
 
@@ -1068,19 +1155,32 @@ class _ExactLoginForm extends StatelessWidget {
                               message: errorMessage!,
                             ),
                     ),
+                  if (captcha != null)
+                    Positioned(
+                      // Keyed so the error banner appearing before it in this
+                      // Stack never re-parents the check and drops its state.
+                      key: const ValueKey<String>('login.captcha.slot'),
+                      left: left,
+                      top: captchaTop,
+                      width: fieldWidth,
+                      height: captchaExtra - _kCaptchaGap,
+                      child: captcha!,
+                    ),
                   Positioned(
                     left: left,
                     top: 316 + feedbackOffset,
                     width: fieldWidth,
                     height: 52,
                     child: _SignInButtonDepth(
-                      enabled: !busy,
+                      enabled: !busy && !awaitingCaptcha,
                       child: TpButton.primary(
                         key: const Key('login.submit'),
                         label: l10n.actionSignIn,
                         isFullWidth: true,
                         isBusy: isSubmitting,
-                        onPressed: busy ? null : () => unawaited(onSubmit()),
+                        onPressed: busy || awaitingCaptcha
+                            ? null
+                            : () => unawaited(onSubmit()),
                       ),
                     ),
                   ),

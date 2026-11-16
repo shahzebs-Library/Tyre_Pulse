@@ -9,6 +9,7 @@
  */
 import { supabase, unwrap, applyCountry, isMissingRelation, fetchAllPages, ServiceError, toServiceError } from './_client'
 import { toUserMessage } from '../safeError'
+import { pinCompany } from './companyScope'
 
 export const COLS =
   'id,organisation_id,country,name,asset_no,asset_type,interval_type,interval_value,' +
@@ -48,9 +49,9 @@ function chunk(arr, size) {
  * Returns [] when the table is missing so the UI can prompt for the migration
  * rather than error.
  */
-export async function listPmPrograms({ country, status } = {}) {
+export async function listPmPrograms({ country, status, orgId } = {}) {
   const result = await fetchAllPages((from, to) => {
-    let q = supabase.from('pm_programs').select(COLS)
+    let q = pinCompany(supabase.from('pm_programs').select(COLS), orgId)
     if (status) q = q.eq('status', status)
     return applyCountry(q, country).order('next_due', { ascending: true, nullsFirst: false }).order('id').range(from, to)
   }, { max: 50000 })
@@ -242,9 +243,9 @@ async function captureMeterReading(result, values = {}) {
  * program, country-scoped (null-safe). Read failures propagate to the page.
  * @param {{ asset_no?:string, program_id?:string|number, country?:string,  }} [opts]
  */
-export async function listPmServiceRecords({ asset_no, program_id, country } = {}) {
+export async function listPmServiceRecords({ asset_no, program_id, country, orgId } = {}) {
   const result = await fetchAllPages((from, to) => {
-    let q = supabase.from('pm_service_records').select(SERVICE_RECORD_COLS)
+    let q = pinCompany(supabase.from('pm_service_records').select(SERVICE_RECORD_COLS), orgId)
     if (asset_no) q = q.eq('asset_no', asset_no)
     if (program_id) q = q.eq('pm_program_id', program_id)
     return applyCountry(q, country).order('service_date', { ascending: false }).order('id').range(from, to)

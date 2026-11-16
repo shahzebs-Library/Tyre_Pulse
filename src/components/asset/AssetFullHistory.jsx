@@ -689,7 +689,7 @@ const HISTORY_VIEWS = [
   { key: 'gaps', label: 'What we do not have' },
 ]
 
-export function AssetFullHistory({ assetNo, country }) {
+export function AssetFullHistory({ assetNo, country, org }) {
   const { activeCurrency } = useSettings()
   const [loading, setLoading]  = useState(true)
   const [error, setError]      = useState(null)
@@ -714,7 +714,7 @@ export function AssetFullHistory({ assetNo, country }) {
       setLoading(true)
       setError(null)
       try {
-        const res = await loadAssetHistory(assetNo, { country })
+        const res = await loadAssetHistory(assetNo, { country, org })
         if (cancelled) return
         setNow(Date.now())
         setPayload(res)
@@ -726,7 +726,7 @@ export function AssetFullHistory({ assetNo, country }) {
     }
     run()
     return () => { cancelled = true }
-  }, [assetNo, country, reloadKey])
+  }, [assetNo, country, org, reloadKey])
 
   const timeline = useMemo(
     () => (payload ? buildTimeline(payload.sources, { now, country }) : null),

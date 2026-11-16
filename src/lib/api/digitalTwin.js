@@ -7,6 +7,7 @@
 import { supabase, applyCountry, fetchAllPages, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 import { sanitizeSearchTerm } from '../searchFilter'
+import { isOrgId, currentOrgId } from './companyScope'
 
 const COLS =
   'id,serial_no,serial_number,tyre_serial,brand,size,supplier,asset_no,asset_number,site,' +
@@ -19,7 +20,7 @@ const COLS =
  * @param {string} assetNo
  * @param {{ country?:string }} [opts]
  */
-export async function getAssetTwinRecords(assetNo, { country } = {}) {
+export async function getAssetTwinRecords(assetNo, { country, orgId } = {}) {
   const raw = String(assetNo || '').trim()
   if (!raw) return []
   const s = sanitizeSearchTerm(raw)
@@ -30,13 +31,18 @@ export async function getAssetTwinRecords(assetNo, { country } = {}) {
       .order('position', { ascending: true, nullsFirst: false })
       .order('id', { ascending: true })
       .range(from, to)
-    return applyCountry(q, country)
+    // The machine's own company: a super admin's read spans companies, and the
+    // same asset code in two companies is two machines.
+    return applyCountry(isOrgId(orgId) ? q.eq('organisation_id', orgId) : q, country)
   })
 }
 
 /**
  * Asset search for the lookup box: distinct asset numbers matching a query, with
  * a little context (site/brand) for disambiguation. Capped for responsiveness.
+ * Limited to the caller's company (the same rule as reference_asset_options):
+ * a super admin's read spans companies, and folding two companies' tyres on
+ * one code into one suggestion would count them as one machine.
  * @param {string} query
  * @param {{ country?:string, limit?:number }} [opts]
  */
@@ -49,6 +55,8 @@ export async function searchAssets(query, { country, limit = 25 } = {}) {
     .is('removal_date', null)
     .limit(300)
   q = applyCountry(q, country)
+  const org = await currentOrgId()
+  if (org) q = q.eq('organisation_id', org)
   const { data, error } = await q
   if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   const seen = new Map()

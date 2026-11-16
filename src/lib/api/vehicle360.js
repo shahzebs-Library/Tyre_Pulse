@@ -7,7 +7,7 @@
 import { supabase, unwrap, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 import { escapeLike } from '../searchFilter'
-import { firstForCallerCompany } from './companyScope'
+import { firstForCallerCompany, isOrgId } from './companyScope'
 
 const BUCKET = 'vehicle-photos'
 
@@ -38,8 +38,11 @@ export function validatePhotoFile(file) {
   }
   return ext
 }
+// Read from the base table, not the `vehicles` view: the view carries no
+// organisation_id, and a super admin's read spans every company, so the row's
+// own company is what pins every later read and write on this page.
 const V_COLS =
-  'id,asset_no,fleet_number,make,model,vehicle_type,year,department,operator_name,' +
+  'id,organisation_id,asset_no,fleet_number,make,model,vehicle_type,year,department,operator_name,' +
   'site,country,region,status,tyre_size,expected_km_per_tyre,monthly_tyre_budget,notes,' +
   'image_path,latitude,longitude,location_updated_at,gps_source'
 
@@ -50,32 +53,53 @@ const scopedCountry = (c) => (c && c !== 'All' ? c : null)
  * One vehicle by asset number (case-insensitive, exact - `%`/`_` in the code are
  * escaped so they cannot act as wildcards). Pass `country` when known: the same
  * asset code in two countries is usually a DIFFERENT machine, so an unscoped
- * read could open the wrong one.
+ * read could open the wrong one. The same code can also exist in two
+ * companies: the caller's company wins, a code only one company holds opens
+ * that company's machine, and a code held only by two OTHER companies opens
+ * nothing (null) rather than an arbitrary one.
  */
 export async function getVehicle(assetNo, { country } = {}) {
-  let q = supabase.from('vehicles').select(V_COLS).ilike('asset_no', escapeLike(String(assetNo ?? '').trim()))
+  let q = supabase.from('vehicle_fleet').select(V_COLS).ilike('asset_no', escapeLike(String(assetNo ?? '').trim()))
   const c = scopedCountry(country)
   if (c) q = q.eq('country', c)
-  return unwrap(await q.order('id').limit(1).maybeSingle())
+  const rows = unwrap(await q.order('id').limit(20))
+  return firstForCallerCompany(rows || [])
 }
 
 /**
  * Every tyre record for this vehicle, newest first (for the per-vehicle panels).
  * `country` scopes it to the vehicle's own country: without it a tyre fitted to
  * the same-numbered machine in another country was listed as this vehicle's.
+ * `orgId` (the vehicle row's company) does the same across companies.
  */
-export async function getVehicleTyres(assetNo, { country } = {}) {
+export async function getVehicleTyres(assetNo, { country, orgId } = {}) {
   let q = supabase.from('tyre_records')
     .select('id,serial_no,asset_no,brand,size,position,issue_date,removal_date,km_at_fitment,km_at_removal,cost_per_tyre,qty,risk_level,category,tread_depth,pressure_reading,country')
     .ilike('asset_no', escapeLike(String(assetNo ?? '').trim()))
   const c = scopedCountry(country)
   if (c) q = q.eq('country', c)
+  if (isOrgId(orgId)) q = q.eq('organisation_id', orgId)
   return unwrap(
     await q
       .order('issue_date', { ascending: false })
       .order('id', { ascending: false })
       .limit(500),
   )
+}
+
+/**
+ * Narrow a vehicle_fleet write to ONE machine: its row id when known, else asset
+ * code + country + company. A write by asset code alone reached every
+ * same-numbered machine the caller could see, which for a super admin meant
+ * other companies' vehicles.
+ */
+function oneVehicle(q, assetNo, { id, country, orgId } = {}) {
+  if (id != null && id !== '') return q.eq('id', id)
+  let out = q.ilike('asset_no', escapeLike(String(assetNo ?? '').trim()))
+  const c = scopedCountry(country)
+  if (c) out = out.eq('country', c)   // never touch a same-numbered machine elsewhere
+  if (isOrgId(orgId)) out = out.eq('organisation_id', orgId)
+  return out
 }
 
 /** Signed URL for a stored vehicle photo path (1 hour). null when no path. */
@@ -139,7 +163,7 @@ async function vehicleOrgId(assetNo, country) {
  * (upsert), records the path on vehicle_fleet, and returns { path, url }.
  * `orgId` is optional; when omitted the vehicle row's own organisation is used.
  */
-export async function uploadVehiclePhoto(assetNo, file, { country, orgId } = {}) {
+export async function uploadVehiclePhoto(assetNo, file, { country, orgId, id } = {}) {
   const ext = validatePhotoFile(file)
   const org = orgId || await vehicleOrgId(assetNo, country)
   const path = vehiclePhotoPath({ orgId: org, country, assetNo, ext })
@@ -147,11 +171,10 @@ export async function uploadVehiclePhoto(assetNo, file, { country, orgId } = {})
     upsert: true, contentType: file.type || 'image/jpeg', cacheControl: '3600',
   })
   if (upErr) throw new ServiceError(toUserMessage(upErr, 'Photo upload failed.'), upErr.statusCode, upErr)
-  let upd = supabase.from('vehicle_fleet')
-    .update({ image_path: path, updated_at: new Date().toISOString() })
-    .ilike('asset_no', escapeLike(String(assetNo ?? '').trim()))
-  const c = scopedCountry(country)
-  if (c) upd = upd.eq('country', c)   // never touch a same-numbered machine elsewhere
+  const upd = oneVehicle(
+    supabase.from('vehicle_fleet').update({ image_path: path, updated_at: new Date().toISOString() }),
+    assetNo, { id, country, orgId: org },
+  )
   const { error: dbErr } = await upd
   if (dbErr) throw new ServiceError(toUserMessage(dbErr, 'Could not save the photo reference.'), dbErr.code, dbErr)
   const url = await vehiclePhotoUrl(path)
@@ -159,18 +182,18 @@ export async function uploadVehiclePhoto(assetNo, file, { country, orgId } = {})
 }
 
 /** Save a manual GPS position on the vehicle (used until a provider feed is wired). */
-export async function saveVehicleGps(assetNo, latitude, longitude, source = 'manual', { country } = {}) {
+export async function saveVehicleGps(assetNo, latitude, longitude, source = 'manual', { country, orgId, id } = {}) {
   const lat = Number(latitude), lng = Number(longitude)
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
     throw new Error('Enter a valid latitude (-90..90) and longitude (-180..180).')
   }
-  let q = supabase.from('vehicle_fleet')
-    .update({ latitude: lat, longitude: lng, location_updated_at: new Date().toISOString(), gps_source: source })
-    .ilike('asset_no', escapeLike(String(assetNo ?? '').trim()))
-  // Scoped to the vehicle's own country when known, so a same-numbered machine
-  // in another country never has its position overwritten.
-  const c = scopedCountry(country)
-  if (c) q = q.eq('country', c)
+  // One machine only (row id, else code + country + company), so a
+  // same-numbered machine in another country or company never moves.
+  const q = oneVehicle(
+    supabase.from('vehicle_fleet')
+      .update({ latitude: lat, longitude: lng, location_updated_at: new Date().toISOString(), gps_source: source }),
+    assetNo, { id, country, orgId },
+  )
   const { error } = await q
   if (error) throw new ServiceError(toUserMessage(error, 'Could not save the location.'), error.code, error)
   return { latitude: lat, longitude: lng }

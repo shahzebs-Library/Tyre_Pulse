@@ -115,6 +115,7 @@ export const NAV_COMMANDS = [
   { id: 'continuous-improvement', label: 'Continuous Improvement', path: '/continuous-improvement', icon: 'Zap', adminOnly: true, moduleKey: 'analytics' },
   // Administration & Data
   { id: 'cleaning',       label: 'Data Cleaning',        path: '/cleaning',     icon: 'Trash2',     adminOnly: true, moduleKey: 'data_cleaning' },
+  { id: 'erp-intake',     label: 'ERP Data Intake',      path: '/erp-intake',   icon: 'Layers', roles: ANALYTICS_ROLES, keywords: ['erp', 'erp intake', 'upload', 'ramco', 'expense grid', 'job cards', 'monthly tyres', 'complaints', 'open job cards', 'asset master'] },
   { id: 'data-intake',    label: 'Data Intake Center',   path: '/data-intake',  icon: 'Upload', keywords: ['upload', 'import', 'excel', 'csv', 'file', 'erp', 'erp import', 'erp intake', 'expense import', 'expense grid', 'ramco', 'template', 'tyre change', 'm3', 'production'] },
   { id: 'upload-approvals', label: 'Upload Approvals',   path: '/upload-approvals', icon: 'ClipboardCheck', adminOnly: true },
   { id: 'custom-data',    label: 'Custom Data',          path: '/custom-data',  icon: 'FileText' },

@@ -342,6 +342,7 @@ const MasterAccessControl    = lazy(() => import('./pages/MasterAccessControl'))
 const ReportShare            = lazy(() => import('./pages/ReportShare'))
 const AccidentPortalView     = lazy(() => import('./pages/AccidentPortalView'))
 const DataDeletion           = lazy(() => import('./pages/DataDeletion'))
+const CaptchaBridge          = lazy(() => import('./pages/CaptchaBridge'))
 const Privacy                = lazy(() => import('./pages/Privacy'))
 const Terms                  = lazy(() => import('./pages/Terms'))
 const PublicSupport          = lazy(() => import('./pages/PublicSupport'))
@@ -611,6 +612,7 @@ function MainApp() {
             {/* PUBLIC account & data deletion page - the URL for the Google Play
                 Data Safety form's deletion mechanism. Anon, no app shell. */}
             <Route path="/data-deletion"   element={<Safe><DataDeletion /></Safe>} />
+            <Route path="/captcha-bridge"  element={<Safe><CaptchaBridge /></Safe>} />
             <Route path="/delete-account"  element={<LegacyRedirect to="/data-deletion" />} />
             {/* PUBLIC privacy policy - the URL for Play Console App content + Data Safety. */}
             <Route path="/privacy"         element={<Safe><Privacy /></Safe>} />

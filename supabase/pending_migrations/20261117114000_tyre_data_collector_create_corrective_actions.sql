@@ -21,6 +21,13 @@
 --     refuse a row outside the person's scope.
 -- =============================================================================
 begin;
+-- Backup: the full settings row before the change (restore = write this value back).
+create schema if not exists _bak;
+create table if not exists _bak.tdc_corrective_actions_settings (
+  organisation_id uuid, settings jsonb, saved_at timestamptz default now());
+revoke all on _bak.tdc_corrective_actions_settings from public;
+insert into _bak.tdc_corrective_actions_settings(organisation_id, settings)
+  select id, settings from public.organisations where id = '00000000-0000-0000-0000-000000000001';
 do $$
 declare v_pov jsonb; v_new jsonb; v_typ text;
 begin

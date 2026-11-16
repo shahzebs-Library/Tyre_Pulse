@@ -222,3 +222,11 @@ Inventory and test record: `docs/commercial-readiness/audit/BY_NUMBER_JOIN_AUDIT
   `tyre_status_marks_serial_mark_type_bridge` index. OWNER APPROVAL ONLY, after the production
   web build carries #541. Contains `drop`, so the apply prompt needs the owner. Rollback in the
   file header.
+
+- `20261117130000_ai_tyre_serial_recognition.sql` (+ `_ROLLBACK`) — DEFERRED FEATURE, draft
+  only: AI tyre serial-number readings and reviewer decisions (append-only, org + country RLS,
+  no client writes, never writes tyre records). Needs the shared tyre-position service, which is
+  live. Inert until the edge function source on branch `claude/ai-serial-recognition-7rxp2t` is
+  deployed AND `system_config.ai_tyre_serial_enabled = 'true'`. Each of those is a separate owner
+  approval. Staging proof: `supabase/tests/staging_ai_serial_recognition.sh`. Design:
+  `docs/features/AI_SERIAL_RECOGNITION.md`. Not a blocker for the current-company release.

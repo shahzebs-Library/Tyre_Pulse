@@ -4,7 +4,7 @@ import { lifeDisplay } from '../../lib/tyreRunningLife'
 import { defectsForAction, isSevereCondition } from '../../lib/inspectionTyreFlags'
 import { displayPositionCode, inspectionTypeHint } from '../../lib/tyreBay'
 import RaiseActionDialog from './RaiseActionDialog'
-import { listActionsForSource, isActionClosed } from '../../lib/api/correctiveActions'
+import { listActionsForSource, isActionClosed, canCreateCorrectiveAction } from '../../lib/api/correctiveActions'
 
 // Immediate flag banner: shown when the vehicle carries tyres at/near end of
 // life (judged by the ONE running-life calc via buildAssetFlagMap) or when
@@ -45,6 +45,17 @@ export default function TyreDueBanner({ entry, damaged = [], inspection = null }
   // One action speaks for each defect: an open one wins over a closed one, so
   // the banner never says "Fixed" while work is still outstanding; among equals
   // the newest (the list is newest first) is kept.
+  // Can this person create an action at all? Asked once, of the database. A
+  // Tyre Data Collector may see the defects but not raise work; offering the
+  // button anyway meant every press was refused (seen live 2026-11-16).
+  const [mayCreate, setMayCreate] = useState(null)
+  useEffect(() => {
+    if (!canRaise) return undefined
+    let live = true
+    canCreateCorrectiveAction().then((v) => { if (live) setMayCreate(v) })
+    return () => { live = false }
+  }, [canRaise])
+
   const byKey = new Map()
   for (const a of existing) {
     if (!a.source_detail) continue
@@ -116,7 +127,13 @@ export default function TyreDueBanner({ entry, damaged = [], inspection = null }
         </ul>
       )}
 
-      {canRaise && defects.length > 0 && (
+      {canRaise && defects.length > 0 && mayCreate === false && (
+        <p className="mt-3 text-xs text-[var(--text-secondary)]">
+          Your role cannot raise corrective actions. Ask a supervisor or manager to raise one for these tyres.
+        </p>
+      )}
+
+      {canRaise && defects.length > 0 && mayCreate !== false && (
         <div className="mt-3 flex items-center gap-3 flex-wrap">
           <button
             type="button" onClick={() => setDialogOpen(true)}

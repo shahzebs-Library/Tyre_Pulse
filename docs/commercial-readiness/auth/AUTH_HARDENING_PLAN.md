@@ -46,13 +46,15 @@ NOT stop scripts that call Supabase Auth directly.
 | Invitation sign-up sends the token | `src/pages/InviteSignup.jsx` | On #546 |
 | Flutter Android/iOS Turnstile (WebView, `webview_flutter ^4.14.1`), token on password sign-in, sign-in function and self sign-up; key from `--dart-define=TURNSTILE_SITE_KEY` (empty = unchanged) | `tyre_pulse_flutter/` | This branch. analyze clean; auth/login/extras/l10n tests 286 pass, 1 known Linux golden diff; config/router 173 pass. Not run on a real phone yet. |
 | `sign-in` edge function forwards `captcha_token` to Supabase Auth | `supabase/functions/sign-in` | On main; not redeployed |
-| `sign-in` edge function refuses (503) when the lockout check errors, instead of proceeding | `supabase/functions/sign-in` | On #550 (independent of #546) and #546. Local test `e2e/auth/sign_in_edge_local.mjs`: 16/16. The same test fails on today's function (15/16: a session is issued while the lockout check is down). Not deployed. |
-| Expo app | `mobile/` | Still the main phone client (see 5b). It cannot send a token. |
+| `sign-in` edge function fails closed: 503 when the lockout check errors, times out (8 s per upstream call, one overall deadline on the account lookup) or answers in an unexpected shape | `supabase/functions/sign-in` | This branch (also on #546). Local test `e2e/auth/sign_in_edge_local.mjs`: 32/32. The function on main fails 10 of the same 32 (a session is issued while the lockout check is down; hangs up to 15 s). Not deployed. |
+| `sign-in` edge function forwards only a valid `cf-connecting-ip`, never `X-Forwarded-For` / `X-Real-IP` / `True-Client-IP` | `supabase/functions/sign-in` | This branch. Forwarding switch stays OFF (see 5f). |
+| Public `/captcha-bridge` page for the Expo app (Turnstile in the phone browser, then a fixed `tyrepulse-inspector://captcha` return link) | `src/pages/CaptchaBridge.jsx`, `src/lib/captchaBridge.js` | This branch. Tests 4/4. Shows a plain note while the site key is unset. |
+| Expo app 1.6.0 over-the-air update: opens the bridge page, reads the token back, signs in | `mobile/` on branch `ota/mobile-1.6.0-captcha` | Separate draft. NOT published to EAS. |
 
 ## 4. Fail-open review
 - Browser and app pre-checks: keep fail-open. They are advisory; the real gates are Supabase
   Auth and the `sign-in` function.
-- `sign-in` function: now fails closed on an error (#546). Supabase Auth uses the same
+- `sign-in` function: now fails closed on an error, a timeout or an odd answer (#550, #546). Supabase Auth uses the same
   database, so when the check is down a sign-in would fail anyway. Staff lose nothing extra.
 - Database functions: `login_attempt_status` / `record_login_failure` still turn any internal
   error into "not locked". The function cannot tell "lockout switched off" from "something
@@ -63,8 +65,13 @@ NOT stop scripts that call Supabase Auth directly.
 - Done:
   - Web Console tests 78/78.
   - Flutter: analyze clean; 286 auth/login/extras/l10n tests pass (1 known Linux golden diff); a local test server proves the token reaches Supabase Auth, the `sign-in` function and sign-up, and a CAPTCHA refusal is never counted as a failed login.
-  - #546 local `sign-in` function test 13/13: lockout error gives 503 and no session; recovery
-    signs in again.
+  - Local `sign-in` function test 32/32 (#550): lockout function missing, erroring, hanging,
+    answering an odd shape, account lookup hanging, Supabase Auth hanging or down; every case
+    gives 503 `unavailable` and no session, no internal detail in any response body, and the
+    next call after recovery signs in. Forged `X-Forwarded-For`, `X-Real-IP`, `True-Client-IP`
+    and a malformed `cf-connecting-ip` are never forwarded. The function on main fails 10.
+  - Bridge page 4/4: odd `state` values refused, the return link is fixed, a `return=` URL
+    parameter is ignored.
 - Not possible from this environment:
   - Real token checks against Cloudflare: the network proxy blocks challenges.cloudflare.com.
   - A local Supabase Auth server: no Docker daemon.
@@ -171,6 +178,17 @@ NOT stop scripts that call Supabase Auth directly.
   Reset password with a reason.
 - Nothing works for many users at once: tell the owner. The emergency rollback is below.
 
+## 5f. Client IP trust model
+- Supabase per-IP limits only help if the IP is real. A header that the caller can type
+  (`X-Forwarded-For`, `X-Real-IP`, `True-Client-IP`) is never trusted.
+- The production proxy chain in front of Supabase Edge Functions could not be verified from
+  here: the sandbox network blocks direct calls to `supabase.co`, so it is unknown whether
+  `cf-connecting-ip` is always set by Cloudflare and stripped from client input.
+- So `AUTH_FORWARD_CLIENT_IP` stays OFF. With it off the function sends no client IP and Supabase
+  sees the function's own address, which is the current behaviour.
+- To switch it on later (owner approval): from a phone, call the deployed function with a forged
+  `cf-connecting-ip` and check in the Auth logs that the forged value never appears.
+
 ## 6. Rollout order (each step needs owner approval)
 1. Owner decides the Expo route (5b) and the hosted staging route.
 2. Create a free Turnstile widget in Cloudflare. Allowed hostnames: `tyrepulse.app` and
@@ -205,6 +223,11 @@ NOT stop scripts that call Supabase Auth directly.
   `flutter_min_version` until the fix is live.
 - `sign-in` function problem: redeploy the previous version. Record its source hash before
   step 7.
+- `sign-in` function deployed today: version 1, bundle hash `5c8ac2b84d11bce6...` (code matches
+  main's `supabase/functions/sign-in/index.ts`, sha256 `75c23efd...`). Redeploy that source to
+  roll back step 7.
+- Expo over-the-air update problem: republish the previous update group from the EAS dashboard
+  (rollback), then CAPTCHA off if it was on.
 - Locked-out admin: the super admin clears it in the Console, or switches
   `max_login_attempts` to 0 in system_config (lockout off) as a last resort.
 

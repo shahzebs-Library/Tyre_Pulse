@@ -55,9 +55,14 @@ function cors(req: Request): Record<string, string> {
   }
 }
 
+// Only the address Cloudflare (in front of Supabase) records is trusted. Cloudflare sets
+// cf-connecting-ip itself and overwrites any value a caller sends. X-Forwarded-For and
+// X-Real-IP are NOT used: their leftmost value is whatever the caller wrote, so trusting
+// them would let a script claim a new address on every attempt and dodge per-IP limits.
+// No trustworthy address -> nothing is forwarded (Supabase then limits by the edge's own).
 function clientIp(req: Request): string | null {
-  const raw = req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || ''
-  return raw.split(',')[0].trim().slice(0, 64) || null
+  const raw = (req.headers.get('cf-connecting-ip') || '').trim()
+  return /^[0-9a-fA-F:.]{3,45}$/.test(raw) ? raw : null
 }
 
 function escapeLike(s: string): string {

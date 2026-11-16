@@ -44,7 +44,7 @@ NOT stop scripts that call Supabase Auth directly.
 | Console sign-in sends the token | `src/console/*` | Already on main |
 | Console "Send reset email" sends the token | `src/console/pages/ConsoleUsers.jsx` | This branch. Without it, admin reset emails would fail once CAPTCHA is on. |
 | Invitation sign-up sends the token | `src/pages/InviteSignup.jsx` | On #546 |
-| Flutter Android/iOS Turnstile (WebView), token on password sign-in, sign-in function and self sign-up | `tyre_pulse_flutter/` | This branch (see Flutter section) |
+| Flutter Android/iOS Turnstile (WebView, `webview_flutter ^4.14.1`), token on password sign-in, sign-in function and self sign-up; key from `--dart-define=TURNSTILE_SITE_KEY` (empty = unchanged) | `tyre_pulse_flutter/` | This branch. analyze clean; auth/login/extras/l10n tests 286 pass, 1 known Linux golden diff; config/router 173 pass. Not run on a real phone yet. |
 | `sign-in` edge function forwards `captcha_token` to Supabase Auth | `supabase/functions/sign-in` | On main; not redeployed |
 | `sign-in` edge function refuses (503) when the lockout check errors, instead of proceeding | `supabase/functions/sign-in` | On #546 (local test 13/13); not deployed |
 | Expo app | `mobile/` | Retired. It cannot send a token, so it stops signing in once CAPTCHA is on. Confirm no one still uses it. |
@@ -62,9 +62,9 @@ NOT stop scripts that call Supabase Auth directly.
 ## 5. Tests
 - Done:
   - Web Console tests 78/78.
+  - Flutter: analyze clean; 286 auth/login/extras/l10n tests pass (1 known Linux golden diff); a local test server proves the token reaches Supabase Auth, the `sign-in` function and sign-up, and a CAPTCHA refusal is never counted as a failed login.
   - #546 local `sign-in` function test 13/13: lockout error gives 503 and no session; recovery
     signs in again.
-  - Flutter (agent results in the PR).
 - Not possible from this environment:
   - Real token checks against Cloudflare: the network proxy blocks challenges.cloudflare.com.
   - A local Supabase Auth server: no Docker daemon.
@@ -94,7 +94,7 @@ NOT stop scripts that call Supabase Auth directly.
 2. Hosted staging (a second free Supabase project, or the owner's choice):
    - run the matrix above with test keys, then with the real keys
    - real people sign in on web, Android and iOS
-3. Ship a Flutter build with `--dart-define=TURNSTILE_SITE_KEY=...` to closed testing.
+3. Ship a Flutter build with `--dart-define=TURNSTILE_SITE_KEY=...` to closed testing (the release workflow must build with Flutter 3.47 or newer; webview_flutter's iOS part needs it).
    Measure phone sign-ins for 2 weeks; add Flutter sign-ins to the audit log first.
 4. Set `VITE_TURNSTILE_SITE_KEY` in Vercel and deploy. The web widget appears; Supabase still
    ignores tokens.

@@ -11,6 +11,8 @@
 //  * A job whose provider was already called is never called again.
 
 import type { MonthlyBudgetDecision } from "./budget.ts";
+import { extractSerialFromOutput, promptVersionFor, sanitizeSerialReading,
+  type SerialComparison, type SerialReading } from "./serial.ts";
 
 export type Json = Record<string, unknown>;
 
@@ -70,7 +72,7 @@ export function normalizeAnalysis(raw: unknown): Json {
 
 // ---- Photo quality + consistency heuristics (pure, cheap, no model call) -------------------------------
 
-export interface QualityFlag { code: string; severity: "info" | "warn" | "block"; message: string; source: "metadata" | "model" | "history" }
+export interface QualityFlag { code: string; severity: "info" | "warn" | "block"; message: string; source: "metadata" | "model" | "history" | "serial" }
 
 /** Width/height from JPEG, PNG or WebP headers; null when not readable. Never throws. */
 export function imageDimensions(bytes: Uint8Array): { width: number; height: number } | null {
@@ -199,6 +201,40 @@ export function parseModelOutput(output: unknown): Json {
   return normalizeAnalysis(JSON.parse(repairTruncatedJson(text.slice(start))));
 }
 
+/**
+ * Same tolerant strategy as parseModelOutput but returns the RAW object (no normalisation), for the
+ * serial path only. parseModelOutput itself is untouched so the damage path stays byte-identical.
+ */
+export function parseRawObject(output: unknown): Json {
+  const text = String(output || "").trim();
+  const clean = text.replace(/^`{3}(?:json)?\s*/i, "").replace(/\s*`{3}$/, "");
+  const isObj = (v: unknown): v is Json => !!v && typeof v === "object" && !Array.isArray(v);
+  try { const v = JSON.parse(clean); if (isObj(v)) return v; } catch { /* tolerant below */ }
+  const start = text.indexOf("{");
+  if (start < 0) throw new Error("No JSON object in model output");
+  const end = text.lastIndexOf("}");
+  if (end > start) { try { const v = JSON.parse(text.slice(start, end + 1)); if (isObj(v)) return v; } catch { /* repair */ } }
+  const v = JSON.parse(repairTruncatedJson(text.slice(start)));
+  if (!isObj(v)) throw new Error("Invalid AI response");
+  return v;
+}
+
+/** Review flag for a serial comparison (added to analysis.flags only when the serial flag is on). */
+export function serialFlags(reading: SerialReading, comparison: SerialComparison | null, unavailable = false): QualityFlag[] {
+  if (unavailable || !comparison) {
+    return [{ code: "serial_compare_unavailable", severity: "info", source: "serial",
+      message: "Serial reading saved; comparison with the tyre register was not available" }];
+  }
+  if (!comparison.needsReview) return [];
+  const text: Record<string, string> = {
+    mismatch: "Serial read from the photo differs from the tyre registered on this wheel; verify before any change",
+    ambiguous: "Serial could not be confirmed against the tyre register; verify manually",
+    unreadable: "A serial is registered for this wheel but could not be read from the photo",
+  };
+  return [{ code: "serial_" + comparison.outcome, severity: "warn", source: "serial",
+    message: text[comparison.outcome] ?? "Serial needs manual review" }];
+}
+
 /** Close a truncated JSON object: drop a dangling key/comma, terminate a string, close brackets. */
 export function repairTruncatedJson(src: string): string {
   const stack: string[] = [];
@@ -264,7 +300,14 @@ export interface Photo { mediaType: string; base64: string; bytes?: number; widt
 export interface ReusableAnalysis { id: string; analysis: Json }
 
 export interface Deps {
-  config: { providerName: string; model: string; rates: Rates | null; reserveUsd: number; dailyLimitUsd: number; monthlyLimitUsd?: number };
+  config: { providerName: string; model: string; rates: Rates | null; reserveUsd: number; dailyLimitUsd: number; monthlyLimitUsd?: number;
+    /** DRAFT serial-number reading (system_config ai_tyre_serial_enabled). Absent/false => v4 behaviour, byte-identical. */
+    serialEnabled?: boolean };
+  /**
+   * Serial path only: store the sanitised reading for this job and compare it with the register server-side
+   * (RPC ai_tyre_serial_record). Returns the comparison. Must NEVER write tyre records. Errors are tolerated.
+   */
+  recordSerial?: (job: JobRow, reading: SerialReading) => Promise<SerialComparison | null>;
   /** Pricing for the provider that actually served (fallback may differ from config). */
   ratesFor?: (providerName: string, model: string) => Rates | null;
   /** Previous completed reading for the same asset + tyre position; best effort, errors ignored. */
@@ -309,6 +352,14 @@ async function failJob(d: Deps, job: JobRow, kind: FailureKind, message: string,
 /** Process one claimed (status=processing) job. Never throws. */
 export async function processJob(d: Deps, job: JobRow): Promise<Outcome> {
   const { providerName, model, rates } = d.config;
+  const serialOn = d.config.serialEnabled === true;
+  const promptVersion = promptVersionFor(PROMPT_VERSION, serialOn);
+  // Serial path: record + compare; flags only. A failure here never fails the damage analysis.
+  const serialStep = async (reading: SerialReading): Promise<QualityFlag[]> => {
+    if (!d.recordSerial) return serialFlags(reading, null, true);
+    try { return serialFlags(reading, await d.recordSerial(job, reading)); }
+    catch { return serialFlags(reading, null, true); }
+  };
   let reserved = false, called = false, settled = false;
   const settle = async (cost: number | null) => { if (!settled) { settled = true; await d.settleBudget(job.id, cost, called); } };
   try {
@@ -355,7 +406,7 @@ export async function processJob(d: Deps, job: JobRow): Promise<Outcome> {
     // Identical bytes already analysed (same organisation, same prompt version): copy, no provider call, cost 0.
     if (photo.sha256 && d.findReusable) {
       let source: ReusableAnalysis | null = null;
-      try { source = await d.findReusable(job, photo.sha256, PROMPT_VERSION); } catch { source = null; }
+      try { source = await d.findReusable(job, photo.sha256, promptVersion); } catch { source = null; }
       if (source?.analysis && source.id !== job.id) {
         const src = source.analysis;
         const original = typeof src.reusedFrom === "string" && src.reusedFrom ? src.reusedFrom : source.id;
@@ -363,10 +414,11 @@ export async function processJob(d: Deps, job: JobRow): Promise<Outcome> {
         if (d.loadPrevious) {
           try { flags.push(...consistencyFlags(src, await d.loadPrevious(job))); } catch { /* history is best effort */ }
         }
+        if (serialOn) flags.push(...await serialStep(sanitizeSerialReading(src.serial)));
         const analysis: Json = { ...src, flags, reusedFrom: original,
           serving: { ...((src.serving as Json) ?? {}), reused: true } };
         const ok = await d.updateJob(job.id, { status: "completed", analysis, error_message: null, failure_kind: null,
-          photo_content_sha256: photo.sha256, prompt_version: PROMPT_VERSION,
+          photo_content_sha256: photo.sha256, prompt_version: promptVersion,
           input_tokens: 0, output_tokens: 0, total_tokens: 0, cost_usd: 0, updated_at: stamp(d) }, "processing");
         if (ok) return "completed";
       }
@@ -384,7 +436,7 @@ export async function processJob(d: Deps, job: JobRow): Promise<Outcome> {
     reserved = true;
     // Persist the fact of the attempt before the request so a crash cannot cause a second charge.
     await d.updateJob(job.id, { provider_attempts: 1, provider_called_at: stamp(d), provider: providerName,
-      model_version: model, prompt_version: PROMPT_VERSION,
+      model_version: model, prompt_version: promptVersion,
       ...(photo.sha256 ? { photo_content_sha256: photo.sha256 } : {}) }, "processing");
 
     called = true;
@@ -433,6 +485,11 @@ export async function processJob(d: Deps, job: JobRow): Promise<Outcome> {
     const flags: QualityFlag[] = [...quality.flags, ...modelQualityFlags(analysis)];
     if (d.loadPrevious) {
       try { flags.push(...consistencyFlags(analysis, await d.loadPrevious(job))); } catch { /* history is best effort */ }
+    }
+    if (serialOn) {
+      const serial = extractSerialFromOutput(result.output, parseRawObject);
+      flags.push(...await serialStep(serial));
+      analysis = { ...analysis, serial };
     }
     analysis = { ...analysis, flags,
       serving: { provider: served.providerName, model: served.model, ...(result.fallbackFrom ? { fallbackFrom: result.fallbackFrom } : {}) } };

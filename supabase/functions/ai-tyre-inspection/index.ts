@@ -12,6 +12,7 @@ import {
   type MonthlyBudgetDecision,
 } from "./budget.ts";
 import { constantTimeEqual, isActiveAccount, parseStorageRef } from "../_shared/aiSecurity.ts";
+import { promptFor, serialFlagFrom, SERIAL_FLAG_KEY, type SerialComparison, type SerialOutcome, type SerialReading } from "./serial.ts";
 
 const ALLOWED_ORIGINS = [
   ...(Deno.env.get("AI_ALLOWED_ORIGIN") ?? "").split(",").map(x => x.trim()).filter(Boolean),
@@ -368,14 +369,22 @@ async function work(req:Request) {
   // Worst-case per-call reservation; settled to the real estimate (or kept when usage is unknown).
   const reserveUsd = Math.max(0.0001, Math.min(Number(env("AI_RESERVE_USD_PER_CALL") ?? "0.01"), 1));
   const rates = resolveRates(providerName, model, env);
+  // DRAFT serial-number reading: OFF unless system_config.ai_tyre_serial_enabled is exactly 'true'.
+  // Any read problem => OFF, so the v4 prompt and v4 analysis shape are used (fail safe to today's behaviour).
+  let serialEnabled = false;
+  try {
+    const { data: flagRows, error: flagError } = await admin.from("system_config").select("key,value").eq("key", SERIAL_FLAG_KEY);
+    serialEnabled = !flagError && serialFlagFrom(flagRows);
+  } catch { serialEnabled = false; }
+  const prompt = promptFor(PROMPT, serialEnabled);
   // Secondary provider (used only on primary timeout / 429 / 5xx) when its key exists.
   const attempts: ProviderAttempt[] = [{ providerName, model,
-    call: (photo: Photo) => callProvider({ providerName, providerKey, model }, PROMPT, photo) }];
+    call: (photo: Photo) => callProvider({ providerName, providerKey, model }, prompt, photo) }];
   const gKey = Deno.env.get("AI_PROVIDER_KEY");
   if (providerName === "anthropic" && gKey) {
     const gModel = Deno.env.get("AI_FALLBACK_MODEL") || "gemini-2.5-flash-lite";
     attempts.push({ providerName: "google", model: gModel,
-      call: (photo: Photo) => callProvider({ providerName: "google", providerKey: gKey, model: gModel }, PROMPT, photo) });
+      call: (photo: Photo) => callProvider({ providerName: "google", providerKey: gKey, model: gModel }, prompt, photo) });
   }
 
   // Pre-flight: if the monthly cap is already reached, claim nothing and report a visible state.
@@ -395,7 +404,16 @@ async function work(req:Request) {
 
   const gate = createRateLimitGate(() => Date.now());
   const deps: Deps = {
-    config: { providerName, model, rates, reserveUsd, dailyLimitUsd: dailyLimit, monthlyLimitUsd: lastBudget.limitUsd ?? 0 },
+    config: { providerName, model, rates, reserveUsd, dailyLimitUsd: dailyLimit, monthlyLimitUsd: lastBudget.limitUsd ?? 0, serialEnabled },
+    // Serial path only (flag on). The RPC stores the reading append-only and compares it with the register
+    // through the shared tyre-position service. It never writes tyre_records, fitments or history.
+    ...(serialEnabled ? { recordSerial: async (job: JobRow, reading: SerialReading): Promise<SerialComparison | null> => {
+      const { data, error } = await admin.rpc("ai_tyre_serial_record", { p_job: job.id, p_reading: reading });
+      if (error || !data || (data as Json).ok !== true) return null;
+      const d = data as Json;
+      return { outcome: String(d.outcome) as SerialOutcome, reason: String(d.reason ?? ""),
+        needsReview: d.needs_review === true, registered: null };
+    } } : {}),
     ratesFor: (name, m) => (name === providerName && m === model ? rates : resolveRates(name, m, () => undefined)),
     loadPrevious: async (job) => {
       if (!job.inspection_id || !job.tyre_position) return null;

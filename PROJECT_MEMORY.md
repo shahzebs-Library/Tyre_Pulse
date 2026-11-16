@@ -5,6 +5,12 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ 2026-11-16 06:38 UTC — TEN-9f APPLIED TO PRODUCTION (owner approved, limited security fix). Migration `20261116063833 ten9f_login_lockout_per_account` (from PR #548 commit 6d1be4e9, file md5 973ed89a...). Nothing else applied.
+- Installed md5: _login_attempt_key 0e70a58e, login_attempt_status ca2a4834, record_login_failure acb3e295, reset_login_attempts 6224b664, _login_lock_admin_ok 747373f1, admin_login_lock_status 03513178, admin_clear_login_lock a43074e6. Rollback: 20261116100000_..._ROLLBACK.sql on #548 (restores bda4f978/c8a5b4a4/32867f65).
+- Verified on production in a rolled-back transaction, demo.manager only: all spellings share one counter, 5th failure locks 15 min, real and unknown names answer identically, Manager/anon unlock refused, super admin unlock needs reason and is audited, reset clears. Baseline identical after (counters md5 54140f42, access_audit 4330, tyre_records 11267/28191879, bridge index, single_tenant_mode=true). Same-company Admin unlock tested on staging only (no plain Admin exists in production; owner forbade a role change).
+- NOT a fix for direct calls to /auth/v1/token (Supabase limit 1800/h per IP). CAPTCHA, rate-limit change, sign-in fn deploy, username-lookup change all need separate owner approval. Web Turnstile widget exists (off); Flutter has no CAPTCHA yet.
+- The 18 legacy text-keyed rows (3 for demo, newest 2026-11-08) are inert and age out via the 30-minute purge.
+
 # ⚑ 2026-11-16 — #547 MERGED + LIVE; TEN-9f ISOLATED (PR #548); APPROVAL PACKAGE. NO PRODUCTION DB CHANGE.
 - #547 (= #543+#544+#545) squash-merged `ebe77220`, production READY on that sha. #543/#544/#545 closed as superseded.
 - TEN-9f standalone on PR #548 (branch claude/ten9f-lockout-7rxp2t): `20261116100000_ten9f_login_lockout_per_account.sql` (+ROLLBACK).

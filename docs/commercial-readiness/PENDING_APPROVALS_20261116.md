@@ -1,5 +1,7 @@
 # Pending production approvals (2026-11-16)
 
+> SUPERSEDED 2026-11-16 by `COMPLETION_DASHBOARD.md` (TEN-9f below is now applied).
+
 Nothing below is applied. Each item needs the owner's explicit approval. Order = recommended order.
 
 ## 1. TEN-9f sign-in lockout per account (live gap inside our own sign-in flow; not complete auth protection, see package)

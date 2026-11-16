@@ -49,8 +49,7 @@ if echo "$after" | grep -q '^FAIL'; then echo "assertions failed"; exit 1; fi
 [ "$(echo "$after" | grep -c '^PASS')" -eq 4 ] || { echo "expected 4 PASS lines"; exit 1; }
 
 new_md5="$(keys_md5)"
-# The migration is NOT idempotent: a second run stops on "already exists". It runs in one
-# transaction, so the failed re-run must leave the key exactly as it was.
+# The migration drops and re-adds its own constraint, so a second run is a no-op.
 if rerun="$(q -f "$MIG" 2>&1)"; then
   echo "re-run succeeded (migration became idempotent)"
 else

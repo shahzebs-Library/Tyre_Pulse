@@ -5,6 +5,7 @@
 import { supabase, unwrap, applyCountry, ServiceError, fetchAllPages, fetchAllRpcPages } from './_client'
 import { toUserMessage } from '../safeError'
 import { growthPct } from '../commandCenter'
+import { firstForCallerCompany } from './companyScope'
 
 // Fleet Master extras (type list, bulk edit, last service, PM due, utilisation)
 // live in their own module and are re-exported so the page reaches them
@@ -32,7 +33,7 @@ export {
 // EXPORTED so callers reuse this ONE list rather than drifting from it.
 export const COLS =
   'id,asset_no,fleet_number,make,model,vehicle_type,year,registration_no,chassis_no,serial_no,site,country,status,is_active,'
-  + 'department,operator_name,current_km,tyre_size,capacity,engine_no,ops_status,ops_status_note,ops_status_at,created_at'
+  + 'department,operator_name,current_km,tyre_size,capacity,engine_no,ops_status,ops_status_note,ops_status_at,created_at,organisation_id'
 
 /**
  * List fleet assets, newest first. Country-scoped (null-safe) and optionally
@@ -139,8 +140,13 @@ export async function getAssetMatches(assetNo, country) {
         .limit(20),
     ) || []
   const scoped = country && country !== 'All' ? rows.filter((r) => r.country === country) : rows
+  // The same code can also exist in ANOTHER COMPANY (identity is per company),
+  // and a super admin's read spans companies: the caller's company wins; a
+  // code held by one company only resolves to it; two other companies' rows
+  // are never picked between on the reader's behalf.
+  const row = await firstForCallerCompany(scoped)
   return {
-    row: scoped[0] || null,
+    row,
     rows,
     countries: [...new Set(rows.map((r) => r.country).filter(Boolean))],
     ambiguous: rows.length > 1,
@@ -269,11 +275,16 @@ export async function getFleetSummary({ country, search, site, type } = {}) {
 }
 
 export async function saveFleetRecord(payload, id) {
+  // The update asks for the changed id back: row security refuses an update by
+  // matching zero rows without raising, which used to read as a successful save.
   const q = id
-    ? supabase.from('vehicle_fleet').update(payload).eq('id', id)
+    ? supabase.from('vehicle_fleet').update(payload).eq('id', id).select('id')
     : supabase.from('vehicle_fleet').insert(payload)
-  const { error } = await q
+  const { data, error } = await q
   if (error) throw new ServiceError(toUserMessage(error), error.code, error)
+  if (id && (!Array.isArray(data) || data.length === 0)) {
+    throw new ServiceError('This vehicle was not updated. You do not have permission to change the fleet register, or the vehicle no longer exists.')
+  }
 }
 
 export async function deleteFleetRecord(id) {

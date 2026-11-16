@@ -99,10 +99,16 @@ describe('service layer - settings', () => {
     expect(h.state.last._calls.eq).toContainEqual(['id', 'u1'])
   })
 
-  it('upsertKpiTargets upserts with the composite conflict target', async () => {
-    await settings.upsertKpiTargets([{ metric: 'cpk' }])
+  // CHANGED 2026-11-12 (MODC-03): this used to pin the upsert conflict target
+  // (metric,year,month,site), which can never match a target saved with blank
+  // month and site. Settings now saves through the one KPI target writer.
+  it('upsertKpiTargets saves through the KPI target writer, not an upsert', async () => {
+    h.state.result = { data: [{ id: 'k1', metric: 'cpk', year: 2026, month: null, site: null, country: 'KSA' }], error: null }
+    const res = await settings.upsertKpiTargets([{ metric: 'cpk', year: 2026, target_value: 1 }])
+    expect(res.error).toBeNull()
     expect(h.state.last._table).toBe('kpi_targets')
-    expect(h.state.last._calls.upsertOpts).toEqual({ onConflict: 'metric,year,month,site' })
+    expect(h.state.last._calls.upsert).toBeUndefined()
+    expect(h.state.last._calls.update).toMatchObject({ target_value: 1 })
   })
 
   it('listReportSchedules selects the section columns, oldest first', async () => {

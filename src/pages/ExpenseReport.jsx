@@ -51,7 +51,7 @@ import { getExpenseBySite, setStoreSiteMap, listSites } from '../lib/api/storeSi
 import { getFleetCpk } from '../lib/api/fleetCpk'
 import {
   fmtCpkValue, fmtDistance, fmtMoney as fmtCpkMoney, fmtCoverage, unitSuffix,
-  sortByTypeWorstFirst, fleetTiles,
+  sortByTypeWorstFirst, fleetTiles, tileCells, tileBasis,
 } from '../lib/fleetCpkView'
 import { stylize, ACCENTS } from '../lib/reportColors'
 import PresentationStudio from '../components/present/PresentationStudio'
@@ -79,7 +79,7 @@ const LS_KEY = 'expenseReport.sections.v1'
 const SECTIONS = [
   ['kpis', 'KPIs', Wallet],
   ['compare', 'vs Last Period', ArrowRight],
-  ['cpk', 'Cost per km', Gauge],
+  ['cpk', 'Cost per vehicle km', Gauge],
   ['why', 'Why It Changed', Sparkles],
   ['movers', 'What Moved', TrendingUp],
   ['categories', 'Categories', PieChart],
@@ -589,19 +589,20 @@ export function buildStudioCatalog({
   // Fleet CPK (cost per km / per engine-hour) by vehicle type - split by unit so
   // a km-rate and an hour-rate never share one axis. Rates keep their decimals.
   const byType = Array.isArray(fleetCpk?.byType) ? fleetCpk.byType : []
-  const kmRows = byType.filter((r) => r.unit === 'km' && r.cpk_total != null)
-    .map((r) => ({ label: r.vehicle_type || 'N/A', value: Number(r.cpk_total) || 0 }))
+  // km side: the tyre spend ratio (cpk_tyre). A total over tyre km is withheld (ENG-1).
+  const kmRows = byType.filter((r) => r.unit === 'km' && r.cpk_tyre != null)
+    .map((r) => ({ label: r.vehicle_type || 'N/A', value: Number(r.cpk_tyre) || 0 }))
   const hrRows = byType.filter((r) => r.unit === 'engine_hours' && r.cpk_total != null)
     .map((r) => ({ label: r.vehicle_type || 'N/A', value: Number(r.cpk_total) || 0 }))
-  if (kmRows.length) out.push({ key: 'cpk_km', label: 'CPK per km by type', kind: 'flat', valueKind: 'rate', unitLabel: `${activeCurrency}/km`, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}/km`, rows: kmRows })
-  if (hrRows.length) out.push({ key: 'cpk_hr', label: 'Cost per hour by type', kind: 'flat', valueKind: 'rate', unitLabel: `${activeCurrency}/hr`, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}/hr`, rows: hrRows })
+  if (kmRows.length) out.push({ key: 'cpk_km', label: 'Tyre spend ratio by type (per tyre km)', kind: 'flat', valueKind: 'rate', unitLabel: `${activeCurrency} per tyre km`, format: (v) => `${activeCurrency} ${Number(v).toFixed(4)} per tyre km`, rows: kmRows })
+  if (hrRows.length) out.push({ key: 'cpk_hr', label: 'Operating cost per engine hour by type', kind: 'flat', valueKind: 'rate', unitLabel: `${activeCurrency}/hr`, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}/hr`, rows: hrRows })
 
   // Overall fleet CPK (one bar per unit) from the fleet-level tiles.
   const tiles = fleetTiles(fleetCpk?.fleet)
   const cpkOverall = tiles
-    .filter((t) => t.cpkTotal != null)
-    .map((t) => ({ label: t.unit === 'engine_hours' ? 'Cost per engine-hour' : 'Cost per km', value: Number(t.cpkTotal) || 0 }))
-  if (cpkOverall.length) out.push({ key: 'cpk_overall', label: 'Overall CPK', kind: 'flat', valueKind: 'rate', unitLabel: activeCurrency, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}`, rows: cpkOverall })
+    .filter((t) => t.rate != null)
+    .map((t) => ({ label: t.rateLabel, value: Number(t.rate) || 0 }))
+  if (cpkOverall.length) out.push({ key: 'cpk_overall', label: 'Tyre spend ratio and cost per engine hour', kind: 'flat', valueKind: 'rate', unitLabel: activeCurrency, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}`, rows: cpkOverall })
 
   // Tyre quantity + tyre CPK by site (from the loaded tyre records).
   if (tyreAgg) {
@@ -997,7 +998,7 @@ export default function ExpenseReport() {
       meta: { align: 'right', exportValue: (r) => r[id] ?? '' },
       cell: ({ row }) => <span className="tabular-nums">{fmtCpkMoney(row.original[id], row.original.currency)}</span>,
     })),
-    ...[['cpk_tyre', 'CPK Tyre'], ['cpk_total', 'CPK Total']].map(([id, header]) => ({
+    ...[['cpk_tyre', 'Tyre spend ratio (per tyre km) or tyre cost per hour'], ['cpk_total', 'Operating cost per hour (hour assets)']].map(([id, header]) => ({
       id, header, accessorFn: (r) => r[id], size: 150, sortingFn: nullLastSort,
       meta: { align: 'right', exportValue: (r) => r[id] ?? '' },
       cell: ({ row }) => (
@@ -1661,7 +1662,7 @@ export default function ExpenseReport() {
               <div className="flex items-start gap-2">
                 <Gauge size={15} className="text-[var(--accent)] mt-0.5 shrink-0" />
                 <div>
-                  <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)]">Fleet CPK (cost per km / hour)</h2>
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)]">Tyre spend ratio and cost per engine hour</h2>
                   <p className="text-xs text-[var(--text-tertiary)]">
                     Km for road assets, engine-hours for plant (generators, pumps, loaders). Currency stays per country.
                     {' '}Window: {cpkFrom} to {cpkTo}{!from && !to ? ' (last 365 days)' : ''}
@@ -1692,9 +1693,9 @@ export default function ExpenseReport() {
                   style={{ paddingTop: 'var(--space-8)', paddingBottom: 'var(--space-8)' }}
                 >
                   <Gauge size={26} className="text-[var(--text-muted)]" />
-                  <p className="text-[var(--text-secondary)] text-sm font-medium">No CPK data for the selected filters</p>
+                  <p className="text-[var(--text-secondary)] text-sm font-medium">No tyre spend ratio or cost per engine hour for the selected filters</p>
                   <p className="text-[var(--text-tertiary)] text-xs max-w-md">
-                    CPK needs measured distance (odometer) or engine-hours plus expense data in this window.
+                    These figures need tyre km (from tyre changes) or engine hours, plus expense data in this window.
                   </p>
                 </Card>
               ) : (
@@ -1709,28 +1710,23 @@ export default function ExpenseReport() {
                             <div className="flex items-center gap-1.5 min-w-0">
                               {isHours ? <Clock size={14} className="text-amber-400 shrink-0" /> : <Gauge size={14} className="text-[var(--accent)] shrink-0" />}
                               <span className="text-xs text-[var(--text-secondary)] font-medium truncate">
-                                {t.country || 'Fleet'} - {isHours ? 'per hour' : 'per km'}
+                                {t.country || 'Fleet'} - {isHours ? 'per engine hour' : 'per tyre km'}
                               </span>
                             </div>
                             <span className="text-[10px] text-[var(--text-muted)] uppercase">{t.currency}</span>
                           </div>
                           <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <p className="text-[10px] text-[var(--text-muted)]">Total CPK</p>
-                              <p className="text-base font-bold text-[var(--text-primary)] leading-tight">
-                                {fmtCpkValue(t.cpkTotal, t.currency, t.unit)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] text-[var(--text-muted)]">Tyre CPK</p>
-                              <p className="text-base font-bold text-[var(--text-secondary)] leading-tight">
-                                {fmtCpkValue(t.cpkTyre, t.currency, t.unit)}
-                              </p>
-                            </div>
+                            {tileCells(t).map((c) => (
+                              <div key={c.label}>
+                                <p className="text-[10px] text-[var(--text-muted)]">{c.label}</p>
+                                <p className={`text-base font-bold leading-tight ${c.primary ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>{c.value}</p>
+                              </div>
+                            ))}
                           </div>
                           <p className="text-[10px] text-[var(--text-muted)]">
-                            {fmtDistance(t.distance, t.unit)} measured | Coverage {fmtCoverage(t.coveragePct)}
+                            {isHours ? fmtDistance(t.distance, t.unit) : fmtDistance(t.distance, t.unit).replace(/ km$/, ' tyre km')} measured | Coverage {fmtCoverage(t.coveragePct)}
                           </p>
+                          <p className="text-[10px] text-[var(--text-muted)]">{tileBasis(t)}</p>
                         </Card>
                       )
                     })}
@@ -1741,7 +1737,7 @@ export default function ExpenseReport() {
                     <div className="text-xs text-[var(--text-muted)] space-y-1">
                       {(fleetCpk.fleet || []).filter((f) => Number(f?.unregistered_cost) > 0).map((f, i) => (
                         <p key={i}>
-                          {f.country}: {fmtCpkMoney(f.unregistered_cost, f.currency || f.country)} of spend sits on assets not in the fleet register, so it is excluded from per-asset CPK.
+                          {f.country}: {fmtCpkMoney(f.unregistered_cost, f.currency || f.country)} of spend sits on assets not in the fleet register, so it is left out of the per-asset figures.
                         </p>
                       ))}
                     </div>
@@ -1750,11 +1746,11 @@ export default function ExpenseReport() {
                   {/* By asset type (worst CPK first) */}
                   <Card className="overflow-x-auto">
                     <CardHeader
-                      title="CPK by asset type"
+                      title="Tyre spend ratio and cost per engine hour by asset type"
                       level={3}
                       icon={Layers}
                       actions={(
-                        <span className="text-xs text-[var(--text-muted)]">{cpkByType.length} types | worst CPK first</span>
+                        <span className="text-xs text-[var(--text-muted)]">{cpkByType.length} types | highest rate first</span>
                       )}
                     />
                     <p className="text-xs text-[var(--text-muted)] mb-2">

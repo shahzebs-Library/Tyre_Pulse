@@ -96,6 +96,7 @@ class _FakeFleetSource implements VehicleFleetSource {
   Future<Map<String, dynamic>?> fetchByAssetNo({
     required String assetNo,
     required String? country,
+    String? organisationId,
   }) async =>
       <String, dynamic>{
         'id': 'v1',

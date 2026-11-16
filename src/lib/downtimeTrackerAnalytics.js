@@ -10,11 +10,28 @@
  *    no vehicles in scope (the old code floored the vehicle count at 1);
  *  - MTBE (mean hours between events) is null, not 0, when no vehicle has two
  *    events;
- *  - downtime hours are ACTUAL where a work order carries opened/completed
- *    timestamps, otherwise an ESTIMATE per severity, and every row says which.
+ *  - MEASURED and ASSUMED are never added into one figure that reads as
+ *    measured (ENG-7, 2026-11-12). Hours are MEASURED only from job cards with
+ *    two plausible timestamps (see workOrderHours). A tyre event on an asset
+ *    with no such job card has NO measured hours; it carries an ASSUMED figure
+ *    (severity table below, 2 hours when unrated) that is reported separately
+ *    and always named "assumed";
+ *  - `totalHours`, `availability` and `totalCost` are measured-only and null
+ *    (N/A) when they cannot be measured. The assumed model is exposed as
+ *    `modelledHours`, `availabilityAssumed`, `modelledCost`;
+ *  - there is NO default hourly downtime rate. A flat 850 with no currency was
+ *    applied to SAR, AED and EGP alike. Cost is null until the tenant sets a
+ *    rate (settings key downtime_rate), and is then in the page currency.
  */
 
-export const DEFAULT_DOWNTIME_RATE = 850
+/** @deprecated No default rate is applied any more (ENG-7). Kept as null for old imports. */
+export const DEFAULT_DOWNTIME_RATE = null
+/** Hours ASSUMED for a tyre event with no measured job card, by risk rating. An assumption, never a measurement. */
+export const ASSUMED_EVENT_HOURS = 2
+/** A job card longer than this is a data error (corrupt import dates), not downtime. */
+export const MAX_MEASURED_HOURS = 720
+/** Job card dates before this year are import artefacts (two digit years, 1900 blanks). */
+export const MIN_PLAUSIBLE_YEAR = 2000
 export const SHIFT_HOURS = 8
 export const TARGET_AVAILABILITY = 95
 export const SEVERITY_HOURS = { Critical: 4, High: 3, Medium: 2, Low: 2 }
@@ -63,18 +80,39 @@ export function last12Months(now) {
   return out
 }
 
-/** Actual downtime hours from a work order, or null. */
-export function workOrderHours(wo) {
+/**
+ * MEASURED downtime hours from a work order, or null.
+ *
+ * Only a job card with two PLAUSIBLE timestamps measures anything. Live KSA
+ * job cards (2026-11-12): 10,790 opened before 1990 (two digit year import),
+ * 977 completed before opened, 1,025 longer than a year, 364 opened in the
+ * future. One such card used to make an asset's "actual" downtime thousands of
+ * hours, and that average was then applied to every tyre event on the asset.
+ * Rejected here: a date before MIN_PLAUSIBLE_YEAR, a date after `now` (when a
+ * clock is supplied), completed at or before opened, a span over
+ * MAX_MEASURED_HOURS.
+ * @param {object} wo
+ * @param {{ now?: Date|number }} [opts]
+ */
+export function workOrderHours(wo, { now } = {}) {
   if (!wo || !wo.opened_at || !wo.completed_at) return null
-  const h = (new Date(wo.completed_at) - new Date(wo.opened_at)) / 3600000
-  return Number.isFinite(h) && h > 0 ? h : null
+  const a = new Date(wo.opened_at)
+  const b = new Date(wo.completed_at)
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null
+  if (a.getUTCFullYear() < MIN_PLAUSIBLE_YEAR || b.getUTCFullYear() < MIN_PLAUSIBLE_YEAR) return null
+  if (now != null) {
+    const n = toMs(now)
+    if (Number.isFinite(n) && (a.getTime() > n || b.getTime() > n)) return null
+  }
+  const h = (b - a) / 3600000
+  return Number.isFinite(h) && h > 0 && h <= MAX_MEASURED_HOURS ? h : null
 }
 
 /** asset_no -> average ACTUAL hours from work orders carrying both timestamps. */
-export function actualHoursByAsset(workOrders = []) {
+export function actualHoursByAsset(workOrders = [], opts = {}) {
   const acc = new Map()
   for (const wo of workOrders) {
-    const h = workOrderHours(wo)
+    const h = workOrderHours(wo, opts)
     if (h == null || !wo.asset_no) continue
     const cur = acc.get(wo.asset_no) || { sum: 0, n: 0 }
     cur.sum += h; cur.n += 1
@@ -85,15 +123,29 @@ export function actualHoursByAsset(workOrders = []) {
   return out
 }
 
+/**
+ * Downtime of one tyre event.
+ *   hours        MEASURED hours (asset's mean job card duration), or null
+ *   actual       true when measured
+ *   assumedHours the ASSUMPTION for an unmeasured event, else null
+ *   modelHours   hours ?? assumedHours: for charts that are labelled as a model
+ * `hours` is never an assumption (audit case C28b).
+ */
 export function downtimeHours(record, actualByAsset) {
   const actual = actualByAsset && record?.asset_no ? actualByAsset.get(record.asset_no) : undefined
-  if (actual != null) return { hours: actual, actual: true }
-  return { hours: SEVERITY_HOURS[record?.risk_level] ?? 2, actual: false }
+  if (actual != null) return { hours: actual, actual: true, assumedHours: null, modelHours: actual }
+  const assumed = SEVERITY_HOURS[record?.risk_level] ?? ASSUMED_EVENT_HOURS
+  return { hours: null, actual: false, assumedHours: assumed, modelHours: assumed }
 }
+
+/** The removal reason text of a tyre row. The populated column is `removal_reason`. */
+export const removalReasonOf = (record) => String(record?.removal_reason ?? record?.reason_for_removal ?? '')
 
 export function causeLabel(record) {
   const rl = record?.risk_level
-  const rfr = String(record?.reason_for_removal || '').toLowerCase()
+  // ENG-7: the page used to read `reason_for_removal`, filled on 0 rows, so the
+  // cause could only be Unknown or Routine. The populated column is removal_reason.
+  const rfr = removalReasonOf(record).toLowerCase()
   if (rl === 'Critical') return 'Critical Failure'
   if (rfr.includes('pressure') || rfr.includes('blow') || rfr.includes('burst')) return 'Pressure Issue'
   if (rl === 'High') return 'Wear-Related'
@@ -114,7 +166,7 @@ export function filterEvents(records = [], { cutoff = null, site = '', country =
     if (risk === 'unrated' ? !!r.risk_level : risk && r.risk_level !== risk) return false
     if (cause && causeLabel(r) !== cause) return false
     if (q) {
-      const hay = `${r.asset_no || ''} ${r.serial_number || ''} ${r.brand || ''} ${r.reason_for_removal || ''} ${r.site || ''}`.toLowerCase()
+      const hay = `${r.asset_no || ''} ${r.serial_number || ''} ${r.brand || ''} ${removalReasonOf(r)} ${r.site || ''}`.toLowerCase()
       if (!hay.includes(q)) return false
     }
     return true
@@ -137,19 +189,33 @@ export function periodDays(events, cutoff, now) {
   return Math.max(1, Math.ceil((new Date(dates[dates.length - 1]) - new Date(dates[0])) / DAY) + 1)
 }
 
-export function downtimeKpis(events = [], { cutoff = null, now, actualByAsset = new Map(), rate = DEFAULT_DOWNTIME_RATE } = {}) {
-  let totalHours = 0; let actualEvents = 0
+/**
+ * Headline figures. MEASURED and ASSUMED are separate (see file header).
+ * @param {object} opts
+ * @param {number|null} [opts.rate] the tenant's hourly downtime rate in the page
+ *   currency, or null when none is configured (cost is then null, N/A).
+ */
+export function downtimeKpis(events = [], { cutoff = null, now, actualByAsset = new Map(), rate = null } = {}) {
+  let measured = 0; let assumed = 0; let actualEvents = 0
   for (const r of events) {
     const d = downtimeHours(r, actualByAsset)
-    totalHours += d.hours
-    if (d.actual) actualEvents += 1
+    if (d.actual) { measured += d.hours; actualEvents += 1 } else { assumed += d.assumedHours }
   }
+  const unmeasuredEvents = events.length - actualEvents
+  // Measured hours exist only when at least one event was measured.
+  const totalHours = actualEvents > 0 ? measured : null
+  const modelledHours = measured + assumed
   const vehicles = new Set(events.map((r) => r.asset_no).filter(Boolean)).size
   const days = periodDays(events, cutoff, now)
   const vehicleDays = vehicles * days
-  const availability = vehicleDays > 0
-    ? Math.max(0, Math.min(100, ((vehicleDays - totalHours / SHIFT_HOURS) / vehicleDays) * 100))
-    : null
+  const avail = (h) => (vehicleDays > 0
+    ? Math.max(0, Math.min(100, ((vehicleDays - h / SHIFT_HOURS) / vehicleDays) * 100))
+    : null)
+  // Availability is MEASURED only when every event in view has measured hours.
+  // With any assumed event the figure is a model and is reported as such.
+  const availability = events.length > 0 && unmeasuredEvents === 0 ? avail(measured) : null
+  const availabilityAssumed = avail(modelledHours)
+  const hasRate = Number.isFinite(Number(rate)) && Number(rate) > 0
 
   const byVehicle = new Map()
   for (const r of events) {
@@ -168,10 +234,20 @@ export function downtimeKpis(events = [], { cutoff = null, now, actualByAsset = 
   const unplanned = events.filter(isUnplanned).length
   return {
     totalEvents: events.length,
+    // measured only; null when nothing was measured
     totalHours,
-    downDays: totalHours / SHIFT_HOURS,
-    totalCost: totalHours * rate,
+    measuredHours: totalHours,
+    downDays: totalHours == null ? null : totalHours / SHIFT_HOURS,
+    totalCost: hasRate && totalHours != null ? totalHours * Number(rate) : null,
     availability,
+    // the assumed model, always labelled assumed on screen and in exports
+    assumedHours: assumed,
+    modelledHours,
+    modelledDownDays: modelledHours / SHIFT_HOURS,
+    modelledCost: hasRate ? modelledHours * Number(rate) : null,
+    availabilityAssumed,
+    unmeasuredEvents,
+    rateConfigured: hasRate,
     mtbeHours: gapN ? gapSum / gapN : null,
     uniqueVehicles: vehicles,
     unplannedEvents: unplanned,
@@ -182,7 +258,11 @@ export function downtimeKpis(events = [], { cutoff = null, now, actualByAsset = 
   }
 }
 
-/** 12-month availability series; null per month when there are no vehicles. */
+/**
+ * 12-month availability series; null per month when there are no vehicles.
+ * A MODEL: it includes assumed hours for events with no measured job card, so
+ * the chart that draws it must say "includes assumed hours".
+ */
 export function availabilityTrend(records = [], { now, actualByAsset = new Map() } = {}) {
   const months = last12Months(now)
   const vehicles = new Set(records.map((r) => r.asset_no).filter(Boolean)).size
@@ -191,7 +271,7 @@ export function availabilityTrend(records = [], { now, actualByAsset = new Map()
     const [y, m] = ym.split('-')
     const days = new Date(+y, +m, 0).getDate()
     const hours = records.filter((r) => yearMonth(r.issue_date) === ym)
-      .reduce((s, r) => s + downtimeHours(r, actualByAsset).hours, 0)
+      .reduce((s, r) => s + downtimeHours(r, actualByAsset).modelHours, 0)
     const vd = vehicles * days
     return Math.max(0, Math.min(100, ((vd - hours / SHIFT_HOURS) / vd) * 100))
   })
@@ -203,7 +283,8 @@ export function siteBreakdown(events = [], { actualByAsset = new Map(), limit = 
   for (const r of events) {
     const s = r.site || 'Unknown'
     const cur = map.get(s) || { site: s, planned: 0, unplanned: 0 }
-    const h = downtimeHours(r, actualByAsset).hours
+    // model hours (measured where a job card exists, otherwise assumed)
+    const h = downtimeHours(r, actualByAsset).modelHours
     if (isUnplanned(r)) cur.unplanned += h; else cur.planned += h
     map.set(s, cur)
   }
@@ -220,14 +301,18 @@ export function causeBreakdown(events = []) {
   return CAUSES.filter((c) => map.has(c)).map((c) => ({ cause: c, count: map.get(c) }))
 }
 
-export function monthlyCost(events = [], { now, actualByAsset = new Map(), rate = DEFAULT_DOWNTIME_RATE } = {}) {
+export function monthlyCost(events = [], { now, actualByAsset = new Map(), rate = null } = {}) {
   const months = last12Months(now)
+  // No configured rate, no cost series (never a default rate with no currency).
+  if (!(Number.isFinite(Number(rate)) && Number(rate) > 0)) {
+    return months.map((ym) => ({ month: ym, planned: null, unplanned: null, cumulative: null }))
+  }
   let cum = 0
   const rows = months.map((ym) => {
     let planned = 0; let unplanned = 0
     for (const r of events) {
       if (yearMonth(r.issue_date) !== ym) continue
-      const cost = downtimeHours(r, actualByAsset).hours * rate
+      const cost = downtimeHours(r, actualByAsset).modelHours * rate
       if (isUnplanned(r)) unplanned += cost; else planned += cost
     }
     cum += planned + unplanned
@@ -237,15 +322,17 @@ export function monthlyCost(events = [], { now, actualByAsset = new Map(), rate 
 }
 
 /** One row per vehicle, ALL vehicles (the table sorts and pages them). */
-export function vehicleRows(events = [], { cutoff = null, now, actualByAsset = new Map(), rate = DEFAULT_DOWNTIME_RATE } = {}) {
+export function vehicleRows(events = [], { cutoff = null, now, actualByAsset = new Map(), rate = null } = {}) {
+  const hasRate = Number.isFinite(Number(rate)) && Number(rate) > 0
   const map = new Map()
   for (const r of events) {
     if (!r.asset_no) continue
-    const cur = map.get(r.asset_no) || { asset: r.asset_no, site: r.site || 'N/A', dates: [], totalHours: 0, totalCost: 0, severitySum: 0, actual: 0 }
+    const cur = map.get(r.asset_no) || { asset: r.asset_no, site: r.site || 'N/A', dates: [], totalHours: 0, measuredHours: 0, assumedHours: 0, severitySum: 0, actual: 0 }
     const d = downtimeHours(r, actualByAsset)
     cur.dates.push(r.issue_date)
-    cur.totalHours += d.hours
-    cur.totalCost += d.hours * rate
+    // totalHours is the MODEL (measured + assumed); `basis` says which it is.
+    cur.totalHours += d.modelHours
+    if (d.actual) cur.measuredHours += d.hours; else cur.assumedHours += d.assumedHours
     cur.severitySum += SEVERITY_WEIGHT[r.risk_level] ?? 1
     if (d.actual) cur.actual += 1
     map.set(r.asset_no, cur)
@@ -265,10 +352,12 @@ export function vehicleRows(events = [], { cutoff = null, now, actualByAsset = n
       site: v.site,
       eventCount: v.dates.length,
       totalHours: v.totalHours,
-      totalCost: v.totalCost,
+      measuredHours: v.actual > 0 ? v.measuredHours : null,
+      assumedHours: v.assumedHours,
+      totalCost: hasRate ? v.totalHours * Number(rate) : null,
       avgBetween,
       riskScore: Math.round((v.severitySum / months) * 100) / 100,
-      basis: v.actual === v.dates.length ? 'Actual' : v.actual ? 'Mixed' : 'Estimated',
+      basis: v.actual === v.dates.length ? 'Measured' : v.actual ? 'Part assumed' : 'Assumed',
     }
   })
   const avgEvents = rows.length ? rows.reduce((s, r) => s + r.eventCount, 0) / rows.length : 0
@@ -285,7 +374,7 @@ export function heatmap(events = [], { now, actualByAsset = new Map(), limit = 1
     const ym = yearMonth(r.issue_date)
     if (!ym || !months.includes(ym)) continue
     const k = `${r.asset_no}::${ym}`
-    cells.set(k, (cells.get(k) || 0) + downtimeHours(r, actualByAsset).hours)
+    cells.set(k, (cells.get(k) || 0) + downtimeHours(r, actualByAsset).modelHours)
   }
   const assets = [...new Set(events.map((r) => r.asset_no).filter(Boolean))]
   const rows = assets
@@ -326,20 +415,23 @@ export function recommendations(events = [], vehicles = [], kpis = {}) {
   return recs
 }
 
-export const EVENT_EXPORT_HEADERS = ['Asset No', 'Site', 'Country', 'Risk Level', 'Issue Date', 'Reason for Removal', 'Brand', 'Position', 'Downtime Hours', 'Downtime Cost', 'Cause', 'Data Source']
-export const EVENT_EXPORT_KEYS = ['asset_no', 'site', 'country', 'risk_level', 'issue_date', 'reason_for_removal', 'brand', 'position', 'downtime_hours', 'downtime_cost', 'cause', 'data_source']
+export const EVENT_EXPORT_HEADERS = ['Asset No', 'Site', 'Country', 'Risk Level', 'Issue Date', 'Reason for Removal', 'Brand', 'Position', 'Measured Downtime Hours', 'Assumed Downtime Hours', 'Downtime Cost', 'Cause', 'Hours Basis']
+export const EVENT_EXPORT_KEYS = ['asset_no', 'site', 'country', 'risk_level', 'issue_date', 'reason_for_removal', 'brand', 'position', 'downtime_hours', 'assumed_hours', 'downtime_cost', 'cause', 'data_source']
 
-export function eventExportRows(events = [], { actualByAsset = new Map(), rate = DEFAULT_DOWNTIME_RATE } = {}) {
+export function eventExportRows(events = [], { actualByAsset = new Map(), rate = null } = {}) {
+  const hasRate = Number.isFinite(Number(rate)) && Number(rate) > 0
   return events.map((r) => {
     const d = downtimeHours(r, actualByAsset)
     return {
       asset_no: r.asset_no || '', site: r.site || '', country: r.country || '',
       risk_level: r.risk_level || 'Not rated', issue_date: r.issue_date || '',
-      reason_for_removal: r.reason_for_removal || '', brand: r.brand || '', position: r.position || '',
-      downtime_hours: Math.round(d.hours * 100) / 100,
-      downtime_cost: Math.round(d.hours * rate * 100) / 100,
+      reason_for_removal: removalReasonOf(r), brand: r.brand || '', position: r.position || '',
+      // measured and assumed sit in separate columns; neither is ever a blank zero
+      downtime_hours: d.actual ? Math.round(d.hours * 100) / 100 : 'N/A',
+      assumed_hours: d.actual ? 'N/A' : d.assumedHours,
+      downtime_cost: hasRate ? Math.round(d.modelHours * Number(rate) * 100) / 100 : 'N/A',
       cause: causeLabel(r),
-      data_source: d.actual ? 'Actual (work order)' : 'Estimated (severity)',
+      data_source: d.actual ? 'Measured (job card timestamps, asset average)' : 'Assumed (no job card with valid timestamps)',
     }
   })
 }

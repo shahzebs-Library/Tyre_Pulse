@@ -12,6 +12,9 @@
  */
 
 /** Country -> currency. Mirrors SettingsContext.COUNTRY_CURRENCY. */
+import { rowRate } from './cpkMetrics'
+import { fitmentKm } from './tyreLifetime'
+
 export const EXPENSE_COUNTRY_CURRENCY = Object.freeze({ KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' })
 
 /** Currency for one country, falling back to `fallback` for anything unmapped. */
@@ -73,10 +76,15 @@ export function aggregateTyres(rows = [], fromISO = '', toISO = '') {
     if (/^\d{4}-\d{2}$/.test(mk)) month.set(mk, (month.get(mk) || 0) + qty)
     const unitCost = Number(r.cost_per_tyre) || 0
     const cost = unitCost * qty
-    const km = Number(r.total_km) || 0
+    // ENG-11: km by the single tyreKm rule (placeholder fitment odometer -> unknown,
+    // over the class cap -> unknown), never the raw total_km, which on a
+    // placeholder row is the MACHINE odometer. Cost and km both carry the
+    // quantity so a weak-serial row of several tyres is not priced several
+    // times over one tyre's distance.
+    const km = fitmentKm(r) || 0
     if (km > 0 && cost > 0) {
       siteCost.set(s, (siteCost.get(s) || 0) + cost)
-      siteKm.set(s, (siteKm.get(s) || 0) + km)
+      siteKm.set(s, (siteKm.get(s) || 0) + km * qty)
     }
     if (unitCost > 0) {
       brandCost.set(b, (brandCost.get(b) || 0) + cost)
@@ -262,15 +270,23 @@ export function cpkTypeRows(rows = []) {
     tyre_cost: finite(r?.tyre_cost),
     total_cost: finite(r?.total_cost),
     cpk_tyre: finite(r?.cpk_tyre),
-    cpk_total: finite(r?.cpk_total),
+    // ENG-1: no total over tyre km. Hour rows keep their per engine hour total.
+    cpk_total: r?.unit === 'engine_hours' ? finite(r?.cpk_total) : null,
+    // the one rate a row is ranked by (cpkMetrics.rowRate)
+    rate: finite(rowRate(r)),
   }))
 }
 
 /** Summary over CPK-by-type rows: how many types are measurable, and the worst. */
 export function cpkTypeSummary(rows = []) {
   const list = cpkTypeRows(rows)
-  const measured = list.filter((r) => r.cpk_total != null)
-  const worst = measured.reduce((w, r) => (!w || r.cpk_total > w.cpk_total ? r : w), null)
+  const measured = list.filter((r) => r.rate != null)
+  // "Worst" compares like with like: a per tyre km ratio and a per engine hour
+  // cost are different units, so the worst is taken within the larger unit group.
+  const kmRows = measured.filter((r) => r.unit !== 'engine_hours')
+  const hrRows = measured.filter((r) => r.unit === 'engine_hours')
+  const pool = hrRows.length > kmRows.length ? hrRows : kmRows
+  const worst = pool.reduce((w, r) => (!w || r.rate > w.rate ? r : w), null)
   return {
     types: list.length,
     measured: measured.length,

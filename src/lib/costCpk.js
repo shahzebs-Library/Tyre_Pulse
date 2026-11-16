@@ -19,6 +19,8 @@
  *      gates it.
  */
 
+import { CPK_METRIC, metricDef } from './cpkMetrics'
+
 /** Buckets in the order they are always presented. */
 export const BUCKETS = Object.freeze(['tyre', 'spare', 'oil'])
 
@@ -143,6 +145,12 @@ export function cpkView(snap) {
     const x = c[w] || {}
     return {
       cpk: fin(x.cpk),
+      // The split of the same figure (cpkMetrics: tyre and maintenance cost per
+      // vehicle km). Present once draft 20261113120000 is applied; null (N/A)
+      // before that. Never derived client-side: the matched spend by bucket is
+      // only known to the server.
+      cpkTyre: fin(x.cpk_tyre),
+      cpkMaintenance: fin(x.cpk_maintenance),
       km: fin(x.km),
       assetsMeasured: fin(x.assets_measured) || 0,
       spendMatched: fin(x.spend_matched),
@@ -168,7 +176,7 @@ export function cpkView(snap) {
     // why a comparison is being withheld, in words the reader can act on
     withheldReason: current.comparable
       ? (previous.comparable ? null : 'The earlier period has too few odometer readings to compare against.')
-      : 'Not enough odometer readings in this period to measure cost per kilometre.',
+      : 'Not enough odometer readings in this period to measure cost per vehicle km.',
   }
 }
 
@@ -297,15 +305,24 @@ export function buildCostCpkExport(snap) {
     })
   }
   rows.push({
-    section: 'Cost per km', name: `Cost per km (${cur})`,
+    section: 'Cost per vehicle km', name: `${metricDef(CPK_METRIC.OPERATING_COST_PER_VEHICLE_KM).name} (${cur})`,
     current: cpk.current.cpk ?? 'N/A',
     previous: cpk.previous.cpk ?? 'N/A',
     last_year: cpk.lastYear.cpk ?? 'N/A',
     change_vs_previous: cpk.vsPrevious ? pct(cpk.vsPrevious.pct) : 'Not comparable',
     change_vs_last_year: cpk.vsLastYear ? pct(cpk.vsLastYear.pct) : 'Not comparable',
   })
+  for (const [key, id] of [['cpkTyre', CPK_METRIC.TYRE_COST_PER_VEHICLE_KM], ['cpkMaintenance', CPK_METRIC.MAINTENANCE_COST_PER_VEHICLE_KM]]) {
+    rows.push({
+      section: 'Cost per vehicle km', name: `${metricDef(id).name} (${cur})`,
+      current: cpk.current[key] ?? 'N/A',
+      previous: cpk.previous[key] ?? 'N/A',
+      last_year: cpk.lastYear[key] ?? 'N/A',
+      change_vs_previous: '', change_vs_last_year: '',
+    })
+  }
   rows.push({
-    section: 'Cost per km', name: 'Odometer coverage of spend',
+    section: 'Cost per vehicle km', name: 'Odometer coverage of spend',
     current: pct(cpk.current.coverage),
     previous: pct(cpk.previous.coverage),
     last_year: pct(cpk.lastYear.coverage),

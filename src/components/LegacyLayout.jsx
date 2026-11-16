@@ -27,7 +27,7 @@ import useAppShellScrollLock from '../hooks/useAppShellScrollLock'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
-import { isChecklistOnlyRole, isChecklistPathAllowed, CHECKLIST_ONLY_ROLES } from '../lib/checklistAccess'
+import { isChecklistOnlyRole, isChecklistPathAllowed, CHECKLIST_AUTHOR_ROLES, isChecklistNavVisible, canAuthorChecklists, CHECKLIST_ONLY_ROLES } from '../lib/checklistAccess'
 import { navItemAllowedForCustomRole, NAV_MODULE_KEY, governingModuleKey, isPathSwitchedOff } from '../lib/navAccess'
 import { ACCESS_ROLES } from '../lib/moduleCatalog'
 import { applyNavLayout } from '../lib/navLayout'
@@ -249,7 +249,7 @@ const NAV_GROUPS = [
       { to: '/stock',               label: 'Stock',               icon: StockBoxIc },
       { to: '/stock-replenishment', label: 'Stock Replenishment', icon: PackagePlus },
       { to: '/scrap',               label: 'Scrap Management',    icon: ScrapBinIc },
-      { to: '/tyre-pool',           label: 'Tyre Pool',           icon: PackageCheck },
+      { to: '/tyre-pool',           label: 'Tyre Pool',           icon: PackageCheck, roles: ANALYTICS_ROLES },
       { to: '/parts-catalog',       label: 'Parts Catalog',       icon: Boxes },
       { to: '/requisitions',        label: 'Requisitions',        icon: ClipboardList },
       { to: '/goods-receipt',       label: 'Goods Receipt',       icon: PackageCheck },
@@ -284,7 +284,7 @@ const NAV_GROUPS = [
       { to: '/my-checklists',          label: 'My Checklists',       icon: ClipboardList },
       { to: '/checklist-schedules',    label: 'Checklist Schedules', icon: Calendar, adminOnly: A },
       { to: '/checklist-insights',     label: 'Checklist Insights',  icon: ClipboardCheck, adminOnly: A },
-      { to: '/checklist-audit',        label: 'Audit Pack',          icon: ClipboardCheck, adminOnly: A },
+      { to: '/checklist-audit',        label: 'Audit Pack',          icon: ClipboardCheck, roles: CHECKLIST_AUTHOR_ROLES },
       { to: '/inspection-planner',     label: 'Inspection Planner',  icon: CalendarClock },
       { to: '/inspection-intelligence', label: 'Inspection Intelligence', icon: Activity, adminOnly: A },
       { to: '/compliance',             label: 'Compliance Dashboard', icon: Shield, adminOnly: A },
@@ -436,8 +436,11 @@ function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedM
   }
   // Checklist-only role (Maintenance Supervisor): sidebar shows only checklists.
   if (isChecklistOnlyRole(profile?.role)) {
-    return isChecklistPathAllowed(item.to)
+    return isChecklistPathAllowed(item.to, hasPermission) && isChecklistNavVisible(item.to, profile?.role, isSuperAdmin)
   }
+  // The Audit Pack route admits CHECKLIST_AUTHOR_ROLES (and super admins), so the
+  // sidebar follows exactly that list.
+  if (item.to === '/checklist-audit') return canAuthorChecklists(profile?.role, isSuperAdmin)
   // If this nav item maps to a module, its visibility follows the access matrix +
   // per-user grants/revokes via hasPermission - so an admin turning a module OFF for
   // a role (or revoking a user) actually HIDES it from the sidebar, and turning it
@@ -477,16 +480,20 @@ function roleBadgeClass(role) {
 const TYRE_MAN_TABS = [
   { to: '/inspections', tk: 'inspect', label: 'Inspect',   icon: ClipboardCheck, end: false },
   { to: '/tyres',       tk: 'records', label: 'Records',   icon: Layers },
-  { to: '/work-orders', tk: 'work',    label: 'Work',      icon: Wrench },
+  // The person's own assigned jobs. Shown only when Work Orders is switched on for them, so the
+  // tab never leads to Access Restricted.
+  { to: '/my-jobs',     tk: 'work',    label: 'Work',      icon: Wrench, moduleKey: 'work_orders' },
   { to: '/scan',        tk: 'scan',    label: 'Scan',      icon: ScanLine },
   { to: '/settings',    tk: 'profile', label: 'Profile',   icon: User },
 ]
 
 function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
   const hasCustomIcon = Boolean(customAppIcon)
-  const { signOut, profile } = useAuth()
+  const { signOut, profile, hasPermission } = useAuth()
   const { t } = useLanguage()
   const location = useLocation()
+  const tabs = TYRE_MAN_TABS.filter((tab) => !tab.moduleKey
+    || (typeof hasPermission === 'function' && hasPermission(tab.moduleKey) === true))
   const { acquire: acquireWakeLock, release: releaseWakeLock } = useWakeLock()
   const [pendingCount, setPendingCount] = useState(0)
   const [failedCount, setFailedCount]   = useState(0)
@@ -665,7 +672,7 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
         }}
       >
         <div className="flex items-stretch h-[54px]">
-          {TYRE_MAN_TABS.map(({ to, label, tk, icon: Icon, end }) => (
+          {tabs.map(({ to, label, tk, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}

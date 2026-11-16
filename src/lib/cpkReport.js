@@ -11,6 +11,8 @@
  * Every row is one country's data in one currency (passed in); this engine never
  * mixes currencies - it only ever formats/sorts/filters the rows it is given.
  */
+import { rowRate, CPK_METRIC, metricShort, sanitizeFleetCpk } from './cpkMetrics'
+
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0)
 
@@ -27,8 +29,8 @@ export const REPORT_SECTIONS = [
   { key: 'fleet_summary', label: 'Fleet summary (KPIs)', defaultOn: true },
   { key: 'by_type', label: 'Cost by asset type', defaultOn: true },
   { key: 'per_vehicle', label: 'Per vehicle', defaultOn: true },
-  { key: 'worst_cpk', label: 'Worst CPK (highest cost per unit)', defaultOn: true },
-  { key: 'best_value', label: 'Best value (lowest CPK)', defaultOn: false },
+  { key: 'worst_cpk', label: 'Highest rate (tyre spend ratio or cost per engine hour)', defaultOn: true },
+  { key: 'best_value', label: 'Lowest rate (tyre spend ratio or cost per engine hour)', defaultOn: false },
   { key: 'km_coverage', label: 'Meter coverage', defaultOn: false },
 ]
 
@@ -41,8 +43,8 @@ export const PER_VEHICLE_COLUMNS = [
   { key: 'tyre_cost', header: 'Tyre cost', money: true },
   { key: 'maintenance_cost', header: 'Maintenance cost', money: true },
   { key: 'total_cost', header: 'Total cost', money: true },
-  { key: 'cpk_tyre', header: 'CPK tyre' },
-  { key: 'cpk_total', header: 'CPK total' },
+  { key: 'cpk_tyre', header: 'Tyre spend ratio (per tyre km) or tyre cost per hour' },
+  { key: 'cpk_total', header: 'Operating cost per hour (hour assets only)' },
 ]
 
 /** Selectable by-type columns (a rolled-up view; no per-asset id). */
@@ -53,8 +55,8 @@ export const BY_TYPE_COLUMNS = [
   { key: 'tyre_cost', header: 'Tyre cost', money: true },
   { key: 'maintenance_cost', header: 'Maintenance cost', money: true },
   { key: 'total_cost', header: 'Total cost', money: true },
-  { key: 'cpk_tyre', header: 'CPK tyre' },
-  { key: 'cpk_total', header: 'CPK total' },
+  { key: 'cpk_tyre', header: 'Tyre spend ratio (per tyre km) or tyre cost per hour' },
+  { key: 'cpk_total', header: 'Operating cost per hour (hour assets only)' },
 ]
 
 const DEFAULT_SECTIONS = REPORT_SECTIONS.filter((s) => s.defaultOn).map((s) => s.key)
@@ -141,9 +143,13 @@ function tableSection(key, label, rows, cols, currency) {
  * @param {number} topN
  */
 export function rankByCpkTotal(perVehicle = [], dir = 'desc', topN = 10) {
-  const rated = (Array.isArray(perVehicle) ? perVehicle : []).filter((r) => !isCpkNull(r?.cpk_total))
+  // ENG-1: ranked by cpkMetrics.rowRate (operating cost per engine hour for
+  // plant, tyre spend ratio for km assets). A total over tyre km does not exist.
+  // km and hour rows carry different units, so a caller should rank one
+  // mobility at a time; mixed input still sorts but compares unlike units.
+  const rated = (Array.isArray(perVehicle) ? perVehicle : []).filter((r) => rowRate(r) != null)
   rated.sort((a, b) => {
-    const d = Number(a.cpk_total) - Number(b.cpk_total)
+    const d = rowRate(a) - rowRate(b)
     if (d !== 0) return dir === 'asc' ? d : -d
     // stable-ish tiebreak: larger total_cost first
     return num(b.total_cost) - num(a.total_cost)
@@ -191,15 +197,20 @@ export function buildCpkReport({
   const pvCols = resolveColumns(columns.perVehicle, PER_VEHICLE_COLUMNS, DEFAULT_PV_COLUMNS)
   const btCols = resolveColumns(columns.byType, BY_TYPE_COLUMNS, DEFAULT_BT_COLUMNS)
 
-  const pv = Array.isArray(perVehicle) ? perVehicle : []
-  const bt = Array.isArray(byType) ? byType : []
+  // Defence in depth: rows normally arrive through api/fleetCpk (already gated),
+  // but a caller handing raw RPC rows must not print a km total either (ENG-1).
+  const safe = sanitizeFleetCpk({ perVehicle, byType, fleet: [] })
+  const pv = safe.perVehicle
+  const bt = safe.byType
   const out = []
 
   for (const key of wantedSections) {
     if (key === 'fleet_summary') {
       const tiles = [
-        { label: 'Fleet CPK (tyre)', value: fmtCpk(fleetRow?.cpk_tyre, curr) },
-        { label: 'Fleet CPK (total)', value: fmtCpk(fleetRow?.cpk_total, curr) },
+        // Names from the one glossary (cpkMetrics). The figures live under
+        // fleet[].km and fleet[].hours; there is no total over tyre km.
+        { label: metricShort(CPK_METRIC.TYRE_SPEND_RATIO), value: fmtCpk(fleetRow?.km?.cpk_tyre ?? fleetRow?.cpk_tyre, curr) },
+        { label: metricShort(CPK_METRIC.OPERATING_COST_PER_ENGINE_HOUR), value: fmtCpk(fleetRow?.hours?.cpk_total, curr) },
         {
           label: 'Meter coverage',
           value: fleetRow && Number.isFinite(Number(fleetRow.coverage_pct))

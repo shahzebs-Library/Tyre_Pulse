@@ -4,6 +4,8 @@
  * assets.js / tyres.js.
  */
 import { supabase, unwrap, applyCountry, fetchAllPages, ServiceError } from './_client'
+import { expectRows } from './writeGuard'
+import { firstForCallerCompany } from './companyScope'
 import { toUserMessage } from '../safeError'
 
 const COLS =
@@ -205,11 +207,18 @@ export async function getInspectionForPage(id) {
 }
 
 /**
- * Patch an inspection by id, fire-and-check-error style (no returning select).
- * The page checks only the thrown error; it never reads a returned row here.
+ * Patch an inspection by id.
+ *
+ * Asks for the changed id back: row security refuses an update by matching zero
+ * rows without raising, so a role the update policy does not admit used to see
+ * "saved" for a change that never happened. Zero rows now throws a
+ * WriteRefusedError. Callers still only check for a thrown error.
  */
 export async function patchInspection(id, patch) {
-  return unwrap(await supabase.from('inspections').update(patch).eq('id', id))
+  return expectRows(
+    await supabase.from('inspections').update(patch).eq('id', id).select('id'),
+    'This inspection was not updated. Your role is not allowed to change it, or it no longer exists.',
+  )
 }
 
 /**
@@ -278,9 +287,16 @@ export async function insertInspectionReturning(values) {
   return unwrap(await supabase.from('inspections').insert(values).select().single())
 }
 
-/** Delete an inspection by id. */
+/**
+ * Delete an inspection by id. Asks for the deleted id back so a delete the
+ * database refused (deleting is Admin only) is reported instead of looking
+ * like it worked.
+ */
 export async function deleteInspection(id) {
-  return unwrap(await supabase.from('inspections').delete().eq('id', id))
+  return expectRows(
+    await supabase.from('inspections').delete().eq('id', id).select('id'),
+    'This inspection was not deleted. Only an Admin can delete an inspection, or it no longer exists.',
+  )
 }
 
 // ── vehicle_fleet lookups used by the Inspections page ───────────────────────
@@ -317,10 +333,11 @@ export async function listInspectionVehicles({ country } = {}) {
  * asset number can exist per country (V348), so limit(1) keeps this single-row-safe
  * for a super-admin; RLS scopes a country-restricted user to their own row. */
 export async function findVehicleByAsset(assetNo, country) {
-  let q = supabase.from('vehicle_fleet').select('vehicle_type,asset_no,site,country').eq('asset_no', assetNo)
+  let q = supabase.from('vehicle_fleet').select('vehicle_type,asset_no,site,country,organisation_id').eq('asset_no', assetNo)
   if (country && country !== 'All') q = q.eq('country', country)
-  const rows = unwrap(await q.order('country', { ascending: true }).limit(1))
-  return Array.isArray(rows) ? rows[0] || null : rows || null
+  // The same code can also exist in another company; the caller's company wins.
+  const rows = unwrap(await q.order('country', { ascending: true }).order('id').limit(20))
+  return Array.isArray(rows) ? firstForCallerCompany(rows) : rows || null
 }
 
 /**

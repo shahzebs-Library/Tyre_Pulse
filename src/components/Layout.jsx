@@ -5,7 +5,7 @@ import { Fragment, useState, useEffect, useCallback, useMemo, useRef } from 'rea
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence, MotionConfig } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
-import { isChecklistOnlyRole, isChecklistPathAllowed, CHECKLIST_ONLY_ROLES } from '../lib/checklistAccess'
+import { isChecklistOnlyRole, isChecklistPathAllowed, CHECKLIST_AUTHOR_ROLES, isChecklistNavVisible, canAuthorChecklists, CHECKLIST_ONLY_ROLES } from '../lib/checklistAccess'
 import { navItemAllowedForCustomRole, NAV_MODULE_KEY, governingModuleKey, isPathSwitchedOff } from '../lib/navAccess'
 import { ACCESS_ROLES } from '../lib/moduleCatalog'
 import { applyNavLayout } from '../lib/navLayout'
@@ -174,7 +174,7 @@ const NAV_GROUPS = [
       { to: '/heat-intelligence',      label: 'Heat Intelligence', parent: 'Condition',      icon: Thermometer, roles: ANALYTICS_ROLES },
       { to: '/tyre-lifecycle',         label: 'Tyre Lifecycle', parent: 'Lifecycle',         icon: RefreshCw, adminOnly: A },
       { to: '/tyre-service-events',    label: 'Tyre Service Events', parent: 'Lifecycle',    icon: Activity, roles: ANALYTICS_ROLES },
-      { to: '/tyre-pool',           label: 'Tyre Pool', parent: 'Lifecycle',           icon: PackageCheck },
+      { to: '/tyre-pool',           label: 'Tyre Pool', parent: 'Lifecycle',           icon: PackageCheck, roles: ANALYTICS_ROLES },
       { to: '/scrap',               label: 'Scrap Management', parent: 'Lifecycle',    icon: ScrapBinIc },
       { to: '/retread',                label: 'Retread Management', parent: 'Lifecycle',  icon: Recycle, adminOnly: A },
       { to: '/retread-claims',         label: 'Retread Claims', parent: 'Lifecycle',      icon: Recycle, adminOnly: A },
@@ -223,7 +223,7 @@ const NAV_GROUPS = [
       { to: '/checklists',             label: 'Checklists', parent: 'Checklists',          icon: ListChecks },
       { to: '/checklist-schedules',    label: 'Checklist Schedules', parent: 'Checklists', icon: Calendar, adminOnly: A },
       { to: '/checklist-insights',     label: 'Checklist Insights', parent: 'Checklists',  icon: ClipboardCheck, adminOnly: A },
-      { to: '/checklist-audit',        label: 'Audit Pack',         parent: 'Checklists',  icon: ClipboardCheck, adminOnly: A },
+      { to: '/checklist-audit',        label: 'Audit Pack',         parent: 'Checklists',  icon: ClipboardCheck, roles: CHECKLIST_AUTHOR_ROLES },
       { to: '/actions',             label: 'Corrective Actions', parent: 'Findings', icon: ClipboardList },
       { to: '/rca',                 label: 'Root Cause', parent: 'Findings',         icon: Search },
       { to: '/root-cause',             label: 'Root Cause Engine', parent: 'Findings',      icon: Microscope, roles: ANALYTICS_ROLES },
@@ -463,8 +463,11 @@ function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedM
   }
   // Checklist-only role (Maintenance Supervisor): sidebar shows only checklists.
   if (isChecklistOnlyRole(profile?.role)) {
-    return isChecklistPathAllowed(item.to)
+    return isChecklistPathAllowed(item.to, hasPermission) && isChecklistNavVisible(item.to, profile?.role, isSuperAdmin)
   }
+  // The Audit Pack route admits CHECKLIST_AUTHOR_ROLES (and super admins), so the
+  // sidebar follows exactly that list.
+  if (item.to === '/checklist-audit') return canAuthorChecklists(profile?.role, isSuperAdmin)
   // If this nav item maps to a module, its visibility follows the access matrix +
   // per-user grants/revokes via hasPermission - so an admin turning a module OFF for
   // a role (or revoking a user) actually HIDES it from the sidebar, and turning it
@@ -566,16 +569,20 @@ function roleBadgeClass(role) {
 const TYRE_MAN_TABS = [
   { to: '/inspections', tk: 'inspect', label: 'Inspect',   icon: ClipboardCheck, end: false },
   { to: '/tyres',       tk: 'records', label: 'Records',   icon: Layers },
-  { to: '/work-orders', tk: 'work',    label: 'Work',      icon: Wrench },
+  // The person's own assigned jobs. Shown only when Work Orders is switched on for them, so the
+  // tab never leads to Access Restricted.
+  { to: '/my-jobs',     tk: 'work',    label: 'Work',      icon: Wrench, moduleKey: 'work_orders' },
   { to: '/scan',        tk: 'scan',    label: 'Scan',      icon: ScanLine },
   { to: '/settings',    tk: 'profile', label: 'Profile',   icon: User },
 ]
 
 function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
   const hasCustomIcon = Boolean(customAppIcon)
-  const { signOut, profile } = useAuth()
+  const { signOut, profile, hasPermission } = useAuth()
   const { t } = useLanguage()
   const location = useLocation()
+  const tabs = TYRE_MAN_TABS.filter((tab) => !tab.moduleKey
+    || (typeof hasPermission === 'function' && hasPermission(tab.moduleKey) === true))
   const { acquire: acquireWakeLock, release: releaseWakeLock } = useWakeLock()
   const [pendingCount, setPendingCount] = useState(0)
   const [failedCount, setFailedCount]   = useState(0)
@@ -761,7 +768,7 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
         }}
       >
         <div className="flex items-stretch h-[54px]">
-          {TYRE_MAN_TABS.map(({ to, label, tk, icon: Icon, end }) => (
+          {tabs.map(({ to, label, tk, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}

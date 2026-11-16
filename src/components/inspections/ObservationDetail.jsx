@@ -4,14 +4,23 @@
  * has since been replaced. "Open full inspection" is still one click away, but
  * a reviewer no longer has to find the finding inside the whole sheet.
  */
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ExternalLink, Wrench, ImageOff } from 'lucide-react'
+import { ExternalLink, Wrench, ImageOff, Download } from 'lucide-react'
 import SideDrawer from '../ui/SideDrawer'
 import InspectionDiagram from '../inspection/InspectionDiagram'
 import { resolveStorageUrl } from '../../lib/storageRefs'
 import { safeImageSrc } from '../../lib/safeUrl'
 import { TYRE_NOW_META } from '../../lib/observationTracking'
+import { downloadObservationReport, observationReportId, observationRevision } from '../../lib/observationReportPdf'
+import ObservationErpEvidence from './ObservationErpEvidence'
+import { getObservationErpLink, isErpReviewNotProvisioned } from '../../lib/api/observationErpEvidence'
+import StoredPdfPanel from '../pdf/StoredPdfPanel'
+import { getOrCreatePdf, deliverPdf } from '../../lib/pdfCache/service'
+import { observationPdfRequest } from '../../lib/pdfCache/reportRequests'
+import { applyExportPolicy } from '../../lib/exportUtils'
+import { toUserMessage } from '../../lib/safeError'
+import { useAuth } from '../../contexts/AuthContext'
 
 const fmtDay = (d) => {
   if (!d) return 'N/A'
@@ -48,12 +57,57 @@ function Photo({ refValue }) {
   )
 }
 
-export default function ObservationDetail({ obs, onClose, onOpenInspection, onRaiseAction }) {
+export default function ObservationDetail({ obs: first, observations = [], onClose, onOpenInspection, onRaiseAction }) {
+  const diagramRef = useRef(null)
+  const [selected, setSelected] = useState(null)
+  const [checkedKeys, setCheckedKeys] = useState([])
+  const [pdfBusy, setPdfBusy] = useState(false)
+  const [pdfError, setPdfError] = useState('')
+  const [pdfNote, setPdfNote] = useState('')
+  const [pdfRev, setPdfRev] = useState(0)
+  const { profile, isSuperAdmin } = useAuth() || {}
+  const role = String(profile?.role || '').toLowerCase()
+  const isAdmin = !!isSuperAdmin || role === 'admin'
+  const findings = observations.length ? observations : first ? [first] : []
+  const obs = findings.find((f) => f.key === selected) || findings[0]
+  const sourceRow = obs?.row || null
+
+  // The observation report for this inspection: served from the stored copy when the
+  // current revision is already saved, otherwise drawn here once (same generator) and stored.
+  const ensureObservationPdf = useCallback(async (opts = {}) => {
+    const req = await observationPdfRequest(sourceRow, findings)
+    return getOrCreatePdf({
+      ...req, ...opts,
+      generate: async () => {
+        const links = {}
+        let unreadable = false
+        const actionIds = [...new Set(findings.map(f => f.actionRecord?.id).filter(Boolean))]
+        await Promise.all(actionIds.map(async id => {
+          try { links[id] = await getObservationErpLink(id) }
+          // Review not set up in the database yet: there is no link to read, which is
+          // "not confirmed", not an unreadable record.
+          catch (e) { if (!isErpReviewNotProvisioned(e)) unreadable = true }
+        }))
+        const warnings = []
+        const doc = await downloadObservationReport(sourceRow, findings, {
+          svgEl: diagramRef.current?.querySelector('svg[data-tyre-map]') || diagramRef.current?.querySelector('svg'),
+          erpLinks: links, erpUnreadable: unreadable, save: false, warnings,
+        })
+        return { bytes: doc.output('arraybuffer'), fileName: req.fileName, warnings }
+      },
+    })
+  }, [sourceRow, findings])
+  // The panel re-reads only when what the report prints changes (findings are rebuilt
+  // by the parent on every render, so their identity cannot be the trigger).
+  const findingsRef = useRef(findings)
+  findingsRef.current = findings
+  const findingsSig = findings.map((f) => `${f.key}:${f.tyreNow?.state || ''}:${f.actionRecord?.status || ''}`).join('|')
+  const buildPdfRequest = () => observationPdfRequest(sourceRow, findingsRef.current)
+  const eligible = findings.filter((f) => f.kind === 'tyre' && !f.actionRaised && f.tyreNow?.state !== 'replaced')
+  const checked = eligible.filter((f) => checkedKeys.includes(f.key))
   if (!obs) return null
   const now = obs.tyreNow
   const meta = now ? TYRE_NOW_META[now.state] : null
-  const canAct = obs.kind !== 'note' && !obs.actionRaised && now?.state !== 'replaced'
-    && (obs.tone === 'bad' || obs.tone === 'warn')
   return (
     <SideDrawer
       open
@@ -64,9 +118,23 @@ export default function ObservationDetail({ obs, onClose, onOpenInspection, onRa
       closeLabel="Close observation"
       footer={(
         <div className="cc iw-od-foot">
-          {canAct && onRaiseAction && (
-            <button type="button" className="cc-btn" onClick={() => onRaiseAction(obs.row)}>
-              <Wrench size={14} aria-hidden="true" /> Create action
+          <button type="button" className="cc-btn" disabled={pdfBusy} onClick={async () => {
+            setPdfBusy(true); setPdfError(''); setPdfNote('')
+            try {
+              const result = await ensureObservationPdf()
+              // A stored copy skips the generator, so the export switch and audit are applied here.
+              if (result.cached) applyExportPolicy([], 'Observation PDF ' + observationReportId(obs.row))
+              await deliverPdf(result)
+              if (result.note) setPdfNote(result.note)
+              setPdfRev((n) => n + 1)
+            }
+            catch (e) { setPdfError(toUserMessage(e, 'Could not download the observation report. Retry.')) }
+            finally { setPdfBusy(false) }
+          }}><Download size={14} aria-hidden="true" /> {pdfBusy ? 'Preparing PDF...' : 'Download observation PDF'}</button>
+          {eligible.length > 0 && onRaiseAction && (
+            <button type="button" className="cc-btn-primary" disabled={!checked.length}
+              onClick={() => onRaiseAction(obs.row, checked.map((f) => `damage:${f.rawPosition}`))}>
+              <Wrench size={14} aria-hidden="true" /> Create actions ({checked.length})
             </button>
           )}
           {obs.actionRaised && <Link className="cc-link" to="/actions">Action raised</Link>}
@@ -77,6 +145,65 @@ export default function ObservationDetail({ obs, onClose, onOpenInspection, onRa
       )}
     >
       <div className="cc iw-od">
+        {pdfError && <p role="alert" className="iw-od-muted">{pdfError}</p>}
+        {pdfNote && <p role="status" className="iw-od-muted">{pdfNote}</p>}
+        {sourceRow?.id && (
+          <StoredPdfPanel
+            refreshKey={`${sourceRow.id}:${pdfRev}:${findingsSig}`}
+            buildRequest={buildPdfRequest}
+            canRegenerate={isAdmin || role === 'manager' || role === 'director'}
+            isAdmin={isAdmin}
+            onRegenerate={async ({ reason }) => {
+              const result = await ensureObservationPdf({ regenerate: true, reason })
+              if (result.note) setPdfNote(result.note)
+              setPdfRev((n) => n + 1)
+            }}
+          />
+        )}
+        <section className="iw-od-block" aria-label="Inspection report reference">
+          <h4>Inspection details</h4>
+          <dl className="iw-od-facts">
+            <div><dt>Report ID</dt><dd>{observationReportId(obs.row)}</dd></div>
+            <div><dt>PDF template version</dt><dd>1.0</dd></div>
+            <div><dt>Source revision</dt><dd>{observationRevision(obs.row)}</dd></div>
+            <div><dt>Asset</dt><dd>{obs.asset_no || 'Not recorded'}</dd></div>
+            <div><dt>Inspection date</dt><dd>{fmtDay(obs.day)}</dd></div>
+            <div><dt>Site</dt><dd>{obs.site || 'Not recorded'}</dd></div>
+            <div><dt>Inspection type</dt><dd>{obs.row?.inspection_type || 'Not recorded'}</dd></div>
+            <div><dt>Inspector</dt><dd>{obs.inspector || 'Not recorded'}</dd></div>
+            <div><dt>Status</dt><dd>{obs.row?.approval_status || obs.row?.status || 'Not recorded'}</dd></div>
+          </dl>
+        </section>
+        <section className="iw-od-block" aria-label="Findings in this inspection">
+          <h4>Findings ({findings.length})</h4>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <p className="iw-od-muted">{checked.length} of {eligible.length} actionable tyres selected</p>
+            <div className="flex gap-2">
+              <button type="button" className="cc-btn" onClick={() => setCheckedKeys(eligible.map((f) => f.key))}>Select all</button>
+              <button type="button" className="cc-btn" onClick={() => setCheckedKeys([])}>Clear</button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {findings.map((f, i) => {
+              const available = eligible.some((e) => e.key === f.key)
+              return (
+                <div key={f.key} className="flex items-center gap-3 rounded-lg border border-[var(--border)] p-3">
+                  <input type="checkbox" className="h-4 w-4 accent-[var(--accent)]" disabled={!available}
+                    aria-label={`Select action for ${f.position || f.text}`}
+                    checked={checkedKeys.includes(f.key) && available}
+                    onChange={(e) => setCheckedKeys((old) => e.target.checked ? [...new Set([...old, f.key])] : old.filter((key) => key !== f.key))} />
+                  <button type="button" className="flex-1 text-left text-sm" aria-pressed={f.key === obs.key}
+                    onClick={() => setSelected(f.key)}>
+                    <span className="font-semibold">{i + 1}. {f.position || (f.kind === 'note' ? 'Inspector note' : 'Site observation')}</span>
+                    <span className="block text-[var(--text-secondary)]">{f.text}</span>
+                  </button>
+                  <span className="text-xs text-[var(--text-muted)]">{f.actionRaised ? 'Action raised' : f.tyreNow?.state === 'replaced' ? 'Replaced' : !available ? 'Information only' : 'Needs action'}</span>
+                </div>
+              )
+            })}
+          </div>
+          <p className="iw-od-muted">Tick several tyres, then create their actions together. Click a tyre name to view its photos and readings below.</p>
+        </section>
         <section className="iw-od-head">
           <span className={`cc-pill ${obs.tone}`}>{obs.severity}</span>
           <h3>{obs.text}</h3>
@@ -113,16 +240,18 @@ export default function ObservationDetail({ obs, onClose, onOpenInspection, onRa
             </section>
 
             <section className="iw-od-block">
-              <h4>Photo of this tyre</h4>
+              <h4>Inspection photo</h4>
               <Photo refValue={obs.photo} />
             </section>
+
+            <ObservationErpEvidence observation={obs} />
           </>
         )}
 
         {obs.row && (
           <section className="iw-od-block">
             <h4>On the vehicle</h4>
-            <InspectionDiagram inspection={obs.row} width={360} showReadings={false} variant="board" />
+            <div ref={diagramRef}><InspectionDiagram inspection={obs.row} width={360} showReadings={false} variant="board" /></div>
           </section>
         )}
       </div>

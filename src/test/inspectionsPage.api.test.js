@@ -122,11 +122,21 @@ describe('inspections page service - getInspectionForPage', () => {
 })
 
 describe('inspections page service - patchInspection', () => {
-  it('passes the patch and scopes by id, without a returning select', async () => {
+  // CHANGED 2026-11-12 (MODB-7). This case used to assert "without a returning
+  // select". That was the defect: row security refuses an update by matching
+  // zero rows with no error, so without the returned id a refused patch read as
+  // saved. The patch now asks for the id back and a zero-row answer throws.
+  it('passes the patch, scopes by id and asks for the changed id back', async () => {
+    h.state.result = { data: [{ id: 'i1' }], error: null }
     await inspectionsApi.patchInspection('i1', { status: 'Done', linked_action_id: 'ca1' })
     expect(h.state.last._calls.update).toEqual({ status: 'Done', linked_action_id: 'ca1' })
     expect(h.state.last._calls.eq).toContainEqual(['id', 'i1'])
-    expect(h.state.last._calls.select).toHaveLength(0)
+    expect(h.state.last._calls.select).toContain('id')
+  })
+
+  it('throws a refusal when the database changed no row', async () => {
+    h.state.result = { data: [], error: null }
+    await expect(inspectionsApi.patchInspection('i1', { status: 'Done' })).rejects.toMatchObject({ refused: true })
   })
 })
 
@@ -146,6 +156,7 @@ describe('inspections page service - insert/delete', () => {
   })
 
   it('deleteInspection deletes by id', async () => {
+    h.state.result = { data: [{ id: 'i1' }], error: null }
     await inspectionsApi.deleteInspection('i1')
     expect(h.state.last._calls.delete).toBe(true)
     expect(h.state.last._calls.eq).toContainEqual(['id', 'i1'])

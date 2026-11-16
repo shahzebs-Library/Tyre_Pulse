@@ -32,6 +32,11 @@ describe('erpSyncAnalytics', () => {
     expect(r.byReason).toHaveLength(2)
     expect(r).not.toHaveProperty('value')
   })
+  it('labels skipped complaint rows and keeps them out of the country pairs', () => {
+    const r = rejectSummary([{ uploaded_country: 'KSA', reject_reason: 'complaint_missing_vehicle_in_date', work_order_no: 'JC-2' }])
+    expect(r.byReason).toEqual([{ label: 'Complaint row skipped: no Vehicle In Date', count: 1 }])
+    expect(r.byPair).toEqual([])
+  })
   it('filters and exports batches', () => {
     expect(filterBatches(batches, { outcome: 'nothing' }).map(b => b.id)).toEqual([3])
     expect(filterBatches(batches, { module: 'fleet' })).toHaveLength(1)

@@ -7,7 +7,10 @@
 // For every ACTIVE schedule whose next_run_at has passed (or is null), it
 // builds a live executive intelligence digest for the schedule's report type
 // via the server-side aggregate RPC `report_exec_digest` (V85 - one round-trip,
-// org-scoped, all-time + trailing-30-day windows), emails it to the recipients
+// org-scoped, all-time + trailing-30-day windows) for COUNTS, and the
+// per-country aggregate `report_exec_money_by_country` for MONEY (expense grid,
+// each country in its own currency, never one blended total - see money.ts),
+// emails it to the recipients
 // via Resend (same provider/env as send-email), records the outcome in
 // report_send_log (sent/failed + provider error), and advances
 // last_sent_at/next_run_at. Failures back off one hour instead of hammering
@@ -15,6 +18,12 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import {
+  type CountryMoney, type CurrencyMap, type ExecMoney, type MoneyPart,
+  budgetOutlook, buildCurrencyMap, execMoneyFromLegacy, fmtField, fmtMoney, fmtMoneyParts,
+  isMissingRpc, isMixedCurrency, normaliseExecMoney, partsFor, rowCurrency, sumByCurrency,
+  sumRowsByCurrency,
+} from './money.ts'
 
 const RIYADH_OFFSET_MIN = 3 * 60 // Gulf standard time, no DST
 
@@ -283,9 +292,7 @@ function num(n: number | null | undefined): string {
   return n == null || !Number.isFinite(Number(n)) ? 'N/A' : Number(n).toLocaleString('en-US')
 }
 function money(n: number | null | undefined, currency: string): string {
-  if (n == null || !Number.isFinite(Number(n))) return 'N/A'
-  const v = Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 })
-  return currency ? `${currency} ${v}` : v
+  return fmtMoney(n, currency)
 }
 function dateShort(s: string | null | undefined): string {
   return s ? String(s).slice(0, 10) : 'N/A'
@@ -309,7 +316,7 @@ function trend(cur: number, prev: number, higherIsWorse: boolean): string {
 function tile(label: string, value: string, sub = '', color = '#0f172a'): string {
   return `
     <td style="padding:12px 14px;background:#f8fafc;border:1px solid #eef2f7;border-radius:10px;text-align:center;vertical-align:top">
-      <div style="font-size:20px;font-weight:800;color:${color};line-height:1.1">${value}</div>
+      <div style="font-size:${value.length > 18 ? 13 : 20}px;font-weight:800;color:${color};line-height:1.25">${value}</div>
       <div style="font-size:10.5px;color:#64748b;text-transform:uppercase;letter-spacing:.4px;margin-top:4px">${label}</div>
       ${sub ? `<div style="margin-top:5px">${sub}</div>` : ''}
     </td>`
@@ -376,54 +383,140 @@ function brandReliabilityList(items: Array<{ label: string; value: number; risk_
     </td>`
 }
 
-function buildRecommendations(d: Digest): string[] {
+/** Country to currency lookup plus the system default currency. */
+type CurrencyContext = { map: CurrencyMap; fallback: string }
+
+/**
+ * Money for the executive digest, per country, each in its own currency.
+ *
+ * Source of truth is the expense grid (parts_consumption.tyre_cost), the same
+ * source the Expenses screens read, through the service-role aggregate
+ * `report_exec_money_by_country`. Until that function is installed the digest
+ * falls back to the legacy per-country list (tyre record prices): still never
+ * blended, but labelled as the weaker source, with the other money figures N/A.
+ */
+// deno-lint-ignore no-explicit-any
+async function buildExecMoney(svc: any, orgId: string | null, legacy: Digest, cur: CurrencyContext): Promise<ExecMoney> {
+  orgId = requireOrg(orgId)
+  const { data, error } = await svc.rpc('report_exec_money_by_country', { p_org: orgId, p_days: 30 })
+  if (!error && data) return normaliseExecMoney(data)
+  if (error && !isMissingRpc(error)) throw new Error(`money digest RPC failed: ${error.message}`)
+  return execMoneyFromLegacy(legacy, cur.map, cur.fallback)
+}
+
+function buildRecommendations(d: Digest, m: ExecMoney): string[] {
   const recs: string[] = []
-  if (d.dup_serials > 0) recs.push(`Resolve <b>${num(d.dup_serials)}</b> duplicate tyre serial(s) — they distort life &amp; CPK analysis.`)
-  if (d.missing_cost > 0) recs.push(`<b>${num(d.missing_cost)}</b> tyre record(s) have no cost — cost KPIs understate true spend until filled.`)
-  if (d.wo_overdue > 0) recs.push(`<b>${num(d.wo_overdue)}</b> work order(s) past target completion — expedite to cut downtime.`)
-  if (d.ca_overdue > 0) recs.push(`<b>${num(d.ca_overdue)}</b> corrective action(s) overdue — reassign or escalate.`)
-  const brandUnknown = (d.top_brands ?? []).length === 1 && d.top_brands[0].label === '(unknown)'
-  if (brandUnknown) recs.push(`Tyre <b>brand</b> is blank across records — populate it to unlock vendor performance ranking.`)
+  if (d.dup_serials > 0) recs.push(`Resolve <b>${num(d.dup_serials)}</b> duplicate tyre serial(s). They distort life &amp; CPK analysis.`)
+  if (d.missing_cost > 0) recs.push(`<b>${num(d.missing_cost)}</b> tyre record(s) have no price. Per-tyre cost KPIs understate until filled (tyre spend totals come from the expense grid and are not affected).`)
+  if (d.wo_overdue > 0) recs.push(`<b>${num(d.wo_overdue)}</b> work order(s) past target completion. Expedite to cut downtime.`)
+  if (d.ca_overdue > 0) recs.push(`<b>${num(d.ca_overdue)}</b> corrective action(s) overdue. Reassign or escalate.`)
   const siteUnknown = (d.top_sites ?? []).length === 1 && d.top_sites[0].label === '(unknown)'
-  if (siteUnknown) recs.push(`Tyre <b>site</b> is blank across records — populate it to unlock branch cost comparison.`)
-  if (d.all.cpk == null) recs.push(`Cost-per-km can't be computed — capture <b>fitment/removal km</b> to enable CPK &amp; life forecasting.`)
-  if (d.win.tyres.cur === 0) recs.push(`No tyre records in the last ${d.period_days} days — confirm data imports are current (latest record ${dateShort(d.all.last_date)}).`)
-  // Budget outlook: projected annual run-rate vs the fleet's annual budget.
-  if (d.projected_annual_spend != null && d.monthly_budget > 0) {
-    const bud = d.monthly_budget * 12
-    if (d.projected_annual_spend > bud) {
-      const over = Math.round(((d.projected_annual_spend - bud) / bud) * 100)
-      recs.push(`Projected tyre spend is tracking <b>${over}% over</b> the annual budget — review procurement &amp; the highest-cost assets/brands below.`)
+  if (siteUnknown) recs.push(`Tyre <b>site</b> is blank across records. Populate it to unlock branch cost comparison.`)
+  if (d.all.cpk == null) recs.push(`Cost per km cannot be computed. Capture <b>fitment and removal km</b> to enable CPK &amp; life forecasting.`)
+  if (d.win.tyres.cur === 0) recs.push(`No tyre records in the last ${d.period_days} days. Confirm data imports are current (latest record ${dateShort(d.all.last_date)}).`)
+  // Budget outlook, one country at a time (never a cross-currency comparison).
+  for (const c of m.countries) {
+    const o = budgetOutlook(c)
+    if (o && o.over) {
+      recs.push(`<b>${c.country}</b>: tyre spend over the last 12 months (${money(o.run_rate, c.currency)}) is <b>${o.pct}% over</b> the annual tyre budget (${money(o.annual_budget, c.currency)}). Review procurement and the highest-cost assets below.`)
     }
   }
   // Worst-reliability brand (highest High/Critical rate with enough records).
   const worstBrand = (d.brand_reliability ?? []).find((b) => b.risk_pct != null && Number(b.risk_pct) >= 30)
-  if (worstBrand) recs.push(`<b>${worstBrand.label}</b> shows a <b>${worstBrand.risk_pct}%</b> High/Critical risk rate — investigate as a candidate for de-listing or root-cause review.`)
+  if (worstBrand) recs.push(`<b>${worstBrand.label}</b> shows a <b>${worstBrand.risk_pct}%</b> High/Critical risk rate. Investigate as a candidate for de-listing or root-cause review.`)
   if (!recs.length) recs.push('No critical issues detected this period. Maintain inspection cadence and monitor high-risk positions.')
   return recs.slice(0, 8)
 }
 
-function renderHtml(s: Schedule, d: Digest, appUrl: string, currency: string, windowLabel = ''): string {
+/** One row per country: every amount in that country's own currency. */
+function countryMoneyTable(m: ExecMoney): string {
+  if (!m.countries.length) {
+    return `<div style="font-size:12px;color:#94a3b8;padding:6px 0">No cost lines are recorded for this organisation yet.</div>`
+  }
+  const th = (t: string, right = false) =>
+    `<td style="padding:6px;font-size:10.5px;font-weight:700;color:#64748b;text-transform:uppercase${right ? ';text-align:right' : ''}">${t}</td>`
+  const td = (t: string, right = false, bold = false) =>
+    `<td style="padding:7px 6px;font-size:11.5px;color:#0f172a;border-bottom:1px solid #eef2f7${right ? ';text-align:right' : ''}${bold ? ';font-weight:700' : ''}">${t}</td>`
+  const rows = m.countries.map((c: CountryMoney) => {
+    const tr = c.tyre_spend_cur != null && c.tyre_spend_prev != null ? ` ${trend(c.tyre_spend_cur, c.tyre_spend_prev, true)}` : ''
+    return `<tr>
+      ${td(c.country, false, true)}
+      ${td(c.currency || 'not set')}
+      ${td(money(c.tyre_spend_all, c.currency), true, true)}
+      ${td(`${money(c.tyre_spend_cur, c.currency)}${tr}`, true)}
+      ${td(money(c.tyre_spend_prev, c.currency), true)}
+      ${td(money(c.wo_cost, c.currency), true)}
+      ${td(money(c.accident_cost, c.currency), true)}
+    </tr>`
+  }).join('')
+  return `<table role="presentation" width="100%" cellspacing="0">
+    <tr style="background:#f8fafc">
+      ${th('Country')}${th('Currency')}${th('Tyre spend, all time', true)}${th(`Last ${m.period_days} days`, true)}${th(`Prior ${m.period_days} days`, true)}${th('Work order cost', true)}${th('Accident cost', true)}
+    </tr>
+    ${rows}
+  </table>`
+}
+
+/** Per-country trend, forecast and cost drivers (expense grid only). */
+function countryDetailBlocks(m: ExecMoney): string {
+  return m.countries.map((c: CountryMoney) => {
+    const o = budgetOutlook(c)
+    const outlook = o == null
+      ? tile('Budget outlook', 'N/A', 'set a fleet tyre budget')
+      : tile('Budget outlook', `${o.over ? 'Over' : 'Under'} by ${o.pct}%`, o.over ? 'last 12 months exceed budget' : 'within budget', o.over ? '#b91c1c' : '#047857')
+    return `
+        ${sectionTitle(`${c.country} (${c.currency || 'currency not set'}): cost trend and drivers`)}
+        <tr><td colspan="3" style="padding-top:4px">${monthlyTrendBars(c.monthly_trend, c.currency)}</td></tr>
+        <tr>
+          ${tile('Tyre spend, last 12 months', money(c.tyre_spend_12m, c.currency))}
+          ${tile('Annual tyre budget (12 x monthly)', c.monthly_budget ? money(c.monthly_budget * 12, c.currency) : 'N/A')}
+          ${outlook}
+        </tr>
+        <tr>
+          ${topList('Top sites by tyre spend (issuing store)', c.top_sites, (n) => money(n, c.currency))}
+          ${topList('Highest tyre spend assets', c.top_assets, (n) => money(n, c.currency))}
+          <td style="vertical-align:top;padding:6px 0 6px 0"></td>
+        </tr>`
+  }).join('')
+}
+
+function renderHtml(s: Schedule, d: Digest, appUrl: string, m: ExecMoney, windowLabel = ''): string {
   const genAt = new Date().toISOString().slice(0, 16).replace('T', ' ')
-  const coverage = `${dateShort(d.all.first_date)} → ${dateShort(d.all.last_date)}`
+  const coverage = `${dateShort(d.all.first_date)} to ${dateShort(d.all.last_date)}`
   const riskColor = d.all.high_risk > 0 ? '#b91c1c' : '#047857'
-  const recs = buildRecommendations(d)
+  const recs = buildRecommendations(d, m)
+  const mixed = isMixedCurrency(partsFor(m, 'tyre_spend_all'))
+  const single = m.countries.length === 1 ? m.countries[0] : null
+  const perCurrency = mixed ? 'per currency, not added together' : ''
+  const fromGrid = m.basis === 'expense_grid'
+  const basisNote = fromGrid
+    ? 'Tyre spend is taken from the expense grid, the same source as the Expenses screens, for each country in its own currency.'
+    : 'Tyre spend here uses tyre record prices because the expense grid summary is not installed yet. Work order cost, accident cost, trends and budgets per country will appear once it is.'
 
   const summary =
-    `Across the full dataset (${coverage}) the fleet has <b>${num(d.all.tyres)}</b> tyre transactions ` +
-    `totalling <b>${money(d.all.spend, currency)}</b>, with <b>${num(d.wo_open)}</b> work order(s) open` +
+    `Across the full dataset (${coverage}) the fleet has <b>${num(d.all.tyres)}</b> tyre transactions, ` +
+    `with tyre spend of <b>${fmtField(m, 'tyre_spend_all')}</b>${mixed ? ' (one figure per currency; currencies are never added together)' : ''}, ` +
+    `<b>${num(d.wo_open)}</b> work order(s) open` +
     `${d.wo_overdue ? ` (<b style="color:#b91c1c">${num(d.wo_overdue)} overdue</b>)` : ''} ` +
     `and <b>${num(d.ca_open)}</b> corrective action(s) outstanding. ` +
     (d.win.tyres.cur > 0
       ? `In the last ${d.period_days} days, <b>${num(d.win.tyres.cur)}</b> tyre record(s) were added.`
       : `No new tyre records were logged in the last ${d.period_days} days.`)
 
+  // Cost per km from tyre record prices is only meaningful inside one currency.
+  const cpkTile = single && d.all.cpk != null
+    ? tile('Avg cost / km', `${single.currency ? single.currency + ' ' : ''}${Number(d.all.cpk).toFixed(3)}`, 'from tyre record prices')
+    : tile('Avg cost / km', 'N/A', m.countries.length > 1 ? 'see CPK screens per country' : '')
+  const spendTrend = single && single.tyre_spend_cur != null && single.tyre_spend_prev != null
+    ? trend(single.tyre_spend_cur, single.tyre_spend_prev, true)
+    : perCurrency
+
   return `
   <div style="font-family:Segoe UI,Arial,sans-serif;max-width:680px;margin:auto;color:#0f172a;background:#fff">
     <div style="background:#0f172a;border-radius:12px 12px 0 0;padding:22px 26px;color:#fff">
-      <div style="font-size:19px;font-weight:800">TyrePulse — ${typeLabel(s.report_type)}</div>
+      <div style="font-size:19px;font-weight:800">TyrePulse ${typeLabel(s.report_type)}</div>
       <div style="font-size:12px;color:#94a3b8;margin-top:3px">
-        Schedule “${s.name}” · generated ${genAt} UTC · data coverage ${coverage}
+        Schedule "${s.name}" | generated ${genAt} UTC | data coverage ${coverage}
       </div>
       ${windowLabel ? `<div style="font-size:12px;color:#cbd5e1;margin-top:4px">
         Report window: all-time totals plus the last ${d.period_days} days compared to the prior ${d.period_days} days.
@@ -440,11 +533,11 @@ function renderHtml(s: Schedule, d: Digest, appUrl: string, currency: string, wi
 
       <table role="presentation" width="100%" cellspacing="8" style="margin-top:6px">
 
-        ${sectionTitle('Fleet Intelligence · All-time')}
+        ${sectionTitle('Fleet Intelligence: all time')}
         <tr>
           ${tile('Tyre transactions', num(d.all.tyres))}
-          ${tile('Total tyre spend', money(d.all.spend, currency))}
-          ${tile('Avg cost / km', d.all.cpk == null ? 'N/A' : money(d.all.cpk, currency))}
+          ${tile('Total tyre spend', fmtField(m, 'tyre_spend_all'), perCurrency)}
+          ${cpkTile}
         </tr>
         <tr>
           ${tile('High / Critical risk', num(d.all.high_risk), '', riskColor)}
@@ -452,10 +545,10 @@ function renderHtml(s: Schedule, d: Digest, appUrl: string, currency: string, wi
           ${tile('Active vehicles', num(d.fleet_active))}
         </tr>
 
-        ${sectionTitle(`Recent Activity · last ${d.period_days} days`)}
+        ${sectionTitle(`Recent Activity: last ${d.period_days} days`)}
         <tr>
           ${tile('Tyre records', num(d.win.tyres.cur), trend(d.win.tyres.cur, d.win.tyres.prev, false))}
-          ${tile('Tyre spend', money(d.win.spend.cur, currency), trend(d.win.spend.cur, d.win.spend.prev, true))}
+          ${tile('Tyre spend', fmtField(m, 'tyre_spend_cur'), spendTrend)}
           ${tile('High/Critical', num(d.win.high_risk.cur), trend(d.win.high_risk.cur, d.win.high_risk.prev, true), d.win.high_risk.cur ? '#b91c1c' : '#0f172a')}
         </tr>
         <tr>
@@ -464,11 +557,19 @@ function renderHtml(s: Schedule, d: Digest, appUrl: string, currency: string, wi
           ${tile('Accidents (all)', num(d.accidents), '', d.accidents ? '#b91c1c' : '#047857')}
         </tr>
 
+        ${sectionTitle('Money by country (each in its own currency)')}
+        <tr><td colspan="3" style="padding-top:4px">
+          ${countryMoneyTable(m)}
+          <div style="font-size:11.5px;color:#64748b;line-height:1.6;margin-top:8px">
+            ${basisNote} Amounts in different currencies are never added together, so there is no combined total across countries.
+          </div>
+        </td></tr>
+
         ${sectionTitle('Operations & Reliability')}
         <tr>
           ${tile('Open work orders', num(d.wo_open), `of ${num(d.wo_total)} total`)}
           ${tile('Overdue work orders', num(d.wo_overdue), '', d.wo_overdue ? '#b91c1c' : '#047857')}
-          ${tile('Work order cost', money(d.wo_cost, currency))}
+          ${tile('Work order cost', fmtField(m, 'wo_cost'), isMixedCurrency(partsFor(m, 'wo_cost')) ? 'per currency, not added together' : '')}
         </tr>
         <tr>
           ${tile('Open actions', num(d.ca_open), '', d.ca_open ? '#b45309' : '#047857')}
@@ -478,50 +579,23 @@ function renderHtml(s: Schedule, d: Digest, appUrl: string, currency: string, wi
         <tr>
           ${tile('RCAs logged', num(d.rca))}
           ${tile('Inspections (all)', num(d.inspections))}
-          ${tile('Accident cost', money(d.accident_cost, currency), '', d.accident_cost ? '#b91c1c' : '#0f172a')}
+          ${tile('Accident cost', fmtField(m, 'accident_cost'), isMixedCurrency(partsFor(m, 'accident_cost')) ? 'per currency, not added together' : '', partsFor(m, 'accident_cost').length ? '#b91c1c' : '#0f172a')}
         </tr>
 
-        ${sectionTitle('Cost Drivers')}
+        ${fromGrid ? countryDetailBlocks(m) : ''}
+
+        ${sectionTitle('Removals & Reliability')}
         <tr>
-          ${topList('Top brands by spend', d.top_brands, (n) => money(n, currency))}
-          ${topList('Top sites by spend', d.top_sites, (n) => money(n, currency))}
           ${topList('Top removal reasons', d.top_removal_reasons, (n) => num(n))}
-        </tr>
-
-        ${sectionTitle('Cost Trend & Forecast · last 6 months')}
-        <tr><td colspan="3" style="padding-top:4px">${monthlyTrendBars(d.monthly_trend, currency)}</td></tr>
-        <tr>
-          ${tile('Projected annual spend', d.projected_annual_spend == null ? 'N/A' : money(d.projected_annual_spend, currency), 'run-rate to date')}
-          ${tile('Annual budget (12× monthly)', d.monthly_budget ? money(d.monthly_budget * 12, currency) : 'N/A')}
-          ${(() => {
-            const proj = d.projected_annual_spend
-            const bud = d.monthly_budget ? d.monthly_budget * 12 : null
-            if (proj == null || bud == null || bud === 0) return tile('Budget outlook', 'N/A', 'set a fleet budget')
-            const over = proj > bud
-            const pct = Math.round(Math.abs((proj - bud) / bud) * 100)
-            return tile('Budget outlook', `${over ? 'Over' : 'Under'} by ${pct}%`, over ? 'projected spend exceeds budget' : 'within budget', over ? '#b91c1c' : '#047857')
-          })()}
-        </tr>
-
-        ${sectionTitle('Asset & Position Intelligence')}
-        <tr>
-          ${topList('Highest-cost assets', d.worst_assets, (n) => money(n, currency))}
           ${topList('Removals by position', d.by_position, (n) => num(n))}
-          ${topList('Spend by category', d.by_category, (n) => money(n, currency))}
-        </tr>
-
-        ${sectionTitle('Fleet Distribution & Reliability')}
-        <tr>
-          ${topList('Spend by country', d.by_country, (n) => money(n, currency))}
           ${brandReliabilityList(d.brand_reliability)}
-          <td style="vertical-align:top;padding:6px 0 6px 0"></td>
         </tr>
 
         ${sectionTitle('Data Quality')}
         <tr>
           ${tile('Duplicate serials', num(d.dup_serials), '', d.dup_serials ? '#b91c1c' : '#047857')}
-          ${tile('Records missing cost', num(d.missing_cost), '', d.missing_cost ? '#b45309' : '#047857')}
-          ${tile('Monthly tyre budget', money(d.monthly_budget, currency))}
+          ${tile('Tyre records with no price', num(d.missing_cost), '', d.missing_cost ? '#b45309' : '#047857')}
+          ${tile('Monthly tyre budget', fmtField(m, 'monthly_budget'), isMixedCurrency(partsFor(m, 'monthly_budget')) ? 'per currency, not added together' : '')}
         </tr>
       </table>
 
@@ -539,8 +613,8 @@ function renderHtml(s: Schedule, d: Digest, appUrl: string, currency: string, wi
       </p>
       <a href="${appUrl}" style="display:inline-block;background:#16a34a;color:#fff;font-weight:700;font-size:13px;padding:11px 20px;border-radius:8px;text-decoration:none;margin-top:4px">Open TyrePulse Dashboard</a>
       <p style="font-size:11px;color:#94a3b8;margin-top:18px">
-        You receive this because you are a recipient of the “${s.name}” schedule.
-        Manage recipients &amp; frequency in TyrePulse → Scheduled Reports.
+        You receive this because you are a recipient of the "${s.name}" schedule.
+        Manage recipients &amp; frequency in TyrePulse, Scheduled Reports.
       </p>
     </div>
   </div>`
@@ -553,6 +627,7 @@ function renderHtml(s: Schedule, d: Digest, appUrl: string, currency: string, wi
 // an estimate.
 
 type ClaimRow = {
+  country: string | null
   incident_date: string | null
   asset_no: string | null
   site: string | null
@@ -580,17 +655,21 @@ type ClaimsDigest = {
   open: number
   closed: number
   delayed: number
-  claim_total: number
-  approved_total: number
-  recovered_total: number
-  deductible_total: number
-  net_exposure: number
+  // Money is carried PER CURRENCY (one part per currency, never added across
+  // currencies). An organisation working in one currency has one part.
+  claim_total: MoneyPart[]
+  approved_total: MoneyPart[]
+  recovered_total: MoneyPart[]
+  deductible_total: MoneyPart[]
+  net_exposure: MoneyPart[]
+  outstanding: MoneyPart[]
+  mixed: boolean
   first_date: string | null
   last_date: string | null
-  by_insurer: TopItem[]
+  by_insurer: Array<TopItem & { currency: string }>
   by_status: TopItem[]
   recent: Array<{
-    date: string; asset: string; insurer: string; status: string
+    date: string; asset: string; insurer: string; status: string; currency: string
     claim: number; approved: number; recovered: number; state: 'Open' | 'Closed'; delayed: boolean
   }>
 }
@@ -609,7 +688,7 @@ function claimIsDelayed(r: ClaimRow, today: string): boolean {
 }
 
 // deno-lint-ignore no-explicit-any
-async function buildClaimsDigest(svc: any, orgId: string | null, win: { from: string | null; to: string | null } = { from: null, to: null }): Promise<ClaimsDigest> {
+async function buildClaimsDigest(svc: any, orgId: string | null, win: { from: string | null; to: string | null } = { from: null, to: null }, cur: CurrencyContext = { map: {}, fallback: '' }): Promise<ClaimsDigest> {
   // PostgREST caps every response at 1000 rows whatever .limit() says, so the
   // digest pages with .range() (id tiebreak keeps page boundaries stable) up to
   // a hard ceiling rather than silently summarising the newest 1000 claims.
@@ -619,7 +698,7 @@ async function buildClaimsDigest(svc: any, orgId: string | null, win: { from: st
     let q = svc
       .from('accidents')
       .select(
-        'id,incident_date,asset_no,site,driver_name,status,claim_status,insurer,policy_no,gcc_liability_ratio,fault_status,claim_amount,claim_approved_amount,deductible,recovered_amount,repair_cost,estimated_damage_cost,parts_cost,expected_release_date,release_date,closure_status',
+        'id,country,incident_date,asset_no,site,driver_name,status,claim_status,insurer,policy_no,gcc_liability_ratio,fault_status,claim_amount,claim_approved_amount,deductible,recovered_amount,repair_cost,estimated_damage_cost,parts_cost,expected_release_date,release_date,closure_status',
       )
       .or('claim_amount.gt.0,claim_approved_amount.gt.0,claim_status.not.is.null,insurer.not.is.null')
       .order('incident_date', { ascending: false })
@@ -643,23 +722,33 @@ async function buildClaimsDigest(svc: any, orgId: string | null, win: { from: st
   }
 
   const today = new Date().toISOString().slice(0, 10)
-  const insurerMap = new Map<string, number>()
+  const insurerMap = new Map<string, { label: string; currency: string; value: number }>()
   const statusMap = new Map<string, number>()
   let open = 0, closed = 0, delayed = 0
-  let claim_total = 0, approved_total = 0, recovered_total = 0, deductible_total = 0, net_exposure = 0
+  // One accumulator per currency: a claim in AED is never added to one in SAR.
+  type Acc = { claim: number; approved: number; recovered: number; deductible: number; net: number }
+  const byCur = new Map<string, Acc>()
+  const anyCountry = rows.some((r) => String(r.country ?? '').trim() !== '')
+  const curOf = (r: ClaimRow) => rowCurrency(r as unknown as Record<string, unknown>, 'country', cur.map, cur.fallback, anyCountry)
   let first_date: string | null = null, last_date: string | null = null
 
   for (const r of rows) {
     const cl = claimIsClosed(r)
     if (cl) closed++; else open++
     if (claimIsDelayed(r, today)) delayed++
-    claim_total += n0(r.claim_amount)
-    approved_total += n0(r.claim_approved_amount)
-    recovered_total += n0(r.recovered_amount)
-    deductible_total += n0(r.deductible)
-    net_exposure += Math.max(0, (n0(r.repair_cost) || n0(r.estimated_damage_cost)) + n0(r.parts_cost) - n0(r.recovered_amount))
+    const c = curOf(r)
+    const a = byCur.get(c) ?? { claim: 0, approved: 0, recovered: 0, deductible: 0, net: 0 }
+    a.claim += n0(r.claim_amount)
+    a.approved += n0(r.claim_approved_amount)
+    a.recovered += n0(r.recovered_amount)
+    a.deductible += n0(r.deductible)
+    a.net += Math.max(0, (n0(r.repair_cost) || n0(r.estimated_damage_cost)) + n0(r.parts_cost) - n0(r.recovered_amount))
+    byCur.set(c, a)
     const ins = (r.insurer || '(no insurer)').trim() || '(no insurer)'
-    insurerMap.set(ins, (insurerMap.get(ins) ?? 0) + n0(r.claim_amount))
+    const insKey = `${ins}|${c}`
+    const insAcc = insurerMap.get(insKey) ?? { label: ins, currency: c, value: 0 }
+    insAcc.value += n0(r.claim_amount)
+    insurerMap.set(insKey, insAcc)
     const st = (r.claim_status || '(unspecified)').trim() || '(unspecified)'
     statusMap.set(st, (statusMap.get(st) ?? 0) + 1)
     const d = r.incident_date ? String(r.incident_date).slice(0, 10) : null
@@ -669,8 +758,12 @@ async function buildClaimsDigest(svc: any, orgId: string | null, win: { from: st
     }
   }
 
-  const by_insurer = [...insurerMap.entries()].map(([label, value]) => ({ label, value }))
-    .sort((a, b) => b.value - a.value).slice(0, 6)
+  // Ranked inside each currency first (currency code, then value) so an EGP
+  // figure is never ranked above a SAR one just because the number is bigger.
+  const by_insurer = [...insurerMap.values()]
+    .sort((a, b) => a.currency.localeCompare(b.currency) || b.value - a.value).slice(0, 8)
+  const part = (pick: (a: Acc) => number): MoneyPart[] =>
+    sumByCurrency([...byCur.entries()].map(([currency, a]) => ({ currency, amount: pick(a) })))
   const by_status = [...statusMap.entries()].map(([label, value]) => ({ label, value }))
     .sort((a, b) => b.value - a.value).slice(0, 6)
   const recent = rows.slice(0, 12).map((r) => ({
@@ -678,6 +771,7 @@ async function buildClaimsDigest(svc: any, orgId: string | null, win: { from: st
     asset: r.asset_no || 'N/A',
     insurer: r.insurer || 'N/A',
     status: r.claim_status || r.status || 'N/A',
+    currency: curOf(r),
     claim: n0(r.claim_amount),
     approved: n0(r.claim_approved_amount),
     recovered: n0(r.recovered_amount),
@@ -687,28 +781,38 @@ async function buildClaimsDigest(svc: any, orgId: string | null, win: { from: st
 
   return {
     total: rows.length, open, closed, delayed,
-    claim_total, approved_total, recovered_total, deductible_total, net_exposure,
+    claim_total: part((a) => a.claim), approved_total: part((a) => a.approved),
+    recovered_total: part((a) => a.recovered), deductible_total: part((a) => a.deductible),
+    net_exposure: part((a) => a.net), outstanding: part((a) => Math.max(0, a.approved - a.recovered)),
+    mixed: byCur.size > 1,
     first_date, last_date, by_insurer, by_status, recent,
   }
 }
 
-function renderClaimsHtml(s: Schedule, d: ClaimsDigest, appUrl: string, currency: string, windowLabel = ''): string {
+function renderClaimsHtml(s: Schedule, d: ClaimsDigest, appUrl: string, windowLabel = ''): string {
   const genAt = new Date().toISOString().slice(0, 16).replace('T', ' ')
   const coverage = `${dateShort(d.first_date)} → ${dateShort(d.last_date)}`
-  const recoveryRate = d.claim_total > 0 ? Math.round((d.recovered_total / d.claim_total) * 100) : null
+  // A rate or an average across currencies would divide unlike amounts, so
+  // both are shown only when every claim is in one currency.
+  const one = (parts: MoneyPart[]): number | null => (d.mixed ? null : (parts[0]?.amount ?? 0))
+  const claimOne = one(d.claim_total)
+  const recoveredOne = one(d.recovered_total)
+  const recoveryRate = claimOne != null && recoveredOne != null && claimOne > 0 ? Math.round((recoveredOne / claimOne) * 100) : null
+  const p = (parts: MoneyPart[]) => fmtMoneyParts(parts, fmtMoney(0, ''))
+  const mixedNote = d.mixed ? ' Claims are in more than one currency, so each figure is listed per currency and nothing is added across currencies.' : ''
 
   const summary = d.total === 0
     ? `No incidents carrying an insurance claim were found for ${windowLabel ? `the requested period (${windowLabel})` : 'this organisation'}. When a claim is opened on an accident record it will appear here automatically.`
     : `<b>${num(d.total)}</b> insurance claim(s) on record — <b>${num(d.open)}</b> open, <b>${num(d.closed)}</b> closed` +
       `${d.delayed ? `, with <b style="color:#b91c1c">${num(d.delayed)}</b> past the expected release date` : ''}. ` +
-      `Total claimed <b>${money(d.claim_total, currency)}</b>, approved <b>${money(d.approved_total, currency)}</b>, ` +
-      `recovered <b>${money(d.recovered_total, currency)}</b>${recoveryRate != null ? ` (<b>${recoveryRate}%</b> recovery rate)` : ''}. ` +
-      `Net exposure after recoveries <b>${money(d.net_exposure, currency)}</b>.`
+      `Total claimed <b>${p(d.claim_total)}</b>, approved <b>${p(d.approved_total)}</b>, ` +
+      `recovered <b>${p(d.recovered_total)}</b>${recoveryRate != null ? ` (<b>${recoveryRate}%</b> recovery rate)` : ''}. ` +
+      `Net exposure after recoveries <b>${p(d.net_exposure)}</b>.${mixedNote}`
 
   const insurerRows = d.by_insurer.length
     ? d.by_insurer.map((it, i) => `<tr>
         <td style="padding:6px 0;font-size:12.5px;color:#334155"><span style="display:inline-block;width:18px;color:#94a3b8;font-weight:700">${i + 1}.</span>${it.label}</td>
-        <td style="padding:6px 0;font-size:12.5px;color:#0f172a;font-weight:700;text-align:right">${money(it.value, currency)}</td></tr>`).join('')
+        <td style="padding:6px 0;font-size:12.5px;color:#0f172a;font-weight:700;text-align:right">${money(it.value, it.currency)}</td></tr>`).join('')
     : `<tr><td style="padding:6px 0;font-size:12px;color:#94a3b8">No data</td></tr>`
   const statusRows = d.by_status.length
     ? d.by_status.map((it, i) => `<tr>
@@ -722,9 +826,9 @@ function renderClaimsHtml(s: Schedule, d: ClaimsDigest, appUrl: string, currency
         <td style="padding:7px 6px;font-size:11.5px;color:#0f172a;font-weight:600;border-bottom:1px solid #eef2f7">${r.asset}</td>
         <td style="padding:7px 6px;font-size:11.5px;color:#334155;border-bottom:1px solid #eef2f7">${r.insurer}</td>
         <td style="padding:7px 6px;font-size:11.5px;border-bottom:1px solid #eef2f7"><span style="color:${r.state === 'Closed' ? '#047857' : '#b45309'};font-weight:700">${r.state}</span>${r.delayed ? ' <span style="color:#b91c1c;font-weight:700">· delayed</span>' : ''}</td>
-        <td style="padding:7px 6px;font-size:11.5px;color:#0f172a;text-align:right;border-bottom:1px solid #eef2f7">${money(r.claim, currency)}</td>
-        <td style="padding:7px 6px;font-size:11.5px;color:#0f172a;text-align:right;border-bottom:1px solid #eef2f7">${money(r.approved, currency)}</td>
-        <td style="padding:7px 6px;font-size:11.5px;color:#047857;text-align:right;border-bottom:1px solid #eef2f7">${money(r.recovered, currency)}</td></tr>`).join('')
+        <td style="padding:7px 6px;font-size:11.5px;color:#0f172a;text-align:right;border-bottom:1px solid #eef2f7">${money(r.claim, r.currency)}</td>
+        <td style="padding:7px 6px;font-size:11.5px;color:#0f172a;text-align:right;border-bottom:1px solid #eef2f7">${money(r.approved, r.currency)}</td>
+        <td style="padding:7px 6px;font-size:11.5px;color:#047857;text-align:right;border-bottom:1px solid #eef2f7">${money(r.recovered, r.currency)}</td></tr>`).join('')
     : `<tr><td colspan="7" style="padding:10px 6px;font-size:12px;color:#94a3b8">No claims to list.</td></tr>`
 
   return `
@@ -751,19 +855,19 @@ function renderClaimsHtml(s: Schedule, d: ClaimsDigest, appUrl: string, currency
         <tr>
           ${tile('Delayed', num(d.delayed), 'past expected release', d.delayed ? '#b91c1c' : '#047857')}
           ${tile('Recovery rate', recoveryRate == null ? 'N/A' : `${recoveryRate}%`)}
-          ${tile('Net exposure', money(d.net_exposure, currency), 'after recoveries', d.net_exposure ? '#b91c1c' : '#0f172a')}
+          ${tile('Net exposure', p(d.net_exposure), 'after recoveries', d.net_exposure.length ? '#b91c1c' : '#0f172a')}
         </tr>
 
         ${sectionTitle('Financials')}
         <tr>
-          ${tile('Total claimed', money(d.claim_total, currency))}
-          ${tile('Approved', money(d.approved_total, currency), '', '#047857')}
-          ${tile('Recovered', money(d.recovered_total, currency), '', '#047857')}
+          ${tile('Total claimed', p(d.claim_total))}
+          ${tile('Approved', p(d.approved_total), '', '#047857')}
+          ${tile('Recovered', p(d.recovered_total), '', '#047857')}
         </tr>
         <tr>
-          ${tile('Deductible exposure', money(d.deductible_total, currency))}
-          ${tile('Outstanding vs approved', money(Math.max(0, d.approved_total - d.recovered_total), currency), 'approved not yet recovered', (d.approved_total - d.recovered_total) > 0 ? '#b45309' : '#047857')}
-          ${tile('Avg claim', d.total ? money(Math.round(d.claim_total / d.total), currency) : 'N/A')}
+          ${tile('Deductible exposure', p(d.deductible_total))}
+          ${tile('Outstanding vs approved', p(d.outstanding), 'approved not yet recovered', d.outstanding.length ? '#b45309' : '#047857')}
+          ${tile('Avg claim', d.total && claimOne != null ? money(Math.round(claimOne / d.total), d.claim_total[0]?.currency ?? '') : 'N/A', d.mixed ? 'not shown across currencies' : '')}
         </tr>
 
         ${sectionTitle('Claims by Insurer & Status')}
@@ -911,7 +1015,10 @@ const DATASET_DIGEST: Record<string, DatasetDigestCfg> = {
 
 type DatasetDigest = {
   count: number
-  moneySum: number
+  // Per-currency parts (each row's currency comes from its own country). Never
+  // one number across currencies.
+  moneyParts: MoneyPart[]
+  anyCountry: boolean
   recent30: number
   first: string | null
   last: string | null
@@ -1030,9 +1137,13 @@ function scopeDatasetQuery(q: any, cfg: DatasetDigestCfg, orgId: string | null, 
 }
 
 // deno-lint-ignore no-explicit-any
-async function buildDatasetDigest(svc: any, cfg: DatasetDigestCfg, orgId: string | null, win: { from: string | null; to: string | null }): Promise<DatasetDigest> {
+async function buildDatasetDigest(svc: any, cfg: DatasetDigestCfg, orgId: string | null, win: { from: string | null; to: string | null }, cur: CurrencyContext = { map: {}, fallback: '' }): Promise<DatasetDigest> {
   const cols = new Set<string>([cfg.dateCol])
   if (cfg.money) cols.add(cfg.money)
+  // Every table that carries money here also carries `country`; it decides the
+  // currency of each row. Tables with no money column are left untouched.
+  const hasMoney = !!cfg.money || cfg.moneyCols.length > 0
+  if (hasMoney) cols.add('country')
   cfg.groups.forEach(([, c]) => cols.add(c))
   cfg.recent.forEach(([c]) => cols.add(c))
   let q = svc.from(cfg.table).select([...cols].join(','))
@@ -1053,11 +1164,12 @@ async function buildDatasetDigest(svc: any, cfg: DatasetDigestCfg, orgId: string
   if (countErr) throw new Error(`${cfg.table} count failed: ${countErr.message}`)
 
   const cutoff = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10)
-  let moneySum = 0, recent30 = 0
+  let recent30 = 0
   let first: string | null = null, last: string | null = null
   const maps = cfg.groups.map(() => new Map<string, number>())
+  const anyCountry = hasMoney && rows.some((r) => String(r.country ?? '').trim() !== '')
+  const moneyParts = cfg.money ? sumRowsByCurrency(rows, cfg.money, 'country', cur.map, cur.fallback) : []
   for (const r of rows) {
-    if (cfg.money) moneySum += n0(r[cfg.money])
     const d = r[cfg.dateCol] ? String(r[cfg.dateCol]).slice(0, 10) : null
     if (d) {
       if (!first || d < first) first = d
@@ -1076,10 +1188,12 @@ async function buildDatasetDigest(svc: any, cfg: DatasetDigestCfg, orgId: string
   // rows.length is only ever used as a last-resort fallback if the exact count
   // request itself failed to return a number (should not happen; head counts
   // do not hit the same row-payload cap the data query does).
-  return { count: exactCount ?? rows.length, moneySum, recent30, first, last, groups, recent: rows.slice(0, 12) }
+  return { count: exactCount ?? rows.length, moneyParts, anyCountry, recent30, first, last, groups, recent: rows.slice(0, 12) }
 }
 
-function renderDatasetHtml(s: Schedule, cfg: DatasetDigestCfg, d: DatasetDigest, appUrl: string, currency: string, windowLabel: string): string {
+function renderDatasetHtml(s: Schedule, cfg: DatasetDigestCfg, d: DatasetDigest, appUrl: string, cur: CurrencyContext, windowLabel: string): string {
+  const totalValue = fmtMoneyParts(d.moneyParts, fmtMoney(0, ''))
+  const mixed = isMixedCurrency(d.moneyParts)
   const genAt = new Date().toISOString().slice(0, 16).replace('T', ' ')
   // The window the schedule was actually configured for - never inferred from
   // the data alone, or an empty window would print "N/A" instead of naming
@@ -1097,7 +1211,7 @@ function renderDatasetHtml(s: Schedule, cfg: DatasetDigestCfg, d: DatasetDigest,
       ? `<b>${num(d.count)}</b> record(s) in ${coverage}. ` +
         `<b>${num(d.recent30)}</b> of those started in the last 30 days.`
       : `<b>${num(d.count)}</b> record(s) in ${coverage}` +
-        `${cfg.money ? `, totalling <b>${money(d.moneySum, currency)}</b>` : ''}. ` +
+        `${cfg.money ? `, totalling <b>${totalValue}</b>${mixed ? ' (listed per currency, not added together)' : ''}` : ''}. ` +
         `<b>${num(d.recent30)}</b> of those were added in the last 30 days.`
 
   // Group breakdowns, three columns per row.
@@ -1114,7 +1228,7 @@ function renderDatasetHtml(s: Schedule, cfg: DatasetDigestCfg, d: DatasetDigest,
     ? d.recent.map((r) => `<tr>${cfg.recent.map(([c]) => {
         const raw = (r as Record<string, unknown>)[c]
         const val = cfg.moneyCols.includes(c)
-          ? money(n0(raw as number), currency)
+          ? money(n0(raw as number), rowCurrency(r as Record<string, unknown>, 'country', cur.map, cur.fallback, d.anyCountry))
           : (raw == null || String(raw).trim() === '') ? 'N/A'
           : /_date$/.test(c) ? String(raw).slice(0, 10)
           : String(raw)
@@ -1124,7 +1238,7 @@ function renderDatasetHtml(s: Schedule, cfg: DatasetDigestCfg, d: DatasetDigest,
 
   const kpis = [
     tile('Total records', num(d.count)),
-    cfg.money ? tile('Total value', money(d.moneySum, currency)) : tile('Added last 30d', num(d.recent30)),
+    cfg.money ? tile('Total value', totalValue, mixed ? 'per currency, not added' : '') : tile('Added last 30d', num(d.recent30)),
     cfg.money ? tile('Added last 30d', num(d.recent30)) : tile('Coverage', coverage),
   ].join('')
 
@@ -1167,7 +1281,7 @@ function renderDatasetHtml(s: Schedule, cfg: DatasetDigestCfg, d: DatasetDigest,
  *  period-scoped figure. The fallback branch (unknown report type) keeps the
  *  old header with no window claim. */
 // deno-lint-ignore no-explicit-any
-async function renderForSchedule(svc: any, s: Schedule, appUrl: string, currency: string): Promise<{ subject: string; html: string; shouldSend?: boolean }> {
+async function renderForSchedule(svc: any, s: Schedule, appUrl: string, cur: CurrencyContext): Promise<{ subject: string; html: string; shouldSend?: boolean }> {
   const type = s.report_type ?? ''
   const win = resolvePeriodBounds(s, new Date())
   let html: string
@@ -1177,17 +1291,19 @@ async function renderForSchedule(svc: any, s: Schedule, appUrl: string, currency
     if (!rows.length) return { subject, html: '', shouldSend: false }
     return { subject, html: asciiSafe(renderTyreStockAlert(s, rows, `${appUrl.replace(/\/+$/, '')}/stock`)), shouldSend: true }
   } else if (type === 'claims') {
-    html = renderClaimsHtml(s, await buildClaimsDigest(svc, s.org_id, win), appUrl, currency, win.label)
+    html = renderClaimsHtml(s, await buildClaimsDigest(svc, s.org_id, win, cur), appUrl, win.label)
   } else if (type === 'executive') {
-    html = renderHtml(s, await buildDigest(svc, s.org_id), appUrl, currency, win.label)
+    const d = await buildDigest(svc, s.org_id)
+    html = renderHtml(s, d, appUrl, await buildExecMoney(svc, s.org_id, d, cur), win.label)
   } else if (type.startsWith('builder:')) {
     const cfg = DATASET_DIGEST.accidents
-    html = renderDatasetHtml(s, cfg, await buildDatasetDigest(svc, cfg, s.org_id, win), appUrl, currency, win.label)
+    html = renderDatasetHtml(s, cfg, await buildDatasetDigest(svc, cfg, s.org_id, win, cur), appUrl, cur, win.label)
   } else if (DATASET_DIGEST[type]) {
     const cfg = DATASET_DIGEST[type]
-    html = renderDatasetHtml(s, cfg, await buildDatasetDigest(svc, cfg, s.org_id, win), appUrl, currency, win.label)
+    html = renderDatasetHtml(s, cfg, await buildDatasetDigest(svc, cfg, s.org_id, win, cur), appUrl, cur, win.label)
   } else {
-    html = renderHtml(s, await buildDigest(svc, s.org_id), appUrl, currency)
+    const d = await buildDigest(svc, s.org_id)
+    html = renderHtml(s, d, appUrl, await buildExecMoney(svc, s.org_id, d, cur))
   }
   // No dash punctuation in report output (user preference) - sanitize both.
   return { subject: asciiSafe(`TyrePulse ${typeLabel(s.report_type) || 'Report'}: ${s.name}`), html: asciiSafe(html) }
@@ -1199,6 +1315,20 @@ async function systemCurrency(svc: any): Promise<string> {
     const { data: cur } = await svc.from('system_config').select('value').eq('key', 'default_currency').maybeSingle()
     return (cur?.value ?? '').toString().replace(/^"|"$/g, '').trim()
   } catch { return '' }
+}
+
+/** Country to currency lookup (country_currency table) plus the system default
+ *  that applies ONLY to rows of an organisation that records no country at all.
+ *  Best-effort: a failed read yields an empty map, which renders amounts with
+ *  no currency code rather than a wrong one. */
+// deno-lint-ignore no-explicit-any
+async function loadCurrencyContext(svc: any): Promise<CurrencyContext> {
+  let map: CurrencyMap = {}
+  try {
+    const { data } = await svc.from('country_currency').select('country,currency')
+    map = buildCurrencyMap(data ?? [])
+  } catch { /* empty map: amounts print without a code */ }
+  return { map, fallback: await systemCurrency(svc) }
 }
 
 const SCHEDULE_COLS = 'id,name,report_type,frequency,day_of_week,day_of_month,time_of_day,recipients,last_sent_at,next_run_at,org_id,period,period_from,period_to'
@@ -1286,7 +1416,7 @@ async function handleSendNow(req: Request, svc: any): Promise<Response> {
 
   const now = new Date()
   try {
-    const rendered = await renderForSchedule(svc, s as Schedule, APP_URL, await systemCurrency(svc))
+    const rendered = await renderForSchedule(svc, s as Schedule, APP_URL, await loadCurrencyContext(svc))
     if (rendered.shouldSend === false) {
       await svc.from('report_schedules').update({ last_status: 'no_alert', last_error: null, updated_at: now.toISOString() }).eq('id', s.id)
       return jsonResponse(req, { sent: false, skipped: true, recipients: 0, reason: 'No tyre stock is at or below its minimum level.' })
@@ -1354,8 +1484,8 @@ serve(async (req) => {
   const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'reports@tyrepulse.app'
   const APP_URL = Deno.env.get('APP_URL') || 'https://tyrepulse.app'
 
-  // System currency (best-effort; blank if unset - never blocks a send).
-  const currency = await systemCurrency(svc)
+  // Country to currency lookup (best-effort; never blocks a send).
+  const currency = await loadCurrencyContext(svc)
 
   let sent = 0
   let failed = 0

@@ -21,8 +21,10 @@ export function mobilityOfUnit(unit) {
 
 /** Display meta for each mobility class. */
 export const MOBILITY_META = {
-  movable: { key: 'movable', label: 'Movable', sublabel: 'cost per km', unit: 'km' },
-  non_movable: { key: 'non_movable', label: 'Non-movable', sublabel: 'cost per hour', unit: 'engine_hours' },
+  // ENG-1: the km side of get_fleet_cpk divides by TYRE km, so its only rate is
+  // the tyre spend ratio. Names come from src/lib/cpkMetrics.js.
+  movable: { key: 'movable', label: 'Movable', sublabel: 'tyre spend per tyre km', unit: 'km' },
+  non_movable: { key: 'non_movable', label: 'Non-movable', sublabel: 'cost per engine hour', unit: 'engine_hours' },
 }
 
 /** Pad a number to 2 digits. */
@@ -196,7 +198,8 @@ export function fleetSideFor(fleetRow, mobility) {
     currency: fleetRow.currency ?? fleetRow.country ?? '',
     unit: MOBILITY_META[mobility].unit,
     cpkTyre: s.cpk_tyre ?? s.cpkTyre ?? null,
-    cpkTotal: s.cpk_total ?? s.cpkTotal ?? null,
+    // A total over tyre km is not a measurement (ENG-1): null on the km side.
+    cpkTotal: mobility === 'non_movable' ? (s.cpk_total ?? s.cpkTotal ?? null) : null,
     coveragePct: s.coverage_pct ?? s.coveragePct ?? null,
     tyreCost: num(s.tyre_cost_matched ?? s.tyre_cost ?? s.tyreCost),
     totalCost: cost,

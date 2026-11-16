@@ -170,9 +170,9 @@ export async function listOffsets({ country, limit = 500 } = {}) {
 }
 
 /**
- * Record a carbon offset purchase. Requires tonnes > 0. trees_equivalent is
- * derived (1 tonne ≈ 45 trees/yr) unless caller supplies one. RLS enforces
- * org isolation and elevated-role writes.
+ * Record a carbon offset purchase. Requires tonnes > 0. Nothing is derived or
+ * defaulted: a field the caller left blank is not sent. RLS enforces org
+ * isolation and elevated-role writes.
  */
 export async function createOffset(values = {}) {
   const tonnes = asNumber(values.tonnes, 'Tonnes')
@@ -180,14 +180,21 @@ export async function createOffset(values = {}) {
   const aedCost = asNumber(values.aed_cost, 'AED cost')
   const treesEq = asNumber(values.trees_equivalent, 'Trees equivalent')
   const payload = {
-    provider: asText(values.provider, 200) || 'Verra Registry',
-    project: asText(values.project, 200) || 'UAE Mangrove Restoration',
+    // A blank field is stored as "not recorded". It used to be filled with a
+    // made-up registry, project, price (tonnes x 90) and tree count (tonnes x 45),
+    // which then read back as facts the user had entered.
+    provider: asText(values.provider, 200) || null,
+    project: asText(values.project, 200) || null,
     tonnes: Math.round(tonnes * 100) / 100,
-    aed_cost: aedCost != null ? Math.round(aedCost) : Math.round(tonnes * 90),
-    trees_equivalent: treesEq != null ? Math.round(treesEq) : Math.round(tonnes * 45),
     notes: asText(values.notes, 2000),
     country: asText(values.country, 120),
   }
+  // aed_cost and trees_equivalent are NOT NULL DEFAULT 0 in production today, so
+  // a blank one is left OUT of the insert (an explicit null would be refused).
+  // The pending draft 20261117100000_atr_carbon_offsets_blank_is_null makes both
+  // nullable with no default, after which an omitted value is stored as null.
+  if (aedCost != null) payload.aed_cost = Math.round(aedCost)
+  if (treesEq != null) payload.trees_equivalent = Math.round(treesEq)
   return unwrap(await supabase.from('carbon_offsets').insert(payload).select(OFFSET_COLS).single())
 }
 

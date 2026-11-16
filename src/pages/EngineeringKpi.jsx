@@ -538,7 +538,9 @@ export default function EngineeringKpi() {
           : replacementRate.avgPerVehiclePerMonth < 1.5 ? 'warning' : 'critical',
       },
       {
-        title: 'Pressure Compliance %',
+        // ENG-9: consistency around each vehicle's own median, not compliance
+        // with a target pressure (no target pressure is stored).
+        title: 'Pressure Consistency %',
         value: inspections.length === 0 ? 'N/A (no inspections)' : fmtPct(pressPct),
         subValue: pressMeasured
           ? `${pressureCompliance.compliantCount} of ${pressureCompliance.totalCount} readings within tolerance`
@@ -594,10 +596,12 @@ export default function EngineeringKpi() {
       },
       {
         title: 'Vehicle Downtime Impact',
-        value: `${downtimeImpact.totalDowntimeHours.toLocaleString()} hrs estimated`,
-        subValue: `Avg ${downtimeImpact.avgDowntimePerVehicle.toFixed(1)} hrs/vehicle`,
-        description: 'Estimate: tyre replacements x 2 hrs industry average',
-        status: downtimeImpact.totalDowntimeHours > 500 ? 'critical' : downtimeImpact.totalDowntimeHours > 100 ? 'warning' : 'good',
+        // ENG-7: no downtime is recorded on a tyre record, so nothing here is
+        // measured. The headline is N/A; the assumed figure is named as assumed.
+        value: 'N/A (not measured)',
+        subValue: `Assumed ${Number(downtimeImpact.assumedDowntimeHours || 0).toLocaleString()} hrs at ${downtimeImpact.assumedHoursPerReplacement} hrs per tyre fitment record`,
+        description: 'Assumption, not a measurement. Measured downtime comes from job card timestamps on the Downtime page.',
+        status: 'neutral',
       },
       {
         title: 'Tyre Spend Trend (expense grid)',
@@ -1116,7 +1120,7 @@ export default function EngineeringKpi() {
             'Fleet Availability':    fmtPct(head.availabilityPct),
             'Scrap Rate':            fmtPct(head.scrapPct),
             'Tyre Spend Trend':      costTrend ? costTrend.trend : 'N/A',
-            'Downtime Hours':        `${kpis.downtimeImpact.totalDowntimeHours.toLocaleString()} hrs`,
+            'Downtime Hours (assumed, not measured)': `${Number(kpis.downtimeImpact.assumedDowntimeHours || 0).toLocaleString()} hrs`,
           }}
           period={dateFrom && dateTo ? `${dateFrom} to ${dateTo}` : 'All time'}
         />

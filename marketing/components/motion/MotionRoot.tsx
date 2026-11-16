@@ -21,13 +21,13 @@ import { useEffect } from "react";
 const SINGLES = [
   ".sec-h", ".split", ".overview", ".insp-hero", ".people", ".tab-intro",
   ".cta-band-inner", ".form-card", ".page-content > .site-shell > .panel",
-  ".anchor-sec", ".proof-head", ".ar-split", "[data-reveal]",
+  ".anchor-sec", ".proof-head", ".ar-split", ".tp-feature", ".tp-prose", "[data-reveal]",
 ].join(",");
 
 /** Containers whose direct children rise one after another. */
 const GROUPS = [
   ".bento", ".eco-grid", ".sec-list", ".ind-list", ".flow", ".faq-list",
-  ".price-grid", ".grid-3p", ".grid-4p", ".ar-steps", ".proof-stats", "[data-reveal-group]",
+  ".price-grid", ".grid-3p", ".grid-4p", ".ar-steps", ".proof-stats", ".tp-caps", "[data-reveal-group]",
 ].join(",");
 
 /** Endless animations that should only run while visible (see motion.css). */

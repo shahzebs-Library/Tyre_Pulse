@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { APP_STORE_URL } from "@/app/schema";
-import { APP_URL, CONTACT_EMAIL, LEGAL_LINKS, WHATSAPP_URL } from "@/lib/site";
+import { APP_URL, CONTACT_EMAIL, IOS_STATEMENT, IOS_STATEMENT_AR, IOS_STATUS, LEGAL_LINKS, WHATSAPP_URL } from "@/lib/site";
+import { StatusBadge } from "./ui/StatusBadge";
 import { MENU_GROUPS, menuHref } from "@/lib/nav";
 import { Logo } from "./Logo";
 import { StoreBadges } from "./StoreBadges";
@@ -9,7 +10,7 @@ const COPY = {
   en: {
     about: "One operational workspace for plant, machinery and vehicles: assets, workshop, field teams and stores.",
     mobile: "Mobile app",
-    mobileText: "Inspections, meter readings and job cards from the yard, online or offline.",
+    mobileText: "Inspections, meter readings and job cards from the yard, online or offline. On Android today. The iPhone app is not on the App Store yet.",
     access: "Access",
     login: "Customer login",
     whatsapp: "WhatsApp sales",
@@ -21,7 +22,7 @@ const COPY = {
   ar: {
     about: "مساحة عمل تشغيلية واحدة للمعدات والآليات والمركبات: الأصول والورشة والفرق الميدانية والمستودعات.",
     mobile: "تطبيق الجوال",
-    mobileText: "الفحوصات وقراءات العدادات وبطاقات العمل من الموقع، مع الاتصال أو بدونه.",
+    mobileText: "الفحوصات وقراءات العدادات وبطاقات العمل من الموقع، مع الاتصال أو بدونه. متاح اليوم على أندرويد، وتطبيق آيفون غير متاح على App Store بعد.",
     access: "الدخول",
     login: "دخول العملاء",
     whatsapp: "المبيعات عبر واتساب",
@@ -49,14 +50,15 @@ export function Footer({ locale = "en" }: { locale?: "en" | "ar" }) {
             <p className="footer-text">{c.about}</p>
             <p className="footer-heading">{c.mobile}</p>
             <p className="footer-text">{c.mobileText}</p>
-            <StoreBadges tone="dark" appStoreUrl={APP_STORE_URL} />
+            <StoreBadges tone="dark" appStoreUrl={APP_STORE_URL} showIos={IOS_STATUS === "available"} />
+            {IOS_STATUS === "in-review" && <p className="footer-ios"><StatusBadge status="in-review" locale={locale} /> <span>{ar ? IOS_STATEMENT_AR : IOS_STATEMENT}</span></p>}
           </div>
           {MENU_GROUPS.map((g) => (
             <nav key={g.id} aria-label={ar ? g.labelAr : g.label}>
               <p className="footer-heading" aria-hidden="true">{ar ? g.labelAr : g.label}</p>
               <div className="footer-links">
-                {g.items.map((p) => <Link key={p.href} href={menuHref(p.href)}>{ar ? p.labelAr : p.label}</Link>)}
-                {g.id === "resources" && (ar ? <Link href="/" lang="en">English</Link> : <Link href="/ar" lang="ar">العربية</Link>)}
+                {g.items.map((p) => <Link key={p.href} href={menuHref(p.href)} prefetch={false}>{ar ? p.labelAr : p.label}</Link>)}
+                {g.id === "resources" && (ar ? <Link href="/" lang="en" prefetch={false}>English</Link> : <Link href="/ar" lang="ar" prefetch={false}>العربية</Link>)}
               </div>
             </nav>
           ))}

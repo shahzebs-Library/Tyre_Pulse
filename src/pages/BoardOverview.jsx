@@ -66,7 +66,7 @@ import { loadGovernedCostSplit } from '../lib/api/governedCost'
 import CostValue from '../components/cost/CostValue'
 import { getFleetCpk } from '../lib/api/fleetCpk'
 import {
-  fmtCpkValue, fmtDistance, fmtCoverage, unitSuffix, sortByTypeWorstFirst, fleetTiles,
+  fmtCpkValue, fmtDistance, fmtCoverage, unitSuffix, sortByTypeWorstFirst, fleetTiles, tileCells, tileBasis,
 } from '../lib/fleetCpkView'
 import { scopeLabel } from '../lib/reportingScope'
 import { scopeRequestCountries, scopeQueryKey } from '../lib/reportingScopeQuery'
@@ -474,7 +474,7 @@ export default function BoardOverview() {
       cell: ({ row }) => fmtDistance(row.original.distance, row.original.unit),
     },
     {
-      id: 'cpk', header: 'CPK total', accessorFn: (r) => r.cpk, size: 140, sortUndefined: 'last', meta: { align: 'right' },
+      id: 'cpk', header: 'Tyre spend ratio or cost per hour', accessorFn: (r) => r.cpk, size: 140, sortUndefined: 'last', meta: { align: 'right' },
       cell: ({ row }) => (
         <span className={row.original.cpk == null ? 'text-[var(--text-muted)]' : 'font-medium text-[var(--text-primary)]'}>
           {fmtCpkValue(row.original.cpk, row.original.currency, row.original.unit)}
@@ -703,15 +703,15 @@ export default function BoardOverview() {
       // currency. Straightforward text, so it travels with the board PDF.
       if (cpkFleetTiles.length > 0) {
         doc.setTextColor(15, 23, 42); doc.setFontSize(10)
-        doc.text('Fleet CPK (cost per km / hour, last 365 days)', M, y)
+        doc.text('Tyre spend ratio and cost per engine hour (last 365 days)', M, y)
         y += 6
         doc.setFontSize(8)
         cpkFleetTiles.forEach((tile) => {
-          const unitLabel = tile.unit === 'engine_hours' ? 'per hour' : 'per km'
+          const unitLabel = tile.unit === 'engine_hours' ? 'per engine hour' : 'per tyre km'
           doc.setTextColor(71, 85, 105)
           doc.text(
-            `${tile.country || 'Fleet'} (${unitLabel}): Total ${fmtCpkValue(tile.cpkTotal, tile.currency, tile.unit)}`
-              + `  |  Tyre ${fmtCpkValue(tile.cpkTyre, tile.currency, tile.unit)}  |  Coverage ${fmtCoverage(tile.coveragePct)}`,
+            `${tile.country || 'Fleet'} (${unitLabel}): ${tileCells(tile).map((c) => `${c.label} ${c.value}`).join('  |  ')}`
+              + `  |  Coverage ${fmtCoverage(tile.coveragePct)}`,
             M, y,
           )
           y += 5
@@ -1051,24 +1051,23 @@ export default function BoardOverview() {
                             <div className="flex items-center gap-1.5 min-w-0">
                               {isHours ? <Clock size={14} className="text-amber-400 shrink-0" /> : <Gauge size={14} className="text-[var(--accent)] shrink-0" />}
                               <span className="text-xs text-[var(--text-secondary)] font-medium truncate">
-                                {tile.country || 'Fleet'} - {isHours ? 'per hour' : 'per km'}
+                                {tile.country || 'Fleet'} - {isHours ? 'per engine hour' : 'per tyre km'}
                               </span>
                             </div>
                             <span className="text-[10px] text-[var(--text-muted)] uppercase">{tile.currency}</span>
                           </div>
                           <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <p className="text-[10px] text-[var(--text-muted)]">Total CPK</p>
-                              <p className="text-base font-bold text-[var(--text-primary)] leading-tight">{fmtCpkValue(tile.cpkTotal, tile.currency, tile.unit)}</p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] text-[var(--text-muted)]">Tyre CPK</p>
-                              <p className="text-base font-bold text-[var(--text-secondary)] leading-tight">{fmtCpkValue(tile.cpkTyre, tile.currency, tile.unit)}</p>
-                            </div>
+                            {tileCells(tile).map((c) => (
+                              <div key={c.label}>
+                                <p className="text-[10px] text-[var(--text-muted)]">{c.label}</p>
+                                <p className={`text-base font-bold leading-tight ${c.primary ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>{c.value}</p>
+                              </div>
+                            ))}
                           </div>
                           <p className="text-[10px] text-[var(--text-muted)]">
-                            {fmtDistance(tile.distance, tile.unit)} measured | Coverage {fmtCoverage(tile.coveragePct)}
+                            {isHours ? fmtDistance(tile.distance, tile.unit) : `${fmtDistance(tile.distance, tile.unit).replace(/ km$/, ' tyre km')}`} measured | Coverage {fmtCoverage(tile.coveragePct)}
                           </p>
+                          <p className="text-[10px] text-[var(--text-muted)]">{tileBasis(tile)}</p>
                         </Card>
                       )
                     })}
@@ -1078,7 +1077,7 @@ export default function BoardOverview() {
                     <Card>
                       <CardHeader
                         icon={Layers}
-                        title="Worst asset types by CPK"
+                        title="Highest rate by asset type (tyre spend ratio or cost per engine hour)"
                         actions={<span className="text-xs text-[var(--text-muted)]">top {cpkTopTypes.length}, each in its own currency</span>}
                       />
                       <EnterpriseTable
@@ -1090,7 +1089,7 @@ export default function BoardOverview() {
                         enableExport={false}
                         enableColumnVisibility={false}
                         initialPageSize={25}
-                        emptyMessage="No asset type has measured CPK in this scope."
+                        emptyMessage="No asset type has a measured rate in this scope."
                       />
                     </Card>
                   )}

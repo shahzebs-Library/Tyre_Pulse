@@ -54,6 +54,7 @@ export const CONFIG_DEFAULTS = Object.freeze({
   backup_enabled: true,
   export_enabled: true,
   max_export_rows: 50000,
+  pdf_bulk_limit: 50,            // reports in one bulk PDF download: 10, 50 or 100
   max_upload_rows: 100000,
   data_retention_months: 0,      // 0 = keep forever
   audit_retention_days: 0,       // 0 = keep forever

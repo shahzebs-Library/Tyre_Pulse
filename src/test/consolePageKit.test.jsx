@@ -4,7 +4,7 @@ import { render, screen, fireEvent, act, renderHook, cleanup } from '@testing-li
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import {
   refreshedLabel, usePaged, Pager, useUrlTab, useUrlParam, Collapsible, AttentionList, Drawer,
-  normalizeAttentionItem, PageHeader,
+  normalizeAttentionItem, PageHeader, ConsoleLink,
 } from '../console/pages/shared/pageKit'
 
 afterEach(() => {
@@ -194,5 +194,21 @@ describe('Collapsible, AttentionList, PageHeader', () => {
     expect(screen.getByText('Not loaded yet')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /Refresh/ }))
     expect(n).toBe(1)
+  })
+})
+
+describe('ConsoleLink', () => {
+  it('stays in the console tab for a console page', () => {
+    render(<MemoryRouter><ConsoleLink to="/console/health">Health</ConsoleLink></MemoryRouter>)
+    const a = screen.getByRole('link', { name: 'Health' })
+    expect(a.getAttribute('href')).toBe('/console/health')
+    expect(a.getAttribute('target')).toBeNull()
+  })
+  it('opens a main-app page in a new tab, so the console session is not left behind', () => {
+    render(<MemoryRouter><ConsoleLink to="/data-reconciliation">Brand fill</ConsoleLink></MemoryRouter>)
+    const a = screen.getByRole('link', { name: 'Brand fill' })
+    expect(a.getAttribute('href')).toBe('/data-reconciliation')
+    expect(a.getAttribute('target')).toBe('_blank')
+    expect(a.getAttribute('rel')).toContain('noopener')
   })
 })

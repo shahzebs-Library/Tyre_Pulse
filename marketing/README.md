@@ -43,40 +43,28 @@ is which:
 `marketing`, so a marketing-only push no longer starts a pointless Vite build.
 The marketing project is unaffected by that script and still builds normally.
 
-**What it does not have is a custom domain.** `tyrepulse.app` and
-`www.tyrepulse.app` are both attached to the app project (`tyrepulse.app`
-308-redirects to `www`), so the branded hosts still serve the application, and
-this site is only reachable on its `.vercel.app` address.
-`app.tyrepulse.app`, `admin.tyrepulse.app` and `console.tyrepulse.app` do not
-exist at all.
+### Hosts
 
-That is why `NEXT_PUBLIC_APP_URL` defaults to `https://www.tyrepulse.app` in
-`lib/site.ts`: it is the host that actually serves the app, so the Login link
-works. Pointing it at `app.tyrepulse.app` before that host exists puts a dead
-link in the header of every page.
+The operational app is served at `app.tyrepulse.app`, the production domain of
+the app project. `NEXT_PUBLIC_APP_URL` defaults to that host in `lib/site.ts`,
+which is the one place it is written: the Log in link, the customer login link,
+the legal pages (`/privacy`, `/terms`, `/data-deletion`), the structured data,
+`llms.txt` and the `/console` redirect all read `APP_URL` from there.
 
-### The intended split
+`NEXT_PUBLIC_SITE_URL` defaults to `https://www.tyrepulse.app` and drives
+canonical URLs, hreflang, the sitemap and the JSON-LD graph. Confirm on
+`tyre-pulse-eezl` that `www.tyrepulse.app` is attached to this project (or set
+the variable to the host that really serves this site) before relying on the
+canonical URLs.
 
-Only the domains still need moving; the project already exists.
+`next.config.ts` still carries the PWA rescue redirect: a request that arrives
+with `?source=pwa` is handed to `APP_URL`, so a phone whose installed app was
+bound to the old host launches into the application and not into this site.
 
-In this order, so nothing is dark in between:
-
-1. Add `app.tyrepulse.app` to the **app** project and wait for it to serve.
-2. Set `NEXT_PUBLIC_APP_URL=https://app.tyrepulse.app` on `tyre-pulse-eezl`.
-3. Move `www.tyrepulse.app` and `tyrepulse.app` from the app project to
-   `tyre-pulse-eezl`.
-
-Step 1 before step 3 matters: the app is an installed PWA whose start_url is
-bound to the current host, and `next.config.ts` carries the rescue redirect that
-hands those launches back to the application.
-
-| Host | Serves | Exists |
-| --- | --- | --- |
-| `tyre-pulse-eezl.vercel.app` | this marketing site | yes, live now |
-| `www.tyrepulse.app` | this marketing site, once moved | yes, currently the app |
-| `app.tyrepulse.app` | operational product | not yet |
-| `admin.tyrepulse.app` | company administration | no, and not planned as a public host |
-| `console.tyrepulse.app` | platform owner console | no, and not planned as a public host |
+| Host | Serves |
+| --- | --- |
+| `www.tyrepulse.app` | this marketing site (canonical origin) |
+| `app.tyrepulse.app` | the operational product |
 
 Company administration and the owner console are reached from inside the
 application, not as separate public sites. The footer states that rather than

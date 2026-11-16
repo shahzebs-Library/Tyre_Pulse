@@ -28,7 +28,8 @@
  * never message text alone, because unwrap() sanitises the message).
  */
 import { supabase, fetchAllPages, isMissingRelation } from './_client'
-import { fetchableSources, canonAssetNo } from '../assetHistory'
+import { fetchableSources, canonAssetNo, assetCompany } from '../assetHistory'
+import { currentOrgId } from './companyScope'
 
 /* ------------------------------------------------------------------ *
  * Read ceilings                                                        *
@@ -95,9 +96,14 @@ async function readPaged(pageFn, max) {
  * merge. Under the All-countries scope no filter is applied, and the page
  * states that the timeline may span more than one machine.
  */
-function scopeCountry(query, country, column = 'country') {
-  if (country && country !== 'All') return query.eq(column, country)
-  return query
+function scopeCountry(query, country, org) {
+  let q = query
+  if (country && country !== 'All') q = q.eq('country', country)
+  // Company scope: the same asset code in another company is another machine,
+  // and a super admin's read spans companies. Strict for the same reason as
+  // country: a row that cannot be proved to be this company's is left out.
+  if (org) q = q.eq('organisation_id', org)
+  return q
 }
 
 /** Optional server-side date window on a source's own date column. */
@@ -119,14 +125,14 @@ const JOB_CARD_COLS =
   'technician_name,workshop_name,site,country,opened_at,started_at,completed_at,' +
   'production_out_at,production_in_at,waiting_parts_hours,waiting_manpower_hours,' +
   'labour_cost,parts_cost,lubricant_cost,outside_repair_cost,tyre_cost,total_cost,' +
-  'breakdown_hours,odometer,notes,custom_data,created_at'
+  'breakdown_hours,odometer,notes,custom_data,created_at,organisation_id'
 
 const PARTS_COLS =
   'id,event_date,txn_date,issue_number,work_order_no,asset_code,item_code,item_description,' +
-  'qty,unit_cost,line_cost,tyre_cost,spare_cost,oil_cost,site,store_code,currency,country'
+  'qty,unit_cost,line_cost,tyre_cost,spare_cost,oil_cost,site,store_code,currency,country,organisation_id'
 
 const LINE_ITEM_COLS =
-  'id,work_order_no,asset_no,task,detail,action,qty,opened_date,country,created_at'
+  'id,work_order_no,asset_no,task,detail,action,qty,opened_date,country,created_at,organisation_id'
 
 const TYRE_COLS =
   'id,asset_no,serial_no,position,brand,size,cost_per_tyre,issue_date,removal_date,' +
@@ -174,132 +180,132 @@ const DISPOSAL_COLS =
  * Per-source readers                                                   *
  * ------------------------------------------------------------------ */
 
-function readJobCards(asset, country, from, to) {
+function readJobCards(asset, country, from, to, org) {
   return readPaged((f, t) => scopeDates(
     scopeCountry(
       supabase.from('work_orders').select(JOB_CARD_COLS).eq('asset_no', asset),
-      country,
+      country, org,
     ), 'opened_at', from, to)
     .order('opened_at', { ascending: false }).order('id').range(f, t),
   READ_MAX.job_card)
 }
 
-function readPartsLines(asset, country, from, to) {
+function readPartsLines(asset, country, from, to, org) {
   return readPaged((f, t) => scopeDates(
     scopeCountry(
       supabase.from('parts_consumption').select(PARTS_COLS).eq('asset_code', asset),
-      country,
+      country, org,
     ), 'event_date', from, to)
     .order('event_date', { ascending: false }).order('id').range(f, t),
   READ_MAX.parts_line)
 }
 
-function readLineItems(asset, country) {
+function readLineItems(asset, country, org) {
   return readPaged((f, t) => scopeCountry(
     supabase.from('work_order_line_items').select(LINE_ITEM_COLS).eq('asset_no', asset),
-    country,
+    country, org,
   ).order('id').range(f, t), READ_MAX.line_item)
 }
 
-function readTyres(asset, country) {
+function readTyres(asset, country, org) {
   // Deliberately NOT date-windowed: a tyre fitted before the window is still
   // the tyre on the wheel today, and its removal may fall inside the window.
   return readPaged((f, t) => scopeCountry(
     supabase.from('tyre_records').select(TYRE_COLS).eq('asset_no', asset),
-    country,
+    country, org,
   ).order('issue_date', { ascending: false }).order('id').range(f, t), READ_MAX.tyre_fitment)
 }
 
-function readOdometer(asset, country, from, to) {
+function readOdometer(asset, country, from, to, org) {
   return readPaged((f, t) => scopeDates(
     scopeCountry(
       supabase.from('odometer_logs').select(ODOMETER_COLS).eq('asset_no', asset),
-      country,
+      country, org,
     ), 'reading_date', from, to)
     .order('reading_date', { ascending: true }).order('id').range(f, t), READ_MAX.odometer)
 }
 
-function readEngineHours(asset, country, from, to) {
+function readEngineHours(asset, country, from, to, org) {
   return readPaged((f, t) => scopeDates(
     scopeCountry(
       supabase.from('engine_hours_logs').select(HOURS_COLS).eq('asset_no', asset),
-      country,
+      country, org,
     ), 'reading_date', from, to)
     .order('reading_date', { ascending: true }).order('id').range(f, t), READ_MAX.engine_hours)
 }
 
-function readInspections(asset, country, from, to) {
+function readInspections(asset, country, from, to, org) {
   return readPaged((f, t) => scopeDates(
     scopeCountry(
       supabase.from('inspections').select(INSPECTION_COLS).eq('asset_no', asset),
-      country,
+      country, org,
     ), 'inspection_date', from, to)
     .order('inspection_date', { ascending: false }).order('id').range(f, t), READ_MAX.inspection)
 }
 
-function readChecklists(asset, country, from, to) {
+function readChecklists(asset, country, from, to, org) {
   return readPaged((f, t) => scopeDates(
     scopeCountry(
       supabase.from('checklist_submissions').select(CHECKLIST_COLS).eq('asset_no', asset),
-      country,
+      country, org,
     ), 'submitted_at', from, to)
     .order('submitted_at', { ascending: false }).order('id').range(f, t), READ_MAX.checklist)
 }
 
-function readAccidents(asset, country, from, to) {
+function readAccidents(asset, country, from, to, org) {
   return readPaged((f, t) => scopeDates(
     scopeCountry(
       supabase.from('accidents').select(ACCIDENT_COLS).eq('asset_no', asset),
-      country,
+      country, org,
     ), 'incident_date', from, to)
     .order('incident_date', { ascending: false }).order('id').range(f, t), READ_MAX.accident)
 }
 
-function readBreakdowns(asset, country) {
+function readBreakdowns(asset, country, org) {
   // An open breakdown that started before the window is exactly what the page
   // exists to surface, so this is never date-windowed.
   return readPaged((f, t) => scopeCountry(
     supabase.from('asset_breakdowns').select(BREAKDOWN_COLS).eq('asset_no', asset),
-    country,
+    country, org,
   ).order('reported_on', { ascending: false }).order('id').range(f, t), READ_MAX.breakdown)
 }
 
-function readWashes(asset, country, from, to) {
+function readWashes(asset, country, from, to, org) {
   return readPaged((f, t) => scopeDates(
     scopeCountry(
       supabase.from('wash_records').select(WASH_COLS).eq('asset_no', asset),
-      country,
+      country, org,
     ), 'wash_date', from, to)
     .order('wash_date', { ascending: false }).order('id').range(f, t), READ_MAX.wash)
 }
 
-function readPmServices(asset, country, from, to) {
+function readPmServices(asset, country, from, to, org) {
   return readPaged((f, t) => scopeDates(
     scopeCountry(
       supabase.from('pm_service_records').select(PM_COLS).eq('asset_no', asset),
-      country,
+      country, org,
     ), 'service_date', from, to)
     .order('service_date', { ascending: false }).order('id').range(f, t), READ_MAX.pm_service)
 }
 
-function readUtilization(asset, country) {
+function readUtilization(asset, country, org) {
   return readPaged((f, t) => scopeCountry(
     supabase.from('asset_utilization').select(UTILIZATION_COLS).eq('asset_no', asset),
-    country,
+    country, org,
   ).order('captured_at', { ascending: false }).order('id').range(f, t), READ_MAX.utilization)
 }
 
-function readPenalties(asset, country) {
+function readPenalties(asset, country, org) {
   return readPaged((f, t) => scopeCountry(
     supabase.from('sany_delay_penalties').select(PENALTY_COLS).eq('asset_no', asset),
-    country,
+    country, org,
   ).order('period_date', { ascending: false }).order('id').range(f, t), READ_MAX.penalty)
 }
 
-function readDisposal(asset, country) {
+function readDisposal(asset, country, org) {
   return readPaged((f, t) => scopeCountry(
     supabase.from('asset_disposals').select(DISPOSAL_COLS).eq('asset_no', asset),
-    country,
+    country, org,
   ).order('id').range(f, t), READ_MAX.disposal)
 }
 
@@ -311,7 +317,7 @@ function readDisposal(asset, country) {
  * `.in()` list is caller-supplied and an asset with hundreds of fitments would
  * otherwise build an unbounded filter expression.
  */
-async function readTyreMarks(serials) {
+async function readTyreMarks(serials, org) {
   const list = [...new Set((serials || []).filter(Boolean).map((s) => String(s).trim()).filter(Boolean))]
   if (!list.length) return empty(false)
   const rows = []
@@ -320,8 +326,8 @@ async function readTyreMarks(serials) {
     // `.in()` builds and escapes its own value list, so a serial containing a
     // comma or a quote cannot break out of the filter.
     const res = await readPaged(
-      (f, t) => supabase.from('tyre_status_marks').select(MARK_COLS)
-        .in('serial', chunk).order('serial').order('mark_type').range(f, t),
+      (f, t) => scopeCountry(supabase.from('tyre_status_marks').select(MARK_COLS)
+        .in('serial', chunk), null, org).order('serial').order('mark_type').range(f, t),
       READ_MAX.tyre_mark,
     )
     if (!res.ok) return res            // one failed chunk means we do not know
@@ -353,7 +359,7 @@ export function listFleetRowsForAsset(assetNo) {
     (f, t) => supabase.from('vehicle_fleet')
       .select('id,asset_no,country,site,region,vehicle_type,make,model,model_year,' +
         'registration_no,chassis_no,engine_no,status,ops_status,ops_status_note,' +
-        'current_km,fleet_number,capacity,operation_start_date,created_at')
+        'current_km,fleet_number,capacity,operation_start_date,created_at,organisation_id')
       .eq('asset_no', asset).order('country').order('id').range(f, t),
     100,
   )
@@ -405,7 +411,7 @@ function settled(result) {
  *   fleetRows:Array, crossCountry:boolean, sources:Record<string,object>,
  *   truncated:string[]}>}
  */
-export async function loadAssetHistory(assetNo, { country, from, to, sources } = {}) {
+export async function loadAssetHistory(assetNo, { country, from, to, sources, org: companyOrg } = {}) {
   const asset = canonAssetNo(assetNo)
   if (!asset) {
     return {
@@ -417,25 +423,34 @@ export async function loadAssetHistory(assetNo, { country, from, to, sources } =
   const wanted = Array.isArray(sources) && sources.length ? new Set(sources) : null
   const want = (key) => !wanted || wanted.has(key)
 
-  // The register read runs alongside everything else; it is never a gate.
-  const fleetPromise = listFleetRowsForAsset(asset)
+  // The register read decides WHICH company's machine this is (an asset code is
+  // unique per company and country, not globally; a super admin's read spans
+  // companies), so it runs first, alongside the caller-company read. Both are
+  // small single reads. A failed register read never blocks the page: the
+  // caller's own company is used, which is what an ordinary user's RLS gives.
+  const [fleetSettled, callerOrg] = await Promise.all([
+    Promise.allSettled([listFleetRowsForAsset(asset)]).then((r) => settled(r[0])),
+    currentOrgId(),
+  ])
+  const allFleetRows = fleetSettled.ok ? fleetSettled.rows : []
+  const org = companyOrg || assetCompany(allFleetRows, country, callerOrg)
 
   const plan = [
-    ['job_card', () => readJobCards(asset, country, from, to)],
-    ['parts_line', () => readPartsLines(asset, country, from, to)],
-    ['line_item', () => readLineItems(asset, country)],
-    ['tyre_fitment', () => readTyres(asset, country)],
-    ['odometer', () => readOdometer(asset, country, from, to)],
-    ['engine_hours', () => readEngineHours(asset, country, from, to)],
-    ['inspection', () => readInspections(asset, country, from, to)],
-    ['checklist', () => readChecklists(asset, country, from, to)],
-    ['accident', () => readAccidents(asset, country, from, to)],
-    ['breakdown', () => readBreakdowns(asset, country)],
-    ['wash', () => readWashes(asset, country, from, to)],
-    ['pm_service', () => readPmServices(asset, country, from, to)],
-    ['utilization', () => readUtilization(asset, country)],
-    ['penalty', () => readPenalties(asset, country)],
-    ['disposal', () => readDisposal(asset, country)],
+    ['job_card', () => readJobCards(asset, country, from, to, org)],
+    ['parts_line', () => readPartsLines(asset, country, from, to, org)],
+    ['line_item', () => readLineItems(asset, country, org)],
+    ['tyre_fitment', () => readTyres(asset, country, org)],
+    ['odometer', () => readOdometer(asset, country, from, to, org)],
+    ['engine_hours', () => readEngineHours(asset, country, from, to, org)],
+    ['inspection', () => readInspections(asset, country, from, to, org)],
+    ['checklist', () => readChecklists(asset, country, from, to, org)],
+    ['accident', () => readAccidents(asset, country, from, to, org)],
+    ['breakdown', () => readBreakdowns(asset, country, org)],
+    ['wash', () => readWashes(asset, country, from, to, org)],
+    ['pm_service', () => readPmServices(asset, country, from, to, org)],
+    ['utilization', () => readUtilization(asset, country, org)],
+    ['penalty', () => readPenalties(asset, country, org)],
+    ['disposal', () => readDisposal(asset, country, org)],
   ].filter(([key]) => key === 'line_item' ? want('job_card') : want(key))
 
   const settledResults = await Promise.allSettled(plan.map(([, run]) => run()))
@@ -449,7 +464,7 @@ export async function loadAssetHistory(assetNo, { country, from, to, sources } =
     const tyreRes = out.tyre_fitment
     if (tyreRes && tyreRes.ok && tyreRes.rows.length) {
       const serials = tyreRes.rows.map((r) => r?.serial_no).filter(Boolean)
-      const marks = await Promise.allSettled([readTyreMarks(serials)])
+      const marks = await Promise.allSettled([readTyreMarks(serials, org)])
       out.tyre_mark = settled(marks[0])
     } else {
       // No serials to look up is not a failure and not evidence of anything.
@@ -457,8 +472,10 @@ export async function loadAssetHistory(assetNo, { country, from, to, sources } =
     }
   }
 
-  const fleetRes = settled(await Promise.allSettled([fleetPromise]).then((r) => r[0]))
-  const fleetRows = fleetRes.ok ? fleetRes.rows : []
+  const fleetRes = fleetSettled
+  // Another company's machine with the same code is not this machine, so it is
+  // neither the register row nor a cross-country collision for this page.
+  const fleetRows = org ? allFleetRows.filter((r) => !r?.organisation_id || r.organisation_id === org) : allFleetRows
   const here = String(country || '').trim().toUpperCase()
   const fleet =
     fleetRows.find((r) => String(r?.country || '').trim().toUpperCase() === here) ||
@@ -474,6 +491,7 @@ export async function loadAssetHistory(assetNo, { country, from, to, sources } =
     fleetRows,
     fleetReadable: fleetRes.ok,
     crossCountry: fleetRows.length > 1,
+    org: org || null,
     sources: out,
     truncated: Object.entries(out).filter(([, v]) => v && v.truncated).map(([k]) => k),
   }

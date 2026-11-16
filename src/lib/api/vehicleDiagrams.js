@@ -114,7 +114,7 @@ export function getCustomLayoutMap() {
       try {
         const { data, error } = await supabase
           .from(TABLE)
-          .select('vehicle_type,label,config,active')
+          .select('vehicle_type,label,config,active,updated_at')
           .eq('active', true)
         if (error || !Array.isArray(data)) return {}
         const map = {}
@@ -123,6 +123,9 @@ export function getCustomLayoutMap() {
           if (!key) continue
           const layout = positionsFromConfig(row.config)
           layout.label = row.label || null
+          // When the layout was last changed: a record older than this was not
+          // captured on it (tyrePositionService does not trust it for that record).
+          layout.updatedAt = row.updated_at || null
           map[key] = layout
         }
         return map

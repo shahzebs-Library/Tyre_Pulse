@@ -32,7 +32,10 @@ describe('cpkOverviewView', () => {
     const k = overviewKpis(fleet(0.2, 0.5, 1000, 80, 18), fleet(0.25, 0.4, 800, 70, 20))
     expect(k.currency).toBe('SAR')
     expect(k.cpkTyre).toEqual({ value: 0.2, trend: -20 })
-    expect(k.cpkTotal).toEqual({ value: 0.5, trend: 25 })
+    // ENG-1 (2026-11-12): this pinned 0.5 as a "total cost per km". That figure is
+    // tyres plus spares plus oil over TYRE km, which measures nothing, so the
+    // overview withholds it. The hour side (cph) is a valid rate and is unchanged.
+    expect(k.cpkTotal).toEqual({ value: null, trend: null, withheld: true })
     expect(k.distance).toEqual({ value: 1000, trend: 25 })
     expect(k.coverage).toEqual({ value: 80, trend: 10 })
     expect(k.cph).toEqual({ value: 18, trend: -10 })
@@ -65,10 +68,12 @@ describe('cpkOverviewView', () => {
 
   it('rateBars draws measured types only, worst first, and names the unmeasured', () => {
     const rows = [
-      { key: 'a', vehicle_type: 'A', mobility: 'movable', cpk_total: 0.2 },
-      { key: 'b', vehicle_type: 'B', mobility: 'movable', cpk_total: 0.4 },
-      { key: 'c', vehicle_type: 'C', mobility: 'movable', cpk_total: null },
-      { key: 'd', vehicle_type: 'D', mobility: 'non_movable', cpk_total: 9 },
+      // ENG-1: bars are drawn from each row's named rate (tyre spend ratio for a
+      // km row, cost per engine hour for an hour row), never the withheld km total.
+      { key: 'a', vehicle_type: 'A', mobility: 'movable', rate: 0.2, cpk_total: null },
+      { key: 'b', vehicle_type: 'B', mobility: 'movable', rate: 0.4, cpk_total: null },
+      { key: 'c', vehicle_type: 'C', mobility: 'movable', rate: null, cpk_total: null },
+      { key: 'd', vehicle_type: 'D', mobility: 'non_movable', rate: 9, cpk_total: 9 },
     ]
     const r = rateBars(rows, 'movable', 1)
     expect(r.bars.map((b) => b.label)).toEqual(['B'])

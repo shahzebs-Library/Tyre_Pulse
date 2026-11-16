@@ -102,6 +102,36 @@ TpRoute? notificationDestination(TpNotificationTarget target) {
     return const ProfileRoute();
   }
 
+  // 0. Console and platform notices the phone has no screen for. Matched on
+  //    the EXACT type and kept ahead of every substring bucket below, because
+  //    their entity names collide with field work: a `security` notice about
+  //    a `platform_incident` contains "incident" and opened an accident
+  //    detail screen with an id that is not an accident; a `system` notice
+  //    about a `cron_job` contains "job" and opened the workshop board; an
+  //    `upload_gap` notice is about the web data intake. None has a phone
+  //    destination, so the row stays an inbox entry.
+  if (type == 'security' || type == 'system' || type == 'upload_gap') {
+    return null;
+  }
+
+  // 0b. Due alerts (`due_<rule key>`, the hourly due-alert digest). The web
+  //     rebuilds a link per rule (`src/lib/dueAlertLinks.js`); this is the
+  //     phone's equivalent. A rule with no phone screen (certification or
+  //     insurance expiry) returns null rather than falling into a bucket that
+  //     merely shares a word with it.
+  if (type.startsWith('due_')) {
+    return switch (type) {
+      'due_pm_due' => const PreventiveMaintenanceRoute(),
+      'due_stock_low' => const StockCountRoute(),
+      'due_inspection_plan_overdue' => const MyPlansRoute(),
+      'due_tyre_end_of_life' => const TyreRecordsRoute(),
+      'due_fleet_document_expiry' ||
+      'due_fleet_document_missing' =>
+        const VehiclesRoute(),
+      _ => null,
+    };
+  }
+
   // 1. LOCAL device notifications, matched on the EXACT type and matched
   //    FIRST. Their wording overlaps the entity buckets below:
   //    `inspection_reminder` contains "inspection" and would otherwise open

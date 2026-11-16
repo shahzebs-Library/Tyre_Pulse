@@ -46,8 +46,8 @@ NOT stop scripts that call Supabase Auth directly.
 | Invitation sign-up sends the token | `src/pages/InviteSignup.jsx` | On #546 |
 | Flutter Android/iOS Turnstile (WebView, `webview_flutter ^4.14.1`), token on password sign-in, sign-in function and self sign-up; key from `--dart-define=TURNSTILE_SITE_KEY` (empty = unchanged) | `tyre_pulse_flutter/` | This branch. analyze clean; auth/login/extras/l10n tests 286 pass, 1 known Linux golden diff; config/router 173 pass. Not run on a real phone yet. |
 | `sign-in` edge function forwards `captcha_token` to Supabase Auth | `supabase/functions/sign-in` | On main; not redeployed |
-| `sign-in` edge function refuses (503) when the lockout check errors, instead of proceeding | `supabase/functions/sign-in` | On #546 (local test 13/13); not deployed |
-| Expo app | `mobile/` | Retired. It cannot send a token, so it stops signing in once CAPTCHA is on. Confirm no one still uses it. |
+| `sign-in` edge function refuses (503) when the lockout check errors, instead of proceeding | `supabase/functions/sign-in` | On #550 (independent of #546) and #546. Local test `e2e/auth/sign_in_edge_local.mjs`: 16/16. The same test fails on today's function (15/16: a session is issued while the lockout check is down). Not deployed. |
+| Expo app | `mobile/` | Still the main phone client (see 5b). It cannot send a token. |
 
 ## 4. Fail-open review
 - Browser and app pre-checks: keep fail-open. They are advisory; the real gates are Supabase
@@ -88,36 +88,125 @@ NOT stop scripts that call Supabase Auth directly.
 | Wrong password 5 times through the app | TEN-9f lock, admin unlock with reason |
 | Lockout check down | `sign-in` function returns 503, apps show "try again" |
 
+## 5b. Measured blockers (2026-11-16, read only)
+- **The Expo app is still the main phone client.** From `user_devices`:
+
+  | Client | Version | Devices | Users | Seen 7 days | Seen 30 days |
+  |---|---|---|---|---|---|
+  | Expo | 1.6.0 | 134 | 114 | 45 | 79 |
+  | Expo | 1.3.2 / 1.5.0 | 7 | 5 | 0 | 0 |
+  | Flutter | 1.0.0 | 5 | 5 | 2 | 5 |
+  | Flutter | 0.1.1 | 7 | 7 | 4 | 7 |
+  | Flutter | 0.1.0 | 1 | 1 | 0 | 0 |
+
+  - Expo 1.6.0 signs in with `supabase.auth.signInWithPassword({ email, password })` and no
+    token. Switching CAPTCHA on today would lock out about 79 active phone users.
+  - The 1.6.0 build has no `react-native-webview` and no `expo-web-browser`, so an
+    over-the-air update cannot add an in-app Turnstile.
+  - Over-the-air route that IS possible: open `https://tyrepulse.app/captcha` in the system
+    browser and return the token through the app's `tyrepulse-inspector://` link (expo-linking
+    is in the binary). It is clumsy but needs no store build.
+  - The other routes are a new Expo store build (Expo builds are retired by owner rule) or
+    moving those users to Flutter first.
+  - **Decision for the owner.** Until it is made, CAPTCHA activation is blocked.
+- **Hosted staging is blocked on the free plan.** This Supabase organisation already has 2
+  active projects (Tyre_pulse and opsbrain), the free limit. Options:
+  - pause opsbrain while testing
+  - use a separate free organisation
+  - get owner approval for anything paid
+- **Mobile sign-in traffic** (Supabase's own `auth.audit_log_entries`, last 30 days, all
+  clients):
+  - 121 logins, peak 4 in one hour across the whole company
+  - IP addresses are not recorded usefully there (one value), so per-site measurement
+    needs Flutter/Expo to log sign-ins
+  - Do not tighten rate limits until that exists
+  - Never trust a client-sent IP: the `sign-in` function forwards the caller IP to Supabase
+    only from Supabase's own edge header and only with the secret key
+    (`AUTH_FORWARD_CLIENT_IP`, off today)
+
+## 5c. Client compatibility matrix (CAPTCHA switched ON)
+| Client | Password sign-in | Sign-up | Reset email | Notes |
+|---|---|---|---|---|
+| Web app (main) | works when `VITE_TURNSTILE_SITE_KEY` is set | works | admin Console: works (#550) | Users ask an admin for resets (database function, no CAPTCHA) |
+| System Console | works | n/a | works (#550) | |
+| Invitation page | n/a | works (#546) | n/a | |
+| Flutter with key (#550 build) | works | works | n/a (admin-handled) | Needs a new build with `TURNSTILE_SITE_KEY` |
+| Flutter 0.1.x / 1.0.0 (current) | BLOCKED | BLOCKED | n/a | 12 active users: must update first |
+| Expo 1.6.0 | BLOCKED | BLOCKED | n/a | 79 active users in 30 days: see 5b |
+| Already signed-in sessions (all clients) | stay signed in | | | Token refresh has no CAPTCHA |
+| QR sign-in | works | | | Server-minted single-use code, no CAPTCHA on verify |
+| 2FA (TOTP) | works | | | Checked after the password; no CAPTCHA |
+
+## 5d. Device and hosted staging checklist (to run once 5b is decided)
+- Automated, direct API: `scripts/auth-staging/captcha_matrix.mjs` with Turnstile test
+  secrets. It refuses the production project. Checks:
+  - no token is refused
+  - a valid token signs in
+  - valid token with a wrong password gives invalid credentials
+  - sign-up, reset email and OTP without a token are refused
+  - token refresh still works
+  - an invalid token is refused
+  - a reused token is refused
+  - CAPTCHA is switched off again at the end
+- Manual, with the real keys:
+
+  | Test | Web | Android | iOS |
+  |---|---|---|---|
+  | Sign in (username, employee ID) | | | |
+  | Wrong password x5 then admin unlock | | | |
+  | Leave the check open more than 5 minutes, then sign in (expired token renews) | | | |
+  | Airplane mode during the check: clear message and Retry | | | |
+  | Slow 3G profile: check loads within 20 s | | | |
+  | 10 phones on one site Wi-Fi signing in within a minute | | | |
+  | Self registration | | | |
+  | QR sign-in | | | |
+  | 2FA account sign-in | | | |
+  | Arabic and Urdu, text size 200% | | | |
+
+## 5e. Support instructions (for the help desk, once CAPTCHA is on)
+- "Security check failed" or "could not load": check the internet connection, then tap
+  Try again. On site Wi-Fi that blocks Cloudflare, switch to mobile data.
+- "Update required": install the latest Tyre Pulse app from the Play Store.
+- Locked after 5 attempts: wait 15 minutes, or an Admin clears it in Console > Users >
+  Reset password with a reason.
+- Nothing works for many users at once: tell the owner. The emergency rollback is below.
+
 ## 6. Rollout order (each step needs owner approval)
-1. Create a free Turnstile widget in Cloudflare. Allowed hostnames: `tyrepulse.app`,
-   `www.tyrepulse.app`, plus the Flutter WebView base URL host.
-2. Hosted staging (a second free Supabase project, or the owner's choice):
-   - run the matrix above with test keys, then with the real keys
-   - real people sign in on web, Android and iOS
-3. Ship a Flutter build with `--dart-define=TURNSTILE_SITE_KEY=...` to closed testing (the release workflow must build with Flutter 3.47 or newer; webview_flutter's iOS part needs it).
-   Measure phone sign-ins for 2 weeks; add Flutter sign-ins to the audit log first.
-4. Set `VITE_TURNSTILE_SITE_KEY` in Vercel and deploy. The web widget appears; Supabase still
+1. Owner decides the Expo route (5b) and the hosted staging route.
+2. Create a free Turnstile widget in Cloudflare. Allowed hostnames: `tyrepulse.app` and
+   `www.tyrepulse.app` (the Flutter WebView loads under `https://tyrepulse.app/`).
+3. Hosted staging:
+   - run `captcha_matrix.mjs`
+   - run the manual checklist on web, a real Android phone and a real iPhone
+4. Flutter build with `--dart-define=TURNSTILE_SITE_KEY=...` (Flutter 3.47 or newer):
+   - closed testing first, then all staff
+   - raise `flutter_min_version` only after the build is live
+5. Expo users moved or updated (per the 5b decision). Proceed only when the device table shows
+   no active client without CAPTCHA support for 7 days.
+6. Set `VITE_TURNSTILE_SITE_KEY` in Vercel and deploy. The widget shows; Supabase still
    ignores tokens.
-5. When the Flutter build is the one staff actually use, switch on CAPTCHA protection in
-   Supabase (Dashboard > Authentication > Bot and Abuse Protection, provider Turnstile, secret
-   key).
-6. Watch for 48 hours:
+7. Deploy the `sign-in` function from #550 (fail-closed lockout). Smoke test web and Flutter.
+8. Switch on CAPTCHA protection in Supabase (Dashboard > Authentication > Bot and Abuse
+   Protection, provider Turnstile, secret key), in a quiet hour. Smoke test straight after:
+   web, Android, iOS, plus one direct API call without a token, which must be refused.
+9. Watch for 48 hours:
    - `captcha_failed` counts in the Auth logs
    - TEN-9f lock counts
-   - staff reports
-7. Optional, later: lower the sign-in rate limit only after step 3 shows peak phone traffic per
-   site IP. Current measured peak is 2 per hour per IP. Keep at least 10x headroom for shared
-   site Wi-Fi.
-8. Deploy the fail-closed `sign-in` function only with the #546 rollout.
+   - help-desk reports
+10. Later and optional: tighter rate limits, only after 2 weeks of logged phone sign-ins.
 
-## 7. Rollback
-- CAPTCHA:
-  - switch it off in the Supabase dashboard (instant)
-  - clear `VITE_TURNSTILE_SITE_KEY` and redeploy web; the widget disappears
-  - Flutter builds with a key keep working, because a token sent to Supabase with CAPTCHA off
-    is ignored
-- Rate limits: restore the values recorded before the change.
-- `sign-in` function: redeploy the previous version (keep its source hash before deploying).
+## 7. Rollback and emergency recovery
+- Mass sign-in failure after step 8: switch CAPTCHA protection off in the Supabase dashboard.
+  It takes effect within seconds and needs no deploy. Clients that send a token keep working,
+  because Supabase ignores tokens when CAPTCHA is off.
+- Web widget problem: remove `VITE_TURNSTILE_SITE_KEY` in Vercel and redeploy. The widget
+  disappears.
+- Flutter widget problem: CAPTCHA off first, then ship a build without the key. Do NOT raise
+  `flutter_min_version` until the fix is live.
+- `sign-in` function problem: redeploy the previous version. Record its source hash before
+  step 7.
+- Locked-out admin: the super admin clears it in the Console, or switches
+  `max_login_attempts` to 0 in system_config (lockout off) as a last resort.
 
 ## 8. Limits under the current (free) plan
 - No server hook can count failed passwords for direct API calls. That needs the Teams plan,

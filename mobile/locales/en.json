@@ -54,7 +54,17 @@
     "errorRequired": "Please enter your login and password.",
     "errorFailed": "Login failed. Please check your credentials.",
     "errorLocked": "Too many failed attempts. This account is locked. Please try again in {mins} minutes.",
-    "errorNoAccount": "No account found with that username or Employee ID."
+    "errorNoAccount": "No account found with that username or Employee ID.",
+    "captcha": {
+      "waitingTitle": "Finish the security check",
+      "waitingBody": "A security check opened in your browser. Complete it, then tap \"Return to Tyre Pulse\". You will be signed in automatically.",
+      "reopen": "Open the check again",
+      "cancel": "Cancel",
+      "expired": "The security check expired. Please sign in again.",
+      "noBrowser": "Could not open the browser. Check that a web browser is installed and try again.",
+      "offline": "You are offline. Connect to the internet and try again.",
+      "unavailable": "The security check cannot start on this phone. Please contact your administrator."
+    }
   },
   "tabs": {
     "home": "Home",

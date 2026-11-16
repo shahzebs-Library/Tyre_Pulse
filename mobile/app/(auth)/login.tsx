@@ -1,14 +1,49 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
-  StatusBar, Image,
+  StatusBar, Image, Linking,
 } from 'react-native'
+import * as Network from 'expo-network'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage, Language } from '../../contexts/LanguageContext'
 import { supabase } from '../../lib/supabase'
+import {
+  startCheck, buildBridgeUrl, pendingState, hasPendingCheck, clearAll,
+  deliverReturnUrl, takeOutcome, subscribe, shouldRecordFailure,
+} from '../../lib/captchaBridge'
+
+// ---------------------------------------------------------------------------
+// CAPTCHA browser check (lib/captchaBridge.ts). Only used when Supabase refuses
+// a sign-in with a captcha error; while CAPTCHA protection is off none of this
+// runs. The Linking subscription lives at MODULE level, not in the component,
+// so a return link is caught even if the router briefly swaps this screen out
+// for app/captcha.tsx.
+// ---------------------------------------------------------------------------
+let returnSub: { remove: () => void } | null = null
+let initialUrlChecked = false
+
+function listenForReturn() {
+  if (returnSub) return
+  try {
+    returnSub = Linking.addEventListener('url', ({ url }) => {
+      if (deliverReturnUrl(url) && !hasPendingCheck()) stopListening()
+    })
+  } catch { returnSub = null }
+}
+function stopListening() {
+  try { returnSub?.remove() } catch { /* already gone */ }
+  returnSub = null
+}
+/** Cold start: a return link that launched the app finds no pending check (the
+ *  password was in memory only), so it is reported as expired. Read once. */
+function checkInitialUrlOnce() {
+  if (initialUrlChecked) return
+  initialUrlChecked = true
+  Linking.getInitialURL().then(url => { if (url) deliverReturnUrl(url) }, () => {})
+}
 
 // Server-enforced account lockout (System Configuration -> Max Login Attempts,
 // V287). Fail-safe: any RPC error is treated as "not locked" so a transient
@@ -42,38 +77,157 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // 'waiting' = the browser check is open and we are waiting for the return link.
+  const [checkWaiting, setCheckWaiting] = useState(() => hasPendingCheck())
+
+  // t() returns the key path when a key is missing everywhere; never show that.
+  const tx = (key: string, fallback: string) => {
+    const v = t(key)
+    return v === key ? fallback : v
+  }
+
+  /** Open the browser check for these credentials. */
+  async function beginCheck(id: string, pw: string) {
+    try {
+      const net = await Network.getNetworkStateAsync()
+      if (net.isConnected === false || net.isInternetReachable === false) {
+        setError(tx('login.captcha.offline', 'You are offline. Connect to the internet and try again.'))
+        return
+      }
+    } catch { /* unknown network state: try anyway */ }
+
+    const started = startCheck(id, pw)
+    if (!started.ok) {
+      setError(tx('login.captcha.unavailable', 'The security check cannot start on this phone. Please contact your administrator.'))
+      return
+    }
+    listenForReturn()
+    try {
+      await Linking.openURL(buildBridgeUrl(started.state, language))
+      setCheckWaiting(true)
+      setError(null)
+    } catch {
+      clearAll()
+      stopListening()
+      setCheckWaiting(false)
+      setError(tx('login.captcha.noBrowser', 'Could not open the browser. Check that a web browser is installed and try again.'))
+    }
+  }
+
+  async function attempt(id: string, pw: string, captchaToken?: string) {
+    setError(null)
+    setLoading(true)
+    try {
+      const gate = await lockStatus(id.trim())
+      if (gate.locked) {
+        clearAll(); setCheckWaiting(false)
+        setError(t('login.errorLocked').replace('{mins}', String(lockMins(gate))))
+        return
+      }
+      const result = await signIn(id, pw, captchaToken)
+      if (!result.error) {
+        clearAll(); stopListening(); setCheckWaiting(false)
+        // Success: clear the caller's own server-side counter (authenticated).
+        supabase.rpc('reset_login_attempts').then(() => {}, () => {})
+        return
+      }
+      if (result.captchaRequired) {
+        // NOT a wrong password: never recorded as a failed login.
+        if (captchaToken) {
+          // The token itself was refused (expired or already used). Do not loop.
+          clearAll(); stopListening(); setCheckWaiting(false)
+          setError(tx('login.captcha.expired', 'The security check expired. Please sign in again.'))
+          return
+        }
+        await beginCheck(id, pw)
+        return
+      }
+      clearAll(); setCheckWaiting(false)
+      if (result.offline) {
+        setError(tx('login.captcha.offline', 'You are offline. Connect to the internet and try again.'))
+        return
+      }
+      if (shouldRecordFailure(result)) {
+        const locked = await recordFailure(id.trim())
+        if (locked.locked) {
+          setError(t('login.errorLocked').replace('{mins}', String(lockMins(locked))))
+          return
+        }
+      }
+      // Never surface raw Supabase error strings - they enable user enumeration
+      const msg = result.error.message ?? ''
+      const isCustom = msg.startsWith('No account found') || msg.startsWith('Account')
+      setError(isCustom ? msg : t('login.errorFailed'))
+    } finally {
+      setLoading(false)
+    }
+  }
 
   async function handleLogin() {
     if (!identifier.trim() || !password) {
       setError(t('login.errorRequired'))
       return
     }
-    setError(null)
-    setLoading(true)
-    try {
-      const gate = await lockStatus(identifier.trim())
-      if (gate.locked) {
-        setError(t('login.errorLocked').replace('{mins}', String(lockMins(gate))))
-        return
-      }
-      const { error: signInError } = await signIn(identifier, password)
-      if (signInError) {
-        const locked = await recordFailure(identifier.trim())
-        if (locked.locked) {
-          setError(t('login.errorLocked').replace('{mins}', String(lockMins(locked))))
-        } else {
-          // Never surface raw Supabase error strings - they enable user enumeration
-          const msg = signInError.message ?? ''
-          const isCustom = msg.startsWith('No account found') || msg.startsWith('Account')
-          setError(isCustom ? msg : t('login.errorFailed'))
-        }
-      } else {
-        // Success: clear the caller's own server-side counter (authenticated).
-        supabase.rpc('reset_login_attempts').then(() => {}, () => {})
-      }
-    } finally {
-      setLoading(false)
+    await attempt(identifier, password)
+  }
+
+  // Pick up a return link (now or when this screen mounts after the router
+  // swapped it out). attemptRef keeps the latest closure for the listener.
+  const attemptRef = useRef(attempt)
+  attemptRef.current = attempt
+  const consumeOutcome = useCallback(() => {
+    const outcome = takeOutcome()
+    if (!outcome) return
+    if (outcome.type === 'accepted') {
+      setCheckWaiting(false)
+      attemptRef.current(outcome.identifier, outcome.password, outcome.token)
+    } else {
+      setCheckWaiting(hasPendingCheck())
+      setError(tx('login.captcha.expired', 'The security check expired. Please sign in again.'))
     }
+  // tx/t are stable enough for this purpose; language switches re-render anyway.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    checkInitialUrlOnce()
+    consumeOutcome()
+    return subscribe(consumeOutcome)
+  }, [consumeOutcome])
+
+  // A check left open past its 5 minutes becomes invalid; say so.
+  useEffect(() => {
+    if (!checkWaiting) return
+    const id = setInterval(() => {
+      if (!hasPendingCheck()) {
+        stopListening()
+        setCheckWaiting(false)
+        setError(tx('login.captcha.expired', 'The security check expired. Please sign in again.'))
+      }
+    }, 10_000)
+    return () => clearInterval(id)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkWaiting])
+
+  async function reopenCheck() {
+    const state = pendingState()
+    if (!state) {
+      setCheckWaiting(false)
+      setError(tx('login.captcha.expired', 'The security check expired. Please sign in again.'))
+      return
+    }
+    try {
+      await Linking.openURL(buildBridgeUrl(state, language))
+    } catch {
+      setError(tx('login.captcha.noBrowser', 'Could not open the browser. Check that a web browser is installed and try again.'))
+    }
+  }
+
+  function cancelWaiting() {
+    clearAll()
+    stopListening()
+    setCheckWaiting(false)
+    setError(null)
   }
 
   const textAlign = isRTL ? 'right' : 'left'
@@ -125,6 +279,27 @@ export default function LoginScreen() {
               <View style={styles.errorBox}>
                 <Ionicons name="alert-circle-outline" size={16} color="#dc2626" />
                 <Text style={[styles.errorText, { textAlign }]}>{error}</Text>
+              </View>
+            )}
+
+            {checkWaiting && (
+              <View style={styles.checkBox} accessibilityLiveRegion="polite">
+                <View style={[styles.checkHead, isRTL && styles.inputWrapperRTL]}>
+                  <Ionicons name="shield-checkmark-outline" size={18} color="#15803d" />
+                  <Text style={[styles.checkTitle, { textAlign }]}>
+                    {tx('login.captcha.waitingTitle', 'Finish the security check')}
+                  </Text>
+                </View>
+                <Text style={[styles.checkBody, { textAlign }]}>
+                  {tx('login.captcha.waitingBody', 'A security check opened in your browser. Complete it, then tap "Return to Tyre Pulse". You will be signed in automatically.')}
+                </Text>
+                <TouchableOpacity style={styles.checkPrimary} onPress={reopenCheck} activeOpacity={0.8} accessibilityRole="button">
+                  <Ionicons name="open-outline" size={18} color="#fff" />
+                  <Text style={styles.checkPrimaryText}>{tx('login.captcha.reopen', 'Open the check again')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.checkSecondary} onPress={cancelWaiting} activeOpacity={0.7} accessibilityRole="button">
+                  <Text style={styles.checkSecondaryText}>{tx('login.captcha.cancel', 'Cancel')}</Text>
+                </TouchableOpacity>
               </View>
             )}
 
@@ -293,6 +468,30 @@ const styles = StyleSheet.create({
     color: '#dc2626',
     fontWeight: '500',
   },
+  checkBox: {
+    gap: 10,
+    backgroundColor: 'rgba(22,163,74,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(22,163,74,0.25)',
+    borderRadius: 12,
+    padding: 14,
+  },
+  checkHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  checkTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: '#14532d' },
+  checkBody: { fontSize: 13, color: '#334155', lineHeight: 19 },
+  checkPrimary: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#15803d',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+  },
+  checkPrimaryText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  checkSecondary: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  checkSecondaryText: { color: '#475569', fontSize: 14, fontWeight: '600' },
   fieldGroup: { gap: 8 },
   fieldLabel: {
     fontSize: 12,

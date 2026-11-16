@@ -17,6 +17,7 @@ import { setSentryUser } from '../lib/sentry'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { AppState, AppStateStatus } from 'react-native'
 import { storageReadFailureCount } from '../lib/secureStorage'
+import { isCaptchaError, isNetworkError } from '../lib/captchaBridge'
 import {
   shouldRunAutoRefresh, classifyRestore, isCachedProfileUsable,
   shouldRevalidateOnForeground,
@@ -137,7 +138,14 @@ interface AuthContextType {
   /** Total pending (unsynced) queued work: offline queue + record queue. Callers
    *  (e.g. the profile screen) use it to warn before logging out. */
   hasUnsyncedWork: () => Promise<number>
-  signIn: (identifier: string, password: string) => Promise<{ error: AuthError | Error | null }>
+  /** `captchaToken` is passed only on the retry after the browser check (see
+   *  lib/captchaBridge.ts). `captchaRequired` marks a refusal that came from
+   *  Supabase CAPTCHA protection, which is NOT a wrong password. */
+  signIn: (identifier: string, password: string, captchaToken?: string) => Promise<{
+    error: AuthError | Error | null
+    captchaRequired?: boolean
+    offline?: boolean
+  }>
   /** `force` lets a caller express intent to sign out despite unsynced work;
    *  behavior is identical either way (pending work is preserved regardless). */
   signOut: (force?: boolean) => Promise<void>
@@ -654,7 +662,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function signIn(identifier: string, password: string) {
+  async function signIn(identifier: string, password: string, captchaToken?: string) {
     let email = identifier.trim()
 
     // ONE identical generic error for identifier-not-found, RPC failure, AND
@@ -667,15 +675,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .rpc('get_email_by_identifier', { identifier: email })
       if (rpcErr) {
         if (__DEV__) console.warn('identifier resolution RPC error', rpcErr)
-        return { error: genericError }
+        return isNetworkError(rpcErr) ? { error: genericError, offline: true } : { error: genericError }
       }
       if (!resolved) return { error: genericError }
       email = resolved
     }
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { error } = await supabase.auth.signInWithPassword(
+      captchaToken ? { email, password, options: { captchaToken } } : { email, password },
+    )
     if (error) {
       if (__DEV__) console.warn('signInWithPassword error', error)
+      // Still the same generic error text (no enumeration), plus a flag so the
+      // screen can start the browser check instead of counting a failed login.
+      if (isCaptchaError(error)) return { error: genericError, captchaRequired: true }
+      if (isNetworkError(error)) return { error: genericError, offline: true }
       return { error: genericError }
     }
     return { error: null }

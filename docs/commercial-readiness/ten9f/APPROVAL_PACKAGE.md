@@ -58,7 +58,7 @@ after the fix 52 passed, 0 failed.
 |---|---|---|
 | Web/Flutter/Expo login screens | Enforced by the app before and after sign-in | Supabase Auth per-IP rate limits |
 | `sign-in` edge function (real-email accounts) | Enforced server-side | Supabase Auth per-IP rate limits |
-| Script calling `/auth/v1/token?grant_type=password` directly | BYPASSED: never calls our RPCs | Supabase Auth per-IP rate limits only; bcrypt cost; 2FA for accounts that enrolled it |
+| Script calling `/auth/v1/token?grant_type=password` directly | BYPASSED: never calls our RPCs | Supabase Auth limit on `/auth/v1/token`: per IP, 1800 requests per hour with bursts of 30 (Supabase docs). That is about 43,000 password guesses per day per IP address, and more with several addresses. 2FA only for accounts that enrolled it. |
 | Usernames | `get_email_by_identifier` gives anyone the account's sign-in email, which feeds the direct path above | Same as above |
 | TOTP two-factor codes | Not counted (checked by Supabase Auth after a correct password) | Supabase Auth limits |
 | QR sign-in | Not applicable: single-use server codes with number matching, no password guessed | Code expiry and single use |
@@ -69,11 +69,15 @@ after the fix 52 passed, 0 failed.
   - Tighter Auth rate limits in the Supabase dashboard: free, per IP only.
 
 ## Production fingerprints
-- Last read from production on 2026-11-16 (before the fix):
+- Re-read from production on 2026-11-16 (read only), all as expected:
+  - 18 counter rows, 0 locked, `max_login_attempts` 5, `single_tenant_mode` true
+  - none of the new functions exist yet
+  - `_resolve_sign_in_profile` 1ee66847b3d067fd171305fa7de11233
+  - the three lockout functions:
   - `login_attempt_status` bda4f978f7404a86aa650f9aab6f3f14
   - `record_login_failure` c8a5b4a419e567262e6620c3fb16bbed
   - `reset_login_attempts` 32867f65d8493dd864f2d00c9e29dc71
-- Staging check 0 confirms the same three hashes. Re-read them at apply time (step 1). If any
+- Staging check 0 confirms the same hashes. Re-read them at apply time (step 1). If any
   differ, stop: production changed and the rollback file no longer matches.
 - Files:
   - migration md5 `973ed89a784ffb3a8325cd6d5a121395`

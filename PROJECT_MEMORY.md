@@ -5,6 +5,24 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ 2026-11-16 — #547 MERGED + LIVE; TEN-9f ISOLATED (PR #548); APPROVAL PACKAGE. NO PRODUCTION DB CHANGE.
+- #547 (= #543+#544+#545) squash-merged `ebe77220`, production READY on that sha. #543/#544/#545 closed as superseded.
+- TEN-9f standalone on PR #548 (branch claude/ten9f-lockout-7rxp2t): `20261116100000_ten9f_login_lockout_per_account.sql` (+ROLLBACK).
+  - Bypass reproduced on PROD in a rolled-back txn (demo.manager locked, empid/email/code-form/spaced still open).
+  - Also fixes the existence oracle (`remaining` key / unknowns never locking) and adds an audited admin_clear_login_lock + console panel.
+  - Staging 48/48; rollback byte-identical. Approval doc on PR #548. NOT APPLIED.
+  - REAL LIMIT: the counter is advisory. A direct Supabase Auth API call bypasses it; only per-IP limits apply. The full fix is the Password Verification hook (Teams plan) or CAPTCHA.
+- #545 drafts verified on staging (staging matches prod md5; identical outputs; 2-company leak closed).
+  - Complaints draft revised so a re-upload does not double-log rejects (branch claude/pending-approvals-7rxp2t).
+  - Prod: 0 shared job card / asset numbers between companies.
+- Recalls: production table has 0 rows, so no duplicates.
+- Bridge index KEPT. Usage counters cannot tell old and new tabs apart. Remove after 2026-11-22 and before a second company records marks.
+- #546: harness 202/0. New draft TEN-9g (code form cannot be squatted by a "/" username). Prod has 0 such names.
+- STAGING GOTCHA: the local cluster now lives at /var/lib/postgresql/tp-staging (port 54329). Start it as postgres with pg_ctl. The scratchpad path is a symlink.
+  - It crashed when /tmp/claude-0 perms were reset to 700.
+  - Disk is ~2.5 GB free; drop staging copies after use.
+- Package: docs/commercial-readiness/PENDING_APPROVALS_20261116.md.
+
 # ⚑ 2026-11-15 21:10 UTC — POST-ROLLOUT VERIFICATION (owner checklist). No production DB change after the bridge index.
 - #541 IS LIVE: production deploy dpl_FLXv7rJVi6GXpHpR97zRSwW5RdJC READY on aa217b03 (main tip a4bc8ec7 differs only by PROJECT_MEMORY.md). The live chunk tyreExchange-BKl7t9C6.js carries onConflict `organisation_id,serial,mark_type`. 0 runtime errors in the hour after. #530/#541 deploys succeeded between rate-limit refusals; #540/#542 (docs) were refused.
 - Tyre Exchange tested at DB level as real Manager / Reporter / Tyre Data Collector / Tyre Man (all rolled back): save via old and new conflict key OK, read OK, edit reason OK, delete of a mark refused for all non-admins; scrap -> Scrapped, reason edit OK, Collector undo refused ("Only an administrator can undo a scrap"), super-admin undo restores the exact prior status. NOT browser-tested (no test login available to this session).

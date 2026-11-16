@@ -15,7 +15,7 @@
 //   401 { error: 'invalid_credentials' }   unknown user AND wrong password (identical)
 //   429 { error: 'locked', retry_after_seconds }
 //   400 { error: 'invalid_request' } / 405 { error: 'method_not_allowed' }
-//   503 { error: 'unavailable' }           auth backend busy or down (not counted)
+//   503 { error: 'unavailable' }           auth backend or lockout check busy/down (not counted)
 //
 // Failures are recorded server-side via record_login_failure, so the client
 // must NOT record them again (it would double count).
@@ -132,13 +132,24 @@ Deno.serve(async (req) => {
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
 
-  // ---- lockout gate (fail safe: an RPC error never blocks a sign-in) -----
+  // ---- lockout gate (fails CLOSED on an error) --------------------------
+  // If the lockout check itself cannot answer, the request is refused with the
+  // same 503 a busy auth backend gets, instead of going on unguarded. Supabase
+  // Auth uses the same database, so when this check is down a password sign-in
+  // would almost certainly fail anyway: refusing costs real users nothing extra,
+  // while proceeding would hand a guesser an unlimited window. Not counted as a
+  // failed attempt. The apps show "try again shortly". (The browser and app
+  // pre-checks stay fail-open: they are advisory, this function is the
+  // server-side gate.)
   try {
-    const { data } = await admin.rpc('login_attempt_status', { p_identifier: identifier })
+    const { data, error } = await admin.rpc('login_attempt_status', { p_identifier: identifier })
+    if (error) return reply(503, { error: 'unavailable' })
     if (data?.locked) {
       return refuse(429, { error: 'locked', retry_after_seconds: Number(data.retry_after_seconds) || 0 })
     }
-  } catch { /* fail safe */ }
+  } catch {
+    return reply(503, { error: 'unavailable' })
+  }
 
   const recordFailure = async () => {
     try {

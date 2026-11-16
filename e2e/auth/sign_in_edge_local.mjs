@@ -22,9 +22,13 @@ const FN = join(HERE, '..', '..', 'supabase', 'functions', 'sign-in', 'index.ts'
 const DB = process.env.STAGING_DB || 'tp_auth550'
 const HOST = process.env.STAGING_HOST || '127.0.0.1'
 if (!['127.0.0.1', 'localhost'].includes(HOST)) { console.error('Refusing: local staging only'); process.exit(1) }
-const MOCK_PORT = 54398, FN_PORT = 54397
+const MOCK_PORT = 54398, FN_PORT = 54397, FN_FWD_PORT = 54396
 const GOOD_PW = 'correct-horse-1'
 let lockoutBroken = false
+let lockoutMode = '' // '', 'slow', 'weird', 'null'
+let lookupSlow = false
+let authMode = '' // '', 'slow', '500', '429'
+let lastAuthHeaders = null
 let profilesBroken = false
 let captchaOn = false
 const issuedTokens = new Set()
@@ -46,6 +50,9 @@ const mock = http.createServer((req, res) => {
     try {
       const rpc = url.pathname.match(/^\/rest\/v1\/rpc\/(\w+)$/)
       if (rpc && RPCS.has(rpc[1])) {
+        if (rpc[1] === 'login_attempt_status' && lockoutMode === 'slow') return setTimeout(() => send(200, { enabled: true, locked: false }), 6000)
+        if (rpc[1] === 'login_attempt_status' && lockoutMode === 'weird') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end('"oops"') }
+        if (rpc[1] === 'login_attempt_status' && lockoutMode === 'null') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end('null') }
         if (rpc[1] === 'login_attempt_status' && lockoutBroken) return send(500, { code: 'XX000', message: 'boom' })
         const id = JSON.parse(body || '{}').p_identifier ?? ''
         // psql :'v' quoting keeps the identifier a literal (no injection).
@@ -55,6 +62,7 @@ const mock = http.createServer((req, res) => {
       const prof = url.pathname === '/rest/v1/profiles'
       if (prof) {
         if (profilesBroken) return send(500, { code: 'XX000', message: 'boom' })
+        if (lookupSlow) return setTimeout(() => send(200, []), 6000)
         const col = url.searchParams.has('username') ? 'username' : 'employee_id'
         const pat = (url.searchParams.get(col) || '').replace(/^ilike\./, '')
         const out = sql(`select coalesce(jsonb_agg(jsonb_build_object('id', id)), '[]') from (select id from public.profiles where ${col} ilike :'v' limit 1) s`, { v: pat })
@@ -66,6 +74,10 @@ const mock = http.createServer((req, res) => {
         return out ? send(200, JSON.parse(out)) : send(404, { msg: 'User not found' })
       }
       if (url.pathname === '/auth/v1/token') {
+        lastAuthHeaders = { apikey: req.headers.apikey, forwarded: req.headers['sb-forwarded-for'] ?? null }
+        if (authMode === 'slow') return setTimeout(() => send(200, {}), 6000)
+        if (authMode === '500') return send(500, { message: 'upstream exploded at db.internal:5432' })
+        if (authMode === '429') return send(429, { error_code: 'over_request_rate_limit' })
         const { email, password, gotrue_meta_security: meta } = JSON.parse(body || '{}')
         if (captchaOn) {
           const tok = meta?.captcha_token
@@ -85,10 +97,13 @@ const mock = http.createServer((req, res) => {
 
 const results = []
 const check = (name, cond, detail = '') => { results.push(!!cond); console.log(`${cond ? 'ok' : 'not ok'} - ${name}${cond ? '' : ` | ${detail}`}`) }
-async function call(identifier, password = GOOD_PW, captcha_token) {
+const bodies = []
+async function call(identifier, password = GOOD_PW, captcha_token, { port = FN_PORT, headers = {} } = {}) {
   const t0 = Date.now()
-  const r = await fetch(`http://127.0.0.1:${FN_PORT}/`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ identifier, password, ...(captcha_token ? { captcha_token } : {}) }) })
-  return { status: r.status, body: await r.json().catch(() => null), ms: Date.now() - t0 }
+  const r = await fetch(`http://127.0.0.1:${port}/`, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify({ identifier, password, ...(captcha_token ? { captcha_token } : {}) }) })
+  const text = await r.text(); bodies.push(text)
+  let parsed = null; try { parsed = JSON.parse(text) } catch { parsed = null }
+  return { status: r.status, body: parsed, ms: Date.now() - t0 }
 }
 
 // Fresh production-shaped copy: staging mirror + TEN-9f.
@@ -101,14 +116,22 @@ const map = join(dir, 'import_map.json')
 writeFileSync(map, JSON.stringify({ imports: { 'https://esm.sh/@supabase/supabase-js@2': 'npm:@supabase/supabase-js@2' } }))
 const fn = spawn('npx', ['--yes', 'deno@2', 'run', '--no-config', `--import-map=${map}`, '--allow-net', '--allow-env', FN], {
   env: { ...process.env, DENO_SERVE_ADDRESS: `tcp:127.0.0.1:${FN_PORT}`, PORT: String(FN_PORT),
-    SUPABASE_URL: `http://127.0.0.1:${MOCK_PORT}`, SUPABASE_SERVICE_ROLE_KEY: 'service-stand-in', SUPABASE_ANON_KEY: 'anon-stand-in' },
+    SUPABASE_URL: `http://127.0.0.1:${MOCK_PORT}`, SUPABASE_SERVICE_ROLE_KEY: 'service-stand-in', SUPABASE_ANON_KEY: 'anon-stand-in', SIGN_IN_UPSTREAM_TIMEOUT_MS: '2000' },
   stdio: ['ignore', 'pipe', 'pipe'],
   detached: true, // own process group, so the deno child of npx is stopped too
 })
+const fnFwd = spawn('npx', ['--yes', 'deno@2', 'run', '--no-config', `--import-map=${map}`, '--allow-net', '--allow-env', FN], {
+  env: { ...process.env, DENO_SERVE_ADDRESS: `tcp:127.0.0.1:${FN_FWD_PORT}`, PORT: String(FN_FWD_PORT),
+    SUPABASE_URL: `http://127.0.0.1:${MOCK_PORT}`, SUPABASE_SERVICE_ROLE_KEY: 'service-stand-in', SUPABASE_ANON_KEY: 'anon-stand-in',
+    AUTH_FORWARD_CLIENT_IP: 'true', SB_SECRET_KEY: 'sb_secret_stand_in', SIGN_IN_UPSTREAM_TIMEOUT_MS: '2000' },
+  stdio: ['ignore', 'pipe', 'pipe'], detached: true,
+})
 let fnLog = ''
 fn.stdout.on('data', (d) => { fnLog += d }); fn.stderr.on('data', (d) => { fnLog += d })
-for (let i = 0; i < 120; i++) {
-  try { await fetch(`http://127.0.0.1:${FN_PORT}/`, { method: 'OPTIONS' }); break } catch { await new Promise((r) => setTimeout(r, 1000)) }
+for (const port of [FN_PORT, FN_FWD_PORT]) {
+  for (let i = 0; i < 120; i++) {
+    try { await fetch(`http://127.0.0.1:${port}/`, { method: 'OPTIONS' }); break } catch { await new Promise((r) => setTimeout(r, 1000)) }
+  }
 }
 
 try {
@@ -160,8 +183,48 @@ try {
   r = await call('alpha.admin', 'wrong-password', 'tok-2')
   check('CAPTCHA on, valid token + wrong password -> 401 and counted', r.status === 401, JSON.stringify(r))
   captchaOn = false
+
+  // ---- outages, timeouts, odd answers, recovery -----------------------------
+  sql("delete from public.login_attempts")
+  for (const [mode, label] of [['slow', 'lockout check hangs past the 2 s test timeout'], ['weird', 'lockout check returns an unexpected value'], ['null', 'lockout check returns nothing']]) {
+    lockoutMode = mode
+    r = await call('alpha.admin')
+    check(`${label} -> 503 unavailable, no session`, r.status === 503 && r.body?.error === 'unavailable' && !r.body?.access_token && r.ms < 5000, JSON.stringify(r))
+    lockoutMode = ''
+  }
+  lookupSlow = true
+  r = await call('alpha.admin')
+  check('account lookup hangs -> 503 unavailable within the timeout', r.status === 503 && r.ms < 5000, JSON.stringify(r))
+  lookupSlow = false
+  for (const [mode, label] of [['slow', 'Supabase Auth hangs'], ['500', 'Supabase Auth errors'], ['429', 'Supabase Auth rate-limits']]) {
+    authMode = mode
+    r = await call('alpha.admin')
+    check(`${label} -> 503 unavailable, nothing counted`, r.status === 503 && r.ms < 5000, JSON.stringify(r))
+    authMode = ''
+  }
+  cnt = sql(`select count(*) from public.login_attempts where identifier = 'u:${ADMIN}'`)
+  check('none of the outages counted as a wrong password', cnt === '0', `rows=${cnt}`)
+  r = await call('alpha.admin')
+  check('after every outage clears, the same person signs in (retry works)', r.status === 200, JSON.stringify(r))
+  const leaky = bodies.filter((b) => /boom|XX000|db\.internal|5432|stack|postgres|exception/i.test(b))
+  check('no response body carries internal details', leaky.length === 0, leaky.slice(0, 2).join(' | '))
+  check('every refusal body is a fixed short code', bodies.every((b) => b.length < 400), String(bodies.find((b) => b.length >= 400)).slice(0, 200))
+
+  // ---- forged IP headers ------------------------------------------------------
+  const forged = { 'x-forwarded-for': '198.51.100.88, 10.0.0.1', 'x-real-ip': '192.0.2.99', 'true-client-ip': '203.0.113.66' }
+  r = await call('alpha.admin', GOOD_PW, undefined, { headers: { ...forged, 'cf-connecting-ip': '203.0.113.77' } })
+  check('forwarding OFF (production): no client IP is passed on, whatever the headers say', r.status === 200 && lastAuthHeaders.forwarded === null && lastAuthHeaders.apikey === 'anon-stand-in', JSON.stringify(lastAuthHeaders))
+  r = await call('alpha.admin', GOOD_PW, undefined, { port: FN_FWD_PORT, headers: forged })
+  check('forwarding ON, only X-Forwarded-For / X-Real-IP / True-Client-IP -> nothing forwarded', r.status === 200 && lastAuthHeaders.forwarded === null, JSON.stringify(lastAuthHeaders))
+  r = await call('alpha.admin', GOOD_PW, undefined, { port: FN_FWD_PORT, headers: { ...forged, 'cf-connecting-ip': '203.0.113.77' } })
+  check('forwarding ON, cf-connecting-ip present -> only that address is forwarded, with the secret key', r.status === 200 && lastAuthHeaders.forwarded === '203.0.113.77' && lastAuthHeaders.apikey === 'sb_secret_stand_in', JSON.stringify(lastAuthHeaders))
+  r = await call('alpha.admin', GOOD_PW, undefined, { port: FN_FWD_PORT, headers: { 'cf-connecting-ip': '203.0.113.77, 198.51.100.1' } })
+  check('forwarding ON, malformed cf-connecting-ip (a list) -> nothing forwarded', r.status === 200 && lastAuthHeaders.forwarded === null, JSON.stringify(lastAuthHeaders))
+  r = await call('alpha.admin', GOOD_PW, undefined, { port: FN_FWD_PORT, headers: { 'cf-connecting-ip': '<script>' } })
+  check('forwarding ON, garbage cf-connecting-ip -> nothing forwarded', r.status === 200 && lastAuthHeaders.forwarded === null, JSON.stringify(lastAuthHeaders))
 } finally {
   try { process.kill(-fn.pid, 'SIGTERM') } catch { fn.kill('SIGTERM') }
+  try { process.kill(-fnFwd.pid, 'SIGTERM') } catch { fnFwd.kill('SIGTERM') }
   mock.close()
 }
 const failed = results.filter((x) => !x).length

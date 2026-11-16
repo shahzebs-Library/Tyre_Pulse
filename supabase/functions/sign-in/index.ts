@@ -69,6 +69,27 @@ function escapeLike(s: string): string {
   return s.replace(/[\\%_]/g, (m) => '\\' + m)
 }
 
+// Every upstream call (database RPCs, account lookup, Supabase Auth) is bounded, so a
+// hung dependency answers the caller with a clear 503 "try again" instead of hanging
+// until the platform kills the function. 8 s default; SIGN_IN_UPSTREAM_TIMEOUT_MS may
+// set 1000..15000 (used by the local tests).
+function upstreamTimeoutMs(): number {
+  const n = Number(Deno.env.get('SIGN_IN_UPSTREAM_TIMEOUT_MS') || '')
+  return Number.isFinite(n) && n >= 1000 && n <= 15000 ? n : 8000
+}
+const timedFetch: typeof fetch = (input, init = {}) =>
+  fetch(input, { ...init, signal: AbortSignal.timeout(upstreamTimeoutMs()) })
+
+/** One overall deadline for a step: the client library retries read requests on its own,
+ *  so a per-request timeout alone can add up to several times the limit. */
+function withDeadline<T>(work: Promise<T>): Promise<T> {
+  let timer: number | undefined
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('deadline')), upstreamTimeoutMs())
+  })
+  return Promise.race([work, deadline]).finally(() => clearTimeout(timer))
+}
+
 /** Optional sb_secret_ key: only a secret key may carry Sb-Forwarded-For. */
 function secretKey(): string | null {
   const direct = Deno.env.get('SB_SECRET_KEY')
@@ -135,7 +156,10 @@ Deno.serve(async (req) => {
     return reply(400, { error: 'invalid_request' })
   }
 
-  const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+  const admin = createClient(url, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: timedFetch },
+  })
 
   // ---- lockout gate (fails CLOSED on an error) --------------------------
   // If the lockout check itself cannot answer, the request is refused with the
@@ -149,7 +173,11 @@ Deno.serve(async (req) => {
   try {
     const { data, error } = await admin.rpc('login_attempt_status', { p_identifier: identifier })
     if (error) return reply(503, { error: 'unavailable' })
-    if (data?.locked) {
+    // Anything but the documented shape is treated as "cannot tell": refuse, never assume.
+    if (!data || typeof data !== 'object' || typeof (data as { locked?: unknown }).locked !== 'boolean') {
+      return reply(503, { error: 'unavailable' })
+    }
+    if (data.locked) {
       return refuse(429, { error: 'locked', retry_after_seconds: Number(data.retry_after_seconds) || 0 })
     }
   } catch {
@@ -174,18 +202,21 @@ Deno.serve(async (req) => {
     // PostgREST treats '*' as a LIKE wildcard; no username or employee id
     // carries one, so such an identifier simply matches nobody.
     try {
-      const pattern = escapeLike(identifier)
-      let userId: string | null = null
-      for (const col of ['username', 'employee_id']) {
-        const { data, error } = await admin.from('profiles').select('id').ilike(col, pattern).limit(1)
-        if (error) return reply(503, { error: 'unavailable' })
-        if (data?.length) { userId = data[0].id as string; break }
-      }
-      if (userId) {
+      const found = await withDeadline((async (): Promise<{ ok: boolean; email: string | null }> => {
+        const pattern = escapeLike(identifier)
+        let userId: string | null = null
+        for (const col of ['username', 'employee_id']) {
+          const { data, error } = await admin.from('profiles').select('id').ilike(col, pattern).limit(1)
+          if (error) return { ok: false, email: null }
+          if (data?.length) { userId = data[0].id as string; break }
+        }
+        if (!userId) return { ok: true, email: null }
         const { data, error } = await admin.auth.admin.getUserById(userId)
-        if (error) return reply(503, { error: 'unavailable' })
-        email = data?.user?.email ?? null
-      }
+        if (error) return { ok: false, email: null }
+        return { ok: true, email: data?.user?.email ?? null }
+      })())
+      if (!found.ok) return reply(503, { error: 'unavailable' })
+      email = found.email
     } catch {
       return reply(503, { error: 'unavailable' })
     }
@@ -194,6 +225,9 @@ Deno.serve(async (req) => {
 
   // ---- password grant ----------------------------------------------------
   const secret = secretKey()
+  // OFF in production and to stay off: the proxy chain in front of this function has not
+  // been verified to set or overwrite cf-connecting-ip for every path (see the auth plan).
+  // Without forwarding, Supabase Auth limits by the address it sees itself.
   const forward = Deno.env.get('AUTH_FORWARD_CLIENT_IP') === 'true' && secret
   const ip = clientIp(req)
   const authHeaders: Record<string, string> = {
@@ -204,7 +238,7 @@ Deno.serve(async (req) => {
 
   let res: Response
   try {
-    res = await fetch(`${url}/auth/v1/token?grant_type=password`, {
+    res = await timedFetch(`${url}/auth/v1/token?grant_type=password`, {
       method: 'POST',
       headers: authHeaders,
       body: JSON.stringify({

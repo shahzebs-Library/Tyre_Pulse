@@ -23,6 +23,8 @@ import { applyRegisterFilters, conditionOptions } from '../lib/aiTyreInspectionF
 import AiTyreOpsPanel from '../components/aiInspection/AiTyreOpsPanel'
 import ExpertLabellingPanel from '../components/aiInspection/ExpertLabellingPanel'
 import LazyTyrePhoto from '../components/aiInspection/LazyTyrePhoto'
+import SerialReviewBlock from '../components/aiInspection/SerialReviewBlock'
+import { listSerialReadings } from '../lib/api/aiTyreSerial'
 import { readInspectionMeasurements, recordDepthMeasurement, readInspectionAnalysis, enqueueInspectionPhotos, reviewAiFinding, backfillAiInspectionRange, screenInspectionPhotos, getAiReviewFeedback, getAiLabelledFindings } from '../lib/api/aiTyreInspection'
 
 /** Calendar day selection in Saudi Arabia; always preserve local midnight. */
@@ -378,7 +380,11 @@ function InspectionDetail({ inspection, related, role, activeTab, onTab, onClose
   const [analysisError,setAnalysisError]=useState('')
   const [analysisLoading,setAnalysisLoading]=useState(false)
   const [analysisNotice,setAnalysisNotice]=useState('')
-  const refreshAnalysis=useCallback(async()=>{try{setAnalysisJobs(await readInspectionAnalysis([inspection.id]));setAnalysisError('')}catch(e){setAnalysisError(toUserMessage(e,'Could not load AI results'))}},[inspection.id])
+  const [serialData,setSerialData]=useState({readings:[],events:[]})
+  // DRAFT serial pilot: best effort and separate, so a missing table never hides the damage findings.
+  const refreshSerial=useCallback(async()=>{try{setSerialData(await listSerialReadings([inspection.id]))}catch{setSerialData({readings:[],events:[]})}},[inspection.id])
+  const serialByJob=useMemo(()=>new Map((serialData.readings||[]).map(r=>[r.job_id,r])),[serialData])
+  const refreshAnalysis=useCallback(async()=>{try{setAnalysisJobs(await readInspectionAnalysis([inspection.id]));setAnalysisError('')}catch(e){setAnalysisError(toUserMessage(e,'Could not load AI results'))}refreshSerial()},[inspection.id,refreshSerial])
   useEffect(()=>{refreshAnalysis()},[refreshAnalysis])
   const screenAll=async()=>{
     setAnalysisLoading(true)
@@ -618,7 +624,7 @@ function InspectionDetail({ inspection, related, role, activeTab, onTab, onClose
           </div><p className="text-xs text-[var(--text-muted)] mt-1">Your decisions and reasons are retained as structured feedback for future quality evaluation. No automatic model retraining or unsafe auto-approval is performed.</p></div>
           <div className="space-y-3">{analysisJobs.map(job=><Card key={job.id}>
             <div className="flex justify-between items-center gap-3"><h4 className="font-semibold">{positionLabel(job.tyre_position)}</h4><span className="text-xs">{STATUS_LABEL[job.status]||job.status} | {REVIEW_LABEL[job.review_status||'unreviewed']||job.review_status}</span></div>{job.photo_ref && <div className="mt-3"><LazyTyrePhoto photoRef={job.photo_ref} alt={'Original tyre photo for supervisor verification at '+positionLabel(job.tyre_position)} className="h-48 max-w-full rounded-lg border border-[var(--border-dim)] object-contain"/><p className="text-xs text-[var(--text-muted)] mt-1">Original photograph: enlarge and compare before review</p></div>}
-            {job.analysis?<div className="mt-3 space-y-2"><p className="text-sm">{job.analysis.assessable?'Visual assessment available':(job.analysis.reason||'Image unassessable')}</p>{(job.analysis.defects||[]).map((d,i)=><p key={i} className="text-sm border-l-2 border-amber-500 pl-3">{d.type}: {d.description} ({d.severity})</p>)}<p className="text-sm text-[var(--text-secondary)]">{job.analysis.recommendation}</p></div>:<p className={'text-xs mt-2 '+(job.status==='failed'?'text-red-500':job.status==='pending'&&job.failure_kind?'text-amber-500':'text-[var(--text-muted)]')}>{job.status==='failed'||(job.status==='pending'&&job.failure_kind)?failureText(job):job.status==='completed'?'No finding recorded.':'Waiting for the analysis service.'}</p>}
+            {job.analysis?<div className="mt-3 space-y-2"><p className="text-sm">{job.analysis.assessable?'Visual assessment available':(job.analysis.reason||'Image unassessable')}</p>{(job.analysis.defects||[]).map((d,i)=><p key={i} className="text-sm border-l-2 border-amber-500 pl-3">{d.type}: {d.description} ({d.severity})</p>)}<p className="text-sm text-[var(--text-secondary)]">{job.analysis.recommendation}</p><SerialReviewBlock reading={serialByJob.get(job.id)} events={serialData.events} mayReview={mayReview} onDecided={refreshSerial}/></div>:<p className={'text-xs mt-2 '+(job.status==='failed'?'text-red-500':job.status==='pending'&&job.failure_kind?'text-amber-500':'text-[var(--text-muted)]')}>{job.status==='failed'||(job.status==='pending'&&job.failure_kind)?failureText(job):job.status==='completed'?'No finding recorded.':'Waiting for the analysis service.'}</p>}
             {mayReview && job.status==='completed' && (!job.review_status || job.review_status==='unreviewed')&&<div className="mt-3 space-y-2"><label className="block text-xs text-[var(--text-secondary)]">Review reason / improvement feedback<textarea className="input block w-full mt-1" rows={2} placeholder="Describe the confirmed damage, false positive, blur, or missing evidence" value={reviewNotes[job.id]||''} onChange={e=>setReviewNotes(v=>({...v,[job.id]:e.target.value}))}/></label><div className="flex gap-2 flex-wrap"><button className="btn-secondary" disabled={analysisLoading} onClick={()=>decide(job,'accepted')}>Accept observation</button><button className="btn-secondary" disabled={analysisLoading} onClick={()=>decide(job,'rejected')}>Reject observation</button></div></div>}
           </Card>)}</div>
           {!analysisJobs.length && <EmptyState icon={SearchCheck} title="No queued image analysis" description="Request server-side analysis to create jobs for the linked abnormal-tyre photographs."/>}

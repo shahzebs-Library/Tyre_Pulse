@@ -41,6 +41,11 @@ select tt.ok('6j Beta Admin chooses BETA once', tt.try($$select public.org_set_m
 select tt.ok('6k a second change by the company is refused (platform changes it)',
   tt.try($$select public.org_set_my_sign_in_code('BETA2')$$) like '42501%');
 select tt.ok('6l screen now says already_set', public.get_my_org_sign_in_code() ->> 'reason' = 'already_set');
+select tt.ok('6l2 the company Admin cannot clear its code with a direct UPDATE',
+  tt.try($$update public.organisations set sign_in_code = null where id = 'bbbbbbbb-0000-4000-8000-000000000002'$$) like '42501%');
+select tt.ok('6l3 so the code is still set and "once only" holds',
+  (select sign_in_code from public.organisations where id = 'bbbbbbbb-0000-4000-8000-000000000002') = 'BETA'
+  and tt.try($$select public.org_set_my_sign_in_code('BETA2')$$) like '42501%');
 select tt.ok('6m the code is recorded in the company audit',
   exists (select 1 from public.org_admin_events where organisation_id = :'BETA_ORG'::uuid and action = 'company.code_set'));
 reset role;
@@ -52,6 +57,8 @@ select tt.ok('6o Alpha cannot take Beta''s code', tt.try($$select public.org_set
 select set_config('request.jwt.claims', json_build_object('sub', :'SUPER', 'role', 'authenticated', 'aal', 'aal2')::text, true) \g /dev/null
 select tt.ok('6p super admin can still change Beta''s code',
   tt.try($$select public.admin_set_org_sign_in_code('bbbbbbbb-0000-4000-8000-000000000002','BETA-H')$$) = 'OK');
+select tt.ok('6p2 super admin can still clear a code directly',
+  tt.try($$update public.organisations set sign_in_code = null where id = 'bbbbbbbb-0000-4000-8000-000000000002'$$) = 'OK');
 select tt.ok('6q super admin direct UPDATE of a code still checks the slug clash',
   tt.try($$update public.organisations set sign_in_code = 'alpha-readymix' where id = 'bbbbbbbb-0000-4000-8000-000000000002'$$) like '23505%');
 reset role;

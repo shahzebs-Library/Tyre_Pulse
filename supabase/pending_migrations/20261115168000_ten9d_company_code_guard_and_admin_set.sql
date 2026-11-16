@@ -19,6 +19,8 @@
 --      "<old slug>/<name>" sign-in of that company stops working.
 --
 -- FIX
+--   1b. A direct client UPDATE that CLEARS the code is refused too (found in review:
+--       clear-then-set bypassed "once only" and released the code to other companies).
 --   1. _guard_org_sign_in_code becomes SECURITY INVOKER (same convention as
 --      guard_organisation_platform_columns, which works). Definer RPCs still pass because
 --      inside them current_user is the owner. The uniqueness EXISTS then runs under the
@@ -34,12 +36,32 @@
 --
 -- EXISTING DATA: none touched. 0 organisations have a code in production today.
 -- ROLLBACK
---   alter function public._guard_org_sign_in_code() security definer;
+--   re-create _guard_org_sign_in_code from its previous body (SECURITY DEFINER, NULL
+--   code returned before the client check);
 --   re-create guard_organisation_platform_columns without the slug line;
 --   drop function public.org_set_my_sign_in_code(text); drop function public.get_my_org_sign_in_code();
 -- =============================================================================
 
-alter function public._guard_org_sign_in_code() security invoker;
+-- SECURITY INVOKER (fix 1). Also (fix 1b, review 2026-11-16): a company Admin could
+-- CLEAR its own code with a direct UPDATE (the guard returned early on a NULL code),
+-- which (a) defeated "once only" (clear, then org_set_my_sign_in_code again) and
+-- (b) released the code so another company could claim it, after which the first
+-- company's "<code>/<name>" sign-ins would resolve inside the other company.
+-- Clearing is now a platform change like any other code change.
+create or replace function public._guard_org_sign_in_code()
+returns trigger language plpgsql security invoker set search_path = public as $fn$
+begin
+  if tg_op = 'UPDATE' and new.sign_in_code is not distinct from old.sign_in_code then return new; end if;
+  if tg_op = 'INSERT' and new.sign_in_code is null then return new; end if;
+  if current_user in ('authenticated', 'anon') and not coalesce(public.is_super_admin(), false) then
+    raise exception 'The company code is managed by the platform.' using errcode = '42501';
+  end if;
+  if new.sign_in_code is null then return new; end if;
+  if exists (select 1 from public.organisations o where o.id <> new.id and lower(o.slug) = lower(new.sign_in_code)) then
+    raise exception 'That company code is already in use.' using errcode = '23505';
+  end if;
+  return new;
+end $fn$;
 
 create or replace function public.guard_organisation_platform_columns()
 returns trigger language plpgsql set search_path = public as $fn$

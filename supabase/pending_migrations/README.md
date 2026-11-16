@@ -120,9 +120,8 @@ NOT applied. Order, dependencies, the check after each step and the point of no 
   longer holds (used, cancelled, expired, wrong email, wrong code, code alone) is ABORTED instead of
   creating an orphan account with no company that burns the username. `get_public_config()` also returns
   `single_tenant_mode` (the sign-in hint shows only once multi-company is on).
-- `20261115168700_ten9f_login_lockout_per_account.sql` : new. The lockout counter is keyed on the account
-  (`_login_attempt_key`), not the typed text: with the code form, spacing variants of
-  "code/name" each had their own counter, so the lock could be bypassed.
+- TEN-9f moved to its own PR #548: `20261116100000_ten9f_login_lockout_per_account.sql` (+ROLLBACK).
+  The copy here is byte-identical and only used by the staging harness; apply it from #548, once.
 - `20261115168800_ten9g_code_form_cannot_be_squatted.sql` : new (2026-11-16). A username or employee
   id containing "/" or "\\" could shadow a "code/name" sign-in (step 1 exact match ran first): staging
   proved `resolve_sign_in_user('beta-haulage/beta.admin')` returning a self-registered impostor. The

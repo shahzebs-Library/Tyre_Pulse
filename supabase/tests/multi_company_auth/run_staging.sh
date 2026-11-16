@@ -17,7 +17,7 @@ P=(psql -X -q -v ON_ERROR_STOP=1 -h "$HOST" -p "$PORT" -U postgres)
 PEND="$ROOT/supabase/pending_migrations"
 TEN9D="$PEND/20261115168000_ten9d_company_code_guard_and_admin_set.sql"
 TEN9E="$PEND/20261115168500_ten9e_invitation_signup_refuses_cleanly.sql"
-TEN9F="$PEND/20261115168700_ten9f_login_lockout_per_account.sql"
+TEN9F="$PEND/20261116100000_ten9f_login_lockout_per_account.sql"  # owned by PR 548, identical copy
 TEN9G="$PEND/20261115168800_ten9g_code_form_cannot_be_squatted.sql"
 TEN9C="$PEND/20261115169000_ten9c_HOLD_per_company_usernames.sql"
 

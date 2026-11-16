@@ -35,9 +35,8 @@
 --
 -- EXISTING DATA: none touched.
 -- ROLLBACK:
---   drop trigger if exists trg_guard_profile_sign_in_names on public.profiles;
---   drop function if exists public.guard_profile_sign_in_names();
---   re-create _resolve_sign_in_profile from its TEN-9b body (step 1 then step 2).
+--   20261115168800_ten9g_code_form_cannot_be_squatted.ROLLBACK.sql (exact pre-TEN-9g body,
+--   md5 1ee66847b3d067fd171305fa7de11233, plus drop of the trigger and guard function).
 -- =============================================================================
 
 create or replace function public._resolve_sign_in_profile(p_identifier text)

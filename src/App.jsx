@@ -124,6 +124,7 @@ const DataCleaning           = lazy(() => import('./pages/DataCleaning'))
 const DataReconciliation     = lazy(() => import('./pages/DataReconciliation'))
 const UploadData             = lazy(() => import('./pages/UploadData'))
 const DataIntakeCenter       = lazy(() => import('./pages/DataIntakeCenter'))
+const ErpIntake              = lazy(() => import('./pages/ErpIntake'))
 const NotFound               = lazy(() => import('./pages/NotFound'))
 const DataIntakeHistory      = lazy(() => import('./pages/DataIntakeHistory'))
 const Checklists             = lazy(() => import('./pages/Checklists'))
@@ -665,7 +666,8 @@ function MainApp() {
                       {/* ── Analytics ── */}
                       {/* Merged pages: the old routes below redirect to the page that absorbed them
                           (/analytics, /comparison, /safety-compliance, /tyre-failure-cpk, /workshop,
-                          /erp-intake, /expense-import, /erp-import). Each lives on as a tab of its keeper. */}
+                          /expense-import, /erp-import). Each lives on as a tab of its keeper. /erp-intake is the owner's upload area and
+                          keeps its own page (owner instruction 2026-11-16); it is also a tab of /data-intake. */}
                       <Route path="/analytics"    element={<Navigate to="/advanced-analytics" replace />} />
                       <Route path="/brand-perf"   element={<Safe><ModuleRoute moduleKey="brand_performance"><BrandPerformance /></ModuleRoute></Safe>} />
                       <Route path="/site-comp"    element={<Safe><ModuleRoute moduleKey="site_comparison"><SiteComparison /></ModuleRoute></Safe>} />
@@ -757,7 +759,7 @@ function MainApp() {
                       <Route path="/sany-invoices"           element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><SanyInvoices /></RoleRoute></Safe>} />
                       <Route path="/sany-delay-penalty"      element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><SanyDelayPenalty /></RoleRoute></Safe>} />
                       <Route path="/production-m3"           element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ProductionM3 /></RoleRoute></Safe>} />
-                      <Route path="/erp-intake"             element={<Navigate to="/data-intake?tab=reports" replace />} />
+                      <Route path="/erp-intake"             element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ErpIntake /></RoleRoute></Safe>} />
                       <Route path="/expense-import"          element={<Navigate to="/data-intake?tab=expenses" replace />} />
                       <Route path="/report-sharing"          element={<Safe><RoleRoute allowed={['Admin']}><ReportSharing /></RoleRoute></Safe>} />
                       <Route path="/forecasting"             element={<Safe><ModuleRoute moduleKey="forecasting"><ForecastingEngine /></ModuleRoute></Safe>} />

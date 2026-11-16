@@ -26,7 +26,10 @@
 --      primary key and one would be swallowed by the exception handler. 20 parallel
 --      clients on staging did NOT reproduce a loss with the current function (20/20
 --      counted), so this is defence in depth. Now a single INSERT .. ON CONFLICT DO UPDATE.
---   3. Admin recovery: there was no way for an administrator to clear a lock (only the
+--   3. Retention: idle counters are purged after window + lock (30 minutes by
+--      default) instead of 1 day, because unknown names now create rows and an
+--      anonymous caller must not be able to grow the table without bound.
+--   4. Admin recovery: there was no way for an administrator to clear a lock (only the
 --      15-minute expiry). New admin_login_lock_status / admin_clear_login_lock, gated to
 --      super admin or an Admin of the same company, reason required, every clear written
 --      to access_audit with the before state.
@@ -62,12 +65,13 @@ as $fn$
 declare
   v_text text := lower(btrim(coalesce(p_identifier, '')));
   v_uid uuid;
+  v_mail uuid;
 begin
   if v_text = '' then return null; end if;
+  -- Both lookups always run, so a real name and an unknown name cost the same.
   v_uid := public._resolve_sign_in_profile(p_identifier);
-  if v_uid is null then
-    select au.id into v_uid from auth.users au where lower(au.email) = v_text limit 1;
-  end if;
+  select au.id into v_mail from auth.users au where lower(au.email) = v_text limit 1;
+  v_uid := coalesce(v_uid, v_mail);
   if v_uid is not null then return 'u:' || v_uid::text; end if;
   return 'x:' || md5(v_text);
 end $fn$;
@@ -144,10 +148,13 @@ begin
       'retry_after_seconds', ceil(extract(epoch from v_lock))::int);
   end if;
 
-  -- Occasional housekeeping: counters idle for a day can never matter again.
+  -- Housekeeping. A counter idle for longer than window + lock can never matter again
+  -- (its window has expired and any lock ended). Unknown names now get rows too, so
+  -- this bounds the table to roughly (attempts per minute) x (window + lock minutes)
+  -- instead of letting an anonymous flood of made-up names grow it without limit.
   if random() < 0.02 then
     delete from public.login_attempts
-     where updated_at < now() - interval '1 day'
+     where updated_at < now() - (v_win + v_lock)
        and (locked_until is null or locked_until < now());
   end if;
 

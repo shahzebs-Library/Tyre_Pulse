@@ -16,6 +16,7 @@ P=(psql -X -q -v ON_ERROR_STOP=1 -h "$HOST" -p "$PORT" -U postgres)
 MIG="$ROOT/supabase/pending_migrations/20261116100000_ten9f_login_lockout_per_account.sql"
 RB="$ROOT/supabase/pending_migrations/20261116100000_ten9f_login_lockout_per_account.ROLLBACK.sql"
 PROD_MD5="login_attempt_status=bda4f978f7404a86aa650f9aab6f3f14 record_login_failure=c8a5b4a419e567262e6620c3fb16bbed reset_login_attempts=32867f65d8493dd864f2d00c9e29dc71"
+timing() { "${P[@]}" -d "$DB" -f "$HERE/timing.sql" 2>&1 | sed -n 's/^.*NOTICE:  //p' | grep '^timing'; }
 md5s() { "${P[@]}" -d "$DB" -At -c "select string_agg(p.proname||'='||md5(pg_get_functiondef(p.oid)),' ' order by p.proname) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('login_attempt_status','record_login_failure','reset_login_attempts')"; }
 checks() { "${P[@]}" -d "$DB" -f "$1" 2>&1 | sed -n 's/^.*NOTICE:  //p' | grep -E '^(ok|not ok)'; }
 
@@ -25,8 +26,11 @@ OUT=""
 [ "$(md5s)" = "$PROD_MD5" ] && OUT+="ok - 0 staging functions byte-identical to production"$'\n' || OUT+="not ok - 0 staging functions differ from production: $(md5s)"$'\n'
 
 echo -n "$OUT"; echo "## before TEN-9f (production shape)"; B="$(checks "$HERE/before.sql")"; echo "$B"
+echo "## timing before"; timing
 "${P[@]}" -d "$DB" -f "$MIG" >/dev/null || { echo "not ok - migration failed to apply"; exit 1; }
 echo "## after TEN-9f"; A="$(checks "$HERE/after.sql")"; echo "$A"
+echo "## timing after"; timing
+echo "## flood and retention"; F="$(checks "$HERE/retention.sql")"; echo "$F"; A="$A"$'\n'"$F"
 
 echo "## concurrency"
 "${P[@]}" -d "$DB" -c "select public.t9f_reset(); update public.system_config set value='50' where key='max_login_attempts'" >/dev/null

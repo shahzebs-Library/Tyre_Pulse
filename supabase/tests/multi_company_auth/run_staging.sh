@@ -18,6 +18,7 @@ PEND="$ROOT/supabase/pending_migrations"
 TEN9D="$PEND/20261115168000_ten9d_company_code_guard_and_admin_set.sql"
 TEN9E="$PEND/20261115168500_ten9e_invitation_signup_refuses_cleanly.sql"
 TEN9F="$PEND/20261115168700_ten9f_login_lockout_per_account.sql"
+TEN9G="$PEND/20261115168800_ten9g_code_form_cannot_be_squatted.sql"
 TEN9C="$PEND/20261115169000_ten9c_HOLD_per_company_usernames.sql"
 
 fresh() {
@@ -33,21 +34,23 @@ run "$DB" "$HERE/tests.sql"
 "${P[@]}" -d "$DB" -1 -f "$TEN9D" >/dev/null
 "${P[@]}" -d "$DB" -1 -f "$TEN9E" >/dev/null
 "${P[@]}" -d "$DB" -1 -f "$TEN9F" >/dev/null
-echo "## after TEN-9d + TEN-9e + TEN-9f"
-OUT1="$(run "$DB" "$HERE/tests.sql" -v strict=1; run "$DB" "$HERE/tests_ten9d.sql"; run "$DB" "$HERE/tests_ten9e.sql"; run "$DB" "$HERE/tests_ten9f.sql")"
+"${P[@]}" -d "$DB" -1 -f "$TEN9G" >/dev/null
+echo "## after TEN-9d + TEN-9e + TEN-9f + TEN-9g"
+OUT1="$(run "$DB" "$HERE/tests.sql" -v strict=1; run "$DB" "$HERE/tests_ten9d.sql"; run "$DB" "$HERE/tests_ten9e.sql"; run "$DB" "$HERE/tests_ten9f.sql"; run "$DB" "$HERE/tests_gaps.sql" -v ten9c=0)"
 echo "$OUT1"
 
-echo "## TEN-9d/9e/9f + HOLD ten9c (private copy only)"
+echo "## TEN-9d/9e/9f/9g + HOLD ten9c (private copy only)"
 fresh "$DB9C"
 "${P[@]}" -d "$DB9C" -1 -f "$TEN9D" >/dev/null
 "${P[@]}" -d "$DB9C" -1 -f "$TEN9E" >/dev/null
 "${P[@]}" -d "$DB9C" -1 -f "$TEN9F" >/dev/null
+"${P[@]}" -d "$DB9C" -1 -f "$TEN9G" >/dev/null
 "${P[@]}" -d "$DB9C" -1 -f "$TEN9C" >/dev/null
-OUT2="$(run "$DB9C" "$HERE/tests_ten9c.sql")"
+OUT2="$(run "$DB9C" "$HERE/tests_ten9c.sql"; run "$DB9C" "$HERE/tests_gaps.sql" -v ten9c=1)"
 echo "$OUT2"
 
 ALL="$OUT1"$'\n'"$OUT2"
 PASS=$(echo "$ALL" | grep -c "^ok" || true)
 FAIL=$(echo "$ALL" | grep -cE "^not ok|ERROR" || true)
-echo "multi-company auth staging (after TEN-9d/9e/9f): $PASS passed, $FAIL failed"
+echo "multi-company auth staging (after TEN-9d/9e/9f/9g): $PASS passed, $FAIL failed"
 [ "$FAIL" = "0" ]

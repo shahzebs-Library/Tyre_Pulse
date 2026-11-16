@@ -123,10 +123,15 @@ NOT applied. Order, dependencies, the check after each step and the point of no 
 - `20261115168700_ten9f_login_lockout_per_account.sql` : new. The lockout counter is keyed on the account
   (`_login_attempt_key`), not the typed text: with the code form, spacing variants of
   "code/name" each had their own counter, so the lock could be bypassed.
+- `20261115168800_ten9g_code_form_cannot_be_squatted.sql` : new (2026-11-16). A username or employee
+  id containing "/" or "\\" could shadow a "code/name" sign-in (step 1 exact match ran first): staging
+  proved `resolve_sign_in_user('beta-haulage/beta.admin')` returning a self-registered impostor. The
+  resolver now tries the code form first when the separator is present; a trigger refuses NEW or
+  CHANGED names carrying a separator (existing rows untouched). Preflight count in the file header.
 - `20261115169000_ten9c_HOLD_per_company_usernames.sql` — new, HOLD. Removes the global username and
   employee id keys. Contains `drop`. Point of no easy return; not part of the sequence proper.
 
-Test for TEN-8b/9b/9c/9d/9e/9f (local staging only): `supabase/tests/multi_company_auth/run_staging.sh`.
+Test for TEN-8b/9b/9c/9d/9e/9f/9g + gap matrix `tests_gaps.sql` (local staging only): `supabase/tests/multi_company_auth/run_staging.sh`.
 Sign-in edge function run locally against staging: `e2e/multi_company/sign_in_edge_local.mjs`.
 
 Status per finding (TEN-1 to TEN-13): `docs/commercial-readiness/audit/TENANCY_STATUS.md`.

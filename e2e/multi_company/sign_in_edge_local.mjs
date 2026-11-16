@@ -22,6 +22,7 @@ const MOCK_PORT = 54398, FN_PORT = 54397
 const GOOD_PW = 'correct-horse-1'
 let resolverMissing = false
 let resolverBroken = false
+let lockoutBroken = false
 
 function sql(query, vars = {}) {
   const args = ['-X', '-qAt', '-h', HOST, '-p', '54329', '-U', 'postgres', '-d', DB]
@@ -42,6 +43,7 @@ const mock = http.createServer((req, res) => {
       if (rpc && RPCS.has(rpc[1])) {
         if (rpc[1] === 'resolve_sign_in_user' && resolverMissing) return send(404, { code: 'PGRST202', message: 'Could not find the function' })
         if (rpc[1] === 'resolve_sign_in_user' && resolverBroken) return send(500, { code: 'XX000', message: 'boom' })
+        if (rpc[1] === 'login_attempt_status' && lockoutBroken) return send(500, { code: 'XX000', message: 'boom' })
         const id = JSON.parse(body || '{}').p_identifier ?? ''
         // psql :'v' quoting keeps the identifier a literal (no injection).
         const out = sql(`select to_jsonb(public.${rpc[1]}(:'v'))`, { v: id })
@@ -125,7 +127,12 @@ try {
   resolverMissing = false; resolverBroken = true
   r = await call('beta.admin')
   check('resolver erroring -> 503 unavailable, not counted as a failure', r.status === 503, JSON.stringify(r))
-  resolverBroken = false
+  resolverBroken = false; lockoutBroken = true
+  r = await call('beta.admin')
+  check('lockout check erroring -> 503 unavailable (fails closed), no session issued', r.status === 503 && !r.body?.access_token, JSON.stringify(r))
+  lockoutBroken = false
+  r = await call('beta.admin')
+  check('lockout check back -> correct password signs in again', r.status === 200 && r.body?.user?.id === BETA, JSON.stringify(r))
 } finally {
   try { process.kill(-fn.pid, 'SIGTERM') } catch { fn.kill('SIGTERM') }
   mock.close()

@@ -88,11 +88,19 @@ export function feedFreshness(detail, now = Date.now()) {
 }
 
 /** Rejected expense lines grouped by reason and by the country pair. */
+export const REJECT_REASON_LABEL = Object.freeze({
+  complaint_missing_vehicle_in_date: 'Complaint row skipped: no Vehicle In Date',
+  complaint_unreadable_vehicle_in_date: 'Complaint row skipped: Vehicle In Date could not be read',
+})
+
 export function rejectSummary(rejects = []) {
   const reasons = {}; const pairs = {}
   for (const r of rejects) {
-    const reason = r.reject_reason || 'Country mismatch (reason not recorded)'
+    const code = r.reject_reason || 'Country mismatch (reason not recorded)'
+    const reason = REJECT_REASON_LABEL[code] || code
     reasons[reason] = (reasons[reason] || 0) + 1
+    // A skipped complaint row is not a country mismatch; it has no country pair.
+    if (REJECT_REASON_LABEL[code]) continue
     const pair = `${r.uploaded_country || 'Unknown'} upload, belongs to ${r.detected_country || 'Unknown'}`
     pairs[pair] = (pairs[pair] || 0) + 1
   }

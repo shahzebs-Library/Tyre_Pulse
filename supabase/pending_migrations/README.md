@@ -192,6 +192,12 @@ Tests: `supabase/tests/staging/report_pdf_cache_tests.sh` (local staging), `supa
   become nullable with no default, so a blank is stored as "not recorded" and not 0. Contains `drop default` /
   `drop not null` (unavoidable), so the apply prompt needs the owner. No dependency. Tested on local staging.
 
+- `20261117102000_recalls_number_unique_per_org.sql` - the recall number key becomes
+  (organisation_id, recall_number, country) NULLS NOT DISTINCT, so two companies can use the same
+  recall number and a country-less number is still policed. `recalls` holds 0 rows. Contains
+  `drop constraint`, so the apply prompt needs the owner. No dependency. Not executed anywhere.
+  The Recall Tracker save 403 itself is fixed in code (src/lib/recallCountry.js), not here.
+
 ## Engineering accuracy drafts (PR #513) - executed on local staging, NOT applied to production
 
 Apply in this order. Each saves the definition it replaces to `_bak.fn_defs_eng_20261113` and aborts if an
@@ -207,3 +213,27 @@ writes metric registry text only. Staging proof: `supabase/tests/staging/eng_rou
    odometer 1 (round 2 defect R2-D1). Raises cost per vehicle km about 5% KSA and 8% UAE: tell users first.
 
 120000 and 125000 both change what "cost per vehicle km" shows; apply them together.
+
+## By-number joins follow TEN-1b (2026-11-15) - executed on local staging, NOT applied to production
+
+Inventory and test record: `docs/commercial-readiness/audit/BY_NUMBER_JOIN_AUDIT.md`.
+
+- `20261117110000_by_number_org_joins.sql` - adds the company condition to the 8 functions and
+  1 view that joined or looked up a job card by number only (expense classification, site
+  operating cost, disposal register, complaints and monthly-tyre staging, repair-request
+  conversion, owner data audit, tyre cost audit, fitment evidence view). Re-creates each from
+  its live definition (anchored replace, aborts unless each anchor occurs once), saves the old
+  text to `_bak.by_number_org_joins_defs`, re-run is a no-op. No destructive keyword. Outputs
+  byte-identical on staging while numbers do not overlap. Rollback:
+  `20261117110000_by_number_org_joins_ROLLBACK.sql` (restores the saved definitions).
+- `20261117112000_complaints_missing_in_date_reject.sql` - APPLY AFTER `20261117110000`.
+  `process_stg_complaints` skips a row with a blank or unreadable Vehicle In Date and records it
+  in `expense_import_rejects` (`complaint_missing_vehicle_in_date` /
+  `complaint_unreadable_vehicle_in_date`) instead of aborting the whole batch on the NOT NULL
+  `opened_at`. Aborts if the by-number marker is missing. Rollback:
+  `20261117112000_complaints_missing_in_date_reject_ROLLBACK.sql`, run it BEFORE the by-number
+  rollback. Test: `supabase/tests/staging_complaints_in_date.sh` (local staging copy only).
+- `20261117111000_drop_tyre_status_marks_bridge.sql` - removes the temporary
+  `tyre_status_marks_serial_mark_type_bridge` index. OWNER APPROVAL ONLY, after the production
+  web build carries #541. Contains `drop`, so the apply prompt needs the owner. Rollback in the
+  file header.

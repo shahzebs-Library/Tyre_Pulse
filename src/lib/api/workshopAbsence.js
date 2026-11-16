@@ -15,7 +15,7 @@
  * here - RLS is the authoritative country boundary for staff. We scope shifts /
  * attendance by their scalar country column only.
  */
-import { supabase, unwrap, applyCountry, fetchAllPages, fetchAllOrThrow, isMissingRelation, ServiceError } from './_client'
+import { supabase, applyCountry, fetchAllPages, fetchAllOrThrow, isMissingRelation, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 
 export const SHIFT_COLS =
@@ -30,14 +30,18 @@ export const STAFF_COLS = 'id,full_name,employee_id,role,site'
 /** Load rostered shifts in [from,to], optionally scoped by site + country. */
 async function loadShifts({ from, to, site, country }) {
   try {
-    let q = supabase.from('shifts').select(SHIFT_COLS)
-    q = applyCountry(q, country)
-    if (from) q = q.gte('shift_date', String(from).slice(0, 10))
-    if (to) q = q.lte('shift_date', String(to).slice(0, 10))
-    if (site && site !== 'All') q = q.eq('site', site)
-    return (
-      unwrap(await q.order('shift_date', { ascending: true }).limit(20000)) || []
-    )
+    // Paged: `.limit(20000)` was not a bound - the server caps every response at
+    // 1,000 rows, so a month of rostered shifts past that silently vanished and
+    // those people could never read as absent. The id tiebreak keeps pages stable
+    // (many shifts share a shift_date).
+    return await fetchAllOrThrow((pFrom, pTo) => {
+      let q = supabase.from('shifts').select(SHIFT_COLS)
+      q = applyCountry(q, country)
+      if (from) q = q.gte('shift_date', String(from).slice(0, 10))
+      if (to) q = q.lte('shift_date', String(to).slice(0, 10))
+      if (site && site !== 'All') q = q.eq('site', site)
+      return q.order('shift_date', { ascending: true }).order('id', { ascending: true }).range(pFrom, pTo)
+    }, { pageSize: 1000, max: 20000 })
   } catch (err) {
     if (isMissingRelation(err)) return []
     throw err
@@ -52,15 +56,14 @@ async function loadAttendance({ from, to, site, country }) {
   const pageFn = (pFrom, pTo) => {
     let q = supabase.from('workshop_attendance').select(ATTENDANCE_COLS)
     q = applyCountry(q, country)
-    if (from) q = q.gte('check_in', String(from).slice(0, 10))
-    // Inclusive upper bound: strictly-less-than the day after `to`.
-    if (to) {
-      const d = new Date(String(to).slice(0, 10))
-      if (!Number.isNaN(d.getTime())) {
-        d.setDate(d.getDate() + 1)
-        q = q.lt('check_in', d.toISOString().slice(0, 10))
-      }
-    }
+    // check_in is a UTC instant while the window is in the site's local days
+    // (KSA/UAE/Egypt are UTC+2..+4), so the bounds are widened by one day each
+    // side. The engine matches each check-in to its rostered shift, so the extra
+    // rows never count on their own.
+    const lo = shiftDay(from, -1)
+    if (lo) q = q.gte('check_in', lo)
+    const hi = shiftDay(to, 2)
+    if (hi) q = q.lt('check_in', hi)
     if (site && site !== 'All') q = q.eq('site', site)
     return q.order('check_in', { ascending: false }).order('id', { ascending: true }).range(pFrom, pTo)
   }
@@ -72,6 +75,15 @@ async function loadAttendance({ from, to, site, country }) {
     if (isMissingRelation(err)) return []
     throw err
   }
+}
+
+/** YYYY-MM-DD `days` after the given date (UTC arithmetic, no timezone drift), or null. */
+export function shiftDay(value, days) {
+  if (!value) return null
+  const d = new Date(`${String(value).slice(0, 10)}T00:00:00Z`)
+  if (Number.isNaN(d.getTime())) return null
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
 }
 
 /** Load the staff directory (RLS-scoped). Never country-filtered (text[]). */

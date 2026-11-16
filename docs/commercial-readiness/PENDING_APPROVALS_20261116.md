@@ -2,10 +2,10 @@
 
 Nothing below is applied. Each item needs the owner's explicit approval. Order = recommended order.
 
-## 1. TEN-9f sign-in lockout per account (APPLY NOW, live security gap)
+## 1. TEN-9f sign-in lockout per account (live gap inside our own sign-in flow; not complete auth protection, see package)
 - PR #548, `supabase/pending_migrations/20261116100000_ten9f_login_lockout_per_account.sql` (+ROLLBACK)
 - Full package: `docs/commercial-readiness/ten9f/APPROVAL_PACKAGE.md` (on PR #548)
-- Bypass reproduced on production (rolled back, demo account). Staging 48/48, rollback byte-identical.
+- Bypass reproduced on production (rolled back, demo account). Staging 52/52 (adds timing, flood and retention), rollback byte-identical.
 - Not covered: direct Supabase Auth API calls (needs a paid Teams hook or CAPTCHA on all clients).
 
 ## 2. #545 company-scoped job card joins (before any second company imports data)
@@ -24,6 +24,7 @@ Nothing below is applied. Each item needs the owner's explicit approval. Order =
 - Today a single blank Vehicle In Date aborts the whole complaints upload. After: that row is skipped with a clear reason, the rest land.
 - Revised on this branch: re-uploading a file no longer logs the same rejected row twice.
 - Staging: `staging_complaints_in_date.sh` ALL OK; re-run no-op; rollback restores the by-number text.
+- Re-verified on a fresh staging copy (joins + complaints together): 8/8 PASS including "same file uploaded twice keeps one reject per row" (the previous draft logged 4 rows, now 2); owner report snapshots unchanged; all 7 two-company leak cases closed; both rollbacks restore the 11 objects byte for byte.
 
 ## 4. Recall number unique per company
 - `20261117102000_recalls_number_unique_per_org.sql` (rollback in the file).

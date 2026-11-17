@@ -4557,6 +4557,10 @@ class AppLocalizationsUr extends AppLocalizations {
   String get loginCreateAccount => 'اکاؤنٹ بنائیں';
 
   @override
+  String get loginCompanyCodeHelp =>
+      'کیا آپ دعوت کے ذریعے کسی دوسری کمپنی میں شامل ہوئے ہیں؟ کمپنی کوڈ، پھر سلیش اور پھر اپنا یوزر نیم لکھ کر سائن اِن کریں، مثلاً ACME/ali۔';
+
+  @override
   String get accAssessmentLoadFailed => 'جائزہ لوڈ نہیں ہو سکا';
 
   @override

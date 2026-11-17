@@ -9,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { supabase } from '../lib/supabase'
 import { toUserMessage } from '../lib/safeError'
+import { normalizeSignInIdentifier, isMultiCompanyMode } from '../lib/signInIdentifier'
 import { getPublicConfig } from '../lib/api/systemConfig'
 import { signInOptions, signInWithProvider } from '../lib/api/loginShowcase'
 import { loginAttemptStatus, recordLoginFailure, resetLoginAttempts, lockMinutes } from '../lib/api/loginGuard'
@@ -119,6 +120,8 @@ export default function Login() {
   // switches them on, so the page never shows a button that cannot work.
   const [signInOpts, setSignInOpts] = useState({ google: false, microsoft: false, qr: false })
   const [appVersion, setAppVersion] = useState('')
+  // "Company code / username" hint: only once multi-company sign-in is on.
+  const [multiCompany, setMultiCompany] = useState(false)
 
   // Pre-auth read of the registration switch on mount. getPublicConfig never
   // throws (returns {} on failure), so a read miss leaves signup permissively open.
@@ -128,6 +131,7 @@ export default function Login() {
       if (!alive) return
       if (cfg?.registration_open === 'false' || cfg?.allow_signups === 'false') setSignupClosed(true)
       setSignInOpts(signInOptions(cfg))
+      setMultiCompany(isMultiCompanyMode(cfg))
       const v = typeof cfg?.app_version === 'string' ? cfg.app_version.replace(/^"|"$/g, '').trim() : ''
       if (v) setAppVersion(v)
     })
@@ -174,9 +178,12 @@ export default function Login() {
     }
     if (needsCaptcha && !captchaToken) { setError(t('auth.login.errCaptcha')); return }
     setError(''); setFieldErr({ id: null, pw: null }); setLoading(true)
+    // "ACME \ ali" and "ACME/ali" ask for the same account; a bare username is
+    // unchanged. The lockout is keyed on this text, so tidy it once here.
+    const signInId = normalizeSignInIdentifier(identifier)
     // Server-enforced lockout (System Configuration -> Max Login Attempts, V287).
     // Fail-safe: a not-locked / errored probe never blocks a real sign-in.
-    const gate = await loginAttemptStatus(identifier)
+    const gate = await loginAttemptStatus(signInId)
     if (gate?.locked) {
       setError(t('auth.login.errAccountLocked', { mins: lockMinutes(gate) }))
       setLoading(false)
@@ -184,7 +191,7 @@ export default function Login() {
     }
     let result
     try {
-      result = await signIn(identifier, password, captchaToken)
+      result = await signIn(signInId, password, captchaToken)
     } catch (err) {
       // Any unexpected failure (network drop, RPC crash) must surface a message
       // and release the button — never leave it stuck on "Signing in…".
@@ -253,7 +260,7 @@ export default function Login() {
       else if (next >= 3) setCooldownUntil(Date.now() +  5_000)
       // Record against the server-side lockout; if it just locked, say so clearly.
       // A username sign-in was already counted by the sign-in edge function.
-      const locked = result?.counted ? null : await recordLoginFailure(identifier)
+      const locked = result?.counted ? null : await recordLoginFailure(signInId)
       if (locked?.locked) {
         setError(t('auth.login.errAccountLocked', { mins: lockMinutes(locked) }))
       } else {
@@ -576,7 +583,7 @@ export default function Login() {
                         type="text"
                         style={inputStyle('id')}
                         aria-invalid={fieldErr.id !== null || undefined}
-                        aria-describedby={fieldErr.id ? 'login-id-err' : (error ? 'login-error' : undefined)}
+                        aria-describedby={fieldErr.id ? 'login-id-err' : ([error && 'login-error', multiCompany && 'login-id-hint'].filter(Boolean).join(' ') || undefined)}
                         placeholder={p('idPlaceholder')}
                         value={identifier}
                         onChange={e => { setIdentifier(e.target.value); if (fieldErr.id !== null || fieldErr.pw) setFieldErr({ id: null, pw: null }) }}
@@ -586,6 +593,7 @@ export default function Login() {
                       />
                     </div>
                     {fieldErr.id && <p id="login-id-err" className="tpl-field-err" role="alert">{fieldErr.id}</p>}
+                    {!fieldErr.id && multiCompany && <p id="login-id-hint"style={{ margin:'6px 0 0', fontSize:12, opacity:0.75 }}>{p('idCompanyHint')}</p>}
                   </div>
 
                   {/* Password */}

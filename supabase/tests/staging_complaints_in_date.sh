@@ -37,7 +37,7 @@ apply 20261117112000_complaints_missing_in_date_reject.sql
 echo "--- after the fix"
 after="$(assertions)"; echo "$after"
 if echo "$after" | grep -q '^FAIL'; then echo "assertions failed"; exit 1; fi
-[ "$(echo "$after" | grep -c '^PASS')" -eq 7 ] || { echo "expected 7 PASS lines"; exit 1; }
+[ "$(echo "$after" | grep -c '^PASS')" -eq 8 ] || { echo "expected 8 PASS lines"; exit 1; }
 
 patched_md5="$(fn_md5)"
 apply 20261117112000_complaints_missing_in_date_reject.sql

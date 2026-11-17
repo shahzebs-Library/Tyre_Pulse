@@ -1,6 +1,6 @@
 -- =============================================================================
 -- 20261117112000_complaints_missing_in_date_reject.sql
--- STATUS: AUTHORED, NOT APPLIED. Draft for owner review. Tested on a private
+-- STATUS: AUTHORED, NOT APPLIED. Revised 2026-11-16: a re-upload no longer logs the same rejected row twice. Tested on a private
 --         copy of the local staging mirror (tp_mirror2) only:
 --         supabase/tests/staging_complaints_in_date.sh.
 -- APPLY ORDER: AFTER 20261117110000_by_number_org_joins.sql (this file reads the
@@ -59,19 +59,26 @@ $a$;
   IF ind IS NULL THEN
     -- opened_at is NOT NULL: skip this row with a row-level reason instead of
     -- aborting the whole batch, and never invent a date.
+    -- Re-uploading the same file must not log the same skipped row twice.
     INSERT INTO public.expense_import_rejects
       (organisation_id, uploaded_country, detected_country, reject_reason,
        work_order_no, item_code, item_description)
-    VALUES (v_org, NEW.country, NULL,
+    SELECT x.* FROM (SELECT v_org AS o, NEW.country AS c, NULL::text AS d,
       CASE WHEN coalesce(btrim(NEW.vehicle_in_date),'') = ''
            THEN 'complaint_missing_vehicle_in_date'
            ELSE 'complaint_unreadable_vehicle_in_date' END,
-      NULLIF(btrim(NEW.jc_no),''), NULL,
+      NULLIF(btrim(NEW.jc_no),''), NULL::text,
       left('Vehicle Complaints History row skipped: '
         || CASE WHEN coalesce(btrim(NEW.vehicle_in_date),'') = ''
                 THEN 'Vehicle In Date is blank'
                 ELSE 'Vehicle In Date "' || btrim(NEW.vehicle_in_date) || '" could not be read' END
-        || coalesce(', asset ' || NULLIF(btrim(NEW.veh_no),''), ''), 500));
+        || coalesce(', asset ' || NULLIF(btrim(NEW.veh_no),''), ''), 500)) x(o, c, d, rr, wo, ic, descr)
+    WHERE NOT EXISTS (SELECT 1 FROM public.expense_import_rejects e
+                       WHERE e.organisation_id IS NOT DISTINCT FROM x.o
+                         AND e.uploaded_country IS NOT DISTINCT FROM x.c
+                         AND e.reject_reason = x.rr
+                         AND e.work_order_no IS NOT DISTINCT FROM x.wo
+                         AND e.item_description IS NOT DISTINCT FROM x.descr);
     RETURN NULL;
   END IF;
   outd := public.erp_parse_date(NEW.vehicle_out_date);

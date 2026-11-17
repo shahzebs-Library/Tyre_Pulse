@@ -4230,6 +4230,10 @@
   "@loginCreateAccount": {
     "description": "Login access-help dialog: opens the self-registration screen (the account is created pending administrator approval)."
   },
+  "loginCompanyCodeHelp": "Joined another company through an invitation? Sign in with its company code, a slash and your username, for example ACME/ali.",
+  "@loginCompanyCodeHelp": {
+    "description": "Login access-help dialog: how a member of a company other than the original one signs in (company code / username). A bare username still works for everyone else."
+  },
   "accAssessmentLoadFailed": "The assessment could not be loaded",
   "@accAssessmentLoadFailed": {
     "description": "Error title."

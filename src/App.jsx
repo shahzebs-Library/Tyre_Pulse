@@ -124,6 +124,7 @@ const DataCleaning           = lazy(() => import('./pages/DataCleaning'))
 const DataReconciliation     = lazy(() => import('./pages/DataReconciliation'))
 const UploadData             = lazy(() => import('./pages/UploadData'))
 const DataIntakeCenter       = lazy(() => import('./pages/DataIntakeCenter'))
+const ErpIntake              = lazy(() => import('./pages/ErpIntake'))
 const NotFound               = lazy(() => import('./pages/NotFound'))
 const DataIntakeHistory      = lazy(() => import('./pages/DataIntakeHistory'))
 const Checklists             = lazy(() => import('./pages/Checklists'))
@@ -163,6 +164,7 @@ const IncidentReports        = lazy(() => import('./pages/IncidentReports'))
 const JourneyLog             = lazy(() => import('./pages/JourneyLog'))
 const DigitalTwin            = lazy(() => import('./pages/DigitalTwin'))
 const PartsCatalog           = lazy(() => import('./pages/PartsCatalog'))
+const OemPartsCatalogPreview = lazy(() => import('./pages/OemPartsCatalogPreview'))
 const Combinations           = lazy(() => import('./pages/Combinations'))
 const Dispatch               = lazy(() => import('./pages/Dispatch'))
 const ColdChain              = lazy(() => import('./pages/ColdChain'))
@@ -245,6 +247,7 @@ const FleetMaster            = lazy(() => import('./pages/FleetMaster'))
 const Vehicle360             = lazy(() => import('./pages/Vehicle360'))
 const AuditTrail             = lazy(() => import('./pages/AuditTrail'))
 const ResetPassword          = lazy(() => import('./pages/ResetPassword'))
+const InviteSignup           = lazy(() => import('./pages/InviteSignup'))
 const Accidents              = lazy(() => import('./pages/Accidents'))
 const AccidentCases          = lazy(() => import('./pages/AccidentCases'))
 const AccidentDetail         = lazy(() => import('./components/AccidentDetailModal'))
@@ -609,6 +612,9 @@ function MainApp() {
             <Route path="/login"          element={<Login />} />
             <Route path="/"               element={<PublicRootRoute />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            {/* PUBLIC company invitation sign-up. The token names the company;
+                the database places the account (_signup_context). */}
+            <Route path="/invite/:token"  element={<Safe><InviteSignup /></Safe>} />
             {/* PUBLIC account & data deletion page - the URL for the Google Play
                 Data Safety form's deletion mechanism. Anon, no app shell. */}
             <Route path="/data-deletion"   element={<Safe><DataDeletion /></Safe>} />
@@ -667,7 +673,8 @@ function MainApp() {
                       {/* ── Analytics ── */}
                       {/* Merged pages: the old routes below redirect to the page that absorbed them
                           (/analytics, /comparison, /safety-compliance, /tyre-failure-cpk, /workshop,
-                          /erp-intake, /expense-import, /erp-import). Each lives on as a tab of its keeper. */}
+                          /expense-import, /erp-import). Each lives on as a tab of its keeper. /erp-intake is the owner's upload area and
+                          keeps its own page (owner instruction 2026-11-16); it is also a tab of /data-intake. */}
                       <Route path="/analytics"    element={<Navigate to="/advanced-analytics" replace />} />
                       <Route path="/brand-perf"   element={<Safe><ModuleRoute moduleKey="brand_performance"><BrandPerformance /></ModuleRoute></Safe>} />
                       <Route path="/site-comp"    element={<Safe><ModuleRoute moduleKey="site_comparison"><SiteComparison /></ModuleRoute></Safe>} />
@@ -759,7 +766,7 @@ function MainApp() {
                       <Route path="/sany-invoices"           element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><SanyInvoices /></RoleRoute></Safe>} />
                       <Route path="/sany-delay-penalty"      element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><SanyDelayPenalty /></RoleRoute></Safe>} />
                       <Route path="/production-m3"           element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ProductionM3 /></RoleRoute></Safe>} />
-                      <Route path="/erp-intake"             element={<Navigate to="/data-intake?tab=reports" replace />} />
+                      <Route path="/erp-intake"             element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ErpIntake /></RoleRoute></Safe>} />
                       <Route path="/expense-import"          element={<Navigate to="/data-intake?tab=expenses" replace />} />
                       <Route path="/report-sharing"          element={<Safe><RoleRoute allowed={['Admin']}><ReportSharing /></RoleRoute></Safe>} />
                       <Route path="/forecasting"             element={<Safe><ModuleRoute moduleKey="forecasting"><ForecastingEngine /></ModuleRoute></Safe>} />
@@ -830,6 +837,7 @@ function MainApp() {
                       <Route path="/digital-twin"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><DigitalTwin /></RoleRoute></Safe>} />
                       <Route path="/digital-twin/:assetNo" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><DigitalTwin /></RoleRoute></Safe>} />
                       <Route path="/parts-catalog"         element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><PartsCatalog /></RoleRoute></Safe>} />
+                      <Route path="/parts-catalog/oem-preview" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><OemPartsCatalogPreview /></RoleRoute></Safe>} />
                       <Route path="/combinations"          element={<Safe><RoleRoute allowed={['Admin']}><Combinations /></RoleRoute></Safe>} />
                       <Route path="/dispatch"              element={<Safe><RoleRoute allowed={['Admin']}><Dispatch /></RoleRoute></Safe>} />
                       <Route path="/cold-chain"            element={<Safe><RoleRoute allowed={['Admin']}><ColdChain /></RoleRoute></Safe>} />

@@ -8014,6 +8014,12 @@ abstract class AppLocalizations {
   /// **'Create an account'**
   String get loginCreateAccount;
 
+  /// Login access-help dialog: how a member of a company other than the original one signs in (company code / username). A bare username still works for everyone else.
+  ///
+  /// In en, this message translates to:
+  /// **'Joined another company through an invitation? Sign in with its company code, a slash and your username, for example ACME/ali.'**
+  String get loginCompanyCodeHelp;
+
   /// Error title.
   ///
   /// In en, this message translates to:

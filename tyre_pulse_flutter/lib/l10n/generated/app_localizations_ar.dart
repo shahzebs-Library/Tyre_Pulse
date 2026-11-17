@@ -4546,6 +4546,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get loginCreateAccount => 'إنشاء حساب';
 
   @override
+  String get loginCompanyCodeHelp =>
+      'انضممت إلى شركة أخرى عبر دعوة؟ سجّل الدخول برمز الشركة ثم شرطة مائلة ثم اسم المستخدم، مثل ACME/ali.';
+
+  @override
   String get accAssessmentLoadFailed => 'تعذر تحميل التقييم';
 
   @override

@@ -35,6 +35,10 @@ begin;
 alter table public.recalls
   drop constraint if exists recall_number_country_uniq;
 
+-- re-runnable: a second run replaces the constraint with the same definition
+alter table public.recalls
+  drop constraint if exists recalls_org_number_country_uniq;
+
 alter table public.recalls
   add constraint recalls_org_number_country_uniq
   unique nulls not distinct (organisation_id, recall_number, country);

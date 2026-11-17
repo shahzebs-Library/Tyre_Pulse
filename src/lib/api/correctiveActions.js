@@ -85,6 +85,24 @@ export async function updateCorrectiveAction(id, patch) {
  * submission). Degrades to [] rather than throwing, so a failure to read the
  * existing actions can never block the page that shows the defects.
  */
+/**
+ * Whether the signed-in person may CREATE a corrective action, answered by the
+ * database (app_user_can, the same function the insert policy uses), so the
+ * button and the server can never disagree. Returns true / false, or null when
+ * the check itself could not run: callers then keep the button and let the
+ * server decide, so an outage never hides the action from someone allowed to
+ * use it.
+ */
+export async function canCreateCorrectiveAction() {
+  try {
+    const { data, error } = await supabase.rpc('app_user_can', { p_key: 'corrective_actions', p_cap: 'create' })
+    if (error || typeof data !== 'boolean') return null
+    return data
+  } catch {
+    return null
+  }
+}
+
 export async function listActionsForSource(sourceType, sourceId, { strict = false } = {}) {
   if (!sourceType || !sourceId) return []
   try {

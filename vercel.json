@@ -136,6 +136,7 @@
   ],
   "git": {
     "deploymentEnabled": {
+      "claude/multi-company-client-7rxp2t": false,
       "claude/release-543-545-7rxp2t": false,
       "claude/ops-docs-only-skip-7rxp2t": false,
       "claude/recall-absence-fix-7rxp2t": false,
@@ -151,6 +152,7 @@
       "claude/fix-observation-test-7rxp2t": false,
       "claude/legal-links-redirect-7rxp2t": false,
       "claude/tyrepulse-inspector-build-7rxp2t": false,
+      "claude/pending-approvals-7rxp2t": false,
       "claude/console-fixes-7rxp2t": false,
       "claude/flutter-fixes-7rxp2t": false,
       "claude/tenant-security-drafts-7rxp2t": false,

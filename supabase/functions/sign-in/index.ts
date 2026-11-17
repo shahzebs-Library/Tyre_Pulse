@@ -203,9 +203,25 @@ Deno.serve(async (req) => {
     // carries one, so such an identifier simply matches nobody.
     try {
       const found = await withDeadline((async (): Promise<{ ok: boolean; email: string | null }> => {
-        const pattern = escapeLike(identifier)
+        // The database resolver is the ONE rule for who an identifier names:
+        // a bare username / employee id first (today's users are unaffected),
+        // then "<company code>/<name>" inside that company only, and an
+        // ambiguous bare name outside the original company resolves to nobody.
+        // (public.resolve_sign_in_user -> _resolve_sign_in_profile, executable
+        // by service_role only.) If the function is not there yet, fall back to
+        // the old exact username / employee id lookup.
         let userId: string | null = null
-        for (const col of ['username', 'employee_id']) {
+        let resolverMissing = false
+        const resolved = await admin.rpc('resolve_sign_in_user', { p_identifier: identifier })
+        if (resolved.error) {
+          const code = String((resolved.error as { code?: string }).code ?? '')
+          if (code === 'PGRST202' || code === '42883') resolverMissing = true
+          else return { ok: false, email: null }
+        } else if (typeof resolved.data === 'string' && resolved.data) {
+          userId = resolved.data
+        }
+        const pattern = escapeLike(identifier)
+        for (const col of resolverMissing ? ['username', 'employee_id'] : []) {
           const { data, error } = await admin.from('profiles').select('id').ilike(col, pattern).limit(1)
           if (error) return { ok: false, email: null }
           if (data?.length) { userId = data[0].id as string; break }

@@ -47,6 +47,7 @@ abstract final class LoginActionKeys {
   static const Key forgotPassword = Key('login.forgot_password');
   static const Key accessHelp = Key('login.access_help');
   static const Key createAccount = Key('login.create_account');
+  static const Key companyCodeHelp = Key('login.company_code_help');
   static const Key forgotIdentifier = Key('login.forgot.identifier');
   static const Key forgotSubmit = Key('login.forgot.submit');
   static const Key forgotSent = Key('login.forgot.sent');
@@ -287,7 +288,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       context: context,
       builder: (BuildContext dialogContext) => AlertDialog(
         title: Text(copy.helpTitle),
-        content: Text(message),
+        // The access-help dialog also says how a member of another company
+        // signs in ("code/username"); a bare username keeps working.
+        content: offerRegister
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(message),
+                  const SizedBox(height: TpSpace.md),
+                  Text(
+                    AppLocalizations.of(dialogContext).loginCompanyCodeHelp,
+                    key: LoginActionKeys.companyCodeHelp,
+                  ),
+                ],
+              )
+            : Text(message),
         actions: <Widget>[
           // New staff can request an account themselves; it is created as a
           // pending account an administrator approves. The register screen

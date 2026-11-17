@@ -1,3 +1,5 @@
+import { analyzePageGeometry, pageInfo } from './oemCatalog/pageGeometry'
+
 /** Deterministic extraction of OEM parts tables from selectable-text PDFs. */
 const PART_NO_RE = /^[A-Z0-9][A-Z0-9._/-]{5,}$/i
 
@@ -112,7 +114,7 @@ export function extractOemPartsPage(items, pdfPage) {
 }
 
 /** Iterate every PDF page; records pages with no selectable parts table for review. */
-export async function extractOemPartsDocument(pdfDoc, onProgress = () => {}) {
+export async function extractOemPartsDocument(pdfDoc, onProgress = () => {}, { ops } = {}) {
   const rows = []
   const parsedPages = []
   const skippedPages = []
@@ -147,8 +149,15 @@ export async function extractOemPartsDocument(pdfDoc, onProgress = () => {}) {
   // Callout numbers printed on each linked illustration page (text layer only).
   // Image-only figures give none; the pipeline then skips orphan-callout checks.
   const calloutsByPage = {}
+  const geometryByPage = {}
   for (const page of new Set(rows.map((r) => r.illustration_pdf_page).filter(Boolean))) {
-    const content = await (await pdfDoc.getPage(page)).getTextContent()
+    const pdfPage = await pdfDoc.getPage(page)
+    const content = await pdfPage.getTextContent()
+    if (ops && pdfPage.getOperatorList) {
+      try {
+        geometryByPage[page] = analyzePageGeometry({ opList: await pdfPage.getOperatorList(), OPS: ops, items: content.items, info: pageInfo(pdfPage) })
+      } catch { /* geometry is best effort; rows without it go to review as unverified */ }
+    }
     const found = new Set()
     for (const item of content.items) {
       const s = String(item?.str || '').trim()
@@ -156,7 +165,7 @@ export async function extractOemPartsDocument(pdfDoc, onProgress = () => {}) {
     }
     if (found.size) calloutsByPage[page] = [...found]
   }
-  return { rows, parsedPages, skippedPages, reviewPages, imageOnlyPages, calloutsByPage, pageCount: pdfDoc.numPages, printedPageMap: Object.fromEntries(printedPageMap) }
+  return { rows, parsedPages, skippedPages, reviewPages, imageOnlyPages, calloutsByPage, geometryByPage, pageCount: pdfDoc.numPages, printedPageMap: Object.fromEntries(printedPageMap) }
 }
 
 /** Read common OEM identity labels from the cover/title pages; the import form stays editable for confirmation. */

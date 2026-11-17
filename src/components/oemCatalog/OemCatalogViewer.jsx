@@ -128,6 +128,7 @@ export default function OemCatalogViewer({
                   selectedIndex={selectedIndex}
                   onSelectIndex={(v) => onSelectIndex(normalizeIndex(v))}
                   figureLabel={activeGroup.label}
+                  geometry={activeMeta?.geometry}
                   position={`${printed || activeGroup.page} · ${activeAt + 1}/${flat.length}`}
                   onPrev={activeAt > 0 ? () => goto(-1) : undefined}
                   onNext={activeAt >= 0 && activeAt < flat.length - 1 ? () => goto(1) : undefined}

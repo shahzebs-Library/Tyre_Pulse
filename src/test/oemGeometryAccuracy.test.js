@@ -6,6 +6,7 @@
 import { describe, it, expect } from 'vitest'
 import { jsPDF } from 'jspdf'
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { processExtraction } from '../lib/oemCatalog/pipeline'
 import { analyzePageGeometry, pageInfo, iou, matchTableToFigure, reconcileCallouts, repeatedMargins, textBoxes, figureSignature } from '../lib/oemCatalog/pageGeometry'
 
 const W = 600; const H = 800
@@ -159,5 +160,27 @@ describe('page facts', () => {
   })
   it('textBoxes keeps only non-empty strings', () => {
     expect(textBoxes([{ str: ' ', transform: [1, 0, 0, 1, 0, 0] }, { str: '7', transform: [1, 0, 0, 1, 5, 6], width: 4, height: 9 }])).toHaveLength(1)
+  })
+})
+
+describe('pipeline: tables paired with their own drawing', () => {
+  const row = (page, printed, heading, idx, pn) => ({ source_pdf_page: page, row_order: Number(idx), assembly_heading: heading, printed_page: printed, index_no: String(idx), parent_index: null, part_no: pn, description: `Part ${pn}`, quantity: 1, illustration_pdf_page: 1 })
+  it('pairs two tables with the two drawings and sends a mismatching table to review', async () => {
+    const c = buildCase(1) // left drawing callouts 1-4, right drawing 5-8, one PDF page
+    const geo = await analyse(c.buf)
+    const rows = [
+      ...[1, 2, 3, 4].map((i) => row(2, '3-1', 'Water Supply System', i, `6001000${i}`)),
+      ...[5, 6, 7, 8].map((i) => row(3, '3-2', 'Mixing Drum Assembly', i, `6002000${i}`)),
+      // owner's case: indexes 17, 1, 2 against a drawing that only has callouts 1 and 2 region
+      ...[17, 1, 2].map((i, k) => ({ ...row(4, '3-3', 'Discharge Chute', i, `6003000${k}`), row_order: k + 1 })),
+    ]
+    const out = processExtraction({ rows, geometryByPage: { 1: geo } })
+    const a = out.figures['F3-1'].geometry; const b = out.figures['F3-2'].geometry
+    expect(a.status).toBe('verified'); expect(b.status).toBe('verified')
+    expect(a.bbox.x0).toBeLessThan(b.bbox.x0)
+    expect(out.figures['F3-3'].geometry.status).not.toBe('verified')
+    expect(out.review.some((r) => r.figure_id === 'F3-3')).toBe(true)
+    expect(out.publish.filter((r) => r.figure_id === 'F3-1')).toHaveLength(4)
+    expect(out.summary.figuresVerified).toBe(2)
   })
 })

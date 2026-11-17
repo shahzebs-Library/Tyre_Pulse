@@ -58,6 +58,9 @@
 .oem-canvas-stage { position: relative; margin-inline: auto; background: #fff; box-shadow: 0 2px 14px rgba(0, 0, 0, .25); }
 .oem-canvas-stage canvas { display: block; max-width: none; }
 .oem-callout { position: absolute; z-index: 2; display: grid; place-items: center; min-width: 26px; min-height: 26px; padding: 0 5px; transform: translate(-50%, -50%); border: 2px solid var(--oem-ink); border-radius: 999px; background: #fff; color: var(--oem-ink); font-size: 12px; font-weight: 800; cursor: pointer; box-shadow: 0 1px 4px rgba(0, 0, 0, .4); }
+.oem-callout[data-estimated='true'] { border-style: dashed; }
+.oem-canvas-host { cursor: grab; touch-action: pan-x pan-y; }
+.oem-canvas-host:active { cursor: grabbing; }
 .oem-callout:hover { transform: translate(-50%, -50%) scale(1.12); }
 .oem-callout[data-selected='true'] { background: var(--oem-select-fill); color: #fff; border-color: #fff; box-shadow: 0 0 0 3px var(--oem-select); }
 .oem-callout:focus-visible, .oem-tool:focus-visible, .oem-nav-item:focus-visible, .oem-table button:focus-visible, .oem-primary:focus-visible, .oem-secondary:focus-visible { outline: 3px solid var(--oem-select); outline-offset: 2px; }

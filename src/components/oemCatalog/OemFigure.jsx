@@ -16,7 +16,7 @@ const ZOOM_STEPS = [0.6, 0.8, 1, 1.25, 1.6, 2, 2.6, 3.2]
  * zoom, fullscreen, figure paging and an overview thumbnail with a green box
  * showing the part of the drawing currently in view.
  */
-export default function OemFigure({ pdfDoc, pageNo, rows, selectedIndex, onSelectIndex, figureLabel, position, onPrev, onNext, calloutNote }) {
+export default function OemFigure({ pdfDoc, pageNo, rows, selectedIndex, onSelectIndex, figureLabel, position, onPrev, onNext, calloutNote, geometry }) {
   const { t } = useLanguage()
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -30,6 +30,18 @@ export default function OemFigure({ pdfDoc, pageNo, rows, selectedIndex, onSelec
   const hostRef = useRef(null)
   const cardRef = useRef(null)
   const zoomValue = ZOOM_STEPS[zoom]
+  const drag = useRef(null)
+  const onPointerDown = (e) => {
+    if (e.target.closest('button')) return
+    drag.current = { x: e.clientX, y: e.clientY, sl: hostRef.current.scrollLeft, st: hostRef.current.scrollTop }
+    hostRef.current.setPointerCapture?.(e.pointerId)
+  }
+  const onPointerMove = (e) => {
+    if (!drag.current) return
+    hostRef.current.scrollLeft = drag.current.sl - (e.clientX - drag.current.x)
+    hostRef.current.scrollTop = drag.current.st - (e.clientY - drag.current.y)
+  }
+  const onPointerUp = () => { drag.current = null }
 
   useEffect(() => {
     let cancelled = false
@@ -39,28 +51,45 @@ export default function OemFigure({ pdfDoc, pageNo, rows, selectedIndex, onSelec
       setBusy(true); setError('')
       try {
         const page = await pdfDoc.getPage(pageNo)
+        const crop = geometry?.crop
         const natural = page.getViewport({ scale: 1 })
-        const fit = Math.max(0.2, (hostRef.current.clientWidth - 24) / natural.width)
-        const viewport = page.getViewport({ scale: Math.min(4, fit * zoomValue) })
+        // Crop in PDF user space -> viewport space, so it survives rotation and zoom.
+        const probe = page.getViewport({ scale: 1 })
+        const corners = crop ? [probe.convertToViewportPoint(crop.x0, crop.y0), probe.convertToViewportPoint(crop.x1, crop.y1)] : null
+        const cx0 = corners ? Math.min(corners[0][0], corners[1][0]) : 0
+        const cy0 = corners ? Math.min(corners[0][1], corners[1][1]) : 0
+        const cw = corners ? Math.abs(corners[1][0] - corners[0][0]) : natural.width
+        const ch = corners ? Math.abs(corners[1][1] - corners[0][1]) : natural.height
+        const fit = Math.max(0.2, (hostRef.current.clientWidth - 24) / cw)
+        const scale = Math.min(6, fit * zoomValue)
+        const viewport = page.getViewport({ scale, offsetX: -cx0 * scale, offsetY: -cy0 * scale })
         const ratio = Math.min(window.devicePixelRatio || 1, 2)
         const canvas = canvasRef.current
-        canvas.width = Math.floor(viewport.width * ratio)
-        canvas.height = Math.floor(viewport.height * ratio)
-        canvas.style.width = `${viewport.width}px`
-        canvas.style.height = `${viewport.height}px`
-        setSize({ width: viewport.width, height: viewport.height })
-        const text = await page.getTextContent()
-        const usable = new Set(rows.map((row) => normalizeIndex(row.index_no || row.parent_index)).filter(Boolean))
-        const seen = new Set()
+        const outW = cw * scale; const outH = ch * scale
+        canvas.width = Math.floor(outW * ratio)
+        canvas.height = Math.floor(outH * ratio)
+        canvas.style.width = `${outW}px`
+        canvas.style.height = `${outH}px`
+        setSize({ width: outW, height: outH })
         const markers = []
-        for (const item of text.items || []) {
-          const index = normalizeIndex(item.str)
-          if (!index || !usable.has(index)) continue
-          const [x, y] = viewport.convertToViewportPoint(item.transform[4], item.transform[5])
-          const id = `${index}-${Math.round(x)}-${Math.round(y)}`
-          if (seen.has(id)) continue
-          seen.add(id)
-          markers.push({ id, index, x, y })
+        if (geometry?.callouts?.length) {
+          for (const c of geometry.callouts) {
+            const [x, y] = viewport.convertToViewportPoint(c.x, c.y)
+            markers.push({ id: `${c.index}-${Math.round(x)}-${Math.round(y)}`, index: c.index, x, y, estimated: c.status !== 'verified' })
+          }
+        } else {
+          const text = await page.getTextContent()
+          const usable = new Set(rows.map((row) => normalizeIndex(row.index_no || row.parent_index)).filter(Boolean))
+          const seen = new Set()
+          for (const item of text.items || []) {
+            const index = normalizeIndex(item.str)
+            if (!index || !usable.has(index)) continue
+            const [x, y] = viewport.convertToViewportPoint(item.transform[4], item.transform[5])
+            const id = `${index}-${Math.round(x)}-${Math.round(y)}`
+            if (seen.has(id)) continue
+            seen.add(id)
+            markers.push({ id, index, x, y, estimated: true })
+          }
         }
         if (!cancelled) setCallouts(markers)
         task = page.render({ canvasContext: canvas.getContext('2d', { alpha: false }), viewport, transform: ratio === 1 ? null : [ratio, 0, 0, ratio, 0, 0] })
@@ -78,7 +107,7 @@ export default function OemFigure({ pdfDoc, pageNo, rows, selectedIndex, onSelec
     }
     draw()
     return () => { cancelled = true; task?.cancel() }
-  }, [pdfDoc, pageNo, rows, zoomValue, t])
+  }, [pdfDoc, pageNo, rows, zoomValue, t, geometry])
 
   const updateView = useCallback(() => {
     const el = hostRef.current
@@ -133,7 +162,7 @@ export default function OemFigure({ pdfDoc, pageNo, rows, selectedIndex, onSelec
         </div>
       </header>
       <div className="oem-figure-body">
-        <div ref={hostRef} className="oem-canvas-host" dir="ltr" onScroll={updateView} tabIndex={0} aria-label={figureLabel}>
+        <div ref={hostRef} className="oem-canvas-host" dir="ltr" onScroll={updateView} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} tabIndex={0} aria-label={figureLabel}>
           {busy && <Loader2 className="oem-spin" size={18} aria-label={t('oemcatalog.loading')} />}
           <div className="oem-canvas-stage" style={{ width: size.width || '100%', height: size.height || 'auto' }}>
             <canvas ref={canvasRef} />
@@ -143,6 +172,7 @@ export default function OemFigure({ pdfDoc, pageNo, rows, selectedIndex, onSelec
                 type="button"
                 className="oem-callout"
                 data-selected={selectedIndex === m.index ? 'true' : undefined}
+                data-estimated={m.estimated ? 'true' : undefined}
                 aria-pressed={selectedIndex === m.index}
                 aria-label={t('oemcatalog.figure.callout', { index: m.index })}
                 title={t('oemcatalog.figure.callout', { index: m.index })}
@@ -160,6 +190,7 @@ export default function OemFigure({ pdfDoc, pageNo, rows, selectedIndex, onSelec
         )}
       </div>
       {error && <p role="alert" className="oem-note oem-note-error">{error}</p>}
+      {!busy && !error && callouts.length > 0 && <p className="oem-note">{geometry?.status === 'verified' ? t('oemcatalog.figure.estimatedMatched') : t('oemcatalog.figure.estimated')}</p>}
       {!busy && !error && callouts.length === 0 && <p className="oem-note">{calloutNote || t('oemcatalog.figure.noCallouts')}</p>}
     </section>
   )

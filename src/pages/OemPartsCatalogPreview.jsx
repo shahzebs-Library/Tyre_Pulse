@@ -231,7 +231,7 @@ export default function OemPartsCatalogPreview() {
       const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise
       setPdfDoc(doc)
       const identity = await extractOemIdentity(doc, file.name)
-      const extracted = await extractOemPartsDocument(doc, setExtractProgress)
+      const extracted = await extractOemPartsDocument(doc, setExtractProgress, { ops: pdfjsLib.OPS })
       setExtraction(extracted)
       setManualForm((form) => ({
         ...form,

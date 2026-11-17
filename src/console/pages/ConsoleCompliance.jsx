@@ -30,7 +30,8 @@ import {
 import {
   CONTROLS, evaluateControls, readinessScore, filterByFramework, sortResults, domainSummary,
   failedSources, evidencePackRows, activeAttestation, FRAMEWORKS, STATUS_LABEL, SOURCE_LABEL,
-  EVIDENCE_COLUMNS, EVIDENCE_HEADERS,
+  EVIDENCE_COLUMNS, EVIDENCE_HEADERS, PDF_MARGIN_MM, PDF_PRINTABLE_MM, PDF_CONTROL_WIDTHS,
+  PDF_ATTESTATION_WIDTHS, pdfEvidenceCell,
 } from '../../lib/complianceControls'
 import { toUserMessage } from '../../lib/safeError'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
@@ -84,7 +85,7 @@ async function renderEvidencePackPdf({ results, readiness, framework, failed, at
   let y = 42
   if (failed.length) {
     doc.setTextColor(160, 60, 0)
-    doc.text(`Evidence sources that could not be loaded: ${failed.map((f) => f.label).join(', ')}. Their controls are marked Could not check.`, 14, y, { maxWidth: 268 })
+    doc.text(`Evidence sources that could not be loaded: ${failed.map((f) => f.label).join(', ')}. Their controls are marked Could not check.`, 14, y, { maxWidth: PDF_PRINTABLE_MM })
     doc.setTextColor(20)
     y += 8
   }
@@ -92,11 +93,13 @@ async function renderEvidencePackPdf({ results, readiness, framework, failed, at
   autoTable(doc, {
     startY: y,
     head: [EVIDENCE_HEADERS.slice(0, 8)],
-    body: rows.map((r) => EVIDENCE_COLUMNS.slice(0, 8).map((k) => r[k])),
+    body: rows.map((r) => EVIDENCE_COLUMNS.slice(0, 8).map((k) => (k === 'evidence' ? pdfEvidenceCell(r[k]) : r[k]))),
     styles: { fontSize: 7, cellPadding: 1.5, overflow: 'linebreak', valign: 'top' },
     headStyles: { fillColor: [31, 41, 55], textColor: 255 },
-    columnStyles: { 0: { cellWidth: 22 }, 1: { cellWidth: 22 }, 2: { cellWidth: 18 }, 3: { cellWidth: 22 }, 4: { cellWidth: 38 }, 5: { cellWidth: 22 }, 6: { cellWidth: 90 }, 7: { cellWidth: 35 } },
-    margin: { left: 10, right: 10 },
+    columnStyles: Object.fromEntries(PDF_CONTROL_WIDTHS.map((w, i) => [i, { cellWidth: w }])),
+    tableWidth: PDF_PRINTABLE_MM,
+    rowPageBreak: 'avoid',
+    margin: { left: PDF_MARGIN_MM, right: PDF_MARGIN_MM, bottom: 14 },
   })
   const live = attestations.filter((a) => !a.withdrawn_at)
   doc.addPage()
@@ -109,17 +112,19 @@ async function renderEvidencePackPdf({ results, readiness, framework, failed, at
       ? live.map((a) => [a.control_id, a.note, a.attested_by_email || 'N/A', fmtDay(a.attested_at), fmtDay(a.expires_at),
         new Date(a.expires_at).getTime() > Date.now() ? 'Active' : 'Expired'])
       : [['N/A', 'No attestations recorded', '', '', '', '']],
-    styles: { fontSize: 8, cellPadding: 1.5, overflow: 'linebreak' },
+    styles: { fontSize: 8, cellPadding: 1.5, overflow: 'linebreak', valign: 'top' },
     headStyles: { fillColor: [31, 41, 55], textColor: 255 },
-    columnStyles: { 1: { cellWidth: 120 } },
-    margin: { left: 10, right: 10 },
+    columnStyles: Object.fromEntries(PDF_ATTESTATION_WIDTHS.map((w, i) => [i, { cellWidth: w }])),
+    tableWidth: PDF_PRINTABLE_MM,
+    rowPageBreak: 'avoid',
+    margin: { left: PDF_MARGIN_MM, right: PDF_MARGIN_MM, bottom: 14 },
   })
   const pages = doc.getNumberOfPages()
   for (let i = 1; i <= pages; i += 1) {
     doc.setPage(i)
     doc.setFontSize(7)
     doc.setTextColor(120)
-    doc.text(`Page ${i} of ${pages}`, doc.internal.pageSize.width - 30, doc.internal.pageSize.height - 6)
+    doc.text(`Page ${i} of ${pages}`, doc.internal.pageSize.width - PDF_MARGIN_MM, doc.internal.pageSize.height - 6, { align: 'right' })
   }
   doc.save(`${reportFileName('Compliance Evidence Pack', fwLabel, generatedAt.slice(0, 10))}.pdf`)
 }

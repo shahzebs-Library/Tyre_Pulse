@@ -365,6 +365,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/cleaning',         label: 'Data Cleaning',      icon: Wand2, roles: CLEANING_ROLES },
       { to: '/data-reconciliation', label: 'Data Reconciliation', icon: GitCompare, adminOnly: true },
+      { to: '/erp-intake',       label: 'ERP Data Intake', icon: Layers, roles: ANALYTICS_ROLES },
       { to: '/data-intake',      label: 'Data Intake Center', icon: Database },
       { to: '/upload-approvals', label: 'Upload Approvals',   icon: ClipboardList, roles: UPLOAD_ROLES },
       { to: '/custom-data',      label: 'Custom Data',        icon: Database },

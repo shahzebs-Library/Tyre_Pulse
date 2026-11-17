@@ -261,7 +261,6 @@ const ROUTES_MERGED_INTO = {
   '/analytics': '/advanced-analytics',
   '/comparison': '/site-comp?tab=periods',
   '/erp-import': '/data-intake?tab=templates',
-  '/erp-intake': '/data-intake?tab=reports',
   '/expense-import': '/data-intake?tab=expenses',
   '/safety-compliance': '/compliance?tab=safety',
   '/tyre-failure-cpk': '/cpk-intelligence?tab=failures',

@@ -37,5 +37,13 @@ begin
   select count(*) into n_rej_missing from public.expense_import_rejects where work_order_no = 'ZZTEST/JC/0001';
   raise notice '% existing card re-upload skipped silently (rejects=%)',
     case when n_rej_missing = 0 then 'PASS' else 'FAIL' end, n_rej_missing;
+  -- Uploading the same file again does not log the same rejected rows twice.
+  insert into public.stg_complaints (country, veh_no, jc_no, complaints, job_done_description, vehicle_in_date, vehicle_out_date)
+  values ('KSA', 'ZZT002', 'ZZTEST/JC/0002', 'Tyre wear', 'Rotated', '', ''),
+         ('KSA', 'ZZT003', 'ZZTEST/JC/0003', 'Oil leak',  'Seal',    'not a date', '');
+  select count(*) into n_rej_missing from public.expense_import_rejects
+   where work_order_no in ('ZZTEST/JC/0002','ZZTEST/JC/0003');
+  raise notice '% same file uploaded twice keeps one reject per row (rejects=%)',
+    case when n_rej_missing = 2 then 'PASS' else 'FAIL' end, n_rej_missing;
 end $t$;
 rollback;

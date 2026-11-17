@@ -374,6 +374,7 @@ const NAV_GROUPS = [
   {
     label: 'Administration',
     items: [
+      { to: '/erp-intake',       label: 'ERP Data Intake', parent: 'Data', icon: Layers, roles: ANALYTICS_ROLES },
       { to: '/data-intake',      label: 'Data Intake Center', parent: 'Data', icon: Database, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/upload-approvals', label: 'Upload Approvals', parent: 'Data',   icon: ClipboardList, roles: UPLOAD_ROLES },
       { to: '/cleaning',         label: 'Data Cleaning', parent: 'Data',      icon: Wand2, roles: CLEANING_ROLES },

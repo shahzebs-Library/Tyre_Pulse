@@ -102,6 +102,7 @@ export function requestExportRows(decorated) {
     priority: PARTS_PRIORITY_LABEL[r.priority] || r.priority || '',
     status: PARTS_STATUS_LABEL[r._status] || r.status || '',
     needed_by: r.needed_by ? String(r.needed_by).slice(0, 10) : '',
+    notes: r.notes || '',
     overdue: r._overdue ? 'Yes' : 'No',
     age: fmtAge(r._ageHours),
     fulfilled_at: r.fulfilled_at ? String(r.fulfilled_at).slice(0, 16).replace('T', ' ') : '',

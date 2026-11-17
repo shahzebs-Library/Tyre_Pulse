@@ -324,8 +324,8 @@ export default function PartsRequests() {
   }, [form, jobs, activeCountry])
 
   // ── Exports (whole filtered set, never one page) ─────────────────────────
-  const EXPORT_COLS = ['requested_at', 'part_name', 'qty', 'asset_no', 'site', 'priority', 'status', 'needed_by', 'overdue', 'age', 'fulfilled_at']
-  const EXPORT_HEADERS = ['Requested', 'Part', 'Qty', 'Asset', 'Site', 'Priority', 'Status', 'Needed by', 'Overdue', 'Age', 'Fulfilled']
+  const EXPORT_COLS = ['requested_at', 'part_name', 'qty', 'asset_no', 'site', 'priority', 'status', 'needed_by', 'notes', 'overdue', 'age', 'fulfilled_at']
+  const EXPORT_HEADERS = ['Requested', 'Part', 'Qty', 'Asset', 'Site', 'Priority', 'Status', 'Needed by', 'Request / OEM source details', 'Overdue', 'Age', 'Fulfilled']
   const exportRows = () => requestExportRows(decoratedFiltered)
   const exportExcel = () => {
     const name = reportFileName('Parts Requests', reportDateLabel())
@@ -341,7 +341,7 @@ export default function PartsRequests() {
       { id: 'requested_at', header: 'Requested', accessorFn: (r) => r.requested_at || undefined, size: 160, sortingFn: valueSort, sortUndefined: 'last',
         cell: ({ getValue }) => <span className="text-[var(--text-secondary)] whitespace-nowrap">{fmtDateTime(getValue())}</span> },
       { id: 'part_name', header: 'Part', accessorFn: (r) => r.part_name || undefined, size: 200, sortingFn: valueSort, sortUndefined: 'last',
-        cell: ({ getValue }) => <span className="text-[var(--text-primary)]">{getValue() ?? 'N/A'}</span> },
+        cell: ({ row, getValue }) => <div className="min-w-0"><span className="block text-[var(--text-primary)]">{getValue() ?? 'N/A'}</span>{row.original.notes && <details className="mt-1 max-w-[360px]"><summary className="cursor-pointer text-[10px] font-medium text-emerald-400">View request / OEM source details</summary><span className="mt-1 block whitespace-pre-wrap text-[10px] leading-4 text-[var(--text-muted)]">{row.original.notes}</span></details>}</div> },
       { id: 'qty', header: 'Qty', accessorFn: (r) => (Number.isFinite(Number(r.qty)) ? Number(r.qty) : undefined), size: 70, sortingFn: valueSort, sortUndefined: 'last',
         cell: ({ getValue }) => <span className="tabular-nums">{fmtNum(getValue())}</span>, meta: { align: 'right' } },
       { id: 'asset_no', header: 'Asset', accessorFn: (r) => r.asset_no || undefined, size: 110, sortingFn: valueSort, sortUndefined: 'last', cell: ({ getValue }) => getValue() ?? 'N/A' },

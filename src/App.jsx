@@ -164,6 +164,7 @@ const IncidentReports        = lazy(() => import('./pages/IncidentReports'))
 const JourneyLog             = lazy(() => import('./pages/JourneyLog'))
 const DigitalTwin            = lazy(() => import('./pages/DigitalTwin'))
 const PartsCatalog           = lazy(() => import('./pages/PartsCatalog'))
+const OemPartsCatalogPreview = lazy(() => import('./pages/OemPartsCatalogPreview'))
 const Combinations           = lazy(() => import('./pages/Combinations'))
 const Dispatch               = lazy(() => import('./pages/Dispatch'))
 const ColdChain              = lazy(() => import('./pages/ColdChain'))
@@ -830,6 +831,7 @@ function MainApp() {
                       <Route path="/digital-twin"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><DigitalTwin /></RoleRoute></Safe>} />
                       <Route path="/digital-twin/:assetNo" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><DigitalTwin /></RoleRoute></Safe>} />
                       <Route path="/parts-catalog"         element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><PartsCatalog /></RoleRoute></Safe>} />
+                      <Route path="/parts-catalog/oem-preview" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><OemPartsCatalogPreview /></RoleRoute></Safe>} />
                       <Route path="/combinations"          element={<Safe><RoleRoute allowed={['Admin']}><Combinations /></RoleRoute></Safe>} />
                       <Route path="/dispatch"              element={<Safe><RoleRoute allowed={['Admin']}><Dispatch /></RoleRoute></Safe>} />
                       <Route path="/cold-chain"            element={<Safe><RoleRoute allowed={['Admin']}><ColdChain /></RoleRoute></Safe>} />

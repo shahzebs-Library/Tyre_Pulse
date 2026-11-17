@@ -76,7 +76,10 @@ The current diagram view renders a page from the stored PDF in the app and uses 
 
 ### D. Add a selected part
 
-- “Add to request” creates a request/job line containing OEM number, source catalog, model configuration, figure/callout, description, quantity, and user-entered requested quantity.
+- Users can collect parts from multiple figures and manuals in one selection table without losing each item’s own catalog/model, fitment metadata, assembly/figure, callout/index, source pages, OEM quantity, and requested quantity.
+- The selection table supports quantity edits, duplicate prevention, removal, and clearing. Each chosen OEM row becomes its own line in the existing Parts Requests workflow so request status and approval continue to use the current lifecycle.
+- Store the OEM number, description, catalog/model/generation, applicability fields, assembly/figure, callout/index, source PDF/list pages, and any variant note in the request details. Keep the inventory item link separate; do not invent an internal SKU or mutate stock when creating an OEM request.
+- If the user associates the batch with a work order, verify its asset matches the selected parts’ asset before creating the request lines. Support an unlinked general request when there is no matching work order.
 - “Link to inventory item” is an authorized catalog cross-reference action. It does not adjust stock, price, or tyre data.
 - Actual stock receipt/issue remains in the existing inventory workflow with its normal authorization and audit trail.
 

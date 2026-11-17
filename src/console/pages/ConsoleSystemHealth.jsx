@@ -24,6 +24,7 @@ import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
   listSystemLogs, resolveSystemLog, resolveAllSystemLogs, getHealthMetrics,
 } from '../../lib/api/systemLogs'
+import { statusLabel, isOpenLog, validReason, MIN_REASON_LENGTH } from '../../lib/errorStatus'
 import {
   computeHealthScore, freshnessScore, errorRateScore, reachabilityScore,
 } from '../../lib/adminHealth'
@@ -52,7 +53,7 @@ const LOG_EXPORT_COLUMNS = [
   { key: 'module', header: 'Module', value: r => r.module_id || r.source || 'app' },
   { key: 'message', header: 'Message' },
   { key: 'reference_id', header: 'Reference' },
-  { key: 'status', header: 'Status', value: r => (r.resolved === true || r.resolved_at != null ? 'Resolved' : 'Open') },
+  { key: 'status', header: 'Status', value: r => statusLabel(r) },
 ]
 const TREND_MAX_ROWS = 20000
 
@@ -214,7 +215,9 @@ export default function ConsoleSystemHealth() {
   const [actionError, setActionError] = useState(null)
   const [resolvingId, setResolvingId] = useState(null)
   const [resolvingAll, setResolvingAll] = useState(false)
-  const [confirmAll, setConfirmAll] = useState(false)
+  // Resolve needs a reason. null = closed, { id } = one problem, 'all' = every matching problem.
+  const [resolveTarget, setResolveTarget] = useState(null)
+  const [resolveReason, setResolveReason] = useState('')
   const [refreshedAt, setRefreshedAt] = useState(null)
   const [sampleLogs, setSampleLogs] = useState([])   // null = the broad sample could not be read
   const [drawerRow, setDrawerRow] = useState(null)
@@ -234,8 +237,8 @@ export default function ConsoleSystemHealth() {
     const filters = { limit: LOG_LIMIT }
     if (fSeverity !== 'all') filters.severity = fSeverity
     if (fModule !== 'all') filters.module = fModule
-    if (fResolved === 'open') filters.resolved = false
-    else if (fResolved === 'resolved') filters.resolved = true
+    if (fResolved === 'open') filters.status = 'open'
+    else if (fResolved === 'resolved') filters.status = 'closed'
     if (fSince !== 'all') {
       const days = Number(fSince)
       if (Number.isFinite(days) && days > 0) {
@@ -349,12 +352,27 @@ export default function ConsoleSystemHealth() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function handleResolve(id) {
+  function askResolve(target) {
+    setActionError(null)
+    setResolveReason('')
+    setResolveTarget(target)
+  }
+
+  async function submitResolve() {
+    const target = resolveTarget
+    const reason = resolveReason.trim()
+    if (!target || !validReason(reason)) return
+    setResolveTarget(null)
+    if (target === 'all') await handleResolveAll(reason)
+    else await handleResolve(target.id, reason)
+  }
+
+  async function handleResolve(id, reason) {
     if (!id) return
     setResolvingId(id)
     setActionError(null)
     try {
-      await resolveSystemLog(id)
+      await resolveSystemLog(id, reason)
       await loadLogs()
       await loadCore()
     } catch (err) {
@@ -365,12 +383,11 @@ export default function ConsoleSystemHealth() {
     }
   }
 
-  async function handleResolveAll() {
-    setConfirmAll(false)
+  async function handleResolveAll(reason) {
     setResolvingAll(true)
     setActionError(null)
     try {
-      const args = {}
+      const args = { reason }
       if (fModule !== 'all') args.module = fModule
       if (fSeverity !== 'all') args.severity = fSeverity
       await resolveAllSystemLogs(args)
@@ -450,7 +467,7 @@ export default function ConsoleSystemHealth() {
     return sortRows(found, logSort, {
       severity: r => SEVERITIES.findIndex(x => x.key === canonSeverity(r.severity)),
       module: r => r.module_id || r.source || 'app',
-      status: r => (r.resolved === true || r.resolved_at != null ? 1 : 0),
+      status: r => (isOpenLog(r) ? 0 : 1),
     })
   }, [logs, logQuery, logSort])
 
@@ -462,7 +479,7 @@ export default function ConsoleSystemHealth() {
   // Noisiest modules across the broad (unfiltered) sample of recent logs: the
   // quickest answer to "where are the problems coming from".
   const noisyModules = useMemo(() => {
-    const open = (sampleLogs || []).filter(r => !(r?.resolved === true || r?.resolved_at != null))
+    const open = (sampleLogs || []).filter(r => isOpenLog(r))
     const counts = new Map()
     for (const r of open) {
       const k = r?.module_id || r?.source || 'app'
@@ -529,7 +546,7 @@ export default function ConsoleSystemHealth() {
   ]
 
   const drawerSev = drawerRow ? SEV_BY_KEY[canonSeverity(drawerRow.severity)] : null
-  const drawerResolved = drawerRow ? (drawerRow.resolved === true || drawerRow.resolved_at != null) : false
+  const drawerResolved = drawerRow ? !isOpenLog(drawerRow) : false
 
   return (
     <div className="space-y-4 max-w-7xl">
@@ -681,7 +698,7 @@ export default function ConsoleSystemHealth() {
                 <ExportButtons rows={visibleLogs} title="System Error Log"
                   columns={LOG_EXPORT_COLUMNS} />
                 <Btn variant="primary" icon={CheckCircle2} busy={resolvingAll} disabled={logs.length === 0}
-                  onClick={() => setConfirmAll(true)}
+                  onClick={() => askResolve('all')}
                   title="Mark every problem matching the current module and severity filters as handled">
                   Resolve all
                 </Btn>
@@ -695,7 +712,7 @@ export default function ConsoleSystemHealth() {
               <Select value={fModule} onChange={setFModule} className="w-full sm:w-44" ariaLabel="Filter by module"
                 options={[{ value: 'all', label: 'All modules' }, ...moduleOptions.map(m => ({ value: m, label: m }))]} />
               <Select value={fResolved} onChange={setFResolved} className="w-full sm:w-36" ariaLabel="Filter by status"
-                options={[{ value: 'open', label: 'Open only' }, { value: 'resolved', label: 'Resolved only' }, { value: 'all', label: 'All' }]} />
+                options={[{ value: 'open', label: 'Open only' }, { value: 'resolved', label: 'Closed only' }, { value: 'all', label: 'All' }]} />
               <Select value={fSince} onChange={setFSince} className="w-full sm:w-36" ariaLabel="Filter by time window"
                 options={[
                   { value: '1', label: 'Last 24 hours' }, { value: '7', label: 'Last 7 days' },
@@ -731,7 +748,7 @@ export default function ConsoleSystemHealth() {
                   <tbody>
                     {paged.slice.map(row => {
                       const sev = SEV_BY_KEY[canonSeverity(row.severity)]
-                      const isResolved = row.resolved === true || row.resolved_at != null
+                      const isResolved = !isOpenLog(row)
                       return (
                         <Tr key={row.id} onClick={() => setDrawerRow(row)} ariaLabel={`Open detail for ${sev.label} problem`}>
                           <Td nowrap><span className="text-gray-500" title={fmtDateTime(row.created_at)}>{fmtRelative(row.created_at)}</span></Td>
@@ -742,12 +759,12 @@ export default function ConsoleSystemHealth() {
                             {row.reference_id && <span className="block text-[10px] text-gray-500 font-mono mt-0.5 break-all">{row.reference_id}</span>}
                           </Td>
                           <Td align="center">
-                            {isResolved ? <Badge tone="good">Resolved</Badge> : <Badge tone="default">Open</Badge>}
+                            <Badge tone={isResolved ? 'good' : 'default'}>{statusLabel(row)}</Badge>
                           </Td>
                           <Td align="right">
                             {!isResolved && (
                               <Btn size="xs" variant="ghost" busy={resolvingId === row.id}
-                                onClick={(e) => { e.stopPropagation(); handleResolve(row.id) }}>
+                                onClick={(e) => { e.stopPropagation(); askResolve({ id: row.id }) }}>
                                 Resolve
                               </Btn>
                             )}
@@ -864,21 +881,17 @@ export default function ConsoleSystemHealth() {
         onClose={() => setDrawerRow(null)}
         footer={drawerRow && !drawerResolved ? (
           <Btn variant="primary" icon={CheckCircle2} busy={resolvingId === drawerRow.id}
-            onClick={async () => { await handleResolve(drawerRow.id); setDrawerRow(null) }}>Mark resolved</Btn>
+            onClick={() => { askResolve({ id: drawerRow.id }); setDrawerRow(null) }}>Mark resolved</Btn>
         ) : null}
       >
         {drawerRow && (
           <dl className="grid grid-cols-3 gap-x-3 gap-y-2 text-xs">
             <dt className="text-gray-500">Status</dt>
-            <dd className="col-span-2">{drawerResolved ? <Badge tone="good">Resolved</Badge> : <Badge>Open</Badge>}</dd>
+            <dd className="col-span-2"><Badge tone={drawerResolved ? 'good' : 'default'}>{statusLabel(drawerRow)}</Badge></dd>
             <dt className="text-gray-500">Severity</dt>
             <dd className="col-span-2"><Badge tone={drawerSev?.tone}>{drawerSev?.label}</Badge></dd>
             <dt className="text-gray-500">Logged</dt>
             <dd className="col-span-2 text-gray-300">{fmtDateTime(drawerRow.created_at)} ({fmtRelative(drawerRow.created_at)})</dd>
-            {drawerRow.resolved_at && (<>
-              <dt className="text-gray-500">Resolved</dt>
-              <dd className="col-span-2 text-gray-300">{fmtDateTime(drawerRow.resolved_at)}</dd>
-            </>)}
             <dt className="text-gray-500">Module</dt>
             <dd className="col-span-2 text-gray-300">{drawerRow.module_id || drawerRow.source || 'app'}</dd>
             <dt className="text-gray-500">Reference</dt>
@@ -890,22 +903,34 @@ export default function ConsoleSystemHealth() {
       </Drawer>
 
       <Modal
-        open={confirmAll}
-        title="Resolve all matching problems?"
-        subtitle="This marks them as handled. It does not delete anything."
-        onClose={() => setConfirmAll(false)}
+        open={!!resolveTarget}
+        title={resolveTarget === 'all' ? 'Resolve all matching problems?' : 'Resolve this problem?'}
+        subtitle="The error log itself is never changed. The status, your name, the time and this reason are recorded in the Error Center history."
+        onClose={() => setResolveTarget(null)}
         width="max-w-md"
         footer={(
           <>
-            <Btn onClick={() => setConfirmAll(false)} disabled={resolvingAll}>Cancel</Btn>
-            <Btn variant="primary" icon={CheckCircle2} onClick={handleResolveAll} busy={resolvingAll}>Resolve all</Btn>
+            <Btn onClick={() => setResolveTarget(null)}>Cancel</Btn>
+            <Btn variant="primary" icon={CheckCircle2} onClick={submitResolve}
+              disabled={!validReason(resolveReason)}>
+              {resolveTarget === 'all' ? 'Resolve all' : 'Resolve'}
+            </Btn>
           </>
         )}
       >
-        <p className="text-sm text-gray-300">
-          Every open problem for {resolveAllScope} will be marked as resolved.
-          The time window and open or resolved filters do not narrow this action.
-        </p>
+        {resolveTarget === 'all' && (
+          <p className="text-sm text-gray-300 mb-3">
+            Every open problem for {resolveAllScope} will be marked as resolved. The time window and status filters
+            do not narrow this action. If the same problem happens again later, it reopens on its own.
+          </p>
+        )}
+        <label htmlFor="resolve-reason" className="block text-xs text-gray-400 mb-1">
+          Reason (required, at least {MIN_REASON_LENGTH} characters)
+        </label>
+        <textarea id="resolve-reason" rows={3} value={resolveReason}
+          onChange={(e) => setResolveReason(e.target.value)}
+          className="w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+          placeholder="For example: fixed in release 2026-11-16" />
       </Modal>
     </div>
   )

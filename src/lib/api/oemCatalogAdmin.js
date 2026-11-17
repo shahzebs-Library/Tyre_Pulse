@@ -1,0 +1,154 @@
+/**
+ * Admin working data for the OEM catalog: review queue, figures, corrections and
+ * category rules. These tables come from the PENDING migration
+ * 20261118100000_oem_catalog_advanced.sql. Until it is applied every call here
+ * reports `NOT_PROVISIONED` and the UI says so instead of pretending. The
+ * database (RLS) is the real gate; the checks here only fail fast and give a
+ * clean message.
+ */
+import { supabase, isMissingRelation } from './_client'
+
+export const NOT_PROVISIONED = 'OEM_NOT_PROVISIONED'
+const fail = (error, fallback) => {
+  if (isMissingRelation(error) || /oem_catalog_admin|oem_apply_correction/.test(String(error?.message || '')) && /does not exist|not found/i.test(String(error?.message || ''))) {
+    const e = new Error('The advanced catalog tables are not installed yet. An administrator must approve the pending catalog migration.')
+    e.code = NOT_PROVISIONED
+    throw e
+  }
+  const e = new Error(error?.message || fallback)
+  e.code = error?.code
+  throw e
+}
+
+/** true / false from the database; null when the function is not installed (then the server decides on each write). */
+export async function isCatalogAdmin() {
+  const { data, error } = await supabase.rpc('oem_catalog_admin')
+  if (error) return null
+  return data === true
+}
+
+export async function requireCatalogAdmin() {
+  const ok = await isCatalogAdmin()
+  if (ok === false) { const e = new Error('Only a catalog administrator can do this.'); e.code = '42501'; throw e }
+}
+
+const REVIEW_COLS = 'id,manual_id,entry_id,figure_id,pdf_page,part_no,payload,reasons,confidence,status,decided_at,created_at'
+
+/** Paginated, filterable, searchable queue. Nothing is capped: the caller pages with `page`. */
+export async function listReviewItems({ manualId, status = 'pending', search = '', maxConfidence, page = 0, pageSize = 25 } = {}) {
+  let q = supabase.from('oem_review_items').select(REVIEW_COLS, { count: 'exact' }).eq('manual_id', manualId)
+  if (status && status !== 'all') q = q.eq('status', status)
+  if (maxConfidence != null) q = q.lte('confidence', maxConfidence)
+  const term = String(search || '').trim().replace(/[%,()]/g, ' ')
+  if (term) q = q.or(`part_no.ilike.%${term}%,figure_id.ilike.%${term}%`)
+  const { data, error, count } = await q.order('created_at', { ascending: true }).order('id', { ascending: true }).range(page * pageSize, page * pageSize + pageSize - 1)
+  if (error) fail(error, 'Could not load the review queue.')
+  return { items: data || [], total: count ?? 0, page, pageSize }
+}
+
+/** Persist the whole queue in chunks (no 500 cap). Returns how many were stored. */
+export async function saveReviewItems(manualId, records) {
+  await requireCatalogAdmin()
+  let saved = 0
+  for (let i = 0; i < records.length; i += 200) {
+    const batch = records.slice(i, i + 200).map((r) => ({
+      manual_id: manualId, figure_id: r.figure_id || null, pdf_page: r.source_pdf_page || null, part_no: r.part_no,
+      payload: r, reasons: (r.issues || []).map((x) => x.message), confidence: r.confidence ?? null,
+    }))
+    const { error } = await supabase.from('oem_review_items').upsert(batch, { onConflict: 'manual_id,figure_id,part_no,pdf_page', ignoreDuplicates: true })
+    if (error) fail(error, 'Could not save the review queue.')
+    saved += batch.length
+  }
+  return saved
+}
+
+export async function decideReviewItems(ids, status) {
+  await requireCatalogAdmin()
+  if (!['approved', 'rejected', 'pending'].includes(status)) throw new Error('Unknown review status')
+  const { data: user } = await supabase.auth.getUser()
+  const { error } = await supabase.from('oem_review_items')
+    .update({ status, decided_by: user?.user?.id || null, decided_at: new Date().toISOString() }).in('id', ids)
+  if (error) fail(error, 'Could not save the decision.')
+}
+
+/** Publish approved items as catalog entries. Existing rows (same manual, page, row) are never overwritten. */
+export async function publishApproved(manualId) {
+  await requireCatalogAdmin()
+  const { data, error } = await supabase.from('oem_review_items').select('id,payload').eq('manual_id', manualId).eq('status', 'approved').limit(1000)
+  if (error) fail(error, 'Could not read approved items.')
+  let published = 0
+  for (let i = 0; i < (data || []).length; i += 100) {
+    const chunk = data.slice(i, i + 100)
+    const rows = chunk.map(({ payload: r }) => ({
+      manual_id: manualId, source_pdf_page: r.source_pdf_page, row_order: r.row_order, assembly_heading: r.assembly_heading || null, printed_page: r.printed_page || null,
+      index_no: r.index_no || null, parent_index: r.parent_index || null, part_no: r.part_no, description: r.description, remark: r.remark || null, quantity: r.quantity ?? null,
+      see_page: r.see_page || null, illustration_pdf_page: r.illustration_pdf_page || null, row_type: r.row_type || 'catalog_item', source_line: r.source_line || null,
+    }))
+    const { error: insErr } = await supabase.from('oem_parts_entries').upsert(rows, { onConflict: 'manual_id,source_pdf_page,row_order', ignoreDuplicates: true })
+    if (insErr) fail(insErr, 'Could not publish approved parts.')
+    const { error: stErr } = await supabase.from('oem_review_items').update({ status: 'published' }).in('id', chunk.map((c) => c.id))
+    if (stErr) fail(stErr, 'Parts were published but their status could not be updated.')
+    published += rows.length
+  }
+  return published
+}
+
+/** The sanctioned edit path: audited, flags the record as admin corrected so imports never overwrite it. */
+export async function applyCorrection(entryId, field, value, reason = '') {
+  const { data, error } = await supabase.rpc('oem_apply_correction', { p_entry: entryId, p_field: field, p_value: String(value ?? ''), p_reason: reason || null })
+  if (error) fail(error, 'Could not save the correction.')
+  return data
+}
+
+export async function listCategoryRules() {
+  const { data, error } = await supabase.from('oem_category_rules').select('heading,heading_key,category,system,scope,manufacturer')
+  if (error) { if (isMissingRelation(error)) return []; fail(error, 'Could not load category rules.') }
+  return data || []
+}
+
+export async function saveCategoryRule({ heading, headingKey, category, system, scope = 'manufacturer', manufacturer = '' }) {
+  await requireCatalogAdmin()
+  const { error } = await supabase.from('oem_category_rules').upsert({ heading, heading_key: headingKey, category, system: system || null, scope, manufacturer }, { onConflict: 'organisation_id,heading_key,scope,manufacturer' })
+  if (error) fail(error, 'Could not save the category rule.')
+}
+
+export async function saveFigures(manualId, figures) {
+  await requireCatalogAdmin()
+  const rows = Object.entries(figures).map(([figureId, f]) => ({
+    manual_id: manualId, figure_id: figureId, pdf_page: f.geometry?.pdf_page || f.illustration_pdf_page || 1, printed_page: figureId.replace(/^F/, ''),
+    caption: f.geometry?.caption || null, page_info: f.geometry?.page || {}, bbox: f.geometry?.bbox || null, crop: f.geometry?.crop || null,
+    callouts: f.geometry?.callouts || [], match: { status: f.geometry?.status, score: f.geometry?.score, missing: f.geometry?.missing, reason: f.geometry?.reason },
+    match_status: ['estimated', 'verified', 'ambiguous', 'unavailable'].includes(f.geometry?.status) ? f.geometry.status : 'estimated', hierarchy: f.hierarchy || {},
+  }))
+  for (let i = 0; i < rows.length; i += 100) {
+    const { error } = await supabase.from('oem_figures').upsert(rows.slice(i, i + 100), { onConflict: 'manual_id,figure_id', ignoreDuplicates: true })
+    if (error) fail(error, 'Could not save figure geometry.')
+  }
+  return rows.length
+}
+
+export async function listFigures(manualId) {
+  const { data, error } = await supabase.from('oem_figures').select('figure_id,pdf_page,printed_page,caption,bbox,crop,callouts,match,match_status,hierarchy,admin_adjusted').eq('manual_id', manualId)
+  if (error) { if (isMissingRelation(error)) return []; fail(error, 'Could not load figures.') }
+  return data || []
+}
+
+/** Admin moves a figure boundary; stored as adjusted so a re-import never replaces it. */
+export async function adjustFigureCrop(manualId, figureId, crop) {
+  await requireCatalogAdmin()
+  const { error } = await supabase.from('oem_figures').update({ crop, admin_adjusted: true }).eq('manual_id', manualId).eq('figure_id', figureId)
+  if (error) fail(error, 'Could not save the new figure boundary.')
+}
+
+export async function updateReviewPayload(id, payload) {
+  await requireCatalogAdmin()
+  const { error } = await supabase.from('oem_review_items').update({ payload, part_no: payload.part_no }).eq('id', id)
+  if (error) fail(error, 'Could not save the edit.')
+}
+
+export async function listCorrections(entryId) {
+  if (!entryId) return []
+  const { data, error } = await supabase.from('oem_corrections').select('id,field,old_value,new_value,reason,corrected_at').eq('entry_id', entryId).order('corrected_at', { ascending: false }).limit(50)
+  if (error) { if (isMissingRelation(error)) return []; fail(error, 'Could not load the correction history.') }
+  return data || []
+}

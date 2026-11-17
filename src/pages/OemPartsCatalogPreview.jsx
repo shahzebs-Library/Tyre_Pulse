@@ -16,6 +16,9 @@ import { createPartsRequest, listOpenJobs } from '../lib/api/partsRequests'
 import { extractOemIdentity, extractOemPartsDocument } from '../lib/oemPartsExtractor'
 import { toUserMessage } from '../lib/safeError'
 import { useLanguage } from '../contexts/LanguageContext'
+import { useAuth } from '../contexts/AuthContext'
+import OemReviewWorkspace from '../components/oemCatalog/OemReviewWorkspace'
+import { requireCatalogAdmin, saveFigures, saveReviewItems, NOT_PROVISIONED } from '../lib/api/oemCatalogAdmin'
 import { processExtraction, reviewQueueForStorage } from '../lib/oemCatalog/pipeline'
 import OemCatalogViewer from '../components/oemCatalog/OemCatalogViewer'
 import { normalizeIndex } from '../components/oemCatalog/OemFigure'
@@ -63,7 +66,11 @@ async function sha256(file) {
 export default function OemPartsCatalogPreview() {
   const { activeCountry } = useSettings()
   const { t } = useLanguage()
+  const { profile, isSuperAdmin } = useAuth()
+  // Convenience only: the database (RLS) and the service layer enforce the same rule.
+  const canManage = profile?.role === 'Admin' || isSuperAdmin === true
   const [tab, setTab] = useState('browse')
+  const [reviewManualId, setReviewManualId] = useState('')
   const [manuals, setManuals] = useState([])
   const [entries, setEntries] = useState([])
   const [query, setQuery] = useState('')
@@ -288,6 +295,7 @@ export default function OemPartsCatalogPreview() {
     if (!manualForm.manufacturer.trim() || !manualForm.model.trim()) { setSaveError('Enter the OEM brand and model printed on the manual.'); return }
     setSaving(true); setSaveError(''); setSaveNotice('')
     try {
+      await requireCatalogAdmin()
       const hash = await sha256(pdfFile)
       const existing = await findOemManualByHash(hash)
       const alreadyReady = existing && ['ready', 'needs_review'].includes(existing.extraction_status)
@@ -311,6 +319,7 @@ export default function OemPartsCatalogPreview() {
           figures: pipeline.figures,
           pipeline: pipeline.summary,
           reviewQueue: reviewQueueForStorage(pipeline.review),
+          reviewQueueTotal: pipeline.review.length,
           fitment: {
             generation: manualForm.generation.trim() || null,
             model_year_from: manualForm.modelYearFrom ? Number(manualForm.modelYearFrom) : null,
@@ -318,8 +327,16 @@ export default function OemPartsCatalogPreview() {
           },
         },
       })
+      let extra = ''
+      try {
+        await saveFigures(saved.id, pipeline.figures)
+        const queued = await saveReviewItems(saved.id, pipeline.review)
+        extra = queued ? ` ${t('oemcatalog.import.queueSaved', { count: queued })}` : ''
+      } catch (error) {
+        extra = error?.code === NOT_PROVISIONED ? ` ${t('oemcatalog.import.notProvisioned', { count: pipeline.review.length })}` : ` ${toUserMessage(error, '')}`
+      }
       await refreshManuals()
-      setSaveNotice(`${saved.manufacturer} ${saved.model}: ${saved.item_count.toLocaleString()} parts and variants saved. The PDF is stored once for future lookups.`)
+      setSaveNotice(`${saved.manufacturer} ${saved.model}: ${saved.item_count.toLocaleString()} parts and variants saved. The PDF is stored once for future lookups.${extra}`)
       setTab('browse')
     } catch (error) { setSaveError(toUserMessage(error, 'Could not save the OEM manual.')) }
     finally { setSaving(false) }
@@ -423,7 +440,7 @@ export default function OemPartsCatalogPreview() {
     <PageHeader title={t('oemcatalog.page.title')} subtitle={t('oemcatalog.page.subtitle')} icon={BookOpen} actions={<Link to="/parts-catalog" className={BUTTON}><ArrowLeft size={15}/>{t('oemcatalog.page.inventory')}</Link>} />
 
     <div className="flex flex-wrap gap-2 border-b border-[var(--input-border)] pb-3" role="tablist" aria-label="OEM catalog sections">
-      {[['browse',t('oemcatalog.tab.browse')],['partSearch',t('oemcatalog.tab.search')],['selection',t('oemcatalog.tab.selected', { count: selectedParts.length })],['manuals',t('oemcatalog.tab.manuals')],['import',t('oemcatalog.tab.import')]].map(([key,label]) => <button key={key} role="tab" aria-selected={tab === key} onClick={() => switchTab(key)} className={`min-h-[40px] rounded-lg px-4 text-sm font-medium ${tab === key ? 'bg-[color-mix(in_srgb,var(--brand)_78%,#000)] text-white font-bold' : 'text-[var(--text-secondary)] hover:bg-[var(--panel-2)]'}`}>{label}</button>)}
+      {[['browse',t('oemcatalog.tab.browse')],['partSearch',t('oemcatalog.tab.search')],['selection',t('oemcatalog.tab.selected', { count: selectedParts.length })],['manuals',t('oemcatalog.tab.manuals')],...(canManage ? [['review',t('oemcatalog.review.tab')],['import',t('oemcatalog.tab.import')]] : [])].map(([key,label]) => <button key={key} role="tab" aria-selected={tab === key} onClick={() => switchTab(key)} className={`min-h-[40px] rounded-lg px-4 text-sm font-medium ${tab === key ? 'bg-[color-mix(in_srgb,var(--brand)_78%,#000)] text-white font-bold' : 'text-[var(--text-secondary)] hover:bg-[var(--panel-2)]'}`}>{label}</button>)}
     </div>
 
     {pageError && <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300" role="alert">{pageError}</div>}
@@ -456,6 +473,7 @@ export default function OemPartsCatalogPreview() {
           activeGroup={activeIllustration}
           onOpenGroup={openIllustration}
           pdfDoc={browsePdfDoc}
+          allRows={browseRows}
           selectedIndex={selectedIndex}
           onSelectIndex={setSelectedIndex}
           selectedKeys={selectedKeys}
@@ -498,7 +516,12 @@ export default function OemPartsCatalogPreview() {
       {catalogLoading ? <div className="grid min-h-40 place-items-center"><Loader2 className="animate-spin text-[var(--oem-accent-text)]"/></div> : manuals.length ? <div className="divide-y divide-[var(--input-border)]">{manuals.map((manual) => <div key={manual.id} className="flex flex-wrap items-center justify-between gap-4 px-4 py-4"><div><div className="font-semibold text-[var(--text-primary)]">{manual.manufacturer} · {manual.model}{manual.generation ? ` · ${manual.generation}` : ''}</div><div className="mt-1 text-xs text-[var(--text-muted)]">{[manual.model_code && `Model code ${manual.model_code}`, (manual.model_year_from || manual.model_year_to) && `Years ${manual.model_year_from || '—'}–${manual.model_year_to || '—'}`,manual.equipment_no && `Equipment ${manual.equipment_no}`,manual.chassis_from && `Chassis ${manual.chassis_from}${manual.chassis_to ? `–${manual.chassis_to}` : ''}`].filter(Boolean).join(' · ') || manual.source_file_name}</div><div className="mt-1 text-xs text-[var(--text-muted)]">{manual.item_count.toLocaleString()} entries · {manual.page_count} PDF pages · {manual.extraction_status.replace('_',' ')}</div></div><div className="flex min-w-0 items-center gap-3"><span className="max-w-[280px] truncate text-xs text-[var(--text-muted)]">{manual.source_file_name}</span><button type="button" onClick={() => { switchTab('browse'); selectBrowseManual(manual) }} className={`${BUTTON} min-h-9 text-xs`}><BookOpen size={14}/>Browse this catalog</button></div></div>)}</div> : <div className="p-8 text-center text-sm text-[var(--text-muted)]">No manuals imported.</div>}
     </Card>}
 
-    {tab === 'import' && <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(300px,0.72fr)]">
+    {tab === 'review' && canManage && <div className="space-y-3">
+      <label className="oem-field"><span>{t('oemcatalog.review.manual')}</span><select value={reviewManualId} onChange={(e) => setReviewManualId(e.target.value)}><option value="">-</option>{manuals.map((m) => <option key={m.id} value={m.id}>{m.manufacturer} {m.model}</option>)}</select></label>
+      {reviewManualId && manuals.find((m) => m.id === reviewManualId) && <OemReviewWorkspace key={reviewManualId} manual={manuals.find((m) => m.id === reviewManualId)} />}
+    </div>}
+
+    {tab === 'import' && canManage && <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(300px,0.72fr)]">
       <Card className="space-y-4">
         <div><h2 className="text-sm font-semibold text-[var(--text-primary)]">Upload and extract the OEM catalog</h2><p className="mt-1 text-xs text-[var(--text-muted)]">Download a catalog you’re authorized to use, then select its PDF here. Tyre Pulse extracts the parts rows and saves the source PDF privately for its illustrations.</p></div>
         <div className="rounded-lg border border-[var(--input-border)] bg-[var(--panel-2)] p-3"><div className="text-xs font-semibold text-[var(--text-primary)]">Official catalog sources to check</div><p className="mt-1 text-[11px] text-[var(--text-muted)]">Availability and download rights vary by brand. Some portals show diagrams online but do not provide a downloadable full catalog.</p><div className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-xs"><a className="text-[var(--oem-accent-text)] underline" href="https://www.cat.com/en_US/support/maintenance/parts-reference-guides.html" target="_blank" rel="noreferrer">Cat free parts guides</a><a className="text-[var(--oem-accent-text)] underline" href="https://www.cat.com/sis2go" target="_blank" rel="noreferrer">Cat SIS2GO</a><a className="text-[var(--oem-accent-text)] underline" href="https://www.bobcat.com/na/en/parts-service/parts-catalog" target="_blank" rel="noreferrer">Bobcat official catalog</a><a className="text-[var(--oem-accent-text)] underline" href="https://www.hitachicm.com/global/en/products/parts-service/parts/selected-parts/" target="_blank" rel="noreferrer">Hitachi selected parts PDFs</a><a className="text-[var(--oem-accent-text)] underline" href="https://www.sanyglobal.com/mysany/" target="_blank" rel="noreferrer">SANY MySANY parts access</a></div></div>

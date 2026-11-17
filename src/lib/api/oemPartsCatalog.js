@@ -1,4 +1,5 @@
 import { supabase } from './_client'
+import { requireCatalogAdmin } from './oemCatalogAdmin'
 
 const MANUAL_COLUMNS = 'id,country,manufacturer,model,model_code,equipment_no,chassis_from,chassis_to,source_file_name,source_sha256,storage_path,page_count,item_count,extraction_status,import_summary,created_at'
 const ENTRY_COLUMNS = 'id,manual_id,source_pdf_page,row_order,assembly_heading,printed_page,index_no,parent_index,part_no,description,remark,quantity,see_page,illustration_pdf_page,row_type,source_line,manual:oem_parts_manuals!inner(id,manufacturer,model,model_code,equipment_no,country,storage_path,page_count)'
@@ -96,6 +97,7 @@ export async function getOemPdfSignedUrl(manualId) {
 
 /** Save the PDF once, then idempotently upsert every extracted table row in batches. */
 export async function saveOemManual({ id, resume = false, file, sha256, country, manufacturer, model, modelCode, equipmentNo, chassisFrom, chassisTo, pageCount, rows, summary }) {
+  await requireCatalogAdmin()
   const manual = {
     id,
     country: country || null,

@@ -1,5 +1,5 @@
 /* OEM illustrated parts catalog viewer. Brand green marks selection and confirmation only; everything else is neutral. */
-.oem-viewer {
+.oem-viewer, .oem-review, .oem-page {
   --oem-ink: #161616;
   --oem-select: var(--brand);
   --oem-select-fill: color-mix(in srgb, var(--brand) 78%, #000);
@@ -40,7 +40,7 @@
 .oem-nav-search { padding: 8px; border-bottom: 1px solid var(--input-border); }
 .oem-nav-search input { width: 100%; min-height: 38px; border: 1px solid var(--input-border); border-radius: 8px; background: var(--panel-2); color: var(--text-primary); padding-inline: 10px; font-size: 12px; }
 .oem-nav-group h3 { position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; margin: 0; padding: 7px 12px; background: var(--panel-2); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); }
-.oem-nav-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-height: 44px; padding: 8px 12px; border: 0; border-inline-start: 3px solid transparent; background: transparent; color: var(--text-primary); text-align: start; font-size: 12px; cursor: pointer; }
+.oem-nav-item { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; width: 100%; height: 49px; overflow: hidden; padding: 8px 12px; border: 0; border-inline-start: 3px solid transparent; background: transparent; color: var(--text-primary); text-align: start; font-size: 12px; cursor: pointer; }
 .oem-nav-item small { font-size: 10px; color: var(--text-muted); }
 .oem-nav-item:hover { background: var(--panel-2); }
 .oem-nav-item[aria-current='true'] { border-inline-start-color: var(--oem-select); background: var(--oem-select-tint); font-weight: 700; }
@@ -117,3 +117,41 @@ html.light .oem-note-error { color: #b42318; }
 
 /* Accent for TEXT: the brand green legible on the active theme (AA on the tint). */
 :root { --oem-accent-text: var(--brand-on-tint); }
+
+/* Derived detail: summary strip, drawer, coverage. */
+.oem-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 12px; border-bottom: 1px solid var(--input-border); font-size: 11px; color: var(--text-secondary); }
+.oem-muted { color: var(--text-muted); }
+.oem-coverage { border: 1px solid var(--input-border); border-radius: 12px; background: var(--panel); padding: 6px 12px; font-size: 12px; color: var(--text-secondary); }
+.oem-coverage summary { min-height: 32px; display: flex; align-items: center; cursor: pointer; font-weight: 700; color: var(--text-primary); }
+.oem-coverage ul { margin: 4px 0 6px; padding-inline-start: 18px; display: grid; gap: 2px; }
+.oem-drawer { display: grid; gap: 14px; font-size: 12px; color: var(--text-primary); }
+.oem-drawer h3 { margin: 0 0 4px; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); }
+.oem-drawer dl { margin: 0; display: grid; gap: 4px; }
+.oem-kv { display: grid; grid-template-columns: minmax(110px, 38%) 1fr; gap: 8px; }
+.oem-kv dt { color: var(--text-muted); }
+.oem-kv dd { margin: 0; overflow-wrap: anywhere; }
+.oem-empty-val { color: var(--text-muted); font-style: italic; }
+.oem-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+.oem-list button { width: 100%; min-height: 36px; padding: 4px 8px; text-align: start; border: 1px solid var(--input-border); border-radius: 8px; background: var(--panel-2); color: var(--text-primary); cursor: pointer; }
+.oem-list button small { color: var(--text-muted); }
+.oem-note-flat { padding: 0; display: flex; gap: 6px; align-items: flex-start; }
+
+.oem-nav-item > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Review workspace: queue and evidence scroll independently, action bar stays pinned. */
+.oem-review { display: grid; gap: 10px; grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.3fr); height: clamp(520px, calc(100vh - 260px), 900px); }
+.oem-review-filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--input-border); font-size: 11px; color: var(--text-secondary); }
+.oem-review-filters input, .oem-review-filters select, .oem-form input, .oem-form-row select, .oem-form-row input { min-height: 36px; border: 1px solid var(--input-border); border-radius: 8px; background: var(--panel-2); color: var(--text-primary); padding-inline: 8px; font-size: 12px; }
+.oem-search { display: inline-flex; align-items: center; gap: 6px; }
+.oem-sticky-bar { position: sticky; top: 0; z-index: 2; background: var(--panel); }
+.oem-review-rows li { display: flex; align-items: flex-start; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--input-border); }
+.oem-review-rows li[data-active='true'] { background: var(--oem-select-tint); box-shadow: inset 3px 0 0 var(--oem-select); }
+.oem-review-rows li button { border: 0; background: transparent; flex: 1; display: grid; gap: 2px; padding: 4px; }
+.oem-review-rows input[type='checkbox'] { width: 20px; height: 20px; margin-top: 8px; accent-color: var(--brand); }
+.oem-review-body { padding: 10px 12px; display: grid; gap: 10px; align-content: start; }
+.oem-review-figure { height: 320px; display: flex; }
+.oem-review-figure .oem-figure { flex: 1; }
+.oem-form { display: grid; gap: 8px; }
+.oem-form label, .oem-form-row { display: grid; gap: 3px; font-size: 11px; color: var(--text-muted); }
+.oem-form-row fieldset { border: 0; padding: 0; }
+@media (max-width: 1023px) { .oem-review { grid-template-columns: minmax(0, 1fr); height: auto; } .oem-review .oem-card { max-height: 70vh; } }

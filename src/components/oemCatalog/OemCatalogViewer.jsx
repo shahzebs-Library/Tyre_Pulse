@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { BookOpen, CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, Loader2, PackagePlus, Plus, AlertTriangle } from 'lucide-react'
+import { BookOpen, CheckCircle2, Info, ChevronLeft, ChevronRight, ExternalLink, Loader2, PackagePlus, Plus, AlertTriangle } from 'lucide-react'
 import { useLanguage } from '../../contexts/LanguageContext'
 import OemFigure, { normalizeIndex } from './OemFigure'
+import { CoveragePanel, FigureSummary, PartDrawer } from './OemInsightPanels'
 import './oemCatalog.css'
 
 const PAGE_SIZE = 40
@@ -14,12 +15,15 @@ const AREA_ORDER = ['chassis', 'upper', 'other']
  */
 export default function OemCatalogViewer({
   manual, manualOptions, onChooseManual, asset, fitment, groups, activeGroup, onOpenGroup,
-  pdfDoc, selectedIndex, onSelectIndex, selectedKeys, onAddRows, onRequestSelected, onOpenSource, loading, error,
+  pdfDoc, allRows = [], selectedIndex, onSelectIndex, selectedKeys, onAddRows, onRequestSelected, onOpenSource, loading, error,
 }) {
   const { t } = useLanguage()
   const [pageNo, setPageNo] = useState(0)
   const [navQuery, setNavQuery] = useState('')
+  const [detail, setDetail] = useState(null)
   const rowRefs = useRef(new Map())
+  const navRef = useRef(null)
+  const [navTop, setNavTop] = useState(0)
   const figures = manual?.import_summary?.figures || {}
 
   const meta = (group) => {
@@ -40,6 +44,15 @@ export default function OemCatalogViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groups, navQuery, figures])
   const hasAreas = Object.keys(figures).length > 0
+  // Windowing for very large manuals: only the nav items near the scroll position are mounted.
+  const ITEM_H = 49
+  const windowed = (list, top, all, area) => {
+    if (list.length < 80) return list
+    const offset = AREA_ORDER.slice(0, AREA_ORDER.indexOf(area)).reduce((n, k) => n + all[k].length * ITEM_H + (all[k].length ? 30 : 0), 0) + 30
+    const first = Math.max(0, Math.floor((top - offset) / ITEM_H) - 8)
+    const last = Math.min(list.length, first + 40)
+    return [first > 0 && { spacer: first * ITEM_H, key: 'top' }, ...list.slice(first, last), last < list.length && { spacer: (list.length - last) * ITEM_H, key: 'bottom' }].filter(Boolean)
+  }
 
   const flat = useMemo(() => AREA_ORDER.flatMap((a) => grouped[a]), [grouped])
   const activeAt = flat.findIndex((g) => g === activeGroup)
@@ -90,6 +103,7 @@ export default function OemCatalogViewer({
         {activeMeta && activeMeta.confidence < 0.7 && <span className="oem-chip oem-chip-warn"><AlertTriangle size={14} aria-hidden="true" />{t('oemcatalog.needsReview')}</span>}
       </div>
 
+      <CoveragePanel manual={manual} />
       <nav className="oem-crumbs" aria-label={t('oemcatalog.breadcrumb')}>
         <ol>{crumbs.map((c, i) => <li key={`${c}-${i}`} aria-current={i === crumbs.length - 1 ? 'page' : undefined}>{c}</li>)}</ol>
       </nav>
@@ -102,11 +116,11 @@ export default function OemCatalogViewer({
           <aside className="oem-card oem-nav" aria-label={t('oemcatalog.assemblies.title')}>
             <header className="oem-card-head"><h2>{t('oemcatalog.assemblies.title')}</h2></header>
             <div className="oem-nav-search"><input type="search" value={navQuery} onChange={(e) => setNavQuery(e.target.value)} placeholder={t('oemcatalog.assemblies.search')} aria-label={t('oemcatalog.assemblies.search')} /></div>
-            <div className="oem-scroll">
+            <div className="oem-scroll" onScroll={(e) => setNavTop(e.currentTarget.scrollTop)} ref={navRef}>
               {AREA_ORDER.map((a) => grouped[a].length > 0 && (
                 <div key={a} className="oem-nav-group">
                   {hasAreas && <h3>{t(`oemcatalog.area.${a}`)} <span>{grouped[a].length}</span></h3>}
-                  {grouped[a].map((g) => (
+                  {windowed(grouped[a], navTop, grouped, a).map((g) => g.spacer ? <div key={g.key} style={{ height: g.spacer }} aria-hidden="true" /> : (
                     <button key={g.page || 'unlinked'} type="button" className="oem-nav-item" aria-current={g === activeGroup ? 'true' : undefined} onClick={() => onOpenGroup(g)}>
                       <span>{g.label}</span>
                       <small dir="ltr">{g.printedPages[0] || (g.page ? `PDF ${g.page}` : t('oemcatalog.assemblies.unlinked'))} · {g.rows.length}</small>
@@ -145,6 +159,7 @@ export default function OemCatalogViewer({
                   <h2>{t('oemcatalog.parts.title')}</h2>
                   <span className="oem-count">{t('oemcatalog.parts.count', { count: rows.length })}</span>
                 </header>
+                <FigureSummary group={activeGroup} geometry={activeMeta?.geometry} />
                 <div className="oem-scroll oem-table-wrap" tabIndex={0} aria-label={t('oemcatalog.parts.title')}>
                   <table className="oem-table">
                     <thead><tr>
@@ -165,7 +180,7 @@ export default function OemCatalogViewer({
                             <td className="oem-pn" dir="ltr">{row.part_no}</td>
                             <td>{row.description}{row.remark && <small>{row.remark}</small>}</td>
                             <td className="oem-num">{row.quantity ?? '-'}</td>
-                            <td className="oem-add"><button type="button" disabled={added} onClick={(e) => { e.stopPropagation(); onAddRows([row]) }} aria-label={t('oemcatalog.parts.addOne', { part: row.part_no })} title={added ? t('oemcatalog.parts.added') : t('oemcatalog.parts.add')}>{added ? <CheckCircle2 size={15} aria-hidden="true" /> : <Plus size={15} aria-hidden="true" />}</button></td>
+                            <td className="oem-add"><button type="button" onClick={(e) => { e.stopPropagation(); setDetail(row) }} aria-label={t('oemcatalog.detail.title')} title={t('oemcatalog.detail.title')}><Info size={15} aria-hidden="true" /></button><button type="button" disabled={added} onClick={(e) => { e.stopPropagation(); onAddRows([row]) }} aria-label={t('oemcatalog.parts.addOne', { part: row.part_no })} title={added ? t('oemcatalog.parts.added') : t('oemcatalog.parts.add')}>{added ? <CheckCircle2 size={15} aria-hidden="true" /> : <Plus size={15} aria-hidden="true" />}</button></td>
                           </tr>
                         )
                       })}
@@ -197,6 +212,7 @@ export default function OemCatalogViewer({
           )}
         </div>
       )}
+      {detail && <PartDrawer row={detail} rows={allRows} manual={manual} figures={figures} added={selectedKeys.has(`${manual.id}:${detail.id}`)} onAdd={(r) => onAddRows([r])} onClose={() => setDetail(null)} onGoToFigure={(w) => { const g = groups.find((x) => x.rows.some((r) => r.id === w.id)); if (g) { onOpenGroup(g); onSelectIndex(normalizeIndex(w.callout)); setDetail(null) } }} />}
     </div>
   )
 }

@@ -78,7 +78,9 @@
       "figure": "Assembly / figure / index",
       "source": "Source and fitment",
       "qty": "Request qty",
-      "remove": "Remove"
+      "remove": "Remove",
+      "fitment": "Fitment",
+      "stock": "Stock"
     },
     "noCode": "Generation or code not recorded",
     "figureLine": "Figure page {page} · index {index}",
@@ -282,5 +284,44 @@
     "notProvisioned": "The persistent review queue and correction history need the pending catalog migration, which an administrator must approve. Until then only the first 500 queued rows are kept with each import record.",
     "manual": "Manual",
     "tab": "Review"
+  },
+  "why": {
+    "exact_part_no": "Exact part number",
+    "part_no_prefix": "Part number starts with",
+    "part_no_contains": "Part number contains",
+    "replacement_number": "Old or replacement number",
+    "description_all_words": "All words in description",
+    "description_some_words": "Some words in description",
+    "description_synonym": "Synonym in description",
+    "assembly": "Assembly name",
+    "category": "Category",
+    "figure_no": "Figure number",
+    "callout": "Callout number",
+    "manual": "Manual or model"
+  },
+  "compat": {
+    "confirmed": "Confirmed for this equipment",
+    "model": "Model-level match",
+    "unverified": "Fit not verified",
+    "incompatible": "Does not fit this equipment"
+  },
+  "filters": {
+    "title": "Search filters",
+    "manufacturer": "Manufacturer",
+    "compat": "Compatibility",
+    "category": "Category",
+    "all": "All"
+  },
+  "basket": {
+    "onHand": "On hand: {qty}",
+    "sameNumber": "Identical part number in the internal parts catalog; not a verified link",
+    "noStock": "Not linked to stock",
+    "reservedNote": "Reserved quantity is not tracked",
+    "unit": "Unit",
+    "clear": "Clear list",
+    "clearTitle": "Clear the selection?",
+    "clearBody": "All selected parts are removed from this list. Parts already sent to Parts Requests are not affected.",
+    "keep": "Keep",
+    "clearYes": "Remove {count} parts"
   }
 }

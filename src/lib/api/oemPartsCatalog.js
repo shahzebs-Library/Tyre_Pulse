@@ -2,7 +2,7 @@ import { supabase } from './_client'
 import { requireCatalogAdmin } from './oemCatalogAdmin'
 
 const MANUAL_COLUMNS = 'id,country,manufacturer,model,model_code,equipment_no,chassis_from,chassis_to,source_file_name,source_sha256,storage_path,page_count,item_count,extraction_status,import_summary,created_at'
-const ENTRY_COLUMNS = 'id,manual_id,source_pdf_page,row_order,assembly_heading,printed_page,index_no,parent_index,part_no,description,remark,quantity,see_page,illustration_pdf_page,row_type,source_line,manual:oem_parts_manuals!inner(id,manufacturer,model,model_code,equipment_no,country,storage_path,page_count)'
+const ENTRY_COLUMNS = 'id,manual_id,source_pdf_page,row_order,assembly_heading,printed_page,index_no,parent_index,part_no,description,remark,quantity,see_page,illustration_pdf_page,row_type,source_line,manual:oem_parts_manuals!inner(id,manufacturer,model,model_code,equipment_no,chassis_from,chassis_to,country,storage_path,page_count)'
 const BROWSE_ENTRY_COLUMNS = 'id,manual_id,source_pdf_page,row_order,assembly_heading,printed_page,index_no,parent_index,part_no,description,remark,quantity,see_page,illustration_pdf_page,row_type'
 
 function raise(error, fallback) {
@@ -52,6 +52,13 @@ export async function searchOemEntries(search, { manualId, country, limit = 100 
   if (!/^[\s\-./_A-Za-z0-9]+$/.test(term) || term.length >= 3) {
     let q = supabase.from('oem_parts_entries').select(ENTRY_COLUMNS)
       .textSearch('search_vector', term, { type: 'websearch', config: 'simple' }).limit(limit)
+    if (manualId) q = q.eq('manual_id', manualId)
+    if (country && country !== 'All') q = q.eq('country', country)
+    queries.push(q)
+  }
+  // Old and replacement numbers live in the OEM remark text, not in the part-number column.
+  if (normalized.length >= 6) {
+    let q = supabase.from('oem_parts_entries').select(ENTRY_COLUMNS).ilike('remark', `%${term.replace(/[%,()]/g, ' ')}%`).limit(limit)
     if (manualId) q = q.eq('manual_id', manualId)
     if (country && country !== 'All') q = q.eq('country', country)
     queries.push(q)
@@ -166,3 +173,19 @@ export async function saveOemManual({ id, resume = false, file, sha256, country,
   raise(error, 'Parts were saved, but the manual status could not be finalized.')
   return data
 }
+
+/**
+ * Stock from the EXISTING internal parts catalog, matched only on an identical part number.
+ * That is a lead, not a verified OEM-to-item link (no crosswalk exists yet), and the UI says so.
+ * Reservations are not tracked by parts_catalog, so no reserved quantity is returned.
+ */
+export async function lookupStockByPartNumbers(partNos) {
+  const list = [...new Set(partNos.filter(Boolean))].slice(0, 200)
+  if (!list.length) return {}
+  const { data, error } = await supabase.from('parts_catalog').select('part_no,name,on_hand_qty,uom').in('part_no', list)
+  if (error) return {}
+  const out = {}
+  for (const r of data || []) out[normalizePartNumberKey(r.part_no)] = { part_no: r.part_no, name: r.name, on_hand_qty: r.on_hand_qty, uom: r.uom }
+  return out
+}
+const normalizePartNumberKey = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '')

@@ -184,7 +184,7 @@ export function assignCallouts(texts, figures, { reach = 22 } = {}) {
   const orphans = []
   for (const t of texts) {
     if (!CALLOUT_RE.test(t.str) || Number(t.str) < 1) continue
-    const cx = (t.x0 + t.x1) / 2; const cy = (t.y0 + t.y1) / 2
+    const cx = (t.x0 + t.x1) / 2; const cy = t.y0 + (t.y1 - t.y0) * 0.35 // glyph centre: baseline plus about a third of the em box
     let best = -1; let bestD = Infinity
     figures.forEach((f, i) => {
       const r = expand(f.bbox, reach)
@@ -256,8 +256,10 @@ export function analyzePageGeometry({ opList, OPS, items, info }) {
   const texts = textBoxes(items)
   const figures = segmentFigures(drawingBoxes(opList, OPS), info)
   const { byFigure, orphans } = assignCallouts(texts, figures)
+  // The crop must keep the callout numerals that label the drawing, which sit just outside the artwork.
+  const withLabels = figures.map((f, i) => ({ ...f, bbox: byFigure[i].reduce((u, c) => union(u, { x0: c.x - 8, y0: c.y - 9, x1: c.x + 8, y1: c.y + 9 }), f.bbox) }))
   const analysed = figures.map((f, i) => ({
-    order: f.order, bbox: f.bbox, crop: cropFor(f, figures, info), ambiguous: f.ambiguous, reason: f.reason,
+    order: f.order, bbox: f.bbox, crop: cropFor(withLabels[i], withLabels, info, 10), ambiguous: f.ambiguous, reason: f.reason,
     callouts: byFigure[i], caption: captionFor(f, texts),
   }))
   return { info, figures: analysed, orphanNumerals: orphans }

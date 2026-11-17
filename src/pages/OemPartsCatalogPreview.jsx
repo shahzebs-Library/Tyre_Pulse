@@ -11,7 +11,7 @@ import Card from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import { listAssets } from '../lib/api/assets'
-import { findOemManualByHash, getOemPdfSignedUrl, listOemManualEntries, listOemManuals, saveOemManual, searchOemEntries } from '../lib/api/oemPartsCatalog'
+import { lookupStockByPartNumbers, findOemManualByHash, getOemPdfSignedUrl, listOemManualEntries, listOemManuals, saveOemManual, searchOemEntries } from '../lib/api/oemPartsCatalog'
 import { createPartsRequest, listOpenJobs } from '../lib/api/partsRequests'
 import { extractOemIdentity, extractOemPartsDocument } from '../lib/oemPartsExtractor'
 import { toUserMessage } from '../lib/safeError'
@@ -19,6 +19,9 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { useAuth } from '../contexts/AuthContext'
 import OemReviewWorkspace from '../components/oemCatalog/OemReviewWorkspace'
 import { requireCatalogAdmin, saveFigures, saveReviewItems, NOT_PROVISIONED } from '../lib/api/oemCatalogAdmin'
+import { STANDARD_CATEGORIES } from '../lib/oemCatalog/taxonomy'
+import { compatibility } from '../lib/oemCatalog/search'
+import { rankResults } from '../lib/oemCatalog/search'
 import { processExtraction, reviewQueueForStorage } from '../lib/oemCatalog/pipeline'
 import OemCatalogViewer from '../components/oemCatalog/OemCatalogViewer'
 import { normalizeIndex } from '../components/oemCatalog/OemFigure'
@@ -26,12 +29,19 @@ import { ExtractionPreviewTable, ImportReviewPanel, SearchResultsTable, Selected
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
+const STANDARD_LABELS = Object.fromEntries(STANDARD_CATEGORIES.map(([c]) => [c, true]))
 const INPUT = 'input min-h-[44px] w-full'
 const BUTTON = 'btn-secondary inline-flex min-h-[42px] items-center justify-center gap-2 px-3 text-sm'
 const assetText = (asset) => [asset.asset_no, asset.fleet_number, asset.make, asset.model, asset.vehicle_type, asset.registration_no, asset.chassis_no, asset.serial_no, asset.engine_no, asset.site, asset.country].filter(Boolean).join(' ').toLowerCase()
 
 function Field({ label, value, onChange, placeholder, required = false }) {
   return <label className="block"><span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">{label}{required ? ' *' : ''}</span><input required={required} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className={INPUT} /></label>
+}
+
+function groupKeyOf(row) {
+  const page = row.illustration_pdf_page || null
+  const heading = String(row.assembly_heading || '').toLowerCase().replace(/\s+/g, ' ').trim()
+  return `${page || 'unlinked'}|${heading || row.printed_page || row.source_pdf_page || ''}`
 }
 
 function searchableAssetResult(asset) {
@@ -71,6 +81,7 @@ export default function OemPartsCatalogPreview() {
   const canManage = profile?.role === 'Admin' || isSuperAdmin === true
   const [tab, setTab] = useState('browse')
   const [reviewManualId, setReviewManualId] = useState('')
+  const [searchFilters, setSearchFilters] = useState({ manufacturer: '', compatibility: '', category: '' })
   const [manuals, setManuals] = useState([])
   const [entries, setEntries] = useState([])
   const [query, setQuery] = useState('')
@@ -90,7 +101,12 @@ export default function OemPartsCatalogPreview() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [saveNotice, setSaveNotice] = useState('')
-  const [selectedParts, setSelectedParts] = useState([])
+  const basketKey = `oem-basket:${profile?.id || 'anon'}`
+  const [selectedParts, setSelectedParts] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem(`oem-basket:${profile?.id || 'anon'}`) || '[]') } catch { return [] }
+  })
+  const [basketStock, setBasketStock] = useState({})
+  const [confirmClear, setConfirmClear] = useState(false)
   const [requestModalOpen, setRequestModalOpen] = useState(false)
   const [requestJobs, setRequestJobs] = useState([])
   const [requestJobsLoading, setRequestJobsLoading] = useState(false)
@@ -137,11 +153,10 @@ export default function OemPartsCatalogPreview() {
     setLoading(true); setPageError('')
     try {
       const results = await searchOemEntries(term, { manualId: manualFilter === 'all' ? undefined : manualFilter, country: activeCountry, limit: 120 })
-      const applicable = selectedAsset ? new Set(manuals.filter((manual) => normalizeManualForAsset(manual, selectedAsset)).map((manual) => manual.id)) : null
-      setEntries(applicable ? results.filter((row) => applicable.has(row.manual_id)) : results)
+      setEntries(results)
     } catch (error) { setEntries([]); setPageError(toUserMessage(error, 'Part search failed.')) }
     finally { setLoading(false) }
-  }, [query, manualFilter, activeCountry, selectedAsset, manuals])
+  }, [query, manualFilter, activeCountry])
   useEffect(() => {
     const timer = setTimeout(searchParts, 250)
     return () => clearTimeout(timer)
@@ -165,12 +180,15 @@ export default function OemPartsCatalogPreview() {
     }
     return assetQuery.trim() ? chassisManualMatches : manuals
   }, [selectedAsset, manualsForAsset, chassisManualMatches, assetQuery, manuals])
+  // ROOT CAUSE of "index 17 beside callouts 1 and 2": rows were grouped by illustration PAGE only, so
+  // every parts table that shares a figure page was merged into one list. A group is now one parts
+  // table (its assembly heading on that drawing page); continuation pages with the same heading merge.
   const illustrationGroups = useMemo(() => {
     const groups = new Map()
     for (const row of browseRows) {
       const page = row.illustration_pdf_page || null
-      const key = page ? String(page) : 'unlinked'
-      if (!groups.has(key)) groups.set(key, { page, rows: [], headings: new Set(), sourcePages: new Set(), printedPages: new Set() })
+      const key = groupKeyOf(row)
+      if (!groups.has(key)) groups.set(key, { key, page, rows: [], headings: new Set(), sourcePages: new Set(), printedPages: new Set() })
       const group = groups.get(key)
       group.rows.push(row)
       if (row.assembly_heading) group.headings.add(row.assembly_heading)
@@ -183,7 +201,7 @@ export default function OemPartsCatalogPreview() {
       sourcePages: [...group.sourcePages].sort((a, b) => a - b),
       printedPages: [...group.printedPages],
       label: [...group.headings][0] || (group.page ? `Illustration page ${group.page}` : 'Parts without a linked illustration'),
-    })).sort((a, b) => (a.page || Number.MAX_SAFE_INTEGER) - (b.page || Number.MAX_SAFE_INTEGER))
+    })).sort((a, b) => (a.page || Number.MAX_SAFE_INTEGER) - (b.page || Number.MAX_SAFE_INTEGER) || (a.sourcePages[0] || 0) - (b.sourcePages[0] || 0))
   }, [browseRows])
   const assemblyCategories = useMemo(() => [...new Set(illustrationGroups.flatMap((group) => group.headings))].sort((a, b) => a.localeCompare(b)), [illustrationGroups])
   const filteredIllustrations = useMemo(() => illustrationGroups.filter((group) => {
@@ -192,9 +210,23 @@ export default function OemPartsCatalogPreview() {
     const textMatch = !needle || [group.label, group.page, ...group.headings, ...group.printedPages].join(' ').toLowerCase().includes(needle)
     return categoryMatch && textMatch
   }), [illustrationGroups, assemblyFilter, browseFilter])
-  const activeIllustration = useMemo(() => illustrationGroups.find((group) => group.page === selectedIllustrationPage) || illustrationGroups.find((group) => !group.page && selectedIllustrationPage === 'unlinked') || null, [illustrationGroups, selectedIllustrationPage])
+  const activeIllustration = useMemo(() => illustrationGroups.find((group) => group.key === selectedIllustrationPage) || null, [illustrationGroups, selectedIllustrationPage])
   const selectedIndexRows = useMemo(() => activeIllustration?.rows.filter((row) => normalizeIndex(row.index_no || row.parent_index) === normalizeIndex(selectedIndex)) || [], [activeIllustration, selectedIndex])
 
+  const figuresByManual = useMemo(() => Object.fromEntries(manuals.map((m) => [m.id, m.import_summary?.figures || {}])), [manuals])
+  const ranked = useMemo(() => rankResults(entries, query, { asset: selectedAsset, manuals, figuresByManual, filters: searchFilters }), [entries, query, selectedAsset, manuals, figuresByManual, searchFilters])
+  // The basket survives figure, filter, tab and manual changes, and a reload of the tab.
+  useEffect(() => {
+    try {
+      const slim = selectedParts.map((i) => ({ ...i, manual: { id: i.manual.id, manufacturer: i.manual.manufacturer, model: i.manual.model, generation: i.manual.generation, model_code: i.manual.model_code, model_year_from: i.manual.model_year_from, model_year_to: i.manual.model_year_to, chassis_from: i.manual.chassis_from, chassis_to: i.manual.chassis_to, equipment_no: i.manual.equipment_no, source_file_name: i.manual.source_file_name } }))
+      sessionStorage.setItem(basketKey, JSON.stringify(slim))
+    } catch { /* storage unavailable: the basket still works for this view */ }
+  }, [selectedParts, basketKey])
+  useEffect(() => {
+    let live = true
+    lookupStockByPartNumbers(selectedParts.map((i) => i.row.part_no)).then((s) => { if (live) setBasketStock(s) })
+    return () => { live = false }
+  }, [selectedParts])
   const selectedKeys = useMemo(() => new Set(selectedParts.map((item) => item.key)), [selectedParts])
   const pipeline = useMemo(() => (extraction ? processExtraction(extraction, { model: manualForm.model }) : null), [extraction, manualForm.model])
   const fitmentState = useMemo(() => {
@@ -275,7 +307,7 @@ export default function OemPartsCatalogPreview() {
 
   const openIllustration = async (group, manualOverride = null) => {
     const sourceManual = manualOverride || browseManual
-    setSelectedIllustrationPage(group.page || 'unlinked')
+    setSelectedIllustrationPage(group.key || groupKeyOf(group.rows[0]))
     setSelectedIndex(normalizeIndex(group.rows[0]?.index_no || group.rows[0]?.parent_index))
     setBrowseError('')
     if (!group.page || !sourceManual) return
@@ -375,6 +407,7 @@ export default function OemPartsCatalogPreview() {
         assetNo: selectedAsset?.asset_no || selectedAsset?.fleet_number || null,
         site: selectedAsset?.site || null,
         requestedQty: Number.isFinite(sourceQty) && sourceQty > 0 ? sourceQty : 1,
+        fitment: compatibility(manual, selectedAsset),
       }]
     })
   }
@@ -487,8 +520,8 @@ export default function OemPartsCatalogPreview() {
     </div>}
 
     {tab === 'selection' && <Card className="space-y-3 !p-3">
-      <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-[var(--text-primary)]">Selected OEM parts</h2><p className="text-xs text-[var(--text-muted)]">Collect parts across different assemblies and manuals. Source and figure details stay with each selected row.</p></div><div className="flex gap-2"><button type="button" disabled={!selectedParts.length} onClick={() => setSelectedParts([])} className={`${BUTTON} disabled:opacity-50`}><X size={14}/>Clear list</button><button type="button" disabled={!selectedParts.length} onClick={() => { setRequestError(''); setRequestModalOpen(true) }} className="btn-primary inline-flex min-h-[42px] items-center gap-2 px-3 text-sm disabled:opacity-50"><PackagePlus size={15}/>Add {selectedParts.length || ''} to Parts Requests</button></div></div>
-      {selectedParts.length ? <SelectedPartsTable items={selectedParts} onQty={updateRequestedQty} onRemove={(key) => setSelectedParts((current) => current.filter((row) => row.key !== key))} /> : <div className="grid min-h-52 place-items-center rounded-lg border border-dashed border-[var(--input-border)] p-6 text-center"><div><PackagePlus size={28} className="mx-auto text-[var(--oem-accent-text)]"/><h3 className="mt-3 text-sm font-semibold text-[var(--text-primary)]">No parts selected yet</h3><p className="mt-1 max-w-md text-xs text-[var(--text-muted)]">Browse an illustration, select “Add” beside each OEM row, then continue through other assemblies. Your list stays here while you browse.</p><button type="button" onClick={() => switchTab('browse')} className={`${BUTTON} mt-3`}>Browse catalogs</button></div></div>}
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-[var(--text-primary)]">Selected OEM parts</h2><p className="text-xs text-[var(--text-muted)]">Collect parts across different assemblies and manuals. Source and figure details stay with each selected row.</p></div><div className="flex gap-2"><button type="button" disabled={!selectedParts.length} onClick={() => setConfirmClear(true)} className={`${BUTTON} disabled:opacity-50`}><X size={14}/>{t('oemcatalog.basket.clear')}</button><button type="button" disabled={!selectedParts.length} onClick={() => { setRequestError(''); setRequestModalOpen(true) }} className="btn-primary inline-flex min-h-[42px] items-center gap-2 px-3 text-sm disabled:opacity-50"><PackagePlus size={15}/>Add {selectedParts.length || ''} to Parts Requests</button></div></div>
+      {selectedParts.length ? <SelectedPartsTable stock={basketStock} items={selectedParts} onQty={updateRequestedQty} onRemove={(key) => setSelectedParts((current) => current.filter((row) => row.key !== key))} /> : <div className="grid min-h-52 place-items-center rounded-lg border border-dashed border-[var(--input-border)] p-6 text-center"><div><PackagePlus size={28} className="mx-auto text-[var(--oem-accent-text)]"/><h3 className="mt-3 text-sm font-semibold text-[var(--text-primary)]">No parts selected yet</h3><p className="mt-1 max-w-md text-xs text-[var(--text-muted)]">Browse an illustration, select “Add” beside each OEM row, then continue through other assemblies. Your list stays here while you browse.</p><button type="button" onClick={() => switchTab('browse')} className={`${BUTTON} mt-3`}>Browse catalogs</button></div></div>}
     </Card>}
 
     {tab === 'partSearch' && <div className="space-y-4">
@@ -505,9 +538,14 @@ export default function OemPartsCatalogPreview() {
         {selectedAsset && <p className="text-xs text-[var(--text-muted)]">{manualsForAsset.length ? `${manualsForAsset.length} manual${manualsForAsset.length === 1 ? '' : 's'} match this vehicle’s make and model.` : 'No saved manual matches this vehicle’s make and model yet.'}</p>}
       </Card>
 
+      <div className="oem-filters" role="group" aria-label={t('oemcatalog.filters.title')}>
+        <label>{t('oemcatalog.filters.manufacturer')}<select value={searchFilters.manufacturer} onChange={(e) => setSearchFilters((f) => ({ ...f, manufacturer: e.target.value }))}><option value="">{t('oemcatalog.filters.all')}</option>{[...new Set(manuals.map((m) => m.manufacturer).filter(Boolean))].map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
+        <label>{t('oemcatalog.filters.compat')}<select value={searchFilters.compatibility} onChange={(e) => setSearchFilters((f) => ({ ...f, compatibility: e.target.value }))}><option value="">{t('oemcatalog.filters.all')}</option>{['confirmed', 'model', 'unverified', 'incompatible'].map((c) => <option key={c} value={c}>{t(`oemcatalog.compat.${c}`)}</option>)}</select></label>
+        <label>{t('oemcatalog.filters.category')}<select value={searchFilters.category} onChange={(e) => setSearchFilters((f) => ({ ...f, category: e.target.value }))}><option value="">{t('oemcatalog.filters.all')}</option>{Object.keys(STANDARD_LABELS).map((c) => <option key={c} value={c}>{t(`oemcatalog.category.${c}`)}</option>)}</select></label>
+      </div>
       <Card pad="none" className="overflow-hidden">
         <div className="flex items-center justify-between gap-3 border-b border-[var(--input-border)] px-4 py-3"><div><h2 className="text-sm font-semibold text-[var(--text-primary)]">OEM parts master</h2><p className="mt-1 text-xs text-[var(--text-muted)]">{query.trim().length >= 2 ? `${entries.length} result${entries.length === 1 ? '' : 's'} shown` : `${manuals.reduce((sum, m) => sum + (m.item_count || 0), 0).toLocaleString()} searchable entries across ${manuals.length} manuals`}</p></div>{catalogLoading && <Loader2 size={17} className="animate-spin text-[var(--oem-accent-text)]"/>}</div>
-        {loading ? <div className="grid min-h-40 place-items-center text-sm text-[var(--text-muted)]"><Loader2 className="animate-spin" size={20}/></div> : entries.length ? <SearchResultsTable entries={entries} selectedKeys={selectedKeys} onView={browseFromPart} onAdd={(row) => addPartToSelection(row, row.manual, { label: row.assembly_heading || 'Figure not linked', page: row.illustration_pdf_page, rows: [row], sourcePages: [row.source_pdf_page] })} /> : <div className="grid min-h-48 place-items-center px-5 text-center"><div><FileSearch size={24} className="mx-auto text-[var(--text-muted)]"/><p className="mt-3 text-sm font-medium text-[var(--text-primary)]">{manuals.length ? 'Search by any part number to find it in the OEM manuals' : 'No OEM manuals saved yet'}</p><p className="mt-1 text-xs text-[var(--text-muted)]">Upload a PDF once. Tyre Pulse stores its parts rows and private source document for future searches.</p>{!manuals.length && <button type="button" onClick={() => switchTab('import')} className={`${BUTTON} mt-4`}><Upload size={15}/>Import first manual</button>}</div></div>}
+        {loading ? <div className="grid min-h-40 place-items-center text-sm text-[var(--text-muted)]"><Loader2 className="animate-spin" size={20}/></div> : entries.length ? <SearchResultsTable entries={ranked} selectedKeys={selectedKeys} onView={browseFromPart} onAdd={(row) => addPartToSelection(row, row.manual, { label: row.assembly_heading || 'Figure not linked', page: row.illustration_pdf_page, rows: [row], sourcePages: [row.source_pdf_page] })} /> : <div className="grid min-h-48 place-items-center px-5 text-center"><div><FileSearch size={24} className="mx-auto text-[var(--text-muted)]"/><p className="mt-3 text-sm font-medium text-[var(--text-primary)]">{manuals.length ? 'Search by any part number to find it in the OEM manuals' : 'No OEM manuals saved yet'}</p><p className="mt-1 text-xs text-[var(--text-muted)]">Upload a PDF once. Tyre Pulse stores its parts rows and private source document for future searches.</p>{!manuals.length && <button type="button" onClick={() => switchTab('import')} className={`${BUTTON} mt-4`}><Upload size={15}/>Import first manual</button>}</div></div>}
       </Card>
     </div>}
 
@@ -515,6 +553,8 @@ export default function OemPartsCatalogPreview() {
       <div className="flex items-center justify-between border-b border-[var(--input-border)] px-4 py-3"><div><h2 className="text-sm font-semibold text-[var(--text-primary)]">Saved OEM manuals</h2><p className="mt-1 text-xs text-[var(--text-muted)]">Each PDF is stored once. Its extracted rows remain available in the master search.</p></div><button type="button" onClick={() => switchTab('import')} className={BUTTON}><Upload size={15}/>Import PDF</button></div>
       {catalogLoading ? <div className="grid min-h-40 place-items-center"><Loader2 className="animate-spin text-[var(--oem-accent-text)]"/></div> : manuals.length ? <div className="divide-y divide-[var(--input-border)]">{manuals.map((manual) => <div key={manual.id} className="flex flex-wrap items-center justify-between gap-4 px-4 py-4"><div><div className="font-semibold text-[var(--text-primary)]">{manual.manufacturer} · {manual.model}{manual.generation ? ` · ${manual.generation}` : ''}</div><div className="mt-1 text-xs text-[var(--text-muted)]">{[manual.model_code && `Model code ${manual.model_code}`, (manual.model_year_from || manual.model_year_to) && `Years ${manual.model_year_from || '—'}–${manual.model_year_to || '—'}`,manual.equipment_no && `Equipment ${manual.equipment_no}`,manual.chassis_from && `Chassis ${manual.chassis_from}${manual.chassis_to ? `–${manual.chassis_to}` : ''}`].filter(Boolean).join(' · ') || manual.source_file_name}</div><div className="mt-1 text-xs text-[var(--text-muted)]">{manual.item_count.toLocaleString()} entries · {manual.page_count} PDF pages · {manual.extraction_status.replace('_',' ')}</div></div><div className="flex min-w-0 items-center gap-3"><span className="max-w-[280px] truncate text-xs text-[var(--text-muted)]">{manual.source_file_name}</span><button type="button" onClick={() => { switchTab('browse'); selectBrowseManual(manual) }} className={`${BUTTON} min-h-9 text-xs`}><BookOpen size={14}/>Browse this catalog</button></div></div>)}</div> : <div className="p-8 text-center text-sm text-[var(--text-muted)]">No manuals imported.</div>}
     </Card>}
+
+    <Modal open={confirmClear} onClose={() => setConfirmClear(false)} title={t('oemcatalog.basket.clearTitle')} size="sm" footer={<div className="flex justify-end gap-2"><button type="button" className={BUTTON} onClick={() => setConfirmClear(false)}>{t('oemcatalog.basket.keep')}</button><button type="button" className="btn-primary min-h-[42px] px-3 text-sm" onClick={() => { setSelectedParts([]); setConfirmClear(false) }}>{t('oemcatalog.basket.clearYes', { count: selectedParts.length })}</button></div>}><p className="text-sm text-[var(--text-secondary)]">{t('oemcatalog.basket.clearBody')}</p></Modal>
 
     {tab === 'review' && canManage && <div className="space-y-3">
       <label className="oem-field"><span>{t('oemcatalog.review.manual')}</span><select value={reviewManualId} onChange={(e) => setReviewManualId(e.target.value)}><option value="">-</option>{manuals.map((m) => <option key={m.id} value={m.id}>{m.manufacturer} {m.model}</option>)}</select></label>

@@ -121,7 +121,7 @@ export default function OemCatalogViewer({
                 <div key={a} className="oem-nav-group">
                   {hasAreas && <h3>{t(`oemcatalog.area.${a}`)} <span>{grouped[a].length}</span></h3>}
                   {windowed(grouped[a], navTop, grouped, a).map((g) => g.spacer ? <div key={g.key} style={{ height: g.spacer }} aria-hidden="true" /> : (
-                    <button key={g.page || 'unlinked'} type="button" className="oem-nav-item" aria-current={g === activeGroup ? 'true' : undefined} onClick={() => onOpenGroup(g)}>
+                    <button key={g.key || `${g.page}-${g.printedPages[0]}`} type="button" className="oem-nav-item" aria-current={g === activeGroup ? 'true' : undefined} onClick={() => onOpenGroup(g)}>
                       <span>{g.label}</span>
                       <small dir="ltr">{g.printedPages[0] || (g.page ? `PDF ${g.page}` : t('oemcatalog.assemblies.unlinked'))} · {g.rows.length}</small>
                     </button>

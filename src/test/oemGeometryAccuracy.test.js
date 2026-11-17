@@ -112,6 +112,7 @@ describe('geometry engine accuracy (synthetic ground truth)', () => {
     const [a, b] = out.figures
     expect(a.crop.x1).toBeLessThanOrEqual(b.bbox.x0)
     expect(b.crop.x0).toBeGreaterThanOrEqual(a.bbox.x1)
+    for (const f of [a, b]) for (const c of f.callouts) expect(c.y + 8).toBeLessThanOrEqual(f.crop.y1)
   })
 })
 

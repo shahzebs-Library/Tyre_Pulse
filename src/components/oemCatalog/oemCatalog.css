@@ -1,5 +1,5 @@
 /* OEM illustrated parts catalog viewer. Brand green marks selection and confirmation only; everything else is neutral. */
-.oem-viewer, .oem-review, .oem-page {
+.oem-viewer {
   --oem-ink: #161616;
   --oem-select: var(--brand);
   --oem-select-fill: color-mix(in srgb, var(--brand) 78%, #000);
@@ -155,3 +155,14 @@ html.light .oem-note-error { color: #b42318; }
 .oem-form label, .oem-form-row { display: grid; gap: 3px; font-size: 11px; color: var(--text-muted); }
 .oem-form-row fieldset { border: 0; padding: 0; }
 @media (max-width: 1023px) { .oem-review { grid-template-columns: minmax(0, 1fr); height: auto; } .oem-review .oem-card { max-height: 70vh; } }
+
+.oem-review, .oem-page { --oem-ink: #161616; --oem-select: var(--brand); --oem-select-fill: color-mix(in srgb, var(--brand) 78%, #000); --oem-select-tint: color-mix(in srgb, var(--brand) 16%, transparent); }
+
+.oem-why { display: flex; flex-wrap: wrap; gap: 4px; margin: 3px 0; }
+.oem-why span { font-size: 10px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--input-border); color: var(--text-secondary); }
+.oem-filters { display: flex; flex-wrap: wrap; gap: 8px 12px; font-size: 11px; color: var(--text-muted); }
+.oem-filters label { display: grid; gap: 3px; }
+.oem-filters select { min-height: 36px; border: 1px solid var(--input-border); border-radius: 8px; background: var(--panel-2); color: var(--text-primary); padding-inline: 8px; }
+
+.oem-add { white-space: nowrap; width: 80px; }
+.oem-add button { display: inline-grid; place-items: center; }

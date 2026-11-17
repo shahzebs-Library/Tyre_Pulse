@@ -1,7 +1,7 @@
 -- Staging verification for 20261117120000_error_center_status_history.sql (rolled back, never commits).
 -- The migration's own begin/commit must be stripped first so everything stays in this one rolled-back
 -- transaction:
---   sed '/^begin;$/d;/^commit;$/d' supabase/pending_migrations/20261117120000_error_center_status_history.sql > /tmp/ec_body.sql
+--   sed '/^begin;$/d;/^commit;$/d' supabase/migrations/20261117120000_error_center_status_history.sql > /tmp/ec_body.sql
 --   psql -d tp_mirror2 -At -F ' | ' -f supabase/tests/error_center_status_history.staging.sql
 -- Expected results are listed at the end of this file.
 \set ON_ERROR_STOP 1

@@ -1,6 +1,9 @@
 -- =====================================================================================================
 -- 20261117120000_error_center_status_history.sql
--- STATUS: AUTHORED, NOT APPLIED. Needs the owner's approval before it is applied to production.
+-- STATUS: APPLIED to production 2026-11-17 (owner approved). Recorded in the ledger as `error_center_status_history`.
+-- Applied with the DROP ... IF EXISTS lines omitted (none of these objects existed). Verified after: audit logs and
+-- business records byte-identical to the pre-apply baseline; permissions and recurrence checked as real roles, rolled back.
+-- Backup of the 4 replaced functions and the triage table: _bak.err_center_20261117_fn, _bak.err_center_20261117_state.
 --
 -- WHY
 --   System Health's Resolve button and its CSV/Excel export used system_logs.resolved. system_logs is

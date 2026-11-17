@@ -42,7 +42,7 @@ describe('error status (Error Center triage is the single source)', () => {
   })
 
   it('SQL and JS agree on which statuses are open', () => {
-    const sql = readFileSync(resolve(__dirname, '../../supabase/pending_migrations/20261117120000_error_center_status_history.sql'), 'utf8')
+    const sql = readFileSync(resolve(__dirname, '../../supabase/migrations/20261117120000_error_center_status_history.sql'), 'utf8')
     const opens = [...sql.matchAll(/in \('for_review', 'reviewed'\)/g)]
     expect(opens.length).toBeGreaterThanOrEqual(4)
     expect([...OPEN_STATUSES]).toEqual(['for_review', 'reviewed'])

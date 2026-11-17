@@ -13,7 +13,7 @@ const ZOOM_STEPS = [0.6, 0.8, 1, 1.25, 1.6, 2, 2.6, 3.2]
 
 /**
  * The exploded OEM drawing: renders one PDF page, overlays clickable callouts,
- * zoom, fullscreen, figure paging and an overview thumbnail with a yellow box
+ * zoom, fullscreen, figure paging and an overview thumbnail with a green box
  * showing the part of the drawing currently in view.
  */
 export default function OemFigure({ pdfDoc, pageNo, rows, selectedIndex, onSelectIndex, figureLabel, position, onPrev, onNext, calloutNote }) {

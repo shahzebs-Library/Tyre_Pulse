@@ -4,7 +4,7 @@ import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import {
   ArrowLeft, BookOpen, CheckCircle2, FileSearch,
-  FileText, Loader2, Search, Upload, X,
+  Loader2, Search, Upload,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Card from '../components/ui/Card'
@@ -22,44 +22,6 @@ const assetText = (asset) => [asset.asset_no, asset.fleet_number, asset.make, as
 
 function Field({ label, value, onChange, placeholder, required = false }) {
   return <label className="block"><span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">{label}{required ? ' *' : ''}</span><input required={required} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className={INPUT} /></label>
-}
-
-function OemPdfSheet({ pdfDoc, pageNo, title }) {
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
-  const canvasRef = useRef(null)
-  const hostRef = useRef(null)
-  useEffect(() => {
-    let cancelled = false
-    let task
-    async function draw() {
-      if (!pdfDoc || !canvasRef.current || !hostRef.current) return
-      setBusy(true); setError('')
-      try {
-        const page = await pdfDoc.getPage(pageNo)
-        const natural = page.getViewport({ scale: 1 })
-        const scale = Math.min(1.5, Math.max(0.3, (hostRef.current.clientWidth - 32) / natural.width))
-        const viewport = page.getViewport({ scale })
-        const ratio = Math.min(window.devicePixelRatio || 1, 2)
-        const canvas = canvasRef.current
-        canvas.width = Math.floor(viewport.width * ratio)
-        canvas.height = Math.floor(viewport.height * ratio)
-        canvas.style.width = `${viewport.width}px`
-        canvas.style.height = `${viewport.height}px`
-        task = page.render({ canvasContext: canvas.getContext('2d', { alpha: false }), viewport, transform: ratio === 1 ? null : [ratio, 0, 0, ratio, 0, 0] })
-        await task.promise
-      } catch (err) {
-        if (err?.name !== 'RenderingCancelledException' && !cancelled) setError(toUserMessage(err, 'This PDF page could not be displayed.'))
-      } finally { if (!cancelled) setBusy(false) }
-    }
-    draw()
-    return () => { cancelled = true; task?.cancel() }
-  }, [pdfDoc, pageNo])
-  if (!pdfDoc) return null
-  return <div className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-slate-900">
-    <div className="flex min-h-11 items-center justify-between gap-2 border-b border-white/10 px-3"><span className="truncate text-xs font-semibold text-white">{title} · PDF page {pageNo}</span>{busy && <Loader2 className="animate-spin text-yellow-400" size={14}/>}</div>
-    <div ref={hostRef} className="min-h-0 flex-1 overflow-auto p-3"><div className="mx-auto grid min-h-full place-items-start justify-center"><canvas ref={canvasRef} className="max-w-none bg-white shadow-xl"/>{error && <p role="alert" className="mt-3 text-xs text-red-300">{error}</p>}</div></div>
-  </div>
 }
 
 function OemIllustrationCanvas({ pdfDoc, pageNo, rows, selectedIndex, onSelectIndex }) {
@@ -110,21 +72,6 @@ function OemIllustrationCanvas({ pdfDoc, pageNo, rows, selectedIndex, onSelectIn
   return <div className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-slate-900">
     <div className="flex min-h-11 items-center justify-between gap-2 border-b border-white/10 px-3"><span className="truncate text-xs font-semibold text-white">OEM illustration · PDF page {pageNo}</span><span className="text-[11px] text-slate-400">Click a numbered callout</span>{busy && <Loader2 className="animate-spin text-yellow-400" size={14}/>}</div>
     <div ref={hostRef} className="min-h-0 flex-1 overflow-auto p-3"><div className="relative mx-auto bg-white shadow-xl" style={{ width: canvasSize.width || '100%', height: canvasSize.height || 'auto' }}><canvas ref={canvasRef} className="block max-w-none"/>{callouts.map((marker) => <button key={marker.id} type="button" title={`Show parts for index ${marker.index}`} aria-label={`Show parts for index ${marker.index}`} onClick={() => onSelectIndex(marker.index)} className={`absolute z-10 grid h-7 min-w-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 px-1 text-xs font-extrabold shadow-lg ${selectedIndex === marker.index ? 'border-white bg-emerald-500 text-white ring-2 ring-emerald-300' : 'border-slate-950 bg-yellow-300 text-slate-950 hover:scale-110'}`} style={{ left: marker.x, top: marker.y }}>{marker.index}</button>)}</div>{error && <p role="alert" className="mt-3 text-xs text-red-300">{error}</p>}{!busy && !error && callouts.length === 0 && <p className="mt-2 text-xs text-slate-400">The PDF does not expose clickable text callouts on this page. Choose the matching index from the parts list beside the drawing.</p>}</div>
-  </div>
-}
-
-function PageCanvas({ pdfDoc, entry, onClose }) {
-  if (!pdfDoc) return null
-  const drawingPage = entry.illustration_pdf_page || null
-  return <div className="fixed inset-0 z-[100] flex flex-col bg-slate-950/95" role="dialog" aria-modal="true" aria-label="OEM illustration and indexed parts list">
-    <div className="flex min-h-16 items-center justify-between gap-3 border-b border-white/10 px-4">
-      <div className="min-w-0"><div className="truncate text-sm font-semibold text-white">{entry.manual?.manufacturer} {entry.manual?.model} · {entry.part_no}</div><div className="mt-0.5 truncate text-xs text-slate-400">Index {entry.index_no || entry.parent_index || '—'} · {entry.description}</div></div>
-      <button className={BUTTON} onClick={onClose} aria-label="Close manual"><X size={17}/>Close</button>
-    </div>
-    <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-auto p-3 lg:grid-cols-2 lg:p-4">
-      {drawingPage ? <OemPdfSheet pdfDoc={pdfDoc} pageNo={drawingPage} title={`Illustration ${entry.see_page || ''}`}/> : <div className="grid min-h-64 place-items-center rounded-xl border border-white/10 bg-slate-900 p-5 text-center text-sm text-slate-300">No printed drawing-page reference was found for this item. The source parts-list page is shown beside this panel.</div>}
-      <OemPdfSheet pdfDoc={pdfDoc} pageNo={entry.source_pdf_page} title="Indexed parts list"/>
-    </div>
   </div>
 }
 
@@ -185,12 +132,11 @@ export default function OemPartsCatalogPreview() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [saveNotice, setSaveNotice] = useState('')
-  const [viewer, setViewer] = useState(null)
-  const [viewPdfDoc, setViewPdfDoc] = useState(null)
   const [browseManual, setBrowseManual] = useState(null)
   const [browseRows, setBrowseRows] = useState([])
   const [browseLoading, setBrowseLoading] = useState(false)
   const [browsePdfDoc, setBrowsePdfDoc] = useState(null)
+  const [browsePdfManualId, setBrowsePdfManualId] = useState(null)
   const [browseError, setBrowseError] = useState('')
   const [assemblyFilter, setAssemblyFilter] = useState('all')
   const [selectedIllustrationPage, setSelectedIllustrationPage] = useState(null)
@@ -208,7 +154,6 @@ export default function OemPartsCatalogPreview() {
   }, [activeCountry])
   useEffect(() => { refreshManuals() }, [refreshManuals])
   useEffect(() => () => { if (pdfDoc) pdfDoc.destroy() }, [pdfDoc])
-  useEffect(() => () => { if (viewPdfDoc) viewPdfDoc.destroy() }, [viewPdfDoc])
   useEffect(() => () => { if (browsePdfDoc) browsePdfDoc.destroy() }, [browsePdfDoc])
 
   const searchParts = useCallback(async () => {
@@ -325,7 +270,7 @@ export default function OemPartsCatalogPreview() {
 
   const selectBrowseManual = async (manual) => {
     setBrowseManual(manual)
-    setBrowseRows([]); setBrowsePdfDoc(null); setBrowseError('')
+    setBrowseRows([]); setBrowsePdfDoc(null); setBrowsePdfManualId(null); setBrowseError('')
     setAssemblyFilter('all'); setBrowseFilter(''); setSelectedIllustrationPage(null); setSelectedIndex('')
     setBrowseLoading(true)
     try {
@@ -336,15 +281,19 @@ export default function OemPartsCatalogPreview() {
     finally { setBrowseLoading(false) }
   }
 
-  const openIllustration = async (group) => {
+  const openIllustration = async (group, manualOverride = null) => {
+    const sourceManual = manualOverride || browseManual
     setSelectedIllustrationPage(group.page || 'unlinked')
-    setSelectedIndex(String(group.rows[0]?.index_no || group.rows[0]?.parent_index || ''))
+    setSelectedIndex(normalizeIndex(group.rows[0]?.index_no || group.rows[0]?.parent_index))
     setBrowseError('')
-    if (!group.page || browsePdfDoc || !browseManual) return
+    if (!group.page || !sourceManual) return
+    if (browsePdfDoc && browsePdfManualId === sourceManual.id) return
+    setBrowsePdfDoc(null)
     try {
-      const url = await getOemPdfSignedUrl(browseManual.id)
+      const url = await getOemPdfSignedUrl(sourceManual.id)
       const doc = await pdfjsLib.getDocument({ url }).promise
       setBrowsePdfDoc(doc)
+      setBrowsePdfManualId(sourceManual.id)
     } catch (error) { setBrowseError(toUserMessage(error, 'Could not open the saved source PDF.')) }
   }
 
@@ -388,13 +337,19 @@ export default function OemPartsCatalogPreview() {
     finally { setSaving(false) }
   }
 
-  const openManual = async (entry) => {
-    setViewer(entry); setViewPdfDoc(null)
+  const browseFromPart = async (entry) => {
+    const manual = manuals.find((item) => item.id === entry.manual_id) || entry.manual
+    if (!manual?.id) {
+      setPageError('The source OEM manual could not be found for this part.')
+      return
+    }
+    setTab('browse'); setPageError('')
     try {
-      const url = await getOemPdfSignedUrl(entry.manual_id)
-      const doc = await pdfjsLib.getDocument({ url }).promise
-      setViewPdfDoc(doc)
-    } catch (error) { setPageError(toUserMessage(error, 'Could not open this stored OEM manual.')); setViewer(null) }
+      if (browseManual?.id !== manual.id) await selectBrowseManual(manual)
+      const group = { page: entry.illustration_pdf_page || null, rows: [entry] }
+      await openIllustration(group, manual)
+      setSelectedIndex(normalizeIndex(entry.index_no || entry.parent_index))
+    } catch (error) { setBrowseError(toUserMessage(error, 'Could not open the interactive OEM illustration.')) }
   }
 
   const switchTab = (value) => { setTab(value); setPageError(''); setSaveError('') }
@@ -416,18 +371,18 @@ export default function OemPartsCatalogPreview() {
           <input value={assetQuery} onChange={(e) => setAssetQuery(e.target.value)} onFocus={() => { if (!assetRows.length) searchAssets() }} className={INPUT} placeholder="Type chassis number, VIN or fleet number" aria-label="Find vehicle by chassis, VIN or fleet number"/>
           <button type="button" onClick={searchAssets} className={BUTTON} disabled={assetsLoading}><Search size={15}/>{assetsLoading ? 'Loading fleet…' : 'Search fleet'}</button>
         </div>
-        {selectedAsset ? <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-yellow-400/30 bg-yellow-400/5 p-3"><span className="text-sm text-[var(--text-primary)]">{searchableAssetResult(selectedAsset)}</span><button type="button" className="text-xs text-yellow-300" onClick={() => { setSelectedAsset(null); setBrowseManual(null); setBrowseRows([]); setSelectedIllustrationPage(null); setBrowsePdfDoc(null) }}>Change vehicle</button></div> : matchingAssets.length > 0 ? <div className="overflow-hidden rounded-lg border border-[var(--input-border)]">{matchingAssets.map((asset) => <button type="button" key={asset.id} onClick={() => { applyAssetFitment(asset); setBrowseManual(null); setBrowseRows([]); setSelectedIllustrationPage(null); setBrowsePdfDoc(null) }} className="block min-h-11 w-full border-b border-[var(--input-border)] px-3 py-2 text-left text-sm last:border-0 hover:bg-[var(--panel-2)]">{searchableAssetResult(asset)}</button>)}</div> : null}
+        {selectedAsset ? <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-yellow-400/30 bg-yellow-400/5 p-3"><span className="text-sm text-[var(--text-primary)]">{searchableAssetResult(selectedAsset)}</span><button type="button" className="text-xs text-yellow-300" onClick={() => { setSelectedAsset(null); setBrowseManual(null); setBrowseRows([]); setSelectedIllustrationPage(null); setBrowsePdfDoc(null); setBrowsePdfManualId(null) }}>Change vehicle</button></div> : matchingAssets.length > 0 ? <div className="overflow-hidden rounded-lg border border-[var(--input-border)]">{matchingAssets.map((asset) => <button type="button" key={asset.id} onClick={() => { applyAssetFitment(asset); setBrowseManual(null); setBrowseRows([]); setSelectedIllustrationPage(null); setBrowsePdfDoc(null); setBrowsePdfManualId(null) }} className="block min-h-11 w-full border-b border-[var(--input-border)] px-3 py-2 text-left text-sm last:border-0 hover:bg-[var(--panel-2)]">{searchableAssetResult(asset)}</button>)}</div> : null}
       </Card>
 
       <Card className="space-y-4">
-        <div className="flex flex-wrap items-end justify-between gap-3"><div><div className="text-sm font-semibold text-[var(--text-primary)]">2. Choose the matching OEM catalog</div><p className="mt-1 text-xs text-[var(--text-muted)]">{selectedAsset ? (browseManualOptions.length ? 'Catalogs matching this vehicle are shown first.' : 'No saved catalog matches this vehicle yet.') : `${manuals.length} saved manuals available. Search above by chassis or choose a catalog below.`}</p></div>{browseManual && <button type="button" className="text-xs text-yellow-300" onClick={() => { setBrowseManual(null); setBrowseRows([]); setBrowsePdfDoc(null); setSelectedIllustrationPage(null) }}>Choose another manual</button>}</div>
+        <div className="flex flex-wrap items-end justify-between gap-3"><div><div className="text-sm font-semibold text-[var(--text-primary)]">2. Choose the matching OEM catalog</div><p className="mt-1 text-xs text-[var(--text-muted)]">{selectedAsset ? (browseManualOptions.length ? 'Catalogs matching this vehicle are shown first.' : 'No saved catalog matches this vehicle yet.') : `${manuals.length} saved manuals available. Search above by chassis or choose a catalog below.`}</p></div>{browseManual && <button type="button" className="text-xs text-yellow-300" onClick={() => { setBrowseManual(null); setBrowseRows([]); setBrowsePdfDoc(null); setBrowsePdfManualId(null); setSelectedIllustrationPage(null) }}>Choose another manual</button>}</div>
         {!browseManual && <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {browseManualOptions.map((manual) => <button type="button" key={manual.id} onClick={() => selectBrowseManual(manual)} className="rounded-xl border border-[var(--input-border)] bg-[var(--panel-2)] p-4 text-left transition hover:border-yellow-400/60 hover:bg-yellow-400/5"><div className="font-semibold text-[var(--text-primary)]">{manual.manufacturer} · {manual.model}{manual.generation ? ` · ${manual.generation}` : ''}</div><div className="mt-1 text-xs text-[var(--text-muted)]">{[manual.model_code || manual.source_file_name, (manual.model_year_from || manual.model_year_to) && `Model years ${manual.model_year_from || '—'}–${manual.model_year_to || '—'}`].filter(Boolean).join(' · ')}</div><div className="mt-1 text-xs text-[var(--text-muted)]">Chassis / equipment: {manual.equipment_no || 'not specified'}</div><div className="mt-3 flex items-center justify-between gap-2"><span className="text-xs text-[var(--text-secondary)]">{Number(manual.item_count || 0).toLocaleString()} indexed part rows</span><span className="text-xs font-semibold text-yellow-300">Browse illustrations →</span></div></button>)}
           </div>
           {selectedAsset && browseManualOptions.length === 0 && <p className="rounded-lg border border-amber-400/30 bg-amber-400/5 p-3 text-sm text-amber-200">No manual is linked to this make/model or chassis yet. Import its OEM PDF once, then return here to browse it.</p>}
         </>}
-        {browseManual && <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3"><div className="font-semibold text-[var(--text-primary)]">{browseManual.manufacturer} · {browseManual.model}</div><div className="mt-1 text-xs text-[var(--text-muted)]">Equipment / chassis {browseManual.equipment_no || 'not recorded'} · {Number(browseManual.item_count || 0).toLocaleString()} saved rows</div></div>}
+      {browseManual && <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3"><div className="font-semibold text-[var(--text-primary)]">{browseManual.manufacturer} · {browseManual.model}{browseManual.generation ? ` · ${browseManual.generation}` : ''}</div><div className="mt-1 text-xs text-[var(--text-muted)]">{browseManual.model_year_from || browseManual.model_year_to ? `Model years ${browseManual.model_year_from || '—'}–${browseManual.model_year_to || '—'} · ` : ''}Equipment / chassis {browseManual.equipment_no || 'not recorded'} · {Number(browseManual.item_count || 0).toLocaleString()} saved rows</div></div>}
       </Card>
 
       {browseManual && <Card className="space-y-4">
@@ -442,7 +397,7 @@ export default function OemPartsCatalogPreview() {
 
       {browseManual && activeIllustration && <Card className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2"><div><div className="text-sm font-semibold text-[var(--text-primary)]">4. Select a callout to get its parts</div><p className="mt-1 text-xs text-[var(--text-muted)]">{activeIllustration.label} · {activeIllustration.page ? `OEM PDF page ${activeIllustration.page}` : 'No illustration page'} · {activeIllustration.rows.length} linked rows</p></div><button type="button" className={BUTTON} onClick={() => setSelectedIllustrationPage(null)}>Back to illustrations</button></div>
-        {activeIllustration.page && browsePdfDoc ? <div className="grid min-h-[600px] gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(420px,0.9fr)]"><OemIllustrationCanvas pdfDoc={browsePdfDoc} pageNo={activeIllustration.page} rows={activeIllustration.rows} selectedIndex={selectedIndex} onSelectIndex={(value) => setSelectedIndex(normalizeIndex(value))}/><div className="space-y-3 overflow-hidden"><div className="rounded-lg border border-[var(--input-border)] bg-[var(--panel-2)] p-3"><div className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Selected index {selectedIndex || '—'}</div>{selectedIndexRows.length ? <div className="mt-2 space-y-2">{selectedIndexRows.map((row) => <div key={row.id} className="rounded-md border border-[var(--input-border)] bg-[var(--panel)] p-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-mono font-bold text-yellow-300">{row.part_no}</span><span className="text-xs text-[var(--text-muted)]">Qty {row.quantity ?? '—'} · {row.row_type === 'variant' ? `Variant of ${row.parent_index || '—'}` : `Index ${row.index_no || '—'}`}</span></div><div className="mt-1 text-sm text-[var(--text-primary)]">{row.description}</div>{row.remark && <div className="mt-1 text-xs text-[var(--text-secondary)]">{row.remark}</div>}<div className="mt-2 text-[11px] text-[var(--text-muted)]">Source list: PDF page {row.source_pdf_page} · printed page {row.printed_page || '—'}</div><button type="button" className={`${BUTTON} mt-2 min-h-9 text-xs`} onClick={() => openManual({ ...row, manual: { manufacturer: browseManual.manufacturer, model: browseManual.model } })}><FileText size={14}/>Open matching list page</button></div>)}</div> : <p className="mt-2 text-xs text-[var(--text-muted)]">Click a yellow numbered callout on the drawing, or select an index in the parts list below.</p>}</div><div className="max-h-[420px] overflow-auto rounded-lg border border-[var(--input-border)]"><table className="w-full text-left text-xs"><thead className="sticky top-0 bg-[var(--panel-2)] text-[var(--text-muted)]"><tr><th className="px-2 py-2">Index</th><th className="px-2 py-2">Part number</th><th className="px-2 py-2">Description</th><th className="px-2 py-2">Qty</th></tr></thead><tbody>{activeIllustration.rows.map((row) => {const index=normalizeIndex(row.index_no || row.parent_index);return <tr key={row.id} onClick={() => setSelectedIndex(index)} className={`cursor-pointer border-t border-[var(--input-border)] ${index && selectedIndex === index ? 'bg-yellow-400/10' : 'hover:bg-[var(--panel-2)]'}`}><td className="px-2 py-2 font-bold text-[var(--text-primary)]">{index || '—'}</td><td className="px-2 py-2 font-mono text-yellow-300">{row.part_no}</td><td className="px-2 py-2 text-[var(--text-primary)]">{row.description}{row.remark && <span className="block text-[var(--text-muted)]">{row.remark}</span>}</td><td className="px-2 py-2 text-[var(--text-primary)]">{row.quantity ?? '—'}</td></tr>})}</tbody></table></div></div></div> : activeIllustration.page && !browsePdfDoc ? <div className="grid min-h-64 place-items-center rounded-xl border border-[var(--input-border)] text-sm text-[var(--text-muted)]"><div className="text-center"><Loader2 className="mx-auto mb-2 animate-spin text-yellow-400"/>Opening the OEM illustration…</div></div> : <div className="space-y-3"><p className="rounded-lg border border-amber-400/30 bg-amber-400/5 p-4 text-sm text-amber-200">No illustration page was linked for these rows. The extracted part records remain available below, with their source pages.</p><div className="max-h-[520px] overflow-auto rounded-lg border border-[var(--input-border)]"><table className="w-full text-left text-xs"><thead className="sticky top-0 bg-[var(--panel-2)] text-[var(--text-muted)]"><tr><th className="px-2 py-2">Index</th><th className="px-2 py-2">Part number</th><th className="px-2 py-2">Description</th><th className="px-2 py-2">Qty</th><th className="px-2 py-2">Source page</th><th className="px-2 py-2">Action</th></tr></thead><tbody>{activeIllustration.rows.map((row) => <tr key={row.id} className="border-t border-[var(--input-border)]"><td className="px-2 py-2 text-[var(--text-primary)]">{row.index_no || row.parent_index || '—'}</td><td className="px-2 py-2 font-mono text-yellow-300">{row.part_no}</td><td className="px-2 py-2 text-[var(--text-primary)]">{row.description}{row.remark && <span className="block text-[var(--text-muted)]">{row.remark}</span>}</td><td className="px-2 py-2 text-[var(--text-primary)]">{row.quantity ?? '—'}</td><td className="px-2 py-2 text-[var(--text-primary)]">{row.source_pdf_page}</td><td className="px-2 py-2"><button type="button" className={`${BUTTON} min-h-9 text-xs`} onClick={() => openManual({ ...row, manual: { manufacturer: browseManual.manufacturer, model: browseManual.model } })}><FileText size={14}/>Open source page</button></td></tr>)}</tbody></table></div></div>}
+        {activeIllustration.page && browsePdfDoc ? <div className="grid min-h-[600px] gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(420px,0.9fr)]"><OemIllustrationCanvas pdfDoc={browsePdfDoc} pageNo={activeIllustration.page} rows={activeIllustration.rows} selectedIndex={selectedIndex} onSelectIndex={(value) => setSelectedIndex(normalizeIndex(value))}/><div className="space-y-3 overflow-hidden"><div className="rounded-lg border border-[var(--input-border)] bg-[var(--panel-2)] p-3"><div className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Selected index {selectedIndex || '—'}</div>{selectedIndexRows.length ? <div className="mt-2 space-y-2">{selectedIndexRows.map((row) => <div key={row.id} className="rounded-md border border-[var(--input-border)] bg-[var(--panel)] p-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-mono font-bold text-yellow-300">{row.part_no}</span><span className="text-xs text-[var(--text-muted)]">Qty {row.quantity ?? '—'} · {row.row_type === 'variant' ? `Variant of ${row.parent_index || '—'}` : `Index ${row.index_no || '—'}`}</span></div><div className="mt-1 text-sm text-[var(--text-primary)]">{row.description}</div>{row.remark && <div className="mt-1 text-xs text-[var(--text-secondary)]">{row.remark}</div>}<div className="mt-2 text-[11px] text-[var(--text-muted)]">Source list: PDF page {row.source_pdf_page} · printed page {row.printed_page || '—'}</div></div>)}</div> : <p className="mt-2 text-xs text-[var(--text-muted)]">Click a yellow numbered callout on the drawing, or select an index in the parts list below.</p>}</div><div className="max-h-[420px] overflow-auto rounded-lg border border-[var(--input-border)]"><table className="w-full text-left text-xs"><thead className="sticky top-0 bg-[var(--panel-2)] text-[var(--text-muted)]"><tr><th className="px-2 py-2">Index</th><th className="px-2 py-2">Part number</th><th className="px-2 py-2">Description</th><th className="px-2 py-2">Qty</th></tr></thead><tbody>{activeIllustration.rows.map((row) => {const index=normalizeIndex(row.index_no || row.parent_index);return <tr key={row.id} onClick={() => setSelectedIndex(index)} className={`cursor-pointer border-t border-[var(--input-border)] ${index && selectedIndex === index ? 'bg-yellow-400/10' : 'hover:bg-[var(--panel-2)]'}`}><td className="px-2 py-2 font-bold text-[var(--text-primary)]">{index || '—'}</td><td className="px-2 py-2 font-mono text-yellow-300">{row.part_no}</td><td className="px-2 py-2 text-[var(--text-primary)]">{row.description}{row.remark && <span className="block text-[var(--text-muted)]">{row.remark}</span>}</td><td className="px-2 py-2 text-[var(--text-primary)]">{row.quantity ?? '—'}</td></tr>})}</tbody></table></div></div></div> : activeIllustration.page && !browsePdfDoc ? <div className="grid min-h-64 place-items-center rounded-xl border border-[var(--input-border)] text-sm text-[var(--text-muted)]"><div className="text-center"><Loader2 className="mx-auto mb-2 animate-spin text-yellow-400"/>Opening the OEM illustration…</div></div> : <div className="space-y-3"><p className="rounded-lg border border-amber-400/30 bg-amber-400/5 p-4 text-sm text-amber-200">No illustration page was linked for these rows. The extracted part records remain available below, with their source pages.</p><div className="max-h-[520px] overflow-auto rounded-lg border border-[var(--input-border)]"><table className="w-full text-left text-xs"><thead className="sticky top-0 bg-[var(--panel-2)] text-[var(--text-muted)]"><tr><th className="px-2 py-2">Index</th><th className="px-2 py-2">Part number</th><th className="px-2 py-2">Description</th><th className="px-2 py-2">Qty</th><th className="px-2 py-2">Source page</th><th className="px-2 py-2">Source</th></tr></thead><tbody>{activeIllustration.rows.map((row) => <tr key={row.id} className="border-t border-[var(--input-border)]"><td className="px-2 py-2 text-[var(--text-primary)]">{row.index_no || row.parent_index || '—'}</td><td className="px-2 py-2 font-mono text-yellow-300">{row.part_no}</td><td className="px-2 py-2 text-[var(--text-primary)]">{row.description}{row.remark && <span className="block text-[var(--text-muted)]">{row.remark}</span>}</td><td className="px-2 py-2 text-[var(--text-primary)]">{row.quantity ?? '—'}</td><td className="px-2 py-2 text-[var(--text-primary)]">{row.source_pdf_page}</td><td className="px-2 py-2 text-[var(--text-muted)]">PDF page {row.source_pdf_page}</td></tr>)}</tbody></table></div></div>}
       </Card>}
     </div>}
 
@@ -462,7 +417,7 @@ export default function OemPartsCatalogPreview() {
 
       <Card className="overflow-hidden p-0">
         <div className="flex items-center justify-between gap-3 border-b border-[var(--input-border)] px-4 py-3"><div><h2 className="text-sm font-semibold text-[var(--text-primary)]">OEM parts master</h2><p className="mt-1 text-xs text-[var(--text-muted)]">{query.trim().length >= 2 ? `${entries.length} result${entries.length === 1 ? '' : 's'} shown` : `${manuals.reduce((sum, m) => sum + (m.item_count || 0), 0).toLocaleString()} searchable entries across ${manuals.length} manuals`}</p></div>{catalogLoading && <Loader2 size={17} className="animate-spin text-yellow-400"/>}</div>
-        {loading ? <div className="grid min-h-40 place-items-center text-sm text-[var(--text-muted)]"><Loader2 className="animate-spin" size={20}/></div> : entries.length ? <div className="overflow-auto"><table className="w-full min-w-[900px] text-left text-xs"><thead className="bg-[var(--panel-2)] text-[var(--text-muted)]"><tr>{['OEM brand / model','Part number','Description / assembly','Index','Qty','PDF pages'].map((h) => <th key={h} className="px-3 py-3 font-semibold">{h}</th>)}<th className="px-3 py-3">Manual</th></tr></thead><tbody>{entries.map((row) => <tr key={row.id} className="border-t border-[var(--input-border)]"><td className="px-3 py-3"><div className="font-medium text-[var(--text-primary)]">{row.manual?.manufacturer} {row.manual?.model}</div><div className="mt-1 text-[var(--text-muted)]">{row.manual?.equipment_no || row.manual?.model_code || 'Equipment ID not recorded'}</div></td><td className="px-3 py-3 font-mono font-semibold text-yellow-300">{row.part_no}</td><td className="max-w-[380px] whitespace-normal px-3 py-3"><div className="text-[var(--text-primary)]">{row.description}</div>{row.assembly_heading && <div className="mt-1 text-[var(--text-muted)]">{row.assembly_heading}</div>}{row.remark && <div className="mt-1 text-[var(--text-muted)]">Variant: {row.remark}</div>}</td><td className="px-3 py-3 text-[var(--text-primary)]">{row.index_no || row.parent_index || '—'}{row.parent_index ? <span className="text-[var(--text-muted)]"> · variant</span> : ''}</td><td className="px-3 py-3 tabular-nums text-[var(--text-primary)]">{row.quantity ?? '—'}</td><td className="px-3 py-3 text-[var(--text-secondary)]">{row.illustration_pdf_page ? `Drawing ${row.illustration_pdf_page}` : `List ${row.source_pdf_page}`}{row.see_page ? ` · ${row.see_page}` : ''}</td><td className="px-3 py-3"><button className={`${BUTTON} min-h-9 text-xs`} onClick={() => openManual(row)}><FileText size={14}/>{row.illustration_pdf_page ? 'View illustration' : 'Open source page'}</button></td></tr>)}</tbody></table></div> : <div className="grid min-h-48 place-items-center px-5 text-center"><div><FileSearch size={24} className="mx-auto text-[var(--text-muted)]"/><p className="mt-3 text-sm font-medium text-[var(--text-primary)]">{manuals.length ? 'Search by any part number to find it in the OEM manuals' : 'No OEM manuals saved yet'}</p><p className="mt-1 text-xs text-[var(--text-muted)]">Upload a PDF once. Tyre Pulse stores its parts rows and private source document for future searches.</p>{!manuals.length && <button type="button" onClick={() => switchTab('import')} className={`${BUTTON} mt-4`}><Upload size={15}/>Import first manual</button>}</div></div>}
+        {loading ? <div className="grid min-h-40 place-items-center text-sm text-[var(--text-muted)]"><Loader2 className="animate-spin" size={20}/></div> : entries.length ? <div className="overflow-auto"><table className="w-full min-w-[900px] text-left text-xs"><thead className="bg-[var(--panel-2)] text-[var(--text-muted)]"><tr>{['OEM brand / model','Part number','Description / assembly','Index','Qty','PDF pages'].map((h) => <th key={h} className="px-3 py-3 font-semibold">{h}</th>)}<th className="px-3 py-3">Manual</th></tr></thead><tbody>{entries.map((row) => <tr key={row.id} className="border-t border-[var(--input-border)]"><td className="px-3 py-3"><div className="font-medium text-[var(--text-primary)]">{row.manual?.manufacturer} {row.manual?.model}</div><div className="mt-1 text-[var(--text-muted)]">{row.manual?.equipment_no || row.manual?.model_code || 'Equipment ID not recorded'}</div></td><td className="px-3 py-3 font-mono font-semibold text-yellow-300">{row.part_no}</td><td className="max-w-[380px] whitespace-normal px-3 py-3"><div className="text-[var(--text-primary)]">{row.description}</div>{row.assembly_heading && <div className="mt-1 text-[var(--text-muted)]">{row.assembly_heading}</div>}{row.remark && <div className="mt-1 text-[var(--text-muted)]">Variant: {row.remark}</div>}</td><td className="px-3 py-3 text-[var(--text-primary)]">{row.index_no || row.parent_index || '—'}{row.parent_index ? <span className="text-[var(--text-muted)]"> · variant</span> : ''}</td><td className="px-3 py-3 tabular-nums text-[var(--text-primary)]">{row.quantity ?? '—'}</td><td className="px-3 py-3 text-[var(--text-secondary)]">{row.illustration_pdf_page ? `Drawing ${row.illustration_pdf_page}` : `List ${row.source_pdf_page}`}{row.see_page ? ` · ${row.see_page}` : ''}</td><td className="px-3 py-3"><button className={`${BUTTON} min-h-9 text-xs`} onClick={() => browseFromPart(row)}><Search size={14}/>{row.illustration_pdf_page ? 'Open interactive diagram' : 'Show catalog entry'}</button></td></tr>)}</tbody></table></div> : <div className="grid min-h-48 place-items-center px-5 text-center"><div><FileSearch size={24} className="mx-auto text-[var(--text-muted)]"/><p className="mt-3 text-sm font-medium text-[var(--text-primary)]">{manuals.length ? 'Search by any part number to find it in the OEM manuals' : 'No OEM manuals saved yet'}</p><p className="mt-1 text-xs text-[var(--text-muted)]">Upload a PDF once. Tyre Pulse stores its parts rows and private source document for future searches.</p>{!manuals.length && <button type="button" onClick={() => switchTab('import')} className={`${BUTTON} mt-4`}><Upload size={15}/>Import first manual</button>}</div></div>}
       </Card>
     </div>}
 
@@ -498,6 +453,5 @@ export default function OemPartsCatalogPreview() {
       </Card>
     </div>}
 
-    {viewer && viewPdfDoc && <PageCanvas pdfDoc={viewPdfDoc} entry={viewer} onClose={() => { setViewer(null); setViewPdfDoc(null) }}/>}
   </div>
 }

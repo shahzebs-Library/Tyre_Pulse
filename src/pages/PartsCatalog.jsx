@@ -414,7 +414,7 @@ export default function PartsCatalog() {
         updatedAt={updatedAt}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Link to="/parts-catalog/oem-preview" className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><BookOpen size={14} aria-hidden="true" /> OEM catalog preview</Link>
+            <Link to="/parts-catalog/oem-preview" className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><BookOpen size={14} aria-hidden="true" /> OEM parts master</Link>
             <button type="button" onClick={exportExcel} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!exportRows.length}>
               <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>

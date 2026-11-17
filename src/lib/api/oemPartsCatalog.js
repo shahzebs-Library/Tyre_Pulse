@@ -2,6 +2,7 @@ import { supabase } from './_client'
 
 const MANUAL_COLUMNS = 'id,country,manufacturer,model,model_code,equipment_no,chassis_from,chassis_to,source_file_name,source_sha256,storage_path,page_count,item_count,extraction_status,import_summary,created_at'
 const ENTRY_COLUMNS = 'id,manual_id,source_pdf_page,row_order,assembly_heading,printed_page,index_no,parent_index,part_no,description,remark,quantity,see_page,illustration_pdf_page,row_type,source_line,manual:oem_parts_manuals!inner(id,manufacturer,model,model_code,equipment_no,country,storage_path,page_count)'
+const BROWSE_ENTRY_COLUMNS = 'id,manual_id,source_pdf_page,row_order,assembly_heading,printed_page,index_no,parent_index,part_no,description,remark,quantity,see_page,illustration_pdf_page,row_type'
 
 function raise(error, fallback) {
   if (!error) return
@@ -15,14 +16,24 @@ export async function listOemManuals(country) {
   if (country && country !== 'All') query = query.eq('country', country)
   const { data, error } = await query.order('created_at', { ascending: false }).limit(1000)
   raise(error, 'Could not load OEM manuals.')
-  return data || []
+  return (data || []).map(withFitmentMetadata)
+}
+
+function withFitmentMetadata(manual) {
+  const fitment = manual?.import_summary?.fitment || {}
+  return {
+    ...manual,
+    generation: fitment.generation || null,
+    model_year_from: fitment.model_year_from || null,
+    model_year_to: fitment.model_year_to || null,
+  }
 }
 
 export async function findOemManualByHash(sha256) {
   const { data, error } = await supabase.from('oem_parts_manuals')
     .select(MANUAL_COLUMNS).eq('source_sha256', sha256).maybeSingle()
   raise(error, 'Could not check whether this manual was already imported.')
-  return data || null
+  return data ? withFitmentMetadata(data) : null
 }
 
 export async function searchOemEntries(search, { manualId, country, limit = 100 } = {}) {
@@ -51,6 +62,25 @@ export async function searchOemEntries(search, { manualId, country, limit = 100 
     for (const row of data || []) byId.set(row.id, row)
   }
   return [...byId.values()].slice(0, limit)
+}
+
+/** Load one selected manual in stable pages so users can browse by illustration before knowing a part number. */
+export async function listOemManualEntries(manualId) {
+  if (!manualId) return []
+  const pageSize = 500
+  const rows = []
+  for (let start = 0; ; start += pageSize) {
+    const { data, error } = await supabase.from('oem_parts_entries')
+      .select(BROWSE_ENTRY_COLUMNS)
+      .eq('manual_id', manualId)
+      .order('source_pdf_page', { ascending: true })
+      .order('row_order', { ascending: true })
+      .range(start, start + pageSize - 1)
+    raise(error, 'Could not load this manual’s illustrated parts groups.')
+    rows.push(...(data || []))
+    if (!data || data.length < pageSize) break
+  }
+  return rows
 }
 
 export async function getOemPdfSignedUrl(manualId) {

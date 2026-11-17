@@ -33,6 +33,7 @@ const NOT_A_MODULE = {
   '/status': 'public status page',
   '/support': 'public support page',
   '/contact': 'public support contact page',
+  '/parts-catalog/oem-preview': 'sub-page of Parts Catalog (opened from its Browse illustrated OEM parts link, Admin/Manager/Director route)',
   '/report-builder': 'sub-page of Reports (SectionTabs, admin-only, governed by report builder access)',
   '/checklist-builder': 'sub-page of Checklists (author roles)',
   '/automation-rules/builder': 'sub-page of Automation Rules',

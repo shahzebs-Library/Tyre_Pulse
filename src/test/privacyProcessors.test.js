@@ -31,6 +31,7 @@ const NOT_A_PROCESSOR = [
   /(^|\.)github\.com$/,                                         // a link to our own release workflow
   /(^|\.)google\.com$/,                                         // a map LINK the user chooses to open
   /(^|\.)play\.google\.com$/, /(^|\.)apps\.apple\.com$/,        // store links
+  /(^|\.)cat\.com$/, /(^|\.)bobcat\.com$/, /(^|\.)hitachicm\.com$/, /(^|\.)sanyglobal\.com$/, // OEM parts-catalog LINKS the user chooses to open (never contacted by the app)
 ]
 
 function externalHosts(files) {

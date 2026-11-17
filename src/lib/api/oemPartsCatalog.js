@@ -16,14 +16,24 @@ export async function listOemManuals(country) {
   if (country && country !== 'All') query = query.eq('country', country)
   const { data, error } = await query.order('created_at', { ascending: false }).limit(1000)
   raise(error, 'Could not load OEM manuals.')
-  return data || []
+  return (data || []).map(withFitmentMetadata)
+}
+
+function withFitmentMetadata(manual) {
+  const fitment = manual?.import_summary?.fitment || {}
+  return {
+    ...manual,
+    generation: fitment.generation || null,
+    model_year_from: fitment.model_year_from || null,
+    model_year_to: fitment.model_year_to || null,
+  }
 }
 
 export async function findOemManualByHash(sha256) {
   const { data, error } = await supabase.from('oem_parts_manuals')
     .select(MANUAL_COLUMNS).eq('source_sha256', sha256).maybeSingle()
   raise(error, 'Could not check whether this manual was already imported.')
-  return data || null
+  return data ? withFitmentMetadata(data) : null
 }
 
 export async function searchOemEntries(search, { manualId, country, limit = 100 } = {}) {

@@ -1,0 +1,131 @@
+{
+  "page": {
+    "title": "Illustrated Parts Catalog",
+    "subtitle": "Choose the vehicle by chassis, browse its illustrated assemblies, then select a numbered callout to see the matching parts.",
+    "inventory": "Inventory catalog"
+  },
+  "tab": {
+    "browse": "Browse by vehicle",
+    "search": "Search by part number",
+    "selected": "Selected parts ({count})",
+    "manuals": "Saved manuals",
+    "import": "Import catalog"
+  },
+  "machine": "Machine",
+  "asset": "Asset",
+  "notSelected": "Not selected",
+  "fitment": {
+    "exact": "Fitment confirmed",
+    "model": "Model match only",
+    "unconfirmed": "Fitment not confirmed"
+  },
+  "needsReview": "Figure needs review",
+  "breadcrumb": "Catalog location",
+  "loading": "Loading",
+  "assemblies": {
+    "title": "Assemblies",
+    "search": "Find assembly or page",
+    "unlinked": "No figure",
+    "none": "No assemblies match."
+  },
+  "figure": {
+    "title": "OEM exploded view",
+    "tools": "Figure tools",
+    "zoomOut": "Zoom out",
+    "zoomIn": "Zoom in",
+    "zoomReset": "Reset zoom",
+    "full": "Full screen",
+    "exitFull": "Exit full screen",
+    "prev": "Previous figure",
+    "next": "Next figure",
+    "callout": "Show parts for index {index}",
+    "noCallouts": "This page has no readable callout numbers. Choose the index from the parts table.",
+    "error": "This illustration page could not be displayed.",
+    "opening": "Opening illustration",
+    "unlinked": "No figure page is linked to this assembly. Its parts are listed on the right."
+  },
+  "parts": {
+    "title": "Parts for this assembly",
+    "count": "{count} rows",
+    "selectIndex": "Select index {index}",
+    "addOne": "Add {part} to the selection",
+    "added": "Added",
+    "add": "Add",
+    "addSelected": "Add selected part to work order",
+    "pager": "Parts pages",
+    "prevPage": "Previous page of parts",
+    "nextPage": "Next page of parts",
+    "openPdf": "Open original PDF",
+    "source": "Source: {brand} Parts Book · printed page {page}"
+  },
+  "col": {
+    "index": "Index",
+    "partNo": "Part number",
+    "description": "Description",
+    "qty": "Qty",
+    "add": "Add"
+  },
+  "choose": {
+    "title": "Choose an assembly",
+    "body": "The drawing and its linked parts appear here together. No separate PDF window opens."
+  },
+  "selected": {
+    "col": {
+      "partDesc": "OEM part number and description",
+      "model": "Brand / model / generation",
+      "figure": "Assembly / figure / index",
+      "source": "Source and fitment",
+      "qty": "Request qty",
+      "remove": "Remove"
+    },
+    "noCode": "Generation or code not recorded",
+    "figureLine": "Figure page {page} · index {index}",
+    "notLinked": "not linked",
+    "savedCatalog": "Saved OEM catalog",
+    "sourceLine": "List PDF p. {list} · printed p. {printed} · asset {asset} · applicability needs source verification",
+    "qtyFor": "Requested quantity for {part}",
+    "oemQty": "OEM qty: {qty}",
+    "removeOne": "Remove {part} from selected parts"
+  },
+  "results": {
+    "col": {
+      "model": "OEM brand / model",
+      "partNo": "Part number",
+      "desc": "Description / assembly",
+      "index": "Index",
+      "qty": "Qty",
+      "pages": "PDF pages",
+      "actions": "Actions"
+    },
+    "noEquipment": "Equipment ID not recorded",
+    "variant": "Variant: {remark}",
+    "drawing": "Drawing {page}",
+    "list": "List {page}",
+    "viewFigure": "View figure",
+    "showEntry": "Show entry"
+  },
+  "import": {
+    "col": {
+      "page": "PDF page",
+      "index": "Index",
+      "partNo": "Part number",
+      "desc": "Description",
+      "qty": "Qty"
+    },
+    "stat": {
+      "published": "Rows ready to publish",
+      "review": "Rows sent to review",
+      "figures": "Figures found",
+      "dupes": "Duplicates removed"
+    },
+    "orphans": "{count} callout numbers on the drawings have no matching parts row. Check them before relying on this catalog.",
+    "queueTitle": "Review queue",
+    "queueHelp": "These rows were not published because they failed a check or sit on a figure that could not be classified with confidence. They are kept with the import record.",
+    "queueItem": "figure {figure} · confidence {pct}%"
+  },
+  "area": {
+    "chassis": "Chassis",
+    "upper": "Upper part assembly",
+    "other": "Other / unassigned"
+  }
+}

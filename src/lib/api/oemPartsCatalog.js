@@ -158,7 +158,7 @@ export async function saveOemManual({ id, resume = false, file, sha256, country,
     }
   }
 
-  const status = rows.length && !summary.reviewPages?.length && !summary.imageOnlyPages?.length ? 'ready' : 'needs_review'
+  const status = rows.length && !summary.reviewPages?.length && !summary.imageOnlyPages?.length && !summary.reviewQueue?.length ? 'ready' : 'needs_review'
   const { data, error } = await supabase.from('oem_parts_manuals')
     .update({ extraction_status: status }).eq('id', id).select(MANUAL_COLUMNS).single()
   raise(error, 'Parts were saved, but the manual status could not be finalized.')

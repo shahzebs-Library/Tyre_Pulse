@@ -144,7 +144,19 @@ export async function extractOemPartsDocument(pdfDoc, onProgress = () => {}) {
       || (assemblyFigure && printedPageMap.get(assemblyFigure))
       || null
   }
-  return { rows, parsedPages, skippedPages, reviewPages, imageOnlyPages, pageCount: pdfDoc.numPages, printedPageMap: Object.fromEntries(printedPageMap) }
+  // Callout numbers printed on each linked illustration page (text layer only).
+  // Image-only figures give none; the pipeline then skips orphan-callout checks.
+  const calloutsByPage = {}
+  for (const page of new Set(rows.map((r) => r.illustration_pdf_page).filter(Boolean))) {
+    const content = await (await pdfDoc.getPage(page)).getTextContent()
+    const found = new Set()
+    for (const item of content.items) {
+      const s = String(item?.str || '').trim()
+      if (/^\d{1,3}$/.test(s) && Number(s) > 0) found.add(String(Number(s)))
+    }
+    if (found.size) calloutsByPage[page] = [...found]
+  }
+  return { rows, parsedPages, skippedPages, reviewPages, imageOnlyPages, calloutsByPage, pageCount: pdfDoc.numPages, printedPageMap: Object.fromEntries(printedPageMap) }
 }
 
 /** Read common OEM identity labels from the cover/title pages; the import form stays editable for confirmation. */

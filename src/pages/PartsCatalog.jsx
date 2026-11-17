@@ -12,6 +12,7 @@
  * When the backing table is absent it prompts for MIGRATIONS_V140_PARTS_CATALOG.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement,
   Title, Tooltip, Legend,
@@ -21,7 +22,7 @@ import {
   Boxes, Package, PackageX, DollarSign, Layers, Plus, X, Trash2, Loader2,
   Search, Pencil, AlertTriangle, FileSpreadsheet, FileText, Save,
   ShoppingCart, BarChart3, ClipboardList, ShieldAlert, RefreshCcw,
-  ChevronUp, ChevronDown, ChevronsUpDown,
+  ChevronUp, ChevronDown, ChevronsUpDown, BookOpen,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardHeader } from '../components/ui/Card'
@@ -413,6 +414,7 @@ export default function PartsCatalog() {
         updatedAt={updatedAt}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <Link to="/parts-catalog/oem-preview" className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><BookOpen size={14} aria-hidden="true" /> OEM catalog preview</Link>
             <button type="button" onClick={exportExcel} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!exportRows.length}>
               <FileSpreadsheet size={14} aria-hidden="true" /> Excel
             </button>

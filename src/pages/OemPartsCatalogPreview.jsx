@@ -14,10 +14,6 @@ import { toUserMessage } from '../lib/safeError'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
-function cleanText(value) {
-  return String(value || '').replace(/\s+/g, ' ').trim()
-}
-
 function pdfLines(items = []) {
   const lines = []
   for (const item of items) {
@@ -52,7 +48,7 @@ function extractParts(lines) {
   const rows = []
   let parentIndex = ''
   for (const line of lines.slice(header + 1)) {
-    if (/^SY\\d{3,}[A-Z0-9/-]*/i.test(line.trim())) break
+    if (/^SY\d{3,}[A-Z0-9/-]*/i.test(line.trim())) break
     const match = line.match(/^\s*(?:(\d{1,3})\s+)?([A-Z0-9][A-Z0-9._/-]{6,})\s+(.+)$/)
     if (!match) continue
     const [, index = '', partNo, tail] = match

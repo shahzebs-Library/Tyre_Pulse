@@ -10,7 +10,7 @@ import { supabase, isMissingRelation } from './_client'
 
 export const NOT_PROVISIONED = 'OEM_NOT_PROVISIONED'
 const fail = (error, fallback) => {
-  if (isMissingRelation(error) || /oem_catalog_admin|oem_apply_correction/.test(String(error?.message || '')) && /does not exist|not found/i.test(String(error?.message || ''))) {
+  if (isMissingRelation(error) || /oem_catalog_admin|oem_apply_correction|oem_reassign_entries|oem_figure_merge|oem_figure_split/.test(String(error?.message || '')) && /does not exist|not found/i.test(String(error?.message || ''))) {
     const e = new Error('The advanced catalog tables are not installed yet. An administrator must approve the pending catalog migration.')
     e.code = NOT_PROVISIONED
     throw e
@@ -151,4 +151,44 @@ export async function listCorrections(entryId) {
   const { data, error } = await supabase.from('oem_corrections').select('id,field,old_value,new_value,reason,corrected_at').eq('entry_id', entryId).order('corrected_at', { ascending: false }).limit(50)
   if (error) { if (isMissingRelation(error)) return []; fail(error, 'Could not load the correction history.') }
   return data || []
+}
+
+/** Move parts to another figure. Audited and protected from reprocess overwrite. */
+export async function reassignEntries(manualId, entryIds, toFigure) {
+  await requireCatalogAdmin()
+  const { data, error } = await supabase.rpc('oem_reassign_entries', { p_manual: manualId, p_entry_ids: entryIds, p_to_figure: toFigure })
+  if (error) fail(error, 'Could not move the parts.')
+  return data
+}
+
+/** Merge figure `from` into `into` (same PDF page only). */
+export async function mergeFigures(manualId, from, into) {
+  await requireCatalogAdmin()
+  const { data, error } = await supabase.rpc('oem_figure_merge', { p_manual: manualId, p_from: from, p_into: into })
+  if (error) fail(error, 'Could not merge the figures.')
+  return data
+}
+
+/** Split a figure: create `newFigure` with its own crop and move the chosen parts to it. */
+export async function splitFigure(manualId, figure, newFigure, crop, entryIds) {
+  await requireCatalogAdmin()
+  const { data, error } = await supabase.rpc('oem_figure_split', { p_manual: manualId, p_figure: figure, p_new_figure: newFigure, p_crop: crop, p_entry_ids: entryIds })
+  if (error) fail(error, 'Could not split the figure.')
+  return data
+}
+
+/** Entries with their stored figure link; falls back to the base columns until the migration adds figure_id. */
+export async function listEntriesWithFigure(manualId) {
+  const base = 'id,source_pdf_page,row_order,assembly_heading,printed_page,index_no,parent_index,part_no,description,remark,quantity,illustration_pdf_page'
+  const rows = []
+  for (let start = 0; ; start += 500) {
+    let res = await supabase.from('oem_parts_entries').select(`${base},figure_id,admin_corrected`).eq('manual_id', manualId).order('source_pdf_page').order('row_order').range(start, start + 499)
+    if (res.error && /figure_id|admin_corrected|column/i.test(res.error.message || '')) {
+      res = await supabase.from('oem_parts_entries').select(base).eq('manual_id', manualId).order('source_pdf_page').order('row_order').range(start, start + 499)
+    }
+    if (res.error) fail(res.error, 'Could not load the parts of this manual.')
+    rows.push(...(res.data || []))
+    if (!res.data || res.data.length < 500) break
+  }
+  return rows
 }

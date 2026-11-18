@@ -189,3 +189,18 @@ export async function lookupStockByPartNumbers(partNos) {
   return out
 }
 const normalizePartNumberKey = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+
+/**
+ * Delete one manual (admin only, enforced by RLS). The row delete comes first so a refusal (for example a
+ * manual holding admin-corrected parts, which the database protects) leaves the PDF in place.
+ */
+export async function deleteOemManual(manualId) {
+  const { data: manual, error: readError } = await supabase.from('oem_parts_manuals').select('storage_path').eq('id', manualId).single()
+  raise(readError, 'Could not find the OEM manual.')
+  const { error } = await supabase.from('oem_parts_manuals').delete().eq('id', manualId)
+  if (error) {
+    if (/corrected by an administrator|42501/.test(`${error.message} ${error.code}`)) throw new Error('This manual has parts corrected by an administrator. It cannot be deleted; reprocess or edit it instead.')
+    raise(error, 'Could not delete the OEM manual.')
+  }
+  if (manual?.storage_path) await supabase.storage.from('oem-parts-catalogs').remove([manual.storage_path])
+}

@@ -14,7 +14,6 @@ function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 10139
 
 /** Draw one exploded-style drawing: many parts, callouts just outside. Returns truth in PDF user space (y up). */
 function drawFigure(doc, r, x, y, w, h, indexes) {
-  const shapes = []
   for (let i = 0; i < 12; i += 1) {
     const sx = x + 8 + r() * (w - 60); const sy = y + 8 + r() * (h - 50)
     const sw = 20 + r() * 30; const sh = 15 + r() * 25

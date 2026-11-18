@@ -1,9 +1,11 @@
 /* OEM illustrated parts catalog viewer. Brand green marks selection and confirmation only; everything else is neutral. */
-.oem-viewer {
+.oem-viewer, .oem-review, .oem-tools {
   --oem-ink: #161616;
   --oem-select: var(--brand);
   --oem-select-fill: color-mix(in srgb, var(--brand) 78%, #000);
   --oem-select-tint: color-mix(in srgb, var(--brand) 16%, transparent);
+}
+.oem-viewer {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -141,7 +143,7 @@ html.light .oem-note-error { color: #b42318; }
 /* Review workspace: queue and evidence scroll independently, action bar stays pinned. */
 .oem-review { display: grid; gap: 10px; grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.3fr); height: clamp(520px, calc(100vh - 260px), 900px); }
 .oem-review-filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--input-border); font-size: 11px; color: var(--text-secondary); }
-.oem-review-filters input, .oem-review-filters select, .oem-form input, .oem-form-row select, .oem-form-row input { min-height: 36px; border: 1px solid var(--input-border); border-radius: 8px; background: var(--panel-2); color: var(--text-primary); padding-inline: 8px; font-size: 12px; }
+.oem-review-filters input, .oem-review-filters select, .oem-form input, .oem-form select, .oem-form-row select, .oem-form-row input { min-height: 36px; border: 1px solid var(--input-border); border-radius: 8px; background: var(--panel-2); color: var(--text-primary); padding-inline: 8px; font-size: 12px; }
 .oem-search { display: inline-flex; align-items: center; gap: 6px; }
 .oem-sticky-bar { position: sticky; top: 0; z-index: 2; background: var(--panel); }
 .oem-review-rows li { display: flex; align-items: flex-start; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--input-border); }

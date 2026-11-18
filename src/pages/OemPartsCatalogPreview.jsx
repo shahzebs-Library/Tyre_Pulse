@@ -11,13 +11,15 @@ import Card from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import { listAssets } from '../lib/api/assets'
-import { lookupStockByPartNumbers, findOemManualByHash, getOemPdfSignedUrl, listOemManualEntries, listOemManuals, saveOemManual, searchOemEntries } from '../lib/api/oemPartsCatalog'
+import { deleteOemManual, lookupStockByPartNumbers, findOemManualByHash, getOemPdfSignedUrl, listOemManualEntries, listOemManuals, saveOemManual, searchOemEntries } from '../lib/api/oemPartsCatalog'
 import { createPartsRequest, listOpenJobs } from '../lib/api/partsRequests'
 import { extractOemIdentity, extractOemPartsDocument } from '../lib/oemPartsExtractor'
 import { toUserMessage } from '../lib/safeError'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useAuth } from '../contexts/AuthContext'
 import OemReviewWorkspace from '../components/oemCatalog/OemReviewWorkspace'
+import OemFigureTools from '../components/oemCatalog/OemFigureTools'
+import OemReprocessPanel from '../components/oemCatalog/OemReprocessPanel'
 import { requireCatalogAdmin, saveFigures, saveReviewItems, NOT_PROVISIONED } from '../lib/api/oemCatalogAdmin'
 import { STANDARD_CATEGORIES } from '../lib/oemCatalog/taxonomy'
 import { compatibility } from '../lib/oemCatalog/search'
@@ -78,6 +80,8 @@ export default function OemPartsCatalogPreview() {
   const { t } = useLanguage()
   const { profile, isSuperAdmin } = useAuth()
   // Convenience only: the database (RLS) and the service layer enforce the same rule.
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
   const canManage = profile?.role === 'Admin' || isSuperAdmin === true
   const [tab, setTab] = useState('browse')
   const [reviewManualId, setReviewManualId] = useState('')
@@ -262,8 +266,8 @@ export default function OemPartsCatalogPreview() {
   const selectPdf = async (file) => {
     if (!file) return
     resetImport()
-    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) { setPdfError('Select an OEM parts catalog PDF.'); return }
-    if (file.size > 100 * 1024 * 1024) { setPdfError('This PDF is larger than the 100 MB catalog limit.'); return }
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) { setPdfError(t('oemcatalog.import.errNotPdf')); return }
+    if (file.size > 100 * 1024 * 1024) { setPdfError(t('oemcatalog.import.errTooBig')); return }
     setPdfFile(file); setPdfError(''); setExtractProgress({ pageNumber: 0, pageCount: 0, rowCount: 0 })
     try {
       const buffer = await file.arrayBuffer()
@@ -323,8 +327,8 @@ export default function OemPartsCatalogPreview() {
 
   const saveCatalog = async (event) => {
     event.preventDefault()
-    if (!pdfFile || !pipeline?.publish?.length) { setSaveError('This PDF has no parts rows to save. Review the source pages first.'); return }
-    if (!manualForm.manufacturer.trim() || !manualForm.model.trim()) { setSaveError('Enter the OEM brand and model printed on the manual.'); return }
+    if (!pdfFile || !pipeline?.publish?.length) { setSaveError(t('oemcatalog.import.errNoRows')); return }
+    if (!manualForm.manufacturer.trim() || !manualForm.model.trim()) { setSaveError(t('oemcatalog.import.errBrand')); return }
     setSaving(true); setSaveError(''); setSaveNotice('')
     try {
       await requireCatalogAdmin()
@@ -370,7 +374,7 @@ export default function OemPartsCatalogPreview() {
       await refreshManuals()
       setSaveNotice(`${saved.manufacturer} ${saved.model}: ${saved.item_count.toLocaleString()} parts and variants saved. The PDF is stored once for future lookups.${extra}`)
       setTab('browse')
-    } catch (error) { setSaveError(toUserMessage(error, 'Could not save the OEM manual.')) }
+    } catch (error) { setSaveError(toUserMessage(error, t('oemcatalog.import.errSave'))) }
     finally { setSaving(false) }
   }
 
@@ -551,14 +555,16 @@ export default function OemPartsCatalogPreview() {
 
     {tab === 'manuals' && <Card pad="none" className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-[var(--input-border)] px-4 py-3"><div><h2 className="text-sm font-semibold text-[var(--text-primary)]">Saved OEM manuals</h2><p className="mt-1 text-xs text-[var(--text-muted)]">Each PDF is stored once. Its extracted rows remain available in the master search.</p></div><button type="button" onClick={() => switchTab('import')} className={BUTTON}><Upload size={15}/>Import PDF</button></div>
-      {catalogLoading ? <div className="grid min-h-40 place-items-center"><Loader2 className="animate-spin text-[var(--oem-accent-text)]"/></div> : manuals.length ? <div className="divide-y divide-[var(--input-border)]">{manuals.map((manual) => <div key={manual.id} className="flex flex-wrap items-center justify-between gap-4 px-4 py-4"><div><div className="font-semibold text-[var(--text-primary)]">{manual.manufacturer} · {manual.model}{manual.generation ? ` · ${manual.generation}` : ''}</div><div className="mt-1 text-xs text-[var(--text-muted)]">{[manual.model_code && `Model code ${manual.model_code}`, (manual.model_year_from || manual.model_year_to) && `Years ${manual.model_year_from || '—'}–${manual.model_year_to || '—'}`,manual.equipment_no && `Equipment ${manual.equipment_no}`,manual.chassis_from && `Chassis ${manual.chassis_from}${manual.chassis_to ? `–${manual.chassis_to}` : ''}`].filter(Boolean).join(' · ') || manual.source_file_name}</div><div className="mt-1 text-xs text-[var(--text-muted)]">{manual.item_count.toLocaleString()} entries · {manual.page_count} PDF pages · {manual.extraction_status.replace('_',' ')}</div></div><div className="flex min-w-0 items-center gap-3"><span className="max-w-[280px] truncate text-xs text-[var(--text-muted)]">{manual.source_file_name}</span><button type="button" onClick={() => { switchTab('browse'); selectBrowseManual(manual) }} className={`${BUTTON} min-h-9 text-xs`}><BookOpen size={14}/>Browse this catalog</button></div></div>)}</div> : <div className="p-8 text-center text-sm text-[var(--text-muted)]">No manuals imported.</div>}
+      {catalogLoading ? <div className="grid min-h-40 place-items-center"><Loader2 className="animate-spin text-[var(--oem-accent-text)]"/></div> : manuals.length ? <div className="divide-y divide-[var(--input-border)]">{manuals.map((manual) => <div key={manual.id} className="flex flex-wrap items-center justify-between gap-4 px-4 py-4"><div><div className="font-semibold text-[var(--text-primary)]">{manual.manufacturer} · {manual.model}{manual.generation ? ` · ${manual.generation}` : ''}</div><div className="mt-1 text-xs text-[var(--text-muted)]">{[manual.model_code && `Model code ${manual.model_code}`, (manual.model_year_from || manual.model_year_to) && `Years ${manual.model_year_from || '—'}–${manual.model_year_to || '—'}`,manual.equipment_no && `Equipment ${manual.equipment_no}`,manual.chassis_from && `Chassis ${manual.chassis_from}${manual.chassis_to ? `–${manual.chassis_to}` : ''}`].filter(Boolean).join(' · ') || manual.source_file_name}</div><div className="mt-1 text-xs text-[var(--text-muted)]">{manual.item_count.toLocaleString()} entries · {manual.page_count} PDF pages · {manual.extraction_status.replace('_',' ')}</div></div><div className="flex min-w-0 items-center gap-3"><span className="max-w-[280px] truncate text-xs text-[var(--text-muted)]">{manual.source_file_name}</span><button type="button" onClick={() => { switchTab('browse'); selectBrowseManual(manual) }} className={`${BUTTON} min-h-9 text-xs`}><BookOpen size={14}/>Browse this catalog</button>{canManage && <button type="button" onClick={() => setDeleteTarget(manual)} className={`${BUTTON} min-h-9 text-xs`}>{t('oemcatalog.manual.delete')}</button>}</div></div>)}</div> : <div className="p-8 text-center text-sm text-[var(--text-muted)]">No manuals imported.</div>}
     </Card>}
 
     <Modal open={confirmClear} onClose={() => setConfirmClear(false)} title={t('oemcatalog.basket.clearTitle')} size="sm" footer={<div className="flex justify-end gap-2"><button type="button" className={BUTTON} onClick={() => setConfirmClear(false)}>{t('oemcatalog.basket.keep')}</button><button type="button" className="btn-primary min-h-[42px] px-3 text-sm" onClick={() => { setSelectedParts([]); setConfirmClear(false) }}>{t('oemcatalog.basket.clearYes', { count: selectedParts.length })}</button></div>}><p className="text-sm text-[var(--text-secondary)]">{t('oemcatalog.basket.clearBody')}</p></Modal>
 
+    <Modal open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} title={t('oemcatalog.manual.deleteTitle')} size="sm" footer={<div className="flex justify-end gap-2"><button type="button" className={BUTTON} onClick={() => setDeleteTarget(null)}>{t('oemcatalog.basket.keep')}</button><button type="button" disabled={deleting} className="btn-primary min-h-[42px] px-3 text-sm" onClick={async () => { setDeleting(true); try { await deleteOemManual(deleteTarget.id); setDeleteTarget(null); await refreshManuals() } catch (e) { setDeleteTarget(null); setPageError(toUserMessage(e, t('oemcatalog.manual.deleteError'))) } finally { setDeleting(false) } }}>{t('oemcatalog.manual.deleteYes')}</button></div>}><p className="text-sm text-[var(--text-secondary)]">{t('oemcatalog.manual.deleteBody', { name: deleteTarget ? `${deleteTarget.manufacturer} ${deleteTarget.model}` : '' })}</p></Modal>
+
     {tab === 'review' && canManage && <div className="space-y-3">
       <label className="oem-field"><span>{t('oemcatalog.review.manual')}</span><select value={reviewManualId} onChange={(e) => setReviewManualId(e.target.value)}><option value="">-</option>{manuals.map((m) => <option key={m.id} value={m.id}>{m.manufacturer} {m.model}</option>)}</select></label>
-      {reviewManualId && manuals.find((m) => m.id === reviewManualId) && <OemReviewWorkspace key={reviewManualId} manual={manuals.find((m) => m.id === reviewManualId)} />}
+      {reviewManualId && manuals.find((m) => m.id === reviewManualId) && <><OemReviewWorkspace key={reviewManualId} manual={manuals.find((m) => m.id === reviewManualId)} /><OemFigureTools key={`tools-${reviewManualId}`} manual={manuals.find((m) => m.id === reviewManualId)} /><OemReprocessPanel key={`rep-${reviewManualId}`} manual={manuals.find((m) => m.id === reviewManualId)} /></>}
     </div>}
 
     {tab === 'import' && canManage && <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(300px,0.72fr)]">

@@ -127,7 +127,12 @@
     "queueHelp": "These rows were not published because they failed a check or sit on a figure that could not be classified with confidence. They are kept with the import record.",
     "queueItem": "figure {figure} · confidence {pct}%",
     "queueSaved": "{count} review rows were saved to the persistent review queue.",
-    "notProvisioned": "The persistent review queue is not installed yet, so only the first 500 of {count} queued rows are kept with the import record. An administrator must approve the pending catalog migration."
+    "notProvisioned": "The persistent review queue is not installed yet, so only the first 500 of {count} queued rows are kept with the import record. An administrator must approve the pending catalog migration.",
+    "errNotPdf": "Select an OEM parts catalog PDF.",
+    "errTooBig": "This PDF is larger than the 100 MB catalog limit.",
+    "errBrand": "Enter the OEM brand and model printed on the manual.",
+    "errSave": "Could not save the OEM manual.",
+    "errNoRows": "This PDF has no parts rows to save. Review the source pages first."
   },
   "area": {
     "chassis": "Chassis",
@@ -323,5 +328,54 @@
     "clearBody": "All selected parts are removed from this list. Parts already sent to Parts Requests are not affected.",
     "keep": "Keep",
     "clearYes": "Remove {count} parts"
+  },
+  "tools": {
+    "title": "Figure tools",
+    "help": "Fix figure and table links by hand. Moved parts are marked as admin edited and are never overwritten by a re-import.",
+    "loadError": "Could not load figures.",
+    "saveError": "Could not save the change.",
+    "figure": "Figure",
+    "noParts": "No parts are linked to this figure.",
+    "reassign": "Move selected parts to another figure",
+    "moveTo": "Move to",
+    "moveBtn": "Move {count} parts",
+    "moved": "{count} parts moved.",
+    "merge": "Merge this figure into another",
+    "mergeInto": "Merge into",
+    "mergeBtn": "Merge figures",
+    "merged": "Figures merged, {count} parts moved.",
+    "split": "Split this figure",
+    "newName": "New figure name",
+    "axis": "Cut direction",
+    "axisX": "Vertical cut (left and right)",
+    "axisY": "Horizontal cut (top and bottom)",
+    "ratio": "Cut position (% from left or top)",
+    "splitBtn": "Split and move {count} parts",
+    "splitDone": "Figure split, {count} parts moved.",
+    "noCrop": "This figure has no stored boundary to split."
+  },
+  "reprocess": {
+    "title": "Reprocess preview",
+    "help": "Re-reads the stored PDF and shows what would change. Nothing is written by this step.",
+    "run": "Run preview",
+    "error": "The preview could not be produced.",
+    "newParts": "new parts",
+    "changed": "changed parts",
+    "protectedRecords": "protected (admin corrected or used by a work order)",
+    "unchanged": "unchanged",
+    "missingNow": "stored parts not found in the new run (kept)",
+    "uncertain": "uncertain records",
+    "categoryChanges": "category changes",
+    "duplicates": "duplicate candidates",
+    "safe": "Existing records and manual corrections are preserved. Only new parts can be sent to review.",
+    "queue": "Send {count} new parts to review",
+    "queued": "{count} parts queued for review."
+  },
+  "manual": {
+    "delete": "Delete",
+    "deleteTitle": "Delete this manual?",
+    "deleteBody": "{name} and its stored PDF will be removed. Parts linked to work orders keep their request notes. This cannot be undone.",
+    "deleteYes": "Delete manual",
+    "deleteError": "The manual could not be deleted."
   }
 }

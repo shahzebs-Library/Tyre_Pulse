@@ -32,7 +32,7 @@ export function processExtraction(extraction, { model = '', manufacturer = '', c
     figures[f.id] = { heading: f.heading, group: f.group, area: f.area, confidence: f.confidence, reason: f.reason, conflict: Boolean(f.conflict), chapter: f.chapter, illustration_pdf_page: f.illustrationPage, rows: f.rowCount }
   }
 
-  for (const [id, f] of Object.entries(figures)) {
+  for (const f of Object.values(figures)) {
     f.hierarchy = classifyFigureHierarchy({ heading: f.heading, chapter: f.chapter, area: f.area, equipment: model }, { corrections, manufacturer })
   }
 

@@ -16,7 +16,6 @@ import { deleteOemManual, lookupStockByPartNumbers, findOemManualByHash, getOemP
 import { createPartsRequest, listOpenJobs } from '../lib/api/partsRequests'
 import { extractOemIdentity, extractOemPartsDocument } from '../lib/oemPartsExtractor'
 import { toUserMessage } from '../lib/safeError'
-import { useLanguage } from '../contexts/LanguageContext'
 import { useAuth } from '../contexts/AuthContext'
 import OemReviewWorkspace from '../components/oemCatalog/OemReviewWorkspace'
 import OemFigureTools from '../components/oemCatalog/OemFigureTools'

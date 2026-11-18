@@ -36,6 +36,17 @@ export async function currentOrgId() {
 }
 
 /**
+ * Narrow a PostgREST query to one company when `orgId` is a real company id;
+ * otherwise return it unchanged (RLS stays the boundary, never a wider read).
+ * Use on every per-asset / per-number read once the record's company is known.
+ */
+export function pinCompany(query, orgId) {
+  return isOrgId(orgId) && query && typeof query.eq === 'function'
+    ? query.eq('organisation_id', orgId)
+    : query
+}
+
+/**
  * The first row of an already ordered result, preferring the caller's company
  * when the rows span more than one company. Rows from two OTHER companies are
  * never picked between: null is returned instead.
@@ -72,4 +83,29 @@ export function pickCompanyRow(rows, org) {
   }
   if (list.length === 1) return { row: list[0], ambiguous: false }
   return { row: null, ambiguous: list.length > 1 }
+}
+
+/**
+ * Keep the rows of ONE company for a code (asset number, serial) whose rows the
+ * caller can see in more than one company - a super admin's case.
+ *   - rows from one company (or none): kept as they are; that company, or the
+ *     caller's company when there are no rows, pins the reads that follow;
+ *   - several companies, the caller's among them: the caller's rows;
+ *   - several companies, the caller's NOT among them: no rows, ambiguous -
+ *     choosing one company's machine on the reader's behalf is the mix-up this
+ *     guards against.
+ *
+ * @param {Array<object>} rows  rows carrying organisation_id
+ * @returns {Promise<{rows: Array<object>, orgId: string|null, ambiguous: boolean}>}
+ */
+export async function companyRowsForCode(rows) {
+  const list = Array.isArray(rows) ? rows.filter(Boolean) : []
+  const orgs = [...new Set(list.map((r) => r.organisation_id).filter(isOrgId))]
+  if (orgs.length === 1) return { rows: list, orgId: orgs[0], ambiguous: false }
+  const caller = await currentOrgId()
+  if (orgs.length === 0) return { rows: list, orgId: caller, ambiguous: false }
+  if (caller && orgs.includes(caller)) {
+    return { rows: list.filter((r) => r.organisation_id === caller), orgId: caller, ambiguous: false }
+  }
+  return { rows: [], orgId: caller, ambiguous: true }
 }

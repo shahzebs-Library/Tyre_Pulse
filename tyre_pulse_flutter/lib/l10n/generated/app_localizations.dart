@@ -8014,6 +8014,12 @@ abstract class AppLocalizations {
   /// **'Create an account'**
   String get loginCreateAccount;
 
+  /// Login access-help dialog: how a member of a company other than the original one signs in (company code / username). A bare username still works for everyone else.
+  ///
+  /// In en, this message translates to:
+  /// **'Joined another company through an invitation? Sign in with its company code, a slash and your username, for example ACME/ali.'**
+  String get loginCompanyCodeHelp;
+
   /// Error title.
   ///
   /// In en, this message translates to:
@@ -15184,6 +15190,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Send reply'**
   String get teamMessageSend;
+
+  /// Accessibility label on the Cloudflare Turnstile security check shown above the sign-in and register buttons when CAPTCHA is enabled for this build.
+  ///
+  /// In en, this message translates to:
+  /// **'Security check'**
+  String get captchaSemanticLabel;
+
+  /// Status under the security check while the challenge loads.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading the security check...'**
+  String get captchaLoading;
+
+  /// Status under the security check while it is unsolved; the sign-in / register button stays disabled until it is done.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete the security check to continue.'**
+  String get captchaPrompt;
+
+  /// Status under the security check once it is solved.
+  ///
+  /// In en, this message translates to:
+  /// **'Security check complete.'**
+  String get captchaSolved;
+
+  /// The solved check expired before it was used; offers Try again.
+  ///
+  /// In en, this message translates to:
+  /// **'The security check expired. Try it again.'**
+  String get captchaExpired;
+
+  /// The check failed to load or reported an error; offers Try again.
+  ///
+  /// In en, this message translates to:
+  /// **'The security check could not load. Check your connection and try again.'**
+  String get captchaLoadFailed;
+
+  /// Nothing loaded within the time limit; offers Try again.
+  ///
+  /// In en, this message translates to:
+  /// **'The security check is taking too long. Check your connection and try again.'**
+  String get captchaTimedOut;
+
+  /// Supabase Auth refused the attempt because of the CAPTCHA (captcha_failed). Never counted as a wrong password.
+  ///
+  /// In en, this message translates to:
+  /// **'The security check was not accepted. Complete it again and retry.'**
+  String get captchaRefused;
 }
 
 class _AppLocalizationsDelegate

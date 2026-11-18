@@ -13,17 +13,20 @@
  */
 import { supabase, fetchAllPages, isMissingRelation, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
+import { isOrgId } from './companyScope'
 
 const COLS =
   'id,country,policy_no,cover_type,asset_no,plate_no,chassis_no,description,sum_insured,premium,currency,cover_from,cover_to,status,certificate_no'
 
-export async function listVehicleInsuranceLines(assetNo, { country } = {}) {
+export async function listVehicleInsuranceLines(assetNo, { country, orgId } = {}) {
   const asset = String(assetNo || '').trim().toUpperCase()
   if (!asset) return []
   try {
     const { data, error } = await fetchAllPages((from, to) => {
       let q = supabase.from('insurance_policy_assets').select(COLS).eq('asset_no', asset)
       if (country && country !== 'All') q = q.eq('country', country)
+      // The machine's own company: a super admin's read spans companies.
+      if (isOrgId(orgId)) q = q.eq('organisation_id', orgId)
       return q.order('cover_to', { ascending: false, nullsFirst: false }).order('id').range(from, to)
     }, { max: 500 })
     if (error) throw new ServiceError(toUserMessage(error), error.code, error)

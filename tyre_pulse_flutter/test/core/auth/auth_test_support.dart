@@ -84,12 +84,17 @@ final class FakeAuthRepository implements AuthRepository {
   @override
   Stream<AuthSessionSignal> get sessionChanges => _controller.stream;
 
+  /// The CAPTCHA token each [signIn] call carried, in order (null when none).
+  final List<String?> captchaTokens = <String?>[];
+
   @override
   Future<SignInOutcome> signIn({
     required String identifier,
     required String password,
+    String? captchaToken,
   }) async {
     calls.add('signIn');
+    captchaTokens.add(captchaToken);
     return signInHandler(identifier, password);
   }
 

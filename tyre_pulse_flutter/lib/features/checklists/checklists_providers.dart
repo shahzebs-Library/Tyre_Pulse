@@ -127,8 +127,7 @@ final lastChecklistOdometerProvider =
 final Provider<ChecklistAssetHoursRepository>
     checklistAssetHoursRepositoryProvider =
     Provider<ChecklistAssetHoursRepository>(
-  (ref) =>
-      SupabaseChecklistAssetHoursRepository(
+  (ref) => SupabaseChecklistAssetHoursRepository(
     ref.watch(supabaseClientProvider),
     organisationId: ref.watch(workspaceContextProvider)?.companyId,
   ),

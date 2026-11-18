@@ -40,6 +40,7 @@ import { useConsoleAuth } from '../ConsoleAuthContext'
 import { ACCESS_ROLES } from '../../lib/moduleCatalog'
 import { ACCESS_MODULES as ALL_MODULES } from '../../lib/accessCatalog'
 import { listCustomRoles } from '../../lib/api/customRoles'
+import LoginLockPanel from './users/LoginLockPanel'
 import {
   setUserCountry, bulkSetRole, bulkSetGrant, adminSetUserSites, adminSetWebAccess,
   canEmailReset, adminSetUserPassword,
@@ -1290,6 +1291,7 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
         )}>
         {resetModal && (
           <div className="space-y-3">
+            <LoginLockPanel userId={resetModal.id} />
             {/* A field worker's address is synthetic and receives no mail, so a
                 reset link is a guaranteed dead end. Setting the password is the
                 only thing that restores access for them. */}

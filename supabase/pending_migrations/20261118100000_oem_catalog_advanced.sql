@@ -298,4 +298,6 @@ REVOKE ALL ON FUNCTION public.oem_reassign_entries(uuid, uuid[], text), public.o
 GRANT EXECUTE ON FUNCTION public.oem_reassign_entries(uuid, uuid[], text), public.oem_figure_merge(uuid, text, text), public.oem_figure_split(uuid, text, text, jsonb, uuid[]) TO authenticated;
 
 -- 10. Read-only integration bot policies for the new tables (repo rule: a migration that creates a table ends with this)
-select anum_integration.apply_reader_policies();
+DO $$ BEGIN
+  IF to_regprocedure('anum_integration.apply_reader_policies()') IS NOT NULL THEN PERFORM anum_integration.apply_reader_policies(); END IF;
+END $$;

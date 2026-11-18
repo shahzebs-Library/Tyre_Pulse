@@ -8,7 +8,7 @@
  * (systemConfig.saveSystemConfigValues, backups, securityAudit).
  */
 import { supabase } from './_client'
-import { listSystemLogs } from './systemLogs'
+import { listSystemLogs, openLogCounts } from './systemLogs'
 
 const DAY = 86400000
 
@@ -138,14 +138,17 @@ export async function loadRecordsWritten(now = Date.now()) {
 /** Unresolved critical + error log rows in the last 7 days (top bar button). */
 export async function loadCriticalCount(now = Date.now()) {
   const since = new Date(now - 7 * DAY).toISOString()
+  // Open = not closed in the Error Center (log rows are immutable; their resolved flag never changes).
+  const open = await openLogCounts(since)
+  if (open) return Number(open.critical) || 0
   return countOrNull(() => supabase.from('system_logs').select('id', { count: 'exact', head: true })
-    .eq('severity', 'critical').eq('resolved', false).gte('created_at', since))
+    .eq('severity', 'critical').gte('created_at', since))
 }
 
 /** Unresolved log rows in the last 7 days, for the errors panel. Throws on failure. */
 export async function loadRecentErrors(now = Date.now()) {
   const since = new Date(now - 7 * DAY).toISOString()
-  return listSystemLogs({ resolved: false, since, limit: 500 })
+  return listSystemLogs({ status: 'open', since, limit: 500 })
 }
 
 /**

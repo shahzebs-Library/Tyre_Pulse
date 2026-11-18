@@ -1,0 +1,11 @@
+{
+  "title": "OEM Illustrated Parts Catalog",
+  "subtitle": "Choose the vehicle by chassis, browse its illustrated assemblies, then select the numbered callout to see matching parts.",
+  "inventoryCatalog": "Inventory catalog",
+  "sections": "OEM catalog sections",
+  "tabBrowse": "Browse by vehicle",
+  "tabPartSearch": "Search by part number",
+  "tabSelection": "Selected parts ({count})",
+  "tabManuals": "Saved manuals",
+  "tabImport": "Import catalog"
+}

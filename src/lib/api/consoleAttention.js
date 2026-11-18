@@ -4,6 +4,7 @@
  * renders as "could not check" rather than a silent all-clear.
  */
 import { supabase } from '../supabase'
+import { openLogCounts } from './systemLogs'
 
 const count = async (build) => {
   try {
@@ -22,14 +23,21 @@ const latest = async (table, dateCol, country) => {
   } catch { return null }
 }
 
+/** Open error + critical logs since a date, by Error Center status; raw count if the RPC is absent. */
+async function openErrorCount(since) {
+  const open = await openLogCounts(since)
+  if (open) return (Number(open.error) || 0) + (Number(open.critical) || 0)
+  return count(() => supabase.from('system_logs').select('id', { count: 'exact', head: true })
+    .in('severity', ['error', 'critical']).gte('created_at', since))
+}
+
 export async function loadAttentionInputs() {
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString()
   const [pendingUsers, lockedUsers, unresolvedErrors, openTrustAlerts, ksaExp, uaeExp, egyExp, ksaJc] =
     await Promise.all([
       count(() => supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('approved', false)),
       count(() => supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('locked', true)),
-      count(() => supabase.from('system_logs').select('id', { count: 'exact', head: true })
-        .in('severity', ['error', 'critical']).eq('resolved', false).gte('created_at', weekAgo)),
+      openErrorCount(weekAgo),
       count(() => supabase.from('trust_alerts').select('id', { count: 'exact', head: true }).eq('status', 'open')),
       latest('parts_consumption', 'event_date', 'KSA'),
       latest('parts_consumption', 'event_date', 'UAE'),

@@ -362,8 +362,8 @@ async function loadSystemErrors() {
 }
 
 async function runResolveSystemErrors() {
-  const n = await resolveAllSystemLogs({})
-  return `${num(n)} system log${Number(n) === 1 ? '' : 's'} marked resolved.`
+  const n = await resolveAllSystemLogs({ reason: 'Bulk resolved from Data Trust and Control' })
+  return `${num(n)} error group${Number(n) === 1 ? '' : 's'} marked resolved. The logs themselves are kept unchanged.`
 }
 
 // ── panel ───────────────────────────────────────────────────────────────────────

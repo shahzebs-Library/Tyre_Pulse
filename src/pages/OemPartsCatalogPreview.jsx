@@ -10,6 +10,7 @@ import PageHeader from '../components/ui/PageHeader'
 import Card from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { listAssets } from '../lib/api/assets'
 import { deleteOemManual, lookupStockByPartNumbers, findOemManualByHash, getOemPdfSignedUrl, listOemManualEntries, listOemManuals, saveOemManual, searchOemEntries } from '../lib/api/oemPartsCatalog'
 import { createPartsRequest, listOpenJobs } from '../lib/api/partsRequests'
@@ -476,7 +477,7 @@ export default function OemPartsCatalogPreview() {
   return <div className="oem-page space-y-5">
     <PageHeader title={t('oemcatalog.page.title')} subtitle={t('oemcatalog.page.subtitle')} icon={BookOpen} actions={<Link to="/parts-catalog" className={BUTTON}><ArrowLeft size={15}/>{t('oemcatalog.page.inventory')}</Link>} />
 
-    <div className="flex flex-wrap gap-2 border-b border-[var(--input-border)] pb-3" role="tablist" aria-label="OEM catalog sections">
+    <div className="flex flex-wrap gap-2 border-b border-[var(--input-border)] pb-3" role="tablist" aria-label={t('oempreview.sections')}>
       {[['browse',t('oemcatalog.tab.browse')],['partSearch',t('oemcatalog.tab.search')],['selection',t('oemcatalog.tab.selected', { count: selectedParts.length })],['manuals',t('oemcatalog.tab.manuals')],...(canManage ? [['review',t('oemcatalog.review.tab')],['import',t('oemcatalog.tab.import')]] : [])].map(([key,label]) => <button key={key} role="tab" aria-selected={tab === key} onClick={() => switchTab(key)} className={`min-h-[40px] rounded-lg px-4 text-sm font-medium ${tab === key ? 'bg-[color-mix(in_srgb,var(--brand)_78%,#000)] text-white font-bold' : 'text-[var(--text-secondary)] hover:bg-[var(--panel-2)]'}`}>{label}</button>)}
     </div>
 

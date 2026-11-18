@@ -5,6 +5,9 @@
 -- Columns added to oem_parts_entries / oem_parts_manuals are left in place on purpose (nullable or
 -- defaulted, harmless); drop them only after confirming nothing reads them.
 
+DROP FUNCTION IF EXISTS public.oem_reassign_entries(uuid, uuid[], text);
+DROP FUNCTION IF EXISTS public.oem_figure_merge(uuid, text, text);
+DROP FUNCTION IF EXISTS public.oem_figure_split(uuid, text, text, jsonb, uuid[]);
 DROP TRIGGER IF EXISTS oem_protect_corrected_trg ON public.oem_parts_entries;
 DROP FUNCTION IF EXISTS public.oem_protect_corrected();
 DROP FUNCTION IF EXISTS public.oem_apply_correction(uuid, text, text, text);

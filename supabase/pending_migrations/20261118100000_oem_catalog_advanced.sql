@@ -219,3 +219,80 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION public.oem_apply_correction(uuid, text, text, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.oem_apply_correction(uuid, text, text, text) TO authenticated;
+
+-- 9. Manual figure tools: re-assign parts to another figure, merge two figures, split one -----
+-- Every change is admin only, org scoped, written to oem_corrections, and flags the touched rows /
+-- figure as admin edited so a later reprocess never overwrites it. Nothing is deleted except the
+-- emptied figure row of a merge (its parts move to the target; the PDF and entries are untouched).
+CREATE OR REPLACE FUNCTION public.oem_reassign_entries(p_manual uuid, p_entry_ids uuid[], p_to_figure text)
+RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE org uuid; n integer := 0; r record;
+BEGIN
+  IF NOT public.oem_catalog_admin() THEN RAISE EXCEPTION 'Only a catalog administrator can edit the catalog' USING ERRCODE = '42501'; END IF;
+  SELECT organisation_id INTO org FROM public.oem_parts_manuals WHERE id = p_manual;
+  IF org IS NULL OR org IS DISTINCT FROM public.app_current_org() THEN RAISE EXCEPTION 'Manual not found' USING ERRCODE = '42501'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.oem_figures WHERE manual_id = p_manual AND figure_id = p_to_figure) THEN
+    RAISE EXCEPTION 'Target figure % does not exist in this manual', p_to_figure USING ERRCODE = '22023';
+  END IF;
+  PERFORM set_config('oem.allow_corrected_edit', 'on', true);
+  FOR r IN SELECT id, figure_id FROM public.oem_parts_entries WHERE manual_id = p_manual AND id = ANY (p_entry_ids) LOOP
+    UPDATE public.oem_parts_entries SET figure_id = p_to_figure, admin_corrected = true, review_status = 'approved' WHERE id = r.id;
+    INSERT INTO public.oem_corrections (organisation_id, manual_id, entry_id, figure_id, field, old_value, new_value, reason)
+      VALUES (org, p_manual, r.id, p_to_figure, 'figure_id', to_jsonb(r.figure_id), to_jsonb(p_to_figure), 'reassigned to another figure');
+    n := n + 1;
+  END LOOP;
+  PERFORM set_config('oem.allow_corrected_edit', 'off', true);
+  RETURN n;
+END $$;
+
+CREATE OR REPLACE FUNCTION public.oem_figure_merge(p_manual uuid, p_from text, p_into text)
+RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE org uuid; a public.oem_figures; b public.oem_figures; n integer; c jsonb;
+BEGIN
+  IF NOT public.oem_catalog_admin() THEN RAISE EXCEPTION 'Only a catalog administrator can edit the catalog' USING ERRCODE = '42501'; END IF;
+  IF p_from = p_into THEN RAISE EXCEPTION 'Choose two different figures' USING ERRCODE = '22023'; END IF;
+  SELECT organisation_id INTO org FROM public.oem_parts_manuals WHERE id = p_manual;
+  IF org IS NULL OR org IS DISTINCT FROM public.app_current_org() THEN RAISE EXCEPTION 'Manual not found' USING ERRCODE = '42501'; END IF;
+  SELECT * INTO a FROM public.oem_figures WHERE manual_id = p_manual AND figure_id = p_from;
+  SELECT * INTO b FROM public.oem_figures WHERE manual_id = p_manual AND figure_id = p_into;
+  IF a.id IS NULL OR b.id IS NULL THEN RAISE EXCEPTION 'Figure not found' USING ERRCODE = '22023'; END IF;
+  IF a.pdf_page IS DISTINCT FROM b.pdf_page THEN RAISE EXCEPTION 'Figures on different PDF pages are different drawings and cannot be merged' USING ERRCODE = '22023'; END IF;
+  IF a.crop IS NOT NULL AND b.crop IS NOT NULL THEN
+    c := jsonb_build_object('x0', least((a.crop->>'x0')::numeric, (b.crop->>'x0')::numeric), 'y0', least((a.crop->>'y0')::numeric, (b.crop->>'y0')::numeric),
+                            'x1', greatest((a.crop->>'x1')::numeric, (b.crop->>'x1')::numeric), 'y1', greatest((a.crop->>'y1')::numeric, (b.crop->>'y1')::numeric));
+  ELSE c := coalesce(b.crop, a.crop); END IF;
+  PERFORM set_config('oem.allow_corrected_edit', 'on', true);
+  UPDATE public.oem_parts_entries SET figure_id = p_into, admin_corrected = true, review_status = 'approved' WHERE manual_id = p_manual AND figure_id = p_from;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  PERFORM set_config('oem.allow_corrected_edit', 'off', true);
+  UPDATE public.oem_figures SET crop = c, callouts = b.callouts || a.callouts, admin_adjusted = true, updated_at = now() WHERE id = b.id;
+  DELETE FROM public.oem_figures WHERE id = a.id;
+  INSERT INTO public.oem_corrections (organisation_id, manual_id, figure_id, field, old_value, new_value, reason)
+    VALUES (org, p_manual, p_into, 'figure_merge', to_jsonb(p_from), to_jsonb(p_into), n || ' parts moved');
+  RETURN n;
+END $$;
+
+CREATE OR REPLACE FUNCTION public.oem_figure_split(p_manual uuid, p_figure text, p_new_figure text, p_crop jsonb, p_entry_ids uuid[])
+RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE org uuid; a public.oem_figures; n integer := 0;
+BEGIN
+  IF NOT public.oem_catalog_admin() THEN RAISE EXCEPTION 'Only a catalog administrator can edit the catalog' USING ERRCODE = '42501'; END IF;
+  IF coalesce(btrim(p_new_figure), '') = '' OR p_new_figure = p_figure THEN RAISE EXCEPTION 'Give the new figure a different name' USING ERRCODE = '22023'; END IF;
+  SELECT organisation_id INTO org FROM public.oem_parts_manuals WHERE id = p_manual;
+  IF org IS NULL OR org IS DISTINCT FROM public.app_current_org() THEN RAISE EXCEPTION 'Manual not found' USING ERRCODE = '42501'; END IF;
+  SELECT * INTO a FROM public.oem_figures WHERE manual_id = p_manual AND figure_id = p_figure;
+  IF a.id IS NULL THEN RAISE EXCEPTION 'Figure not found' USING ERRCODE = '22023'; END IF;
+  IF EXISTS (SELECT 1 FROM public.oem_figures WHERE manual_id = p_manual AND figure_id = p_new_figure) THEN RAISE EXCEPTION 'That figure name is already used' USING ERRCODE = '22023'; END IF;
+  INSERT INTO public.oem_figures (organisation_id, manual_id, figure_id, pdf_page, printed_page, caption, page_info, bbox, crop, callouts, match, match_status, hierarchy, admin_adjusted)
+    VALUES (org, p_manual, p_new_figure, a.pdf_page, a.printed_page, a.caption, a.page_info, a.bbox, p_crop, '[]'::jsonb, a.match, 'estimated', a.hierarchy, true);
+  PERFORM set_config('oem.allow_corrected_edit', 'on', true);
+  UPDATE public.oem_parts_entries SET figure_id = p_new_figure, admin_corrected = true, review_status = 'approved' WHERE manual_id = p_manual AND figure_id = p_figure AND id = ANY (p_entry_ids);
+  GET DIAGNOSTICS n = ROW_COUNT;
+  PERFORM set_config('oem.allow_corrected_edit', 'off', true);
+  INSERT INTO public.oem_corrections (organisation_id, manual_id, figure_id, field, old_value, new_value, reason)
+    VALUES (org, p_manual, p_figure, 'figure_split', to_jsonb(p_figure), to_jsonb(p_new_figure), n || ' parts moved');
+  RETURN n;
+END $$;
+
+REVOKE ALL ON FUNCTION public.oem_reassign_entries(uuid, uuid[], text), public.oem_figure_merge(uuid, text, text), public.oem_figure_split(uuid, text, text, jsonb, uuid[]) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.oem_reassign_entries(uuid, uuid[], text), public.oem_figure_merge(uuid, text, text), public.oem_figure_split(uuid, text, text, jsonb, uuid[]) TO authenticated;

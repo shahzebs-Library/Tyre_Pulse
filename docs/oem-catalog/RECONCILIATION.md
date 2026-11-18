@@ -23,5 +23,8 @@ select policyname, cmd from pg_policies where schemaname='storage' and policynam
 ## Existing manuals (reprocess, optional, later)
 Use the reprocess preview in the review workspace. It lists new parts, changed values, category changes, duplicate candidates and uncertain records, and shows admin-corrected or work-order-referenced records as protected: they are never overwritten. Nothing is written until an admin approves the preview.
 
+## Figure tools (also in the migration)
+After applying, `select proname from pg_proc where proname in ('oem_reassign_entries','oem_figure_merge','oem_figure_split')` must return 3 rows, and `select has_function_privilege('anon','public.oem_figure_merge(uuid,text,text)','execute')` must be false. Each call writes an `oem_corrections` row; moved parts are flagged `admin_corrected`, so a reprocess never overwrites them and the delete trigger refuses to remove them.
+
 ## Rollback
-`20261118100000_oem_catalog_advanced_ROLLBACK.sql`. Export `oem_figures`, `oem_review_items`, `oem_corrections` and `oem_category_rules` first; the rollback drops them. Added columns on existing tables are kept.
+`20261118100000_oem_catalog_advanced_ROLLBACK.sql` (also drops the three figure-tool functions). Export `oem_figures`, `oem_review_items`, `oem_corrections` and `oem_category_rules` first; the rollback drops them. Added columns on existing tables are kept.

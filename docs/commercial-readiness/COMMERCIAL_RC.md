@@ -21,12 +21,14 @@ Applied already in production: TEN-1..13, COM, TEN-9f. Needed before `single_ten
 | 1 | 20261115168000_ten9d_company_code_guard_and_admin_set | company Admin can no longer set its own sign-in code directly | revert function/guard (header) |
 | 2 | 20261115168500_ten9e_invitation_signup_refuses_cleanly | refused invitation no longer leaves an orphan account | header |
 | 3 | 20261115168800_ten9g_code_form_cannot_be_squatted | usernames containing / or \ refused (0 exist) | sibling ROLLBACK |
-| 4 | 20261117110000_by_number_org_joins | 9 live functions also match company on job card / asset number | sibling ROLLBACK |
-| 5 | 20261117112000_complaints_missing_in_date_reject | needs #4 first; blank in-date rejected, not batch-aborting | sibling ROLLBACK (before #4's) |
+| 4 | ALREADY LIVE since 2026-11-16 (ledger 20261116112628): 20261117110000_by_number_org_joins | 9 live functions also match company on job card / asset number | sibling ROLLBACK |
+| 5 | ALREADY LIVE since 2026-11-16 (ledger 20261116112739): 20261117112000_complaints_missing_in_date_reject | needs #4 first; blank in-date rejected, not batch-aborting | sibling ROLLBACK (before #4's) |
 | 6 | 20261117113000_company_pinned_lookups | per-asset / per-serial readers stay in one company for super admins | sibling ROLLBACK |
 | 7 | 20261117102000_recalls_number_unique_per_org | recall number unique per company (0 rows today) | header |
 | 8 | 20261117111000_drop_tyre_status_marks_bridge | owner approval only; remove after ~2026-11-22 and before a second company records marks | recreate index (header) |
 `sign-in` edge function must be redeployed (authenticated `supabase functions deploy sign-in`, verify_jwt=false).
+
+Exact SQL, impact, tests, rollback and preflight for the five that still need approval (1, 2, 3, 6, 7): `MIGRATION_APPROVAL_PACKAGE.md`. Rollback files for 9d and 9e were added (exact live bodies).
 
 ## Test results (this RC head)
 See the final report; Flutter analyze/tests and deno e2e could not run here (no SDK / no deno): they are release blockers.

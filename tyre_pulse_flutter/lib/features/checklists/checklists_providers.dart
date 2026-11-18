@@ -128,7 +128,10 @@ final Provider<ChecklistAssetHoursRepository>
     checklistAssetHoursRepositoryProvider =
     Provider<ChecklistAssetHoursRepository>(
   (ref) =>
-      SupabaseChecklistAssetHoursRepository(ref.watch(supabaseClientProvider)),
+      SupabaseChecklistAssetHoursRepository(
+    ref.watch(supabaseClientProvider),
+    organisationId: ref.watch(workspaceContextProvider)?.companyId,
+  ),
 );
 
 /// The latest `engine_hours_logs.engine_hours` for one asset. Null means the

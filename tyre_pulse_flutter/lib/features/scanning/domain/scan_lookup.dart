@@ -521,9 +521,15 @@ AppError _asAppError(Object error) {
 final class ScanLookupRepository
     with SupabaseGateway
     implements ScanLookupSource {
-  ScanLookupRepository(this._client);
+  ScanLookupRepository(this._client, {String? organisationId})
+      : _organisationId = organisationId;
 
   final SupabaseClient _client;
+
+  /// The caller's company. Pins the by-number asset reads to it so a super
+  /// admin who can see several companies never resolves another company's
+  /// same-numbered asset. Null leaves it to row-level security alone.
+  final String? _organisationId;
 
   /// Mirrors `assetLookup.ts`'s `ASSET_COLS` exactly.
   static const String _assetColumns = 'id, site, asset_no, vehicle_type, '
@@ -541,11 +547,17 @@ final class ScanLookupRepository
     }
     final List<Map<String, dynamic>> rows =
         await guard<List<Map<String, dynamic>>>(
-      () => _client
-          .from(SupabaseTables.vehicleFleet)
-          .select(_assetColumns)
-          .eq('asset_no', clean)
-          .limit(1),
+      () {
+        var q = _client
+            .from(SupabaseTables.vehicleFleet)
+            .select(_assetColumns)
+            .eq('asset_no', clean);
+        final String? org = _organisationId;
+        if (org != null && org.isNotEmpty) {
+          q = q.eq('organisation_id', org);
+        }
+        return q.limit(1);
+      },
     );
     return rows.isEmpty ? null : AssetLookupRecord.fromRow(rows.first);
   }
@@ -558,11 +570,17 @@ final class ScanLookupRepository
     }
     final List<Map<String, dynamic>> rows =
         await guard<List<Map<String, dynamic>>>(
-      () => _client
-          .from(SupabaseTables.vehicleFleet)
-          .select(_assetColumns)
-          .ilike('asset_no', literal)
-          .limit(1),
+      () {
+        var q = _client
+            .from(SupabaseTables.vehicleFleet)
+            .select(_assetColumns)
+            .ilike('asset_no', literal);
+        final String? org = _organisationId;
+        if (org != null && org.isNotEmpty) {
+          q = q.eq('organisation_id', org);
+        }
+        return q.limit(1);
+      },
     );
     return rows.isEmpty ? null : AssetLookupRecord.fromRow(rows.first);
   }
@@ -577,11 +595,17 @@ final class ScanLookupRepository
     }
     final List<Map<String, dynamic>> rows =
         await guard<List<Map<String, dynamic>>>(
-      () => _client
-          .from(SupabaseTables.vehicleFleet)
-          .select(_assetColumns)
-          .ilike('fleet_number', literal)
-          .limit(1),
+      () {
+        var q = _client
+            .from(SupabaseTables.vehicleFleet)
+            .select(_assetColumns)
+            .ilike('fleet_number', literal);
+        final String? org = _organisationId;
+        if (org != null && org.isNotEmpty) {
+          q = q.eq('organisation_id', org);
+        }
+        return q.limit(1);
+      },
     );
     return rows.isEmpty ? null : AssetLookupRecord.fromRow(rows.first);
   }

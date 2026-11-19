@@ -100,3 +100,4 @@
 .st-identity { flex-wrap: wrap; }
 .st-identity > div { min-width: 0; }
 .st-serial-big { overflow-wrap: anywhere; }
+.st-pos { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; unicode-bidi: isolate; }

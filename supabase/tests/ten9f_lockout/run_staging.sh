@@ -13,8 +13,8 @@ HOST="${STAGING_HOST:-127.0.0.1}"; PORT="${STAGING_PORT:-54329}"
 BASE="${STAGING_DB:-tp_mirror2}"; DB="${TEN9F_DB:-tp_ten9f}"
 case "$HOST" in 127.0.0.1|localhost) ;; *) echo "Refusing: local staging only" >&2; exit 1;; esac
 P=(psql -X -q -v ON_ERROR_STOP=1 -h "$HOST" -p "$PORT" -U postgres)
-MIG="$ROOT/supabase/pending_migrations/20261116100000_ten9f_login_lockout_per_account.sql"
-RB="$ROOT/supabase/pending_migrations/20261116100000_ten9f_login_lockout_per_account.ROLLBACK.sql"
+MIG="$ROOT/supabase/migrations/20261116063833_ten9f_login_lockout_per_account.sql"
+RB="$ROOT/supabase/rollbacks/20261116100000_ten9f_login_lockout_per_account.ROLLBACK.sql"
 PROD_MD5="login_attempt_status=bda4f978f7404a86aa650f9aab6f3f14 record_login_failure=c8a5b4a419e567262e6620c3fb16bbed reset_login_attempts=32867f65d8493dd864f2d00c9e29dc71"
 timing() { "${P[@]}" -d "$DB" -f "$HERE/timing.sql" 2>&1 | sed -n 's/^.*NOTICE:  //p' | grep '^timing'; }
 md5s() { "${P[@]}" -d "$DB" -At -c "select string_agg(p.proname||'='||md5(pg_get_functiondef(p.oid)),' ' order by p.proname) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('login_attempt_status','record_login_failure','reset_login_attempts')"; }

@@ -20,7 +20,7 @@ import { useLanguage } from '../../contexts/LanguageContext'
 import { loadBalanceSnapshot, compatibilityCounts } from '../../lib/api/inventory'
 import { sumByCurrency, balanceValue, isOwned, formatMoney, formatQty, formatTotals } from '../../lib/inventory/inventoryMoney'
 import { reorderSignals, summarizeBalances } from '../../lib/inventory/balanceView'
-import { useInvQuery, ErrorNote, NotSetUp, Note, SectionCard, Denied } from './InvUi'
+import { useInvQuery, ErrorNote, NotSetUp, Note, SectionCard, Denied, alignNumeric } from './InvUi'
 
 function useSnapshot(scope) {
   return useInvQuery(() => loadBalanceSnapshot(scope), [scope.country, scope.site])
@@ -63,13 +63,13 @@ export function ValuationSection({ scope, can }) {
       {q.data?.truncated && <Note tone="warn">{t('inventory.state.truncated')}</Note>}
       <Note>{t('inventory.valuation.method')}</Note>
       <SectionCard title={t('inventory.valuation.bySite')} sub={t('inventory.valuation.bySiteSub')}>
-        <KitTable compact rows={bySite} loading={loading} empty={t('inventory.valuation.empty')} columns={[
+        <KitTable compact rows={bySite} loading={loading} empty={t('inventory.valuation.empty')} columns={alignNumeric([
           { key: 'site', header: t('inventory.scope.site') },
           { key: 'currency', header: t('inventory.common.currency'), cell: (r) => r.currency || <span className="cc-na">{t('inventory.valuation.noCurrency')}</span> },
           { key: 'lines', header: t('inventory.valuation.lines'), numeric: true },
           { key: 'unvalued', header: t('inventory.valuation.unvalued'), numeric: true },
           { key: 'amount', header: t('inventory.valuation.value'), numeric: true, cell: (r) => (r.valued ? formatMoney(r.amount, r.currency) : 'N/A') },
-        ]} />
+        ])} />
       </SectionCard>
     </div>
   )
@@ -103,13 +103,13 @@ export function PlanningSection({ scope }) {
         </Link>
       </div>
       <SectionCard title={t('inventory.planning.signalsTitle')} sub={t('inventory.planning.signalsSub')}>
-        <KitTable compact scroll rows={signals} loading={loading} empty={t('inventory.planning.noSignals')} columns={[
+        <KitTable compact scroll rows={signals} loading={loading} empty={t('inventory.planning.noSignals')} columns={alignNumeric([
           { key: 'item_code', header: t('inventory.common.item'), cell: (r) => r.item_code || r.description || <span className="cc-na">N/A</span> },
           { key: 'site', header: t('inventory.scope.site'), cell: (r) => r.location_code || r.site || <span className="cc-na">N/A</span> },
           { key: 'available', header: t('inventory.planning.available'), numeric: true, cell: (r) => formatQty(r.available) },
           { key: 'reorder_point', header: t('inventory.planning.reorderPoint'), numeric: true, cell: (r) => formatQty(r.reorder_point) },
           { key: 'gap', header: t('inventory.planning.gap'), numeric: true, cell: (r) => formatQty(r.gap) },
-        ]} />
+        ])} />
       </SectionCard>
       <SectionCard title={t('inventory.planning.simTitle')} sub={t('inventory.planning.simSub')}>
         {compat.error ? <ErrorNote error={compat.error} onRetry={compat.retry} /> : validated === 0

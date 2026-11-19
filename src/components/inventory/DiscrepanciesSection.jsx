@@ -90,7 +90,7 @@ export default function DiscrepanciesSection({ scope, can, userId }) {
         onPageSize={(s) => { setPageSize(s); setPage(0) }} empty={t('inventory.disc.empty')}
         what={t('inventory.objects.inventory_discrepancies')} noun={t('inventory.disc.noun')} onRowClick={openRow} />
 
-      <SideDrawer open={!!open} onClose={() => setOpen(null)} busy={busy} size="lg"
+      <SideDrawer className="cc inv-panel" open={!!open} onClose={() => setOpen(null)} busy={busy} size="lg"
         title={t('inventory.disc.drawerTitle')} subtitle={open ? `${open.item_code || open.serial_no || ''} | ${open.location_code || ''}` : ''}
         closeLabel={t('inventory.actions.close')}>
         {open && edit && (

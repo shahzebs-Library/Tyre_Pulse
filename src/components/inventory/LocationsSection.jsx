@@ -171,7 +171,7 @@ export default function LocationsSection({ scope, can }) {
         )}
       </SectionCard>
 
-      <Modal open={!!editing} onClose={() => !busy && setEditing(null)} size="md"
+      <Modal className="cc inv-panel" open={!!editing} onClose={() => !busy && setEditing(null)} size="md"
         title={editing?.draft?.id ? t('inventory.locations.editTitle') : t('inventory.locations.addTitle')}
         footer={(
           <div className="inv-actions">
@@ -183,7 +183,7 @@ export default function LocationsSection({ scope, can }) {
         {saveErr && <ErrorNote error={saveErr} />}
       </Modal>
 
-      <Modal open={!!labels} onClose={() => setLabels(null)} size="xl" title={t('inventory.locations.labelSheet')}
+      <Modal className="cc inv-panel" open={!!labels} onClose={() => setLabels(null)} size="xl" title={t('inventory.locations.labelSheet')}
         subtitle={t('inventory.locations.labelSheetSub')}
         footer={(
           <div className="inv-actions">

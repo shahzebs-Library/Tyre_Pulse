@@ -13,7 +13,7 @@ import { loadReconciliation, reconcileAudit, assignRecount, newIdempotencyKey } 
 import { buildReconciliationRows, summarizeReconciliation, needsRecount } from '../../lib/inventory/auditView'
 import { formatMoney, formatQty, formatTotals } from '../../lib/inventory/inventoryMoney'
 import { toUserMessage } from '../../lib/safeError'
-import { useInvQuery, ErrorNote, NotSetUp, Note, StatusPill, Field } from './InvUi'
+import { useInvQuery, ErrorNote, NotSetUp, Note, StatusPill, Field, alignNumeric } from './InvUi'
 
 const STATUS_TONE = { match: 'good', over: 'warning', short: 'bad', not_counted: 'muted', unexpected: 'warning' }
 
@@ -79,7 +79,7 @@ export default function AuditReconciliation({ audit, can, userId, people = [], o
           </button>
         </div>
       </div>
-      <KitTable compact columns={columns} rows={visible} loading={q.loading && !q.data}
+      <KitTable compact columns={alignNumeric(columns)} rows={visible} loading={q.loading && !q.data}
         empty={rows.length ? t('inventory.recon.noExceptions') : t('inventory.recon.noLines')} />
 
       {can('recount') && recountRows.length > 0 && (

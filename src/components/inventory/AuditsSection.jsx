@@ -103,7 +103,7 @@ export default function AuditsSection({ scope, can, userId, onNavigate }) {
         <label className="inv-check">
           <input type="checkbox" checked={mine} onChange={(e) => { setMine(e.target.checked); setPage(0) }} /> {t('inventory.audits.mine')}
         </label>
-        {can('audit_create') && (
+        {can('audit_create') && q.data?.status !== 'not_provisioned' && (
           <button type="button" className="cc-btn-primary" onClick={openCreate}><Plus size={14} aria-hidden="true" /> {t('inventory.audits.new')}</button>
         )}
       </div>
@@ -113,7 +113,7 @@ export default function AuditsSection({ scope, can, userId, onNavigate }) {
         what={t('inventory.objects.inventory_audits')} noun={t('inventory.audits.noun')}
         onRowClick={(a) => { setOpen(a); setMode('details'); setErr('') }} />
 
-      <Modal open={!!creating} onClose={() => !busy && setCreating(null)} size="lg" title={t('inventory.audits.newTitle')}
+      <Modal className="cc inv-panel" open={!!creating} onClose={() => !busy && setCreating(null)} size="lg" title={t('inventory.audits.newTitle')}
         subtitle={t('inventory.audits.newSub')}
         footer={(
           <div className="inv-actions">
@@ -164,7 +164,7 @@ export default function AuditsSection({ scope, can, userId, onNavigate }) {
         )}
       </Modal>
 
-      <SideDrawer open={!!open} onClose={() => setOpen(null)} busy={busy} size="xl"
+      <SideDrawer className="cc inv-panel" open={!!open} onClose={() => setOpen(null)} busy={busy} size="xl"
         title={open ? `${t('inventory.audits.audit')} ${open.ref || open.id?.slice(0, 8)}` : ''}
         subtitle={open ? `${t(`inventory.auditTypes.${open.audit_type}`)} | ${open.site || ''}` : ''}
         closeLabel={t('inventory.actions.close')}>

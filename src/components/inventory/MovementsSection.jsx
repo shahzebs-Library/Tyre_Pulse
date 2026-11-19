@@ -86,7 +86,7 @@ export default function MovementsSection({ scope, can }) {
         onPageSize={(s) => { setPageSize(s); setPage(0) }} empty={t('inventory.movements.empty')}
         what={t('inventory.objects.ledger')} noun={t('inventory.movements.noun')} />
 
-      <Modal open={!!reversing} onClose={() => !busy && setReversing(null)} size="sm" title={t('inventory.movements.reverseTitle')}
+      <Modal className="cc inv-panel" open={!!reversing} onClose={() => !busy && setReversing(null)} size="sm" title={t('inventory.movements.reverseTitle')}
         footer={(
           <div className="inv-actions">
             <button type="button" className="cc-btn-ghost" onClick={() => setReversing(null)} disabled={busy}>{t('inventory.actions.cancel')}</button>

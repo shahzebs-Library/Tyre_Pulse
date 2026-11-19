@@ -84,3 +84,14 @@ button.inv-tile[aria-pressed="true"] { border-color: var(--cc-green); background
   .inv-print-hide { display: none !important; }
   .inv-labels { grid-template-columns: repeat(3, 1fr); }
 }
+
+/* Wide registers scroll inside their card on phones instead of pushing the page sideways. */
+.inv-hub, .inv-hub > *, .inv-hub .cc-card { min-width: 0; max-width: 100%; }
+.inv-scroll { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
+.inv-hub .cc-kpi-val { overflow-wrap: normal; word-break: keep-all; font-size: clamp(17px, 1.5vw, 22px); }
+.inv-hub .cc-et { max-width: 100%; overflow-x: auto; }
+/* Modals and drawers portal out of the hub, so they carry .cc themselves. */
+.inv-panel.cc { gap: 0; }
+.inv-panel .inv-input, .inv-panel .cc-select { min-height: 44px; }
+.inv-panel .cc-btn-primary, .inv-panel .cc-btn-ghost, .inv-panel .cc-icon-btn { min-height: 44px; }
+.inv-num-cell { display: block; text-align: end; font-variant-numeric: tabular-nums; }

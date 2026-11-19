@@ -105,6 +105,13 @@ export function SearchBox({ value, onChange, placeholder, label }) {
   )
 }
 
+/** Right-align numeric cells (KitTable aligns the header; this aligns the value). */
+export function alignNumeric(columns) {
+  return columns.map((c) => (c.numeric
+    ? { ...c, cell: (r) => <span className="inv-num-cell">{c.cell ? c.cell(r) : (r[c.key] ?? 'N/A')}</span> }
+    : c))
+}
+
 /**
  * A server-paged table with every state. `query` is a useInvQuery result whose
  * data is `{ status, rows, total }`.
@@ -115,7 +122,9 @@ export function PagedTable({ query, columns, page, pageSize, onPage, onPageSize,
   const rows = query.data?.rows || []
   return (
     <>
-      <KitTable compact columns={columns} rows={rows} loading={query.loading && !query.data} empty={empty} onRowClick={onRowClick} />
+      <div className="inv-scroll">
+        <KitTable compact columns={alignNumeric(columns)} rows={rows} loading={query.loading && !query.data} empty={empty} onRowClick={onRowClick} />
+      </div>
       {(query.data?.total ?? 0) > 0 && (
         <Pager page={page} pageSize={pageSize} total={query.data.total} onPage={onPage} onPageSize={onPageSize} sizes={[25, 50, 100, 200]} noun={noun} />
       )}

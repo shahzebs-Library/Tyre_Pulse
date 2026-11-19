@@ -78,7 +78,7 @@ export default function TyreInventorySection({ scope, can }) {
           ]} />
       </SectionCard>
 
-      <SideDrawer open={!!conflict} onClose={() => setConflict(null)} size="md" title={t('inventory.tyres.evidenceTitle')}
+      <SideDrawer className="cc inv-panel" open={!!conflict} onClose={() => setConflict(null)} size="md" title={t('inventory.tyres.evidenceTitle')}
         subtitle={conflict?.serial_no} closeLabel={t('inventory.actions.close')}>
         {conflict && (
           <div className="inv-hub" style={{ gap: 12 }}>

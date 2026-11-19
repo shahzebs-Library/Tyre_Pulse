@@ -101,7 +101,7 @@ export default function OpeningBalancePanel({ scope, can, userId }) {
         what={t('inventory.objects.opening_balance_batches')} noun={t('inventory.opening.noun')}
         onRowClick={(b) => { setOpen(b); setLinePage(0); setErr(''); setNote('') }} />
 
-      <Modal open={!!wizard} onClose={() => !busy && setWizard(null)} size="xl" title={t('inventory.opening.wizardTitle')}
+      <Modal className="cc inv-panel" open={!!wizard} onClose={() => !busy && setWizard(null)} size="xl" title={t('inventory.opening.wizardTitle')}
         subtitle={wizard?.filename}
         footer={(
           <div className="inv-actions">
@@ -140,7 +140,7 @@ export default function OpeningBalancePanel({ scope, can, userId }) {
         )}
       </Modal>
 
-      <SideDrawer open={!!open} onClose={() => setOpen(null)} busy={busy} size="xl"
+      <SideDrawer className="cc inv-panel" open={!!open} onClose={() => setOpen(null)} busy={busy} size="xl"
         title={open ? `${t('inventory.opening.batch')} ${open.ref || open.id?.slice(0, 8)}` : ''} closeLabel={t('inventory.actions.close')}>
         {open && (
           <div className="inv-hub" style={{ gap: 12 }}>

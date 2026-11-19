@@ -14,6 +14,7 @@
  *     load index, speed rating, DOT, temperature, who fitted the tyre).
  */
 import { fitmentKm } from './tyreLifetime'
+import { parsePosition, canonicalCode, describePosition } from './tyrePositions'
 
 /** Status token on tyre_records -> the label and tone the page shows. */
 export const STATUS_META = {
@@ -51,6 +52,47 @@ function num(v) {
 const dateOf = (r) => r?.issue_date || r?.fitment_date || null
 const positionOf = (r) => cleanSerial(r?.position || r?.tyre_position) || null
 
+/* Import placeholders that are not a wheel position ("0", "1", "N/A", a header
+ * word that landed in the cell). They read as unknown, never as a position. */
+const PLACEHOLDER_POSITION = /^(\d+|n\/?a|na|null|none|unknown|-+|tyre\s*position|position)$/i
+
+/**
+ * Position of one tyre record, for the register and the detail panel.
+ * Reads tyre_position then position, trims the old padded rows and shows the
+ * app's canonical code (tyrePositions.canonicalCode) when it parses, else the
+ * trimmed upper-case text. kind: 'current' = Active so it IS on that wheel;
+ * 'last' = Removed/Scrapped so it is only the last known wheel; 'unknown' =
+ * nothing usable, with the reason.
+ */
+export function positionInfo(r) {
+  const raw = cleanSerial(r?.tyre_position) || cleanSerial(r?.position) || ''
+  const fitted = String(r?.status || '').trim() === 'Active'
+  if (!raw) return { kind: 'unknown', code: null, label: null, fitted, reason: 'No wheel position recorded' }
+  if (PLACEHOLDER_POSITION.test(raw)) return { kind: 'unknown', code: null, label: null, fitted, reason: `Position "${raw}" is a placeholder` }
+  const parsed = parsePosition(raw)
+  const code = parsed ? canonicalCode(raw) : raw.toUpperCase().replace(/\s+/g, '')
+  const label = parsed ? describePosition(raw) : null
+  return { kind: fitted ? 'current' : 'last', code, label, fitted, reason: null }
+}
+
+/** One short caption for a position: whether it is fitted now or only last known. */
+export function positionCaption(info) {
+  if (!info || info.kind === 'unknown') return null
+  return info.kind === 'current' ? 'Fitted now' : 'Last known'
+}
+
+/**
+ * Site of one tyre record. The record's own site first; when it has none, the
+ * site of its vehicle in the fleet register (fleetSite), labelled as such.
+ */
+export function locationInfo(r, fleetSite = null) {
+  const own = cleanSerial(r?.site)
+  if (own) return { site: own, source: 'record', reason: null }
+  const fleet = cleanSerial(fleetSite ?? r?.fleet_site)
+  if (fleet) return { site: fleet, source: 'vehicle register', reason: null }
+  return { site: null, source: null, reason: cleanSerial(r?.asset_no) ? 'No site on the record or the vehicle' : 'Not fitted to a vehicle' }
+}
+
 /** Distance one fitment ran, or null when it was not measured. */
 export function recordKm(r) {
   // The shared km rule (tyreKm.js, T7). The old local rule preferred total_km,
@@ -68,7 +110,7 @@ export function currentAssignment(records) {
       return {
         asset_no: r.asset_no || null,
         vehicle_type: r.vehicle_type || null,
-        position: positionOf(r),
+        position: positionInfo(r).code,
         installed: dateOf(r),
         site: r.site || null,
         country: r.country || null,

@@ -73,7 +73,7 @@ export const NAV_COMMANDS = [
   { id: 'downtime',       label: 'Downtime Tracker',     path: '/downtime',     icon: 'Clock',      adminOnly: true, moduleKey: 'fleet_analytics' },
   { id: 'fuel-efficiency', label: 'Fuel Efficiency',     path: '/fuel-efficiency', icon: 'Gauge',   adminOnly: true, moduleKey: 'fleet_analytics' },
   // Stock & Procurement
-  { id: 'stock',          label: 'Stock Management',     path: '/stock',        icon: 'Package' },
+  { id: 'stock',          label: 'Inventory Control Center', path: '/stock',      icon: 'Package', keywords: ['stock', 'stock management', 'inventory', 'stock count', 'physical audit', 'stocktake', 'cycle count', 'discrepancy', 'bin', 'location', 'valuation', 'opening balance', 'consignment'] },
   { id: 'stock-replenishment', label: 'Stock Replenishment', path: '/stock-replenishment', icon: 'Package' },
   { id: 'scrap',          label: 'Scrap Management',     path: '/scrap',        icon: 'Trash2' },
   { id: 'budgets',        label: 'Budgets',              path: '/budgets',      icon: 'FileText' },

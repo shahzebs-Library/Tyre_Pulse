@@ -34,7 +34,7 @@ export const SECTIONS = [
   { key: 'controls', group: 'control', icon: 'ShieldCheck', cap: 'view' },
   { key: 'procurement', group: 'supply', icon: 'ShoppingCart', cap: 'view' },
   { key: 'receiving', group: 'supply', icon: 'PackageCheck', cap: 'view' },
-  { key: 'supplier', group: 'supply', icon: 'Handshake', cap: 'view' },
+  { key: 'supplier', group: 'supply', icon: 'Truck', cap: 'view' },
   { key: 'tyres', group: 'assets', icon: 'CircleDot', cap: 'view' },
   { key: 'identification', group: 'assets', icon: 'ScanLine', cap: 'view' },
   { key: 'valuation', group: 'insight', icon: 'Coins', cap: 'view_value' },

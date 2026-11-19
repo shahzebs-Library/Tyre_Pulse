@@ -25,7 +25,7 @@ void main() {
         expect(tokens.add(id.token), isTrue, reason: 'duplicate ${id.token}');
         expect(names.add(id.databaseName), isTrue);
       }
-      expect(RoleId.values, hasLength(17));
+      expect(RoleId.values, hasLength(18));
     });
 
     test(
@@ -125,7 +125,7 @@ void main() {
     });
 
     test('an unknown role with a raw value is not absent', () {
-      expect(UserRole.fromDatabase('Store Keeper').isAbsent, isFalse);
+      expect(UserRole.fromDatabase('Insurance Officer').isAbsent, isFalse);
     });
   });
 

@@ -12,6 +12,8 @@ import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/inventory/presentation/my_audits_screen.dart';
+import 'package:tyre_pulse/features/inventory/presentation/transfers_screen.dart';
 import 'package:tyre_pulse/features/stock_count/domain/stock_item.dart';
 import 'package:tyre_pulse/features/stock_count/presentation/stock_count_copy.dart';
 import 'package:tyre_pulse/features/stock_count/stock_count_providers.dart';
@@ -240,6 +242,23 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
         },
         backFallback: fallback,
         actions: <Widget>[
+          // Inventory counts and transfers are pushed with Navigator: their
+          // routes belong in reserved router files (see
+          // docs/inventory_reserved_patch.md). Same `stock` module gate.
+          IconButton(
+            key: const Key('stock.myCounts'),
+            tooltip: copy('myCounts'),
+            icon: const Icon(Icons.fact_check_outlined),
+            onPressed: () =>
+                unawaited(Navigator.of(context).push(MyAuditsScreen.route())),
+          ),
+          IconButton(
+            key: const Key('stock.transfers'),
+            tooltip: copy('transfers'),
+            icon: const Icon(Icons.swap_horiz_rounded),
+            onPressed: () =>
+                unawaited(Navigator.of(context).push(TransfersScreen.route())),
+          ),
           IconButton(
             key: const Key('stock.add'),
             tooltip: copy('add'),

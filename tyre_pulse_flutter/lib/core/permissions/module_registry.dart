@@ -381,6 +381,11 @@ const Map<ModuleKey, Set<RoleId>> flutterRoleDefaultExtensions =
     RoleId.fleetSupervisor,
     RoleId.fleetIncharge,
   },
+  // Stock Count and the inventory counts/transfers it hosts: Store Keeper
+  // runs the stores. The web grants it stock create (2026-10-12) and the
+  // inventory contract (docs/inventory/07) names it as a counting role. The
+  // server is still the boundary: every `inv_*` RPC re-checks the capability.
+  ModuleKey.stock: <RoleId>{RoleId.storeKeeper},
 };
 
 /// The registry itself.

@@ -646,10 +646,17 @@ void main() {
     // Cancel, Try again, "Details (required)" and "Evidence uploaded." reuse
     // actionClose, wfDialogCancel, actionRetry, wfBlockNoteLabel and
     // wfEvidenceUploaded.
-    test('en, ar and ur each carry exactly 2514 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2514);
-      expect(_translatableKeys(ar).length, 2514);
-      expect(_translatableKeys(ur).length, 2514);
+    // 2514 + 8 + 1 = 2523. Cloudflare Turnstile CAPTCHA on sign-in and
+    // self-registration (+8): the check's accessibility label, its loading /
+    // prompt / solved / expired / load-failed / timed-out status lines and
+    // the localized refusal sentence (captchaSemanticLabel ...
+    // captchaRefused). Try again reuses actionRetry. loginCompanyCodeHelp
+    // (+1): the access-help dialog says how a member of another company
+    // signs in ("company code/username").
+    test('en, ar and ur each carry exactly 2523 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2523);
+      expect(_translatableKeys(ar).length, 2523);
+      expect(_translatableKeys(ur).length, 2523);
     });
   });
 

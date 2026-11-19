@@ -29,6 +29,7 @@ import { toUserMessage } from '../../../../lib/safeError'
 import { useConsoleAuth } from '../../../ConsoleAuthContext'
 import { AttentionStrip, MovedHere, Pill, fmtNum } from '../PlatformKit'
 import BulkCsvDialog from './BulkCsvDialog'
+import OrgInvitationsPanel from '../../../../components/admin/OrgInvitationsPanel'
 
 const PAGE = 50
 const VIEWS_KEY = 'tp_console_user_views'
@@ -510,15 +511,16 @@ export default function PeopleTab({ data, onOpenManage }) {
         )}
       </ConfirmImpactDialog>
       <Drawer open={invite} title="Invite a user" subtitle="Add someone to Tyre Pulse" onClose={() => setInvite(false)}
-        footer={<><Btn onClick={() => setInvite(false)}>Close</Btn><Btn variant="primary" onClick={() => { try { navigator.clipboard?.writeText(`${window.location.origin}/login`) } catch { /* copy is a convenience */ } setToast('Sign-up link copied.') }}>Copy sign-up link</Btn></>}>
-        <Note tone="warning" icon={Info}>
-          Sending invitations is not built yet: creating a sign-in account needs a server step with the service key. Today people sign up themselves and wait in Waiting for approval, where you set their role, organization, country and sites.
+        footer={<><Btn onClick={() => setInvite(false)}>Close</Btn><Btn onClick={() => { try { navigator.clipboard?.writeText(`${window.location.origin}/login`) } catch { /* copy is a convenience */ } setToast('Sign-up link copied.') }}>Copy open sign-up link</Btn></>}>
+        <Note tone="accent" icon={Info}>
+          An invitation link adds the person to YOUR OWN company, approved, with the role you pick. To add someone to another company, its own Admin invites them from Settings, Security.
         </Note>
-        <ImpactBox what="How to add a person today"
-          change="Share the sign-up link. When they register, approve them from Waiting for approval and set role, organization, country and sites."
-          who="Only the person who signs up."
-          undo="Yes. Lock or reject the account before approving." />
-        <p className="text-[11px] text-gray-500">Registration is {`controlled on System Settings, Sign-in (registration_open and require_approval).`}</p>
+        <ImpactBox what="What an invitation does"
+          change="The person opens the link, chooses a username and password, and joins with the chosen role. No approval step."
+          who="Only the person who opens the link (and, if you enter an email, only that address)."
+          undo="Yes. Cancel the link before it is used, or lock the account afterwards." />
+        {invite && <OrgInvitationsPanel />}
+        <p className="text-[11px] text-gray-500">The open sign-up link still works as before: people who register there wait in Waiting for approval.</p>
       </Drawer>
 
       <Drawer open={orphanOpen} title="Sign-in accounts without a profile" subtitle="They can pass the password step but see nothing" onClose={() => setOrphanOpen(false)}>

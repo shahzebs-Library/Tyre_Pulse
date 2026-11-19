@@ -16,6 +16,7 @@
 library;
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:tyre_pulse/core/auth/captcha/turnstile_captcha.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
 
 /// The switch as the server reported it.
@@ -42,6 +43,10 @@ enum SelfRegistrationResult {
 
   /// No connection.
   offline,
+
+  /// A CAPTCHA token was sent and Supabase Auth refused it (`captcha_failed`).
+  /// The person completes the security check again and retries.
+  captchaFailed,
 
   /// Anything else.
   failed,
@@ -99,6 +104,7 @@ abstract interface class SelfRegistrationRepository {
     required String employeeId,
     required String password,
     String? fullName,
+    String? captchaToken,
   });
 }
 
@@ -129,7 +135,10 @@ final class SupabaseSelfRegistrationRepository
     required String employeeId,
     required String password,
     String? fullName,
+    String? captchaToken,
   }) async {
+    final String? captcha =
+        (captchaToken ?? '').trim().isEmpty ? null : captchaToken!.trim();
     final RegistrationPolicy? policy = await loadPolicy();
     if (policy == null) return SelfRegistrationResult.offline;
     if (!policy.open) return SelfRegistrationResult.closed;
@@ -138,6 +147,7 @@ final class SupabaseSelfRegistrationRepository
       await _client.auth.signUp(
         email: syntheticEmailFor(username),
         password: password,
+        captchaToken: captcha,
         data: <String, Object?>{
           'username': username.trim(),
           'full_name': name.isEmpty ? null : name,
@@ -146,7 +156,10 @@ final class SupabaseSelfRegistrationRepository
       ).timeout(_timeout);
       return SelfRegistrationResult.created;
     } on AuthException catch (error) {
-      return classifySignUpError(error.message);
+      return classifySignUpError(
+        error.code == null ? error.message : '${error.code} ${error.message}',
+        captchaSent: captcha != null,
+      );
     } on Object catch (error) {
       final String text = error.toString().toLowerCase();
       if (text.contains('socket') ||
@@ -161,12 +174,20 @@ final class SupabaseSelfRegistrationRepository
 
 /// A sign-up error message mapped to a result. The pattern matches the web,
 /// which reads a duplicate username through the synthetic email collision.
-SelfRegistrationResult classifySignUpError(String message) {
-  // Supabase Auth CAPTCHA protection refuses a sign-up with no captcha token,
-  // and the phone has no challenge to produce one. Treat it as registration
-  // being unavailable (the "ask your administrator" screen), never a retry.
-  if (RegExp('captcha', caseSensitive: false).hasMatch(message)) {
-    return SelfRegistrationResult.closed;
+///
+/// A CAPTCHA refusal depends on [captchaSent]: with a token, the token was
+/// rejected and the person retries the security check; without one (this
+/// build has no Turnstile site key while the server requires a CAPTCHA) the
+/// phone cannot answer it, so registration reads as unavailable (the "ask
+/// your administrator" screen), never as a retry.
+SelfRegistrationResult classifySignUpError(
+  String message, {
+  bool captchaSent = false,
+}) {
+  if (isCaptchaRefusal(message)) {
+    return captchaSent
+        ? SelfRegistrationResult.captchaFailed
+        : SelfRegistrationResult.closed;
   }
   final bool taken = RegExp(
     'already registered|already been registered|duplicate|already exists|'

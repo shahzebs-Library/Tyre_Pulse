@@ -8,6 +8,7 @@ import UpdateHistory from '../components/ReleaseNotes'
 import AppearancePanel from '../components/settings/AppearancePanel'
 import MySignaturePanel from '../components/settings/MySignaturePanel'
 import FeatureFlagsPanel from '../components/settings/FeatureFlagsPanel'
+import OrgInvitationsPanel from '../components/admin/OrgInvitationsPanel'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { Save, User, Settings2, Bell, BellRing, Database, Info, Target, Clock, Mail, Phone, Calendar, Trash2, Plus, Play, Lock, Shield, ShieldCheck, ShieldOff, AlertTriangle, Sparkles, Moon, Search } from 'lucide-react'
 import { motion } from 'framer-motion'
@@ -1729,6 +1730,10 @@ export default function Settings() {
         removing={removingMfa}
         msg={mfaMsg}
       />
+
+      {/* Company invitations: an Admin invites people into their own company.
+          The server (org_invite_member) decides the company from the session. */}
+      {isAdmin && <OrgInvitationsPanel />}
 
       {/* Delete My Account (in-app deletion request) */}
       <AccountDeletionCard userEmail={user?.email} />

@@ -28,7 +28,7 @@ import { buildInsurancePortfolio } from '../insurancePortfolio'
 const MAX_ROWS = 20000
 
 const SCHEDULE_COLS =
-  'id,country,policy_id,policy_no,cover_type,asset_no,plate_no,chassis_no,description,make,model_year,sum_insured,premium,currency,location,site,cover_from,cover_to,status,certificate_no,source_file,match_method'
+  'id,organisation_id,country,policy_id,policy_no,cover_type,asset_no,plate_no,chassis_no,description,make,model_year,sum_insured,premium,currency,location,site,cover_from,cover_to,status,certificate_no,source_file,match_method'
 
 const PROPERTY_COLS =
   'id,country,policy_id,policy_no,risk_id,location_name,site,city,gps_lat,gps_lng,building_age,floors,item_no,item_description,quantity,total_value,premium,currency,status,cover_description,period_from,period_to'
@@ -40,7 +40,7 @@ const PROPERTY_COLS =
  * omitted: see the engine's note on why it is not a metric.
  */
 const CLAIM_COLS =
-  'id,country,claim_no,sub_claim_no,intimation_date,accident_date,policy_no,policy_id,uw_year,claim_type,cause_of_loss,estimate_payment,paid_amount,outstanding_amount,currency,make,chassis_no,plate_no,claim_city,driver_name,claim_source,survey_no,asset_no,accident_id,match_method,match_confidence'
+  'id,organisation_id,country,claim_no,sub_claim_no,intimation_date,accident_date,policy_no,policy_id,uw_year,claim_type,cause_of_loss,estimate_payment,paid_amount,outstanding_amount,currency,make,chassis_no,plate_no,claim_city,driver_name,claim_source,survey_no,asset_no,accident_id,match_method,match_confidence'
 
 const LOSS_RUN_COLS =
   'id,country,policy_no,policy_id,cover_type,policy_year,period_from,period_to,month_no,month_label,paid_count,paid_amount,outstanding_count,outstanding_amount,salvage_received,salvage_receivable,sum_insured,premium,currency,is_total,report_date'

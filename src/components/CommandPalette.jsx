@@ -14,6 +14,7 @@ import {
   Loader2, WifiOff,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { currentOrgId, pinCompany } from '../lib/api/companyScope'
 import { useAuth } from '../contexts/AuthContext'
 import { useCommandPalette } from '../contexts/CommandPaletteContext'
 import { useFeatureGate } from '../hooks/useFeatureFlags'
@@ -241,11 +242,18 @@ export default function CommandPalette() {
         if (!cancelled) { setRecordGroups([]); setSearching(false) }
         return
       }
+      // Records are searched in the caller's company only. An ordinary user's
+      // RLS already means that; a super admin's read spans companies, and a hit
+      // from another company opens by its number (/vehicle/<code>), which the
+      // detail page resolves in the caller's company - a different machine.
+      // Unreadable company: RLS stays the boundary (never a wider read).
+      const org = isSuperAdmin ? await currentOrgId() : null
+      if (cancelled) return
       const settled = await Promise.allSettled(
         sources.map((s) => {
           const orClause = buildOrClause(s.fields, q)
           if (!orClause) return Promise.resolve({ data: [] })
-          return supabase.from(s.table).select(s.select).or(orClause).limit(5)
+          return pinCompany(supabase.from(s.table).select(s.select).or(orClause), org).limit(5)
         }),
       )
       if (cancelled) return

@@ -11,7 +11,7 @@ import { PGlite } from '@electric-sql/pglite'
 //   * an admin-corrected entry cannot be deleted or silently overwritten; corrections are append only
 const base1 = await readFile(new URL('../migrations/20261117130000_oem_illustrated_parts_catalog.sql', import.meta.url), 'utf8')
 const base2 = await readFile(new URL('../migrations/20261117143000_oem_parts_catalog_large_manuals.sql', import.meta.url), 'utf8')
-const adv = await readFile(new URL('../pending_migrations/20261118100000_oem_catalog_advanced.sql', import.meta.url), 'utf8')
+const adv = await readFile(new URL('../migrations/20261118100000_oem_catalog_advanced.sql', import.meta.url), 'utf8')
 const rollback = await readFile(new URL('../pending_migrations/20261118100000_oem_catalog_advanced_ROLLBACK.sql', import.meta.url), 'utf8')
 const id = (n) => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`
 const ORG_A = id(900); const ORG_B = id(901)

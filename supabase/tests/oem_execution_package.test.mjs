@@ -9,7 +9,7 @@ import { PGlite } from '@electric-sql/pglite'
 //  * the apply is all-or-nothing; the baseline-driven rollback restores EXACT policies and grants (zero diff)
 //  * the guards abort before any change when the catalog does not match the baseline
 const read = (p) => readFile(new URL(p, import.meta.url), 'utf8')
-const migPath = '../pending_migrations/20261118100000_oem_catalog_advanced.sql'
+const migPath = '../migrations/20261118100000_oem_catalog_advanced.sql'
 const M = await read(migPath)
 const files = {}
 for (const f of ['02_REHEARSAL_rolled_back', '02b_after_rehearsal_nothing_persisted', '03_APPLY_migration', '04_ROLLBACK_only_if_needed', '04b_VERIFY_rollback_vs_baseline', '06_VINAY_view_only_grant', '07_RECORD_in_migration_ledger']) files[f] = await read(`../../docs/oem-catalog/execution/${f}.sql`)

@@ -3,7 +3,7 @@
 Usage: python3 scripts/build-oem-execution-package.py"""
 import hashlib, pathlib
 root = pathlib.Path(__file__).resolve().parent.parent
-mig_path = root / 'supabase/pending_migrations/20261118100000_oem_catalog_advanced.sql'
+mig_path = root / 'supabase/migrations/20261118100000_oem_catalog_advanced.sql'
 M = mig_path.read_text()
 SHA = hashlib.sha256(M.encode()).hexdigest()
 out = root / 'docs/oem-catalog/execution'

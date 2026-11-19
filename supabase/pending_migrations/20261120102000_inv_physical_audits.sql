@@ -35,10 +35,11 @@
 -- Discrepancy vocabulary is provisional (owner list not in the repo):
 --   variance_type: shortage, excess, unexpected_item, not_counted,
 --     missing_serial, unexpected_serial, condition_mismatch
---   root_cause_category: counting_error, unrecorded_issue, unrecorded_receipt,
---     unrecorded_transfer, wrong_location, wrong_item_code, damage,
---     theft_suspected, supplier_short_delivery, data_entry_error, timing_cutoff,
---     unknown
+--   root_cause_category (= web src/lib/inventory/auditView.js, 12 values):
+--     count_error, unrecorded_issue, unrecorded_receipt, wrong_location,
+--     wrong_item, damaged, expired_obsolete, theft_suspected, supplier_shortage,
+--     uom_error, data_entry, unknown. A cutoff-timing difference is not a root
+--     cause: the reconciliation already moves it into cutoff_adjustment_qty.
 -- =============================================================================
 begin;
 
@@ -135,9 +136,9 @@ create table if not exists public.inventory_discrepancies (
   serial text,
   variance_type text not null check (variance_type in ('shortage','excess','unexpected_item','not_counted',
     'missing_serial','unexpected_serial','condition_mismatch')),
-  root_cause_category text check (root_cause_category is null or root_cause_category in ('counting_error',
-    'unrecorded_issue','unrecorded_receipt','unrecorded_transfer','wrong_location','wrong_item_code','damage',
-    'theft_suspected','supplier_short_delivery','data_entry_error','timing_cutoff','unknown')),
+  root_cause_category text check (root_cause_category is null or root_cause_category in ('count_error',
+    'unrecorded_issue','unrecorded_receipt','wrong_location','wrong_item','damaged','expired_obsolete',
+    'theft_suspected','supplier_shortage','uom_error','data_entry','unknown')),
   snapshot_qty numeric, cutoff_adjustment_qty numeric not null default 0,
   expected_qty numeric, counted_qty numeric, variance_qty numeric,
   unit_cost numeric, currency text, value_impact numeric,

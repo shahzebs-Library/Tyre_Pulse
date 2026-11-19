@@ -3,7 +3,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
-import { buildDb, asUser, rpc, q, one, id, U, code } from './inventory_harness.test.mjs'
+import { buildDb, asUser, rpc, q, one, id, U, code , call } from './inventory_harness.test.mjs'
 
 const j = JSON.stringify
 const FILTER = id(100); const BRAKE = id(104); const TYRE = id(101)
@@ -26,7 +26,7 @@ async function leaks (db, uid, needles) {
 test('blind physical audit end to end', async t => {
   const db = await buildDb()
   try {
-    const loc = p => rpc(db, U.admin, 'inv_location_upsert', [j(p)])
+    const loc = p => call(db, U.admin, 'inv_location_upsert', p).then(r => r.id)
     const wh = await loc({ country: 'KSA', site: 'S1', location_type: 'warehouse', code: 'WH1' })
     const bin = await loc({ country: 'KSA', site: 'S1', location_type: 'bin', code: 'A-01', parent_id: wh })
     const other = await loc({ country: 'KSA', site: 'S2', location_type: 'warehouse', code: 'WH2' })
@@ -36,16 +36,16 @@ test('blind physical audit end to end', async t => {
     const outside = await post(U.keeper, { idempotency_key: 'a3', item_id: FILTER, location_id: other, movement_type: 'receipt', qty_change: 7 })
 
     await t.test('segregation is enforced at creation', async () => {
-      await assert.rejects(rpc(db, U.reviewer, 'inv_audit_create', [j({ country: 'KSA', site: 'S1', audit_type: 'bin',
-        scope: { location_ids: [wh] }, counter_id: U.counter, approver_id: U.counter })]), /check constraint|violates/)
-      await assert.rejects(rpc(db, U.counter, 'inv_audit_create', [j({ country: 'KSA', site: 'S1', audit_type: 'bin' })]), code('42501'))
+      await assert.rejects(call(db, U.reviewer, 'inv_audit_create', { country: 'KSA', site: 'S1', audit_type: 'bin',
+        scope: { location_ids: [wh] }, counter_id: U.counter, approver_id: U.counter }).then(r => r.id), /check constraint|violates/)
+      await assert.rejects(call(db, U.counter, 'inv_audit_create', { country: 'KSA', site: 'S1', audit_type: 'bin' }).then(r => r.id), code('42501'))
     })
 
-    const audit = await rpc(db, U.reviewer, 'inv_audit_create', [j({ country: 'KSA', site: 'S1', audit_type: 'bin',
-      scope: { location_ids: [wh] }, counter_id: U.counter, reviewer_id: U.reviewer, approver_id: U.approver, instructions: 'Count bin A-01' })])
-    await rpc(db, U.reviewer, 'inv_audit_schedule', [audit, new Date(Date.now() + 864e5).toISOString(), null])
-    await assert.rejects(rpc(db, U.counter, 'inv_audit_start', [audit]), code('42501'))
-    const started = await rpc(db, U.reviewer, 'inv_audit_start', [audit])
+    const audit = await call(db, U.reviewer, 'inv_audit_create', { country: 'KSA', site: 'S1', audit_type: 'bin',
+      scope: { location_ids: [wh] }, counter_id: U.counter, reviewer_id: U.reviewer, approver_id: U.approver, instructions: 'Count bin A-01' }).then(r => r.id)
+    await call(db, U.reviewer, 'inv_audit_schedule', { audit_id: audit, due_at: new Date(Date.now() + 864e5).toISOString() })
+    await assert.rejects(call(db, U.counter, 'inv_audit_start', { audit_id: audit }), code('42501'))
+    const started = await call(db, U.reviewer, 'inv_audit_start', { audit_id: audit })
     assert.equal(started.snapshot_lines, 2)
 
     await t.test('the counter cannot see an expected quantity through any table, view or RPC', async () => {
@@ -61,7 +61,7 @@ test('blind physical audit end to end', async t => {
       await assert.rejects(post(U.counter, { idempotency_key: 'c1', stock_id: f.stock_id, movement_type: 'receipt', qty_change: 1 }), e => e.code === '42501' && !/\d/.test(e.message))
       await assert.rejects(rpc(db, U.counter, 'set_stock_count', [f.stock_id, 3, 'peek']), code('42501'))
       await assert.rejects(rpc(db, U.counter, 'post_stock_movement', [f.stock_id, 'receipt', 1, 'peek', null]), code('42501'))
-      await assert.rejects(rpc(db, U.counter, 'inv_audit_reconcile', [audit]), code('42501'))
+      await assert.rejects(call(db, U.counter, 'inv_audit_reconcile', { audit_id: audit }), code('42501'))
       const view = await rpc(db, U.counter, 'inv_audit_counter_view', [audit])
       const text = JSON.stringify(view)
       assert.ok(!/expected|on_hand|unit_cost|value|variance/i.test(text), text)
@@ -73,25 +73,25 @@ test('blind physical audit end to end', async t => {
     // a movement after the snapshot, before the count (cutoff reconciliation)
     await post(U.keeper, { idempotency_key: 'a4', stock_id: f.stock_id, movement_type: 'issue', qty_change: -2 })
     const c1 = randomUUID(); const c2 = randomUUID()
-    const sub = await rpc(db, U.counter, 'inv_count_submit', [audit, 'dev-1', j([
+    const sub = await call(db, U.counter, 'inv_count_submit', { audit_id: audit, device_id: 'dev-1', lines: [
       { client_uuid: c1, location_id: bin, item_id: FILTER, counted_qty: 8, condition: 'good' },
       { client_uuid: c2, location_id: bin, item_id: BRAKE, counted_qty: 3 },
       { client_uuid: 'not-a-uuid', item_id: BRAKE, counted_qty: 1 },
-    ])])
+    ] })
     assert.deepEqual(sub.accepted.sort(), [c1, c2].sort()); assert.equal(sub.rejected.length, 1)
     assert.deepEqual(Object.keys(sub).sort(), ['accepted', 'duplicates', 'rejected'])
-    const dup = await rpc(db, U.counter, 'inv_count_submit', [audit, 'dev-1', j([{ client_uuid: c1, location_id: bin, item_id: FILTER, counted_qty: 8 }])])
+    const dup = await call(db, U.counter, 'inv_count_submit', { audit_id: audit, device_id: 'dev-1', lines: [{ client_uuid: c1, location_id: bin, item_id: FILTER, counted_qty: 8 }] })
     assert.deepEqual(dup.duplicates, [c1])
     // a movement after the line was counted must NOT change its expected quantity
     await post(U.keeper, { idempotency_key: 'a5', stock_id: b.stock_id, movement_type: 'receipt', qty_change: 1, unit_cost: 20 })
-    await rpc(db, U.counter, 'inv_audit_complete_counting', [audit])
+    await call(db, U.counter, 'inv_audit_complete_counting', { audit_id: audit })
 
     await t.test('late offline lines are accepted only if counted before counting closed', async () => {
       const early = randomUUID(); const late = randomUUID()
-      const r = await rpc(db, U.counter, 'inv_count_submit', [audit, 'dev-2', j([
+      const r = await call(db, U.counter, 'inv_count_submit', { audit_id: audit, device_id: 'dev-2', lines: [
         { client_uuid: early, location_id: bin, item_id: TYRE, counted_qty: 1, counted_at: new Date(Date.now() - 60000).toISOString() },
         { client_uuid: late, location_id: bin, item_id: TYRE, counted_qty: 1, counted_at: new Date(Date.now() + 60000).toISOString() },
-      ])])
+      ] })
       assert.deepEqual(r.accepted, [early]); assert.equal(r.rejected[0].client_uuid, late)
       const row = await one(db, 'select late, unexpected from inventory_count_lines where client_uuid = $1', [early])
       assert.equal(row.late, true); assert.equal(row.unexpected, true)
@@ -99,7 +99,7 @@ test('blind physical audit end to end', async t => {
 
     let disc
     await t.test('cutoff reconciliation: movements before the count adjust the expectation, later ones do not', async () => {
-      const rec = await rpc(db, U.reviewer, 'inv_audit_reconcile', [audit])
+      const rec = await call(db, U.reviewer, 'inv_audit_reconcile', { audit_id: audit })
       assert.equal(rec.matched, 1)
       const rows = await q(db, 'select * from inventory_discrepancies where audit_id = $1 order by variance_type', [audit])
       const short = rows.find(r => r.variance_type === 'shortage')
@@ -112,34 +112,34 @@ test('blind physical audit end to end', async t => {
     })
 
     await t.test('recount must be a different person who has not counted', async () => {
-      await assert.rejects(rpc(db, U.reviewer, 'inv_recount_assign', [audit, U.counter, `{${disc.id}}`]), code('42501'))
-      await assert.rejects(rpc(db, U.reviewer, 'inv_recount_assign', [audit, U.approver, `{${disc.id}}`]), code('42501'))
-      const ra = await rpc(db, U.reviewer, 'inv_recount_assign', [audit, U.keeper, `{${disc.id}}`])
+      await assert.rejects(call(db, U.reviewer, 'inv_recount_assign', { audit_id: audit, recount_counter_id: U.counter, discrepancy_ids: [disc.id] }), code('42501'))
+      await assert.rejects(call(db, U.reviewer, 'inv_recount_assign', { audit_id: audit, recount_counter_id: U.approver, discrepancy_ids: [disc.id] }), code('42501'))
+      const ra = await call(db, U.reviewer, 'inv_recount_assign', { audit_id: audit, recount_counter_id: U.keeper, discrepancy_ids: [disc.id] })
       assert.equal(ra.round, 2)
       // the recount counter is blind too
       assert.deepEqual(await leaks(db, U.keeper, [b.stock_id]), [])
       const rc = randomUUID()
       // physical truth at recount time: 3 found earlier + 1 received after the first count = 4,
       // against an expectation of 5 (4 snapshot + the receipt, now before this line's count time)
-      await rpc(db, U.keeper, 'inv_count_submit', [audit, 'dev-3', j([{ client_uuid: rc, location_id: bin, item_id: BRAKE, counted_qty: 4 }])])
-      await rpc(db, U.keeper, 'inv_audit_complete_counting', [audit])
-      const rec2 = await rpc(db, U.reviewer, 'inv_audit_reconcile', [audit])
+      await call(db, U.keeper, 'inv_count_submit', { audit_id: audit, device_id: 'dev-3', lines: [{ client_uuid: rc, location_id: bin, item_id: BRAKE, counted_qty: 4 }] })
+      await call(db, U.keeper, 'inv_audit_complete_counting', { audit_id: audit })
+      const rec2 = await call(db, U.reviewer, 'inv_audit_reconcile', { audit_id: audit })
       assert.ok(rec2.discrepancies >= 1)
       disc = await one(db, `select * from inventory_discrepancies where audit_id = $1 and variance_type = 'shortage' and status = 'open'`, [audit])
       assert.equal(disc.round, 2)
     })
 
     await t.test('adjustment approval refuses counters, the creator and the proposer; approval posts through the ledger', async () => {
-      await assert.rejects(rpc(db, U.counter, 'inv_discrepancy_update', [disc.id, j({ root_cause_category: 'counting_error', status: 'proposed' })]), code('42501'))
-      await rpc(db, U.reviewer, 'inv_discrepancy_update', [disc.id, j({ root_cause_category: 'unrecorded_issue', status: 'proposed',
-        investigation_notes: 'job card missing' })])
+      await assert.rejects(call(db, U.counter, 'inv_discrepancy_update', { discrepancy_id: disc.id, ...{ root_cause_category: 'count_error', status: 'proposed' } }), code('42501'))
+      await call(db, U.reviewer, 'inv_discrepancy_update', { discrepancy_id: disc.id, ...{ root_cause_category: 'unrecorded_issue', status: 'proposed',
+        investigation_notes: 'job card missing' } })
       const adj = await one(db, 'select * from inventory_adjustments where discrepancy_id = $1', [disc.id])
       assert.equal(Number(adj.qty_change), -1)
-      await assert.rejects(rpc(db, U.counter, 'inv_adjustment_approve', [adj.id, 'approve', 'ok']), code('42501'))
+      await assert.rejects(call(db, U.counter, 'inv_adjustment_approve', { adjustment_id: adj.id, decision: 'approve', note: 'ok' }), code('42501'))
       await db.exec(`insert into test_caps values ('${U.reviewer}','adjustment_approve')`)
-      await assert.rejects(rpc(db, U.reviewer, 'inv_adjustment_approve', [adj.id, 'approve', 'ok']), code('42501'))
-      await assert.rejects(rpc(db, U.keeper, 'inv_adjustment_approve', [adj.id, 'approve', 'ok']), code('42501'))
-      const ok = await rpc(db, U.approver, 'inv_adjustment_approve', [adj.id, 'approve', 'agreed'])
+      await assert.rejects(call(db, U.reviewer, 'inv_adjustment_approve', { adjustment_id: adj.id, decision: 'approve', note: 'ok' }), code('42501'))
+      await assert.rejects(call(db, U.keeper, 'inv_adjustment_approve', { adjustment_id: adj.id, decision: 'approve', note: 'ok' }), code('42501'))
+      const ok = await call(db, U.approver, 'inv_adjustment_approve', { adjustment_id: adj.id, decision: 'approve', note: 'agreed' })
       assert.equal(ok.status, 'posted')
       const mv = await one(db, 'select * from stock_movements where id = $1', [ok.movement_id])
       assert.equal(mv.movement_type, 'adjustment_down'); assert.equal(mv.source_doc_type, 'inventory_adjustment')
@@ -147,17 +147,17 @@ test('blind physical audit end to end', async t => {
     })
 
     await t.test('close requires every discrepancy decided; afterwards the counter may read the result', async () => {
-      await assert.rejects(rpc(db, U.approver, 'inv_audit_close', [audit, 'done']), code('22023'))
+      await assert.rejects(call(db, U.approver, 'inv_audit_close', { audit_id: audit, note: 'done' }), code('22023'))
       const rest = await q(db, `select id from inventory_discrepancies where audit_id = $1 and status = 'open'`, [audit])
-      for (const r of rest) await rpc(db, U.reviewer, 'inv_discrepancy_update', [r.id, j({ root_cause_category: 'wrong_location', status: 'closed' })])
-      await assert.rejects(rpc(db, U.counter, 'inv_audit_close', [audit, 'mine']), code('42501'))
-      const cl = await rpc(db, U.approver, 'inv_audit_close', [audit, 'done'])
+      for (const r of rest) await call(db, U.reviewer, 'inv_discrepancy_update', { discrepancy_id: r.id, ...{ root_cause_category: 'wrong_location', status: 'closed' } })
+      await assert.rejects(call(db, U.counter, 'inv_audit_close', { audit_id: audit, note: 'mine' }), code('42501'))
+      const cl = await call(db, U.approver, 'inv_audit_close', { audit_id: audit, note: 'done' })
       assert.equal(cl.status, 'closed')
       const snap = await asUser(db, U.counter, async () => q(db, 'select id from inventory_audit_snapshot_lines where audit_id = $1', [audit]))
       assert.equal(snap.length, 2)
       const bal = await asUser(db, U.counter, async () => q(db, 'select id from stock_records where id = $1', [f.stock_id]))
       assert.equal(bal.length, 1)
-      const after = await rpc(db, U.counter, 'inv_count_submit', [audit, 'dev-1', j([{ client_uuid: randomUUID(), item_id: FILTER, location_id: bin, counted_qty: 1 }])])
+      const after = await call(db, U.counter, 'inv_count_submit', { audit_id: audit, device_id: 'dev-1', lines: [{ client_uuid: randomUUID(), item_id: FILTER, location_id: bin, counted_qty: 1 }] })
       assert.equal(after.rejected[0].reason, 'Audit is closed')
     })
   } finally { await db.close() }

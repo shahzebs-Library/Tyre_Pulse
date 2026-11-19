@@ -2,7 +2,7 @@
 // opening balances and master-data review (PGlite, synthetic data).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildDb, rpc, q, one, id, U, code } from './inventory_harness.test.mjs'
+import { buildDb, rpc, q, one, id, U, code , call } from './inventory_harness.test.mjs'
 
 const j = JSON.stringify
 const FILTER = id(100); const BRAKE = id(104); const SUP = id(200)
@@ -10,7 +10,7 @@ const FILTER = id(100); const BRAKE = id(104); const SUP = id(200)
 async function setup () {
   const db = await buildDb()
   await db.exec(`insert into test_caps values ('${U.keeper}','procure'),('${U.keeper}','view_value'),('${U.approver}','procure'),('${U.approver}','financial_post')`)
-  const loc = p => rpc(db, U.admin, 'inv_location_upsert', [j(p)])
+  const loc = p => call(db, U.admin, 'inv_location_upsert', p).then(r => r.id)
   const L = {
     s1: await loc({ country: 'KSA', site: 'S1', location_type: 'warehouse', code: 'WH1' }),
     s2: await loc({ country: 'KSA', site: 'S2', location_type: 'warehouse', code: 'WH2' }),
@@ -70,11 +70,11 @@ test('reservations, issue consuming a reservation, and consignment kept out of o
     assert.equal(Number(iss.value_change), -20)
     let b = await bal(s.stock_id)
     assert.equal(Number(b.qty_on_hand), 3); assert.equal(Number(b.qty_reserved), 1)
-    await rpc(db, U.keeper, 'inv_release', [res.id, null, 'rel-1'])
+    await call(db, U.keeper, 'inv_release', { reservation_id: res.id, idempotency_key: 'rel-1' })
     b = await bal(s.stock_id); assert.equal(Number(b.qty_reserved), 0)
     // consignment
-    await rpc(db, U.keeper, 'inv_supplier_agreement_upsert', [j({ country: 'KSA', supplier_id: SUP, agreement_type: 'consignment',
-      agreement_no: 'CON-1', currency: 'SAR', agreed_prices: { [BRAKE]: 15 } })])
+    await call(db, U.keeper, 'inv_supplier_agreement_upsert', { country: 'KSA', supplier_id: SUP, agreement_type: 'consignment',
+      agreement_no: 'CON-1', currency: 'SAR', agreed_prices: { [BRAKE]: 15 } }).then(r => r.id ?? r)
     await assert.rejects(post(U.keeper, { idempotency_key: 'c2', item_id: BRAKE, location_id: L.s1, movement_type: 'consignment_receipt', qty_change: 4 }), code('22023'))
     const cons = await post(U.keeper, { idempotency_key: 'c3', item_id: BRAKE, location_id: L.s1, ownership: 'consignment',
       owner_supplier_id: SUP, movement_type: 'consignment_receipt', qty_change: 4, unit_cost: 15 })
@@ -121,7 +121,7 @@ test('goods receipt against a PO and three-way match (no posting)', async () => 
   try {
     const po = (await one(db, `insert into purchase_orders(po_number, organisation_id, country, site, supplier_id, currency, status)
       values ('PO-77', '${id(900)}', 'KSA', 'S1', '${SUP}', 'SAR', 'Submitted') returning id`)).id
-    const pl = await rpc(db, U.keeper, 'inv_po_add_line', [po, j({ item_id: FILTER, qty_ordered: 10, unit_price: 5, location_id: L.s1 })])
+    const pl = await call(db, U.keeper, 'inv_po_add_line', { po_id: po, ...{ item_id: FILTER, qty_ordered: 10, unit_price: 5, location_id: L.s1 } }).then(r => r.id)
     const g = await rpc(db, U.keeper, 'inv_receive_goods', [j({ idempotency_key: 'grn-1', country: 'KSA', site: 'S1', po_id: po, supplier_id: SUP,
       lines: [{ po_line_id: pl, item_id: FILTER, location_id: L.s1, qty_received: 6, qty_rejected: 1 }] })])
     assert.equal(g.lines, 1)
@@ -133,34 +133,34 @@ test('goods receipt against a PO and three-way match (no posting)', async () => 
     assert.equal(Number(bal.qty_on_hand), 5); assert.equal(Number(bal.avg_unit_cost), 5)
     await assert.rejects(rpc(db, U.keeper, 'inv_receive_goods', [j({ idempotency_key: 'grn-2', country: 'KSA', site: 'S1', po_id: po,
       lines: [{ po_line_id: pl, item_id: FILTER, location_id: L.s1, qty_received: 6 }] })]), code('22023'))
-    const inv = await rpc(db, U.approver, 'inv_supplier_invoice_create', [j({ country: 'KSA', supplier_id: SUP, invoice_no: 'INV-1', currency: 'SAR', po_id: po,
-      lines: [{ po_line_id: pl, item_id: FILTER, qty: 6, unit_price: 5.5 }] })])
-    const m = await rpc(db, U.approver, 'inv_supplier_invoice_match', [inv])
+    const inv = await call(db, U.approver, 'inv_supplier_invoice_create', { country: 'KSA', supplier_id: SUP, invoice_no: 'INV-1', currency: 'SAR', po_id: po,
+      lines: [{ po_line_id: pl, item_id: FILTER, qty: 6, unit_price: 5.5 }] }).then(r => r.id ?? r)
+    const m = await call(db, U.approver, 'inv_supplier_invoice_match', { invoice_id: inv })
     assert.equal(m.match_status, 'qty_and_price_mismatch'); assert.equal(m.posting, 'none')
-    const inv2 = await rpc(db, U.approver, 'inv_supplier_invoice_create', [j({ country: 'KSA', supplier_id: SUP, invoice_no: 'INV-2', currency: 'SAR', po_id: po,
-      lines: [{ po_line_id: pl, item_id: FILTER, qty: 5, unit_price: 5 }] })])
+    const inv2 = await call(db, U.approver, 'inv_supplier_invoice_create', { country: 'KSA', supplier_id: SUP, invoice_no: 'INV-2', currency: 'SAR', po_id: po,
+      lines: [{ po_line_id: pl, item_id: FILTER, qty: 5, unit_price: 5 }] }).then(r => r.id ?? r)
     await db.exec(`update supplier_invoices set status = 'rejected' where id = '${inv}'`)
-    assert.equal((await rpc(db, U.approver, 'inv_supplier_invoice_match', [inv2])).match_status, 'matched')
+    assert.equal((await call(db, U.approver, 'inv_supplier_invoice_match', { invoice_id: inv2 })).match_status, 'matched')
   } finally { await db.close() }
 })
 
 test('opening balance: legacy rows reviewed, preparer cannot approve, drift recorded not posted', async () => {
   const { db, L, bal } = await setup()
   try {
-    const batch = await rpc(db, U.keeper, 'inv_opening_batch_create', ['KSA', 'S1', 'OB-2026-01', 'legacy_stock_records'])
-    const n = await rpc(db, U.keeper, 'inv_opening_batch_seed_legacy', [batch])
+    const cb = await call(db, U.keeper, 'inv_opening_batch_create', { country: 'KSA', site: 'S1', reference: 'OB-2026-01', source: 'legacy_stock_records' })
+    const batch = cb.batch_id; const n = cb.seeded_legacy_lines
     assert.equal(n, 2)
     const lines = await q(db, 'select * from opening_balance_lines where batch_id = $1 order by line_no', [batch])
     const rim = lines.find(l => l.target_stock_id === id(401)); const tyre = lines.find(l => l.target_stock_id === id(400))
     assert.equal(rim.history_certainty, 'uncertain'); assert.equal(Number(rim.legacy_drift), 4); assert.equal(rim.missing_cost, true)
     assert.equal(tyre.history_certainty, 'known')
-    await assert.rejects(rpc(db, U.keeper, 'inv_opening_batch_submit', [batch]), code('22023'))
-    await rpc(db, U.keeper, 'inv_opening_line_map', [rim.id, j({ mapping_status: 'mapped', item_id: BRAKE, location_id: L.s1, qty: 3, unit_cost: 7 })])
-    await rpc(db, U.keeper, 'inv_opening_line_map', [tyre.id, j({ mapping_status: 'excluded', notes: 'tyres via tyre_items' })])
-    await rpc(db, U.keeper, 'inv_opening_batch_submit', [batch])
+    await assert.rejects(call(db, U.keeper, 'inv_opening_batch_submit', { batch_id: batch }), code('22023'))
+    await call(db, U.keeper, 'inv_opening_line_map', { line_id: rim.id, ...{ mapping_status: 'mapped', item_id: BRAKE, location_id: L.s1, qty: 3, unit_cost: 7 } })
+    await call(db, U.keeper, 'inv_opening_line_map', { line_id: tyre.id, ...{ mapping_status: 'excluded', notes: 'tyres via tyre_items' } })
+    await call(db, U.keeper, 'inv_opening_batch_submit', { batch_id: batch })
     await db.exec(`insert into test_caps values ('${U.keeper}','adjustment_approve')`)
-    await assert.rejects(rpc(db, U.keeper, 'inv_opening_batch_decide', [batch, 'approve', 'mine']), code('42501'))
-    const ok = await rpc(db, U.approver, 'inv_opening_batch_decide', [batch, 'approve', 'checked against count'])
+    await assert.rejects(call(db, U.keeper, 'inv_opening_batch_decide', { batch_id: batch, decision: 'approve', note: 'mine' }), code('42501'))
+    const ok = await call(db, U.approver, 'inv_opening_batch_approve', { batch_id: batch, decision: 'approve', note: 'checked against count' })
     assert.equal(ok.lines_posted, 1)
     const b = await bal(id(401))
     assert.equal(Number(b.qty_on_hand), 3); assert.equal(Number(b.avg_unit_cost), 7); assert.equal(b.item_id, BRAKE)
@@ -174,18 +174,18 @@ test('opening balance: legacy rows reviewed, preparer cannot approve, drift reco
 test('master data review: no auto-merge, proposer cannot approve', async () => {
   const { db } = await setup()
   try {
-    const r = await rpc(db, U.keeper, 'inv_master_review_submit', [j({ item_id: FILTER, change_type: 'update', reason: 'set levels',
-      proposed: { min_qty: 2, max_qty: 10, stocked: true } })])
-    await assert.rejects(rpc(db, U.keeper, 'inv_master_review_submit', [j({ item_id: FILTER, change_type: 'update', reason: 'x', proposed: { item_code: 'HACK' } })]), code('22023'))
+    const r = await call(db, U.keeper, 'inv_master_review_submit', { item_id: FILTER, change_type: 'update', reason: 'set levels',
+      proposed: { min_qty: 2, max_qty: 10, stocked: true } }).then(r => r.id ?? r)
+    await assert.rejects(call(db, U.keeper, 'inv_master_review_submit', { item_id: FILTER, change_type: 'update', reason: 'x', proposed: { item_code: 'HACK' } }).then(r => r.id ?? r), code('22023'))
     await db.exec(`update profiles set role = 'Manager' where id = '${U.keeper}'`)
-    await assert.rejects(rpc(db, U.keeper, 'inv_master_review_decide', [r, 'approve', 'ok']), code('42501'))
+    await assert.rejects(call(db, U.keeper, 'inv_master_review_decide', { review_id: r, decision: 'approve', note: 'ok' }), code('42501'))
     await db.exec(`update profiles set role = 'Store Keeper' where id = '${U.keeper}'`)
-    await rpc(db, U.approver, 'inv_master_review_decide', [r, 'approve', 'ok'])
+    await call(db, U.approver, 'inv_master_review_decide', { review_id: r, decision: 'approve', note: 'ok' })
     const m = await one(db, 'select min_qty, max_qty, stocked from material_master where id = $1', [FILTER])
     assert.equal(Number(m.min_qty), 2); assert.equal(m.stocked, true)
-    const merge = await rpc(db, U.keeper, 'inv_master_review_submit', [j({ item_id: BRAKE, target_item_id: FILTER, change_type: 'merge', reason: 'duplicate?' })])
+    const merge = await call(db, U.keeper, 'inv_master_review_submit', { item_id: BRAKE, target_item_id: FILTER, change_type: 'merge', reason: 'duplicate?' }).then(r => r.id ?? r)
     assert.equal((await one(db, 'select status from material_master where id = $1', [BRAKE])).status, 'active')
-    await rpc(db, U.approver, 'inv_master_review_decide', [merge, 'reject', 'different part'])
+    await call(db, U.approver, 'inv_master_review_decide', { review_id: merge, decision: 'reject', note: 'different part' })
     assert.equal((await one(db, 'select status from material_master where id = $1', [BRAKE])).status, 'active')
   } finally { await db.close() }
 })

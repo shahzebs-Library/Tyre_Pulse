@@ -32,6 +32,7 @@ export const MIGRATIONS = [
   '20261120104000_inv_valuation.sql',
   '20261120105000_inv_tyre_items.sql',
   '20261120106000_inv_oem_fitments.sql',
+  '20261120107000_inv_api_contract.sql',
 ]
 export const ROLLBACKS = MIGRATIONS.map(f => f.replace('.sql', '_ROLLBACK.sql'))
 export const sqlOf = f => PM(f)
@@ -149,6 +150,21 @@ create table public.work_order_stock_reservation_lines(reservation_id uuid not n
   quantity integer not null check (quantity > 0 and quantity <= 100000), primary key (reservation_id, stock_id));
 create function private.reserve_work_order_stock_internal(p_work_order_id uuid, p_lines jsonb, p_idempotency_key text) returns jsonb language sql as $$ select null::jsonb $$;
 create function private.release_work_order_stock_internal(p_work_order_id uuid, p_reason text) returns jsonb language sql as $$ select null::jsonb $$;
+-- legacy writers, live signatures/ACL (bodies stubbed; the rollback test proves they come back)
+create function public.post_stock_movement(p_stock_id uuid, p_type text, p_qty numeric, p_reason text default null,
+  p_reference text default null) returns jsonb language sql as $$ select '{"legacy":"post"}'::jsonb $$;
+create function public.set_stock_count(p_stock_id uuid, p_count numeric, p_reason text default null)
+  returns jsonb language sql as $$ select '{"legacy":"count"}'::jsonb $$;
+create function public.save_stock_entry(p_request_id uuid, p_country text, p_site text, p_mode text, p_reference text,
+  p_notes text, p_lines jsonb) returns jsonb language sql as $$ select '{"legacy":"save"}'::jsonb $$;
+create function public.transfer_stock_entry(p_request_id uuid, p_from uuid, p_to uuid, p_qty integer, p_expected_from integer,
+  p_expected_to integer, p_notes text default ''::text) returns jsonb language sql as $$ select '{"legacy":"transfer"}'::jsonb $$;
+revoke all on function public.post_stock_movement(uuid,text,numeric,text,text), public.set_stock_count(uuid,numeric,text),
+  public.save_stock_entry(uuid,text,text,text,text,text,jsonb), public.transfer_stock_entry(uuid,uuid,uuid,integer,integer,integer,text)
+  from public, anon;
+grant execute on function public.post_stock_movement(uuid,text,numeric,text,text), public.set_stock_count(uuid,numeric,text),
+  public.save_stock_entry(uuid,text,text,text,text,text,jsonb), public.transfer_stock_entry(uuid,uuid,uuid,integer,integer,integer,text)
+  to authenticated, service_role;
 create function public.reserve_work_order_stock(p_work_order_id uuid, p_lines jsonb, p_idempotency_key text) returns jsonb
   language sql set search_path = '' as $$ select private.reserve_work_order_stock_internal(p_work_order_id, p_lines, p_idempotency_key) $$;
 create function public.release_work_order_stock(p_work_order_id uuid, p_reason text default null) returns jsonb
@@ -303,3 +319,7 @@ test('harness: every inventory migration applies over the live-shaped platform',
   assert.equal(n.n, 4)
   await db.close()
 })
+
+// Client-contract call: one p_payload jsonb with an idempotency_key (fresh unless given).
+export const call = (db, uid, fn, payload = {}) => rpc(db, uid, fn,
+  [JSON.stringify({ idempotency_key: `k-${Math.random().toString(36).slice(2)}-${Date.now()}`, ...payload })])

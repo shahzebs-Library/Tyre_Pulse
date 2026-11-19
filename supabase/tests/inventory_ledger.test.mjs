@@ -1,7 +1,7 @@
 // P0 ledger integrity + valuation + legacy wrappers + write gates (PGlite, synthetic data).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildDb, asUser, rpc, q, one, id, U, ORG_A, ORG_B, code } from './inventory_harness.test.mjs'
+import { buildDb, asUser, rpc, q, one, id, U, ORG_A, ORG_B, code , call } from './inventory_harness.test.mjs'
 
 const j = JSON.stringify
 let n = 0
@@ -9,7 +9,7 @@ const key = () => `k-${++n}`
 
 async function setup () {
   const db = await buildDb()
-  const loc = async (uid, p) => rpc(db, uid, 'inv_location_upsert', [j(p)])
+  const loc = async (uid, p) => call(db, uid, 'inv_location_upsert', p).then(r => r.id)
   const L = {}
   L.s1 = await loc(U.admin, { country: 'KSA', site: 'S1', location_type: 'warehouse', code: 'WH1' })
   L.s1bin = await loc(U.admin, { country: 'KSA', site: 'S1', location_type: 'bin', code: 'A-01', parent_id: L.s1 })
@@ -84,14 +84,14 @@ test('ledger: weighted average, unvalued-first, refusals, idempotency, reversal'
     await t.test('reversal negates exactly, only once, and refuses when the units are gone', async () => {
       const rc = await post(U.keeper, { idempotency_key: 'rv-src', stock_id: sid, movement_type: 'receipt', qty_change: 10, unit_cost: 12 })
       let b = await bal(sid); assert.equal(Number(b.avg_unit_cost), 9)
-      await assert.rejects(rpc(db, U.keeper, 'inv_reverse_movement', [rc.movement_id, 'wrong qty', 'rv1']), code('42501'))
-      const rv = await rpc(db, U.approver, 'inv_reverse_movement', [rc.movement_id, 'wrong qty', 'rv1'])
+      await assert.rejects(call(db, U.keeper, 'inv_reverse_movement', { movement_id: rc.movement_id, reason: 'wrong qty', idempotency_key: 'rv1' }), code('42501'))
+      const rv = await call(db, U.approver, 'inv_reverse_movement', { movement_id: rc.movement_id, reason: 'wrong qty', idempotency_key: 'rv1' })
       assert.equal(Number(rv.qty_change), -10); assert.equal(Number(rv.value_change), -120)
       b = await bal(sid); assert.equal(Number(b.avg_unit_cost), 6); assert.equal(Number(b.qty_on_hand), 10)
-      await assert.rejects(rpc(db, U.approver, 'inv_reverse_movement', [rc.movement_id, 'again', 'rv2']), code('23505'))
+      await assert.rejects(call(db, U.approver, 'inv_reverse_movement', { movement_id: rc.movement_id, reason: 'again', idempotency_key: 'rv2' }), code('23505'))
       const big = await post(U.keeper, { idempotency_key: 'rv-big', stock_id: sid, movement_type: 'receipt', qty_change: 5, unit_cost: 6 })
       await post(U.keeper, { idempotency_key: 'rv-out', stock_id: sid, movement_type: 'issue', qty_change: -14 })
-      const refused = await rpc(db, U.approver, 'inv_reverse_movement', [big.movement_id, 'late', 'rv3'])
+      const refused = await call(db, U.approver, 'inv_reverse_movement', { movement_id: big.movement_id, reason: 'late', idempotency_key: 'rv3' })
       assert.equal(refused.status, 'refused_shortage')
     })
     await t.test('the ledger is append-only even for the database owner', async () => {

@@ -58,6 +58,73 @@
 begin;
 
 -- ---------------------------------------------------------------------------
+-- 0. Rollback snapshot. Everything this migration REPLACES is copied from the
+--    catalog before it is touched, so the ROLLBACK file restores the exact live
+--    definitions (nothing is transcribed by hand). Kept in _bak (no client grant).
+-- ---------------------------------------------------------------------------
+create schema if not exists _bak;
+revoke all on schema _bak from public;
+create table if not exists _bak.inv_p0_snapshot (
+  kind text not null, name text not null, definition text not null,
+  captured_at timestamptz not null default now(), primary key (kind, name));
+do $$
+declare r record;
+begin
+  delete from _bak.inv_p0_snapshot;
+  for r in select p.oid::regprocedure::text as sig, pg_get_functiondef(p.oid) as def
+             from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+            where (n.nspname, p.proname) in (('public','post_stock_movement'),('public','set_stock_count'),
+              ('public','save_stock_entry'),('public','transfer_stock_entry'),
+              ('private','reserve_work_order_stock_internal'),('private','release_work_order_stock_internal')) loop
+    insert into _bak.inv_p0_snapshot values ('function', r.sig, r.def);
+    insert into _bak.inv_p0_snapshot values ('function_acl', r.sig,
+      format('revoke all on function %s from public, anon, authenticated', r.sig) || coalesce((
+        select string_agg(format('; grant execute on function %s to %s', r.sig,
+                 case when a.grantee = 0 then 'public' else quote_ident(pg_get_userbyid(a.grantee)) end), '')
+          from pg_proc p2, aclexplode(coalesce(p2.proacl, acldefault('f', p2.proowner))) a
+         where p2.oid = to_regprocedure(r.sig) and a.privilege_type = 'EXECUTE' and a.grantee <> p2.proowner), ''));
+  end loop;
+  for r in select schemaname, tablename, policyname, permissive, cmd, roles, qual, with_check
+             from pg_policies where schemaname = 'public' and tablename in ('stock_records','stock_movements','stock',
+               'goods_receipts','requisitions','suppliers','purchase_orders','materials') loop
+    insert into _bak.inv_p0_snapshot values ('policy', r.tablename || '.' || r.policyname,
+      format('create policy %I on public.%I as %s for %s to %s%s%s', r.policyname, r.tablename, r.permissive, r.cmd,
+        array_to_string(r.roles, ', '),
+        case when r.qual is not null then ' using (' || r.qual || ')' else '' end,
+        case when r.with_check is not null then ' with check (' || r.with_check || ')' else '' end));
+  end loop;
+  for r in select table_name, string_agg(privilege_type, ', ') as privs from information_schema.role_table_grants
+            where table_schema = 'public' and grantee = 'authenticated'
+              and ((table_name in ('stock_records','stock_movements','stock','materials')
+                    and privilege_type in ('INSERT','UPDATE','DELETE','TRUNCATE'))
+                   or table_name = 'v_stock_balance_reconcile') group by table_name loop
+    insert into _bak.inv_p0_snapshot values ('grant', r.table_name,
+      format('grant %s on public.%I to authenticated', r.privs, r.table_name));
+  end loop;
+  for r in select c.conrelid::regclass::text as tbl, c.conname, pg_get_constraintdef(c.oid) as def from pg_constraint c
+            where c.conname in ('stock_movements_stock_id_fkey','stock_movements_movement_type_check',
+              'purchase_orders_po_number_key','work_order_stock_reservation_lines_stock_id_fkey') loop
+    insert into _bak.inv_p0_snapshot values ('constraint', r.tbl || '.' || r.conname,
+      format('alter table %s add constraint %I %s', r.tbl, r.conname, r.def));
+  end loop;
+  for r in select c.relname, pg_get_viewdef(c.oid) as def, coalesce(array_to_string(c.reloptions, ', '), '') as opts
+             from pg_class c join pg_namespace n on n.oid = c.relnamespace
+            where n.nspname = 'public' and c.relkind = 'v' and c.relname = 'v_stock_balance_reconcile' loop
+    insert into _bak.inv_p0_snapshot values ('view', r.relname,
+      format('create view public.%I%s as %s', r.relname, case when r.opts <> '' then ' with (' || r.opts || ')' else '' end, r.def));
+  end loop;
+  insert into _bak.inv_p0_snapshot
+  select 'nullable', 'stock_movements.organisation_id', 'alter table public.stock_movements alter column organisation_id drop not null'
+    from pg_attribute a where a.attrelid = 'public.stock_movements'::regclass and a.attname = 'organisation_id' and not a.attnotnull;
+  for r in select c.relname, a.attname, format_type(a.atttypid, a.atttypmod) as typ
+             from pg_attribute a join pg_class c on c.oid = a.attrelid
+            where c.relname = 'stock_movements' and c.relnamespace = 'public'::regnamespace
+              and a.attname in ('qty_before','qty_change','qty_after') loop
+    insert into _bak.inv_p0_snapshot values ('column_type', r.relname || '.' || r.attname, r.typ);
+  end loop;
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- 0. Shared helpers
 -- ---------------------------------------------------------------------------
 create or replace function public.inv_can(p_cap text)

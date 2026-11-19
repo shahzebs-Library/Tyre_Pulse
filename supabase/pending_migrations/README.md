@@ -222,3 +222,9 @@ Inventory and test record: `docs/commercial-readiness/audit/BY_NUMBER_JOIN_AUDIT
   `tyre_status_marks_serial_mark_type_bridge` index. OWNER APPROVAL ONLY, after the production
   web build carries #541. Contains `drop`, so the apply prompt needs the owner. Rollback in the
   file header.
+- `20261119100000_oem_review_items_source_row.sql` - OEM review queue keyed by source row
+  (manual_id, pdf_page, row_order) instead of (manual_id, figure_id, part_no, pdf_page), so the same
+  part number listed twice on one page is no longer dropped from review. Adds nullable `row_order`,
+  backfills it from the payload, aborts on duplicates. Contains `drop constraint`, so the apply
+  prompt needs the owner. Rollback: `20261119100000_oem_review_items_source_row_ROLLBACK.sql`.
+  Test: `supabase/tests/oem_review_source_row.test.mjs`. The client falls back safely until applied.

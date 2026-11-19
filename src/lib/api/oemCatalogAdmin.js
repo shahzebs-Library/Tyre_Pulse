@@ -9,6 +9,7 @@
 import { supabase, isMissingRelation } from './_client'
 
 export const NOT_PROVISIONED = 'OEM_NOT_PROVISIONED'
+export const REVIEW_PARTIAL = 'OEM_REVIEW_PARTIAL'
 const fail = (error, fallback) => {
   if (isMissingRelation(error) || /oem_catalog_admin|oem_apply_correction|oem_reassign_entries|oem_figure_merge|oem_figure_split/.test(String(error?.message || '')) && /does not exist|not found/i.test(String(error?.message || ''))) {
     const e = new Error('The advanced catalog tables are not installed yet. An administrator must approve the pending catalog migration.')
@@ -46,18 +47,65 @@ export async function listReviewItems({ manualId, status = 'pending', search = '
   return { items: data || [], total: count ?? 0, page, pageSize }
 }
 
-/** Persist the whole queue in chunks (no 500 cap). Returns how many were stored. */
+/**
+ * True when the database does not yet have the source-row key from the follow-up migration
+ * 20261119100000_oem_review_items_source_row (row_order column missing, or no unique constraint on
+ * manual_id,pdf_page,row_order). Then the save falls back to plain inserts.
+ */
+export function isMissingSourceRowKey(error) {
+  const code = String(error?.code || '')
+  if (code === 'PGRST204' || code === '42703' || code === '42P10') return true
+  return /row_order/i.test(String(error?.message || '')) && /column|constraint|conflict/i.test(String(error?.message || ''))
+}
+
+const reviewRow = (manualId, r, withRowOrder) => {
+  const row = {
+    manual_id: manualId, figure_id: r.figure_id || null, pdf_page: r.source_pdf_page || null, part_no: r.part_no,
+    payload: r, reasons: (r.issues || []).map((x) => x.message), confidence: r.confidence ?? null,
+  }
+  if (withRowOrder) row.row_order = Number.isInteger(r.row_order) ? r.row_order : null
+  return row
+}
+
+/**
+ * Persist the whole queue in chunks (no 500 cap). One review row per SOURCE row: the key is the page
+ * and the row order on that page, so the same part number listed twice on one page keeps both rows.
+ * Returns how many rows were stored. If the database still has the old part-number key and some rows
+ * cannot be stored, it throws after saving the rest, saying how many were not queued (never silent).
+ */
 export async function saveReviewItems(manualId, records) {
   await requireCatalogAdmin()
   let saved = 0
+  let legacy = false
+  let notQueued = 0
   for (let i = 0; i < records.length; i += 200) {
-    const batch = records.slice(i, i + 200).map((r) => ({
-      manual_id: manualId, figure_id: r.figure_id || null, pdf_page: r.source_pdf_page || null, part_no: r.part_no,
-      payload: r, reasons: (r.issues || []).map((x) => x.message), confidence: r.confidence ?? null,
-    }))
-    const { error } = await supabase.from('oem_review_items').upsert(batch, { onConflict: 'manual_id,figure_id,part_no,pdf_page', ignoreDuplicates: true })
-    if (error) fail(error, 'Could not save the review queue.')
-    saved += batch.length
+    const slice = records.slice(i, i + 200)
+    if (!legacy) {
+      const { error } = await supabase.from('oem_review_items')
+        .upsert(slice.map((r) => reviewRow(manualId, r, true)), { onConflict: 'manual_id,pdf_page,row_order', ignoreDuplicates: true })
+      if (!error) { saved += slice.length; continue }
+      if (!isMissingSourceRowKey(error)) fail(error, 'Could not save the review queue.')
+      legacy = true
+    }
+    // Old key still installed: insert without row_order. A conflict means the row is already queued
+    // or repeats a part number on its page; insert one by one so the rest of the batch is kept.
+    const batch = slice.map((r) => reviewRow(manualId, r, false))
+    const { error } = await supabase.from('oem_review_items').insert(batch)
+    if (!error) { saved += batch.length; continue }
+    if (String(error.code) !== '23505') fail(error, 'Could not save the review queue.')
+    for (const row of batch) {
+      const { error: oneErr } = await supabase.from('oem_review_items').insert(row)
+      if (!oneErr) saved += 1
+      else if (String(oneErr.code) === '23505') notQueued += 1
+      else fail(oneErr, 'Could not save the review queue.')
+    }
+  }
+  if (notQueued) {
+    const e = new Error(`${saved} review rows saved. ${notQueued} rows were not queued because they are already in the queue or repeat a part number on the same page; repeated part numbers can be queued once the catalog database update is applied.`)
+    e.code = REVIEW_PARTIAL
+    e.saved = saved
+    e.notQueued = notQueued
+    throw e
   }
   return saved
 }
@@ -71,18 +119,26 @@ export async function decideReviewItems(ids, status) {
   if (error) fail(error, 'Could not save the decision.')
 }
 
-/** Publish approved items as catalog entries. Existing rows (same manual, page, row) are never overwritten. */
+/**
+ * Publish approved items as catalog entries. Existing rows (same manual, page, row) are never overwritten.
+ * Each entry carries the manual's company and country so country-filtered searches find it, and the
+ * figure link the review row was proposed under.
+ */
 export async function publishApproved(manualId) {
   await requireCatalogAdmin()
+  const { data: manual, error: manualErr } = await supabase.from('oem_parts_manuals').select('organisation_id,country').eq('id', manualId).single()
+  if (manualErr) fail(manualErr, 'Could not read the manual.')
   const { data, error } = await supabase.from('oem_review_items').select('id,payload').eq('manual_id', manualId).eq('status', 'approved').limit(1000)
   if (error) fail(error, 'Could not read approved items.')
   let published = 0
   for (let i = 0; i < (data || []).length; i += 100) {
     const chunk = data.slice(i, i + 100)
     const rows = chunk.map(({ payload: r }) => ({
-      manual_id: manualId, source_pdf_page: r.source_pdf_page, row_order: r.row_order, assembly_heading: r.assembly_heading || null, printed_page: r.printed_page || null,
+      manual_id: manualId, organisation_id: manual.organisation_id, country: manual.country || null,
+      source_pdf_page: r.source_pdf_page, row_order: r.row_order, assembly_heading: r.assembly_heading || null, printed_page: r.printed_page || null,
       index_no: r.index_no || null, parent_index: r.parent_index || null, part_no: r.part_no, description: r.description, remark: r.remark || null, quantity: r.quantity ?? null,
       see_page: r.see_page || null, illustration_pdf_page: r.illustration_pdf_page || null, row_type: r.row_type || 'catalog_item', source_line: r.source_line || null,
+      figure_id: r.figure_id || null,
     }))
     const { error: insErr } = await supabase.from('oem_parts_entries').upsert(rows, { onConflict: 'manual_id,source_pdf_page,row_order', ignoreDuplicates: true })
     if (insErr) fail(insErr, 'Could not publish approved parts.')
@@ -118,7 +174,9 @@ export async function saveFigures(manualId, figures) {
     manual_id: manualId, figure_id: figureId, pdf_page: f.geometry?.pdf_page || f.illustration_pdf_page || 1, printed_page: figureId.replace(/^F/, ''),
     caption: f.geometry?.caption || null, page_info: f.geometry?.page || {}, bbox: f.geometry?.bbox || null, crop: f.geometry?.crop || null,
     callouts: f.geometry?.callouts || [], match: { status: f.geometry?.status, score: f.geometry?.score, missing: f.geometry?.missing, reason: f.geometry?.reason },
-    match_status: ['estimated', 'verified', 'ambiguous', 'unavailable'].includes(f.geometry?.status) ? f.geometry.status : 'estimated', hierarchy: f.hierarchy || {},
+    match_status: ['estimated', 'verified', 'ambiguous', 'unavailable'].includes(f.geometry?.status) ? f.geometry.status : 'estimated',
+    // area, heading and area confidence ride in hierarchy so the viewer needs no import snapshot.
+    hierarchy: { ...(f.hierarchy || {}), area: f.area || null, heading: f.heading || null, area_confidence: f.confidence ?? null },
   }))
   for (let i = 0; i < rows.length; i += 100) {
     const { error } = await supabase.from('oem_figures').upsert(rows.slice(i, i + 100), { onConflict: 'manual_id,figure_id', ignoreDuplicates: true })
@@ -128,7 +186,7 @@ export async function saveFigures(manualId, figures) {
 }
 
 export async function listFigures(manualId) {
-  const { data, error } = await supabase.from('oem_figures').select('figure_id,pdf_page,printed_page,caption,bbox,crop,callouts,match,match_status,hierarchy,admin_adjusted').eq('manual_id', manualId)
+  const { data, error } = await supabase.from('oem_figures').select('figure_id,pdf_page,printed_page,caption,page_info,bbox,crop,callouts,match,match_status,hierarchy,admin_adjusted').eq('manual_id', manualId)
   if (error) { if (isMissingRelation(error)) return []; fail(error, 'Could not load figures.') }
   return data || []
 }

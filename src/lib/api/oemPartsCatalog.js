@@ -72,18 +72,28 @@ export async function searchOemEntries(search, { manualId, country, limit = 100 
   return [...byId.values()].slice(0, limit)
 }
 
-/** Load one selected manual in stable pages so users can browse by illustration before knowing a part number. */
+/**
+ * Load one selected manual in stable pages so users can browse by illustration before knowing a part number.
+ * Includes the saved figure link (figure_id) so the viewer groups by the corrected figure, not the import
+ * snapshot. Falls back to the base columns on a database that has not got figure_id yet.
+ */
 export async function listOemManualEntries(manualId) {
   if (!manualId) return []
   const pageSize = 500
   const rows = []
+  let columns = `${BROWSE_ENTRY_COLUMNS},figure_id`
   for (let start = 0; ; start += pageSize) {
-    const { data, error } = await supabase.from('oem_parts_entries')
-      .select(BROWSE_ENTRY_COLUMNS)
+    const page = () => supabase.from('oem_parts_entries')
+      .select(columns)
       .eq('manual_id', manualId)
       .order('source_pdf_page', { ascending: true })
       .order('row_order', { ascending: true })
       .range(start, start + pageSize - 1)
+    let { data, error } = await page()
+    if (error && columns !== BROWSE_ENTRY_COLUMNS && /figure_id/i.test(String(error.message || '')) && /column|schema/i.test(String(error.message || ''))) {
+      columns = BROWSE_ENTRY_COLUMNS
+      ;({ data, error } = await page())
+    }
     raise(error, 'Could not load this manual’s illustrated parts groups.')
     rows.push(...(data || []))
     if (!data || data.length < pageSize) break
@@ -158,6 +168,7 @@ export async function saveOemManual({ id, resume = false, file, sha256, country,
       illustration_pdf_page: row.illustration_pdf_page || null,
       row_type: row.row_type || 'catalog_item',
       source_line: row.source_line || null,
+      figure_id: row.figure_id || null,
     }))
     const { error } = await supabase.from('oem_parts_entries')
       .upsert(batch, { onConflict: 'manual_id,source_pdf_page,row_order', ignoreDuplicates: true })

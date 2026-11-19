@@ -40,6 +40,17 @@ describe('OemCatalogViewer', () => {
     fireEvent.click(screen.getByText('Add selected part to work order'))
     expect(p.onRequestSelected.mock.calls[0][0].map((r) => r.part_no)).toEqual(['60012346'])
   })
+  it('uses saved figures (oem_figures) over the import snapshot', () => {
+    // Snapshot says upper; the saved figure (admin corrected) says chassis and wins.
+    setup({ figureRows: [{ figure_id: 'F2-14', pdf_page: 4, hierarchy: { area: 'chassis', area_confidence: 0.9 }, match_status: 'verified' }] })
+    expect(screen.getByText('Chassis', { selector: 'li' })).toBeTruthy()
+    expect(screen.queryByText('Upper part assembly', { selector: 'li' })).toBeNull()
+  })
+  it('follows a group\'s saved figure link before its printed page', () => {
+    const linked = { ...group, figureId: 'F9-1' }
+    setup({ groups: [linked], activeGroup: linked, figureRows: [{ figure_id: 'F9-1', pdf_page: 4, hierarchy: { area: 'chassis' } }, { figure_id: 'F2-14', pdf_page: 4, hierarchy: { area: 'upper' } }] })
+    expect(screen.getByText('Chassis', { selector: 'li' })).toBeTruthy()
+  })
   it('flags unconfirmed fitment and disables adding with nothing selected', () => {
     setup({ fitment: 'unconfirmed', selectedIndex: '' })
     expect(screen.getByText('Fitment not confirmed')).toBeTruthy()

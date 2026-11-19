@@ -3,6 +3,7 @@ import { BookOpen, CheckCircle2, Info, ChevronLeft, ChevronRight, ExternalLink, 
 import { useLanguage } from '../../contexts/LanguageContext'
 import OemFigure, { normalizeIndex } from './OemFigure'
 import { CoveragePanel, FigureSummary, PartDrawer } from './OemInsightPanels'
+import { groupFigureId, resolveFigures } from '../../lib/oemCatalog/figureLinks'
 import './oemCatalog.css'
 
 const PAGE_SIZE = 40
@@ -15,7 +16,7 @@ const AREA_ORDER = ['chassis', 'upper', 'other']
  */
 export default function OemCatalogViewer({
   manual, manualOptions, onChooseManual, asset, fitment, groups, activeGroup, onOpenGroup,
-  pdfDoc, allRows = [], selectedIndex, onSelectIndex, selectedKeys, onAddRows, onRequestSelected, onOpenSource, loading, error,
+  pdfDoc, allRows = [], figureRows = null, selectedIndex, onSelectIndex, selectedKeys, onAddRows, onRequestSelected, onOpenSource, loading, error,
 }) {
   const { t } = useLanguage()
   const [pageNo, setPageNo] = useState(0)
@@ -24,11 +25,11 @@ export default function OemCatalogViewer({
   const rowRefs = useRef(new Map())
   const navRef = useRef(null)
   const [navTop, setNavTop] = useState(0)
-  const figures = manual?.import_summary?.figures || {}
+  // Saved figures (oem_figures) carry admin corrections; the import snapshot is a legacy fallback.
+  const figures = useMemo(() => resolveFigures(figureRows, manual?.import_summary?.figures), [figureRows, manual])
 
   const meta = (group) => {
-    const printed = group.printedPages[0]
-    const id = printed ? `F${printed}` : null
+    const id = groupFigureId(group)
     return (id && figures[id]) || null
   }
 

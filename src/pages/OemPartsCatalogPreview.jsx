@@ -20,12 +20,14 @@ import { useAuth } from '../contexts/AuthContext'
 import OemReviewWorkspace from '../components/oemCatalog/OemReviewWorkspace'
 import OemFigureTools from '../components/oemCatalog/OemFigureTools'
 import OemReprocessPanel from '../components/oemCatalog/OemReprocessPanel'
-import { requireCatalogAdmin, saveFigures, saveReviewItems, NOT_PROVISIONED } from '../lib/api/oemCatalogAdmin'
+import { listFigures, requireCatalogAdmin, saveFigures, saveReviewItems, NOT_PROVISIONED, REVIEW_PARTIAL } from '../lib/api/oemCatalogAdmin'
 import { STANDARD_CATEGORIES } from '../lib/oemCatalog/taxonomy'
 import { compatibility } from '../lib/oemCatalog/search'
 import { rankResults } from '../lib/oemCatalog/search'
 import { processExtraction, reviewQueueForStorage } from '../lib/oemCatalog/pipeline'
 import OemCatalogViewer from '../components/oemCatalog/OemCatalogViewer'
+import { entryGroupKey } from '../lib/oemCatalog/figureLinks'
+import { importSaveCounts, importSavedNotice } from '../lib/oemCatalog/importSave'
 import { normalizeIndex } from '../components/oemCatalog/OemFigure'
 import { ExtractionPreviewTable, ImportReviewPanel, SearchResultsTable, SelectedPartsTable } from '../components/oemCatalog/OemTables'
 
@@ -40,11 +42,7 @@ function Field({ label, value, onChange, placeholder, required = false }) {
   return <label className="block"><span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">{label}{required ? ' *' : ''}</span><input required={required} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className={INPUT} /></label>
 }
 
-function groupKeyOf(row) {
-  const page = row.illustration_pdf_page || null
-  const heading = String(row.assembly_heading || '').toLowerCase().replace(/\s+/g, ' ').trim()
-  return `${page || 'unlinked'}|${heading || row.printed_page || row.source_pdf_page || ''}`
-}
+const groupKeyOf = entryGroupKey
 
 function searchableAssetResult(asset) {
   return `${asset.asset_no || asset.fleet_number || 'Asset'} · ${[asset.make, asset.model].filter(Boolean).join(' ')} · Chassis ${asset.chassis_no || asset.serial_no || 'not recorded'}`
@@ -119,6 +117,8 @@ export default function OemPartsCatalogPreview() {
   const [requestForm, setRequestForm] = useState({ jobId: '', priority: 'medium', neededBy: '', notes: '' })
   const [browseManual, setBrowseManual] = useState(null)
   const [browseRows, setBrowseRows] = useState([])
+  // Saved figures (oem_figures) for the open manual; empty means use the import snapshot.
+  const [browseFigures, setBrowseFigures] = useState([])
   const [browseLoading, setBrowseLoading] = useState(false)
   const [browsePdfDoc, setBrowsePdfDoc] = useState(null)
   const [browsePdfManualId, setBrowsePdfManualId] = useState(null)
@@ -192,7 +192,7 @@ export default function OemPartsCatalogPreview() {
     for (const row of browseRows) {
       const page = row.illustration_pdf_page || null
       const key = groupKeyOf(row)
-      if (!groups.has(key)) groups.set(key, { key, page, rows: [], headings: new Set(), sourcePages: new Set(), printedPages: new Set() })
+      if (!groups.has(key)) groups.set(key, { key, page, figureId: row.figure_id || null, rows: [], headings: new Set(), sourcePages: new Set(), printedPages: new Set() })
       const group = groups.get(key)
       group.rows.push(row)
       if (row.assembly_heading) group.headings.add(row.assembly_heading)
@@ -302,8 +302,14 @@ export default function OemPartsCatalogPreview() {
     setAssemblyFilter('all'); setBrowseFilter(''); setSelectedIllustrationPage(null); setSelectedIndex('')
     setBrowseLoading(true)
     try {
-      const rows = await listOemManualEntries(manual.id)
+      setBrowseFigures([])
+      const [rows, figureRows] = await Promise.all([
+        listOemManualEntries(manual.id),
+        // Figures are an enhancement: a failure falls back to the import snapshot, never blocks browsing.
+        listFigures(manual.id).catch(() => []),
+      ])
       setBrowseRows(rows)
+      setBrowseFigures(figureRows)
       if (!rows.length) setBrowseError('This manual has no saved part rows yet. Re-import the source PDF or ask an administrator to check its import status.')
     } catch (error) { setBrowseError(toUserMessage(error, 'Could not load this manual’s illustration groups.')) }
     finally { setBrowseLoading(false) }
@@ -327,7 +333,8 @@ export default function OemPartsCatalogPreview() {
 
   const saveCatalog = async (event) => {
     event.preventDefault()
-    if (!pdfFile || !pipeline?.publish?.length) { setSaveError(t('oemcatalog.import.errNoRows')); return }
+    const counts = importSaveCounts(pipeline)
+    if (!pdfFile || !counts.canSave) { setSaveError(t('oemcatalog.import.errNoRows')); return }
     if (!manualForm.manufacturer.trim() || !manualForm.model.trim()) { setSaveError(t('oemcatalog.import.errBrand')); return }
     setSaving(true); setSaveError(''); setSaveNotice('')
     try {
@@ -369,10 +376,12 @@ export default function OemPartsCatalogPreview() {
         const queued = await saveReviewItems(saved.id, pipeline.review)
         extra = queued ? ` ${t('oemcatalog.import.queueSaved', { count: queued })}` : ''
       } catch (error) {
-        extra = error?.code === NOT_PROVISIONED ? ` ${t('oemcatalog.import.notProvisioned', { count: pipeline.review.length })}` : ` ${toUserMessage(error, '')}`
+        // A partial queue save carries its own plain counts (no database text), so show it as is.
+        extra = error?.code === NOT_PROVISIONED ? ` ${t('oemcatalog.import.notProvisioned', { count: pipeline.review.length })}`
+          : error?.code === REVIEW_PARTIAL ? ` ${error.message}` : ` ${toUserMessage(error, '')}`
       }
       await refreshManuals()
-      setSaveNotice(`${saved.manufacturer} ${saved.model}: ${saved.item_count.toLocaleString()} parts and variants saved. The PDF is stored once for future lookups.${extra}`)
+      setSaveNotice(`${importSavedNotice(saved, counts)}${extra}`)
       setTab('browse')
     } catch (error) { setSaveError(toUserMessage(error, t('oemcatalog.import.errSave'))) }
     finally { setSaving(false) }
@@ -511,6 +520,7 @@ export default function OemPartsCatalogPreview() {
           onOpenGroup={openIllustration}
           pdfDoc={browsePdfDoc}
           allRows={browseRows}
+          figureRows={browseFigures}
           selectedIndex={selectedIndex}
           onSelectIndex={setSelectedIndex}
           selectedKeys={selectedKeys}

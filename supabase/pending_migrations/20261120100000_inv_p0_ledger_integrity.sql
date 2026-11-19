@@ -187,7 +187,7 @@ update public.stock_records s set
 
 alter table public.stock_records
   add constraint stock_records_condition_chk check (condition in
-    ('new','serviceable','used','retread','repairable','damaged','quarantine','scrap','unspecified')),
+    ('new','good','serviceable','used','retread','repairable','damaged','quarantine','scrap','unspecified')),
   add constraint stock_records_ownership_chk check (ownership in ('owned','consignment','supplier')),
   add constraint stock_records_owner_supplier_chk check (ownership = 'owned' or owner_supplier_id is not null),
   add constraint stock_records_qty_on_hand_nonneg check (qty_on_hand >= 0),
@@ -376,6 +376,7 @@ drop policy if exists stock_movements_insert on public.stock_movements;
 drop policy if exists stock_movements_active_user_insert on public.stock_movements;
 drop policy if exists stock_movements_active_user_update on public.stock_movements;
 revoke insert, update, delete, truncate on public.stock_movements from authenticated, anon;
+revoke all on public.stock_movements, public.stock_records from anon;  -- V281 already holds this live; restated
 drop policy if exists stock_movements_country_isolation on public.stock_movements;
 create policy stock_movements_country_isolation on public.stock_movements as restrictive for select to authenticated
   using ((country is null) or (select public.is_super_admin()) or (select public.app_sees_all_countries())

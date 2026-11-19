@@ -79,9 +79,13 @@ begin
   return v;
 end $fn$;
 
-create or replace function public.inv_transfer_dispatch(p jsonb)
+-- Argument shapes agreed with the Flutter lane (tyre_pulse_flutter/docs/inventory_reserved_patch.md):
+-- p_payload {idempotency_key, from_location_id, to_location_id, remarks,
+--            lines:[{stock_id | scanned_code 'TP:STK:<stock id>', qty}]}
+create or replace function public.inv_transfer_dispatch(p_payload jsonb)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $fn$
-declare v_org uuid := public.app_current_org(); v_key text := nullif(btrim(p->>'idempotency_key'), '');
+declare p jsonb := p_payload; v_sid uuid; v_code text;
+  v_org uuid := public.app_current_org(); v_key text := nullif(btrim(p->>'idempotency_key'), '');
   v_t public.stock_transfers%rowtype; v_from public.inventory_locations%rowtype; v_to public.inventory_locations%rowtype;
   v_transit uuid; l jsonb; v_rec public.stock_records%rowtype; v_out jsonb; v_in jsonb; v_n int := 0;
 begin
@@ -110,11 +114,17 @@ begin
   insert into public.stock_transfers(organisation_id, ref, country, site, to_site, from_location_id, to_location_id,
     transit_location_id, idempotency_key, notes)
   values (v_org, 'TRF-' || to_char(now(), 'YYYYMMDD') || '-' || upper(left(md5(v_org::text || v_key), 8)), v_from.country,
-    v_from.site, v_to.site, v_from.id, v_to.id, v_transit, v_key, p->>'notes')
+    v_from.site, v_to.site, v_from.id, v_to.id, v_transit, v_key, coalesce(p->>'remarks', p->>'notes'))
   returning * into v_t;
-  for l in select value from jsonb_array_elements(p->'lines') order by value->>'stock_id' loop
+  for l in select value from jsonb_array_elements(p->'lines') order by coalesce(value->>'stock_id', value->>'scanned_code') loop
     v_n := v_n + 1;
-    select * into v_rec from public.stock_records where id = (l->>'stock_id')::uuid;
+    v_code := upper(btrim(coalesce(l->>'scanned_code', '')));
+    begin
+      v_sid := coalesce(nullif(l->>'stock_id', '')::uuid, case when v_code like 'TP:STK:%' then substr(v_code, 8)::uuid end);
+    exception when others then
+      raise exception 'Line %: unreadable stock label.', v_n using errcode = '22023';
+    end;
+    select * into v_rec from public.stock_records where id = v_sid;
     if v_rec.id is null or v_rec.organisation_id <> v_org or v_rec.location_id is distinct from v_from.id or v_rec.item_id is null then
       raise exception 'Line %: the balance must be a mapped item at the source location.', v_n using errcode = '22023';
     end if;
@@ -140,6 +150,9 @@ begin
 end $fn$;
 
 -- p_mode 'receive' (into the destination) or 'return' (back to the source).
+-- Lines: {line_id, received_qty | qty, condition, remarks}. Condition 'good'
+-- keeps the dispatched condition; damaged / repairable / quarantine / scrap land
+-- as that condition at the destination.
 create or replace function public._inv_transfer_move(p jsonb, p_mode text)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $fn$
 declare v_org uuid := public.app_current_org(); v_key text := nullif(btrim(p->>'idempotency_key'), '');
@@ -158,7 +171,7 @@ begin
   for l in select value from jsonb_array_elements(p->'lines') loop
     select * into ln from public.stock_transfer_lines where id = (l->>'line_id')::uuid and transfer_id = v_t.id for update;
     if not found then raise exception 'Transfer line not found.' using errcode = 'P0002'; end if;
-    v_qty := (l->>'qty')::numeric;
+    v_qty := coalesce(nullif(l->>'received_qty', ''), l->>'qty')::numeric;
     v_left := ln.qty_dispatched - ln.qty_received - ln.qty_returned;
     if v_qty is null or v_qty <= 0 or v_qty > v_left then
       raise exception 'Line %: quantity must be between 0 and the % still in transit.', ln.line_no, v_left using errcode = '22023';
@@ -171,7 +184,7 @@ begin
       raise exception 'Line %: in-transit stock is not available.', ln.line_no using errcode = '23514';
     end if;
     v_in := public._inv_post(jsonb_build_object('idempotency_key', 'trf:' || v_key || ':' || ln.id || ':in', 'item_id', ln.item_id,
-      'location_id', v_dest, 'condition', coalesce(nullif(l->>'condition', ''), ln.condition), 'ownership', ln.ownership,
+      'location_id', v_dest, 'condition', case when lower(coalesce(l->>'condition', '')) in ('', 'good') then ln.condition else lower(l->>'condition') end, 'ownership', ln.ownership,
       'owner_supplier_id', ln.owner_supplier_id, 'movement_type', 'transfer_in', 'qty_change', v_qty,
       'currency', v_out->>'currency', 'unit_cost', v_out->'unit_cost',
       'carried_value', -coalesce((v_out->>'value_change')::numeric, 0),
@@ -195,8 +208,9 @@ begin
   return jsonb_build_object('transfer_id', v_t.id, 'status', v_t.status);
 end $fn$;
 
-create or replace function public.inv_transfer_receive(p jsonb)
+create or replace function public.inv_transfer_receive(p_payload jsonb)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $fn$
+declare p jsonb := p_payload;
 begin
   if not public.is_approved_and_unlocked() or not (public.inv_can('transfer') or public.inv_can('receive')) then
     raise exception 'Stock permission "transfer" or "receive" is required.' using errcode = '42501';
@@ -204,8 +218,9 @@ begin
   return public._inv_transfer_move(p, 'receive');
 end $fn$;
 
-create or replace function public.inv_transfer_return_remaining(p jsonb)
+create or replace function public.inv_transfer_return_remaining(p_payload jsonb)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $fn$
+declare p jsonb := p_payload;
 begin
   if not public.is_approved_and_unlocked() or not public.inv_can('transfer') then
     raise exception 'Stock permission "transfer" is required.' using errcode = '42501';

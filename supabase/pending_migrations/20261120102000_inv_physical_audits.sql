@@ -18,9 +18,11 @@
 --     * snapshot lines, discrepancies and adjustments are readable only through
 --       _inv_audit_can_see_expected(): never by an assigned counter while the
 --       audit is open.
---     * inv_audit_counter_view returns locations and items only; serial audits
---       return locations only (an expected-serial list would be the answer key).
---     * inv_count_submit answers accepted/replayed/late/rejected counts only.
+--     * inv_audit_counter_view(p_audit_id) returns locations and items only; serial
+--       audits return locations only (an expected-serial list would be the answer key).
+--     * inv_count_submit(p_audit_id, p_device_id, p_lines) answers accepted /
+--       duplicates / rejected client_uuids only (shape agreed with the Flutter lane,
+--       tyre_pulse_flutter/docs/inventory_reserved_patch.md).
 --   Live counting with cutoff reconciliation (no freeze): inv_audit_start stores
 --   cutoff_seq = the org's current max movement_seq; reconcile adds every
 --   movement on the balance with movement_seq > cutoff_seq posted before the
@@ -353,12 +355,31 @@ begin
   return jsonb_build_object('id', v.id, 'status', 'in_progress', 'cutoff_seq', v_cut, 'snapshot_lines', v_n + v_s);
 end $fn$;
 
+create or replace function public.inv_canon_serial(p text)
+returns text language sql immutable set search_path = public as $$
+  select nullif(upper(regexp_replace(coalesce(p, ''), '\s+', '', 'g')), '')
+$$;
 -- What the counter may see: where to count and what to look for, never how many.
-create or replace function public.inv_audit_counter_view(p_audit uuid)
+-- Shape agreed with the Flutter lane (tyre_pulse_flutter/docs/inventory_reserved_patch.md).
+-- p_audit_id NULL = the open audits assigned to me.
+create or replace function public.inv_audit_counter_view(p_audit_id uuid default null)
 returns jsonb language plpgsql stable security definer set search_path = public, pg_temp as $fn$
 declare v public.inventory_audits%rowtype; v_round int;
 begin
-  select * into v from public.inventory_audits where id = p_audit;
+  if not public.is_approved_and_unlocked() then raise exception 'Not authorised.' using errcode = '42501'; end if;
+  if p_audit_id is null then
+    return jsonb_build_object('audits', coalesce((select jsonb_agg(jsonb_build_object('id', a.id, 'ref', a.ref,
+        'audit_type', a.audit_type, 'status', a.status, 'site', a.site, 'due_at', a.due_at, 'instructions', a.instructions,
+        'round', case when auth.uid() = a.recount_counter_id then a.current_round else 1 end,
+        'location_count', (select count(*) from public.inventory_locations l where l.organisation_id = a.organisation_id
+           and ((cardinality(a.location_ids) > 0 and l.id = any (a.location_ids))
+             or (cardinality(a.location_ids) = 0 and (a.site is null or l.site = a.site))))) order by a.due_at nulls last)
+      from public.inventory_audits a
+      where a.organisation_id = public.app_current_org()
+        and ((auth.uid() = a.counter_id and a.status in ('assigned','in_progress'))
+          or (auth.uid() = a.recount_counter_id and a.status = 'recount'))), '[]'::jsonb));
+  end if;
+  select * into v from public.inventory_audits where id = p_audit_id;
   if not found or v.organisation_id is distinct from public.app_current_org()
      or auth.uid() not in (coalesce(v.counter_id, '00000000-0000-0000-0000-000000000000'::uuid),
                            coalesce(v.recount_counter_id, '00000000-0000-0000-0000-000000000000'::uuid)) then
@@ -366,38 +387,36 @@ begin
   end if;
   v_round := case when auth.uid() = v.recount_counter_id then v.current_round else 1 end;
   return jsonb_build_object(
-    'audit_id', v.id, 'ref', v.ref, 'audit_type', v.audit_type, 'status', v.status, 'round', v_round,
-    'blind', v.blind, 'instructions', v.instructions, 'due_at', v.due_at,
-    'locations', coalesce((select jsonb_agg(jsonb_build_object('location_id', l.id, 'code', l.code, 'name', l.name,
+    'audit', jsonb_build_object('id', v.id, 'ref', v.ref, 'audit_type', v.audit_type, 'status', v.status, 'site', v.site,
+      'round', v_round, 'blind', v.blind, 'instructions', v.instructions, 'due_at', v.due_at),
+    'locations', coalesce((select jsonb_agg(jsonb_build_object('id', l.id, 'code', l.code, 'name', l.name,
         'label_code', l.label_code, 'location_type', l.location_type) order by l.code)
       from public.inventory_locations l
       where l.organisation_id = v.organisation_id
         and ((cardinality(v.location_ids) > 0 and l.id = any (v.location_ids))
           or (cardinality(v.location_ids) = 0 and (v.site is null or l.site = v.site)))), '[]'::jsonb),
+    -- Serial audits list no items: an expected-serial list would be the answer key.
     'items', case when v.audit_type in ('tyre_serial','vehicle_tyre') then '[]'::jsonb else coalesce((
-      select jsonb_agg(distinct jsonb_build_object('item_id', m.id, 'item_code', m.item_code, 'item_name', m.item_name,
-        'uom', coalesce(m.base_uom, m.uom), 'barcode', m.barcode))
-      from public.material_master m
-      where m.organisation_id = v.organisation_id
-        and ((cardinality(v.item_ids) > 0 and m.id = any (v.item_ids))
-          or (cardinality(v.item_ids) = 0 and m.id in (select sl.item_id from public.inventory_audit_snapshot_lines sl
-                                                     where sl.audit_id = v.id and sl.item_id is not null)))), '[]'::jsonb) end,
-    'my_lines', coalesce((select jsonb_agg(jsonb_build_object('client_uuid', c.client_uuid, 'location_id', c.location_id,
-        'item_id', c.item_id, 'serial', c.serial, 'counted_qty', c.counted_qty, 'confirmed_zero', c.confirmed_zero,
-        'counted_at', c.counted_at, 'round', c.round))
-      from public.inventory_count_lines c where c.audit_id = v.id and c.counter_id = auth.uid()), '[]'::jsonb));
+      select jsonb_agg(jsonb_build_object('location_id', x.location_id, 'item_id', m.id, 'item_code', m.item_code,
+          'description', m.item_name, 'uom', coalesce(m.base_uom, m.uom), 'serial_tracked', m.serial_tracked))
+      from (select distinct sl.location_id, sl.item_id from public.inventory_audit_snapshot_lines sl
+             where sl.audit_id = v.id and sl.item_id is not null) x
+      join public.material_master m on m.id = x.item_id), '[]'::jsonb) end,
+    'submitted', coalesce((select jsonb_agg(c.client_uuid) from public.inventory_count_lines c
+      where c.audit_id = v.id and c.counter_id = auth.uid()), '[]'::jsonb));
 end $fn$;
 
-create or replace function public.inv_count_submit(p_audit uuid, p_lines jsonb)
+-- Blind count submission. Idempotent per client_uuid. Answers ids only - never
+-- an expected quantity, a variance or a value.
+create or replace function public.inv_count_submit(p_audit_id uuid, p_device_id text, p_lines jsonb)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $fn$
-declare v public.inventory_audits%rowtype; l jsonb; v_round int; v_at timestamptz; v_late boolean;
-  v_acc int := 0; v_rep int := 0; v_late_n int := 0; v_rej int := 0; v_existing public.inventory_count_lines%rowtype;
-  v_unexpected boolean; v_loc uuid; v_item uuid; v_serial text; v_stock uuid;
+declare v public.inventory_audits%rowtype; l jsonb; v_round int; v_at timestamptz; v_late boolean; v_cu uuid;
+  v_acc jsonb := '[]'; v_dup jsonb := '[]'; v_rej jsonb := '[]'; v_existing public.inventory_count_lines%rowtype;
+  v_unexpected boolean; v_loc uuid; v_item uuid; v_serial text; v_stock uuid; v_code text;
 begin
   if not public.is_approved_and_unlocked() then raise exception 'Not authorised.' using errcode = '42501'; end if;
-  v := public._inv_audit_lock(p_audit);
-  if auth.uid() = v.counter_id and v.current_round = 1 then v_round := 1;
-  elsif auth.uid() = v.recount_counter_id then v_round := v.current_round;
+  v := public._inv_audit_lock(p_audit_id);
+  if auth.uid() = v.recount_counter_id then v_round := v.current_round;
   elsif auth.uid() = v.counter_id then v_round := 1;
   else raise exception 'You are not assigned to count this audit.' using errcode = '42501';
   end if;
@@ -405,57 +424,80 @@ begin
     raise exception 'Send between 1 and 500 count lines.' using errcode = '22023';
   end if;
   for l in select value from jsonb_array_elements(p_lines) loop
-    if nullif(l->>'client_uuid', '') is null then raise exception 'Every count line needs a client_uuid.' using errcode = '22023'; end if;
-    select * into v_existing from public.inventory_count_lines where client_uuid = (l->>'client_uuid')::uuid;
+    begin
+      v_cu := nullif(l->>'client_uuid', '')::uuid;
+    exception when others then v_cu := null;
+    end;
+    if v_cu is null then
+      v_rej := v_rej || jsonb_build_array(jsonb_build_object('client_uuid', l->>'client_uuid', 'reason', 'client_uuid is required'));
+      continue;
+    end if;
+    select * into v_existing from public.inventory_count_lines where client_uuid = v_cu;
     if found then
       if v_existing.audit_id <> v.id or v_existing.counter_id <> auth.uid() then
-        raise exception 'client_uuid already used elsewhere.' using errcode = '23505';
+        v_rej := v_rej || jsonb_build_array(jsonb_build_object('client_uuid', v_cu, 'reason', 'client_uuid already used elsewhere'));
+      else
+        v_dup := v_dup || jsonb_build_array(v_cu);
       end if;
-      v_rep := v_rep + 1; continue;
+      continue;
     end if;
     v_at := coalesce(nullif(l->>'counted_at', '')::timestamptz, clock_timestamp());
     v_late := false;
     if (v_round = 1 and v.status = 'in_progress') or (v_round > 1 and v.status = 'recount') then
       null;
     elsif v.status in ('counting_completed','reconciliation') and v.counting_completed_at is not null
-          and v_at <= v.counting_completed_at and (v_round = 1 or v.status = 'counting_completed') then
-      v_late := true;
+          and v_at <= v.counting_completed_at then
+      v_late := true;  -- offline line captured before counting closed
     else
-      v_rej := v_rej + 1; continue;
+      v_rej := v_rej || jsonb_build_array(jsonb_build_object('client_uuid', v_cu,
+        'reason', case when v.status in ('closed','cancelled','rejected','adjustment_posted') then 'Audit is closed'
+                       else 'Counting is not open for this line' end));
+      continue;
     end if;
     v_loc := nullif(l->>'location_id', '')::uuid; v_item := nullif(l->>'item_id', '')::uuid;
-    v_serial := upper(btrim(nullif(l->>'serial', '')));
-    if v_loc is not null and not exists (select 1 from public.inventory_locations where id = v_loc and organisation_id = v.organisation_id) then
-      raise exception 'Unknown location in count line.' using errcode = '22023';
-    end if;
-    if v_item is not null and not exists (select 1 from public.material_master where id = v_item and organisation_id = v.organisation_id) then
-      raise exception 'Unknown item in count line.' using errcode = '22023';
-    end if;
-    if v_serial is null and v_item is null and nullif(l->>'stock_id', '') is null then
-      raise exception 'A count line needs an item, a stock balance or a serial.' using errcode = '22023';
-    end if;
+    v_serial := public.inv_canon_serial(coalesce(nullif(l->>'serial_no', ''), nullif(l->>'serial', '')));
     v_stock := nullif(l->>'stock_id', '')::uuid;
-    if v_stock is not null and not exists (select 1 from public.inventory_audit_snapshot_lines
-         where audit_id = v.id and stock_id = v_stock) then
+    v_code := upper(btrim(coalesce(l->>'scanned_code', '')));
+    if v_stock is null and v_code like 'TP:STK:%' then
+      begin v_stock := substr(v_code, 8)::uuid; exception when others then v_stock := null; end;
+    end if;
+    if v_loc is null and v_code like 'TP:LOC:%' then
+      begin v_loc := substr(v_code, 8)::uuid; exception when others then v_loc := null; end;
+    end if;
+    if (v_loc is not null and not exists (select 1 from public.inventory_locations where id = v_loc and organisation_id = v.organisation_id))
+       or (v_item is not null and not exists (select 1 from public.material_master where id = v_item and organisation_id = v.organisation_id)) then
+      v_rej := v_rej || jsonb_build_array(jsonb_build_object('client_uuid', v_cu, 'reason', 'Unknown location or item'));
+      continue;
+    end if;
+    if v_stock is not null and not exists (select 1 from public.inventory_audit_snapshot_lines where audit_id = v.id and stock_id = v_stock) then
       v_stock := null;
     end if;
+    if v_serial is null and v_item is null and v_stock is null then
+      v_rej := v_rej || jsonb_build_array(jsonb_build_object('client_uuid', v_cu, 'reason', 'A count line needs an item, a stock label or a serial'));
+      continue;
+    end if;
+    if v_serial is null and nullif(l->>'counted_qty', '') is null and not coalesce((l->>'confirmed_zero')::boolean, false) then
+      v_rej := v_rej || jsonb_build_array(jsonb_build_object('client_uuid', v_cu, 'reason', 'Enter a quantity or confirm zero'));
+      continue;
+    end if;
+    -- the server, not the phone, decides whether a line was expected
     v_unexpected := case
-      when v_serial is not null then not exists (select 1 from public.inventory_audit_snapshot_lines
-        where audit_id = v.id and serial = v_serial)
+      when v_serial is not null then not exists (select 1 from public.inventory_audit_snapshot_lines where audit_id = v.id and serial = v_serial)
       when v_stock is not null then false
-      else not exists (select 1 from public.inventory_audit_snapshot_lines
-        where audit_id = v.id and item_id = v_item and location_id is not distinct from v_loc) end;
+      else not exists (select 1 from public.inventory_audit_snapshot_lines where audit_id = v.id and item_id = v_item
+                        and location_id is not distinct from v_loc) end;
     insert into public.inventory_count_lines(organisation_id, audit_id, round, location_id, item_id, stock_id, serial,
       counted_qty, confirmed_zero, condition, photos, remarks, counter_id, counted_at, device_id, client_uuid, unexpected, late)
     values (v.organisation_id, v.id, v_round, v_loc, v_item, v_stock, v_serial,
-      case when v_serial is not null then coalesce(nullif(l->>'counted_qty', '')::numeric, 1) else nullif(l->>'counted_qty', '')::numeric end,
-      coalesce((l->>'confirmed_zero')::boolean, false), l->>'condition', coalesce(l->'photos', '[]'::jsonb),
-      left(l->>'remarks', 1000), auth.uid(), v_at, left(l->>'device_id', 120), (l->>'client_uuid')::uuid, v_unexpected, v_late);
-    v_acc := v_acc + 1;
-    if v_late then v_late_n := v_late_n + 1; end if;
+      case when v_serial is not null then coalesce(nullif(l->>'counted_qty', '')::numeric, 1)
+           when coalesce((l->>'confirmed_zero')::boolean, false) then 0 else nullif(l->>'counted_qty', '')::numeric end,
+      coalesce((l->>'confirmed_zero')::boolean, false), lower(nullif(l->>'condition', '')), coalesce(l->'photos', '[]'::jsonb),
+      left(l->>'remarks', 1000), auth.uid(), v_at, left(coalesce(p_device_id, l->>'device_id'), 120), v_cu, v_unexpected, v_late);
+    v_acc := v_acc || jsonb_build_array(v_cu);
   end loop;
-  return jsonb_build_object('accepted', v_acc, 'replayed', v_rep, 'late', v_late_n, 'rejected', v_rej);
+  return jsonb_build_object('accepted', v_acc, 'duplicates', v_dup, 'rejected', v_rej);
 end $fn$;
+
 
 create or replace function public.inv_audit_complete_counting(p_audit uuid)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $fn$
@@ -761,13 +803,15 @@ revoke all on function public._inv_audit_lock(uuid), public._inv_audit_can_see_e
   public._inv_audit_open_for_counter(text) from public, anon;
 revoke all on function public._inv_audit_lock(uuid) from authenticated;
 grant execute on function public._inv_audit_can_see_expected(uuid), public._inv_audit_open_for_counter(text) to authenticated;
+-- RLS policies evaluate it as the caller; it answers only for the caller's own assignments.
+grant execute on function public.inv_blind_hides_balance(uuid, text, uuid, uuid) to authenticated;
 revoke all on function public.inv_audit_create(jsonb), public.inv_audit_schedule(uuid, timestamptz, uuid),
-  public.inv_audit_start(uuid), public.inv_audit_counter_view(uuid), public.inv_count_submit(uuid, jsonb),
+  public.inv_audit_start(uuid), public.inv_audit_counter_view(uuid), public.inv_count_submit(uuid, text, jsonb),
   public.inv_audit_complete_counting(uuid), public.inv_audit_reconcile(uuid), public.inv_recount_assign(uuid, uuid, uuid[]),
   public.inv_discrepancy_update(uuid, jsonb), public.inv_adjustment_approve(uuid, text, text),
   public.inv_audit_close(uuid, text), public.inv_audit_cancel(uuid, text) from public, anon;
 grant execute on function public.inv_audit_create(jsonb), public.inv_audit_schedule(uuid, timestamptz, uuid),
-  public.inv_audit_start(uuid), public.inv_audit_counter_view(uuid), public.inv_count_submit(uuid, jsonb),
+  public.inv_audit_start(uuid), public.inv_audit_counter_view(uuid), public.inv_count_submit(uuid, text, jsonb),
   public.inv_audit_complete_counting(uuid), public.inv_audit_reconcile(uuid), public.inv_recount_assign(uuid, uuid, uuid[]),
   public.inv_discrepancy_update(uuid, jsonb), public.inv_adjustment_approve(uuid, text, text),
   public.inv_audit_close(uuid, text), public.inv_audit_cancel(uuid, text) to authenticated;

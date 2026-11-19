@@ -189,9 +189,31 @@ alter table public.stock_records enable row level security;
 create policy stock_records_org_isolation on public.stock_records as restrictive for all to authenticated
   using ((organisation_id = (select public.app_current_org())) or (select public.is_super_admin()))
   with check ((organisation_id = (select public.app_current_org())) or (select public.is_super_admin()));
+create policy stock_records_country_isolation on public.stock_records as restrictive for select
+  using ((country is null) or (select public.is_super_admin()) or (select public.app_sees_all_countries())
+    or (lower(btrim(country)) = any (coalesce((select public.app_country_scope()), '{}'::text[]))));
+create policy stock_records_site_isolation on public.stock_records as restrictive for select to authenticated
+  using ((site is null) or (btrim(site) = '') or (select public.app_sees_all_sites())
+    or (upper(btrim(site)) = any (coalesce((select public.app_site_scope()), '{}'::text[]))));
+create policy stock_movements_site_isolation on public.stock_movements as restrictive for select to authenticated
+  using ((site is null) or (btrim(site) = '') or (select public.app_sees_all_sites())
+    or (upper(btrim(site)) = any (coalesce((select public.app_site_scope()), '{}'::text[]))));
 create policy stock_records_select on public.stock_records for select using ((select auth.role()) = 'authenticated');
 create policy stock_records_update on public.stock_records for update using ((select public.get_my_role()) in ('Manager','Admin'));
 create policy stock_records_insert on public.stock_records for insert with check ((select public.get_my_role()) in ('Manager','Admin'));
+-- live-like RLS on the procurement/master tables whose permissive write policies P0 replaces
+do $$ declare t text; begin
+  foreach t in array array['goods_receipts','suppliers','purchase_orders','requisitions','materials'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('create policy %I on public.%I as restrictive for all to authenticated using (organisation_id = (select public.app_current_org())) with check (organisation_id = (select public.app_current_org()))', t || '_org_isolation', t);
+    execute format('create policy %I on public.%I for select to authenticated using (true)', t || '_read', t);
+  end loop;
+end $$;
+create policy goods_receipts_insert on public.goods_receipts for insert with check (auth.uid() is not null);
+create policy suppliers_insert on public.suppliers for insert with check (auth.uid() is not null);
+create policy po_insert_authenticated on public.purchase_orders for insert to authenticated with check (true);
+create policy requisitions_insert on public.requisitions for insert with check (auth.uid() is not null);
+create policy materials_insert on public.materials for insert with check (auth.uid() is not null);
 alter table public.material_master enable row level security;
 create policy material_master_org on public.material_master as restrictive for all to authenticated
   using (organisation_id = (select public.app_current_org()) or (select public.is_super_admin()));

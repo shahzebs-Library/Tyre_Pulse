@@ -796,6 +796,9 @@ void main() {
       // Access help lets new staff request an account themselves.
       expect(find.byKey(LoginActionKeys.createAccount), findsOneWidget);
       expect(find.text('Create an account'), findsOneWidget);
+      // ...and says how a member of another company signs in.
+      expect(find.byKey(LoginActionKeys.companyCodeHelp), findsOneWidget);
+      expect(find.textContaining('ACME/ali'), findsOneWidget);
     },
   );
 

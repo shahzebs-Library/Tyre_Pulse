@@ -111,8 +111,27 @@ NOT applied. Order, dependencies, the check after each step and the point of no 
   and `get_org_admin_audit()` for the company Admin. Creates a table, ends with the reader policies call.
 - `20261115167000_ten13_company_export_own_data.sql` : new. `org_export_manifest()` and `org_export_page()`:
   a company Admin reads the company's own rows of the export list. Reads only. Purge stays HOLD.
+- `20261115168000_ten9d_company_code_guard_and_admin_set.sql` : new (PR #546 test matrix). DEFECT FIX: the
+  "only the platform sets a company code" guard never fired (SECURITY DEFINER, so `current_user` was the
+  owner) and `slug` was unguarded; a company Admin could set or rename its sign-in code by a direct UPDATE.
+  Guard made SECURITY INVOKER, `slug` added to the platform columns. Adds `org_set_my_sign_in_code()`
+  (company Admin, once, refused while `single_tenant_mode` is true) and `get_my_org_sign_in_code()`.
+- `20261115168500_ten9e_invitation_signup_refuses_cleanly.sql` : new. A sign-up whose invitation no
+  longer holds (used, cancelled, expired, wrong email, wrong code, code alone) is ABORTED instead of
+  creating an orphan account with no company that burns the username. `get_public_config()` also returns
+  `single_tenant_mode` (the sign-in hint shows only once multi-company is on).
+- TEN-9f moved to its own PR #548: `20261116100000_ten9f_login_lockout_per_account.sql` (+ROLLBACK).
+  The copy here is byte-identical and only used by the staging harness; apply it from #548, once.
+- `20261115168800_ten9g_code_form_cannot_be_squatted.sql` : new (2026-11-16). A username or employee
+  id containing "/" or "\\" could shadow a "code/name" sign-in (step 1 exact match ran first): staging
+  proved `resolve_sign_in_user('beta-haulage/beta.admin')` returning a self-registered impostor. The
+  resolver now tries the code form first when the separator is present; a trigger refuses NEW or
+  CHANGED names carrying a separator (existing rows untouched). Preflight count in the file header.
 - `20261115169000_ten9c_HOLD_per_company_usernames.sql` — new, HOLD. Removes the global username and
   employee id keys. Contains `drop`. Point of no easy return; not part of the sequence proper.
+
+Test for TEN-8b/9b/9c/9d/9e/9f/9g + gap matrix `tests_gaps.sql` (local staging only): `supabase/tests/multi_company_auth/run_staging.sh`.
+Sign-in edge function run locally against staging: `e2e/multi_company/sign_in_edge_local.mjs`.
 
 Status per finding (TEN-1 to TEN-13): `docs/commercial-readiness/audit/TENANCY_STATUS.md`.
 

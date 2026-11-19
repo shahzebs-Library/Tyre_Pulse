@@ -1597,6 +1597,7 @@
   "registerErrOffline": "کنکشن نہیں ہے۔ آپ کا اکاؤنٹ نہیں بنا۔ سگنل آنے پر دوبارہ کوشش کریں۔",
   "registerErrFailed": "آپ کا اکاؤنٹ نہیں بن سکا۔ دوبارہ کوشش کریں۔",
   "loginCreateAccount": "اکاؤنٹ بنائیں",
+  "loginCompanyCodeHelp": "کیا آپ دعوت کے ذریعے کسی دوسری کمپنی میں شامل ہوئے ہیں؟ کمپنی کوڈ، پھر سلیش اور پھر اپنا یوزر نیم لکھ کر سائن اِن کریں، مثلاً ACME/ali۔",
   "accAssessmentLoadFailed": "جائزہ لوڈ نہیں ہو سکا",
   "accSafetyAndMobility": "حفاظت اور نقل و حرکت",
   "accSafeToMove": "منتقل کرنا محفوظ ہے",

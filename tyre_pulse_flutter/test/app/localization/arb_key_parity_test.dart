@@ -646,10 +646,12 @@ void main() {
     // Cancel, Try again, "Details (required)" and "Evidence uploaded." reuse
     // actionClose, wfDialogCancel, actionRetry, wfBlockNoteLabel and
     // wfEvidenceUploaded.
-    test('en, ar and ur each carry exactly 2514 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2514);
-      expect(_translatableKeys(ar).length, 2514);
-      expect(_translatableKeys(ur).length, 2514);
+    // 2514 + 1 = 2515. loginCompanyCodeHelp: the access-help dialog says how a
+    // member of another company signs in ("company code/username").
+    test('en, ar and ur each carry exactly 2515 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2515);
+      expect(_translatableKeys(ar).length, 2515);
+      expect(_translatableKeys(ur).length, 2515);
     });
   });
 

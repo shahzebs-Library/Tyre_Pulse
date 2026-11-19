@@ -48,6 +48,7 @@ import 'dart:convert';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tyre_pulse/core/auth/login_lockout.dart';
+import 'package:tyre_pulse/core/auth/sign_in_identifier.dart';
 import 'package:tyre_pulse/core/auth/sign_in_outcome.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
@@ -307,7 +308,9 @@ final class SupabaseAuthRepository implements AuthRepository {
     required String identifier,
     required String password,
   }) async {
-    final String trimmedIdentifier = identifier.trim();
+    // "code/username" (another company) and a bare username both reach the
+    // server unchanged apart from tidying; the server resolves either form.
+    final String trimmedIdentifier = normalizeSignInIdentifier(identifier);
     if (trimmedIdentifier.isEmpty || password.isEmpty) {
       return const SignInRejected(
         AppError(

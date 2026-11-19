@@ -136,6 +136,7 @@
   ],
   "git": {
     "deploymentEnabled": {
+      "claude/multi-company-client-7rxp2t": false,
       "claude/release-543-545-7rxp2t": false,
       "claude/ops-docs-only-skip-7rxp2t": false,
       "claude/recall-absence-fix-7rxp2t": false,

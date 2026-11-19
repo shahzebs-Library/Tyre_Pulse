@@ -23,6 +23,9 @@ import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
+import 'package:tyre_pulse/core/auth/captcha/turnstile_captcha.dart';
+import 'package:tyre_pulse/core/auth/captcha/turnstile_webview.dart';
+import 'package:tyre_pulse/core/auth/captcha/turnstile_widget.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/features/extras/data/self_registration_repository.dart';
 import 'package:tyre_pulse/features/extras/extras_providers.dart';
@@ -38,6 +41,7 @@ abstract final class RegisterKeys {
   static const Key closed = Key('register.closed');
   static const Key done = Key('register.done');
   static const Key error = Key('register.error');
+  static const Key captcha = Key('register.captcha');
 }
 
 /// Field-level problems, in form order.
@@ -93,6 +97,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   bool _obscure = true;
   String? _error;
 
+  /// The single-use Turnstile token, or null. Only used when this build has
+  /// a Turnstile site key (see `turnstile_captcha.dart`).
+  String? _captchaToken;
+  final TurnstileController _captcha = TurnstileController();
+
+  bool get _captchaOn => ref.read(turnstileSiteKeyProvider).isNotEmpty;
+
   @override
   void initState() {
     super.initState();
@@ -133,9 +144,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       setState(() => _showProblems = true);
       return;
     }
+    if (_captchaOn && _captchaToken == null) {
+      setState(() => _error = l10n.captchaPrompt);
+      return;
+    }
+    final String? captchaToken = _captchaToken;
     setState(() {
       _submitting = true;
       _error = null;
+      // Single use: whatever happens next, this token is spent.
+      _captchaToken = null;
     });
     final SelfRegistrationResult result =
         await ref.read(selfRegistrationRepositoryProvider).register(
@@ -143,8 +161,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               employeeId: _employeeId.text,
               password: _password.text,
               fullName: _fullName.text,
+              captchaToken: captchaToken,
             );
     if (!mounted) return;
+    if (captchaToken != null) _captcha.reset();
     setState(() {
       _submitting = false;
       switch (result) {
@@ -156,6 +176,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           _error = l10n.registerErrTaken;
         case SelfRegistrationResult.offline:
           _error = l10n.registerErrOffline;
+        case SelfRegistrationResult.captchaFailed:
+          _error = l10n.captchaRefused;
         case SelfRegistrationResult.failed:
           _error = l10n.registerErrFailed;
       }
@@ -220,6 +242,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         _showProblems ? _problems() : const <RegisterProblem>[];
     final TpPalette palette = TpPalette.of(context);
     final TextTheme text = Theme.of(context).textTheme;
+    final String siteKey = ref.watch(turnstileSiteKeyProvider);
 
     String? usernameError() {
       if (problems.contains(RegisterProblem.usernameShort)) {
@@ -333,13 +356,28 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     child: Text(_error!),
                   ),
                 ],
+                if (siteKey.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: TpSpace.lg),
+                  TurnstileCaptcha(
+                    key: RegisterKeys.captcha,
+                    siteKey: siteKey,
+                    factory: ref.watch(turnstileViewFactoryProvider),
+                    controller: _captcha,
+                    onTokenChanged: (String? token) {
+                      if (mounted) setState(() => _captchaToken = token);
+                    },
+                  ),
+                ],
                 const SizedBox(height: TpSpace.xl),
                 TpButton.primary(
                   key: RegisterKeys.submit,
                   label: l10n.registerSubmit,
                   isBusy: _submitting,
                   isFullWidth: true,
-                  onPressed: _submitting ? null : () => unawaited(_submit()),
+                  onPressed: _submitting ||
+                          (siteKey.isNotEmpty && _captchaToken == null)
+                      ? null
+                      : () => unawaited(_submit()),
                 ),
                 const SizedBox(height: TpSpace.md),
                 TextButton(

@@ -45,6 +45,7 @@ import { Illustration } from '../components/illustrations'
 import { vehicleArt } from '../lib/brand/vehicleArt'
 import { fetchAllPages } from '../lib/fetchAll'
 import { applyCountry } from '../lib/api/_client'
+import { pinCompany, companyRowsForCode } from '../lib/api/companyScope'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import { reportFileName, reportDateLabel } from '../lib/exportUtils'
 import {
@@ -125,11 +126,11 @@ const WO_BADGE = {
  * another country is a different vehicle). Paged so a busy machine is never
  * cut at the server's 1,000-row cap, ordered with an id tiebreak.
  */
-function listThisAssetWorkOrders(assetNo, country) {
+function listThisAssetWorkOrders(assetNo, country, orgId) {
   return fetchAllPages((from, to) => applyCountry(
-    supabase.from('work_orders')
+    pinCompany(supabase.from('work_orders')
       .select('id,asset_no,country,status,total_cost,created_at,opened_at,work_type,work_order_no,priority,labour_cost,parts_cost,completed_at')
-      .eq('asset_no', assetNo),
+      .eq('asset_no', assetNo), orgId),
     country,
   ).order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, to), { max: 20000 })
 }
@@ -331,13 +332,18 @@ export default function AssetDetail() {
       // tyres, inspections and incidents would be worse than the error.
       const scopeCountry = activeCountry && activeCountry !== 'All' ? activeCountry : null
       const { data: fleetRows, error: fleetErr } = await supabase.from('vehicle_fleet')
-        .select('id,asset_no,fleet_number,make,model,vehicle_type,year,department,operator_name,site,country,region,tyre_size,tyre_brand_preferred,monthly_tyre_budget,current_km,registration_no,registration_date,status,notes,custom_data,image_path,active:is_active')
+        .select('id,organisation_id,asset_no,fleet_number,make,model,vehicle_type,year,department,operator_name,site,country,region,tyre_size,tyre_brand_preferred,monthly_tyre_budget,current_km,registration_no,registration_date,status,notes,custom_data,image_path,active:is_active')
         .eq('asset_no', assetNo)
         .order('country', { ascending: true })
         .order('id', { ascending: true })
         .limit(20)
       if (fleetErr) throw new Error(fleetErr.message)
-      const allRows = Array.isArray(fleetRows) ? fleetRows : []
+      // The same code can also be held by more than one company (a super
+      // admin's read spans companies): keep only the company this page is
+      // about - the caller's company when it holds the code, else the single
+      // holder, else none (never a pick between two other companies).
+      const { rows: allRows, orgId: companyOrg, ambiguous } = await companyRowsForCode(Array.isArray(fleetRows) ? fleetRows : [])
+      if (ambiguous) { setAsset(null); setLoading(false); return }
       const scopedRows = scopeCountry ? allRows.filter(r => r.country === scopeCountry) : allRows
       const fleetRow = scopedRows[0] || null
       setMatches({
@@ -350,21 +356,23 @@ export default function AssetDetail() {
       // Read the history of THIS machine only. Falls back to the country on
       // screen when the code has no fleet row at all.
       const dataCountry = fleetRow?.country || scopeCountry || null
+      // Every per-asset read below is pinned to that company.
+      const dataOrg = fleetRow?.organisation_id || companyOrg
 
       const [tyreRes, woRes, ovRes, inspRes, accRes, odoRes, ehRes, pmRes, pmSvcRes, utilRes] = await Promise.allSettled([
-        assetApi.listAssetTyres(assetNo, dataCountry),
-        listThisAssetWorkOrders(assetNo, dataCountry),
+        assetApi.listAssetTyres(assetNo, dataCountry, dataOrg),
+        listThisAssetWorkOrders(assetNo, dataCountry, dataOrg),
         assetApi.reportAssetOverview({ country: dataCountry || 'All' }),
-        assetApi.listAssetInspections(assetNo, dataCountry),
-        assetApi.listAssetAccidents(assetNo, dataCountry),
-        assetApi.latestOdometer(assetNo, dataCountry),
-        assetApi.latestEngineHours(assetNo, dataCountry),
+        assetApi.listAssetInspections(assetNo, dataCountry, dataOrg),
+        assetApi.listAssetAccidents(assetNo, dataCountry, dataOrg),
+        assetApi.latestOdometer(assetNo, dataCountry, dataOrg),
+        assetApi.latestEngineHours(assetNo, dataCountry, dataOrg),
         // Preventive Maintenance: plans (client-filtered to this asset) + history.
         // Both degrade to [] when the pm_* tables are not provisioned yet.
-        listPmPrograms({}),
-        listPmServiceRecords({ asset_no: assetNo }),
+        listPmPrograms({ orgId: dataOrg }),
+        listPmServiceRecords({ asset_no: assetNo, orgId: dataOrg }),
         // Telematics utilization snapshot for this asset ([] / null when absent).
-        getAssetUtilization(assetNo),
+        getAssetUtilization(assetNo, { orgId: dataOrg }),
       ])
 
       const tyreRows = tyreRes.status === 'fulfilled' ? (tyreRes.value.data ?? []) : []
@@ -1188,6 +1196,7 @@ export default function AssetDetail() {
               <AssetFullHistory
                 assetNo={assetNo}
                 country={asset?.country || matches.requested || undefined}
+                org={asset?.organisation_id || undefined}
               />
             </motion.div>
           )}

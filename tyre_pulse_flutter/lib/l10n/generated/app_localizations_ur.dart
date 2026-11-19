@@ -4557,6 +4557,10 @@ class AppLocalizationsUr extends AppLocalizations {
   String get loginCreateAccount => 'اکاؤنٹ بنائیں';
 
   @override
+  String get loginCompanyCodeHelp =>
+      'کیا آپ دعوت کے ذریعے کسی دوسری کمپنی میں شامل ہوئے ہیں؟ کمپنی کوڈ، پھر سلیش اور پھر اپنا یوزر نیم لکھ کر سائن اِن کریں، مثلاً ACME/ali۔';
+
+  @override
   String get accAssessmentLoadFailed => 'جائزہ لوڈ نہیں ہو سکا';
 
   @override
@@ -8691,4 +8695,32 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get teamMessageSend => 'جواب بھیجیں';
+
+  @override
+  String get captchaSemanticLabel => 'سیکیورٹی چیک';
+
+  @override
+  String get captchaLoading => 'سیکیورٹی چیک لوڈ ہو رہا ہے...';
+
+  @override
+  String get captchaPrompt => 'جاری رکھنے کے لیے سیکیورٹی چیک مکمل کریں۔';
+
+  @override
+  String get captchaSolved => 'سیکیورٹی چیک مکمل ہو گیا۔';
+
+  @override
+  String get captchaExpired =>
+      'سیکیورٹی چیک کی میعاد ختم ہو گئی۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get captchaLoadFailed =>
+      'سیکیورٹی چیک لوڈ نہیں ہو سکا۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔';
+
+  @override
+  String get captchaTimedOut =>
+      'سیکیورٹی چیک میں بہت زیادہ وقت لگ رہا ہے۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔';
+
+  @override
+  String get captchaRefused =>
+      'سیکیورٹی چیک قبول نہیں ہوا۔ اسے دوبارہ مکمل کریں اور پھر کوشش کریں۔';
 }

@@ -19,6 +19,7 @@ import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
 import { getVehicle } from '../lib/api/vehicle360'
+import { currentOrgId } from '../lib/api/companyScope'
 import { shapeRunningLife, BAND_META } from '../lib/tyreRunningLife'
 import { enrichTwin, filterPositions, sortPositions } from '../lib/digitalTwinAnalytics'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -184,10 +185,14 @@ export default function DigitalTwin() {
   const load = useCallback(async (an) => {
     if (!an) { setRecords(null); return }
     setLoading(true); setError('')
-    const [recs, lifeRes, veh] = await Promise.allSettled([
-      getAssetTwinRecords(an, { country: activeCountry }),
+    // The vehicle row decides WHICH company's machine this code is (the caller's
+    // company first); its tyres are then read from that company only, so a
+    // super admin never sees two companies' machines merged into one twin.
+    const [veh] = await Promise.allSettled([getVehicle(an)])
+    const org = (veh.status === 'fulfilled' && veh.value?.organisation_id) || await currentOrgId()
+    const [recs, lifeRes] = await Promise.allSettled([
+      getAssetTwinRecords(an, { country: activeCountry, orgId: org }),
       getTyreRunningLife({ country: activeCountry, asset: an }),
-      getVehicle(an),
     ])
     if (recs.status === 'fulfilled') setRecords(recs.value)
     else { setError(toUserMessage(recs.reason, 'Could not load this vehicle.')); setRecords([]) }

@@ -75,3 +75,16 @@ final class SignInFailed extends SignInOutcome {
 
   final AppError error;
 }
+
+/// Supabase Auth refused the attempt because of its CAPTCHA (the token was
+/// missing, already used, expired or invalid - `captcha_failed`).
+///
+/// Says nothing about the password, so it is never counted towards the
+/// login lockout and never shown as "wrong password". The screen asks for the
+/// security check again in the reader's language; [error] carries the English
+/// sentence and the technical detail for logs only.
+final class SignInCaptchaFailed extends SignInOutcome {
+  const SignInCaptchaFailed(this.error);
+
+  final AppError error;
+}

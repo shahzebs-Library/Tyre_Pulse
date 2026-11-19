@@ -40,6 +40,7 @@ import { useConsoleAuth } from '../ConsoleAuthContext'
 import { ACCESS_ROLES } from '../../lib/moduleCatalog'
 import { ACCESS_MODULES as ALL_MODULES } from '../../lib/accessCatalog'
 import { listCustomRoles } from '../../lib/api/customRoles'
+import LoginLockPanel from './users/LoginLockPanel'
 import {
   setUserCountry, bulkSetRole, bulkSetGrant, adminSetUserSites, adminSetWebAccess,
   canEmailReset, adminSetUserPassword,
@@ -51,6 +52,7 @@ import { revokeUserSessions, ACCESS_TOKEN_NOTE } from '../../lib/api/sessionRevo
 // Single source: src/lib/scopeSentinel.js (shared with the invariant tests).
 import { isOrgWideSites, withoutOrgWide } from '../../lib/scopeSentinel'
 import PasswordRequestsPanel from './users/PasswordRequestsPanel'
+import TurnstileWidget, { captchaEnabled, withCaptcha } from '../../components/auth/TurnstileWidget'
 
 // Site options are capped so a runaway fleet register can never flood the
 // editor; anything already stored on a user still renders as a chip.
@@ -171,6 +173,10 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
   const [saving, setSaving]   = useState(false)
   const [error, setError]     = useState(null)
   const [resetSent, setResetSent] = useState(false)
+  // Supabase CAPTCHA protection also guards the reset-email endpoint, so the
+  // admin solves the check before sending once CAPTCHA is switched on.
+  const [resetCaptcha, setResetCaptcha] = useState(null)
+  const resetCaptchaRef = useRef(null)
   const [resetError, setResetError] = useState('')
   const [resetBusy, setResetBusy] = useState(false)
   const [newPassword, setNewPassword] = useState('')
@@ -616,9 +622,11 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
 
   async function sendPasswordReset(user) {
     setResetSent(false); setResetError('')
-    const { error: err } = await supabase.auth.resetPasswordForEmail(user.email, {
+    if (captchaEnabled() && !resetCaptcha) { setResetError('Complete the security check, then send.'); return }
+    const { error: err } = await supabase.auth.resetPasswordForEmail(user.email, withCaptcha({
       redirectTo: `${window.location.origin}/reset-password`,
-    })
+    }, resetCaptcha))
+    resetCaptchaRef.current?.reset()
     if (err) { setResetError(toUserMessage(err, 'Could not send the reset email.')); return }
     await logAction('reset_password', user.id, 'user', { email: user.email })
     setResetSent(true)
@@ -1271,7 +1279,8 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
               {resetSent ? 'Close' : 'Cancel'}
             </Btn>
             {!resetSent && (canEmailReset(resetModal.email) ? (
-              <Btn variant="primary" icon={Key} onClick={() => sendPasswordReset(resetModal)}>Send reset email</Btn>
+              <Btn variant="primary" icon={Key} onClick={() => sendPasswordReset(resetModal)}
+                disabled={captchaEnabled() && !resetCaptcha}>Send reset email</Btn>
             ) : (
               <Btn variant="primary" icon={Key} onClick={() => setPasswordDirect(resetModal)}
                 busy={resetBusy} disabled={newPassword.trim().length < 8}>
@@ -1282,6 +1291,7 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
         )}>
         {resetModal && (
           <div className="space-y-3">
+            <LoginLockPanel userId={resetModal.id} />
             {/* A field worker's address is synthetic and receives no mail, so a
                 reset link is a guaranteed dead end. Setting the password is the
                 only thing that restores access for them. */}
@@ -1294,10 +1304,13 @@ export default function ConsoleUsers({ tabParam = 'tab' } = {}) {
                       signed out.</>}
               </Note>
             ) : canEmailReset(resetModal.email) ? (
+              <>
               <p className="text-xs text-gray-400">
                 Send a password reset link to <strong className="text-gray-100">{resetModal.full_name ?? resetModal.email}</strong>.
                 The user will receive an email with a secure link to set a new password.
               </p>
+              <TurnstileWidget ref={resetCaptchaRef} onToken={setResetCaptcha} onError={setResetError} />
+              </>
             ) : (
               <>
                 <Note icon={AlertTriangle} tone="warning">

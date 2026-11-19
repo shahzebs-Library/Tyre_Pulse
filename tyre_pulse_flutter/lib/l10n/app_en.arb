@@ -4230,6 +4230,10 @@
   "@loginCreateAccount": {
     "description": "Login access-help dialog: opens the self-registration screen (the account is created pending administrator approval)."
   },
+  "loginCompanyCodeHelp": "Joined another company through an invitation? Sign in with its company code, a slash and your username, for example ACME/ali.",
+  "@loginCompanyCodeHelp": {
+    "description": "Login access-help dialog: how a member of a company other than the original one signs in (company code / username). A bare username still works for everyone else."
+  },
   "accAssessmentLoadFailed": "The assessment could not be loaded",
   "@accAssessmentLoadFailed": {
     "description": "Error title."
@@ -8881,5 +8885,37 @@
   "teamMessageAckRequired": "Acknowledgement required",
   "teamMessageAcknowledge": "Acknowledge",
   "teamMessageReplyLabel": "Reply to team",
-  "teamMessageSend": "Send reply"
+  "teamMessageSend": "Send reply",
+  "captchaSemanticLabel": "Security check",
+  "@captchaSemanticLabel": {
+    "description": "Accessibility label on the Cloudflare Turnstile security check shown above the sign-in and register buttons when CAPTCHA is enabled for this build."
+  },
+  "captchaLoading": "Loading the security check...",
+  "@captchaLoading": {
+    "description": "Status under the security check while the challenge loads."
+  },
+  "captchaPrompt": "Complete the security check to continue.",
+  "@captchaPrompt": {
+    "description": "Status under the security check while it is unsolved; the sign-in / register button stays disabled until it is done."
+  },
+  "captchaSolved": "Security check complete.",
+  "@captchaSolved": {
+    "description": "Status under the security check once it is solved."
+  },
+  "captchaExpired": "The security check expired. Try it again.",
+  "@captchaExpired": {
+    "description": "The solved check expired before it was used; offers Try again."
+  },
+  "captchaLoadFailed": "The security check could not load. Check your connection and try again.",
+  "@captchaLoadFailed": {
+    "description": "The check failed to load or reported an error; offers Try again."
+  },
+  "captchaTimedOut": "The security check is taking too long. Check your connection and try again.",
+  "@captchaTimedOut": {
+    "description": "Nothing loaded within the time limit; offers Try again."
+  },
+  "captchaRefused": "The security check was not accepted. Complete it again and retry.",
+  "@captchaRefused": {
+    "description": "Supabase Auth refused the attempt because of the CAPTCHA (captcha_failed). Never counted as a wrong password."
+  }
 }

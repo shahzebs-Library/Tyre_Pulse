@@ -126,6 +126,7 @@ final Provider<InspectionPreviousMetersRepository>
     Provider<InspectionPreviousMetersRepository>(
   (ref) => SupabaseInspectionPreviousMetersRepository(
     ref.watch(supabaseClientProvider),
+    organisationId: ref.watch(workspaceContextProvider)?.companyId,
   ),
 );
 

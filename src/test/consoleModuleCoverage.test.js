@@ -26,6 +26,7 @@ const NOT_A_MODULE = {
   '/reset-password': 'public auth step',
   '/data-deletion': 'public Play Store deletion page',
   '/delete-account': 'redirect alias of /data-deletion',
+  '/captcha-bridge': 'public security-check page opened by the installed phone app in the system browser',
   '/privacy': 'public legal page',
   '/privacy-policy': 'public legal page',
   '/terms': 'public legal page',

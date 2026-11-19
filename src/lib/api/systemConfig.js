@@ -30,6 +30,7 @@ export const PUBLIC_CONFIG_KEYS = Object.freeze([
   'require_approval', 'app_version', 'session_timeout_hours', 'two_factor_required',
   'password_min_length', 'default_currency', 'mobile_login_hero',
   'auth_google_enabled', 'auth_microsoft_enabled', 'qr_login_enabled',
+  'single_tenant_mode',
 ])
 
 /** App defaults — the effective value when a key is unset/unreadable. Enforcement

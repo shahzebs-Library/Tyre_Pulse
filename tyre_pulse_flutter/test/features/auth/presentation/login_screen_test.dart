@@ -53,6 +53,8 @@ import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/auth/auth_controller.dart';
 import 'package:tyre_pulse/core/auth/auth_dependency_providers.dart';
+import 'package:tyre_pulse/core/auth/captcha/turnstile_captcha.dart';
+import 'package:tyre_pulse/core/auth/captcha/turnstile_webview.dart';
 import 'package:tyre_pulse/core/auth/sign_in_outcome.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
@@ -64,6 +66,7 @@ import 'package:tyre_pulse/features/auth/presentation/login_screen.dart';
 import 'package:tyre_pulse/features/auth/presentation/widgets/login_country_hero.dart';
 
 import '../../../core/auth/auth_test_support.dart';
+import '../../../core/auth/captcha/fake_turnstile.dart';
 
 final class _Pumped {
   const _Pumped({
@@ -131,6 +134,7 @@ Future<_Pumped> _pump(
   Locale locale = const Locale('en'),
   LoginCountry? country = LoginCountry.saudiArabia,
   ThemeData? theme,
+  List<Override> extraOverrides = const <Override>[],
 }) async {
   final FakeAuthRepository auth = FakeAuthRepository();
   final _LoginCountryRepository countryRepository = _LoginCountryRepository(
@@ -153,6 +157,7 @@ Future<_Pumped> _pump(
       ),
       currentAppVersionProvider.overrideWithValue('2.0'),
       deviceBiometricAuthenticatorProvider.overrideWithValue(biometrics),
+      ...extraOverrides,
     ],
   );
   addTearDown(container.dispose);
@@ -796,6 +801,9 @@ void main() {
       // Access help lets new staff request an account themselves.
       expect(find.byKey(LoginActionKeys.createAccount), findsOneWidget);
       expect(find.text('Create an account'), findsOneWidget);
+      // ...and says how a member of another company signs in.
+      expect(find.byKey(LoginActionKeys.companyCodeHelp), findsOneWidget);
+      expect(find.textContaining('ACME/ali'), findsOneWidget);
     },
   );
 
@@ -990,4 +998,133 @@ void main() {
       },
     );
   }
+
+  group('Turnstile CAPTCHA', () {
+    List<Override> captchaOn(FakeTurnstileFactory factory) => <Override>[
+          turnstileSiteKeyProvider.overrideWithValue('site-key'),
+          turnstileViewFactoryProvider.overrideWithValue(factory),
+        ];
+
+    testWidgets(
+      'no site key: no security check, sign-in enabled and sent without a '
+      'token, exactly as before',
+      (WidgetTester tester) async {
+        final _Pumped p = await _pump(tester);
+        expect(find.byKey(kLoginCaptchaKey), findsNothing);
+
+        await _fillValidCredentials(tester);
+        expect(tester.widget<TpButton>(_submitButton()).onPressed, isNotNull);
+        await tester.tap(_submitButton());
+        await tester.pump();
+        await tester.pump();
+
+        expect(p.auth.calls, <String>['signIn']);
+        expect(p.auth.captchaTokens, <String?>[null]);
+      },
+    );
+
+    testWidgets(
+      'site key set: sign-in stays disabled until the check is solved, then '
+      'carries the token once and re-arms the check',
+      (WidgetTester tester) async {
+        final FakeTurnstileFactory factory = FakeTurnstileFactory();
+        final _Pumped p =
+            await _pump(tester, extraOverrides: captchaOn(factory));
+        expect(find.byKey(kLoginCaptchaKey), findsOneWidget);
+        expect(factory.latest.siteKey, 'site-key');
+
+        await _fillValidCredentials(tester);
+        expect(tester.widget<TpButton>(_submitButton()).onPressed, isNull);
+        await tester.tap(_submitButton(), warnIfMissed: false);
+        await tester.pump();
+        expect(p.auth.calls, isEmpty);
+
+        factory.latest.emit(const TurnstileReady());
+        await tester.pump();
+        expect(
+          find.text('Complete the security check to continue.'),
+          findsOneWidget,
+        );
+        expect(tester.widget<TpButton>(_submitButton()).onPressed, isNull);
+
+        factory.latest.emit(const TurnstileToken('tok-1'));
+        await tester.pump();
+        expect(tester.widget<TpButton>(_submitButton()).onPressed, isNotNull);
+
+        p.auth.signInHandler =
+            (String identifier, String password) async => const SignInRejected(
+                  AppError.authorization(message: 'Wrong password.'),
+                );
+        await tester.tap(_submitButton());
+        await tester.pump();
+        await tester.pump();
+
+        expect(p.auth.captchaTokens, <String?>['tok-1']);
+        // Single use: spent, the check re-armed, sign-in disabled again.
+        expect(factory.latest.resets, 1);
+        expect(tester.widget<TpButton>(_submitButton()).onPressed, isNull);
+      },
+    );
+
+    testWidgets(
+      'a CAPTCHA refusal shows the localized security-check sentence',
+      (WidgetTester tester) async {
+        final FakeTurnstileFactory factory = FakeTurnstileFactory();
+        final _Pumped p =
+            await _pump(tester, extraOverrides: captchaOn(factory));
+        p.auth.signInHandler = (String identifier, String password) async =>
+            const SignInCaptchaFailed(
+              AppError.authorization(message: 'raw captcha_failed text'),
+            );
+        await _fillValidCredentials(tester);
+        factory.latest.emit(const TurnstileToken('tok-1'));
+        await tester.pump();
+        await tester.tap(_submitButton());
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.byKey(LoginBannerKeys.error), findsOneWidget);
+        expect(
+          find.text(
+            'The security check was not accepted. Complete it again and '
+            'retry.',
+          ),
+          findsOneWidget,
+        );
+        expect(find.text('raw captcha_failed text'), findsNothing);
+      },
+    );
+
+    for (final Size size in const <Size>[Size(320, 568), Size(1024, 768)]) {
+      testWidgets(
+        'with the check on, login fits ${size.width.toInt()}x'
+        '${size.height.toInt()} at a 2x text scale in Arabic',
+        (WidgetTester tester) async {
+          tester.view.physicalSize = size;
+          tester.view.devicePixelRatio = 1;
+          tester.platformDispatcher.textScaleFactorTestValue = 2;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+          final FakeTurnstileFactory factory = FakeTurnstileFactory();
+          await _pump(
+            tester,
+            locale: const Locale('ar'),
+            extraOverrides: captchaOn(factory),
+          );
+          factory.latest.emit(const TurnstileFailed('load'));
+          await tester.pump(const Duration(milliseconds: 500));
+
+          expect(tester.takeException(), isNull);
+          expect(find.byKey(const Key('captcha.retry')), findsOneWidget);
+          // The check sits above the sign-in button, never under it.
+          expect(
+            tester.getBottomLeft(find.byKey(kLoginCaptchaKey)).dy,
+            lessThanOrEqualTo(tester.getTopLeft(_submitButton()).dy),
+          );
+        },
+      );
+    }
+  });
 }

@@ -120,8 +120,8 @@ export default function Vehicle360() {
     setHistoryLoading(true)
     const country = v?.country || activeCountry
     const [h, ins] = await Promise.allSettled([
-      loadAssetHistory(v.asset_no, { country, sources: HISTORY_SOURCES }),
-      listVehicleInsuranceLines(v.asset_no, { country }),
+      loadAssetHistory(v.asset_no, { country, sources: HISTORY_SOURCES, org: v.organisation_id }),
+      listVehicleInsuranceLines(v.asset_no, { country, orgId: v.organisation_id }),
     ])
     setHistory(h.status === 'fulfilled' ? h.value : { sources: {}, failed: true })
     setInsurance(ins.status === 'fulfilled'
@@ -137,7 +137,7 @@ export default function Vehicle360() {
       // vehicle in the active country, then its tyres in THAT vehicle's country.
       const v = await v360.getVehicle(assetNo, { country: activeCountry })
       if (!v) throw new Error(`Vehicle "${assetNo}" not found.`)
-      const t = await v360.getVehicleTyres(assetNo, { country: v.country })
+      const t = await v360.getVehicleTyres(assetNo, { country: v.country, orgId: v.organisation_id })
       setVehicle(v); setTyres(t || [])
       setGps({ lat: v.latitude ?? '', lng: v.longitude ?? '' })
       setPhotoUrl(await v360.vehiclePhotoUrl(v360.resolveVehiclePhotoPath(v)))
@@ -165,7 +165,7 @@ export default function Vehicle360() {
     if (file.size > 8 * 1024 * 1024) { setMsg({ type: 'err', text: 'Image must be under 8 MB.' }); return }
     setUploading(true); setMsg(null)
     try {
-      const { url } = await v360.uploadVehiclePhoto(assetNo, file, { country: vehicle?.country })
+      const { url } = await v360.uploadVehiclePhoto(assetNo, file, { country: vehicle?.country, orgId: vehicle?.organisation_id, id: vehicle?.id })
       setPhotoUrl(url); setMsg({ type: 'ok', text: 'Photo updated.' })
     } catch (err) { setMsg({ type: 'err', text: toUserMessage(err, 'Upload failed.') }) }
     finally { setUploading(false); if (fileRef.current) fileRef.current.value = '' }
@@ -174,7 +174,7 @@ export default function Vehicle360() {
   async function saveGps(e) {
     e.preventDefault(); setSavingGps(true); setMsg(null)
     try {
-      const { latitude, longitude } = await v360.saveVehicleGps(assetNo, gps.lat, gps.lng, 'manual', { country: vehicle?.country })
+      const { latitude, longitude } = await v360.saveVehicleGps(assetNo, gps.lat, gps.lng, 'manual', { country: vehicle?.country, orgId: vehicle?.organisation_id, id: vehicle?.id })
       setVehicle((v) => ({ ...v, latitude, longitude }))
       setMsg({ type: 'ok', text: 'Location saved.' })
     } catch (err) { setMsg({ type: 'err', text: toUserMessage(err, 'Could not save location.') }) }

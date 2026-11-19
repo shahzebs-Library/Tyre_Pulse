@@ -15,7 +15,7 @@
 //   401 { error: 'invalid_credentials' }   unknown user AND wrong password (identical)
 //   429 { error: 'locked', retry_after_seconds }
 //   400 { error: 'invalid_request' } / 405 { error: 'method_not_allowed' }
-//   503 { error: 'unavailable' }           auth backend busy or down (not counted)
+//   503 { error: 'unavailable' }           auth backend or lockout check busy/down (not counted)
 //
 // Failures are recorded server-side via record_login_failure, so the client
 // must NOT record them again (it would double count).
@@ -55,13 +55,39 @@ function cors(req: Request): Record<string, string> {
   }
 }
 
+// Only the address Cloudflare (in front of Supabase) records is trusted. Cloudflare sets
+// cf-connecting-ip itself and overwrites any value a caller sends. X-Forwarded-For and
+// X-Real-IP are NOT used: their leftmost value is whatever the caller wrote, so trusting
+// them would let a script claim a new address on every attempt and dodge per-IP limits.
+// No trustworthy address -> nothing is forwarded (Supabase then limits by the edge's own).
 function clientIp(req: Request): string | null {
-  const raw = req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || ''
-  return raw.split(',')[0].trim().slice(0, 64) || null
+  const raw = (req.headers.get('cf-connecting-ip') || '').trim()
+  return /^[0-9a-fA-F:.]{3,45}$/.test(raw) ? raw : null
 }
 
 function escapeLike(s: string): string {
   return s.replace(/[\\%_]/g, (m) => '\\' + m)
+}
+
+// Every upstream call (database RPCs, account lookup, Supabase Auth) is bounded, so a
+// hung dependency answers the caller with a clear 503 "try again" instead of hanging
+// until the platform kills the function. 8 s default; SIGN_IN_UPSTREAM_TIMEOUT_MS may
+// set 1000..15000 (used by the local tests).
+function upstreamTimeoutMs(): number {
+  const n = Number(Deno.env.get('SIGN_IN_UPSTREAM_TIMEOUT_MS') || '')
+  return Number.isFinite(n) && n >= 1000 && n <= 15000 ? n : 8000
+}
+const timedFetch: typeof fetch = (input, init = {}) =>
+  fetch(input, { ...init, signal: AbortSignal.timeout(upstreamTimeoutMs()) })
+
+/** One overall deadline for a step: the client library retries read requests on its own,
+ *  so a per-request timeout alone can add up to several times the limit. */
+function withDeadline<T>(work: Promise<T>): Promise<T> {
+  let timer: number | undefined
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('deadline')), upstreamTimeoutMs())
+  })
+  return Promise.race([work, deadline]).finally(() => clearTimeout(timer))
 }
 
 /** Optional sb_secret_ key: only a secret key may carry Sb-Forwarded-For. */
@@ -130,15 +156,33 @@ Deno.serve(async (req) => {
     return reply(400, { error: 'invalid_request' })
   }
 
-  const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+  const admin = createClient(url, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: timedFetch },
+  })
 
-  // ---- lockout gate (fail safe: an RPC error never blocks a sign-in) -----
+  // ---- lockout gate (fails CLOSED on an error) --------------------------
+  // If the lockout check itself cannot answer, the request is refused with the
+  // same 503 a busy auth backend gets, instead of going on unguarded. Supabase
+  // Auth uses the same database, so when this check is down a password sign-in
+  // would almost certainly fail anyway: refusing costs real users nothing extra,
+  // while proceeding would hand a guesser an unlimited window. Not counted as a
+  // failed attempt. The apps show "try again shortly". (The browser and app
+  // pre-checks stay fail-open: they are advisory, this function is the
+  // server-side gate.)
   try {
-    const { data } = await admin.rpc('login_attempt_status', { p_identifier: identifier })
-    if (data?.locked) {
+    const { data, error } = await admin.rpc('login_attempt_status', { p_identifier: identifier })
+    if (error) return reply(503, { error: 'unavailable' })
+    // Anything but the documented shape is treated as "cannot tell": refuse, never assume.
+    if (!data || typeof data !== 'object' || typeof (data as { locked?: unknown }).locked !== 'boolean') {
+      return reply(503, { error: 'unavailable' })
+    }
+    if (data.locked) {
       return refuse(429, { error: 'locked', retry_after_seconds: Number(data.retry_after_seconds) || 0 })
     }
-  } catch { /* fail safe */ }
+  } catch {
+    return reply(503, { error: 'unavailable' })
+  }
 
   const recordFailure = async () => {
     try {
@@ -158,18 +202,37 @@ Deno.serve(async (req) => {
     // PostgREST treats '*' as a LIKE wildcard; no username or employee id
     // carries one, so such an identifier simply matches nobody.
     try {
-      const pattern = escapeLike(identifier)
-      let userId: string | null = null
-      for (const col of ['username', 'employee_id']) {
-        const { data, error } = await admin.from('profiles').select('id').ilike(col, pattern).limit(1)
-        if (error) return reply(503, { error: 'unavailable' })
-        if (data?.length) { userId = data[0].id as string; break }
-      }
-      if (userId) {
+      const found = await withDeadline((async (): Promise<{ ok: boolean; email: string | null }> => {
+        // The database resolver is the ONE rule for who an identifier names:
+        // a bare username / employee id first (today's users are unaffected),
+        // then "<company code>/<name>" inside that company only, and an
+        // ambiguous bare name outside the original company resolves to nobody.
+        // (public.resolve_sign_in_user -> _resolve_sign_in_profile, executable
+        // by service_role only.) If the function is not there yet, fall back to
+        // the old exact username / employee id lookup.
+        let userId: string | null = null
+        let resolverMissing = false
+        const resolved = await admin.rpc('resolve_sign_in_user', { p_identifier: identifier })
+        if (resolved.error) {
+          const code = String((resolved.error as { code?: string }).code ?? '')
+          if (code === 'PGRST202' || code === '42883') resolverMissing = true
+          else return { ok: false, email: null }
+        } else if (typeof resolved.data === 'string' && resolved.data) {
+          userId = resolved.data
+        }
+        const pattern = escapeLike(identifier)
+        for (const col of resolverMissing ? ['username', 'employee_id'] : []) {
+          const { data, error } = await admin.from('profiles').select('id').ilike(col, pattern).limit(1)
+          if (error) return { ok: false, email: null }
+          if (data?.length) { userId = data[0].id as string; break }
+        }
+        if (!userId) return { ok: true, email: null }
         const { data, error } = await admin.auth.admin.getUserById(userId)
-        if (error) return reply(503, { error: 'unavailable' })
-        email = data?.user?.email ?? null
-      }
+        if (error) return { ok: false, email: null }
+        return { ok: true, email: data?.user?.email ?? null }
+      })())
+      if (!found.ok) return reply(503, { error: 'unavailable' })
+      email = found.email
     } catch {
       return reply(503, { error: 'unavailable' })
     }
@@ -178,6 +241,9 @@ Deno.serve(async (req) => {
 
   // ---- password grant ----------------------------------------------------
   const secret = secretKey()
+  // OFF in production and to stay off: the proxy chain in front of this function has not
+  // been verified to set or overwrite cf-connecting-ip for every path (see the auth plan).
+  // Without forwarding, Supabase Auth limits by the address it sees itself.
   const forward = Deno.env.get('AUTH_FORWARD_CLIENT_IP') === 'true' && secret
   const ip = clientIp(req)
   const authHeaders: Record<string, string> = {
@@ -188,7 +254,7 @@ Deno.serve(async (req) => {
 
   let res: Response
   try {
-    res = await fetch(`${url}/auth/v1/token?grant_type=password`, {
+    res = await timedFetch(`${url}/auth/v1/token?grant_type=password`, {
       method: 'POST',
       headers: authHeaders,
       body: JSON.stringify({

@@ -37,7 +37,13 @@ abstract interface class InspectionPreviousMetersRepository {
 final class SupabaseInspectionPreviousMetersRepository
     with SupabaseGateway
     implements InspectionPreviousMetersRepository {
-  SupabaseInspectionPreviousMetersRepository(this._client);
+  SupabaseInspectionPreviousMetersRepository(
+    this._client, {
+    String? organisationId,
+  }) : _organisationId = organisationId;
+
+  /// Pins the reads to the caller's company (null = row-level security only).
+  final String? _organisationId;
 
   final SupabaseClient _client;
 
@@ -56,14 +62,18 @@ final class SupabaseInspectionPreviousMetersRepository
     try {
       final List<Map<String, dynamic>> rows =
           await guard<List<Map<String, dynamic>>>(
-        () async => await _client
-            .from(table)
-            .select(column)
-            .eq('asset_no', asset)
-            .not(column, 'is', null)
-            .order('reading_date', ascending: false, nullsFirst: false)
-            .order('created_at', ascending: false)
-            .limit(1),
+        () async {
+          var q = _client.from(table).select(column).eq('asset_no', asset);
+          final String? org = _organisationId;
+          if (org != null && org.isNotEmpty) {
+            q = q.eq('organisation_id', org);
+          }
+          return await q
+              .not(column, 'is', null)
+              .order('reading_date', ascending: false, nullsFirst: false)
+              .order('created_at', ascending: false)
+              .limit(1);
+        },
       );
       if (rows.isEmpty) return null;
       final Object? v = rows.first[column];

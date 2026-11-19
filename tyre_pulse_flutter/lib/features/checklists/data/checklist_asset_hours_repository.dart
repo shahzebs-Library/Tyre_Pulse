@@ -28,7 +28,11 @@ abstract interface class ChecklistAssetHoursRepository {
 final class SupabaseChecklistAssetHoursRepository
     with SupabaseGateway
     implements ChecklistAssetHoursRepository {
-  SupabaseChecklistAssetHoursRepository(this._client);
+  SupabaseChecklistAssetHoursRepository(this._client, {String? organisationId})
+      : _organisationId = organisationId;
+
+  /// Pins the read to the caller's company (null = row-level security only).
+  final String? _organisationId;
 
   final SupabaseClient _client;
 
@@ -38,16 +42,21 @@ final class SupabaseChecklistAssetHoursRepository
     if (asset.isEmpty) return null;
     try {
       final List<Map<String, dynamic>> rows =
-          await guard<List<Map<String, dynamic>>>(
-        () => _client
+          await guard<List<Map<String, dynamic>>>(() {
+        var q = _client
             .from(SupabaseTables.engineHoursLogs)
             .select('engine_hours,reading_date,created_at')
-            .eq('asset_no', asset)
+            .eq('asset_no', asset);
+        final String? org = _organisationId;
+        if (org != null && org.isNotEmpty) {
+          q = q.eq('organisation_id', org);
+        }
+        return q
             .not('engine_hours', 'is', null)
             .order('reading_date', ascending: false, nullsFirst: false)
             .order('created_at', ascending: false)
-            .limit(1),
-      );
+            .limit(1);
+      });
       if (rows.isEmpty) return null;
       return engineHoursFromRow(rows.first);
     } on SupabaseFailure catch (failure) {

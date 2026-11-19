@@ -10,8 +10,8 @@ const read = (p) => readFile(new URL(p, import.meta.url), 'utf8')
 const base1 = await read('../migrations/20261117130000_oem_illustrated_parts_catalog.sql')
 const base2 = await read('../migrations/20261117143000_oem_parts_catalog_large_manuals.sql')
 const adv = await read('../migrations/20261118100000_oem_catalog_advanced.sql')
-const fix = await read('../pending_migrations/20261119100000_oem_review_items_source_row.sql')
-const rollback = await read('../pending_migrations/20261119100000_oem_review_items_source_row_ROLLBACK.sql')
+const fix = await read('../migrations/20261119100000_oem_review_items_source_row.sql')
+const rollback = await read('../rollbacks/20261119100000_oem_review_items_source_row_ROLLBACK.sql')
 const ORG = '00000000-0000-0000-0000-000000000900'
 const MANUAL = '00000000-0000-0000-0000-000000000010'
 

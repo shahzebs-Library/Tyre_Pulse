@@ -1,5 +1,5 @@
 -- OEM review queue: one row per SOURCE row, not per part number.
--- STATUS: AUTHORED, NOT APPLIED. Needs owner approval. Rollback: 20261119100000_oem_review_items_source_row_ROLLBACK.sql
+-- STATUS: APPLIED to production 2026-11-19 (ledger 20261119100000, owner order). Verified: key UNIQUE (manual_id, pdf_page, row_order), 0 rows. Rollback: 20261119100000_oem_review_items_source_row_ROLLBACK.sql
 -- Depends on: 20261118100000_oem_catalog_advanced.sql (applied in production 2026-11-19).
 --
 -- Why: oem_review_items was unique on (manual_id, figure_id, part_no, pdf_page). A parts book often

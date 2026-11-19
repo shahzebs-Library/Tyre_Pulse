@@ -114,7 +114,8 @@ test('blind physical audit end to end', async t => {
     await t.test('recount must be a different person who has not counted', async () => {
       await assert.rejects(call(db, U.reviewer, 'inv_recount_assign', { audit_id: audit, recount_counter_id: U.counter, discrepancy_ids: [disc.id] }), code('42501'))
       await assert.rejects(call(db, U.reviewer, 'inv_recount_assign', { audit_id: audit, recount_counter_id: U.approver, discrepancy_ids: [disc.id] }), code('42501'))
-      const ra = await call(db, U.reviewer, 'inv_recount_assign', { audit_id: audit, recount_counter_id: U.keeper, discrepancy_ids: [disc.id] })
+      const ra = await call(db, U.reviewer, 'inv_recount_assign', { audit_id: audit, recount_counter_id: U.keeper,
+        line_keys: [[disc.location_id || '', disc.item_id || '', disc.serial || ''].join('|')] }) // web line-key form
       assert.equal(ra.round, 2)
       // the recount counter is blind too
       assert.deepEqual(await leaks(db, U.keeper, [b.stock_id]), [])

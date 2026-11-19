@@ -307,9 +307,13 @@ language plpgsql security definer set search_path = public, pg_temp as $fn$
 declare r jsonb; v_ids uuid[];
 begin
   r := public._inv_req_begin('inv_recount_assign', p_payload); if r is not null then return r; end if;
-  select coalesce(array_agg(x::uuid), '{}') into v_ids
-    from jsonb_array_elements_text(coalesce(p_payload->'discrepancy_ids', p_payload->'line_keys', '[]'::jsonb)) x
-   where x ~* '^[0-9a-f-]{36}$';
+  -- discrepancy_ids (Flutter / DB) or the web's line_keys 'location_id|item_id|serial'
+  select coalesce(array_agg(distinct d.id), '{}') into v_ids
+    from public.inventory_discrepancies d
+   where d.audit_id = (p_payload->>'audit_id')::uuid and d.organisation_id = public.app_current_org()
+     and (d.id::text in (select jsonb_array_elements_text(coalesce(p_payload->'discrepancy_ids', '[]'::jsonb)))
+          or coalesce(d.location_id::text, '') || '|' || coalesce(d.item_id::text, '') || '|' || coalesce(d.serial, '')
+             in (select jsonb_array_elements_text(coalesce(p_payload->'line_keys', '[]'::jsonb))));
   return public._inv_req_end('inv_recount_assign', p_payload, public._inv_recount_assign((p_payload->>'audit_id')::uuid,
     coalesce(nullif(p_payload->>'recount_counter_id', ''), p_payload->>'counter_id')::uuid, v_ids));
 end $fn$;

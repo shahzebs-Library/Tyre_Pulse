@@ -1,0 +1,97 @@
+/* Inventory Control Center. Built on the Command Center kit tokens (.cc);
+   logical properties only so the hub mirrors cleanly in Arabic (RTL). */
+.inv-hub { display: flex; flex-direction: column; gap: 14px; }
+.inv-hub .cc-btn, .inv-hub .cc-btn-primary, .inv-hub .cc-btn-ghost,
+.inv-hub .cc-select, .inv-hub .cc-tab, .inv-hub .cc-icon-btn,
+.inv-hub .cc-pager button, .inv-hub .cc-pager select { min-height: 44px; }
+.inv-hub .cc-icon-btn { min-width: 44px; }
+.inv-hub .cc-search input { min-height: 44px; }
+
+.inv-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.inv-head h1 { margin: 0; font-size: 22px; font-weight: 750; color: var(--cc-ink); letter-spacing: -0.01em; }
+.inv-head p { margin: 4px 0 0; font-size: 13px; color: var(--cc-ink-2); max-width: 70ch; }
+.inv-scope { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+
+.inv-nav { display: flex; flex-direction: column; gap: 8px; }
+.inv-nav .cc-tabs { flex-wrap: wrap; }
+.inv-nav .inv-sections .cc-tab { flex: 0 1 auto; padding-inline: 12px; font-size: 12.5px; }
+.inv-nav .inv-groups .cc-tab { flex: 0 1 auto; padding-inline: 14px; font-size: 13px; }
+
+.inv-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.inv-cols-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.inv-cols-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 1100px) { .inv-cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .inv-cols-2, .inv-cols-3 { grid-template-columns: minmax(0, 1fr); } }
+
+.inv-note { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 10px;
+  border: 1px solid var(--cc-inner-border); background: var(--cc-inner); color: var(--cc-ink-2); font-size: 13px; line-height: 1.5; }
+.inv-note svg { flex: none; margin-top: 2px; }
+.inv-note strong { color: var(--cc-ink); }
+.inv-note.warn { border-color: color-mix(in srgb, var(--cc-amber) 45%, transparent); }
+.inv-note.bad { border-color: color-mix(in srgb, var(--cc-red) 45%, transparent); }
+.inv-note.good { border-color: color-mix(in srgb, var(--cc-green) 45%, transparent); }
+
+.inv-dl { display: grid; grid-template-columns: minmax(120px, max-content) 1fr; gap: 6px 14px; margin: 0; font-size: 13px; }
+.inv-dl dt { color: var(--cc-ink-3); }
+.inv-dl dd { margin: 0; color: var(--cc-ink); overflow-wrap: anywhere; }
+
+.inv-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 640px) { .inv-form { grid-template-columns: minmax(0, 1fr); } }
+.inv-form .inv-full { grid-column: 1 / -1; }
+.inv-input { width: 100%; min-height: 44px; font-size: 13px; color: var(--cc-ink); background: var(--cc-inner);
+  border: 1px solid var(--cc-inner-border); border-radius: 9px; padding: 8px 12px; }
+html.light .inv-input { background: #fff; }
+.inv-input:focus-visible { outline: 2px solid var(--cc-green); outline-offset: 1px; }
+textarea.inv-input { min-height: 88px; resize: vertical; }
+.inv-err { color: var(--cc-red); font-size: 12px; margin: 2px 0 0; }
+
+.inv-tree { list-style: none; margin: 0; padding: 0; }
+.inv-tree-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding-inline: 8px;
+  border-bottom: 1px solid var(--cc-inner-border); }
+.inv-tree-row .inv-tree-name { flex: 1 1 auto; min-width: 0; color: var(--cc-ink); font-size: 13px; overflow-wrap: anywhere; }
+.inv-tree-row code { font-size: 11.5px; color: var(--cc-ink-3); }
+
+.inv-count-row { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap: 10px; align-items: center;
+  padding: 10px 0; border-bottom: 1px solid var(--cc-inner-border); }
+@media (max-width: 560px) { .inv-count-row { grid-template-columns: minmax(0, 1fr) 100px; } .inv-count-row > :last-child { grid-column: 1 / -1; } }
+.inv-check { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 12.5px; color: var(--cc-ink-2); cursor: pointer; }
+.inv-check input { width: 18px; height: 18px; }
+
+.inv-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.inv-tile { border: 1px solid var(--cc-inner-border); background: var(--cc-inner); border-radius: 10px; padding: 10px 12px; min-height: 64px;
+  text-align: start; color: inherit; font: inherit; cursor: default; }
+button.inv-tile { cursor: pointer; }
+button.inv-tile[aria-pressed="true"] { border-color: var(--cc-green); background: var(--cc-green-tint); }
+.inv-tile b { display: block; font-size: 20px; color: var(--cc-ink); font-variant-numeric: tabular-nums; }
+.inv-tile span { font-size: 12px; color: var(--cc-ink-2); }
+
+.inv-links { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.inv-linkcard { display: flex; gap: 10px; align-items: flex-start; padding: 12px; min-height: 64px; border-radius: 10px;
+  border: 1px solid var(--cc-inner-border); background: var(--cc-inner); color: var(--cc-ink); text-decoration: none; }
+.inv-linkcard:hover, .inv-linkcard:focus-visible { border-color: var(--cc-green); outline: none; }
+.inv-linkcard small { display: block; color: var(--cc-ink-3); font-size: 12px; margin-top: 2px; }
+
+.inv-labels { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.inv-label { border: 1px dashed var(--cc-inner-border); border-radius: 8px; padding: 10px; text-align: center; background: #fff; color: #101828; }
+.inv-label img { width: 120px; height: 120px; }
+.inv-label b { display: block; font-size: 13px; }
+.inv-label small { display: block; font-size: 11px; color: #475467; overflow-wrap: anywhere; }
+
+.inv-num { font-variant-numeric: tabular-nums; }
+.inv-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.inv-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+@media print {
+  .inv-print-hide { display: none !important; }
+  .inv-labels { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* Wide registers scroll inside their card on phones instead of pushing the page sideways. */
+.inv-hub, .inv-hub > *, .inv-hub .cc-card { min-width: 0; max-width: 100%; }
+.inv-scroll { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
+.inv-hub .cc-kpi-val { overflow-wrap: normal; word-break: keep-all; font-size: clamp(17px, 1.5vw, 22px); }
+.inv-hub .cc-et { max-width: 100%; overflow-x: auto; }
+/* Modals and drawers portal out of the hub, so they carry .cc themselves. */
+.inv-panel.cc { gap: 0; }
+.inv-panel .inv-input, .inv-panel .cc-select { min-height: 44px; }
+.inv-panel .cc-btn-primary, .inv-panel .cc-btn-ghost, .inv-panel .cc-icon-btn { min-height: 44px; }
+.inv-num-cell { display: block; text-align: end; font-variant-numeric: tabular-nums; }

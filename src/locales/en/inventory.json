@@ -1,0 +1,279 @@
+{
+  "title": "Inventory Control Center",
+  "lead": "Stock, locations, counts, discrepancies and approvals in one place. Every balance change is a ledger movement; nothing is edited in place.",
+  "navLabel": "Inventory sections",
+  "groupsLabel": "Inventory areas",
+  "sectionsLabel": "Sections in this area",
+  "groups": { "operate": "Stock", "control": "Audit & control", "supply": "Supply", "assets": "Tyres & identification", "insight": "Value & reports" },
+  "sections": {
+    "overview": "Overview", "register": "Stock register", "locations": "Locations", "movements": "Movements",
+    "audits": "Physical audits", "discrepancies": "Discrepancies", "controls": "Controls", "procurement": "Procurement",
+    "receiving": "Receiving & issue", "supplier": "Supplier stock", "tyres": "Tyre inventory", "identification": "Identification",
+    "valuation": "Valuation", "planning": "Planning & simulation", "reports": "Reports"
+  },
+  "scope": {
+    "country": "Country", "allCountries": "All countries", "countryHint": "Change the country from the working context at the top of the app.",
+    "site": "Site", "allSites": "All sites"
+  },
+  "actions": {
+    "retry": "Retry", "cancel": "Cancel", "close": "Close", "save": "Save", "saving": "Saving...", "print": "Print",
+    "pdf": "Download PDF", "excel": "Download Excel", "searching": "Searching..."
+  },
+  "state": {
+    "notSetUpTitle": "{what} is not set up yet",
+    "notSetUpBody": "The database part of this section has not been installed for your company. Nothing is shown until it is, so no figure on this screen is invented.",
+    "errorTitle": "This could not be loaded",
+    "deniedTitle": "You do not have access to this",
+    "deniedBody": "This needs the \"{cap}\" permission for inventory. Ask an administrator if you need it.",
+    "truncated": "Showing the first 20,000 lines only. Narrow the site or country to see everything.",
+    "noMatch": "Nothing matches your search."
+  },
+  "common": {
+    "all": "All", "choose": "Choose...", "item": "Item", "location": "Location", "status": "Status", "from": "From", "to": "To",
+    "serial": "Serial", "created": "Created", "currency": "Currency", "description": "Description",
+    "notAssigned": "Not assigned", "unknownPerson": "Unknown person"
+  },
+  "objects": {
+    "inventory_locations": "Inventory locations", "inventory_audits": "Physical audits", "inventory_discrepancies": "Discrepancies",
+    "inventory_adjustments": "Adjustment approvals", "opening_balance_batches": "Opening balance batches", "tyre_items": "Tyre custody register",
+    "tyre_custody_conflicts": "Tyre custody conflicts", "supplier_agreements": "Supplier agreements", "purchase_order_lines": "Purchase order lines",
+    "goods_receipt_lines": "Goods receipt lines", "material_aliases": "Item cross-references", "oem_part_references": "OEM part references",
+    "material_master_reviews": "Master data reviews", "stock_records": "Stock balances", "ledger": "Stock ledger"
+  },
+  "overview": {
+    "balanceLines": "Stock lines", "belowReorder": "At or below reorder point", "openAudits": "Open audits",
+    "openDiscrepancies": "Open discrepancies", "pendingAdjustments": "Adjustments awaiting approval", "custodyConflicts": "Tyre custody conflicts",
+    "pendingBatches": "Opening balances awaiting approval", "ownedValue": "Owned stock value",
+    "naHint": "N/A means the figure cannot be measured yet (the part is not set up, or the data is missing). It never means zero.",
+    "setupTitle": "Setup status", "setupSub": "{n} of {total} inventory parts installed", "setupChecking": "Checking...",
+    "installed": "Installed", "notInstalled": "Not installed", "unknown": "Could not check",
+    "rulesTitle": "How this inventory is controlled", "rulesSub": "Rules enforced by the database, not only by this screen"
+  },
+  "rules": {
+    "noNegative": "Physical stock can never go below zero. Shortages and backorders are recorded separately.",
+    "blind": "Counts are blind: the counter never sees how many the system expects.",
+    "segregation": "The person who counted cannot approve the adjustment.",
+    "ledger": "The ledger is append-only. Mistakes are corrected by a reversal, never by editing.",
+    "erp": "Financial postings stay in the ERP. Inventory creates no accounting entries.",
+    "tyres": "Each tyre has one custody state. Conflicts are investigated, never corrected automatically.",
+    "currency": "Values are shown per currency (SAR, AED, EGP) and never added together."
+  },
+  "locations": {
+    "title": "Location hierarchy", "sub": "{n} locations", "search": "Search code, name or type", "add": "Add location",
+    "addTitle": "Add location", "editTitle": "Edit location", "edit": "Edit {code}", "printOne": "Print label for {code}",
+    "labels": "Print labels ({n})", "code": "Code", "name": "Name", "type": "Type", "parent": "Inside", "noParent": "Top level (no parent)",
+    "active": "Active", "inactive": "Inactive", "empty": "No locations yet. Add a warehouse, then its zones and bins.",
+    "readOnly": "You can view locations. Adding or changing them needs the transfer permission.",
+    "labelSheet": "Location labels", "labelSheetSub": "Each label carries TP:LOC and the location id. Scan it on the phone to open that bin.",
+    "qrAlt": "QR label for location {code}",
+    "errors": {
+      "code": "Enter a code.", "codeFormat": "Use letters, numbers, dot, dash or underscore (up to 40).",
+      "codeTaken": "This code is already used at this site.", "name": "Enter a name.", "type": "Choose a type.",
+      "site": "Enter the site.", "selfParent": "A location cannot be inside itself."
+    }
+  },
+  "locationTypes": {
+    "warehouse": "Warehouse", "zone": "Zone", "rack": "Rack", "shelf": "Shelf", "bin": "Bin", "in_transit": "In transit",
+    "quarantine": "Quarantine", "damaged": "Damaged", "scrap": "Scrap", "warranty": "Warranty", "repairable": "Repairable",
+    "supplier_custody": "Supplier custody", "vehicle_custody": "Vehicle custody", "consignment": "Consignment"
+  },
+  "movements": {
+    "posted": "Posted", "type": "Type", "qty": "Quantity", "after": "Balance after", "value": "Value change", "source": "Source document",
+    "reason": "Reason", "search": "Search item, reference or reason", "empty": "No movements for these filters.", "noun": "movements",
+    "appendOnly": "The ledger is append-only. A wrong movement is corrected by a reversal that points back to it.",
+    "reverse": "Reverse movement", "reverseTitle": "Reverse this movement",
+    "reverseBody": "A new movement will cancel this one. The original stays in the ledger. A reason is required.",
+    "reasonRequired": "Enter a reason for the reversal."
+  },
+  "audits": {
+    "ref": "Reference", "type": "Audit type", "counter": "Counter", "reviewer": "Reviewer", "approver": "Approver", "due": "Due",
+    "openOnly": "Open audits", "mine": "Only audits I am part of", "new": "New audit", "newTitle": "New physical audit",
+    "newSub": "The counter will count blind. The reviewer and approver must be different people from the counter.",
+    "create": "Create audit", "empty": "No audits for these filters.", "noun": "audits", "audit": "Audit",
+    "howItWorks": "Start takes a snapshot of the expected stock. The counter counts blind, the reviewer reconciles, lines outside tolerance are recounted by someone else, then an approver decides each adjustment.",
+    "approverPolicy": "Decided by the approval policy", "highValueOnly": "High-value items only", "instructions": "Instructions for the counter",
+    "actionsLabel": "Audit actions", "details": "Details", "countNow": "Count", "reconcile": "Reconcile", "start": "Start",
+    "toApproval": "Go to approvals", "close": "Close audit", "cancel": "Cancel audit", "snapshot": "Snapshot taken",
+    "noSnapshot": "Not taken yet (taken when the audit starts)", "yourRole": "Your role",
+    "counterNote": "You are the counter. You will not see expected quantities, and you cannot approve this audit's adjustments.",
+    "noActions": "There is nothing for you to do on this audit right now.",
+    "errors": {
+      "type": "Choose an audit type.", "site": "Enter the site.", "counter": "Choose a counter.", "reviewer": "Choose a reviewer.",
+      "sameReviewer": "The reviewer must be a different person from the counter.", "due": "Choose a due date.",
+      "duePast": "The due date cannot be in the past.", "instructions": "Instructions are too long (2,000 characters)."
+    }
+  },
+  "auditTypes": {
+    "full": "Full count", "partial": "Partial count", "cycle": "Cycle count", "category": "Category count", "high_value": "High-value count",
+    "surprise": "Surprise count", "bin": "Bin count", "tyre_serial": "Tyre serial count", "vehicle_tyre": "Vehicle tyre verification"
+  },
+  "auditStatus": {
+    "draft": "Draft", "scheduled": "Scheduled", "assigned": "Assigned", "in_progress": "Counting", "counting_completed": "Counted",
+    "reconciliation": "Reconciliation", "recount": "Recount", "investigation": "Investigation", "approval": "Awaiting approval",
+    "adjustment_posted": "Adjustments posted", "closed": "Closed", "cancelled": "Cancelled", "rejected": "Rejected"
+  },
+  "roles": { "counter": "Counter", "recounter": "Recounter", "reviewer": "Reviewer", "approver": "Approver", "creator": "Created by you", "none": "Not assigned to this audit" },
+  "count": {
+    "blindTitle": "Blind count",
+    "blindBody": "Count what is physically there. Expected quantities are hidden on purpose. Leave a line blank if you did not count it; tick Confirmed zero if the shelf is empty.",
+    "progress": "{done} of {total} lines counted", "noLines": "No lines were assigned to you for this audit.", "unnamed": "Unnamed item",
+    "qtyFor": "Counted quantity for {item}", "qty": "Quantity", "confirmedZero": "Confirmed zero", "condition": "Condition",
+    "remarks": "Remarks", "extrasTitle": "Found items not on the list",
+    "extrasBody": "Add anything on the shelf that is not on your list. The reviewer will see it as unexpected.",
+    "addExtra": "Add item found", "submit": "Submit count", "confirmSubmit": "Yes, submit",
+    "confirmBody": "After you submit you cannot change these figures. A recount, if needed, is done by someone else.",
+    "badQty": "A counted quantity must be a number of zero or more.", "badExtra": "Each extra item needs a quantity above zero.",
+    "nothing": "Enter at least one counted line before submitting."
+  },
+  "conditions": { "new": "New", "used_serviceable": "Used, serviceable", "damaged": "Damaged", "repairable": "Repairable", "scrap": "Scrap" },
+  "recon": {
+    "expected": "Expected", "counted": "Counted", "variance": "Variance", "valueImpact": "Value impact", "round": "Round",
+    "recount": "Recount", "recountNeeded": "Needed", "accuracy": "Lines matching", "recountLines": "Lines to recount",
+    "netValue": "Net value variance", "absValue": "Absolute value variance",
+    "netAbsHint": "Net can hide offsetting losses, so the absolute variance is always shown beside it.",
+    "show": "Show", "exceptions": "Exceptions only", "run": "Run reconciliation",
+    "noExceptions": "Every counted line matches.", "noLines": "No snapshot or count lines yet.",
+    "recountTitle": "{n} lines are outside tolerance",
+    "recountBody": "Assign a recount to a different person. Serial-tracked tyres have zero tolerance.",
+    "recounter": "Recount by", "assign": "Assign recount",
+    "status": { "match": "Match", "over": "Over", "short": "Short", "not_counted": "Not counted", "unexpected": "Unexpected" }
+  },
+  "approve": {
+    "noUser": "Sign in again to approve.", "noCapability": "You do not have the adjustment approval permission.",
+    "segregation": "You counted, recounted or created this, so someone else must approve it."
+  },
+  "disc": {
+    "raised": "Raised", "category": "Category", "uncategorised": "Not categorised", "search": "Search item, serial or audit",
+    "openOnly": "Open", "empty": "No discrepancies for these filters.", "noun": "discrepancies", "drawerTitle": "Discrepancy",
+    "investigation": "Investigation", "readOnly": "You can read this investigation. Changing it needs the discrepancy review permission.",
+    "proposedQty": "Proposed correct quantity", "notes": "Investigation notes", "proposedAction": "Proposed action", "moveTo": "Move to",
+    "approval": "Approval", "notProposed": "Approval opens once a correction has been proposed.",
+    "incomplete": "Before approval this needs: {fields}", "decisionNote": "Decision note", "approve": "Approve", "reject": "Reject",
+    "recount": "Ask for recount", "hold": "Hold", "noteRequired": "A note is required to reject or hold.",
+    "field": { "category": "a category", "notes": "investigation notes", "proposed_qty": "a proposed quantity" }
+  },
+  "discCategories": {
+    "count_error": "Count error", "unrecorded_issue": "Issue not recorded", "unrecorded_receipt": "Receipt not recorded",
+    "wrong_location": "Wrong location", "wrong_item": "Wrong item", "damaged": "Damaged", "expired_obsolete": "Expired or obsolete",
+    "theft_suspected": "Theft suspected", "supplier_shortage": "Supplier shortage", "uom_error": "Unit of measure error",
+    "data_entry": "Data entry error", "unknown": "Unknown"
+  },
+  "discStatus": {
+    "open": "Open", "investigating": "Investigating", "proposed": "Correction proposed", "approved": "Approved", "rejected": "Rejected",
+    "posted": "Posted", "closed": "Closed"
+  },
+  "controls": {
+    "tabs": { "permissions": "My permissions", "opening": "Opening balances", "master": "Master data reviews" },
+    "permTitle": "What you can do in inventory", "permSub": "Based on your role and any personal grants",
+    "capability": "Permission", "you": "You", "allowed": "Allowed", "notAllowed": "Not allowed",
+    "serverNote": "This list decides what the screen offers. The database checks every action again, so a refusal can still appear.",
+    "noAutoMerge": "Items that look like duplicates are reviewed one by one. Nothing is merged automatically.",
+    "reviewsEmpty": "No master data changes waiting.", "reviewNoun": "reviews", "change": "Proposed change",
+    "review": { "pending": "Pending", "approved": "Approved", "rejected": "Rejected", "all": "All" }
+  },
+  "caps": {
+    "view": "View inventory", "view_value": "See stock value", "receive": "Receive goods", "issue": "Issue stock", "transfer": "Transfer and manage locations",
+    "count": "Count stock", "audit_create": "Create audits and opening balances", "recount": "Assign recounts", "discrepancy_review": "Investigate discrepancies",
+    "adjustment_approve": "Approve adjustments", "financial_post": "Financial posting", "scrap_approve": "Approve scrap", "export": "Export reports",
+    "audit_history": "See audit history"
+  },
+  "opening": {
+    "rule": "Existing stock figures are not assumed correct. Load an opening balance as a batch: map the columns, check missing costs, submit, then someone else approves it.",
+    "upload": "Upload opening balance file", "emptyFile": "The file has no rows.", "readFailed": "The file could not be read.",
+    "empty": "No opening balance batches yet.", "noun": "batches", "linesNoun": "lines", "ref": "Batch", "source": "Source", "lines": "Lines",
+    "missingCost": "Missing cost", "blocking": "Lines with problems", "pricedValue": "Priced value", "pricedPct": "{pct}% of lines carry a cost.",
+    "wizardTitle": "New opening balance batch", "mapping": "Match your columns", "notMapped": "Not in this file",
+    "missingRequired": "Map these required columns first: {fields}", "createDraft": "Create draft batch",
+    "previewNote": "Showing the first {shown} of {total} lines. All lines are saved in the batch.",
+    "noLines": "No lines.", "unitCost": "Unit cost", "costMissing": "Cost missing", "issues": "Issues", "ready": "Ready",
+    "batch": "Batch", "submit": "Submit for approval", "notSubmitted": "Only a submitted batch can be approved.",
+    "field": {
+      "item_code": "Item code", "description": "Description", "location_code": "Location code", "site": "Site", "qty": "Quantity",
+      "uom": "Unit", "unit_cost": "Unit cost", "currency": "Currency", "condition": "Condition", "serial_no": "Serial number"
+    },
+    "issue": {
+      "missing_item": "No item code", "missing_location": "No location", "missing_qty": "No quantity", "bad_qty": "Quantity is not a number",
+      "negative_qty": "Negative quantity (not allowed)", "bad_cost": "Cost is not a valid number", "duplicate": "Duplicate line in file"
+    },
+    "status": { "draft": "Draft", "mapped": "Mapped", "submitted": "Awaiting approval", "approved": "Approved", "rejected": "Rejected", "posted": "Posted" }
+  },
+  "links": {
+    "replenishment": "Stock Replenishment", "replenishmentSub": "Reorder suggestions from usage",
+    "requisitions": "Requisitions", "requisitionsSub": "Purchase requests",
+    "partsRequests": "Parts Requests", "partsRequestsSub": "Workshop demand per job",
+    "procurement": "Purchase Orders", "procurementSub": "Raise and track orders",
+    "goodsReceipt": "Goods Receipt", "goodsReceiptSub": "Record deliveries",
+    "materialIssue": "Store Material Issue", "materialIssueSub": "Issue and return against job cards",
+    "suppliers": "Supplier Management", "suppliersSub": "Scorecards and contracts"
+  },
+  "supply": {
+    "erpRule": "Orders are tracked here for stock planning. Invoices and accounting postings stay in the ERP.",
+    "poLines": "Purchase order lines", "poLinesSub": "Ordered against received, per line", "poSearch": "Search PO, item or description",
+    "poEmpty": "No purchase order lines.", "linesNoun": "lines", "po": "PO", "ordered": "Ordered", "received": "Received",
+    "outstanding": "Outstanding", "unitPrice": "Unit price",
+    "receiveRule": "A goods receipt adds stock through a receipt movement. Rejected quantities never enter on-hand stock.",
+    "grnLines": "Goods receipt lines", "grnLinesSub": "Received, accepted and rejected per line", "grnSearch": "Search GRN, PO or item",
+    "grnEmpty": "No goods receipt lines.", "grn": "GRN", "noPo": "No PO", "accepted": "Accepted", "rejected": "Rejected",
+    "consignmentRule": "Consignment and supplier-owned stock is counted but is not your stock value. Cost reaches the books only through the ERP.",
+    "agreements": "Supplier agreements", "agreementsSub": "Consignment, vendor-managed and framework terms", "agreementType": "Agreement type",
+    "agreementsEmpty": "No supplier agreements.", "agreementsNoun": "agreements", "supplier": "Supplier", "leadTime": "Lead time (days)",
+    "minMax": "Min / max", "expires": "Expires", "consignmentStock": "Consignment stock on hand",
+    "consignmentStockSub": "Stock held for a supplier", "consignmentEmpty": "No consignment stock.", "agreedPrice": "Agreed price",
+    "types": { "all": "All", "consignment": "Consignment", "vmi": "Vendor managed", "framework": "Framework" }
+  },
+  "register": { "onHand": "On hand" },
+  "tyres": {
+    "rule": "Each tyre has exactly one custody state, derived from tyre records without changing them. Time in stock is not running life, so no km or life is shown here.",
+    "conflictsTitle": "Custody conflicts", "conflictsSub": "Tyres whose records disagree, for example scrapped yet still fitted",
+    "conflictsEmpty": "No open custody conflicts.", "conflictNoun": "conflicts", "conflict": "Conflict", "detected": "Detected",
+    "custodyTitle": "Tyres by custody state", "custodySub": "{total} tyres tracked, {stock} in stores", "custodyNone": "No custody figures yet",
+    "filterByState": "Filter tyres by custody state", "search": "Search serial, asset, brand or size", "serialTracker": "Serial Tracker",
+    "empty": "No tyres for these filters.", "noun": "tyres", "state": "Custody state", "brandSize": "Brand and size", "where": "Where",
+    "purchaseCost": "Purchase cost", "evidenceTitle": "Conflict evidence",
+    "noAutoFix": "This is not corrected automatically. An authorised person decides, with this evidence, which record is right.",
+    "noEvidence": "No evidence was attached to this conflict.", "passport": "Open tyre passport"
+  },
+  "custody": {
+    "new_stock": "New in stock", "reserved": "Reserved", "in_transit": "In transit", "fitted": "Fitted", "removed_pending": "Removed, decision pending",
+    "reusable": "Reusable", "under_repair": "Under repair", "warranty": "Warranty", "quarantine": "Quarantine", "scrapped": "Scrapped",
+    "returned_supplier": "Returned to supplier", "unknown": "Unknown"
+  },
+  "ident": {
+    "lookupTitle": "What is this code?", "lookupSub": "Scan or type a bin label, item code, barcode or cross-reference",
+    "placeholder": "Scan or type a code", "find": "Find", "partial": "Some lookups are not set up yet, so results may be incomplete.",
+    "isLocation": "This is a location label", "openLocations": "Open locations", "category": "Category", "aliasType": "Reference type",
+    "value": "Value", "nothing": "Nothing in inventory matches this code.",
+    "labelsTitle": "Labels", "labelsSub": "Print QR labels for bins and assets",
+    "binLabels": "Bin and location labels", "binLabelsSub": "From the Locations section", "assetLabels": "Tyre and vehicle labels",
+    "assetLabelsSub": "From QR Labels", "compatTitle": "Compatibility data", "compatSub": "OEM references and fitments approved by engineering",
+    "noCompat": "No validated compatibility data",
+    "noCompatBody": "No approved OEM reference or fitment exists yet, so no part is suggested as compatible. Nothing is matched by description.",
+    "compatNotSetUp": "The compatibility tables are not set up yet.", "oemRefs": "OEM references", "fitments": "Approved fitments"
+  },
+  "valuation": {
+    "owned": "Owned stock value", "unvalued": "Lines without a cost", "excluded": "Consignment lines excluded",
+    "mixed": "Values are listed per currency. They are never added together.",
+    "unvaluedNote": "{n} lines have no cost. They are counted as unvalued, not as zero.",
+    "method": "Weighted average cost per item, calculated by the database. Serialised tyres keep their own purchase price. This value is never added to the ERP expense figures and creates no posting.",
+    "bySite": "Value by site and currency", "bySiteSub": "Owned stock only", "empty": "No stock lines.", "noCurrency": "No currency",
+    "lines": "Lines", "value": "Value"
+  },
+  "planning": {
+    "noReorderPoint": "Lines with no reorder point", "zeroStock": "Lines at zero",
+    "replenishmentSub": "Suggested order quantities from actual usage",
+    "signalsTitle": "At or below reorder point", "signalsSub": "Available stock (on hand minus reserved) against the reorder point set for the line",
+    "noSignals": "No line is at or below its reorder point.", "available": "Available", "reorderPoint": "Reorder point", "gap": "Short by",
+    "simTitle": "Brand and investment simulation", "simSub": "What-if scenarios for planning",
+    "simNoData": "Brand-change and part-substitution scenarios need validated compatibility. None exists yet, so no scenario is offered.",
+    "simReady": "{n} validated compatibility records are available for scenarios.",
+    "simHonesty": "Scenarios are hypothetical and are never shown as actual savings."
+  },
+  "reports": {
+    "title": "Inventory reports", "sub": "Each file carries a report reference, its filters and the snapshot time",
+    "report": "Report", "register": "Stock register", "movements": "Movement ledger", "audits": "Physical audits",
+    "discrepancies": "Discrepancies", "tyres": "Tyre custody", "conflicts": "Tyre custody conflicts", "scope": "This report will cover",
+    "building": "Building...", "notSetUp": "This report's data is not set up yet.",
+    "done": "Report {ref} created", "doneBody": "{rows} rows, snapshot {snapshot}.", "truncated": "First {max} rows only",
+    "currencyRule": "Money columns always sit beside their currency. Totals across currencies are never calculated."
+  }
+}

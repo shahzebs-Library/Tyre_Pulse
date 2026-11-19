@@ -9,6 +9,36 @@ import 'package:tyre_pulse/core/sync/queued_command_repository.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/features/stock_count/domain/stock_item.dart';
 
+/// PostgREST caps every response at 1000 rows whatever `.limit()` asks for,
+/// so a single read silently truncates the register once it passes the cap
+/// (docs/inventory/05 finding 4). This reads page after page until a short
+/// page proves the end, up to [maxRows].
+///
+/// [maxRows] is a safety ceiling, not a target. Reaching it throws rather than
+/// returning a list that looks complete, because a Stock Count screen showing
+/// part of the store as the whole store is the defect this exists to stop.
+Future<List<Map<String, dynamic>>> fetchStockPages(
+  Future<List<Map<String, dynamic>>> Function(int from, int to) readPage, {
+  int pageSize = 1000,
+  int maxRows = 50000,
+}) async {
+  final List<Map<String, dynamic>> all = <Map<String, dynamic>>[];
+  int from = 0;
+  while (true) {
+    final List<Map<String, dynamic>> page =
+        await readPage(from, from + pageSize - 1);
+    all.addAll(page);
+    if (page.length < pageSize) return all;
+    from += pageSize;
+    if (from >= maxRows) {
+      throw StateError(
+        'The stock register has more than $maxRows rows; refusing to show '
+        'a partial list as complete.',
+      );
+    }
+  }
+}
+
 abstract interface class StockCountRepository {
   Future<List<StockItem>> list({String? country});
 
@@ -77,16 +107,21 @@ final class DefaultStockCountRepository
   @override
   Future<List<StockItem>> list({String? country}) {
     return guard<List<StockItem>>(() async {
-      var query = _client.from(SupabaseTables.stockRecords).select(
-            'id,site,description,stock_qty,min_level,critical_level,'
-            'stock_status,updated_at',
-          );
       final String scope = country?.trim() ?? '';
-      if (scope.isNotEmpty && scope != 'All') {
-        query = query.or('country.eq.$scope,country.is.null');
-      }
-      final List<Map<String, dynamic>> rows =
-          await query.order('site').limit(1000);
+      final List<Map<String, dynamic>> rows = await fetchStockPages(
+        (int from, int to) {
+          var query = _client.from(SupabaseTables.stockRecords).select(
+                'id,site,description,stock_qty,min_level,critical_level,'
+                'stock_status,updated_at',
+              );
+          if (scope.isNotEmpty && scope != 'All') {
+            query = query.or('country.eq.$scope,country.is.null');
+          }
+          // The id tiebreak is load-bearing: ordering a paged read on a
+          // non-unique key (site) drops or repeats rows at a page boundary.
+          return query.order('site').order('id').range(from, to);
+        },
+      );
       return rows
           .map(_fromRow)
           .where((StockItem item) => item.id.isNotEmpty)

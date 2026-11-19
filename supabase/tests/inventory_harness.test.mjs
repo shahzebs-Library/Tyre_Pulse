@@ -160,7 +160,8 @@ create table public.purchase_orders(id uuid primary key default gen_random_uuid(
   supplier_name text, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
 create table public.goods_receipts(id uuid primary key default gen_random_uuid(), organisation_id uuid, country text, grn_no text,
   po_ref text, supplier text, item text, qty_ordered numeric, qty_received numeric, site text, status text not null default 'received',
-  created_by uuid, unit_cost numeric, created_at timestamptz not null default now());
+  created_by uuid, unit_cost numeric, created_at timestamptz not null default now(), received_date date, delivery_note_no text,
+  qty_rejected numeric, received_by text, notes text, condition text, updated_at timestamptz not null default now());
 create table public.requisitions(id uuid primary key default gen_random_uuid(), organisation_id uuid, country text,
   item text not null, quantity numeric, site text, status text not null default 'draft', created_by uuid);
 create table public.materials(id uuid primary key default gen_random_uuid(), organisation_id uuid, country text, name text not null,

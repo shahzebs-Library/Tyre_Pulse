@@ -1,7 +1,8 @@
 import { supabase } from './_client'
+import { requireCatalogAdmin } from './oemCatalogAdmin'
 
 const MANUAL_COLUMNS = 'id,country,manufacturer,model,model_code,equipment_no,chassis_from,chassis_to,source_file_name,source_sha256,storage_path,page_count,item_count,extraction_status,import_summary,created_at'
-const ENTRY_COLUMNS = 'id,manual_id,source_pdf_page,row_order,assembly_heading,printed_page,index_no,parent_index,part_no,description,remark,quantity,see_page,illustration_pdf_page,row_type,source_line,manual:oem_parts_manuals!inner(id,manufacturer,model,model_code,equipment_no,country,storage_path,page_count)'
+const ENTRY_COLUMNS = 'id,manual_id,source_pdf_page,row_order,assembly_heading,printed_page,index_no,parent_index,part_no,description,remark,quantity,see_page,illustration_pdf_page,row_type,source_line,manual:oem_parts_manuals!inner(id,manufacturer,model,model_code,equipment_no,chassis_from,chassis_to,country,storage_path,page_count)'
 const BROWSE_ENTRY_COLUMNS = 'id,manual_id,source_pdf_page,row_order,assembly_heading,printed_page,index_no,parent_index,part_no,description,remark,quantity,see_page,illustration_pdf_page,row_type'
 
 function raise(error, fallback) {
@@ -55,6 +56,13 @@ export async function searchOemEntries(search, { manualId, country, limit = 100 
     if (country && country !== 'All') q = q.eq('country', country)
     queries.push(q)
   }
+  // Old and replacement numbers live in the OEM remark text, not in the part-number column.
+  if (normalized.length >= 6) {
+    let q = supabase.from('oem_parts_entries').select(ENTRY_COLUMNS).ilike('remark', `%${term.replace(/[%,()]/g, ' ')}%`).limit(limit)
+    if (manualId) q = q.eq('manual_id', manualId)
+    if (country && country !== 'All') q = q.eq('country', country)
+    queries.push(q)
+  }
   const results = await Promise.all(queries.map((query) => query))
   const byId = new Map()
   for (const { data, error } of results) {
@@ -64,18 +72,28 @@ export async function searchOemEntries(search, { manualId, country, limit = 100 
   return [...byId.values()].slice(0, limit)
 }
 
-/** Load one selected manual in stable pages so users can browse by illustration before knowing a part number. */
+/**
+ * Load one selected manual in stable pages so users can browse by illustration before knowing a part number.
+ * Includes the saved figure link (figure_id) so the viewer groups by the corrected figure, not the import
+ * snapshot. Falls back to the base columns on a database that has not got figure_id yet.
+ */
 export async function listOemManualEntries(manualId) {
   if (!manualId) return []
   const pageSize = 500
   const rows = []
+  let columns = `${BROWSE_ENTRY_COLUMNS},figure_id`
   for (let start = 0; ; start += pageSize) {
-    const { data, error } = await supabase.from('oem_parts_entries')
-      .select(BROWSE_ENTRY_COLUMNS)
+    const page = () => supabase.from('oem_parts_entries')
+      .select(columns)
       .eq('manual_id', manualId)
       .order('source_pdf_page', { ascending: true })
       .order('row_order', { ascending: true })
       .range(start, start + pageSize - 1)
+    let { data, error } = await page()
+    if (error && columns !== BROWSE_ENTRY_COLUMNS && /figure_id/i.test(String(error.message || '')) && /column|schema/i.test(String(error.message || ''))) {
+      columns = BROWSE_ENTRY_COLUMNS
+      ;({ data, error } = await page())
+    }
     raise(error, 'Could not load this manual’s illustrated parts groups.')
     rows.push(...(data || []))
     if (!data || data.length < pageSize) break
@@ -96,6 +114,7 @@ export async function getOemPdfSignedUrl(manualId) {
 
 /** Save the PDF once, then idempotently upsert every extracted table row in batches. */
 export async function saveOemManual({ id, resume = false, file, sha256, country, manufacturer, model, modelCode, equipmentNo, chassisFrom, chassisTo, pageCount, rows, summary }) {
+  await requireCatalogAdmin()
   const manual = {
     id,
     country: country || null,
@@ -149,6 +168,7 @@ export async function saveOemManual({ id, resume = false, file, sha256, country,
       illustration_pdf_page: row.illustration_pdf_page || null,
       row_type: row.row_type || 'catalog_item',
       source_line: row.source_line || null,
+      figure_id: row.figure_id || null,
     }))
     const { error } = await supabase.from('oem_parts_entries')
       .upsert(batch, { onConflict: 'manual_id,source_pdf_page,row_order', ignoreDuplicates: true })
@@ -158,9 +178,40 @@ export async function saveOemManual({ id, resume = false, file, sha256, country,
     }
   }
 
-  const status = rows.length && !summary.reviewPages?.length && !summary.imageOnlyPages?.length ? 'ready' : 'needs_review'
+  const status = rows.length && !summary.reviewPages?.length && !summary.imageOnlyPages?.length && !summary.reviewQueue?.length ? 'ready' : 'needs_review'
   const { data, error } = await supabase.from('oem_parts_manuals')
     .update({ extraction_status: status }).eq('id', id).select(MANUAL_COLUMNS).single()
   raise(error, 'Parts were saved, but the manual status could not be finalized.')
   return data
+}
+
+/**
+ * Stock from the EXISTING internal parts catalog, matched only on an identical part number.
+ * That is a lead, not a verified OEM-to-item link (no crosswalk exists yet), and the UI says so.
+ * Reservations are not tracked by parts_catalog, so no reserved quantity is returned.
+ */
+export async function lookupStockByPartNumbers(partNos) {
+  const list = [...new Set(partNos.filter(Boolean))].slice(0, 200)
+  if (!list.length) return {}
+  const { data, error } = await supabase.from('parts_catalog').select('part_no,name,on_hand_qty,uom').in('part_no', list)
+  if (error) return {}
+  const out = {}
+  for (const r of data || []) out[normalizePartNumberKey(r.part_no)] = { part_no: r.part_no, name: r.name, on_hand_qty: r.on_hand_qty, uom: r.uom }
+  return out
+}
+const normalizePartNumberKey = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+
+/**
+ * Delete one manual (admin only, enforced by RLS). The row delete comes first so a refusal (for example a
+ * manual holding admin-corrected parts, which the database protects) leaves the PDF in place.
+ */
+export async function deleteOemManual(manualId) {
+  const { data: manual, error: readError } = await supabase.from('oem_parts_manuals').select('storage_path').eq('id', manualId).single()
+  raise(readError, 'Could not find the OEM manual.')
+  const { error } = await supabase.from('oem_parts_manuals').delete().eq('id', manualId)
+  if (error) {
+    if (/corrected by an administrator|42501/.test(`${error.message} ${error.code}`)) throw new Error('This manual has parts corrected by an administrator. It cannot be deleted; reprocess or edit it instead.')
+    raise(error, 'Could not delete the OEM manual.')
+  }
+  if (manual?.storage_path) await supabase.storage.from('oem-parts-catalogs').remove([manual.storage_path])
 }

@@ -222,3 +222,5 @@ Inventory and test record: `docs/commercial-readiness/audit/BY_NUMBER_JOIN_AUDIT
   `tyre_status_marks_serial_mark_type_bridge` index. OWNER APPROVAL ONLY, after the production
   web build carries #541. Contains `drop`, so the apply prompt needs the owner. Rollback in the
   file header.
+- `20261119100000_oem_review_items_source_row.sql` - APPLIED 2026-11-19, moved to `supabase/migrations/`
+  (rollback in `supabase/rollbacks/`).

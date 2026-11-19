@@ -26,7 +26,7 @@ import {
   ClipboardList, UserX, CalendarClock, Hash, CheckCircle2, Package, Wrench, Ban,
   EyeOff, Eye, ExternalLink, X, ImageOff, ArrowRight, QrCode,
 } from 'lucide-react'
-import { findSerialRecords, listSerialRegister, getSerialKpis, listSizeOptions, listCatalogueForBrand } from '../lib/api/serialTracker'
+import { findSerialRecords, listSerialRegister, getSerialKpis, listSizeOptions, listPositionOptions, listCatalogueForBrand } from '../lib/api/serialTracker'
 import { matchCatalogue } from '../lib/tyreImage'
 import TyreTreadImage from '../components/tyre/TyreTreadImage'
 import { listFilterOptions } from '../lib/api/tyreRecords'
@@ -50,7 +50,7 @@ import {
 } from '../lib/serialTrackerAnalytics'
 import {
   STATUS_OPTIONS, statusMeta, cleanSerial, sameSerial, currentAssignment, historyEvents,
-  filterEvents, eventCounts, HISTORY_TABS, USAGE_TABS, lifeUsage, sparkPath, recordPhotos,
+  filterEvents, eventCounts, positionInfo, positionCaption, locationInfo, HISTORY_TABS, USAGE_TABS, lifeUsage, sparkPath, recordPhotos,
 } from '../lib/serialTrackerView'
 import { compareValues } from '../lib/consoleTable'
 import { costDisplay } from '../lib/tyreCostAudit'
@@ -333,7 +333,8 @@ export default function SerialTracker() {
     removal_date: r.removal_date ? formatDate(r.removal_date) : 'N/A',
     asset_no: r.asset_no || 'N/A',
     site: r.site || 'N/A',
-    position: r.position || r.tyre_position || 'N/A',
+    position: positionInfo(r).code || 'N/A',
+    position_state: positionCaption(positionInfo(r)) || 'N/A',
     brand: r.brand || 'N/A',
     description: r.description || 'N/A',
     risk_level: r.risk_level || 'N/A',
@@ -352,6 +353,7 @@ export default function SerialTracker() {
           { key: 'asset_no',     header: 'Asset No' },
           { key: 'site',         header: 'Site' },
           { key: 'position',     header: 'Position' },
+          { key: 'position_state', header: 'Position state' },
           { key: 'brand',        header: 'Brand' },
           { key: 'description',  header: 'Description' },
           { key: 'risk_level',   header: 'Risk' },
@@ -371,8 +373,8 @@ export default function SerialTracker() {
     try {
       exportToExcel(
         lifecycleRows,
-        ['issue_date','removal_date','asset_no','site','position','brand','description','risk_level','status','price','remarks'],
-        ['Fitted','Removed','Asset No','Site','Position','Brand','Description','Risk','Status','Price per tyre','Remarks'],
+        ['issue_date','removal_date','asset_no','site','position','position_state','brand','description','risk_level','status','price','remarks'],
+        ['Fitted','Removed','Asset No','Site','Position','Position state','Brand','Description','Risk','Status','Price per tyre','Remarks'],
         reportFileName('TyrePulse Serial', lastQuery)
       )
     } catch (err) {
@@ -658,6 +660,7 @@ export default function SerialTracker() {
   const [size, setSize] = useState('')
   const [status, setStatus] = useState('')
   const [site, setSite] = useState('')
+  const [position, setPosition] = useState('')
   const [regPage, setRegPage] = useState(0)
   const [regSize, setRegSize] = useState(10)
   const [historyTab, setHistoryTab] = useState('all')
@@ -669,21 +672,21 @@ export default function SerialTracker() {
     return () => clearTimeout(t)
   }, [regSearch])
   // Any filter change starts the register from its first page.
-  useEffect(() => { setRegPage(0) }, [regSearchDebounced, brand, size, status, site, regSize, activeCountry])
+  useEffect(() => { setRegPage(0) }, [regSearchDebounced, brand, size, status, site, position, regSize, activeCountry])
 
   const kpis = useCard(() => getSerialKpis(activeCountry), [activeCountry])
   const options = useCard(async () => {
-    const [f, sizes] = await Promise.all([listFilterOptions(activeCountry), listSizeOptions(activeCountry)])
-    return { brands: f.brands, sites: f.sites, sizes }
+    const [f, sizes, positions] = await Promise.all([listFilterOptions(activeCountry), listSizeOptions(activeCountry), listPositionOptions(activeCountry)])
+    return { brands: f.brands, sites: f.sites, sizes, positions }
   }, [activeCountry])
   const register = useCard(
-    () => listSerialRegister({ page: regPage, pageSize: regSize, search: regSearchDebounced, brand, size, status, site, country: activeCountry }),
-    [regPage, regSize, regSearchDebounced, brand, size, status, site, activeCountry],
+    () => listSerialRegister({ page: regPage, pageSize: regSize, search: regSearchDebounced, brand, size, status, site, position, country: activeCountry }),
+    [regPage, regSize, regSearchDebounced, brand, size, status, site, position, activeCountry],
   )
   const regRows = register.data?.rows || []
   const regTotal = register.data?.total ?? 0
-  const filtersOn = !!(regSearch || brand || size || status || site)
-  const clearFilters = () => { setRegSearch(''); setBrand(''); setSize(''); setStatus(''); setSite('') }
+  const filtersOn = !!(regSearch || brand || size || status || site || position)
+  const clearFilters = () => { setRegSearch(''); setBrand(''); setSize(''); setStatus(''); setSite(''); setPosition('') }
 
   // Open the first serial of the register once, so the details rail is never blank on arrival.
   const autoPicked = useRef(false)
@@ -703,6 +706,8 @@ export default function SerialTracker() {
   }
 
   const assignment = useMemo(() => currentAssignment(records), [records])
+  const lastRecord = records[records.length - 1] || null
+  const lastKnown = useMemo(() => (lastRecord ? positionInfo(lastRecord) : null), [lastRecord])
 
   // Tyre catalogue entry for the selected tyre's brand and size: pattern, load
   // index and the tread picture. A failed read says "could not check".
@@ -760,7 +765,25 @@ export default function SerialTracker() {
         </span>
       ) : <span className="cc-na">Not fitted</span>,
     },
-    { key: 'site', header: 'Current location', cell: (r) => r.site || <span className="cc-na">N/A</span> },
+    {
+      key: 'position', header: 'Wheel position', cell: (r) => {
+        const info = positionInfo(r)
+        if (info.kind === 'unknown') return <span className="cc-na" title={info.reason}>N/A</span>
+        return (
+          <span title={info.label || undefined}>
+            <span className="cc-strong st-pos" dir="ltr">{info.code}</span>
+            <span className="cc-sub">{positionCaption(info)}</span>
+          </span>
+        )
+      },
+    },
+    {
+      key: 'site', header: 'Site / location', cell: (r) => {
+        const loc = locationInfo(r)
+        if (!loc.site) return <span className="cc-na" title={loc.reason}>N/A</span>
+        return <span>{loc.site}{loc.source !== 'record' && <span className="cc-sub">From vehicle register</span>}</span>
+      },
+    },
     { key: 'status', header: 'Status', cell: (r) => <StatusPill status={r.status} /> },
     { key: 'issue_date', header: 'Installed date', cell: (r) => dateOrNA(r.issue_date || r.fitment_date) },
     {
@@ -854,6 +877,10 @@ export default function SerialTracker() {
                   <select className="cc-select" aria-label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
                     <option value="">All status</option>
                     {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                  <select className="cc-select" aria-label="Wheel position" value={position} onChange={(e) => setPosition(e.target.value)}>
+                    <option value="">All positions</option>
+                    {(options.data?.positions || []).map((p) => <option key={p} value={p}>{p}</option>)}
                   </select>
                   <select className="cc-select" aria-label="Location" value={site} onChange={(e) => setSite(e.target.value)}>
                     <option value="">All locations</option>
@@ -1155,7 +1182,16 @@ export default function SerialTracker() {
 
           <Card title="Current assignment">
             {!stats ? <div className="cc-empty">No serial selected.</div> : !assignment ? (
-              <div className="cc-empty">This tyre is not fitted to a vehicle now.</div>
+              <>
+                <div className="cc-empty">This tyre is not fitted to a vehicle now.</div>
+                {lastKnown && lastKnown.kind !== 'unknown' && (
+                  <dl className="st-fields">
+                    <Field label="Last known position">{lastKnown.code}</Field>
+                    <Field label="Last vehicle">{lastRecord?.asset_no || null}</Field>
+                    <Field label="Site">{locationInfo(lastRecord).site}</Field>
+                  </dl>
+                )}
+              </>
             ) : (
               <>
                 <div className="cc-vehicle st-assign">

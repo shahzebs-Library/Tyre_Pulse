@@ -283,7 +283,7 @@ const NAV_GROUPS = [
   {
     label: 'Inventory & Procurement',
     items: [
-      { to: '/stock',               label: 'Stock', parent: 'Stock',               icon: StockBoxIc },
+      { to: '/stock',               label: 'Inventory Control', parent: 'Stock',               icon: StockBoxIc },
       { to: '/stock-replenishment', label: 'Stock Replenishment', parent: 'Stock', icon: PackagePlus, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/parts-catalog',       label: 'Parts Catalog', parent: 'Stock',       icon: Boxes, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/materials',           label: 'Materials', parent: 'Stock',           icon: Layers, adminOnly: A },

@@ -114,6 +114,14 @@ test('blind physical audit end to end', async t => {
     await t.test('recount must be a different person who has not counted', async () => {
       await assert.rejects(call(db, U.reviewer, 'inv_recount_assign', { audit_id: audit, recount_counter_id: U.counter, discrepancy_ids: [disc.id] }), code('42501'))
       await assert.rejects(call(db, U.reviewer, 'inv_recount_assign', { audit_id: audit, recount_counter_id: U.approver, discrepancy_ids: [disc.id] }), code('42501'))
+      // the recount assignment needs an approval first; the proposed recounter cannot approve it
+      await assert.rejects(call(db, U.reviewer, 'inv_recount_assign', { audit_id: audit, recount_counter_id: U.keeper,
+        line_keys: [[disc.location_id || '', disc.item_id || '', disc.serial || ''].join('|')] }), /approval is required/)
+      await assert.rejects(call(db, U.reviewer, 'inv_request_approval', { entity_type: 'recount_assignment', entity_id: audit, proposal: { counter_id: U.counter } }), code('42501'))
+      const rq = await call(db, U.reviewer, 'inv_request_approval', { entity_type: 'recount_assignment', entity_id: audit, proposal: { counter_id: U.keeper } })
+      await assert.rejects(call(db, U.counter, 'inv_approval_decide', { request_id: rq.id, decision: 'approve' }), code('42501'))
+      await assert.rejects(call(db, U.reviewer, 'inv_approval_decide', { request_id: rq.id, decision: 'approve' }), code('42501'))
+      await call(db, U.approver, 'inv_approval_decide', { request_id: rq.id, decision: 'approve' })
       const ra = await call(db, U.reviewer, 'inv_recount_assign', { audit_id: audit, recount_counter_id: U.keeper,
         line_keys: [[disc.location_id || '', disc.item_id || '', disc.serial || ''].join('|')] }) // web line-key form
       assert.equal(ra.round, 2)
@@ -140,6 +148,13 @@ test('blind physical audit end to end', async t => {
       await db.exec(`insert into test_caps values ('${U.reviewer}','adjustment_approve')`)
       await assert.rejects(call(db, U.reviewer, 'inv_adjustment_approve', { adjustment_id: adj.id, decision: 'approve', note: 'ok' }), code('42501'))
       await assert.rejects(call(db, U.keeper, 'inv_adjustment_approve', { adjustment_id: adj.id, decision: 'approve', note: 'ok' }), code('42501'))
+      // posting needs an approved stock_adjustment approval
+      await assert.rejects(call(db, U.approver, 'inv_adjustment_approve', { adjustment_id: adj.id, decision: 'approve', note: 'ok' }), /approval is required/)
+      const rq = await call(db, U.reviewer, 'inv_request_approval', { entity_type: 'stock_adjustment', entity_id: adj.id })
+      for (const who of [U.counter, U.keeper, U.reviewer]) {
+        await assert.rejects(call(db, who, 'inv_approval_decide', { request_id: rq.id, decision: 'approve' }), code('42501'))
+      }
+      await call(db, U.approver, 'inv_approval_decide', { request_id: rq.id, decision: 'approve' })
       const ok = await call(db, U.approver, 'inv_adjustment_approve', { adjustment_id: adj.id, decision: 'approve', note: 'agreed' })
       assert.equal(ok.status, 'posted')
       const mv = await one(db, 'select * from stock_movements where id = $1', [ok.movement_id])

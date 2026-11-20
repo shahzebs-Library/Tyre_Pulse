@@ -139,6 +139,7 @@ begin
       'movement_type', 'transfer_in', 'qty_change', (l->>'qty')::numeric, 'currency', v_out->>'currency', 'unit_cost', v_out->'unit_cost',
       'carried_value', -coalesce((v_out->>'value_change')::numeric, 0),
       'carried_unvalued_qty', -coalesce((v_out->>'unvalued_qty_change')::numeric, 0),
+      'carried_from_stock_id', v_rec.id,
       'reason', 'In transit ' || v_t.ref, 'source_doc_type', 'stock_transfer', 'source_doc_id', v_t.id::text), false);
     insert into public.stock_transfer_lines(organisation_id, transfer_id, line_no, item_id, from_stock_id, transit_stock_id,
       condition, ownership, owner_supplier_id, qty_dispatched, carried_value, carried_unvalued_qty, currency)
@@ -189,6 +190,7 @@ begin
       'currency', v_out->>'currency', 'unit_cost', v_out->'unit_cost',
       'carried_value', -coalesce((v_out->>'value_change')::numeric, 0),
       'carried_unvalued_qty', -coalesce((v_out->>'unvalued_qty_change')::numeric, 0),
+      'carried_from_stock_id', ln.transit_stock_id,
       'reason', p_mode || ' ' || v_t.ref, 'source_doc_type', 'stock_transfer', 'source_doc_id', v_t.id::text), false);
     update public.stock_transfer_lines set
       qty_received = qty_received + case when p_mode = 'receive' then v_qty else 0 end,

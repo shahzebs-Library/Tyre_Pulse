@@ -25,7 +25,7 @@ test('api contract: payload writes, idempotency, closed internals, masked views'
 
     await t.test('positional implementations are not callable by a signed-in user', async () => {
       const r = await q(db, `select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-        where n.nspname = 'public' and p.proname like '\\_inv\\_%' and p.proname not in ('_inv_audit_can_see_expected','_inv_audit_open_for_counter','_inv_cap_for','_inv_posting_on') and has_function_privilege('authenticated', p.oid, 'EXECUTE')`)
+        where n.nspname = 'public' and p.proname like '\\_inv\\_%' and p.proname not in ('_inv_audit_can_see_expected','_inv_audit_open_for_counter','_inv_cap_for','_inv_posting_on','_inv_approval_block_reason') and has_function_privilege('authenticated', p.oid, 'EXECUTE')`)
       assert.deepEqual(r, [])
       const pub = await q(db, `select p.proname, pg_get_function_identity_arguments(p.oid) as a from pg_proc p
         join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname like 'inv\\_%'

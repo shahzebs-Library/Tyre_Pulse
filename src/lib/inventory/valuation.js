@@ -17,6 +17,12 @@
  *     purchase price; see tyreStockValuation()).
  *   - A unit whose cost is unknown is UNVALUED, never 0. It is tracked in its own
  *     bucket (unvaluedQty) so the valued part keeps an honest average.
+ *   - Owner decision 2026-11-20 (binding): unpriced units are NEVER consumed first.
+ *     An outbound movement takes valued units first at the weighted average, and
+ *     only the quantity the valued bucket cannot cover leaves as UNVALUED. That
+ *     unvalued part carries no invented cost; it raises a cost reconciliation
+ *     (inventory_cost_reconciliations) and only an approved reconciliation can
+ *     turn it into a known value (reconcileCost below).
  *   - Physical stock can never go negative (owner rule 1, no override). A movement
  *     that would do so is refused, the balance is returned unchanged.
  *   - Currencies are never blended. A movement in another currency is refused.
@@ -77,7 +83,7 @@ export const MOVEMENT_TYPES = Object.freeze({
   supplier_return: { qty: -1, label: 'Return to supplier' },
   supplier_credit: { qty: 0, label: 'Supplier price credit (value only)' },
   landed_cost: { qty: 0, label: 'Landed cost allocation (value only)' },
-  cost_assignment: { qty: 0, label: 'Cost assigned to unvalued units' },
+  cost_assignment: { qty: 0, label: 'Cost assigned to unvalued units (approved cost reconciliation only)' },
   adjustment_up: { qty: +1, label: 'Approved count adjustment (gain)' },
   adjustment_down: { qty: -1, label: 'Approved count adjustment (loss)' },
   scrap: { qty: -1, label: 'Scrap / write-off' },
@@ -138,14 +144,16 @@ const refuse = (balance, reason, detail = {}) => ({
   valuationStatus: 'refused',
 })
 
-const done = (balance, extra) => ({ ok: true, balance, variance: null, consignmentConsumption: null, ...extra })
+const done = (balance, extra) => ({ ok: true, balance, variance: null, consignmentConsumption: null, reconciliation: null, ...extra })
 
-// Take `qty` out of a balance. Unvalued units go first (policy: the remaining
-// stock keeps the cost basis we actually know), then valued units at average.
-// Returns { next, valueOut (null when only unvalued units left), unvaluedOut, unitCost }.
+// Take `qty` out of a balance. Valued units go first at the weighted average
+// (owner decision 2026-11-20: never consume unpriced units first, never invent
+// a proportional cost); only the remainder the valued bucket cannot cover
+// leaves as unvalued and needs a cost reconciliation.
+// Returns { next, valueOut (null when no valued unit left), valuedOut, unvaluedOut, unitCost }.
 function takeOut(balance, qty, at) {
-  const unvaluedOut = Math.min(balance.unvaluedQty, qty)
-  const valuedOut = qty - unvaluedOut
+  const valuedOut = Math.min(balance.valuedQty, qty)
+  const unvaluedOut = qty - valuedOut
   const avg = averageCost(balance)
   let valueOut = 0
   const next = { ...balance, unvaluedQty: balance.unvaluedQty - unvaluedOut }
@@ -240,8 +248,11 @@ export function applyMovement(balance, movement) {
       qtyChange: qty,
       valueChange: valueIn,
       unvaluedQtyChange: valueIn === null ? qty : 0,
+      valuedQty: valueIn === null ? 0 : qty,
+      unvaluedQty: valueIn === null ? qty : 0,
       unitCostApplied: valueIn === null ? null : roundUnit(unitCost),
       valuationStatus: valueIn === null ? 'unvalued' : 'valued',
+      reconciliation: valueIn === null ? { required: true, qty, consumed: false, kind: 'unpriced_inbound' } : null,
     })
   }
 
@@ -257,8 +268,16 @@ export function applyMovement(balance, movement) {
     qtyChange: -qty,
     valueChange: out.valueOut === null ? null : -out.valueOut,
     unvaluedQtyChange: -out.unvaluedOut,
+    valuedQty: out.valuedOut,
+    unvaluedQty: out.unvaluedOut,
     unitCostApplied: out.unitCost,
     valuationStatus: movementStatus(out.valueOut, out.unvaluedOut),
+    // The unvalued part keeps no invented cost; it opens a cost reconciliation.
+    // A transfer leg moves the open reconciliation with the units instead of
+    // creating a second one (see transfer()).
+    reconciliation: out.unvaluedOut > QTY_EPS
+      ? { required: true, qty: out.unvaluedOut, consumed: type !== 'transfer_out', kind: type === 'transfer_out' ? 'transfer' : 'consumed' }
+      : null,
   })
 
   if (type === 'supplier_return') {
@@ -419,6 +438,62 @@ export function transfer(source, destination, qty, { at = null } = {}) {
     carriedUnitCost: out.unitCostApplied,
     valueMoved: roundMoney(valueIn),
     unvaluedQtyMoved: unvaluedMoved,
+    // Unvalued units travel with their open reconciliation (one record, never two).
+    reconciliation: unvaluedMoved > QTY_EPS ? { required: true, qty: unvaluedMoved, consumed: false, kind: 'transfer' } : null,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cost reconciliation (mirror of inv_cost_reconcile, docs/inventory/20 section 4)
+// ---------------------------------------------------------------------------
+
+export const RECONCILIATION_STATUSES = Object.freeze(['open', 'resolved', 'written_off', 'cancelled'])
+
+/**
+ * Resolve one open cost reconciliation. Nothing becomes valued without it.
+ *
+ * reconciliation = { status, qty, consumed, createdBy, proposedBy }
+ * decision = { resolution: 'resolved' | 'written_off', unitCost, approved, approvedBy, resolvedBy }
+ *
+ * - Refused unless the matching approval is approved, the resolver is not the
+ *   creator, and the approver is neither the creator nor the preparer.
+ * - written_off: the units stay unvalued for good (the cost is accepted as
+ *   unknowable); no value is invented.
+ * - resolved + consumed (the units already left in an issue, scrap, ...):
+ *   the consumption value becomes known (`recognisedValue`); the shelf balance
+ *   does not change because the units are no longer there.
+ * - resolved + in stock: a cost_assignment values min(qty, unvalued on the
+ *   balance) units; anything the balance no longer holds is `notAppliedQty`.
+ */
+export function reconcileCost(balance, reconciliation = {}, decision = {}) {
+  const b = balance || emptyBalance()
+  const rec = reconciliation || {}
+  const d = decision || {}
+  const no = (reason) => ({ ok: false, reason, balance: b })
+  if ((rec.status ?? 'open') !== 'open') return no('not_open')
+  if (!d.approved) return no('approval_required')
+  if (d.resolvedBy && rec.createdBy && d.resolvedBy === rec.createdBy) return no('segregation_of_duties')
+  if (d.approvedBy && (d.approvedBy === rec.createdBy || d.approvedBy === rec.proposedBy)) return no('segregation_of_duties')
+  const qty = num(rec.qty)
+  if (qty === null || qty <= 0) return no('invalid_quantity')
+  if (d.resolution === 'written_off') {
+    return { ok: true, status: 'written_off', balance: b, recognisedValue: null, appliedQty: 0, notAppliedQty: qty }
+  }
+  if (d.resolution !== 'resolved') return no('invalid_resolution')
+  const cost = num(d.unitCost)
+  if (cost === null || cost < 0) return no('invalid_unit_cost')
+  if (rec.consumed) {
+    return { ok: true, status: 'resolved', balance: b, recognisedValue: roundMoney(qty * cost), appliedQty: 0, notAppliedQty: 0 }
+  }
+  const apply = Math.min(qty, num(b.unvaluedQty) ?? 0)
+  if (apply <= QTY_EPS) {
+    return { ok: true, status: 'resolved', balance: b, recognisedValue: roundMoney(qty * cost), appliedQty: 0, notAppliedQty: qty }
+  }
+  const r = applyMovement(b, { type: 'cost_assignment', qty: apply, unitCost: cost })
+  if (!r.ok) return no(r.reason)
+  return {
+    ok: true, status: 'resolved', balance: r.balance, recognisedValue: roundMoney(qty * cost),
+    appliedQty: apply, notAppliedQty: qty - apply, valueChange: r.valueChange,
   }
 }
 
@@ -550,6 +625,10 @@ export function summarizeValuation(rows = []) {
     // The headline owned value is only a measurement when every line is valued.
     o.value = o.lines === 0 ? null : o.complete ? o.valuedValue : null
     o.valueReason = o.lines === 0 ? 'no_owned_stock' : o.complete ? null : 'unvalued_stock_present'
+    // Finance view vocabulary (v_inv_valuation): valuedAmount is the valued PART
+    // only and must never be labelled as the total while valuationComplete is false.
+    o.valuationComplete = o.complete
+    o.valuedAmount = o.valuedValue
     if (s.consignment.lines === 0) s.consignment.agreedValue = null
     else if (s.consignment.unpricedLines > 0) s.consignment.agreedValueComplete = false
   }

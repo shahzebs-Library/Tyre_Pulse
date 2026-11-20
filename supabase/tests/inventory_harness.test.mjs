@@ -33,6 +33,10 @@ export const MIGRATIONS = [
   '20261120105000_inv_tyre_items.sql',
   '20261120106000_inv_oem_fitments.sql',
   '20261120107000_inv_api_contract.sql',
+  '20261120108000_inv_approvals.sql',
+  '20261120109000_inv_erp_reconciliation.sql',
+  '20261120110000_inv_metric_catalogue.sql',
+  '20261120111000_inv_report_schedules.sql',
 ]
 export const ROLLBACKS = MIGRATIONS.map(f => f.replace('.sql', '_ROLLBACK.sql'))
 export const sqlOf = f => PM(f)
@@ -112,7 +116,7 @@ create table public.suppliers(id uuid primary key default gen_random_uuid(), sup
   status text not null default 'active', country text, site text, organisation_id uuid not null,
   created_by uuid, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
 create table public.sites(id uuid primary key default gen_random_uuid(), name text not null, country text not null,
-  organisation_id uuid, site_code text, site_type text not null default 'other', active boolean default true);
+  organisation_id uuid, site_code text, site_type text not null default 'other', active boolean default true, region text);
 create table public.work_orders(id uuid primary key default gen_random_uuid(), organisation_id uuid, work_order_no text,
   asset_no text, country text, site text);
 create table public.workflow_instances(id uuid default gen_random_uuid(), organisation_id uuid, entity_type text,
@@ -190,6 +194,71 @@ create table public.tyre_status_marks(id uuid primary key default gen_random_uui
   organisation_id uuid not null, country text, created_by uuid, created_at timestamptz not null default now(), reason text,
   prior_status jsonb, unique (organisation_id, serial, mark_type));
 
+-- governed approval engine (live shape 2026-11-20): approval_policies + the routing resolver, verbatim
+create schema approval_private;
+create table public.approval_policies(id uuid primary key default gen_random_uuid(), organisation_id uuid, name text not null,
+  entity_type text not null, version integer not null default 1, state text not null default 'draft', priority integer not null default 0,
+  match_country text, match_site text, match_role text, match_user_id uuid, stages jsonb not null, created_by uuid,
+  created_at timestamptz default clock_timestamp(), updated_at timestamptz default clock_timestamp(), published_by uuid,
+  published_at timestamptz, effective_at timestamptz, change_reason text, match_region text,
+  constraint approval_policies_entity_type_check check (entity_type = any (array['inspection'::text, 'checklist'::text, 'work_order'::text, 'tyre_change'::text])));
+create function approval_private.site_region(p_org uuid, p_country text, p_site text) returns text language sql stable security definer
+  set search_path to 'public' as $$
+ SELECT upper(btrim(s.region)) FROM sites s
+  WHERE s.organisation_id=p_org AND nullif(btrim(p_site),'') IS NOT NULL
+    AND upper(btrim(s.name))=upper(btrim(p_site))
+    AND nullif(btrim(s.region),'') IS NOT NULL
+    AND (p_country IS NULL OR s.country=p_country OR NOT EXISTS(
+      SELECT 1 FROM sites t WHERE t.organisation_id=p_org AND upper(btrim(t.name))=upper(btrim(p_site)) AND t.country=p_country))
+  ORDER BY (s.country IS NOT DISTINCT FROM p_country) DESC, s.active DESC NULLS LAST, s.id
+  LIMIT 1 $$;
+create function approval_private.resolve(p_org uuid, p_type text, p_country text, p_site text, p_role text, p_user uuid,
+  p_draft uuid default null::uuid, p_region text default null::text) returns jsonb language sql stable security definer
+  set search_path to 'public' as $$
+ WITH ctx AS (
+  SELECT coalesce(upper(nullif(btrim(p_region),'')),approval_private.site_region(p_org,p_country,p_site)) AS region
+ ), candidates AS (
+ SELECT p.*,num_nonnulls(p.match_country,p.match_region,p.match_site,p.match_role,p.match_user_id) specificity,
+ dense_rank() OVER(ORDER BY p.priority DESC,num_nonnulls(p.match_country,p.match_region,p.match_site,p.match_role,p.match_user_id) DESC) rank
+ FROM approval_policies p CROSS JOIN ctx
+ WHERE p.organisation_id=p_org AND p.entity_type=p_type AND ((p.state='published' AND p.effective_at<=now()) OR (p.id=p_draft AND p.state='draft'))
+ AND (p.match_country IS NULL OR p.match_country=p_country)
+ AND (p.match_region IS NULL OR p.match_region=ctx.region)
+ AND (p.match_site IS NULL OR p.match_site=p_site)
+ AND (p.match_role IS NULL OR p.match_role=p_role) AND (p.match_user_id IS NULL OR p.match_user_id=p_user))
+ SELECT jsonb_build_object('mode',CASE WHEN EXISTS(SELECT 1 FROM approval_policies WHERE organisation_id=p_org AND entity_type=p_type AND effective_at<=now()) THEN 'enforced' ELSE 'legacy' END,
+ 'status',CASE count(*) FILTER(WHERE rank=1) WHEN 0 THEN 'no_route' WHEN 1 THEN 'matched' ELSE 'ambiguous' END,
+ 'region',(SELECT region FROM ctx),
+ 'policy',CASE WHEN count(*) FILTER(WHERE rank=1)=1 THEN (jsonb_agg(to_jsonb(candidates)-'rank'-'specificity' ORDER BY rank,id)->0) ELSE NULL END,
+ 'candidates',coalesce(jsonb_agg(to_jsonb(candidates) ORDER BY rank,id),'[]'::jsonb)) FROM candidates $$;
+
+-- ERP expense grid and store issues (live columns used by the reconciliation view)
+create table public.parts_consumption(id uuid primary key default gen_random_uuid(), organisation_id uuid, country text,
+  issue_number text, work_order_no text, item_code text, item_description text, qty text, value_amount text,
+  line_cost numeric, cost_category text, tyre_cost numeric, spare_cost numeric, oil_cost numeric,
+  created_at timestamptz default now(), event_date date, qty_n numeric, currency text, site text, unit_cost numeric);
+create table public.material_issues(id uuid primary key default gen_random_uuid(), organisation_id uuid, country text, site text,
+  issue_number text, status text, issued_at timestamptz, created_at timestamptz default now());
+create table public.material_issue_lines(id uuid primary key default gen_random_uuid(), issue_id uuid references public.material_issues(id),
+  line_no integer, item_code text, qty numeric, unit_cost numeric, line_cost numeric);
+-- metric catalogue (MIGRATIONS_V473 shape) and report schedules (live CHECK 2026-11-20)
+create table public.metric_registry(metric_id text primary key, name text not null, description text, business_owner text,
+  source_module text, source_table text, source_columns text[], date_field text, date_logic text, unit text,
+  currency_handling text, null_handling text, duplicate_handling text, included_statuses text[], excluded_statuses text[],
+  joins text, transformations text, refresh_sla text, lineage_domain text, quality_domain text, calc_ref text,
+  dashboards text[], active boolean default true, created_at timestamptz default now(), updated_at timestamptz default now(),
+  status text, approved_by uuid, constraint metric_registry_status_check check (status is null or status = any (array['certified','draft','deprecated'])));
+create table public.metric_versions(id uuid primary key default gen_random_uuid(), metric_id text references public.metric_registry(metric_id) on delete cascade,
+  version integer not null, formula text, formula_ref text, numerator text, denominator text, rounding text, effective_from date,
+  effective_to date, owner text, approver text, approved_at timestamptz, change_note text, created_at timestamptz default now(),
+  unique (metric_id, version));
+insert into public.metric_registry(metric_id, name, source_module) values ('fleet_cpk', 'Fleet CPK', 'Engineering KPI');
+create table public.report_schedules(id uuid primary key default gen_random_uuid(), name text, report_type text not null,
+  frequency text, org_id uuid, created_by uuid, active boolean default true,
+  constraint report_schedules_report_type_check check (((report_type = any (array['executive'::text, 'kpi'::text, 'fleet'::text,
+    'inspection'::text, 'cost'::text, 'accidents'::text, 'claims'::text, 'stock'::text, 'vendor'::text, 'pm'::text, 'workshop'::text,
+    'workshop_status'::text, 'tyre_stock_alert'::text])) or (report_type ~~ 'builder:%'::text))));
+
 grant usage on schema public, auth, private to authenticated, anon, service_role;
 grant all on all tables in schema public to authenticated, anon, service_role;
 grant all on all sequences in schema public to authenticated, service_role;
@@ -243,6 +312,26 @@ alter table public.tyre_status_marks enable row level security;
 create policy tsm_org on public.tyre_status_marks as restrictive for all to authenticated
   using (organisation_id = (select public.app_current_org()));
 create policy tsm_all on public.tyre_status_marks for all to authenticated using (true) with check (true);
+-- live policies of parts_consumption / material_issues (org + country + site, active read, elevated write)
+do $$ declare t text; begin
+  foreach t in array array['parts_consumption','material_issues'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('create policy %I on public.%I as restrictive for all to authenticated using ((organisation_id = (select public.app_current_org())) or (select public.is_super_admin())) with check ((organisation_id = (select public.app_current_org())) or (select public.is_super_admin()))', t || '_org_isolation', t);
+    execute format($p$create policy %I on public.%I as restrictive for select to authenticated using ((country is null) or (select public.is_super_admin()) or (select public.app_sees_all_countries()) or (lower(btrim(country)) = any (coalesce((select public.app_country_scope()), '{}'::text[]))))$p$, t || '_country_isolation', t);
+    execute format($p$create policy %I on public.%I as restrictive for select to authenticated using ((site is null) or (btrim(site) = '') or (select public.app_sees_all_sites()) or (upper(btrim(site)) = any (coalesce((select public.app_site_scope()), '{}'::text[]))))$p$, t || '_site_isolation', t);
+    execute format('create policy %I on public.%I for select to authenticated using ((select public.app_is_active()))', t || '_select', t);
+    execute format('create policy %I on public.%I for all to authenticated using ((select public.app_is_elevated())) with check ((select public.app_is_elevated()))', t || '_write', t);
+  end loop;
+end $$;
+alter table public.material_issue_lines enable row level security;
+create policy material_issue_lines_org_isolation on public.material_issue_lines as restrictive for all to authenticated
+  using (exists (select 1 from public.material_issues h where h.id = material_issue_lines.issue_id and h.organisation_id = (select public.app_current_org())));
+create policy material_issue_lines_select on public.material_issue_lines for select to authenticated using (public.app_is_active());
+alter table public.metric_registry enable row level security;
+create policy metric_registry_read on public.metric_registry for select to authenticated using (public.app_is_active());
+create policy metric_registry_write on public.metric_registry for all to authenticated using ((select public.is_super_admin())) with check ((select public.is_super_admin()));
+alter table public.metric_versions enable row level security;
+create policy metric_versions_read on public.metric_versions for select to authenticated using (public.app_is_active());
 `
 
 const SEED = `
@@ -283,6 +372,10 @@ insert into public.stock_records(id, organisation_id, country, site, description
 insert into public.stock_movements(stock_id, site, description, movement_type, qty_before, qty_change, qty_after, created_by, organisation_id, created_at) values
  ('${id(400)}','S1','Legacy tyre 315','Initial',0,10,10,'${U.admin}','${ORG_A}', now() - interval '2 days');
 `
+
+// The same platform + seed as SQL text, for the real-PostgreSQL concurrency test on staging.
+export const PLATFORM_SQL = PLATFORM
+export const SEED_SQL = SEED
 
 export async function buildDb ({ upTo = MIGRATIONS.length } = {}) {
   const db = new PGlite()

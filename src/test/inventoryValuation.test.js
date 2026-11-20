@@ -4,6 +4,7 @@ import path from 'node:path'
 import {
   num, roundMoney, emptyBalance, applyMovement, replay, transfer, onHand, averageCost, valuationStatus,
   allocateLandedCost, summarizeValuation, adjustmentValue, ageingBuckets, exposure, tyreStockValuation, MOVEMENT_TYPES,
+  reconcileCost,
 } from '../lib/inventory/valuation'
 
 const SAR = (over = {}) => emptyBalance({ currency: 'SAR', ...over })
@@ -88,22 +89,45 @@ describe('unvalued stock is never valued at 0', () => {
     expect(valuationStatus(r.balance)).toBe('unvalued')
   })
 
-  it('mixed balance: unvalued units leave first, the valued average is preserved', () => {
+  it('mixed balance: valued units leave first; only the uncovered part is unvalued (owner decision)', () => {
     let r = step(SAR(), { type: 'opening', qty: 3 })
     r = step(r.balance, { type: 'receipt', qty: 2, unitCost: 100 })
     expect(valuationStatus(r.balance)).toBe('partially_valued')
     r = step(r.balance, { type: 'issue', qty: 4 })
-    expect(r.unvaluedQtyChange).toBe(-3)
-    expect(r.valueChange).toBe(-100)
+    expect(r.valuedQty).toBe(2)
+    expect(r.unvaluedQty).toBe(2)
+    expect(r.unvaluedQtyChange).toBe(-2)
+    expect(r.valueChange).toBe(-200) // valued part only; no cost invented for the other 2
     expect(r.valuationStatus).toBe('partially_valued')
-    expect(averageCost(r.balance)).toBe(100)
+    expect(r.reconciliation).toEqual({ required: true, qty: 2, consumed: true, kind: 'consumed' })
+    expect(r.balance.unvaluedQty).toBe(1)
+    expect(r.balance.valuedQty).toBe(0)
+    expect(averageCost(r.balance)).toBe(null)
   })
 
-  it('issue entirely from unvalued units has null value', () => {
+  it('an issue fully covered by valued units leaves unpriced units untouched', () => {
+    let r = step(SAR(), { type: 'opening', qty: 3 })
+    r = step(r.balance, { type: 'receipt', qty: 5, unitCost: 10 })
+    r = step(r.balance, { type: 'issue', qty: 4 })
+    expect(r.unvaluedQty).toBe(0)
+    expect(r.valueChange).toBe(-40)
+    expect(r.reconciliation).toBe(null)
+    expect(r.balance.unvaluedQty).toBe(3)
+    expect(averageCost(r.balance)).toBe(10)
+  })
+
+  it('issue entirely from unvalued units has null value and needs a reconciliation', () => {
     const r1 = step(SAR(), { type: 'opening', qty: 3 })
     const r2 = step(r1.balance, { type: 'issue', qty: 1 })
     expect(r2.valueChange).toBe(null)
     expect(r2.valuationStatus).toBe('unvalued')
+    expect(r2.reconciliation.qty).toBe(1)
+  })
+
+  it('an unpriced receipt is flagged for reconciliation, never priced', () => {
+    const r = step(SAR(), { type: 'receipt', qty: 4 })
+    expect(r.reconciliation).toEqual({ required: true, qty: 4, consumed: false, kind: 'unpriced_inbound' })
+    expect(r.unvaluedQty).toBe(4)
   })
 
   it('cost assignment values units that arrived unpriced', () => {
@@ -112,6 +136,41 @@ describe('unvalued stock is never valued at 0', () => {
     expect(r.valueChange).toBe(120)
     expect(valuationStatus(r.balance)).toBe('valued')
     expect(applyMovement(r.balance, { type: 'cost_assignment', qty: 1, unitCost: 1 }).reason).toBe('exceeds_unvalued_qty')
+  })
+})
+
+describe('cost reconciliation (nothing becomes valued without it)', () => {
+  const bal = () => step(SAR(), { type: 'opening', qty: 3 }).balance
+  const rec = { status: 'open', qty: 3, consumed: false, createdBy: 'u1', proposedBy: 'u2' }
+  it('refuses without an approved approval', () => {
+    expect(reconcileCost(bal(), rec, { resolution: 'resolved', unitCost: 5, approved: false }).reason).toBe('approval_required')
+  })
+  it('refuses the creator as resolver and the creator or preparer as approver', () => {
+    const d = { resolution: 'resolved', unitCost: 5, approved: true, approvedBy: 'u3' }
+    expect(reconcileCost(bal(), rec, { ...d, resolvedBy: 'u1' }).reason).toBe('segregation_of_duties')
+    expect(reconcileCost(bal(), rec, { ...d, approvedBy: 'u1', resolvedBy: 'u4' }).reason).toBe('segregation_of_duties')
+    expect(reconcileCost(bal(), rec, { ...d, approvedBy: 'u2', resolvedBy: 'u4' }).reason).toBe('segregation_of_duties')
+  })
+  it('in-stock reconciliation values the units through a cost assignment', () => {
+    const r = reconcileCost(bal(), rec, { resolution: 'resolved', unitCost: 5, approved: true, approvedBy: 'u3', resolvedBy: 'u4' })
+    expect(r.ok).toBe(true)
+    expect(r.appliedQty).toBe(3)
+    expect(r.balance.valuedValue).toBe(15)
+    expect(valuationStatus(r.balance)).toBe('valued')
+  })
+  it('consumed reconciliation records the value; the shelf does not change', () => {
+    const b = bal()
+    const r = reconcileCost(b, { ...rec, consumed: true }, { resolution: 'resolved', unitCost: 5, approved: true, approvedBy: 'u3', resolvedBy: 'u4' })
+    expect(r.recognisedValue).toBe(15)
+    expect(r.balance).toEqual(b)
+  })
+  it('write-off never invents a value', () => {
+    const r = reconcileCost(bal(), rec, { resolution: 'written_off', approved: true, approvedBy: 'u3', resolvedBy: 'u4' })
+    expect(r.recognisedValue).toBe(null)
+    expect(r.balance.unvaluedQty).toBe(3)
+  })
+  it('only an open reconciliation can be resolved', () => {
+    expect(reconcileCost(bal(), { ...rec, status: 'resolved' }, { approved: true }).reason).toBe('not_open')
   })
 })
 
@@ -220,6 +279,7 @@ describe('transfer carries cost', () => {
     const t = transfer(src, null, 2)
     expect(t.destination.unvaluedQty).toBe(2)
     expect(t.valueMoved).toBe(0)
+    expect(t.reconciliation).toEqual({ required: true, qty: 2, consumed: false, kind: 'transfer' })
   })
   it('refuses cross currency and over-quantity', () => {
     const src = step(SAR(), { type: 'receipt', qty: 1, unitCost: 1 }).balance

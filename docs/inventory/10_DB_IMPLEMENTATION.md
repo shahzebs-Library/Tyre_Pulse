@@ -20,10 +20,14 @@ Apply in this order, each one its own transaction (all live in `supabase/pending
 | 2 | `20261120101000_inv_item_master_locations.sql` | material_master stocking fields, aliases, governed master reviews, `inventory_locations` (`TP:LOC:` labels), opening-balance batches (preparer != approver) |
 | 3 | `20261120102000_inv_physical_audits.sql` | Audits, snapshot by `movement_seq`, blind enforcement (RLS + RPC), count lines, cutoff reconciliation, recount, discrepancies (12 web categories), adjustments posted through the ledger |
 | 4 | `20261120103000_inv_transfers_procurement.sql` | Transfers via an IN-TRANSIT location (partial receive / return), reservations, issue, PO and GRN lines, supplier invoices with three-way match (no accounting postings), supplier agreements, consignment |
-| 5 | `20261120104000_inv_valuation.sql` | `v_inventory_valuation`, `inv_valuation_summary` (per currency; owned value NULL while unvalued stock exists) |
+| 5 | `20261120104000_inv_valuation.sql` | Owner valuation rule 2026-11-20: `inventory_cost_reconciliations` (one open record per unvalued unit), real `_inv_cost_rec_track` hook, legacy unvalued balances seeded as `legacy` records, finance view `v_inv_valuation`, `v_inv_cost_reconciliations`, `v_inventory_valuation`, `inv_valuation_summary` (+ `valuation_complete`, `open_reconciliations`) |
 | 6 | `20261120105000_inv_tyre_items.sql` | `tyre_items`, `tyre_item_events`, `tyre_custody_conflicts`, store holdings, dispositions; derivation from tyre_records/tyre_status_marks; scrap guard that flags, never blocks |
 | 7 | `20261120106000_inv_oem_fitments.sql` | `oem_part_references`, `equipment_fitments`, engineering approval, `v_validated_compatibility` |
 | 8 | `20261120107000_inv_api_contract.sql` | The client contract: one `p_payload jsonb` per write, idempotency store, web-named read views |
+| 9 | `20261120108000_inv_approvals.sql` | Mandatory approvals through the EXISTING `approval_policies` engine (entity_type CHECK widened, `approval_private.resolve` routing), `inventory_approval_requests` + append-only `inventory_approval_decisions`, `inv_request_approval`, `inv_approval_decide`, `v_inv_pending_approvals`, DB gates on adjustment posting / opening approval / recount assignment, `inv_cost_reconcile`, separation-of-duties CHECKs |
+| 10 | `20261120109000_inv_erp_reconciliation.sql` | Read-only `v_inv_erp_reconciliation` (inventory issues vs parts_consumption + material_issues not already in it) |
+| 11 | `20261120110000_inv_metric_catalogue.sql` | Seeds the 25 KPIs of `src/lib/inventory/kpi.js` into `metric_registry` + `metric_versions` (status draft, lineage_domain NULL, insert-only) |
+| 12 | `20261120111000_inv_report_schedules.sql` | `report_schedules.report_type` allows `inventory`; read-only digest view `v_inv_report_snapshot` |
 
 Every new table ends with `anum_integration.apply_reader_policies()` guarded by
 `to_regprocedure(...) is not null`. Every SECURITY DEFINER function pins `search_path`;
@@ -37,7 +41,7 @@ NOT NULL; if not, it leaves it nullable with a NOTICE.
 
 ## 2. Rollback
 
-Every file has a `_ROLLBACK.sql`. Run them in REVERSE order (107000 first, 100000 last).
+Every file has a `_ROLLBACK.sql`. Run them in REVERSE order (111000 first, 100000 last).
 
 * P0 copies every object it replaces into `_bak.inv_p0_snapshot` at apply time, from the
   catalog (`pg_get_functiondef`, `pg_policies`, `pg_get_constraintdef`, `pg_get_viewdef`,
@@ -154,7 +158,11 @@ Legacy wrappers keep their live signatures and ACLs: `post_stock_movement`,
 * No negative stock, no override. A shortage posts nothing and writes a
   `stock_exceptions` row (`refused_shortage`); legacy wrappers raise 23514.
 * WAC mirrors valuation.js: `valued_qty / valued_value / unvalued_qty` buckets; unpriced
-  units are never valued at 0 and leave FIRST on issue; value-only movements
+  units are never valued at 0 and are NEVER consumed first: an outbound movement takes
+  valued units at the average, records the remainder as unvalued (`stock_movements.valued_qty`,
+  `unvalued_qty`; `value_change` for the valued part only) and an open cost reconciliation;
+  only an approved `inv_cost_reconcile` makes unknown cost known (owner decision 2026-11-20,
+  doc 20 section 3); value-only movements
   (landed_cost, supplier_credit, cost_assignment) change value, not quantity; a reversal
   is the exact negation; a residual or negative value becomes a recorded variance.
   Currencies never mix in one balance or one total.
@@ -180,37 +188,129 @@ Legacy wrappers keep their live signatures and ACLs: `post_stock_movement`,
   carry evidence and are closed only by a person with a reason; nothing is auto-corrected.
   The scrap guard on tyre_records flags and never blocks, and swallows its own errors.
 
-## 6. Test results (PGlite, synthetic data)
+## 6. Mandatory controls (108000-111000) - names the client lane codes against
 
-`node --test --test-concurrency=1 supabase/tests/inventory_*.test.mjs`
-**45 passing, 0 failing, ~55 s** (node:test count, subtests included).
+### 6.1 Valuation rule and cost reconciliation (owner decision 2026-11-20)
+* `stock_movements` gains `valued_qty`, `unvalued_qty` (magnitudes moved at known / unknown
+  cost); the posting answer carries them as `valued_qty_moved`, `unvalued_qty_moved` (the
+  balance's own `valued_qty` / `unvalued_qty` keys are unchanged).
+* Table `inventory_cost_reconciliations` (org, country, site, item_id, location_id, stock_id,
+  movement_id, origin_movement_id, kind `unpriced_inbound|consumed|transfer|reversal_return|legacy`,
+  consumed, unvalued_qty, currency, status `open|resolved|written_off|cancelled`,
+  proposed_resolution / proposed_unit_cost / proposed_by, resolution_source
+  `reconciliation|opening_batch|reversal`, resolved_unit_cost, resolved_value, applied_qty,
+  not_applied_qty, resolution_movement_id, approval_request_id, resolved_by / resolved_at,
+  evidence, created_by). CHECK `inventory_cost_reconciliations_sod_chk`: a reconciliation-sourced
+  resolution needs `resolved_by <> created_by`. Blind-count restrictive policy included.
+  `cancelled` is a fourth status beyond the brief (open|resolved|written_off): it is set only
+  when a reversal or an approved opening correction removes the units.
+* `inv_cost_reconcile(p_payload {reconciliation_id, idempotency_key, note?, evidence?,
+  resolution?, unit_cost?})` -> `{id, status, resolved_value, applied_qty, not_applied_qty,
+  movement_id, posting:'none'}`. Needs `stock:financial_post`, an APPROVED
+  `cost_reconciliation` request whose proposal matches, resolver != creator.
+  Direct `cost_assignment` through `inv_post_movement` is now refused (22023).
+* Views: `v_inv_valuation` (stock_id, item_code, ownership, currency, qty_on_hand,
+  valued_qty, unvalued_qty, valued_amount, avg_unit_cost, valuation_complete,
+  open_reconciliations, valuation_status), `v_inv_cost_reconciliations` (money masked
+  without `stock:view_value`). `inv_valuation_summary` adds `valuation_complete` (top level and
+  per currency) and `open_reconciliations`.
+
+### 6.2 Approvals (the existing approval_policies engine)
+* `approval_policies.entity_type` CHECK widened with `inventory_stock_adjustment`,
+  `inventory_recount_assignment`, `inventory_opening_balance_batch`,
+  `inventory_cost_reconciliation`; routing = `approval_private.resolve(...)` (live body).
+  `decide_approval` / `approval_private.context` / `person_eligible` are NOT changed (they
+  hard-code inspection, checklist, work_order and tyre_change and workshop roles; changing them
+  would alter live approvals), so the stage decisions live in a thin adapter:
+  `inventory_approval_requests` (one pending/approved per entity; CHECK decided_by <>
+  requested_by) and append-only `inventory_approval_decisions`.
+* **Known limit:** `approval_private.validate_policy` (Approval Policies editor) only accepts
+  workshop / PMV / Admin roles as stage approvers for non-inspection types, so today an
+  inventory policy authored in the editor can only name Admin or a named person of those roles.
+  Widening that list is a change to a live shared function and needs owner approval.
+* `inv_request_approval(p_payload {entity_type stock_adjustment|recount_assignment|
+  opening_balance_batch|cost_reconciliation, entity_id, idempotency_key, proposal?, reason?,
+  evidence?})` -> `{id, status, route_source policy|default, stages}`. Proposal:
+  recount `{counter_id}`, cost reconciliation `{resolution, unit_cost}` (resolved needs
+  evidence or a reason). Who may ask: adjustment `discrepancy_review` or elevated; recount
+  `recount`; opening batch the preparer or elevated; cost `financial_post` or `view_value`.
+* `inv_approval_decide(p_payload {request_id, decision approve|reject, note, signature?,
+  idempotency_key})` -> `{id, status, current_stage, entity_type, entity_id}`. Reject needs a
+  note; a policy stage with `require_signature` (default true) needs a signature.
+* **Safe default** when no inventory policy is published for the type: one stage
+  "Elevated approver" = Admin / Manager / Director (`app_is_elevated`) who is not the
+  creator, preparer, counter or recounter. If policies exist but none (or two) match: refused.
+* Eligibility (`_inv_approval_block_reason`, also exposed as `v_inv_pending_approvals.can_decide`
+  / `blocked_reason`): active, same company, country + site scope, not the requester, not in the
+  entity conflict set (adjustment: proposer, audit creator, counter, recounter, every counter of
+  the audit; recount: audit creator, counter, recounter, counters, proposed recounter; opening:
+  preparer; cost: creator, proposer), distinct reviewer per stage, stage person / role match,
+  capability (`adjustment_approve`, `discrepancy_review`, `adjustment_approve`, `financial_post`)
+  or elevated.
+* Gates (triggers, every path): `inventory_adjustments` -> posted (also refuses
+  approved_by = proposed_by), `opening_balance_batches` -> approved (+ CHECK
+  `opening_balance_batches_sod_chk`), `inventory_audits.recount_counter_id` (+ CHECK
+  `inventory_audits_recount_sod_chk`; recounter never the counter, creator or any earlier
+  counter). Each consumes the approved request; an adjustment whose qty changed after approval,
+  or a recount counter other than the approved one, is refused.
+
+### 6.3 ERP reconciliation, catalogue, schedules
+* `v_inv_erp_reconciliation` (security_invoker, read-only): organisation_id, country, site,
+  month, item_code, currency, inventory_qty, inventory_value (masked), inventory_unvalued_qty,
+  inventory_movements, erp_qty, erp_value, erp_lines, qty_difference, value_difference (masked),
+  status `matched|qty_diff|value_diff|inventory_only|erp_only|unvalued`. ERP = parts_consumption
+  + material_issues lines whose issue_number is not already in parts_consumption. Currency is part
+  of the key. Matching is by item_code text.
+* `metric_registry` / `metric_versions`: 25 rows each (`source_module 'Inventory Control Center'`,
+  status draft, lineage_domain NULL, calc_ref `src/lib/inventory/kpi.js#<id>`), generated from
+  `KPI_CATALOGUE`; the controls test fails on drift.
+* `report_schedules.report_type` allows `inventory`; `v_inv_report_snapshot` per org / country /
+  site / currency. The `send-scheduled-reports` edge branch for `inventory` is NOT built (edge
+  deploy = separate owner approval); until then the generic fallback is emailed.
+
+### 6.4 Apply order, verify, rollback (new files)
+| File | Verify after apply | Rollback |
+|---|---|---|
+| 104000 (rewritten) | `select count(*) from inventory_cost_reconciliations where kind='legacy'` = number of balances with unvalued_qty > 0; `select prosrc from pg_proc where proname='_inv_cost_rec_track'` is not the stub | `_ROLLBACK` refuses while non-legacy or decided records exist (discard flag), restores the P0 stub |
+| 108000 | `pg_get_constraintdef` of `approval_policies_entity_type_check` lists the 4 inventory types; `has_function_privilege('anon','inv_request_approval(jsonb)','execute')` = false | refuses while requests or inventory policies exist (discard flag), restores the live CHECK |
+| 109000 | `select count(*) from v_inv_erp_reconciliation` runs; `select md5(...) from parts_consumption` unchanged | drops the view |
+| 110000 | 25 rows `where source_module='Inventory Control Center'` in both tables | deletes exactly those 25 ids (only while still owned by that module) |
+| 111000 | insert of an `inventory` schedule accepted (in a rolled-back txn) | refuses while an `inventory` schedule exists; restores the live CHECK |
+
+Edited in place (all unapplied): 100000 (`_inv_post` valued-first, `valued_qty` / `unvalued_qty`
+columns, `_inv_cost_rec_track` stub hook, `inv_post_movement` refuses `cost_assignment`,
+`transfer_stock_entry` passes `carried_from_stock_id`), 103000 (transfer legs pass
+`carried_from_stock_id`).
+
+## 7. Test results
+
+`node --test --test-concurrency=1 supabase/tests/inventory_*.test.mjs` (PGlite, synthetic data)
+**66 tests, 65 pass, 0 fail, 1 skipped** (node:test top-level count; the skip is the
+real-PostgreSQL concurrency file, which skips itself when the staging cluster is down; ~147 s).
+Real PostgreSQL 16 (staging cluster, throwaway database, then dropped):
+`inventory_concurrency.test.mjs` **1 passing** (skipped automatically when the cluster is down).
 
 | File | Covers |
 |---|---|
-| `inventory_harness.test.mjs` | all eight migrations apply over the live-shaped platform |
-| `inventory_ledger.test.mjs` | WAC maths, unvalued-first, negative refused -> exception, idempotent retries / key reuse, reversal (once, exact), immutable ledger (UPDATE/DELETE/TRUNCATE), direct writes refused, cross-company isolation, country/site scope, legacy wrappers incl. reservations on stock_records |
-| `inventory_audits.test.mjs` | blind enforcement via every endpoint, cutoff reconciliation (real numbers: expected 4, counted 3, value -20), late offline counts, recount by another person (web line_keys form), approver != counter, adjustment posted through the ledger, close rules |
-| `inventory_flows.test.mjs` | partial transfer + return, reservations, consignment value, value-only movements, GRN + three-way match, opening balances, master review |
-| `inventory_tyres.test.mjs` | custody derivation and conflicts with evidence, read-only proof, dispositions, scrap guard flags without blocking, OEM/fitment approval by someone else |
-| `inventory_api.test.mjs` | payload contract, replay / reuse / missing key, internals closed to clients, views mask money and respect blind count, counter view `lines` |
-| `inventory_rollback.test.mjs` | exact catalog restore, refusals, apply -> rollback -> apply |
+| `inventory_harness.test.mjs` | all twelve migrations apply over the live-shaped platform (approval engine resolver, parts_consumption, material_issues, metric catalogue, report_schedules copied from production) |
+| `inventory_ledger.test.mjs` | WAC maths, valued-first (owner rule), negative refused -> exception, idempotent retries / key reuse, reversal (once, exact), immutable ledger, direct writes refused, cross-company isolation, country/site scope, legacy wrappers |
+| `inventory_audits.test.mjs` | blind enforcement via every endpoint, cutoff reconciliation (expected 4, counted 3, value -20), late offline counts, recount via approval by another person, adjustment approval + posting through the ledger, close rules |
+| `inventory_flows.test.mjs` | transfer valued-first (10 at 4 = 40 + 1 unvalued carried; reconciliation travels and splits), reservations, consignment, value-only movements, cost assignment only via approved reconciliation, GRN + three-way match, opening balance via approval (legacy cost record: 1 cancelled, 3 resolved at 7 = 21), master review |
+| `inventory_tyres.test.mjs` | custody derivation, conflicts with evidence, read-only proof, scrap guard, OEM approval |
+| `inventory_api.test.mjs` | payload contract, replay, internals closed, masked views, counter view |
+| `inventory_controls.test.mjs` | receipt -> availability -> reservation -> issue to WO; missing cost (5 at 10 + 3 unpriced, issue 7: -50 valued, 2 unvalued consumed, 1 open), finance view, every SoD refusal, write-off; reversal re-opens the record; policy route (2 stages, role + named person, signature, distinct reviewers, ambiguity refused); count -> discrepancy -> recount -> approval -> adjustment with every refusal (counter, recounter, proposer, requester, wrong recounter, DB CHECKs); opening preparer refused; single-connection lock ordering + double-submit; tyre fit/removal/transfer/scrap custody with tyre_records hash unchanged at each step; supplier vs company stock; company/country/site/role scoping; ERP statuses (matched, qty_diff, value_diff, inventory_only, erp_only incl. other currency, unvalued, no double count); 25 KPIs in sync; DEFINER search_path + no PUBLIC/anon execute; CPK/expense inputs hashed before and after |
+| `inventory_rollback.test.mjs` | exact catalog restore across all twelve files, refusals (ledger, locations, approvals, cost reconciliations), apply -> rollback -> apply |
+| `inventory_concurrency.test.mjs` | two real connections: B blocks on A's row lock (~1.1 s) and is refused as shortage, never negative; the same idempotency key from two connections posts once; ledger sum = balance |
 
-**Not proven:** true concurrency. PGlite is a single connection, so two simultaneous
-posts cannot race there. The design relies on `select ... for update` of the balance row,
-a version bump, and `pg_advisory_xact_lock(org + idempotency_key)`; run the concurrent
-post / double-submit check on the staging cluster before production.
+## 8. Decisions and open items for the owner
 
-## 7. Decisions and open items for the owner
-
-* **Capability extensions** beyond the contract list: `stock:procure` (suppliers, POs,
-  PO lines, agreements) and `stock:engineering_approve` (compatibility). Admin/Manager/
-  Director pass through `app_is_elevated()` where the contract says so; others need the
-  capability granted in Access Control.
-* **Variance types** (`shortage, excess, unexpected_item, not_counted, missing_serial,
-  unexpected_serial, condition_mismatch`) are provisional and separate from the 12 root
-  causes.
-* Deferred, not built: reconciliation view of inventory value against the ERP expense
-  grid; integration with `approval_policies` (approvals here are built-in role/capability
-  checks); accounting postings from the three-way match (it records a match only).
+* **Capability extensions** beyond the contract list: `stock:procure` and
+  `stock:engineering_approve`. Admin/Manager/Director pass through `app_is_elevated()` where the
+  contract says so; others need the capability in Access Control.
+* **Variance types** stay provisional and separate from the 12 root causes.
+* Approval policies for inventory: the editor's role list (see 6.2) needs widening before
+  finance roles can be named in a published inventory policy.
+* Not built: accounting postings from the three-way match (it records a match only); the
+  `inventory` branch of `send-scheduled-reports`.
 * `materials` is frozen read-only and `stock` (legacy, empty) is retired from writes;
   `material_master` is the one item master and `stock_records` the one balance.

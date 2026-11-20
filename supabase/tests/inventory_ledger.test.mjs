@@ -23,7 +23,7 @@ async function setup () {
 
 const FILTER = id(100); const BRAKE = id(104); const UAE_FILTER = id(102); const B_FILTER = id(103)
 
-test('ledger: weighted average, unvalued-first, refusals, idempotency, reversal', async t => {
+test('ledger: weighted average, valued-first, refusals, idempotency, reversal', async t => {
   const { db, L, post, bal } = await setup()
   try {
     let sid
@@ -36,16 +36,19 @@ test('ledger: weighted average, unvalued-first, refusals, idempotency, reversal'
       assert.equal(Number(b.qty_on_hand), 20); assert.equal(Number(b.avg_unit_cost), 6); assert.equal(Number(b.valued_value), 120)
       assert.equal(b.stock_qty, 20); assert.equal(b.currency, 'SAR'); assert.equal(b.site, 'S1')
     })
-    await t.test('unpriced receipt is unvalued (never 0) and leaves first', async () => {
+    await t.test('unpriced receipt is unvalued (never 0) and is NOT consumed first (owner decision)', async () => {
       await post(U.keeper, { idempotency_key: 'r3', stock_id: sid, movement_type: 'receipt', qty_change: 4 })
       let b = await bal(sid)
       assert.equal(Number(b.unvalued_qty), 4); assert.equal(Number(b.valued_qty), 20); assert.equal(Number(b.avg_unit_cost), 6)
       const i1 = await post(U.keeper, { idempotency_key: 'i1', stock_id: sid, movement_type: 'issue', qty_change: -3 })
-      assert.equal(i1.value_change, null); assert.equal(i1.valuation_status, 'unvalued'); assert.equal(Number(i1.unvalued_qty_change), -3)
+      assert.equal(Number(i1.value_change), -18); assert.equal(i1.valuation_status, 'valued'); assert.equal(Number(i1.unvalued_qty_change), 0)
+      assert.equal(Number(i1.valued_qty_moved), 3); assert.equal(Number(i1.unvalued_qty_moved), 0)
       const i2 = await post(U.keeper, { idempotency_key: 'i2', stock_id: sid, movement_type: 'issue', qty_change: -6 })
-      assert.equal(i2.valuation_status, 'partially_valued'); assert.equal(Number(i2.value_change), -30)
+      assert.equal(i2.valuation_status, 'valued'); assert.equal(Number(i2.value_change), -36)
       b = await bal(sid)
-      assert.equal(Number(b.qty_on_hand), 15); assert.equal(Number(b.unvalued_qty), 0); assert.equal(Number(b.valued_value), 90)
+      assert.equal(Number(b.qty_on_hand), 15); assert.equal(Number(b.unvalued_qty), 4); assert.equal(Number(b.valued_value), 66)
+      const rec = await one(db, `select count(*)::int c, sum(unvalued_qty)::numeric q from inventory_cost_reconciliations where stock_id = $1 and status = 'open'`, [sid])
+      assert.equal(rec.c, 1); assert.equal(Number(rec.q), 4)
     })
     await t.test('idempotent retry replays; a changed payload with the same key is refused', async () => {
       const again = await post(U.keeper, { idempotency_key: 'i2', stock_id: sid, movement_type: 'issue', qty_change: -6 })
@@ -83,7 +86,7 @@ test('ledger: weighted average, unvalued-first, refusals, idempotency, reversal'
     })
     await t.test('reversal negates exactly, only once, and refuses when the units are gone', async () => {
       const rc = await post(U.keeper, { idempotency_key: 'rv-src', stock_id: sid, movement_type: 'receipt', qty_change: 10, unit_cost: 12 })
-      let b = await bal(sid); assert.equal(Number(b.avg_unit_cost), 9)
+      let b = await bal(sid); assert.equal(Number(b.avg_unit_cost), 9.75) // (36 + 120) / 16 valued units
       await assert.rejects(call(db, U.keeper, 'inv_reverse_movement', { movement_id: rc.movement_id, reason: 'wrong qty', idempotency_key: 'rv1' }), code('42501'))
       const rv = await call(db, U.approver, 'inv_reverse_movement', { movement_id: rc.movement_id, reason: 'wrong qty', idempotency_key: 'rv1' })
       assert.equal(Number(rv.qty_change), -10); assert.equal(Number(rv.value_change), -120)

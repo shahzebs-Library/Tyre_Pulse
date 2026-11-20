@@ -66,6 +66,7 @@ end $$;
 drop view if exists public.v_stock_balance_reconcile;
 drop table if exists public.stock_exceptions;
 drop function if exists public._inv_post(jsonb, boolean);
+drop function if exists public._inv_cost_rec_track(public.stock_movements, jsonb);
 drop function if exists public._inv_movement_json(public.stock_movements);
 drop function if exists public.inv_ledger_guard();
 drop function if exists public.inv_balance_guard();
@@ -115,7 +116,7 @@ alter table public.stock_movements
   drop column if exists currency, drop column if exists ownership, drop column if exists source_doc_type,
   drop column if exists source_doc_id, drop column if exists idempotency_key, drop column if exists payload_hash,
   drop column if exists reverses_movement_id, drop column if exists actor_id, drop column if exists approval_ref,
-  drop column if exists reserved_change;
+  drop column if exists reserved_change, drop column if exists valued_qty, drop column if exists unvalued_qty;
 drop sequence if exists public.stock_movements_movement_seq_seq;
 do $$ declare r record; begin
   for r in select definition from _bak.inv_p0_snapshot where kind = 'nullable' loop execute r.definition; end loop;

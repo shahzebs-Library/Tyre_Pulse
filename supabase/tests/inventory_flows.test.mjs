@@ -26,35 +26,42 @@ test('transfer: dispatch carries cost into transit, partial receipt, return of t
     const src = await post(U.keeper, { idempotency_key: 't1', item_id: FILTER, location_id: L.s1, movement_type: 'receipt', qty_change: 10, unit_cost: 4 })
     await post(U.keeper, { idempotency_key: 't0', stock_id: src.stock_id, movement_type: 'receipt', qty_change: 2 }) // 2 unvalued
     const d = await rpc(db, U.keeper, 'inv_transfer_dispatch', [j({ idempotency_key: 'trf-1', from_location_id: L.s1, to_location_id: L.s2,
-      remarks: 'to S2', lines: [{ scanned_code: `TP:STK:${src.stock_id}`, qty: 6 }] })])
+      remarks: 'to S2', lines: [{ scanned_code: `TP:STK:${src.stock_id}`, qty: 11 }] })])
     assert.equal(d.status, 'in_transit')
     const replay = await rpc(db, U.keeper, 'inv_transfer_dispatch', [j({ idempotency_key: 'trf-1', from_location_id: L.s1, to_location_id: L.s2, lines: [] })])
     assert.equal(replay.replayed, true)
     const line = await one(db, 'select * from stock_transfer_lines where transfer_id = $1', [d.transfer_id])
-    // unvalued units left first: 2 unvalued + 4 valued at 4 = 16
-    assert.equal(Number(line.carried_unvalued_qty), 2); assert.equal(Number(line.carried_value), 16)
+    // valued units leave first (owner decision): 10 valued at 4 = 40, then 1 unvalued (no cost invented)
+    assert.equal(Number(line.carried_unvalued_qty), 1); assert.equal(Number(line.carried_value), 40)
     const transit = await bal(line.transit_stock_id)
-    assert.equal(Number(transit.qty_on_hand), 6); assert.equal(Number(transit.unvalued_qty), 2); assert.equal(Number(transit.valued_value), 16)
-    assert.equal(Number((await bal(src.stock_id)).qty_on_hand), 6)
+    assert.equal(Number(transit.qty_on_hand), 11); assert.equal(Number(transit.unvalued_qty), 1); assert.equal(Number(transit.valued_value), 40)
+    assert.equal(Number((await bal(src.stock_id)).qty_on_hand), 1)
+    // the open reconciliation travelled with the unvalued unit (split), never duplicated
+    const recs = await q(db, `select stock_id, unvalued_qty from inventory_cost_reconciliations where status = 'open' and not consumed and item_id = '${FILTER}' order by stock_id`)
+    assert.equal(recs.reduce((s, r) => s + Number(r.unvalued_qty), 0), 2)
+    assert.equal(Number(recs.find(r => r.stock_id === line.transit_stock_id).unvalued_qty), 1)
     // partial receipt at S2 with a damaged condition
     const r1 = await rpc(db, U.site2Only, 'inv_transfer_receive', [j({ idempotency_key: 'rcv-1', transfer_id: d.transfer_id,
       lines: [{ line_id: line.id, received_qty: 4, condition: 'good' }] })])
     assert.equal(r1.status, 'partially_received')
     await assert.rejects(rpc(db, U.site2Only, 'inv_transfer_receive', [j({ idempotency_key: 'rcv-2', transfer_id: d.transfer_id,
-      lines: [{ line_id: line.id, received_qty: 5 }] })]), code('22023'))
+      lines: [{ line_id: line.id, received_qty: 8 }] })]), code('22023'))
     const dest = await one(db, `select * from stock_records where location_id = $1 and item_id = $2`, [L.s2, FILTER])
-    assert.equal(Number(dest.qty_on_hand), 4); assert.equal(Number(dest.unvalued_qty), 2); assert.equal(Number(dest.valued_value), 8)
+    assert.equal(Number(dest.qty_on_hand), 4); assert.equal(Number(dest.unvalued_qty), 0); assert.equal(Number(dest.valued_value), 16)
     // site-1-only keeper cannot receive at S2? (keeper has S1,S2) - a UAE user cannot
     await assert.rejects(rpc(db, U.uaeOnly, 'inv_transfer_receive', [j({ idempotency_key: 'rcv-x', transfer_id: d.transfer_id,
       lines: [{ line_id: line.id, received_qty: 1 }] })]), /not found|scope|42501/)
     const back = await rpc(db, U.keeper, 'inv_transfer_return_remaining', [j({ idempotency_key: 'ret-1', transfer_id: d.transfer_id,
-      reason: 'short shipped', lines: [{ line_id: line.id, qty: 2 }] })])
+      reason: 'short shipped', lines: [{ line_id: line.id, qty: 7 }] })])
     assert.equal(back.status, 'completed')
     assert.equal(Number((await bal(line.transit_stock_id)).qty_on_hand), 0)
-    assert.equal(Number((await bal(src.stock_id)).qty_on_hand), 8)
-    // total value conserved: 40 bought, 8 at S2, rest at S1
-    const tot = await one(db, `select sum(valued_value)::numeric v, sum(qty_on_hand)::numeric qty from stock_records where item_id = $1`, [FILTER])
+    const s1 = await bal(src.stock_id)
+    assert.equal(Number(s1.qty_on_hand), 8); assert.equal(Number(s1.unvalued_qty), 2); assert.equal(Number(s1.valued_value), 24)
+    // total value conserved: 40 bought, 16 at S2, 24 at S1; unvalued units and their open records agree
+    const tot = await one(db, `select sum(valued_value)::numeric v, sum(qty_on_hand)::numeric qty, sum(unvalued_qty)::numeric u from stock_records where item_id = $1`, [FILTER])
     assert.equal(Number(tot.v), 40); assert.equal(Number(tot.qty), 12)
+    const openQ = await one(db, `select sum(unvalued_qty)::numeric q from inventory_cost_reconciliations where status = 'open' and not consumed and item_id = $1`, [FILTER])
+    assert.equal(Number(openQ.q), Number(tot.u))
   } finally { await db.close() }
 })
 
@@ -109,8 +116,14 @@ test('value-only movements: landed cost, supplier credit, cost assignment', asyn
     let b = await bal(s.stock_id); assert.equal(Number(b.avg_unit_cost), 12)
     const cr = await post(U.approver, { idempotency_key: 'v5', stock_id: s.stock_id, movement_type: 'supplier_credit', value: 100 })
     assert.equal(Number(cr.value_change), -48); assert.equal(cr.variance_kind, 'supplier_credit_exceeds_stock_value'); assert.equal(Number(cr.variance_amount), -52)
-    await assert.rejects(post(U.approver, { idempotency_key: 'v6', stock_id: s.stock_id, movement_type: 'cost_assignment', qty: 3, unit_cost: 5 }), code('22023'))
-    await post(U.approver, { idempotency_key: 'v7', stock_id: s.stock_id, movement_type: 'cost_assignment', qty: 2, unit_cost: 5 })
+    // nothing becomes valued without an approved cost reconciliation
+    await assert.rejects(post(U.approver, { idempotency_key: 'v7', stock_id: s.stock_id, movement_type: 'cost_assignment', qty: 2, unit_cost: 5 }), /cost reconciliation/)
+    const rec = await one(db, `select id from inventory_cost_reconciliations where stock_id = $1 and status = 'open'`, [s.stock_id])
+    const req = await call(db, U.approver, 'inv_request_approval', { entity_type: 'cost_reconciliation', entity_id: rec.id,
+      proposal: { resolution: 'resolved', unit_cost: 5 }, reason: 'supplier invoice INV-9' })
+    await call(db, U.admin, 'inv_approval_decide', { request_id: req.id, decision: 'approve' })
+    const res = await call(db, U.approver, 'inv_cost_reconcile', { reconciliation_id: rec.id })
+    assert.equal(res.status, 'resolved'); assert.equal(Number(res.applied_qty), 2); assert.equal(res.posting, 'none')
     b = await bal(s.stock_id)
     assert.equal(Number(b.unvalued_qty), 0); assert.equal(Number(b.valued_value), 10); assert.equal(Number(b.qty_on_hand), 6)
   } finally { await db.close() }
@@ -160,6 +173,11 @@ test('opening balance: legacy rows reviewed, preparer cannot approve, drift reco
     await call(db, U.keeper, 'inv_opening_batch_submit', { batch_id: batch })
     await db.exec(`insert into test_caps values ('${U.keeper}','adjustment_approve')`)
     await assert.rejects(call(db, U.keeper, 'inv_opening_batch_decide', { batch_id: batch, decision: 'approve', note: 'mine' }), code('42501'))
+    // independent approval through the approval engine before the batch can post
+    await assert.rejects(call(db, U.approver, 'inv_opening_batch_approve', { batch_id: batch, decision: 'approve', note: 'early' }), /approval is required/)
+    const req = await call(db, U.keeper, 'inv_request_approval', { entity_type: 'opening_balance_batch', entity_id: batch })
+    await assert.rejects(call(db, U.keeper, 'inv_approval_decide', { request_id: req.id, decision: 'approve' }), code('42501'))
+    await call(db, U.approver, 'inv_approval_decide', { request_id: req.id, decision: 'approve' })
     const ok = await call(db, U.approver, 'inv_opening_batch_approve', { batch_id: batch, decision: 'approve', note: 'checked against count' })
     assert.equal(ok.lines_posted, 1)
     const b = await bal(id(401))
@@ -168,6 +186,10 @@ test('opening balance: legacy rows reviewed, preparer cannot approve, drift reco
     assert.equal(Number(mv.qty_change), -1); assert.equal(Number(mv.value_change), 21)
     // no manufactured history: the only movements on the row are the approved opening
     assert.equal((await one(db, 'select count(*)::int c from stock_movements where stock_id = $1', [id(401)])).c, 1)
+    // the legacy unknown cost is closed by the approved batch: 1 unit removed (cancelled), 3 priced (resolved at 7)
+    const lr = await q(db, `select status, unvalued_qty, resolution_source, resolved_value from inventory_cost_reconciliations where stock_id = $1 order by status`, [id(401)])
+    assert.deepEqual(lr.map(r => [r.status, Number(r.unvalued_qty), r.resolution_source]), [['cancelled', 1, 'opening_batch'], ['resolved', 3, 'opening_batch']])
+    assert.equal(Number(lr[1].resolved_value), 21)
   } finally { await db.close() }
 })
 

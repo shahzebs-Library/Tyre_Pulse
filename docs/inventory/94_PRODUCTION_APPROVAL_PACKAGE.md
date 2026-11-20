@@ -299,7 +299,8 @@ template (adjustment_approve / discrepancy_review / financial_post / view_value 
 
 0. Owner signs section 13. Window agreed (low activity; `pg_stat_activity` showed 1 active session at prepare).
 1. Backup confirmation (section 4, items 1-5). Record time + LSN.
-2. (Optional, owner-approved) `94_prepared/nhc_stock_country_correction.sql`; then re-take section 6.
+2. **Owner-approved (2026-11-20), mandatory, BEFORE file 1 only:** `94_prepared/nhc_stock_country_correction.sql`; then re-take section 6.
+   It cannot run after the release: after the 16 files `inv_balance_guard` refuses the change (doc 95 finding S2).
 3. Pre-checks (section 11 STOP list) incl. re-take of section 6 and the section 3 function md5s.
 4. Verify each file's sha256 against 1.1; apply files 1..16 **one file per apply**, as `postgres`, each
    followed by its verify query (doc 90 section 3). Never combine files ("out of shared memory" at
@@ -417,3 +418,35 @@ I, the owner, have read this package and approve, for production project `jhssdm
 * [ ] Web deploy (merge) ____ / edge deploy ____ / Flutter build: HOLD - each approved separately.
 
 Signature: ______________________   Date/time (UTC): ______________________
+
+---
+
+## 16. Owner decision record and web acceptance addendum (2026-11-20)
+
+**Owner decision (architect-reviewed, commit 7ef83b77 package):** CONDITIONAL APPROVAL to apply the exact 16
+files in section 1.1. Executable ONLY after a current usable backup or PITR recovery point is confirmed in the
+Supabase dashboard (section 4) and the section 11 pre-checks pass. Missing confirmation = STOP.
+
+* **NHC correction:** APPROVED, run before file 1 (section 8 step 2). Quantity, cost and movements unchanged.
+* **Store Keepers:** APPROVED for receive / issue / transfer / count only, **restricted to each person's verified
+  assigned sites**. Production today has `sites = {ALL}` on all 7 Store Keepers, so their real sites must be
+  set (Console > Users) before `store_keeper_capabilities.sql` runs; granting while they hold `{ALL}` would be
+  the unrestricted access the owner refused. No approval, valuation or money capability.
+* **Approvers:** no existing employee's role is replaced. Admin / Manager / Director approval stays the working
+  route (it is the default approval route the server enforces). Dedicated Inventory Controller, Finance Manager
+  and a KSA-scoped PMV Manager are assigned in the Console only when the responsible people are named; they also
+  need stock capability grants and an approval policy naming their role (doc 95 finding S3).
+* **Seven tyre conflicts:** stay open for engineering investigation and independent PMV Manager approval; no
+  automatic change to `tyre_records` or `tyre_status_marks`. The 6 KSA cases wait for a KSA-scoped PMV Manager.
+* **Rollback limitations (section 13):** ACCEPTED - `_bak.inv_p0_snapshot` is kept after a rollback, and the 188
+  material-master tyre items keep the apply time as `updated_at`.
+
+**Web acceptance (doc 95, commit 7e7b15c9):** real browser + PostgREST 12.2.3 + PostgreSQL 17.6 snapshot with the
+same 16 files (sha256 unchanged). 30 cases; 5 client defects found and fixed in app code (no migration changed).
+Not covered: password sign-in itself (sessions injected), Inventory Controller / Finance Manager approval (no
+policy names them yet), the UAE tyre case, opening batches and supplier screens in the browser.
+
+**Operational order for the first full count (doc 95 finding S1):** legacy stock lines without an item
+(18 at NHC) are snapshotted by a full audit but cannot be counted until mapped to an item. Map them through the
+opening-balance batches FIRST, then start full audits. Otherwise each round raises "not counted" discrepancies
+that must be closed by hand before the audit can close. No migration change; this is the run order.

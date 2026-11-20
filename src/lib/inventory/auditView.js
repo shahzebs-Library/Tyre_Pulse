@@ -134,11 +134,28 @@ const lineKey = (l) => [l.location_id || '', l.item_id || '', l.serial_no || '']
  *  - value impact = variance x unit cost, NULL when the cost is unknown.
  */
 export function buildReconciliationRows(snapshotLines = [], countLines = []) {
+  // Mirror the server (inv_audit_reconcile): within the LATEST round of a line
+  // key, every count line is SUMMED (the same item counted twice on one shelf,
+  // or by two passes, is one quantity). Earlier rounds are ignored.
+  const maxRound = new Map()
+  for (const c of countLines || []) {
+    const k = lineKey(c)
+    const r = Number(c.round) || 1
+    if (!maxRound.has(k) || r > maxRound.get(k)) maxRound.set(k, r)
+  }
   const latest = new Map()
   for (const c of countLines || []) {
     const k = lineKey(c)
+    if ((Number(c.round) || 1) !== maxRound.get(k)) continue
+    const qty = c.confirmed_zero ? 0 : n(c.counted_qty)
     const prev = latest.get(k)
-    if (!prev || (Number(c.round) || 1) >= (Number(prev.round) || 1)) latest.set(k, c)
+    if (!prev) {
+      latest.set(k, { ...c, counted_qty: qty, confirmed_zero: false, _lines: 1 })
+      continue
+    }
+    const sum = prev.counted_qty === null && qty === null ? null : (prev.counted_qty ?? 0) + (qty ?? 0)
+    const newer = String(c.counted_at || '') > String(prev.counted_at || '')
+    latest.set(k, { ...(newer ? c : prev), counted_qty: sum, confirmed_zero: false, _lines: prev._lines + 1 })
   }
   const rows = []
   const seen = new Set()

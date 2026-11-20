@@ -385,15 +385,28 @@ export async function getCounterView(auditId) {
     const loc = l.location_id ? locs.get(l.location_id) : null
     return loc && !l.location_code ? { ...l, location_code: loc.code, location_name: loc.name || null } : l
   })
-  return { audit: Array.isArray(data) ? null : (data?.audit || null), lines: sanitizeCounterLines(named) }
+  return {
+    audit: Array.isArray(data) ? null : (data?.audit || null),
+    lines: sanitizeCounterLines(named),
+    // The audit's own locations: an extra (unexpected) line typed by code is
+    // resolved against these before it is sent (the server takes ids, not codes).
+    locations: Array.isArray(data?.locations) ? data.locations.map((x) => ({ id: x.id, code: x.code || null, name: x.name || null })) : [],
+  }
 }
 
-/** Submit counted lines. Each line carries its own client_uuid (offline-safe retries). */
+/**
+ * Submit counted lines. Each line carries its own client_uuid (offline-safe
+ * retries): callers must allocate it ONCE per line and resend the identical
+ * payload on a retry (the outer key's stored hash covers the whole payload).
+ * The fallback below only serves callers that never retry.
+ * Answer: { accepted: uuid[], duplicates: uuid[], rejected: [{client_uuid, reason}] }.
+ */
 export const submitCount = ({ auditId, lines, round = 1, deviceId = 'web' }, key) => rpcWrite('inv_count_submit', {
   audit_id: auditId,
   round,
   lines: (lines || []).map((l) => ({
     location_id: l.location_id || null, item_id: l.item_id || null, serial_no: l.serial_no || null,
+    ...(l.stock_id ? { stock_id: l.stock_id } : {}),
     counted_qty: l.confirmed_zero ? 0 : l.counted_qty, confirmed_zero: !!l.confirmed_zero,
     condition: l.condition || null, remarks: l.remarks || null, unexpected: !!l.unexpected,
     client_uuid: l.client_uuid || newIdempotencyKey(), device_id: deviceId,

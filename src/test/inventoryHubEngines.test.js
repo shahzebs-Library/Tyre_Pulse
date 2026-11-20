@@ -134,6 +134,20 @@ describe('audit view', () => {
     expect(sum.abs.totals[0].amount).toBe(5)
     expect(sum.accuracyPct).toBe(0)
   })
+  it('sums every line of the latest round per item/location, like inv_audit_reconcile', () => {
+    const snapshot = [{ location_id: 'L1', item_id: 'I1', expected_qty: 10, expected_cost: 2, currency: 'SAR' }]
+    const counts = [
+      { location_id: 'L1', item_id: 'I1', counted_qty: 50, round: 1 },
+      { location_id: 'L1', item_id: 'I1', counted_qty: 4, round: 2, counted_at: '2026-11-20T10:00:00Z' },
+      { location_id: 'L1', item_id: 'I1', counted_qty: 5, round: 2, counted_at: '2026-11-20T10:05:00Z' },
+      { location_id: 'L1', item_id: 'I1', confirmed_zero: true, counted_qty: null, round: 2 },
+      { location_id: 'L2', item_id: 'I9', counted_qty: 1, round: 1 },
+      { location_id: 'L2', item_id: 'I9', counted_qty: 2, round: 1 },
+    ]
+    const by = Object.fromEntries(buildReconciliationRows(snapshot, counts).map((r) => [r.item_id, r]))
+    expect(by.I1).toMatchObject({ counted_qty: 9, variance: -1, value_impact: -2, status: 'short', round: 2 })
+    expect(by.I9).toMatchObject({ status: 'unexpected', counted_qty: 3, variance: 3 })
+  })
   it('gives serial lines zero tolerance and quantity lines a band', () => {
     expect(needsRecount({ status: 'short', variance: -1, serial_no: 'S1', expected_qty: 1, value_impact: null })).toBe(true)
     expect(needsRecount({ status: 'short', variance: -1, expected_qty: 100, value_impact: -10 })).toBe(false)

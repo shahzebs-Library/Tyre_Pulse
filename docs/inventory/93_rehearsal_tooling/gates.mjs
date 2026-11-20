@@ -1,6 +1,6 @@
 // Rehearsal gates 4, 5, 6, 7, 8, 10, 12 on a disposable clone of copy A (PG17.6, production roles).
 import { writeFileSync } from 'node:fs'
-import { run, rpc, sel, one, asUser, claims, check, expectRefused, results, settle } from './lib.mjs'
+import { run, rpc, sel, one, asUser, check, expectRefused, results } from './lib.mjs'
 import { setup, P, ORG_A, ORG_B } from './setup.mjs'
 
 const db = process.argv[2]
@@ -354,7 +354,6 @@ const tryCall = p => p.then(r => ({ ok: true, r }), e => ({ ok: false, e: String
   const g = 5
   for (const t of ['tyre_item_events', 'inventory_approval_decisions']) {
     const n = (await one(db, `select count(*)::int n from ${t}`)).n
-    const col = t === 'tyre_item_events' ? 'note' : 'note'
     const cols = await sel(db, `select column_name c from information_schema.columns where table_name = '${t}' and column_name not in ('id') limit 1 offset 1`)
     await expectRefused(g, `${t} (${n} rows): owner UPDATE refused`, run(db, `update ${t} set ${cols[0].c} = ${cols[0].c} where true`, 'postgres'))
     await expectRefused(g, `${t} (${n} rows): owner DELETE refused`, run(db, `delete from ${t} where true`, 'postgres'))

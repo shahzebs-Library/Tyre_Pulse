@@ -1,6 +1,6 @@
 // Gate 9: opening balances from the 43 live stock_records rows (disposable clone of copy A).
 import { writeFileSync } from 'node:fs'
-import { rpc, sel, one, check, results } from './lib.mjs'
+import { rpc, one, check, results } from './lib.mjs'
 import { P } from './setup.mjs'
 const db = process.argv[2]
 const H = `select md5(string_agg(concat_ws('|', id, site, description, stock_qty, min_level, critical_level, stock_status, reorder_qty, management_action, region, updated_by, updated_at, country, organisation_id, custom_data, unit_cost, currency, brand, tyre_size, last_counted_at, qty_on_hand, unvalued_qty, valued_value), ',' order by id)) h,

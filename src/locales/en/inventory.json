@@ -124,7 +124,8 @@
     "addExtra": "Add item found", "submit": "Submit count", "confirmSubmit": "Yes, submit",
     "confirmBody": "After you submit you cannot change these figures. A recount, if needed, is done by someone else.",
     "badQty": "A counted quantity must be a number of zero or more.", "badExtra": "Each extra item needs a quantity above zero.",
-    "nothing": "Enter at least one counted line before submitting."
+    "nothing": "Enter at least one counted line before submitting.",
+    "extraItemUnknown": "No item with this code was found. Check the code or label.", "extraItemAmbiguous": "More than one item uses this code. Use the barcode or ask the reviewer.", "extraLocationUnknown": "This location code is not part of this audit.", "extraLocationAmbiguous": "More than one location in this audit uses this code.", "extraUnresolved": "Some found items could not be matched. Correct the marked lines; nothing was sent.", "partialRejected": "{done} lines were saved. {rejected} lines were not accepted; they stay below with the reason. Correct them and submit again.", "rejectedReason": "Not accepted: {reason}", "rejectedNoReason": "Not accepted by the server."
   },
   "conditions": { "new": "New", "used_serviceable": "Used, serviceable", "damaged": "Damaged", "repairable": "Repairable", "scrap": "Scrap" },
   "recon": {

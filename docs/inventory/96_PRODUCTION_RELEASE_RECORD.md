@@ -99,6 +99,27 @@ with stock unvalued, 3 at zero), 7 `uncertain` legacy-drift lines; tyre sync UAE
   10.6 s; Egypt, 500: 1.2 s) because `_inv_tyre_item_sync` builds `_tc_derived` with correlated subqueries over
   unindexed temp tables. A web "Refresh" for KSA will hit the API statement timeout. Needs a follow-up migration
   (index the temp tables or rewrite as joins); the 7 conflicts are therefore not yet materialised in KSA.
+* **Follow-up migration awaiting owner approval (NOT applied):**
+  `supabase/pending_migrations/20261121100000_inv_reconcile_multi_balance.sql` (+ `_ROLLBACK`). Review
+  finding on PR #569: `_inv_audit_reconcile` ties a count line that names no balance to ONE snapshot balance
+  (`limit 1`) when an item/location holds several balances (condition / ownership split), so the count is
+  credited to an arbitrary balance and the others show false shortages. The fix reconciles such an
+  item/location once (sum of expectations, cutoff and the latest round's count lines; discrepancy at
+  item/location level, cost only when every balance shares it); in-place anchored patch guarded by the live
+  md5 `ba9845b1df32d899ff58bd87d8372bf0` (read from production 2026-11-20), original kept in
+  `_bak.inv_121100_snapshot`. PGlite: defect reproduced before, 0 false discrepancies after, short count = one
+  item/location shortage, rollback restores the original (`supabase/tests/inventory_reconcile_multi_balance.test.mjs`).
+  **Production impact today: none** - read-only check 2026-11-20: 0 item/location groups with more than one
+  balance (no `stock_records` row carries an `item_id` yet), 0 audits. **Operational rule until it is applied:**
+  before starting an audit, check that no item/location in its scope has more than one balance
+  (`select item_id, location_id from stock_records where item_id is not null group by 1,2 having count(*) > 1`);
+  if one does, count those items by scanning the balance label (`TP:STK:<id>`, which names the balance) or
+  leave them out of the audit scope.
+* Client fixes from the same review, shipped with this PR: blind-count "found item" lines are resolved to
+  item / location ids (codes were dropped before and the line was refused); rejected lines stay on screen with
+  the server's reason and the screen closes only when every line is saved; line `client_uuid`s are allocated
+  once so a retry resends the identical payload; the reviewer comparison sums every line of the latest round
+  per item/location like the server.
 * Store Keeper capabilities NOT granted (owner: real sites first; all 7 hold `{ALL}`).
 * No Inventory Controller / Finance Manager / KSA PMV Manager assigned; Admin / Manager / Director approve.
 * Map the 18 NHC legacy lines through opening batches before the first full count (doc 94 section 16).

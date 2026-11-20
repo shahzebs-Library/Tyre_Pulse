@@ -19,7 +19,7 @@ import {
 import {
   AUDIT_TYPES, AUDIT_STATUSES, AUDIT_STATUS_TONE, validateAuditDraft, availableActions, auditRolesFor,
 } from '../../lib/inventory/auditView'
-import { toUserMessage } from '../../lib/safeError'
+import { toUserMessage } from '../../lib/inventory/errorText'
 import { useInvQuery, PagedTable, Field, ErrorNote, Note, StatusPill, fmtDate, fmtDateTime } from './InvUi'
 import AuditCounterView from './AuditCounterView'
 import AuditReconciliation from './AuditReconciliation'

@@ -15,6 +15,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { listPoLines, listGrnLines, listSupplierAgreements, listBalances } from '../../lib/api/inventory'
 import { formatMoney, formatQty } from '../../lib/inventory/inventoryMoney'
 import { useInvQuery, PagedTable, SearchBox, Note, StatusPill, SectionCard, fmtDate } from './InvUi'
+import { ReceiveGoodsPanel, ReserveIssuePanel } from './StockFlows'
 
 function LinkCards({ links }) {
   const { t } = useLanguage()
@@ -79,7 +80,7 @@ export function ProcurementSection({ can }) {
   )
 }
 
-export function ReceivingSection({ can }) {
+export function ReceivingSection({ scope, can }) {
   const { t } = useLanguage()
   const [search, setSearch] = useState('')
   const p = usePaged((page, pageSize) => listGrnLines({ page, pageSize, search }), [search])
@@ -91,6 +92,8 @@ export function ReceivingSection({ can }) {
         { to: '/store-material-issue', icon: PackageMinus, labelKey: 'inventory.links.materialIssue', subKey: 'inventory.links.materialIssueSub', roles: AMD },
       ]} />
       <Note>{t('inventory.supply.receiveRule')}</Note>
+      <ReceiveGoodsPanel scope={scope} can={can} />
+      <ReserveIssuePanel scope={scope} can={can} />
       <SectionCard title={t('inventory.supply.grnLines')} sub={t('inventory.supply.grnLinesSub')}>
         <div className="cc-filters" style={{ marginBottom: 10 }}>
           <SearchBox value={search} onChange={(v) => { setSearch(v); p.reset() }} placeholder={t('inventory.supply.grnSearch')} />

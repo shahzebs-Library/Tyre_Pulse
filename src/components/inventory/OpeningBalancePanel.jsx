@@ -16,8 +16,9 @@ import {
 } from '../../lib/api/inventory'
 import { OB_FIELDS, mapHeaders, missingRequired, mapRows, summarizeBatch, canApproveBatch } from '../../lib/inventory/openingBalance'
 import { formatMoney, formatQty, formatTotals } from '../../lib/inventory/inventoryMoney'
-import { toUserMessage } from '../../lib/safeError'
+import { toUserMessage } from '../../lib/inventory/errorText'
 import { useInvQuery, PagedTable, Field, ErrorNote, Note, StatusPill, fmtDateTime } from './InvUi'
+import { RequestApprovalButton } from './ApprovalsPanel'
 
 const TONE = { draft: 'muted', mapped: 'info', submitted: 'warning', approved: 'good', rejected: 'bad', posted: 'good' }
 const PREVIEW_LIMIT = 200
@@ -158,6 +159,7 @@ export default function OpeningBalancePanel({ scope, can, userId }) {
                 <Send size={14} aria-hidden="true" /> {t('inventory.opening.submit')}
               </button>
             )}
+            {open.status === 'submitted' && <RequestApprovalButton key={open.id} entityType="opening_batch" entityId={open.id} onDone={() => q.retry()} />}
             {open.status === 'submitted' && (approval?.ok ? (
               <>
                 <Field label={t('inventory.disc.decisionNote')} full>

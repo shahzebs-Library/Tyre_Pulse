@@ -95,3 +95,17 @@ button.inv-tile[aria-pressed="true"] { border-color: var(--cc-green); background
 .inv-panel .inv-input, .inv-panel .cc-select { min-height: 44px; }
 .inv-panel .cc-btn-primary, .inv-panel .cc-btn-ghost, .inv-panel .cc-icon-btn { min-height: 44px; }
 .inv-num-cell { display: block; text-align: end; font-variant-numeric: tabular-nums; }
+
+/* KPI tile + Explain this number (button sits in the corner, outside the tile). */
+.inv-kpi-wrap { position: relative; min-width: 0; }
+.inv-kpi-wrap > .cc-kpi { height: 100%; }
+.inv-kpi-explain { position: absolute; top: 6px; inset-inline-end: 6px; }
+.inv-tabs-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.inv-lines { display: grid; gap: 8px; }
+.inv-line { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; align-items: end;
+  padding: 10px; border: 1px solid var(--cc-inner-border); border-radius: 10px; }
+.inv-picklist { list-style: none; margin: 4px 0 0; padding: 0; border: 1px solid var(--cc-inner-border); border-radius: 8px; max-height: 220px; overflow: auto; }
+.inv-picklist button { display: block; width: 100%; min-height: 44px; text-align: start; padding: 8px 10px; background: transparent;
+  border: 0; border-bottom: 1px solid var(--cc-inner-border); color: var(--cc-ink); font-size: 13px; cursor: pointer; }
+.inv-picklist button:hover, .inv-picklist button:focus-visible { background: var(--cc-inner); outline: none; }
+.inv-flag { display: inline-flex; align-items: center; gap: 6px; font-weight: 650; }

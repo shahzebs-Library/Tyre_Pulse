@@ -6,7 +6,7 @@ import { useLanguage } from '../../contexts/LanguageContext'
 import { overviewCounts, loadBalanceSnapshot, probeInventorySetup, CORE_OBJECTS } from '../../lib/api/inventory'
 import { summarizeBalances } from '../../lib/inventory/balanceView'
 import { sumByCurrency, balanceValue, isOwned, formatTotals } from '../../lib/inventory/inventoryMoney'
-import { useInvQuery, ErrorNote, Note, SectionCard } from './InvUi'
+import { useInvQuery, ErrorNote, Note, SectionCard, ExplainedKpi } from './InvUi'
 
 export default function OverviewSection({ scope, can, onNavigate }) {
   const { t } = useLanguage()
@@ -35,7 +35,7 @@ export default function OverviewSection({ scope, can, onNavigate }) {
           label={t('inventory.overview.belowReorder')} onClick={() => onNavigate('planning')} />
         <Kpi icon={ClipboardCheck} tone="t-blue" loading={loading} value={c.openAudits}
           label={t('inventory.overview.openAudits')} onClick={() => onNavigate('audits')} />
-        <Kpi icon={AlertTriangle} tone="t-red" loading={loading} value={c.openDiscrepancies}
+        <ExplainedKpi metricId="inv_discrepancies" country={scope.country} icon={AlertTriangle} tone="t-red" loading={loading} value={c.openDiscrepancies}
           label={t('inventory.overview.openDiscrepancies')} onClick={() => onNavigate('discrepancies')} />
         <Kpi icon={Scale} tone="t-purple" loading={loading} value={c.pendingAdjustments}
           label={t('inventory.overview.pendingAdjustments')} onClick={() => onNavigate('discrepancies')} />
@@ -44,7 +44,7 @@ export default function OverviewSection({ scope, can, onNavigate }) {
         <Kpi icon={FileCheck2} tone="t-blue" loading={loading} value={c.pendingBatches}
           label={t('inventory.overview.pendingBatches')} onClick={() => onNavigate('controls')} />
         {can('view_value') && (
-          <Kpi icon={Coins} tone="t-green" loading={snapLoading}
+          <ExplainedKpi metricId="inv_stock_value" country={scope.country} icon={Coins} tone="t-green" loading={snapLoading}
             display={snap.data?.status === 'ok' ? formatTotals(value.totals) : 'N/A'}
             label={t('inventory.overview.ownedValue')} onClick={() => onNavigate('valuation')} />
         )}

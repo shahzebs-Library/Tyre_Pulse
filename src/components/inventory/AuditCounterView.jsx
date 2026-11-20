@@ -11,7 +11,7 @@ import { useMemo, useState } from 'react'
 import { Plus, Send } from 'lucide-react'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { getCounterView, submitCount, newIdempotencyKey } from '../../lib/api/inventory'
-import { toUserMessage } from '../../lib/safeError'
+import { toUserMessage } from '../../lib/inventory/errorText'
 import { useInvQuery, ErrorNote, NotSetUp, Note, Field } from './InvUi'
 
 const CONDITIONS = ['new', 'used_serviceable', 'damaged', 'repairable', 'scrap']

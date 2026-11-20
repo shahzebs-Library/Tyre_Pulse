@@ -12,8 +12,8 @@ import { useLanguage } from '../../contexts/LanguageContext'
 import { loadReconciliation, reconcileAudit, assignRecount, newIdempotencyKey } from '../../lib/api/inventory'
 import { buildReconciliationRows, summarizeReconciliation, needsRecount } from '../../lib/inventory/auditView'
 import { formatMoney, formatQty, formatTotals } from '../../lib/inventory/inventoryMoney'
-import { toUserMessage } from '../../lib/safeError'
-import { useInvQuery, ErrorNote, NotSetUp, Note, StatusPill, Field, alignNumeric } from './InvUi'
+import { toUserMessage } from '../../lib/inventory/errorText'
+import { useInvQuery, ErrorNote, NotSetUp, Note, StatusPill, Field, alignNumeric, ExplainedKpi } from './InvUi'
 
 const STATUS_TONE = { match: 'good', over: 'warning', short: 'bad', not_counted: 'muted', unexpected: 'warning' }
 
@@ -56,7 +56,7 @@ export default function AuditReconciliation({ audit, can, userId, people = [], o
   return (
     <div className="inv-hub" style={{ gap: 12 }}>
       <div className="inv-kpis">
-        <Kpi icon={Target} tone="t-green" display={sum.accuracyPct === null ? 'N/A' : `${sum.accuracyPct}%`} label={t('inventory.recon.accuracy')} />
+        <ExplainedKpi metricId="inv_accuracy_exact_line" country={audit.country} icon={Target} tone="t-green" display={sum.accuracyPct === null ? 'N/A' : `${sum.accuracyPct}%`} label={t('inventory.recon.accuracy')} />
         <Kpi icon={RotateCw} tone="t-amber" value={sum.recount} label={t('inventory.recon.recountLines')} />
         <Kpi icon={HelpCircle} tone="t-blue" value={sum.byStatus.not_counted} label={t('inventory.recon.status.not_counted')} />
         {showValue && <Kpi icon={Scale} tone="t-red" display={formatTotals(sum.net.totals)} label={t('inventory.recon.netValue')} />}

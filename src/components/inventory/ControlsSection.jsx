@@ -11,6 +11,7 @@ import { listMasterReviews } from '../../lib/api/inventory'
 import { INVENTORY_CAPABILITIES } from '../../lib/inventory/hubSections'
 import { useInvQuery, PagedTable, Note, StatusPill, SectionCard, fmtDateTime } from './InvUi'
 import OpeningBalancePanel from './OpeningBalancePanel'
+import ApprovalsPanel from './ApprovalsPanel'
 
 function Permissions({ can }) {
   const { t } = useLanguage()
@@ -58,14 +59,16 @@ function MasterReviews() {
 
 export default function ControlsSection(props) {
   const { t } = useLanguage()
-  const [tab, setTab] = useState('permissions')
+  const [tab, setTab] = useState('approvals')
   return (
     <div className="inv-hub">
       <Tabs label={t('inventory.sections.controls')} value={tab} onChange={setTab} tabs={[
+        { key: 'approvals', label: t('inventory.controls.tabs.approvals') },
         { key: 'permissions', label: t('inventory.controls.tabs.permissions') },
         { key: 'opening', label: t('inventory.controls.tabs.opening') },
         { key: 'master', label: t('inventory.controls.tabs.master') },
       ]} />
+      {tab === 'approvals' && <ApprovalsPanel {...props} />}
       {tab === 'permissions' && <Permissions can={props.can} />}
       {tab === 'opening' && <OpeningBalancePanel {...props} />}
       {tab === 'master' && <MasterReviews />}

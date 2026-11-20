@@ -2,8 +2,11 @@
  * Discrepancies: every variance the reconciliation raised, investigated with
  * a category, notes, evidence and a proposed correction, then decided by an
  * approver who is NOT the counter, recounter or audit creator (approve /
- * reject / recount / hold). An approved adjustment posts a ledger movement
- * through inv_adjustment_approve; nothing here edits a balance directly.
+ * reject / hold through inv_adjustment_approve). A RECOUNT is not an approval
+ * decision: it needs a named counter who has not counted the line, so it goes
+ * through inv_recount_assign. An approved adjustment posts a ledger movement;
+ * nothing here edits a balance directly. The adjustment needs an approved
+ * approval request (inv_request_approval) before the server will post it.
  */
 import { useEffect, useState } from 'react'
 import { Save, CheckCircle2, XCircle, RotateCcw, PauseCircle } from 'lucide-react'
@@ -11,12 +14,14 @@ import SideDrawer from '../ui/SideDrawer'
 import { useLanguage } from '../../contexts/LanguageContext'
 import {
   listDiscrepancies, updateDiscrepancy, decideAdjustment, getAudit, newIdempotencyKey,
+  recountDiscrepancies, listAdjustments, listAssignablePeople,
 } from '../../lib/api/inventory'
+import { RequestApprovalButton } from './ApprovalsPanel'
 import {
   DISCREPANCY_CATEGORIES, DISCREPANCY_STATUSES, nextDiscrepancyStatuses, discrepancyReadyForApproval, canApproveAdjustment,
 } from '../../lib/inventory/auditView'
 import { formatMoney, formatQty } from '../../lib/inventory/inventoryMoney'
-import { toUserMessage } from '../../lib/safeError'
+import { toUserMessage } from '../../lib/inventory/errorText'
 import { useInvQuery, PagedTable, SearchBox, Field, ErrorNote, Note, StatusPill, fmtDateTime } from './InvUi'
 
 const TONE = { open: 'bad', investigating: 'warning', proposed: 'info', approved: 'good', rejected: 'muted', posted: 'good', closed: 'muted' }
@@ -34,6 +39,24 @@ export default function DiscrepanciesSection({ scope, can, userId }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [keys, setKeys] = useState({})
+  const [adjustment, setAdjustment] = useState(null)
+  const [people, setPeople] = useState([])
+  const [recounter, setRecounter] = useState('')
+
+  useEffect(() => {
+    let live = true
+    listAssignablePeople().then((p) => { if (live) setPeople(p) }).catch(() => { if (live) setPeople([]) })
+    return () => { live = false }
+  }, [])
+
+  useEffect(() => {
+    if (!open?.id) { setAdjustment(null); return undefined }
+    let live = true
+    listAdjustments({ discrepancyId: open.id, pageSize: 5 })
+      .then((r) => { if (live) setAdjustment(r.rows?.[0] || null) })
+      .catch(() => { if (live) setAdjustment(null) })
+    return () => { live = false }
+  }, [open?.id])
   const showValue = can('view_value')
   const canReview = can('discrepancy_review')
 
@@ -50,7 +73,8 @@ export default function DiscrepanciesSection({ scope, can, userId }) {
   const openRow = (d) => {
     setOpen(d); setErr(''); setNote('')
     setEdit({ category: d.category || '', investigation_notes: d.investigation_notes || '', proposed_qty: d.proposed_qty ?? '', proposed_action: d.proposed_action || '', status: d.status })
-    setKeys({ save: newIdempotencyKey(), decide: newIdempotencyKey() })
+    setKeys({ save: newIdempotencyKey(), decide: newIdempotencyKey(), recount: newIdempotencyKey() })
+    setRecounter('')
   }
 
   const columns = [
@@ -150,12 +174,37 @@ export default function DiscrepanciesSection({ scope, can, userId }) {
                 <div className="inv-actions">
                   <button type="button" className="cc-btn-primary" disabled={busy || !ready.ok} onClick={() => decide('approve')}><CheckCircle2 size={14} aria-hidden="true" /> {t('inventory.disc.approve')}</button>
                   <button type="button" className="cc-btn-ghost" disabled={busy || !note.trim()} onClick={() => decide('reject')}><XCircle size={14} aria-hidden="true" /> {t('inventory.disc.reject')}</button>
-                  <button type="button" className="cc-btn-ghost" disabled={busy} onClick={() => decide('recount')}><RotateCcw size={14} aria-hidden="true" /> {t('inventory.disc.recount')}</button>
                   <button type="button" className="cc-btn-ghost" disabled={busy || !note.trim()} onClick={() => decide('hold')}><PauseCircle size={14} aria-hidden="true" /> {t('inventory.disc.hold')}</button>
                 </div>
                 <p className="cc-card-sub">{t('inventory.disc.noteRequired')}</p>
               </>
             ) : <Note tone="warn">{t(approval?.reason || 'inventory.approve.noCapability')}</Note>}
+
+            {open.status === 'proposed' && (
+              adjustment?.id
+                ? <RequestApprovalButton key={adjustment.id} entityType="adjustment" entityId={adjustment.id} />
+                : <Note>{t('inventory.disc.noAdjustmentYet')}</Note>
+            )}
+
+            {can('recount') && !['posted', 'closed', 'written_off', 'superseded'].includes(open.status) && (
+              <>
+                <h4 className="cc-card-title">{t('inventory.disc.recountTitle')}</h4>
+                <p className="cc-card-sub">{t('inventory.disc.recountBody')}</p>
+                <div className="cc-filters">
+                  <Field label={t('inventory.recon.recounter')}>
+                    <select className="cc-select" value={recounter} onChange={(e) => setRecounter(e.target.value)}>
+                      <option value="">{t('inventory.common.choose')}</option>
+                      {people.filter((p) => p.id !== audit?.counter_id && p.id !== audit?.recount_counter_id && p.id !== userId)
+                        .map((p) => <option key={p.id} value={p.id}>{p.full_name || p.username}</option>)}
+                    </select>
+                  </Field>
+                  <button type="button" className="cc-btn-ghost" disabled={busy || !recounter || !open.audit_id}
+                    onClick={() => run(() => recountDiscrepancies({ auditId: open.audit_id, recounterId: recounter, discrepancyIds: [open.id] }, keys.recount))}>
+                    <RotateCcw size={14} aria-hidden="true" /> {t('inventory.disc.recount')}
+                  </button>
+                </div>
+              </>
+            )}
             {err && <ErrorNote error={err} />}
           </div>
         )}

@@ -30,7 +30,7 @@ const SECTION_COMPONENTS = {
   supplier: lazy(() => import('./SupplySections').then((m) => ({ default: m.SupplierSection }))),
   tyres: lazy(() => import('./TyreInventorySection')),
   identification: lazy(() => import('./IdentificationSection')),
-  valuation: lazy(() => import('./InsightSections').then((m) => ({ default: m.ValuationSection }))),
+  valuation: lazy(() => import('./ValuationPanels')),
   planning: lazy(() => import('./InsightSections').then((m) => ({ default: m.PlanningSection }))),
   reports: lazy(() => import('./ReportsSection')),
 }

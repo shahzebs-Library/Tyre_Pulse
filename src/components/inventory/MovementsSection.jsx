@@ -9,8 +9,10 @@ import Modal from '../ui/Modal'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { listMovements, reverseMovement, newIdempotencyKey } from '../../lib/api/inventory'
 import { formatMoney, formatQty } from '../../lib/inventory/inventoryMoney'
-import { toUserMessage } from '../../lib/safeError'
+import { toUserMessage } from '../../lib/inventory/errorText'
 import { useInvQuery, PagedTable, SearchBox, Field, ErrorNote, StatusPill, fmtDateTime } from './InvUi'
+import { Tabs } from '../commandCenter/kit'
+import { TransfersPanel } from './StockFlows'
 import DateField from '../ui/DateField'
 
 export const MOVEMENT_FILTER_TYPES = [
@@ -20,7 +22,7 @@ export const MOVEMENT_FILTER_TYPES = [
 
 const inflow = new Set(['receipt', 'return', 'transfer_in', 'adjustment_up', 'opening_balance'])
 
-export default function MovementsSection({ scope, can }) {
+function LedgerPanel({ scope, can }) {
   const { t } = useLanguage()
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(25)
@@ -100,6 +102,21 @@ export default function MovementsSection({ scope, can }) {
         </Field>
         {err && <ErrorNote error={err} />}
       </Modal>
+    </div>
+  )
+}
+
+/** Movements: the ledger and the transfers that move stock between locations. */
+export default function MovementsSection(props) {
+  const { t } = useLanguage()
+  const [tab, setTab] = useState('ledger')
+  return (
+    <div className="inv-hub">
+      <Tabs label={t('inventory.sections.movements')} value={tab} onChange={setTab} tabs={[
+        { key: 'ledger', label: t('inventory.flows.tabs.ledger') },
+        { key: 'transfers', label: t('inventory.flows.tabs.transfers') },
+      ]} />
+      {tab === 'ledger' ? <LedgerPanel {...props} /> : <TransfersPanel {...props} />}
     </div>
   )
 }

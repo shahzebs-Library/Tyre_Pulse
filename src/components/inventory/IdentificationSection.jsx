@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom'
 import { ScanLine, QrCode, ExternalLink } from 'lucide-react'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { lookupCode, compatibilityCounts } from '../../lib/api/inventory'
-import { toUserMessage } from '../../lib/safeError'
+import { toUserMessage } from '../../lib/inventory/errorText'
 import { useInvQuery, ErrorNote, Note, SectionCard, StatusPill } from './InvUi'
 import { KitTable } from '../commandCenter/kit'
 

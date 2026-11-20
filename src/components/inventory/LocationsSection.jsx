@@ -16,7 +16,7 @@ import {
 import { labelGrid } from '../../lib/qrLabelLayout'
 import { loadPdf } from '../../lib/pdfEngine'
 import { reportFileName } from '../../lib/exportUtils'
-import { toUserMessage } from '../../lib/safeError'
+import { toUserMessage } from '../../lib/inventory/errorText'
 import { useInvQuery, ErrorNote, NotSetUp, Note, Field, SearchBox, SectionCard, StatusPill } from './InvUi'
 
 const EMPTY = { id: null, code: '', name: '', location_type: 'bin', parent_id: '', site: '', responsible_user_id: '', active: true }

@@ -11,7 +11,7 @@ import { useLanguage } from '../../contexts/LanguageContext'
 import { useSettings } from '../../contexts/SettingsContext'
 import { loadReportRows, SNAPSHOT_MAX } from '../../lib/api/inventory'
 import { REPORTS, reportByKey, makeReportRef, describeFilters, exportRowsFor } from '../../lib/inventory/reportCatalog'
-import { toUserMessage } from '../../lib/safeError'
+import { toUserMessage } from '../../lib/inventory/errorText'
 import { Denied, ErrorNote, Note, SectionCard, StatusPill, fmtDateTime } from './InvUi'
 
 const STATUS_OPTIONS = {

@@ -7,8 +7,9 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Info, Lock, RefreshCw, Search } from 'lucide-react'
-import { Card, KitTable, Pager } from '../commandCenter/kit'
-import { toUserMessage } from '../../lib/safeError'
+import { Card, KitTable, Kpi, Pager } from '../commandCenter/kit'
+import ExplainThisNumber from '../trust/ExplainThisNumber'
+import { toUserMessage } from '../../lib/inventory/errorText'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { isInventoryNotSetUp } from '../../lib/api/inventory'
 
@@ -148,4 +149,24 @@ export function fmtDateTime(v) {
   const d = new Date(v)
   if (Number.isNaN(d.getTime())) return String(v)
   return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+/**
+ * A KPI tile with its governed definition one click away. `metricId` is a key
+ * of src/lib/inventory/kpi.js KPI_CATALOGUE (seeded into metric_registry by
+ * the DB lane), so the explanation and the tile can never name different
+ * formulas. The Explain button sits beside the tile, never inside it (the tile
+ * may itself be a button).
+ */
+export function ExplainedKpi({ metricId, country, explainValue, ...kpi }) {
+  return (
+    <div className="inv-kpi-wrap">
+      <Kpi {...kpi} />
+      {metricId && (
+        <span className="inv-kpi-explain">
+          <ExplainThisNumber metricId={metricId} country={country || null} value={explainValue ?? kpi.display ?? kpi.value ?? null} label={kpi.label} />
+        </span>
+      )}
+    </div>
+  )
 }

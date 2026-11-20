@@ -16,7 +16,7 @@ import {
   receiveGoods, reserveStock, issueStock, dispatchTransfer, receiveTransfer, listTransfers, listLocations,
   listBalances, searchItems, newIdempotencyKey,
 } from '../../lib/api/inventory'
-import { openTransferLines } from '../../lib/inventory/integrationView'
+import { openTransferLines, movedSplit } from '../../lib/inventory/integrationView'
 import { formatQty } from '../../lib/inventory/inventoryMoney'
 import { toUserMessage } from '../../lib/inventory/errorText'
 import { useInvQuery, PagedTable, Field, ErrorNote, Note, StatusPill, SectionCard, fmtDateTime } from './InvUi'
@@ -26,7 +26,19 @@ function ResultNote({ result }) {
   const { t } = useLanguage()
   if (!result) return null
   if (result.status === 'refused_shortage') return <Note tone="warn" title={t('inventory.flows.shortageTitle')}>{t('inventory.flows.shortageBody')}</Note>
-  return <Note tone="good">{t(result.replayed ? 'inventory.flows.replayed' : 'inventory.flows.posted')}</Note>
+  const moved = movedSplit(result)
+  return (
+    <>
+      <Note tone="good">{t(result.replayed ? 'inventory.flows.replayed' : 'inventory.flows.posted')}</Note>
+      {moved && (
+        <Note tone={moved.unvalued > 0 || moved.pending > 0 ? 'warn' : undefined}>
+          {t('inventory.flows.movedSplit', { valued: formatQty(moved.valued), unvalued: formatQty(moved.unvalued), pending: formatQty(moved.pending) })}
+          {moved.unvalued > 0 ? ` ${t('inventory.flows.movedUnvaluedNote')}` : ''}
+          {moved.pending > 0 ? ` ${t('inventory.flows.movedPendingNote')}` : ''}
+        </Note>
+      )}
+    </>
+  )
 }
 
 function useLocations(scope) {

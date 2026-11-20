@@ -14,6 +14,7 @@ import { buildReconciliationRows, summarizeReconciliation, needsRecount } from '
 import { formatMoney, formatQty, formatTotals } from '../../lib/inventory/inventoryMoney'
 import { toUserMessage } from '../../lib/inventory/errorText'
 import { useInvQuery, ErrorNote, NotSetUp, Note, StatusPill, Field, alignNumeric, ExplainedKpi } from './InvUi'
+import { RequestApprovalButton, ApprovalState } from './ApprovalsPanel'
 
 const STATUS_TONE = { match: 'good', over: 'warning', short: 'bad', not_counted: 'muted', unexpected: 'warning' }
 
@@ -24,6 +25,7 @@ export default function AuditReconciliation({ audit, can, userId, people = [], o
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [recounter, setRecounter] = useState('')
+  const [stateKey, setStateKey] = useState(0)
   const [keys] = useState(() => ({ reconcile: newIdempotencyKey(), recount: newIdempotencyKey() }))
   const showValue = can('view_value')
 
@@ -100,6 +102,11 @@ export default function AuditReconciliation({ audit, can, userId, people = [], o
                 {t('inventory.recon.assign')}
               </button>
             </div>
+            <p className="cc-card-sub">{t('inventory.disc.recountSteps')}</p>
+            <ApprovalState entityType="recount_assignment" entityId={audit.id} refreshKey={stateKey} />
+            <RequestApprovalButton entityType="recount_assignment" entityId={audit.id}
+              proposal={recounter ? { counter_id: recounter } : null} disabled={!recounter}
+              label={t('inventory.disc.requestRecount')} onDone={() => setStateKey((k) => k + 1)} />
           </div>
         </div>
       )}

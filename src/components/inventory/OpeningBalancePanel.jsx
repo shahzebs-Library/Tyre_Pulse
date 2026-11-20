@@ -18,7 +18,7 @@ import { OB_FIELDS, mapHeaders, missingRequired, mapRows, summarizeBatch, canApp
 import { formatMoney, formatQty, formatTotals } from '../../lib/inventory/inventoryMoney'
 import { toUserMessage } from '../../lib/inventory/errorText'
 import { useInvQuery, PagedTable, Field, ErrorNote, Note, StatusPill, fmtDateTime } from './InvUi'
-import { RequestApprovalButton } from './ApprovalsPanel'
+import { RequestApprovalButton, ApprovalState } from './ApprovalsPanel'
 
 const TONE = { draft: 'muted', mapped: 'info', submitted: 'warning', approved: 'good', rejected: 'bad', posted: 'good' }
 const PREVIEW_LIMIT = 200
@@ -34,6 +34,7 @@ export default function OpeningBalancePanel({ scope, can, userId }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [note, setNote] = useState('')
+  const [stateKey, setStateKey] = useState(0)
   const lines = useInvQuery(() => (open ? listOpeningLines(open.id, { page: linePage, pageSize: 50 }) : Promise.resolve({ status: 'ok', rows: [], total: 0 })), [open?.id, linePage])
 
   const readFile = async (file) => {
@@ -159,7 +160,13 @@ export default function OpeningBalancePanel({ scope, can, userId }) {
                 <Send size={14} aria-hidden="true" /> {t('inventory.opening.submit')}
               </button>
             )}
-            {open.status === 'submitted' && <RequestApprovalButton key={open.id} entityType="opening_batch" entityId={open.id} onDone={() => q.retry()} />}
+            {open.status === 'submitted' && (
+              <>
+                <Note>{t('inventory.opening.approvalFirst')}</Note>
+                <ApprovalState entityType="opening_balance_batch" entityId={open.id} refreshKey={stateKey} />
+                <RequestApprovalButton key={open.id} entityType="opening_balance_batch" entityId={open.id} onDone={() => { setStateKey((k) => k + 1); q.retry() }} />
+              </>
+            )}
             {open.status === 'submitted' && (approval?.ok ? (
               <>
                 <Field label={t('inventory.disc.decisionNote')} full>

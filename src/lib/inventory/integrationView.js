@@ -1,16 +1,13 @@
 /**
  * Shaping for the views the DB lane added in the client-integration round
  * (pure, no I/O): v_inv_valuation, v_inv_pending_approvals,
- * inventory_cost_reconciliations and v_inv_erp_reconciliation.
- *
- * The screens read those views with `select('*')` because the DB lane owns
- * their shape; these helpers accept the documented column names plus the
- * obvious alternates, so a rename on either side degrades to "N/A" for one
- * field instead of a broken screen.
+ * v_inv_cost_reconciliations, v_inv_erp_reconciliation and the posting answers.
+ * Column names follow docs/inventory/10_DB_IMPLEMENTATION.md section 6.
  *
  * OWNER RULE: unknown cost is never zero and never invented. A value that is
- * missing stays null (rendered "N/A"), a valuation with unvalued quantity is
- * flagged incomplete, and a partial value is never labelled a total.
+ * missing stays null (rendered "N/A"), a valuation with unvalued or
+ * not-yet-allocated quantity is flagged incomplete, and a partial value is
+ * never labelled a total.
  */
 
 /** First defined, non-empty value among `keys`. */
@@ -36,49 +33,80 @@ const truthy = (v) => v === true || v === 'true' || v === 't' || v === 1
 
 /**
  * One v_inv_valuation row -> a stable shape.
- * `complete` is the server flag when present, otherwise derived: complete
- * only when there is no unvalued quantity at all. Unknown stays unknown.
+ * Pending allocation (doc 10 section 6.1: an issue or transfer from a balance
+ * holding both valued and unvalued units leaves the ambiguous part undecided
+ * until an approved split) is a THIRD figure beside valued and unvalued: any
+ * pending quantity or open allocation makes the row incomplete even if the
+ * server flag said complete.
  */
 export function normaliseValuationRow(row = {}) {
-  const valuedQty = num(pick(row, ['valued_qty', 'qty_valued']))
-  const unvaluedQty = num(pick(row, ['unvalued_qty', 'qty_unvalued']))
-  const amount = num(pick(row, ['valued_amount', 'valued_value', 'value_valued']))
-  const flag = pick(row, ['valuation_complete', 'complete', 'is_complete'])
+  const valuedQty = num(row.valued_qty)
+  const unvaluedQty = num(row.unvalued_qty)
+  const pendingAllocationQty = num(row.pending_allocation_qty)
+  const pendingOutQty = num(row.pending_allocation_out_qty)
+  const pendingInQty = num(row.pending_allocation_in_qty)
+  const openAllocations = num(row.open_allocations)
+  const amount = num(pick(row, ['valued_amount', 'valued_value']))
+  const flag = pick(row, ['valuation_complete'])
   let complete
   if (flag !== null) complete = truthy(flag)
   else if (unvaluedQty === null) complete = null
   else complete = unvaluedQty === 0
+  if ((pendingAllocationQty ?? 0) > 0 || (pendingOutQty ?? 0) > 0 || (pendingInQty ?? 0) > 0 || (openAllocations ?? 0) > 0) complete = false
   return {
-    key: row.id || [row.country, row.site, row.location_code, row.currency].filter(Boolean).join('|') || 'all',
+    key: row.stock_id || row.id || [row.country, row.site, row.location_id, row.currency].filter(Boolean).join('|') || 'all',
+    stockId: row.stock_id || row.id || null,
+    itemCode: row.item_code || null,
+    description: row.description || null,
     country: row.country || null,
     site: row.site || null,
-    location: pick(row, ['location_code', 'location']),
+    location: pick(row, ['location_code', 'location_id']),
+    ownership: row.ownership || 'owned',
     currency: upper(row.currency),
+    qtyOnHand: num(row.qty_on_hand),
     valuedQty,
     unvaluedQty,
+    pendingAllocationQty,
+    pendingOutQty,
+    pendingInQty,
+    openAllocations,
     valuedAmount: amount,
+    avgUnitCost: num(row.avg_unit_cost),
     complete,
-    openReconciliations: num(pick(row, ['open_reconciliations', 'open_reconciliation_count', 'open_cost_reconciliations', 'reconciliations_open'])),
+    status: row.valuation_status || null,
+    openReconciliations: num(row.open_reconciliations),
   }
 }
 
+/** Undecided-split quantity of one row: the view's total, else out + in. */
+export function pendingOf(r) {
+  if (r.pendingAllocationQty !== null && r.pendingAllocationQty !== undefined) return r.pendingAllocationQty
+  return (r.pendingOutQty || 0) + (r.pendingInQty || 0)
+}
+
 /**
- * Totals PER CURRENCY (never blended). A currency is complete only if every
- * contributing row is complete; any unknown flag makes it unknown, never
+ * Totals PER CURRENCY (never blended), owned stock only (consignment and
+ * supplier stock are not the company's value). A currency is complete only if
+ * every contributing row is complete; any unknown flag makes it unknown, never
  * complete. Rows with no currency are kept under `null` and flagged.
  */
 export function summariseValuation(rows = []) {
   const byCurrency = new Map()
   let unvaluedQty = 0
   let unvaluedKnown = true
+  let pendingAllocationQty = 0
+  let openAllocations = 0
   let openReconciliations = 0
   let reconKnown = false
   for (const raw of rows) {
     const r = raw && raw.valuedQty !== undefined ? raw : normaliseValuationRow(raw)
+    if (r.ownership && r.ownership !== 'owned') continue
     const k = r.currency || null
-    const cur = byCurrency.get(k) || { currency: k, valuedQty: 0, unvaluedQty: 0, valuedAmount: 0, amountKnown: true, complete: true }
+    const cur = byCurrency.get(k) || { currency: k, valuedQty: 0, unvaluedQty: 0, pendingAllocationQty: 0, valuedAmount: 0, amountKnown: true, complete: true }
     cur.valuedQty += r.valuedQty || 0
     cur.unvaluedQty += r.unvaluedQty || 0
+    const pending = pendingOf(r)
+    cur.pendingAllocationQty += pending
     if (r.valuedAmount === null) cur.amountKnown = false
     else cur.valuedAmount += r.valuedAmount
     if (r.complete === false) cur.complete = false
@@ -86,7 +114,9 @@ export function summariseValuation(rows = []) {
     byCurrency.set(k, cur)
     if (r.unvaluedQty === null) unvaluedKnown = false
     else unvaluedQty += r.unvaluedQty
-    if (r.openReconciliations !== null) { reconKnown = true; openReconciliations += r.openReconciliations }
+    pendingAllocationQty += pending
+    openAllocations += r.openAllocations || 0
+    if (r.openReconciliations !== null && r.openReconciliations !== undefined) { reconKnown = true; openReconciliations += r.openReconciliations }
   }
   const currencies = [...byCurrency.values()].map((c) => ({
     ...c,
@@ -98,6 +128,8 @@ export function summariseValuation(rows = []) {
     currencies,
     mixedCurrency: currencies.filter((c) => c.currency).length > 1,
     unvaluedQty: unvaluedKnown ? unvaluedQty : null,
+    pendingAllocationQty,
+    openAllocations,
     openReconciliations: reconKnown ? openReconciliations : null,
     /** true = every currency fully valued; false = at least one has unvalued stock; null = unknown. */
     complete: currencies.length === 0 ? null : allComplete ? true : anyIncomplete ? false : null,
@@ -124,11 +156,14 @@ export function valuationFromBalances(balances = []) {
       const unvaluedQty = num(b.unvalued_qty) ?? (num(b.avg_unit_cost) === null ? qty : 0)
       const cost = num(b.avg_unit_cost)
       return normaliseValuationRow({
-        id: b.id,
+        stock_id: b.id,
+        item_code: b.item_code,
+        description: b.description,
         country: b.country,
         site: b.site,
         location_code: b.location_code,
         currency: b.currency,
+        qty_on_hand: qty,
         valued_qty: valuedQty,
         unvalued_qty: unvaluedQty,
         valued_amount: cost === null || valuedQty === null ? null : cost * valuedQty,
@@ -136,18 +171,53 @@ export function valuationFromBalances(balances = []) {
     })
 }
 
+/**
+ * Posting answer -> how much moved at known and unknown cost, or null when the
+ * server did not say (older answer shapes). Multi-line answers are summed.
+ */
+export function movedSplit(result) {
+  if (!result || typeof result !== 'object') return null
+  const parts = [result, ...['lines', 'results', 'postings', 'movements'].flatMap((k) => (Array.isArray(result[k]) ? result[k] : []))]
+  let seen = false
+  let valued = 0
+  let unvalued = 0
+  let pending = 0
+  for (const p of parts) {
+    const v = num(p?.valued_qty_moved)
+    const u = num(p?.unvalued_qty_moved)
+    const d = num(p?.pending_allocation_qty)
+    if (v === null && u === null && d === null) continue
+    seen = true
+    valued += Math.abs(v || 0)
+    unvalued += Math.abs(u || 0)
+    pending += Math.abs(d || 0)
+  }
+  return seen ? { valued, unvalued, pending } : null
+}
+
 // ── Approvals ────────────────────────────────────────────────────────────────
 
+/** One v_inv_pending_approvals row. `canDecide` is the server's answer, never guessed. */
 export function normaliseApproval(row = {}) {
+  const stages = Array.isArray(row.stages) ? row.stages : []
+  const idx = num(row.current_stage)
+  const blocked = row.blocked_reason ? String(row.blocked_reason) : null
   return {
-    id: row.id || row.approval_id || null,
-    entityType: pick(row, ['entity_type', 'type']),
-    entityId: pick(row, ['entity_id', 'record_id']),
-    entityRef: pick(row, ['entity_ref', 'reference', 'ref', 'entity_label']),
-    requestedBy: pick(row, ['requested_by_name', 'requested_by']),
-    requestedAt: pick(row, ['requested_at', 'created_at']),
-    status: pick(row, ['status', 'approval_status']) || 'pending',
-    summary: pick(row, ['summary', 'reason', 'note', 'description']),
+    id: row.id || null,
+    entityType: row.entity_type || null,
+    entityId: row.entity_id || null,
+    entityRef: row.entity_ref || null,
+    proposal: row.proposal && typeof row.proposal === 'object' ? row.proposal : null,
+    reason: row.reason || null,
+    requestedBy: row.requested_by || null,
+    requestedAt: row.requested_at || null,
+    status: row.status || 'pending',
+    stageName: row.stage_name || null,
+    stageIndex: idx,
+    stageCount: num(row.stage_count) ?? (stages.length || null),
+    routeSource: row.route_source || null,
+    canDecide: row.can_decide === undefined ? null : truthy(row.can_decide),
+    blockedReason: blocked,
     site: row.site || null,
     country: row.country || null,
   }
@@ -158,45 +228,63 @@ export function normaliseApproval(row = {}) {
 export function normaliseCostReconciliation(row = {}) {
   return {
     id: row.id || null,
-    stockId: pick(row, ['stock_id', 'stock_record_id']),
-    itemCode: pick(row, ['item_code', 'item']),
-    description: pick(row, ['description', 'item_name']),
-    location: pick(row, ['location_code', 'site']),
-    unvaluedQty: num(pick(row, ['unvalued_qty', 'qty_unvalued', 'qty'])),
-    proposedCost: num(pick(row, ['proposed_unit_cost', 'unit_cost', 'proposed_cost'])),
-    currency: upper(pick(row, ['currency', 'proposed_currency'])),
-    source: pick(row, ['source', 'cost_source']),
-    status: pick(row, ['status']) || 'open',
-    createdAt: pick(row, ['created_at', 'opened_at']),
+    stockId: row.stock_id || null,
+    itemCode: row.item_code || null,
+    location: row.location_id || null,
+    site: row.site || null,
+    kind: row.kind || null,
+    consumed: truthy(row.consumed),
+    unvaluedQty: num(row.unvalued_qty),
+    proposedResolution: row.proposed_resolution || null,
+    proposedCost: num(row.proposed_unit_cost),
+    isAllocation: row.kind === 'issue_allocation',
+    allocationQty: num(row.allocation_qty) ?? (row.kind === 'issue_allocation' ? num(row.unvalued_qty) : null),
+    snapshot: row.snapshot && typeof row.snapshot === 'object' ? row.snapshot : null,
+    holderStockId: row.holder_stock_id || null,
+    proposedValuedQty: num(row.proposed_valued_qty),
+    resolvedValuedQty: num(row.resolved_valued_qty),
+    resolvedUnvaluedQty: num(row.resolved_unvalued_qty),
+    resolvedCost: num(row.resolved_unit_cost),
+    resolvedValue: num(row.resolved_value),
+    currency: upper(row.currency),
+    approvalRequestId: row.approval_request_id || null,
+    status: row.status || 'open',
+    createdBy: row.created_by || null,
+    createdAt: row.created_at || null,
+    notes: row.notes || null,
   }
 }
+
+export const COST_RECON_TONE = { open: 'warning', resolved: 'good', written_off: 'muted', cancelled: 'muted' }
 
 // ── ERP reconciliation ───────────────────────────────────────────────────────
 
 export function normaliseErpRow(row = {}) {
-  const invQty = num(pick(row, ['inventory_qty', 'inv_qty', 'qty_inventory']))
-  const erpQty = num(pick(row, ['erp_qty', 'qty_erp']))
-  const invValue = num(pick(row, ['inventory_value', 'inv_value', 'value_inventory']))
-  const erpValue = num(pick(row, ['erp_value', 'value_erp']))
-  let qtyDiff = num(pick(row, ['qty_difference', 'qty_diff', 'difference_qty']))
+  const invQty = num(row.inventory_qty)
+  const erpQty = num(row.erp_qty)
+  const invValue = num(row.inventory_value)
+  const erpValue = num(row.erp_value)
+  let qtyDiff = num(row.qty_difference)
   if (qtyDiff === null && invQty !== null && erpQty !== null) qtyDiff = invQty - erpQty
-  let valueDiff = num(pick(row, ['value_difference', 'value_diff', 'difference_value']))
-  if (valueDiff === null && invValue !== null && erpValue !== null) valueDiff = Math.round((invValue - erpValue) * 100) / 100
+  const valueDiff = num(row.value_difference)
   return {
-    id: row.id || [row.item_code, row.site, row.currency].filter(Boolean).join('|'),
-    itemCode: pick(row, ['item_code', 'item']),
-    description: pick(row, ['description', 'item_name']),
+    id: [row.month, row.country, row.site, row.item_code, row.currency].map((x) => x ?? '').join('|'),
+    month: row.month || null,
+    itemCode: row.item_code || null,
     site: row.site || null,
     country: row.country || null,
     currency: upper(row.currency),
     invQty, erpQty, qtyDiff, invValue, erpValue, valueDiff,
-    status: pick(row, ['status', 'reconciliation_status']) || 'unknown',
+    invUnvaluedQty: num(row.inventory_unvalued_qty),
+    invMovements: num(row.inventory_movements),
+    erpLines: num(row.erp_lines),
+    status: row.status || 'unknown',
   }
 }
 
 export const ERP_STATUS_TONE = {
-  matched: 'good', qty_difference: 'warning', value_difference: 'warning',
-  missing_in_erp: 'bad', missing_in_inventory: 'bad', unknown: 'muted',
+  matched: 'good', qty_diff: 'warning', value_diff: 'warning', unvalued: 'warning',
+  inventory_only: 'bad', erp_only: 'bad', unknown: 'muted',
 }
 
 /** Export rows (plain values, money beside its currency, nothing blended). */
@@ -205,8 +293,8 @@ export function erpExportRows(rows = []) {
   return rows.map((raw) => {
     const r = raw && raw.qtyDiff !== undefined ? raw : normaliseErpRow(raw)
     return {
-      item_code: na(r.itemCode), description: na(r.description), site: na(r.site), country: na(r.country),
-      inventory_qty: na(r.invQty), erp_qty: na(r.erpQty), qty_difference: na(r.qtyDiff),
+      month: na(r.month), item_code: na(r.itemCode), site: na(r.site), country: na(r.country),
+      inventory_qty: na(r.invQty), inventory_unvalued_qty: na(r.invUnvaluedQty), erp_qty: na(r.erpQty), qty_difference: na(r.qtyDiff),
       inventory_value: na(r.invValue), erp_value: na(r.erpValue), value_difference: na(r.valueDiff),
       currency: na(r.currency), status: na(r.status),
     }
@@ -214,10 +302,10 @@ export function erpExportRows(rows = []) {
 }
 
 export const ERP_EXPORT_COLUMNS = [
-  ['item_code', 'Item code'], ['description', 'Description'], ['site', 'Site'], ['country', 'Country'],
-  ['inventory_qty', 'Inventory qty'], ['erp_qty', 'ERP qty'], ['qty_difference', 'Qty difference'],
-  ['inventory_value', 'Inventory value'], ['erp_value', 'ERP value'], ['value_difference', 'Value difference'],
-  ['currency', 'Currency'], ['status', 'Status'],
+  ['month', 'Month'], ['item_code', 'Item code'], ['site', 'Site'], ['country', 'Country'],
+  ['inventory_qty', 'Inventory qty'], ['inventory_unvalued_qty', 'Inventory qty at unknown cost'], ['erp_qty', 'ERP qty'],
+  ['qty_difference', 'Qty difference'], ['inventory_value', 'Inventory value (valued part)'], ['erp_value', 'ERP value'],
+  ['value_difference', 'Value difference'], ['currency', 'Currency'], ['status', 'Status'],
 ]
 
 // ── Transfers ────────────────────────────────────────────────────────────────

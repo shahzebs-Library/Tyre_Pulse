@@ -16,7 +16,7 @@ import {
   listDiscrepancies, updateDiscrepancy, decideAdjustment, getAudit, newIdempotencyKey,
   recountDiscrepancies, listAdjustments, listAssignablePeople,
 } from '../../lib/api/inventory'
-import { RequestApprovalButton } from './ApprovalsPanel'
+import { RequestApprovalButton, ApprovalState } from './ApprovalsPanel'
 import {
   DISCREPANCY_CATEGORIES, DISCREPANCY_STATUSES, nextDiscrepancyStatuses, discrepancyReadyForApproval, canApproveAdjustment,
 } from '../../lib/inventory/auditView'
@@ -42,6 +42,7 @@ export default function DiscrepanciesSection({ scope, can, userId }) {
   const [adjustment, setAdjustment] = useState(null)
   const [people, setPeople] = useState([])
   const [recounter, setRecounter] = useState('')
+  const [stateKey, setStateKey] = useState(0)
 
   useEffect(() => {
     let live = true
@@ -165,6 +166,16 @@ export default function DiscrepanciesSection({ scope, can, userId }) {
             )}
 
             <h4 className="cc-card-title">{t('inventory.disc.approval')}</h4>
+            {open.status === 'proposed' && (
+              adjustment?.id ? (
+                <>
+                  <p className="cc-card-sub">{t('inventory.disc.approvalSteps')}</p>
+                  <ApprovalState entityType="stock_adjustment" entityId={adjustment.id} refreshKey={stateKey} />
+                  <RequestApprovalButton key={adjustment.id} entityType="stock_adjustment" entityId={adjustment.id}
+                    onDone={() => setStateKey((k) => k + 1)} />
+                </>
+              ) : <Note>{t('inventory.disc.noAdjustmentYet')}</Note>
+            )}
             {open.status !== 'proposed' ? <Note>{t('inventory.disc.notProposed')}</Note> : approval?.ok ? (
               <>
                 {!ready.ok && <Note tone="warn">{t('inventory.disc.incomplete', { fields: ready.missing.map((m) => t(`inventory.disc.field.${m}`)).join(', ') })}</Note>}
@@ -180,12 +191,6 @@ export default function DiscrepanciesSection({ scope, can, userId }) {
               </>
             ) : <Note tone="warn">{t(approval?.reason || 'inventory.approve.noCapability')}</Note>}
 
-            {open.status === 'proposed' && (
-              adjustment?.id
-                ? <RequestApprovalButton key={adjustment.id} entityType="adjustment" entityId={adjustment.id} />
-                : <Note>{t('inventory.disc.noAdjustmentYet')}</Note>
-            )}
-
             {can('recount') && !['posted', 'closed', 'written_off', 'superseded'].includes(open.status) && (
               <>
                 <h4 className="cc-card-title">{t('inventory.disc.recountTitle')}</h4>
@@ -198,6 +203,13 @@ export default function DiscrepanciesSection({ scope, can, userId }) {
                         .map((p) => <option key={p.id} value={p.id}>{p.full_name || p.username}</option>)}
                     </select>
                   </Field>
+                </div>
+                <p className="cc-card-sub">{t('inventory.disc.recountSteps')}</p>
+                {open.audit_id && <ApprovalState entityType="recount_assignment" entityId={open.audit_id} refreshKey={stateKey} />}
+                <RequestApprovalButton entityType="recount_assignment" entityId={open.audit_id}
+                  proposal={recounter ? { counter_id: recounter } : null} disabled={!recounter}
+                  label={t('inventory.disc.requestRecount')} onDone={() => setStateKey((k) => k + 1)} />
+                <div className="inv-actions">
                   <button type="button" className="cc-btn-ghost" disabled={busy || !recounter || !open.audit_id}
                     onClick={() => run(() => recountDiscrepancies({ auditId: open.audit_id, recounterId: recounter, discrepancyIds: [open.id] }, keys.recount))}>
                     <RotateCcw size={14} aria-hidden="true" /> {t('inventory.disc.recount')}

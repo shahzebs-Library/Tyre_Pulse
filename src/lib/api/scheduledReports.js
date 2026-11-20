@@ -175,14 +175,17 @@ const DATASETS = {
   inventory: {
     // Inventory Control Center digest (DB lane view v_inv_report_snapshot): one
     // row per country / site / currency, as at now. A current-state snapshot,
-    // so the coverage period is not applied and there is no date to order by
-    // (dateCol null -> id order only; a guessed date column would fail the
-    // whole request). Value is the VALUED part with its completeness flag and
-    // the unvalued quantity beside it; currencies are never added together.
+    // so the coverage period is not applied. The view has no id: rows order by
+    // their key (country, site, currency). Value is the VALUED part of owned
+    // stock with its completeness flag and the unvalued quantity beside it;
+    // currencies are never added together. The emailed digest for this type
+    // is NOT built: the send-scheduled-reports edge function needs a deploy that
+    // is pending owner approval, so a schedule emails the generic fallback.
     table: 'v_inv_report_snapshot', dateCol: null, title: 'Inventory Control Digest',
     queryCols: ['*'],
-    cols:    ['country', 'site', 'currency', 'balance_lines', 'valued_qty', 'unvalued_qty', 'valued_amount', 'valuation_complete', 'open_audits', 'open_discrepancies', 'pending_approvals', 'open_cost_reconciliations', 'erp_differences'],
-    headers: ['Country', 'Site', 'Currency', 'Balance Lines', 'Valued Qty', 'Unvalued Qty', 'Valued Amount', 'Valuation Complete', 'Open Audits', 'Open Discrepancies', 'Pending Approvals', 'Open Cost Reconciliations', 'ERP Differences'],
+    orderCols: ['country', 'site', 'currency'],
+    cols:    ['country', 'site', 'currency', 'balances', 'qty_on_hand', 'qty_reserved', 'owned_valued_qty', 'owned_unvalued_qty', 'owned_valued_amount', 'valuation_complete', 'critical_lines', 'low_lines', 'open_exceptions', 'open_discrepancies', 'open_cost_reconciliations', 'pending_approvals'],
+    headers: ['Country', 'Site', 'Currency', 'Balance Lines', 'Qty On Hand', 'Qty Reserved', 'Owned Valued Qty', 'Owned Qty At Unknown Cost', 'Owned Valued Amount (valued part)', 'Valuation Complete', 'Critical Lines', 'Low Lines', 'Open Shortages', 'Open Discrepancies', 'Open Cost Reconciliations', 'Pending Approvals'],
     currentState: true,
   },
 }
@@ -377,6 +380,8 @@ export async function fetchReportRows(reportType, { from, to, country } = {}) {
     // id tiebreak keeps page boundaries stable on a non-unique date. A dataset
     // with no date column (a snapshot view) orders by id only.
     if (ds.dateCol) q = q.order(ds.dateCol, { ascending: ds.orderAscending === true, nullsFirst: false })
+    // A view with no id passes its own unique key as orderCols.
+    if (ds.orderCols) return ds.orderCols.reduce((acc, col) => acc.order(col, { ascending: true }), q)
     return q.order('id', { ascending: true })
   }
   // The server caps one response at 1000 rows, so page up to the report ceiling.

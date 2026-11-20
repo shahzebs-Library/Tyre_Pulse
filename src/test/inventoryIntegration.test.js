@@ -37,12 +37,13 @@ import {
   listTyreItems, listCustodyConflicts, listSupplierAgreements, listPoLines, listGrnLines, overviewCounts,
   decideAdjustment, recountDiscrepancies, requestApproval, reconcileCost, receiveGoods, reserveStock, issueStock,
   dispatchTransfer, receiveTransfer, listTransfers, listPendingApprovals, listErpReconciliation, loadReconciliation,
-  inventoryRefusalText, flattenEmbed, loadReportRows, VIEWS,
+  inventoryRefusalText, flattenEmbed, loadReportRows, VIEWS, decideApproval, getApprovalState, listCostReconciliations,
+  COST_RECON_STATUSES,
 } from '../lib/api/inventory'
 import { toUserMessage } from '../lib/inventory/errorText'
 import {
   normaliseValuationRow, summariseValuation, valueLabelKey, valuationFromBalances, normaliseErpRow, erpExportRows,
-  normaliseApproval, openTransferLines,
+  normaliseApproval, openTransferLines, movedSplit,
 } from '../lib/inventory/integrationView'
 
 beforeEach(() => {
@@ -100,12 +101,21 @@ describe('reads use the web-named views', () => {
     expect(state.calls).toContainEqual(['in', 'status', ['dispatched', 'in_transit', 'partially_received']])
   })
 
-  it('reads the DB-lane views with select(*) and no guessed ordering column', async () => {
-    await listPendingApprovals({ entityType: 'adjustment' })
-    await listErpReconciliation({ status: 'differences' })
-    expect(selects()).toEqual(['v_inv_pending_approvals', 'v_inv_erp_reconciliation'])
-    expect(state.calls.filter((c) => c[0] === 'order').map((c) => c[2])).toEqual(['id', 'id'])
+  it('reads the DB-lane views and pages them on a real unique key (the ERP view has no id)', async () => {
+    await listPendingApprovals({ entityType: 'stock_adjustment' })
+    expect(selects()).toEqual(['v_inv_pending_approvals'])
+    expect(state.calls.filter((c) => c[0] === 'order').map((c) => c[2])).toEqual(['requested_at', 'id'])
+    expect(state.calls).toContainEqual(['eq', 'entity_type', 'stock_adjustment'])
+    state.calls = []
+    await listErpReconciliation({ status: 'differences', search: 'TY-1' })
+    expect(selects()).toEqual(['v_inv_erp_reconciliation'])
+    expect(state.calls.filter((c) => c[0] === 'order').map((c) => c[2])).toEqual(['month', 'country', 'site', 'item_code', 'currency'])
     expect(state.calls).toContainEqual(['neq', 'status', 'matched'])
+    state.calls = []
+    await listCostReconciliations({ status: 'open' })
+    expect(selects()).toEqual(['v_inv_cost_reconciliations'])
+    expect(state.calls).toContainEqual(['eq', 'status', 'open'])
+    expect(COST_RECON_STATUSES).toEqual(['open', 'resolved', 'written_off', 'cancelled'])
   })
 })
 
@@ -118,21 +128,68 @@ describe('writes', () => {
     expect(lastRpc()).toEqual(['rpc', 'inv_recount_assign', { p_payload: { audit_id: 'a', recount_counter_id: 'u2', discrepancy_ids: ['d'], idempotency_key: 'k2' } }])
   })
 
-  it('requests an approval with entity type + id + key', async () => {
-    await requestApproval({ entityType: 'opening_batch', entityId: 'b1' }, 'k')
-    expect(lastRpc()).toEqual(['rpc', 'inv_request_approval', { p_payload: { entity_type: 'opening_batch', entity_id: 'b1', idempotency_key: 'k' } }])
-    await expect(requestApproval({ entityType: 'stock', entityId: 'x' }, 'k')).rejects.toMatchObject({ code: 'INV_BAD_ENTITY' })
+  it('requests an approval with the DB entity types; a recount names its counter', async () => {
+    await requestApproval({ entityType: 'opening_balance_batch', entityId: 'b1' }, 'k')
+    expect(lastRpc()).toEqual(['rpc', 'inv_request_approval', { p_payload: { entity_type: 'opening_balance_batch', entity_id: 'b1', reason: null, evidence: [], idempotency_key: 'k' } }])
+    await expect(requestApproval({ entityType: 'opening_batch', entityId: 'x' }, 'k')).rejects.toMatchObject({ code: 'INV_BAD_ENTITY' })
+    await expect(requestApproval({ entityType: 'recount_assignment', entityId: 'a' }, 'k')).rejects.toMatchObject({ code: 'INV_NO_RECOUNTER' })
+    await requestApproval({ entityType: 'recount_assignment', entityId: 'aud', proposal: { counter_id: 'u2' } }, 'k2')
+    expect(lastRpc()[2].p_payload).toMatchObject({ entity_type: 'recount_assignment', entity_id: 'aud', proposal: { counter_id: 'u2' } })
   })
 
-  it('a cost is never sent as zero or blank', async () => {
-    await expect(reconcileCost({ reconciliationId: 'r', unitCost: '', currency: 'SAR' }, 'k')).rejects.toMatchObject({ code: 'INV_NO_COST' })
-    await expect(reconcileCost({ reconciliationId: 'r', unitCost: 0, currency: 'SAR' }, 'k')).rejects.toMatchObject({ code: 'INV_NO_COST' })
-    await expect(reconcileCost({ reconciliationId: 'r', unitCost: 10, currency: '' }, 'k')).rejects.toMatchObject({ code: 'INV_NO_CURRENCY' })
+  it('a cost is proposed through approval, never sent as zero or blank, and posting carries no cost', async () => {
+    const ask = (proposal, extra = {}) => requestApproval({ entityType: 'cost_reconciliation', entityId: 'r', proposal, ...extra }, 'k')
+    await expect(ask({ resolution: 'resolved', unit_cost: '' }, { reason: 'INV-1' })).rejects.toMatchObject({ code: 'INV_NO_COST' })
+    await expect(ask({ resolution: 'resolved', unit_cost: -1 }, { reason: 'INV-1' })).rejects.toMatchObject({ code: 'INV_NO_COST' })
+    await expect(ask({ resolution: 'resolved', unit_cost: 10 })).rejects.toMatchObject({ code: 'INV_NO_EVIDENCE' })
+    await expect(ask({ resolution: 'written_off' })).rejects.toMatchObject({ code: 'INV_NO_REASON' })
     expect(state.calls.filter((c) => c[0] === 'rpc')).toHaveLength(0)
-    await reconcileCost({ reconciliationId: 'r', unitCost: '12.5', currency: 'sar', source: 'INV-1' }, 'k')
-    expect(lastRpc()[2].p_payload).toMatchObject({ unit_cost: 12.5, currency: 'SAR', decision: 'propose', idempotency_key: 'k' })
-    await reconcileCost({ reconciliationId: 'r', decision: 'reject', note: 'dup' }, 'k3')
-    expect(lastRpc()[2].p_payload).toMatchObject({ unit_cost: null, currency: null, decision: 'reject' })
+    await ask({ resolution: 'resolved', unit_cost: '12.5' }, { reason: 'INV-1', evidence: 'invoice scan' })
+    expect(lastRpc()[2].p_payload).toMatchObject({
+      entity_type: 'cost_reconciliation', proposal: { resolution: 'resolved', unit_cost: 12.5 }, reason: 'INV-1',
+      evidence: [{ type: 'note', text: 'invoice scan' }],
+    })
+    await reconcileCost({ reconciliationId: 'r', note: 'approved' }, 'k3')
+    expect(lastRpc()).toEqual(['rpc', 'inv_cost_reconcile', { p_payload: { reconciliation_id: 'r', note: 'approved', idempotency_key: 'k3' } }])
+  })
+
+  it('an undecided split proposes valued_qty within the undecided units, with evidence; never a write-off', async () => {
+    const ask = (proposal, extra = {}) => requestApproval({ entityType: 'cost_reconciliation', entityId: 'alloc', proposal, ...extra }, 'k')
+    await expect(ask({ valued_qty: '', max_qty: 3 }, { reason: 'GRN-1' })).rejects.toMatchObject({ code: 'INV_BAD_SPLIT' })
+    await expect(ask({ valued_qty: 4, max_qty: 3 }, { reason: 'GRN-1' })).rejects.toMatchObject({ code: 'INV_BAD_SPLIT' })
+    await expect(ask({ valued_qty: 1, max_qty: 3 })).rejects.toMatchObject({ code: 'INV_NO_EVIDENCE' })
+    expect(state.calls.filter((c) => c[0] === 'rpc')).toHaveLength(0)
+    await ask({ valued_qty: '0', max_qty: 3 }, { evidence: 'batch B-7 label' })
+    expect(lastRpc()[2].p_payload.proposal).toEqual({ resolution: 'resolved', valued_qty: 0 })
+  })
+
+  it('new allocation refusals reach the user in plain words', () => {
+    const say = (message) => inventoryRefusalText({ code: '22023', message })
+    expect(say('This balance has an undecided issue allocation; resolve it before assigning a cost.')).toMatch(/undecided cost split.*before pricing the units still in stock/)
+    expect(say('This balance has an undecided issue allocation; resolve it before an opening correction.')).toMatch(/before posting an opening correction/)
+    expect(say('This item is serial or lot tracked: name the receipt the units come from (source_receipt_movement_id).')).toMatch(/^This item is tracked by serial or lot.*goods receipt/)
+    expect(say('proposal.valued_qty must be between 0 and 3.')).toBe('The units at known cost must be between 0 and 3.')
+    expect(inventoryRefusalText({ code: '42501', message: 'An approved cost reconciliation approval is required before this can be posted (inv_request_approval, inv_approval_decide).' }))
+      .toBe('This needs an approved cost reconciliation request first. Ask for approval, and post once another person has approved it.')
+    for (const s of ['This item is serial or lot tracked: name the receipt the units come from (source_receipt_movement_id).', 'allocation_side must be source or holder.']) {
+      expect(String(say(s) ?? '')).not.toMatch(/_id|_side/)
+    }
+  })
+
+  it('decides an approval: approve or reject, a rejection needs a note', async () => {
+    await expect(decideApproval({ requestId: 'q', decision: 'hold' }, 'k')).rejects.toMatchObject({ code: 'INV_BAD_DECISION' })
+    await expect(decideApproval({ requestId: 'q', decision: 'reject' }, 'k')).rejects.toMatchObject({ code: 'INV_NO_NOTE' })
+    await decideApproval({ requestId: 'q', decision: 'approve' }, 'k1')
+    expect(lastRpc()).toEqual(['rpc', 'inv_approval_decide', { p_payload: { request_id: 'q', decision: 'approve', note: null, signature: null, idempotency_key: 'k1' } }])
+  })
+
+  it('reads the newest approval request for a record, null when unreadable', async () => {
+    state.result = { data: [{ id: 'q', status: 'approved' }], error: null }
+    expect(await getApprovalState('stock_adjustment', 'adj')).toMatchObject({ status: 'approved' })
+    expect(selects()).toEqual(['inventory_approval_requests'])
+    state.result = { data: null, error: { code: '42P01', message: 'x' } }
+    expect(await getApprovalState('stock_adjustment', 'adj')).toBeNull()
+    expect(await getApprovalState('stock_adjustment', null)).toBeNull()
   })
 
   it('receive keeps an unknown cost as null, never 0', async () => {
@@ -217,17 +274,51 @@ describe('valuation shaping (owner rule: unknown cost is never zero)', () => {
 })
 
 describe('ERP reconciliation and approvals shaping', () => {
-  it('derives differences only when both sides are known', () => {
-    expect(normaliseErpRow({ item_code: 'A', inventory_qty: 5, erp_qty: 3, inventory_value: 50, erp_value: 30.5, currency: 'sar', status: 'qty_difference' }))
-      .toMatchObject({ qtyDiff: 2, valueDiff: 19.5, currency: 'SAR' })
-    expect(normaliseErpRow({ item_code: 'B', erp_qty: 3 }).qtyDiff).toBeNull()
+  it('reads the view columns; a masked value stays null and is never derived', () => {
+    expect(normaliseErpRow({ month: '2026-10-01', item_code: 'A', inventory_qty: 5, erp_qty: 3, inventory_value: 50, erp_value: 30.5,
+      qty_difference: 2, value_difference: 19.5, inventory_unvalued_qty: 1, currency: 'sar', status: 'qty_diff' }))
+      .toMatchObject({ qtyDiff: 2, valueDiff: 19.5, currency: 'SAR', invUnvaluedQty: 1, month: '2026-10-01', status: 'qty_diff' })
+    // inventory_value NULL = masked without view_value: the difference is not invented.
+    expect(normaliseErpRow({ item_code: 'B', inventory_qty: 1, erp_qty: 1, inventory_value: null, erp_value: 9, value_difference: null }).valueDiff).toBeNull()
     expect(erpExportRows([{ item_code: 'B', erp_qty: 3 }])[0]).toMatchObject({ inventory_qty: 'N/A', erp_qty: 3, qty_difference: 'N/A', status: 'unknown' })
   })
 
-  it('approvals and transfer lines tolerate column variants', () => {
-    expect(normaliseApproval({ id: 'x', entity_type: 'recount', entity_id: 'e', created_at: 't' })).toMatchObject({ entityType: 'recount', entityId: 'e', requestedAt: 't', status: 'pending' })
+  it('approvals carry the server answer for who may decide; it is never guessed', () => {
+    expect(normaliseApproval({ id: 'x', entity_type: 'recount_assignment', entity_id: 'e', requested_at: 't', can_decide: false, blocked_reason: 'You counted this audit.', stage_name: 'Elevated approver', stage_count: 1, current_stage: 0 }))
+      .toMatchObject({ entityType: 'recount_assignment', canDecide: false, blockedReason: 'You counted this audit.', stageName: 'Elevated approver', stageCount: 1 })
+    expect(normaliseApproval({ id: 'y', can_decide: true }).canDecide).toBe(true)
+    expect(normaliseApproval({ id: 'z' }).canDecide).toBeNull()
     expect(openTransferLines({ lines: [{ id: 1, qty_dispatched: 5, qty_received: 2 }, { id: 2, qty_dispatched: 1, qty_received: 1 }] }))
       .toEqual([expect.objectContaining({ id: 1, outstanding: 3 })])
+  })
+
+  it('posting answers report what moved at known and unknown cost', () => {
+    expect(movedSplit({ status: 'posted', valued_qty_moved: 4, unvalued_qty_moved: 1 })).toEqual({ valued: 4, unvalued: 1, pending: 0 })
+    expect(movedSplit({ status: 'posted', lines: [{ valued_qty_moved: -2, unvalued_qty_moved: 0 }, { valued_qty_moved: 1, unvalued_qty_moved: 3 }] })).toEqual({ valued: 3, unvalued: 3, pending: 0 })
+    expect(movedSplit({ status: 'posted', valued_qty_moved: 4, unvalued_qty_moved: 2, pending_allocation_qty: 1 })).toEqual({ valued: 4, unvalued: 2, pending: 1 })
+    expect(movedSplit({ status: 'posted' })).toBeNull()
+  })
+
+  it('valued, unvalued and undecided are three separate figures; an undecided split is never valued', () => {
+    const s = summariseValuation([
+      { stock_id: 'a', currency: 'SAR', valued_qty: 4, unvalued_qty: 2, pending_allocation_out_qty: 1, pending_allocation_in_qty: 0, open_allocations: 1, valued_amount: 40, valuation_complete: false },
+      { stock_id: 'b', currency: 'SAR', valued_qty: 5, unvalued_qty: 0, pending_allocation_qty: 0, pending_allocation_in_qty: 2, open_allocations: 0, valued_amount: 50, valuation_complete: true },
+    ])
+    expect(s.currencies[0]).toMatchObject({ valuedQty: 9, unvaluedQty: 2, valuedAmount: 90, complete: false })
+    // row a: no total given -> out + in = 1; row b: the view total 0 wins, but pending_in 2 still marks it incomplete
+    expect(s.pendingAllocationQty).toBe(1)
+    expect(s.openAllocations).toBe(1)
+    expect(normaliseValuationRow({ currency: 'SAR', valued_qty: 5, unvalued_qty: 0, pending_allocation_in_qty: 2, valuation_complete: true }).complete).toBe(false)
+    expect(valueLabelKey(s.complete)).toBe('partialValue')
+  })
+
+  it('unallocated issued units keep the valuation incomplete', () => {
+    const row = normaliseValuationRow({ stock_id: 's', currency: 'SAR', valued_qty: 3, unvalued_qty: 0, valuation_complete: true, pending_allocation_qty: 2 })
+    expect(row.complete).toBe(false)
+    const s = summariseValuation([row])
+    expect(s.complete).toBe(false)
+    expect(s.pendingAllocationQty).toBe(2)
+    expect(summariseValuation([{ currency: 'SAR', valued_qty: 1, unvalued_qty: 5, ownership: 'consignment' }]).currencies).toHaveLength(0)
   })
 })
 
@@ -238,9 +329,10 @@ describe('scheduled inventory digest', () => {
     const ds = sched.datasetFor('inventory')
     expect(ds).toMatchObject({ table: 'v_inv_report_snapshot', dateCol: null, currentState: true })
     expect(ds.cols).toHaveLength(ds.headers.length)
-    expect(ds.cols).toEqual(expect.arrayContaining(['currency', 'valued_amount', 'unvalued_qty', 'valuation_complete']))
+    expect(ds.cols).toEqual(expect.arrayContaining(['currency', 'owned_valued_amount', 'owned_unvalued_qty', 'valuation_complete', 'pending_approvals']))
     await sched.fetchReportRows('inventory', { from: '2026-01-01', to: '2026-01-31' })
     const orders = state.calls.filter((c) => c[0] === 'order' && c[1] === 'v_inv_report_snapshot').map((c) => c[2])
-    expect(orders).toEqual(['id'])
+    // The view has no id: it pages on its own key.
+    expect(orders).toEqual(['country', 'site', 'currency'])
   })
 })

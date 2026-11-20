@@ -68,7 +68,7 @@ function applySite(q, site) {
  * One server page. `build(q)` adds filters to the select builder. Ordering
  * always ends on `id` so a page boundary never drops or repeats a row.
  */
-async function pagedRead(table, cols, { page = 0, pageSize = 25, order = 'created_at', ascending = false, build } = {}) {
+async function pagedRead(table, cols, { page = 0, pageSize = 25, order = 'created_at', ascending = false, build, tiebreak = ['id'] } = {}) {
   const p = clampPage(page)
   const size = clampSize(pageSize)
   const from = p * size
@@ -76,7 +76,10 @@ async function pagedRead(table, cols, { page = 0, pageSize = 25, order = 'create
     let q = supabase.from(table).select(cols, { count: 'exact' })
     if (build) q = build(q)
     if (order) q = q.order(order, { ascending })
-    q = q.order('id', { ascending: true }).range(from, from + size - 1)
+    // Every page needs a total order or a row can repeat or vanish at a page edge.
+    // Views without an `id` pass their own unique key as `tiebreak`.
+    for (const col of tiebreak) q = q.order(col, { ascending: true })
+    q = q.range(from, from + size - 1)
     const { data, error, count } = await q
     if (error) {
       if (notProvisioned(error)) return { status: 'not_provisioned', rows: [], total: 0 }
@@ -125,9 +128,46 @@ export function inventoryRefusalText(err) {
   const e = err?.cause || err
   const code = e?.code ? String(e.code) : ''
   const msg = typeof e?.message === 'string' ? e.message.trim() : ''
-  if (!REFUSAL_CODES.has(code) || !msg || msg.length > 240 || INTERNAL_TEXT.test(msg)) return null
+  if (!REFUSAL_CODES.has(code) || !msg) return null
+  for (const [re, plain] of PLAIN_REFUSALS) {
+    const m = msg.match(re)
+    if (m) return typeof plain === 'function' ? plain(m) : plain
+  }
+  if (msg.length > 240 || INTERNAL_TEXT.test(msg) || SNAKE_IDENT.test(msg)) return null
   return msg
 }
+
+/** A snake_case identifier (a column or function name) means the sentence was written for developers. */
+const SNAKE_IDENT = /\b[a-z][a-z0-9]*_[a-z0-9_]+\b/
+
+/**
+ * Server sentences that name internals or are worded for developers, rewritten
+ * in plain words. Order matters: the first match wins.
+ */
+const PLAIN_REFUSALS = [
+  [/undecided issue allocation.*opening correction/i,
+    'Some of this stock left with an undecided cost split. Decide that split in Valuation > Cost reconciliation before posting an opening correction.'],
+  [/undecided issue allocation.*assigning a cost/i,
+    'Some of this stock left with an undecided cost split. Decide that split in Valuation > Cost reconciliation before pricing the units still in stock.'],
+  [/serial or lot tracked/i,
+    'This item is tracked by serial or lot and its stock mixes known and unknown cost. Choose the goods receipt the units came from, then try again.'],
+  [/split is not possible on the balance now/i,
+    'This split no longer fits the stock as it is now. Decide any earlier undecided split for this item first.'],
+  [/issue allocation .*cannot be written off/i,
+    'An undecided split cannot be written off. Decide how many of the units carry the known cost.'],
+  [/valued_qty must be between 0 and (\d+(?:\.\d+)?)/i,
+    (m) => `The units at known cost must be between 0 and ${m[1]}.`],
+  [/evidence \(batch, receipt or GRN\) or a reason for the split/i,
+    'Give evidence (batch, receipt or GRN) or a reason for the split.'],
+  [/transfer carried units with an undecided split/i,
+    'This transfer carried units with an undecided cost split. Transfer them back instead of reversing it.'],
+  [/approved cost allocation is undone by reversing/i,
+    'An approved cost split is undone by reversing the original movement.'],
+  [/approved (.+?) approval is required before this can be posted/i,
+    (m) => `This needs an approved ${m[1]} request first. Ask for approval, and post once another person has approved it.`],
+  [/Stock permission "([a-z_]+)" is required/i,
+    (m) => `You do not have the inventory permission "${m[1].replace(/_/g, ' ')}".`],
+]
 
 async function rpcWrite(fn, payload, idempotencyKey) {
   if (!idempotencyKey) throw new ServiceError('A request reference is missing. Please try again.', 'INV_NO_IDEMPOTENCY')
@@ -190,7 +230,8 @@ export const VIEWS = Object.freeze({
   pendingApprovals: 'v_inv_pending_approvals',
   erpReconciliation: 'v_inv_erp_reconciliation',
   reportSnapshot: 'v_inv_report_snapshot',
-  costReconciliations: 'inventory_cost_reconciliations',
+  costReconciliations: 'v_inv_cost_reconciliations',
+  approvalRequests: 'inventory_approval_requests',
   transfers: 'stock_transfers',
 })
 
@@ -644,28 +685,30 @@ export async function loadReportRows(source, { country, site, from, to, status }
   }
 }
 
-// ── Approvals (inv_request_approval + v_inv_pending_approvals) ───────────────
+// ── Approvals (inv_request_approval -> inv_approval_decide -> posting) ───────
 //
-// Adjustments, recounts, opening batches and cost reconciliations need an
-// APPROVED approval before the server will act on them. Segregation of duties
-// (requester != approver, counter != approver) is enforced server-side; the
-// refusal sentence reaches the user through `inventoryRefusalText`.
+// Adjustment posting, opening-batch approval, recount assignment and cost
+// reconciliation each need an APPROVED request first (DB gates on every path,
+// docs/inventory/10 section 6.2). The posting call consumes the approval; what is
+// posted must match what was approved (a recount's counter, a cost's proposal).
+// Segregation of duties is decided by the server and exposed per row as
+// v_inv_pending_approvals.can_decide / blocked_reason, so the client never
+// guesses who may decide.
 
-export const APPROVAL_ENTITY_TYPES = ['adjustment', 'recount', 'opening_batch', 'cost_reconciliation']
+/** entity_type values accepted by inv_request_approval (DB CHECK). */
+export const APPROVAL_ENTITY_TYPES = ['stock_adjustment', 'recount_assignment', 'opening_balance_batch', 'cost_reconciliation']
 
-/** Where each approval is decided in the hub (section + optional tab). */
+/** Where the evidence for each approval lives in the hub (section + optional tab). */
 export const APPROVAL_TARGET = Object.freeze({
-  adjustment: { section: 'discrepancies' },
-  recount: { section: 'audits' },
-  opening_batch: { section: 'controls', tab: 'opening' },
+  stock_adjustment: { section: 'discrepancies' },
+  recount_assignment: { section: 'audits' },
+  opening_balance_batch: { section: 'controls', tab: 'opening' },
   cost_reconciliation: { section: 'valuation', tab: 'costs' },
 })
 
 export function listPendingApprovals({ page, pageSize, entityType, country, site } = {}) {
-  // select('*') + id ordering only: the DB lane owns this view's shape, and a
-  // guessed column would fail the whole request (read as "not set up").
   return pagedRead(VIEWS.pendingApprovals, '*', {
-    page, pageSize, order: null,
+    page, pageSize, order: 'requested_at', ascending: true,
     build: (q) => {
       q = applySite(applyCountry(q, country), site)
       return entityType && entityType !== 'all' ? q.eq('entity_type', entityType) : q
@@ -673,15 +716,94 @@ export function listPendingApprovals({ page, pageSize, entityType, country, site
   })
 }
 
-export function requestApproval({ entityType, entityId }, key) {
+const isBlank = (v) => v === '' || v === null || v === undefined
+
+/**
+ * Ask for approval. `proposal` is required where the posting step must match it:
+ * recount_assignment {counter_id}; cost_reconciliation {resolution, unit_cost}.
+ * A cost resolution needs evidence or a reason; unknown cost is never sent as 0.
+ */
+export function requestApproval({ entityType, entityId, proposal, reason, evidence }, key) {
   if (!APPROVAL_ENTITY_TYPES.includes(entityType)) {
     return Promise.reject(new ServiceError('This record cannot be sent for approval.', 'INV_BAD_ENTITY'))
   }
   if (!entityId) return Promise.reject(new ServiceError('Choose the record to send for approval.', 'INV_NO_ENTITY'))
-  return rpcWrite('inv_request_approval', { entity_type: entityType, entity_id: entityId }, key)
+  let prop = null
+  if (entityType === 'recount_assignment') {
+    if (!proposal?.counter_id) return Promise.reject(new ServiceError('Choose who will recount.', 'INV_NO_RECOUNTER'))
+    prop = { counter_id: proposal.counter_id }
+  } else if (entityType === 'cost_reconciliation' && proposal && 'valued_qty' in proposal) {
+    // An undecided split (issue_allocation): state how many of the ambiguous
+    // units were at KNOWN cost, from evidence. Never written off.
+    const v = Number(proposal.valued_qty)
+    const max = proposal.max_qty === undefined || proposal.max_qty === null ? null : Number(proposal.max_qty)
+    if (isBlank(proposal.valued_qty) || !Number.isFinite(v) || v < 0 || (max !== null && v > max)) {
+      return Promise.reject(new ServiceError(max === null
+        ? 'Enter how many units carry the known cost.'
+        : `Enter how many units carry the known cost, between 0 and ${max}.`, 'INV_BAD_SPLIT'))
+    }
+    const hasEvidence = Array.isArray(evidence) ? evidence.length > 0 : !isBlank(evidence)
+    if (!hasEvidence && isBlank(reason)) {
+      return Promise.reject(new ServiceError('Give evidence (batch, receipt or GRN) or a reason for the split.', 'INV_NO_EVIDENCE'))
+    }
+    prop = { resolution: 'resolved', valued_qty: v }
+  } else if (entityType === 'cost_reconciliation') {
+    const resolution = proposal?.resolution === 'written_off' ? 'written_off' : 'resolved'
+    if (resolution === 'resolved') {
+      const c = Number(proposal?.unit_cost)
+      if (isBlank(proposal?.unit_cost) || !Number.isFinite(c) || c < 0) {
+        return Promise.reject(new ServiceError('Enter the evidenced unit cost. A blank cost is never sent as zero.', 'INV_NO_COST'))
+      }
+      const hasEvidence = Array.isArray(evidence) ? evidence.length > 0 : !isBlank(evidence)
+      if (!hasEvidence && isBlank(reason)) {
+        return Promise.reject(new ServiceError('Give evidence or a reason for the cost.', 'INV_NO_EVIDENCE'))
+      }
+      prop = { resolution, unit_cost: c }
+    } else {
+      if (isBlank(reason)) return Promise.reject(new ServiceError('Give the reason for writing this off.', 'INV_NO_REASON'))
+      prop = { resolution }
+    }
+  }
+  const ev = Array.isArray(evidence) ? evidence : isBlank(evidence) ? [] : [{ type: 'note', text: String(evidence).trim() }]
+  return rpcWrite('inv_request_approval', {
+    entity_type: entityType, entity_id: entityId, proposal: prop || undefined,
+    reason: isBlank(reason) ? null : String(reason).trim(), evidence: ev,
+  }, key)
 }
 
-// ── Valuation (v_inv_valuation, inventory_cost_reconciliations) ──────────────
+/** approve | reject on one pending request. Reject needs a note (server rule too). */
+export const APPROVAL_DECISIONS = ['approve', 'reject']
+export function decideApproval({ requestId, decision, note, signature }, key) {
+  if (!APPROVAL_DECISIONS.includes(decision)) {
+    return Promise.reject(new ServiceError('Choose approve or reject.', 'INV_BAD_DECISION'))
+  }
+  if (!requestId) return Promise.reject(new ServiceError('Choose the request.', 'INV_NO_ENTITY'))
+  if (decision === 'reject' && isBlank(note)) {
+    return Promise.reject(new ServiceError('Give a reason for the rejection.', 'INV_NO_NOTE'))
+  }
+  return rpcWrite('inv_approval_decide', {
+    request_id: requestId, decision, note: isBlank(note) ? null : String(note).trim(), signature: signature || null,
+  }, key)
+}
+
+/**
+ * The newest approval request for one record (any status), or null. Shows
+ * "approval pending / approved / rejected" beside the posting button. Best
+ * effort: an unreadable table answers null and never blocks the screen.
+ */
+export async function getApprovalState(entityType, entityId) {
+  if (!entityType || !entityId) return null
+  try {
+    const { data, error } = await supabase.from(VIEWS.approvalRequests)
+      .select('id, entity_type, entity_id, status, proposal, current_stage, requested_by, requested_at')
+      .eq('entity_type', entityType).eq('entity_id', entityId)
+      .order('requested_at', { ascending: false }).order('id', { ascending: true }).limit(1)
+    if (error) return null
+    return data?.[0] || null
+  } catch { return null }
+}
+
+// ── Valuation (v_inv_valuation, v_inv_cost_reconciliations) ──────────────────
 //
 // OWNER RULE: unknown cost is never zero and never invented. The view gives
 // valued qty, unvalued qty, the valued amount per currency and a completeness
@@ -692,7 +814,7 @@ export async function loadValuation({ country, site } = {}) {
     const { data, error, truncated } = await fetchAllPages((from, to) => {
       let q = supabase.from(VIEWS.valuation).select('*')
       q = applySite(applyCountry(q, country), site)
-      return q.order('id', { ascending: true }).range(from, to)
+      return q.order('stock_id', { ascending: true }).range(from, to)
     }, { max: 5000 })
     if (error) {
       if (notProvisioned(error)) return { status: 'not_provisioned', rows: [], truncated: false }
@@ -705,57 +827,62 @@ export async function loadValuation({ country, site } = {}) {
   }
 }
 
+/** inventory_cost_reconciliations.status (DB CHECK). */
+export const COST_RECON_STATUSES = ['open', 'resolved', 'written_off', 'cancelled']
+
 export function listCostReconciliations({ page, pageSize, status, country, site } = {}) {
   return pagedRead(VIEWS.costReconciliations, '*', {
-    page, pageSize, order: null,
+    page, pageSize, order: 'created_at', ascending: true,
     build: (q) => {
       q = applySite(applyCountry(q, country), site)
-      if (status === 'open') return q.not('status', 'in', '(resolved,approved,rejected,cancelled,closed)')
       return status && status !== 'all' ? q.eq('status', status) : q
     },
   })
 }
 
 /**
- * Record an evidenced cost for unvalued stock (or reject the reconciliation).
- * Nothing is defaulted: a blank cost is refused here rather than sent as 0.
+ * Post an APPROVED cost reconciliation. The cost and resolution come from the
+ * approved request (the server consumes it); this call carries only the record,
+ * a note and evidence. Unknown cost never becomes known any other way.
  */
-export function reconcileCost({ reconciliationId, stockId, unitCost, currency, source, evidence, note, decision = 'propose' }, key) {
-  if (decision === 'propose') {
-    const c = Number(unitCost)
-    if (unitCost === '' || unitCost === null || unitCost === undefined || !Number.isFinite(c) || c <= 0) {
-      return Promise.reject(new ServiceError('Enter the evidenced unit cost (greater than zero).', 'INV_NO_COST'))
-    }
-    if (!String(currency || '').trim()) return Promise.reject(new ServiceError('Choose the currency of the cost.', 'INV_NO_CURRENCY'))
-  }
+export function reconcileCost({ reconciliationId, note, evidence }, key) {
+  if (!reconciliationId) return Promise.reject(new ServiceError('Choose the reconciliation.', 'INV_NO_ENTITY'))
+  const ev = Array.isArray(evidence) ? evidence : isBlank(evidence) ? undefined : [{ type: 'note', text: String(evidence).trim() }]
   return rpcWrite('inv_cost_reconcile', {
-    reconciliation_id: reconciliationId || null, stock_id: stockId || null, decision,
-    unit_cost: decision === 'propose' ? Number(unitCost) : null,
-    currency: decision === 'propose' ? String(currency).trim().toUpperCase() : null,
-    source: source || null, evidence: evidence || null, note: note || null,
+    reconciliation_id: reconciliationId, note: isBlank(note) ? null : String(note).trim(), evidence: ev,
   }, key)
 }
 
 // ── ERP reconciliation (read-only, v_inv_erp_reconciliation) ─────────────────
 
-function erpFilters(q, { country, site, status, search }) {
+/** v_inv_erp_reconciliation.status values. */
+export const ERP_RECON_STATUSES = ['matched', 'qty_diff', 'value_diff', 'inventory_only', 'erp_only', 'unvalued']
+/** The view has no id: its key is (month, country, site, item_code, currency). */
+const ERP_KEY = ['country', 'site', 'item_code', 'currency']
+
+function erpFilters(q, { country, site, status, search, month }) {
   q = applySite(applyCountry(q, country), site)
   if (status === 'differences') q = q.neq('status', 'matched')
   else if (status && status !== 'all') q = q.eq('status', status)
-  const or = searchOr(['item_code', 'description'], search)
+  if (month) q = q.eq('month', month)
+  const or = searchOr(['item_code'], search)
   return or ? q.or(or) : q
 }
 
 export function listErpReconciliation({ page, pageSize, ...filters } = {}) {
-  return pagedRead(VIEWS.erpReconciliation, '*', { page, pageSize, order: null, build: (q) => erpFilters(q, filters) })
+  return pagedRead(VIEWS.erpReconciliation, '*', {
+    page, pageSize, order: 'month', ascending: false, tiebreak: ERP_KEY, build: (q) => erpFilters(q, filters),
+  })
 }
 
 /** Bounded full read for the ERP reconciliation export (same filters as the screen). */
 export async function loadErpReconciliationRows(filters = {}) {
   try {
-    const { data, error, truncated } = await fetchAllPages((from, to) => erpFilters(
-      supabase.from(VIEWS.erpReconciliation).select('*'), filters,
-    ).order('id', { ascending: true }).range(from, to), { max: SNAPSHOT_MAX })
+    const { data, error, truncated } = await fetchAllPages((from, to) => {
+      let q = erpFilters(supabase.from(VIEWS.erpReconciliation).select('*'), filters).order('month', { ascending: false })
+      for (const col of ERP_KEY) q = q.order(col, { ascending: true })
+      return q.range(from, to)
+    }, { max: SNAPSHOT_MAX })
     if (error) {
       if (notProvisioned(error)) return { status: 'not_provisioned', rows: [], truncated: false }
       throw toServiceError(error)
@@ -851,7 +978,8 @@ export async function loadReportSnapshot({ country, site } = {}) {
   try {
     let q = supabase.from(VIEWS.reportSnapshot).select('*')
     q = applySite(applyCountry(q, country), site)
-    const { data, error } = await q.limit(500)
+    const { data, error } = await q.order('country', { ascending: true }).order('site', { ascending: true })
+      .order('currency', { ascending: true }).limit(500)
     if (error) {
       if (notProvisioned(error)) return { status: 'not_provisioned', rows: [] }
       throw toServiceError(error)

@@ -236,8 +236,12 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON F
 ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON SEQUENCES TO postgres, anon, authenticated, service_role;
 """)
 
-open('snap_schema_pre.sql', 'w').write('\n'.join(pre) + '\n' + '\n'.join(cons_pre) + '\n')
-open('snap_data.sql', 'w').write("SET session_replication_role = replica;\n" + '\n'.join(data) + "\nSET session_replication_role = origin;\n")
-open('snap_schema_post.sql', 'w').write('SET check_function_bodies = off;\n' + '\n'.join(cons_fk) + '\n' + '\n'.join(post) + '\n')
-json.dump(manifest, open('snap_manifest.json', 'w'), indent=1)
+with open('snap_schema_pre.sql', 'w') as fh:
+    fh.write('\n'.join(pre) + '\n' + '\n'.join(cons_pre) + '\n')
+with open('snap_data.sql', 'w') as fh:
+    fh.write("SET session_replication_role = replica;\n" + '\n'.join(data) + "\nSET session_replication_role = origin;\n")
+with open('snap_schema_post.sql', 'w') as fh:
+    fh.write('SET check_function_bodies = off;\n' + '\n'.join(cons_fk) + '\n' + '\n'.join(post) + '\n')
+with open('snap_manifest.json', 'w') as fh:
+    json.dump(manifest, fh, indent=1)
 print('A', len(phaseA), 'B', len(phaseB), 'fks', len(cons_fk) // 2, 'skippedfk', len(manifest['skipped_fks']), 'data', len(data))

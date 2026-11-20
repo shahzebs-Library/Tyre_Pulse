@@ -2,7 +2,8 @@ import json, sys
 
 
 def load(path):
-    t = open(path).read()
+    with open(path) as fh:
+        t = fh.read()
     try:
         o = json.loads(t)
         if isinstance(o, list):
@@ -12,6 +13,7 @@ def load(path):
         elif isinstance(o, dict) and 'text' in o:
             t = o['text']
     except Exception:
+        # Not a JSON envelope: fall through and parse the raw text below.
         pass
     s = t.find('[', t.find('<untrusted-data-'))
     e = t.rfind(']', 0, t.rfind('</untrusted-data-'))

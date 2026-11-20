@@ -2,10 +2,11 @@
 import sys
 def load(p):
     d = {}
-    for line in open(p):
-        parts = line.rstrip('\n').split('\t')
-        if len(parts) == 3:
-            d[(parts[0], parts[1])] = parts[2]
+    with open(p) as fh:
+        for line in fh:
+            parts = line.rstrip('\n').split('\t')
+            if len(parts) == 3:
+                d[(parts[0], parts[1])] = parts[2]
     return d
 a, b = load(sys.argv[1]), load(sys.argv[2])
 ign = '--ignore-bak' in sys.argv

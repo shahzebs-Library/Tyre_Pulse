@@ -47,6 +47,7 @@ export const REPORT_TYPES = [
   { value: 'pm',         label: 'Preventive Maintenance' },
   { value: 'workshop',   label: 'Workshop Summary' },
   { value: 'workshop_status', label: 'Workshop Vehicle Status' },
+  { value: 'inventory',  label: 'Inventory Control' },
 ]
 
 export const FREQUENCIES = [
@@ -169,6 +170,19 @@ const DATASETS = {
     eqFilter: { current_active: true },
     nullFilter: ['deleted_at'],
     orderAscending: true,
+    currentState: true,
+  },
+  inventory: {
+    // Inventory Control Center digest (DB lane view v_inv_report_snapshot): one
+    // row per country / site / currency, as at now. A current-state snapshot,
+    // so the coverage period is not applied and there is no date to order by
+    // (dateCol null -> id order only; a guessed date column would fail the
+    // whole request). Value is the VALUED part with its completeness flag and
+    // the unvalued quantity beside it; currencies are never added together.
+    table: 'v_inv_report_snapshot', dateCol: null, title: 'Inventory Control Digest',
+    queryCols: ['*'],
+    cols:    ['country', 'site', 'currency', 'balance_lines', 'valued_qty', 'unvalued_qty', 'valued_amount', 'valuation_complete', 'open_audits', 'open_discrepancies', 'pending_approvals', 'open_cost_reconciliations', 'erp_differences'],
+    headers: ['Country', 'Site', 'Currency', 'Balance Lines', 'Valued Qty', 'Unvalued Qty', 'Valued Amount', 'Valuation Complete', 'Open Audits', 'Open Discrepancies', 'Pending Approvals', 'Open Cost Reconciliations', 'ERP Differences'],
     currentState: true,
   },
 }
@@ -360,8 +374,10 @@ export async function fetchReportRows(reportType, { from, to, country } = {}) {
     if (ds.eqFilter) for (const [col, val] of Object.entries(ds.eqFilter)) q = q.eq(col, val)
     if (ds.nullFilter) for (const col of ds.nullFilter) q = q.is(col, null)
     if (ds.orFilter) q = q.or(ds.orFilter)
-    // id tiebreak keeps page boundaries stable on a non-unique date.
-    return q.order(ds.dateCol, { ascending: ds.orderAscending === true, nullsFirst: false }).order('id', { ascending: true })
+    // id tiebreak keeps page boundaries stable on a non-unique date. A dataset
+    // with no date column (a snapshot view) orders by id only.
+    if (ds.dateCol) q = q.order(ds.dateCol, { ascending: ds.orderAscending === true, nullsFirst: false })
+    return q.order('id', { ascending: true })
   }
   // The server caps one response at 1000 rows, so page up to the report ceiling.
   const { data, error, truncated } = await fetchAllPages((a, b) => build().range(a, b), { pageSize: 1000, max: REPORT_ROW_MAX })

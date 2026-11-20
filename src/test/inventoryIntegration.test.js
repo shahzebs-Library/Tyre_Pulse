@@ -230,3 +230,17 @@ describe('ERP reconciliation and approvals shaping', () => {
       .toEqual([expect.objectContaining({ id: 1, outstanding: 3 })])
   })
 })
+
+describe('scheduled inventory digest', () => {
+  it('registers report_type inventory over v_inv_report_snapshot as a current-state snapshot', async () => {
+    const sched = await import('../lib/api/scheduledReports')
+    expect(sched.REPORT_TYPES.some((r) => r.value === 'inventory')).toBe(true)
+    const ds = sched.datasetFor('inventory')
+    expect(ds).toMatchObject({ table: 'v_inv_report_snapshot', dateCol: null, currentState: true })
+    expect(ds.cols).toHaveLength(ds.headers.length)
+    expect(ds.cols).toEqual(expect.arrayContaining(['currency', 'valued_amount', 'unvalued_qty', 'valuation_complete']))
+    await sched.fetchReportRows('inventory', { from: '2026-01-01', to: '2026-01-31' })
+    const orders = state.calls.filter((c) => c[0] === 'order' && c[1] === 'v_inv_report_snapshot').map((c) => c[2])
+    expect(orders).toEqual(['id'])
+  })
+})

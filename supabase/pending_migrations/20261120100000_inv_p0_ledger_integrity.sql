@@ -357,7 +357,11 @@ alter table public.stock_movements
   add column if not exists reverses_movement_id uuid references public.stock_movements(id),
   add column if not exists actor_id uuid,
   add column if not exists approval_ref text,
-  add column if not exists reserved_change numeric not null default 0;
+  add column if not exists reserved_change numeric not null default 0,
+  -- magnitudes of the quantity this movement moved at a KNOWN cost and at an UNKNOWN
+  -- cost; value_change is the value of the valued part only (owner decision 2026-11-20)
+  add column if not exists valued_qty numeric not null default 0,
+  add column if not exists unvalued_qty numeric not null default 0;
 
 -- Backfill legacy rows (78 live) BEFORE the append-only trigger exists.
 update public.stock_movements m set
@@ -495,9 +499,16 @@ returns jsonb language sql stable set search_path = public as $$
     'stock_id',m.stock_id,'movement_type',m.movement_type,'qty_before',m.qty_before,'qty_change',m.qty_change,
     'qty_after',m.qty_after,'reserved_change',m.reserved_change,'unit_cost',m.unit_cost,
     'value_change',m.value_change,'unvalued_qty_change',m.unvalued_qty_change,'valuation_status',m.valuation_status,
+    'valued_qty_moved',m.valued_qty,'unvalued_qty_moved',m.unvalued_qty,
     'variance_kind',m.variance_kind,'variance_amount',m.variance_amount,
     'currency',m.currency,'idempotency_key',m.idempotency_key)
 $$;
+
+-- Cost-reconciliation hook (same pattern as inv_blind_hides_balance): replaced by
+-- the real body in 20261120104000_inv_valuation.sql.
+create or replace function public._inv_cost_rec_track(p_mov public.stock_movements, p jsonb)
+returns void language plpgsql security definer set search_path = public as $fn$ begin return; end $fn$;
+revoke all on function public._inv_cost_rec_track(public.stock_movements, jsonb) from public, anon, authenticated;
 
 create or replace function public._inv_post(p jsonb, p_check_cap boolean)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $fn$
@@ -524,6 +535,7 @@ declare
   v_val_chg numeric; v_unv_chg numeric := 0; v_unit_applied numeric; v_val_status text;
   v_var_kind text; v_var_amt numeric;
   v_out_unv numeric; v_out_val numeric; v_out_value numeric; v_avg numeric;
+  v_m_vq numeric := 0; v_m_uq numeric := 0;  -- movement magnitudes: valued / unvalued quantity moved
 begin
   if v_uid is null or v_org is null then
     raise exception 'Sign in with an organisation to post stock.' using errcode = '42501';
@@ -735,10 +747,12 @@ begin
     v_val_status := case when v_val_chg is null then 'unvalued' else 'valued' end;
   elsif v_chg < 0 then
     if -v_chg <= v_vq + v_uq then
-      -- unvalued units leave first; then valued units at the average
+      -- Owner decision 2026-11-20: VALUED units leave first at the weighted average;
+      -- only the quantity the valued bucket cannot cover leaves UNVALUED (no cost is
+      -- invented for it; _inv_cost_rec_track opens a cost reconciliation).
       v_unit_applied := case when v_vq > 0 then round(v_vv / v_vq, 4) end;
-      v_out_unv := least(v_uq, -v_chg);
-      v_out_val := -v_chg - v_out_unv;
+      v_out_val := least(v_vq, -v_chg);
+      v_out_unv := -v_chg - v_out_val;
       v_uq := v_uq - v_out_unv; v_unv_chg := -v_out_unv;
       if v_out_val > 0 then
         if v_out_val = v_vq then v_out_value := v_vv; v_vq := 0; v_vv := 0;
@@ -759,9 +773,15 @@ begin
     v_val_chg := case when v_rchg <> 0 then null else 0 end;
     v_val_status := 'valued';
   end if;
+  if v_kind = 'value' then
+    v_m_vq := case when v_type = 'cost_assignment' then coalesce(v_qty_val, 0) else 0 end;
+  elsif v_vq is not null then
+    v_m_uq := abs(coalesce(v_unv_chg, 0)); v_m_vq := greatest(abs(v_chg) - v_m_uq, 0);
+  end if;
   -- Approved opening with a line cost also prices units still unvalued on the balance.
   if v_type = 'opening' and v_unit is not null and v_uq > 0 and v_vq is not null then
     v_val_chg := coalesce(v_val_chg, 0) + round(v_uq * v_unit, 2);
+    v_m_vq := v_m_vq + v_uq;
     v_vq := v_vq + v_uq; v_vv := round(v_vv + v_uq * v_unit, 2); v_unv_chg := v_unv_chg - v_uq; v_uq := 0;
     v_unit_applied := round(v_unit, 4); v_val_status := 'valued';
   end if;
@@ -794,15 +814,20 @@ begin
   insert into public.stock_movements(stock_id, site, description, movement_type, qty_before, qty_change, qty_after,
     reason, reference_no, created_by, organisation_id, country, item_id, location_id, posted_at, effective_at,
     unit_cost, value_change, unvalued_qty_change, valuation_status, variance_kind, variance_amount, currency, ownership,
-    source_doc_type, source_doc_id, idempotency_key, payload_hash, reverses_movement_id, actor_id, approval_ref, reserved_change)
+    source_doc_type, source_doc_id, idempotency_key, payload_hash, reverses_movement_id, actor_id, approval_ref, reserved_change,
+    valued_qty, unvalued_qty)
   values (v_rec.id, v_rec.site, v_rec.description, v_type, v_before, v_chg, v_after,
     nullif(btrim(p->>'reason'), ''), nullif(btrim(p->>'reference_no'), ''), v_uid, v_org, v_rec.country,
     v_rec.item_id, v_rec.location_id, clock_timestamp(),
     coalesce(nullif(p->>'effective_at', '')::timestamptz, clock_timestamp()),
     v_unit_applied, v_val_chg, v_unv_chg, v_val_status, v_var_kind, v_var_amt, v_cur, v_rec.ownership,
     nullif(p->>'source_doc_type', ''), nullif(p->>'source_doc_id', ''),
-    v_key, v_hash, nullif(p->>'reverses_movement_id', '')::uuid, v_uid, nullif(p->>'approval_ref', ''), v_rchg)
+    v_key, v_hash, nullif(p->>'reverses_movement_id', '')::uuid, v_uid, nullif(p->>'approval_ref', ''), v_rchg,
+    v_m_vq, v_m_uq)
   returning * into v_mov;
+  -- Unknown cost is never silently valued: open / move / consume cost reconciliations
+  -- (no-op stub here; the real body arrives with 20261120104000_inv_valuation).
+  perform public._inv_cost_rec_track(v_mov, p);
 
   update public.stock_records set
     qty_on_hand = v_after, stock_qty = floor(v_after)::integer, qty_reserved = v_rafter,
@@ -830,6 +855,10 @@ begin
   end if;
   if lower(btrim(coalesce(p->>'movement_type', ''))) in ('reversal', 'opening') then
     raise exception 'Use inv_reverse_movement or an approved opening balance batch for this movement type.' using errcode = '22023';
+  end if;
+  if lower(btrim(coalesce(p->>'movement_type', ''))) = 'cost_assignment' then
+    -- Owner decision 2026-11-20: nothing becomes valued without an approved cost reconciliation.
+    raise exception 'Unvalued stock is valued only through an approved cost reconciliation (inv_cost_reconcile).' using errcode = '22023';
   end if;
   return public._inv_post(p - 'reverses_movement_id' - 'orig_qty_change' - 'orig_unvalued_qty_change' - 'orig_value_change', true);
 end $fn$;
@@ -1081,7 +1110,7 @@ BEGIN
    'source_doc_type','transfer_stock_entry','source_doc_id',p_request_id::text),false);
  v_in:=_inv_post(jsonb_build_object('idempotency_key','transfer:'||p_request_id::text||':in','stock_id',b.id,'movement_type','transfer_in',
    'qty_change',p_qty,'unit_cost',v_out->'unit_cost','currency',v_out->>'currency',
-   'carried_value',-coalesce((v_out->>'value_change')::numeric,0),'carried_unvalued_qty',-coalesce((v_out->>'unvalued_qty_change')::numeric,0),'reason',concat('Transfer from ',a.site,': ',p_notes),
+   'carried_value',-coalesce((v_out->>'value_change')::numeric,0),'carried_unvalued_qty',-coalesce((v_out->>'unvalued_qty_change')::numeric,0),'carried_from_stock_id',a.id,'reason',concat('Transfer from ',a.site,': ',p_notes),
    'reference_no','TRANSFER-'||p_request_id::text,'source_doc_type','transfer_stock_entry','source_doc_id',p_request_id::text),false);
  PERFORM record_audit_event('stock_transfer','stock_records',p_from::text,jsonb_build_object('from_qty',a.stock_qty,'to_qty',b.stock_qty),jsonb_build_object('from_id',p_from,'to_id',p_to,'qty',p_qty,'request_id',p_request_id));
  v_result:=jsonb_build_object('status','posted','from_stock_id',p_from,'to_stock_id',p_to,'qty',p_qty);

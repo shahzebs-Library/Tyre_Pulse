@@ -58,8 +58,8 @@ test('rollback refuses to discard inventory records unless explicitly told to', 
   const db = await buildDb()
   const wh = (await rpc(db, U.admin, 'inv_location_upsert', [JSON.stringify({ idempotency_key: 'rb-1', country: 'KSA', site: 'S1', location_type: 'warehouse', code: 'WH1' })])).id
   await rpc(db, U.keeper, 'inv_post_movement', [JSON.stringify({ idempotency_key: 'rb-2', item_id: id(100), location_id: wh, movement_type: 'receipt', qty_change: 3, unit_cost: 2 })])
-  await db.exec(sqlOf(ROLLBACKS[ROLLBACKS.length - 1])) // 107: holds no business data
-  for (const f of [...ROLLBACKS].reverse().slice(1, 6)) await db.exec(sqlOf(f)) // 106..102: nothing recorded there
+  // 111..102: nothing recorded there (the receipt was priced, so no cost reconciliation exists)
+  for (const f of [...ROLLBACKS].reverse().slice(0, ROLLBACKS.length - 2)) await db.exec(sqlOf(f))
   await assert.rejects(db.exec(sqlOf(ROLLBACKS[1])), /export them/) // 101: a location exists
   await db.exec("rollback")
   await db.exec(sqlOf(ROLLBACKS[1]).replace(/^begin;/m, "begin;\nset local inv.rollback_discard = 'on';"))
@@ -68,6 +68,24 @@ test('rollback refuses to discard inventory records unless explicitly told to', 
   await db.exec(sqlOf(ROLLBACKS[0]).replace(/^begin;/m, "begin;\nset local inv.rollback_discard = 'on';"))
   const n = (await q(db, "select count(*)::int as n from public.stock_movements"))[0].n
   assert.ok(n >= 2, 'ledger rows are kept; only the new columns go')
+  await db.close()
+})
+
+test('approvals and cost reconciliations are never discarded silently by a rollback', async () => {
+  const db = await buildDb()
+  const wh = (await rpc(db, U.admin, 'inv_location_upsert', [JSON.stringify({ idempotency_key: 'rc-1', country: 'KSA', site: 'S1', location_type: 'warehouse', code: 'WH1' })])).id
+  await rpc(db, U.keeper, 'inv_post_movement', [JSON.stringify({ idempotency_key: 'rc-2', item_id: id(100), location_id: wh, movement_type: 'receipt', qty_change: 3 })])
+  const rec = (await q(db, `select id from inventory_cost_reconciliations where kind = 'unpriced_inbound'`))[0].id
+  await db.exec("insert into test_caps values ('" + U.approver + "','financial_post')")
+  await rpc(db, U.approver, 'inv_request_approval', [JSON.stringify({ idempotency_key: 'rc-3', entity_type: 'cost_reconciliation', entity_id: rec, proposal: { resolution: 'written_off' }, reason: 'x' })])
+  const idx = f => ROLLBACKS.findIndex(x => x.startsWith(f))
+  for (const f of ['20261120111000', '20261120110000', '20261120109000']) await db.exec(sqlOf(ROLLBACKS[idx(f)]))
+  await assert.rejects(db.exec(sqlOf(ROLLBACKS[idx('20261120108000')])), /export them/)
+  await db.exec('rollback')
+  await db.exec(sqlOf(ROLLBACKS[idx('20261120108000')]).replace(/^begin;/m, "begin;\nset local inv.rollback_discard = 'on';"))
+  for (const f of ['20261120107000', '20261120106000', '20261120105000']) await db.exec(sqlOf(ROLLBACKS[idx(f)]))
+  await assert.rejects(db.exec(sqlOf(ROLLBACKS[idx('20261120104000')])), /Cost reconciliations exist/)
+  await db.exec('rollback')
   await db.close()
 })
 

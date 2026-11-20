@@ -649,10 +649,17 @@ void main() {
     // 2514 + 1 = 2515. Inventory counts and transfers: one packed catalog
     // (inventoryCopyCatalog) for the blind count, My counts and transfer
     // screens, read through InventoryCopy like stockCountCopyCatalog.
-    test('en, ar and ur each carry exactly 2515 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2515);
-      expect(_translatableKeys(ar).length, 2515);
-      expect(_translatableKeys(ur).length, 2515);
+    // 2515 + 8 + 1 = 2524. Cloudflare Turnstile CAPTCHA on sign-in and
+    // self-registration (+8): the check's accessibility label, its loading /
+    // prompt / solved / expired / load-failed / timed-out status lines and
+    // the localized refusal sentence (captchaSemanticLabel ...
+    // captchaRefused). Try again reuses actionRetry. loginCompanyCodeHelp
+    // (+1): the access-help dialog says how a member of another company
+    // signs in ("company code/username").
+    test('en, ar and ur each carry exactly 2524 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2524);
+      expect(_translatableKeys(ar).length, 2524);
+      expect(_translatableKeys(ur).length, 2524);
     });
   });
 

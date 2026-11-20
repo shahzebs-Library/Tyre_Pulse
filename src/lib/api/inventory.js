@@ -3,8 +3,8 @@
  *
  * Talks to the tables and `inv_*` RPCs named in the build contract
  * (docs/inventory/07_APPROVED_REQUIREMENTS_AND_BUILD_CONTRACT.md). Those objects
- * live in `supabase/pending_migrations/*inv_*` and are applied to NOTHING in
- * production yet, so EVERY call here degrades honestly:
+ * live in `supabase/migrations/*inv_*` (applied to production 2026-11-20). An
+ * environment without them still degrades honestly:
  *
  *   - a read of a table/column that does not exist returns
  *     `{ status: 'not_provisioned', rows: [], total: 0 }` and the screen says

@@ -248,6 +248,42 @@ export async function adminSetUserPassword(userId, password, reason) {
   return data || { ok: false, reason: 'unknown' }
 }
 
+// ── Sign-in lockout (TEN-9f) ────────────────────────────────────────────────
+
+const NOT_INSTALLED_CODES = new Set(['42883', 'PGRST202'])
+
+/**
+ * Lockout state of one account, for an administrator. Resolves to null when
+ * the TEN-9f migration is not installed yet, so the console can hide the panel.
+ * @param {string} userId
+ * @returns {Promise<null | {ok:boolean, reason?:string, locked?:boolean,
+ *   retry_after_seconds?:number, failed_attempts?:number, last_failure_at?:string}>}
+ */
+export async function adminLoginLockStatus(userId) {
+  const { data, error } = await supabase.rpc('admin_login_lock_status', { p_user_id: userId })
+  if (error) {
+    if (NOT_INSTALLED_CODES.has(error.code)) return null
+    throw new ServiceError(toUserMessage(error), error.code, error)
+  }
+  return data || { ok: false, reason: 'unknown' }
+}
+
+/**
+ * Clear an account's sign-in lockout. Super admin or an Admin of the same
+ * company; the reason is required and written to the access audit trail.
+ * @param {string} userId
+ * @param {string} reason
+ * @returns {Promise<{ok:boolean, reason?:string, cleared?:number}>}
+ */
+export async function adminClearLoginLock(userId, reason) {
+  const { data, error } = await supabase.rpc('admin_clear_login_lock', {
+    p_user_id: userId,
+    p_reason: String(reason || ''),
+  })
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
+  return data || { ok: false, reason: 'unknown' }
+}
+
 // ── Console Access Control headline figures + the new-areas policy ─────────
 
 /**

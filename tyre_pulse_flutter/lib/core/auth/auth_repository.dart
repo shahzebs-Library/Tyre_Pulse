@@ -47,7 +47,9 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:tyre_pulse/core/auth/captcha/turnstile_captcha.dart';
 import 'package:tyre_pulse/core/auth/login_lockout.dart';
+import 'package:tyre_pulse/core/auth/sign_in_identifier.dart';
 import 'package:tyre_pulse/core/auth/sign_in_outcome.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
@@ -90,6 +92,12 @@ final class SignInFunctionLocked extends SignInFunctionResult {
   final LoginLockStatus lock;
 }
 
+/// Supabase Auth refused the request for its CAPTCHA (`captcha_failed`). Not
+/// counted towards the lockout: it says nothing about the password.
+final class SignInFunctionCaptchaFailed extends SignInFunctionResult {
+  const SignInFunctionCaptchaFailed();
+}
+
 /// The auth backend could not be reached or was busy. Not counted, and never
 /// shown as "wrong password".
 final class SignInFunctionUnavailable extends SignInFunctionResult {
@@ -130,6 +138,8 @@ SignInFunctionResult interpretSignInFunction(int status, Object? body) {
   switch (map['error']) {
     case 'invalid_credentials':
       return const SignInFunctionRejected();
+    case 'captcha_failed':
+      return const SignInFunctionCaptchaFailed();
     case 'locked':
       return SignInFunctionLocked(
         LoginLockStatus.fromRpcResult(<String, Object?>{
@@ -141,6 +151,21 @@ SignInFunctionResult interpretSignInFunction(int status, Object? body) {
   }
   return const SignInFunctionUnavailable(_signInUnavailableError);
 }
+
+/// The `sign-in` edge-function request body. `captcha_token` is present only
+/// when a token exists, so a build with the CAPTCHA off sends exactly the body
+/// it always sent.
+Map<String, Object?> signInFunctionBody(
+  String identifier,
+  String password,
+  String? captchaToken,
+) =>
+    <String, Object?>{
+      'identifier': identifier,
+      'password': password,
+      if (captchaToken != null && captchaToken.isNotEmpty)
+        'captcha_token': captchaToken,
+    };
 
 /// Pure interpretation of a `sso_password_login_check` response, exposed for
 /// tests. Anything unclear (null, non-map, missing key) ALLOWS - identical to
@@ -196,9 +221,14 @@ abstract interface class AuthRepository {
   /// Runs the full sign-in rule: lock check, identifier resolution, the sign-in
   /// call itself, and failure recording / lockout reset. Never throws; every
   /// outcome, including a network failure, is a [SignInOutcome] value.
+  ///
+  /// [captchaToken] is the single-use Cloudflare Turnstile token, or null when
+  /// the CAPTCHA is off for this build. It is sent on whichever ONE auth call
+  /// the attempt makes (`signInWithPassword` or the `sign-in` function).
   Future<SignInOutcome> signIn({
     required String identifier,
     required String password,
+    String? captchaToken,
   });
 
   /// Ends the session. Best-effort in the sense that it clears whatever local
@@ -233,6 +263,14 @@ final class SupabaseAuthRepository implements AuthRepository {
   SupabaseAuthRepository(this._client);
 
   final SupabaseClient _client;
+
+  static const AppError _captchaRefusedError = AppError(
+    kind: AppErrorKind.authentication,
+    message: 'The security check was not accepted. Complete it again and '
+        'retry.',
+    technical: 'Supabase Auth refused the attempt: captcha_failed (missing, '
+        'used, expired or invalid Turnstile token)',
+  );
 
   static const AppError _invalidCredentialsError = AppError(
     kind: AppErrorKind.authentication,
@@ -306,8 +344,13 @@ final class SupabaseAuthRepository implements AuthRepository {
   Future<SignInOutcome> signIn({
     required String identifier,
     required String password,
+    String? captchaToken,
   }) async {
-    final String trimmedIdentifier = identifier.trim();
+    final String? captcha =
+        (captchaToken ?? '').trim().isEmpty ? null : captchaToken!.trim();
+    // "code/username" (another company) and a bare username both reach the
+    // server unchanged apart from tidying; the server resolves either form.
+    final String trimmedIdentifier = normalizeSignInIdentifier(identifier);
     if (trimmedIdentifier.isEmpty || password.isEmpty) {
       return const SignInRejected(
         AppError(
@@ -338,8 +381,14 @@ final class SupabaseAuthRepository implements AuthRepository {
         await _client.auth.signInWithPassword(
           email: loginEmail,
           password: password,
+          captchaToken: captcha,
         );
       } on Object catch (error) {
+        // A CAPTCHA refusal happens before the password is checked: never
+        // record it as a failed attempt.
+        if (isCaptchaRefusal(error)) {
+          return const SignInCaptchaFailed(_captchaRefusedError);
+        }
         final SupabaseFailure failure = classifySupabaseError(error);
         if (failure.isConnectivity) {
           return SignInFailed(failure.error);
@@ -359,6 +408,7 @@ final class SupabaseAuthRepository implements AuthRepository {
       final SignInFunctionResult result = await _signInThroughFunction(
         trimmedIdentifier,
         password,
+        captcha,
       );
       switch (result) {
         case SignInFunctionSession(
@@ -375,6 +425,8 @@ final class SupabaseAuthRepository implements AuthRepository {
           }
         case SignInFunctionRejected():
           return const SignInRejected(_invalidCredentialsError);
+        case SignInFunctionCaptchaFailed():
+          return const SignInCaptchaFailed(_captchaRefusedError);
         case SignInFunctionLocked(:final LoginLockStatus lock):
           return SignInLocked(lock.lockoutMinutes);
         case SignInFunctionUnavailable(:final AppError error):
@@ -421,14 +473,12 @@ final class SupabaseAuthRepository implements AuthRepository {
   Future<SignInFunctionResult> _signInThroughFunction(
     String identifier,
     String password,
+    String? captchaToken,
   ) async {
     try {
       final FunctionResponse response = await _client.functions.invoke(
         _signInFunction,
-        body: <String, Object?>{
-          'identifier': identifier,
-          'password': password,
-        },
+        body: signInFunctionBody(identifier, password, captchaToken),
       );
       return interpretSignInFunction(response.status, response.data);
     } on FunctionException catch (error) {

@@ -226,7 +226,16 @@ final class MeterLogSubmissionResult {
 final class SupabaseMeterLogRepository
     with SupabaseGateway
     implements MeterLogRepository {
-  SupabaseMeterLogRepository(this._client, this._commands);
+  SupabaseMeterLogRepository(
+    this._client,
+    this._commands, {
+    String? organisationId,
+  }) : _organisationId = organisationId;
+
+  /// The caller's company. Pins the by-number read to it so a super admin who
+  /// can see several companies never gets another company's same-numbered
+  /// asset. Null leaves the read to row-level security alone.
+  final String? _organisationId;
 
   final SupabaseClient _client;
   final QueuedCommandRepository _commands;
@@ -249,16 +258,21 @@ final class SupabaseMeterLogRepository
     if (asset.isEmpty) return null;
     try {
       final List<Map<String, dynamic>> rows =
-          await guard<List<Map<String, dynamic>>>(
-        () => _client
+          await guard<List<Map<String, dynamic>>>(() {
+        var q = _client
             .from(SupabaseTables.odometerLogs)
             .select('odometer_km,reading_date,created_at')
-            .eq('asset_no', asset)
+            .eq('asset_no', asset);
+        final String? org = _organisationId;
+        if (org != null && org.isNotEmpty) {
+          q = q.eq('organisation_id', org);
+        }
+        return q
             .not('odometer_km', 'is', null)
             .order('reading_date', ascending: false, nullsFirst: false)
             .order('created_at', ascending: false)
-            .limit(1),
-      );
+            .limit(1);
+      });
       if (rows.isEmpty) return null;
       final Map<String, dynamic> row = rows.first;
       return LastOdometerReading(

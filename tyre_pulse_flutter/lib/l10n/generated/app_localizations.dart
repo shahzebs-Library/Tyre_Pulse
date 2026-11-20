@@ -8014,6 +8014,12 @@ abstract class AppLocalizations {
   /// **'Create an account'**
   String get loginCreateAccount;
 
+  /// Login access-help dialog: how a member of a company other than the original one signs in (company code / username). A bare username still works for everyone else.
+  ///
+  /// In en, this message translates to:
+  /// **'Joined another company through an invitation? Sign in with its company code, a slash and your username, for example ACME/ali.'**
+  String get loginCompanyCodeHelp;
+
   /// Error title.
   ///
   /// In en, this message translates to:
@@ -15190,6 +15196,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'myAuditsTitle=My counts~audit=Inventory audit~noAudits=No counts assigned~noAuditsBody=No inventory count is assigned to you right now.~draftsUnreadable=Counts saved on this phone could not be read just now. Nothing was changed. Try again.~unsyncedLines=%n counted lines are saved on this phone and not yet sent. Tap to open.~pendingN=%n not sent~overdue=Overdue~due=Due~notCounting=This audit is not open for counting.~notProvisionedTitle=Inventory counts are not set up yet~notProvisionedBody=The server does not have inventory counting switched on yet. Your administrator needs to finish the inventory setup.~loadFailed=This could not be loaded.~countTitle=Blind count~resumed=Resumed: %n lines from your earlier session.~noLocations=No locations are in this audit.~progress=Locations counted: %a of %b~linesDone=%n lines counted~unexpectedN=%n unexpected~scanLocation=Scan the location label first~scanItem=Scan an item, serial or barcode~scanCamera=Scan with camera~locations=Locations~atLocation=Counting at~scanningSerialsOf=Scanning serials of~stopSerials=Stop~serialTracked=Serial tracked~linesN=%n lines~myLines=My counts here~noLinesHere=Nothing counted at this location yet.~confirmedZero=Zero (confirmed)~notCountedYet=Not counted yet~unexpected=Unexpected item~unexpectedHint=Not in this location\'s list. It will be reviewed.~photosN=%n photos~submitN=Send %n counted lines~submitDone=%n lines sent.~submitNothing=Finish a line before sending.~submitOffline=No connection. Your counts are safe on this phone; send again when you have signal.~submitQueued=No connection. %n counted lines will be sent automatically when the connection returns.~submitPartial=Some lines were not accepted or their photos could not be uploaded. Check the lines marked.~submitFailed=The counts could not be sent. They are still saved on this phone.~draftSaveFailed=This phone could not save the count just now. Do not close the app; try again.~serialCounted=Serial counted.~scan_locationSelected=Location selected.~scan_serialItemSelected=Now scan each unit\'s serial.~scan_locationOutOfScope=That location is not part of this audit.~scan_duplicateSerial=That serial is already counted in this audit.~scan_needsLocation=Scan the location label before counting items.~countedQty=Counted quantity~confirmZero=None found here~confirmZeroHint=Tick only after looking: an empty box is not a count of zero.~serialOne=One serialised unit.~condition=Condition~condition_good=Good~condition_damaged=Damaged~condition_repairable=Repairable~condition_quarantine=Quarantine~condition_scrap=Scrap~remarks=Remarks (optional)~photo=Photo~addPhoto=Add photo~photoFailed=The photo could not be taken.~removeLine=Remove~saveLine=Save~enterQty=Enter the counted quantity, or tick None found here.~invalidQty=Quantities cannot be negative.~confirmZeroFirst=For zero, tick None found here.~state_draft=On phone~state_submitted=Sent~state_rejected=Not accepted~status_draft=Draft~status_scheduled=Scheduled~status_assigned=Assigned~status_in_progress=In progress~status_counting_completed=Counting completed~status_reconciliation=Reconciliation~status_recount=Recount~status_investigation=Investigation~status_approval=Awaiting approval~status_adjustment_posted=Adjustment posted~status_closed=Closed~status_cancelled=Cancelled~status_rejected=Rejected~status_unknown=Status not recorded~type_full=Full count~type_partial=Partial count~type_cycle=Cycle count~type_category=Category count~type_high_value=High-value count~type_surprise=Surprise count~type_bin=Bin count~type_tyre_serial=Tyre serial count~type_vehicle_tyre=Vehicle tyre count~transfersTitle=Stock transfers~transfer=Transfer~noTransfers=No transfers~noTransfersBody=No stock transfers are visible to you.~tstatus_dispatched=Dispatched~tstatus_in_transit=In transit~tstatus_partially_received=Partly received~tstatus_completed=Completed~tstatus_cancelled=Cancelled~tstatus_unknown=Status not recorded~dispatchTitle=Dispatch stock~scanFrom=Scan the FROM location label~scanTo=Scan the TO location label~from=From~to=To~items=Items~noItemsScanned=No items scanned yet.~needFrom=Scan the location the stock leaves from.~needTo=Scan the location the stock goes to.~sameLocation=From and To must be different locations.~needLines=Add at least one line.~dispatchSend=Dispatch~dispatchDone=Transfer dispatched.~transferOffline=No connection. Nothing was sent; try again when you have signal.~transferFailed=The transfer could not be saved.~receiveTitle=Receive transfer~noLines=This transfer has no lines.~outstanding=Still to arrive~outstandingUnknown=Quantity sent not recorded~receiveSend=Confirm receipt~receiveDone=Receipt recorded.~manualSendNote=Your counts stay on this phone until the server confirms them. Without signal, finished lines (with their photos) are sent automatically when the connection returns. Tap Send to send them now.~finishCounting=Finish counting~finishNote=When every location is counted and sent, finish counting so the audit can be reconciled. You cannot add counts afterwards.~finishUnsent=%n lines are still on this phone. Send them before you finish counting.~finishNotOpen=Counting is not open on this audit, so it cannot be finished.~finishOffline=No connection. Finishing counting needs signal; nothing was changed.~finishConfirmTitle=Finish counting?~finishConfirmBody=The audit moves to reconciliation and no more counts can be added. Make sure every location has been counted.~finishCancel=Keep counting~finishDone=Counting finished. The audit is ready for reconciliation.~finishFailed=Counting could not be finished. Try again.'**
   String get inventoryCopyCatalog;
+
+  /// Accessibility label on the Cloudflare Turnstile security check shown above the sign-in and register buttons when CAPTCHA is enabled for this build.
+  ///
+  /// In en, this message translates to:
+  /// **'Security check'**
+  String get captchaSemanticLabel;
+
+  /// Status under the security check while the challenge loads.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading the security check...'**
+  String get captchaLoading;
+
+  /// Status under the security check while it is unsolved; the sign-in / register button stays disabled until it is done.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete the security check to continue.'**
+  String get captchaPrompt;
+
+  /// Status under the security check once it is solved.
+  ///
+  /// In en, this message translates to:
+  /// **'Security check complete.'**
+  String get captchaSolved;
+
+  /// The solved check expired before it was used; offers Try again.
+  ///
+  /// In en, this message translates to:
+  /// **'The security check expired. Try it again.'**
+  String get captchaExpired;
+
+  /// The check failed to load or reported an error; offers Try again.
+  ///
+  /// In en, this message translates to:
+  /// **'The security check could not load. Check your connection and try again.'**
+  String get captchaLoadFailed;
+
+  /// Nothing loaded within the time limit; offers Try again.
+  ///
+  /// In en, this message translates to:
+  /// **'The security check is taking too long. Check your connection and try again.'**
+  String get captchaTimedOut;
+
+  /// Supabase Auth refused the attempt because of the CAPTCHA (captcha_failed). Never counted as a wrong password.
+  ///
+  /// In en, this message translates to:
+  /// **'The security check was not accepted. Complete it again and retry.'**
+  String get captchaRefused;
 }
 
 class _AppLocalizationsDelegate

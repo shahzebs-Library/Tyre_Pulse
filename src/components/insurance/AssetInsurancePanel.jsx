@@ -52,11 +52,15 @@ export default function AssetInsurancePanel({ asset, country }) {
       }
       if (cancelled) return
       const err = sched.error || claims.error || ''
+      // A schedule line or claim of ANOTHER company can carry the same asset
+      // code, plate or chassis (a super admin reads every company): keep only
+      // this machine's own company.
+      const sameCompany = (r) => !asset.organisation_id || !r.organisation_id || r.organisation_id === asset.organisation_id
       setState({
         loading: false,
         error: err,
-        cover: (sched.data || []).filter((r) => describesAsset(r, asset)),
-        claims: (claims.data || []).filter((r) => describesAsset(r, asset))
+        cover: (sched.data || []).filter((r) => sameCompany(r) && describesAsset(r, asset)),
+        claims: (claims.data || []).filter((r) => sameCompany(r) && describesAsset(r, asset))
           .sort((a, b) => String(b.accident_date || '').localeCompare(String(a.accident_date || ''))),
       })
     })()

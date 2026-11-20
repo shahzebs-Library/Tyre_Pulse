@@ -10,6 +10,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
+import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/scanning/domain/scan_lookup.dart';
 
 /// Where a signed-in build gets its [ScanLookupSource].
@@ -22,7 +23,10 @@ import 'package:tyre_pulse/features/scanning/domain/scan_lookup.dart';
 /// elsewhere in this project.
 final Provider<ScanLookupSource> scanLookupRepositoryProvider =
     Provider<ScanLookupSource>(
-  (ref) => ScanLookupRepository(ref.watch(supabaseClientProvider)),
+  (ref) => ScanLookupRepository(
+    ref.watch(supabaseClientProvider),
+    organisationId: ref.watch(workspaceContextProvider)?.companyId,
+  ),
 );
 
 /// Where the scanning screen is in its own lifecycle.

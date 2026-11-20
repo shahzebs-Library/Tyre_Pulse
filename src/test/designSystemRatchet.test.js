@@ -89,11 +89,8 @@ const PAGES_DIR = resolve(process.cwd(), 'src/pages')
  * moved onto EnterpriseTable when they were deepened. DataIntakeHistory moved
  * all six of its tables when it was deepened (one step of the 190 -> 189 drop).
  */
-// rawTable 0 -> 1: OemPartsCatalogPreview.jsx (merged without a ratchet run) holds three
-// hand-rolled parts tables. Draft PR #565 rewrites that page without them; lower this back to 0
-// in the same merge.
 const BASELINE = {
-  rawTable: 1,
+  rawTable: 0,
   rawOverlay: 0,
 }
 

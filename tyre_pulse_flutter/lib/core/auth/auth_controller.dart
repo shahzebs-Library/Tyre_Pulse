@@ -155,8 +155,13 @@ final class AuthController extends Notifier<AuthState> {
   Future<SignInOutcome> signIn({
     required String identifier,
     required String password,
+    String? captchaToken,
   }) =>
-      _auth.signIn(identifier: identifier, password: password);
+      _auth.signIn(
+        identifier: identifier,
+        password: password,
+        captchaToken: captchaToken,
+      );
 
   /// Verifies the multi-factor [code] owed by the current session and, once
   /// accepted, carries on with the profile load that was held back for it.

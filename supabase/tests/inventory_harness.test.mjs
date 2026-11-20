@@ -23,7 +23,7 @@ export const U = {
   viewer: id(6), adminB: id(7), super: id(8), uaeOnly: id(9), site2Only: id(10), engineer: id(11),
 }
 
-const PM = f => readFileSync(new URL(`../pending_migrations/${f}`, import.meta.url), 'utf8')
+const PM = f => readFileSync(new URL(`../${f.endsWith('_ROLLBACK.sql') ? 'rollbacks' : 'migrations'}/${f}`, import.meta.url), 'utf8')
 export const MIGRATIONS = [
   '20261120100000_inv_p0_ledger_integrity.sql',
   '20261120101000_inv_item_master_locations.sql',

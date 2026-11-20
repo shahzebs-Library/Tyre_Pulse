@@ -247,6 +247,7 @@ const FleetMaster            = lazy(() => import('./pages/FleetMaster'))
 const Vehicle360             = lazy(() => import('./pages/Vehicle360'))
 const AuditTrail             = lazy(() => import('./pages/AuditTrail'))
 const ResetPassword          = lazy(() => import('./pages/ResetPassword'))
+const InviteSignup           = lazy(() => import('./pages/InviteSignup'))
 const Accidents              = lazy(() => import('./pages/Accidents'))
 const AccidentCases          = lazy(() => import('./pages/AccidentCases'))
 const AccidentDetail         = lazy(() => import('./components/AccidentDetailModal'))
@@ -344,6 +345,7 @@ const MasterAccessControl    = lazy(() => import('./pages/MasterAccessControl'))
 const ReportShare            = lazy(() => import('./pages/ReportShare'))
 const AccidentPortalView     = lazy(() => import('./pages/AccidentPortalView'))
 const DataDeletion           = lazy(() => import('./pages/DataDeletion'))
+const CaptchaBridge          = lazy(() => import('./pages/CaptchaBridge'))
 const Privacy                = lazy(() => import('./pages/Privacy'))
 const Terms                  = lazy(() => import('./pages/Terms'))
 const PublicSupport          = lazy(() => import('./pages/PublicSupport'))
@@ -610,9 +612,13 @@ function MainApp() {
             <Route path="/login"          element={<Login />} />
             <Route path="/"               element={<PublicRootRoute />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            {/* PUBLIC company invitation sign-up. The token names the company;
+                the database places the account (_signup_context). */}
+            <Route path="/invite/:token"  element={<Safe><InviteSignup /></Safe>} />
             {/* PUBLIC account & data deletion page - the URL for the Google Play
                 Data Safety form's deletion mechanism. Anon, no app shell. */}
             <Route path="/data-deletion"   element={<Safe><DataDeletion /></Safe>} />
+            <Route path="/captcha-bridge"  element={<Safe><CaptchaBridge /></Safe>} />
             <Route path="/delete-account"  element={<LegacyRedirect to="/data-deletion" />} />
             {/* PUBLIC privacy policy - the URL for Play Console App content + Data Safety. */}
             <Route path="/privacy"         element={<Safe><Privacy /></Safe>} />

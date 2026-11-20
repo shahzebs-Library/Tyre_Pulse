@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { sanitizeSearchTerm } from '../lib/searchFilter'
+import { currentOrgId, pinCompany } from '../lib/api/companyScope'
 import { useLanguage } from '../contexts/LanguageContext'
 
 const CATEGORY_CONFIG = {
@@ -61,37 +62,42 @@ function highlight(text, query) {
 }
 
 // ── Search engine ─────────────────────────────────────────────────────────────
-async function searchAll(query) {
+export async function searchAll(query) {
   if (!query || query.length < 2) return {}
   const q = sanitizeSearchTerm(query)
   if (q.length < 2) return {}
   const results = {}
+  // The caller's company only (RLS already means that for an ordinary user; a
+  // super admin's read spans companies). Unreadable company: RLS-only, as before.
+  const org = await currentOrgId()
 
   const [tyres, vehicles, inspections, workOrders, stock] = await Promise.allSettled([
-    // Tyre records
-    supabase.from('tyre_records')
+    // Tyre records. The filter names the REAL columns: PostgREST filters do not
+    // see select aliases, and `serial_number` / `asset_number` are dead legacy
+    // columns (empty on every row), so the old filter never matched a serial.
+    pinCompany(supabase.from('tyre_records')
       .select('id, serial_number:serial_no, asset_number:asset_no, brand, risk_level')
-      .or(`serial_number.ilike.%${q}%,asset_number.ilike.%${q}%,brand.ilike.%${q}%`)
+      .or(`serial_no.ilike.%${q}%,asset_no.ilike.%${q}%,brand.ilike.%${q}%`), org)
       .limit(6),
-    // Vehicles
-    supabase.from('vehicles')
+    // Vehicles (base table: the `vehicles` view carries no organisation_id)
+    pinCompany(supabase.from('vehicle_fleet')
       .select('id, asset_no, vehicle_type, make, model, site')
-      .or(`asset_no.ilike.%${q}%,make.ilike.%${q}%,model.ilike.%${q}%`)
+      .or(`asset_no.ilike.%${q}%,make.ilike.%${q}%,model.ilike.%${q}%`), org)
       .limit(6),
     // Inspections
-    supabase.from('inspections')
+    pinCompany(supabase.from('inspections')
       .select('id, asset_no, inspector, inspection_date, site')
-      .or(`asset_no.ilike.%${q}%,inspector.ilike.%${q}%`)
+      .or(`asset_no.ilike.%${q}%,inspector.ilike.%${q}%`), org)
       .limit(6),
     // Work orders
-    supabase.from('work_orders')
+    pinCompany(supabase.from('work_orders')
       .select('id, work_order_no, asset_no, work_type, status')
-      .or(`work_order_no.ilike.%${q}%,asset_no.ilike.%${q}%,description.ilike.%${q}%`)
+      .or(`work_order_no.ilike.%${q}%,asset_no.ilike.%${q}%,description.ilike.%${q}%`), org)
       .limit(6),
     // Stock
-    supabase.from('stock')
+    pinCompany(supabase.from('stock')
       .select('id, brand, size, quantity, site')
-      .or(`brand.ilike.%${q}%,size.ilike.%${q}%,site.ilike.%${q}%`)
+      .or(`brand.ilike.%${q}%,size.ilike.%${q}%,site.ilike.%${q}%`), org)
       .limit(4),
   ])
 

@@ -58,7 +58,7 @@ export const MOBILE_MODULES = [
   { key: 'workorders',     label: 'Work Orders',      group: 'Maintenance', roles: [] },
   { key: 'rca',            label: 'Root Cause',       group: 'Maintenance', roles: ['manager', 'director', 'inspector'] },
   { key: 'tasks',          label: 'Tasks',            group: 'Maintenance', roles: ['manager', 'director', 'inspector'] },
-  { key: 'stock',          label: 'Stock Count',      group: 'Maintenance', roles: ['manager', 'inspector'] },
+  { key: 'stock',          label: 'Stock Count',      group: 'Maintenance', roles: ['manager', 'inspector', 'store_keeper'] },
   { key: 'pm',             label: 'Maintenance Due',  group: 'Maintenance', roles: ['manager', 'director'] },
   // My Jobs: the shop-floor roles plus supervisors; admin always sees it.
   { key: 'workshop',       label: 'My Jobs',          group: 'Maintenance', roles: ['manager', 'director', 'inspector', 'tyre_man', 'mechanic', 'electrician'] },

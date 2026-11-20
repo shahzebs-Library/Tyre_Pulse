@@ -6,6 +6,9 @@ import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/router/screen_registry.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
+import 'package:tyre_pulse/core/auth/captcha/turnstile_captcha.dart';
+import 'package:tyre_pulse/core/auth/captcha/turnstile_webview.dart';
+import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/permissions/access_resolver.dart';
 import 'package:tyre_pulse/core/permissions/roles.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
@@ -23,6 +26,8 @@ import 'package:tyre_pulse/features/extras/extras_providers.dart';
 import 'package:tyre_pulse/features/extras/extras_screen_registrations.dart';
 import 'package:tyre_pulse/features/extras/presentation/fleet_ai_screen.dart';
 import 'package:tyre_pulse/features/extras/presentation/repair_request_screen.dart';
+
+import '../../core/auth/captcha/fake_turnstile.dart';
 
 const WorkspaceContext _workspace = WorkspaceContext(
   userId: 'user-1',
@@ -65,6 +70,8 @@ class _FakeReg implements SelfRegistrationRepository {
   _FakeReg(this.policy);
   final RegistrationPolicy? policy;
   int calls = 0;
+  final List<String?> captchaTokens = <String?>[];
+  SelfRegistrationResult result = SelfRegistrationResult.created;
 
   @override
   Future<RegistrationPolicy?> loadPolicy() async => policy;
@@ -75,9 +82,11 @@ class _FakeReg implements SelfRegistrationRepository {
     required String employeeId,
     required String password,
     String? fullName,
+    String? captchaToken,
   }) async {
     calls++;
-    return SelfRegistrationResult.created;
+    captchaTokens.add(captchaToken);
+    return result;
   }
 }
 
@@ -307,7 +316,68 @@ void main() {
       await tester.tap(find.byKey(RegisterKeys.submit));
       await tester.pumpAndSettle();
       expect(reg.calls, 1);
+      expect(reg.captchaTokens, <String?>[null]);
+      expect(find.byKey(RegisterKeys.captcha), findsNothing);
       expect(find.byKey(RegisterKeys.done), findsOneWidget);
+    });
+
+    testWidgets(
+        'with a Turnstile site key the account is only requested once the '
+        'check is solved, and a refusal asks for it again', (
+      WidgetTester tester,
+    ) async {
+      final _FakeReg reg = _FakeReg(
+        const RegistrationPolicy(open: true, minPassword: 8),
+      )..result = SelfRegistrationResult.captchaFailed;
+      final FakeTurnstileFactory factory = FakeTurnstileFactory();
+      await _pump(
+        tester,
+        const RegisterScreen(route: RegisterRoute()),
+        <Override>[
+          selfRegistrationRepositoryProvider.overrideWithValue(reg),
+          turnstileSiteKeyProvider.overrideWithValue('site-key'),
+          turnstileViewFactoryProvider.overrideWithValue(factory),
+        ],
+      );
+      await tester.pump();
+      expect(find.byKey(RegisterKeys.captcha), findsOneWidget);
+
+      Future<void> type(Key key, String value) => tester.enterText(
+            find.descendant(
+              of: find.byKey(key),
+              matching: find.byType(TextField),
+            ),
+            value,
+          );
+      await type(RegisterKeys.username, 'ali.khan');
+      await type(RegisterKeys.employeeId, 'E100');
+      await type(RegisterKeys.password, 'longenough1');
+      await type(RegisterKeys.confirm, 'longenough1');
+      await tester.pump();
+
+      TpButton submit() => tester.widget<TpButton>(
+            find.byKey(RegisterKeys.submit),
+          );
+      expect(submit().onPressed, isNull);
+
+      factory.latest.emit(const TurnstileToken('tok-r'));
+      await tester.pump();
+      expect(submit().onPressed, isNotNull);
+
+      await tester.ensureVisible(find.byKey(RegisterKeys.submit));
+      await tester.tap(find.byKey(RegisterKeys.submit));
+      await tester.pump();
+      await tester.pump();
+
+      expect(reg.captchaTokens, <String?>['tok-r']);
+      expect(factory.latest.resets, 1);
+      expect(
+        find.text(
+          'The security check was not accepted. Complete it again and retry.',
+        ),
+        findsOneWidget,
+      );
+      expect(submit().onPressed, isNull);
     });
   });
 

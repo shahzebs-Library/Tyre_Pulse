@@ -10,6 +10,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
+import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/tyres/data/tyre_fitment_repository.dart';
 import 'package:tyre_pulse/features/tyres/data/tyre_lookup_repository.dart';
 
@@ -25,5 +26,6 @@ final Provider<TyreFitmentRepository> tyreFitmentRepositoryProvider =
     Provider<TyreFitmentRepository>(
   (ref) => SupabaseTyreFitmentRepository(
     ref.watch(supabaseClientProvider),
+    organisationId: ref.watch(workspaceContextProvider)?.companyId,
   ),
 );

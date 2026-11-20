@@ -9,11 +9,19 @@
 --   * Ordinary stock: weighted average of PROPERLY VALUED quantity only. Unknown
 --     cost is never treated as zero and never consumed first; no proportional
 --     cost is invented.
---   * An issue or transfer that touches unknown-cost stock moves its valued part
---     at the average (stock_movements.valued_qty, value_change) and records the
---     rest as unvalued (stock_movements.unvalued_qty) with an OPEN row in
---     inventory_cost_reconciliations. Only an approved reconciliation
---     (inv_cost_reconcile, 20261120108000) turns unknown cost into known value.
+--   * No order is assumed when a balance holds BOTH valued and unvalued units
+--     (not priced-first, not unpriced-first, not proportional). An outbound
+--     movement moves only what arithmetic proves: the certainly valued part at the
+--     average (stock_movements.valued_qty, value_change) and the certainly
+--     unvalued part (stock_movements.unvalued_qty, with an OPEN reconciliation).
+--     The AMBIGUOUS part posts no value change (stock_movements.pending_out_change)
+--     and opens ONE row of kind 'issue_allocation' holding the quantity, the
+--     movement and the balance split before it (snapshot). The balance carries it
+--     as pending_allocation_out_qty (a transfer destination as
+--     pending_allocation_in_qty) until a person decides the split.
+--   * Only an approved reconciliation (inv_cost_reconcile, 20261120108000) turns
+--     unknown cost into known value or decides an issue allocation; the decision
+--     posts linked cost_allocation movements (append-only).
 --
 -- The single writer _inv_post (20261120100000) computes the buckets and calls
 -- _inv_cost_rec_track, whose real body is installed here:
@@ -62,7 +70,7 @@ create table if not exists public.inventory_cost_reconciliations (
   stock_id uuid references public.stock_records(id),
   origin_movement_id uuid references public.stock_movements(id),
   movement_id uuid references public.stock_movements(id),
-  kind text not null check (kind in ('unpriced_inbound','consumed','transfer','reversal_return','legacy')),
+  kind text not null check (kind in ('unpriced_inbound','consumed','transfer','reversal_return','legacy','issue_allocation')),
   consumed boolean not null default false,
   consumed_at timestamptz,
   unvalued_qty numeric not null check (unvalued_qty > 0),
@@ -81,6 +89,13 @@ create table if not exists public.inventory_cost_reconciliations (
   evidence jsonb not null default '[]'::jsonb,
   notes text,
   parent_id uuid references public.inventory_cost_reconciliations(id),
+  -- issue_allocation only: the balance split before the movement, where a
+  -- transfer's undecided units now sit, the proposed and decided split
+  snapshot jsonb,
+  holder_stock_id uuid references public.stock_records(id),
+  proposed_valued_qty numeric check (proposed_valued_qty is null or proposed_valued_qty >= 0),
+  resolved_valued_qty numeric, resolved_unvalued_qty numeric,
+  holder_resolution_movement_id uuid references public.stock_movements(id),
   created_by uuid,
   created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
   constraint inventory_cost_reconciliations_closed_chk check (status = 'open' or resolved_at is not null),
@@ -110,7 +125,7 @@ declare r public.inventory_cost_reconciliations%rowtype; v_left numeric := p_qty
 begin
   if p_dest is not null then select * into d from public.stock_records where id = p_dest; end if;
   for r in select * from public.inventory_cost_reconciliations
-            where stock_id = p_stock and status = 'open' and not consumed
+            where stock_id = p_stock and status = 'open' and not consumed and kind <> 'issue_allocation'
             order by created_at, id for update loop
     exit when v_left <= 0;
     v_take := least(r.unvalued_qty, v_left);
@@ -149,9 +164,37 @@ end $fn$;
 create or replace function public._inv_cost_rec_track(p_mov public.stock_movements, p jsonb)
 returns void language plpgsql security definer set search_path = public, pg_temp as $fn$
 declare v_u numeric := coalesce(p_mov.unvalued_qty_change, 0); v_left numeric; v_kind text;
-  r public.inventory_cost_reconciliations%rowtype; v_take numeric;
+  r public.inventory_cost_reconciliations%rowtype; v_take numeric; v_res_mov uuid; b public.stock_records%rowtype;
 begin
-  if v_u = 0 or p_mov.movement_type = 'cost_assignment' then return; end if;
+  -- the approved resolution steps move their own records (inv_cost_reconcile)
+  if p_mov.movement_type in ('cost_assignment', 'cost_allocation') then return; end if;
+  -- the ambiguous part of an outbound: ONE issue_allocation record, snapshot of the
+  -- balance before the movement (this hook runs before the balance is updated)
+  if coalesce(p_mov.pending_out_change, 0) > 0 and p_mov.movement_type <> 'reversal' then
+    select * into b from public.stock_records where id = p_mov.stock_id;
+    insert into public.inventory_cost_reconciliations(organisation_id, country, site, item_id, location_id, stock_id,
+      origin_movement_id, movement_id, kind, consumed, unvalued_qty, currency, snapshot, created_by)
+    values (p_mov.organisation_id, p_mov.country, p_mov.site, p_mov.item_id, p_mov.location_id, p_mov.stock_id,
+      p_mov.id, p_mov.id, 'issue_allocation', false, p_mov.pending_out_change, p_mov.currency,
+      jsonb_build_object('valued_qty', b.valued_qty, 'unvalued_qty', b.unvalued_qty, 'valued_value', b.valued_value,
+        'pending_allocation_out_qty', b.pending_allocation_out_qty, 'pending_allocation_in_qty', b.pending_allocation_in_qty,
+        'qty_on_hand', b.qty_on_hand, 'movement_qty', -p_mov.qty_change), p_mov.actor_id);
+  end if;
+  -- undecided units arriving by transfer: the record now knows where they sit
+  if coalesce(p_mov.pending_in_change, 0) > 0 and p_mov.movement_type = 'transfer_in'
+     and nullif(p->>'carried_movement_id', '') is not null then
+    update public.inventory_cost_reconciliations set holder_stock_id = p_mov.stock_id, updated_at = now()
+     where origin_movement_id = (p->>'carried_movement_id')::uuid and kind = 'issue_allocation';
+  end if;
+  if p_mov.movement_type = 'reversal' and p_mov.reverses_movement_id is not null then
+    -- an undecided allocation of the reversed movement is cancelled with it
+    update public.inventory_cost_reconciliations set status = 'cancelled', resolution_source = 'reversal',
+      resolution_movement_id = p_mov.id, resolved_by = p_mov.actor_id, resolved_at = now(), updated_at = now()
+     where origin_movement_id = p_mov.reverses_movement_id and kind = 'issue_allocation' and status = 'open';
+    select resolution_movement_id into v_res_mov from public.inventory_cost_reconciliations
+     where origin_movement_id = p_mov.reverses_movement_id and kind = 'issue_allocation' and status = 'resolved';
+  end if;
+  if v_u = 0 then return; end if;
   if v_u > 0 then
     v_left := v_u;
     if p_mov.movement_type = 'transfer_in' and nullif(p->>'carried_from_stock_id', '') is not null then
@@ -159,7 +202,8 @@ begin
     elsif p_mov.movement_type = 'reversal' and p_mov.reverses_movement_id is not null then
       -- the reversed issue's consumed records come back on the shelf, still open
       for r in select * from public.inventory_cost_reconciliations
-                where movement_id = p_mov.reverses_movement_id and consumed and status = 'open'
+                where (movement_id = p_mov.reverses_movement_id or movement_id = v_res_mov)
+                  and consumed and status = 'open' and kind <> 'issue_allocation'
                 order by created_at, id for update loop
         exit when v_left <= 0;
         v_take := least(r.unvalued_qty, v_left);
@@ -220,7 +264,8 @@ select s.organisation_id, s.country, s.site, s.item_id, s.location_id, s.id, 'le
        'Unvalued at inventory go-live (legacy balance without a recorded cost).'
   from public.stock_records s
  where s.unvalued_qty > 0
-   and not exists (select 1 from public.inventory_cost_reconciliations r where r.stock_id = s.id and r.status = 'open');
+   and not exists (select 1 from public.inventory_cost_reconciliations r where r.stock_id = s.id and r.status = 'open'
+                    and r.kind <> 'issue_allocation');
 
 -- ---------------------------------------------------------------------------
 -- Read surfaces
@@ -232,11 +277,18 @@ select s.id as stock_id, s.organisation_id, s.country, s.site, s.location_id, s.
        s.qty_on_hand, s.valued_qty, s.unvalued_qty,
        case when (select public.inv_can('view_value')) then s.valued_value end as valued_amount,
        case when (select public.inv_can('view_value')) then s.avg_unit_cost end as avg_unit_cost,
-       s.unvalued_qty = 0 as valuation_complete,
+       s.unvalued_qty = 0 and s.pending_allocation_out_qty = 0 and s.pending_allocation_in_qty = 0 as valuation_complete,
        (select count(*) from public.inventory_cost_reconciliations r where r.stock_id = s.id and r.status = 'open')::int
          as open_reconciliations,
-       case when s.qty_on_hand = 0 then 'empty' when s.unvalued_qty = 0 then 'valued'
-            when s.valued_qty = 0 then 'unvalued' else 'partially_valued' end as valuation_status
+       case when s.pending_allocation_out_qty + s.pending_allocation_in_qty > 0 then 'pending_allocation'
+            when s.qty_on_hand = 0 then 'empty' when s.unvalued_qty = 0 then 'valued'
+            when s.valued_qty = 0 then 'unvalued' else 'partially_valued' end as valuation_status,
+       -- units whose valued/unvalued split is undecided (issue allocations): out = left
+       -- this balance, in = arrived here by transfer
+       s.pending_allocation_out_qty + s.pending_allocation_in_qty as pending_allocation_qty,
+       s.pending_allocation_out_qty, s.pending_allocation_in_qty,
+       (select count(*) from public.inventory_cost_reconciliations r where r.stock_id = s.id and r.status = 'open'
+         and r.kind = 'issue_allocation')::int as open_allocations
   from public.stock_records s
   left join public.material_master m on m.id = s.item_id;
 revoke all on public.v_inv_valuation from anon;
@@ -250,7 +302,10 @@ select r.id, r.organisation_id, r.country, r.site, r.item_id, m.item_code, r.loc
        case when (select public.inv_can('view_value')) then r.resolved_unit_cost end as resolved_unit_cost,
        case when (select public.inv_can('view_value')) then r.resolved_value end as resolved_value,
        r.applied_qty, r.not_applied_qty, r.resolved_by, r.resolved_at, r.approval_request_id,
-       r.movement_id, r.origin_movement_id, r.evidence, r.notes, r.created_by, r.created_at
+       r.movement_id, r.origin_movement_id, r.evidence, r.notes, r.created_by, r.created_at,
+       case when r.kind = 'issue_allocation' then r.unvalued_qty end as allocation_qty,
+       r.snapshot, r.holder_stock_id, r.proposed_valued_qty, r.resolved_valued_qty, r.resolved_unvalued_qty,
+       r.resolution_movement_id, r.holder_resolution_movement_id
   from public.inventory_cost_reconciliations r
   left join public.material_master m on m.id = r.item_id;
 revoke all on public.v_inv_cost_reconciliations from anon;
@@ -281,7 +336,8 @@ begin
   end if;
   with b as (
     select s.*, upper(s.currency) as cur from public.stock_records s
-     where s.qty_on_hand > 0 and (p_country is null or lower(s.country) = lower(p_country))
+     where (s.qty_on_hand > 0 or s.pending_allocation_out_qty + s.pending_allocation_in_qty > 0)
+       and (p_country is null or lower(s.country) = lower(p_country))
   ), agreed as (
     select b.id, (select (a.agreed_prices ->> b.item_id::text)::numeric from public.supplier_agreements a
                    where a.organisation_id = b.organisation_id and a.supplier_id = b.owner_supplier_id
@@ -293,6 +349,7 @@ begin
       sum(b.valued_value) filter (where b.ownership = 'owned') as owned_valued_value,
       sum(b.valued_qty) filter (where b.ownership = 'owned') as owned_valued_qty,
       sum(b.unvalued_qty) filter (where b.ownership = 'owned') as owned_unvalued_qty,
+      sum(b.pending_allocation_out_qty + b.pending_allocation_in_qty) filter (where b.ownership = 'owned') as owned_pending_qty,
       count(*) filter (where b.ownership = 'owned' and b.unvalued_qty > 0 and b.valued_qty > 0) as partial_lines,
       count(*) filter (where b.ownership = 'owned' and b.unvalued_qty > 0 and b.valued_qty = 0) as unvalued_lines,
       sum(b.qty_on_hand) filter (where b.ownership = 'consignment') as consignment_qty,
@@ -303,11 +360,14 @@ begin
   )
   select coalesce(jsonb_agg(jsonb_build_object(
       'currency', currency,
-      'owned_value', case when coalesce(owned_unvalued_qty, 0) = 0 then round(coalesce(owned_valued_value, 0), 2) end,
-      'owned_value_reason', case when coalesce(owned_unvalued_qty, 0) > 0 then 'unvalued_stock_present' end,
+      'owned_value', case when coalesce(owned_unvalued_qty, 0) = 0 and coalesce(owned_pending_qty, 0) = 0
+        then round(coalesce(owned_valued_value, 0), 2) end,
+      'owned_value_reason', case when coalesce(owned_pending_qty, 0) > 0 then 'pending_allocation_present'
+        when coalesce(owned_unvalued_qty, 0) > 0 then 'unvalued_stock_present' end,
       'owned_valued_value', round(coalesce(owned_valued_value, 0), 2),
-      'valuation_complete', coalesce(owned_unvalued_qty, 0) = 0,
+      'valuation_complete', coalesce(owned_unvalued_qty, 0) = 0 and coalesce(owned_pending_qty, 0) = 0,
       'owned_unvalued_qty', coalesce(owned_unvalued_qty, 0),
+      'owned_pending_allocation_qty', coalesce(owned_pending_qty, 0),
       'priced_pct', case when coalesce(owned_valued_qty, 0) + coalesce(owned_unvalued_qty, 0) > 0
         then round(100 * coalesce(owned_valued_qty, 0) / (coalesce(owned_valued_qty, 0) + coalesce(owned_unvalued_qty, 0)), 1) end,
       'partial_lines', partial_lines, 'unvalued_lines', unvalued_lines,
@@ -317,7 +377,8 @@ begin
       'supplier_custody_qty', coalesce(supplier_custody_qty, 0)) order by currency), '[]'::jsonb)
     into v from per;
   return jsonb_build_object('by_currency', v, 'mixed_currency', jsonb_array_length(v) > 1,
-    'valuation_complete', not exists (select 1 from jsonb_array_elements(v) e where (e->>'owned_unvalued_qty')::numeric > 0),
+    'valuation_complete', not exists (select 1 from jsonb_array_elements(v) e
+      where (e->>'owned_unvalued_qty')::numeric > 0 or (e->>'owned_pending_allocation_qty')::numeric > 0),
     'open_reconciliations', (select count(*) from public.inventory_cost_reconciliations r
                               where r.status = 'open' and (p_country is null or lower(r.country) = lower(p_country))),
     'note', 'Per currency; never summed across currencies. owned_valued_value is the valued part only and is not a total while valuation_complete is false. Inventory value is not maintenance cost.');

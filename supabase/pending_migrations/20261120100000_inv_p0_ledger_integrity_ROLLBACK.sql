@@ -116,7 +116,9 @@ alter table public.stock_movements
   drop column if exists currency, drop column if exists ownership, drop column if exists source_doc_type,
   drop column if exists source_doc_id, drop column if exists idempotency_key, drop column if exists payload_hash,
   drop column if exists reverses_movement_id, drop column if exists actor_id, drop column if exists approval_ref,
-  drop column if exists reserved_change, drop column if exists valued_qty, drop column if exists unvalued_qty;
+  drop column if exists reserved_change, drop column if exists valued_qty, drop column if exists unvalued_qty,
+  drop column if exists pending_out_change, drop column if exists pending_in_change,
+  drop column if exists source_receipt_movement_id;
 drop sequence if exists public.stock_movements_movement_seq_seq;
 do $$ declare r record; begin
   for r in select definition from _bak.inv_p0_snapshot where kind = 'nullable' loop execute r.definition; end loop;
@@ -136,6 +138,7 @@ alter table public.stock_records
   drop column if exists ownership, drop column if exists owner_supplier_id, drop column if exists qty_on_hand,
   drop column if exists qty_reserved, drop column if exists avg_unit_cost, drop column if exists valued_qty,
   drop column if exists valued_value, drop column if exists unvalued_qty, drop column if exists last_receipt_at,
+  drop column if exists pending_allocation_out_qty, drop column if exists pending_allocation_in_qty,
   drop column if exists last_issue_at, drop column if exists uom, drop column if exists version;
 
 -- 7. grants + view

@@ -155,7 +155,8 @@ begin
     return jsonb_build_object('org', r.organisation_id, 'country', r.country, 'site', r.site, 'ref', r.id::text,
       'state', r.status, 'state_ok', r.status = 'open',
       'conflicts', to_jsonb(array_remove(array[r.created_by, r.proposed_by], null)),
-      'snapshot', jsonb_build_object('unvalued_qty', r.unvalued_qty, 'consumed', r.consumed, 'stock_id', r.stock_id));
+      'snapshot', jsonb_build_object('unvalued_qty', r.unvalued_qty, 'consumed', r.consumed, 'stock_id', r.stock_id,
+        'kind', r.kind, 'holder_stock_id', r.holder_stock_id));
   end if;
   return null;
 end $fn$;
@@ -250,6 +251,30 @@ begin
       raise exception 'A recount must be done by a different person who has not counted this audit.' using errcode = '42501';
     end if;
     v_prop := jsonb_build_object('counter_id', v_cnt);
+  elsif v_type = 'cost_reconciliation' and e->'snapshot'->>'kind' = 'issue_allocation' then
+    -- An undecided split: a person states how many of the ambiguous units were VALUED
+    -- (from evidence: batch, receipt, GRN). Never written off: it has to be decided.
+    if coalesce(nullif(v_prop->>'resolution', ''), 'resolved') <> 'resolved' then
+      raise exception 'An issue allocation is resolved by deciding the split; it cannot be written off.' using errcode = '22023';
+    end if;
+    begin v_cost := (v_prop->>'valued_qty')::numeric; exception when others then v_cost := null; end;
+    if v_cost is null or v_cost < 0 or v_cost > (e->'snapshot'->>'unvalued_qty')::numeric then
+      raise exception 'proposal.valued_qty must be between 0 and %.', e->'snapshot'->>'unvalued_qty' using errcode = '22023';
+    end if;
+    if jsonb_array_length(coalesce(p_payload->'evidence', '[]'::jsonb)) = 0 and nullif(btrim(p_payload->>'reason'), '') is null then
+      raise exception 'Give evidence (batch, receipt or GRN) or a reason for the split.' using errcode = '22023';
+    end if;
+    -- the split must fit the buckets that still hold the units (checked again at posting)
+    if exists (select 1 from public.stock_records sr where sr.id = (e->'snapshot'->>'stock_id')::uuid
+                and (v_cost > sr.valued_qty or (e->'snapshot'->>'unvalued_qty')::numeric - v_cost > sr.unvalued_qty)) then
+      raise exception 'This split is not possible on the balance now; decide any upstream allocation first.' using errcode = '22023';
+    end if;
+    v_prop := jsonb_build_object('resolution', 'resolved', 'valued_qty', v_cost);
+    update public.inventory_cost_reconciliations set proposed_resolution = 'resolved', proposed_valued_qty = v_cost,
+      proposed_by = auth.uid(), proposed_at = now(),
+      evidence = evidence || coalesce(p_payload->'evidence', '[]'::jsonb), updated_at = now()
+     where id = v_id;
+    e := public._inv_approval_entity(v_type, v_id);
   elsif v_type = 'cost_reconciliation' then
     v_res_kind := coalesce(nullif(v_prop->>'resolution', ''), 'resolved');
     if v_res_kind not in ('resolved','written_off') then
@@ -434,6 +459,7 @@ create or replace function public.inv_cost_reconcile(p_payload jsonb)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $fn$
 declare v_res jsonb; c public.inventory_cost_reconciliations%rowtype; a public.inventory_approval_requests%rowtype;
   s public.stock_records%rowtype; v_cost numeric; v_kind text; v_apply numeric := 0; v_post jsonb; v_mov uuid;
+  v_hmov uuid; v_a numeric; v_u numeric; v_val numeric; m public.stock_movements%rowtype; v_left numeric;
 begin
   v_res := public._inv_req_begin('inv_cost_reconcile', p_payload);
   if v_res is not null then return v_res; end if;
@@ -452,7 +478,56 @@ begin
   end if;
   a := public._inv_approval_consume('cost_reconciliation', c.id,
     jsonb_strip_nulls(jsonb_build_object('resolution', nullif(p_payload->>'resolution', ''),
-      'unit_cost', case when p_payload ? 'unit_cost' then p_payload->'unit_cost' end)));
+      'unit_cost', case when p_payload ? 'unit_cost' then p_payload->'unit_cost' end,
+      'valued_qty', case when p_payload ? 'valued_qty' then p_payload->'valued_qty' end)));
+  if c.kind = 'issue_allocation' then
+    -- Decide the split: value leaves the source for the units decided valued
+    -- (linked cost_allocation movement, append-only); for a transfer it arrives at
+    -- the holder. The undecided unvalued part becomes ordinary reconciliations.
+    v_a := (a.proposal->>'valued_qty')::numeric; v_u := c.unvalued_qty - v_a;
+    v_post := public._inv_post(jsonb_build_object('idempotency_key', 'costalloc:' || c.id::text || ':source',
+      'stock_id', c.stock_id, 'movement_type', 'cost_allocation', 'qty_change', 0, 'qty', c.unvalued_qty,
+      'valued_qty', v_a, 'allocation_side', 'source', 'reason', 'Approved issue allocation ' || c.id::text,
+      'source_doc_type', 'issue_allocation', 'source_doc_id', c.origin_movement_id::text, 'approval_ref', a.id::text), false);
+    v_mov := (v_post->>'movement_id')::uuid; v_val := -(v_post->>'value_change')::numeric;
+    select * into m from public.stock_movements where id = v_mov;
+    if c.holder_stock_id is not null then
+      v_post := public._inv_post(jsonb_build_object('idempotency_key', 'costalloc:' || c.id::text || ':holder',
+        'stock_id', c.holder_stock_id, 'movement_type', 'cost_allocation', 'qty_change', 0, 'qty', c.unvalued_qty,
+        'valued_qty', v_a, 'allocation_side', 'holder', 'carried_value', coalesce(v_val, 0),
+        'reason', 'Approved issue allocation ' || c.id::text, 'source_doc_type', 'issue_allocation_holder',
+        'source_doc_id', c.origin_movement_id::text, 'approval_ref', a.id::text), false);
+      v_hmov := (v_post->>'movement_id')::uuid;
+      select * into m from public.stock_movements where id = v_hmov;
+      v_left := case when v_u > 0 then public._inv_rec_take(c.stock_id, v_u, 'move', m, c.holder_stock_id) else 0 end;
+      if v_left > 0 then
+        insert into public.inventory_cost_reconciliations(organisation_id, country, site, item_id, location_id, stock_id,
+          origin_movement_id, movement_id, kind, consumed, unvalued_qty, currency, created_by)
+        values (m.organisation_id, m.country, m.site, m.item_id, m.location_id, m.stock_id, c.origin_movement_id, m.id,
+          'transfer', false, v_left, m.currency, c.created_by);
+      end if;
+    else
+      v_left := case when v_u > 0 then public._inv_rec_take(c.stock_id, v_u, 'consume', m) else 0 end;
+      if v_left > 0 then
+        insert into public.inventory_cost_reconciliations(organisation_id, country, site, item_id, location_id, stock_id,
+          origin_movement_id, movement_id, kind, consumed, consumed_at, unvalued_qty, currency, created_by)
+        values (m.organisation_id, m.country, m.site, m.item_id, m.location_id, m.stock_id, c.origin_movement_id, m.id,
+          'consumed', true, now(), v_left, m.currency, c.created_by);
+      end if;
+    end if;
+    update public.inventory_cost_reconciliations set status = 'resolved', resolution_source = 'reconciliation',
+      resolved_valued_qty = v_a, resolved_unvalued_qty = v_u, resolved_value = v_val,
+      resolved_unit_cost = case when v_a > 0 then round(v_val / v_a, 4) end,
+      applied_qty = c.unvalued_qty, not_applied_qty = 0,
+      resolution_movement_id = v_mov, holder_resolution_movement_id = v_hmov, approval_request_id = a.id,
+      resolved_by = auth.uid(), resolved_at = now(),
+      evidence = evidence || coalesce(p_payload->'evidence', '[]'::jsonb),
+      notes = concat_ws(E'\n', notes, nullif(btrim(p_payload->>'note'), '')), updated_at = now()
+     where id = c.id returning * into c;
+    return public._inv_req_end('inv_cost_reconcile', p_payload, jsonb_build_object('id', c.id, 'status', c.status,
+      'kind', c.kind, 'resolved_valued_qty', c.resolved_valued_qty, 'resolved_unvalued_qty', c.resolved_unvalued_qty,
+      'resolved_value', c.resolved_value, 'movement_id', v_mov, 'holder_movement_id', v_hmov, 'posting', 'none'));
+  end if;
   v_kind := a.proposal->>'resolution';
   v_cost := (a.proposal->>'unit_cost')::numeric;
   if v_kind = 'resolved' and not c.consumed and c.stock_id is not null then

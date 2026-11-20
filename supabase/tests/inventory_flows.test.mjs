@@ -22,6 +22,14 @@ async function setup () {
 
 test('transfer: dispatch carries cost into transit, partial receipt, return of the rest', async () => {
   const { db, L, post, bal } = await setup()
+  const alloc = (stockId) => one(db, `select * from inventory_cost_reconciliations where kind = 'issue_allocation' and stock_id = $1 and status = 'open' order by created_at limit 1`, [stockId])
+  let k = 0
+  const decide = async (recId, valuedQty) => {
+    const req = await call(db, U.approver, 'inv_request_approval', { idempotency_key: `ar-${++k}`, entity_type: 'cost_reconciliation', entity_id: recId,
+      proposal: { valued_qty: valuedQty }, evidence: [{ type: 'grn', ref: `GRN-${k}` }] })
+    await call(db, U.admin, 'inv_approval_decide', { idempotency_key: `ad-${k}`, request_id: req.id, decision: 'approve' })
+    return call(db, U.approver, 'inv_cost_reconcile', { idempotency_key: `ac-${k}`, reconciliation_id: recId })
+  }
   try {
     const src = await post(U.keeper, { idempotency_key: 't1', item_id: FILTER, location_id: L.s1, movement_type: 'receipt', qty_change: 10, unit_cost: 4 })
     await post(U.keeper, { idempotency_key: 't0', stock_id: src.stock_id, movement_type: 'receipt', qty_change: 2 }) // 2 unvalued
@@ -31,36 +39,59 @@ test('transfer: dispatch carries cost into transit, partial receipt, return of t
     const replay = await rpc(db, U.keeper, 'inv_transfer_dispatch', [j({ idempotency_key: 'trf-1', from_location_id: L.s1, to_location_id: L.s2, lines: [] })])
     assert.equal(replay.replayed, true)
     const line = await one(db, 'select * from stock_transfer_lines where transfer_id = $1', [d.transfer_id])
-    // valued units leave first (owner decision): 10 valued at 4 = 40, then 1 unvalued (no cost invented)
-    assert.equal(Number(line.carried_unvalued_qty), 1); assert.equal(Number(line.carried_value), 40)
+    // no order is assumed (owner decision): of 11 from 10 valued + 2 unvalued, 9 are certainly
+    // valued (36), 1 certainly unvalued, 1 undecided (travels as pending allocation, no value)
+    assert.equal(Number(line.carried_unvalued_qty), 1); assert.equal(Number(line.carried_value), 36)
     const transit = await bal(line.transit_stock_id)
-    assert.equal(Number(transit.qty_on_hand), 11); assert.equal(Number(transit.unvalued_qty), 1); assert.equal(Number(transit.valued_value), 40)
-    assert.equal(Number((await bal(src.stock_id)).qty_on_hand), 1)
-    // the open reconciliation travelled with the unvalued unit (split), never duplicated
-    const recs = await q(db, `select stock_id, unvalued_qty from inventory_cost_reconciliations where status = 'open' and not consumed and item_id = '${FILTER}' order by stock_id`)
+    assert.equal(Number(transit.qty_on_hand), 11); assert.equal(Number(transit.unvalued_qty), 1); assert.equal(Number(transit.valued_value), 36)
+    assert.equal(Number(transit.pending_allocation_in_qty), 1)
+    let s1 = await bal(src.stock_id)
+    assert.equal(Number(s1.qty_on_hand), 1); assert.equal(Number(s1.pending_allocation_out_qty), 1)
+    const a1 = await alloc(src.stock_id)
+    assert.equal(Number(a1.unvalued_qty), 1); assert.equal(a1.holder_stock_id, line.transit_stock_id)
+    assert.deepEqual([Number(a1.snapshot.valued_qty), Number(a1.snapshot.unvalued_qty), Number(a1.snapshot.valued_value)], [10, 2, 40])
+    // the open unvalued-cost reconciliation travelled with the certainly unvalued unit, never duplicated
+    const recs = await q(db, `select stock_id, unvalued_qty from inventory_cost_reconciliations where status = 'open' and not consumed and kind <> 'issue_allocation' and item_id = '${FILTER}' order by stock_id`)
     assert.equal(recs.reduce((s, r) => s + Number(r.unvalued_qty), 0), 2)
     assert.equal(Number(recs.find(r => r.stock_id === line.transit_stock_id).unvalued_qty), 1)
-    // partial receipt at S2 with a damaged condition
+    // partial receipt at S2
     const r1 = await rpc(db, U.site2Only, 'inv_transfer_receive', [j({ idempotency_key: 'rcv-1', transfer_id: d.transfer_id,
       lines: [{ line_id: line.id, received_qty: 4, condition: 'good' }] })])
     assert.equal(r1.status, 'partially_received')
     await assert.rejects(rpc(db, U.site2Only, 'inv_transfer_receive', [j({ idempotency_key: 'rcv-2', transfer_id: d.transfer_id,
       lines: [{ line_id: line.id, received_qty: 8 }] })]), code('22023'))
-    const dest = await one(db, `select * from stock_records where location_id = $1 and item_id = $2`, [L.s2, FILTER])
-    assert.equal(Number(dest.qty_on_hand), 4); assert.equal(Number(dest.unvalued_qty), 0); assert.equal(Number(dest.valued_value), 16)
-    // site-1-only keeper cannot receive at S2? (keeper has S1,S2) - a UAE user cannot
+    const destId = (await one(db, `select id from stock_records where location_id = $1 and item_id = $2`, [L.s2, FILTER])).id
+    let dest = await bal(destId)
+    assert.equal(Number(dest.qty_on_hand), 4); assert.equal(Number(dest.unvalued_qty), 0); assert.equal(Number(dest.valued_value), 8)
+    assert.equal(Number(dest.pending_allocation_in_qty), 2)
     await assert.rejects(rpc(db, U.uaeOnly, 'inv_transfer_receive', [j({ idempotency_key: 'rcv-x', transfer_id: d.transfer_id,
       lines: [{ line_id: line.id, received_qty: 1 }] })]), /not found|scope|42501/)
     const back = await rpc(db, U.keeper, 'inv_transfer_return_remaining', [j({ idempotency_key: 'ret-1', transfer_id: d.transfer_id,
       reason: 'short shipped', lines: [{ line_id: line.id, qty: 7 }] })])
     assert.equal(back.status, 'completed')
     assert.equal(Number((await bal(line.transit_stock_id)).qty_on_hand), 0)
-    const s1 = await bal(src.stock_id)
-    assert.equal(Number(s1.qty_on_hand), 8); assert.equal(Number(s1.unvalued_qty), 2); assert.equal(Number(s1.valued_value), 24)
-    // total value conserved: 40 bought, 16 at S2, 24 at S1; unvalued units and their open records agree
-    const tot = await one(db, `select sum(valued_value)::numeric v, sum(qty_on_hand)::numeric qty, sum(unvalued_qty)::numeric u from stock_records where item_id = $1`, [FILTER])
-    assert.equal(Number(tot.v), 40); assert.equal(Number(tot.qty), 12)
-    const openQ = await one(db, `select sum(unvalued_qty)::numeric q from inventory_cost_reconciliations where status = 'open' and not consumed and item_id = $1`, [FILTER])
+    s1 = await bal(src.stock_id)
+    assert.equal(Number(s1.qty_on_hand), 8); assert.equal(Number(s1.valued_value), 24); assert.equal(Number(s1.pending_allocation_in_qty), 2)
+    // value conserved (40 bought) while 5 units across three allocations are undecided
+    let tot = await one(db, `select sum(valued_value)::numeric v, sum(qty_on_hand)::numeric qty, sum(unvalued_qty)::numeric u,
+      sum(pending_allocation_out_qty)::numeric po, sum(pending_allocation_in_qty)::numeric pi from stock_records where item_id = $1`, [FILTER])
+    assert.equal(Number(tot.v), 40); assert.equal(Number(tot.qty), 12); assert.equal(Number(tot.po), 5); assert.equal(Number(tot.pi), 5)
+    const a2 = await alloc(line.transit_stock_id)
+    // decide them; the chain unwinds in any order the buckets allow (no deadlock)
+    await decide(a1.id, 1)
+    const a2r = await decide(a2.id, 2)
+    assert.equal(a2r.status, 'resolved'); assert.equal(Number(a2r.resolved_value), 8)
+    const a3 = await alloc(line.transit_stock_id)
+    await assert.rejects(decide(a3.id, 0), /not possible/) // 2 unvalued would need more than the 1 held
+    const a3r = await decide(a3.id, 1)
+    assert.equal(a3r.status, 'resolved')
+    tot = await one(db, `select sum(valued_value)::numeric v, sum(unvalued_qty)::numeric u,
+      sum(pending_allocation_out_qty + pending_allocation_in_qty)::numeric p from stock_records where item_id = $1`, [FILTER])
+    assert.equal(Number(tot.v), 40); assert.equal(Number(tot.p), 0)
+    s1 = await bal(src.stock_id); dest = await bal(destId)
+    assert.deepEqual([Number(s1.valued_qty), Number(s1.unvalued_qty), Number(s1.valued_value)], [6, 2, 24])
+    assert.deepEqual([Number(dest.valued_qty), Number(dest.unvalued_qty), Number(dest.valued_value)], [4, 0, 16])
+    const openQ = await one(db, `select sum(unvalued_qty)::numeric q from inventory_cost_reconciliations where status = 'open' and not consumed and kind <> 'issue_allocation' and item_id = $1`, [FILTER])
     assert.equal(Number(openQ.q), Number(tot.u))
   } finally { await db.close() }
 })

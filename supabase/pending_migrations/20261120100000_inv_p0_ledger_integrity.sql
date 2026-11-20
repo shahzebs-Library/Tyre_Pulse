@@ -161,6 +161,7 @@ returns text language sql immutable set search_path = public as $$
     when 'issue' then 'out' when 'transfer_out' then 'out' when 'adjustment_down' then 'out'
     when 'scrap' then 'out' when 'out' then 'out' when 'supplier_return' then 'out'
     when 'landed_cost' then 'value' when 'supplier_credit' then 'value' when 'cost_assignment' then 'value'
+    when 'cost_allocation' then 'value'
     when 'stocktake' then 'signed' when 'adjustment' then 'signed' when 'reversal' then 'signed'
     when 'reserve' then 'reserve' when 'release' then 'reserve'
   end
@@ -174,7 +175,7 @@ returns text language sql immutable set search_path = public as $$
     when 'issue' then 'issue' when 'return' then 'issue' when 'issue_return' then 'issue'
     when 'supplier_return' then 'receive'
     when 'landed_cost' then 'financial_post' when 'supplier_credit' then 'financial_post'
-    when 'cost_assignment' then 'financial_post'
+    when 'cost_assignment' then 'financial_post' when 'cost_allocation' then 'financial_post'
     when 'reserve' then 'issue' when 'release' then 'issue'
     when 'transfer_in' then 'transfer' when 'transfer_out' then 'transfer'
     when 'scrap' then 'scrap_approve'
@@ -232,6 +233,11 @@ alter table public.stock_records
   add column if not exists valued_qty numeric not null default 0,
   add column if not exists valued_value numeric not null default 0,
   add column if not exists unvalued_qty numeric not null default 0,
+  -- Owner decision 2026-11-20: units whose valued/unvalued split is undecided.
+  -- out: left this balance, still inside valued_qty / unvalued_qty until resolved;
+  -- in:  arrived by transfer, in neither bucket until the upstream split is resolved.
+  add column if not exists pending_allocation_out_qty numeric not null default 0,
+  add column if not exists pending_allocation_in_qty numeric not null default 0,
   add column if not exists last_receipt_at timestamptz,
   add column if not exists last_issue_at timestamptz,
   add column if not exists uom text,
@@ -261,7 +267,9 @@ alter table public.stock_records
   add constraint stock_records_qty_reserved_bounds check (qty_reserved >= 0 and qty_reserved <= qty_on_hand),
   add constraint stock_records_avg_cost_nonneg check (avg_unit_cost is null or avg_unit_cost >= 0),
   add constraint stock_records_value_buckets_chk check (valued_qty >= 0 and unvalued_qty >= 0 and valued_value >= 0
-    and qty_on_hand = valued_qty + unvalued_qty and (valued_qty > 0 or valued_value = 0));
+    and pending_allocation_out_qty >= 0 and pending_allocation_in_qty >= 0
+    and qty_on_hand + pending_allocation_out_qty - pending_allocation_in_qty = valued_qty + unvalued_qty
+    and (valued_qty > 0 or valued_value = 0));
 
 create unique index if not exists stock_records_item_balance_uq
   on public.stock_records (organisation_id, item_id, location_id, condition, ownership,
@@ -279,18 +287,22 @@ begin
   end if;
   if tg_op = 'INSERT' then
     if coalesce(new.qty_on_hand, 0) <> 0 or coalesce(new.stock_qty, 0) <> 0 or coalesce(new.qty_reserved, 0) <> 0
-       or coalesce(new.valued_qty, 0) <> 0 or coalesce(new.unvalued_qty, 0) <> 0 or coalesce(new.valued_value, 0) <> 0 then
+       or coalesce(new.valued_qty, 0) <> 0 or coalesce(new.unvalued_qty, 0) <> 0 or coalesce(new.valued_value, 0) <> 0
+       or coalesce(new.pending_allocation_out_qty, 0) <> 0 or coalesce(new.pending_allocation_in_qty, 0) <> 0 then
       raise exception 'Stock quantity can only be set by a posted movement (inv_post_movement or an approved opening balance).'
         using errcode = '42501';
     end if;
     new.qty_on_hand := 0; new.stock_qty := 0; new.qty_reserved := 0; new.version := 1;
     new.valued_qty := 0; new.valued_value := 0; new.unvalued_qty := 0; new.avg_unit_cost := null; new.unit_cost := null;
+    new.pending_allocation_out_qty := 0; new.pending_allocation_in_qty := 0;
     return new;
   elsif tg_op = 'UPDATE' then
     if new.qty_on_hand is distinct from old.qty_on_hand or new.stock_qty is distinct from old.stock_qty
        or new.qty_reserved is distinct from old.qty_reserved or new.avg_unit_cost is distinct from old.avg_unit_cost
        or new.valued_qty is distinct from old.valued_qty or new.valued_value is distinct from old.valued_value
        or new.unvalued_qty is distinct from old.unvalued_qty
+       or new.pending_allocation_out_qty is distinct from old.pending_allocation_out_qty
+       or new.pending_allocation_in_qty is distinct from old.pending_allocation_in_qty
        or new.unit_cost is distinct from old.unit_cost or new.currency is distinct from old.currency
        or new.version is distinct from old.version or new.item_id is distinct from old.item_id
        or new.location_id is distinct from old.location_id or new.condition is distinct from old.condition
@@ -361,7 +373,13 @@ alter table public.stock_movements
   -- magnitudes of the quantity this movement moved at a KNOWN cost and at an UNKNOWN
   -- cost; value_change is the value of the valued part only (owner decision 2026-11-20)
   add column if not exists valued_qty numeric not null default 0,
-  add column if not exists unvalued_qty numeric not null default 0;
+  add column if not exists unvalued_qty numeric not null default 0,
+  -- signed changes of the balance's pending allocation (out / in); an outbound movement
+  -- whose valued/unvalued split cannot be proved posts its ambiguous qty here and NO value
+  add column if not exists pending_out_change numeric not null default 0,
+  add column if not exists pending_in_change numeric not null default 0,
+  -- serial / lot-tracked items: the receipt whose actual cost this outbound used
+  add column if not exists source_receipt_movement_id uuid references public.stock_movements(id);
 
 -- Backfill legacy rows (78 live) BEFORE the append-only trigger exists.
 update public.stock_movements m set
@@ -412,7 +430,7 @@ alter table public.stock_movements add constraint stock_movements_movement_type_
   'In','Out','Adjustment','Initial','Reorder','Scrap',
   'receipt','return','transfer_in','adjustment_up','issue','transfer_out','scrap','adjustment_down','stocktake',
   'opening','reversal','reserve','release','consignment_receipt','issue_return','supplier_return',
-  'supplier_credit','landed_cost','cost_assignment']));
+  'supplier_credit','landed_cost','cost_assignment','cost_allocation']));
 alter table public.stock_movements add constraint stock_movements_qty_after_nonneg check (qty_after >= 0) not valid;
 do $$ begin
   alter table public.stock_movements validate constraint stock_movements_qty_after_nonneg;
@@ -500,6 +518,9 @@ returns jsonb language sql stable set search_path = public as $$
     'qty_after',m.qty_after,'reserved_change',m.reserved_change,'unit_cost',m.unit_cost,
     'value_change',m.value_change,'unvalued_qty_change',m.unvalued_qty_change,'valuation_status',m.valuation_status,
     'valued_qty_moved',m.valued_qty,'unvalued_qty_moved',m.unvalued_qty,
+    'pending_allocation_qty',greatest(abs(m.pending_out_change),abs(m.pending_in_change)),
+    'pending_out_change',m.pending_out_change,'pending_in_change',m.pending_in_change,
+    'source_receipt_movement_id',m.source_receipt_movement_id,
     'variance_kind',m.variance_kind,'variance_amount',m.variance_amount,
     'currency',m.currency,'idempotency_key',m.idempotency_key)
 $$;
@@ -536,6 +557,10 @@ declare
   v_var_kind text; v_var_amt numeric;
   v_out_unv numeric; v_out_val numeric; v_out_value numeric; v_avg numeric;
   v_m_vq numeric := 0; v_m_uq numeric := 0;  -- movement magnitudes: valued / unvalued quantity moved
+  -- pending allocation (owner decision 2026-11-20: no order is assumed on a mixed balance)
+  v_po numeric; v_pi numeric; v_po_chg numeric := 0; v_pi_chg numeric := 0; v_amb numeric := 0;
+  v_maxv numeric; v_maxu numeric; v_q numeric; v_a numeric; v_alloc_val numeric;
+  v_tracked boolean := false; v_src_mov public.stock_movements%rowtype; v_src_left numeric; v_src_unit numeric;
 begin
   if v_uid is null or v_org is null then
     raise exception 'Sign in with an organisation to post stock.' using errcode = '42501';
@@ -684,7 +709,11 @@ begin
   end if;
 
   v_vq := coalesce(v_rec.valued_qty, 0); v_vv := coalesce(v_rec.valued_value, 0); v_uq := coalesce(v_rec.unvalued_qty, 0);
+  v_po := coalesce(v_rec.pending_allocation_out_qty, 0); v_pi := coalesce(v_rec.pending_allocation_in_qty, 0);
   v_before  := coalesce(v_rec.qty_on_hand, 0);
+  if v_type = 'opening' and v_rec.id is not null and v_po + v_pi > 0 then
+    raise exception 'This balance has an undecided issue allocation; resolve it before an opening correction.' using errcode = '22023';
+  end if;
   v_rbefore := coalesce(v_rec.qty_reserved, 0);
 
   -- ---- valuation (mirror of applyMovement) ----
@@ -693,10 +722,15 @@ begin
     v_chg := -coalesce((p->>'orig_qty_change')::numeric, 0);
     v_unv_chg := -coalesce((p->>'orig_unvalued_qty_change')::numeric, 0);
     v_val_chg := -coalesce((p->>'orig_value_change')::numeric, 0);
-    if v_vq + (v_chg - v_unv_chg) < 0 or v_uq + v_unv_chg < 0 then
+    v_po_chg := -coalesce((p->>'orig_pending_out_change')::numeric, 0);
+    v_pi_chg := -coalesce((p->>'orig_pending_in_change')::numeric, 0);
+    -- qty_on_hand + out - in = valued + unvalued
+    if v_vq + (v_chg - v_unv_chg + v_po_chg - v_pi_chg) < 0 or v_uq + v_unv_chg < 0
+       or v_po + v_po_chg < 0 or v_pi + v_pi_chg < 0 then
       v_vq := null;  -- marks refusal below
     else
-      v_vq := v_vq + (v_chg - v_unv_chg); v_uq := v_uq + v_unv_chg; v_vv := round(v_vv + v_val_chg, 2);
+      v_vq := v_vq + (v_chg - v_unv_chg + v_po_chg - v_pi_chg); v_uq := v_uq + v_unv_chg; v_vv := round(v_vv + v_val_chg, 2);
+      v_po := v_po + v_po_chg; v_pi := v_pi + v_pi_chg;
       if v_vq = 0 and v_vv <> 0 then
         v_var_kind := 'reversal_residual'; v_var_amt := v_vv; v_vv := 0;
       elsif v_vv < 0 then
@@ -705,8 +739,45 @@ begin
       v_val_chg := round(v_vv - coalesce(v_rec.valued_value, 0), 2);
     end if;
     v_val_status := 'valued';
+  elsif v_type = 'cost_allocation' then
+    -- Approved split of an issue allocation (inv_cost_reconcile only). allocation_side
+    -- 'source': the units left here undecided; 'holder': they arrived here by transfer.
+    v_q := (p->>'qty')::numeric; v_a := (p->>'valued_qty')::numeric;
+    if v_q is null or v_q <= 0 or v_a is null or v_a < 0 or v_a > v_q then
+      raise exception 'A cost allocation needs qty > 0 and 0 <= valued_qty <= qty.' using errcode = '22023';
+    end if;
+    if p->>'allocation_side' = 'source' then
+      -- The decided units must fit the buckets that still hold them. Units that
+      -- arrived here undecided (pending_allocation_in_qty) are in neither bucket, so
+      -- a split that needs them waits for that upstream allocation to be decided.
+      if v_q > v_po or v_a > v_vq or v_q - v_a > v_uq then
+        raise exception 'This split is not possible on the balance now (valued %, unvalued %, pending out %, pending in %); decide any upstream allocation first.',
+          v_vq, v_uq, v_po, v_pi using errcode = '22023';
+      end if;
+      if v_a = 0 then v_alloc_val := null;
+      elsif v_a = v_vq then v_alloc_val := v_vv; v_vq := 0; v_vv := 0;
+      else v_alloc_val := round(v_a * v_vv / v_vq, 2); v_vq := v_vq - v_a; v_vv := round(v_vv - v_alloc_val, 2);
+      end if;
+      v_unit_applied := case when v_a > 0 then round(v_alloc_val / v_a, 4) end;
+      v_val_chg := -v_alloc_val; v_uq := v_uq - (v_q - v_a); v_unv_chg := -(v_q - v_a);
+      v_po := v_po - v_q; v_po_chg := -v_q;
+    elsif p->>'allocation_side' = 'holder' then
+      if v_q > v_pi then
+        raise exception 'This balance does not hold % undecided units.', v_q using errcode = '22023';
+      end if;
+      v_alloc_val := case when v_a > 0 then round(coalesce((p->>'carried_value')::numeric, 0), 2) end;
+      v_val_chg := v_alloc_val; v_vq := v_vq + v_a; v_vv := round(v_vv + coalesce(v_alloc_val, 0), 2);
+      v_uq := v_uq + (v_q - v_a); v_unv_chg := v_q - v_a; v_pi := v_pi - v_q; v_pi_chg := -v_q;
+      v_unit_applied := case when v_a > 0 then round(v_alloc_val / v_a, 4) end;
+    else
+      raise exception 'allocation_side must be source or holder.' using errcode = '22023';
+    end if;
+    v_val_status := 'valued';
   elsif v_kind = 'value' then
     if v_type = 'cost_assignment' then
+      if v_po + v_pi > 0 then
+        raise exception 'This balance has an undecided issue allocation; resolve it before assigning a cost.' using errcode = '22023';
+      end if;
       if v_qty_val > v_uq then
         raise exception 'Cost assignment exceeds the unvalued quantity (%).', v_uq using errcode = '22023';
       end if;
@@ -729,9 +800,12 @@ begin
   elsif v_chg > 0 then
     if v_type = 'transfer_in' and p ? 'carried_value' then
       -- cost travels with the units; unvalued units stay unvalued
-      v_unv_chg := least(coalesce((p->>'carried_unvalued_qty')::numeric, 0), v_chg);
-      v_val_chg := case when v_chg - v_unv_chg > 0 then round(coalesce((p->>'carried_value')::numeric, 0), 2) end;
-      v_vq := v_vq + (v_chg - v_unv_chg); v_vv := round(v_vv + coalesce(v_val_chg, 0), 2); v_uq := v_uq + v_unv_chg;
+      -- undecided units arrive in neither bucket (pending_allocation_in_qty)
+      v_amb := least(greatest(coalesce((p->>'carried_pending_qty')::numeric, 0), 0), v_chg);
+      v_unv_chg := least(coalesce((p->>'carried_unvalued_qty')::numeric, 0), v_chg - v_amb);
+      v_val_chg := case when v_chg - v_unv_chg - v_amb > 0 then round(coalesce((p->>'carried_value')::numeric, 0), 2) end;
+      v_vq := v_vq + (v_chg - v_unv_chg - v_amb); v_vv := round(v_vv + coalesce(v_val_chg, 0), 2); v_uq := v_uq + v_unv_chg;
+      v_pi := v_pi + v_amb; v_pi_chg := v_amb;
       v_unit_applied := (p->>'unit_cost')::numeric;
     else
       if v_unit is null and v_type in ('issue_return', 'return', 'adjustment_up', 'stocktake', 'adjustment') then
@@ -744,25 +818,65 @@ begin
         v_unit_applied := round(v_unit, 4);
       end if;
     end if;
-    v_val_status := case when v_val_chg is null then 'unvalued' else 'valued' end;
+    v_val_status := case when v_amb > 0 then 'pending_allocation' when v_val_chg is null then 'unvalued' else 'valued' end;
   elsif v_chg < 0 then
-    if -v_chg <= v_vq + v_uq then
-      -- Owner decision 2026-11-20: VALUED units leave first at the weighted average;
-      -- only the quantity the valued bucket cannot cover leaves UNVALUED (no cost is
-      -- invented for it; _inv_cost_rec_track opens a cost reconciliation).
-      v_unit_applied := case when v_vq > 0 then round(v_vv / v_vq, 4) end;
-      v_out_val := least(v_vq, -v_chg);
-      v_out_unv := -v_chg - v_out_val;
+    if -v_chg <= v_before then
+      -- Owner decision 2026-11-20: no order is assumed on a balance holding BOTH valued
+      -- and unvalued units (not priced-first, not unpriced-first, not proportional).
+      -- maxv / maxu = the most units of each kind that can be on the shelf. Only what
+      -- arithmetic proves moves now: the certainly valued part at the weighted
+      -- average, the certainly unvalued part with a cost reconciliation. The rest is
+      -- AMBIGUOUS: no value change, pending_allocation_out_qty += it, and
+      -- _inv_cost_rec_track opens an 'issue_allocation' record for a person to decide.
+      v_q := -v_chg;
+      select coalesce((to_jsonb(mm)->>'serial_tracked')::boolean, false) or coalesce((to_jsonb(mm)->>'lot_tracked')::boolean, false)
+        into v_tracked from public.material_master mm where mm.id = v_rec.item_id;
+      v_tracked := coalesce(v_tracked, false);
+      v_maxv := least(v_before, v_vq + v_pi); v_maxu := least(v_before, v_uq + v_pi);
+      if nullif(p->>'source_receipt_movement_id', '') is not null then
+        -- specific identification (serial / lot-tracked): the named receipt's actual cost
+        select * into v_src_mov from public.stock_movements where id = (p->>'source_receipt_movement_id')::uuid;
+        if v_src_mov.id is null or v_src_mov.stock_id is distinct from v_rec.id or v_src_mov.qty_change <= 0
+           or v_src_mov.pending_in_change <> 0
+           or exists (select 1 from public.stock_movements x where x.reverses_movement_id = v_src_mov.id) then
+          raise exception 'The named receipt is not a live receipt of this balance.' using errcode = '22023';
+        end if;
+        select v_src_mov.qty_change - coalesce(sum(-x.qty_change), 0) into v_src_left from public.stock_movements x
+         where x.source_receipt_movement_id = v_src_mov.id
+           and not exists (select 1 from public.stock_movements y where y.reverses_movement_id = x.id);
+        if v_q > v_src_left then
+          raise exception 'Only % unit(s) of the named receipt remain.', v_src_left using errcode = '22023';
+        end if;
+        v_src_unit := case when v_src_mov.value_change is not null and v_src_mov.unvalued_qty_change = 0
+                           then coalesce(v_src_mov.unit_cost, round(v_src_mov.value_change / v_src_mov.qty_change, 4)) end;
+        if (v_src_unit is not null and v_q > v_vq) or (v_src_unit is null and v_q > v_uq) then
+          raise exception 'The named receipt does not fit what this balance holds.' using errcode = '22023';
+        end if;
+        v_out_val := case when v_src_unit is not null then v_q else 0 end;
+        v_out_unv := v_q - v_out_val; v_amb := 0;
+      else
+        if v_tracked and v_maxv > 0 and v_maxu > 0 then
+          raise exception 'This item is serial or lot tracked: name the receipt the units come from (source_receipt_movement_id).'
+            using errcode = '22023';
+        end if;
+        v_out_val := greatest(0, v_q - v_maxu); v_out_unv := greatest(0, v_q - v_maxv);
+        v_amb := v_q - v_out_val - v_out_unv;
+      end if;
+      v_unit_applied := case when v_out_val > 0 then coalesce(v_src_unit, case when v_vq > 0 then round(v_vv / v_vq, 4) end) end;
       v_uq := v_uq - v_out_unv; v_unv_chg := -v_out_unv;
+      v_po := v_po + v_amb; v_po_chg := v_amb;
       if v_out_val > 0 then
         if v_out_val = v_vq then v_out_value := v_vv; v_vq := 0; v_vv := 0;
+        elsif v_src_unit is not null then
+          v_out_value := least(round(v_out_val * v_src_unit, 2), v_vv); v_vq := v_vq - v_out_val; v_vv := round(v_vv - v_out_value, 2);
         else v_out_value := round(v_out_val * v_vv / v_vq, 2); v_vq := v_vq - v_out_val; v_vv := round(v_vv - v_out_value, 2);
         end if;
         v_val_chg := -v_out_value;
       else
         v_val_chg := null;
       end if;
-      v_val_status := case when v_out_unv > 0 and v_val_chg is null then 'unvalued'
+      v_val_status := case when v_amb > 0 then 'pending_allocation'
+                           when v_out_unv > 0 and v_val_chg is null then 'unvalued'
                            when v_out_unv > 0 then 'partially_valued' else 'valued' end;
       if v_type = 'supplier_return' and (p->>'credit_unit_cost') is not null and v_val_chg is not null then
         v_var_kind := 'supplier_return_price_variance';
@@ -773,10 +887,13 @@ begin
     v_val_chg := case when v_rchg <> 0 then null else 0 end;
     v_val_status := 'valued';
   end if;
-  if v_kind = 'value' then
+  if v_type = 'cost_allocation' then
+    v_m_vq := v_a; v_m_uq := v_q - v_a;
+  elsif v_kind = 'value' then
     v_m_vq := case when v_type = 'cost_assignment' then coalesce(v_qty_val, 0) else 0 end;
   elsif v_vq is not null then
-    v_m_uq := abs(coalesce(v_unv_chg, 0)); v_m_vq := greatest(abs(v_chg) - v_m_uq, 0);
+    v_m_uq := abs(coalesce(v_unv_chg, 0));
+    v_m_vq := greatest(abs(v_chg) - v_m_uq - abs(coalesce(v_po_chg, 0)) - abs(coalesce(v_pi_chg, 0)), 0);
   end if;
   -- Approved opening with a line cost also prices units still unvalued on the balance.
   if v_type = 'opening' and v_unit is not null and v_uq > 0 and v_vq is not null then
@@ -815,7 +932,7 @@ begin
     reason, reference_no, created_by, organisation_id, country, item_id, location_id, posted_at, effective_at,
     unit_cost, value_change, unvalued_qty_change, valuation_status, variance_kind, variance_amount, currency, ownership,
     source_doc_type, source_doc_id, idempotency_key, payload_hash, reverses_movement_id, actor_id, approval_ref, reserved_change,
-    valued_qty, unvalued_qty)
+    valued_qty, unvalued_qty, pending_out_change, pending_in_change, source_receipt_movement_id)
   values (v_rec.id, v_rec.site, v_rec.description, v_type, v_before, v_chg, v_after,
     nullif(btrim(p->>'reason'), ''), nullif(btrim(p->>'reference_no'), ''), v_uid, v_org, v_rec.country,
     v_rec.item_id, v_rec.location_id, clock_timestamp(),
@@ -823,7 +940,7 @@ begin
     v_unit_applied, v_val_chg, v_unv_chg, v_val_status, v_var_kind, v_var_amt, v_cur, v_rec.ownership,
     nullif(p->>'source_doc_type', ''), nullif(p->>'source_doc_id', ''),
     v_key, v_hash, nullif(p->>'reverses_movement_id', '')::uuid, v_uid, nullif(p->>'approval_ref', ''), v_rchg,
-    v_m_vq, v_m_uq)
+    v_m_vq, v_m_uq, coalesce(v_po_chg, 0), coalesce(v_pi_chg, 0), v_src_mov.id)
   returning * into v_mov;
   -- Unknown cost is never silently valued: open / move / consume cost reconciliations
   -- (no-op stub here; the real body arrives with 20261120104000_inv_valuation).
@@ -832,6 +949,7 @@ begin
   update public.stock_records set
     qty_on_hand = v_after, stock_qty = floor(v_after)::integer, qty_reserved = v_rafter,
     valued_qty = v_vq, valued_value = v_vv, unvalued_qty = v_uq,
+    pending_allocation_out_qty = v_po, pending_allocation_in_qty = v_pi,
     avg_unit_cost = v_avg, unit_cost = v_avg, currency = coalesce(currency, v_cur),
     stock_status = v_status, version = version + 1, updated_by = v_uid, updated_at = clock_timestamp(),
     last_counted_at = case when v_type = 'stocktake' then clock_timestamp() else last_counted_at end,
@@ -843,6 +961,7 @@ begin
 
   return public._inv_movement_json(v_mov) || jsonb_build_object('qty_on_hand', v_after, 'qty_reserved', v_rafter,
     'valued_qty', v_vq, 'valued_value', v_vv, 'unvalued_qty', v_uq,
+    'pending_allocation_out_qty', v_po, 'pending_allocation_in_qty', v_pi,
     'avg_unit_cost', v_avg, 'version', v_rec.version + 1, 'stock_status', v_status);
 end $fn$;
 revoke all on function public._inv_post(jsonb, boolean) from public, anon, authenticated;
@@ -856,16 +975,19 @@ begin
   if lower(btrim(coalesce(p->>'movement_type', ''))) in ('reversal', 'opening') then
     raise exception 'Use inv_reverse_movement or an approved opening balance batch for this movement type.' using errcode = '22023';
   end if;
-  if lower(btrim(coalesce(p->>'movement_type', ''))) = 'cost_assignment' then
+  if lower(btrim(coalesce(p->>'movement_type', ''))) in ('cost_assignment', 'cost_allocation') then
     -- Owner decision 2026-11-20: nothing becomes valued without an approved cost reconciliation.
     raise exception 'Unvalued stock is valued only through an approved cost reconciliation (inv_cost_reconcile).' using errcode = '22023';
   end if;
-  return public._inv_post(p - 'reverses_movement_id' - 'orig_qty_change' - 'orig_unvalued_qty_change' - 'orig_value_change', true);
+  return public._inv_post(p - 'reverses_movement_id' - 'orig_qty_change' - 'orig_unvalued_qty_change' - 'orig_value_change'
+    - 'orig_pending_out_change' - 'orig_pending_in_change' - 'carried_value' - 'carried_unvalued_qty' - 'carried_pending_qty'
+    - 'carried_from_stock_id' - 'carried_movement_id', true);
 end $fn$;
 
 create or replace function public.inv_reverse_movement(p_movement_id uuid, p_reason text, p_idempotency_key text)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $fn$
-declare v_m public.stock_movements%rowtype;
+declare v_m public.stock_movements%rowtype; v_r public.stock_movements%rowtype;
+  v_unv numeric; v_val numeric; v_po numeric;
 begin
   if not public.is_approved_and_unlocked() or not public.inv_can('adjustment_approve') then
     raise exception 'Stock permission "adjustment_approve" is required to reverse a movement.' using errcode = '42501';
@@ -880,6 +1002,13 @@ begin
   if v_m.movement_type = 'reversal' then
     raise exception 'A reversal cannot itself be reversed; post a new correcting movement.' using errcode = '22023';
   end if;
+  if v_m.movement_type = 'cost_allocation' then
+    raise exception 'An approved cost allocation is undone by reversing the original movement.' using errcode = '22023';
+  end if;
+  if v_m.movement_type in ('transfer_out', 'transfer_in') and (v_m.pending_out_change <> 0 or v_m.pending_in_change <> 0) then
+    raise exception 'This transfer carried units with an undecided split; transfer them back instead of reversing.'
+      using errcode = '22023';
+  end if;
   if exists (select 1 from public.stock_movements where reverses_movement_id = p_movement_id) then
     raise exception 'This movement was already reversed.' using errcode = '23505';
   end if;
@@ -892,10 +1021,23 @@ begin
       'qty_change', 0, 'reserved_change', -v_m.reserved_change, 'reason', 'Reversal: ' || p_reason,
       'source_doc_type', 'reversal', 'source_doc_id', v_m.id::text), false);
   end if;
+  -- An undecided issue allocation: reverse the movement together with its approved
+  -- split when there is one, else take the pending units back.
+  v_unv := v_m.unvalued_qty_change; v_val := v_m.value_change; v_po := v_m.pending_out_change;
+  if v_m.pending_out_change > 0 then
+    select * into v_r from public.stock_movements where movement_type = 'cost_allocation'
+       and source_doc_type = 'issue_allocation' and source_doc_id = v_m.id::text and stock_id = v_m.stock_id;
+    if v_r.id is not null then
+      v_unv := v_unv + v_r.unvalued_qty_change; v_po := v_po + v_r.pending_out_change;
+      v_val := case when v_val is null and v_r.value_change is null then null
+                    else coalesce(v_val, 0) + coalesce(v_r.value_change, 0) end;
+    end if;
+  end if;
   return public._inv_post(jsonb_build_object('idempotency_key', p_idempotency_key, 'stock_id', v_m.stock_id,
     'movement_type', 'reversal', 'qty_change', -v_m.qty_change, 'reserved_change', -v_m.reserved_change,
-    'orig_qty_change', v_m.qty_change, 'orig_unvalued_qty_change', v_m.unvalued_qty_change,
-    'orig_value_change', v_m.value_change, 'currency', v_m.currency,
+    'orig_qty_change', v_m.qty_change, 'orig_unvalued_qty_change', v_unv,
+    'orig_pending_out_change', v_po, 'orig_pending_in_change', v_m.pending_in_change,
+    'orig_value_change', v_val, 'currency', v_m.currency,
     'reverses_movement_id', v_m.id, 'reason', 'Reversal: ' || p_reason,
     'source_doc_type', 'reversal', 'source_doc_id', v_m.id::text), false);
 end $fn$;
@@ -1110,7 +1252,8 @@ BEGIN
    'source_doc_type','transfer_stock_entry','source_doc_id',p_request_id::text),false);
  v_in:=_inv_post(jsonb_build_object('idempotency_key','transfer:'||p_request_id::text||':in','stock_id',b.id,'movement_type','transfer_in',
    'qty_change',p_qty,'unit_cost',v_out->'unit_cost','currency',v_out->>'currency',
-   'carried_value',-coalesce((v_out->>'value_change')::numeric,0),'carried_unvalued_qty',-coalesce((v_out->>'unvalued_qty_change')::numeric,0),'carried_from_stock_id',a.id,'reason',concat('Transfer from ',a.site,': ',p_notes),
+   'carried_value',-coalesce((v_out->>'value_change')::numeric,0),'carried_unvalued_qty',-coalesce((v_out->>'unvalued_qty_change')::numeric,0),'carried_from_stock_id',a.id,
+   'carried_pending_qty',coalesce((v_out->>'pending_out_change')::numeric,0),'carried_movement_id',v_out->>'movement_id','reason',concat('Transfer from ',a.site,': ',p_notes),
    'reference_no','TRANSFER-'||p_request_id::text,'source_doc_type','transfer_stock_entry','source_doc_id',p_request_id::text),false);
  PERFORM record_audit_event('stock_transfer','stock_records',p_from::text,jsonb_build_object('from_qty',a.stock_qty,'to_qty',b.stock_qty),jsonb_build_object('from_id',p_from,'to_id',p_to,'qty',p_qty,'request_id',p_request_id));
  v_result:=jsonb_build_object('status','posted','from_stock_id',p_from,'to_stock_id',p_to,'qty',p_qty);

@@ -278,7 +278,6 @@ const TYPE_LABEL: Record<string, string> = {
   pm: 'Preventive Maintenance due',
   workshop: 'Workshop Summary',
   workshop_status: 'Workshop Vehicle Status',
-  inventory: 'Inventory Control Digest',
 }
 
 /** Friendly label for any report_type, incl. custom 'builder:<template-id>' layouts. */
@@ -1299,8 +1298,6 @@ async function renderForSchedule(svc: any, s: Schedule, appUrl: string, cur: Cur
   } else if (type.startsWith('builder:')) {
     const cfg = DATASET_DIGEST.accidents
     html = renderDatasetHtml(s, cfg, await buildDatasetDigest(svc, cfg, s.org_id, win, cur), appUrl, cur, win.label)
-  } else if (type === 'inventory') {
-    html = renderInventoryHtml(s, await buildInventoryDigest(svc, s.org_id), appUrl)
   } else if (DATASET_DIGEST[type]) {
     const cfg = DATASET_DIGEST[type]
     html = renderDatasetHtml(s, cfg, await buildDatasetDigest(svc, cfg, s.org_id, win, cur), appUrl, cur, win.label)
@@ -1310,117 +1307,6 @@ async function renderForSchedule(svc: any, s: Schedule, appUrl: string, cur: Cur
   }
   // No dash punctuation in report output (user preference) - sanitize both.
   return { subject: asciiSafe(`TyrePulse ${typeLabel(s.report_type) || 'Report'}: ${s.name}`), html: asciiSafe(html) }
-}
-
-/* ── Inventory Control digest (report_type 'inventory') ───────────────────────
- * Reads the DB-lane view v_inv_report_snapshot: one row per country / site /
- * currency, as at now. It is deliberately NOT a DATASET_DIGEST entry, because
- * the generic digest adds one money column across rows, and inventory value
- * must never be added across currencies. Each currency is shown on its own,
- * the valued amount is labelled "valued part" whenever unvalued quantity
- * exists (OWNER RULE: unknown cost is never zero and never invented), and a
- * missing figure prints N/A. Nothing here posts anything anywhere. */
-
-type InventoryDigestRow = Record<string, unknown>
-type InventoryDigest = { ok: boolean; rows: InventoryDigestRow[]; error?: string }
-
-// deno-lint-ignore no-explicit-any
-async function buildInventoryDigest(svc: any, orgId: string | null): Promise<InventoryDigest> {
-  try {
-    let q = svc.from('v_inv_report_snapshot').select('*')
-    if (orgId) q = q.eq('organisation_id', orgId)
-    const { data, error } = await q.limit(500)
-    if (error) return { ok: false, rows: [], error: 'The inventory digest view is not available yet.' }
-    return { ok: true, rows: data ?? [] }
-  } catch {
-    return { ok: false, rows: [], error: 'The inventory digest could not be read.' }
-  }
-}
-
-function invEsc(v: unknown): string {
-  return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
-}
-
-function invNum(v: unknown): number | null {
-  if (v === null || v === undefined || v === '') return null
-  const n = Number(v)
-  return Number.isFinite(n) ? n : null
-}
-
-function invPick(r: InventoryDigestRow, keys: string[]): unknown {
-  for (const k of keys) if (r[k] !== undefined && r[k] !== null && r[k] !== '') return r[k]
-  return null
-}
-
-/** true / false / null (unknown) - derived from unvalued qty when the flag is absent. */
-function invComplete(r: InventoryDigestRow): boolean | null {
-  const f = invPick(r, ['valuation_complete', 'complete'])
-  if (f !== null) return f === true || f === 'true' || f === 't'
-  const u = invNum(invPick(r, ['unvalued_qty']))
-  return u === null ? null : u === 0
-}
-
-function renderInventoryHtml(s: Schedule, d: InventoryDigest, appUrl: string): string {
-  const accent = '#0f766e'
-  const genAt = new Date().toISOString().slice(0, 16).replace('T', ' ')
-  const link = `${appUrl.replace(/\/+$/, '')}/stock?section=overview`
-  const sum = (keys: string[]): number | null => {
-    let any = false; let t = 0
-    for (const r of d.rows) { const n = invNum(invPick(r, keys)); if (n !== null) { any = true; t += n } }
-    return any ? t : null
-  }
-  // Counts are currency-free and safe to add; money is never added.
-  const openAudits = sum(['open_audits'])
-  const openDisc = sum(['open_discrepancies'])
-  const pendingAppr = sum(['pending_approvals'])
-  const openCost = sum(['open_cost_reconciliations', 'open_reconciliations'])
-  const erpDiff = sum(['erp_differences'])
-  const unvalued = sum(['unvalued_qty'])
-  const incomplete = d.rows.some((r) => invComplete(r) === false)
-
-  const rows = d.rows.map((r) => {
-    const cur = invEsc(invPick(r, ['currency']) ?? '')
-    const amt = invNum(invPick(r, ['valued_amount', 'valued_value']))
-    const c = invComplete(r)
-    const amount = amt === null ? 'N/A' : `${cur ? cur + ' ' : ''}${amt.toLocaleString('en-US', { maximumFractionDigits: 2 })}${c === false ? ' (valued part)' : ''}`
-    const flag = c === true ? 'Complete' : c === false ? 'Incomplete' : 'Unknown'
-    const cell = (v: unknown) => `<td style="padding:7px 6px;font-size:11.5px;color:#334155;border-bottom:1px solid #eef2f7">${v === null || v === undefined || v === '' ? 'N/A' : invEsc(v)}</td>`
-    return `<tr>${cell(invPick(r, ['country']))}${cell(invPick(r, ['site']))}${cell(cur || null)}${cell(invNum(invPick(r, ['valued_qty'])))}${cell(invNum(invPick(r, ['unvalued_qty'])))}${cell(amount)}${cell(flag)}</tr>`
-  }).join('')
-  const headers = ['Country', 'Site', 'Currency', 'Valued qty', 'Unvalued qty', 'Valued amount', 'Valuation'].map((h) =>
-    `<td style="padding:6px;font-size:10.5px;font-weight:700;color:#64748b;text-transform:uppercase">${h}</td>`).join('')
-
-  const summary = !d.ok
-    ? invEsc(d.error ?? 'The inventory digest is not available.')
-    : d.rows.length === 0
-      ? 'No inventory figures are recorded yet for your company.'
-      : `Open audits <b>${num(openAudits)}</b>, open discrepancies <b>${num(openDisc)}</b>, approvals waiting <b>${num(pendingAppr)}</b>, ` +
-        `open cost reconciliations <b>${num(openCost)}</b>, ERP differences <b>${num(erpDiff)}</b>.` +
-        (incomplete ? ` <b>Valuation is incomplete</b>: ${num(unvalued)} unit(s) have no known cost, so the amounts below are the valued part only, not totals.` : '')
-
-  return `
-  <div style="font-family:Segoe UI,Arial,sans-serif;max-width:680px;margin:auto;color:#0f172a;background:#fff">
-    <div style="background:${accent};border-radius:12px 12px 0 0;padding:22px 26px;color:#fff">
-      <div style="font-size:19px;font-weight:800">TyrePulse Inventory Control Digest</div>
-      <div style="font-size:12px;color:#e2e8f0;margin-top:3px">Schedule "${invEsc(s.name)}" | snapshot ${genAt} UTC</div>
-    </div>
-    <div style="border:1px solid #e2e8f0;border-top:0;border-radius:0 0 12px 12px;padding:22px 26px">
-      <div style="background:#f1f5f9;border-left:4px solid ${accent};border-radius:8px;padding:12px 16px;font-size:13px;color:#334155;line-height:1.6">${summary}</div>
-      <table role="presentation" width="100%" cellspacing="8" style="margin-top:6px">
-        ${sectionTitle('Control queues')}
-        <tr>${tile('Open audits', num(openAudits))}${tile('Open discrepancies', num(openDisc))}${tile('Approvals waiting', num(pendingAppr))}</tr>
-        <tr>${tile('Cost reconciliations', num(openCost))}${tile('ERP differences', num(erpDiff))}${tile('Unvalued qty', num(unvalued), incomplete ? 'valuation incomplete' : '')}</tr>
-      </table>
-      <div style="margin-top:18px;font-size:13px;font-weight:800;color:#0f172a;text-transform:uppercase;letter-spacing:.6px;border-bottom:2px solid ${accent};padding-bottom:8px">Owned stock value by currency</div>
-      <table role="presentation" width="100%" cellspacing="0" style="margin-top:8px">
-        <tr style="background:#f8fafc">${headers}</tr>
-        ${rows || '<tr><td colspan="7" style="padding:10px 6px;font-size:12px;color:#94a3b8">No rows.</td></tr>'}
-      </table>
-      <p style="font-size:12px;color:#475569;line-height:1.6;margin-top:16px">Each currency is shown on its own and never added together. N/A means the value is not recorded and is never estimated. Inventory value is balance-sheet only; this digest creates no accounting posting.</p>
-      <a href="${link}" style="display:inline-block;background:${accent};color:#fff;font-weight:700;font-size:13px;padding:11px 20px;border-radius:8px;text-decoration:none;margin-top:4px">Open Inventory Control Center</a>
-      <p style="font-size:11px;color:#94a3b8;margin-top:18px">You receive this because you are a recipient of the "${invEsc(s.name)}" schedule. Manage recipients and frequency in TyrePulse, Scheduled Reports.</p>
-    </div>
-  </div>`
 }
 
 // deno-lint-ignore no-explicit-any

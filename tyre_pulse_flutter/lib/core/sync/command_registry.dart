@@ -123,6 +123,11 @@ enum CommandType {
   /// one row) but still upserted on `client_uuid` since V292, so it is
   /// idempotent exactly like every other command here.
   workshopEvent,
+
+  /// One blind count line, sent through the `inv_count_submit` RPC (count
+  /// lines have no client write grant). Idempotent on the line's
+  /// `client_uuid`, which is also the command's idempotency key.
+  inventoryCountLine,
 }
 
 /// `pending_commands.commandType` values.
@@ -161,6 +166,8 @@ extension CommandTypeWireName on CommandType {
         return 'WASH_RECORD';
       case CommandType.workshopEvent:
         return 'WORKSHOP_EVENT';
+      case CommandType.inventoryCountLine:
+        return 'INVENTORY_COUNT_LINE';
     }
   }
 }
@@ -169,6 +176,11 @@ extension CommandTypeWireName on CommandType {
 enum CommandOperation {
   insert,
   update,
+
+  /// Calls [CommandSpec.rpc] with the allow-listed payload as `p_payload`.
+  /// The RPC answers which lines it accepted, so a refusal is classified by
+  /// the engine, never retried blindly.
+  rpc,
 }
 
 /// One command's shape: which table, which operation, which fields survive
@@ -183,7 +195,17 @@ final class CommandSpec {
     this.matchColumn,
     this.requiresMediaReady = false,
     this.requiresOptimisticStatusMatch = false,
+    this.rpc,
+    this.retiredMessage,
   });
+
+  /// Required when [operation] is [CommandOperation.rpc]: the RPC name.
+  final String? rpc;
+
+  /// Non-null for a command this build no longer replays. A queued row of
+  /// this type is failed with this message (validation, never retried) and
+  /// never reaches the server. The enum value stays so old rows decode.
+  final String? retiredMessage;
 
   final CommandType type;
 
@@ -533,6 +555,11 @@ abstract final class CommandRegistry {
       table: SupabaseTables.stockRecords,
       operation: CommandOperation.update,
       matchColumn: 'id',
+      // Retired (docs/inventory/05 finding 2): a replayed absolute quantity
+      // bypasses the movement ledger and overwrites receipts posted while
+      // the phone was offline. Count the item again as a blind count line.
+      retiredMessage: 'This offline stock change was made before counts were '
+          'audited and was not sent. Count the item again.',
       fieldAllowList: <String>{
         'id',
         'stock_qty',
@@ -540,6 +567,17 @@ abstract final class CommandRegistry {
         'updated_by',
         'updated_at',
       },
+    ),
+    // ---- RPC commands ----
+    CommandType.inventoryCountLine: CommandSpec(
+      type: CommandType.inventoryCountLine,
+      table: SupabaseTables.inventoryCountLines,
+      operation: CommandOperation.rpc,
+      rpc: 'inv_count_submit',
+      // Photos are NOT replayed from the queue: a line is queued only once
+      // its photos are uploaded (or it has none); a line with local photos
+      // stays in the encrypted draft for the manual Send.
+      fieldAllowList: <String>{'audit_id', 'device_id', 'lines'},
     ),
     CommandType.workOrderStatus: CommandSpec(
       type: CommandType.workOrderStatus,

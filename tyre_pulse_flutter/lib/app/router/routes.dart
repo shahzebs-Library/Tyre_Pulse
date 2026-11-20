@@ -194,6 +194,9 @@ abstract final class TpRouteId {
   static const String repairRequest = 'repairRequest';
   static const String rca = 'rca';
   static const String stockCount = 'stockCount';
+  static const String inventoryAudits = 'inventoryAudits';
+  static const String inventoryCount = 'inventoryCount';
+  static const String inventoryTransfers = 'inventoryTransfers';
   static const String tasks = 'tasks';
   static const String preventiveMaintenance = 'preventiveMaintenance';
   static const String workOrders = 'workOrders';
@@ -274,6 +277,13 @@ abstract final class TpRoutePaths {
   static const String repairRequest = '/repair-request';
   static const String rca = '/rca';
   static const String stockCount = '/stock';
+
+  /// Children of [stockCount] (nested so Back from a count returns to the
+  /// stock list). Literal segments, declared before any `:param` sibling.
+  static const String inventoryAudits = 'counts';
+  static const String inventoryCount = 'counts/:auditId';
+  static const String inventoryTransfers = 'transfers';
+  static const String pAuditId = 'auditId';
   static const String tasks = '/tasks';
   static const String preventiveMaintenance = '/maintenance';
   static const String workOrders = '/work-orders';
@@ -803,6 +813,57 @@ final class StockCountRoute extends TpRoute {
 
   @override
   String get location => TpRoutePaths.stockCount;
+}
+
+/// Audits assigned to me (blind counting). Child of [StockCountRoute].
+final class InventoryAuditsRoute extends TpRoute {
+  const InventoryAuditsRoute();
+
+  @override
+  String get routeId => TpRouteId.inventoryAudits;
+
+  @override
+  String get location =>
+      '${TpRoutePaths.stockCount}/${TpRoutePaths.inventoryAudits}';
+}
+
+/// The blind count of one audit.
+final class InventoryCountRoute extends TpRoute {
+  const InventoryCountRoute(this.auditId);
+
+  static final RegExp _uuid = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+
+  /// A non-uuid id falls back to the audit list: a route must never start a
+  /// count for an audit the server cannot name.
+  static TpRoute parse(TpRouteParameters p) {
+    final String id = (p.path[TpRoutePaths.pAuditId] ?? '').trim();
+    return _uuid.hasMatch(id)
+        ? InventoryCountRoute(id)
+        : const InventoryAuditsRoute();
+  }
+
+  final String auditId;
+
+  @override
+  String get routeId => TpRouteId.inventoryCount;
+
+  @override
+  String get location => '${TpRoutePaths.stockCount}/'
+      '${TpRoutePaths.inventoryAudits}/${_segment(auditId)}';
+}
+
+/// Stock transfers between locations. Child of [StockCountRoute].
+final class InventoryTransfersRoute extends TpRoute {
+  const InventoryTransfersRoute();
+
+  @override
+  String get routeId => TpRouteId.inventoryTransfers;
+
+  @override
+  String get location =>
+      '${TpRoutePaths.stockCount}/${TpRoutePaths.inventoryTransfers}';
 }
 
 final class TasksRoute extends TpRoute {

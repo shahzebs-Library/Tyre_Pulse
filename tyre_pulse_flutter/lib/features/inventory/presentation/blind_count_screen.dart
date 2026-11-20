@@ -19,6 +19,7 @@ import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/inventory/data/count_finisher.dart';
+import 'package:tyre_pulse/features/inventory/data/count_line_queue.dart';
 import 'package:tyre_pulse/features/inventory/data/count_submitter.dart';
 import 'package:tyre_pulse/features/inventory/domain/count_models.dart';
 import 'package:tyre_pulse/features/inventory/domain/count_session.dart';
@@ -166,10 +167,29 @@ class _BlindCountScreenState extends ConsumerState<BlindCountScreen> {
           .submit(session, deviceId: deviceId);
       if (!mounted) return;
       setState(() => _session = outcome.session);
+      var queued = 0;
+      final workspace = ref.read(workspaceContextProvider);
+      if (outcome.status == SubmitStatus.offline && workspace != null) {
+        // No signal: hand the finished lines to the background queue (photos
+        // are uploaded first by the sync pass). The draft keeps every line
+        // until the server confirms it.
+        queued = await queueCountLines(
+          commands: ref.read(inventoryQueuedCommandRepositoryProvider),
+          auditId: widget.auditId,
+          deviceId: deviceId,
+          lines: outcome.session.submittable,
+          workspace: workspace,
+          now: DateTime.now(),
+          isQueued: ref.read(inventoryLineQueuedProvider),
+        );
+        if (!mounted) return;
+      }
       _snack(
         switch (outcome.status) {
           SubmitStatus.done => copy.count('submitDone', outcome.accepted),
           SubmitStatus.nothingToSend => copy('submitNothing'),
+          SubmitStatus.offline when queued > 0 =>
+            copy.count('submitQueued', queued),
           SubmitStatus.offline => copy('submitOffline'),
           SubmitStatus.notProvisioned => copy('notProvisionedBody'),
           SubmitStatus.partial => copy('submitPartial'),
@@ -474,8 +494,8 @@ class _BlindCountScreenState extends ConsumerState<BlindCountScreen> {
             ),
         ],
         const SizedBox(height: TpSpace.lg),
-        // Interim workflow: no background sync until the reserved-file patch
-        // (docs/inventory_reserved_patch.md) lands, so the screen says so.
+        // Background sync is live (INVENTORY_COUNT_LINE): Send without signal
+        // queues the lines; Send with signal sends them now.
         Text(
           copy('manualSendNote'),
           key: const Key('inventory.count.manualSendNote'),

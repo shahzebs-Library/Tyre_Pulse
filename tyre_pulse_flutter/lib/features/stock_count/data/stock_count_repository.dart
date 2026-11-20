@@ -1,11 +1,8 @@
 library;
 
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
-import 'package:tyre_pulse/core/sync/command_registry.dart';
-import 'package:tyre_pulse/core/sync/queued_command_repository.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/features/stock_count/domain/stock_item.dart';
 
@@ -52,8 +49,9 @@ abstract interface class StockCountRepository {
   /// Quick +/- adjustment by a signed [delta] (Expo `adjustStock`,
   /// `mobile/lib/stock.ts`): the audited `post_stock_movement` RPC
   /// (`adjustment_up` / `adjustment_down`) when online, an absolute
-  /// `STOCK_ADJUST` from the last-known quantity when the network is down.
-  /// Returns true when the change was queued offline.
+  /// Online only since STOCK_ADJUST was retired: a lost connection is
+  /// thrown for the screen to report (count it as a blind count instead).
+  /// Returns false (nothing is queued).
   Future<bool> adjust({
     required StockItem item,
     required int delta,
@@ -99,10 +97,9 @@ String stockStatusFor(int quantity, int? minimum, int? critical) {
 final class DefaultStockCountRepository
     with SupabaseGateway
     implements StockCountRepository {
-  DefaultStockCountRepository(this._client, this._commands);
+  DefaultStockCountRepository(this._client);
 
   final SupabaseClient _client;
-  final QueuedCommandRepository _commands;
 
   @override
   Future<List<StockItem>> list({String? country}) {
@@ -137,38 +134,20 @@ final class DefaultStockCountRepository
     required WorkspaceContext workspace,
   }) async {
     final num whole = count.floor();
-    try {
-      await guard<Object?>(
-        () => _client.rpc<Object?>(
-          SupabaseRpcs.setStockCount,
-          params: <String, Object?>{
-            'p_stock_id': item.id,
-            'p_count': whole,
-            'p_reason': _text(reason),
-          },
-        ),
-      );
-      return false;
-    } on SupabaseFailure catch (failure) {
-      if (!failure.isConnectivity) rethrow;
-    }
-
-    final DateTime now = DateTime.now();
-    await _commands.enqueue(
-      type: CommandType.stockAdjust,
-      entityId: item.id,
-      payload: <String, Object?>{
-        'id': item.id,
-        'stock_qty': whole,
-        'stock_status': stockStatus(whole, item.minimum, item.critical),
-        'updated_by': workspace.userId,
-        'updated_at': now.toUtc().toIso8601String(),
-      },
-      workspace: workspace,
-      now: now,
-      country: workspace.activeCountry,
+    await guard<Object?>(
+      () => _client.rpc<Object?>(
+        SupabaseRpcs.setStockCount,
+        params: <String, Object?>{
+          'p_stock_id': item.id,
+          'p_count': whole,
+          'p_reason': _text(reason),
+        },
+      ),
     );
-    return true;
+    // STOCK_ADJUST is retired: nothing is queued offline (an absolute
+    // quantity replayed later would bypass the movement ledger). A lost
+    // connection is thrown for the screen to report.
+    return false;
   }
 
   @override
@@ -178,42 +157,22 @@ final class DefaultStockCountRepository
     required WorkspaceContext workspace,
   }) async {
     if (delta == 0) return false;
-    try {
-      await guard<Object?>(
-        () => _client.rpc<Object?>(
-          SupabaseRpcs.postStockMovement,
-          params: <String, Object?>{
-            'p_stock_id': item.id,
-            'p_type': delta > 0 ? 'adjustment_up' : 'adjustment_down',
-            'p_qty': delta.abs(),
-            'p_reason': null,
-            'p_reference': null,
-          },
-        ),
-      );
-      return false;
-    } on SupabaseFailure catch (failure) {
-      if (!failure.isConnectivity) rethrow;
-    }
-
-    final int next =
-        (item.quantity.floor() + delta) < 0 ? 0 : item.quantity.floor() + delta;
-    final DateTime now = DateTime.now();
-    await _commands.enqueue(
-      type: CommandType.stockAdjust,
-      entityId: item.id,
-      payload: <String, Object?>{
-        'id': item.id,
-        'stock_qty': next,
-        'stock_status': stockStatus(next, item.minimum, item.critical),
-        'updated_by': workspace.userId,
-        'updated_at': now.toUtc().toIso8601String(),
-      },
-      workspace: workspace,
-      now: now,
-      country: workspace.activeCountry,
+    await guard<Object?>(
+      () => _client.rpc<Object?>(
+        SupabaseRpcs.postStockMovement,
+        params: <String, Object?>{
+          'p_stock_id': item.id,
+          'p_type': delta > 0 ? 'adjustment_up' : 'adjustment_down',
+          'p_qty': delta.abs(),
+          'p_reason': null,
+          'p_reference': null,
+        },
+      ),
     );
-    return true;
+    // STOCK_ADJUST is retired: nothing is queued offline (an absolute
+    // quantity replayed later would bypass the movement ledger). A lost
+    // connection is thrown for the screen to report.
+    return false;
   }
 
   @override

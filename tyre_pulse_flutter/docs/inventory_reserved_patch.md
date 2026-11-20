@@ -3,8 +3,25 @@
 Lane: client integration, Inventory Control & Audit
 (`docs/inventory/07_APPROVED_REQUIREMENTS_AND_BUILD_CONTRACT.md`, server contract in
 `docs/inventory/10_DB_IMPLEMENTATION.md`). Per `tyre_pulse_flutter/AGENTS.md` no agent may edit the
-seven reserved files, so this is an **exact, apply-ready patch** for a human. **Nothing below has been
-applied to the repository.**
+seven reserved files, so this is an **exact, apply-ready patch** for a human.
+
+> **APPLIED 2026-11-20** on branch `claude/inventory-upgrade-7rxp2t` under an explicit owner
+> authorisation ("Apply the reserved inventory patch to the integration branch ... Do not leave the
+> offline background-sync integration as a permanently unconnected patch"). The seven reserved files
+> received ONLY this patch's hunks (all applied cleanly). Re-authored because the finish-counting
+> commit (`1ab838c6`) had moved the context: the import hunks of `inventory_providers.dart` and
+> `blind_count_screen.dart`, and the `inventoryCopyCatalog` hunks (ARB en/ar/ur + generated, which
+> now also carry the finish-counting keys; regenerated with `flutter gen-l10n`).
+>
+> **Changed on purpose at integration, outside the reserved files:** photos ARE now delivered by the
+> background sync. `count_line_queue.dart` queues every finished line, with still-local photo paths
+> under `local_photo_paths`; the new decorator `lib/core/sync/inventory_count_command_pusher.dart`
+> (wired in `background_sync.dart`) uploads them first to a deterministic, upserted object path and
+> only then calls `inv_count_submit`; a line the server already refused is answered locally from the
+> device's `sync_failures` log and never re-sent. The comment on the INVENTORY_COUNT_LINE spec in
+> `command_registry.dart` ("Photos are NOT replayed from the queue") is now out of date; it was left
+> untouched because the authorisation covered only this patch's hunks. A human should reword it.
+> Sections below describe the patch as written.
 
 ## How to apply (from the repository root)
 

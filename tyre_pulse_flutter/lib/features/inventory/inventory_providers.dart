@@ -3,9 +3,12 @@ library;
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show FutureProviderFamily;
+import 'package:tyre_pulse/core/database/app_database.dart';
+import 'package:tyre_pulse/core/database/app_database_provider.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
 import 'package:tyre_pulse/core/storage/secure_key_value_store.dart';
 import 'package:tyre_pulse/core/storage/storage_providers.dart';
+import 'package:tyre_pulse/core/sync/queued_command_repository.dart';
 import 'package:tyre_pulse/features/inventory/data/count_draft_store.dart';
 import 'package:tyre_pulse/features/inventory/data/count_finisher.dart';
 import 'package:tyre_pulse/features/inventory/data/count_photo_capture.dart';
@@ -15,6 +18,22 @@ import 'package:tyre_pulse/features/inventory/data/inventory_transfer_repository
 import 'package:tyre_pulse/features/inventory/domain/count_models.dart';
 import 'package:tyre_pulse/features/inventory/domain/transfer_models.dart';
 import 'package:uuid/uuid.dart';
+
+/// The offline queue for INVENTORY_COUNT_LINE (per feature, like washing).
+final Provider<QueuedCommandRepository>
+    inventoryQueuedCommandRepositoryProvider =
+    Provider<QueuedCommandRepository>((Ref ref) {
+  final AppDatabase db = ref.watch(appDatabaseProvider);
+  return QueuedCommandRepository(db.queueDao);
+});
+
+/// True when a count line (by client_uuid) is already in the offline queue.
+final Provider<Future<bool> Function(String)> inventoryLineQueuedProvider =
+    Provider<Future<bool> Function(String)>((Ref ref) {
+  final AppDatabase db = ref.watch(appDatabaseProvider);
+  return (String key) async =>
+      await db.queueDao.commandByIdempotencyKey(key) != null;
+});
 
 final Provider<InventoryAuditRepository> inventoryAuditRepositoryProvider =
     Provider<InventoryAuditRepository>(

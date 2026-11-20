@@ -91,8 +91,15 @@ void main() {
     ];
     for (final String lang in <String>['en', 'ar', 'ur']) {
       final Map<String, String> c = _catalog(lang, 'inventoryCopyCatalog');
-      // Pinned entry count of the packed catalog: 125 + 10 finish keys.
-      expect(c.length, 135, reason: lang);
+      // Pinned entry count of the packed catalog: 125 + 10 finish keys
+      // + submitQueued (background sync).
+      expect(c.length, 136, reason: lang);
+      expect(c['submitQueued'], contains('%n'), reason: lang);
+      expect(
+        c['manualSendNote']!.toLowerCase(),
+        isNot(contains('later app update')),
+        reason: '$lang: background sending is live, not promised for later',
+      );
       for (final String k in finishKeys) {
         expect(c[k], isNotNull, reason: '$lang $k');
         expect(c[k]!.trim(), isNotEmpty, reason: '$lang $k');

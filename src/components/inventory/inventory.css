@@ -104,6 +104,9 @@ button.inv-tile[aria-pressed="true"] { border-color: var(--cc-green); background
 .inv-lines { display: grid; gap: 8px; }
 .inv-line { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; align-items: end;
   padding: 10px; border: 1px solid var(--cc-inner-border); border-radius: 10px; }
+/* A full-width field on a transfer line (the source-receipt picker) takes its
+   own row, so its long option text is not squeezed into a third narrow cell. */
+.inv-line .inv-full { grid-column: 1 / -1; }
 .inv-picklist { list-style: none; margin: 4px 0 0; padding: 0; border: 1px solid var(--cc-inner-border); border-radius: 8px; max-height: 220px; overflow: auto; }
 .inv-picklist button { display: block; width: 100%; min-height: 44px; text-align: start; padding: 8px 10px; background: transparent;
   border: 0; border-bottom: 1px solid var(--cc-inner-border); color: var(--cc-ink); font-size: 13px; cursor: pointer; }

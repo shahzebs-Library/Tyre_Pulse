@@ -326,7 +326,7 @@ describe('tyre custody: fit, removal, transfer, scrap reach tyre_items; tyre_rec
     expect(tyre.purchase_cost).toBeNull()
   })
 
-  it('a scrapped-yet-active tyre becomes a conflict with evidence; only a person with a reason closes it, and nothing is corrected', async () => {
+  it('a scrapped-yet-active tyre becomes a conflict with evidence; it is investigated, approved by an independent PMV Manager and closed as a decision; nothing is corrected', async () => {
     await env.api.exec(`insert into tyre_records(organisation_id, country, site, serial_no, asset_no, tyre_position, status, issue_date)
       values ('${ORG_A}','KSA','S1','QQ1234567','TM300','LHF1','Active','2026-01-01');
       insert into tyre_status_marks(serial, mark_type, organisation_id, country, reason) values ('QQ1234567','scrap','${ORG_A}','KSA','sidewall cut')`)
@@ -340,8 +340,24 @@ describe('tyre custody: fit, removal, transfer, scrap reach tyre_items; tyre_rec
     expect((await attempt(() => inv.decideCustodyConflict({ conflictId: c.id, status: 'resolved', note: 'x' }, key()))).ok).toBe(false)
     env.as(U.reviewer)
     expect((await attempt(() => inv.decideCustodyConflict({ conflictId: c.id, status: 'resolved', note: '' }, key()))).error.code).toBe('INV_NO_NOTE')
-    await inv.decideCustodyConflict({ conflictId: c.id, status: 'resolved', note: 'Scrap mark confirmed by workshop; fitment row to be corrected by the tyre team' }, key())
+    // owner decision 2026-11-20: a scrapped-but-active conflict is investigated, never decided directly
+    expect((await attempt(() => inv.decideCustodyConflict({ conflictId: c.id, status: 'resolved', note: 'looks fine' }, key()))).ok).toBe(false)
+    const PMV = '00000000-0000-0000-0000-000000000030'
+    await env.api.exec(`insert into profiles(id, organisation_id, org_id, role, full_name, country, sites) values ('${PMV}','${ORG_A}','${ORG_A}','PMV Manager','PMV',ARRAY['KSA'],ARRAY['ALL']);
+      insert into test_caps values ('${PMV}','scrap_approve')`)
+    env.as(U.admin)
+    await inv.assignConflictInvestigator({ conflictId: c.id, investigatorId: U.engineer }, key())
+    env.as(U.engineer)
+    await inv.recordConflictFinding({ conflictId: c.id, note: 'Vehicle checked: tyre on TM300 LHF1 carries this serial' }, key())
+    const p = await inv.proposeConflictCorrection({ conflictId: c.id, action: 'clear_scrap_mark', detail: 'Mark was raised against the wrong serial' }, key())
+    expect((await attempt(() => inv.decideApproval({ requestId: p.approval_request_id, decision: 'approve' }, key()))).ok).toBe(false)
+    env.as(PMV)
+    await inv.decideApproval({ requestId: p.approval_request_id, decision: 'approve' }, key())
+    const closed = await inv.closeConflictCase({ conflictId: c.id }, key())
+    expect(closed.investigation_status).toBe('closed')
+    env.as(U.reviewer)
     expect((await inv.listCustodyConflicts({ status: 'open' })).rows.find((r) => r.serial_no === 'QQ1234567')).toBeUndefined()
+    expect((await inv.listConflictCases({ investigationStatus: 'closed' })).rows.map((r) => r.serial)).toContain('QQ1234567')
     expect((await env.api.sql(HASH))[0]).toEqual(before)
   })
 })

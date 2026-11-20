@@ -38,6 +38,9 @@ export const MIGRATIONS = [
   '20261120110000_inv_metric_catalogue.sql',
   '20261120111000_inv_report_schedules.sql',
   '20261120112000_inv_source_receipt.sql',
+  '20261120113000_inv_approval_roles.sql',
+  '20261120114000_inv_tyre_conflict_investigation.sql',
+  '20261120115000_inv_hardening.sql',
 ]
 export const ROLLBACKS = MIGRATIONS.map(f => f.replace('.sql', '_ROLLBACK.sql'))
 export const sqlOf = f => PM(f)
@@ -53,7 +56,8 @@ create function anum_integration.apply_reader_policies() returns void language s
 
 create table public.organisations(id uuid primary key, name text);
 create table public.profiles(id uuid primary key, organisation_id uuid, org_id uuid, role text, full_name text,
-  is_super_admin boolean default false, country text[], sites text[], approved boolean default true, locked boolean default false);
+  is_super_admin boolean default false, country text[], sites text[], approved boolean default true, locked boolean default false,
+  countries text[] default '{}', site text default '');
 create table public.test_caps(user_id uuid, cap text, primary key(user_id, cap));
 
 create function public.app_current_org() returns uuid language sql stable security definer set search_path=public as $$
@@ -233,6 +237,60 @@ create function approval_private.resolve(p_org uuid, p_type text, p_country text
  'policy',CASE WHEN count(*) FILTER(WHERE rank=1)=1 THEN (jsonb_agg(to_jsonb(candidates)-'rank'-'specificity' ORDER BY rank,id)->0) ELSE NULL END,
  'candidates',coalesce(jsonb_agg(to_jsonb(candidates) ORDER BY rank,id),'[]'::jsonb)) FROM candidates $$;
 
+-- live approval_private.validate_policy (production 2026-11-20, md5 b76c1c97d59bc5b384041b5f8b67c867 with CR stripped), verbatim
+create function approval_private.validate_policy(p approval_policies) returns void language plpgsql security definer
+  set search_path to 'public' as $function$
+DECLARE s jsonb; reviewer uuid; reviewer_role text; seen uuid[]:='{}'::uuid[];
+BEGIN
+ IF p.match_site IS NOT NULL AND (p.match_country IS NULL OR NOT EXISTS(
+  SELECT 1 FROM sites WHERE organisation_id=p.organisation_id AND name=p.match_site AND country=p.match_country AND active IS TRUE)) THEN
+  RAISE EXCEPTION 'Select an active site in the selected country' USING ERRCODE='22023'; END IF;
+ IF p.match_region IS NOT NULL AND NOT EXISTS(
+  SELECT 1 FROM sites WHERE organisation_id=p.organisation_id AND active IS TRUE AND upper(btrim(region))=p.match_region
+   AND (p.match_country IS NULL OR country=p.match_country)) THEN
+  RAISE EXCEPTION 'Select a region that has active sites in the selected country' USING ERRCODE='22023'; END IF;
+ IF p.match_region IS NOT NULL AND p.match_site IS NOT NULL
+  AND approval_private.site_region(p.organisation_id,p.match_country,p.match_site) IS DISTINCT FROM p.match_region THEN
+  RAISE EXCEPTION 'The selected site is not in the selected region' USING ERRCODE='22023'; END IF;
+ IF p.match_user_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM profiles WHERE id=p.match_user_id AND org_id=p.organisation_id AND approved IS TRUE AND locked IS NOT TRUE) THEN
+  RAISE EXCEPTION 'Submitting person is unavailable in this organisation' USING ERRCODE='22023'; END IF;
+ IF jsonb_typeof(p.stages)<>'array' OR jsonb_array_length(p.stages) NOT BETWEEN 1 AND 5 THEN RAISE EXCEPTION 'Use one to five ordered stages' USING ERRCODE='22023'; END IF;
+ FOR s IN SELECT value FROM jsonb_array_elements(p.stages) LOOP
+  reviewer:=nullif(s->>'approver_user_id','')::uuid; reviewer_role:=nullif(btrim(s->>'approver_role'),'');
+  IF jsonb_typeof(s)<>'object' OR nullif(btrim(s->>'name'),'') IS NULL OR ((reviewer IS NULL)=(reviewer_role IS NULL)) THEN
+   RAISE EXCEPTION 'Each stage needs a name and exactly one person or role' USING ERRCODE='22023'; END IF;
+  IF (s-'name'-'approver_user_id'-'approver_role'-'require_signature'-'prevent_self_approval'-'distinct_reviewer'-'sla_hours')<>'{}'::jsonb THEN
+   RAISE EXCEPTION 'Unsupported stage setting' USING ERRCODE='22023'; END IF;
+  IF (s ? 'require_signature' AND jsonb_typeof(s->'require_signature')<>'boolean')
+   OR (s ? 'prevent_self_approval' AND jsonb_typeof(s->'prevent_self_approval')<>'boolean')
+   OR (s ? 'distinct_reviewer' AND jsonb_typeof(s->'distinct_reviewer')<>'boolean') THEN
+   RAISE EXCEPTION 'Stage evidence and independence settings must be booleans' USING ERRCODE='22023'; END IF;
+  IF coalesce((s->>'require_signature')::boolean,true) IS NOT TRUE OR coalesce((s->>'prevent_self_approval')::boolean,true) IS NOT TRUE THEN
+   RAISE EXCEPTION 'Signature and prevention of self approval are required' USING ERRCODE='22023'; END IF;
+  IF reviewer=ANY(seen) AND coalesce((s->>'distinct_reviewer')::boolean,true) THEN RAISE EXCEPTION 'Independent stages require different named reviewers' USING ERRCODE='22023'; END IF;
+  IF reviewer IS NOT NULL THEN seen:=array_append(seen,reviewer); END IF;
+  IF s->>'sla_hours' IS NOT NULL AND ((s->>'sla_hours')::numeric NOT BETWEEN 1 AND 8760 OR (s->>'sla_hours')::numeric<>trunc((s->>'sla_hours')::numeric)) THEN
+   RAISE EXCEPTION 'SLA must be a whole number of hours from 1 to 8760' USING ERRCODE='22023'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM profiles u WHERE u.org_id=p.organisation_id AND u.approved IS TRUE AND u.locked IS NOT TRUE
+    AND (reviewer IS NULL OR u.id=reviewer) AND (reviewer_role IS NULL OR u.role=reviewer_role)
+    AND u.role=ANY(CASE WHEN p.entity_type='inspection' THEN ARRAY['Admin','PMV Manager','Workshop Area Manager','Workshop Maintenance Area Manager','Tyre Data Collector']
+    ELSE ARRAY['Admin','Maintenance Supervisor','Workshop Supervisor','PMV Manager','Workshop Area Manager','Workshop Maintenance Area Manager','Tyre Data Collector'] END)
+    -- Super admins are country-unscoped; person_eligible() already admits them at runtime.
+    AND (p.match_country IS NULL OR u.is_super_admin OR EXISTS(SELECT 1 FROM unnest(coalesce(u.country,u.countries)) c WHERE lower(btrim(c)) IN ('all',lower(p.match_country))))
+    AND (p.match_site IS NULL OR u.role='Admin' OR u.is_super_admin OR EXISTS(SELECT 1 FROM unnest(coalesce(u.sites,ARRAY[u.site])) x WHERE upper(btrim(x)) IN ('ALL','*',upper(p.match_site))))
+    -- A regional reviewer must cover at least one site of that region (or all sites).
+    AND (p.match_region IS NULL OR p.match_site IS NOT NULL OR u.role='Admin' OR u.is_super_admin
+     OR EXISTS(SELECT 1 FROM unnest(coalesce(u.sites,ARRAY[u.site])) x WHERE upper(btrim(x)) IN ('ALL','*')
+      OR upper(btrim(x)) IN (SELECT upper(btrim(t.name)) FROM sites t WHERE t.organisation_id=p.organisation_id AND upper(btrim(t.region))=p.match_region)))
+  ) THEN RAISE EXCEPTION 'A stage has no active approver with the required module role and scope' USING ERRCODE='22023'; END IF;
+ END LOOP;
+END $function$;
+-- live custom_roles shape (2026-11-20)
+create table public.custom_roles(id uuid primary key default gen_random_uuid(), organisation_id uuid default public.app_current_org(),
+  name text not null constraint custom_roles_name_not_blank check (btrim(name) <> ''), description text, active boolean default true,
+  created_by uuid default auth.uid(), created_at timestamptz default now(), updated_at timestamptz default now(),
+  constraint custom_roles_organisation_id_name_key unique (organisation_id, name));
+
 -- ERP expense grid and store issues (live columns used by the reconciliation view)
 create table public.parts_consumption(id uuid primary key default gen_random_uuid(), organisation_id uuid, country text,
   issue_number text, work_order_no text, item_code text, item_description text, qty text, value_amount text,
@@ -294,6 +352,23 @@ do $$ declare t text; begin
     execute format('alter table public.%I enable row level security', t);
     execute format('create policy %I on public.%I as restrictive for all to authenticated using (organisation_id = (select public.app_current_org())) with check (organisation_id = (select public.app_current_org()))', t || '_org_isolation', t);
     execute format('create policy %I on public.%I for select to authenticated using (true)', t || '_read', t);
+  end loop;
+end $$;
+-- live restrictive write scoping on the same tables (production 2026-11-20): country / site write
+-- policies on goods_receipts, purchase_orders, requisitions; country (ALL) on suppliers and materials;
+-- the admin-only delete guard on all five. The inventory migrations leave these in place.
+do $$ declare t text; begin
+  foreach t in array array['goods_receipts','purchase_orders','requisitions'] loop
+    execute format($p$create policy %I on public.%I as restrictive for select to authenticated using ((country is null) or (select public.is_super_admin()) or (select public.app_sees_all_countries()) or (lower(btrim(country)) = any (coalesce((select public.app_country_scope()), '{}'::text[]))))$p$, t || '_country_isolation', t);
+    execute format($p$create policy %I on public.%I as restrictive for all to authenticated using ((country is null) or (select public.is_super_admin()) or (select public.app_sees_all_countries()) or (lower(btrim(country)) = any (coalesce((select public.app_country_scope()), '{}'::text[])))) with check ((country is null) or (select public.is_super_admin()) or (select public.app_sees_all_countries()) or (lower(btrim(country)) = any (coalesce((select public.app_country_scope()), '{}'::text[]))))$p$, t || '_country_write', t);
+    execute format($p$create policy %I on public.%I as restrictive for select to authenticated using ((site is null) or (btrim(site) = '') or (select public.app_sees_all_sites()) or (upper(btrim(site)) = any (coalesce((select public.app_site_scope()), '{}'::text[]))))$p$, t || '_site_isolation', t);
+    execute format($p$create policy %I on public.%I as restrictive for all to authenticated using ((site is null) or (btrim(site) = '') or (select public.app_sees_all_sites()) or (upper(btrim(site)) = any (coalesce((select public.app_site_scope()), '{}'::text[])))) with check ((site is null) or (btrim(site) = '') or (select public.app_sees_all_sites()) or (upper(btrim(site)) = any (coalesce((select public.app_site_scope()), '{}'::text[]))))$p$, t || '_site_write', t);
+  end loop;
+  foreach t in array array['suppliers','materials'] loop
+    execute format($p$create policy %I on public.%I as restrictive for all to authenticated using ((country is null) or (select public.is_super_admin()) or (select public.app_sees_all_countries()) or (lower(btrim(country)) = any (coalesce((select public.app_country_scope()), '{}'::text[])))) with check ((country is null) or (select public.is_super_admin()) or (select public.app_sees_all_countries()) or (lower(btrim(country)) = any (coalesce((select public.app_country_scope()), '{}'::text[]))))$p$, t || '_country_isolation_v578', t);
+  end loop;
+  foreach t in array array['goods_receipts','purchase_orders','requisitions','suppliers','materials'] loop
+    execute format('create policy admin_only_delete_guard on public.%I as restrictive for delete to authenticated using (public.app_can_admin_delete())', t);
   end loop;
 end $$;
 create policy goods_receipts_insert on public.goods_receipts for insert with check (auth.uid() is not null);

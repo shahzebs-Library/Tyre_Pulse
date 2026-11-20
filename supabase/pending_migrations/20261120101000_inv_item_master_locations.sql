@@ -275,6 +275,15 @@ begin
   if not public._inv_scope_ok(p->>'country', p->>'site') then
     raise exception 'Location is outside your country or site scope.' using errcode = '42501';
   end if;
+  -- id injection guard: a parent location and a responsible person must be this company's
+  if nullif(p->>'parent_id', '') is not null and not exists (select 1 from public.inventory_locations
+       where id = (p->>'parent_id')::uuid and organisation_id = v_org) then
+    raise exception 'Parent location not found in your company.' using errcode = 'P0002';
+  end if;
+  if nullif(p->>'responsible_user_id', '') is not null and not exists (select 1 from public.profiles
+       where id = (p->>'responsible_user_id')::uuid and (organisation_id = v_org or org_id = v_org)) then
+    raise exception 'The responsible person must belong to your company.' using errcode = '22023';
+  end if;
   if v_id is null then
     insert into public.inventory_locations(organisation_id, country, site, parent_id, location_type, code, name,
       responsible_user_id, active)
@@ -388,6 +397,10 @@ begin
   if nullif(p->>'location_id', '') is not null and not exists (select 1 from public.inventory_locations
        where id = (p->>'location_id')::uuid and organisation_id = v.organisation_id) then
     raise exception 'Location not found in your company.' using errcode = '42501';
+  end if;
+  if nullif(p->>'owner_supplier_id', '') is not null and not exists (select 1 from public.suppliers
+       where id = (p->>'owner_supplier_id')::uuid and organisation_id = v.organisation_id) then
+    raise exception 'Supplier not found in your company.' using errcode = '42501';
   end if;
   insert into public.opening_balance_lines(organisation_id, batch_id, line_no, source_ref, source_description, item_id,
     location_id, condition, ownership, owner_supplier_id, qty, unit_cost, currency, mapping_status, history_certainty, notes)

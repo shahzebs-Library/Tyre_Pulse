@@ -472,6 +472,15 @@ begin
   if not public._inv_scope_ok(p->>'country', p->>'site') then
     raise exception 'Choose a permitted country and site.' using errcode = '42501';
   end if;
+  -- id injection guard (architect review d): a named PO / supplier must be this company's
+  if nullif(p->>'po_id', '') is not null and not exists (select 1 from public.purchase_orders po
+       where po.id = (p->>'po_id')::uuid and po.organisation_id = v_org) then
+    raise exception 'Purchase order not found.' using errcode = 'P0002';
+  end if;
+  if nullif(p->>'supplier_id', '') is not null and not exists (select 1 from public.suppliers s
+       where s.id = (p->>'supplier_id')::uuid and s.organisation_id = v_org) then
+    raise exception 'Supplier not found.' using errcode = 'P0002';
+  end if;
   insert into public.goods_receipts(organisation_id, country, site, grn_no, po_ref, po_id, supplier, supplier_id, status,
     created_by, received_by_id, idempotency_key, received_date)
   values (v_org, p->>'country', upper(btrim(p->>'site')), coalesce(p->>'grn_no', 'GRN-' || upper(left(md5(v_org::text || v_key), 8))),
@@ -580,6 +589,17 @@ begin
   end if;
   if not exists (select 1 from public.suppliers where id = (p->>'supplier_id')::uuid and organisation_id = v_org) then
     raise exception 'Supplier not found in your company.' using errcode = '42501';
+  end if;
+  if nullif(p->>'po_id', '') is not null and not exists (select 1 from public.purchase_orders
+       where id = (p->>'po_id')::uuid and organisation_id = v_org) then
+    raise exception 'Purchase order not found in your company.' using errcode = '42501';
+  end if;
+  if exists (select 1 from jsonb_array_elements(coalesce(p->'lines', '[]'::jsonb)) x
+              where (nullif(x->>'po_line_id', '') is not null and not exists (select 1 from public.purchase_order_lines pl
+                       where pl.id = (x->>'po_line_id')::uuid and pl.organisation_id = v_org))
+                 or (nullif(x->>'item_id', '') is not null and not exists (select 1 from public.material_master m
+                       where m.id = (x->>'item_id')::uuid and m.organisation_id = v_org))) then
+    raise exception 'An invoice line names a PO line or item of another company.' using errcode = '42501';
   end if;
   insert into public.supplier_invoices(organisation_id, country, supplier_id, invoice_no, invoice_date, currency, po_id,
     total_amount, price_tolerance_pct)

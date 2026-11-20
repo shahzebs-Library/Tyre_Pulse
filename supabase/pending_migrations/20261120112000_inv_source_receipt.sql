@@ -39,17 +39,19 @@ revoke all on _bak.inv_112000_snapshot from public;
 
 do $$
 declare
-  v_def text; v_new text; v_anchor text; v_repl text; v_n int;
+  v_def text; v_new text; v_anchor text; v_repl text; v_n int; v_md5 text;
   r record;
 begin
+  -- FINGERPRINT GUARD: md5 of pg_get_functiondef with chr(13) stripped, taken from
+  -- the PGlite output of 20261120100000..111000 (the release that creates them).
   for r in select * from (values
-    ('public._inv_issue(jsonb)',
+    ('public._inv_issue(jsonb)', '761664c25b2a0094e27ee743952090e5',
      $a$'source_doc_type', coalesce(p->>'source_doc_type', 'issue'),$a$,
      $b$'source_doc_type', coalesce(p->>'source_doc_type', 'issue'), 'source_receipt_movement_id', p->>'source_receipt_movement_id',$b$),
-    ('public._inv_transfer_dispatch(jsonb)',
+    ('public._inv_transfer_dispatch(jsonb)', 'f79392c776f065ea9c8ca0791044984b',
      $a$'reason', 'Dispatch ' || v_t.ref,$a$,
      $b$'reason', 'Dispatch ' || v_t.ref, 'source_receipt_movement_id', l->>'source_receipt_movement_id',$b$)
-  ) v(sig, anchor, repl) loop
+  ) v(sig, md5, anchor, repl) loop
     if to_regprocedure(r.sig) is null then
       raise exception '112000: % is missing; apply 20261120100000..111000 first.', r.sig;
     end if;
@@ -57,6 +59,11 @@ begin
     if position('source_receipt_movement_id' in v_def) > 0 then
       raise notice '112000: % already forwards source_receipt_movement_id; left as is.', r.sig;
       continue;
+    end if;
+    v_md5 := md5(replace(v_def, chr(13), ''));
+    if v_md5 <> r.md5 then
+      raise exception '112000: % differs from the reviewed definition (md5 % expected %); refusing to patch.',
+        r.sig, v_md5, r.md5;
     end if;
     v_n := (length(v_def) - length(replace(v_def, r.anchor, ''))) / length(r.anchor);
     if v_n <> 1 then

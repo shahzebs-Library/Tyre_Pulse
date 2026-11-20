@@ -19,7 +19,7 @@ anything below that says "staging PG16" or "not rehearsed".
 
 ### 0.1 Release identity
 * Branch `claude/inventory-upgrade-7rxp2t`; rehearsal started from `cb7ee7de`; the rehearsed file set is
-  the commit that adds `93_REHEARSAL_EVIDENCE.md` (see 0.10). The sha256 values below pin every file:
+  commit **`17e918da`** (adds `93_REHEARSAL_EVIDENCE.md` and the four fixes). The sha256 values below pin every file:
   **apply only files whose sha256 matches this table.**
 * Rehearsal fixes (four real defects PGlite could not show, all in pending files): F1 105000 scrap mark
   matched by serial, not mark country (7 conflicts, was 6); F2 101000 backfill touches only changed rows

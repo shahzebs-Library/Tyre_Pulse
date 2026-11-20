@@ -39,7 +39,7 @@ function SectionLoading() {
   return <div style={{ display: 'grid', gap: 10 }} aria-busy="true">{[0, 1, 2].map((i) => <div key={i} className="cc-skel" style={{ height: 44 }} />)}</div>
 }
 
-export default function InventoryHub({ section, onSection, renderRegister }) {
+export default function InventoryHub({ section, tab = null, onSection, onTab, renderRegister }) {
   const { t } = useLanguage()
   const { activeCountry } = useSettings()
   const { profile, user, hasCapability, canExport } = useAuth()
@@ -64,7 +64,7 @@ export default function InventoryHub({ section, onSection, renderRegister }) {
   const current = allowed ? section : 'overview'
   const scope = useMemo(() => ({ country: activeCountry && activeCountry !== 'All' ? activeCountry : null, site }), [activeCountry, site])
   const Comp = SECTION_COMPONENTS[current]
-  const sectionProps = { scope, can, userId, onNavigate: onSection }
+  const sectionProps = { scope, can, userId, onNavigate: onSection, tab, onTab }
 
   return (
     <div className="cc inv-hub">
@@ -93,12 +93,12 @@ export default function InventoryHub({ section, onSection, renderRegister }) {
         <div className="inv-groups">
           <Tabs label={t('inventory.groupsLabel')} value={activeGroup?.key}
             tabs={groups.map((g) => ({ key: g.key, label: t(g.labelKey) }))}
-            onChange={(k) => onSection(groups.find((g) => g.key === k)?.sections[0]?.key || 'overview')} />
+            onChange={(k) => onSection(groups.find((g) => g.key === k)?.sections[0]?.key || 'overview', null)} />
         </div>
         <div className="inv-sections">
           <Tabs variant="line" label={t('inventory.sectionsLabel')} value={current}
             tabs={(activeGroup?.sections || []).map((s) => ({ key: s.key, label: t(`inventory.sections.${s.key}`) }))}
-            onChange={onSection} />
+            onChange={(k) => onSection(k, null)} />
         </div>
       </nav>
 

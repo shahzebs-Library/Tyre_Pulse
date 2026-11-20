@@ -138,15 +138,29 @@ function SortedPagedTable({ columns, rows, defaultSort, getRowId, emptyMessage, 
 export default function StockManagement() {
   const [params, setParams] = useSearchParams()
   const section = resolveSection(params.get('section'))
-  const onSection = useCallback((next) => {
+  const tab = params.get('tab') || null
+  // onSection(section, tab?): a link may also name the tab inside the section
+  // ("Open evidence" -> Controls > Opening balances). Changing section without a
+  // tab clears it, so the next section opens on its own default tab.
+  const onSection = useCallback((next, nextTab) => {
     setParams((prev) => {
       const p = new URLSearchParams(prev)
       if (!next || next === 'overview') p.delete('section')
       else p.set('section', next)
+      if (nextTab) p.set('tab', nextTab)
+      else p.delete('tab')
       return p
     }, { replace: false })
   }, [setParams])
-  return <InventoryHub section={section} onSection={onSection} renderRegister={() => <StockRegisterView embedded />} />
+  const onTab = useCallback((nextTab) => {
+    setParams((prev) => {
+      const p = new URLSearchParams(prev)
+      if (nextTab) p.set('tab', nextTab)
+      else p.delete('tab')
+      return p
+    }, { replace: true })
+  }, [setParams])
+  return <InventoryHub section={section} tab={tab} onSection={onSection} onTab={onTab} renderRegister={() => <StockRegisterView embedded />} />
 }
 
 /** The stock register (formerly the whole /stock page). */

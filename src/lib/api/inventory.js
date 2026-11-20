@@ -233,6 +233,7 @@ export const VIEWS = Object.freeze({
   costReconciliations: 'v_inv_cost_reconciliations',
   approvalRequests: 'inventory_approval_requests',
   transfers: 'stock_transfers',
+  receiptSources: 'v_inv_receipt_sources',
 })
 
 const BALANCE_COLS = 'id, item_id, item_code, description, site, country, location_id, location_code, condition, ownership, owner_supplier_id, qty_on_hand, qty_reserved, avg_unit_cost, currency, reorder_point, min_qty, max_qty, uom, version, updated_at, valued_qty, unvalued_qty, valuation_status'
@@ -928,12 +929,39 @@ export function reserveStock({ stockId, qty, sourceDocType, sourceDocId }, key) 
 }
 
 /** inv_issue: issue stock (optionally consuming a reservation). */
-export function issueStock({ stockId, qty, reservationId, reason, referenceNo, sourceDocType, sourceDocId }, key) {
+export function issueStock({ stockId, qty, reservationId, reason, referenceNo, sourceDocType, sourceDocId, sourceReceiptMovementId }, key) {
   if (!stockId || !qtyOk(qty)) return Promise.reject(new ServiceError('Choose a stock line and a quantity above zero.', 'INV_BAD_QTY'))
   return rpcWrite('inv_issue', {
     stock_id: stockId, qty: Number(qty), reservation_id: reservationId || null, reason: reason || null,
     reference_no: referenceNo || null, source_doc_type: sourceDocType || 'issue', source_doc_id: sourceDocId || null,
+    // Specific identification for a serial / lot tracked item on a mixed balance
+    // (known and unknown cost together): the receipt the units came from.
+    source_receipt_movement_id: sourceReceiptMovementId || null,
   }, key)
+}
+
+const RECEIPT_SOURCE_COLS = 'movement_id, stock_id, item_id, item_code, movement_type, movement_seq, posted_at, reference_no, source_doc_type, source_doc_id, received_qty, remaining_qty, cost_known, unit_cost, currency, site, country'
+
+/**
+ * Receipts a serial / lot tracked issue or dispatch can name as its source
+ * (v_inv_receipt_sources: live receipts of this balance with units left).
+ * Bounded (100 rows, oldest first). `{ status, rows }`.
+ */
+export async function listReceiptSources(stockId) {
+  if (!stockId) return { status: 'ok', rows: [] }
+  try {
+    const { data, error } = await supabase.from(VIEWS.receiptSources).select(RECEIPT_SOURCE_COLS)
+      .eq('stock_id', stockId).gt('remaining_qty', 0)
+      .order('movement_seq', { ascending: true }).order('movement_id', { ascending: true }).limit(100)
+    if (error) {
+      if (notProvisioned(error)) return { status: 'not_provisioned', rows: [] }
+      throw toServiceError(error)
+    }
+    return { status: 'ok', rows: data || [] }
+  } catch (err) {
+    if (notProvisioned(err)) return { status: 'not_provisioned', rows: [] }
+    throw toServiceError(err)
+  }
 }
 
 /** inv_transfer_dispatch: source stock moves to the in-transit location. */
@@ -945,7 +973,11 @@ export function dispatchTransfer({ fromLocationId, toLocationId, lines, remarks 
   if (!clean.length) return Promise.reject(new ServiceError('Add at least one line with a quantity.', 'INV_NO_LINES'))
   return rpcWrite('inv_transfer_dispatch', {
     from_location_id: fromLocationId, to_location_id: toLocationId, remarks: remarks || null,
-    lines: clean.map((l) => (l.stock_id ? { stock_id: l.stock_id, qty: Number(l.qty) } : { scanned_code: l.scanned_code, qty: Number(l.qty) })),
+    lines: clean.map((l) => ({
+      ...(l.stock_id ? { stock_id: l.stock_id } : { scanned_code: l.scanned_code }),
+      qty: Number(l.qty),
+      ...(l.source_receipt_movement_id ? { source_receipt_movement_id: l.source_receipt_movement_id } : {}),
+    })),
   }, key)
 }
 

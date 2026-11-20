@@ -37,6 +37,7 @@ export const MIGRATIONS = [
   '20261120109000_inv_erp_reconciliation.sql',
   '20261120110000_inv_metric_catalogue.sql',
   '20261120111000_inv_report_schedules.sql',
+  '20261120112000_inv_source_receipt.sql',
 ]
 export const ROLLBACKS = MIGRATIONS.map(f => f.replace('.sql', '_ROLLBACK.sql'))
 export const sqlOf = f => PM(f)

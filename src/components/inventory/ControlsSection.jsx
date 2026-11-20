@@ -9,7 +9,7 @@ import { Tabs, KitTable } from '../commandCenter/kit'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { listMasterReviews } from '../../lib/api/inventory'
 import { INVENTORY_CAPABILITIES } from '../../lib/inventory/hubSections'
-import { useInvQuery, PagedTable, Note, StatusPill, SectionCard, fmtDateTime } from './InvUi'
+import { useInvQuery, useHubTab, PagedTable, Note, StatusPill, SectionCard, fmtDateTime } from './InvUi'
 import OpeningBalancePanel from './OpeningBalancePanel'
 import ApprovalsPanel from './ApprovalsPanel'
 
@@ -57,9 +57,11 @@ function MasterReviews() {
   )
 }
 
+const CONTROL_TABS = ['approvals', 'permissions', 'opening', 'master']
+
 export default function ControlsSection(props) {
   const { t } = useLanguage()
-  const [tab, setTab] = useState('approvals')
+  const [tab, setTab] = useHubTab(props.tab, props.onTab, CONTROL_TABS, 'approvals')
   return (
     <div className="inv-hub">
       <Tabs label={t('inventory.sections.controls')} value={tab} onChange={setTab} tabs={[

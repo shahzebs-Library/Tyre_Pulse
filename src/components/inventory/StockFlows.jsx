@@ -14,7 +14,7 @@ import SideDrawer from '../ui/SideDrawer'
 import { useLanguage } from '../../contexts/LanguageContext'
 import {
   receiveGoods, reserveStock, issueStock, dispatchTransfer, receiveTransfer, listTransfers, listLocations,
-  listBalances, searchItems, newIdempotencyKey,
+  listBalances, searchItems, newIdempotencyKey, listReceiptSources,
 } from '../../lib/api/inventory'
 import { openTransferLines, movedSplit } from '../../lib/inventory/integrationView'
 import { formatQty } from '../../lib/inventory/inventoryMoney'
@@ -118,6 +118,36 @@ function StockPicker({ label, value, onPick, scope }) {
   )
 }
 
+/**
+ * Receipt a serial / lot tracked issue or dispatch comes from. The server
+ * refuses such an item on a balance that mixes known and unknown cost until a
+ * receipt is named; the list only appears when the balance has receipts with
+ * units left (v_inv_receipt_sources). Leaving it blank lets the server decide
+ * whether a receipt is needed: it never assumes which units leave.
+ */
+function ReceiptSourceSelect({ stockId, value, onChange }) {
+  const { t } = useLanguage()
+  const q = useInvQuery(() => listReceiptSources(stockId), [stockId])
+  const rows = q.data?.rows || []
+  if (!stockId || rows.length === 0) return null
+  return (
+    <Field label={t('inventory.flows.sourceReceipt')} full>
+      <select className="cc-select" value={value || ''} onChange={(e) => onChange(e.target.value || null)} aria-describedby={`rs-hint-${stockId}`}>
+        <option value="">{t('inventory.flows.sourceReceiptAuto')}</option>
+        {rows.map((r) => (
+          <option key={r.movement_id} value={r.movement_id}>
+            {[`#${r.movement_seq}`, r.movement_type, r.reference_no || r.source_doc_id, fmtDateTime(r.posted_at)].filter(Boolean).join(' | ')}
+            {' | '}{formatQty(r.remaining_qty)} {t('inventory.flows.sourceReceiptLeft')}
+            {' | '}{r.cost_known ? t('inventory.flows.costKnown') : t('inventory.flows.costUnknown')}
+            {r.cost_known && r.unit_cost != null ? ` ${formatQty(r.unit_cost)} ${r.currency || ''}` : ''}
+          </option>
+        ))}
+      </select>
+      <span id={`rs-hint-${stockId}`} className="cc-card-sub">{t('inventory.flows.sourceReceiptHint')}</span>
+    </Field>
+  )
+}
+
 const EMPTY_LINE = () => ({ item: null, location_id: '', qty_received: '', qty_rejected: '', unit_cost: '', currency: '', rejection_reason: '' })
 
 export function ReceiveGoodsPanel({ scope, can }) {
@@ -179,7 +209,7 @@ export function ReceiveGoodsPanel({ scope, can }) {
 export function ReserveIssuePanel({ scope, can }) {
   const { t } = useLanguage()
   const [stock, setStock] = useState(null)
-  const [form, setForm] = useState(() => ({ qty: '', doc: '', reason: '', reservationId: '', reserveKey: newIdempotencyKey(), issueKey: newIdempotencyKey() }))
+  const [form, setForm] = useState(() => ({ qty: '', doc: '', reason: '', reservationId: '', sourceReceipt: null, reserveKey: newIdempotencyKey(), issueKey: newIdempotencyKey() }))
   const [busy, setBusy] = useState('')
   const [err, setErr] = useState('')
   const [result, setResult] = useState(null)
@@ -189,7 +219,7 @@ export function ReserveIssuePanel({ scope, can }) {
     try {
       const res = kind === 'reserve'
         ? await reserveStock({ stockId: stock?.id, qty: form.qty, sourceDocType: 'job_card', sourceDocId: form.doc || null }, form.reserveKey)
-        : await issueStock({ stockId: stock?.id, qty: form.qty, reservationId: form.reservationId || null, reason: form.reason || null, referenceNo: form.doc || null }, form.issueKey)
+        : await issueStock({ stockId: stock?.id, qty: form.qty, reservationId: form.reservationId || null, reason: form.reason || null, referenceNo: form.doc || null, sourceReceiptMovementId: form.sourceReceipt || null }, form.issueKey)
       setResult(res || { status: 'posted' })
       if (kind === 'reserve' && res?.reservation_id) setForm((f) => ({ ...f, reservationId: res.reservation_id }))
       setForm((f) => ({ ...f, [kind === 'reserve' ? 'reserveKey' : 'issueKey']: newIdempotencyKey() }))
@@ -199,11 +229,12 @@ export function ReserveIssuePanel({ scope, can }) {
     <SectionCard title={t('inventory.flows.reserveIssueTitle')} sub={t('inventory.flows.reserveIssueSub')}>
       <div className="inv-hub" style={{ gap: 10 }}>
         <div className="inv-form">
-          <StockPicker label={t('inventory.flows.stockLine')} value={stock} onPick={setStock} scope={scope} />
+          <StockPicker label={t('inventory.flows.stockLine')} value={stock} onPick={(s) => { setStock(s); setForm((f) => ({ ...f, sourceReceipt: null })) }} scope={scope} />
           <Field label={t('inventory.flows.qty')}><input className="inv-input inv-num" type="number" min="0" step="any" value={form.qty} onChange={(e) => setForm((f) => ({ ...f, qty: e.target.value }))} /></Field>
           <Field label={t('inventory.flows.document')}><input className="inv-input" maxLength={80} value={form.doc} placeholder="GCKR/JC/..." onChange={(e) => setForm((f) => ({ ...f, doc: e.target.value }))} /></Field>
           <Field label={t('inventory.movements.reason')}><input className="inv-input" maxLength={200} value={form.reason} onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))} /></Field>
         </div>
+        <ReceiptSourceSelect stockId={stock?.id} value={form.sourceReceipt} onChange={(v) => setForm((f) => ({ ...f, sourceReceipt: v }))} />
         {stock && (
           <p className="cc-card-sub">
             {t('inventory.register.onHand')}: {formatQty(stock.qty_on_hand)} | {t('inventory.flows.reserved')}: {formatQty(stock.qty_reserved)}
@@ -248,7 +279,7 @@ export function TransfersPanel({ scope, can }) {
     try {
       const res = await dispatchTransfer({
         fromLocationId: dispatch.from, toLocationId: dispatch.to, remarks: dispatch.remarks,
-        lines: dispatch.lines.map((l) => ({ stock_id: l.stock?.id, qty: l.qty })),
+        lines: dispatch.lines.map((l) => ({ stock_id: l.stock?.id, qty: l.qty, source_receipt_movement_id: l.sourceReceipt || null })),
       }, dispatch.key)
       setResult(res || { status: 'posted' })
       if (res?.status !== 'refused_shortage') { setDispatch(null); q.retry() }
@@ -310,9 +341,11 @@ export function TransfersPanel({ scope, can }) {
               {dispatch.lines.map((l, i) => (
                 <div key={i} className="inv-line">
                   <StockPicker label={t('inventory.flows.stockLine')} value={l.stock} scope={scopeForFrom}
-                    onPick={(s) => setDispatch((d) => ({ ...d, lines: d.lines.map((x, j) => (j === i ? { ...x, stock: s } : x)) }))} />
+                    onPick={(s) => setDispatch((d) => ({ ...d, lines: d.lines.map((x, j) => (j === i ? { ...x, stock: s, sourceReceipt: null } : x)) }))} />
                   <Field label={t('inventory.flows.qty')}><input className="inv-input inv-num" type="number" min="0" step="any" value={l.qty}
                     onChange={(e) => setDispatch((d) => ({ ...d, lines: d.lines.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)) }))} /></Field>
+                  <ReceiptSourceSelect stockId={l.stock?.id} value={l.sourceReceipt}
+                    onChange={(v) => setDispatch((d) => ({ ...d, lines: d.lines.map((x, j) => (j === i ? { ...x, sourceReceipt: v } : x)) }))} />
                 </div>
               ))}
             </div>

@@ -28,7 +28,7 @@ import { formatMoney, formatQty } from '../../lib/inventory/inventoryMoney'
 import { toUserMessage } from '../../lib/inventory/errorText'
 import {
   useInvQuery, ErrorNote, NotSetUp, Note, SectionCard, Denied, alignNumeric, ExplainedKpi, PagedTable, SearchBox,
-  StatusPill, Field, fmtDateTime,
+  StatusPill, Field, fmtDateTime, useHubTab,
 } from './InvUi'
 import { RequestApprovalButton, ApprovalState } from './ApprovalsPanel'
 
@@ -347,9 +347,11 @@ function ErpReconciliationPanel({ scope, can }) {
   )
 }
 
-export default function ValuationSection({ scope, can, userId }) {
+const VALUATION_TABS = ['value', 'costs', 'erp']
+
+export default function ValuationSection({ scope, can, userId, tab: linkedTab, onTab }) {
   const { t } = useLanguage()
-  const [tab, setTab] = useState('value')
+  const [tab, setTab] = useHubTab(linkedTab, onTab, VALUATION_TABS, 'value')
   if (!can('view_value')) return <Denied capLabel={t('inventory.caps.view_value')} />
   return (
     <div className="inv-hub">

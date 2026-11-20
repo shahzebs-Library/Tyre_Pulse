@@ -15,6 +15,27 @@ import { isInventoryNotSetUp } from '../../lib/api/inventory'
 
 const TONE = { good: 'good', info: 'info', warning: 'warn', warn: 'warn', bad: 'bad', muted: 'muted' }
 
+/**
+ * The active tab of a hub section. A link may name it (`?tab=` via the hub's
+ * `tab` prop, e.g. "Open evidence" -> Controls > Opening balances); an unknown
+ * or absent value falls back to the section default. Picking a tab reports it
+ * back through `onTab` so the address bar keeps it across a refresh.
+ */
+export function useHubTab(linked, onTab, allowed, fallback) {
+  const valid = (v) => (v && allowed.includes(v) ? v : null)
+  const [tab, setTabState] = useState(() => valid(linked) || fallback)
+  useEffect(() => {
+    const v = valid(linked)
+    if (v) setTabState(v)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linked])
+  const setTab = useCallback((v) => {
+    setTabState(v)
+    if (onTab) onTab(v === fallback ? null : v)
+  }, [onTab, fallback])
+  return [tab, setTab]
+}
+
 /** Load once per dependency change; the newest request always wins. */
 export function useInvQuery(loader, deps) {
   const [state, setState] = useState({ loading: true, error: null, data: null })

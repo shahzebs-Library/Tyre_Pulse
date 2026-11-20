@@ -24,7 +24,7 @@ Readiness per area:
 | Area | Readiness | Why |
 |---|---|---|
 | Ledger integrity, no negative stock (P0) | Ready | DB suites + client E2E + real two-connection race on PG16 staging |
-| Physical audits, blind count, recount, adjustments (P1) | Ready (web) / Ready after patch (Flutter) | Client E2E end to end; Flutter cannot finish counting (section 9 B3) |
+| Physical audits, blind count, recount, adjustments (P1) | Ready (web) / Ready after patch (Flutter) | Client E2E end to end; Flutter now finishes counting (B3 resolved, section 9); background sync of count lines still needs the reserved patch (B4) |
 | Tyre custody + the 7 conflicts | Ready | Derivation read-only (hash unchanged); conflicts now decidable on the web |
 | Procurement, receiving, issue, transfers (P2) | Ready | Client E2E incl. the Flutter payloads |
 | Valuation, unknown cost, undecided splits | Ready | Client E2E: never zero, never invented, decided by another person |
@@ -220,10 +220,21 @@ No guard would abort on this data.
 
 * **B1 - not applied anywhere but PGlite/staging.** Production apply is the owner's step.
 * **B2 - no browser test against a real database** (no test login available to this lane).
-* **B3 - Flutter cannot finish counting.** No Flutter code calls `inv_audit_complete_counting`, so a
-  counter on the phone counts but someone must press "Finish counting" on the web (the creator or
-  an `audit_create` holder can). A Flutter action is a normal (non-reserved) file change for the
-  Flutter lane.
+* ~~**B3 - Flutter cannot finish counting.**~~ **Resolved 2026-11-20** (commit `1ab838c6`, non-reserved
+  files only). The count screen offers "Finish counting" while the audit is `in_progress` or `recount`
+  and calls `inv_audit_complete_counting` with the web's `p_payload {audit_id, idempotency_key}`
+  (`InventoryAuditRepository.completeCounting`, payload pinned by `inventory_contract_test.dart`).
+  It refuses, without calling the server, while any line on the phone is unsent (draft, incomplete
+  or rejected) or when the device is offline (a call that loses the connection also reads as
+  offline); it asks for confirmation first and mints ONE idempotency key per confirmed press (none
+  for a cancelled press). Copy: 10 entries in the packed `inventoryCopyCatalog` (en / ar / ur;
+  catalog pinned at 135 entries; top-level ARB key count unchanged at 2515). Files:
+  `lib/features/inventory/domain/finish_counting.dart`, `data/count_finisher.dart`,
+  `data/inventory_audit_repository.dart`, `data/inventory_backend.dart`, `inventory_providers.dart`,
+  `presentation/blind_count_screen.dart`. Evidence: `flutter analyze` (whole project) no issues;
+  `flutter test test/features/inventory` 61 / 61, `test/features/stock_count` 12 / 12,
+  `test/app/localization` 46 / 46 (new: `count_finisher_test.dart` 10, `finish_counting_screen_test.dart`
+  5, contract 1, copy 1). Not run: device test (standing no-mobile-build rule).
 * **B4 - Flutter background sync of count lines** is in the reserved patch (section 10), not applied.
 * **B5 - emailed inventory digest** (decision 2).
 
@@ -253,7 +264,37 @@ UI proof from the client lane (fake server, real components):
 `10-approvals-queue`, `10b-approval-decide`, `11-valuation` (4 variants), `12-cost-reconciliation`,
 `12b-issue-allocation`, `13-erp-reconciliation` (3 variants), `20-*` layout sweep (8).
 
-No new screenshots were taken in this round. The screens changed by this lane that are therefore not
-in a screenshot: the source-receipt picker (issue form and dispatch line), "Finish counting", the
-discrepancy correction preview, tyre "Refresh custody" and the conflict decision form. Their
-behaviour is proven by the client E2E; their layout is not yet.
+### Round 3 (2026-11-20): the web UI added in the last round
+
+`/tmp/claude-0/-home-user-Tyre-Pulse/f5f47d6f-b333-5be3-b15d-8e39da2bbfea/scratchpad/inventory_screens_v3/`
+(session scratchpad, not committed; harness `inv_harness_v3` = the v2 harness plus receipt sources, an
+in-progress audit, a correction-signed discrepancy and scripted answers for
+`inv_audit_complete_counting` / `inv_tyre_conflict_decide`). Real components, fake server. 31 files,
+each in dark and light at 1440 and 390, plus Arabic:
+
+| Surface | Files |
+|---|---|
+| Source-receipt picker on issue | `01-issue-source-receipt-{dark,light}-{1440,390}-en` |
+| Source-receipt picker on a transfer dispatch line | `02-dispatch-source-receipt-{dark,light}-{1440,390}-en` |
+| "Finish counting" | `03-finish-counting-{dark,light}-{1440,390}-en`, `03-finish-counting-dark-1440-ar` |
+| Discrepancy correction preview (counted vs book, and the change) | `04-correction-preview-{dark,light}-{1440,390}-en`, `04-correction-preview-light-390-ar` |
+| Tyre conflict decision form | `05-tyre-conflict-decision-{dark,light}-{1440,390}-en`, `05-tyre-conflict-decision-dark-390-ar` |
+| Cost reconciliation drawer | `06-cost-reconciliation-{dark,light}-{1440,390}-en` |
+| `issue_allocation` drawer | `07-issue-allocation-{dark,light}-{1440,390}-en` |
+
+Checks per shot (Playwright): no sideways overflow (document width AND every visible element, in the
+open drawer or the page, inside the viewport unless it sits in an intentional horizontal scroller),
+no page error, and what the UI sent: `inv_issue` / `inv_transfer_dispatch` line carry
+`source_receipt_movement_id`; `inv_audit_complete_counting {audit_id, idempotency_key}`; a stored
+correction of -2 shows as correct quantity 24 and entering 25 previews and saves -1;
+`inv_tyre_conflict_decide {conflict_id, status, note, idempotency_key}` enabled only once a reason is
+written; the allocation drawer offers no write-off. Result: 111 of 112 checks pass; the one failure
+is a 404 for a resource on the very first cold page load of the run (not reproducible on a warm
+load, no 4xx in the app's own requests; harness artifact, most likely the favicon).
+
+Defect found by these screenshots and fixed (`src/components/inventory/inventory.css`): on a transfer
+dispatch line the source-receipt picker was squeezed into a third narrow grid cell (receipt text cut
+to "#1102 | receipt | GRN", labels misaligned). `.inv-line .inv-full` now spans the whole line; the
+`02-*` shots are after the fix.
+
+Not in a screenshot: tyre "Refresh custody" (button only; behaviour proven by the client E2E).

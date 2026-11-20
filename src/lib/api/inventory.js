@@ -361,6 +361,8 @@ export const createAudit = (draft, key) => rpcWrite('inv_audit_create', {
 export const scheduleAudit = (auditId, key) => rpcWrite('inv_audit_schedule', { audit_id: auditId }, key)
 export const startAudit = (auditId, key) => rpcWrite('inv_audit_start', { audit_id: auditId }, key)
 export const closeAudit = (auditId, key) => rpcWrite('inv_audit_close', { audit_id: auditId }, key)
+/** End counting (in_progress / recount -> counting_completed). Late offline lines counted before this still count. */
+export const completeCounting = (auditId, key) => rpcWrite('inv_audit_complete_counting', { audit_id: auditId }, key)
 export const cancelAudit = (auditId, reason, key) => rpcWrite('inv_audit_close', { audit_id: auditId, cancel: true, reason }, key)
 
 /**
@@ -553,6 +555,29 @@ export async function countTyreItemsByState({ country, site } = {}) {
   const entries = await Promise.all(CUSTODY_STATES.map(async (s) => [s, await headCount(VIEWS.tyreItems,
     (q) => applySite(applyCountry(q, country), site).eq('custody_state', s))]))
   return Object.fromEntries(entries)
+}
+
+/**
+ * Re-derive tyre custody (tyre_items, conflicts) from tyre_records and the scrap
+ * marks. Read-only on tyre_records: the answer carries tyre_records_written = 0.
+ * Repeatable, so a fresh key per press is fine.
+ */
+export function syncTyreItems({ country } = {}, key) {
+  return rpcWrite('inv_tyre_item_sync', { country: country || null }, key)
+}
+
+/** Allowed outcomes of a custody conflict (DB CHECK); a person decides, with a reason. */
+export const CONFLICT_DECISIONS = ['resolved', 'dismissed']
+
+/**
+ * Close one custody conflict with an evidence-based reason. It records the
+ * decision only: tyre_records and the scrap marks are never changed from here.
+ */
+export function decideCustodyConflict({ conflictId, status, note }, key) {
+  if (!conflictId) return Promise.reject(new ServiceError('Choose the conflict.', 'INV_NO_ENTITY'))
+  if (!CONFLICT_DECISIONS.includes(status)) return Promise.reject(new ServiceError('Choose resolved or dismissed.', 'INV_BAD_DECISION'))
+  if (isBlank(note) || !String(note).trim()) return Promise.reject(new ServiceError('Give the evidence-based reason.', 'INV_NO_NOTE'))
+  return rpcWrite('inv_tyre_conflict_decide', { conflict_id: conflictId, status, note: String(note).trim() }, key)
 }
 
 export function listCustodyConflicts({ page, pageSize, status } = {}) {
@@ -923,9 +948,11 @@ export function receiveGoods({ country, site, grnNo, poId, supplierId, lines }, 
 /** inv_reserve: hold a quantity of one balance line for a document (e.g. a job card). */
 export function reserveStock({ stockId, qty, sourceDocType, sourceDocId }, key) {
   if (!stockId || !qtyOk(qty)) return Promise.reject(new ServiceError('Choose a stock line and a quantity above zero.', 'INV_BAD_QTY'))
+  // The server answers the reservation row ({id, ...}) or {status:'refused_shortage'};
+  // `reservation_id` is the name the issue form reads, so both are given.
   return rpcWrite('inv_reserve', {
     stock_id: stockId, qty: Number(qty), source_doc_type: sourceDocType || 'job_card', source_doc_id: sourceDocId || null,
-  }, key)
+  }, key).then((d) => (d && d.status !== 'refused_shortage' && d.id && !d.reservation_id ? { ...d, reservation_id: d.id } : d))
 }
 
 /** inv_issue: issue stock (optionally consuming a reservation). */

@@ -18,7 +18,7 @@ import {
 } from '../../lib/api/inventory'
 import { RequestApprovalButton, ApprovalState } from './ApprovalsPanel'
 import {
-  DISCREPANCY_CATEGORIES, DISCREPANCY_STATUSES, nextDiscrepancyStatuses, discrepancyReadyForApproval, canApproveAdjustment,
+  DISCREPANCY_CATEGORIES, DISCREPANCY_STATUSES, nextDiscrepancyStatuses, discrepancyReadyForApproval, canApproveAdjustment, correctionToTarget, targetToCorrection,
 } from '../../lib/inventory/auditView'
 import { formatMoney, formatQty } from '../../lib/inventory/inventoryMoney'
 import { toUserMessage } from '../../lib/inventory/errorText'
@@ -73,7 +73,7 @@ export default function DiscrepanciesSection({ scope, can, userId }) {
 
   const openRow = (d) => {
     setOpen(d); setErr(''); setNote('')
-    setEdit({ category: d.category || '', investigation_notes: d.investigation_notes || '', proposed_qty: d.proposed_qty ?? '', proposed_action: d.proposed_action || '', status: d.status })
+    setEdit({ category: d.category || '', investigation_notes: d.investigation_notes || '', proposed_qty: correctionToTarget(d), proposed_action: d.proposed_action || '', status: d.status })
     setKeys({ save: newIdempotencyKey(), decide: newIdempotencyKey(), recount: newIdempotencyKey() })
     setRecounter('')
   }
@@ -138,8 +138,11 @@ export default function DiscrepanciesSection({ scope, can, userId }) {
                 </select>
               </Field>
               <Field label={t('inventory.disc.proposedQty')}>
-                <input className="inv-input inv-num" type="number" min="0" step="any" disabled={!canReview} value={edit.proposed_qty}
+                <input className="inv-input inv-num" type="number" min="0" step="any" disabled={!canReview} value={edit.proposed_qty} aria-describedby="inv-disc-correction"
                   onChange={(e) => setEdit((x) => ({ ...x, proposed_qty: e.target.value }))} />
+                {edit.proposed_qty !== '' && targetToCorrection(open, edit.proposed_qty) !== null && (
+                  <span id="inv-disc-correction" className="cc-card-sub">{t('inventory.disc.correctionPreview', { change: formatQty(targetToCorrection(open, edit.proposed_qty)), expected: formatQty(open.expected_qty) })}</span>
+                )}
               </Field>
               <Field label={t('inventory.disc.notes')} full>
                 <textarea className="inv-input" disabled={!canReview} maxLength={4000} value={edit.investigation_notes}
@@ -159,7 +162,7 @@ export default function DiscrepanciesSection({ scope, can, userId }) {
             {canReview && (
               <div className="inv-actions">
                 <button type="button" className="cc-btn-primary" disabled={busy}
-                  onClick={() => run(() => updateDiscrepancy(open.id, { ...edit, proposed_qty: edit.proposed_qty === '' ? null : Number(edit.proposed_qty) }, keys.save))}>
+                  onClick={() => run(() => updateDiscrepancy(open.id, { ...edit, proposed_qty: targetToCorrection(open, edit.proposed_qty) }, keys.save))}>
                   <Save size={14} aria-hidden="true" /> {t('inventory.actions.save')}
                 </button>
               </div>

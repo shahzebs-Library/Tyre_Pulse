@@ -92,7 +92,7 @@
     "create": "Create audit", "empty": "No audits for these filters.", "noun": "audits", "audit": "Audit",
     "howItWorks": "Start takes a snapshot of the expected stock. The counter counts blind, the reviewer reconciles, lines outside tolerance are recounted by someone else, then an approver decides each adjustment.",
     "approverPolicy": "Decided by the approval policy", "highValueOnly": "High-value items only", "instructions": "Instructions for the counter",
-    "actionsLabel": "Audit actions", "details": "Details", "countNow": "Count", "reconcile": "Reconcile", "start": "Start",
+    "actionsLabel": "Audit actions", "details": "Details", "countNow": "Count", "finishCounting": "Finish counting", "reconcile": "Reconcile", "start": "Start",
     "toApproval": "Go to approvals", "close": "Close audit", "cancel": "Cancel audit", "snapshot": "Snapshot taken",
     "noSnapshot": "Not taken yet (taken when the audit starts)", "yourRole": "Your role",
     "counterNote": "You are the counter. You will not see expected quantities, and you cannot approve this audit's adjustments.",
@@ -152,7 +152,7 @@
     "raised": "Raised", "category": "Category", "uncategorised": "Not categorised", "search": "Search item, serial or audit",
     "openOnly": "Open", "empty": "No discrepancies for these filters.", "noun": "discrepancies", "drawerTitle": "Discrepancy",
     "investigation": "Investigation", "readOnly": "You can read this investigation. Changing it needs the discrepancy review permission.",
-    "proposedQty": "Proposed correct quantity", "notes": "Investigation notes", "proposedAction": "Proposed action", "moveTo": "Move to",
+    "correctionPreview": "Stock change on approval: {change} (book quantity at the count: {expected}).", "proposedQty": "Proposed correct quantity", "notes": "Investigation notes", "proposedAction": "Proposed action", "moveTo": "Move to",
     "approval": "Approval", "notProposed": "Approval opens once a correction has been proposed.",
     "incomplete": "Before approval this needs: {fields}", "decisionNote": "Decision note", "approve": "Approve", "reject": "Reject",
     "recount": "Ask for recount", "hold": "Hold", "noteRequired": "A note is required to reject or hold.",
@@ -229,7 +229,7 @@
     "types": { "all": "All", "consignment": "Consignment", "vmi": "Vendor managed", "framework": "Framework" }
   },
   "register": { "onHand": "On hand" },
-  "tyres": {
+  "tyres": { "sync": "Refresh custody from tyre records", "syncHint": "Re-reads tyre records and scrap marks. Tyre records are never changed.", "synced": "Custody refreshed: {items} tyres, {conflicts} new conflicts.", "decision": "Decision", "decisionNote": "Evidence-based reason", "decisionRule": "This records your decision on the conflict only. Tyre records and scrap marks are not changed from here.", "decide": "Record decision", "decisions": {"resolved": "Resolved", "dismissed": "Dismissed"},
     "rule": "Each tyre has exactly one custody state, derived from tyre records without changing them. Time in stock is not running life, so no km or life is shown here.",
     "conflictsTitle": "Custody conflicts", "conflictsSub": "Tyres whose records disagree, for example scrapped yet still fitted",
     "conflictsEmpty": "No open custody conflicts.", "conflictNoun": "conflicts", "conflict": "Conflict", "detected": "Detected",

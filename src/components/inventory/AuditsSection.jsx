@@ -14,7 +14,7 @@ import SideDrawer from '../ui/SideDrawer'
 import DateField from '../ui/DateField'
 import { useLanguage } from '../../contexts/LanguageContext'
 import {
-  listAudits, createAudit, startAudit, closeAudit, cancelAudit, listAssignablePeople, newIdempotencyKey,
+  listAudits, createAudit, scheduleAudit, startAudit, completeCounting, closeAudit, cancelAudit, listAssignablePeople, newIdempotencyKey,
 } from '../../lib/api/inventory'
 import {
   AUDIT_TYPES, AUDIT_STATUSES, AUDIT_STATUS_TONE, validateAuditDraft, availableActions, auditRolesFor,
@@ -174,7 +174,12 @@ export default function AuditsSection({ scope, can, userId, onNavigate }) {
               <button type="button" className={mode === 'details' ? 'cc-btn-primary' : 'cc-btn-ghost'} onClick={() => setMode('details')}><ClipboardList size={14} aria-hidden="true" /> {t('inventory.audits.details')}</button>
               {actions.includes('count') && <button type="button" className={mode === 'count' ? 'cc-btn-primary' : 'cc-btn-ghost'} onClick={() => setMode('count')}><ClipboardList size={14} aria-hidden="true" /> {t('inventory.audits.countNow')}</button>}
               {actions.includes('reconcile') && <button type="button" className={mode === 'reconcile' ? 'cc-btn-primary' : 'cc-btn-ghost'} onClick={() => setMode('reconcile')}><Calculator size={14} aria-hidden="true" /> {t('inventory.audits.reconcile')}</button>}
-              {actions.includes('start') && <button type="button" className="cc-btn-ghost" disabled={busy} onClick={() => act((k) => startAudit(open.id, k))}><Play size={14} aria-hidden="true" /> {t('inventory.audits.start')}</button>}
+              {actions.includes('start') && <button type="button" className="cc-btn-ghost" disabled={busy} onClick={() => act(async (k) => {
+                // A new audit is a draft; the server starts only an assigned (scheduled) one.
+                if (open.status === 'draft') await scheduleAudit(open.id, `${k}:schedule`)
+                return startAudit(open.id, k)
+              })}><Play size={14} aria-hidden="true" /> {t('inventory.audits.start')}</button>}
+              {actions.includes('finish') && <button type="button" className="cc-btn-ghost" disabled={busy} onClick={() => act((k) => completeCounting(open.id, k))}><CheckCircle2 size={14} aria-hidden="true" /> {t('inventory.audits.finishCounting')}</button>}
               {actions.includes('approve') && <button type="button" className="cc-btn-ghost" onClick={() => onNavigate('discrepancies')}><Scale size={14} aria-hidden="true" /> {t('inventory.audits.toApproval')}</button>}
               {actions.includes('close') && <button type="button" className="cc-btn-ghost" disabled={busy} onClick={() => act((k) => closeAudit(open.id, k))}><CheckCircle2 size={14} aria-hidden="true" /> {t('inventory.audits.close')}</button>}
               {actions.includes('cancel') && <button type="button" className="cc-btn-ghost" disabled={busy} onClick={() => act((k) => cancelAudit(open.id, 'Cancelled from web', k))}><XCircle size={14} aria-hidden="true" /> {t('inventory.audits.cancel')}</button>}

@@ -93,6 +93,10 @@ export function availableActions(audit, userId, can = () => false) {
   if (['draft', 'scheduled', 'assigned'].includes(s) && (can('audit_create') || roles.has('creator'))) out.push('start')
   if (['assigned', 'in_progress'].includes(s) && roles.has('counter') && can('count')) out.push('count')
   if (s === 'recount' && roles.has('recounter') && can('count')) out.push('count')
+  // Counting ends by the person counting (or the creator / an audit_create holder);
+  // without it the audit can never reach reconciliation (server: inv_audit_complete_counting).
+  if ((s === 'in_progress' && (roles.has('counter') || roles.has('creator') || can('audit_create')))
+    || (s === 'recount' && (roles.has('recounter') || roles.has('creator') || can('audit_create')))) out.push('finish')
   if (['counting_completed', 'reconciliation'].includes(s) && !isCounter && (roles.has('reviewer') || can('discrepancy_review'))) out.push('reconcile')
   if (s === 'reconciliation' && !isCounter && can('recount')) out.push('recount')
   if (s === 'approval' && !isCounter && !roles.has('creator') && can('adjustment_approve')) out.push('approve')
@@ -248,6 +252,31 @@ const DISCREPANCY_FLOW = {
 /** Statuses a reviewer may move to from the investigation drawer. Approval is separate. */
 export function nextDiscrepancyStatuses(status) {
   return DISCREPANCY_FLOW[status] || []
+}
+
+/**
+ * The server stores a discrepancy's proposal as a SIGNED CORRECTION
+ * (inventory_discrepancies.proposed_correction_qty, exposed as `proposed_qty`):
+ * the quantity the approved adjustment adds to (or, negative, removes from) the
+ * balance. People think in the CORRECT quantity on the shelf, so the screen asks
+ * for that and converts: correction = correct - expected (expected as of the
+ * count cutoff). Sending the correct quantity as if it were the correction posted
+ * the wrong stock (found by the client-to-database end-to-end test).
+ */
+const num = (v) => (v === null || v === undefined || v === '' ? null : Number(v))
+
+/** Correct quantity shown in the form, from the stored correction. '' when none. */
+export function correctionToTarget(d) {
+  const c = num(d?.proposed_qty)
+  if (c === null || !Number.isFinite(c)) return ''
+  return String((num(d?.expected_qty) || 0) + c)
+}
+
+/** Signed correction to send, from the correct quantity the person entered. null when blank or invalid. */
+export function targetToCorrection(d, target) {
+  const t = num(target)
+  if (t === null || !Number.isFinite(t) || t < 0) return null
+  return Math.round((t - (num(d?.expected_qty) || 0)) * 10000) / 10000
 }
 
 /** A proposed correction needs a category, a reason and evidence before approval. */

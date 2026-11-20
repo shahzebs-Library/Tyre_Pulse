@@ -82,6 +82,24 @@ describe('audit view', () => {
     expect(availableActions({ status: 'in_progress', counter_id: 'c' }, 'c', can)).toContain('count')
     expect(availableActions({ status: 'in_progress', counter_id: 'c' }, 'z', can)).not.toContain('count')
   })
+  it('converts the correct quantity a person enters into the signed correction the server stores, and back', async () => {
+    const { targetToCorrection, correctionToTarget } = await import('../lib/inventory/auditView')
+    expect(targetToCorrection({ expected_qty: 6 }, '4')).toBe(-2)
+    expect(targetToCorrection({ expected_qty: 6 }, 9)).toBe(3)
+    expect(targetToCorrection({ expected_qty: null }, 2)).toBe(2) // an unexpected line has no book quantity
+    expect(targetToCorrection({ expected_qty: 6 }, '')).toBeNull()
+    expect(targetToCorrection({ expected_qty: 6 }, -1)).toBeNull()
+    expect(correctionToTarget({ expected_qty: 6, proposed_qty: -2 })).toBe('4')
+    expect(correctionToTarget({ expected_qty: 6, proposed_qty: null })).toBe('')
+  })
+  it('offers "finish counting" to the counter, recounter, creator or an audit_create holder only', () => {
+    const none = () => false
+    expect(availableActions({ status: 'in_progress', counter_id: 'c' }, 'c', none)).toContain('finish')
+    expect(availableActions({ status: 'in_progress', counter_id: 'c' }, 'z', none)).not.toContain('finish')
+    expect(availableActions({ status: 'in_progress', counter_id: 'c' }, 'z', (c) => c === 'audit_create')).toContain('finish')
+    expect(availableActions({ status: 'recount', counter_id: 'c', recount_counter_id: 'r' }, 'r', none)).toContain('finish')
+    expect(availableActions({ status: 'counting_completed', counter_id: 'c' }, 'c', none)).not.toContain('finish')
+  })
   it('enforces segregation of duties for adjustment approval', () => {
     const can = (c) => c === 'adjustment_approve'
     expect(canApproveAdjustment({ audit: { counter_id: 'c' }, userId: 'c', can }).reason).toBe('inventory.approve.segregation')

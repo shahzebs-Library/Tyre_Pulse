@@ -7,13 +7,16 @@
  */
 import { Fragment, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ExternalLink } from 'lucide-react'
+import { ExternalLink, RefreshCw, Gavel } from 'lucide-react'
 import SideDrawer from '../ui/SideDrawer'
 import { useLanguage } from '../../contexts/LanguageContext'
-import { listTyreItems, countTyreItemsByState, listCustodyConflicts } from '../../lib/api/inventory'
+import {
+  listTyreItems, countTyreItemsByState, listCustodyConflicts, syncTyreItems, decideCustodyConflict, CONFLICT_DECISIONS, newIdempotencyKey,
+} from '../../lib/api/inventory'
+import { toUserMessage } from '../../lib/inventory/errorText'
 import { summarizeCustody, conflictEvidence, CUSTODY_TONE } from '../../lib/inventory/tyreInventoryView'
 import { formatMoney, formatQty } from '../../lib/inventory/inventoryMoney'
-import { useInvQuery, PagedTable, SearchBox, Note, ErrorNote, StatusPill, SectionCard, fmtDateTime } from './InvUi'
+import { useInvQuery, PagedTable, SearchBox, Note, ErrorNote, StatusPill, SectionCard, Field, fmtDateTime } from './InvUi'
 
 export default function TyreInventorySection({ scope, can }) {
   const { t } = useLanguage()
@@ -24,12 +27,34 @@ export default function TyreInventorySection({ scope, can }) {
   const [cPage, setCPage] = useState(0)
   const [conflict, setConflict] = useState(null)
   const showValue = can('view_value')
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState(null)
+  const [decision, setDecision] = useState({ status: 'resolved', note: '', key: newIdempotencyKey(), busy: false, err: '' })
 
   const counts = useInvQuery(() => countTyreItemsByState(scope), [scope.country, scope.site])
   const items = useInvQuery(() => listTyreItems({ ...scope, page, pageSize, state, search }), [scope.country, scope.site, page, pageSize, state, search])
   const conflicts = useInvQuery(() => listCustodyConflicts({ page: cPage, pageSize: 25, status: 'open' }), [cPage])
   const sum = summarizeCustody(counts.data || {})
   const notInstalled = counts.data && Object.values(counts.data).every((v) => v === null)
+  const canDerive = can('audit_create')
+  const canDecide = can('discrepancy_review')
+
+  const runSync = async () => {
+    setSyncing(true); setSyncMsg(null)
+    try {
+      const r = await syncTyreItems({ country: scope.country }, newIdempotencyKey())
+      setSyncMsg({ tone: 'good', text: t('inventory.tyres.synced', { items: formatQty(r?.items ?? 0), conflicts: formatQty(r?.new_conflicts ?? 0) }) })
+      counts.retry(); items.retry(); conflicts.retry()
+    } catch (e) { setSyncMsg({ tone: 'bad', text: toUserMessage(e) }) } finally { setSyncing(false) }
+  }
+  const openConflict = (c) => { setConflict(c); setDecision({ status: 'resolved', note: '', key: newIdempotencyKey(), busy: false, err: '' }) }
+  const sendDecision = async () => {
+    setDecision((d) => ({ ...d, busy: true, err: '' }))
+    try {
+      await decideCustodyConflict({ conflictId: conflict.id, status: decision.status, note: decision.note }, decision.key)
+      setConflict(null); conflicts.retry()
+    } catch (e) { setDecision((d) => ({ ...d, busy: false, err: toUserMessage(e) })) }
+  }
 
   return (
     <div className="inv-hub">
@@ -39,7 +64,7 @@ export default function TyreInventorySection({ scope, can }) {
       <SectionCard title={t('inventory.tyres.conflictsTitle')} sub={t('inventory.tyres.conflictsSub')}>
         <PagedTable query={conflicts} page={cPage} pageSize={25} onPage={setCPage}
           empty={t('inventory.tyres.conflictsEmpty')} what={t('inventory.objects.tyre_custody_conflicts')} noun={t('inventory.tyres.conflictNoun')}
-          onRowClick={setConflict}
+          onRowClick={openConflict}
           columns={[
             { key: 'serial_no', header: t('inventory.common.serial'), cell: (r) => <span className="inv-mono">{r.serial_no || 'N/A'}</span> },
             { key: 'conflict_type', header: t('inventory.tyres.conflict'), cell: (r) => (r.conflict_type || 'N/A').replace(/_/g, ' ') },
@@ -66,7 +91,13 @@ export default function TyreInventorySection({ scope, can }) {
         <div className="cc-filters" style={{ margin: '12px 0' }}>
           <SearchBox value={search} onChange={(v) => { setSearch(v); setPage(0) }} placeholder={t('inventory.tyres.search')} />
           <Link className="cc-btn-ghost" to="/serial-tracker"><ExternalLink size={14} aria-hidden="true" /> {t('inventory.tyres.serialTracker')}</Link>
+          {canDerive && !notInstalled && (
+            <button type="button" className="cc-btn-ghost" disabled={syncing} onClick={runSync} title={t('inventory.tyres.syncHint')}>
+              <RefreshCw size={14} aria-hidden="true" /> {syncing ? t('inventory.actions.saving') : t('inventory.tyres.sync')}
+            </button>
+          )}
         </div>
+        {syncMsg && <Note tone={syncMsg.tone}>{syncMsg.text}</Note>}
         <PagedTable query={items} page={page} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(0) }}
           empty={t('inventory.tyres.empty')} what={t('inventory.objects.tyre_items')} noun={t('inventory.tyres.noun')}
           columns={[
@@ -91,6 +122,25 @@ export default function TyreInventorySection({ scope, can }) {
             <Link className="cc-btn-ghost" to={`/tyre-passport/${encodeURIComponent(conflict.serial_no || '')}`}>
               <ExternalLink size={14} aria-hidden="true" /> {t('inventory.tyres.passport')}
             </Link>
+            {canDecide && (conflict.status === 'open' || conflict.status === 'investigating') && (
+              <div className="inv-form">
+                <Field label={t('inventory.tyres.decision')}>
+                  <select className="cc-select" value={decision.status} onChange={(e) => setDecision((d) => ({ ...d, status: e.target.value }))}>
+                    {CONFLICT_DECISIONS.map((s) => <option key={s} value={s}>{t(`inventory.tyres.decisions.${s}`)}</option>)}
+                  </select>
+                </Field>
+                <Field label={t('inventory.tyres.decisionNote')} full>
+                  <textarea className="inv-input" maxLength={500} value={decision.note} onChange={(e) => setDecision((d) => ({ ...d, note: e.target.value }))} />
+                </Field>
+                <p className="cc-card-sub inv-full">{t('inventory.tyres.decisionRule')}</p>
+                <div className="inv-actions inv-full">
+                  <button type="button" className="cc-btn-primary" disabled={decision.busy || !decision.note.trim()} onClick={sendDecision}>
+                    <Gavel size={14} aria-hidden="true" /> {decision.busy ? t('inventory.actions.saving') : t('inventory.tyres.decide')}
+                  </button>
+                </div>
+                {decision.err && <div className="inv-full"><ErrorNote error={decision.err} /></div>}
+              </div>
+            )}
           </div>
         )}
       </SideDrawer>
